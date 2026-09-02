@@ -12,6 +12,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **daymade-audio** v1.32.5 → v1.33.0 (`asr-transcribe-to-text`): replaces the stale “Minute URL always ends the job” rule with explicit outcomes. Upload-only still stops at the URL; a request that names upload but no downstream result lands at resumable `outcome_pending` instead of forcing a guess; transcript-only waits for a readable Feishu transcript; project delivery hands preprocessing into `meeting-ingest` and cannot finish until routing, full correction, project indexes, verified Git handoff, and the pushed delivery receipt are complete. A later downstream request preserves the same `minute_token`/URL and resumes instead of re-uploading.
+- **git-safety-net** v1.15.1 → v1.15.2: give the references section-level
+  routing. Measured before the change: of 39 reference sections, only 11 had any
+  inbound pointer naming them — `recovery_playbook.md` had exactly one, so its
+  recovery ladder, the rung an agent actually needs when work has gone missing, was
+  reachable only by opening a 223-line file and scanning. SKILL.md now cites the
+  specific `§ <section>` at each decision point: Mode A routes by symptom to the
+  ladder rung that handles it, Mode B names the at-risk definition and the pinning
+  rationale, Mode C distributes the six merge-verification topics to the sentences
+  that raise them, and every Mode D bullet carries the `§` name of its full
+  treatment. 37 citations; all resolve, checked with a negative control. One
+  measured gap remains by design: `merge_verification.md` was already the
+  best-routed file and needed the least.
+  The change is routing, not rules. The regression audit flagged 18 units whose
+  wording moved; each was classified `preserved_or_moved` against a needle taken
+  from the changed file, and the 31 load-bearing phrases across the nine reworded
+  paragraphs were verified still present by literal match with a negative control.
+  One illustrative example ("an orphan from a rebase") that the rewrite had dropped
+  was restored rather than argued away. No command, condition, verdict, or stop
+  point changed, and the 63-test suite still passes.
 - **git-safety-net** v1.15.0 → v1.15.1: put mechanical judges under the three
   scripts that had none — and they were the load-bearing three.
   `git_verify_branch_merged.sh` is what the Skill's own rules call the only check
