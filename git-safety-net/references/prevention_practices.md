@@ -292,9 +292,11 @@ git log  --oneline "$base"..HEAD          # every commit here must be yours
 git diff --name-only "$base" HEAD         # every path here must be yours
 ```
 
-Two things this check cannot do for you. If `$base` is empty or unresolvable, `"$base"..HEAD`
-degenerates to `HEAD..HEAD`: the `git log` prints nothing and exits 0, which is exactly what "clean"
-looks like — hence the verify line above, which fails loudly instead. And **Git cannot tell you
+Two things this check cannot do for you. If `$base` is **empty** — an unset variable, or a command
+substitution that failed — `"$base"..HEAD` degenerates to `HEAD..HEAD`: the `git log` prints nothing
+and exits 0, which is exactly what "clean" looks like. A non-empty base that does not resolve is a
+different and safer case: it aborts with `fatal: Invalid revision range` at exit 128. Both are
+caught by the verify line above, but only the empty one is silent, and silence is what gets missed. And **Git cannot tell you
 which commits are yours**: a shared checkout gives both sessions the same author and committer
 identity, so no `--author` filter separates them. The answer comes from the SHAs you recorded as you
 committed, which is the second reason to record as you go. If you cannot say with certainty which
@@ -373,8 +375,10 @@ existing sequence in order:
    `--force-with-lease` over `--force`. Anyone else who fetched that branch also needs telling.
 7. **Retiring either ref is a Mode E action** under Mode C evidence — the same standard this skill
    applies to every other preserving ref it tells you to create, and no weaker. Do not delete
-   `rescue/foreign-<sha>` on a heuristic. Note the rescue ref may also be the only anchor for *your*
-   own commits if step 4 was run in the discarding form; step 5 is what catches that.
+   `rescue/foreign-<short-sha>` on a heuristic. Note that if step 4 was run in the discarding form, *your* own
+   commits are anchored only by the preserving refs — `backup/pre-rewrite` from step 2 and, for
+   anything before the foreign commit, `rescue/foreign-<short-sha>` from step 3. Neither is
+   retirable until step 5 has passed.
 
 **Why the obvious "did their work survive?" probes mislead.** These are worth knowing before you
 reach Mode C, because both look authoritative and both were measured returning the wrong answer on
@@ -386,11 +390,14 @@ a real commit whose work had definitively shipped:
   only as an unreachable dangler while its content sits in the integration branch. Note that you can no
   longer observe that zero once this procedure is under way: the foreign commit is an ancestor of
   your pre-rebase tip, so **both** preserving refs contain it — `backup/pre-rewrite` from step 2 as
-  well as `rescue/foreign-<sha>` from step 3 — and the count rises by one at each (measured in step
+  well as `rescue/foreign-<short-sha>` from step 3 — and the count rises by one at each (measured in step
   order). Exclude both, or the reading is about refs you created a minute ago:
   ```bash
   git for-each-ref --contains <sha> --format='%(refname)' | grep -vE '^refs/heads/(rescue|backup)/'
   ```
+  Read the *output*, not the exit code: when the filter removes everything, the pipeline exits 1
+  with empty stdout — which is the answer "no external ref contains it", not a failure. Under
+  `set -e` or `pipefail` that exit aborts the script instead.
 - **Hash-equality comparison of whole files against the integration branch does not prove it
   either.** Hashing `git show <sha>:<path>` against `git show origin/main:<path>` reports
   "different" for every file as soon as the branch moves on; any later commit touching the same

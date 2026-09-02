@@ -350,9 +350,12 @@ The habits that keep a branch tangle from ever stranding work:
   git log  --oneline "$base"..HEAD     # every commit here must be yours
   git diff --name-only "$base" HEAD    # every path here must be yours
   ```
-  **The verify line is load-bearing.** If `$base` is empty or unresolvable, `"$base"..HEAD` becomes
-  `HEAD..HEAD` and the `git log` prints nothing with exit 0 — indistinguishable from "no foreign
-  commits". The check fails green, which is the direction that matters. And **"yours" is not
+  **The verify line is load-bearing, for one input in particular.** If `$base` is **empty** —
+  unset variable, a command substitution that failed — `"$base"..HEAD` becomes `HEAD..HEAD`, and the
+  `git log` prints nothing at exit 0, indistinguishable from "no foreign commits". A non-empty but
+  unresolvable base is not this problem: it fails loudly (`fatal: Invalid revision range`, exit
+  128). Measured — so the case the guard is there for is the quiet one, and it is the only one you
+  would otherwise miss. And **"yours" is not
   derivable from Git**: in a shared checkout both sessions write the same author and committer, so
   no flag separates them. It comes from the SHAs you recorded as you committed. If you cannot say
   which commits are yours, stop and ask — the repair deletes a commit, so a guess here is the loss
@@ -366,7 +369,7 @@ The habits that keep a branch tangle from ever stranding work:
   transferred, repair is a history rewrite of *your* branch — `git rebase --onto` checks out the
   branch it rewrites — so it runs the existing sequence rather than a shortcut: the applicable Mode B
   evidence path, then `git branch backup/pre-rewrite <your-branch>` (**Snapshot before any history rewrite**
-  — this is what makes the rebase reversible), then `git branch rescue/foreign-<sha> <foreign-sha>`
+  — this is what makes the rebase reversible), then `git branch rescue/foreign-<short-sha> <foreign-sha>`
   (this preserves *their* work, a separate obligation and a different ref), then
   `git rebase --onto "<foreign-sha>^" "<foreign-sha>" <your-branch>` — **onto the foreign commit's
   parent, never onto the base**, because `--onto "$base"` discards everything before the foreign
@@ -673,6 +676,9 @@ the helpers authorizes `checkout`, `reset`, `push`, `stash drop`, `branch -d`, o
   exactly this: `git ls-remote --exit-code <remote> refs/heads/<branch>` returns **0** when the ref
   matched, **2** when it did not, and anything else (**128** for an unreachable remote) means the
   probe itself failed — three outcomes the file-size test collapses into two, differently each time.
+  On 128 the branch's fate is unknown, which is not the same as gone: keep whatever preserves it,
+  retire nothing on this reading, and either retry once the remote is reachable or hand the question
+  to a human. An unreachable remote is a reason to wait, never a reason to clean up.
   Pass the **fully-qualified** ref: `ls-remote` matches on the tail of the name across all
   namespaces, so a bare branch name also matches a same-named tag and returns 0 for a branch that
   was deleted (measured — a common shape after a release tags its branch name). Same trap in the working tree: `[ -e <path> ]` cannot tell a tracked-and-clean
