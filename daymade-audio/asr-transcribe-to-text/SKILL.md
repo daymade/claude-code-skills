@@ -253,15 +253,36 @@ that requires a failed local run first.
 
 **Trigger phrases**: 传到妙记 / 上传到飞书妙记 / 让妙记转写 / create a minute from this audio / upload to Feishu minutes.
 
+**Track the requested outcome before uploading**:
+
+- **Upload-only** — the user explicitly says they only want a Minute link or
+  only want the media uploaded. Creating `minute_url` is the terminal state.
+- **Transcript-only** — the user wants the transcript/summary but no project
+  filing. After upload, follow the current version-matched `lark-minutes`
+  instructions through the ready transcript.
+- **Project delivery** — the user wants correction, routing, a knowledge-base
+  file, project indexes, or Git handoff. `meeting-ingest` owns the overall job;
+  this skill is only its preprocessing participant. Switch to that orchestrator
+  before upload and keep running until its delivery receipt is verified.
+- **Downstream unspecified** — the request says to preprocess/upload (for
+  example, “上传到飞书妙记，先转成适合 ASR 的格式”) but does not say what should
+  happen after the Minute exists. Honor the requested upload without inventing
+  transcript or project scope, then emit `outcome_pending` with the durable
+  token/URL. A later transcript or knowledge-base request resumes that same
+  Minute; it never starts over or depends on the original guess.
+
+Do not infer upload-only merely because the user's first clause says “上传到妙记”.
+An explicit downstream outcome in the same request or project context wins.
+
 **Constraints**:
 - **No proxy**: all `lark-cli` calls must use `LARK_CLI_NO_PROXY=1`.
 - **Single profile**: use the active Feishu profile only. Do not iterate tenant
   profiles or invoke tenant routing.
-- **No local transcription follows**: once the minute is created, this skill's
-  job ends here. The user opens the `minute_url` in Feishu and waits for the
-  cloud ASR. Local transcript correction (`transcript-fixer`) or speaker
-  backfill (`review-feishu-minutes`) only apply after the cloud transcript exists
-  and has been pulled back, not at create time.
+- **No duplicate local ASR by default**: Feishu owns transcription on this
+  branch. Local ASR runs only for an explicit offline/comparison purpose.
+- **Load current Feishu guidance**: use `lark-cli-router`, then read the
+  version-matched `lark-minutes` upload/detail instructions. Do not copy a stale
+  stop condition from this skill over the live CLI contract.
 
 **Step-by-step**:
 
@@ -291,22 +312,42 @@ that requires a failed local run first.
    ```
    From the result, record `minute_token` and `minute_url`.
 
-4. **Return the `minute_url` to the user** and stop. Do not run this skill's
-   local transcription steps, and do not run `sync-feishu-minutes` ingest/delegate
-   for this newly created minute — those are for minutes that already existed on
-   Feishu. When the user later asks to pull this minute back, hand off to
-   **`sync-feishu-minutes`**; for speaker cleanup after that, hand off to
-   **`review-feishu-minutes`**.
+4. **Branch on the previously fixed terminal outcome**:
+
+   - Upload-only: return `minute_url` and stop.
+   - Transcript-only: use the current `lark-minutes` detail command with its
+     ready-wait behavior and `--transcript`. A created URL is intermediate;
+     success requires a readable transcript artifact.
+   - Project delivery: return this handoff tuple to `meeting-ingest` and continue
+     in the same run: `prepared_media`, `file_token`, `minute_token`,
+     `minute_url`, `next_required_phase=minute_ready`. The orchestrator waits for
+     the cloud transcript, invokes `sync-feishu-minutes` for token-scoped
+     ingest/routing/delegation, runs full `transcript-fixer`, updates every
+     project-owned index, completes Git handoff, and records delivery.
+   - Downstream unspecified: return `minute_token`, `minute_url`,
+     `outcome_pending`, and `next_required_phase=outcome_decision`. Do not wait
+     for or file a transcript until the user supplies that downstream outcome.
+
+If readiness times out or a downstream stage blocks, report the exact last
+completed phase plus the durable `minute_token`/`minute_url`. Resume that same
+token; never re-upload just to obtain a fresh URL.
 
 **Expected output**:
-- Success: a single `minute_url` the user can open to view/transcribe.
+- Upload-only success: a single `minute_url` the user can open.
+- Downstream-unspecified success: the requested upload is complete, while the
+  run remains explicitly resumable at `outcome_pending`; do not call it project
+  delivery.
+- Transcript-only success: `minute_url` plus a readable transcript artifact.
+- Project-delivery success: only the `meeting-ingest` pushed delivery receipt;
+  preprocessing, URL creation, and transcript download are intermediate phases.
 - Failure: exact API error from `drive +upload` or `minutes +upload`, plus one
   suggested next action.
 
 **Wrong-skill recovery**: if this request lands while you are inside
-`sync-feishu-minutes`, the request shape is "local audio -> Feishu minute", not
-"sync existing minutes" — stop, switch to `asr-transcribe-to-text`, and follow
-this section.
+`sync-feishu-minutes`, choose by outcome: upload-only routes here; project
+delivery routes to `meeting-ingest`, which calls this preprocessing branch and
+then returns to token-scoped Feishu ingestion. Never silently downgrade project
+delivery to a Minute URL.
 
 ## Step 3: Transcribe (speaker labels by default)
 
