@@ -12,6 +12,7 @@ ceremony; adopt the ones whose failure mode you're exposed to.
 - Push work-in-progress branches early
 - Confirm the branch before every commit
 - Recover stranded work after a parallel session switched the shared tree
+- A foreign commit adopted onto your branch (the inverse case)
 - Audit before rebase / branch-delete
 - Audit every authorized worktree before retirement
 - Snapshot before any history rewrite
@@ -262,6 +263,169 @@ After Step 3, return to **Exact-SHA handoff and scoped completion** above: recor
 `topic_sha`, push and read back that exact object, use `git merge "$topic_sha"` for a direct merge,
 and require the hosted expected-head-SHA gate (or immediately preceding hosted head readback) for a
 PR merge. Any branch-tip drift expires the handoff.
+
+## A foreign commit adopted onto your branch (the inverse case)
+
+**Failure mode:** the mirror image of the section above. There, a parallel session moved the shared
+tree and *your uncommitted work* ended up on *their* branch. Here *their commit* ends up in *your
+branch's history*: you created a topic branch in a shared checkout, a sibling session committed while
+`HEAD` was still on it, and that commit is now a parent of yours. Open a PR and it ships their
+in-progress work under your name and your review.
+
+**Why the usual checks miss it.** Every branch-level instrument this skill already tells you to run
+reports correctly, and reports green:
+
+| Check | What it says | Why it cannot see this |
+|---|---|---|
+| `git branch --show-current` | your branch | it *is* your branch — that was never the problem |
+| `git status` | clean | their work was committed, so it left the working tree |
+| `git diff --cached --name-status` | only your paths | their work left the index too, at commit time |
+
+The foreign commit appears only in the branch's **cumulative range against the base you branched
+from** — a comparison none of the above makes. This step is read-only and carries no ownership
+precondition:
+
+```bash
+base=<the base SHA you recorded when you created the branch>
+git rev-parse --verify "$base^{commit}"   # must print a SHA, or everything below is meaningless
+git log  --oneline "$base"..HEAD          # every commit here must be yours
+git diff --name-only "$base" HEAD         # every path here must be yours
+```
+
+Two things this check cannot do for you. If `$base` is **empty** — an unset variable, or a command
+substitution that failed — `"$base"..HEAD` degenerates to `HEAD..HEAD`: the `git log` prints nothing
+and exits 0, which is exactly what "clean" looks like. A non-empty base that does not resolve is a
+different and safer case: it aborts with `fatal: Invalid revision range` at exit 128. Both are
+caught by the verify line above, but only the empty one is silent, and silence is what gets missed. And **Git cannot tell you
+which commits are yours**: a shared checkout gives both sessions the same author and committer
+identity, so no `--author` filter separates them. The answer comes from the SHAs you recorded as you
+committed, which is the second reason to record as you go. If you cannot say with certainty which
+commits are yours, stop and ask rather than proceed — every step below deletes a commit.
+
+**Record the base SHA at branch creation.** `git merge-base origin/main HEAD` recovers it only from
+a *cached* remote ref, and refreshing that cache is a fetch — which **Shared checkout and concurrent
+sessions: one writer** and Mode C both gate on exclusive ownership. A stale base widens the range,
+which is the safe direction for detection but the dangerous one for the rebase that may follow, and
+it is precisely the moment you cannot fetch to fix it. Recording one SHA at the start costs nothing
+and removes the dependency.
+
+Run the comparison before every push and before opening any PR from a shared checkout. The signal
+that reaches you by accident is a repo validator or CI job reporting a wider blast radius than you
+worked on — "2 components changed" when you touched 1. Treat that as this failure mode until proven
+otherwise.
+
+**Repair is governed by the rules that already exist here — do not shortcut them.** Finding a
+foreign commit is itself evidence that another writer was in this checkout, so the first obligation
+is the standing one: stop, and use the repository's coordination system to quiesce that writer and
+transfer exclusive ownership. If no such authority exists, stop with the evidence intact and report
+it. Nothing below is a concurrency loophole.
+
+Once you are the sole writer, the repair is a history rewrite of your own branch — `git rebase
+--onto` checks out the branch it rewrites, so it is checkout-relative mutation — and it runs the
+existing sequence in order:
+
+1. **Audit before rebase / branch-delete** (below): select and run the applicable evidence path.
+   Local-only commits and dirty authorized worktrees must be preserved before the destructive step.
+2. **Snapshot before any history rewrite** (below): `git branch backup/pre-rewrite <your-branch>`.
+   This ref points at *your* tip and is what makes the rebase reversible. Nothing else does — after
+   `git rebase --onto` your pre-rebase tip is reachable through the reflog only (measured: zero refs
+   contain it).
+3. **Preserve their commit** — a separate obligation needing its own ref, because the backup above
+   points at your tip and the rebase drops *their* commit from your branch:
+   ```bash
+   git branch rescue/foreign-<short-sha> <foreign-sha>
+   ```
+   If this exits 128 with `a branch named ... already exists`, do not shrug it off and continue:
+   confirm the existing ref points at the same object (`git rev-parse rescue/foreign-<short-sha>`)
+   before treating this step as done. A same-named ref at a *different* object means someone else's
+   repair is already in flight.
+4. **Rebase onto the foreign commit's parent — not onto the base.** `git rebase --onto X Y branch`
+   replays `Y..branch`, so `--onto "$base" <foreign-sha>` discards **everything before the foreign
+   commit, including your own earlier commits**, and reports success with exit 0. That is only
+   harmless when the foreign commit happens to be the first commit after the base. The general form
+   drops exactly one commit and keeps yours on both sides of it:
+   ```bash
+   git rebase --onto "<foreign-sha>^" "<foreign-sha>" <your-branch>
+   ```
+   Measured on a branch whose history was `A(yours) → F(foreign) → C(yours)`: the `--onto "$base"`
+   form left only `C` and silently dropped `A`; the form above kept `A` and `C` and dropped only `F`.
+   Bounds: it removes **one non-merge commit**. For several foreign commits, or one that is a merge,
+   stop and drop them explicitly through an interactive rebase, re-reading this list first.
+   The tree must be clean before you start. If it is not, `git rebase` refuses with
+   `error: cannot rebase: You have unstaged changes. / Please commit or stash them.` — and note that
+   the second half of Git's own suggestion is the unscoped stash this skill forbids. The correct
+   response is that you are not the sole writer yet: go back to the ownership step.
+   With `rebase.autoStash` enabled the refusal never happens, and that is worse (measured): the
+   rebase silently stashes whatever a sibling session left uncommitted, and if it then **stops on a
+   conflict**, their files are gone from the working tree while `git stash list` shows **nothing** —
+   an autostash is not a stash entry, so the first check anyone runs comes back empty. Their work is
+   at `.git/rebase-merge/autostash`, and in the single `Created autostash: <sha>` line already
+   printed. `git rebase --abort` restores it, but only if someone knows to look.
+5. **Re-run the detection.** The repair is not verified by the rebase's exit code:
+   ```bash
+   git log  --oneline "$base"..<your-branch>    # every commit yours — and your earlier ones still here
+   git diff --name-only "$base" <your-branch>   # every path yours
+   ```
+   Check for both failures at once: the foreign commit gone, *and* nothing of yours gone with it.
+6. **If the branch was already pushed** — which the incident above describes, since the foreign work
+   reached a PR — the rewrite makes your local branch diverge and the next `git push` is rejected
+   with `Updates were rejected because the tip of your current branch is behind`. Do not resolve that
+   here: force-updating a published ref is governed by **Destructive-operation safety (reset /
+   force-push / rewrite)** in [recovery_playbook.md](recovery_playbook.md), which requires
+   `--force-with-lease` over `--force`. Anyone else who fetched that branch also needs telling.
+7. **Retiring either ref is a Mode E action** under Mode C evidence — the same standard this skill
+   applies to every other preserving ref it tells you to create, and no weaker. Do not delete
+   `rescue/foreign-<short-sha>` on a heuristic. Note that if step 4 was run in the discarding form, *your* own
+   commits are anchored only by the preserving refs — `backup/pre-rewrite` from step 2 and, for
+   anything before the foreign commit, `rescue/foreign-<short-sha>` from step 3. Neither is
+   retirable until step 5 has passed.
+
+**Why the obvious "did their work survive?" probes mislead.** These are worth knowing before you
+reach Mode C, because both look authoritative and both were measured returning the wrong answer on
+a real commit whose work had definitively shipped:
+
+- **"No ref contains it" does *not* prove the work is unique.** `git for-each-ref --contains <sha>`
+  (or `git branch -a --contains <sha>`) reports **zero** refs for a commit that already merged,
+  because a **squash or rebase merge re-writes it under a new SHA** — the original object survives
+  only as an unreachable dangler while its content sits in the integration branch. Note that you can no
+  longer observe that zero once this procedure is under way: the foreign commit is an ancestor of
+  your pre-rebase tip, so **both** preserving refs contain it — `backup/pre-rewrite` from step 2 as
+  well as `rescue/foreign-<short-sha>` from step 3 — and the count rises by one at each (measured in step
+  order). Exclude both, or the reading is about refs you created a minute ago:
+  ```bash
+  git for-each-ref --contains <sha> --format='%(refname)' | grep -vE '^refs/heads/(rescue|backup)/'
+  ```
+  Read the *output*, not the exit code: when the filter removes everything, the pipeline exits 1
+  with empty stdout — which is the answer "no external ref contains it", not a failure. Under
+  `set -e` or `pipefail` that exit aborts the script instead.
+- **Hash-equality comparison of whole files against the integration branch does not prove it
+  either.** Hashing `git show <sha>:<path>` against `git show origin/main:<path>` reports
+  "different" for every file as soon as the branch moves on; any later commit touching the same
+  files is enough. Measured: all five files differed while the work was fully present. (This is not
+  the superset-style same-file supersession check in Mode E rung 3, which compares content coverage
+  rather than equality.)
+- **A string the commit added, grepped against the integration branch, does answer** — with the
+  control line that makes it an instrument rather than a guess:
+  ```bash
+  git show origin/main:<path> >/dev/null   # must succeed first: 128 here means the path moved, and
+                                           # then BOTH greps below return 0 and the control passes
+  git show <sha> -- <path> | grep '^+' | grep -v '^+++'   # read these; pick one distinctive line
+  needle='<that phrase WITHOUT its leading + — diff output carries one, and grep -cF is literal>'
+  git show origin/main:<path> | grep -cF "$needle"                  # >0 ⇒ the work is in main
+  git show origin/main:<path> | grep -cF 'string-that-cannot-exist' # must be 0, or the probe is broken
+  ```
+  `origin/main` here is a cached ref. Staleness fails safe in this direction — you read 0, keep the
+  rescue ref, and over-preserve — but the `>0` half is a positive verdict off a cache, so fetch
+  first if you are the sole writer and can, and otherwise treat `>0` as provisional.
+  Both leading-`+` and a renamed path produce the same false negative — 0 hits with the control line
+  passing — so neither is caught by the control alone; that is what the first line and the `+` note
+  are for. If the file was renamed or moved in the integration branch, this probe cannot answer:
+  fall through to Mode E's rung 4 function/marker-level probe, which is
+  built for exactly the absorbed-into-a-refactor case.
+  Treat the result as an explanation of *why* an ancestry check disagreed, not as deletion
+  authority: it reads one string in one file, while Mode C's trial merge is the check this skill
+  records as right every time. If the work turns out to exist only on your branch, it was never
+  yours to drop — keep the rescue ref, tell the other session where it is, and let them re-land it.
 
 ## Audit before rebase / branch-delete
 

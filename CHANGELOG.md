@@ -11,6 +11,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **peer-message** v1.0.0 (marketplace v3.6.0): restore the previously uncommitted Claude UDS messenger from its source session and extend it into a local Claude Code ↔ Codex coordination layer. The bundled stdlib CLI discovers `claude:` and `codex:` targets across isolated standard Claude profiles, preserves the original authenticated UDS fallback, routes Codex through the first-party `codex queue --thread` command, supports explicitly counted cross-provider broadcasts, adds source/reply envelopes with explicit provenance strength, and verifies delivery from Claude transcripts or Codex queue/thread history without writing either product's SQLite stores. Claude uses a host-recognized peer wrapper; Codex provenance remains advisory text enforced by receiver-side governing instructions. The Skill-local official-feature reference owns the corrected availability and inbound-policy boundaries. The registered test suite, live Codex queue acceptance, and subsequent thread-history consumption were independently verified.
 
 ### Changed
+- **git-safety-net** v1.14.0 → v1.15.0: add the inverse of the shared-checkout
+  failure the previous release covered. v1.14.0 handles *your uncommitted work*
+  being stranded on *another session's* branch; this adds *their commit* landing
+  in *your branch's history*, where it ships inside your PR. Every check the skill
+  already prescribes reports green on it, because the foreign work left both the
+  working tree and the index the moment it was committed; only the branch's
+  cumulative range against its recorded base reveals it, so that read-only
+  comparison becomes a pre-push/pre-PR step, with the accidental tell named — a
+  validator or CI job reporting a wider blast radius than you worked on. Repair
+  is routed through the contracts this Skill already carries rather than restated
+  inline: finding a foreign commit is itself evidence another writer was in the
+  checkout, so the standing quiesce/ownership rules apply before anything else,
+  and the sequence that follows is the existing one — Mode B evidence path,
+  `backup/pre-rewrite` at your own tip per "Snapshot before any history rewrite",
+  a separate rescue ref for their commit, then the rebase, with either ref retired
+  only under Mode C/E deletion-grade evidence. The base SHA is recorded at branch
+  creation because recovering it later reads a cached remote ref whose refresh is
+  a gated fetch. Three measured instrument corrections ship with it: `--contains`
+  reports zero refs for a commit whose work already merged under a
+  squash-rewritten SHA; hash-equality comparison of whole files against the
+  integration branch reports differences as soon as the branch moves on; and
+  `merge-base --is-ancestor` answers only where the merge preserved the commit, so
+  under squash merges its exit 1 means "not this object", not "not landed" — the
+  probe that survives either strategy is a content grep carrying a known-absent
+  control line; `--is-ancestor` also has a third exit code, 128, for a SHA this
+  repository does not have — a different answer from 1. The prescribed rebase is
+  `--onto "<foreign-sha>^"`, never `--onto "$base"`: the latter replays
+  `<foreign-sha>..<branch>` and so discards the author's *own* earlier commits when
+  the foreign one is not first after the base, silently and with exit 0 (measured
+  on an `A(yours) → F(foreign) → C(yours)` branch: `A` vanished). Because a rebase
+  exit code cannot report that, re-running the detection is now a required step,
+  and the already-pushed case routes to the existing force-push contract instead of
+  inventing one. Troubleshooting also gains the lost-receipt entry (a moved remote
+  ref is not proof *your* write landed when concurrent sessions are merging) and a
+  probe-shape entry: `git ls-remote > f; [ -s f ]` is wrong in **both** directions
+  depending on one redirection detail — bare `> f` leaves 0 bytes because Git
+  writes the failure to stderr, so a live branch reads as "already gone", while
+  `2>&1` writes 155 bytes and a deleted branch reads as "still there";
+  `--exit-code` separates matched (0), no match (2), and probe failure (128). The
+  `rebase.autoStash` hazard is documented from measurement: on a conflicted rebase
+  a sibling session's uncommitted work leaves the working tree while
+  `git stash list` shows nothing, because an autostash is not a stash entry.
+  Every probe that ships carries the guard that stops it failing green: an
+  unresolvable base turns `"$base"..HEAD` into `HEAD..HEAD` and prints nothing at
+  exit 0, indistinguishable from "clean", so the base is verified first; Git cannot
+  attribute commits in a shared checkout (both sessions write the same author), so
+  "which are mine" is a recorded fact and a stop condition, not a query; the
+  content grep needs its diff `+` stripped and its path checked, since a renamed
+  file and an unstripped needle both return 0 with the control line passing;
+  `--contains` stops reporting zero the moment the rescue ref exists, so the
+  reading must exclude it; `ls-remote` takes a fully-qualified `refs/heads/<branch>`
+  because a bare name also matches a same-named tag; and `cat-file -e` returns 128
+  for a mistyped branch and a symlinked path as well as a missing file.
+  Every exit code, both failure directions, and each of the three wrong
+  instruments were measured, not recalled.
 - **tibo-reset-codex** v1.2.2 → v1.3.1: add the missing local-account
   forensics leg and close the announcement path's structural blind spot,
   both exposed by the 2026-09-01 live run. The skill previously could only

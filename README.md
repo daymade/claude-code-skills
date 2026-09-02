@@ -3284,6 +3284,8 @@ additive until a step is explicitly labeled destructive.
 - Verifies a branch is merged by CONTENT — defeating the squash-merge "100 commits ahead" illusion
 - Proves a linked worktree safe before non-forced removal and exports all refs in one verified bundle
 - Optional adversarial multi-agent verification for a high-stakes "is everything merged?" call
+- Catches another session's commit adopted onto your branch before it ships inside your PR
+- Settles "did my push/merge actually land?" by content when the receipt was lost to a flaky network
 - Prevention habits: commit before switching, push WIP early, audit every checkout before deletion
 
 **Example usage:**
