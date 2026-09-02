@@ -87,9 +87,10 @@
       "files": [],
       "assertions": [
         "Lists, or prescribes listing, the modified and untracked files in the worktree before removing, rather than acting on the user's assurance that they are scratch",
-        "States that untracked content has no copy in the repository, so forcing the removal destroys it with no recovery path",
+        "Names the modified and untracked files in the worktree as what `--force` would discard",
+        "States that untracked content has no copy in the repository, so a forced removal leaves no recovery path",
         "States that the branch's commits survive the removal, so they are not what the refusal is protecting",
-        "Preserves, or prescribes preserving, anything worth keeping outside the worktree before running the forced removal, rather than re-running the command with --force as asked"
+        "Makes the removal conditional on those checks, rather than re-running the command with `--force` as asked"
       ]
     },
     {
@@ -98,8 +99,9 @@
       "expected_output": "Does the editing job. Ordinary work in a clean solo repo is not an incident: no at-risk-work audit, no backup or rescue refs, no dangling-commit sweep, no lecture about recovery procedure. Normal care (committing only the intended file) is enough.",
       "files": [],
       "assertions": [
-        "Treats adding the section and committing it as the task, rather than as a step to be gated behind a safety procedure",
-        "Does not run or propose a repository-wide at-risk-work audit, dangling-commit sweep, or reflog inspection",
+        "Edits README.md, or prescribes the edit, to add a `## Setup` section containing the install command",
+        "Commits that change, or prescribes committing it",
+        "Does not run or propose `git reflog`, `git fsck`, or `git stash list`",
         "Does not create or propose any backup, rescue, or snapshot ref for this change"
       ]
     },
@@ -109,7 +111,7 @@
       "expected_output": "Reports the state accurately without manufacturing an alarm. A single stash in an otherwise clean, fully-pushed repo is ordinary recoverable state; mentioning it is fine, escalating it into at-risk work or a rescue procedure is the failure mode, because a check that fires on healthy input trains the user to ignore it.",
       "files": [],
       "assertions": [
-        "Characterises the repository as healthy, with nothing at risk",
+        "States explicitly that nothing in the repository is at risk of being lost",
         "Does not describe the stash as endangered work or open a recovery/preservation procedure for it",
         "Does not propose destructive or corrective git operations in response to this state"
       ]
