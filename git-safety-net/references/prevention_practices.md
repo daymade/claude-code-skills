@@ -281,55 +281,91 @@ reports correctly, and reports green:
 | `git status` | clean | their work was committed, so it left the working tree |
 | `git diff --cached --name-status` | only your paths | their work left the index too, at commit time |
 
-The foreign commit is visible only in the branch's **cumulative range against the base you branched
-from** — a comparison none of the above makes:
+The foreign commit appears only in the branch's **cumulative range against the base you branched
+from** — a comparison none of the above makes. This step is read-only and carries no ownership
+precondition:
 
 ```bash
-base=$(git merge-base origin/main HEAD)   # or the base SHA you recorded when branching
+base=<the base SHA you recorded when you created the branch>
 git log  --oneline "$base"..HEAD          # every commit here must be yours
 git diff --name-only "$base" HEAD         # every path here must be yours
 ```
 
-Run it before every push and before opening any PR from a shared checkout. The signal that reaches
-you by accident is a repo validator or CI job reporting a wider blast radius than you worked on —
-"2 components changed" when you touched 1. Treat that as this failure mode until proven otherwise.
+**Record the base SHA at branch creation.** `git merge-base origin/main HEAD` recovers it only from
+a *cached* remote ref, and refreshing that cache is a fetch — which **Shared checkout and concurrent
+sessions: one writer** and Mode C both gate on exclusive ownership. A stale base widens the range,
+which is the safe direction for detection but the dangerous one for the rebase that may follow, and
+it is precisely the moment you cannot fetch to fix it. Recording one SHA at the start costs nothing
+and removes the dependency.
 
-**Repair — anchor first, analyse second.** The rebase that removes their commit is the easy half;
-the dangerous half is deciding it is safe to remove. Make that decision non-fatal before you make it:
+Run the comparison before every push and before opening any PR from a shared checkout. The signal
+that reaches you by accident is a repo validator or CI job reporting a wider blast radius than you
+worked on — "2 components changed" when you touched 1. Treat that as this failure mode until proven
+otherwise.
 
-```bash
-git branch rescue/foreign-<short-sha> <foreign-sha>    # free, instant, makes the drop reversible
-git rebase --onto "$base" <foreign-sha> <your-branch>  # replays only the commits after it
-```
+**Repair is governed by the rules that already exist here — do not shortcut them.** Finding a
+foreign commit is itself evidence that another writer was in this checkout, so the first obligation
+is the standing one: stop, and use the repository's coordination system to quiesce that writer and
+transfer exclusive ownership. If no such authority exists, stop with the evidence intact and report
+it. Nothing below is a concurrency loophole.
 
-Anchoring first is not belt-and-braces — it is what lets you be *wrong* about the next step without
-losing anything. Do it unconditionally, before any investigation.
+Once you are the sole writer, the repair is a history rewrite of your own branch — `git rebase
+--onto` checks out the branch it rewrites, so it is checkout-relative mutation — and it runs the
+existing sequence in order:
 
-**Then decide whether the rescue ref can go, and distrust the two obvious instruments.** The question
-is whether that work survives anywhere other than your branch. Both natural ways to ask it were
-measured returning the wrong answer on a real commit whose work had definitively shipped:
+1. **Audit before rebase / branch-delete** (below): select and run the applicable evidence path.
+   Local-only commits and dirty authorized worktrees must be preserved before the destructive step.
+2. **Snapshot before any history rewrite** (below): `git branch backup/pre-rewrite <your-branch>`.
+   This ref points at *your* tip and is what makes the rebase reversible. Nothing else does — after
+   `git rebase --onto` your pre-rebase tip is reachable through the reflog only (measured: zero refs
+   contain it).
+3. **Preserve their commit** — a separate obligation needing its own ref, because the backup above
+   points at your tip and the rebase drops *their* commit from your branch:
+   ```bash
+   git branch rescue/foreign-<short-sha> <foreign-sha>
+   ```
+4. **Rebase — and confirm the working tree is clean before you do.** With `rebase.autoStash`
+   enabled (measured behaviour), a rebase on a shared tree silently stashes whatever a sibling
+   session left uncommitted. On a clean run it is restored and you would never know. If the rebase
+   **stops on a conflict**, their files are gone from the working tree and `git stash list` shows
+   **nothing** — an autostash is not a stash entry, so the first check anyone runs comes back empty
+   while their work sits at `.git/rebase-merge/autostash` and in the one `Created autostash: <sha>`
+   line the rebase already printed. `git rebase --abort` restores it, but only if someone knows to
+   look. This is the unscoped stash of another session's work that this skill forbids, performed on
+   your behalf by a config flag.
+   ```bash
+   git rebase --onto "$base" <foreign-sha> <your-branch>   # replays only the commits after it
+   ```
+5. **Retiring either ref is a Mode E action** under Mode C evidence — the same standard this skill
+   applies to every other preserving ref it tells you to create, and no weaker. Do not delete
+   `rescue/foreign-<sha>` on a heuristic.
+
+**Why the obvious "did their work survive?" probes mislead.** These are worth knowing before you
+reach Mode C, because both look authoritative and both were measured returning the wrong answer on
+a real commit whose work had definitively shipped:
 
 - **"No ref contains it" does *not* prove the work is unique.** `git for-each-ref --contains <sha>`
   (or `git branch -a --contains <sha>`) reports **zero** refs for a commit that already merged,
   because a **squash or rebase merge re-writes it under a new SHA** — the original object survives
   only as an unreachable dangler while its content sits in the integration branch.
-- **Whole-file comparison against the integration branch does not prove it either.** Hashing
-  `git show <sha>:<path>` against `git show origin/main:<path>` reports "different" for every file
-  as soon as the branch moves on; any later commit touching the same files is enough. Measured: all
-  five files differed while the work was fully present.
-- **What works: grep the integration branch for a distinctive string the commit *added*.**
+- **Hash-equality comparison of whole files against the integration branch does not prove it
+  either.** Hashing `git show <sha>:<path>` against `git show origin/main:<path>` reports
+  "different" for every file as soon as the branch moves on; any later commit touching the same
+  files is enough. Measured: all five files differed while the work was fully present. (This is not
+  the superset-style same-file supersession check in Mode E rung 3, which compares content coverage
+  rather than equality.)
+- **A string the commit added, grepped against the integration branch, does answer** — with the
+  control line that makes it an instrument rather than a guess:
   ```bash
   git show <sha> -- <path> | grep '^+' | grep -v '^+++'   # read these; pick one distinctive line
   needle='<a distinctive phrase from that output>'
   git show origin/main:<path> | grep -cF "$needle"                  # >0 ⇒ the work is in main
   git show origin/main:<path> | grep -cF 'string-that-cannot-exist' # must be 0, or the probe is broken
   ```
-  The last line is not optional. It is what separates "the work is not there" from "my probe does not
-  work" — two outcomes a single grep returns identically.
-
-Delete the rescue ref only after that probe answers, in the same command shape, on a string you know
-is present. If the work turns out to exist *only* on your branch, it was never yours to drop: keep
-the rescue ref, tell the other session where it is, and let them re-land it.
+  Treat the result as an explanation of *why* an ancestry check disagreed, not as deletion
+  authority: it reads one string in one file, while Mode C's trial merge is the check this skill
+  records as right every time. If the work turns out to exist only on your branch, it was never
+  yours to drop — keep the rescue ref, tell the other session where it is, and let them re-land it.
 
 ## Audit before rebase / branch-delete
 

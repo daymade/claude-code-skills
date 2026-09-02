@@ -14,25 +14,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **git-safety-net** v1.14.0 → v1.15.0: add the inverse of the shared-checkout
   failure the previous release covered. v1.14.0 handles *your uncommitted work*
   being stranded on *another session's* branch; this adds *their commit* landing
-  in *your branch's history* — which every check the skill already prescribes
-  reports green on, because the foreign work left both the working tree and the
-  index at the moment it was committed. Only the branch's cumulative range
-  against its base reveals it, so that comparison becomes a pre-push/pre-PR step,
-  with the accidental tell named: a validator or CI job reporting a wider blast
-  radius than you worked on. Repair anchors the foreign commit on a rescue ref
-  before the rebase, so being wrong about the next step costs nothing. Two
-  instruments for "did that work survive anywhere else?" are documented as
-  measured wrong: `--contains` reports zero refs for a commit whose work already
-  merged under a squash-rewritten SHA, and whole-file comparison against the
-  integration branch reports differences as soon as the branch moves on. The
-  calibrated probe greps the integration branch for a string the commit added,
-  with a known-absent control line that is not optional. Troubleshooting gains
-  two receipt/probe entries: a moved remote ref is not proof *your* write landed
-  when concurrent sessions are merging, and `git ls-remote > f; [ -s f ]` reports
-  "still exists" for a branch that is long gone, because network error text makes
-  the file non-empty — `--exit-code` distinguishes matched (0), no match (2), and
-  probe failure (128). Every exit code and both failure directions were measured
-  in this repository, not recalled.
+  in *your branch's history*, where it ships inside your PR. Every check the skill
+  already prescribes reports green on it, because the foreign work left both the
+  working tree and the index the moment it was committed; only the branch's
+  cumulative range against its recorded base reveals it, so that read-only
+  comparison becomes a pre-push/pre-PR step, with the accidental tell named — a
+  validator or CI job reporting a wider blast radius than you worked on. Repair
+  is routed through the contracts this Skill already carries rather than restated
+  inline: finding a foreign commit is itself evidence another writer was in the
+  checkout, so the standing quiesce/ownership rules apply before anything else,
+  and the sequence that follows is the existing one — Mode B evidence path,
+  `backup/pre-rewrite` at your own tip per "Snapshot before any history rewrite",
+  a separate rescue ref for their commit, then the rebase, with either ref retired
+  only under Mode C/E deletion-grade evidence. The base SHA is recorded at branch
+  creation because recovering it later reads a cached remote ref whose refresh is
+  a gated fetch. Three measured instrument corrections ship with it: `--contains`
+  reports zero refs for a commit whose work already merged under a
+  squash-rewritten SHA; hash-equality comparison of whole files against the
+  integration branch reports differences as soon as the branch moves on; and
+  `merge-base --is-ancestor` answers only where the merge preserved the commit, so
+  under squash merges its exit 1 means "not this object", not "not landed" — the
+  probe that survives either strategy is a content grep carrying a known-absent
+  control line. Troubleshooting also gains the lost-receipt entry (a moved remote
+  ref is not proof *your* write landed when concurrent sessions are merging) and a
+  probe-shape entry (`git ls-remote > f; [ -s f ]` reports "still exists" for a
+  deleted branch because network error text makes the file non-empty;
+  `--exit-code` separates matched (0), no match (2), and probe failure (128)). The
+  `rebase.autoStash` hazard is documented from measurement: on a conflicted rebase
+  a sibling session's uncommitted work leaves the working tree while
+  `git stash list` shows nothing, because an autostash is not a stash entry.
+  Every exit code, both failure directions, and each of the three wrong
+  instruments were measured, not recalled.
 - **tibo-reset-codex** v1.2.2 → v1.3.1: add the missing local-account
   forensics leg and close the announcement path's structural blind spot,
   both exposed by the 2026-09-01 live run. The skill previously could only

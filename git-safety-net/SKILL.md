@@ -339,27 +339,34 @@ The habits that keep a branch tangle from ever stranding work:
   back. Branch deletion remains a separately authorized Mode E action.
 - **The inverse case: another session's *commit* lands on your branch, and every check you already
   run stays green.** In a shared checkout, a commit a sibling session makes while `HEAD` sits on
-  your branch becomes a parent of yours, and ships inside your PR. `git branch --show-current`
-  names your branch, the tree is clean, and `git diff --cached --name-status` shows exactly your
-  paths — all true, all blind, because their work left the index the moment they committed. It is
-  visible only in the branch's cumulative range against the base you branched from, so read that
-  before you push or open a PR:
+  your branch becomes a parent of yours and ships inside your PR. `git branch --show-current` names
+  your branch, the tree is clean, and `git diff --cached --name-status` shows exactly your paths —
+  all true, all blind, because their work left the index the moment they committed. It appears only
+  in the branch's cumulative range against the base you branched from. Detection is read-only, so
+  run it before every push and before opening any PR:
   ```bash
-  base=$(git merge-base origin/main HEAD)
+  base=<the base SHA you recorded when you created the branch>
   git log  --oneline "$base"..HEAD     # every commit here must be yours
   git diff --name-only "$base" HEAD    # every path here must be yours
   ```
-  To repair, **anchor the foreign commit before dropping it** — one free ref makes the rebase
-  reversible whatever your analysis concludes:
-  ```bash
-  git branch rescue/foreign-<short-sha> <foreign-sha>     # unconditionally, first
-  git rebase --onto "$base" <foreign-sha> <your-branch>   # replays only the commits after it
-  ```
-  Whether that rescue ref is still needed is a *content* question, and the two obvious instruments
-  (`--contains`, whole-file comparison) were both measured answering it wrongly — the calibrated
-  probe is in the prevention reference. Real incident: a sibling session committed while `HEAD` sat
-  on a freshly created branch; the PR carried that session's in-progress work, and the only signal
-  was a repo validator reporting two changed components when the author had touched one.
+  Record that base SHA when you branch. Recovering it later with `git merge-base origin/main HEAD`
+  reads a *cached* remote ref, and the fetch that would refresh it is itself gated on exclusive
+  ownership — so on a contended checkout the derived base is the one input you cannot safely
+  recompute at the moment you need it.
+  **A foreign commit in that range is evidence another writer was in this checkout, so repair is
+  not yours to start.** Stop; the ownership rules above apply unchanged. Once ownership has
+  transferred, repair is a history rewrite of *your* branch — `git rebase --onto` checks out the
+  branch it rewrites — so it runs the existing sequence rather than a shortcut: the Mode B evidence
+  path, then `git branch backup/pre-rewrite <your-branch>` (**Snapshot before any history rewrite**
+  — this is what makes the rebase reversible), then `git branch rescue/foreign-<sha> <foreign-sha>`
+  (this preserves *their* work, a separate obligation and a different ref), then the rebase.
+  Retiring either ref afterwards is Mode C/E deletion-grade evidence, not a guess. Full procedure,
+  and why the two obvious "did their work survive?" probes return the wrong answer, in **A foreign
+  commit adopted onto your branch** in
+  [references/prevention_practices.md](references/prevention_practices.md). Real incident: a
+  sibling session committed while `HEAD` sat on a freshly created branch; the PR carried that
+  session's in-progress work, and the only signal was a repo validator reporting two changed
+  components when the author had touched one.
 - **If a parallel session is *actively* writing the shared tree, all repository mutation stops.**
   Do not `switch`, `add`, `reset`, create commits with a temporary index, update refs, or push. Use
   the repository's coordination system to quiesce that writer and transfer exclusive ownership; if
@@ -623,12 +630,20 @@ the helpers authorizes `checkout`, `reset`, `push`, `stash drop`, `branch -d`, o
 - **A push or merge command lost its receipt (timeout, TLS error, EOF) and the remote ref has
   moved** — a moved ref is not proof *your* write landed. On a repo with concurrent sessions the new
   tip can be someone else's merge, and retrying on that assumption either double-applies your change
-  or reports success for work that never shipped. Decide by content, never by movement: `git fetch`,
-  then confirm your exact object is an ancestor (`git merge-base --is-ancestor <your-sha>
-  origin/<branch>`; exit 0 = yes, 1 = no) or grep the remote-side file for a string only your version
-  contains (`git show origin/<branch>:<path>`). Real incident: three merge attempts failed at the
-  network layer while `origin/main` advanced twice — once for this author's merge, once for a
-  parallel session's.
+  or reports success for work that never shipped. Settle it by content — with two cautions first.
+  Refreshing remote-tracking refs is a fetch, which Mode C gates on exclusive ownership: on a
+  contended checkout, report the verdict as unavailable rather than fetching. And
+  `git merge-base --is-ancestor <your-sha> origin/<branch>` answers only where the merge preserved
+  your commit — a squash or rebase merge re-writes it, so exit 1 there means "not this object", not
+  "not landed", and acting on it produces exactly the double-apply this entry warns about (measured
+  in one repository on one day: one merged PR's commit was an ancestor, another's was not, and both
+  had landed). The probe that survives either merge strategy is content, with its control line:
+  ```bash
+  git show origin/<branch>:<path> | grep -cF '<a string only your version contains>'
+  git show origin/<branch>:<path> | grep -cF 'string-that-cannot-exist'  # must be 0, or the probe is broken
+  ```
+  Real incident: three merge attempts failed at the network layer while `origin/main` advanced
+  twice — once for this author's merge, once for a parallel session's.
 - **A "did that branch get deleted?" probe says it still exists** — check the shape of the probe
   before believing it. `git ls-remote <remote> <ref> > f` writes *error text* into that file when the
   network fails, so a following `[ -s f ]` reads non-empty and reports "still there" for a branch
