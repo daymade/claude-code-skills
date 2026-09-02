@@ -383,11 +383,14 @@ a real commit whose work had definitively shipped:
 - **"No ref contains it" does *not* prove the work is unique.** `git for-each-ref --contains <sha>`
   (or `git branch -a --contains <sha>`) reports **zero** refs for a commit that already merged,
   because a **squash or rebase merge re-writes it under a new SHA** — the original object survives
-  only as an unreachable dangler while its content sits in the integration branch. Note you can no
-  longer observe that zero once step 3 has run: your own `rescue/foreign-<sha>` contains it, so the
-  count is never zero again (measured: 1 → 2 on creating the rescue ref). Exclude your own ref —
-  `git for-each-ref --contains <sha> --format='%(refname)' | grep -v '^refs/heads/rescue/'` — or the
-  reading is about a ref you created a minute ago.
+  only as an unreachable dangler while its content sits in the integration branch. Note that you can no
+  longer observe that zero once this procedure is under way: the foreign commit is an ancestor of
+  your pre-rebase tip, so **both** preserving refs contain it — `backup/pre-rewrite` from step 2 as
+  well as `rescue/foreign-<sha>` from step 3 — and the count rises by one at each (measured in step
+  order). Exclude both, or the reading is about refs you created a minute ago:
+  ```bash
+  git for-each-ref --contains <sha> --format='%(refname)' | grep -vE '^refs/heads/(rescue|backup)/'
+  ```
 - **Hash-equality comparison of whole files against the integration branch does not prove it
   either.** Hashing `git show <sha>:<path>` against `git show origin/main:<path>` reports
   "different" for every file as soon as the branch moves on; any later commit touching the same
@@ -404,6 +407,9 @@ a real commit whose work had definitively shipped:
   git show origin/main:<path> | grep -cF "$needle"                  # >0 ⇒ the work is in main
   git show origin/main:<path> | grep -cF 'string-that-cannot-exist' # must be 0, or the probe is broken
   ```
+  `origin/main` here is a cached ref. Staleness fails safe in this direction — you read 0, keep the
+  rescue ref, and over-preserve — but the `>0` half is a positive verdict off a cache, so fetch
+  first if you are the sole writer and can, and otherwise treat `>0` as provisional.
   Both leading-`+` and a renamed path produce the same false negative — 0 hits with the control line
   passing — so neither is caught by the control alone; that is what the first line and the `+` note
   are for. If the file was renamed or moved in the integration branch, this probe cannot answer:

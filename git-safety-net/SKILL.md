@@ -364,15 +364,15 @@ The habits that keep a branch tangle from ever stranding work:
   **A foreign commit in that range is evidence another writer was in this checkout, so repair is
   not yours to start.** Stop; the ownership rules above apply unchanged. Once ownership has
   transferred, repair is a history rewrite of *your* branch — `git rebase --onto` checks out the
-  branch it rewrites — so it runs the existing sequence rather than a shortcut: the Mode B evidence
-  path, then `git branch backup/pre-rewrite <your-branch>` (**Snapshot before any history rewrite**
+  branch it rewrites — so it runs the existing sequence rather than a shortcut: the applicable Mode B
+  evidence path, then `git branch backup/pre-rewrite <your-branch>` (**Snapshot before any history rewrite**
   — this is what makes the rebase reversible), then `git branch rescue/foreign-<sha> <foreign-sha>`
   (this preserves *their* work, a separate obligation and a different ref), then
   `git rebase --onto "<foreign-sha>^" "<foreign-sha>" <your-branch>` — **onto the foreign commit's
   parent, never onto the base**, because `--onto "$base"` discards everything before the foreign
   commit, your own earlier commits included, and exits 0. Then re-run the detection above: the
   rebase's exit code does not tell you whether it took something of yours with it. Retiring either
-  ref afterwards is Mode C/E deletion-grade evidence, not a guess. Full procedure,
+  ref afterwards requires Mode C/E deletion-grade evidence, not a guess. Full procedure,
   and why the two obvious "did their work survive?" probes return the wrong answer, in **A foreign
   commit adopted onto your branch** in
   [references/prevention_practices.md](references/prevention_practices.md). Real incident: a
@@ -643,8 +643,12 @@ the helpers authorizes `checkout`, `reset`, `push`, `stash drop`, `branch -d`, o
   moved** — a moved ref is not proof *your* write landed. On a repo with concurrent sessions the new
   tip can be someone else's merge, and retrying on that assumption either double-applies your change
   or reports success for work that never shipped. Settle it by content — with two cautions first.
-  Refreshing remote-tracking refs is a fetch, which Mode C gates on exclusive ownership: on a
-  contended checkout, report the verdict as unavailable rather than fetching. And
+  Refreshing remote-tracking refs is a fetch, which Mode C gates on exclusive ownership — which
+  cuts both ways. **Once you are the sole writer, fetch before you read**: rule 1 above applies to
+  this question specifically, because a stale `origin/<branch>` makes work the remote already has
+  read as unique, which is the double-apply this entry opened with. **On a contended checkout you
+  may not fetch**, and a verdict read off a cached ref is not a verdict — report it as unavailable.
+  And
   `git merge-base --is-ancestor <your-sha> origin/<branch>` answers only where the merge preserved
   your commit — a squash or rebase merge re-writes it, so exit 1 there means "not this object", not
   "not landed", and acting on it produces exactly the double-apply this entry warns about (measured
