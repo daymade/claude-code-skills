@@ -11,6 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **peer-message** v1.0.0 (marketplace v3.6.0): restore the previously uncommitted Claude UDS messenger from its source session and extend it into a local Claude Code ↔ Codex coordination layer. The bundled stdlib CLI discovers `claude:` and `codex:` targets across isolated standard Claude profiles, preserves the original authenticated UDS fallback, routes Codex through the first-party `codex queue --thread` command, supports explicitly counted cross-provider broadcasts, adds source/reply envelopes with explicit provenance strength, and verifies delivery from Claude transcripts or Codex queue/thread history without writing either product's SQLite stores. Claude uses a host-recognized peer wrapper; Codex provenance remains advisory text enforced by receiver-side governing instructions. The Skill-local official-feature reference owns the corrected availability and inbound-policy boundaries. The registered test suite, live Codex queue acceptance, and subsequent thread-history consumption were independently verified.
 
 ### Changed
+- **git-safety-net** v1.14.0 → v1.15.0: add the inverse of the shared-checkout
+  failure the previous release covered. v1.14.0 handles *your uncommitted work*
+  being stranded on *another session's* branch; this adds *their commit* landing
+  in *your branch's history* — which every check the skill already prescribes
+  reports green on, because the foreign work left both the working tree and the
+  index at the moment it was committed. Only the branch's cumulative range
+  against its base reveals it, so that comparison becomes a pre-push/pre-PR step,
+  with the accidental tell named: a validator or CI job reporting a wider blast
+  radius than you worked on. Repair anchors the foreign commit on a rescue ref
+  before the rebase, so being wrong about the next step costs nothing. Two
+  instruments for "did that work survive anywhere else?" are documented as
+  measured wrong: `--contains` reports zero refs for a commit whose work already
+  merged under a squash-rewritten SHA, and whole-file comparison against the
+  integration branch reports differences as soon as the branch moves on. The
+  calibrated probe greps the integration branch for a string the commit added,
+  with a known-absent control line that is not optional. Troubleshooting gains
+  two receipt/probe entries: a moved remote ref is not proof *your* write landed
+  when concurrent sessions are merging, and `git ls-remote > f; [ -s f ]` reports
+  "still exists" for a branch that is long gone, because network error text makes
+  the file non-empty — `--exit-code` distinguishes matched (0), no match (2), and
+  probe failure (128). Every exit code and both failure directions were measured
+  in this repository, not recalled.
 - **tibo-reset-codex** v1.2.2 → v1.3.1: add the missing local-account
   forensics leg and close the announcement path's structural blind spot,
   both exposed by the 2026-09-01 live run. The skill previously could only

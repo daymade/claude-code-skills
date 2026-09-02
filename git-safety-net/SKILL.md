@@ -337,6 +337,29 @@ The habits that keep a branch tangle from ever stranding work:
   follow the incident-only relocation procedure in the prevention reference: prove your files match
   across bases, commit only explicit paths, and restore the prior branch before handing ownership
   back. Branch deletion remains a separately authorized Mode E action.
+- **The inverse case: another session's *commit* lands on your branch, and every check you already
+  run stays green.** In a shared checkout, a commit a sibling session makes while `HEAD` sits on
+  your branch becomes a parent of yours, and ships inside your PR. `git branch --show-current`
+  names your branch, the tree is clean, and `git diff --cached --name-status` shows exactly your
+  paths — all true, all blind, because their work left the index the moment they committed. It is
+  visible only in the branch's cumulative range against the base you branched from, so read that
+  before you push or open a PR:
+  ```bash
+  base=$(git merge-base origin/main HEAD)
+  git log  --oneline "$base"..HEAD     # every commit here must be yours
+  git diff --name-only "$base" HEAD    # every path here must be yours
+  ```
+  To repair, **anchor the foreign commit before dropping it** — one free ref makes the rebase
+  reversible whatever your analysis concludes:
+  ```bash
+  git branch rescue/foreign-<short-sha> <foreign-sha>     # unconditionally, first
+  git rebase --onto "$base" <foreign-sha> <your-branch>   # replays only the commits after it
+  ```
+  Whether that rescue ref is still needed is a *content* question, and the two obvious instruments
+  (`--contains`, whole-file comparison) were both measured answering it wrongly — the calibrated
+  probe is in the prevention reference. Real incident: a sibling session committed while `HEAD` sat
+  on a freshly created branch; the PR carried that session's in-progress work, and the only signal
+  was a repo validator reporting two changed components when the author had touched one.
 - **If a parallel session is *actively* writing the shared tree, all repository mutation stops.**
   Do not `switch`, `add`, `reset`, create commits with a temporary index, update refs, or push. Use
   the repository's coordination system to quiesce that writer and transfer exclusive ownership; if
@@ -597,6 +620,24 @@ the helpers authorizes `checkout`, `reset`, `push`, `stash drop`, `branch -d`, o
   many hours old by the end. Symptom to recognise: a change you know you committed appears absent
   upstream, so you prepare to re-ship it. Fetch first, then compare by content; if it did land,
   check whether anyone improved it before re-applying your version over theirs.
+- **A push or merge command lost its receipt (timeout, TLS error, EOF) and the remote ref has
+  moved** — a moved ref is not proof *your* write landed. On a repo with concurrent sessions the new
+  tip can be someone else's merge, and retrying on that assumption either double-applies your change
+  or reports success for work that never shipped. Decide by content, never by movement: `git fetch`,
+  then confirm your exact object is an ancestor (`git merge-base --is-ancestor <your-sha>
+  origin/<branch>`; exit 0 = yes, 1 = no) or grep the remote-side file for a string only your version
+  contains (`git show origin/<branch>:<path>`). Real incident: three merge attempts failed at the
+  network layer while `origin/main` advanced twice — once for this author's merge, once for a
+  parallel session's.
+- **A "did that branch get deleted?" probe says it still exists** — check the shape of the probe
+  before believing it. `git ls-remote <remote> <ref> > f` writes *error text* into that file when the
+  network fails, so a following `[ -s f ]` reads non-empty and reports "still there" for a branch
+  that is long gone. Use the exit code the command has for exactly this: `git ls-remote --exit-code
+  <remote> <ref>` returns **0** when the ref matched, **2** when it did not, and anything else (128
+  for an unreachable remote) means the probe itself failed — three outcomes the file-size test
+  collapses into two. Same trap in the working tree: `[ -e <path> ]` cannot tell a tracked-and-clean
+  file from an untracked collision. Ask Git instead — `git cat-file -e <branch>:<path>` (0 = the
+  branch has it, non-zero = it does not).
 - **You're on a detached HEAD after checking out a commit** — that commit is safe as long as you
   `git switch -c <branch> HEAD` (or the reflog remembers it for ~90 days). Don't leave important
   new work on a detached HEAD across a `gc`.

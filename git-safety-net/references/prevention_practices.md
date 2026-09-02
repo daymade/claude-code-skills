@@ -12,6 +12,7 @@ ceremony; adopt the ones whose failure mode you're exposed to.
 - Push work-in-progress branches early
 - Confirm the branch before every commit
 - Recover stranded work after a parallel session switched the shared tree
+- A foreign commit adopted onto your branch (the inverse case)
 - Audit before rebase / branch-delete
 - Audit every authorized worktree before retirement
 - Snapshot before any history rewrite
@@ -262,6 +263,73 @@ After Step 3, return to **Exact-SHA handoff and scoped completion** above: recor
 `topic_sha`, push and read back that exact object, use `git merge "$topic_sha"` for a direct merge,
 and require the hosted expected-head-SHA gate (or immediately preceding hosted head readback) for a
 PR merge. Any branch-tip drift expires the handoff.
+
+## A foreign commit adopted onto your branch (the inverse case)
+
+**Failure mode:** the mirror image of the section above. There, a parallel session moved the shared
+tree and *your uncommitted work* ended up on *their* branch. Here *their commit* ends up in *your
+branch's history*: you created a topic branch in a shared checkout, a sibling session committed while
+`HEAD` was still on it, and that commit is now a parent of yours. Open a PR and it ships their
+in-progress work under your name and your review.
+
+**Why the usual checks miss it.** Every branch-level instrument this skill already tells you to run
+reports correctly, and reports green:
+
+| Check | What it says | Why it cannot see this |
+|---|---|---|
+| `git branch --show-current` | your branch | it *is* your branch — that was never the problem |
+| `git status` | clean | their work was committed, so it left the working tree |
+| `git diff --cached --name-status` | only your paths | their work left the index too, at commit time |
+
+The foreign commit is visible only in the branch's **cumulative range against the base you branched
+from** — a comparison none of the above makes:
+
+```bash
+base=$(git merge-base origin/main HEAD)   # or the base SHA you recorded when branching
+git log  --oneline "$base"..HEAD          # every commit here must be yours
+git diff --name-only "$base" HEAD         # every path here must be yours
+```
+
+Run it before every push and before opening any PR from a shared checkout. The signal that reaches
+you by accident is a repo validator or CI job reporting a wider blast radius than you worked on —
+"2 components changed" when you touched 1. Treat that as this failure mode until proven otherwise.
+
+**Repair — anchor first, analyse second.** The rebase that removes their commit is the easy half;
+the dangerous half is deciding it is safe to remove. Make that decision non-fatal before you make it:
+
+```bash
+git branch rescue/foreign-<short-sha> <foreign-sha>    # free, instant, makes the drop reversible
+git rebase --onto "$base" <foreign-sha> <your-branch>  # replays only the commits after it
+```
+
+Anchoring first is not belt-and-braces — it is what lets you be *wrong* about the next step without
+losing anything. Do it unconditionally, before any investigation.
+
+**Then decide whether the rescue ref can go, and distrust the two obvious instruments.** The question
+is whether that work survives anywhere other than your branch. Both natural ways to ask it were
+measured returning the wrong answer on a real commit whose work had definitively shipped:
+
+- **"No ref contains it" does *not* prove the work is unique.** `git for-each-ref --contains <sha>`
+  (or `git branch -a --contains <sha>`) reports **zero** refs for a commit that already merged,
+  because a **squash or rebase merge re-writes it under a new SHA** — the original object survives
+  only as an unreachable dangler while its content sits in the integration branch.
+- **Whole-file comparison against the integration branch does not prove it either.** Hashing
+  `git show <sha>:<path>` against `git show origin/main:<path>` reports "different" for every file
+  as soon as the branch moves on; any later commit touching the same files is enough. Measured: all
+  five files differed while the work was fully present.
+- **What works: grep the integration branch for a distinctive string the commit *added*.**
+  ```bash
+  git show <sha> -- <path> | grep '^+' | grep -v '^+++'   # read these; pick one distinctive line
+  needle='<a distinctive phrase from that output>'
+  git show origin/main:<path> | grep -cF "$needle"                  # >0 ⇒ the work is in main
+  git show origin/main:<path> | grep -cF 'string-that-cannot-exist' # must be 0, or the probe is broken
+  ```
+  The last line is not optional. It is what separates "the work is not there" from "my probe does not
+  work" — two outcomes a single grep returns identically.
+
+Delete the rescue ref only after that probe answers, in the same command shape, on a string you know
+is present. If the work turns out to exist *only* on your branch, it was never yours to drop: keep
+the rescue ref, tell the other session where it is, and let them re-land it.
 
 ## Audit before rebase / branch-delete
 

@@ -3285,6 +3285,8 @@ Codex 上次做到一半中断了，读取 rollout 后把工作做完
 - 按内容验证分支是否已合并，破解 squash-merge 后“100 commits ahead”的幻觉
 - 删除 linked worktree 前证明其 HEAD 已被吸收，并把全部 refs 导出为校验过的 bundle
 - 高风险“是否真的全部合并了”场景可选对抗性多 agent 验证
+- 在开 PR 前抓出并行 session 的提交混入自己分支——分支级检查全绿也照样发生
+- 网络吞掉 push/merge 回执时，按内容而不是「远端 ref 动了」判定自己的写入是否落地
 - 预防习惯：切分支前先提交、尽早 push WIP、删除前审计每一个 checkout
 
 **示例：**
