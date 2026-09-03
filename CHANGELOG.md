@@ -11,6 +11,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **peer-message** v1.0.0 (marketplace v3.6.0): restore the previously uncommitted Claude UDS messenger from its source session and extend it into a local Claude Code ↔ Codex coordination layer. The bundled stdlib CLI discovers `claude:` and `codex:` targets across isolated standard Claude profiles, preserves the original authenticated UDS fallback, routes Codex through the first-party `codex queue --thread` command, supports explicitly counted cross-provider broadcasts, adds source/reply envelopes with explicit provenance strength, and verifies delivery from Claude transcripts or Codex queue/thread history without writing either product's SQLite stores. Claude uses a host-recognized peer wrapper; Codex provenance remains advisory text enforced by receiver-side governing instructions. The Skill-local official-feature reference owns the corrected availability and inbound-policy boundaries. The registered test suite, live Codex queue acceptance, and subsequent thread-history consumption were independently verified.
 
 ### Changed
+- **tibo-reset-codex** (v1.3.1 → v1.4.0): fix a multi-account exclusion check that was
+  structurally incapable of failing, and stop reading "clean +7d" as proof of a reset.
+  §2 told the agent to exclude multi-account interleaving by counting `account_id`s in
+  `~/.codex/auth.json` and entries in `~/.cc-switch/cc-switch.db` — but auth.json stores
+  only the currently logged-in account and cc-switch never sees a manual `codex login`,
+  so both probes answer a historical question with current state and always return "one
+  account". On a machine demonstrably rotating two Pro accounts, both reported single-
+  account and the whole attribution came out inverted. Replaced with a three-layer check
+  that can actually fail: (A) `auth.json` `last_refresh` aligned against the zero-out
+  interval plus the decoded `id_token` identity, (B) the cc-switch `providers` table
+  (not `profiles`, which was empty on the observed machine) with per-entry `id_token`
+  decoding, (C) an anchor back-jump scan derived from rollout alone — the only layer
+  still lit when the user switches accounts by hand. Reordered the concurrent-session
+  dedup rule to run *after* the back-jump scan: the records it discards are where the
+  decisive evidence lives (`used_percent` rising, which quota can never do). The two-
+  shape anchor taxonomy becomes three shapes, with "clean +7d" explicitly demoted from
+  "button reset" to "reset **or** account switch, indistinguishable on this axis alone"
+  — reading it the old way turned 8 deduplicated account rotations into "8 silent
+  resets" on the observed machine. Adds trap 4: `sessions/<Y>/<M>/<D>/` directory dates do not bound
+  timestamps, because a session running past midnight keeps writing next-day timestamps
+  into the previous day's directory — scanning N date directories silently under-samples
+  and drops exactly the long-session interleaving that multi-account rotation produces
+  (same one-minute window: 9 rows across 7 directories vs 67 across 9). The bundled
+  rebuild script now decouples directory scan from the time window, reports the back-jump
+  count, and labels each zero-out with its pre-drop usage peak. Back-jump detection was
+  calibrated both ways on real rollout data: it catches the `used 0%→82%` account switch
+  and returns 0 on a known single-anchor-chain period, with a 5-minute threshold added to
+  suppress the false hits produced by the documented second-level `resets_at` drift. All
+  four documented commands were extracted verbatim from SKILL.md and executed.
+  An independent fresh-context review of §2's executability then found nine issues, all
+  fixed and re-verified: the rebuild script crashed with an unguarded `rows[0]` on an
+  empty `~/.codex` (a state §2 elsewhere treats as meaningful) and now exits with an
+  explanation; the back-jump `used%` comparison read the *first* row of the previous
+  anchor run instead of the strictly adjacent snapshot, which printed one real transition
+  as `0%→0%` when it was `100%→0%` — the "quota never un-spends" invariant only holds
+  between adjacent rows, so the loop now compares adjacent rows; the three-layer gate
+  claimed three clean layers proved a single account, when all three are positive-only
+  detectors that can be simultaneously silent during exactly the rotation the section
+  calls its most expensive error, so it now concludes "no positive evidence" and routes
+  to the one question that can settle it; the A layer was labelled decisive though
+  `last_refresh` is indistinguishable from a token renewal on the observed data
+  (`iat` equal, `exp` exactly +3600s) and covers at most one of ten zero-out intervals;
+  the B-layer rule counted an API-key provider row (`auth_mode=None`, `email=None`) as a
+  second account and now filters to `auth_mode='chatgpt'`; the prose pointed at
+  anchor-keyed dedup as the place the decisive record is discarded, which is structurally
+  impossible since dedup merges same-anchor rows, and now points at the back-jump output
+  where the record actually appears; the C-layer middle band had no rule; run order was
+  unstated although the A layer needs an interval only the script produces; and the
+  "widest adjacent gap 1h56m" figure was stale (measured 9.65h, with 39 gaps over the
+  600-second `clean` tolerance).
 - **claude-switch-models-setup** (`daymade-claude-code` v3.7.14 → v3.7.15): close the
   enabledPlugins write-back hole that erased installed skills. `claude plugin
   install/enable` writes the new key into the ACTIVE profile's settings.json only; the
