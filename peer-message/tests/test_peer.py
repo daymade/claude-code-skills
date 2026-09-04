@@ -108,12 +108,9 @@ class PeerMessageTests(unittest.TestCase):
             frame = json.loads(lines[1])
             self.assertEqual(frame["msgV"], 1)
             self.assertEqual(frame["msg_id"], receipt["message_id"])
-            # A Codex sender gets no `from`: that field's host-documented contract is
-            # "copy this into `to`", and no Codex address satisfies it. This assertion
-            # previously pinned the opposite shape, i.e. it pinned the defect.
             self.assertEqual(
                 frame["message"]["content"].splitlines()[0],
-                '<cross-session-message from-name="codex:sender">',
+                '<cross-session-message from="codex:sender" from-name="codex:sender">',
             )
             self.assertIn(
                 f"[peer-message-id: {receipt['message_id']}]",
@@ -578,14 +575,12 @@ class PeerMessageTests(unittest.TestCase):
         envelope = peer.claude_envelope(
             "body", "codex:abc", "codex:abc", "MSGID"
         )
+        # The identifier and its route travel together: `codex:<uuid>` is a working
+        # address for `codex queue --thread`, so it stays in `from`; the body line says
+        # which route resolves it, for recipients whose tools cannot.
+        self.assertIn('from="codex:abc"', envelope)
         self.assertIn("[reply: peer.py send codex:abc]", envelope)
         self.assertNotIn("reply-to=", envelope)
-        # `from` is the field the host tells recipients to copy into `to`. An address
-        # the official tools cannot reach must not sit there looking usable, so the
-        # attribute is dropped rather than filled wrongly.
-        self.assertNotIn(' from="', envelope)
-        # Nothing is lost: the thread id stays in from-name and resolve_codex takes it.
-        self.assertIn('from-name="codex:abc"', envelope)
 
     def test_claude_sender_envelope_has_no_reply_hint(self):
         """A uds: `from` is directly usable by the official tools; adding a hint there

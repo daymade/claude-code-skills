@@ -91,7 +91,9 @@ UDS 连接写两行 NDJSON 后关闭：
 
 `from` 是接收方回信要用的地址，`from-name` 是显示来源。**`from` 必须是官方工具也能解析的形式**（当前实现发 `uds:<socket>`，见 §1）——收信的那个 session 可能根本没装本 Skill，它手上只有 host 那句「回信就把 `from` 抄进 `to`」和官方工具；`from` 若是 `claude:<session-uuid>`，它会得到 `No agent named ...`，而且**没有任何接收侧的补救路径**（官方列表的 `[ref]` 不是 UUID 前缀，对不上）。这类缺陷只能由信封的产生者修。
 
-**Codex 发送方是唯一没有交集形式的情况**：官方 Claude 工具用任何地址都到不了 Codex thread，这是事实不是缺陷。此时 `from` 保持 `codex:<thread-id>`，并在正文首行补一段 `[reply: peer.py send codex:<id>]`——属性集合是固定的，正文首行是唯一还能说话的地方。
+**Codex 发送方：标识符是好的，缺的是官方工具能解析的形式。** `codex:<thread-id>` 是可用的回信地址——`codex queue --thread` 收它（help 逐字："Session UUID or exact session name"），`resolve_codex` 解析它；只是官方 Claude 工具用任何地址都到不了 Codex thread，这是两个产品之间的事实、不是缺陷。
+
+所以 `from` **保持** `codex:<thread-id>`，同时在正文首行补 `[reply: peer.py send codex:<id>]`——属性集合是固定的，正文首行是唯一还能说话的地方。**两个一起走**：删掉地址只为了让一类接收方少踩一次可恢复的失败，会同时夺走另一类接收方手里能用的东西，还让路由脱离了它所路由的对象。
 
 当前 Claude parser 只接受它定义的 peer 属性集合与顺序；`message-id` 因此留在正文首行，不能自创 XML attribute。脚本拒绝正文自行闭合 `cross-session-message`/`peer-message`，避免正文逃出来源边界。官方 `SendMessage` 可用时不要手写这层；让官方通道负责包装和版本适配。
 

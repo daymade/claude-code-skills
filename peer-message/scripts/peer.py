@@ -325,18 +325,17 @@ def claude_envelope(body: str, sender: str, reply_to: str | None, message_id: st
     if canonical and canonical not in f"{reply_to or ''}{sender}":
         hint = f" [from-session: {canonical}]"
     if reply_to and reply_to.startswith("codex:"):
-        # A Codex sender has no address the official Claude tools can reach, and `from`
-        # is the field whose host-documented contract is "copy this into `to`". Putting
-        # an unreachable value there hands the recipient an address-shaped thing that
-        # fails as "no agent named ...", i.e. as nonexistence -- the same trap this
-        # module exists to close. So drop the attribute rather than fill it wrongly:
-        # a fifth of real envelopes carry no `from`, making the shape ordinary, and a
-        # recipient cannot copy what is not offered. The route then has to be stated,
-        # and the body's first line -- where message-id already rides -- is the only
-        # room the fixed attribute set leaves. `from-name` still carries the thread id,
-        # so nothing is lost: it stays visible and `resolve_codex` still accepts it.
+        # `codex:<uuid>` is a working reply address -- `codex queue --thread` takes it,
+        # and `resolve_codex` resolves it. What it is not is an address the official
+        # Claude tools can reach, and only some recipients hold that limitation.
+        # Dropping the address to spare those recipients one recoverable failed attempt
+        # would take a usable handle away from every recipient that does have this
+        # Skill, and it would leave the route travelling without the thing it routes.
+        # So both go: the address stays in `from`, and the body's first line -- where
+        # message-id already rides, the only room the fixed attribute set leaves --
+        # says which route resolves it, so a recipient that cannot use it learns why
+        # instead of reading `No agent named ...` as nonexistence.
         hint = f" [reply: peer.py send {reply_to}]"
-        reply_to = None
     reply = f' from="{safe_attr(reply_to)}"' if reply_to else ""
     return (
         f'<cross-session-message{reply} from-name="{safe_attr(sender)}">\n'
