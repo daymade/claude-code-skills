@@ -12,6 +12,8 @@ five layers that otherwise drift silently:
                 the real ~/.agents/skills entries
   5. RUNTIME    the plugin version the background sync daemon actually executes, vs the
                 version registered in the source marketplace
+  6. FRESHNESS  whether the local checkouts every layer above is read from are themselves
+                behind their already-fetched remote-tracking refs
 
 Findings (each list is empty-friendly; a clean run prints only the summary):
 
@@ -22,6 +24,8 @@ Findings (each list is empty-friendly; a clean run prints only the summary):
   ORPHAN_INSTALLED         installed but no longer in any marketplace.json (loads nothing)
   DAEMON_RUNTIME_LAG       the sync daemon runs a pinned copy older than the source, so every
                            fix shipped to this repo stays invisible to it until the pin moves
+  SOURCE_CHECKOUT_BEHIND   a registry checkout is behind its remote-tracking ref, so every
+                           finding above was judged against a stale reference
   PROFILE_ONLY_RISK        enabledPlugins keys present in a profile but absent from main —
                            pre-fix these were wiped by the next mirror; now they are adopted
                            or preserved, but conflicts still deserve eyeballs
@@ -44,6 +48,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -164,6 +169,52 @@ def load_daemon_runtime_lag():
     ]
 
 
+def load_source_checkout_freshness():
+    """Report registry checkouts that lag the ref they were last fetched against.
+
+    Every layer of this audit is judged against the working tree of a local repo.
+    When that tree is behind, a daemon running the previous release and a checkout
+    still on it agree with each other, and the report is clean while the published
+    source has moved on. That silence is the failure this section exists to break.
+
+    Reads only refs already on disk. Fetching here would make an audit fail on a
+    flaky network, which is the one condition under which nobody would run it.
+
+    Bounded deliberately: this reports a checkout that is behind *its own* upstream,
+    which is a defect. A checkout sitting on a feature branch is ordinary work, and
+    its tree can still differ from the published source — firing on that would make
+    the section noise in a repository where branches are the normal state, and a
+    section people learn to skip protects nothing.
+    """
+    behind = []
+    for label, repo in REGISTRY_REPOS:
+        if not (repo / ".git").exists():
+            continue
+        probe = subprocess.run(
+            ["git", "-C", str(repo), "rev-list", "--count", "HEAD..@{upstream}"],
+            capture_output=True,
+            text=True,
+        )
+        if probe.returncode != 0:
+            continue  # detached, no upstream, or never fetched: not a staleness claim
+        try:
+            count = int(probe.stdout.strip())
+        except ValueError:
+            continue
+        if count:
+            branch = subprocess.run(
+                ["git", "-C", str(repo), "rev-parse", "--abbrev-ref", "HEAD"],
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            behind.append(
+                f"{label}: checkout on '{branch}' is {count} commit(s) behind its "
+                f"upstream, so every finding here was judged against it rather than "
+                f"the published source; `git -C {repo} pull --ff-only` and re-run"
+            )
+    return behind
+
+
 def load_profile_only_keys():
     main_keys = set(load_enabled())
     drift = {}  # profile -> [keys]
@@ -239,6 +290,7 @@ def audit():
         "MANUAL_LINK_RISK": sorted(manual_risk),
         "CODEX_UNLISTED_ENABLED": codex_unlisted,
         "DAEMON_RUNTIME_LAG": load_daemon_runtime_lag(),
+        "SOURCE_CHECKOUT_BEHIND": load_source_checkout_freshness(),
     }
 
 
@@ -283,7 +335,8 @@ def main():
         "\nLegend: DISABLED/NO_KEY -> enable via `claude plugin enable NAME@mkt`; "
         "REGISTERED_NOT_INSTALLED -> `claude plugin install NAME@mkt`; "
         "MANUAL_LINK_RISK -> add the name to codex-active-skills.json or drop the link; "
-        "DAEMON_RUNTIME_LAG -> the daemon is executing code older than this repo."
+        "DAEMON_RUNTIME_LAG -> the daemon is executing code older than this repo; "
+        "SOURCE_CHECKOUT_BEHIND -> this report's own reference is stale."
     )
     return 0
 
