@@ -40,7 +40,7 @@ python3 scripts/analyze_sessions.py list /absolute/path/to/project
 | Pattern | Type | Description |
 |---------|------|-------------|
 | `<uuid>.jsonl` | Main session | User conversation sessions |
-| `agent-<id>.jsonl` | Agent session | Sub-agent execution logs |
+| `agent-<id>.jsonl` | Agent session | Sub-agent execution logs, nested under `<session-id>/subagents/` (Workflow-derived agents one level deeper, in `subagents/workflows/<wf-id>/`, alongside `agent-*.meta.json` and `journal.jsonl`) — not matched by a top-level `projects/*/*.jsonl` glob. See `claude_session_format.md` for the full directory layout. |
 
 ## JSON Structure
 
@@ -69,6 +69,20 @@ Conversation messages are the lines you usually want. In current Claude Code (>=
 
 - **Role lives in `message.role`**; the top-level `type` only labels the line. Older sessions stored `role`/`content` at the top level, and some records carry `message: null`, so first type-check the nested object: `message = data.get("message"); role = data.get("role") or (message.get("role") if isinstance(message, dict) else None)` (the bundled scripts do this).
 - `message.content` is either a string or an array of content blocks (`text`, `tool_use`, `tool_result`, ...).
+- Record granularity is one content block per line, not one message per
+  line: a single `assistant` message whose `content` array holds multiple
+  blocks can be written as multiple JSONL lines, one block per line. Those
+  lines share the same `message.id` and top-level `requestId` (each line's
+  own `uuid` still differs). Group by `message.id` before counting "how many
+  calls" or "how many succeeded" — counting lines overcounts.
+- `message.usage` is repeated verbatim on every line that shares a
+  `message.id`. Summing it across those lines inflates the token count by
+  the number of lines; read `usage` once per distinct `message.id`.
+- In a session with the advisor tool configured, an `assistant` record may
+  also carry `advisorModel` and `effort` at its top level (sibling to
+  `type`/`message`/`uuid`). Newer transcripts add `apiBlockIndex` (the
+  block's position within the message); older files may lack it. Treat all
+  three as fields that can appear, not ones every assistant record has.
 - `type=user` does not prove the human authored the content. A prose-shaped
   record with `isSidechain=true` is normally the main agent's prompt to a
   subagent, so history search and ranked recall exclude it by default. Do not
@@ -247,6 +261,37 @@ The `content` array contains different types of content blocks:
   "is_error": false
 }
 ```
+
+### Server Tool Use / Advisor Result
+
+Sessions where the assistant used the advisor tool carry two extra content
+block types inside `message.content`, alongside the `tool_use` /
+`tool_result` blocks documented above.
+
+```json
+{
+  "type": "server_tool_use",
+  "id": "srvtoolu_…",
+  "name": "advisor",
+  "input": { ... }
+}
+```
+
+```json
+{
+  "type": "advisor_tool_result",
+  "tool_use_id": "srvtoolu_…",
+  "content": {
+    "type": "…"
+  }
+}
+```
+
+`content.type` observed on real transcripts: `advisor_redacted_result` (a
+normal return whose body is an unreadable `encrypted_content` blob) and
+`advisor_tool_result_error` (an error result). The client also declares
+other variants; branch on `content.type` and keep a fallback for
+unrecognized values instead of treating this list as closed.
 
 ## Common Extraction Patterns
 
