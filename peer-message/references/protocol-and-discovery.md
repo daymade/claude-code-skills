@@ -17,6 +17,33 @@ description: Transport-neutral addressing, Claude UDS and Codex queue contracts,
 
 旧命令里未带前缀的 target 继续解释为 Claude，避免恢复版破坏既有调用。
 
+### 两个 route 的地址空间不同——这是本 Skill 最容易踩的坑
+
+上表是 **`scripts/peer.py` 的**地址空间。官方 Claude peer tools 有**另一套**，两者不可互换：
+
+| | 认什么 | 不认什么 |
+|---|---|---|
+| `scripts/peer.py` | 带 `claude:` / `codex:` 前缀；pid、精确名、session-UUID 都解析 | — |
+| 官方 peer tools（`ListAgents` / `SendMessage` 一族） | 宿主列表里的**裸名**，无 provider 前缀 | **session-UUID 解析不了**，带前缀的地址也解析不了 |
+
+把 session-UUID 交给官方发送工具，得到的是 `No agent named <…> is reachable`——一条**指向存在性**的报错，读起来像“目标不在”，实际是“地址空间用错”。官方列表把每行显示成 `<name> [<ref>]`，而那个 `ref` **不是 session-UUID 的前缀**，所以拿 UUID 去肉眼比对官方列表也对不上。
+
+`peer.py list --json` 是两套地址之间唯一的对照表：每行同时带 `id`（session-UUID）与 `address`（`claude:<name>`）。
+
+```bash
+# 已知 session-UUID，求官方工具能用的名字
+python3 scripts/peer.py list --provider claude --json \
+  | python3 -c 'import json,sys;print([r["address"] for r in json.load(sys.stdin) if r["id"]=="<session-uuid>"])'
+# 官方工具用 address 去掉 claude: 前缀的部分；peer.py 用完整 address
+```
+
+**When** 手上只有 session-UUID（收到的信封 `from`、`whoami` 输出、别人给的 ID），而准备用官方工具发送。
+**Do** 先用上面的对照把它解析成 `address`，官方工具用其裸名部分。
+**Expected evidence** 对照命中一行，且该行 `reachable` 为真。
+**If missing** 对照不到就走 `peer.py` route（它认 UUID），不要改写地址重试官方工具。
+**Do not infer** `No agent named` 不证明目标不存在，也不证明它不可达；它只证明这个地址形式官方工具解析不了。
+**Stop** 同一个目标在官方工具上连续两次寻址失败就换 route，不要枚举地址形式。
+
 ## 2. Claude 发现与 UDS fallback
 
 Claude Code 当前在 `<claude-config>/sessions/<pid>.json` 登记顶层 session。当前实现可见字段包括：
@@ -60,7 +87,9 @@ UDS 连接写两行 NDJSON 后关闭：
 </cross-session-message>
 ```
 
-`from` 是接收方应使用本 Skill 回复的地址，`from-name` 是显示来源。当前 Claude parser 只接受它定义的 peer 属性集合与顺序；`message-id` 因此留在正文首行，不能自创 XML attribute。脚本拒绝正文自行闭合 `cross-session-message`/`peer-message`，避免正文逃出来源边界。官方 `SendMessage` 可用时不要手写这层；让官方通道负责地址、包装和版本适配。
+`from` 是接收方应使用**本 Skill 的 `peer.py` route** 回复的地址，`from-name` 是显示来源。当前 Claude parser 只接受它定义的 peer 属性集合与顺序；`message-id` 因此留在正文首行，不能自创 XML attribute。脚本拒绝正文自行闭合 `cross-session-message`/`peer-message`，避免正文逃出来源边界。官方 `SendMessage` 可用时不要手写这层；让官方通道负责包装和版本适配。
+
+**但 `from` 不能直接喂给官方发送工具。** Claude 侧的 `from` 是 `claude:<session-id>` 形式，而官方工具只认裸名（见 §1「两个 route 的地址空间不同」）。收到 `cross-session-message` 后要回信时：直接用 `peer.py send <from>` 回（它认这个形式），或先按 §1 的对照把 `from` 解析成名字再走官方工具。**照抄 `from` 到官方工具的 `to` 会失败**，而且失败信息长得像“对方不存在”。
 
 ## 3. Codex 发现与 queue
 

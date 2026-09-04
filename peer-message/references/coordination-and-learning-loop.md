@@ -9,7 +9,15 @@ description: Parent/worker reply addressing, payload design, delivery-language d
 
 ## 1. 委派时传播精确回传地址
 
-父任务在发出 worker/subtask 指令前，先按当前 CLI help 运行 `whoami`，取得一个可直接用于回复的精确地址；发送任务时，把它作为当前 reply-address option 显式传给 transport，并在委派正文中同时写出。若 `whoami` 无法从宿主环境或 catalog 解析唯一身份，停止并要求调用者给出精确地址，不用 `local-script` 冒充可回复 peer。
+父任务在发出 worker/subtask 指令前，先按当前 CLI help 运行 `whoami`，取得自己的精确地址；发送任务时，把它作为当前 reply-address option 显式传给 transport，并在委派正文中同时写出。若 `whoami` 无法从宿主环境或 catalog 解析唯一身份，停止并要求调用者给出精确地址，不用 `local-script` 冒充可回复 peer。
+
+**`whoami` 给的是 `peer.py` route 的地址，不是官方工具能用的地址。** 当前实现即使拿得到 session 名也会解析成 session-UUID 返回（这对 `peer.py` 是对的：UUID 唯一，名字会重名）。但官方 peer tools 只认裸名，喂 UUID 会失败——见 `references/protocol-and-discovery.md` §1「两个 route 的地址空间不同」。所以回传地址要按对方将走哪条 route 给：
+
+- 对方用 `peer.py` 回 → 直接给 `whoami` 的输出。
+- 对方可能用官方工具回 → 同时给裸名，用 `list --json` 把自己的 `id` 对到 `address` 取得。
+- 不确定对方走哪条 → **两个都写**，并标明哪个配哪条 route。一行字的成本，换掉对方一轮寻址失败。
+
+这条同样适用于**回信**：收到的信封 `from` 也是 UUID 形式，照抄进官方工具的 `to` 会失败。
 
 不要把 `/root`、`主会话`、窗口标题、最近活动时间或工作目录当地址，除非它们就是 catalog 中唯一的 exact name。子任务缺少回传地址时不能自行恢复 parent 关系：报告“missing reply address”并停止回传；由委派方补发精确地址。不要凭“看起来最新”猜 parent。
 
