@@ -12,6 +12,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **peer-message** v1.0.0 (marketplace v3.6.0): restore the previously uncommitted Claude UDS messenger from its source session and extend it into a local Claude Code ↔ Codex coordination layer. The bundled stdlib CLI discovers `claude:` and `codex:` targets across isolated standard Claude profiles, preserves the original authenticated UDS fallback, routes Codex through the first-party `codex queue --thread` command, supports explicitly counted cross-provider broadcasts, adds source/reply envelopes with explicit provenance strength, and verifies delivery from Claude transcripts or Codex queue/thread history without writing either product's SQLite stores. Claude uses a host-recognized peer wrapper; Codex provenance remains advisory text enforced by receiver-side governing instructions. The Skill-local official-feature reference owns the corrected availability and inbound-policy boundaries. The registered test suite, live Codex queue acceptance, and subsequent thread-history consumption were independently verified.
 
 ### Changed
+- **skill-creator** v1.32.1 → v1.33.0 (marketplace v3.8.0): `quick_validate` now reports
+  bundled references that nothing links. SKILL.md has long carried the rule "reference
+  files clearly from SKILL.md" with nothing enforcing it, and a skill shipped with an
+  unreferenced reference after passing validation, `security_scan`, a verbatim run of
+  every documented command, and CI — none of those ask whether a bundled file is
+  reachable, and the file existing is what makes the gap invisible. Reachability is
+  transitive: a reference cited from another reachable reference counts, including by
+  bare filename, since references routinely name siblings that way. Reported as a note,
+  never a failure — some unreferenced files are deliberate (an author-facing template is
+  not runtime guidance) and a gate that fails on those gets bypassed, which turns it off
+  for the skills it was built for. Calibrated against all 104 committed skills before
+  arming: 7 flagged, 0 validation failures, and the flagged set matches an independent
+  measurement exactly. Eight tests cover the directly-linked, transitive, bare-filename,
+  nested-directory, non-markdown and no-references cases.
 - **tibo-reset-codex** (v1.3.1 → v1.4.0): fix a multi-account exclusion check that was
   structurally incapable of failing, and stop reading "clean +7d" as proof of a reset.
   §2 told the agent to exclude multi-account interleaving by counting `account_id`s in
