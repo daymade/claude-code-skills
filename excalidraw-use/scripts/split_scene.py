@@ -36,8 +36,15 @@ def split(scene_path: Path, out_dir: Path, chunks: int, cols: int,
     out_dir.mkdir(parents=True, exist_ok=True)
 
     size = math.ceil(len(elements) / chunks)
+    # Ceiling division can fill the requested number of chunks before running out
+    # of parts (6 elements into 4 chunks is 2+2+2, not 4 parts). Name the files
+    # after how many there will actually be, or "1-of-4" sits next to no 4-of-4.
+    parts = math.ceil(len(elements) / size)
+    if parts != chunks:
+        print(f"note: {len(elements)} elements at {size} per part is {parts} part(s), "
+              f"not the {chunks} requested")
     written, total = [], 0
-    for c in range(chunks):
+    for c in range(parts):
         part = [dict(e) for e in elements[c * size : (c + 1) * size]]
         if not part:
             continue
@@ -46,7 +53,7 @@ def split(scene_path: Path, out_dir: Path, chunks: int, cols: int,
             cx, cy = col * pitch + cell / 2, row * pitch + cell / 2
             el["x"], el["y"] = cx - el["width"] / 2, cy - el["height"] / 2
             el["index"] = f"a{i:04d}"
-        out = out_dir / f"{c + 1}-of-{chunks}.excalidraw"
+        out = out_dir / f"{c + 1}-of-{parts}.excalidraw"
         out.write_text(json.dumps({
             "type": "excalidraw", "version": 2,
             "source": scene.get("source", "https://excalidraw.com"),
