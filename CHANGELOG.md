@@ -265,6 +265,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an order-inverted stitched quote — both fixed and re-verified pre-ship.
 
 ### Fixed
+- **excalidraw-use** v1.0.0 → v1.0.1 (marketplace v3.7.1): link
+  `references/scene_file_format.md` from SKILL.md. It shipped unreferenced, so the
+  executing agent had no route to it — an unlinked reference is unreachable at runtime
+  no matter how good its content is, and this one carries the field-by-field scene
+  breakdown behind `--template-from`. Caught by checking that every file under
+  `references/` appears in a SKILL.md link, which is worth running before any skill
+  ships. Regression audit against the merge commit confirms the three untouched
+  references and four scripts are byte-identical; only SKILL.md changed.
 - **git-safety-net** v1.13.0 → v1.14.0: replace the over-broad “one worktree per
   concurrent session” prescription with an authority-first, single-writer shared-checkout
   contract. Mode D now treats worktrees as explicitly authorized named exceptions, preserves

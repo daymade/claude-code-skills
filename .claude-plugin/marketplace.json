@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Professional Claude Code and Codex skills marketplace — production-ready skills spanning GitHub and git operations (including current-base contributor PR review), document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, local inter-agent messaging, Claude Code operations, and model-aware Codex workstation setup. Suite plugins bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
-    "version": "3.7.0"
+    "version": "3.7.1"
   },
   "plugins": [
     {
@@ -1174,7 +1174,7 @@
       "description": "Place existing images onto an Excalidraw whiteboard, turn a slide deck into clean per-slide images first, and inspect what is inside a .excalidraw file. Use whenever someone mentions Excalidraw, a whiteboard or canvas, a .excalidraw file, 白板 or 画板 — especially \"put these screenshots on my board\", \"add my old workshop images to the canvas\", \"space them out so I don't have to adjust spacing by hand\", \"turn these slides into images I can draw on\", or \"what's in this scene file\". Also use when a talk or workshop is delivered by hand-drawing over screenshots on a shared canvas, or when someone needs a pick tray of many images to choose from. Not for generating a diagram from a text description — that is a different job.",
       "source": "./excalidraw-use",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.0.1",
       "category": "developer-tools",
       "keywords": [
         "excalidraw",
