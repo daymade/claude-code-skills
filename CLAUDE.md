@@ -371,6 +371,23 @@ This applies when you change ANY file under a skill directory:
 
 **Pre-commit check:** Before committing, run `git diff --name-only` and verify: for every `skill-name/` directory that appears, `marketplace.json` also has a version bump for that skill's `plugins[].version`.
 
+**Read the baseline version from an immutable ref, never from the working tree.**
+In a shared checkout `marketplace.json` may already carry a parallel session's
+in-flight bump — staged or merely saved — and `git status` looks normal either
+way, so a version computed from the working copy silently inherits their number
+as its starting point:
+
+```bash
+git show origin/main:.claude-plugin/marketplace.json   # baseline to bump FROM
+```
+
+This is what makes the check above decidable. `git diff --name-only` tells you
+*which* skills changed; only an immutable ref tells you what their versions were
+before anyone started editing. (2026-09-04: a bump computed from the working
+tree adopted another session's staged `peer-message` 1.1.1→1.2.0 as its own
+baseline. Every status-shaped signal stayed green; a CHANGELOG anchor assertion
+was the only thing that caught it.)
+
 ## Available Skills
 
 Current plugin names, versions, sources, and suite membership are defined only
