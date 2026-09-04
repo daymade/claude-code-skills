@@ -68,6 +68,10 @@ Three decisions worth making deliberately:
   copying a live element from *their* board is the only way to be sure the field
   set matches the build they actually run. Without it a reasonable default is
   used, which has worked but is one observed field set, not a spec.
+  [references/scene_file_format.md](references/scene_file_format.md) has the
+  field-by-field breakdown, keeping what the official docs state separate from
+  what was read off a real file — open it when you need to hand-build or repair
+  a scene rather than let the script write one.
 - **`--exclude` anything already on their board.** The check is by image content,
   not filename, so a renamed copy is still caught. Skipping this is how someone
   ends up with the same picture twice and has to delete one by hand.
