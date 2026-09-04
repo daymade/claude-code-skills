@@ -587,6 +587,39 @@ class PeerMessageTests(unittest.TestCase):
         self.assertNotIn("[reply:", envelope)
         self.assertIn('from="uds:/tmp/cc-socks/1.sock"', envelope)
 
+    def test_canonical_session_id_rides_the_body_when_neither_field_carries_it(self):
+        """Cast for use, store the canonical.
+
+        `from` is a socket path -- a locator built on a pid, and pids get reused.
+        `from-name` may be a display name, which is mutable and can collide. When the
+        canonical session id is in neither field an archived envelope cannot be traced
+        back to its sender, so it rides the body's first line instead."""
+        env = {
+            "CLAUDE_CODE_MESSAGING_SOCKET": "/tmp/cc-socks/1.sock",
+            "CLAUDE_CODE_SESSION_ID": "aaaaaaaa-1111-4111-8111-111111111111",
+            "CLAUDE_CODE_SESSION_NAME": "my-session",
+        }
+        with mock.patch.dict(peer.os.environ, env, clear=True):
+            sender = peer.auto_sender()
+            envelope = peer.claude_envelope(
+                "body", sender, peer.auto_reply_address(sender), "MID"
+            )
+        self.assertEqual(sender, "claude:my-session")
+        self.assertIn("[from-session: aaaaaaaa-1111-4111-8111-111111111111]", envelope)
+
+    def test_canonical_not_duplicated_when_a_field_already_carries_it(self):
+        env = {
+            "CLAUDE_CODE_MESSAGING_SOCKET": "/tmp/cc-socks/1.sock",
+            "CLAUDE_CODE_SESSION_ID": "aaaaaaaa-1111-4111-8111-111111111111",
+        }
+        with mock.patch.dict(peer.os.environ, env, clear=True):
+            sender = peer.auto_sender()
+            envelope = peer.claude_envelope(
+                "body", sender, peer.auto_reply_address(sender), "MID"
+            )
+        self.assertIn("aaaaaaaa-1111-4111-8111-111111111111", sender)
+        self.assertNotIn("[from-session:", envelope)
+
 
 if __name__ == "__main__":
     unittest.main()
