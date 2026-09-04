@@ -2244,6 +2244,35 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 
 ---
 
+### **excalidraw-use** - 把图片批量放上 Excalidraw 白板
+
+把已有图片批量放进 Excalidraw 白板，按大间距网格排好，不用再手动拖开。也能先把 slide deck 转成逐页干净截图，以及盘点一个 `.excalidraw` 文件里有什么。现有的 Excalidraw MCP 与 skill 覆盖了元素 CRUD 和导出，但都没有 image 元素类型、没有 `dataURL`、没有 `files` map——嵌入自己的图片正是这块空缺。
+
+**适用场景：**
+- 把截图、图库或 deck 页面放上白板
+- 大量图片一次排好，间距不用再调
+- 把 Vite/React slide deck 转成可以在上面手绘的图片
+- 盘点场景文件：元素分布、内嵌负载大小、占用范围
+
+**核心特性：**
+- 按内容哈希去重，`--exclude` 跳过已在白板上的图
+- `--template-from` 从你自己的白板深拷贝 image 元素字段集——Excalidraw 公开的 schema 并未列出 `fileId`/`status`/`scale`/`crop`
+- 回读验收：文件条目缺失、长宽比失真、任意重叠都会失败
+- Deck 截图会隐藏讲师专用元素、展开分步显示，并报告始终没有渲染出来的 fragment
+- 记录了两个会静默毁掉工作的坑：*Open* 与拖放会**取代**整个场景（只有剪贴板是合并），以及旧构建会让源码里的功能消失、而 `innerText` 仍把隐藏的 fragment 读成存在
+
+**使用示例：**
+```bash
+# 自然触发
+"把这些截图放到我的 Excalidraw 白板上"
+"把以前 workshop 的图都加到画板里，间距大一点"
+"把这个 deck 转成我能在上面画的图片"
+```
+
+**注意**：不负责从文字描述生成图表——那是另一件事。
+
+---
+
 ### **debugging-network-issues** - 证据驱动的网络问题排查
 
 针对网络、流式、协议层 bug 的"先证伪、再下结论"方法论。源自一次真实的 5 小时 SSE 生产事故——堆假设浪费的几个小时，10 分钟分层实验就能解决。
