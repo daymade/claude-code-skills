@@ -57,6 +57,43 @@ mistake), delete the key from that profile's settings.json.
 
 Set `CLAUDE_CODE_SUBAGENT_MODEL` to the same value as `ANTHROPIC_MODEL` in the profile settings. Otherwise subagents may fall back to the default Anthropic model.
 
+## The advisor answers on the same model as the session
+
+Symptom: the session runs on the flagship tier and every advisor call comes
+back from that same model — each advisor record in the session JSONL carries
+an `advisorModel` equal to the session's `model` string (observed 2026-09-05
+on a `claude-fable-5-1` session) — and it looks as if the pairing is
+misconfigured.
+
+Cause: an equal pair is allowed and nothing announces it. `advisorModel` is
+its own setting; `/model` rewrites `model` and leaves it alone (observed
+2026-09-05). The pairing check rejects an advisor that is *less* capable than
+the main model or one the main model does not support — those are the only
+two `/advisor` warnings in the 2.1.260 binary — so raising the main model to
+the advisor's tier silently turns the advisor into a same-model second read.
+It still gets the whole transcript as a separate call; it just brings no
+stronger reasoning.
+
+Fix — pick one:
+
+- Pin a different advisor: `/advisor <model>`. **It writes the top-level
+  `advisorModel` key into the global `~/.claude/settings.json`**, not the
+  project's `.claude/settings.json` (observed 2026-08-13: run inside one
+  project checkout, the key appeared in the global file), so the choice
+  follows every project — and, as a DENYLIST key, reaches no third-party
+  profile.
+- Turn it off: `/advisor off` removes that key from the same global file
+  (observed 2026-09-05: run inside another project, the global file's mtime
+  matched the command to the second and the key was gone). A session that
+  was already running keeps its advisor — one launched before the `off` went
+  on calling it afterwards with the same recorded model; the change applies
+  to sessions started later. `CLAUDE_CODE_DISABLE_ADVISOR_TOOL` also exists
+  in the 2.1.260 binary; it has not been exercised here.
+
+Which model answered a given call is on the assistant record itself
+(`advisorModel`, next to `effort`) — see
+`read-claude-code-history/references/session_file_format.md`.
+
 ## Marketplace says "corrupted installLocation"
 
 Each profile needs its OWN `known_marketplaces.json` — its `installLocation` is
