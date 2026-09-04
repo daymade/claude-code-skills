@@ -314,6 +314,14 @@ def claude_envelope(body: str, sender: str, reply_to: str | None, message_id: st
     validate_body(body)
     reply = f' from="{safe_attr(reply_to)}"' if reply_to else ""
     hint = ""
+    # `from` is cast for immediate use: a socket path is a locator built on a pid, and
+    # pids get reused. `from-name` may be a display name, which is mutable and can
+    # collide. Neither survives archival, so when the canonical session id is in
+    # neither field, carry it too -- the body's first line is the only room the host's
+    # fixed attribute set leaves. Cast for use, store the canonical.
+    canonical = os.environ.get("CLAUDE_CODE_SESSION_ID")
+    if canonical and canonical not in f"{reply_to or ''}{sender}":
+        hint = f" [from-session: {canonical}]"
     if reply_to and reply_to.startswith("codex:"):
         # A Codex sender has no address the official Claude tools can reach, so the
         # host's own "copy `from` into `to`" instruction cannot work here and there is
