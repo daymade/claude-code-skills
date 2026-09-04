@@ -2227,6 +2227,35 @@ Guides users through structured narrative design (ABCDEFG model), then delegates
 
 ---
 
+### **excalidraw-use** - Place Images onto an Excalidraw Board
+
+Batch-place existing images onto an Excalidraw whiteboard, laid out on a generous grid so nobody has to drag them apart afterwards. Also turns a slide deck into clean per-slide images first, and inspects what is inside a `.excalidraw` file. The available Excalidraw MCP servers and skills cover element CRUD and export but document no image element type, no `dataURL` handling, and no `files` map — embedding your own pictures is the gap this fills.
+
+**When to use:**
+- Putting screenshots, a picture library, or deck slides onto a whiteboard
+- Spacing many images out so they never need manual adjustment
+- Turning a Vite/React slide deck into images you can draw over
+- Inspecting a scene file: element mix, embedded payload size, occupied extent
+
+**Key features:**
+- Content-hash dedupe and `--exclude` for images already on the board
+- `--template-from` copies the image-element field set out of your own board — Excalidraw's published schema stops before `fileId`/`status`/`scale`/`crop`
+- Write-back verification: fails on a missing file entry, a distorted aspect ratio, or any overlap
+- Deck capture hides presenter chrome, expands staged reveals, and reports fragments that never rendered
+- Documents the two silent destroyers: *Open* and drag-and-drop **replace** a scene (only the clipboard merges), and a stale build removes a source feature while `innerText` still reads hidden fragments as present
+
+**Example usage:**
+```bash
+# Trigger the skill naturally
+"Put these screenshots on my Excalidraw board"
+"Add my old workshop images to the canvas, spaced out"
+"Turn this deck into images I can draw on"
+```
+
+**Note**: Not for generating a diagram from a text description — that is a different job.
+
+---
+
 ### **debugging-network-issues** - Evidence-Driven Network Investigation
 
 Falsification-first methodology for network, streaming, and protocol-layer bugs where the obvious cause is probably wrong. Built from a real 5-hour SSE incident where assumption-stacking wasted hours that a 10-minute layered experiment would have resolved.
