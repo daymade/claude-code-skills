@@ -2,7 +2,7 @@
 """skill-install-audit.py — read-only reconciliation of every skill install surface.
 
 One command that answers "which of my skills are actually usable where?" by joining
-four layers that otherwise drift silently:
+five layers that otherwise drift silently:
 
   1. REGISTRY   each local marketplace's .claude-plugin/marketplace.json
   2. INSTALLED  ~/.claude/plugins/installed_plugins.json  (shared via symlink)
@@ -10,6 +10,8 @@ four layers that otherwise drift silently:
                 are converged onto it by claude-plugins-sync.py)
   4. CODEX      ~/.config/claude-switch-models-setup/codex-active-skills.json manifest vs
                 the real ~/.agents/skills entries
+  5. RUNTIME    the plugin version the background sync daemon actually executes, vs the
+                version registered in the source marketplace
 
 Findings (each list is empty-friendly; a clean run prints only the summary):
 
@@ -18,6 +20,8 @@ Findings (each list is empty-friendly; a clean run prints only the summary):
   INSTALLED_NO_KEY         installed, no enabledPlugins entry (NOT visible by default)
   REGISTERED_NOT_INSTALLED in a marketplace.json but never installed
   ORPHAN_INSTALLED         installed but no longer in any marketplace.json (loads nothing)
+  DAEMON_RUNTIME_LAG       the sync daemon runs a pinned copy older than the source, so every
+                           fix shipped to this repo stays invisible to it until the pin moves
   PROFILE_ONLY_RISK        enabledPlugins keys present in a profile but absent from main —
                            pre-fix these were wiped by the next mirror; now they are adopted
                            or preserved, but conflicts still deserve eyeballs
@@ -39,6 +43,7 @@ Env overrides (match the sibling sync scripts):
 import argparse
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -61,6 +66,17 @@ REGISTRY_REPOS = [
     ("cemakanshan-skills", HOME / "workspace" / "md" / "cemakanshan-skills"),
 ]
 MANAGED_REPO_PREFIXES = tuple(str(repo.resolve()) for _l, repo in REGISTRY_REPOS)
+# The background syncer deliberately executes a pinned plugin copy rather than a live
+# checkout, so editing the source cannot change what a running daemon does. Nothing
+# advances that pin automatically and nothing else compares the two numbers, so a fix
+# can be merged, tested and believed shipped while the daemon keeps running the old one.
+DAEMON_ENTRY = Path(
+    os.environ.get(
+        "SKILL_SYNC_DAEMON_ENTRY",
+        str(HOME / ".config" / "claude-switch-models-setup" / "sync-local-skill-sources.py"),
+    )
+)
+DAEMON_PLUGIN = "daymade-claude-code"
 
 
 def read_json(path: Path):
@@ -103,6 +119,49 @@ def load_codex():
     if AGENTS_SKILLS.is_dir():
         pool = {e.name for e in AGENTS_SKILLS.iterdir()}
     return manifest, pool
+
+
+def load_daemon_runtime_lag():
+    """Compare the version the daemon executes against the source registry.
+
+    Advisory only: returns [] when current, undeployed, or unparseable, so a machine
+    that does not run this daemon never looks broken.
+    """
+    if not DAEMON_ENTRY.is_symlink():
+        return []
+    try:
+        target = os.readlink(DAEMON_ENTRY)
+    except OSError:
+        return []
+    match = re.search(rf"/{re.escape(DAEMON_PLUGIN)}/([^/]+)/", target)
+    if not match:
+        return []
+    running = match.group(1)
+
+    source = None
+    for _label, repo in REGISTRY_REPOS:
+        for plugin in read_json(repo / ".claude-plugin" / "marketplace.json").get("plugins", []):
+            if plugin.get("name") == DAEMON_PLUGIN:
+                source = plugin.get("version")
+    if not source or source == running:
+        return []
+
+    def parts(value):
+        try:
+            return tuple(int(x) for x in value.split("."))
+        except ValueError:
+            return None
+
+    running_parts, source_parts = parts(running), parts(source)
+    if running_parts is None or source_parts is None or running_parts >= source_parts:
+        return []
+    return [
+        f"{DAEMON_PLUGIN}: daemon runs {running}, source registers {source}. "
+        f"Advance the pin against the daemon's own config dir "
+        f"(`claude plugin marketplace update <mkt>` then `claude plugin update "
+        f"{DAEMON_PLUGIN}@<mkt>`), then repoint the symlinks in "
+        f"{DAEMON_ENTRY.parent} at the new version directory."
+    ]
 
 
 def load_profile_only_keys():
@@ -179,6 +238,7 @@ def audit():
         "PROFILE_ONLY_RISK": profile_only,
         "MANUAL_LINK_RISK": sorted(manual_risk),
         "CODEX_UNLISTED_ENABLED": codex_unlisted,
+        "DAEMON_RUNTIME_LAG": load_daemon_runtime_lag(),
     }
 
 
@@ -222,7 +282,8 @@ def main():
     print(
         "\nLegend: DISABLED/NO_KEY -> enable via `claude plugin enable NAME@mkt`; "
         "REGISTERED_NOT_INSTALLED -> `claude plugin install NAME@mkt`; "
-        "MANUAL_LINK_RISK -> add the name to codex-active-skills.json or drop the link."
+        "MANUAL_LINK_RISK -> add the name to codex-active-skills.json or drop the link; "
+        "DAEMON_RUNTIME_LAG -> the daemon is executing code older than this repo."
     )
     return 0
 
