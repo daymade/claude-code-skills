@@ -69,6 +69,8 @@ Env overrides (match claude-profiles.sh):
     CLAUDE_PROFILES_DIR   default ~/.claude-profiles
 """
 
+from __future__ import annotations
+
 import json
 import os
 import shutil
