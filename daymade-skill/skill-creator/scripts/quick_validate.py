@@ -259,6 +259,61 @@ def find_personal_identifiers(content: str) -> list[tuple[int, str, str]]:
     return issues
 
 
+def find_unreachable_references(skill_path: Path, content: str) -> list[str]:
+    """
+    References the runtime can never be told to open.
+
+    validate_internal_paths checks the forward direction — every path SKILL.md
+    mentions exists. This is the reverse: every file under references/ is
+    reachable from SKILL.md. A bundled reference nothing points at is dead
+    weight at runtime no matter how good its content is, because the executing
+    agent has no route to it. It passes every other check: the file exists, the
+    frontmatter is fine, the commands run.
+
+    Reachability is transitive — a reference linked from another reachable
+    reference counts, since the agent can follow the chain. Both the relative
+    path and the bare filename count as a link inside a reference, because
+    references routinely cite siblings by name alone.
+
+    This is reported, never fatal. Some unreferenced files are deliberate: an
+    author-facing template that would be noise as runtime guidance, for
+    instance. A gate that fails on those teaches people to bypass it, and a
+    bypassed gate is off for every skill including the ones it was built for.
+    """
+    ref_dir = skill_path / "references"
+    if not ref_dir.is_dir():
+        return []
+    files = sorted(
+        p.relative_to(skill_path).as_posix()
+        for p in ref_dir.rglob("*")
+        if p.is_file() and p.suffix == ".md"
+    )
+    if not files:
+        return []
+
+    # A bare filename counts as a link, in SKILL.md and inside references alike.
+    # The common healthy form is a `### references/` section listing each file by
+    # name with a line on what it holds — which is exactly what the guidance asks
+    # for. Requiring the full `references/<name>` path here flagged skills doing
+    # it correctly.
+    reachable = {f for f in files if f in content or Path(f).name in content}
+    frontier = list(reachable)
+    while frontier:
+        current = frontier.pop()
+        try:
+            body = (skill_path / current).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for candidate in files:
+            if candidate in reachable:
+                continue
+            if candidate in body or Path(candidate).name in body:
+                reachable.add(candidate)
+                frontier.append(candidate)
+
+    return [f for f in files if f not in reachable]
+
+
 def validate_internal_paths(skill_path: Path, content: str) -> tuple[bool, list[str]]:
     """
     Verify skill-internal path references actually exist.
@@ -447,6 +502,17 @@ def validate_skill(skill_path, audience=None):
             _, missing = validate_internal_paths(skill_path, file_content)
             if missing:
                 print(f"{chr(9992)}  WARNING: {rel_name} references missing skill files: {', '.join(missing[:5])}")
+
+    unreachable = find_unreachable_references(skill_path, content)
+    if unreachable:
+        return True, (
+            "Skill is valid!\n"
+            f"{chr(9888)}  Bundled but unreachable from SKILL.md: {', '.join(unreachable)}\n"
+            "   Nothing links these, so the executing agent is never told to open them —\n"
+            "   their content cannot affect a run. Either link each one from SKILL.md with\n"
+            "   a line on when to read it, or delete it. Deliberate exceptions exist (an\n"
+            "   author-facing template is not runtime guidance); this is a note, not a defect."
+        )
 
     return True, "Skill is valid!"
 
