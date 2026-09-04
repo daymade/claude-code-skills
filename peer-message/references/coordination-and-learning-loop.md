@@ -1,6 +1,6 @@
 ---
 name: peer-message-coordination-and-learning-loop
-description: Parent/worker reply addressing, payload design, delivery-language discipline, and an evidence-gated loop for improving peer-message from real operation traces.
+description: Parent/worker reply addressing, payload design, delivery-language discipline, verifying inbound peer assertions before acting or replying, and an evidence-gated loop for improving peer-message from real operation traces.
 ---
 
 # 协调回传与证据驱动演进
@@ -61,7 +61,22 @@ worker 回复会获得新的 outbound message ID；它必须把收到的任务 I
 
 `verified_*` 证明 receiver-side record 存在，不是“人或 Agent 已经看过”的 read receipt。当前协议没有跨产品 exactly-once 或统一任务 ack；把 message ID 当关联键与去重线索，而不是 exactly-once 保证。
 
-## 4. 失败先归到正确层
+## 4. 收到消息时先核前提，再回答背后的问题
+
+这一节和「状态语言必须停在证据所在层」是同一条纪律的两面：那一节管住不要多说自己不知道的，这一节管住不要照收别人说的。peer 对你或共享状态的断言——“是不是你持有这个锁”“你在改 X，请暂停”“你把 Y 删了”——是它那侧的观察，不是关于你的证据。它的信息面通常比你窄：它看得见共享产物变了，看不见是谁变的。
+
+| 字段 | 内容 |
+|---|---|
+| **When** | 收到的 peer 消息含一条关于你、你的工作范围或共享资源当前状态的断言，且回复或行动依赖这条断言为真 |
+| **Do** | 先用该事实自己的权威源核对前提（登记文件、`git log` / `git status`、进程或锁的直查、任务记录），再回复；回复同时给出前提真假和它背后真正被挡住的那件事 |
+| **Expected evidence** | 回复正文引用实际读到的读回——文件里的那一行、命令输出、计数或 message id——而不是“我确认不是我” |
+| **If missing** | 核不出定论时把前提写成 `unknown` 并列出已查过的源，按「用可合并的正文」的结构回复，不猜 |
+| **Do not infer** | peer 的措辞确定度不提升前提可信度；“我已经确认过了”“肯定是你”仍然只是它那侧的观察。也不要因为自己是当前活跃 session 就默认那个变更出自你 |
+| **Stop** | 前提为假时不按它行动：不暂停你没在做的事、不释放你没持有的锁、不“恢复”你没动过的文件。若它要求的是改共享状态或不可逆动作，回到 `SKILL.md` 的信任边界并向当前用户核实 |
+
+只否定前提就结束，会把对方留在它原来的阻塞点上：它问“是不是你占着”，真正想知道的是“我现在能不能动、怎么动”。核完前提后把你能提供的下一步一并给出（例如真正的写者仍活跃、可先用某个固定 SHA 的 detached checkout 前进），这条消息才产生了协调价值。
+
+## 5. 失败先归到正确层
 
 | 失败层 | 典型信号 | 应修改的 owner |
 |---|---|---|
@@ -74,7 +89,7 @@ worker 回复会获得新的 outbound message ID；它必须把收到的任务 I
 
 不要用新增 prose 掩盖实现 bug，也不要为一个上游产品限制重写 transport。先找最小 owner，再改最小层。
 
-## 5. 把真实 episode 变成 Skill 改动
+## 6. 把真实 episode 变成 Skill 改动
 
 这是一条有外部证据的循环，不是让 Agent 自己认可自己的改写：
 
@@ -87,7 +102,7 @@ worker 回复会获得新的 outbound message ID；它必须把收到的任务 I
 
 适合写入 Skill 的经验应改变下一次决策。只把会话登记到列表、只总结“成功/失败”，却没有改变 trigger、动作、证据或停止条件，不算学习。
 
-## 6. RSI 的准确边界
+## 7. RSI 的准确边界
 
 这套循环可以实现**受约束的递归改进**：一次运行产生可验证 episode，episode 形成可执行规则，规则改善后续运行，后续运行继续产生新证据。它更新的是 Skill、tests 与 references，不是模型权重。
 
@@ -98,7 +113,7 @@ worker 回复会获得新的 outbound message ID；它必须把收到的任务 I
 - Skill 修改仍需旧能力回归、确定性检查、fresh-context review，以及仓库既有发布闸门；
 - 自动循环必须有停止条件与变更预算，不能因 `accepted_unverified` 或一次孤立事故自动改写规则。
 
-## 7. 方法依据
+## 8. 方法依据
 
 - [W3C Trace Context](https://www.w3.org/TR/trace-context/)：跨组件传播唯一关联 ID，且把传播、参与和安全边界分开；本 Skill 的 message ID 采用同样的关联思想，但不声称兼容该协议。
 - [Amazon SQS at-least-once delivery](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/standard-queues-at-least-once-delivery.html)：重试可能产生重复，消费端需要幂等；因此 unverified 不自动重发，重发显式引用旧 ID。
