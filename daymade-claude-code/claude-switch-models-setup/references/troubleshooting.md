@@ -193,6 +193,19 @@ If the watcher is not installed, install it:
 ~/.config/claude-switch-models-setup/sync-local-skill-sources-daemon.sh --install
 ```
 
+If the watcher is installed, healthy and running, and the change still does not
+appear, check whether it is executing an older pinned copy than the source. The
+daemon deliberately runs an installed plugin version rather than the checkout, and
+nothing advances that pin on its own:
+
+```bash
+python3 <this skill>/scripts/skill-install-audit.py --list DAEMON_RUNTIME_LAG
+```
+
+A non-empty result names both versions and the commands that advance the pin. The
+topology and the reason for the isolation are in
+[local-source-sync-architecture.md](local-source-sync-architecture.md).
+
 Manual repair fallback:
 
 ```bash

@@ -122,6 +122,21 @@ Rules:
   Without it, a marketplace whose own installer activates every registered Skill will
   keep recreating links this syncer then prunes, and the two writers silently undo
   each other.
+- The background daemon executes a **pinned plugin copy**, installed into its own
+  `CLAUDE_CONFIG_DIR` under `~/.local/share/`, not the live checkout. That isolation is
+  deliberate: editing a source repo must not change what an already-running daemon does.
+  The cost is that nothing advances the pin — a fix can be merged, tested and believed
+  shipped while the daemon keeps running the old code. Advance it with the same official
+  commands that installed it, against that config dir:
+
+  ```bash
+  CLAUDE_CONFIG_DIR=<daemon config> claude plugin marketplace update <marketplace>
+  CLAUDE_CONFIG_DIR=<daemon config> claude plugin update <plugin>@<marketplace>
+  ```
+
+  then repoint the script symlinks under `~/.config/claude-switch-models-setup/` at the
+  new version directory. `skill-install-audit.py` reports the gap as `DAEMON_RUNTIME_LAG`;
+  it is the only thing that compares the two numbers.
 - Unselected source Skills remain cold inventory. Real directories and third-party
   symlinks in either root are outside automatic retirement.
 
