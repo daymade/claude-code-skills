@@ -258,7 +258,12 @@ If a `claude-profile <name> -p ...` probe starts successfully, debug logs should
 - In `~/.agents/skills`, this system prunes a symlink only when its resolved
   target is inside a managed source repo and its name is outside the
   active set. Pruning atomically moves that exact entry into
-  `.source-sync-backups/`; it does not delete the object. Classification and
+  `.source-sync-backups/`; it does not delete the object. Nothing ever cleans those
+  buckets, and they look like disposable cache from the outside — but a 2026-09-05
+  survey found most of them holding files present in no repository's object store,
+  one carrying a 75-file variant of a skill whose shipped version has 13. Judge them
+  with `prune-source-sync-backups.py`, which hashes every entry and keeps any bucket
+  it cannot prove reproducible; never clear the directory wholesale. Classification and
   identity come from one entry snapshot, and the move uses the platform's
   no-replace rename primitive. If an unrelated writer replaces the entry after
   classification, the syncer restores that winner to the original name when it
