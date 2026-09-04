@@ -26,6 +26,7 @@ from typing import List, Set
 # the import.
 import functools
 import importlib.util
+import re
 
 _JIEBA_AVAILABLE = importlib.util.find_spec("jieba") is not None
 _JIEBA_MODULE = None
@@ -250,6 +251,28 @@ def check_correction_safety(
         List of SafetyWarning objects (empty = safe)
     """
     warnings: List[SafetyWarning] = []
+
+    # Check 0: a bare number is never a correctable token — digits match
+    # timestamps, scores, prices and quantities in every transcript, so any
+    # replacement produces false positives at scale (real incident 2026-09: a
+    # numeric name-variant deferred 122 items in one rerun, most of them
+    # ".950" millisecond timestamps). This is an error even in non-strict mode.
+    # Predicate semantics shared with core/people_roster.py's load-time refusal
+    # (Unicode decimal digits) — keep the two in sync.
+    if re.fullmatch(r"\d+", from_text):
+        warnings.append(SafetyWarning(
+            level="error",
+            category="numeric_text",
+            message=(
+                f"'{from_text}' is a bare number. Numbers appear correctly as "
+                f"timestamps, scores, prices and quantities in normal text, so "
+                f"replacing them with '{to_text}' always produces false positives."
+            ),
+            suggestion=(
+                "A number heard as a name/term needs a context rule scoped to the "
+                "exact recurring phrase (a context-file trap), not a dictionary entry."
+            ),
+        ))
 
     # Check 1: Is from_text a known common word?
     if from_text in ALL_COMMON_WORDS:

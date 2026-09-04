@@ -69,6 +69,35 @@ class PeopleRosterTests(unittest.TestCase):
         )
         self.assertEqual(corrections, {"丙月": "丙远"})
 
+    def test_bare_numeric_variant_is_refused_with_loud_warning(self) -> None:
+        # A bare number matches timestamps/scores everywhere; it must be refused
+        # at load (not deferred), while legitimate siblings still load.
+        self.roster_path.write_text(
+            "### 甲明\n- **ASR 变体**: 金老师, 95, 纪明\n",
+            encoding="utf-8",
+        )
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            corrections, _ = load_people_roster(self.roster_path)
+        self.assertEqual(corrections, {"金老师": "甲明", "纪明": "甲明"})
+        self.assertNotIn("95", corrections)
+        self.assertIn("refused", stderr.getvalue())
+        self.assertIn("95", stderr.getvalue())
+
+    def test_quoted_numeric_variant_is_still_refused(self) -> None:
+        # Outer quotes are the escape hatch for exotic name shapes, but they must
+        # not bypass the numeric refusal (the gate runs after normalization).
+        self.roster_path.write_text(
+            '### 甲明\n- **ASR 变体**: 金老师, "95"\n',
+            encoding="utf-8",
+        )
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            corrections, _ = load_people_roster(self.roster_path)
+        self.assertNotIn("95", corrections)
+        self.assertEqual(corrections, {"金老师": "甲明"})
+        self.assertIn("refused", stderr.getvalue())
+
     def test_representative_roster_yields_no_prose_entries(self) -> None:
         corrections = self.roster(
             "### 甲明\n"

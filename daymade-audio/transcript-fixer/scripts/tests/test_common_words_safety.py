@@ -44,6 +44,15 @@ class TestSafetyChecks(unittest.TestCase):
             "Expected 'common_word' category",
         )
 
+    def test_bare_number_is_an_error_in_both_modes(self):
+        """A pure-digit from_text matches timestamps/scores everywhere — error, not warning."""
+        for strict in (True, False):
+            warnings = check_correction_safety("95", "某人", strict=strict)
+            self.assertTrue(
+                any(w.category == "numeric_text" and w.level == "error" for w in warnings),
+                f"Expected a numeric_text error with strict={strict}",
+            )
+
     def test_common_word_warning_nonstrict(self):
         """In non-strict mode, common words produce warnings, not errors."""
         warnings = check_correction_safety("仿佛", "反复", strict=False)

@@ -438,6 +438,19 @@ class CorrectionService:
             logger.info(f"Pre-validating {len(corrections)} corrections...")
             invalid_count = 0
             for from_text, to_text in corrections.items():
+                # Bare numeric FROM is refused here too: this import path
+                # deliberately bypasses check_correction_safety, and a number
+                # rule would silently auto-apply under a trusted domain (digits
+                # match timestamps/scores everywhere). Same predicate semantics
+                # as the numeric_text check in utils/common_words.py and the
+                # people-roster loader's refusal — keep the three in sync.
+                if re.fullmatch(r"\d+", from_text):
+                    logger.error(
+                        f"Validation failed for '{from_text}' → '{to_text}': "
+                        "bare numeric FROM can never be a rule; use a context-file trap"
+                    )
+                    invalid_count += 1
+                    continue
                 try:
                     self.validate_correction_text(from_text, "from_text")
                     self.validate_correction_text(to_text, "to_text")

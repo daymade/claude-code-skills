@@ -21,6 +21,14 @@ The derived corrections are merged into Stage 1 at runtime (in-memory only, NEVE
 written to the DB) and go through the normal risk gate: long variants auto-apply;
 short/common ones surface in *_needs_review.md for confirmation against the roster
 context — so the curated roster feeds the system without bypassing safety.
+
+One semantic refusal lives at load time: a **bare numeric variant** (a number heard
+as a person, e.g. `95` -> someone) can never be a global rule, because digits match
+timestamps, scores, and prices in every transcript — deferring it for review just
+converts the mistake into queue spam (real case 2026-09: one roster line deferred
+122 items across five files in a single rerun, most of them `.950` millisecond
+timestamps). Such variants are refused with a loud stderr warning; record that
+mapping as a cue-scoped trap in the owning domain's context file instead.
 """
 
 from __future__ import annotations
@@ -59,6 +67,11 @@ _NON_APOSTROPHE_QUOTE_CHARS = _ALL_QUOTE_CHARS - {"'", "’"}
 _UNQUOTED_FORBIDDEN_RE = re.compile(
     r'[/／]|->|=>|[→←⇒⇐↔⇄]|[。！？!?=:<>]|——'
 )
+# Decimal digits, Unicode-aware (\d matches full-width ９５ etc.). A bare number
+# matches timestamps/scores/prices in every transcript, so it is refused at load
+# rather than risk-gated (see module docstring). Same predicate semantics as the
+# numeric_text check in utils/common_words.py — keep the two in sync.
+_NUMERIC_ONLY_RE = re.compile(r'^\d+$')
 
 
 def load_people_roster(path: Path) -> Tuple[Dict[str, str], Dict[str, str]]:
@@ -82,6 +95,7 @@ def load_people_roster(path: Path) -> Tuple[Dict[str, str], Dict[str, str]]:
     corrections: Dict[str, str] = {}
     current_canonical: str | None = None
     dropped: list[str] = []
+    refused_numeric: list[str] = []
 
     with open(path, 'r', encoding='utf-8') as f:
         for raw in f:
@@ -96,6 +110,9 @@ def load_people_roster(path: Path) -> Tuple[Dict[str, str], Dict[str, str]]:
             if m and current_canonical:
                 for variant in _split_variants(m.group(1), dropped):
                     variant = variant.strip()
+                    if variant and _NUMERIC_ONLY_RE.fullmatch(variant):
+                        refused_numeric.append(variant)
+                        continue
                     # Never map a canonical to itself, and first-seen wins so a
                     # variant can't be hijacked by a later (less relevant) person.
                     if variant and variant != current_canonical and variant not in corrections:
@@ -119,6 +136,17 @@ def load_people_roster(path: Path) -> Tuple[Dict[str, str], Dict[str, str]]:
         print(
             "    Dropped content is omitted from logs. Use balanced outer quotes "
             "for comma-bearing or otherwise ambiguous names.",
+            file=sys.stderr,
+        )
+
+    if refused_numeric:
+        unique = sorted(set(refused_numeric))
+        print(
+            f"⚠️  people roster: refused {len(unique)} bare numeric ASR "
+            f"variant(s) from {path.name}: {', '.join(unique)}. Digits match "
+            "timestamps, scores and prices in every transcript, so a bare number "
+            "can never be a global name rule — record that mapping as a cue-scoped "
+            "trap in the owning domain's context file instead.",
             file=sys.stderr,
         )
 
