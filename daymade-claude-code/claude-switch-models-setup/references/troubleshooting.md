@@ -199,11 +199,16 @@ daemon deliberately runs an installed plugin version rather than the checkout, a
 nothing advances that pin on its own:
 
 ```bash
-python3 <this skill>/scripts/skill-install-audit.py --list DAEMON_RUNTIME_LAG
+python3 <this skill>/scripts/skill-install-audit.py --list DAEMON_RUNTIME_LAG SOURCE_CHECKOUT_BEHIND
 ```
 
-A non-empty result names both versions and the commands that advance the pin. The
-topology and the reason for the isolation are in
+A non-empty `DAEMON_RUNTIME_LAG` names both versions and the commands that advance
+the pin. Read the second section before trusting an empty first one: the comparison
+is made against a local checkout, so a daemon on the previous release and a checkout
+still on it agree with each other, and the lag reads clean while the published source
+has moved on. Bring the checkout current, then re-run.
+
+The topology and the reason for the isolation are in
 [local-source-sync-architecture.md](local-source-sync-architecture.md).
 
 Manual repair fallback:
