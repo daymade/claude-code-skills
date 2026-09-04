@@ -1,6 +1,6 @@
 ---
 name: peer-message-coordination-and-learning-loop
-description: Parent/worker reply addressing, payload design, delivery-language discipline, verifying inbound peer assertions before acting or replying, and an evidence-gated loop for improving peer-message from real operation traces.
+description: Parent/worker reply addressing, payload design, delivery-language discipline, evidence that stays valid while its subject is still changing, verifying inbound peer assertions before acting or replying, reading a set of peer denials without turning it into an ownership conclusion, and an evidence-gated loop for improving peer-message from real operation traces.
 ---
 
 # 协调回传与证据驱动演进
@@ -39,6 +39,8 @@ unknowns: <未覆盖、超时、缺失 ack>
 requested_next_action: <none 或一个明确动作>
 ```
 
+`evidence` 的主体是**可变**共享状态时（正在被写的文件、活动进程、移动中的 ref），一次观测不构成事实。断言前再观测一次并比对：两次一致才写值，并带上 `observed_at` 与会使它失效的条件；两次不同就写「仍在变化」和两次的观测时间，不要引用其中任何一个值。诚实的时间戳挂在一个已经过期的事实上，接收方照样会照它行动——它不知道你测完之后主体还在动。
+
 短单行通知可使用 inline message。多行报告、含引号/代码/非 ASCII 的正文，或接近 shell 参数长度边界的内容，先写成 UTF-8 message file，再按当前 `send --help` 的文件入口发送。不要把任意正文插值进 shell 命令；这既容易破坏引号，也会把一份报告误执行成 shell 片段。
 
 message file 只解决发送端输入，不代表传了附件。所有 route 都只传文本；需要共享文件时发送已授权、双方可读的路径与内容摘要，不把文件字节塞进 peer envelope。
@@ -76,7 +78,34 @@ worker 回复会获得新的 outbound message ID；它必须把收到的任务 I
 
 只否定前提就结束，会把对方留在它原来的阻塞点上：它问“是不是你占着”，真正想知道的是“我现在能不能动、怎么动”。核完前提后把你能提供的下一步一并给出（例如真正的写者仍活跃、可先用某个固定 SHA 的 detached checkout 前进），这条消息才产生了协调价值。
 
-## 5. 失败先归到正确层
+## 5. 向 peer 群体求证时，否认的集合不是结论
+
+这是上一节的发送侧镜像：那一节管住不要照收 peer 说的，这一节管住不要过度相信 peer **没有**说的。
+
+承重的一句是：**你能枚举到的集合，不等于能影响那个产物的集合。** 能改一个路径的是「任何对它有写权限的东西」——从未登记的写者、定时任务、人，以及枚举不到的那部分已退出 session。所以「问了一圈都说不是我」只是关于你枚举到的那几个的事实，不是关于世界的事实。
+
+先弄清 `list` 到底给了你什么，否则口径写不对。下面每条都自己跑一次确认，**不要抄这里的行数**——session 在分钟级生灭，例证数字只说明形态：
+
+- **它不按工作目录分区。** `cmd_list` 没有 cwd 过滤开关，两个打印分支都带 `cwd=`；一次 `--provider claude` 的观测里同时出现了 8 个不同工作目录下的 session。所以「工作目录在别的项目、用绝对路径伸进来的 session」**不是**它够不到的类别——恰恰相反，你要的线索就摆在行里。
+- **一行不等于「在跑」，而且两个 provider 的含义不一样。** Claude 侧读 registry，进程退出即掉出，所以一行基本等于活着；Codex 侧读本地 saved catalog，`status` 全是 `saved`、`alive` 与 `reachable` 为空，**它列出的绝大多数恰恰是已经结束的 session**（`references/official-feature.md` §6 明写不据此判断活性）。对归属调查来说这是反直觉的好消息：一个已退出的 Codex session 会带着 `cwd` 出现在行里，那是线索不是噪音——别因为「它已经死了」就把它划出候选。默认 `--provider all` 时两种行混在一起，要区分就读每行的 `status` / `alive`，不要把 catalog 行数当成活跃 session 数写进口径。
+- **它会静默截断。** `--limit` 默认 30，且只作用于 Codex 一半（Claude registry 不吃这个参数）。`--help` 只印 `--limit LIMIT`，既不显示默认值也没有说明——所以照 `SKILL.md` 第 1 步跑完 `--help` 仍然看不出自己被截断了。Codex 侧正好返回 30 行时，先假定它被截了，用 `--limit` 显式放大再看行数是否变化。
+
+| 字段 | 内容 |
+|---|---|
+| **When** | 你向多个 peer 求证某个共享产物的归属或状态，并打算用它们的答复（尤其是一致否认）推出结论 |
+| **Do** | 把否认当成缩小范围，不当成结论。行为人要去产物侧的权威源认：登记文件、`git log` / `git status`、进程或锁的直查、任务记录——和上一节核前提用的是同一批源，不是再问更多 peer |
+| **Expected evidence** | 一条把行为人和产物直接绑定的读回：写入时间、提交它的 ref、持有它的进程、写它的那条任务记录。「N 个 peer 都否认」不是这样的读回 |
+| **If missing** | 报 `unknown`，并写出可复核的口径三项：这次实际发问的目标数、`list` 当次的 provider 与是否触到 `--limit`、以及其中有多少行只是未验活的 saved catalog。例如「向 `list` 返回的 12 个 Claude 目标发问，Codex 侧 30 行触到默认 limit 未发问，全部否认，归属未定」。不要把 `unknown` 升级成「无主」 |
+| **Do not infer** | 全体否认不证明无人所有；没出现在 `list` 里不证明不存在，也不证明已退出。否认者答的是它自己知道的那部分，它未必知道自己的写入算不算你问的那件事。也不要把「我只问了这一圈」当成「只有这一圈能改它」——圈是你划的，写权限不按你的圈分布 |
+| **Stop** | 归属未定时不对共享产物做不可逆动作，也不把「无主」当成处置依据向任何人上报 |
+
+枚举口径本身就是结论的一部分，所以要连口径一起报。一个真实形态：一批改动被「在该仓工作目录下的全部活跃 session 均否认」推成了「来自已死 session、可以处置」，而真正的写者是一个工作目录在**另一个项目**、用绝对路径写进来的活跃 session。
+
+这个案例的教训容易被记反：**不是工具看不见它**——`list` 本来就跨工作目录，那一行连 `cwd` 都印出来了。是发问的人按项目划了圈，而写权限不按项目分布。所以口径出问题的地方通常不在工具的能力边界上，而在你自己那一步默认的过滤条件里；写口径就是把那个默认过滤条件显式说出来，让读的人能看出它漏了什么。
+
+「来自已死 session」是同一个错误的后半段：它把「查不到」直接换算成了「查不到的那个已经死了，所以可以处置」。这两步都不成立——查不到只是你的圈没覆盖到，而**已死也不等于可处置**，一个已经退出的写者留下的在飞改动照样可能是别人正等着的东西。归属未定时唯一安全的动作是报 `unknown` 并停手，不是给它换一个听起来可以动手的标签。
+
+## 6. 失败先归到正确层
 
 | 失败层 | 典型信号 | 应修改的 owner |
 |---|---|---|
@@ -89,7 +118,7 @@ worker 回复会获得新的 outbound message ID；它必须把收到的任务 I
 
 不要用新增 prose 掩盖实现 bug，也不要为一个上游产品限制重写 transport。先找最小 owner，再改最小层。
 
-## 6. 把真实 episode 变成 Skill 改动
+## 7. 把真实 episode 变成 Skill 改动
 
 这是一条有外部证据的循环，不是让 Agent 自己认可自己的改写：
 
@@ -102,7 +131,7 @@ worker 回复会获得新的 outbound message ID；它必须把收到的任务 I
 
 适合写入 Skill 的经验应改变下一次决策。只把会话登记到列表、只总结“成功/失败”，却没有改变 trigger、动作、证据或停止条件，不算学习。
 
-## 7. RSI 的准确边界
+## 8. RSI 的准确边界
 
 这套循环可以实现**受约束的递归改进**：一次运行产生可验证 episode，episode 形成可执行规则，规则改善后续运行，后续运行继续产生新证据。它更新的是 Skill、tests 与 references，不是模型权重。
 
@@ -113,7 +142,7 @@ worker 回复会获得新的 outbound message ID；它必须把收到的任务 I
 - Skill 修改仍需旧能力回归、确定性检查、fresh-context review，以及仓库既有发布闸门；
 - 自动循环必须有停止条件与变更预算，不能因 `accepted_unverified` 或一次孤立事故自动改写规则。
 
-## 8. 方法依据
+## 9. 方法依据
 
 - [W3C Trace Context](https://www.w3.org/TR/trace-context/)：跨组件传播唯一关联 ID，且把传播、参与和安全边界分开；本 Skill 的 message ID 采用同样的关联思想，但不声称兼容该协议。
 - [Amazon SQS at-least-once delivery](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/standard-queues-at-least-once-delivery.html)：重试可能产生重复，消费端需要幂等；因此 unverified 不自动重发，重发显式引用旧 ID。
