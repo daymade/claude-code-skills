@@ -213,6 +213,33 @@ def auto_sender() -> str:
     return f"claude:{claude_id}" if claude_id else "local-script"
 
 
+def auto_reply_address(sender: str) -> str | None:
+    """Envelope `from` value, chosen so BOTH routes can resolve it.
+
+    The receiving agent may never have loaded this Skill. All it has is the host's
+    own instruction — "to reply, copy `from` into `to`" — and the official tools,
+    which resolve host-native forms (`uds:<socket>`, bare name) but NOT
+    `claude:<session-uuid>`. Feeding them a UUID yields `No agent named ... is
+    reachable`, which reads like "that peer does not exist" and stops them: the
+    official list shows `name [ref]` whose ref is not a UUID prefix, so they cannot
+    map it back by eye either. There is no recipient-side recovery, which is why
+    this has to be right at the producer.
+
+    `uds:<socket>` is the verified intersection — the official tools accept it (it
+    is what the host itself puts in `from`), and `resolve_claude` matches it against
+    `messagingSocketPath`.
+    """
+    codex_id = os.environ.get("CODEX_THREAD_ID") or os.environ.get("CODEX_SESSION_ID")
+    if codex_id:
+        # Official Claude tools cannot reach a Codex thread by any address, so there
+        # is no intersection to pick; peer.py is the only way back either way.
+        return sender if sender != "local-script" else None
+    socket_path = os.environ.get("CLAUDE_CODE_MESSAGING_SOCKET")
+    if socket_path:
+        return f"uds:{socket_path}"
+    return sender if sender != "local-script" else None
+
+
 def current_address(claude_home: Path, codex_home: Path) -> str:
     """Return an exact address for the current hosted session or fail loudly."""
     codex_id = os.environ.get("CODEX_THREAD_ID") or os.environ.get("CODEX_SESSION_ID")
@@ -633,7 +660,7 @@ def cmd_whoami(args: argparse.Namespace) -> int:
 
 def cmd_send(args: argparse.Namespace) -> int:
     sender = args.sender or auto_sender()
-    reply_to = args.reply_to or (sender if sender != "local-script" else None)
+    reply_to = args.reply_to or auto_reply_address(sender)
     receipt = send_one(
         args.target,
         message_text(args),
@@ -661,7 +688,7 @@ def cmd_broadcast(args: argparse.Namespace) -> int:
         )
     body = message_text(args)
     sender = args.sender or auto_sender()
-    reply_to = args.reply_to or (sender if sender != "local-script" else None)
+    reply_to = args.reply_to or auto_reply_address(sender)
     receipts = []
     failures = []
     for target in targets:

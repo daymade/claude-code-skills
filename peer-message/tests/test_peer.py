@@ -506,6 +506,68 @@ class PeerMessageTests(unittest.TestCase):
             )
             self.assertEqual(exit_code, peer.EXIT_USAGE)
 
+    def test_reply_address_prefers_socket_form_official_tools_accept(self):
+        """`from` must be resolvable by the OFFICIAL tools, not just by peer.py.
+
+        A recipient that never loaded this Skill has only the host's instruction
+        ("copy `from` into `to`") plus the official tools, which reject
+        `claude:<session-uuid>`. There is no recipient-side recovery, so the
+        producer has to emit the intersection form.
+        """
+        env = {
+            "CLAUDE_CODE_MESSAGING_SOCKET": "/tmp/cc-socks/4242.sock",
+            "CLAUDE_CODE_SESSION_ID": "22222222-2222-4222-8222-222222222222",
+        }
+        with mock.patch.dict(peer.os.environ, env, clear=True):
+            sender = peer.auto_sender()
+            self.assertEqual(sender, "claude:22222222-2222-4222-8222-222222222222")
+            self.assertEqual(
+                peer.auto_reply_address(sender), "uds:/tmp/cc-socks/4242.sock"
+            )
+
+    def test_reply_address_round_trips_through_resolve_claude(self):
+        """The emitted `from` must also still resolve on the peer.py side."""
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            home, _entry, socket_path = self.make_claude_target(root, name="peer-a")
+            socket_path = str(socket_path)
+            with mock.patch.dict(
+                peer.os.environ,
+                {"CLAUDE_CODE_MESSAGING_SOCKET": socket_path},
+                clear=True,
+            ):
+                reply_to = peer.auto_reply_address(peer.auto_sender())
+            self.assertEqual(reply_to, f"uds:{socket_path}")
+            self.assertEqual(peer.resolve_claude(reply_to, home)["name"], "peer-a")
+
+    def test_reply_address_without_socket_keeps_previous_behaviour(self):
+        with mock.patch.dict(
+            peer.os.environ,
+            {"CLAUDE_CODE_SESSION_ID": "33333333-3333-4333-8333-333333333333"},
+            clear=True,
+        ):
+            sender = peer.auto_sender()
+            self.assertEqual(peer.auto_reply_address(sender), sender)
+        with mock.patch.dict(peer.os.environ, {}, clear=True):
+            self.assertEqual(peer.auto_sender(), "local-script")
+            self.assertIsNone(peer.auto_reply_address("local-script"))
+
+    def test_codex_sender_keeps_codex_address(self):
+        """Official Claude tools cannot reach Codex by any address, so there is no
+        intersection to pick; the codex: form must survive untouched."""
+        with mock.patch.dict(
+            peer.os.environ,
+            {
+                "CODEX_THREAD_ID": "44444444-4444-4444-8444-444444444444",
+                "CLAUDE_CODE_MESSAGING_SOCKET": "/tmp/cc-socks/9999.sock",
+            },
+            clear=True,
+        ):
+            self.assertEqual(
+                peer.auto_reply_address(peer.auto_sender()),
+                "codex:44444444-4444-4444-8444-444444444444",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
