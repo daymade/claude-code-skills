@@ -11,9 +11,9 @@ description: Parent/worker reply addressing, payload design, delivery-language d
 
 父任务在发出 worker/subtask 指令前，先按当前 CLI help 运行 `whoami`，取得自己的精确地址；发送任务时，把它作为当前 reply-address option 显式传给 transport，并在委派正文中同时写出。若 `whoami` 无法从宿主环境或 catalog 解析唯一身份，停止并要求调用者给出精确地址，不用 `local-script` 冒充可回复 peer。
 
-**`whoami` 给的是 `peer.py` 形式的地址，官方工具不一定认。** 当前实现即使拿得到 session 名也会解析成 session-UUID 返回（这对 `peer.py` 是对的：UUID 唯一，名字会重名），而官方 peer tools 不认 `claude:<uuid>`。所以显式传回传地址时，传 `uds:<socket>` 形式——`$CLAUDE_CODE_MESSAGING_SOCKET` 就是它，两条 route 都认（见 `references/protocol-and-discovery.md` §1）。
+`whoami` 返回的是 `peer.py` 形式（session-UUID），官方 peer tools 不认这个形式。**但传它没问题**：`send` / `broadcast` 会把 `--reply-to` 过一遍和 target 相同的解析，写进信封 `from` 的是两条 route 都认的 `uds:<socket>`，`from-name` 是官方 schema 认的裸名。无论地址从哪条路来（自动推导、显式传入、只有 session 名），保证一样。
 
-`send` / `broadcast` 的信封 `from` 已经自动用这个形式，不需要手工指定；只有在委派正文里另写回传地址时才要注意选对形式。
+**只有一处不受这层保护：委派正文里手写的回传地址。** 那是纯文本，不经过 transport，所以要按 worker 将走哪条 route 自己选对形式（见 `references/protocol-and-discovery.md` §1）。
 
 不要把 `/root`、`主会话`、窗口标题、最近活动时间或工作目录当地址，除非它们就是 catalog 中唯一的 exact name。子任务缺少回传地址时不能自行恢复 parent 关系：报告“missing reply address”并停止回传；由委派方补发精确地址。不要凭“看起来最新”猜 parent。
 

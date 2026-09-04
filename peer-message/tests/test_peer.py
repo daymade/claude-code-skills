@@ -108,9 +108,12 @@ class PeerMessageTests(unittest.TestCase):
             frame = json.loads(lines[1])
             self.assertEqual(frame["msgV"], 1)
             self.assertEqual(frame["msg_id"], receipt["message_id"])
+            # A Codex sender gets no `from`: that field's host-documented contract is
+            # "copy this into `to`", and no Codex address satisfies it. This assertion
+            # previously pinned the opposite shape, i.e. it pinned the defect.
             self.assertEqual(
                 frame["message"]["content"].splitlines()[0],
-                '<cross-session-message from="codex:sender" from-name="codex:sender">',
+                '<cross-session-message from-name="codex:sender">',
             )
             self.assertIn(
                 f"[peer-message-id: {receipt['message_id']}]",
@@ -577,6 +580,12 @@ class PeerMessageTests(unittest.TestCase):
         )
         self.assertIn("[reply: peer.py send codex:abc]", envelope)
         self.assertNotIn("reply-to=", envelope)
+        # `from` is the field the host tells recipients to copy into `to`. An address
+        # the official tools cannot reach must not sit there looking usable, so the
+        # attribute is dropped rather than filled wrongly.
+        self.assertNotIn(' from="', envelope)
+        # Nothing is lost: the thread id stays in from-name and resolve_codex takes it.
+        self.assertIn('from-name="codex:abc"', envelope)
 
     def test_claude_sender_envelope_has_no_reply_hint(self):
         """A uds: `from` is directly usable by the official tools; adding a hint there
@@ -619,6 +628,91 @@ class PeerMessageTests(unittest.TestCase):
             )
         self.assertIn("aaaaaaaa-1111-4111-8111-111111111111", sender)
         self.assertNotIn("[from-session:", envelope)
+
+    def test_reply_address_is_normalized_however_it_arrived(self):
+        """The three remaining paths to an unusable `from` all bypass
+        `auto_reply_address`, so the guarantee has to sit where the address is used,
+        not where one of its sources computes it."""
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            home, entry, socket_path = self.make_claude_target(root, name="peer-a")
+            session_id = entry["sessionId"]
+            for label, reply_to in (
+                ("explicit --reply-to (docs told callers to pass whoami output)",
+                 f"claude:{session_id}"),
+                ("session name only", "claude:peer-a"),
+                ("pid form", f"claude:{entry['pid']}"),
+            ):
+                with self.subTest(label):
+                    sender, normalized = peer.normalize_claude_reply(
+                        "claude:whatever", reply_to, home
+                    )
+                    self.assertEqual(normalized, f"uds:{socket_path}", label)
+                    # from-name becomes the bare name the official schema documents.
+                    self.assertEqual(sender, "peer-a", label)
+
+    def test_unresolvable_reply_address_is_left_for_the_body_hint(self):
+        """No registry row means no intersection to substitute; leave the address
+        alone rather than inventing one, exactly as the Codex branch does."""
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw)
+            (home / "sessions").mkdir(parents=True)
+            unknown = "claude:99999999-9999-4999-8999-999999999999"
+            sender, normalized = peer.normalize_claude_reply("claude:x", unknown, home)
+            self.assertEqual(normalized, unknown)
+            self.assertEqual(sender, "claude:x")
+
+    def test_codex_reply_address_is_untouched_by_claude_normalization(self):
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw)
+            sender, normalized = peer.normalize_claude_reply(
+                "codex:abc", "codex:abc", home
+            )
+            self.assertEqual((sender, normalized), ("codex:abc", "codex:abc"))
+
+    def test_send_claude_actually_applies_the_normalization(self):
+        """Wiring test, not a unit test.
+
+        The unit tests above prove `normalize_claude_reply` is correct; they say
+        nothing about whether anything calls it. Removing the call from `send_claude`
+        left every one of them green, which is the shape of a check that passes while
+        the rule it encodes is violated. This one goes through the real socket path
+        and reads the address off the frame that actually left the process.
+        """
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            home, entry, socket_path = self.make_claude_target(root, name="peer-a")
+            received = []
+            ready = threading.Event()
+
+            def server():
+                listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                listener.bind(str(socket_path))
+                listener.listen(1)
+                ready.set()
+                connection, _ = listener.accept()
+                with connection:
+                    received.append(connection.recv(65536).decode("utf-8"))
+                listener.close()
+
+            thread = threading.Thread(target=server)
+            thread.start()
+            ready.wait(2)
+            peer.send_claude(
+                "claude:peer-a",
+                "body",
+                "claude:whatever",
+                f"claude:{entry['sessionId']}",
+                "55555555-5555-4555-8555-555555555555",
+                home,
+            )
+            thread.join(2)
+
+            envelope = json.loads(received[0].splitlines()[1])["message"]["content"]
+            first = envelope.splitlines()[0]
+            self.assertIn(f'from="uds:{socket_path}"', first)
+            self.assertNotIn('from="claude:', first)
+            self.assertIn('from-name="peer-a"', first)
 
 
 if __name__ == "__main__":
