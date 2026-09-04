@@ -89,6 +89,11 @@ class SkillSource:
 class SkillActivationPolicy:
     active_names: tuple[str, ...]
     legacy_codex_compat_names: tuple[str, ...]
+    # Marketplaces whose whole current membership is active. Per-skill curation is
+    # still the default; this is the declared exception for a marketplace whose own
+    # charter is "every registered Skill is activated", so its additions and removals
+    # no longer need a manual edit here to stay in sync.
+    active_marketplaces: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -686,13 +691,27 @@ def load_skill_activation_policy(path: Path) -> SkillActivationPolicy:
         "legacy Codex compatibility",
         required=False,
     )
+    active_marketplaces = _load_skill_name_array(
+        data,
+        path,
+        "active_marketplaces",
+        "active marketplace",
+        required=False,
+    )
+    unknown_marketplaces = sorted(set(active_marketplaces) - set(LOCAL_MARKETPLACE_NAMES))
+    if unknown_marketplaces:
+        raise ValueError(
+            f"{path}: active_marketplaces must name managed marketplaces "
+            f"({', '.join(LOCAL_MARKETPLACE_NAMES)}); unknown: "
+            f"{', '.join(unknown_marketplaces)}"
+        )
     inactive_legacy_names = sorted(set(legacy_names) - set(active_names))
     if inactive_legacy_names:
         raise ValueError(
             f"{path}: legacy_codex_compat_skills must be a subset of active_skills; "
             f"inactive: {', '.join(inactive_legacy_names)}"
         )
-    return SkillActivationPolicy(active_names, legacy_names)
+    return SkillActivationPolicy(active_names, legacy_names, active_marketplaces)
 
 
 def load_active_skill_names(path: Path) -> tuple[str, ...]:
@@ -1767,8 +1786,22 @@ def main(argv: list[str]) -> int:
     manifest = args.active_skills_manifest.expanduser().resolve()
     policy = load_skill_activation_policy(manifest)
     skills = merge_source_skills(sources)
+    discovered_marketplaces = {src.name for src in sources}
+    undiscovered = sorted(set(policy.active_marketplaces) - discovered_marketplaces)
+    if undiscovered:
+        raise ValueError(
+            f"{manifest}: active_marketplaces not found among discovered repos: "
+            f"{', '.join(undiscovered)}"
+        )
+    whole_marketplace_names = {
+        name
+        for src in sources
+        if src.name in policy.active_marketplaces
+        for name in src.skills
+    }
+    active_names = tuple(sorted(set(policy.active_names) | whole_marketplace_names))
     active_skills = freeze_selected_skill_sources(
-        select_active_skills(skills, policy.active_names, manifest)
+        select_active_skills(skills, active_names, manifest)
     )
     legacy_compat_skills = select_active_skills(
         active_skills,

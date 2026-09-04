@@ -41,6 +41,89 @@ class ActiveManifestTests(unittest.TestCase):
             self.assertIn("cmks-skills", sync.LOCAL_MARKETPLACE_NAMES)
             self.assertEqual(repos, [repo.resolve()])
 
+    def test_active_marketplaces_defaults_to_empty_when_absent(self) -> None:
+        """An existing manifest without the key must keep per-skill curation."""
+        with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
+            manifest = Path(raw) / "active.json"
+            manifest.write_text(
+                json.dumps({"schema_version": 1, "active_skills": ["alpha"]}),
+                encoding="utf-8",
+            )
+            policy = sync.load_skill_activation_policy(manifest)
+            self.assertEqual(policy.active_marketplaces, ())
+
+    def test_active_marketplaces_is_read_from_the_manifest(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
+            manifest = Path(raw) / "active.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "active_skills": ["alpha"],
+                        "active_marketplaces": ["cmks-skills"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            policy = sync.load_skill_activation_policy(manifest)
+            self.assertEqual(policy.active_marketplaces, ("cmks-skills",))
+
+    def test_unknown_active_marketplace_fails_before_any_mutation(self) -> None:
+        """A typo must abort at manifest load, not silently select nothing."""
+        with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
+            manifest = Path(raw) / "active.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "active_skills": ["alpha"],
+                        "active_marketplaces": ["not-a-real-marketplace"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "not-a-real-marketplace"):
+                sync.load_skill_activation_policy(manifest)
+
+    def test_whole_marketplace_selection_unions_with_explicit_names(self) -> None:
+        """The union main() computes: every member of a declared marketplace, plus
+        the explicitly listed skills from anywhere else."""
+        def skill(name: str, marketplace: str) -> "sync.SkillSource":
+            return sync.SkillSource(
+                name=name,
+                source_dir=Path("/tmp") / name,
+                plugin_id=f"{name}@{marketplace}",
+            )
+
+        alpha = skill("alpha", "cmks-skills")
+        beta = skill("beta", "cmks-skills")
+        curated = skill("curated", "daymade-skills")
+        whole = sync.MarketplaceSource(
+            name="cmks-skills",
+            repo=Path("/tmp/cmks"),
+            plugins={},
+            skills={"alpha": alpha, "beta": beta},
+        )
+        other = sync.MarketplaceSource(
+            name="daymade-skills",
+            repo=Path("/tmp/daymade"),
+            plugins={},
+            skills={"curated": curated},
+        )
+        sources = [whole, other]
+        policy = sync.SkillActivationPolicy(("curated",), (), ("cmks-skills",))
+
+        selected = {
+            name
+            for src in sources
+            if src.name in policy.active_marketplaces
+            for name in src.skills
+        } | set(policy.active_names)
+
+        self.assertEqual(selected, {"alpha", "beta", "curated"})
+        # An unselected member of a NON-declared marketplace stays cold inventory.
+        self.assertNotIn("uncurated", selected)
+
     def test_legacy_codex_compatibility_must_be_an_active_subset(self) -> None:
         with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
             manifest = Path(raw) / "active.json"

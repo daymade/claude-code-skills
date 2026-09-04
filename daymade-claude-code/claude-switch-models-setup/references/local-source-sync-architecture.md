@@ -115,6 +115,13 @@ Rules:
   therefore fails instead of redirecting active-root pruning into the legacy root.
   A missing root that the selected policy actually needs is created exclusively
   relative to an already-opened real parent.
+- A marketplace named in the manifest's optional `active_marketplaces` has its whole
+  current membership treated as selected, so adding or removing a plugin there no
+  longer needs a second manual edit to this manifest. Unknown names fail at manifest
+  load, before any link is touched; marketplaces absent from that list are unaffected.
+  Without it, a marketplace whose own installer activates every registered Skill will
+  keep recreating links this syncer then prunes, and the two writers silently undo
+  each other.
 - Unselected source Skills remain cold inventory. Real directories and third-party
   symlinks in either root are outside automatic retirement.
 
