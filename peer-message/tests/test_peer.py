@@ -568,6 +568,25 @@ class PeerMessageTests(unittest.TestCase):
                 "codex:44444444-4444-4444-8444-444444444444",
             )
 
+    def test_codex_sender_envelope_carries_reply_instruction(self):
+        """Official Claude tools cannot reach Codex by any address, so the recipient
+        cannot act on the host's copy-`from`-into-`to` instruction. The body's first
+        line is the only channel left to tell it how to reply."""
+        envelope = peer.claude_envelope(
+            "body", "codex:abc", "codex:abc", "MSGID"
+        )
+        self.assertIn("[reply: peer.py send codex:abc]", envelope)
+        self.assertNotIn("reply-to=", envelope)
+
+    def test_claude_sender_envelope_has_no_reply_hint(self):
+        """A uds: `from` is directly usable by the official tools; adding a hint there
+        would push work away from the official channel for no reason."""
+        envelope = peer.claude_envelope(
+            "body", "claude:x", "uds:/tmp/cc-socks/1.sock", "MSGID"
+        )
+        self.assertNotIn("[reply:", envelope)
+        self.assertIn('from="uds:/tmp/cc-socks/1.sock"', envelope)
+
 
 if __name__ == "__main__":
     unittest.main()

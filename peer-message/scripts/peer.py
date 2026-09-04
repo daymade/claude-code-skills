@@ -313,9 +313,17 @@ def codex_envelope(body: str, sender: str, reply_to: str | None, message_id: str
 def claude_envelope(body: str, sender: str, reply_to: str | None, message_id: str) -> str:
     validate_body(body)
     reply = f' from="{safe_attr(reply_to)}"' if reply_to else ""
+    hint = ""
+    if reply_to and reply_to.startswith("codex:"):
+        # A Codex sender has no address the official Claude tools can reach, so the
+        # host's own "copy `from` into `to`" instruction cannot work here and there is
+        # no intersection form to substitute. The attribute set is fixed by the host
+        # parser, so the body's first line -- where message-id already rides -- is the
+        # only place left to say how to reply.
+        hint = f" [reply: peer.py send {reply_to}]"
     return (
         f'<cross-session-message{reply} from-name="{safe_attr(sender)}">\n'
-        f'[peer-message-id: {message_id}]\n{body}\n</cross-session-message>'
+        f'[peer-message-id: {message_id}]{hint}\n{body}\n</cross-session-message>'
     )
 
 
