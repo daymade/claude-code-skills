@@ -58,7 +58,12 @@ file-history snapshots. Read
 [references/hybrid_history_recall.md](references/hybrid_history_recall.md) before
 building or repairing the optional BM25/vector index. Read
 [references/workflow_examples.md](references/workflow_examples.md) for exact search,
-triage, and recovery examples.
+triage, and recovery examples. Read
+[references/claude_session_format.md](references/claude_session_format.md) when you
+need the layout rather than the message schema — where sessions live on disk, how
+project paths are normalized into directory names, the `sessions-index.json` fields,
+and the `compact_boundary` markers that tell you a transcript was summarized rather
+than truncated.
 
 ## Commands
 
