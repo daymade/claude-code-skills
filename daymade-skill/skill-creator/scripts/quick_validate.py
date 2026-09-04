@@ -291,7 +291,12 @@ def find_unreachable_references(skill_path: Path, content: str) -> list[str]:
     if not files:
         return []
 
-    reachable = {f for f in files if f in content}
+    # A bare filename counts as a link, in SKILL.md and inside references alike.
+    # The common healthy form is a `### references/` section listing each file by
+    # name with a line on what it holds — which is exactly what the guidance asks
+    # for. Requiring the full `references/<name>` path here flagged skills doing
+    # it correctly.
+    reachable = {f for f in files if f in content or Path(f).name in content}
     frontier = list(reachable)
     while frontier:
         current = frontier.pop()

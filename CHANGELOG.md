@@ -23,9 +23,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   never a failure — some unreferenced files are deliberate (an author-facing template is
   not runtime guidance) and a gate that fails on those gets bypassed, which turns it off
   for the skills it was built for. Calibrated against all 104 committed skills before
-  arming: 7 flagged, 0 validation failures, and the flagged set matches an independent
-  measurement exactly. Eight tests cover the directly-linked, transitive, bare-filename,
-  nested-directory, non-markdown and no-references cases.
+  arming: 6 flagged, 0 validation failures. The first version required the full
+  `references/<name>` path in SKILL.md and flagged a skill that lists each file by bare
+  name under a `### references/` heading with a line on what it holds — the exact form
+  the guidance asks for. The initial calibration missed it because the confirming
+  measurement applied the same path-only rule; two instruments sharing a blind spot
+  agreeing is not calibration. Re-checked with a different rule (does the filename appear
+  in SKILL.md at all), which isolated the one false positive from the six real ones.
+  Nine tests cover the directly-linked, bare-name-in-SKILL.md, transitive,
+  bare-name-between-references, nested-directory, non-markdown and no-references cases.
 - **tibo-reset-codex** (v1.3.1 → v1.4.0): fix a multi-account exclusion check that was
   structurally incapable of failing, and stop reading "clean +7d" as proof of a reset.
   §2 told the agent to exclude multi-account interleaving by counting `account_id`s in

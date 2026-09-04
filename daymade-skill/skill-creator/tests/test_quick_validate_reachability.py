@@ -61,6 +61,25 @@ def test_reachability_is_transitive(tmp_path):
     assert find_unreachable_references(skill, content) == []
 
 
+def test_bare_filename_in_skill_md_counts_as_a_link(tmp_path):
+    """The healthy form this check first got wrong.
+
+    A `### references/` section listing each file by name with a line on what it
+    holds is exactly what the reference guidance asks for. Requiring the full
+    `references/<name>` path flagged a skill doing it correctly, and a check that
+    fails on healthy input is the one that gets bypassed.
+    """
+    skill = _skill(
+        tmp_path / "section",
+        "# Section\n\n### references/\n\n"
+        "- `api_notes.md`: endpoint shapes and payloads.\n"
+        "- `limits.md`: rate limits and failure handling.\n",
+        {"api_notes.md": "# API notes\n", "limits.md": "# Limits\n"},
+    )
+    content = (skill / "SKILL.md").read_text()
+    assert find_unreachable_references(skill, content) == []
+
+
 def test_bare_filename_counts_as_a_link_between_references(tmp_path):
     """References routinely cite siblings by name alone rather than by path."""
     skill = _skill(
