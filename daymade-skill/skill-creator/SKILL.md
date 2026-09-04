@@ -786,6 +786,12 @@ Filenames must be self-explanatory without reading contents.
 
 **Test**: Can someone understand the file's contents from the name alone?
 
+**Starting a new reference**: copy `references/reference_template.md` — it carries the
+frontmatter shape (`name`, and a `description` that says what the file covers *and when
+to read it*, with trigger keywords) plus the section skeleton. Filling a template beats
+inventing a layout each time, and the description field is what makes the file findable
+rather than merely present.
+
 Two carve-outs: hyphenated names are as good as underscored ones (the separator was never the point — self-explanation is); and files inside a named workflow directory (`workflows/<name>/workflow.md`, `patterns.md`) are directory-qualified — the directory supplies the specificity, and renaming them would break the parallel structure across workflows.
 
 ### Skill Creation Best Practice

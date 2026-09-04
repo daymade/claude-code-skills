@@ -285,6 +285,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an order-inverted stitched quote — both fixed and re-verified pre-ship.
 
 ### Fixed
+- **deep-research** v2.4.0 → v2.4.1, **cli-demo-generator** v1.0.0 → v1.0.1,
+  **youtube-downloader** v1.1.0 → v1.1.1, **skill-creator** v1.33.0 → v1.33.1,
+  **claude-switch-models-setup** and **read-claude-code-history** (both
+  `daymade-claude-code` v3.7.15 → v3.7.16, marketplace v3.8.1): resolve every bundled
+  reference the new reachability check surfaced. Five were live knowledge nobody could
+  route to and are now linked with a line on when to read them — the VHS tape-file
+  syntax, the yt-dlp failures that look like something else, the reference-authoring
+  template, the student-facing setup walkthrough, and the `~/.claude/` layout plus
+  `compact_boundary` markers (distinct from the message-schema reference beside it,
+  which was already linked; both were updated the same day and only one got wired up).
+  One was deleted: `deep-research/references/V6_1_improvements.md` was a version-history
+  file whose load-bearing rule — circular verification versus exclusive information
+  advantage — already lives in SKILL.md's own accessibility table and in
+  `references/source_accessibility_policy.md`, leaving a changelog of the kind that
+  belongs in this file rather than in a skill. Repository now reports 0 unreachable
+  references across all 104 committed skills. Also refreshes **excalidraw-use**
+  v1.0.1 → v1.0.2 (marketplace v3.8.2): its security-scan marker's content hash went
+  stale when SKILL.md changed in the previous release and the re-scan was not staged,
+  which would have blocked the next packaging run.
 - **excalidraw-use** v1.0.0 → v1.0.1 (marketplace v3.7.1): link
   `references/scene_file_format.md` from SKILL.md. It shipped unreferenced, so the
   executing agent had no route to it — an unlinked reference is unreachable at runtime

@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Professional Claude Code and Codex skills marketplace — production-ready skills spanning GitHub and git operations (including current-base contributor PR review), document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, local inter-agent messaging, Claude Code operations, and model-aware Codex workstation setup. Suite plugins bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
-    "version": "3.8.0"
+    "version": "3.8.2"
   },
   "plugins": [
     {
@@ -72,7 +72,7 @@
       "description": "Generate professional animated CLI demos and terminal recordings with VHS. Supports automated generation, batch processing, and interactive recording for documentation and tutorials",
       "source": "./cli-demo-generator",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.0.1",
       "category": "developer-tools",
       "keywords": [
         "cli",
@@ -124,7 +124,7 @@
       "description": "Claude Code operations suite that bundles cross-project prior-work retrieval across code, docs, Skills, meetings, WeChat archives, and conversation history; provider-separated Claude Code and Codex history readers; identity- and lineage-gated continuation workflows; plugin/skill troubleshooting; CLAUDE.md progressive disclosure optimization; version-synced Lark CLI routing; statusline configuration; exported .txt repair; full claude.ai conversation extraction with tool-call rendering and file download; plugin marketplace development and suite consolidation; writing/testing/debugging Claude Code hooks; multi-provider profile isolation; personal-memory migration into tool-agnostic AGENTS.md reference docs; one-shot local timers that ping Claude right after subscription quota reset to start a fresh 5-hour usage window; and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
       "source": "./daymade-claude-code",
       "strict": false,
-      "version": "3.7.15",
+      "version": "3.7.16",
       "category": "suite",
       "keywords": [
         "suite",
@@ -329,7 +329,7 @@
       "description": "Daymade skills core suite. Bundles skill creation, quality review, real Claude/Codex Skill-surface governance, suite-migration reconciliation, and marketplace development tooling under one shared namespace. Skill governance separates canonical source, installed inventory, discovery policy, the fresh model-visible catalog, and router-resolved cold resources instead of optimizing cache counts; it preserves Claude's official versioned-cache lifecycle and verifies selected entries in the real host prompt. Skill verification separates risk classification from evaluation spend: bounded fixes use targeted checks, narrow behavior changes use sampled replays, and paired baselines, graders, benchmarks, or a viewer run only after explicit user authorization or a decision-bearing evidence plan plus opt-in; that authorization does not change the risk tier. Existing-skill edits retain an old-vs-new capability audit and content-bound packaging attestation so prompt compression cannot silently delete runtime contracts. When the official skill-creator plugin is also installed, skill-creator detects the coexistence and offers a consent-based, reversible SessionStart routing hook so the daymade edition wins deterministically; on machines without the official plugin nothing is ever installed.",
       "source": "./daymade-skill",
       "strict": false,
-      "version": "1.33.0",
+      "version": "1.33.1",
       "category": "suite",
       "keywords": [
         "suite",
@@ -352,7 +352,7 @@
       "description": "Generate format-controlled research reports with evidence tracking, source governance, and multi-pass synthesis. V6.1 adds: source accessibility (circular verification forbidden, exclusive advantage encouraged). Enterprise Research Mode: six-dimension data collection, SWOT/barrier/risk frameworks, and three-level quality control for company research",
       "source": "./deep-research",
       "strict": false,
-      "version": "2.4.0",
+      "version": "2.4.1",
       "category": "documentation",
       "keywords": [
         "research",
@@ -877,7 +877,7 @@
       "description": "Download YouTube videos and HLS streams (m3u8) from platforms like Mux, Vimeo, etc. using yt-dlp and ffmpeg. Use when users request downloading videos, extracting audio, handling protected streams with authentication headers, or troubleshooting download issues like nsig extraction failures, 403 errors, or cookie extraction problems",
       "source": "./youtube-downloader",
       "strict": false,
-      "version": "1.1.0",
+      "version": "1.1.1",
       "category": "utilities",
       "keywords": [
         "youtube",
@@ -1174,7 +1174,7 @@
       "description": "Place existing images onto an Excalidraw whiteboard, turn a slide deck into clean per-slide images first, and inspect what is inside a .excalidraw file. Use whenever someone mentions Excalidraw, a whiteboard or canvas, a .excalidraw file, 白板 or 画板 — especially \"put these screenshots on my board\", \"add my old workshop images to the canvas\", \"space them out so I don't have to adjust spacing by hand\", \"turn these slides into images I can draw on\", or \"what's in this scene file\". Also use when a talk or workshop is delivered by hand-drawing over screenshots on a shared canvas, or when someone needs a pick tray of many images to choose from. Not for generating a diagram from a text description — that is a different job.",
       "source": "./excalidraw-use",
       "strict": false,
-      "version": "1.0.1",
+      "version": "1.0.2",
       "category": "developer-tools",
       "keywords": [
         "excalidraw",

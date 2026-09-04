@@ -460,3 +460,8 @@ Fix: add the literal `[1m]` suffix to `ANTHROPIC_MODEL`, every `ANTHROPIC_DEFAUL
 ## Next Step
 
 After setup, the user can immediately test by opening two terminals and running `csk` (Kimi K3) in one and `csd` in the other. Each window is independent.
+
+When the person being set up is a workshop attendee doing it on their own machine
+rather than someone you are driving, hand them `references/student-setup-guide.md`
+instead of walking them through this file — it is written for them, front to back,
+without the maintenance and troubleshooting material they do not need yet.
