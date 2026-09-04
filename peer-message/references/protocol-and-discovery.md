@@ -33,7 +33,7 @@ description: Transport-neutral addressing, Claude UDS and Codex queue contracts,
 
 **回信**：把信封的 `from` 抄进官方工具的 `to`——这就是官方工具自己给的指示，对本 Skill 发出的信封成立，对 host 自己发的信封也成立。
 
-`from` 是 `claude:<session-uuid>`（旧版本 Skill 发的）或者信封没有 `from` 时，改用同一行的 `from-name`：host 发的信封里它就是官方要的裸名。两个都没有就走 `peer.py send`，它认 UUID。
+信封没有 `from` 时，用同一行的 `from-name`：host 发的信封里它就是官方要的裸名。**但这条退路只对 host 发的信封有效**——一个产生者若两个字段同源，坏起来会一起坏，所以正解永远是产生者归一化（本 Skill 在 `send_claude` 里做），不是接收方补救。都没有就走 `peer.py send`，它认 UUID。
 
 **`No agent named ... is reachable` 不证明对方不存在。** 地址形式不对会得到同一条报错，而官方列表每行显示成 `name [ref]`、那个 ref 不是 session-UUID 的前缀，所以拿 UUID 去肉眼比对也对不上——三件事叠在一起，很容易把「形式用错」读成「对方没了」。
 

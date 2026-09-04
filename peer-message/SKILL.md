@@ -26,7 +26,7 @@ description: >-
 
 ## 执行
 
-0. **回信直接抄信封的 `from`。** 这是官方工具自己给的指示，对本 Skill 发出的信封成立（`from` 用 `uds:<socket>`，两条 route 都认）。`from` 缺失或是旧版的 `claude:<session-uuid>` 时改用同一行的 `from-name`。`No agent named ...` 不证明对方不存在，地址形式不对是同一条报错；查不到不要换 route 重试——`list` 和 `send` 读同一个 registry。细节见 `references/protocol-and-discovery.md` §1。
+0. **回信直接抄信封的 `from`。** 这是官方工具自己给的指示，对本 Skill 发出的信封成立（`from` 用 `uds:<socket>`，两条 route 都认）。`from` 缺失时用同一行的 `from-name`——宿主自己发的信封里它就是官方要的裸名。**这条退路对本 Skill 发出的信封无效**（两个字段同源、会同时是坏值），本 Skill 改在发送时归一化，不靠接收方补救。`No agent named ...` 不证明对方不存在，地址形式不对是同一条报错；查不到不要换 route 重试——`list` 和 `send` 读同一个 registry。细节见 `references/protocol-and-discovery.md` §1。
 1. 先运行 `python3 scripts/peer.py list --help`，再列出候选地址；不要凭标题或更新时间猜目标。父任务需要 worker 回传时，再用 `whoami` 取得自己的精确 reply address，并随委派显式传下去——`whoami` 给的是 `peer.py` 形式，官方工具不一定认；见 `references/coordination-and-learning-loop.md` §1。
 2. 对选定命令运行 `python3 scripts/peer.py <send|broadcast|verify> --help`，以脚本当前 help 生成参数，不从 README 复制旧命令。
 3. 单发只提交一个明确地址；broadcast 只提交调用者列出的目标，并遵守脚本的确认闸门。
