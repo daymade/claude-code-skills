@@ -26,6 +26,7 @@ Design (borrowed from annotation-tool practice — Prodigy/Argilla):
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import tempfile
 from dataclasses import dataclass, field
@@ -63,7 +64,13 @@ class ReviewQueueError(Exception):
 
 class ReAnchorNeeded(ReviewQueueError):
     """The item's anchor text no longer matches the target file — the file
-    changed since enqueue. The decision is NOT recorded; fail closed."""
+    changed since enqueue. The decision is NOT recorded; fail closed.
+
+    One shape is told apart before this is raised: on `accepted` / `overridden`,
+    an original that is gone from the whole (ledger-masked) file while the
+    context recorded at enqueue reappears with the resolved text in its slot is
+    a fix applied by hand — the verdict is recorded without writing
+    (`_already_applied`). Every other missing-anchor shape still lands here."""
 
 
 @dataclass
@@ -370,8 +377,10 @@ class ReviewQueue:
             elif not hits:
                 roots = [str(path.parent)] + [str(r) for r in (search_roots or [])]
                 raise ReviewQueueError(
-                    f"file gone and original not found under {roots} — "
-                    f"resolve kept_original/skipped, or re-enqueue against the new file")
+                    f"file gone and original not found under {roots} — pass "
+                    f"--reanchor-to <path> if the transcript moved; if the utterance "
+                    f"is gone, close the row with --decision skipped --note <why> "
+                    f"(kept_original asserts the transcript keeps the original form)")
             else:
                 raise ReviewQueueError(
                     f"file gone and original found in {len(hits)} files — ambiguous, "
@@ -383,7 +392,10 @@ class ReviewQueue:
         if not matches:
             raise ReviewQueueError(
                 f"original {item.original_text[:60]!r} no longer in {path.name} — "
-                f"kept_original/skipped 才是正确退场")
+                f"nothing to re-anchor to. A fix already applied by hand is recorded "
+                f"by --resolve-review {item_id} --decision accepted (no write); an "
+                f"utterance that is gone closes with --decision skipped --note <why>. "
+                f"kept_original asserts the transcript keeps the original form")
         # Disambiguate with the RECORDED context first (it is the best evidence
         # for WHICH occurrence the item meant) — picking purely by distance and
         # then overwriting context_snippet with the chosen line would feed the
@@ -934,7 +946,8 @@ class ReviewQueue:
             raise ReAnchorNeeded(
                 f"file gone: {path} — the transcript moved since enqueue; "
                 f"run `fix_transcription.py --reanchor-review <id> [--reanchor-root DIR]` "
-                f"to repair the anchor (or resolve kept_original/skipped)"
+                f"to repair the anchor, or close the row with --decision skipped "
+                f"--note <why> if the utterance is gone"
             )
         with open(path, "r", encoding="utf-8", newline="") as f:
             return f.read()
@@ -970,7 +983,7 @@ class ReviewQueue:
         count = masked.count(old)
         line_no = action.get("expect_line") or item.line_number
         if count == 0:
-            if self._already_applied(masked, old, new, line_no, item.context_snippet):
+            if self._already_applied(masked, old, new, item.context_snippet):
                 # A hand edit landed the suggestion before the verdict. The
                 # verdict is still "accepted" — recording it as kept_original
                 # would describe the transcript as right as spoken, which it
@@ -978,8 +991,10 @@ class ReviewQueue:
                 return None, new
             raise ReAnchorNeeded(
                 f"anchor text not found: {old[:60]!r} — the file changed since "
-                f"enqueue (or an earlier action in this pack consumed it); "
-                f"nothing was modified (repair with --reanchor-review <id> first)"
+                f"enqueue (or an earlier action in this pack consumed it) and the "
+                f"recorded context does not reappear with {new[:60]!r} in its slot; "
+                f"nothing was modified (if the utterance is gone, close the row "
+                f"with --decision skipped --note <why>)"
             )
         if count == 1 and not line_no:
             # No hint to validate against; a sole occurrence is all we have.
@@ -998,33 +1013,47 @@ class ReviewQueue:
 
     @staticmethod
     def _already_applied(
-        content: str, old: str, new: str, line_no: Optional[int],
-        snippet: Optional[str], window: int = 3,
+        content: str, old: str, new: str, snippet: Optional[str],
     ) -> bool:
         """Is the suggestion already sitting where the anchor was?
 
         The accept path fails closed once `old` is gone, because "gone" alone
         cannot tell a hand-applied fix from a drifted file. This is the one
-        shape it CAN tell apart: the context recorded at enqueue time must
-        reappear within ±window lines of the hint with `new` in the exact slot
-        `old` occupied — the recorded neighbours on both sides of that slot
-        intact. Neighbour width is tried from 8 characters down to 2, so an
-        adjacent edit on the same line (a second correction right next to this
-        one) does not defeat the check, while a one-sided neighbourhood (anchor
-        at a snippet edge) must be at least 3 characters to stand in for the
-        missing side. No line hint or no snippet means nothing to compare
-        against: fail closed. `content` is the ledger-masked text, so an
-        `asr_note` citation of the new form can never satisfy this.
+        shape it CAN tell apart: the context recorded at enqueue time reappears
+        somewhere in the file with `new` in the exact slot `old` occupied and
+        the recorded neighbours on both sides of that slot intact. The whole
+        file is searched, not a window around the line hint: frontmatter
+        growth or a deleted paragraph shifts every later line, and a hint that
+        drifted past the ±3-line resolve window would otherwise strand a row
+        whose fix is in place (the original is gone, so `--reanchor-review`
+        has nothing to re-locate either).
+
+        Neighbour width is tried from 8 characters down to 2, so a second
+        correction on the same line that leaves at least two recorded
+        characters between itself and this slot does not defeat the check; an
+        edit touching the slot does (fail closed). A one-sided neighbourhood
+        (anchor at a snippet edge) must be at least 3 characters to stand in
+        for the missing side, and a snippet that is the bare token carries no
+        neighbours to verify — fail closed. No snippet: fail closed.
+
+        Ambiguity guard: at the width that matched, every occurrence of the
+        recorded neighbourhood in the file must carry `new` in the slot. A line
+        that carries a third form there (the anchored utterance hand-edited to
+        something else, or a look-alike utterance) makes the match ambiguous
+        and the check fails closed — the row then needs a human exit, not a
+        recorded `accepted`. What this cannot detect: the anchored utterance
+        deleted outright while an identical neighbourhood elsewhere already
+        reads with `new`; that shape is indistinguishable from drift and is
+        recorded as accepted without writing (nothing is written either way,
+        and `reopen` re-pends the row). `content` is the ledger-masked text,
+        so an `asr_note` citation of the new form can never satisfy this.
         """
-        if not line_no or not new or not snippet or not snippet.strip():
+        if not old or not new or not snippet or not snippet.strip():
+            return False
+        if old in content:
             return False
         snip = snippet.strip()
-        lines = content.splitlines(keepends=True)
-        lo = max(0, line_no - 1 - window)
-        hi = min(len(lines), line_no + window)
-        region = "".join(lines[lo:hi])
-        if old in region:
-            return False
+        gap = max(len(old), len(new)) + 2
         start = 0
         while True:
             p = snip.find(old, start)
@@ -1038,8 +1067,30 @@ class ReviewQueue:
                     break
                 if (not left or not right) and len(left + right) < 3:
                     continue
-                if left + new + right in region:
-                    return True
+                if left + new + right not in content:
+                    continue
+                return not ReviewQueue._neighbourhood_carries_other_forms(
+                    content, left, right, new, gap)
+
+    @staticmethod
+    def _neighbourhood_carries_other_forms(
+        content: str, left: str, right: str, new: str, gap: int,
+    ) -> bool:
+        """Does `left … right` occur anywhere with something other than `new`
+        in the slot? Two-sided: any filler up to `gap` characters long on one
+        line. One-sided: the `len(new)` characters adjoining the neighbour."""
+        if left and right:
+            pattern = re.escape(left) + r"(.{0," + str(gap) + r"}?)" + re.escape(right)
+            return any(m.group(1) != new for m in re.finditer(pattern, content))
+        if left:
+            return any(
+                content[m.end():m.end() + len(new)] != new
+                for m in re.finditer(re.escape(left), content)
+            )
+        return any(
+            content[max(0, m.start() - len(new)):m.start()] != new
+            for m in re.finditer(re.escape(right), content)
+        )
 
     @staticmethod
     def _locate_anchor(
@@ -1078,7 +1129,9 @@ class ReviewQueue:
         if not candidates:
             raise ReAnchorNeeded(
                 f"anchor text appears {content.count(needle)} times but none within "
-                f"±{window} lines of line {line_no} — refusing an ambiguous edit"
+                f"±{window} lines of line {line_no} — refusing an ambiguous edit "
+                f"(a fix applied by hand is recognised only once the original is "
+                f"gone from the whole file; surviving occurrences are separate decisions)"
             )
         if snippet and snippet.strip():
             probe = snippet.strip()[:80]

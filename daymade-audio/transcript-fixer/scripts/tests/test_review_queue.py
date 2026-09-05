@@ -714,24 +714,122 @@ class TestLedgerFrontmatterIsNotRewritten:
         assert ledger_transcript.read_text(encoding="utf-8") == before
         assert queue.get(item_id).status == "pending"
 
-    def test_already_applied_needs_hint_and_context(self, queue, tmp_path):
-        """Without a line hint or a recorded context there is nothing to
-        compare the new text against — fail closed, do not guess."""
+    def test_already_applied_needs_context(self):
+        """Without a recorded context there is nothing to compare the new
+        text against — fail closed, do not guess. A line hint is not needed:
+        the whole file is searched, so a hint that drifted past the resolve
+        window cannot strand a fix that is in place."""
         from core.review_queue import ReviewQueue
         content = "今天我们请到了汪晓明老师来讲课。\n"
         snippet = "今天我们请到了王晓明老师来讲课。"
-        assert ReviewQueue._already_applied(content, "王晓明", "汪晓明", None, snippet) is False
-        assert ReviewQueue._already_applied(content, "王晓明", "汪晓明", 1, None) is False
-        assert ReviewQueue._already_applied(content, "王晓明", "汪晓明", 1, snippet) is True
+        assert ReviewQueue._already_applied(content, "王晓明", "汪晓明", None) is False
+        assert ReviewQueue._already_applied(content, "王晓明", "汪晓明", "   ") is False
+        assert ReviewQueue._already_applied(content, "王晓明", "汪晓明", snippet) is True
+        # A snippet that is the bare token carries no neighbours to verify.
+        assert ReviewQueue._already_applied("汪晓明\n", "王晓明", "汪晓明", "王晓明") is False
         # A one-sided neighbourhood shorter than three characters is not
         # enough to stand in for the missing side.
-        assert ReviewQueue._already_applied("汪晓明老\n", "王晓明", "汪晓明", 1, "王晓明老") is False
+        assert ReviewQueue._already_applied("汪晓明老\n", "王晓明", "汪晓明", "王晓明老") is False
 
     def test_already_applied_survives_an_adjacent_edit_on_the_same_line(self):
         """Two corrections side by side: the neighbour of this anchor was
         itself corrected, so the widest neighbourhood no longer matches and
-        the check must fall back to a narrower one."""
+        the check must fall back to a narrower one. An edit touching the slot
+        leaves no recorded neighbour on that side — fail closed."""
         from core.review_queue import ReviewQueue
         snippet = "先看巨神模型 voa 这条路线再说"
         content = "先看具身模型 VLA 这条路线再说\n"
-        assert ReviewQueue._already_applied(content, "巨神", "具身", 1, snippet) is True
+        assert ReviewQueue._already_applied(content, "巨神", "具身", snippet) is True
+        assert ReviewQueue._already_applied(
+            "先看具身VLA这条路线再说\n", "巨神", "具身", "先看巨神voa这条路线再说") is False
+
+    def test_already_applied_survives_drift_past_the_resolve_window(self):
+        """Frontmatter grew by more lines than the ±3 resolve window after
+        enqueue; the fix is in place on the shifted line. The original is gone,
+        so --reanchor-review has nothing to re-locate — this check is the only
+        exit that records what happened."""
+        from core.review_queue import ReviewQueue
+        content = "---\n" + "k: v\n" * 6 + "---\n今天我们请到了汪晓明老师来讲课。\n"
+        assert ReviewQueue._already_applied(
+            content, "王晓明", "汪晓明", "今天我们请到了王晓明老师来讲课。") is True
+
+    def test_already_applied_refuses_when_a_sibling_carries_a_third_form(self):
+        """The recorded neighbourhood appears twice: once with the suggestion,
+        once with a third form (the anchored utterance hand-edited to something
+        else, or a look-alike). Which one the row meant is ambiguous — fail
+        closed rather than close the row over the wrong text."""
+        from core.review_queue import ReviewQueue
+        snippet = "我们请到了王晓明老师来讲课。"
+        content = "我们请到了汪晓明老师来讲课。\n我们请到了王小明老师来讲课。\n"
+        assert ReviewQueue._already_applied(content, "王晓明", "汪晓明", snippet) is False
+        # Same neighbourhood used as a sentence template with other names:
+        # the guard cannot tell a template from a mis-edit, so it also refuses.
+        template = "我们请到了汪晓明老师来讲课。\n我们请到了李四老师来讲课。\n"
+        assert ReviewQueue._already_applied(template, "王晓明", "汪晓明", snippet) is False
+        # One-sided neighbourhoods get the same guard.
+        assert ReviewQueue._already_applied(
+            "汪晓明老师来讲课。\n王小明老师来讲课。\n", "王晓明", "汪晓明",
+            "王晓明老师来讲课。") is False
+        assert ReviewQueue._already_applied(
+            "请到了汪晓明\n请到了王小明\n", "王晓明", "汪晓明", "请到了王晓明") is False
+
+    def test_already_applied_cannot_see_a_deleted_anchor_behind_a_twin(self):
+        """Documented boundary, not a target: the anchored utterance deleted
+        outright while an identical neighbourhood elsewhere already reads with
+        the suggestion is indistinguishable from drift. Nothing is written
+        either way and `reopen` re-pends the row."""
+        from core.review_queue import ReviewQueue
+        assert ReviewQueue._already_applied(
+            "我们请到了汪晓明老师来讲课。\n别的话。\n", "王晓明", "汪晓明",
+            "我们请到了王晓明老师来讲课。") is True
+
+    def test_sibling_with_a_third_form_fails_closed_at_queue_level(self, queue, tmp_path):
+        """Row 12 of the 2026-09-05 review: line 2 hand-edited to a third form
+        while line 1 already carried the corrected phrase closed the row
+        `accepted` with the wrong text still on line 2."""
+        f = tmp_path / "sibling.md"
+        f.write_text("我们请到了汪晓明老师来讲课。\n我们请到了王晓明老师来讲课。\n", encoding="utf-8")
+        item_id = queue.enqueue([{
+            "source": "stage1_deferred", "domain": "general",
+            "file": str(f), "line": 2,
+            "original": "王晓明", "suggested": "汪晓明", "kind": "homophone",
+            "context": "我们请到了王晓明老师来讲课。", "evidence": "roster",
+        }])["added"][0]
+        f.write_text("我们请到了汪晓明老师来讲课。\n我们请到了王小明老师来讲课。\n", encoding="utf-8")
+        before = f.read_text(encoding="utf-8")
+        with pytest.raises(ReAnchorNeeded):
+            queue.resolve(item_id, "accepted", by="test")
+        assert f.read_text(encoding="utf-8") == before
+        assert queue.get(item_id).status == "pending"
+
+    def test_hand_applied_fix_past_the_resolve_window_is_recorded(self, queue, tmp_path):
+        """Row 1 of the 2026-09-05 review: hand-applied fix plus five lines of
+        frontmatter growth. accept must record it; before, accept raised
+        ReAnchorNeeded and --reanchor-review refused (original gone)."""
+        f = tmp_path / "drift.md"
+        f.write_text("今天我们请到了王晓明老师来讲课。\n", encoding="utf-8")
+        item_id = queue.enqueue([{
+            "source": "stage1_deferred", "domain": "general",
+            "file": str(f), "line": 1,
+            "original": "王晓明", "suggested": "汪晓明", "kind": "homophone",
+            "context": "今天我们请到了王晓明老师来讲课。", "evidence": "roster",
+        }])["added"][0]
+        f.write_text("---\n" + "k: v\n" * 5 + "---\n今天我们请到了汪晓明老师来讲课。\n",
+                     encoding="utf-8")
+        before = f.read_text(encoding="utf-8")
+        result = queue.resolve(item_id, "accepted", by="test")
+        assert result["item"]["status"] == "accepted"
+        (entry,) = result["apply_log"]
+        assert entry["ok"] and entry["skipped"]
+        assert f.read_text(encoding="utf-8") == before
+
+    def test_override_text_already_in_place_is_recorded_without_writing(
+        self, queue, ledger_transcript
+    ):
+        """`overridden` takes the same path for its override text."""
+        item_id, before = self._hand_applied(queue, ledger_transcript, replacement="周铭轩")
+        result = queue.resolve(item_id, "overridden", override_to="周铭轩", by="test")
+        assert result["item"]["status"] == "overridden"
+        (entry,) = result["apply_log"]
+        assert entry["ok"] and entry["skipped"]
+        assert ledger_transcript.read_text(encoding="utf-8") == before

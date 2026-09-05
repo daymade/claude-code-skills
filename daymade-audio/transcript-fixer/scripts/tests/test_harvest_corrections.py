@@ -326,6 +326,17 @@ class TestUnrenderablePairs20260905:
         assert not _keep("公众号", "***")
         assert not _keep("……", "等等")
 
+    def test_lexical_content_is_script_agnostic(self):
+        """Row 15 of the 2026-09-05 review: the lexical test must not be
+        narrower than the parser. Fullwidth Latin, hangul, kana and CJK
+        compatibility ideographs are real ASR output and still render."""
+        assert _keep("ＡＩ", "AI") is True
+        assert _keep("삼성", "三星") is True
+        assert _keep("ソニー", "索尼") is True
+        assert _keep("﨑", "崎") is True
+        assert _keep("……", "公众号") is False
+        assert _keep("→", "公众号") is False
+
     def test_star_on_either_side_dropped(self):
         assert not _keep("a*b", "abc公司")
         assert not _keep("abc公司", "a*b")
