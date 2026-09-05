@@ -79,8 +79,16 @@ The machine-local manifest is
 Rules:
 
 - Names refer to frontmatter `name`, not directory basename or plugin name.
-- Missing manifest, unsupported schema, duplicates, unknown names, or two source
-  bundles declaring the same name abort before either active root is changed.
+- Missing manifest, unsupported schema, duplicates, or two source bundles
+  declaring the same name abort before either active root is changed.
+- An active name that no discovered checkout registers does not abort. It is
+  reported on stderr with each checkout's current branch and skipped for that
+  pass; the remaining names still converge, and the skipped one is linked on the
+  first pass after some checkout registers it. The usual cause is a shared
+  checkout parked on a feature branch that forked before the skill merged to
+  `main`; a misspelled or retired name repeats the warning until the manifest is
+  corrected. A link the checkout registered earlier and no longer does is pruned
+  like any other stale managed link, into `.source-sync-backups/`.
 - An empty list means “activate none”; it does not fall back to all marketplace
   entries.
 - The syncer creates and verifies the selected links in `~/.agents/skills`

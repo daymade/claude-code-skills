@@ -7,7 +7,9 @@ Default mode is a dry-run audit. Use --apply to:
 - replace installed Claude plugin cache version directories with symlinks to the
   local source directories;
 - update the latest installed_plugins.json records for those local plugins;
-- activate only explicitly selected user skills in ~/.agents/skills;
+- activate only explicitly selected user skills in ~/.agents/skills; a selected
+  name that no discovered source checkout registers is reported on stderr and
+  skipped for the pass instead of aborting it;
 - create explicitly selected compatibility symlinks in ~/.codex/skills after
   the selected ~/.agents/skills links are verified, and report other managed
   legacy links for reviewed cleanup without deleting them in the daemon.
@@ -144,6 +146,11 @@ class EntryChangedAndRestored(RuntimeError):
 def log(msg: str) -> None:
     if not QUIET:
         print(msg)
+
+
+def warn(msg: str) -> None:
+    """Findings reach stderr even under --quiet; --quiet silences progress only."""
+    print(f"WARN: {msg}", file=sys.stderr)
 
 
 def process_alive(pid: int) -> bool:
@@ -814,6 +821,37 @@ def infer_repos(script_path: Path, claude_dir: Path) -> list[Path]:
     return repos
 
 
+def checkout_head_hint(repo: Path) -> str | None:
+    """Say what a source checkout currently has checked out, without running git.
+
+    Reads the plain-text HEAD of a repository or of a linked worktree (whose
+    ``.git`` is a file naming the real git dir). Returns ``branch <name>``,
+    ``detached <sha>``, or None when the directory is not a readable checkout.
+    Diagnostic only: nothing is decided from the answer.
+    """
+    dot_git = repo / ".git"
+    try:
+        if dot_git.is_dir():
+            git_dir = dot_git
+        elif dot_git.is_file():
+            first = dot_git.read_text(encoding="utf-8").splitlines()[:1]
+            if not first or not first[0].startswith("gitdir:"):
+                return None
+            git_dir = Path(first[0].split(":", 1)[1].strip())
+            if not git_dir.is_absolute():
+                git_dir = (repo / git_dir).resolve()
+        else:
+            return None
+        head = (git_dir / "HEAD").read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeDecodeError):
+        return None
+    if head.startswith("ref: refs/heads/"):
+        return f"branch {head[len('ref: refs/heads/'):]}"
+    if head.startswith("ref: "):
+        return f"ref {head[len('ref: '):]}"
+    return f"detached {head[:12]}" if head else None
+
+
 def frontmatter_name(skill_md: Path) -> str | None:
     try:
         lines = skill_md.read_text(encoding="utf-8").splitlines()
@@ -961,14 +999,45 @@ def merge_source_skills(sources: list[MarketplaceSource]) -> dict[str, SkillSour
 def select_active_skills(
     skills: dict[str, SkillSource],
     names: tuple[str, ...],
+) -> tuple[dict[str, SkillSource], tuple[str, ...]]:
+    """Split requested names into resolvable sources and names no source registers.
+
+    An unresolved name does not abort the pass. The manifest is written against
+    the marketplace as published, while the syncer reads a working tree that may
+    sit on a branch predating the skill: a merged skill then stays invisible until
+    that checkout catches up. Refusing the whole pass here froze every other link,
+    and the daemon's enabledPlugins mirror queued behind it, until a human noticed
+    (2026-09-05). Skipping the name keeps the rest converging and links the skill
+    on the first pass after it becomes resolvable. A misspelled or retired name
+    shows the same symptom and is reported the same way on every pass until the
+    manifest is corrected. Callers must surface the second element.
+    """
+    unresolved = tuple(name for name in names if name not in skills)
+    selected = {name: skills[name] for name in names if name in skills}
+    return selected, unresolved
+
+
+def report_unresolved_active_names(
+    unresolved: tuple[str, ...],
+    sources: list[MarketplaceSource],
     manifest: Path,
-) -> dict[str, SkillSource]:
-    unknown = sorted(set(names) - set(skills))
-    if unknown:
-        raise ValueError(
-            f"{manifest}: unknown active skill name(s): {', '.join(unknown)}"
-        )
-    return {name: skills[name] for name in names}
+) -> None:
+    """Name what was skipped and what each checkout had checked out at the time."""
+    if not unresolved:
+        return
+    warn(
+        f"{manifest}: {len(unresolved)} active skill name(s) registered by no "
+        f"discovered source checkout; skipped this pass: {', '.join(unresolved)}"
+    )
+    for src in sources:
+        hint = checkout_head_hint(src.repo)
+        state = f" ({hint})" if hint else ""
+        warn(f"  scanned {src.name}: {src.repo}{state}")
+    warn(
+        "  a checkout on a branch that predates the skill links it on the first "
+        "pass after it catches up; a misspelled or retired name repeats this "
+        "warning until the manifest is corrected"
+    )
 
 
 def freeze_selected_skill_sources(
@@ -1800,13 +1869,14 @@ def main(argv: list[str]) -> int:
         for name in src.skills
     }
     active_names = tuple(sorted(set(policy.active_names) | whole_marketplace_names))
-    active_skills = freeze_selected_skill_sources(
-        select_active_skills(skills, active_names, manifest)
-    )
-    legacy_compat_skills = select_active_skills(
+    selected_skills, unresolved_names = select_active_skills(skills, active_names)
+    report_unresolved_active_names(unresolved_names, sources, manifest)
+    active_skills = freeze_selected_skill_sources(selected_skills)
+    # Manifest load already made legacy names a subset of active_skills, so an
+    # unresolved legacy name is one of unresolved_names and was reported above.
+    legacy_compat_skills, _ = select_active_skills(
         active_skills,
         policy.legacy_codex_compat_names,
-        manifest,
     )
     source_roots = [src.repo for src in sources]
     agents_expectation: SkillRootExpectation | None = None
@@ -1835,9 +1905,12 @@ def main(argv: list[str]) -> int:
     log(f"mode: {'APPLY' if args.apply else 'DRY-RUN'}")
     for src in sources:
         log(f"source {src.name}: {src.repo} ({len(src.plugins)} plugins, {len(src.skills)} skills)")
+    skipped = (
+        f"; {len(unresolved_names)} unresolved name(s) skipped" if unresolved_names else ""
+    )
     log(
         f"Codex user activation: {len(active_skills)}/{len(skills)} source skills "
-        f"selected by {manifest}"
+        f"selected by {manifest}{skipped}"
     )
     log(
         "Legacy Codex compatibility: "
