@@ -311,3 +311,74 @@ class TestRound2Fixes20260823:
         # R2-MED-5 补充：fused 区域的每条产出 bullet 都必须可解析
         out, _ = harvest("云国。\n\n新话题开始", "云果，旧话题结束")
         assert out and all(_parses(_bullet(c["from"], c["to"], "cue")) for c in out)
+
+
+class TestUnrenderablePairs20260905:
+    """One transcript vendor redacts brand names as `***`; diffed against the
+    real word that produced a `*** → 公众号` candidate whose FROM the bullet
+    grammar cannot carry (`*` is the bold delimiter, and _BOLD_TRAP rejects
+    it on either side even inside backticks). The self-check caught the
+    unparseable bullet — and aborted the WHOLE harvest, so every other
+    candidate from the same two-hour transcript went unprinted."""
+
+    def test_side_without_lexical_content_dropped(self):
+        assert not _keep("***", "公众号")
+        assert not _keep("公众号", "***")
+        assert not _keep("……", "等等")
+
+    def test_lexical_content_is_script_agnostic(self):
+        """Row 15 of the 2026-09-05 review: the lexical test must not be
+        narrower than the parser. Fullwidth Latin, hangul, kana and CJK
+        compatibility ideographs are real ASR output and still render."""
+        assert _keep("ＡＩ", "AI") is True
+        assert _keep("삼성", "三星") is True
+        assert _keep("ソニー", "索尼") is True
+        assert _keep("﨑", "崎") is True
+        assert _keep("……", "公众号") is False
+        assert _keep("→", "公众号") is False
+
+    def test_star_on_either_side_dropped(self):
+        assert not _keep("a*b", "abc公司")
+        assert not _keep("abc公司", "a*b")
+
+    def test_mask_pair_no_longer_hides_the_real_candidate(self):
+        raw = "在微信的***里面有一篇文章，巨神智能怎么样。又有人说巨神智能好。"
+        cor = "在微信的公众号里面有一篇文章，具身智能怎么样。又有人说具身智能好。"
+        cands, _ = harvest(raw, cor)
+        pairs = [(c["from"], c["to"]) for c in cands]
+        assert ("***", "公众号") not in pairs
+        assert any(f.startswith("巨神") and t.startswith("具身") for f, t in pairs)
+
+    def _run_main(self, tmp_path, monkeypatch, capsys, extra=()):
+        import harvest_corrections as hc
+        raw = tmp_path / "raw.md"
+        cor = tmp_path / "cor.md"
+        raw.write_text("巨神智能怎么样。巨神智能好。云信信去开户。", encoding="utf-8")
+        cor.write_text("具身智能怎么样。具身智能好。云果去开户。", encoding="utf-8")
+        real_parses = hc._parses
+        # Simulate a future generator gap: one candidate cannot be rendered.
+        monkeypatch.setattr(hc, "_parses",
+                            lambda b: False if "云信信" in b else real_parses(b))
+        monkeypatch.setattr(sys, "argv",
+                            ["harvest_corrections.py", str(raw), str(cor), *extra])
+        rc = hc.main()
+        out, err = capsys.readouterr()
+        return rc, out, err
+
+    def test_unrenderable_bullet_is_excluded_not_fatal(self, tmp_path, monkeypatch, capsys):
+        rc, out, err = self._run_main(tmp_path, monkeypatch, capsys)
+        assert rc == 0
+        bullet_lines = [ln for ln in out.splitlines() if ln.startswith("- **")]
+        assert any("具身" in ln for ln in bullet_lines)      # the survivor is still delivered
+        assert not any("云信信" in ln for ln in bullet_lines)  # the excluded pair is not a candidate
+        assert "云信信" in err                                  # ...but it is reported, not swallowed
+
+    def test_unrenderable_bullet_listed_in_json(self, tmp_path, monkeypatch, capsys):
+        import json
+        rc, out, err = self._run_main(tmp_path, monkeypatch, capsys, extra=("--json",))
+        assert rc == 0
+        data = json.loads(out)
+        assert [c["from"] for c in data["candidates"]] and all(
+            c["from"] != "云信信" for c in data["candidates"])
+        assert any("云信信" in b for b in data["unrenderable"])
+        assert all("云信信" not in b for b in data["bullets"])

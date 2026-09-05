@@ -17,7 +17,9 @@ again by hand. This script closes that leak mechanically:
         -> dedupe + occurrence counts in the raw text
         -> candidate trap bullets, parseable by core.trap_scanner
            BY CONSTRUCTION (every emitted bullet is round-trip verified
-           through the real parser before printing)
+           through the real parser before printing; a pair the bullet
+           grammar cannot carry is reported on stderr and excluded, so one
+           odd pair never hides the rest of the harvest)
 
 Output is a REVIEW artifact: the operator adjudicates which pairs are real
 recurring traps vs one-off fixes. `--write` auto-appends only the recurring
@@ -177,7 +179,7 @@ def _split_fused(core_f: str, core_t: str) -> list[tuple[str, str]] | None:
     word runs recovers the term pair (缺陷→确幸); when the two sides' word-run
     counts or separating punct-run counts disagree it is a prose rewrite that
     cannot be aligned — return None and drop the region rather than emit a
-    newline-carrying unparsable bullet (the exit-2 all-or-nothing accident).
+    newline-carrying unparsable bullet (it would only land in `unrenderable`).
     """
     fw, tw = _WORD_RUN.findall(core_f), _WORD_RUN.findall(core_t)
     if not fw or len(fw) != len(tw):
@@ -249,9 +251,17 @@ def _candidates_from_pair(from_span: str, to_span: str,
     return out
 
 
-# parser 对 TO 的硬拒字符（含其一整个 entry 不解析 → 自检 exit 2）。
+# parser 对 TO 的硬拒字符（含其一整个 entry 不解析 → 该候选判 unrenderable、从输出排除）。
 # FROM 侧可带（反引号 quoted literal 是合法路径），TO 侧不行。
 _TO_HARD_REJECT = re.compile(r"[，。；：、（）()\[\]【】\"'“”‘’`]")
+
+
+def _has_lexical_content(span: str) -> bool:
+    """Any letter or digit in any script — fullwidth Latin (ＡＩ), kana, hangul
+    and CJK compatibility ideographs are real ASR output; `***`, `……` and
+    symbol art are not. `_WORD_RUN` is deliberately not reused here: it only
+    knows ASCII and the URO block, and the parser accepts the wider set."""
+    return any(ch.isalnum() for ch in span)
 
 
 def _keep(from_span: str, to_span: str) -> bool:
@@ -266,6 +276,15 @@ def _keep(from_span: str, to_span: str) -> bool:
     if len(from_span) > _MAX_SPAN_CHARS or len(to_span) > _MAX_SPAN_CHARS:
         return False
     if _PUNCT_ONLY.match(from_span) or _PUNCT_ONLY.match(to_span):
+        return False
+    # 一侧没有任何词汇内容（平台脱敏掩码 ***、省略号、符号画）不是听写形态：
+    # 掩码后面可以是任何词，*** → 公众号 写成 trap 会把每个掩码都改成公众号。
+    # 另外 * 是 bullet 的 bold 定界符，parser 两侧都拒绝它，反引号也救不了——
+    # 在这里拒掉，而不是让自检把整轮收获一起废掉（2026-09-05 实测：一个
+    # *** 候选让同一份 2 小时转录的其余候选一条都没打印出来）。
+    if not _has_lexical_content(from_span) or not _has_lexical_content(to_span):
+        return False
+    if "*" in from_span or "*" in to_span:
         return False
     if _TO_HARD_REJECT.search(to_span):
         return False
@@ -303,7 +322,7 @@ def _quote(side: str) -> str:
     Two triggers: special characters (_BAD_BARE), or length beyond the
     parser's bare-term cap (_MAX_TERM_LEN=12) — a quoted variant is an
     explicit literal and exempt from the cap, so quoting long forms keeps
-    the bullet parseable instead of tripping the exit-2 self-check.
+    the bullet parseable instead of landing it in the unrenderable bucket.
     """
     return f"`{side}`" if _BAD_BARE.search(side) or len(side) > 12 else side
 
@@ -437,17 +456,22 @@ def main() -> int:
                + (f"、残留 {c['remaining']}" if c["remaining"] else ""))
         return _bullet(c["from"], c["to"], cue)
 
-    bullets = [to_bullet(c) for c in candidates]
-    # 自检：生成的每条 bullet 必须能被真 parser 解析——生成器 bug 当场炸，
-    # 不允许把不可解析的行写进 context 文件（2026-08-22 某支付域 表格不解析
-    # 事故的机械防线）。
-    bad = [b for b in bullets if not _parses(b)]
-    if bad:
-        print("harvest BUG: 生成的 bullet 未通过 trap_scanner 解析：",
+    # 自检：生成的每条 bullet 必须能被真 parser 解析，不可解析的行绝不进
+    # 输出、绝不写进 context 文件（2026-08-22 某支付域 表格不解析事故的机械
+    # 防线）。但防线只拦那一条：把它连同原因报到 stderr、从本轮排除，其余
+    # 候选照常交付——全有全无会让一个怪候选吞掉整份收获。
+    rendered = [(c, to_bullet(c)) for c in candidates]
+    unrenderable = [b for _, b in rendered if not _parses(b)]
+    if unrenderable:
+        print(f"harvest: ⚠️ {len(unrenderable)} 条候选无法渲染成可解析的 trap "
+              f"bullet，已从输出与 --write 排除（需要 trap 请手工改写后再入）：",
               file=sys.stderr)
-        for b in bad:
+        for b in unrenderable:
             print(f"  {b}", file=sys.stderr)
-        return 2
+        skip = set(unrenderable)
+        rendered = [(c, b) for c, b in rendered if b not in skip]
+        candidates = [c for c, _ in rendered]
+    bullets = [b for _, b in rendered]
 
     hot = [c for c in candidates if c["fixed"] >= args.min_count]
     cold = [c for c in candidates if c["fixed"] < args.min_count]
@@ -459,6 +483,7 @@ def main() -> int:
             "skipped_known": skipped_known,
             "dropped": dropped,
             "bullets": bullets,
+            "unrenderable": unrenderable,
         }, ensure_ascii=False, indent=2))
     else:
         print(f"harvest: {len(candidates)} 个候选"
