@@ -45,6 +45,10 @@ from core.dictionary_processor import (
 VALID_SOURCES = ("native_pass", "stage1_deferred", "learned_suggestion", "manual")
 VALID_KINDS = ("entity", "homophone", "wording", "unknown")
 VALID_DECISIONS = ("accepted", "overridden", "kept_original", "skipped", "reopen")
+# Lines either side of the recorded line hint that resolve-time anchoring and
+# enqueue-time hint repair treat as "near the hint". One definition; the prose
+# in references/review_queue_dashboard.md states it once and nowhere else.
+RESOLVE_WINDOW_LINES = 3
 PENDING = "pending"
 
 # Priority conventions (higher = review first). Entities compound the most
@@ -67,10 +71,11 @@ class ReAnchorNeeded(ReviewQueueError):
     changed since enqueue. The decision is NOT recorded; fail closed.
 
     One shape is told apart before this is raised: on `accepted` / `overridden`,
-    an original that is gone from the whole (ledger-masked) file while the
-    context recorded at enqueue reappears with the resolved text in its slot is
-    a fix applied by hand — the verdict is recorded without writing
-    (`_already_applied`). Every other missing-anchor shape still lands here."""
+    when the context recorded at enqueue reappears in the ledger-masked file
+    with the resolved text in its slot and nothing near the hint contradicts
+    it, the fix was applied by hand and the verdict is recorded without
+    writing (`_already_applied_verdict`). Every other missing-anchor shape
+    still lands here."""
 
 
 class AppliedVerdict(NamedTuple):
@@ -320,12 +325,12 @@ class ReviewQueue:
         if item["line_number"] is not None:
             hits = [i + 1 for i, ln in enumerate(content.splitlines()) if original in ln]
             if hits and item["line_number"] not in hits and len(hits) == 1:
-                # Only repair a hint that would actually break resolve: the
-                # resolve-time window is ±3 lines, so a hint within window of
-                # the unique match works fine as-is and must NOT be rewritten
-                # (rewriting a functional hint silently broke dashboard
-                # context fallback, tests/test_dashboard_context.py:150).
-                if abs(hits[0] - item["line_number"]) > 3:
+                # Only repair a hint that would actually break resolve: a hint
+                # within RESOLVE_WINDOW_LINES of the unique match works fine
+                # as-is and must NOT be rewritten (rewriting a functional hint
+                # silently broke dashboard context fallback,
+                # tests/test_dashboard_context.py:150).
+                if abs(hits[0] - item["line_number"]) > RESOLVE_WINDOW_LINES:
                     item["_hint_repaired_to"] = hits[0]
                     item["line_number"] = hits[0]
         snippet = item["context_snippet"]
@@ -1076,7 +1081,7 @@ class ReviewQueue:
     @staticmethod
     def _already_applied(
         content: str, old: str, new: str, snippet: Optional[str],
-        line_no: Optional[int] = None, window: int = 3,
+        line_no: Optional[int] = None, window: int = RESOLVE_WINDOW_LINES,
     ) -> bool:
         """True when `_already_applied_verdict` is `applied` — see there."""
         return ReviewQueue._already_applied_verdict(
@@ -1085,7 +1090,7 @@ class ReviewQueue:
     @staticmethod
     def _already_applied_verdict(
         content: str, old: str, new: str, snippet: Optional[str],
-        line_no: Optional[int] = None, window: int = 3,
+        line_no: Optional[int] = None, window: int = RESOLVE_WINDOW_LINES,
     ) -> "AppliedVerdict":
         """Is the suggestion already sitting where the anchor was?
 
@@ -1097,7 +1102,7 @@ class ReviewQueue:
         sides of that slot intact. The whole file is searched, not a window
         around the line hint: frontmatter growth or a deleted paragraph
         shifts every later line, and with the original gone a hint that
-        drifted past the ±3-line resolve window would otherwise strand a row
+        drifted past the resolve window would otherwise strand a row
         whose fix is in place. The occurrence count of `old` is deliberately
         not a precondition — a suggestion that contains the original
         (阿里→阿里云) never lets `old` disappear.
@@ -1216,7 +1221,7 @@ class ReviewQueue:
     @staticmethod
     def _locate_anchor(
         content: str, needle: str, line_no: Optional[int],
-        snippet: Optional[str], window: int = 3,
+        snippet: Optional[str], window: int = RESOLVE_WINDOW_LINES,
     ) -> int:
         """Choose ONE occurrence of `needle` when several exist.
 
