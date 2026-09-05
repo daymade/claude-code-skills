@@ -62,7 +62,8 @@ suggestion itself). The verdict is recorded, nothing is written, and the apply
 log carries `already in place at the anchor — recorded without writing`
 (`reopen` then re-pends the row without reverting anything). The recognition
 fails closed, and the message says which, when the original still sits within
-three lines of the hint outside the suggestion, when the same neighbourhood
+the resolve window (±3 lines around the line hint) outside the suggestion,
+when the same neighbourhood
 also appears with a third form in the slot (anywhere at the matched width, or
 near the hint at any width down to two characters a side), or when the edit
 touched the characters next to the slot; an anchored utterance deleted or
@@ -138,7 +139,7 @@ stops at `resolved_text`, and the reason stops at `decision_note`.
 **Enqueue validates anchors verbatim — authoring errors die at enqueue, not
 at verdict.** When an item declares a readable `file`, `--enqueue-review`
 checks that `original` (and `context`, if given) literally appears in it, and
-repairs a line hint that points beyond the resolve window (±3 lines) of a
+repairs a line hint that points beyond the resolve window of a
 UNIQUE match (a hint inside the window works as-is and is left alone; repairs
 are printed to stderr). Anything else is REJECTED on the spot with the
 reason, and the run exits 3 — the JSON carries the rejects under
