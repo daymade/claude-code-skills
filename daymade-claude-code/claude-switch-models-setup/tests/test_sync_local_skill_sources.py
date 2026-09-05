@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stderr
 import os
 from pathlib import Path
+import shutil
 import sys
 import tempfile
 import unittest
@@ -219,14 +221,47 @@ class ActiveManifestTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "non-empty trimmed string"):
                 sync.load_active_skill_names(manifest)
 
-    def test_unknown_selected_name_fails_before_sync(self) -> None:
+    def test_unresolved_selected_name_is_returned_not_raised(self) -> None:
+        """A name no source registers must not abort the pass: the checkout the
+        syncer reads may sit on a branch that predates the skill. The name comes
+        back separately so main() can report it and still link the rest."""
         with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
-            manifest = Path(raw) / "active.json"
             available = {
                 "alpha": sync.SkillSource("alpha", Path(raw) / "alpha", "plugin")
             }
-            with self.assertRaisesRegex(ValueError, "unknown active skill"):
-                sync.select_active_skills(available, ("missing",), manifest)
+            selected, unresolved = sync.select_active_skills(
+                available, ("missing", "alpha")
+            )
+            self.assertEqual(list(selected), ["alpha"])
+            self.assertIs(selected["alpha"], available["alpha"])
+            self.assertEqual(unresolved, ("missing",))
+
+    def test_checkout_head_hint_reads_branch_detached_and_linked_worktree(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
+            root = Path(raw)
+            on_branch = root / "on-branch"
+            (on_branch / ".git").mkdir(parents=True)
+            (on_branch / ".git" / "HEAD").write_text(
+                "ref: refs/heads/feat/other-work\n", encoding="utf-8"
+            )
+            detached = root / "detached"
+            (detached / ".git").mkdir(parents=True)
+            (detached / ".git" / "HEAD").write_text(
+                "0123456789abcdef0123456789abcdef01234567\n", encoding="utf-8"
+            )
+            real_git_dir = root / "primary" / ".git" / "worktrees" / "wt"
+            real_git_dir.mkdir(parents=True)
+            (real_git_dir / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+            linked = root / "linked-worktree"
+            linked.mkdir()
+            (linked / ".git").write_text(f"gitdir: {real_git_dir}\n", encoding="utf-8")
+            plain = root / "not-a-checkout"
+            plain.mkdir()
+
+            self.assertEqual(sync.checkout_head_hint(on_branch), "branch feat/other-work")
+            self.assertEqual(sync.checkout_head_hint(detached), "detached 0123456789ab")
+            self.assertEqual(sync.checkout_head_hint(linked), "branch main")
+            self.assertIsNone(sync.checkout_head_hint(plain))
 
     def test_manifest_rejects_names_that_are_not_one_kebab_case_segment(self) -> None:
         with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
@@ -531,6 +566,150 @@ class UserRootMigrationTests(unittest.TestCase):
             self.assertEqual((agents_root / "selected").resolve(), selected_source)
             self.assertEqual((codex_root / "selected").resolve(), selected_source)
             self.assertTrue((codex_root / "stale").is_symlink())
+
+    def _register(self, repo: Path, names: list[str]) -> None:
+        """Rewrite the fixture marketplace so exactly `names` are registered, the
+        way a checkout moving between branches changes what it registers."""
+        (repo / ".claude-plugin" / "marketplace.json").write_text(
+            json.dumps(
+                {
+                    "name": "daymade-skills",
+                    "plugins": [
+                        {"name": name, "version": "1.0.0", "source": f"./{name}"}
+                        for name in names
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    def _main_args(self, root: Path, repo: Path, manifest: Path) -> list[str]:
+        return [
+            "--repo",
+            str(repo),
+            "--claude-dir",
+            str(root / "claude"),
+            "--agents-skills",
+            str(root / "agents" / "skills"),
+            "--codex-skills",
+            str(root / "codex" / "skills"),
+            "--active-skills-manifest",
+            str(manifest),
+            "--skip-claude-cache",
+            "--skip-marketplace-source",
+            "--apply",
+            "--quiet",
+        ]
+
+    def test_main_skips_a_name_no_checkout_registers_and_links_the_rest(self) -> None:
+        """The manifest is written against the published marketplace; the checkout
+        it is judged against may sit on a branch that predates one skill. That
+        name is reported on stderr and skipped — the pass still converges for
+        every other name, and --quiet does not hide the report."""
+        with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
+            root = Path(raw)
+            repo, manifest = self._marketplace(root)
+            manifest.write_text(
+                json.dumps(
+                    {"schema_version": 1, "active_skills": ["not-yet-merged", "selected"]}
+                ),
+                encoding="utf-8",
+            )
+            (repo / ".git").mkdir()
+            (repo / ".git" / "HEAD").write_text(
+                "ref: refs/heads/feat/other-work\n", encoding="utf-8"
+            )
+            (root / "claude").mkdir()
+            (root / "codex" / "skills").mkdir(parents=True)
+            agents_root = root / "agents" / "skills"
+
+            stderr = io.StringIO()
+            with redirect_stderr(stderr):
+                result = sync.main(self._main_args(root, repo, manifest))
+
+            self.assertEqual(result, 0)
+            self.assertEqual(
+                (agents_root / "selected").resolve(), (repo / "selected").resolve()
+            )
+            self.assertFalse((agents_root / "not-yet-merged").is_symlink())
+            self.assertFalse((agents_root / "not-yet-merged").exists())
+            report = stderr.getvalue()
+            self.assertIn("skipped this pass: not-yet-merged", report)
+            self.assertIn(f"scanned daymade-skills: {repo.resolve()}", report)
+            self.assertIn("branch feat/other-work", report)
+
+    def test_unresolved_name_links_on_the_first_pass_after_it_is_registered(self) -> None:
+        """Self-healing: once the checkout registers the skill, the next pass links
+        it with no manual step and no further warning."""
+        with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
+            root = Path(raw)
+            repo, manifest = self._marketplace(root)
+            manifest.write_text(
+                json.dumps(
+                    {"schema_version": 1, "active_skills": ["not-yet-merged", "selected"]}
+                ),
+                encoding="utf-8",
+            )
+            (root / "claude").mkdir()
+            (root / "codex" / "skills").mkdir(parents=True)
+            agents_root = root / "agents" / "skills"
+
+            first = io.StringIO()
+            with redirect_stderr(first):
+                self.assertEqual(sync.main(self._main_args(root, repo, manifest)), 0)
+            self.assertFalse((agents_root / "not-yet-merged").exists())
+            self.assertIn("not-yet-merged", first.getvalue())
+
+            # The checkout catches up: the skill directory and its registry entry appear.
+            self._skill(repo, "not-yet-merged")
+            self._register(repo, ["selected", "not-yet-merged"])
+
+            second = io.StringIO()
+            with redirect_stderr(second):
+                self.assertEqual(sync.main(self._main_args(root, repo, manifest)), 0)
+            self.assertEqual(
+                (agents_root / "not-yet-merged").resolve(),
+                (repo / "not-yet-merged").resolve(),
+            )
+            self.assertEqual(second.getvalue(), "")
+
+    def test_link_for_a_name_the_checkout_stopped_registering_is_pruned_not_fatal(self) -> None:
+        """The other direction of a branch move: a skill the checkout registered
+        yesterday is gone today. Its managed link is retired to recoverable
+        storage like any other stale link, the name is reported, and the pass
+        still succeeds."""
+        with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
+            root = Path(raw)
+            repo, manifest = self._marketplace(root)
+            self._skill(repo, "gone")
+            self._register(repo, ["selected", "gone"])
+            manifest.write_text(
+                json.dumps({"schema_version": 1, "active_skills": ["gone", "selected"]}),
+                encoding="utf-8",
+            )
+            (root / "claude").mkdir()
+            (root / "codex" / "skills").mkdir(parents=True)
+            agents_root = root / "agents" / "skills"
+
+            with redirect_stderr(io.StringIO()):
+                self.assertEqual(sync.main(self._main_args(root, repo, manifest)), 0)
+            self.assertTrue((agents_root / "gone").is_symlink())
+
+            # The checkout moves to a branch that never had the skill.
+            shutil.rmtree(repo / "gone")
+            self._register(repo, ["selected"])
+
+            stderr = io.StringIO()
+            with redirect_stderr(stderr):
+                self.assertEqual(sync.main(self._main_args(root, repo, manifest)), 0)
+
+            self.assertFalse((agents_root / "gone").is_symlink())
+            self.assertFalse((agents_root / "gone").exists())
+            retired = list((agents_root / ".source-sync-backups").glob("*/gone.*/entry"))
+            self.assertEqual(len(retired), 1)
+            self.assertTrue(retired[0].is_symlink())
+            self.assertTrue((agents_root / "selected").is_symlink())
+            self.assertIn("skipped this pass: gone", stderr.getvalue())
 
     def test_legacy_compatibility_never_replaces_a_real_directory(self) -> None:
         with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:

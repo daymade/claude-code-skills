@@ -268,6 +268,47 @@ directories, third-party links, malformed foreign links, and `.system` stay
 untouched. Restart any already-running Claude Code/Codex sessions after
 repairing because Skill metadata is loaded at session start.
 
+## Source sync warns that an active skill name is registered by no checkout
+
+`csk` prints this at launch, and the daemon writes it to `source-sync.err.log`:
+
+```
+WARN: <manifest>: 1 active skill name(s) registered by no discovered source checkout; skipped this pass: new-skill
+WARN:   scanned <marketplace>: <checkout> (branch feat/other-work)
+WARN:   scanned <other marketplace>: <checkout> (branch main)
+WARN:   a checkout on a branch that predates the skill links it on the first pass after it catches up; a misspelled or retired name repeats this warning until the manifest is corrected
+```
+
+The name is usually right and a checkout is the problem. The manifest is written
+against the marketplace as published on `main`; the syncer reads the working tree
+of each local checkout, and a checkout parked on a feature branch registers only
+what that branch had when it forked. The pass already converged for every other
+name, so nothing else is waiting on this. Confirm where each checkout is:
+
+```bash
+python3 <this skill>/scripts/skill-install-audit.py --list SOURCE_CHECKOUT_BEHIND
+git -C <checkout> status --short --branch
+```
+
+What to do depends on who owns that checkout. A clean checkout of your own goes
+back with `git checkout main && git pull --ff-only`; the next pass links the name
+with no further step. A checkout another session is working on (uncommitted
+changes, commits in the last hours) stays as it is: the name links on the first
+pass after that work lands and the checkout returns to `main`. Switching,
+stashing, or rebasing someone else's working tree to silence a warning destroys
+their state.
+
+If every checkout is on a current `main` and the warning persists, the name is
+misspelled or the skill was renamed or retired. Correct the manifest.
+
+Before daymade-claude-code v3.15.0 the same condition was a traceback,
+`ValueError: unknown active skill name(s)`, that aborted the pass: the daemon
+exited 1 on every trigger, and `~/.agents/skills` and the `enabledPlugins` mirror
+stayed frozen for every skill (observed 2026-09-05, after a manifest edit made
+against a checkout parked on another session's branch). A daemon still printing
+that traceback runs a pinned copy older than the fix; advance the pin as the
+previous section describes.
+
 ## Several profiles launched at once fail with sync tracebacks
 
 This should not happen on current scripts: `sync-local-skill-sources.py` and `claude-plugins-sync.py` share a cross-process lock before writing marketplace JSON, installed plugin metadata, or cache symlinks.
