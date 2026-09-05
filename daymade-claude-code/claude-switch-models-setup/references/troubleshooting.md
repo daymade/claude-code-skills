@@ -84,11 +84,14 @@ Fix — pick one:
   profile.
 - Turn it off: `/advisor off` removes that key from the same global file
   (observed 2026-09-05: run inside another project, the global file's mtime
-  matched the command to the second and the key was gone). A session that
-  was already running keeps its advisor — one launched before the `off` went
-  on calling it afterwards with the same recorded model; the change applies
-  to sessions started later. `CLAUDE_CODE_DISABLE_ADVISOR_TOOL` also exists
-  in the 2.1.260 binary; it has not been exercised here.
+  matched the command to the second and the key was gone). It takes effect
+  in the session that ran it and in every session started afterwards — that
+  session made no further advisor calls, and later sessions on the same
+  model carry no `advisorModel` on any record — but a *different* session
+  that was already running kept calling the advisor (all observed
+  2026-09-05). Restart those windows if the `off` must reach them.
+  `CLAUDE_CODE_DISABLE_ADVISOR_TOOL` also exists in the 2.1.260 binary; it
+  has not been exercised here.
 
 Which model answered a given call is on the assistant record itself
 (`advisorModel`, next to `effort`) — see
