@@ -867,6 +867,12 @@ class ReviewQueue:
                 path = Path(action["path"]).resolve()
                 content = self._load(contents, path)
                 new_content, applied_new = self._plan_file_edit(content, action, item)
+                if new_content is None:
+                    planned.append({
+                        "action": action, "mode": "skip_already_present",
+                        "msg": "already in place at the anchor — recorded without writing",
+                    })
+                    continue
                 contents[path] = new_content
                 dirty.add(path)
                 planned.append({"action": action, "mode": "file_edit",
@@ -901,7 +907,7 @@ class ReviewQueue:
                 # skipped=True keeps _revert_applied from removing a line this
                 # action never wrote (it was pre-existing content).
                 log.append({"action": action, "ok": True, "skipped": True,
-                            "msg": "already present — skipped"})
+                            "msg": plan.get("msg", "already present — skipped")})
             elif mode == "file_edit":
                 log.append({"action": action, "ok": True, "applied_new": plan["applied_new"],
                             "msg": f"replaced in {plan['path'].name}"})
@@ -947,7 +953,8 @@ class ReviewQueue:
 
     def _plan_file_edit(
         self, content: str, action: dict[str, Any], item: ReviewItem
-    ) -> tuple[str, str]:
+    ) -> tuple[Optional[str], str]:
+        """Returns (new_content, applied_new); (None, new) = already in place."""
         old, new = action["old"], action["new"]
         # A correction-ledger frontmatter field (`asr_note`) quotes old forms on
         # purpose — "修正含：<旧形>→<正确形>". Stage 1 and trap-scan both mask it;
@@ -961,13 +968,19 @@ class ReviewQueue:
         # reported as a successful replace.)
         masked, ledger_spans = _mask_ledger_spans(content)
         count = masked.count(old)
+        line_no = action.get("expect_line") or item.line_number
         if count == 0:
+            if self._already_applied(masked, old, new, line_no, item.context_snippet):
+                # A hand edit landed the suggestion before the verdict. The
+                # verdict is still "accepted" — recording it as kept_original
+                # would describe the transcript as right as spoken, which it
+                # was not. Nothing is written; the caller logs it as skipped.
+                return None, new
             raise ReAnchorNeeded(
                 f"anchor text not found: {old[:60]!r} — the file changed since "
                 f"enqueue (or an earlier action in this pack consumed it); "
                 f"nothing was modified (repair with --reanchor-review <id> first)"
             )
-        line_no = action.get("expect_line") or item.line_number
         if count == 1 and not line_no:
             # No hint to validate against; a sole occurrence is all we have.
             idx = masked.find(old)
@@ -982,6 +995,51 @@ class ReviewQueue:
         if ledger_spans:
             edited = _restore_ledger_spans(edited, ledger_spans)
         return edited, new
+
+    @staticmethod
+    def _already_applied(
+        content: str, old: str, new: str, line_no: Optional[int],
+        snippet: Optional[str], window: int = 3,
+    ) -> bool:
+        """Is the suggestion already sitting where the anchor was?
+
+        The accept path fails closed once `old` is gone, because "gone" alone
+        cannot tell a hand-applied fix from a drifted file. This is the one
+        shape it CAN tell apart: the context recorded at enqueue time must
+        reappear within ±window lines of the hint with `new` in the exact slot
+        `old` occupied — the recorded neighbours on both sides of that slot
+        intact. Neighbour width is tried from 8 characters down to 2, so an
+        adjacent edit on the same line (a second correction right next to this
+        one) does not defeat the check, while a one-sided neighbourhood (anchor
+        at a snippet edge) must be at least 3 characters to stand in for the
+        missing side. No line hint or no snippet means nothing to compare
+        against: fail closed. `content` is the ledger-masked text, so an
+        `asr_note` citation of the new form can never satisfy this.
+        """
+        if not line_no or not new or not snippet or not snippet.strip():
+            return False
+        snip = snippet.strip()
+        lines = content.splitlines(keepends=True)
+        lo = max(0, line_no - 1 - window)
+        hi = min(len(lines), line_no + window)
+        region = "".join(lines[lo:hi])
+        if old in region:
+            return False
+        start = 0
+        while True:
+            p = snip.find(old, start)
+            if p < 0:
+                return False
+            start = p + len(old)
+            for k in (8, 6, 4, 3, 2):
+                left = snip[max(0, p - k):p]
+                right = snip[p + len(old):p + len(old) + k]
+                if not left and not right:
+                    break
+                if (not left or not right) and len(left + right) < 3:
+                    continue
+                if left + new + right in region:
+                    return True
 
     @staticmethod
     def _locate_anchor(

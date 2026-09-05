@@ -661,11 +661,7 @@ class TestLedgerFrontmatterIsNotRewritten:
         assert "participants: [陈一, 邹明轩, 李二]" in text
         assert "asr_note: 2026-09-01 修正含：周明轩→邹明轩、孙立成→孙丽成" in text
 
-    def test_hand_applied_fix_fails_closed_instead_of_eating_the_ledger(
-        self, queue, ledger_transcript
-    ):
-        """Anchored line already fixed by hand -> refuse, do not fall through
-        to the ledger citation (the 2026-09-01 corruption)."""
+    def _hand_applied(self, queue, ledger_transcript, replacement="邹明轩"):
         added = queue.enqueue([{
             "source": "stage1_deferred", "domain": "embodied_ai",
             "file": str(ledger_transcript), "line": 2,
@@ -676,12 +672,66 @@ class TestLedgerFrontmatterIsNotRewritten:
         # the agent applies the frontmatter + body fix by hand first
         text = ledger_transcript.read_text(encoding="utf-8")
         ledger_transcript.write_text(
-            text.replace("participants: [陈一, 周明轩, 李二]", "participants: [陈一, 邹明轩, 李二]")
-                .replace("周明轩 00:01:22", "邹明轩 00:01:22"),
+            text.replace("participants: [陈一, 周明轩, 李二]",
+                         f"participants: [陈一, {replacement}, 李二]")
+                .replace("周明轩 00:01:22", f"{replacement} 00:01:22"),
             encoding="utf-8",
         )
-        before = ledger_transcript.read_text(encoding="utf-8")
-        with pytest.raises(ReAnchorNeeded):
-            queue.resolve(added[0], "accepted", by="test")
+        return added[0], ledger_transcript.read_text(encoding="utf-8")
+
+    def test_hand_applied_fix_is_recorded_without_touching_the_ledger(
+        self, queue, ledger_transcript
+    ):
+        """Anchored line already fixed by hand -> the verdict is still
+        `accepted`; nothing is written, and the ledger citation is never
+        reached (the 2026-09-01 corruption). Before this shape was
+        recognised the only exit was `kept_original`, which describes a
+        transcript that was right as spoken — the opposite of what happened."""
+        item_id, before = self._hand_applied(queue, ledger_transcript)
+        result = queue.resolve(item_id, "accepted", by="test")
+        assert result["item"]["status"] == "accepted"
+        (entry,) = result["apply_log"]
+        assert entry["ok"] and entry["skipped"]
+        assert "already in place" in entry["msg"]
         assert ledger_transcript.read_text(encoding="utf-8") == before
-        assert queue.get(added[0]).status == "pending"
+        assert "asr_note: 2026-09-01 修正含：周明轩→邹明轩、孙立成→孙丽成" in before
+
+    def test_hand_applied_then_reopen_reverts_nothing(self, queue, ledger_transcript):
+        item_id, before = self._hand_applied(queue, ledger_transcript)
+        queue.resolve(item_id, "accepted", by="test")
+        queue.resolve(item_id, "reopen", by="test")
+        assert queue.get(item_id).status == "pending"
+        assert ledger_transcript.read_text(encoding="utf-8") == before
+
+    def test_hand_edit_to_a_different_word_still_fails_closed(
+        self, queue, ledger_transcript
+    ):
+        """The anchor is gone but the suggestion is NOT what replaced it:
+        that is drift, not a hand-applied fix — refuse as before."""
+        item_id, before = self._hand_applied(queue, ledger_transcript, replacement="周明")
+        with pytest.raises(ReAnchorNeeded):
+            queue.resolve(item_id, "accepted", by="test")
+        assert ledger_transcript.read_text(encoding="utf-8") == before
+        assert queue.get(item_id).status == "pending"
+
+    def test_already_applied_needs_hint_and_context(self, queue, tmp_path):
+        """Without a line hint or a recorded context there is nothing to
+        compare the new text against — fail closed, do not guess."""
+        from core.review_queue import ReviewQueue
+        content = "今天我们请到了汪晓明老师来讲课。\n"
+        snippet = "今天我们请到了王晓明老师来讲课。"
+        assert ReviewQueue._already_applied(content, "王晓明", "汪晓明", None, snippet) is False
+        assert ReviewQueue._already_applied(content, "王晓明", "汪晓明", 1, None) is False
+        assert ReviewQueue._already_applied(content, "王晓明", "汪晓明", 1, snippet) is True
+        # A one-sided neighbourhood shorter than three characters is not
+        # enough to stand in for the missing side.
+        assert ReviewQueue._already_applied("汪晓明老\n", "王晓明", "汪晓明", 1, "王晓明老") is False
+
+    def test_already_applied_survives_an_adjacent_edit_on_the_same_line(self):
+        """Two corrections side by side: the neighbour of this anchor was
+        itself corrected, so the widest neighbourhood no longer matches and
+        the check must fall back to a narrower one."""
+        from core.review_queue import ReviewQueue
+        snippet = "先看巨神模型 voa 这条路线再说"
+        content = "先看具身模型 VLA 这条路线再说\n"
+        assert ReviewQueue._already_applied(content, "巨神", "具身", 1, snippet) is True
