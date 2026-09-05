@@ -783,6 +783,117 @@ class TestLedgerFrontmatterIsNotRewritten:
             "我们请到了汪晓明老师来讲课。\n别的话。\n", "王晓明", "汪晓明",
             "我们请到了王晓明老师来讲课。") is True
 
+
+    # ---- 2026-09-05 second-round review (rows numbered as in that table) ----
+
+    def _enqueue(self, queue, f, line, original, suggested, context):
+        return queue.enqueue([{
+            "source": "stage1_deferred", "domain": "general",
+            "file": str(f), "line": line,
+            "original": original, "suggested": suggested, "kind": "homophone",
+            "context": context, "evidence": "roster",
+        }])["added"][0]
+
+    def test_surviving_original_in_another_utterance_is_not_this_rows_edit(
+        self, queue, tmp_path
+    ):
+        """Row 1: the anchored line is hand-fixed and the same garble survives
+        in a different sentence two lines down. Neither accept nor
+        --reanchor-review may land on that other sentence."""
+        f = tmp_path / "survivor.md"
+        f.write_text("今天我们请到了王晓明老师来讲课。\n王晓明老师说了很多。\n", encoding="utf-8")
+        item_id = self._enqueue(queue, f, 1, "王晓明", "汪晓明", "今天我们请到了王晓明老师来讲课。")
+        f.write_text("今天我们请到了汪晓明老师来讲课。\n王晓明老师说了很多。\n", encoding="utf-8")
+        before = f.read_text(encoding="utf-8")
+        with pytest.raises(ReAnchorNeeded, match="do not --reanchor-review"):
+            queue.resolve(item_id, "accepted", by="test")
+        assert f.read_text(encoding="utf-8") == before
+        with pytest.raises(ReviewQueueError, match="already reads with"):
+            queue.reanchor(item_id)
+        item = queue.get(item_id)
+        assert item.status == "pending" and item.line_number == 1
+        assert item.context_snippet == "今天我们请到了王晓明老师来讲课。"
+        # Once the other utterance is settled (here: by hand), this row closes.
+        f.write_text("今天我们请到了汪晓明老师来讲课。\n汪晓明老师说了很多。\n", encoding="utf-8")
+        result = queue.resolve(item_id, "accepted", by="test")
+        assert result["item"]["status"] == "accepted"
+        assert result["apply_log"][0]["skipped"] is True
+
+    def test_suggestion_containing_the_original_is_not_applied_twice(self, queue, tmp_path):
+        """Row 2: 阿里→阿里云 leaves the original inside the fix forever; a
+        hand-applied fix must be recognised, not re-replaced into 阿里云云."""
+        f = tmp_path / "contains.md"
+        f.write_text("我们用阿里的服务。\n", encoding="utf-8")
+        item_id = self._enqueue(queue, f, 1, "阿里", "阿里云", "我们用阿里的服务。")
+        f.write_text("我们用阿里云的服务。\n", encoding="utf-8")
+        result = queue.resolve(item_id, "accepted", by="test")
+        assert result["item"]["status"] == "accepted"
+        assert result["apply_log"][0]["skipped"] is True
+        assert f.read_text(encoding="utf-8") == "我们用阿里云的服务。\n"
+        # The unfixed shape still takes the normal edit path.
+        g = tmp_path / "contains-unfixed.md"
+        g.write_text("我们用阿里的服务。\n", encoding="utf-8")
+        item_id = self._enqueue(queue, g, 1, "阿里", "阿里云", "我们用阿里的服务。")
+        queue.resolve(item_id, "accepted", by="test")
+        assert g.read_text(encoding="utf-8") == "我们用阿里云的服务。\n"
+
+    def test_third_form_of_any_length_is_seen(self):
+        """Row 3: the ambiguity guard is not bounded by the token length."""
+        from core.review_queue import ReviewQueue
+        snippet = "我们请到了王晓明老师来讲课。"
+        assert ReviewQueue._already_applied(
+            "我们请到了汪晓明老师来讲课。\n我们请到了王小明（待核实）老师来讲课。\n",
+            "王晓明", "汪晓明", snippet) is False
+        assert ReviewQueue._already_applied(
+            "先看具身模型这条路线再说\n先看Embodied模型这条路线再说\n",
+            "巨神", "具身", "先看巨神模型这条路线再说") is False
+
+    def test_coedited_third_form_near_the_hint_is_seen(self):
+        """Row 4: the anchored line was hand-edited to a third form AND had an
+        adjacent co-edit; within the hint window the guard tries every
+        neighbour width, so two surviving characters a side are enough."""
+        from core.review_queue import ReviewQueue
+        snippet = "我们请到了王晓明老师来讲课。"
+        fixed = "我们请到了汪晓明老师来讲课。\n"
+        for anchored in (
+            "我们请到了王小明老师来讲课，\n",
+            "我们请到了王小明老师来上课。\n",
+            "我们请到了王小明老师也来讲课。\n",
+        ):
+            assert ReviewQueue._already_applied(
+                fixed + anchored, "王晓明", "汪晓明", snippet, line_no=2) is False, anchored
+        # Documented boundary: both recorded neighbours on one side gone.
+        assert ReviewQueue._already_applied(
+            fixed + "我们请到了王小明来讲课。\n", "王晓明", "汪晓明", snippet, line_no=2) is True
+
+    def test_third_form_at_queue_level_with_a_coedit_stays_pending(self, queue, tmp_path):
+        f = tmp_path / "coedit.md"
+        f.write_text("我们请到了汪晓明老师来讲课。\n我们请到了王晓明老师来讲课。\n", encoding="utf-8")
+        item_id = self._enqueue(queue, f, 2, "王晓明", "汪晓明", "我们请到了王晓明老师来讲课。")
+        f.write_text("我们请到了汪晓明老师来讲课。\n我们请到了王小明老师来讲课，\n", encoding="utf-8")
+        before = f.read_text(encoding="utf-8")
+        with pytest.raises(ReAnchorNeeded, match="different form"):
+            queue.resolve(item_id, "accepted", by="test")
+        assert f.read_text(encoding="utf-8") == before
+        assert queue.get(item_id).status == "pending"
+
+    def test_overlapping_neighbourhoods_are_all_examined(self):
+        """Row 5: left and right neighbour are the same string."""
+        from core.review_queue import ReviewQueue
+        assert ReviewQueue._already_applied(
+            "老师汪晓明老师王小明老师\n", "王晓明", "汪晓明", "老师王晓明老师") is False
+
+    def test_reanchor_refuses_a_row_whose_context_already_reads_fixed(self, queue, tmp_path):
+        """Row 1 (reanchor half): --reanchor-review must not silently re-point
+        a hand-applied row at a surviving occurrence of the original."""
+        f = tmp_path / "repoint.md"
+        f.write_text("今天我们请到了王晓明老师来讲课。\n王晓明老师说了很多。\n", encoding="utf-8")
+        item_id = self._enqueue(queue, f, 1, "王晓明", "汪晓明", "今天我们请到了王晓明老师来讲课。")
+        f.write_text("今天我们请到了汪晓明老师来讲课。\n王晓明老师说了很多。\n", encoding="utf-8")
+        with pytest.raises(ReviewQueueError, match="nothing to re-anchor"):
+            queue.reanchor(item_id)
+        assert queue.get(item_id).line_number == 1
+
     def test_sibling_with_a_third_form_fails_closed_at_queue_level(self, queue, tmp_path):
         """Row 12 of the 2026-09-05 review: line 2 hand-edited to a third form
         while line 1 already carried the corrected phrase closed the row
@@ -797,7 +908,7 @@ class TestLedgerFrontmatterIsNotRewritten:
         }])["added"][0]
         f.write_text("我们请到了汪晓明老师来讲课。\n我们请到了王小明老师来讲课。\n", encoding="utf-8")
         before = f.read_text(encoding="utf-8")
-        with pytest.raises(ReAnchorNeeded):
+        with pytest.raises(ReAnchorNeeded, match="carry a different form"):
             queue.resolve(item_id, "accepted", by="test")
         assert f.read_text(encoding="utf-8") == before
         assert queue.get(item_id).status == "pending"

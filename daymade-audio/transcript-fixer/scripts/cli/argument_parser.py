@@ -483,7 +483,7 @@ def create_argument_parser() -> argparse.ArgumentParser:
         choices=["accepted", "overridden", "kept_original", "skipped", "reopen"],
         help="Verdict for --resolve-review: accepted (apply suggestion, or record it "
              "if a hand edit already put it in place), overridden (apply --override-to "
-             "text), kept_original (transcript is correct as spoken), skipped (can't "
+             "text, or record it if already in place), kept_original (transcript is correct as spoken), skipped (can't "
              "judge, or the utterance is gone), reopen (undo a recorded verdict)"
     )
     parser.add_argument(

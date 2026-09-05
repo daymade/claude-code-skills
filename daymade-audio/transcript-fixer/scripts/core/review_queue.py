@@ -32,7 +32,7 @@ import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, NamedTuple
 
 # Ledger frontmatter (`asr_note`) masking, shared with Stage 1 and the AI
 # passes. Imported here so the ACCEPT path honours the same contract the
@@ -71,6 +71,13 @@ class ReAnchorNeeded(ReviewQueueError):
     context recorded at enqueue reappears with the resolved text in its slot is
     a fix applied by hand — the verdict is recorded without writing
     (`_already_applied`). Every other missing-anchor shape still lands here."""
+
+
+class AppliedVerdict(NamedTuple):
+    """Result of `ReviewQueue._already_applied_verdict`."""
+    kind: str                 # applied | survivor | other_form | absent
+    hit_lines: list[int]      # lines where the recorded context reads with `new`
+    other_lines: list[int]    # survivor / other_form lines (empty otherwise)
 
 
 @dataclass
@@ -389,6 +396,27 @@ class ReviewQueue:
 
         lines = content.splitlines()
         matches = [i + 1 for i, ln in enumerate(lines) if item.original_text in ln]
+        masked, _ = _mask_ledger_spans(content)
+        verdict = self._already_applied_verdict(
+            masked, item.original_text, item.suggested_text or "",
+            item.context_snippet, item.line_number)
+        if verdict.hit_lines:
+            # The recorded context already reads with the suggestion: this
+            # row's fix is in place. Re-locating the ORIGINAL would re-point
+            # the row at a different utterance and a later accept would edit
+            # that one under this row's id (observed in review, 2026-09-05).
+            raise ReviewQueueError(
+                f"this row's recorded context already reads with "
+                f"{(item.suggested_text or '')[:60]!r} at line(s) {verdict.hit_lines} — "
+                f"nothing to re-anchor: resolve it with --resolve-review {item_id} "
+                f"--decision accepted (recorded without writing once no look-alike "
+                f"near the hint still carries the original). "
+                + (f"The original at line(s) {matches} belongs to other utterances: "
+                   f"enqueue those separately or fix them by hand. " if matches else "")
+                + f"If "
+                f"line(s) {verdict.hit_lines} is not the utterance this row meant, "
+                f"close the row with --decision skipped --note <why> and enqueue "
+                f"the garbled one afresh")
         if not matches:
             raise ReviewQueueError(
                 f"original {item.original_text[:60]!r} no longer in {path.name} — "
@@ -982,13 +1010,28 @@ class ReviewQueue:
         masked, ledger_spans = _mask_ledger_spans(content)
         count = masked.count(old)
         line_no = action.get("expect_line") or item.line_number
+        verdict = self._already_applied_verdict(
+            masked, old, new, item.context_snippet, line_no)
+        if verdict.kind == "applied":
+            # A hand edit landed the suggestion before the verdict. The
+            # verdict is still "accepted" — recording it as kept_original
+            # would describe the transcript as right as spoken, which it
+            # was not. Nothing is written; the caller logs it as skipped.
+            # This runs before the occurrence count on purpose: a suggestion
+            # that contains the original (阿里→阿里云) leaves `old` in the
+            # file forever, and an original surviving in a different utterance
+            # far from the hint is that utterance's business, not this row's.
+            return None, new
         if count == 0:
-            if self._already_applied(masked, old, new, item.context_snippet):
-                # A hand edit landed the suggestion before the verdict. The
-                # verdict is still "accepted" — recording it as kept_original
-                # would describe the transcript as right as spoken, which it
-                # was not. Nothing is written; the caller logs it as skipped.
-                return None, new
+            if verdict.kind == "other_form":
+                raise ReAnchorNeeded(
+                    f"anchor text not found: {old[:60]!r} — the recorded context "
+                    f"reappears with {new[:60]!r} in its slot at line(s) "
+                    f"{verdict.hit_lines}, but line(s) {verdict.other_lines} carry a "
+                    f"different form there, so which line this row meant is "
+                    f"ambiguous; nothing was modified. Settle those line(s) first "
+                    f"(their own rows, or by hand), then resolve this one"
+                )
             raise ReAnchorNeeded(
                 f"anchor text not found: {old[:60]!r} — the file changed since "
                 f"enqueue (or an earlier action in this pack consumed it) and the "
@@ -1005,7 +1048,26 @@ class ReviewQueue:
             # anchored line already fixed, `count == 1` matched a different
             # line entirely and the careful ladder below never ran. "CONTENT
             # outranks POSITION" has to hold at every count, not just >1.
-            idx = self._locate_anchor(masked, old, line_no, item.context_snippet)
+            try:
+                idx = self._locate_anchor(masked, old, line_no, item.context_snippet)
+            except ReAnchorNeeded as exc:
+                if verdict.hit_lines:
+                    # The recorded context already reads with the suggestion,
+                    # and the original that is left belongs to another
+                    # utterance (or to a look-alike near the hint). Sending the
+                    # reader to --reanchor-review here would re-point this row
+                    # at that other utterance and edit it under this row's id.
+                    base = str(exc).replace(
+                        " (repair with --reanchor-review <id> first)", "")
+                    raise ReAnchorNeeded(
+                        f"{base}. This row's recorded context already reads with "
+                        f"{new[:60]!r} at line(s) {verdict.hit_lines}; the original "
+                        f"surviving at line(s) {verdict.other_lines} belongs to a "
+                        f"different utterance (or a look-alike near the hint) — "
+                        f"settle it on its own row or by hand, then resolve this "
+                        f"row; do not --reanchor-review it onto that line"
+                    ) from exc
+                raise
         edited = masked[:idx] + new + masked[idx + len(old):]
         if ledger_spans:
             edited = _restore_ledger_spans(edited, ledger_spans)
@@ -1014,19 +1076,31 @@ class ReviewQueue:
     @staticmethod
     def _already_applied(
         content: str, old: str, new: str, snippet: Optional[str],
+        line_no: Optional[int] = None, window: int = 3,
     ) -> bool:
+        """True when `_already_applied_verdict` is `applied` — see there."""
+        return ReviewQueue._already_applied_verdict(
+            content, old, new, snippet, line_no, window).kind == "applied"
+
+    @staticmethod
+    def _already_applied_verdict(
+        content: str, old: str, new: str, snippet: Optional[str],
+        line_no: Optional[int] = None, window: int = 3,
+    ) -> "AppliedVerdict":
         """Is the suggestion already sitting where the anchor was?
 
-        The accept path fails closed once `old` is gone, because "gone" alone
-        cannot tell a hand-applied fix from a drifted file. This is the one
-        shape it CAN tell apart: the context recorded at enqueue time reappears
-        somewhere in the file with `new` in the exact slot `old` occupied and
-        the recorded neighbours on both sides of that slot intact. The whole
-        file is searched, not a window around the line hint: frontmatter
-        growth or a deleted paragraph shifts every later line, and a hint that
+        The accept path fails closed once the anchored occurrence cannot be
+        located, because "not where it was" alone cannot tell a hand-applied
+        fix from a drifted file. This is the one shape it CAN tell apart: the
+        context recorded at enqueue time reappears in the file with `new` in
+        the exact slot `old` occupied and the recorded neighbours on both
+        sides of that slot intact. The whole file is searched, not a window
+        around the line hint: frontmatter growth or a deleted paragraph
+        shifts every later line, and with the original gone a hint that
         drifted past the ±3-line resolve window would otherwise strand a row
-        whose fix is in place (the original is gone, so `--reanchor-review`
-        has nothing to re-locate either).
+        whose fix is in place. The occurrence count of `old` is deliberately
+        not a precondition — a suggestion that contains the original
+        (阿里→阿里云) never lets `old` disappear.
 
         Neighbour width is tried from 8 characters down to 2, so a second
         correction on the same line that leaves at least two recorded
@@ -1036,29 +1110,44 @@ class ReviewQueue:
         for the missing side, and a snippet that is the bare token carries no
         neighbours to verify — fail closed. No snippet: fail closed.
 
-        Ambiguity guard: at the width that matched, every occurrence of the
-        recorded neighbourhood in the file must carry `new` in the slot. A line
-        that carries a third form there (the anchored utterance hand-edited to
-        something else, or a look-alike utterance) makes the match ambiguous
-        and the check fails closed — the row then needs a human exit, not a
-        recorded `accepted`. What this cannot detect: the anchored utterance
-        deleted outright while an identical neighbourhood elsewhere already
-        reads with `new`; that shape is indistinguishable from drift and is
-        recorded as accepted without writing (nothing is written either way,
-        and `reopen` re-pends the row). `content` is the ledger-masked text,
-        so an `asr_note` citation of the new form can never satisfy this.
+        Verdicts, each fail-closed except the first:
+          applied     — the neighbourhood reads with `new` and nothing below
+                        contradicts it; `hit_lines` says where.
+          survivor    — `old` still occurs within ±window lines of the hint
+                        outside any occurrence of `new`: the anchored
+                        utterance, or a look-alike right next to it, is still
+                        garbled; the normal locate-and-edit ladder decides.
+          other_form  — the recorded neighbourhood occurs somewhere with a
+                        third form in the slot: anywhere in the file at the
+                        width that matched, or within ±window lines of the
+                        hint at any width down to 2 (a hand edit that changed
+                        the anchored line to something else, with an
+                        adjacent co-edit, is caught here as long as two
+                        recorded characters survive on each side of the
+                        slot). Which line the row meant is ambiguous; the
+                        row needs a human exit, not a recorded `accepted`.
+          absent      — the neighbourhood does not read with `new` anywhere.
+
+        Boundaries this cannot see, by construction: the anchored utterance
+        deleted outright (or rewritten past both neighbours) while an
+        identical neighbourhood elsewhere already reads with `new` — that is
+        indistinguishable from drift and is `applied`; nothing is written
+        either way, `reopen` re-pends the row, and a garble that is still in
+        the file is re-deferred by the next Stage 1 run. `content` is the
+        ledger-masked text, so an `asr_note` citation of the new form can
+        never satisfy this.
         """
         if not old or not new or not snippet or not snippet.strip():
-            return False
-        if old in content:
-            return False
+            return AppliedVerdict("absent", [], [])
         snip = snippet.strip()
-        gap = max(len(old), len(new)) + 2
+        lines = content.splitlines(keepends=True)
+        # 1. Widest recorded neighbourhood that reads with `new` somewhere.
+        found: Optional[tuple[int, str, str]] = None
         start = 0
-        while True:
+        while found is None:
             p = snip.find(old, start)
             if p < 0:
-                return False
+                return AppliedVerdict("absent", [], [])
             start = p + len(old)
             for k in (8, 6, 4, 3, 2):
                 left = snip[max(0, p - k):p]
@@ -1067,29 +1156,61 @@ class ReviewQueue:
                     break
                 if (not left or not right) and len(left + right) < 3:
                     continue
-                if left + new + right not in content:
+                if left + new + right in content:
+                    found = (p, left, right)
+                    break
+        p, left, right = found
+        hit_lines = [i + 1 for i, ln in enumerate(lines) if left + new + right in ln]
+        lo = max(0, (line_no or 1) - 1 - window)
+        hi = min(len(lines), (line_no or 1) + window)
+        # 2. The original itself still near the hint, outside any `new`.
+        if line_no:
+            survivors = [
+                i + 1 for i in range(lo, hi)
+                if old in lines[i].replace(new, "\x00")
+            ]
+            if survivors:
+                return AppliedVerdict("survivor", hit_lines, survivors)
+        # 3. Third forms: whole file at the matched width, hint window at every width.
+        others: set[int] = set()
+        for i, ln in enumerate(lines):
+            if ReviewQueue._slot_holds_other_form(ln, left, right, new):
+                others.add(i + 1)
+        if line_no:
+            for k in (8, 6, 4, 3, 2):
+                l2 = snip[max(0, p - k):p]
+                r2 = snip[p + len(old):p + len(old) + k]
+                if not l2 and not r2:
+                    break
+                if (not l2 or not r2) and len(l2 + r2) < 3:
                     continue
-                return not ReviewQueue._neighbourhood_carries_other_forms(
-                    content, left, right, new, gap)
+                for i in range(lo, hi):
+                    if ReviewQueue._slot_holds_other_form(lines[i], l2, r2, new):
+                        others.add(i + 1)
+        if others:
+            return AppliedVerdict("other_form", hit_lines, sorted(others))
+        return AppliedVerdict("applied", hit_lines, [])
 
     @staticmethod
-    def _neighbourhood_carries_other_forms(
-        content: str, left: str, right: str, new: str, gap: int,
-    ) -> bool:
-        """Does `left … right` occur anywhere with something other than `new`
-        in the slot? Two-sided: any filler up to `gap` characters long on one
-        line. One-sided: the `len(new)` characters adjoining the neighbour."""
+    def _slot_holds_other_form(line: str, left: str, right: str, new: str) -> bool:
+        """Does `left … right` occur on this line with something other than
+        `new` in the slot? Two-sided: the nearest pairing (the filler may not
+        itself contain either neighbour), any length, one line. One-sided: the
+        `len(new)` characters adjoining the neighbour. Matches are found with
+        a lookahead so overlapping occurrences are all examined."""
         if left and right:
-            pattern = re.escape(left) + r"(.{0," + str(gap) + r"}?)" + re.escape(right)
-            return any(m.group(1) != new for m in re.finditer(pattern, content))
+            filler = r"((?:(?!" + re.escape(left) + "|" + re.escape(right) + r").)*?)"
+            pattern = "(?=" + re.escape(left) + filler + re.escape(right) + ")"
+            return any(m.group(1) != new for m in re.finditer(pattern, line))
         if left:
+            n = len(left)
             return any(
-                content[m.end():m.end() + len(new)] != new
-                for m in re.finditer(re.escape(left), content)
+                line[m.start() + n:m.start() + n + len(new)] != new
+                for m in re.finditer("(?=" + re.escape(left) + ")", line)
             )
         return any(
-            content[max(0, m.start() - len(new)):m.start()] != new
-            for m in re.finditer(re.escape(right), content)
+            line[max(0, m.start() - len(new)):m.start()] != new
+            for m in re.finditer("(?=" + re.escape(right) + ")", line)
         )
 
     @staticmethod
@@ -1130,8 +1251,9 @@ class ReviewQueue:
             raise ReAnchorNeeded(
                 f"anchor text appears {content.count(needle)} times but none within "
                 f"±{window} lines of line {line_no} — refusing an ambiguous edit "
-                f"(a fix applied by hand is recognised only once the original is "
-                f"gone from the whole file; surviving occurrences are separate decisions)"
+                f"(a fix applied by hand is recognised when the recorded context reads "
+                f"with the suggestion in its slot and no look-alike near the hint still "
+                f"carries the original; occurrences elsewhere are separate decisions)"
             )
         if snippet and snippet.strip():
             probe = snippet.strip()[:80]
