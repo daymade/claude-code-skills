@@ -1663,7 +1663,7 @@ After packaging, update the marketplace registry to include the new or updated s
 }
 ```
 
-**For updated skills**, bump the version in `plugins[].version` following semver. Any change to a skill's files — even a one-line typo fix — needs a bump: without it, `marketplace update` sees no new version, so **already-installed copies never refresh** and users keep running the old skill while your fix sits unshipped.
+**For updated skills**, bump the version in `plugins[].version` following semver. Any change to a skill's **shipped** files — even a one-line typo fix — needs a bump: without it, `marketplace update` sees no new version, so **already-installed copies never refresh** and users keep running the old skill while your fix sits unshipped. Files that never ship are the one exception, and it is not a judgement call: `scripts/packaging_policy.py` defines that set and the repository's version gate consumes the same module, so a change confined to those paths is not a content change and needs no bump. Without that exception, retiring one local artifact would demand a release from every plugin that happened to carry one.
 
 **Then record it in the changelog — this is the step that gets skipped.** The bump makes the
 update *installable*; the entry is what makes it *findable* six months later, when someone
