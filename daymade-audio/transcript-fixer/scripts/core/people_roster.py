@@ -82,7 +82,19 @@ _NUMERIC_ONLY_RE = re.compile(r'^\d+$')
 # into a different person). Refused at load; the mapping belongs in the owning
 # domain's context file as a cue-scoped trap. Same predicate as the
 # honorific_only check in utils/common_words.py — keep the two in sync.
-_HONORIFIC_ONLY_RE = re.compile(r'^[\u3400-\u4DBF\u4E00-\u9FFF](老师|总)$')
+# The refused atoms are echoed on purpose: a bare number or a surname + honorific
+# is a generic form, not a person's canonical name, and the maintainer needs the
+# exact atom to move; the malformed-atom branch below stays silent because a
+# malformed atom can carry a full name.
+_HONORIFIC_SUFFIXES = ("老师", "老師", "总", "總")
+
+
+def _is_single_surname_honorific(value: str) -> bool:
+    """One CJK character (any block _is_cjk_char knows) + 老师/老師/总/總."""
+    for suffix in _HONORIFIC_SUFFIXES:
+        if value.endswith(suffix) and len(value) == len(suffix) + 1 and _is_cjk_char(value[0]):
+            return True
+    return False
 
 
 def load_people_roster(path: Path) -> Tuple[Dict[str, str], Dict[str, str]]:
@@ -125,7 +137,7 @@ def load_people_roster(path: Path) -> Tuple[Dict[str, str], Dict[str, str]]:
                     if variant and _NUMERIC_ONLY_RE.fullmatch(variant):
                         refused_numeric.append(variant)
                         continue
-                    if variant and _HONORIFIC_ONLY_RE.fullmatch(variant):
+                    if variant and _is_single_surname_honorific(variant):
                         refused_honorific.append(variant)
                         continue
                     # Never map a canonical to itself, and first-seen wins so a
@@ -168,7 +180,7 @@ def load_people_roster(path: Path) -> Tuple[Dict[str, str], Dict[str, str]]:
         unique = sorted(set(refused_honorific))
         print(
             f"⚠️  people roster: refused {len(unique)} single-surname honorific ASR "
-            f"variant(s) from {path.name}: {', '.join(unique)}. A surname + 老师/总 "
+            f"variant(s) from {path.name}: {', '.join(unique)}. A surname + 老师/老師/总/總 "
             "names everyone with that surname, so one person's misheard surname can "
             "never be a global name rule — record that mapping as a cue-scoped trap "
             "in the owning domain's context file instead.",

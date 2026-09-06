@@ -158,7 +158,7 @@ Read [references/false_positive_guide.md](references/false_positive_guide.md) an
 | Stable non-word or unique garble → canonical term | `--add ... --domain <project>` |
 | Important recurring person and observed ASR variants | People roster |
 | Correction right only inside a specific recurring phrase | `--add-context-rule PATTERN REPLACEMENT --domain <project>` (regex, domain-scoped; omit `--domain` for global) |
-| Common/real word wrong only under a cue | Domain context trap, never a bare rule (a bare number or a single surname + 老师/总 is refused at roster load and by `--add`) |
+| Common/real word wrong only under a cue | Domain context trap, never a bare rule (a bare number or a single surname + 老师/总 is refused at roster load and by `--add` / `--import`, `--force` included) |
 | Real name → different real name | Domain context + human/audio verification, never a bare rule |
 | Confirmed-correct entity repeatedly reopened | Confirmed-correct context record |
 | One-off sentence-local wording | Edit only; do not add |

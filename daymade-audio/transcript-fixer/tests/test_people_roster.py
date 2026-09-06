@@ -89,15 +89,15 @@ class PeopleRosterTests(unittest.TestCase):
         # surname must not rewrite them all. A given-name + 总 (明源总) and a bare
         # given-name variant (小铭) still load; quotes do not bypass the gate.
         self.roster_path.write_text(
-            '### 甲强\n- **ASR 变体**: 朱老师, 傅老师, 明源总, 小铭, "王总"\n',
+            '### 甲强\n- **ASR 变体**: 朱老师, 傅老师, 明源总, 小铭, "王总", 朱老師, 王總, 欧阳老师\n',
             encoding="utf-8",
         )
         stderr = io.StringIO()
         with contextlib.redirect_stderr(stderr):
             corrections, _ = load_people_roster(self.roster_path)
-        self.assertEqual(corrections, {"明源总": "甲强", "小铭": "甲强"})
+        self.assertEqual(corrections, {"明源总": "甲强", "小铭": "甲强", "欧阳老师": "甲强"})   # two-char surnames are out of scope by design
         self.assertIn("refused", stderr.getvalue())
-        for refused in ("朱老师", "傅老师", "王总"):
+        for refused in ("朱老师", "傅老师", "王总", "朱老師", "王總"):
             self.assertIn(refused, stderr.getvalue())
 
     def test_quoted_numeric_variant_is_still_refused(self) -> None:
@@ -138,7 +138,7 @@ class PeopleRosterTests(unittest.TestCase):
             "### 甲明\n"
             "- **ASR 变体**: 甲铭\n"
             "- **别名**: 老甲\n"
-            "- **易混**: 李老师\n"
+            "- **易混**: 李铭\n"
         )
         self.assertEqual(corrections, {"甲铭": "甲明"})
 

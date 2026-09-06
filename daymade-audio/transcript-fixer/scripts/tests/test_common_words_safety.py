@@ -53,6 +53,12 @@ class TestSafetyChecks(unittest.TestCase):
         self.assertFalse(any(w.category == "honorific_only"
                              for w in check_correction_safety("明源总", "明远总", strict=True)))
 
+    def test_unforceable_shapes_ignore_surrounding_whitespace(self):
+        """' 95' and '朱老师 ' are the same shapes; the predicate strips before deciding."""
+        self.assertTrue(any(w.category == "numeric_text" for w in check_correction_safety(" 95", "某人")))
+        self.assertTrue(any(w.category == "honorific_only" for w in check_correction_safety("朱老师 ", "甲强")))
+        self.assertTrue(any(w.category == "honorific_only" for w in check_correction_safety("朱老師", "甲强")))
+
     def test_bare_number_is_an_error_in_both_modes(self):
         """A pure-digit from_text matches timestamps/scores everywhere — error, not warning."""
         for strict in (True, False):

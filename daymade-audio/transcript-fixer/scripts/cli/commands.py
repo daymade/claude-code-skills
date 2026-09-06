@@ -541,14 +541,16 @@ def close_sidecars(input_path: Path, output_dir: Path, *, dry_run: bool = False,
                 matched[i] = j
                 used.add(j)
         for i, (entry, state) in enumerate(pair_entries):
-            if state == "raw" and disabled_pairs and pair in disabled_pairs:
-                # The FROM→TO rule was disabled as a false positive after this
-                # report was written: the entry is no longer a question, so it
-                # closes without a verdict and without being re-asked.
-                state = "disabled"
-            elif state == "raw":
+            if state == "raw":
                 if i in matched:
+                    # a queue row is a live question or a recorded verdict; it
+                    # outranks the rule's later retirement
                     state = "pending" if pair_rows[matched[i]][1] == "pending" else "decided"
+                elif disabled_pairs and pair in disabled_pairs:
+                    # The FROM→TO rule was disabled as a false positive after this
+                    # report was written and no active rule is left in scope: the
+                    # entry is no longer a question, so it closes without a verdict.
+                    state = "disabled"
                 else:
                     state = "undecided"
                     undecided.append(entry)
@@ -606,6 +608,21 @@ def close_sidecars(input_path: Path, output_dir: Path, *, dry_run: bool = False,
     return report
 
 
+def _retired_pairs(domains) -> set:
+    """FROM→TO pairs disabled as false positives with no active rule left in scope.
+
+    Scope is the --domain list when given, else every domain. A pair disabled in
+    one domain but still active in another still fires under that domain, so its
+    report entries are still questions — mirroring Stage 1's per-domain veto.
+    """
+    service = _get_service()
+    scope = domains or None
+    disabled = service.get_disabled_pairs(scope)
+    active = {(c.from_text, c.to_text)
+              for c in service.repository.get_all_corrections(domain=scope, active_only=True)}
+    return disabled - active
+
+
 def cmd_close_sidecars(args: argparse.Namespace) -> None:
     """--close-sidecars: mechanical closure of a transcript's review sidecars."""
     if not getattr(args, "input", None):
@@ -630,7 +647,7 @@ def cmd_close_sidecars(args: argparse.Namespace) -> None:
         decided_by=getattr(args, "review_by", None),
         note=getattr(args, "review_note", None),
         queue=_get_review_queue(),
-        disabled_pairs=_get_service().get_disabled_pairs(None),
+        disabled_pairs=_retired_pairs(domains),
     )
     exit_code = {"closed": 0, "open": 1}.get(report["verdict"], 2)
     if getattr(args, "json_output", False):

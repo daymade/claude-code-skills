@@ -177,7 +177,7 @@ the honorific too. List only forms that actually recurred and are safe to reuse.
 (`95` → a person) matches timestamps, scores, and prices in every transcript,
 so the roster loader rejects it with a loud stderr warning instead of letting
 the risk gate defer it a hundred times, and `--add` / `--import` likewise
-refuse a pure-digit FROM with an error. A number genuinely heard as a name in
+refuse a pure-digit FROM with an error that `--force` does not override. A number genuinely heard as a name in
 one recurring context belongs in the owning domain's context file as a
 cue-scoped trap, never on `ASR 变体` or in the dictionary. (Real case 2026-09:
 a roster line carrying a numeric variant deferred 122 items across five files
@@ -190,8 +190,9 @@ like any other common-word variant.
 names everyone with that surname, so one person's misheard surname recorded as a
 variant rewrites people who were named correctly (real case 2026-09-07: seven
 such variants from one meeting turned an unrelated `朱老师` into a different
-person). The loader refuses a one-character surname followed by `老师` or `总`,
-and `--add` / `--import` refuse it as a FROM. A given name plus an honorific
+person). The loader refuses a one-character surname followed by `老师`/`老師` or
+`总`/`總`, and `--add` / `--import` refuse it as a FROM — `--force` does not
+override it either. A given name plus an honorific
 (`明源总`) and a bare misheard name token (`小铭`) still load. When the mapping
 really holds only under a cue, put it in the owning domain's context file.
 
