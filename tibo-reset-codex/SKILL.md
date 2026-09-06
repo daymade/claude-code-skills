@@ -24,7 +24,7 @@ description: >-
 |---|---|---|---|
 | **官宣广域 RESET** | Tibo / OpenAI | 官方 X 原帖；追踪站只作公告索引 | 无固定排期，常用于里程碑或故障补偿 |
 | **静默平台重置** | OpenAI 后端或限额配置发布 | 产品 usage 状态 + 同时段多账户第一手实测 + 排除各自正常周期；官方限额变更只作上下文 | 可以没有 reset 帖；未获官方范围声明时只能称「大范围观测到」，不能称「全员」 |
-| **BANKED reset** | Tibo 推文 | 官宣：追踪站 API（`type=credits`）；到账确认：ChatGPT 产品内余额 | 一次性「存着随你用」的额度包；官宣 ≠ 人人到账（有过分批延迟） |
+| **BANKED reset** | Tibo 推文 | 官宣：追踪站 API（`type=credits`）；到账确认：ChatGPT 产品内余额 | 一次性「存着随你用」的额度包，**到账后不自动消耗**，由用户在 usage 页手动兑现；官宣 ≠ 人人到账（有过分批延迟）。触发形态含里程碑庆祝与故障补偿——§1 所述 rollout 延迟补偿属后者（按无访问天数累积，可一人多笔；2026-09 GPT-6 Astra 补偿即此形态） |
 | **账户级周重置** | 系统按开通日 | ChatGPT 产品内「Next reset: …」 | 每人时间不同，与 Tibo 无关 |
 
 ## 入口分流
@@ -72,6 +72,13 @@ for e in json.load(sys.stdin)['events'][:5]:
 `official_window`、`reset_verification_status`。`type` 是内部小写值：`reset` = 广域
 重置公告、`credits` = banked/额度包、`boost`/`promo` = 消耗规则类。
 
+⚠️ **`type` 是 Radar 编辑者打的标签，不是事件性质的机器判定——跨平台互动也会被打上
+`reset`。** 2026-09-05 实测：Tibo 回复 Anthropic 的 Lydia Hallie（原帖：「We've just reset
+weekly limits for everyone on a Claude Max plan」，Claude 官方学重置传统），只回了句
+「Wow, huge, wonder why!」的调侃，Radar 照样给它 `type=reset`。读原帖是唯一消歧手段；
+fxtwitter 响应里的 `replying_to`（被回复人）+ `replying_to_status`（被回复帖 id）就是为
+这一步准备的字段。
+
 `url` 已在上面命令的输出里（2026-08-31 起直接打印，免去二次查询），拿到后优先读原帖。X 帖正文的制胜通道是 **fxtwitter 公开镜像 API**（2026-08-30 实测：
 免登录、直连即可、返回完整 JSON；**完整正文在 `tweet.text` 字段——不是 `full_text`**，该键
 不存在、照抄会 KeyError；note_tweet 长文全文也给，8-29 官宣长文实测 2324 字符完整拿到、以
@@ -79,7 +86,7 @@ for e in json.load(sys.stdin)['events'][:5]:
 
 ```bash
 curl -sS --max-time 20 "https://api.fxtwitter.com/<user>/status/<status-id>" \
-  | python3 -c "import json,sys; t=json.load(sys.stdin)['tweet']; print(t['created_at']); print(t['text'])"
+  | python3 -c "import json,sys; t=json.load(sys.stdin)['tweet']; print(t['created_at']); print('reply_to:', t.get('replying_to'), t.get('replying_to_status') or ''); print(t['text'])"
 ```
 
 备胎与死路（同日实测）：
@@ -91,8 +98,10 @@ curl -sS --max-time 20 "https://api.fxtwitter.com/<user>/status/<status-id>" \
 - ~~Jina Reader~~ **可用但间歇，不作主通道依赖**：匿名访问 x.com 会因他人滥用被**间歇性全局
   封禁**（403，2026-08-30 实测：封禁数小时后解除，解除后匿名仍能拿到帖子正文；错误信息点名
   触发滥用的第三方账号）；本仓 jina key 已 402 余额尽。fxtwitter 优先，Jina 只作它的备用。
-- fxtwitter 不返回回复内容（`replies` 字段只是数值计数）；帖子下的 Tibo 澄清需要 WebSearch
-  找转录源补充。
+- fxtwitter 不返回回复**内容**（`replies` 字段只是数值计数）；帖子下的 Tibo 澄清需要 WebSearch
+  找转录源补充。但它返回 `replying_to`（被回复人 handle）与 `replying_to_status`（被回复帖
+  id）——**足够判断「这条是不是回复、回复给谁」**，这正是上面 `type` 误标消歧的唯一字段；
+  被回复帖本身再用同一条命令取一次即可。
 
 `codexlimitwatch.com/codex-reset-history` 与 Radar 都以 Tibo 动态为核心上游，属于**同一来源
 家族**，只能互查转录/解析是否一致，不能称为独立双源。**LunarWerx Codex Forecast**
@@ -132,9 +141,11 @@ for i in d.get('incidents',[]): print(' 未解决事故:', i['name'],'|',i['stat
 done
 ```
 
-@ChatGPT 的帖子用 fxtwitter 同一条命令，把 `<user>` 换成 `ChatGPT` 即可。本机走代理时这些
-端点会间歇抖动（同一分钟内 `status.json` 取空而 `summary.json` 成功）——**失败先重试 2–3 次
-再判定端点不可用**，一次失败不构成「站点挂了」。
+@ChatGPT 的帖子用 fxtwitter 同一条命令，把 `<user>` 换成 `ChatGPT` 即可。**本节所有外部端点
+（Radar、fxtwitter、状态页）都会间歇抖动**——本机走代理时实测同一分钟内 `status.json` 取空
+而 `summary.json` 成功、Radar 首跑吐空响应体直接 `JSONDecodeError`、fxtwitter 连续两次
+`SSL_ERROR_SYSCALL` 第三次成功（2026-09-07 独立复测）——**失败先重试 2–3 次再判定端点
+不可用**，一次失败不构成「站点挂了」。
 
 ### 2. 本机取证：Codex rollout 快照 = 可脚本化的第一手账户证据
 
@@ -277,9 +288,16 @@ for pid,name,cur,cfg in c.execute(\"select id,name,is_current,settings_config fr
 （实测该机有一条 DeepSeek，`auth_mode=None`、`email=None`）——那不是 ChatGPT 账号，**不参与
 账号计数**。只看 `auth_mode='chatgpt'` 且 email 非空的行。
 
-- 这类行里出现**与 A 层不同的 email** → 两个账号的直接证据（实测正是这样命中的）。
+- 这类行里出现**与 A 层不同的 email** → 两个账号的直接证据（2026-09-03 与 2026-09-04 两次
+  实测都是这样命中的）。
 - 只有一行且与 A 层一致 → 该层无阳性证据。
 - `email=None` 或 `auth_mode` 非 `chatgpt` 的行 → **忽略**，别拿它跟 A 层比「不一致」。
+
+⚠️ **`is_current=1` 不是「当前登录」的判据。** 它只表示 cc-switch 自己最后切换到谁；用户绕过
+它手工 `codex login` 之后这个标记不会更新。2026-09-04 实测：该机 is_current 指向的
+email 与 A 层 `auth.json` 显示的实际登录 email 是**两个不同的真实账号**——同一份
+读数同时演示了这条陷阱和 B 层的命中形态（两处 email 不一致本身就是多账号的直接证据）。
+**当前登录身份永远以 A 层为准；is_current 只用来回答「这台机器还存过哪些账号」。**
 
 B 层安静**不代表单账户**——它看不见手工 `codex login`。
 
@@ -361,6 +379,14 @@ print(f'\n非单调回退次数: {back}   （0=与单账户一致；>0=多账号
 A–B 之间」，别把「首个见到 0% 的快照时间」当成到账时刻。**另外快照只更新到用户最后一次跑
 Codex 的时刻**——下「至今没有重置」之前先看最新快照有多旧，那之后是盲区；要消除盲区就让
 用户随便跑一条 Codex 命令再读一次。
+
+**rollout 还有一个覆盖边界：它只覆盖当前登录的那一个账号。** 多账号用户的其余账号完全不在
+快照里——2026-09-04~06 实测快照停在 09-03 连续三个 session 不动（用户一直没跑 Codex，盲区
+28h→49h→70h），那只是「这个账号没新观测」，不是「所有账号都没动静」。此时用户从产品 usage
+页抄出的**多账号统计**（每个账号的重置倒计时 + 「有 N 次 full reset」）是覆盖全部账号的
+第一手观测，证据级别等同产品页，还能直接闭环「官宣≠到账」（09-06 实测：4 个付费账号各显示
+两次 full reset，确认前一日官宣的 full banked reset 已全部到账）。引用这类相对倒计时时
+折算成绝对时刻并标注折算时刻（读数时刻 + 已流逝时间），别把「21 小时之后」原样抄给用户。
 
 ```bash
 # 重建本机周额度曲线 + 多账号回跳检查（2026-09-03 实测；上述陷阱均已内置，见带「陷阱 N」注释的行）
@@ -444,7 +470,9 @@ PY
 
 1. **定账户事实**：记录 weekly 与 5h 是否回到 100%、`Next reset` 是否移动、banked reset
    是否仍在，以及变化是否正好发生在此前已显示的正常重置时刻。产品 usage 页或 `/status`
-   只证明该账户，但证据级别高于聚合器的空结果。**本机有 `~/.codex` 就先跑 §2**：它给的是
+   只证明该账户，但证据级别高于聚合器的空结果。**用户口头或聊天里转述的产品页观测**（多账号
+   额度统计、banked 余额、「有 N 次 full reset」）**记为直接观测，与产品页同级**——不必为了
+   「亲眼看」逼用户再截图或跑命令。**本机有 `~/.codex` 就先跑 §2**：它给的是
    同一层证据，但带历史曲线和分钟级归零区间，能直接回答「这次跳变能不能被正常周期解释」。
 2. **找同时段实测**：用当前 UTC/PT 日期搜索最近帖子，例如 `Codex reset today back to 100%`、
    `Codex reset again 5h`、`site:reddit.com/r/codex reset today`。优先截图、明确的前后百分比、

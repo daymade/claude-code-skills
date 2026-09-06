@@ -1157,7 +1157,7 @@
       "description": "查询 ChatGPT/Codex 额度重置时间，区分 Tibo 官宣、未官宣的平台静默重置、banked reset 与账户级周期重置。Use when 用户问「什么时候重置」「额度什么时候恢复」「下次全员重置几点」 「banked reset 到了吗」「Tibo 说了什么」「usage limit when reset」，或说「额度突然回到 100%」「好像/肯定又重置了」。必须用实时产品状态、独立用户实测与公告交叉核验；禁止因 Tibo Radar 没有新条目就否定已经发生的重置，并须把太平洋时间当场换算为北京时间。",
       "source": "./tibo-reset-codex",
       "strict": false,
-      "version": "1.4.0",
+      "version": "1.5.0",
       "category": "utilities",
       "keywords": [
         "chatgpt",
