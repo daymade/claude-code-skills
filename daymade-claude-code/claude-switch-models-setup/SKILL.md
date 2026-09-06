@@ -117,6 +117,16 @@ When the user says something like "set up Claude Code profiles" or "I want to us
    bundle instead — and accept that repo fixes will not reach it until you copy
    again.
 
+   On a machine whose LaunchAgent runs the **pinned plugin copy** (the maintainer
+   layout described in [local-source-sync-architecture.md](references/local-source-sync-architecture.md)),
+   these same links point at that copy's version directory under `.../plugins/cache/...`,
+   not at the checkout, and move only when the pin is advanced
+   ([troubleshooting.md](references/troubleshooting.md), "advance the pin"). The
+   installer refuses to relink such a machine to the checkout
+   (`CSMS_SETUP_RELINK_TO_CHECKOUT=1` overrides), because the daemon and
+   `claude-profile` would then follow whatever branch the checkout sits on. The
+   live-link check above applies to both layouts.
+
 3. **Add shell integration**
    - Source the profile manager in `~/.zshrc` or `~/.bashrc`
    - Add aliases: `csk`, `csks`, `csd`, `csg`, `css`

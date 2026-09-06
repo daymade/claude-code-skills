@@ -28,6 +28,32 @@ echo "Installing Claude Code profile manager..."
 #
 # sync-profile-settings.py was missing from this list while step 6 of the skill
 # depends on it, so a machine set up by this script had no settings converger.
+#
+# A machine whose LaunchAgent runs the PINNED plugin copy (references/
+# local-source-sync-architecture.md, "pinned plugin copy") points these links at
+# a .../plugins/cache/<marketplace>/<plugin>/<version>/... directory and moves
+# them only when the pin is advanced. Relinking such a machine to this checkout
+# would make the daemon and claude-profile follow whatever branch the checkout
+# sits on, so refuse unless the operator says so explicitly.
+for f in claude-profiles.sh \
+         claude-plugins-sync.py \
+         sync-local-skill-sources.py \
+         sync-local-skill-sources-daemon.sh \
+         sync-profile-settings.py; do
+    existing="$CONFIG_DIR/$f"
+    [ -L "$existing" ] || continue
+    target="$(readlink "$existing")"
+    case "$target" in
+        */plugins/cache/*)
+            if [ "${CSMS_SETUP_RELINK_TO_CHECKOUT:-}" != "1" ]; then
+                echo "Refusing to relink: $existing -> $target is a pinned plugin copy." >&2
+                echo "This machine advances these links with the pin (references/troubleshooting.md, 'advance the pin')." >&2
+                echo "Set CSMS_SETUP_RELINK_TO_CHECKOUT=1 to link into this checkout anyway." >&2
+                exit 1
+            fi
+            ;;
+    esac
+done
 for f in claude-profiles.sh \
          claude-plugins-sync.py \
          sync-local-skill-sources.py \

@@ -313,20 +313,7 @@ previous section describes.
 
 This should not happen on current scripts: `sync-local-skill-sources.py` and `claude-plugins-sync.py` share a cross-process lock before writing marketplace JSON, installed plugin metadata, or cache symlinks.
 
-If you still see `FileExistsError` while creating a symlink or `FileNotFoundError` while replacing `known_marketplaces.json`, re-link (not copy — see "Why symlinks and not `cp`" in SKILL.md's install steps; a `cp` here statically forks these files and reintroduces the exact silent-drift failure that section exists to prevent) the installed helper scripts from the source skill and rerun. This is the same explicit install set owned by SKILL.md:
-
-```bash
-REPO=<absolute-path-to-this-repo>/daymade-claude-code/claude-switch-models-setup
-DST=~/.config/claude-switch-models-setup
-mkdir -p "$DST"
-for f in scripts/claude-profiles.sh \
-         scripts/claude-plugins-sync.py \
-         scripts/sync-local-skill-sources.py \
-         scripts/sync-local-skill-sources-daemon.sh \
-         scripts/sync-profile-settings.py; do
-  ln -sf "$REPO/$f" "$DST/$(basename "$f")"
-done
-```
+If you still see `FileExistsError` while creating a symlink or `FileNotFoundError` while replacing `known_marketplaces.json`, re-link the installed helper scripts and rerun. The install set and both link layouts (checkout-linked, or pinned plugin copy) are owned by step 2 of the setup workflow in SKILL.md: do not copy the files (a copy forks them and reintroduces the silent drift that step exists to prevent), and do not relink a pinned machine to the checkout.
 
 Then verify with concurrent version probes:
 

@@ -77,6 +77,50 @@ class SetupTests(unittest.TestCase):
             self.assertEqual(after, before)
             self.assertEqual(after["sync-profile-settings.py"], 0o644)
 
+    def test_setup_refuses_to_relink_a_pinned_machine_to_the_checkout(self) -> None:
+        """Links that already point into a plugins cache belong to the pinned-daemon
+        layout; the installer must not silently turn them into checkout links."""
+        with tempfile.TemporaryDirectory(prefix="tinkle_profile_setup_") as raw:
+            root = Path(raw)
+            copied_skill, copied_scripts = self._copied_skill(root)
+            fake_home = root / "home"
+            config = fake_home / ".config" / "claude-switch-models-setup"
+            config.mkdir(parents=True)
+            pinned_scripts = (
+                root / "plugins" / "cache" / "mkt" / "plugin" / "9.9.9" / "skill" / "scripts"
+            )
+            pinned_scripts.mkdir(parents=True)
+            (pinned_scripts / "claude-profiles.sh").write_text("# pinned\n", encoding="utf-8")
+            (config / "claude-profiles.sh").symlink_to(pinned_scripts / "claude-profiles.sh")
+
+            refused = subprocess.run(
+                ["bash", str(copied_scripts / "setup.sh")],
+                cwd=copied_skill,
+                env={**os.environ, "HOME": str(fake_home)},
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(refused.returncode, 0)
+            self.assertIn("pinned plugin copy", refused.stderr)
+            self.assertEqual(
+                os.readlink(config / "claude-profiles.sh"),
+                str(pinned_scripts / "claude-profiles.sh"),
+            )
+            self.assertFalse((config / "sync-profile-settings.py").exists())
+
+            relinked = subprocess.run(
+                ["bash", str(copied_scripts / "setup.sh")],
+                cwd=copied_skill,
+                env={**os.environ, "HOME": str(fake_home), "CSMS_SETUP_RELINK_TO_CHECKOUT": "1"},
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(relinked.returncode, 0, relinked.stderr)
+            for name in DEPLOYED_SCRIPTS:
+                self.assertEqual((config / name).resolve(), (copied_scripts / name).resolve())
+
     def test_setup_never_overwrites_a_manifest_created_during_seed(self) -> None:
         with tempfile.TemporaryDirectory(prefix="tinkle_profile_setup_") as raw:
             root = Path(raw)

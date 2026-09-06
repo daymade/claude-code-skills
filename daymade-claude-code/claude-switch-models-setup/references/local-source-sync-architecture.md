@@ -144,7 +144,8 @@ Rules:
 
   then repoint the script symlinks under `~/.config/claude-switch-models-setup/` at the
   new version directory. `skill-install-audit.py` reports the gap as `DAEMON_RUNTIME_LAG`;
-  it is the only thing that compares the two numbers.
+  it is the only thing that compares the two numbers. `scripts/setup.sh` refuses to
+  relink such a machine to the checkout; SKILL.md setup step 2 owns the two layouts.
 - Unselected source Skills remain cold inventory. Real directories and third-party
   symlinks in either root are outside automatic retirement.
 
