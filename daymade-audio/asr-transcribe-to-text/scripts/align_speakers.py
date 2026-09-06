@@ -35,6 +35,7 @@ import bisect
 import csv
 import difflib
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -181,21 +182,51 @@ def assign_speakers(times, segments):
     return speakers
 
 
+_LATIN_WORD_CHAR = re.compile(r"[A-Za-z0-9]")
+
+
+def _inside_latin_word(qwen_raw, prev_raw, cur_raw):
+    """True when the boundary between two kept chars sits inside a Latin word:
+    the raw chars are adjacent (nothing was dropped between them) and both are
+    letters/digits. A pause measured there is timing jitter from anchor
+    interpolation, never a real place to cut speech."""
+    return (
+        cur_raw == prev_raw + 1
+        and bool(_LATIN_WORD_CHAR.match(qwen_raw[prev_raw]))
+        and bool(_LATIN_WORD_CHAR.match(qwen_raw[cur_raw]))
+    )
+
+
 def build_turns(qwen_raw, raw_idx, times, speakers, max_gap):
     """Cut turns on speaker change or a pause > max_gap; slice text from the
-    original transcript so punctuation survives."""
+    original transcript so punctuation survives.
+
+    A pause or speaker change that lands inside a Latin word is deferred to the
+    next word boundary: char times inside words are interpolated between
+    whisper word anchors and diarization edges do not align to words, so a cut
+    there is boundary jitter, not speech. Before this, a 49-minute English talk
+    had 53 words cut in half ("honor t" / "o introduce", "Y" / "eah")."""
     turns = []
     n = len(raw_idx)
     if n == 0:
         return turns
     cur_speaker = speakers[0]
     start_i = 0
+    pending_cut = False
     for i in range(1, n):
         gap = (times[i] or 0) - (times[i - 1] or 0)
-        if speakers[i] != cur_speaker or gap > max_gap:
+        if speakers[i] != cur_speaker or gap > max_gap or pending_cut:
+            if _inside_latin_word(qwen_raw, raw_idx[i - 1], raw_idx[i]):
+                # A speaker change or pause measured inside a word is boundary
+                # jitter (diarization or interpolation); nobody switches mid-word.
+                # Cut at the next word boundary instead; the word stays whole
+                # and stays with the turn it started in.
+                pending_cut = True
+                continue
             turns.append((start_i, i, cur_speaker))
             start_i = i
             cur_speaker = speakers[i]
+            pending_cut = False
     turns.append((start_i, n, cur_speaker))
     out = []
     for lo, hi, sp in turns:

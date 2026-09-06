@@ -318,6 +318,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an order-inverted stitched quote — both fixed and re-verified pre-ship.
 
 ### Fixed
+- **daymade-audio** v1.34.1 (asr-transcribe-to-text): `align_speakers.py` no longer cuts a turn inside a Latin word. Char times inside a word are interpolated between whisper anchors and diarization edges do not fall on word boundaries, so a pause or speaker change measured mid-word is boundary jitter; it is now deferred to the next word boundary and the word stays with the turn it started in. A 49-minute English talk went from 53 words cut in half (`honor t` / `o introduce`, `Y` / `eah`) to 0; four regression tests added. Docs: `--no-diarization` drops every timestamp (now stated where the flag is introduced), unattended batches run one file per invocation because a deterministic failure exits the whole multi-input run, and `HF_HUB_OFFLINE=1` keeps the whisper timing leg off the network when the proxy tunnel flaps.
 - **deep-research** v2.4.0 → v2.4.1, **cli-demo-generator** v1.0.0 → v1.0.1,
   **youtube-downloader** v1.1.0 → v1.1.1, **skill-creator** v1.33.0 → v1.33.1,
   **claude-switch-models-setup** and **read-claude-code-history** (both
