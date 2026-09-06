@@ -172,7 +172,7 @@ def main() -> None:
         cmd_probe(args)
     elif getattr(args, "close_sidecars", False):
         cmd_close_sidecars(args)
-    elif getattr(args, "lookup_term", None):
+    elif getattr(args, "lookup_term", None) is not None:
         cmd_lookup(args)
     elif args.input:
         if getattr(args, "json_output", False):

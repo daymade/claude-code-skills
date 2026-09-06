@@ -170,7 +170,7 @@ def create_argument_parser() -> argparse.ArgumentParser:
              "(the human-readable log is routed to stderr). Fields: applied, deferred, "
              "output_path, needs_review_path, input_unchanged, review_enqueued, "
              "stage1_only_incomplete, stage2_total_chunks, stage2_failed_chunks, "
-             "stage2_degraded. All ten status fields are always present. Lets "
+             "stage2_degraded, boundary_refused. All eleven status fields are always present. Lets "
              "consumers stop inferring no-op vs failure from whether a *_stage1.md "
              "sidecar exists. Also applies to the review-queue commands "
              "(--enqueue-review/--list-review/--show-review/--resolve-review)."

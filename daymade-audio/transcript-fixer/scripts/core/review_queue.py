@@ -205,7 +205,7 @@ class ReviewQueue:
     # ==================== Enqueue ====================
 
     def enqueue(self, items: list[dict[str, Any]]) -> dict[str, Any]:
-        """Insert items; duplicates (same file/original/suggested/domain in ANY
+        """Insert items; duplicates (same file/original/suggested/domain/line in ANY
         status) are skipped so re-runs never re-ask an answered question.
         Returns {added: [ids], skipped_duplicates: int, skipped_temp: int,
         rejected_unanchored: [{original, file, reason}], repaired_hints:

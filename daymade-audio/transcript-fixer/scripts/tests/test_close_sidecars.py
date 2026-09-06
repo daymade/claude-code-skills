@@ -119,13 +119,17 @@ class CloseSidecarsBase(unittest.TestCase):
 
 class TestReportParsing(CloseSidecarsBase):
     def test_entries_roundtrip_from_generated_report(self):
-        entries = parse_stage1_report((self.work / "meeting_changes.md").read_text(encoding="utf-8"))
+        entries, declared = parse_stage1_report((self.work / "meeting_changes.md").read_text(encoding="utf-8"))
         self.assertEqual([(e["from"], e["to"], e["line"]) for e in entries],
                          [("巨神", "具身", 7), ("新一", "欣一", 10)])
         self.assertEqual(entries[0]["context"], "看它的到底是巨神模型")
+        self.assertEqual(declared, 2)
 
     def test_empty_report_has_no_entries(self):
-        self.assertEqual(parse_stage1_report("# Stage 1 Correction Report\n\nNo Stage 1 corrections applied.\n"), [])
+        self.assertEqual(parse_stage1_report("# Stage 1 Correction Report\n\nNo Stage 1 corrections applied.\n"), ([], 0))
+
+    def test_unknown_report_shape_is_flagged_not_empty(self):
+        self.assertEqual(parse_stage1_report("# Needs Review\n\n- Line 6: 克劳锐 → Claude (entity)\n"), ([], None))
 
 
 class TestClosure(CloseSidecarsBase):
@@ -166,6 +170,27 @@ class TestClosure(CloseSidecarsBase):
         self.assertEqual(report["entries"]["decided"], 1)
         self.assertFalse((self.work / "meeting_needs_review.md").exists())
 
+    def test_one_decided_row_answers_one_occurrence_not_the_pair(self):
+        # Two occurrences of one pair on different lines are two queue questions
+        # (the queue keys rows by line); a verdict on one leaves the other open.
+        raw = RAW.replace("你更新一下客户端", "你更新一下客户端\n\n发言人丙 00:00:15\n再更新一下服务端")
+        changes = CHANGES + [Change(line_number=13, from_text="新一", to_text="欣一", rule_type="dictionary",
+                                    rule_name="corrections_dict", risk="high")]
+        self._write_transcript(raw.replace("巨神模型", "具身模型"))
+        (self.work / "meeting_changes.md").write_text(_format_changes_report(changes, raw), encoding="utf-8")
+        (self.work / "meeting_needs_review.md").unlink()
+        queue = self._queue()
+        (item_id,) = queue.enqueue([self._row(line=13, context="再更新一下服务端")])["added"]
+        queue.resolve(item_id, "kept_original", note="子串误命中", by="tester")
+        report = self._close(queue=queue)
+        self.assertEqual(report["verdict"], "open")
+        self.assertEqual((report["entries"]["decided"], report["entries"]["undecided"]), (1, 1))
+        self.assertEqual(report["blockers"]["undecided"][0]["line"], 10)
+        self.assertTrue((self.work / "meeting_changes.md").exists())
+        (item2,) = queue.enqueue([self._row(line=10)])["added"]
+        queue.resolve(item2, "kept_original", note="子串误命中", by="tester")
+        self.assertEqual(self._close(queue=queue)["verdict"], "closed")
+
     def test_pending_queue_row_keeps_the_file_open(self):
         self._write_transcript(RAW.replace("巨神模型", "具身模型"))
         queue = self._queue()
@@ -205,25 +230,67 @@ class TestClosure(CloseSidecarsBase):
         self.assertEqual(report["decisions_recorded"], 0)
         self.assertEqual(queue.list_items(file_path=str(self.transcript)), [])
 
-    def test_unpromoted_stage2_is_retained_unless_discarded(self):
+    def _assert_newer_run_output_is_retained_unless_discarded(self, suffix: str):
         self._write_transcript(RAW.replace("巨神模型", "具身模型").replace("更新一下", "更欣一下"))
-        stage2 = self._sidecar("_stage2.md", NOW + 60, "api output\n")
+        newer = self._sidecar(suffix, NOW + 60, "run output\n")
         report = self._close()
         self.assertEqual(report["verdict"], "closed")
-        self.assertEqual(report["sidecars"]["retained"], [stage2.name])
-        self.assertTrue(stage2.exists())
+        self.assertEqual(report["sidecars"]["retained"], [newer.name])
+        self.assertTrue(newer.exists())
         self.assertFalse((self.work / "meeting_changes.md").exists())
         report2 = self._close(discard_unpromoted=True)
-        self.assertEqual(report2["sidecars"]["removed"], [stage2.name])
-        self.assertFalse(stage2.exists())
+        self.assertEqual(report2["sidecars"]["removed"], [newer.name])
+        self.assertFalse(newer.exists())
+
+    def test_unpromoted_stage2_is_retained_unless_discarded(self):
+        self._assert_newer_run_output_is_retained_unless_discarded("_stage2.md")
+
+    def test_unpromoted_dryrun_is_retained_unless_discarded(self):
+        self._assert_newer_run_output_is_retained_unless_discarded("_dryrun.md")
 
     def test_ledger_citation_in_asr_note_is_not_the_raw_form(self):
-        # Body applied; only the asr_note ledger still quotes 巨神.
-        body_applied = RAW.replace("巨神模型", "具身模型").replace("更新一下", "更欣一下")
-        self.assertIn("巨神→具身", body_applied)   # the citation survives in frontmatter
-        self._write_transcript(body_applied)
+        # The anchored line is rewritten past both probes, so the only place the
+        # original still occurs is the asr_note ledger citation.
+        rewritten = RAW.replace("看它的到底是巨神模型", "看它的其实是这个模型").replace("更新一下", "更欣一下")
+        self.assertIn("巨神→具身", rewritten)   # the citation survives in frontmatter
+        self._write_transcript(rewritten)
+        self.assertEqual(self._close(dry_run=True)["verdict"], "closed")   # gone: masked, absent
+        # Without the ledger mask that citation would read as the raw form and hold the file open.
+        import core.dictionary_processor as dp
+        saved = dp.project_without_ledger_values
+        dp.project_without_ledger_values = lambda text: text
+        try:
+            report = self._close(dry_run=True)
+        finally:
+            dp.project_without_ledger_values = saved
+        self.assertEqual(report["verdict"], "open")
+        self.assertEqual([u["from"] for u in report["blockers"]["undecided"]], ["巨神"])
+
+    def test_sibling_edit_on_the_same_line_keeps_a_surviving_original_open(self):
+        # A native pass reworded the neighbourhood (到底→究竟) but left 巨神 in place:
+        # the anchor no longer matches either probe, yet the original is still there.
+        self._write_transcript(RAW.replace("看它的到底是巨神模型", "看它的究竟是巨神模型").replace("更新一下", "更欣一下"))
         report = self._close()
-        self.assertEqual(report["verdict"], "closed")
+        self.assertEqual(report["verdict"], "open")
+        self.assertEqual([u["from"] for u in report["blockers"]["undecided"]], ["巨神"])
+        self.assertTrue((self.work / "meeting_changes.md").exists())
+
+    def test_unreadable_report_blocks_instead_of_closing(self):
+        self._write_transcript(RAW.replace("巨神模型", "具身模型").replace("更新一下", "更欣一下"))
+        hand_written = self.work / "meeting_needs_review.md"
+        hand_written.write_text("# Needs Review\n\n- Line 7: 巨神 → 具身 (dictionary)\n", encoding="utf-8")
+        report = self._close()
+        self.assertEqual(report["verdict"], "blocked")
+        self.assertEqual(report["blockers"]["report_unparsed"], ["meeting_needs_review.md"])
+        self.assertEqual(report["sidecars"]["removed"], [])
+        self.assertTrue(hand_written.exists())
+        # A declared count above what parses is the same failure.
+        changes = self.work / "meeting_changes.md"
+        changes.write_text(changes.read_text(encoding="utf-8").replace("- **From**: `巨神`", "- **From**: `巨`神`", 1), encoding="utf-8")
+        hand_written.unlink()
+        report = self._close()
+        self.assertEqual(report["verdict"], "blocked")
+        self.assertEqual(report["blockers"]["report_unparsed"], ["meeting_changes.md"])
 
     def test_rewritten_anchor_counts_as_closed(self):
         # The utterance was reworded past both forms; the queue row is the only authority.
@@ -266,6 +333,22 @@ class TestCommandSurface(CloseSidecarsBase):
         code, payload = self._run()
         self.assertEqual((code, payload["verdict"]), (0, "closed"))
         self.assertFalse((self.work / "meeting_changes.md").exists())
+
+    def test_missing_transcript_and_missing_output_dir_exit_2(self):
+        code, payload = self._run(input=str(self.work / "nope.md"))
+        self.assertEqual((code, payload["error"]), (2, "input_not_found"))
+        code, payload = self._run(output=str(self.root / "elsewhere"))
+        self.assertEqual((code, payload["error"]), (2, "output_not_found"))
+        self.assertTrue((self.work / "meeting_changes.md").exists())
+
+    def test_output_dir_is_the_one_searched_and_reported(self):
+        other = self.root / "other"
+        other.mkdir()
+        self._write_transcript(RAW.replace("巨神模型", "具身模型").replace("更新一下", "更欣一下"))
+        code, payload = self._run(output=str(other))
+        self.assertEqual((code, payload["verdict"], payload["dir"]), (0, "closed", str(other.resolve())))
+        self.assertEqual(payload["sidecars"]["present"], [])
+        self.assertTrue((self.work / "meeting_changes.md").exists())   # the transcript's own dir was not touched
 
     def test_missing_input_is_a_usage_error(self):
         out = io.StringIO()

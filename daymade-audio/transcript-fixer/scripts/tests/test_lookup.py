@@ -48,8 +48,9 @@ class TestLookup(unittest.TestCase):
         service = commands._get_service()
         service.add_correction("克劳锐", "Claude", "testdom", notes="garble", force=True)
         service.add_correction("旧形", "新形", "testdom", force=True)
-        service.report_false_positive("旧形", "新形", domain="testdom") if hasattr(service, "report_false_positive") else None
+        self.assertTrue(service.report_false_positive("旧形", "新形", domain="testdom"))
         service.add_context_rule("妙计(?=比)", "妙记", domain="testdom", description="feishu minutes cue")
+        service.add_context_rule("妙计(?=好)", "妙记", domain="otherdom", description="unrelated domain")
         work = self.root / "work"
         work.mkdir()
         transcript = work / "meeting.md"
@@ -85,13 +86,26 @@ class TestLookup(unittest.TestCase):
 
     def test_disabled_rule_is_still_reported(self):
         payload = self._lookup("旧形")
-        self.assertEqual(len(payload["dictionary"]), 1)
-        # Whether or not the false-positive report disabled it, the row is listed
-        # with its state visible rather than hidden.
-        self.assertIn("is_active", payload["dictionary"][0])
+        # The false-positive report disabled the rule; lookup lists it anyway, marked.
+        self.assertEqual([(d["from"], d["is_active"]) for d in payload["dictionary"]], [("旧形", False)])
+
+    def test_blank_term_is_a_usage_error(self):
+        for term in ("", "   "):
+            with self.subTest(term=repr(term)):
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    with self.assertRaises(SystemExit) as cm:
+                        cmd_lookup(Namespace(lookup_term=term, domain=None, json_output=True))
+                self.assertEqual(cm.exception.code, 2)
+                self.assertEqual(json.loads(out.getvalue())["error"], "usage")
+
+    def test_multi_domain_narrows_context_rules_to_global_plus_named(self):
+        self.assertEqual(sorted(r["domain"] for r in self._lookup("妙计")["context_rules"]), ["otherdom", "testdom"])
+        self.assertEqual([r["domain"] for r in self._lookup("妙计", domain="testdom,zzz")["context_rules"]], ["testdom"])
 
     def test_context_rule_roster_and_queue_sections(self):
-        self.assertEqual([r["pattern"] for r in self._lookup("妙计")["context_rules"]], ["妙计(?=比)"])
+        self.assertEqual(sorted(r["pattern"] for r in self._lookup("妙计")["context_rules"]), ["妙计(?=好)", "妙计(?=比)"])
+        self.assertEqual([r["pattern"] for r in self._lookup("妙计", domain="testdom")["context_rules"]], ["妙计(?=比)"])
         roster = self._lookup("章三")["roster"]
         self.assertTrue(roster["path"].endswith("people.md"))
         self.assertEqual(roster["hits"], [{"variant": "章三", "canonical": "张三"}])
