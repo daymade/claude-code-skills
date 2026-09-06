@@ -37,7 +37,6 @@ _SEGMENTER_UNAVAILABLE = False
 # enough for the longest ordinary word to complete on either side, narrow
 # enough that a distant garble cannot reshape the tokens around this one.
 _STRADDLE_WINDOW = 8
-_ASCII_ALNUM_RE = re.compile(r"[A-Za-z0-9]+")
 
 
 def _get_segmenter():
@@ -56,8 +55,9 @@ def _get_segmenter():
 def straddles_word_boundary(text: str, pos: int, match: str) -> bool:
     """True when the match at ``pos`` is a fragment of real words, not a mishearing.
 
-    Two rules, chosen by script. For an ASCII-alphanumeric match the question
-    is the classic word boundary: an ASCII *letter* immediately before or after
+    Two rules, chosen by script. For a pure-ASCII match (letters, digits,
+    spaces or punctuation — ``Cloud Code`` included) the question is the
+    classic word boundary: an ASCII *letter* immediately before or after
     the match means the match is inside a longer word (``Cloud`` in ``iCloud``,
     ``Joe`` in ``Joey``); digits do not count, so ``cloud3`` and ``fiber5``
     still correct. For anything containing CJK, a dictionary-only jieba cut of
@@ -70,12 +70,13 @@ def straddles_word_boundary(text: str, pos: int, match: str) -> bool:
     like, so those pass through to risk scoring unchanged; so does a match that
     is exactly one segment. The remaining blind spot is a real mishearing whose
     neighbours complete whole words on both sides; safe mode only ever deferred
-    that class, the native read-through still owns it, and ``--apply-all`` or a
-    context rule overrides the check.
+    that class, the native read-through still owns it, and ``--apply-all``
+    switches the check off. A context rule skips the check but is still risk
+    scored, so in safe mode it is deferred rather than applied.
     """
     if not match:
         return False
-    if _ASCII_ALNUM_RE.fullmatch(match):
+    if match.isascii():
         before = text[pos - 1] if pos > 0 else ""
         after = text[pos + len(match)] if pos + len(match) < len(text) else ""
         return before.isascii() and before.isalpha() or after.isascii() and after.isalpha()
@@ -446,7 +447,9 @@ class DictionaryProcessor:
         2. Boundary check (short rules only): Check if the match is inside
            a longer common word (e.g., "天差" inside "天差地别").
 
-        3. Risk classification: low/medium/high based on confidence and
+        3. Word-boundary straddle check (every rule): a fragment of real
+           words by script is skipped and counted (see straddles_word_boundary).
+        4. Risk classification: low/medium/high based on confidence and
            common-word membership. In review_mode, high/medium changes are
            tracked but not applied.
         """

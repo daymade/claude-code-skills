@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Safety layer 2b: a dictionary match that is a fragment of real words is refused.
+"""Match-time safety check 3: a dictionary match that is a fragment of real words is refused.
 
 Two rules by script. ASCII-alphanumeric matches use the classic word boundary
 (an ASCII letter next to the match means it is inside a longer word; digits do
@@ -59,9 +59,9 @@ class TestStraddlesWordBoundary(unittest.TestCase):
 
     def test_ascii_match_uses_letter_adjacency_not_digits(self):
         refused = [("苹果的 iCloud 邮箱", "Cloud"), ("Joey said", "Joe"), ("a broker fee", "roker"),
-                   ("GPT4o is out", "GPT4")]
+                   ("GPT4o is out", "GPT4"), ("我在 iCloud Code 里", "Cloud Code")]   # multi-word ASCII too
         allowed = [("我用cloud3写的", "cloud"), ("cloud fiber5 模型", "fiber"), ("Cloud Code", "Cloud"),
-                   ("Cloud是错的", "Cloud"), ("Apple Pay 的 APIT 现在", "APIT")]
+                   ("Cloud是错的", "Cloud"), ("Apple Pay 的 APIT 现在", "APIT"), ("用 Cloud Code 写", "Cloud Code")]
         for text, match in refused:
             with self.subTest(text=text, match=match):
                 self.assertTrue(straddles_word_boundary(text, text.index(match), match))

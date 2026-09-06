@@ -191,6 +191,45 @@ class TestClosure(CloseSidecarsBase):
         queue.resolve(item2, "kept_original", note="子串误命中", by="tester")
         self.assertEqual(self._close(queue=queue)["verdict"], "closed")
 
+    def _two_occurrence_fixture(self):
+        # 巨神 at L7 and L13; the report carries both plus 新一 at L10.
+        raw = RAW + "\n发言人丙 00:00:15\n这个巨神智能的方向\n"
+        changes = CHANGES + [Change(line_number=13, from_text="巨神", to_text="具身", rule_type="dictionary",
+                                    rule_name="corrections_dict", risk="high")]
+        (self.work / "meeting_changes.md").write_text(_format_changes_report(changes, raw), encoding="utf-8")
+        (self.work / "meeting_needs_review.md").unlink()
+        return raw
+
+    def test_applied_occurrence_keeps_its_own_row_from_a_bare_second_one(self):
+        # L7's row is accepted and L7 reads applied; L13 is still 巨神 with no row.
+        # The accepted row must not be borrowed by L13.
+        raw = self._two_occurrence_fixture()
+        self._write_transcript(raw.replace("更新一下", "更欣一下"))
+        queue = self._queue()
+        (item_id,) = queue.enqueue([self._row(frm="巨神", to="具身", line=7, context="看它的到底是巨神模型")])["added"]
+        queue.resolve(item_id, "accepted", by="tester")
+        self.assertIn("具身模型", self.transcript.read_text(encoding="utf-8"))
+        report = self._close(queue=queue, dry_run=True)
+        self.assertEqual(report["verdict"], "open")
+        self.assertEqual((report["entries"]["applied"], report["entries"]["decided"], report["entries"]["undecided"]), (2, 0, 1))
+        self.assertEqual(report["blockers"]["undecided"][0]["line"], 13)
+        self.assertEqual(report["sidecars"]["removed"], [])
+
+    def test_pending_row_on_one_occurrence_leaves_the_other_undecided_for_decide_raw(self):
+        # L13 has a pending row; L7 is raw with no row: L7 is undecided (so
+        # --decide-raw records it), L13 is pending, and the file stays open.
+        raw = self._two_occurrence_fixture()
+        self._write_transcript(raw.replace("更新一下", "更欣一下"))
+        queue = self._queue()
+        (pending_id,) = queue.enqueue([self._row(frm="巨神", to="具身", line=13, context="这个巨神智能的方向")])["added"]
+        report = self._close(queue=queue, decide_raw="kept_original", decided_by="tester", note="子串", domain="testdom")
+        self.assertEqual(report["verdict"], "open")
+        self.assertEqual(report["blockers"]["pending_ids"], [pending_id])
+        self.assertEqual((report["entries"]["pending"], report["entries"]["decided"], report["entries"]["undecided"]), (1, 1, 0))
+        self.assertEqual(report["decisions_recorded"], 1)
+        recorded = queue.list_items(file_path=str(self.transcript), status="kept_original")
+        self.assertEqual([(r.original_text, r.line_number) for r in recorded], [("巨神", 7)])
+
     def test_pending_queue_row_keeps_the_file_open(self):
         self._write_transcript(RAW.replace("巨神模型", "具身模型"))
         queue = self._queue()

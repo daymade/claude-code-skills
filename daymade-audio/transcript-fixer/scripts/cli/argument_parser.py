@@ -465,7 +465,7 @@ def create_argument_parser() -> argparse.ArgumentParser:
         dest="lookup_term",
         help="Show every trace of TERM: dictionary rules where it is FROM or TO (active "
              "and disabled), context rules, roster-loaded name variants, review-queue "
-             "rows; --domain narrows the dictionary scope"
+             "rows; --domain narrows the dictionary and context-rule sections"
     )
     parser.add_argument(
         "--show-review",

@@ -512,44 +512,40 @@ def close_sidecars(input_path: Path, output_dir: Path, *, dry_run: bool = False,
     rows = queue.list_items(file_path=str(input_path), limit=5000) if queue is not None else []
     pending_ids = sorted(r.id for r in rows if r.status == "pending")
     # The queue keys a row by line as well as by pair (two occurrences are two
-    # questions), so one decided row answers one report entry, matched by
-    # nearest line — a native pass shifts later lines but keeps their order —
-    # and a second occurrence with no row of its own stays undecided.
-    decided_lines: dict[tuple[str, str], list[int]] = {}
-    pending_pairs: set[tuple[str, str]] = set()
+    # questions), so one row answers one report entry, matched by nearest line
+    # across EVERY entry of the pair: an applied or gone entry claims its own
+    # row first, so a decided row is never borrowed by a second occurrence that
+    # has none. A raw entry matched to a pending row is pending; a raw entry
+    # with no row of its own is undecided — and is what --decide-raw records.
+    rows_by_pair: dict[tuple[str, str], list[tuple[int, str]]] = {}
     for r in rows:
-        pair = (r.original_text, r.suggested_text)
-        if r.status == "pending":
-            pending_pairs.add(pair)
-        else:
-            decided_lines.setdefault(pair, []).append(r.line_number if r.line_number is not None else -1)
+        rows_by_pair.setdefault((r.original_text, r.suggested_text), []).append(
+            (r.line_number if r.line_number is not None else -1, r.status))
 
     undecided: list[dict] = []
-    raw_by_pair: dict[tuple[str, str], list[dict]] = {}
+    entries_by_pair: dict[tuple[str, str], list[tuple[dict, str]]] = {}
     for entry in entries:
-        state = _report_entry_state(entry, canonical)
-        if state == "raw":
-            raw_by_pair.setdefault((entry["from"], entry["to"]), []).append(entry)
-        else:
-            report["entries"][state] += 1
-    for pair, raw_entries in raw_by_pair.items():
-        lines = decided_lines.get(pair, [])
-        answered: set[int] = set()
+        entries_by_pair.setdefault((entry["from"], entry["to"]), []).append(
+            (entry, _report_entry_state(entry, canonical)))
+    for pair, pair_entries in entries_by_pair.items():
+        pair_rows = rows_by_pair.get(pair, [])
+        matched: dict[int, int] = {}   # entry index -> row index
         used: set[int] = set()
         # closest (entry, row) distances first, each side used at most once
         for _, i, j in sorted((abs(ln - e["line"]), i, j)
-                              for i, e in enumerate(raw_entries) for j, ln in enumerate(lines)):
-            if i not in answered and j not in used:
-                answered.add(i)
+                              for i, (e, _state) in enumerate(pair_entries)
+                              for j, (ln, _status) in enumerate(pair_rows)):
+            if i not in matched and j not in used:
+                matched[i] = j
                 used.add(j)
-        for i, entry in enumerate(raw_entries):
-            if i in answered:
-                report["entries"]["decided"] += 1
-            elif pair in pending_pairs:
-                report["entries"]["pending"] += 1
-            else:
-                report["entries"]["undecided"] += 1
-                undecided.append(entry)
+        for i, (entry, state) in enumerate(pair_entries):
+            if state == "raw":
+                if i in matched:
+                    state = "pending" if pair_rows[matched[i]][1] == "pending" else "decided"
+                else:
+                    state = "undecided"
+                    undecided.append(entry)
+            report["entries"][state] += 1
     undecided.sort(key=lambda e: e["line"])
     report["entries"]["total"] = len(entries)
 
@@ -615,7 +611,7 @@ def cmd_close_sidecars(args: argparse.Namespace) -> None:
         output_dir = Path(args.output).expanduser()
         if not output_dir.is_dir():
             _queue_cmd_error(args, "output_not_found",
-                             f"--output directory does not exist: {output_dir}", code=2)
+                             f"--output is not an existing directory: {output_dir}", code=2)
         output_dir = output_dir.resolve()
     domains = _parse_domains(getattr(args, "domain", None))
     report = close_sidecars(
@@ -1428,7 +1424,7 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
             speaker_labels=speaker_labels,
         )
         # --apply-all is the operator's explicit "apply every match" override:
-        # it also switches off the word-boundary refusal (safety layer 2b).
+        # it also switches off the word-boundary refusal (match-time safety check 3).
         stage1_text, stage1_changes = processor.process(
             original_text, review_mode=review_mode, boundary_check=not apply_all)
 
@@ -1709,7 +1705,7 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
         "stage2_failed_chunks": stage2_failed_chunks,
         "stage2_degraded": stage2_failed_chunks > 0,
         # Additive: dictionary matches refused at word boundaries this run
-        # (safety layer 2b) — neither applied nor deferred, so a caller
+        # (match-time safety check 3) — neither applied nor deferred, so a caller
         # comparing runs can see why a deferral disappeared.
         "boundary_refused": boundary_refused,
     }

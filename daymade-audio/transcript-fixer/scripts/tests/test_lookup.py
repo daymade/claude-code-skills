@@ -12,6 +12,7 @@ import io
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -98,6 +99,14 @@ class TestLookup(unittest.TestCase):
                         cmd_lookup(Namespace(lookup_term=term, domain=None, json_output=True))
                 self.assertEqual(cm.exception.code, 2)
                 self.assertEqual(json.loads(out.getvalue())["error"], "usage")
+
+    def test_blank_term_through_the_cli_entrypoint_is_a_usage_error(self):
+        # The dispatch in fix_transcription.py must not fall through to argparse help (exit 0).
+        script = Path(__file__).resolve().parent.parent / "fix_transcription.py"
+        proc = subprocess.run([sys.executable, str(script), "--lookup", "", "--json"],
+                              capture_output=True, text=True, env=dict(os.environ), timeout=180)
+        self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
+        self.assertEqual(json.loads(proc.stdout.strip().splitlines()[-1])["error"], "usage")
 
     def test_multi_domain_narrows_context_rules_to_global_plus_named(self):
         self.assertEqual(sorted(r["domain"] for r in self._lookup("妙计")["context_rules"]), ["otherdom", "testdom"])
