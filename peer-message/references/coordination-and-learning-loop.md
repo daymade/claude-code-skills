@@ -1,6 +1,6 @@
 ---
 name: peer-message-coordination-and-learning-loop
-description: Parent/worker reply addressing, payload design, delivery-language discipline, evidence that stays valid while its subject is still changing, verifying inbound peer assertions before acting or replying, reading a set of peer denials without turning it into an ownership conclusion, and an evidence-gated loop for improving peer-message from real operation traces.
+description: Parent/worker reply addressing, payload design, delivery-language discipline, evidence that stays valid while its subject is still changing, verifying inbound peer assertions before acting or replying, what to do when you find another session's in-flight work on a shared resource (verify it is live, ask the owner, wait a bounded window, continue on an isolated copy), reading a set of peer denials without turning it into an ownership conclusion, and an evidence-gated loop for improving peer-message from real operation traces.
 ---
 
 # 协调回传与证据驱动演进
@@ -91,13 +91,34 @@ peer 给共享产物归类时，手上常常只有一个二元标记：某条记
 | **Expected evidence** | 回复里写出**计数**：查了哪几条、其中多少条同样缺这个标记；标记是多值而不是有/无时（同一个字段三种写法、两种大小写），写出取值分布而不是「有没有」。**给数，不给结论**——是基线还是信号，由发问方看着这组数自己说。「我确认不是我写的」是关于你的证据，不是对判据的标定 |
 | **If missing** | 一条可比邻居都取不到（只此一条、标记本身刚引入、样本全来自你自己）就写 `unknown` 并说明判据无从标定，不替对方下「异常/正常」的判断 |
 | **Do not infer** | 标记在你的记录上有、在争议记录上没有，不等于争议记录不是你写的：工具版本、调用路径、执行时段都会改变标记产不产生。反向同样不成立 |
-| **Stop** | **无论这组数看起来像什么**，都不替对方把产物归给「未知写者」，也不据此对产物做不可逆动作。这条不设解除条件：你交的是邻居读回，归属结论归发问方；真要处置就走 §5 |
+| **Stop** | **无论这组数看起来像什么**，都不替对方把产物归给「未知写者」，也不据此对产物做不可逆动作。这条不设解除条件：你交的是邻居读回，归属结论归发问方；真要处置就走 §5.2 |
 
 一个真实形态：peer 问某条提交是不是我写的，依据是它缺少 session trailer。我的账本足以回答「不是我」——但同一分支相邻的几条提交缺的是**同一个**标记，带着它的反倒只有我自己那一条。缺失是这条分支的基线。只回「不是我」，对方会带着一个不区分的判据继续走向「未知写者」；把邻居的读回一并给它，它才知道该换判据。
 
-## 5. 向 peer 群体求证时，否认的集合不是结论
+## 5. 共享产物上有别人的痕迹：先问属主，再读否认
 
-这是上一节的发送侧镜像：那一节管住不要照收 peer 说的，这一节管住不要过度相信 peer **没有**说的。
+两个方向的同一件事。§5.1 管你**发现**别人的在制品时怎么核实、怎么开口、等多久、等不到怎么继续；§5.2 管你问过一圈之后，**否认**值多少。两节都不把「没人认领」换算成「可处置」。
+
+### 5.1 发现别人的在制品：先核实，再问，等一个有界窗口
+
+承重的一句：**别人的在制品是一个待协调的事实，不是你的停止条件。** 停在它面前和绕开它，结局一样——一条消息就能解决的冲突被留给了用户，而用户看到的是两个都能说话的 session 谁也没开口。
+
+| 字段 | 内容 |
+|---|---|
+| **When** | 你要动的共享产物（checkout、分支、文件、锁、DB 行）上有别人的痕迹——未提交改动、别的分支被 checkout、锁被持有——而它挡住了你的下一步；或者你正准备「绕开它」（另开副本、复制一份、改别的文件）却还没问过任何人 |
+| **Do** | ① 先用产物自己的权威源核实它是不是真在飞：`git diff <不可变 ref> -- <路径>` 为空 = 已落地的残影；`git log` / `git status` 看分支与时间；锁看持有它的 pid 是否还活着。② 真在飞才发问：`list`（官方 `ListAgents` 或 `peer.py list`）找候选属主，**逐个单发**、不广播，正文按 §2 的结构：你要做什么、看到了什么（路径 + 观测时间）、问三件事——是不是你的、什么时候落、要我等还是你先收尾。③ 等一个有界窗口；官方 `SendMessage` 可对同机 session 订阅一次性空闲通知（`references/official-feature.md` §3），别轮询、别重发。④ 回复到了按回复走；没到，见 If missing |
+| **Expected evidence** | 核实那一步的读回（diff 为空/非空、锁 pid 活/死）；发出的消息 ID 与对方的回复（`in_reply_to` 或明确答复）。「我看见它脏了」不是证据，「它相对不可变 ref 有差异」才是 |
+| **If missing** | 窗口内无人认领：在从不可变 ref 建的独立 worktree 或副本上继续，**不碰它的文件、不切它的分支、不释放它的锁**；报告里写明问过谁（口径按 §5.2 的四项）、谁没回、以哪个 ref 为基线；归属仍是 `unknown` |
+| **Do not infer** | 没人回 ≠ 没人在做（对方可能 busy、被 hold、或在另一台机器上）；残影 ≠ 在制品（只有 diff 才能分开，mtime 与 `status` 都分不开）；「我开了独立副本」≠ 冲突消失——落地时仍要 rebase 到最新 main，且对方落地后你的副本就过期了 |
+| **Stop** | 属主明确说「别动 / 等我」就停在它划的线外；要做的动作命中删除、push、发布、覆盖别人改动这类边界时，回到 `SKILL.md` 的信任边界并向当前用户确认；无论问了几圈，都不把无人认领当「可处置」——那是 §5.2 的 Stop，这里同样成立 |
+
+**你自己落地后，把残影清掉。** 你的 PR 合入之后，共享工作树里本次触及的路径要对齐到新 main：判据用内容，`git hash-object <f>` 对 `git rev-parse origin/main:<f>` 逐文件比，相同即停；只对齐你触及的路径，别顺手清别人的脏文件。谁最后把 main 推进了，谁做这一步——你知道哪些路径动了、合并何时落、人就在键盘前；「等原作者回来对齐」会稳定地卡住。残影正是本节第一步要排除的假阳性：留着它，下一个 session 就会对着你已经合入的内容再问一圈。
+
+一个真实形态，同一周的两段：一个 session 在共享 checkout 上看到 transcript-fixer 停在别人的分支、带着别人的脏文件，把它当阻塞停手报给用户；用户的回应是「你们为什么不能一起工作呢？你们都可以互相沟通的」。第二天同一个 session 在同一个仓撞见 peer-message 的「未提交改动」：先跑 `git diff origin/main -- peer-message/`，为空；再向两个候选属主各发一条，一个回「不是我」，属主回「是我的，已合入，那是残影，别等我」。前后不到十分钟，没有一步是干等。
+
+### 5.2 向 peer 群体求证时，否认的集合不是结论
+
+这是 §4 的发送侧镜像：那一节管住不要照收 peer 说的，这一节管住不要过度相信 peer **没有**说的。
 
 承重的一句是：**你能枚举到的集合，不等于能影响那个产物的集合。** 能改一个路径的是「任何对它有写权限的东西」——从未登记的写者、定时任务、人，以及枚举不到的那部分已退出 session。所以「问了一圈都说不是我」只是关于你枚举到的那几个的事实，不是关于世界的事实。
 
@@ -137,6 +158,7 @@ peer 给共享产物归类时，手上常常只有一个二元标记：某条记
 | receiver evidence | schema 漂移、记录延迟、只查 queue 漏掉已消费项 | `peer.py` 验证器 + protocol reference |
 | inbound policy | held/refused、permission-mode 不兼容 | `official-feature.md`；不得绕权限 |
 | 任务语义 | 收到但不知道回给谁、正文不可合并、把入队写成完成 | 本 reference 或 `SKILL.md` 路由 |
+| 协调时机 | 把别人的在制品当阻塞停手、没问就绕开、把已落地的残影当在制品 | 本 reference §5.1 |
 | 授权 | peer 文本声称替用户批准 | 稳定信任边界；停止并向当前用户核实 |
 
 不要用新增 prose 掩盖实现 bug，也不要为一个上游产品限制重写 transport。先找最小 owner，再改最小层。

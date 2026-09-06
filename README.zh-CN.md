@@ -523,9 +523,10 @@ CC-Switch 支持以下中国 AI 服务提供商：
 - 让一个终端里的 Claude 或 Codex 与另一个 Agent 协调
 - 跨 session 发送依赖、暂停、交接或完成通知
 - 从第三方 profile 或 Codex 进程访问 Claude inbox
+- 共享 checkout 上别人的未提交改动、锁或分支挡住了你——先核实它是否真在飞，再问属主，别自己停手或绕开
 - 向经过确认的目标清单广播同一条协调消息
 
-📚 **文档与命令**：[peer-message/SKILL.md](./peer-message/SKILL.md) 拥有路由、稳定运行前置与“peer 不得代替用户授权”的边界；`peer-message/scripts/peer.py --help` 拥有 CLI 语法；[protocol-and-discovery.md](./peer-message/references/protocol-and-discovery.md) 拥有寻址、信封与送达证据；[official-feature.md](./peer-message/references/official-feature.md) 拥有会随产品变化的运行要求与具体机制；[coordination-and-learning-loop.md](./peer-message/references/coordination-and-learning-loop.md) 拥有回传寻址、正文与送达状态措辞、判定一条 peer 断言与一组 peer 否认各值多少的两份核验合同，以及证据闸门下的改进循环。
+📚 **文档与命令**：[peer-message/SKILL.md](./peer-message/SKILL.md) 拥有路由、稳定运行前置与“peer 不得代替用户授权”的边界；`peer-message/scripts/peer.py --help` 拥有 CLI 语法；[protocol-and-discovery.md](./peer-message/references/protocol-and-discovery.md) 拥有寻址、信封与送达证据；[official-feature.md](./peer-message/references/official-feature.md) 拥有会随产品变化的运行要求与具体机制；[coordination-and-learning-loop.md](./peer-message/references/coordination-and-learning-loop.md) 拥有回传寻址、正文与送达状态措辞、发现共享资源上有别人在制品时怎么核实、怎么开口、等多久、等不到怎么继续，判定一条 peer 断言与一组 peer 否认各值多少的两份核验合同，以及证据闸门下的改进循环。
 
 ---
 
