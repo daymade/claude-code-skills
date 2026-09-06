@@ -186,6 +186,15 @@ covers decimal digits only; CJK numerals (e.g. 九五) are ordinary real-word
 variants — they load, defer under safe mode, and stay a human-judged class
 like any other common-word variant.
 
+**A single surname plus an honorific is refused the same way.** `朱老师` or `王总`
+names everyone with that surname, so one person's misheard surname recorded as a
+variant rewrites people who were named correctly (real case 2026-09-07: seven
+such variants from one meeting turned an unrelated `朱老师` into a different
+person). The loader refuses a one-character surname followed by `老师` or `总`,
+and `--add` / `--import` refuse it as a FROM. A given name plus an honorific
+(`明源总`) and a bare misheard name token (`小铭`) still load. When the mapping
+really holds only under a cue, put it in the owning domain's context file.
+
 **Keep legitimate aliases out of the replacement field.** An English name,
 Chinese full name, and nickname may all identify one person while each remains
 correct speech. Record that identity relationship in the roster's relationship

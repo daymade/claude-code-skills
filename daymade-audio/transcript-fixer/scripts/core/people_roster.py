@@ -22,13 +22,16 @@ written to the DB) and go through the normal risk gate: long variants auto-apply
 short/common ones surface in *_needs_review.md for confirmation against the roster
 context — so the curated roster feeds the system without bypassing safety.
 
-One semantic refusal lives at load time: a **bare numeric variant** (a number heard
+Two semantic refusals live at load time. A **bare numeric variant** (a number heard
 as a person, e.g. `95` -> someone) can never be a global rule, because digits match
 timestamps, scores, and prices in every transcript — deferring it for review just
 converts the mistake into queue spam (real case 2026-09: one roster line deferred
 122 items across five files in a single rerun, most of them `.950` millisecond
-timestamps). Such variants are refused with a loud stderr warning; record that
-mapping as a cue-scoped trap in the owning domain's context file instead.
+timestamps). A **single surname plus an honorific** (朱老师, 王总) is refused for
+the mirror reason: it names everyone with that surname, so one person's misheard
+surname must not become a rule for all of them (real case 2026-09-07). Both are
+refused with a loud stderr warning; record such a mapping as a cue-scoped trap in
+the owning domain's context file instead.
 """
 
 from __future__ import annotations
@@ -72,6 +75,14 @@ _UNQUOTED_FORBIDDEN_RE = re.compile(
 # rather than risk-gated (see module docstring). Same predicate semantics as the
 # numeric_text check in utils/common_words.py — keep the two in sync.
 _NUMERIC_ONLY_RE = re.compile(r'^\d+$')
+# A single CJK character followed by an honorific (朱老师, 王总) is a real form
+# shared by everyone with that surname. One meeting's mishearing of one person's
+# surname must not become a global rule for all of them (real case 2026-09-07:
+# seven such variants recorded from a single meeting turned an unrelated 朱老师
+# into a different person). Refused at load; the mapping belongs in the owning
+# domain's context file as a cue-scoped trap. Same predicate as the
+# honorific_only check in utils/common_words.py — keep the two in sync.
+_HONORIFIC_ONLY_RE = re.compile(r'^[\u3400-\u4DBF\u4E00-\u9FFF](老师|总)$')
 
 
 def load_people_roster(path: Path) -> Tuple[Dict[str, str], Dict[str, str]]:
@@ -96,6 +107,7 @@ def load_people_roster(path: Path) -> Tuple[Dict[str, str], Dict[str, str]]:
     current_canonical: str | None = None
     dropped: list[str] = []
     refused_numeric: list[str] = []
+    refused_honorific: list[str] = []
 
     with open(path, 'r', encoding='utf-8') as f:
         for raw in f:
@@ -112,6 +124,9 @@ def load_people_roster(path: Path) -> Tuple[Dict[str, str], Dict[str, str]]:
                     variant = variant.strip()
                     if variant and _NUMERIC_ONLY_RE.fullmatch(variant):
                         refused_numeric.append(variant)
+                        continue
+                    if variant and _HONORIFIC_ONLY_RE.fullmatch(variant):
+                        refused_honorific.append(variant)
                         continue
                     # Never map a canonical to itself, and first-seen wins so a
                     # variant can't be hijacked by a later (less relevant) person.
@@ -147,6 +162,16 @@ def load_people_roster(path: Path) -> Tuple[Dict[str, str], Dict[str, str]]:
             "timestamps, scores and prices in every transcript, so a bare number "
             "can never be a global name rule — record that mapping as a cue-scoped "
             "trap in the owning domain's context file instead.",
+            file=sys.stderr,
+        )
+    if refused_honorific:
+        unique = sorted(set(refused_honorific))
+        print(
+            f"⚠️  people roster: refused {len(unique)} single-surname honorific ASR "
+            f"variant(s) from {path.name}: {', '.join(unique)}. A surname + 老师/总 "
+            "names everyone with that surname, so one person's misheard surname can "
+            "never be a global name rule — record that mapping as a cue-scoped trap "
+            "in the owning domain's context file instead.",
             file=sys.stderr,
         )
 

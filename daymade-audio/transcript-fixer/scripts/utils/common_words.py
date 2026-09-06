@@ -274,6 +274,26 @@ def check_correction_safety(
             ),
         ))
 
+    # Check 0b: a single surname + honorific (朱老师, 王总) is a real form shared
+    # by everyone with that surname; one person's misheard surname must not
+    # rewrite them all (real incident 2026-09-07). Error in both modes; the
+    # mapping belongs in a context-file trap. Predicate shared with
+    # core/people_roster.py's load-time refusal — keep the two in sync.
+    if re.fullmatch(r"[\u3400-\u4DBF\u4E00-\u9FFF](老师|总)", from_text):
+        warnings.append(SafetyWarning(
+            level="error",
+            category="honorific_only",
+            message=(
+                f"'{from_text}' is a single surname plus an honorific. It names "
+                f"everyone with that surname, so replacing it with '{to_text}' "
+                f"rewrites people who were named correctly."
+            ),
+            suggestion=(
+                "Put the misheard token itself on the roster if it recurs, or scope "
+                "the mapping to the exact recurring phrase as a context-file trap."
+            ),
+        ))
+
     # Check 1: Is from_text a known common word?
     if from_text in ALL_COMMON_WORDS:
         level = "error" if strict else "warning"

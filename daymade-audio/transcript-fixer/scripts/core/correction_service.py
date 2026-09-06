@@ -451,6 +451,14 @@ class CorrectionService:
                     )
                     invalid_count += 1
                     continue
+                if re.fullmatch(r"[\u3400-\u4DBF\u4E00-\u9FFF](老师|总)", from_text):
+                    logger.error(
+                        f"Validation failed for '{from_text}' → '{to_text}': "
+                        "a single surname + honorific names everyone with that surname; "
+                        "use a context-file trap"
+                    )
+                    invalid_count += 1
+                    continue
                 try:
                     self.validate_correction_text(from_text, "from_text")
                     self.validate_correction_text(to_text, "to_text")

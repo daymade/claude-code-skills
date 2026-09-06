@@ -44,6 +44,15 @@ class TestSafetyChecks(unittest.TestCase):
             "Expected 'common_word' category",
         )
 
+    def test_single_surname_honorific_is_an_error_in_both_modes(self):
+        """朱老师 names everyone surnamed 朱 — error, not warning; 明源总 is not this shape."""
+        for strict in (True, False):
+            warnings = check_correction_safety("朱老师", "甲强", strict=strict)
+            self.assertTrue(any(w.category == "honorific_only" and w.level == "error" for w in warnings),
+                            f"Expected an honorific_only error with strict={strict}")
+        self.assertFalse(any(w.category == "honorific_only"
+                             for w in check_correction_safety("明源总", "明远总", strict=True)))
+
     def test_bare_number_is_an_error_in_both_modes(self):
         """A pure-digit from_text matches timestamps/scores everywhere — error, not warning."""
         for strict in (True, False):

@@ -447,7 +447,8 @@ def _report_entry_state(entry: dict, canonical: str) -> str:
 def close_sidecars(input_path: Path, output_dir: Path, *, dry_run: bool = False,
                    discard_unpromoted: bool = False, decide_raw: str | None = None,
                    domain: str = "general", decided_by: str | None = None,
-                   note: str | None = None, queue=None) -> dict:
+                   note: str | None = None, queue=None,
+                   disabled_pairs: set | None = None) -> dict:
     """Decide whether the sidecars beside ``input_path`` are closed; remove them if so.
 
     Closed means every *_changes.md / *_needs_review.md entry now reads applied
@@ -475,7 +476,8 @@ def close_sidecars(input_path: Path, output_dir: Path, *, dry_run: bool = False,
     report: dict = {
         "file": str(input_path), "dir": str(output_dir), "dry_run": dry_run,
         "sidecars": {"present": sorted(p.name for p in present.values()), "removed": [], "retained": []},
-        "entries": {"total": 0, "applied": 0, "gone": 0, "decided": 0, "undecided": 0, "pending": 0},
+        "entries": {"total": 0, "applied": 0, "gone": 0, "decided": 0, "undecided": 0, "pending": 0,
+                    "disabled": 0},
         "blockers": {"pending_ids": [], "undecided": [], "stage1_unpromoted": False, "report_unparsed": []},
         "decisions_recorded": 0,
     }
@@ -539,7 +541,12 @@ def close_sidecars(input_path: Path, output_dir: Path, *, dry_run: bool = False,
                 matched[i] = j
                 used.add(j)
         for i, (entry, state) in enumerate(pair_entries):
-            if state == "raw":
+            if state == "raw" and disabled_pairs and pair in disabled_pairs:
+                # The FROM→TO rule was disabled as a false positive after this
+                # report was written: the entry is no longer a question, so it
+                # closes without a verdict and without being re-asked.
+                state = "disabled"
+            elif state == "raw":
                 if i in matched:
                     state = "pending" if pair_rows[matched[i]][1] == "pending" else "decided"
                 else:
@@ -623,6 +630,7 @@ def cmd_close_sidecars(args: argparse.Namespace) -> None:
         decided_by=getattr(args, "review_by", None),
         note=getattr(args, "review_note", None),
         queue=_get_review_queue(),
+        disabled_pairs=_get_service().get_disabled_pairs(None),
     )
     exit_code = {"closed": 0, "open": 1}.get(report["verdict"], 2)
     if getattr(args, "json_output", False):
@@ -634,7 +642,7 @@ def cmd_close_sidecars(args: argparse.Namespace) -> None:
     print(f"   directory: {report['dir']}")
     print(f"   sidecars present: {', '.join(report['sidecars']['present']) or 'none'}")
     print(f"   report entries: {e['total']} (applied {e['applied']}, rewritten {e['gone']}, "
-          f"decided {e['decided']}, pending {e['pending']}, undecided {e['undecided']})")
+          f"decided {e['decided']}, rule disabled {e['disabled']}, pending {e['pending']}, undecided {e['undecided']})")
     print(f"   pending queue rows for this file: {len(report['blockers']['pending_ids'])}")
     if report["decisions_recorded"]:
         print(f"   verdicts recorded through the queue: {report['decisions_recorded']}")
