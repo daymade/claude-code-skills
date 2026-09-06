@@ -525,7 +525,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 - 从第三方 profile 或 Codex 进程访问 Claude inbox
 - 向经过确认的目标清单广播同一条协调消息
 
-📚 **文档与命令**：[peer-message/SKILL.md](./peer-message/SKILL.md) 拥有路由、稳定运行前置与“peer 不得代替用户授权”的边界；`peer-message/scripts/peer.py --help` 拥有 CLI 语法；[protocol-and-discovery.md](./peer-message/references/protocol-and-discovery.md) 拥有寻址、信封与送达证据；[official-feature.md](./peer-message/references/official-feature.md) 拥有会随产品变化的运行要求与具体机制；[coordination-and-learning-loop.md](./peer-message/references/coordination-and-learning-loop.md) 拥有 parent/worker 回传语言与证据闸门下的 Skill 演进。
+📚 **文档与命令**：[peer-message/SKILL.md](./peer-message/SKILL.md) 拥有路由、稳定运行前置与“peer 不得代替用户授权”的边界；`peer-message/scripts/peer.py --help` 拥有 CLI 语法；[protocol-and-discovery.md](./peer-message/references/protocol-and-discovery.md) 拥有寻址、信封与送达证据；[official-feature.md](./peer-message/references/official-feature.md) 拥有会随产品变化的运行要求与具体机制；[coordination-and-learning-loop.md](./peer-message/references/coordination-and-learning-loop.md) 拥有回传寻址、正文与送达状态措辞、判定一条 peer 断言与一组 peer 否认各值多少的两份核验合同，以及证据闸门下的改进循环。
 
 ---
 
