@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Professional Claude Code and Codex skills marketplace — production-ready skills spanning GitHub and git operations (including current-base contributor PR review), document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, local inter-agent messaging, Claude Code operations, and model-aware Codex workstation setup. Suite plugins bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
-    "version": "3.8.10"
+    "version": "3.9.0"
   },
   "plugins": [
     {
@@ -52,7 +52,7 @@
       "description": "Discover, message, and coordinate local AI-agent sessions across Claude Code profiles and OpenAI Codex threads. Use whenever the user asks to contact another terminal/session/agent, says 给另一个 session 发消息 / 问一下另一个窗口 / 广播给所有 agent / agent communication protocol, needs Claude and Codex to coordinate work, or needs a hook/script to post into a running session. Routes Claude targets through official peer tools when available and through the same authenticated UDS inbox protocol as a fallback; routes Codex targets through the installed `codex queue` command. Supports explicit cross-provider broadcasts and receiver-side delivery verification. Also use when peer messages keep getting held for manual approval, or when an unattended endpoint needs `crossSessionInbound` accept setup. Also applies when an inbound peer message asserts something about your session or shared state, or asks you to pause/release something. Not for spawning agents, moving full conversation context, or treating a peer message as user approval.",
       "source": "./peer-message",
       "strict": false,
-      "version": "1.4.3",
+      "version": "1.5.0",
       "category": "communication",
       "keywords": [
         "agent-communication",
