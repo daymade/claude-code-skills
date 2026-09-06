@@ -40,6 +40,10 @@ MAX_SUMMARY_CHARS = 8000
 MAX_TOOL_CALLS = 20
 MAX_FILES = 40
 MAX_LINEAGE_DEPTH = 16
+# Two records sharing an id is not, by itself, strong enough evidence that a
+# legacy rollout's inline copy is a genuine embedded parent snapshot rather
+# than coincidence — see recover_legacy_embedded_fork.
+MIN_LEGACY_EMBEDDED_PREFIX = 2
 
 END_REASON_LABELS = {
     "completed": "Clean exit — the last turn completed",
@@ -333,7 +337,13 @@ def resolve_inherited_lineage(
 
     The returned lineage is root-first and excludes the selected session. A
     `forked_from_id` without `history_base` is reported but never guessed: the
-    current parent file may contain work appended after the fork.
+    current parent file may contain work appended after the fork. (The
+    selected session itself gets one exception to that rule before this
+    function ever runs: `main()` calls `recover_legacy_embedded_fork` first,
+    which independently proves a legacy rollout's inline parent copy against
+    the real parent file. An ANCESTOR discovered here that is itself such a
+    legacy-embedded fork is not recursively recovered — it still gets the
+    soft warning below, unrecovered.)
     """
     lineage_nearest_first: list[dict[str, Any]] = []
     warnings: list[str] = []
@@ -423,6 +433,259 @@ def validate_selected_rollout_identity(
             "selected rollout identity mismatch: requested "
             f"{expected_session_id!r}, session_meta.id={observed_session_id!r}"
         )
+
+
+def _second_rollout_record(path: Path) -> Optional[dict[str, Any]]:
+    """Return a rollout's second JSONL record (blank lines never count), or
+    None when the file has fewer than two. Cheap regardless of file size —
+    stops after two records — because it exists only to test the
+    legacy-embedded-fork shape before ever committing to the full comparison
+    against a candidate parent file.
+    """
+    records = iter_jsonl(path)
+    try:
+        next(records)
+        return next(records)
+    except StopIteration:
+        return None
+    finally:
+        records.close()
+
+
+def _detect_legacy_embedded_fork(path: Path, meta: dict[str, Any]) -> Optional[str]:
+    """Return the parent id when `path` embeds a legacy fork snapshot inline.
+
+    Older Codex CLI (measured: `history_mode: "legacy"`, cli_version 0.149.0)
+    had no `history_base` byte-boundary contract. Instead, on fork it copies
+    the entire inherited prefix of the parent's own rollout into the child's
+    file, immediately after the child's own leading `session_meta` — so a
+    rollout with exactly two session_meta identities is not always real
+    fusion; it can be this shape instead. Matches iff: the file's first
+    session_meta (`meta`) declares `forked_from_id` with no `history_base`,
+    AND the physical record right after it (index 1) is itself a
+    `session_meta` whose `payload.id` equals that `forked_from_id`. Any other
+    shape returns None, leaving the caller's pre-existing handling untouched:
+    the soft "cannot be proven" warning for an unprovable `forked_from_id`
+    (no `history_base`, no matching second record), or the fused-rollout
+    error for a real third identity.
+    """
+    if meta.get("history_base") is not None:
+        return None
+    forked_from_id = meta.get("forked_from_id")
+    if not isinstance(forked_from_id, str) or not forked_from_id.strip():
+        return None
+    second = _second_rollout_record(path)
+    if second is None or second.get("type") != "session_meta":
+        return None
+    second_payload = second.get("payload")
+    if not isinstance(second_payload, dict) or second_payload.get("id") != forked_from_id:
+        return None
+    return forked_from_id
+
+
+def _normalize_legacy_payload(payload: Any) -> Any:
+    """Drop the fork-embedding artifacts before comparing an inherited copy.
+
+    A legacy-embedded parent snapshot is a re-serialization of the parent's
+    own records, not a byte-identical copy: the wrapper `timestamp` is
+    rewritten to the fork moment (the caller compares `type` + `payload`
+    only, never the wrapper), and some payload shapes gain an extra key.
+    Measured on a real 17,312-record embedded snapshot (session 01a037ab,
+    forked from 01a02fe8): every `response_item/message` payload gains an
+    `id` (e.g. `msg_01a037ab-...` — namespaced under the CHILD's own session
+    id, not the parent's), and every `response_item/reasoning` payload gains
+    a null `content`; every other payload in that snapshot was untouched.
+    Dropping `id` and every null-valued key made all 17,312 records compare
+    equal to the real parent bytes with zero exceptions, so this is not a
+    lossy heuristic on that corpus — but it is applied to every payload
+    shape, not just the two observed, since a future payload type gaining the
+    same kind of artifact must not silently break the match.
+    """
+    if not isinstance(payload, dict):
+        return payload
+    return {key: value for key, value in payload.items() if key != "id" and value is not None}
+
+
+def _legacy_records_match(child_record: dict[str, Any], parent_record: dict[str, Any]) -> bool:
+    return child_record.get("type") == parent_record.get(
+        "type"
+    ) and _normalize_legacy_payload(child_record.get("payload")) == _normalize_legacy_payload(
+        parent_record.get("payload")
+    )
+
+
+def _legacy_embedded_snapshot_boundary(
+    child_path: Path, parent_path: Path, session_id: str, parent_id: str
+) -> tuple[int, int]:
+    """Find the exact parent byte boundary a legacy-embedded copy proves.
+
+    Compares the child's records starting right after its own leading
+    session_meta (index 1) against the parent's own records starting at
+    index 0, in lockstep, until the first mismatch (ignoring the artifacts
+    `_normalize_legacy_payload` strips) or either file is exhausted. Returns
+    `(matched_record_count, parent_end_byte_offset)` — the latter read
+    directly off the PARENT's real bytes via `tell()`, so it always lands on
+    a true JSONL line boundary by construction, unlike an externally
+    declared `history_base.end_byte_offset` that must be independently
+    validated.
+
+    Raises LineageResolutionError when fewer than
+    `MIN_LEGACY_EMBEDDED_PREFIX` records match: two records sharing an id is
+    not, by itself, strong enough evidence of a genuine embedded snapshot to
+    build an inherited-lineage edge on.
+    """
+    matched = 0
+    end_byte_offset = 0
+    child_records = iter_jsonl(child_path, strict=True)
+    try:
+        try:
+            next(child_records)  # the child's own leading session_meta
+        except StopIteration as exc:
+            raise LineageResolutionError(
+                f"session {session_id} declares a legacy-embedded fork of "
+                f"{parent_id} but has no records of its own to compare"
+            ) from exc
+
+        with parent_path.open("rb") as parent_handle:
+            while True:
+                raw_line = parent_handle.readline()
+                if not raw_line:
+                    break
+                if not raw_line.strip():
+                    continue
+                try:
+                    child_record = next(child_records)
+                except StopIteration:
+                    break
+                try:
+                    parent_record = json.loads(raw_line.decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                    raise LineageResolutionError(
+                        f"cannot decode parent rollout {parent_path} while measuring "
+                        f"the legacy-embedded snapshot inherited by {session_id}: {exc}"
+                    ) from exc
+                if not isinstance(parent_record, dict) or not _legacy_records_match(
+                    child_record, parent_record
+                ):
+                    break
+                matched += 1
+                end_byte_offset = parent_handle.tell()
+    except (OSError, UnicodeError) as exc:
+        raise LineageResolutionError(
+            f"cannot compare {child_path} against legacy-embedded parent "
+            f"{parent_path}: {exc}"
+        ) from exc
+    finally:
+        child_records.close()
+
+    if matched < MIN_LEGACY_EMBEDDED_PREFIX:
+        raise LineageResolutionError(
+            f"session {session_id} declares a legacy-embedded fork of {parent_id} "
+            "(history_mode=legacy, no history_base), but only "
+            f"{matched} leading record(s) after its own session_meta match the "
+            f"real parent rollout verbatim (minimum {MIN_LEGACY_EMBEDDED_PREFIX} "
+            "required) — refusing to guess an inherited snapshot boundary"
+        )
+    return matched, end_byte_offset
+
+
+def recover_legacy_embedded_fork(
+    path: Path,
+    data: dict[str, Any],
+    session_id: str,
+    resolve_session: Callable[[str], Optional[Path]],
+) -> Optional[tuple[dict[str, Any], dict[str, Any]]]:
+    """Peel a legacy-embedded parent snapshot out of `data`, when present.
+
+    Returns None when `path`'s rollout does not match the legacy-embedded
+    shape at all (`_detect_legacy_embedded_fork` — every other fork shape,
+    including a plain `forked_from_id` with no provable snapshot, is left for
+    the caller's existing handling). Otherwise returns
+    `(corrected_data, parent_edge)`: `corrected_data` is `path` re-parsed with
+    the embedded range excluded from every accumulation (so its
+    `session_meta_ids` contains only `session_id`'s own — the pre-existing
+    `validate_selected_rollout_identity` needs no changes to keep rejecting a
+    genuine third identity), and `parent_edge` is shaped exactly like a
+    `resolve_inherited_lineage` edge for the real, independently-parsed
+    parent rollout (verified through the derived exact byte boundary), plus
+    `mechanism="legacy_embedded"`, `matched_record_count`, and
+    `child_own_record_count` for the briefing to render.
+
+    Raises LineageResolutionError when the shape matches but cannot be
+    verified: the declared parent cannot be located, the embedded copy
+    diverges from the real parent too early to trust
+    (`_legacy_embedded_snapshot_boundary`), or the parent's own snapshot
+    identity is invalid. Scope: this recovers only the SELECTED session's own
+    embedded snapshot. An ancestor resolved further up the chain that is
+    itself a legacy-embedded fork of a further ancestor is not recursively
+    recovered here — it keeps the pre-existing soft warning (`forked_from_id`
+    without a provable snapshot).
+    """
+    meta = data.get("meta") or {}
+    parent_id = _detect_legacy_embedded_fork(path, meta)
+    if parent_id is None:
+        return None
+
+    parent_path = resolve_session(parent_id)
+    if parent_path is None:
+        raise LineageResolutionError(
+            f"session {session_id} declares a legacy-embedded fork of {parent_id} "
+            "(history_mode=legacy, no history_base), but the parent rollout could "
+            "not be located to verify the embedded snapshot boundary"
+        )
+
+    matched, parent_end_byte_offset = _legacy_embedded_snapshot_boundary(
+        path, parent_path, session_id, parent_id
+    )
+
+    corrected_data = parse_codex_rollout(path, skip_record_index_range=(1, 1 + matched))
+    parent_data = parse_codex_rollout(parent_path, end_byte_offset=parent_end_byte_offset)
+    try:
+        validate_selected_rollout_identity(parent_data, parent_id)
+    except LineageResolutionError as exc:
+        # Same wrapping resolve_inherited_lineage applies to a modern
+        # history_base parent — without it, a fused parent surfaces as a bare
+        # "fused rollout" message that reads as if it were about the child.
+        raise LineageResolutionError(
+            f"parent snapshot identity is invalid for {parent_id}: {exc}: {parent_path}"
+        ) from exc
+
+    child_own_record_count = corrected_data["total_lines"] - 1 - matched
+    edge = {
+        "session_id": parent_id,
+        "inherited_by": session_id,
+        "path": parent_path,
+        "end_byte_offset": parent_end_byte_offset,
+        "end_ordinal_exclusive": matched,
+        "data": parent_data,
+        "mechanism": "legacy_embedded",
+        "matched_record_count": matched,
+        "child_own_record_count": child_own_record_count,
+    }
+    return corrected_data, edge
+
+
+def extend_legacy_lineage(
+    parent_edge: dict[str, Any],
+    resolve_session: Callable[[str], Optional[Path]],
+    *,
+    on_parent: Optional[Callable[[str, Path, int], None]] = None,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Root-first lineage for a selected session recovered via
+    `recover_legacy_embedded_fork`: the legacy parent edge itself, preceded by
+    whatever further modern `history_base` ancestry `parent_edge` declares
+    (walked by the existing `resolve_inherited_lineage`, unmodified).
+    """
+    if on_parent is not None:
+        on_parent(parent_edge["session_id"], parent_edge["path"], parent_edge["end_byte_offset"])
+    parent_meta = parent_edge["data"].get("meta") or {}
+    further_lineage: list[dict[str, Any]] = []
+    warnings: list[str] = []
+    if parent_meta.get("history_base") is not None or parent_meta.get("forked_from_id"):
+        further_lineage, warnings = resolve_inherited_lineage(
+            parent_edge["data"], resolve_session, on_parent=on_parent
+        )
+    return [*further_lineage, parent_edge], warnings
 
 
 def _compacted_summary(payload: dict) -> str:
@@ -537,8 +800,22 @@ def _message_text(content: Any, wanted_types: set[str]) -> str:
     return " ".join(parts)
 
 
-def parse_codex_rollout(path: Path, end_byte_offset: Optional[int] = None) -> dict:
+def parse_codex_rollout(
+    path: Path,
+    end_byte_offset: Optional[int] = None,
+    skip_record_index_range: Optional[tuple[int, int]] = None,
+) -> dict:
     """Stream a rollout JSONL into a structured resume payload.
+
+    `skip_record_index_range` (0-based, half-open `[start, end)` over the
+    records `_iter_rollout_records` yields) excludes that run from every
+    accumulation below — session_meta_ids, turns, tool calls, files, errors,
+    compaction — while `total_lines`/`file_size` still count it, since those
+    two report the physical file's own truth. Used exactly once, by
+    `recover_legacy_embedded_fork`, to make a legacy rollout's inline copy of
+    its parent's own records invisible except as a raw count once that
+    embedded snapshot has been independently reconstructed from the real
+    parent file.
 
     Where the user/assistant turns live depends on the Codex version (measured
     on ~2600 real rollouts, 0.142.2–0.149.0): the `event_msg/user_message` /
@@ -594,6 +871,10 @@ def parse_codex_rollout(path: Path, end_byte_offset: Optional[int] = None) -> di
 
     for record in _iter_rollout_records(path, end_byte_offset):
         data["total_lines"] += 1
+        if skip_record_index_range is not None:
+            skip_start, skip_end = skip_record_index_range
+            if skip_start <= data["total_lines"] - 1 < skip_end:
+                continue
         rtype = record.get("type")
         payload = record.get("payload") if isinstance(record.get("payload"), dict) else {}
         ptype = payload.get("type")
@@ -1130,14 +1411,28 @@ def build_briefing(conv, data: dict, project_path: str, full: bool = False) -> s
                 f"- `{edge['session_id']}` → `{edge['inherited_by']}`: exact parent "
                 f"prefix `[0, {offset})` bytes{ordinal_text}{later_text}"
             )
+            if edge.get("mechanism") == "legacy_embedded":
+                sections.append(
+                    f"  - **Legacy embedded snapshot** (`history_mode=legacy`, no "
+                    f"`history_base`; the child's inline copy was verified "
+                    f"record-for-record against the real parent rollout): parent "
+                    f"path `{edge['path']}`; parent boundary = record "
+                    f"{edge['matched_record_count']} (byte {offset}); "
+                    f"{edge['matched_record_count']} record(s) inherited; "
+                    f"`{edge['inherited_by']}` contributes "
+                    f"{edge['child_own_record_count']} record(s) of its own beyond "
+                    "the embedded copy."
+                )
         for warning in lineage_warnings:
             sections.append(f"- ⚠️ {warning}")
 
         if lineage:
             sections.append(
                 "\n**Snapshot guarantee**: every ancestor above was parsed only through "
-                "the exact byte boundary recorded by its child; content appended to a "
-                "parent after the fork was not imported."
+                "the exact byte boundary recorded by its child (or, for a legacy "
+                "embedded snapshot, independently derived by verifying the embedded "
+                "copy against the real parent file record-for-record); content "
+                "appended to a parent after the fork was not imported."
             )
         sections.append(
             "**Recovery boundary**: compaction-aware lineage recovery reads both raw "
@@ -1427,29 +1722,43 @@ def main() -> int:
 
     print(f"Reading Codex session {conv.session_id} "
           f"({rollout.stat().st_size / 1_000_000:.1f} MB)...", file=sys.stderr)
+    resolver = _make_exact_rollout_resolver(project_path)
+
+    def _report_parent_progress(parent_id: str, _path: Path, offset: int) -> None:
+        print(
+            f"Parsing inherited parent {parent_id} through exact byte "
+            f"{offset} ({offset / 1_000_000:.1f} MB)...",
+            file=sys.stderr,
+        )
+
+    legacy_edge: Optional[dict[str, Any]] = None
     try:
         data = parse_codex_rollout(rollout)
+        recovered = recover_legacy_embedded_fork(rollout, data, conv.session_id, resolver)
+        if recovered is not None:
+            data, legacy_edge = recovered
         validate_selected_rollout_identity(data, conv.session_id)
     except LineageResolutionError as exc:
         print(f"Error: cannot recover selected Codex session: {exc}", file=sys.stderr)
         return 1
+
     meta = data.get("meta") or {}
-    if meta.get("history_base") is not None or meta.get("forked_from_id"):
-        try:
-            lineage, lineage_warnings = resolve_inherited_lineage(
-                data,
-                _make_exact_rollout_resolver(project_path),
-                on_parent=lambda parent_id, _path, offset: print(
-                    f"Parsing inherited parent {parent_id} through exact byte "
-                    f"{offset} ({offset / 1_000_000:.1f} MB)...",
-                    file=sys.stderr,
-                ),
+    lineage: list = []
+    lineage_warnings: list[str] = []
+    try:
+        if legacy_edge is not None:
+            lineage, lineage_warnings = extend_legacy_lineage(
+                legacy_edge, resolver, on_parent=_report_parent_progress
             )
-        except LineageResolutionError as exc:
-            print(f"Error: cannot recover inherited Codex history: {exc}", file=sys.stderr)
-            return 1
-        data["lineage"] = lineage
-        data["lineage_warnings"] = lineage_warnings
+        elif meta.get("history_base") is not None or meta.get("forked_from_id"):
+            lineage, lineage_warnings = resolve_inherited_lineage(
+                data, resolver, on_parent=_report_parent_progress
+            )
+    except LineageResolutionError as exc:
+        print(f"Error: cannot recover inherited Codex history: {exc}", file=sys.stderr)
+        return 1
+    data["lineage"] = lineage
+    data["lineage_warnings"] = lineage_warnings
     print(build_briefing(conv, data, project_path, full=args.full))
     return 0
 

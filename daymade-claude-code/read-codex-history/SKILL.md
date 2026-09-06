@@ -130,7 +130,10 @@ Before making any behavior claim about a named Session:
 3. Parse the selected rollout and require `session_meta.id == requested ID`.
 4. For each fork edge, require the declared parent ID and exact
    `history_base.end_byte_offset`; reject missing, ambiguous, cyclic, or mismatched
-   ancestry rather than reading the parent's current tail.
+   ancestry rather than reading the parent's current tail. A legacy rollout with no
+   `history_base` that inlines its parent's session_meta as the very next record is
+   instead verified record-for-record against the real parent file before its
+   derived byte boundary is trusted.
 5. Report prompt-only or rollout-only gaps explicitly.
 
 This gate is the direct correction for two observed cases: a prompt-ledger Session

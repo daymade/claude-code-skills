@@ -1159,6 +1159,233 @@ class InheritedLineageTests(unittest.TestCase):
         self.assertIn("exact inherited snapshot cannot be proven", briefing)
 
 
+def _payload_with(record: dict, **extra) -> dict:
+    """Return a copy of `record` with extra keys stitched into its payload —
+    models the artifacts a legacy-embedded copy gains (an injected `id`, a
+    null-valued field) without mutating the shared fixture helper."""
+    clone = json.loads(json.dumps(record))
+    clone["payload"].update(extra)
+    return clone
+
+
+class LegacyEmbeddedForkTests(unittest.TestCase):
+    """Older Codex CLI (measured: history_mode=legacy, no history_base) forks
+    by copying the parent's own rollout prefix inline into the child, right
+    after the child's own leading session_meta — real sample: session
+    01a037ab (66 MB, 19,161 records) embeds 17,312 records of its parent
+    01a02fe8 verbatim (mod an injected `id` on response_item/message and a
+    null `content` on response_item/reasoning), then has 1,848 of its own.
+    These fixtures reproduce the same shape at a few dozen records so the
+    boundary math and identity gate can be verified without touching
+    ~/.codex."""
+
+    def _make_parent(self, root: Path) -> tuple[Path, list[dict]]:
+        parent = root / "parent.jsonl"
+        records = [
+            {"type": "session_meta", "payload": {"id": "parent", "cwd": "/tmp"}},
+            _msg("user", "P1", "input_text"),
+            _msg("assistant", "P2", "output_text"),
+            _msg("user", "P3", "input_text"),
+            _msg("assistant", "P4", "output_text"),
+            _msg("user", "P5-parent-only", "input_text"),
+            _msg("assistant", "P6-parent-only", "output_text"),
+        ]
+        _write_rollout_path(parent, records)
+        return parent, records
+
+    def _make_child(self, root: Path, parent_records: list[dict], tail_after_match: list[dict]) -> Path:
+        """A child embedding the first 5 parent records (with injected
+        artifacts on two of them), followed by `tail_after_match`."""
+        embedded = [
+            _payload_with(parent_records[0], extra_from_legacy_embed=None),
+            _payload_with(parent_records[1], id="msg_child-injected-1"),
+            parent_records[2],
+            parent_records[3],
+            parent_records[4],
+        ]
+        records = [
+            {
+                "type": "session_meta",
+                "payload": {
+                    "id": "child",
+                    "cwd": "/tmp",
+                    "forked_from_id": "parent",
+                    "history_mode": "legacy",
+                },
+            },
+            *embedded,
+            *tail_after_match,
+        ]
+        return _write_rollout(records)
+
+    def test_recovers_exact_parent_boundary_and_splits_child_own_tail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            parent, parent_records = self._make_parent(root)
+            with parent.open("rb") as handle:
+                parent_lines = handle.readlines()
+            expected_offset = sum(len(line) for line in parent_lines[:5])
+
+            child = self._make_child(
+                root,
+                parent_records,
+                [
+                    _msg("user", "child new request", "input_text"),
+                    _msg("assistant", "child new reply", "output_text"),
+                ],
+            )
+            data = mod.parse_codex_rollout(child)
+            recovered = mod.recover_legacy_embedded_fork(
+                child, data, "child", lambda sid: parent if sid == "parent" else None
+            )
+
+            self.assertIsNotNone(recovered)
+            corrected_data, edge = recovered
+            self.assertEqual(edge["session_id"], "parent")
+            self.assertEqual(edge["inherited_by"], "child")
+            self.assertEqual(edge["matched_record_count"], 5)
+            self.assertEqual(edge["child_own_record_count"], 2)
+            self.assertEqual(edge["end_byte_offset"], expected_offset)
+            self.assertEqual(edge["mechanism"], "legacy_embedded")
+
+            # The parent's own later activity (after the fork point) must be
+            # excluded — this is the load-bearing check on the boundary math,
+            # not just the record count.
+            self.assertNotIn("P5-parent-only", edge["data"]["user_messages"])
+            self.assertNotIn("P6-parent-only", edge["data"]["assistant_messages"])
+            self.assertEqual(edge["data"]["user_messages"], ["P1", "P3"])
+
+            # The corrected child data must see only its own identity and
+            # only its own new turns — the embedded copy is invisible.
+            self.assertEqual(corrected_data["session_meta_ids"], ["child"])
+            self.assertEqual(
+                corrected_data["user_messages"], ["child new request"]
+            )
+            self.assertEqual(
+                corrected_data["assistant_messages"], ["child new reply"]
+            )
+            mod.validate_selected_rollout_identity(corrected_data, "child")  # must not raise
+
+            lineage, warnings = mod.extend_legacy_lineage(
+                edge, lambda sid: parent if sid == "parent" else None
+            )
+            corrected_data["lineage"] = lineage
+            corrected_data["lineage_warnings"] = warnings
+            briefing = mod.build_briefing(None, corrected_data, "/tmp")
+
+            self.assertIn("Legacy embedded snapshot", briefing)
+            self.assertIn(f"record 5 (byte {expected_offset})", briefing)
+            self.assertIn("5 record(s) inherited", briefing)
+            self.assertIn("contributes 2 record(s) of its own", briefing)
+            self.assertIn("P1", briefing)
+            self.assertNotIn("P5-parent-only", briefing)
+            self.assertIn("child new request", briefing)
+
+    def test_missing_parent_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _, parent_records = self._make_parent(root)
+            child = self._make_child(
+                root, parent_records, [_msg("user", "继续", "input_text")]
+            )
+            data = mod.parse_codex_rollout(child)
+            with self.assertRaisesRegex(
+                mod.LineageResolutionError, "parent rollout could not be located"
+            ):
+                mod.recover_legacy_embedded_fork(child, data, "child", lambda _sid: None)
+
+    def test_third_identity_beyond_embedded_copy_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            parent, parent_records = self._make_parent(root)
+            child = self._make_child(
+                root,
+                parent_records,
+                [
+                    {
+                        "type": "session_meta",
+                        "payload": {"id": "mystery", "cwd": "/tmp"},
+                    },
+                    _msg("user", "继续", "input_text"),
+                ],
+            )
+            data = mod.parse_codex_rollout(child)
+            recovered = mod.recover_legacy_embedded_fork(
+                child, data, "child", lambda sid: parent if sid == "parent" else None
+            )
+            self.assertIsNotNone(recovered)
+            corrected_data, _edge = recovered
+            # The embedded parent's id is excluded; "mystery" is a genuine
+            # third identity in the child's own tail, so the pre-existing
+            # fused-rollout gate must still fire — unchanged wording.
+            with self.assertRaisesRegex(mod.LineageResolutionError, "fused rollout"):
+                mod.validate_selected_rollout_identity(corrected_data, "child")
+
+    def test_matched_prefix_shorter_than_minimum_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            parent = root / "parent.jsonl"
+            _write_rollout_path(
+                parent,
+                [
+                    {"type": "session_meta", "payload": {"id": "parent", "cwd": "/tmp"}},
+                    _msg("user", "P1", "input_text"),
+                ],
+            )
+            child = _write_rollout(
+                [
+                    {
+                        "type": "session_meta",
+                        "payload": {
+                            "id": "child",
+                            "cwd": "/tmp",
+                            "forked_from_id": "parent",
+                            "history_mode": "legacy",
+                        },
+                    },
+                    # Matches parent record 0 (matched=1)...
+                    {"type": "session_meta", "payload": {"id": "parent", "cwd": "/tmp"}},
+                    # ...but this does NOT match parent record 1 ("P1"), so
+                    # the comparison stops at matched=1 < MIN(2).
+                    _msg("user", "totally different content", "input_text"),
+                ]
+            )
+            data = mod.parse_codex_rollout(child)
+            with self.assertRaisesRegex(
+                mod.LineageResolutionError,
+                r"only 1 leading record\(s\).*match the real parent rollout verbatim",
+            ):
+                mod.recover_legacy_embedded_fork(
+                    child, data, "child", lambda sid: parent if sid == "parent" else None
+                )
+
+    def test_non_matching_shape_returns_none_and_is_untouched(self):
+        """A plain forked_from_id with no history_base and no matching second
+        session_meta (e.g. the first real turn right after it) is NOT a
+        legacy-embedded fork — recover_legacy_embedded_fork must return None
+        so the caller's pre-existing soft-warning path still runs."""
+        child = _write_rollout(
+            [
+                {
+                    "type": "session_meta",
+                    "payload": {"id": "child", "cwd": "/tmp", "forked_from_id": "parent"},
+                },
+                _msg("user", "继续", "input_text"),
+            ]
+        )
+        data = mod.parse_codex_rollout(child)
+        resolver_called = False
+
+        def resolver(_: str):
+            nonlocal resolver_called
+            resolver_called = True
+            return None
+
+        result = mod.recover_legacy_embedded_fork(child, data, "child", resolver)
+        self.assertIsNone(result)
+        self.assertFalse(resolver_called)
+
+
 class TruncationContractTests(unittest.TestCase):
     """Default output truncates with a named escape hatch; --full does not."""
 
