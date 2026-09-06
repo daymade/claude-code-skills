@@ -97,6 +97,7 @@ recovered_deep_research/
 *-workspace/
 **/*-workspace/
 .skill-regression-reviewed
+.security-scan-passed
 .skill-regression-baseline.json
 .gstack/
 .in_use/
