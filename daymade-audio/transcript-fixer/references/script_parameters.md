@@ -72,6 +72,13 @@ uv run scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <di
 - `--resolve-review ID --decision accepted|overridden|kept_original|skipped|reopen`: Record a verdict and execute the action pack (`overridden` requires `--override-to TEXT`; `--note` free-text evidence; `--by` reviewer name; `reopen` reverts applied edits and re-pends the item). When the resolved text is already in place — a hand edit landed before the verdict and the recorded context reappears with the text in its slot — `accepted` and `overridden` record the verdict without writing and log `already in place at the anchor — recorded without writing`; the original still within the resolve window of the hint outside the suggestion, a third form in that slot (anywhere at the matched neighbour width, or near the hint at any width down to two characters a side), or an edit touching the slot's neighbours still exits 2 with `re_anchor_needed`, and the message names which
 - `--json` works with all five: one machine-readable result line on stdout
 
+**Sidecar closure and lookup**:
+
+- `--close-sidecars --input FILE [--output DIR] [--dry-run] [--json]`: decide whether the review sidecars beside `FILE` are closed and remove them. Every `*_changes.md`/`*_needs_review.md` entry is re-read against the transcript with the `asr_note` ledger masked (`applied` / still the original / anchor rewritten past both forms) and against the review queue rows for that exact resolved path (a non-pending row for the FROM→TO pair closes it; a pending row blocks). Verdicts: `closed` removes `_changes.md`, `_needs_review.md`, `_uncertain.md`, `_对比.html` and any `_stage1.md`/`_stage2.md`/`_dryrun.md` older than the transcript; `open` (undecided entries or pending rows) removes nothing and lists them; `blocked` (a `_stage1.md` newer than the transcript — unpromoted, take the plain Stage 1 rerun) removes nothing. `--dry-run` computes the verdict without deleting or recording anything.
+- `--decide-raw kept_original|skipped [--by WHO] [--note TEXT] [--domain D]`: with `--close-sidecars`, record that verdict through the review queue for entries that still read as the original and have no row (enqueued as `stage1_deferred` under `--domain`, default `general`, then resolved), so the closure carries an audit trail. Ignored in `--dry-run`.
+- `--discard-unpromoted`: with `--close-sidecars`, also remove a `_stage2.md`/`_dryrun.md` newer than the transcript; otherwise such run outputs are retained and named in `retained`.
+- `--lookup TERM [--domain D] [--json]`: every existing claim on a term — dictionary rules where it is FROM or TO (active and disabled; `--domain` narrows this section), context rules (`--domain` shows global plus that domain), roster-loaded name variants from the configured people roster, and review-queue rows (`original`/`suggested`). ASCII matching is case-insensitive. Prints `no trace anywhere` when every section is empty.
+
 ### Review Queue Item Schema
 
 `--enqueue-review` accepts a JSON array of items (or `{"items": [...]}`). Only `original` is required. **Unknown keys are silently ignored** — a typo'd field name (e.g. `line_hint` instead of `line`) drops the value with no warning, and the item enqueues without that anchor. If the anchor matters, spot-check with `--show-review <id>` after enqueueing (real incident: an item enqueued with `line_hint` lost its line anchor silently).
@@ -134,6 +141,8 @@ uv run scripts/fix_transcription.py --input meeting.md --stage 1 --output ./meet
 - `2` - `--resolve-review` refused because the anchor text no longer matches the target file (re-anchor needed; nothing was applied — fail closed); also `--reanchor-review` when every requested id failed
 - `3` - `--enqueue-review` rejected one or more items whose `original`/`context` is not verbatim in the declared file (see `rejected_unanchored` in the JSON; items in `added` WERE enqueued — fix the rejects and re-enqueue them)
 - API request failures do **not** get a dedicated exit code — the pipeline keeps the original text and prints a warning (see [SKILL.md](../SKILL.md)「Agent-less API route」)
+
+`--close-sidecars` uses `0` = `closed` (evidence removed), `1` = `open` (undecided entries or pending rows; nothing removed), `2` = `blocked` (unpromoted `_stage1.md`, missing `--input`, or file not found); the JSON `verdict` field carries the same word.
 
 `--report-false-positive` carries its own codes, because a caller could not
 otherwise tell "I disabled it just now" from "it was already off" — both used

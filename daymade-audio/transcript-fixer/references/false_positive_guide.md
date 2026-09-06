@@ -14,12 +14,13 @@ Dictionary-based corrections are powerful but dangerous. Adding the wrong rule s
 - **Words <=2 characters**: Almost any 2-char Chinese string is a valid word or part of one. "线数" inside "产线数据" becomes "产线束据".
 - **Both sides are real words**: "仿佛->反复", "犹豫->抑郁" -- both forms are valid Chinese. The "error" is only an error for one specific ASR model.
 
-## Two layers of defense (and why the word list is the weak point)
+## Three layers of defense (and why the word list is the weak point)
 
-The guard fires at two points, and both read `utils/common_words.py`:
+The guard fires at three points; the first two read `utils/common_words.py`, the third asks the segmenter:
 
 1. **Add time** — `--add` runs `check_correction_safety()` and blocks a rule whose `from_text` is a known common word or a substring-collision source (override with `--force`).
 2. **Apply time** — Stage 1 defaults to **safe mode**: `_assess_risk()` grades every rule and only low-risk (non-word, high-confidence) ones auto-apply. Common-word / ≤2-char / real-word-fragment rules are written to `*_needs_review.md` instead. So even a bad rule already sitting in the database won't silently corrupt a transcript unless you pass `--apply-all`.
+3. **Match time** — `DictionaryProcessor` refuses a match at the position itself, before risk scoring, when the corrected form is already in place (superset check), when a short rule sits inside a longer listed common word, or when the match cuts across word boundaries: a dictionary-only jieba cut (HMM off, so nothing is invented) of the surrounding text has a multi-character segment beginning before the match and ending inside or past it, or beginning inside and ending past it — 新一 in 更新|一下, 同龄 in 同龄人, `Cloud` in `iCloud`. Refusals are counted as `Refused at word boundaries` in the Stage 1 summary and are neither applied nor deferred, so a rerun no longer re-defers the same fragments. A genuine garble segments into single characters and passes through; the blind spot is a real mishearing whose neighbours happen to complete two ordinary words (叫新一下单 → 新|一下), which safe mode only ever deferred and the native read-through still owns.
 
 The catch: both layers are only as good as the word list. **A real word missing from `common_words.py` is invisible to *both* checks** — that is exactly how `多深`, `小龙虾`, and `早生` slipped in and then got applied (fixed 2026-06; they are in the list now). So when you find a false positive whose `from_text` is a genuine word, add it to `common_words.py` — not just to the per-rule disable list. That fixes the whole class, not the one instance.
 

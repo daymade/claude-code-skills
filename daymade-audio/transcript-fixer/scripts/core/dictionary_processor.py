@@ -26,6 +26,67 @@ from core.protected_spans import mask_speaker_labels, restore_speaker_labels
 
 logger = logging.getLogger(__name__)
 
+# Word-boundary segmenter for safety layer 2b (see straddles_word_boundary).
+# jieba is already a declared dependency of the Stage 1 entrypoint (the 4+ char
+# real-word guard uses it), so this adds no install cost; it is loaded lazily
+# because building its prefix dictionary costs about a second and --list/--add
+# never need it.
+_SEGMENTER = None
+_SEGMENTER_UNAVAILABLE = False
+# Characters of context handed to the segmenter on each side of a match: wide
+# enough for the longest ordinary word to complete on either side, narrow
+# enough that a distant garble cannot reshape the tokens around this one.
+_STRADDLE_WINDOW = 8
+
+
+def _get_segmenter():
+    """Lazy jieba loader; None when jieba is not importable (the check then no-ops)."""
+    global _SEGMENTER, _SEGMENTER_UNAVAILABLE
+    if _SEGMENTER is None and not _SEGMENTER_UNAVAILABLE:
+        try:
+            import jieba
+            jieba.setLogLevel(logging.ERROR)  # silence "Building prefix dict..."
+            _SEGMENTER = jieba
+        except ImportError:
+            _SEGMENTER_UNAVAILABLE = True
+    return _SEGMENTER
+
+
+def straddles_word_boundary(text: str, pos: int, match: str) -> bool:
+    """True when the match at ``pos`` cuts through a dictionary word.
+
+    A dictionary-only segmentation (HMM off, so nothing is invented) of a
+    window around the match is compared with the match span. When a
+    multi-character segment begins before the match and ends inside or past
+    it, or begins inside it and ends past it, the match is a fragment of real
+    words rather than a mishearing: 新一 inside 更新|一下, 下电 inside
+    楼下|电动车, 出途 inside 退出|途径, 问题记 inside 问题|记录. A genuine
+    garble segments into single characters, so it never trips this check, and
+    a match that IS a whole segment passes through to risk scoring unchanged.
+    Single-character segments are ignored on purpose: they are what an unknown
+    fragment looks like, not evidence of a word boundary. The known blind spot
+    is a real mishearing whose neighbours happen to complete two ordinary
+    words (叫新一下单 → 新|一下); safe mode only ever deferred that class, and
+    the native read-through remains responsible for it.
+    """
+    if not match:
+        return False
+    seg = _get_segmenter()
+    if seg is None:
+        return False
+    start = max(0, pos - _STRADDLE_WINDOW)
+    end = min(len(text), pos + len(match) + _STRADDLE_WINDOW)
+    window = text[start:end]
+    rel_start = pos - start
+    rel_end = rel_start + len(match)
+    cursor = 0
+    for token in seg.lcut(window, HMM=False):
+        token_end = cursor + len(token)
+        if len(token) >= 2 and (cursor < rel_start < token_end or cursor < rel_end < token_end):
+            return True
+        cursor = token_end
+    return False
+
 
 # Frontmatter fields whose values are correction LEDGERS (e.g. `asr_note`
 # records the correction history as "旧形→正确形" lists). The old forms quoted
@@ -202,6 +263,11 @@ class DictionaryProcessor:
         self.context_rules = context_rules
         self.correction_meta = correction_meta or {}
         self.speaker_labels = speaker_labels or set()
+        # (line_number, from_text, to_text, snippet) for every dictionary match
+        # the word-boundary check refused in the last process() call. Reported,
+        # not silently dropped: a caller comparing runs must be able to see why
+        # a deferral disappeared.
+        self.boundary_skips: List[Tuple[int, str, str, str]] = []
 
     def process(self, text: str, review_mode: bool = False) -> Tuple[str, List[Change]]:
         """
@@ -228,6 +294,7 @@ class DictionaryProcessor:
         )
         corrected_text = masked_text
         all_changes = []
+        self.boundary_skips = []
 
         # Step 1: Apply context rules (more specific, higher priority)
         corrected_text, context_changes = self._apply_context_rules(corrected_text, review_mode=review_mode)
@@ -387,6 +454,24 @@ class DictionaryProcessor:
                 search_start = pos + len(wrong)
                 logger.debug(
                     f"Skipped '{wrong}' at pos {pos}: part of longer word"
+                )
+                continue
+
+            # Safety layer 2b: word-boundary straddle check (every rule).
+            # The curated common-word list above only catches a match sitting
+            # INSIDE one listed word; most real false positives cut ACROSS two
+            # ordinary words instead (新一 in 更新|一下), and safe mode used to
+            # defer every one of them into the review sidecar and queue on
+            # every rerun. A dictionary-only segmentation decides that case.
+            if straddles_word_boundary(text, pos, wrong):
+                result_parts.append(text[search_start:pos + len(wrong)])
+                search_start = pos + len(wrong)
+                self.boundary_skips.append((
+                    text[:pos].count('\n') + 1, wrong, correct,
+                    text[max(0, pos - 6):pos + len(wrong) + 6],
+                ))
+                logger.debug(
+                    f"Skipped '{wrong}' at pos {pos}: straddles a word boundary"
                 )
                 continue
 
@@ -562,6 +647,7 @@ class DictionaryProcessor:
         summary = {
             "total_changes": len(changes),
             "dictionary_changes": sum(1 for c in changes if c.rule_type == "dictionary"),
-            "context_rule_changes": sum(1 for c in changes if c.rule_type == "context_rule")
+            "context_rule_changes": sum(1 for c in changes if c.rule_type == "context_rule"),
+            "boundary_skips": len(self.boundary_skips)
         }
         return summary

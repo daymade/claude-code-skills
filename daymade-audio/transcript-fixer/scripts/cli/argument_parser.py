@@ -436,6 +436,38 @@ def create_argument_parser() -> argparse.ArgumentParser:
              "path and scopes both items and status totals to that one file."
     )
     parser.add_argument(
+        "--close-sidecars",
+        action="store_true",
+        dest="close_sidecars",
+        help="Decide whether the Stage 1/2 sidecars beside --input are closed (every "
+             "*_changes/*_needs_review entry applied or decided, zero pending queue rows "
+             "for that exact file) and remove them; --dry-run reports only. "
+             "Exit 0 closed, 1 open, 2 blocked"
+    )
+    parser.add_argument(
+        "--decide-raw",
+        dest="decide_raw",
+        choices=["kept_original", "skipped"],
+        help="With --close-sidecars: record this verdict through the review queue for "
+             "report entries that still read as the original and have no queue row "
+             "(use --by/--note for provenance)"
+    )
+    parser.add_argument(
+        "--discard-unpromoted",
+        action="store_true",
+        dest="discard_unpromoted",
+        help="With --close-sidecars: also remove a *_stage2.md/*_dryrun.md that is newer "
+             "than the transcript (unpromoted API/preview output)"
+    )
+    parser.add_argument(
+        "--lookup",
+        metavar="TERM",
+        dest="lookup_term",
+        help="Show every trace of TERM: dictionary rules where it is FROM or TO (active "
+             "and disabled), context rules, roster-loaded name variants, review-queue "
+             "rows; --domain narrows the dictionary scope"
+    )
+    parser.add_argument(
         "--show-review",
         metavar="ID",
         type=int,
