@@ -433,6 +433,45 @@ audit when the user asks.
   running sessions. Do not clean them solely to make a count reach one.
 - **Marketplace remove would affect installs:** stop and design a scope-preserving
   migration; do not rely on remove-then-add.
+
+## 14. Verify a newly registered Skill
+
+Use this gate when the requested delivery includes local availability. Take the
+expected identity from the task's new registration, not from the current active
+list. A source-only or package-only delivery does not authorize local activation.
+
+1. Run the source owner's sync dry-run and apply within the declared host policy.
+   An approved whole marketplace automatically includes new members. Keep explicit
+   cold discovery paths and router contracts; absence alone is not a cold decision.
+2. Read back the installed route. Codex needs the correct source link. Claude can
+   use either its personal Skill or an enabled plugin containing that Skill;
+   absence from plugin install JSON alone does not prove a personal Skill missing.
+3. Run the fresh-host checks from this bundle:
+
+   ```bash
+   python3 scripts/audit_codex_skill_surface.py --require-visible <skill-name> --required-only --json
+   python3 scripts/audit_claude_skill_surface.py --require-visible <command-name> --json
+   ```
+
+   Use Claude's exact personal name or its existing `<plugin>:<skill>` command.
+   The Claude probe sends only an initialization control request, with no user
+   turn and a loopback model endpoint. Invocation-only settings disable hooks and
+   MCP servers while keeping Skill/plugin discovery. It proves command discovery,
+   not model auto-triggering or successful Skill execution. `--catalog-jsonl` reads
+   a frozen initialization fixture; use a live probe for a live delivery claim.
+4. Require exit 0 for each requested target. Missing names exit 1; invalid or
+   unavailable evidence exits 2. Codex `--required-only` gates the explicit target
+   names while retaining unrelated catalog pressure in the JSON report. For a
+   whole-host audit, omit it: the audit expands `active_marketplaces` through the
+   source owner's `--print-source-inventory` resolver. `--source-sync-script`
+   selects that resolver; `--source-inventory-json` supplies a frozen fixture.
+5. For a retained cold entry, prove it stays absent at each exact discovery alias
+   and that its router still resolves a representative resource. Codex exact-path
+   disables apply only to those lexical paths, not to new aliases of the source.
+
+Do not use `skill-install-audit.py` exit 0 as this gate: it is an inventory report,
+can contain findings, and does not measure the fresh host catalog. Stop when the
+requested host discovers the target and the retained cold route still works.
 - **A duplicate is byte-identical:** it is duplication debt, not evidence that
   either copy can be deleted without identifying the owner and replacement.
 - **Current session still shows retired entries:** restart; startup metadata is

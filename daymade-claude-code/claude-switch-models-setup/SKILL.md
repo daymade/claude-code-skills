@@ -385,6 +385,15 @@ Then restart the affected Claude Code window.
 
 ### Local source edits do not show up in Claude Code or Codex
 
+For an owned marketplace whose new Skills should become available automatically,
+declare it once in `active_marketplaces` (Codex) and, independently,
+`claude_active_marketplaces` (Claude) in the existing activation manifest. Run the
+source sync dry-run before applying. Claude fills missing personal entries,
+preserves existing correct direct links, and avoids creating another entry for
+an installed user plugin. Existing disabled plugins do not gain a new direct
+alias. See `references/local-source-sync-architecture.md` for source selection,
+runtime installation, and verification.
+
 Symptom: you edit a skill in a local source repo, but Claude Code or Codex still loads an old installed copy.
 
 Expected design: normal edits to an installed Claude plugin or an explicitly selected Codex user Skill are live immediately because their runtime locations are symlinks. A source Skill that is absent from `codex-active-skills.json` is deliberately cold inventory, not sync drift. Existing Claude Code/Codex sessions may still need a restart because Skill metadata is loaded at session start.

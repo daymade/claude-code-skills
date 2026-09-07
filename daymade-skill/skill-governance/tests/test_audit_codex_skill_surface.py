@@ -497,5 +497,65 @@ class CodexSkillSurfaceAuditTests(unittest.TestCase):
         self.assertEqual(payload["status"], "invalid")
 
 
+    def market_case(self, visible=True, link=True):
+        source = self.write_skill("source/member", "actual-name", "Complete metadata.")
+        self.control = self.write_skill("control", "control", "Control.")
+        agents = self.skills_root / "active"
+        agents.mkdir()
+        if link:
+            (agents / "actual-name").symlink_to(source.parent)
+        self.manifest.write_text(json.dumps({
+            "schema_version": 1, "active_skills": [], "active_marketplaces": ["example-market"],
+        }))
+        source_inventory = self.root / "sources.json"
+        source_inventory.write_text(json.dumps({"schema_version": 1, "marketplaces": {
+            "example-market": {"actual-name": {"source_dir": str(source.parent)}},
+        }}))
+        prompt = self.write_prompt(
+            [("control", "Control.", self.control)] + (
+                [("actual-name", "Complete metadata.", agents / "actual-name/SKILL.md")] if visible else []
+            ),
+        )
+        options = ["--agents-root", str(agents), "--source-inventory-json", str(source_inventory)]
+        return prompt, options, source, agents
+
+    def test_market_member_present_and_missing_are_distinguished(self):
+        prompt, options, _, agents = self.market_case()
+        result, report = self.run_audit(prompt, *options, "--require-visible", "actual-name")
+        self.assertEqual(result.returncode, 0, report)
+        (agents / "actual-name").unlink()
+        prompt = self.write_prompt([("control", "Control.", self.control)])
+        result, report = self.run_audit(prompt, *options)
+        self.assertEqual(result.returncode, 1, report)
+        self.assertEqual(report["findings"]["active_missing_links"], ["actual-name"])
+
+    def test_exact_disable_is_respected_but_source_disable_does_not_hide_alias(self):
+        prompt, options, source, agents = self.market_case(visible=False)
+        direct = agents / "actual-name/SKILL.md"
+        self.config.write_text(f'[[skills.config]]\npath = "{direct}"\nenabled = false\n')
+        self.write_inventory([self.inventory_item(self.control), self.inventory_item(source, enabled=False)])
+        result, report = self.run_audit(prompt, *options)
+        self.assertEqual(result.returncode, 0, report)
+        self.assertEqual(report["active_disabled"], ["actual-name"])
+        self.config.write_text(f'[[skills.config]]\npath = "{source}"\nenabled = false\n')
+        result, report = self.run_audit(prompt, *options)
+        self.assertEqual(result.returncode, 1, report)
+        self.assertEqual(report["findings"]["active_missing_visible"], ["actual-name"])
+
+    def test_missing_active_market_fails_instead_of_empty_success(self):
+        prompt, options, _, _ = self.market_case()
+        (self.root / "sources.json").write_text('{"schema_version":1,"marketplaces":{}}')
+        result, report = self.run_audit(prompt, *options)
+        self.assertEqual(result.returncode, 2, report)
+
+    def test_required_gate_has_healthy_and_absent_controls(self):
+        prompt, options, _, _ = self.market_case()
+        result, report = self.run_audit(prompt, *options, "--require-visible", "actual-name", "--required-only")
+        self.assertEqual(result.returncode, 0, report)
+        result, report = self.run_audit(prompt, *options, "--require-visible", "missing-control", "--required-only")
+        self.assertEqual(result.returncode, 1, report)
+        self.assertEqual(report["required_status"], "missing")
+
+
 if __name__ == "__main__":
     unittest.main()

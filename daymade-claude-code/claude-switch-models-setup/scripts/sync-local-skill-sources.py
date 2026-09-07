@@ -96,6 +96,7 @@ class SkillActivationPolicy:
     # charter is "every registered Skill is activated", so its additions and removals
     # no longer need a manual edit here to stay in sync.
     active_marketplaces: tuple[str, ...] = ()
+    claude_active_marketplaces: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -705,7 +706,12 @@ def load_skill_activation_policy(path: Path) -> SkillActivationPolicy:
         "active marketplace",
         required=False,
     )
-    unknown_marketplaces = sorted(set(active_marketplaces) - set(LOCAL_MARKETPLACE_NAMES))
+    claude_marketplaces = _load_skill_name_array(
+        data, path, "claude_active_marketplaces", "Claude active marketplace", required=False,
+    )
+    unknown_marketplaces = sorted(
+        (set(active_marketplaces) | set(claude_marketplaces)) - set(LOCAL_MARKETPLACE_NAMES)
+    )
     if unknown_marketplaces:
         raise ValueError(
             f"{path}: active_marketplaces must name managed marketplaces "
@@ -718,7 +724,7 @@ def load_skill_activation_policy(path: Path) -> SkillActivationPolicy:
             f"{path}: legacy_codex_compat_skills must be a subset of active_skills; "
             f"inactive: {', '.join(inactive_legacy_names)}"
         )
-    return SkillActivationPolicy(active_names, legacy_names, active_marketplaces)
+    return SkillActivationPolicy(active_names, legacy_names, active_marketplaces, claude_marketplaces)
 
 
 def load_active_skill_names(path: Path) -> tuple[str, ...]:
@@ -1302,6 +1308,53 @@ def sync_claude_cache(
         write_json(installed_path, installed, apply)
 
 
+def select_claude_direct_skills(
+    skills: dict[str, SkillSource], claude_dir: Path, root: Path,
+) -> dict[str, SkillSource]:
+    """Fill missing personal entries without bypassing disabled/plugin entries."""
+    installed_path = claude_dir / "plugins" / "installed_plugins.json"
+    installed = load_json(installed_path) if installed_path.exists() else {"plugins": {}}
+    settings_path = claude_dir / "settings.json"
+    settings = load_json(settings_path) if settings_path.exists() else {}
+    if not isinstance(installed, dict) or not isinstance(installed.get("plugins"), dict):
+        raise ValueError(f"invalid installed plugin registry: {installed_path}")
+    if not isinstance(settings, dict) or not isinstance(settings.get("enabledPlugins", {}), dict):
+        raise ValueError(f"invalid enabledPlugins settings: {settings_path}")
+    enabled = settings.get("enabledPlugins", {})
+    selected = {}
+    for name, skill in skills.items():
+        existing = root / name
+        if existing.is_symlink() and existing.resolve() == expected_skill_source_path(skill):
+            # A direct skill is an independent route. Disabling its plugin may
+            # deliberately avoid a duplicate, not disable this existing route.
+            selected[name] = skill
+            continue
+        state = enabled.get(skill.plugin_id)
+        if state is False:
+            log(f"Claude skill {name}: explicitly disabled; no direct entry")
+            continue
+        records = installed["plugins"].get(skill.plugin_id, [])
+        if not isinstance(records, list):
+            raise ValueError(f"invalid installed records for {skill.plugin_id}")
+        if records:
+            if state is not True:
+                # Do not reinterpret a missing profile setting as enable consent.
+                warn(f"Claude plugin {skill.plugin_id}: enabled state unknown; no direct entry")
+                continue
+            # Only user-scope installs cover every cwd where a personal skill loads.
+            user_records = [r for r in records if isinstance(r, dict) and r.get("scope") == "user"]
+            if user_records:
+                plugin = user_records[-1]
+                install_path = plugin.get("installPath")
+                if not isinstance(install_path, str) or not Path(install_path).is_dir():
+                    raise ValueError(f"Claude plugin install is missing: {skill.plugin_id}")
+                log(f"Claude skill {name}: provided by enabled user plugin")
+                continue
+            raise ValueError(f"Claude plugin {skill.plugin_id}: scoped install conflicts with personal activation")
+        selected[name] = skill
+    return selected
+
+
 def sync_skill_root(
     root: Path,
     skills: dict[str, SkillSource],
@@ -1802,6 +1855,9 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--claude-dir", type=Path, default=DEFAULT_CLAUDE_DIR)
     parser.add_argument("--codex-skills", type=Path, default=DEFAULT_CODEX_SKILLS)
     parser.add_argument("--agents-skills", type=Path, default=DEFAULT_AGENTS_SKILLS)
+    parser.add_argument("--claude-skills", type=Path, help="Personal root; defaults to <claude-dir>/skills")
+    parser.add_argument("--skip-claude-skills", action="store_true")
+    parser.add_argument("--print-source-inventory", action="store_true", help="Print registered source identities as JSON, without syncing")
     parser.add_argument(
         "--active-skills-manifest",
         type=Path,
@@ -1835,6 +1891,13 @@ def main(argv: list[str]) -> int:
 
     repos = [repo.expanduser().resolve() for repo in args.repo] if args.repo else infer_repos(Path(__file__), args.claude_dir)
     sources = [load_marketplace(repo) for repo in repos]
+    if args.print_source_inventory:
+        merge_source_skills(sources)  # Preserve duplicate-identity validation.
+        print(json.dumps({"schema_version": 1, "marketplaces": {
+            src.name: {name: {"source_dir": str(skill.source_dir), "plugin_id": skill.plugin_id}
+                       for name, skill in src.skills.items()} for src in sources
+        }}, sort_keys=True))
+        return 0
     if args.print_watch_paths:
         print(args.active_skills_manifest.expanduser())
         for src in sources:
@@ -1856,7 +1919,9 @@ def main(argv: list[str]) -> int:
     policy = load_skill_activation_policy(manifest)
     skills = merge_source_skills(sources)
     discovered_marketplaces = {src.name for src in sources}
-    undiscovered = sorted(set(policy.active_marketplaces) - discovered_marketplaces)
+    undiscovered = sorted(
+        (set(policy.active_marketplaces) | set(policy.claude_active_marketplaces)) - discovered_marketplaces
+    )
     if undiscovered:
         raise ValueError(
             f"{manifest}: active_marketplaces not found among discovered repos: "
@@ -1879,6 +1944,18 @@ def main(argv: list[str]) -> int:
         policy.legacy_codex_compat_names,
     )
     source_roots = [src.repo for src in sources]
+    claude_sources = [src for src in sources if src.name in policy.claude_active_marketplaces]
+    claude_candidates = freeze_selected_skill_sources({
+        name: skill for src in claude_sources for name, skill in src.skills.items()
+    })
+    claude_root = absolute_without_symlink_resolution(args.claude_skills or args.claude_dir / "skills")
+    manage_claude = bool(claude_sources) and not args.skip_claude_skills
+    claude_expectation = None
+    if manage_claude:
+        validate_skill_root_topology(claude_root, agents_root)
+        validate_skill_root_topology(claude_root, codex_root)
+        if args.apply:
+            claude_expectation = capture_skill_root_expectation(claude_root, "Claude personal skill root")
     agents_expectation: SkillRootExpectation | None = None
     codex_expectation: SkillRootExpectation | None = None
     if args.apply and not args.skip_agents:
@@ -1972,6 +2049,22 @@ def main(argv: list[str]) -> int:
                 sync_known_marketplaces(args.claude_dir, sources, args.apply)
             if not args.skip_claude_cache:
                 sync_claude_cache(args.claude_dir, sources, stamp, args.apply)
+            if manage_claude:
+                claude_skills = select_claude_direct_skills(claude_candidates, args.claude_dir, claude_root)
+                if args.apply:
+                    claude_pinned = root_stack.enter_context(pin_skill_root(
+                        claude_root, label="Claude personal skill root", apply=True,
+                        create_missing=True, expected=claude_expectation,
+                    ))
+                    if claude_pinned is None:
+                        raise RuntimeError(f"Claude personal skill root unavailable: {claude_root}")
+                else:
+                    claude_pinned = None
+                sync_skill_root(claude_root, claude_skills, [src.repo for src in claude_sources],
+                                stamp, args.apply, create_missing=True, pinned_root=claude_pinned)
+                if args.apply:
+                    verify_selected_skill_links(claude_root, claude_skills, pinned_root=claude_pinned)
+                    assert_selected_skill_sources(claude_candidates)
             if not args.skip_agents and (not args.apply or agents_pinned is not None):
                 assert_selected_skill_sources(active_skills)
                 sync_skill_root(

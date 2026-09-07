@@ -72,6 +72,8 @@ The machine-local manifest is
 {
   "schema_version": 1,
   "active_skills": ["skill-name"],
+  "active_marketplaces": [],
+  "claude_active_marketplaces": [],
   "legacy_codex_compat_skills": []
 }
 ```
@@ -130,6 +132,22 @@ Rules:
   Without it, a marketplace whose own installer activates every registered Skill will
   keep recreating links this syncer then prunes, and the two writers silently undo
   each other.
+- `claude_active_marketplaces` independently opts an owned marketplace into
+  personal Claude Skill activation. Both fields default to empty. New registered
+  members need no second per-Skill edit. The syncer creates missing links in
+  `<claude-dir>/skills`, using the same root identity, source containment, atomic
+  creation, and recoverable pruning checks as the Codex root.
+  `--skip-claude-skills` leaves that root alone. Existing correct direct links
+  retain their identity. An enabled user plugin already provides its members, so
+  it receives no new direct aliases. Explicitly disabled plugins and installed
+  plugins without a known enabled state do not gain a new personal entry; unknown
+  states are reported. A scoped install conflict fails. User-owned directories
+  and foreign links are not replaced. A pre-existing direct Skill remains
+  independent of a disabled plugin with the same source.
+- `--print-source-inventory` returns validated registered frontmatter identities,
+  source directories, and plugin identities as JSON without changing either host.
+  Catalog auditors consume this inventory to expand active marketplaces instead
+  of inferring expected membership from links that happen to exist.
 - The background daemon executes a **pinned plugin copy**, installed into its own
   `CLAUDE_CONFIG_DIR` under `~/.local/share/`, not the live checkout. That isolation is
   deliberate: editing a source repo must not change what an already-running daemon does.
@@ -146,6 +164,13 @@ Rules:
   new version directory. `skill-install-audit.py` reports the gap as `DAEMON_RUNTIME_LAG`;
   it is the only thing that compares the two numbers. `scripts/setup.sh` refuses to
   relink such a machine to the checkout; SKILL.md setup step 2 owns the two layouts.
+- Reinstall the LaunchAgent after advancing its runtime pin. `--install` uses uv
+  once to install Python in this profile manager's own configuration directory;
+  ordinary runs invoke that absolute interpreter directly. The daemon uses the
+  Python commands' shared lock and retries every five minutes as well as on
+  WatchPaths events. A successful pass prints a UTC completion timestamp after
+  link verification and profile synchronization. Inspect that timestamp when
+  checking liveness; registration and exit code alone do not prove a recent pass.
 - Unselected source Skills remain cold inventory. Real directories and third-party
   symlinks in either root are outside automatic retirement.
 
