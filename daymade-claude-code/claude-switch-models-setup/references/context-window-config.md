@@ -9,7 +9,7 @@ mechanism is reference knowledge you reach for when something looks wrong.
 ## Table of contents
 
 - [The `[1m]` marker — full mechanism](#the-1m-marker--full-mechanism)
-- [Keep the marker for non-interactive Claude Code callers](#keep-the-marker-for-non-interactive-claude-code-callers)
+- [Verify the marker on each non-interactive invocation](#verify-the-marker-on-each-non-interactive-invocation)
 - [Decision-rule caveat: the step-2-16k war-story](#decision-rule-caveat-the-step-2-16k-war-story)
 - [Verifying an env var actually changes the outgoing request](#verifying-an-env-var-actually-changes-the-outgoing-request)
 
@@ -28,11 +28,12 @@ Three things follow from this that aren't obvious just from looking at the templ
 - **What `[1m]` actually buys you is Claude Code's own awareness** of that ceiling — the context percentage in the statusline, and, most consequentially, when auto-compact fires. Configure a genuinely-1M-context provider *without* `[1m]` and Claude Code has no way to know it isn't talking to a normal ~200K model; it will compact prematurely on long sessions even though the provider could hold much more.
 - **It's a generic suffix match, not a whitelist of Anthropic's own model names.** It fired identically for `moonshotai/kimi-k3[1m]` — an arbitrary third-party ID Claude Code has never heard of — as it does for Anthropic's own native `sonnet-4-6[1m]`/`opus[1m]`-style 1M-beta models (those exist for the real Anthropic API too, and are where this convention originates). Any provider/model name works as the prefix as long as the string ends in exactly `[1m]`.
 
-## Keep the marker for non-interactive Claude Code callers
+## Verify the marker on each non-interactive invocation
 
-Keep `[1m]` when a non-interactive caller runs through Claude Code, including
-`claude -p`. Use a bare provider model ID only when calling the provider API
-directly, because that caller sends the ID without Claude Code's normalization.
+Keep `[1m]` to select the 1M client budget in the verified `claude --bare -p`
+invocation below. Capture the exact command before applying this result to
+another print-mode or SDK entry point. Use the provider's bare model ID for a
+direct API caller that does not perform Claude Code's normalization.
 
 Verified with a local capture server on Claude Code 2.1.263: `--bare -p` configured
 with `custom-model[1m]` sends `custom-model` and the `context-1m-2025-08-07` beta
