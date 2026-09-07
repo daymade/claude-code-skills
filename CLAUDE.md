@@ -134,7 +134,7 @@ and discovery details belong in `peer-message/references/protocol-and-discovery.
 current product availability, provenance, and inbound-control mechanics belong in
 `peer-message/references/official-feature.md`; reply addressing, payload structure,
 delivery-status language, what to do when you find another session's in-flight work on a
-shared resource, and the two verification contracts that decide what a peer assertion or a
+shared resource, and the verification contracts that decide what a peer assertion or a
 peer denial is worth belong in
 `peer-message/references/coordination-and-learning-loop.md`. Keep implementation, CLI help,
 tests, and those owners aligned; README and changelog entries should point to
@@ -173,6 +173,14 @@ The syncer's managed marketplace identities, conventional checkout candidates,
 and generated watch paths are owned by `sync-local-skill-sources.py`; derive them
 from its constants/functions and `--print-watch-paths` output instead of copying
 their current members or counts into `CLAUDE.md`, READMEs, or references.
+
+When an installation audit or context-window setting changes, keep the executable
+contract in `claude-switch-models-setup` aligned with its
+[`troubleshooting.md`](daymade-claude-code/claude-switch-models-setup/references/troubleshooting.md)
+and [context request probe](daymade-claude-code/claude-switch-models-setup/references/context-window-config.md).
+Use `skill-governance` for fresh-host acceptance; an inventory report's exit status
+does not establish that the host discovers a Skill. Keep result definitions and
+probe commands in those owners rather than copying them here.
 
 In Claude Code, use `/plugin ...` slash commands. In your terminal, use `claude plugin ...`.
 
@@ -319,7 +327,7 @@ Skills for public distribution must NOT contain:
 2. **Global PII Guard pre-commit hook** (`~/scripts/git-pii-guard/pre-commit`) — blocks staged PII/secrets and generated/local artifact paths
 3. **Global PII Guard pre-push hook** (`~/scripts/git-pii-guard/pre-push`) — scans commits about to be pushed, catching bad local history before it hits GitHub
 4. **gitleaks** (`.gitleaks.toml`) — deep scan with custom rules for this repo
-5. **AI semantic read-through** (the gate the other four structurally cannot be) — layers 1-4 are keyword/regex/gitleaks: they only match patterns someone listed, and are blind to private content with **no keyword** — a real name in another language (gitleaks doesn't cover CJK), a verbatim line from a real transcript, a real example dropped into an illustration. Before publishing, **read the whole skill yourself and judge each concrete name/example/snippet semantically** ("generic placeholder / public entity, or lifted from a real project / person / transcript?"). A green scan is **not** a clean bill of health; "grep found nothing" only means your word list didn't fire. Method: [`daymade-skill/skill-creator/references/sanitization_checklist.md`](./daymade-skill/skill-creator/references/sanitization_checklist.md).
+5. **AI semantic read-through** — pattern-based scans only match patterns someone listed, and are blind to private content with **no keyword** — a real name in another language (gitleaks doesn't cover CJK), a verbatim line from a real transcript, a real example dropped into an illustration. Before publishing, **read the whole skill yourself and judge each concrete name/example/snippet semantically** ("generic placeholder / public entity, or lifted from a real project / person / transcript?"). A green scan is **not** a clean bill of health; "grep found nothing" only means your word list didn't fire. Method: [`daymade-skill/skill-creator/references/sanitization_checklist.md`](./daymade-skill/skill-creator/references/sanitization_checklist.md).
 
 Most repositories enable PII Guard via `~/scripts/git-pii-guard/manage.sh enable <repo-path>`. This repository instead points `core.hooksPath` at the canonical primary checkout's absolute `.githooks` directory: its versioned dispatchers run the repository mainline guard and then delegate to the same shared PII guard when installed.
 For repo-specific additions:

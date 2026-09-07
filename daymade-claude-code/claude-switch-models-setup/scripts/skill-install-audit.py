@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """skill-install-audit.py — read-only reconciliation of every skill install surface.
 
-One command that answers "which of my skills are actually usable where?" by joining
-five layers that otherwise drift silently:
+Inspect installation state across the following sources. This is an inventory,
+not a fresh-host discovery or successful-execution check:
 
   1. REGISTRY   each local marketplace's .claude-plugin/marketplace.json
   2. INSTALLED  ~/.claude/plugins/installed_plugins.json  (shared via symlink)
@@ -15,13 +15,13 @@ five layers that otherwise drift silently:
   6. FRESHNESS  whether the local checkouts every layer above is read from are themselves
                 behind their already-fetched remote-tracking refs
 
-Findings (each list is empty-friendly; a clean run prints only the summary):
+Result sections (the human report prints each section, including empty sections):
 
-  ENABLED                  installed + enabledPlugins true (visible in Claude Code)
+  ENABLED                  installed + enabledPlugins true for the same NAME@marketplace
   INSTALLED_DISABLED       installed, explicitly false in enabledPlugins
   INSTALLED_NO_KEY         installed, no enabledPlugins entry (NOT visible by default)
   REGISTERED_NOT_INSTALLED in a marketplace.json but never installed
-  ORPHAN_INSTALLED         installed but no longer in any marketplace.json (loads nothing)
+  ORPHAN_INSTALLED         installed plugin absent from its loaded owning marketplace registry
   DAEMON_RUNTIME_LAG       the sync daemon runs a pinned copy older than the source, so every
                            fix shipped to this repo stays invisible to it until the pin moves
   SOURCE_CHECKOUT_BEHIND   a registry checkout is behind its remote-tracking ref, so every
@@ -32,8 +32,16 @@ Findings (each list is empty-friendly; a clean run prints only the summary):
   MANUAL_LINK_RISK         absolute symlink owned by a successfully loaded source, but not
                            selected by activation policy -> the source-sync daemon will prune it;
                            ownership follows the source-sync classifier; relative links are preserved
-  CODEX_UNLISTED_ENABLED   enabled in Claude yet absent from both the Codex manifest and
-                           ~/.agents/skills (fine if unwanted in Codex; informational)
+  CODEX_UNLISTED_ENABLED   Skill members of enabled owned plugins absent from both expanded
+                           activation policy and verified links (informational if unwanted)
+  CODEX_SELECTED_MISSING   selected Skill names without a verified link to their registered
+                           source, including missing, dangling, wrong-source or unregistered names
+
+Plugin sections use NAME@marketplace identities; Codex sections use Skill names,
+including suite members and selections expanded from active_marketplaces.
+Exit 0 means the inventory completed, even when findings are present. An unknown
+--list section exits 2; invalid or unavailable source/configuration evidence fails.
+Use references/troubleshooting.md for repair and fresh-host acceptance steps.
 
 Usage:
     python3 skill-install-audit.py            # human-readable report
@@ -42,6 +50,7 @@ Usage:
 
 Env overrides (match the sibling sync scripts):
     CLAUDE_BASE_DIR / CLAUDE_PROFILES_DIR / AGENTS_SKILLS_DIR
+    CODEX_ACTIVE_SKILLS / SKILL_SYNC_DAEMON_ENTRY
 """
 
 import argparse
@@ -404,11 +413,9 @@ def main():
             for name in names:
                 print(f"  {name}")
     print(
-        "\nLegend: DISABLED/NO_KEY -> enable via `claude plugin enable NAME@mkt`; "
-        "REGISTERED_NOT_INSTALLED -> `claude plugin install NAME@mkt`; "
-        "MANUAL_LINK_RISK -> add the name to codex-active-skills.json or drop the link; "
-        "DAEMON_RUNTIME_LAG -> the daemon is executing code older than this repo; "
-        "SOURCE_CHECKOUT_BEHIND -> this report's own reference is stale."
+        "\nExit 0 means the inventory completed, not that every Skill is usable. "
+        "Repair workflow: references/troubleshooting.md "
+        "(Installation audit reports missing or unselected Skills)."
     )
     return 0
 
