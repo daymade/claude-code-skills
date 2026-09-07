@@ -69,6 +69,24 @@ class InstallAuditTests(unittest.TestCase):
         (self.pool / "first-skill").symlink_to(self.root / "missing")
         self.assertIn("first-skill", audit.audit()["CODEX_SELECTED_MISSING"])
 
+    def test_wrong_source_does_not_satisfy_selected_name(self):
+        outside = self.root / "outside"
+        outside.mkdir()
+        (outside / "SKILL.md").write_text("---\nname: first-skill\n---\n")
+        (self.pool / "first-skill").symlink_to(outside)
+        self.assertIn("first-skill", audit.audit()["CODEX_SELECTED_MISSING"])
+
+    def test_unregistered_selected_name_cannot_borrow_a_foreign_entry(self):
+        self.write(self.policy, {"schema_version": 1, "active_skills": ["unregistered"]})
+        p = self.pool / "unregistered"
+        p.mkdir()
+        (p / "SKILL.md").write_text("---\nname: unregistered\n---\n")
+        self.assertEqual(["unregistered"], audit.audit()["CODEX_SELECTED_MISSING"])
+
+    def test_relative_link_does_not_satisfy_owner_link_contract(self):
+        (self.pool / "first-skill").symlink_to("../team-repo/bundle/first")
+        self.assertIn("first-skill", audit.audit()["CODEX_SELECTED_MISSING"])
+
     def test_unknown_marketplace_fails_instead_of_empty_success(self):
         self.write(self.policy, {"schema_version": 1, "active_skills": [],
                                  "active_marketplaces": ["misspelled"]})
@@ -93,6 +111,19 @@ class InstallAuditTests(unittest.TestCase):
         (self.pool / "foreign").symlink_to(target)
         self.assertEqual([], audit.audit()["MANUAL_LINK_RISK"])
 
+    def test_escape_through_repo_symlink_is_not_owned(self):
+        self.write(self.policy, {"schema_version": 1, "active_skills": []})
+        outside = self.root / "outside"
+        outside.mkdir()
+        (self.repo / "escape").symlink_to(outside)
+        (self.pool / "foreign").symlink_to(self.repo / "escape")
+        self.assertEqual([], audit.audit()["MANUAL_LINK_RISK"])
+
+    def test_managed_relative_link_is_reported(self):
+        self.write(self.policy, {"schema_version": 1, "active_skills": []})
+        (self.pool / "first-skill").symlink_to("../team-repo/bundle/first")
+        self.assertEqual(["first-skill"], audit.audit()["MANUAL_LINK_RISK"])
+
     def test_suite_is_not_mistaken_for_a_missing_skill(self):
         self.link("first-skill", "first")
         self.link("second-skill", "second")
@@ -113,6 +144,16 @@ class InstallAuditTests(unittest.TestCase):
         self.assertEqual(["suite@cmks-skills"], result["ENABLED"])
         self.assertEqual(["suite@another"], result["INSTALLED_DISABLED"])
         self.assertNotIn("suite@cmks-skills", result["REGISTERED_NOT_INSTALLED"])
+
+    def test_unqualified_plugin_identity_is_invalid(self):
+        self.write(self.base / "plugins/installed_plugins.json", {"plugins": {"suite": [{}]}})
+        with self.assertRaises(ValueError):
+            audit.audit()
+
+    def test_non_boolean_enablement_is_invalid(self):
+        self.write(self.base / "settings.json", {"enabledPlugins": {"suite@cmks-skills": "true"}})
+        with self.assertRaises(ValueError):
+            audit.audit()
 
 
 if __name__ == "__main__":

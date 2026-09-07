@@ -109,6 +109,12 @@ def read_json(path: Path):
         return json.load(fh)
 
 
+def validate_plugin_identity(identity):
+    if (not isinstance(identity, str) or identity.count("@") != 1
+            or any(not part or part != part.strip() for part in identity.split("@"))):
+        raise ValueError(f"invalid qualified plugin identity: {identity!r}")
+
+
 def load_registry():
     """{marketplace_name: set(plugin_names)} for every local repo's marketplace.json."""
     registry = {}
@@ -131,7 +137,11 @@ def load_installed():
     """Keep qualified identities; two marketplaces may install the same name."""
     installed = {}
     data = read_json(BASE / "plugins" / "installed_plugins.json")
-    for key in data.get("plugins", {}):
+    plugins = data.get("plugins", {})
+    if not isinstance(plugins, dict):
+        raise ValueError("installed_plugins.json: plugins must be an object")
+    for key in plugins:
+        validate_plugin_identity(key)
         name, _, mkt = key.rpartition("@")
         installed[key] = mkt
     return installed
@@ -141,11 +151,16 @@ def load_enabled():
     enabled = read_json(BASE / "settings.json").get("enabledPlugins", {})
     if not isinstance(enabled, dict):
         raise ValueError(f"{BASE / 'settings.json'}: enabledPlugins must be an object")
+    for identity, value in enabled.items():
+        validate_plugin_identity(identity)
+        if not isinstance(value, bool):
+            raise ValueError(f"enabledPlugins[{identity!r}] must be a boolean")
     return enabled
 
 
 def load_codex():
-    policy = source_sync().load_skill_activation_policy(CODEX_MANIFEST)
+    resolver = source_sync()
+    policy = resolver.load_skill_activation_policy(CODEX_MANIFEST)
     manifest = set(policy.active_names)
     sources = registered_sources()
     found = {source.name for source in sources}
@@ -155,9 +170,22 @@ def load_codex():
     for source in sources:
         if source.name in policy.active_marketplaces:
             manifest.update(source.skills)
+    registered = resolver.merge_source_skills(sources)
     pool = set()
     if AGENTS_SKILLS.is_dir():
-        pool = {e.name for e in AGENTS_SKILLS.iterdir() if (e / "SKILL.md").is_file()}
+        for entry in AGENTS_SKILLS.iterdir():
+            if not (entry / "SKILL.md").is_file():
+                continue
+            if entry.name in manifest and entry.name not in registered:
+                continue
+            if entry.name in registered:
+                try:
+                    resolver.verify_selected_skill_links(
+                        AGENTS_SKILLS, {entry.name: registered[entry.name]}
+                    )
+                except (OSError, RuntimeError):
+                    continue
+            pool.add(entry.name)
     return manifest, pool
 
 
@@ -307,8 +335,7 @@ def audit():
             except OSError:
                 continue
             resolved = target if target.is_absolute() else (AGENTS_SKILLS / target)
-            if any(resolved == repo or repo in resolved.parents
-                   for _, repo in REGISTRY_REPOS) and e.name not in manifest:
+            if source_sync().path_is_under(resolved, [repo for _, repo in REGISTRY_REPOS]) and e.name not in manifest:
                 manual_risk.append(e.name)
     # Plugin names are not Skill names: a suite has multiple independently
     # discoverable members. Audit only registered owned members, not vendor
