@@ -403,15 +403,15 @@ Status: `[P5 in progress] {N}/{M} sections, ~{words} words.`
 
 ## P6: Counter-Review (Mandatory)
 
-For each major conclusion, perform opposite-view checks:
+For each major conclusion, perform opposite-view checks. These checks do not automatically require another agent or a team; use independent reviewers only when the user request or applicable workspace instructions call for them:
 
 1. **Could the conclusion be wrong?**
 2. **Which high-impact claims depend on a single source?**
 3. **Which claims lack official/academic support?**
 4. **Are stale sources used for time-sensitive claims?**
-5. **Find ≥3 issues** (re-examine if 0 found)
+5. **Report only evidence-backed issues; zero findings is a valid outcome.** State unresolved uncertainty explicitly. Do not invent issues or repeat a completed check solely to reach an issue count.
 
-### Using Counter-Review Team (Recommended)
+### Using Counter-Review Team (Optional)
 
 For comprehensive parallel review, use the Counter-Review Team:
 
@@ -440,9 +440,9 @@ SendMessage to: counter-review-coordinator
 
 See [references/counter_review_team_guide.md](references/counter_review_team_guide.md) for detailed usage.
 
-### Manual Counter-Review (Fallback)
+### Manual Counter-Review (Default)
 
-If Counter-Review Team is unavailable, perform manual checks:
+When a review team has not been selected, perform these evidence checks directly. Obtain individual independent review if the user request or applicable workspace instructions require it:
 - Verify every high-confidence claim has ≥2 sources
 - Check official/academic backing for key claims
 - Verify AS_OF dates on time-sensitive claims
@@ -450,12 +450,15 @@ If Counter-Review Team is unavailable, perform manual checks:
 
 ### Output
 
-Include in final report:
+Include only evidence-backed controversies in the final report. Use numbered entries only when such controversies exist. If none are established, state that explicitly; never fill placeholder disputes to satisfy the template. Report unresolved uncertainty separately, or state that none remains.
+
 ```
 ## 核心争议 / Key Controversies
-- **争议 1:** [主张 A 与反向证据 B 对比] [n][m]
-- **争议 2:** ...
+未发现有证据支持的核心争议。
+未解决的不确定性：无。
 ```
+
+The example above applies only when both statements are supported by the completed checks; otherwise list the actual controversies or unresolved questions.
 
 Report: `[P6 complete] {N} issues found: {critical} critical, {high} high, {medium} medium.`
 
@@ -525,7 +528,7 @@ Report: `[P7 complete] {N} spot-checks, {M} violations fixed.`
 - **Inventing URLs** — only use URLs from actual search results
 - **Resurrecting dropped sources** — dropped in P3 never reappear
 - **Missing AS_OF for time-sensitive claims** — always include source date
-- **Skipping counter-review** — mandatory P6 must find ≥3 issues
+- **Skipping evidence checks** — complete P6, report only supported findings, and allow zero issues when no issue is established.
 - **CIRCULAR VERIFICATION** — never use user's private data to "discover" what they already know about themselves
 - **IGNORING EXCLUSIVE SOURCES** — when user provides Crunchbase Pro etc. for competitor research, USE IT
 

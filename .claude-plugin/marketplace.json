@@ -354,7 +354,7 @@
       "description": "Generate format-controlled research reports with evidence tracking, source governance, and multi-pass synthesis. V6.1 adds: source accessibility (circular verification forbidden, exclusive advantage encouraged). Enterprise Research Mode: six-dimension data collection, SWOT/barrier/risk frameworks, and three-level quality control for company research",
       "source": "./deep-research",
       "strict": false,
-      "version": "2.4.1",
+      "version": "2.4.2",
       "category": "documentation",
       "keywords": [
         "research",

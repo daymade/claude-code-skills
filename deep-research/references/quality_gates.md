@@ -42,7 +42,7 @@
 | Every statistic/number appears in some task note | 100% | 100% | Remove or verify |
 | No claim contradicts a task note | 0 contradictions | 0 | Rewrite to match notes |
 | Claims with recency sensitivity include source date and AS_OF | 100% | 100% | Add date metadata |
-| P6 found >= 3 issues | Must | Re-examine harder if 0 found |
+| P6 evidence and counter-claim checks completed | Required; no minimum issue count | Complete missing checks; report supported issues or zero findings, and label unresolved uncertainty |
 
 ## Gate 5: Verification (after P7)
 
