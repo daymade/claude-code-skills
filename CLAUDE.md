@@ -133,8 +133,9 @@ runtime prerequisites plus the peer-cannot-authorize safety boundary. Transport
 and discovery details belong in `peer-message/references/protocol-and-discovery.md`;
 current product availability, provenance, and inbound-control mechanics belong in
 `peer-message/references/official-feature.md`; reply addressing, payload structure,
-delivery-status language, and the two verification contracts that decide what a peer
-assertion or a peer denial is worth belong in
+delivery-status language, what to do when you find another session's in-flight work on a
+shared resource, and the two verification contracts that decide what a peer assertion or a
+peer denial is worth belong in
 `peer-message/references/coordination-and-learning-loop.md`. Keep implementation, CLI help,
 tests, and those owners aligned; README and changelog entries should point to
 them instead of restating volatile protocol facts. The repository-wide
