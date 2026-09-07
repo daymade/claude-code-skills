@@ -11,8 +11,13 @@ Local source repos are the single source of truth. Installed runtime locations s
 Normal source edits require no sync command:
 
 - Claude Code plugin cache version directories are symlinks to source plugin directories.
-- Codex user Skills named in the explicit activation manifest are symlinks from
+- Codex user Skills selected by the expanded activation policy are symlinks from
   `~/.agents/skills` to source Skill directories.
+- Managed marketplaces named in `claude_active_marketplaces` can also provide
+  source-backed personal Claude entries under `~/.claude/skills`. This is an
+  independent host choice: it fills direct links only where the current Claude
+  plugin install and enable state does not already provide or explicitly block
+  the Skill.
 - `~/.codex/skills/.system` is owned by Codex itself. User-source sync neither
   writes into it nor treats the surrounding legacy root as a normal activation
   target. The optional compatibility subset keeps same-source legacy links only
@@ -32,7 +37,8 @@ global prompt. The sync scripts exist for topology repair, not day-to-day editin
 | Add a new skill/plugin entry | Marketplace manifest changes; LaunchAgent watcher runs source sync |
 | Remove or rename a skill entry | Marketplace manifest changes; the watcher prunes stale managed links from `.agents/skills` but only reports legacy `.codex/skills` links for reviewed cleanup |
 | Bump `plugins[].version` | Marketplace manifest changes; LaunchAgent watcher creates/updates the version symlink and installed metadata |
-| Change the Codex global user set | Edit `~/.config/claude-switch-models-setup/codex-active-skills.json`; watcher links only that set into `~/.agents/skills` |
+| Change the Codex global user set | Edit `active_skills` for individual names or `active_marketplaces` for whole managed marketplaces; the watcher links the expanded set into `~/.agents/skills` |
+| Change Claude personal source links | Edit `claude_active_marketplaces`; the watcher reconciles allowed direct entries under `~/.claude/skills` without installing or bypassing plugin state |
 | A long-lived hook/process still holds `~/.codex/skills/<name>` | Add that already-active name to `legacy_codex_compat_skills`; the watcher keeps a same-source legacy link without reactivating the full source inventory |
 | Add a new Claude profile | `claude-profiles-init` runs source sync and plugin profile sync |
 | Launch Kimi/GLM/DeepSeek/Step profile | `claude-profile` runs source sync, then mirrors enabled plugins |
@@ -42,7 +48,7 @@ global prompt. The sync scripts exist for topology repair, not day-to-day editin
 
 | Component | Role |
 |---|---|
-| `sync-local-skill-sources.py` | Idempotent repair primitive. Finds local source repos, rejects duplicate source names, validates the explicit Codex activation manifest, points Claude marketplaces/caches at source, links and verifies the selected user set in `~/.agents/skills`, then creates/confirms the explicit legacy compatibility subset and reports other managed legacy links without deleting them. |
+| `sync-local-skill-sources.py` | Idempotent repair primitive. Finds local source repos, rejects duplicate source names, validates the activation manifest, points Claude marketplaces/caches at source, reconciles the Codex set in `~/.agents/skills` and eligible Claude personal links in `~/.claude/skills`, then creates/confirms the explicit legacy compatibility subset and reports other managed legacy links without deleting them. |
 | `sync-local-skill-sources-daemon.sh` | macOS LaunchAgent runner. Installs or removes the watcher and runs one locked sync pass. |
 | `claude-plugins-sync.py` | Per-profile Claude Code sync. Builds profile-local `known_marketplaces.json`, shares installed plugin state, and mirrors `enabledPlugins`. |
 | `claude-profiles.sh` | Shell integration. Runs local source sync on profile init/launch before profile plugin sync. |
@@ -63,26 +69,19 @@ Profile state uses `.claude.json` inside each `CLAUDE_CONFIG_DIR`. Older `claude
 
 Accepted marketplace identities are defined only by `LOCAL_MARKETPLACE_NAMES`, and conventional workspace candidates only by `infer_repos()` in `scripts/sync-local-skill-sources.py`. Do not copy either current set into documentation. The script's default dry-run prints the resolved source inventory; if none qualify, it fails fast instead of guessing. Non-conventional checkout paths require `--repo`, `DAYMADE_SKILL_SOURCE_REPOS`, or a registered directory-source marketplace.
 
-## Codex User-Skill Activation
+## Host-Specific User-Skill Activation
 
 The machine-local manifest is
-`~/.config/claude-switch-models-setup/codex-active-skills.json`:
-
-```json
-{
-  "schema_version": 1,
-  "active_skills": ["skill-name"],
-  "active_marketplaces": [],
-  "claude_active_marketplaces": [],
-  "legacy_codex_compat_skills": []
-}
-```
+`~/.config/claude-switch-models-setup/codex-active-skills.json`. Start from the
+bundled [`assets/templates/codex-active-skills.json`](../assets/templates/codex-active-skills.json);
+do not copy its full JSON into another document.
 
 Rules:
 
-- Names refer to frontmatter `name`, not directory basename or plugin name.
+- `active_skills` selects individual frontmatter names for Codex. Names refer to
+  frontmatter `name`, not directory basename or plugin name.
 - Missing manifest, unsupported schema, duplicates, or two source bundles
-  declaring the same name abort before either active root is changed.
+  declaring the same name abort before any affected root is changed.
 - An active name that no discovered checkout registers does not abort. It is
   reported on stderr with each checkout's current branch and skipped for that
   pass; the remaining names still converge, and the skipped one is linked on the
@@ -91,14 +90,15 @@ Rules:
   `main`; a misspelled or retired name repeats the warning until the manifest is
   corrected. A link the checkout registered earlier and no longer does is pruned
   like any other stale managed link, into `.source-sync-backups/`.
-- An empty list means “activate none”; it does not fall back to all marketplace
-  entries.
 - The syncer creates and verifies the selected links in `~/.agents/skills`
   before changing any managed legacy links in `~/.codex/skills`.
 - `legacy_codex_compat_skills` is optional. When present it must be an array;
   explicit JSON `null` is invalid. Its names must be a duplicate-free subset of
-  `active_skills`. It is for live consumers that still retain an old absolute
-  path, not a second activation inventory.
+  `active_skills`. Marketplace expansion does not satisfy this subset rule: even
+  if `active_marketplaces` selects the same Skill for Codex, the compatibility
+  name must still be listed explicitly in `active_skills`. It is for live
+  consumers that still retain an old absolute path, not a second activation
+  inventory.
 - Compatibility links and their `.agents` counterparts resolve to the same
   source directory frozen at the start of the pass. Registered plugin and Skill
   sources carry their declared repo and load-time inode into the freeze step;
@@ -115,8 +115,8 @@ Rules:
   the temporary name is then removed. A path another process creates or replaces
   before, during, or after publication is preserved and the run fails even when
   the competing link happens to use the same source.
-- During an apply pass, each configured root that exists must be a real
-  directory. Before the mutable phase the syncer captures both root identities;
+- During an apply pass, each affected root that exists must be a real directory.
+  Before the mutable phase the syncer captures the affected root identities;
   pinning rejects a root that appeared, disappeared, or changed inode in the
   meantime. It freezes existing ancestor aliases exactly once, never re-resolves
   that frozen path, then walks every remaining component with no-follow directory
@@ -126,14 +126,16 @@ Rules:
   A missing root that the selected policy actually needs is created exclusively
   relative to an already-opened real parent.
 - A marketplace named in the manifest's optional `active_marketplaces` has its whole
-  current membership treated as selected, so adding or removing a plugin there no
-  longer needs a second manual edit to this manifest. Unknown names fail at manifest
+  current membership added to the Codex selection, so adding or removing a plugin
+  there needs no per-Skill policy edit. An empty `active_skills` array therefore
+  selects no individual names; Codex still activates members of selected marketplaces. Unknown names fail at manifest
   load, before any link is touched; marketplaces absent from that list are unaffected.
   Without it, a marketplace whose own installer activates every registered Skill will
   keep recreating links this syncer then prunes, and the two writers silently undo
   each other.
 - `claude_active_marketplaces` independently opts an owned marketplace into
-  personal Claude Skill activation. Both fields default to empty. New registered
+  personal Claude Skill activation without installing plugins or changing
+  `enabledPlugins`. The bundled template declares the empty defaults. New registered
   members need no second per-Skill edit. The syncer creates missing links in
   `<claude-dir>/skills`, using the same root identity, source containment, atomic
   creation, and recoverable pruning checks as the Codex root.
@@ -152,27 +154,21 @@ Rules:
   `CLAUDE_CONFIG_DIR` under `~/.local/share/`, not the live checkout. That isolation is
   deliberate: editing a source repo must not change what an already-running daemon does.
   The cost is that nothing advances the pin — a fix can be merged, tested and believed
-  shipped while the daemon keeps running the old code. Advance it with the same official
-  commands that installed it, against that config dir:
-
-  ```bash
-  CLAUDE_CONFIG_DIR=<daemon config> claude plugin marketplace update <marketplace>
-  CLAUDE_CONFIG_DIR=<daemon config> claude plugin update <plugin>@<marketplace>
-  ```
-
-  then repoint the script symlinks under `~/.config/claude-switch-models-setup/` at the
-  new version directory. `skill-install-audit.py` reports the gap as `DAEMON_RUNTIME_LAG`;
-  it is the only thing that compares the two numbers. `scripts/setup.sh` refuses to
-  relink such a machine to the checkout; SKILL.md setup step 2 owns the two layouts.
+  shipped while the daemon keeps running the old code. Source updates never advance
+  this pin automatically. Follow the single “advance the pin” procedure in
+  [troubleshooting.md](troubleshooting.md#advance-the-pin).
+  `scripts/setup.sh` refuses to relink such a machine to the checkout; SKILL.md setup
+  step 2 owns the two layouts.
 - Reinstall the LaunchAgent after advancing its runtime pin. `--install` uses uv
   once to install Python in this profile manager's own configuration directory;
   ordinary runs invoke that absolute interpreter directly. The daemon uses the
-  Python commands' shared lock and retries every five minutes as well as on
-  WatchPaths events. A successful pass prints a UTC completion timestamp after
-  link verification and profile synchronization. Inspect that timestamp when
-  checking liveness; registration and exit code alone do not prove a recent pass.
-- Unselected source Skills remain cold inventory. Real directories and third-party
-  symlinks in either root are outside automatic retirement.
+  Python commands' shared lock and runs on WatchPaths events plus the interval
+  declared by the generated plist in `sync-local-skill-sources-daemon.sh`. After
+  installation or a deliberate trigger, require a new UTC
+  `source-sync verified links and profiles at ...` log line. Registration and exit
+  code alone do not prove a recent successful pass.
+- Skills outside a host's expanded activation policy remain cold for that host.
+  Real directories and third-party symlinks are outside automatic retirement.
 
 `scripts/setup.sh` writes the empty template to a private temporary file and
 publishes it with a no-overwrite hard link only when no manifest exists. A
@@ -208,14 +204,15 @@ The LaunchAgent label is `ai.daymade.claude-skill-source-sync`. It watches:
 - `~/.claude/plugins/installed_plugins.json`
 - every activation/marketplace path emitted by `sync-local-skill-sources.py --print-watch-paths`
 
-Verify:
+Verify registration and generated configuration:
 
 ```bash
 launchctl print gui/$(id -u)/ai.daymade.claude-skill-source-sync
 plutil -p ~/Library/LaunchAgents/ai.daymade.claude-skill-source-sync.plist
 ```
 
-Logs:
+After installation or a deliberate trigger, verify liveness with a newly written
+success line, not a historical line or `launchctl` exit status:
 
 ```bash
 tail -50 ~/Library/Logs/claude-switch-models-setup/source-sync.err.log
@@ -230,35 +227,24 @@ Uninstall:
 
 ## Verification Checklist
 
-Use these checks when debugging drift:
+Use implementation-owned inventory instead of a hand-maintained plugin or Skill
+list. First confirm which source identities are registered, then preview the exact
+host selections and affected paths:
 
 ```bash
-python3 ~/.config/claude-switch-models-setup/sync-local-skill-sources.py --print-watch-paths
-
-python3 - <<'PY'
-import json, pathlib
-for plugin_id in ["daymade-claude-code@daymade-skills", "sync-feishu-minutes@daymade-skills-pro"]:
-    data = json.loads((pathlib.Path.home()/".claude/plugins/installed_plugins.json").read_text())["plugins"]
-    rec = data[plugin_id][-1]
-    p = pathlib.Path(rec["installPath"])
-    print(plugin_id, rec["version"], p.is_symlink(), p.resolve())
-PY
-
-python3 - <<'PY'
-import pathlib
-root = pathlib.Path.home()/".agents/skills"
-for name in ["skill-creator", "sync-feishu-minutes", "claude-switch-models-setup"]:
-    p = root/name
-    print(name, p.is_symlink(), p.resolve())
-PY
-
-python3 - <<'PY'
-import pathlib
-root = pathlib.Path.home()/".codex/skills"
-print("system-owned", (root/".system").is_dir())
-print("legacy-compat-links", [p.name for p in root.iterdir() if p.is_symlink()])
-PY
+python3 ~/.config/claude-switch-models-setup/sync-local-skill-sources.py --print-source-inventory
+python3 ~/.config/claude-switch-models-setup/sync-local-skill-sources.py
 ```
+
+For each identity required by the task, confirm its resolved link or enabled
+user-plugin route against that inventory. Then run the target-specific fresh-host
+acceptance gate in `/daymade-skill:skill-governance` §14. The source dry-run and
+the read-only installation audit describe derived state; neither proves a fresh
+Claude Code or Codex catalog.
+
+Inspect only the legacy compatibility names requested by the task. Confirm each
+link and its active counterpart resolve to the same source; do not treat a scan
+of the legacy root as the expected activation inventory.
 
 For profile drift:
 
@@ -268,17 +254,12 @@ python3 ~/.config/claude-switch-models-setup/claude-plugins-sync.py
 
 Then compare `enabledPlugins` between the default profile and each profile.
 
-For launch-path verification, test concurrently because that is how race bugs surface:
-
-```bash
-# adjust the list to the profiles you actually configured
-for profile in kimi glm deepseek stepfun anthropic; do
-  tmux new-session -d -s "ccver-$profile" \
-    "zsh -lc 'source ~/.config/claude-switch-models-setup/claude-profiles.sh; claude-profile $profile --version'"
-done
-```
-
-Expected: every configured profile prints the same Claude Code version and no sync traceback. A profile directory without a matching `~/.claude/settings/<profile>.json` is a stale profile and should fail fast at settings-file lookup.
+For launch-path verification, take the profile names from `claude-profiles-ls` and
+test those configured profiles concurrently because that is how race bugs surface.
+Every configured profile should print the same Claude Code version and no sync
+traceback. A profile directory without a matching
+`~/.claude/settings/<profile>.json` is stale and should fail fast at settings-file
+lookup.
 
 If a `claude-profile <name> -p ...` probe starts successfully, debug logs should show plugin and skill loading before any API call. Network or TLS errors after lines such as `Loaded ... installed plugins` and `Loaded ... unique skills` are provider connectivity problems, not skill-sync failures.
 
@@ -292,8 +273,8 @@ If a `claude-profile <name> -p ...` probe starts successfully, debug logs should
 - In `~/.agents/skills`, this system prunes a symlink only when its resolved
   target is inside a managed source repo and its name is outside the
   active set. Pruning atomically moves that exact entry into
-  `.source-sync-backups/`; it does not delete the object. Nothing ever cleans those
-  buckets, and they look like disposable cache from the outside — but a 2026-09-05
+  `.source-sync-backups/`; it does not delete the object. The background pass does not clean those
+  buckets. They can look like disposable cache from the outside, but a 2026-09-05
   survey found most of them holding files present in no repository's object store,
   one carrying a 75-file variant of a skill whose shipped version has 13. Judge them
   with `prune-source-sync-backups.py`, which hashes every entry and keeps any bucket

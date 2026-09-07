@@ -24,7 +24,7 @@ skill-name/
 ### Progressive Disclosure Pattern
 
 Skills use progressive loading:
-1. **Metadata** (name + description in YAML frontmatter) - Always in context
+1. **Metadata** (name + description in YAML frontmatter) - Advertised according to the host's discovery policy and catalog budget; verify the fresh host rather than assuming every description is present
 2. **SKILL.md body** - Loaded when skill triggers
 3. **Bundled resources** - Loaded as needed by Claude
 
@@ -161,26 +161,29 @@ re-add a marketplace: removing it uninstalls plugins installed from that
 marketplace. Do not `cp -r` a second Skill tree into a user Skill directory; that
 copy immediately creates an independent drift owner.
 
-Marketplace source inventory is not Codex activation policy. On a maintainer
-machine, the explicit selection in
-`~/.config/claude-switch-models-setup/codex-active-skills.json` is the SSOT for
-source Skills linked into `~/.agents/skills`; `~/.codex/skills` is only a bounded
-legacy-compatibility surface. Change the manifest and run the bundled syncer—do
-not restore bulk links in either user root. Detailed topology and recovery rules
-remain in
-`daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md`.
+For maintainer source-backed activation, follow
+[Local Source Sync Architecture](daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md).
+That reference owns the activation-manifest contract, host-specific selection,
+legacy compatibility, and repair workflow. An approved whole-marketplace policy
+includes newly registered members; a source checkout or registration alone does
+not establish that policy. Do not hand-create user Skill links.
+
+When delivery includes local availability, finish the source owner's dry-run/apply
+and the [newly registered Skill gate](daymade-skill/skill-governance/references/skill-surface-governance.md#14-verify-a-newly-registered-skill).
+Take expected identities from the requested change, not from links or a whitelist
+that may already omit the new Skill. Keep installation/catalog evidence separate
+from actual task results. A daemon using a pinned plugin copy also needs the
+[pin-update workflow](daymade-claude-code/claude-switch-models-setup/references/troubleshooting.md#advance-the-pin).
+Do not treat a merged source change as proof that this runtime advanced.
+
 The syncer's managed marketplace identities, conventional checkout candidates,
 and generated watch paths are owned by `sync-local-skill-sources.py`; derive them
 from its constants/functions and `--print-watch-paths` output instead of copying
-their current members or counts into `CLAUDE.md`, READMEs, or references.
+their current members or counts into instructions or references.
 
-When an installation audit or context-window setting changes, keep the executable
-contract in `claude-switch-models-setup` aligned with its
-[`troubleshooting.md`](daymade-claude-code/claude-switch-models-setup/references/troubleshooting.md)
-and [context request probe](daymade-claude-code/claude-switch-models-setup/references/context-window-config.md).
-Use `skill-governance` for fresh-host acceptance; an inventory report's exit status
-does not establish that the host discovers a Skill. Keep result definitions and
-probe commands in those owners rather than copying them here.
+For context-window setting changes, keep the executable configuration and the
+[context request probe](daymade-claude-code/claude-switch-models-setup/references/context-window-config.md)
+aligned. That reference owns the request fields and probe commands.
 
 In Claude Code, use `/plugin ...` slash commands. In your terminal, use `claude plugin ...`.
 
@@ -366,7 +369,6 @@ The marketplace is configured in `.claude-plugin/marketplace.json`:
 
 2. **Individual Skill Versions** (`.claude-plugin/marketplace.json` → `plugins[].version`)
    - Each skill has its own independent version
-   - Example: ppt-creator v1.0.0, skill-creator v1.4.0
    - Bump when: Updating that specific skill
    - **CRITICAL**: Skills should NOT have version sections in SKILL.md
 
@@ -374,13 +376,10 @@ The marketplace is configured in `.claude-plugin/marketplace.json`:
 
 ### ⚠️ Updating Existing Skills (MANDATORY)
 
-**Any commit that modifies a skill's files MUST bump that skill's version in `marketplace.json`.**
-
-This applies when you change ANY file under a skill directory:
-- `SKILL.md` (instructions, description, workflow)
-- `references/` (documentation, principles, examples)
-- `scripts/` (executable code)
-- `assets/` (templates, resources)
+Changes to a skill's shipped files require a version bump in
+`marketplace.json`. Shipping exclusions are defined by
+`daymade-skill/skill-creator/scripts/packaging_policy.py` and consumed by the
+version gate; do not maintain a second exclusion list here.
 
 **Version bump rules:**
 - Content/doc updates (new sections, rewritten principles) → bump **MINOR** (1.0.1 → 1.1.0)
@@ -439,64 +438,17 @@ Before submitting or modifying skills:
 
 ## Skill Creation Workflow
 
-When creating a new skill:
-1. Understand concrete usage examples
-2. Plan reusable contents (scripts/references/assets)
-3. Initialize using `init_skill.py`
-4. Edit SKILL.md and bundled resources
-5. Package using `package_skill.py` (auto-validates)
-6. Iterate based on testing feedback
+Use [skill-creator](daymade-skill/skill-creator/SKILL.md) for authoring,
+behavior checks, regression review, and packaging. Its workflow is the authority;
+do not maintain a second sequence in this repository guide.
 
 ## Adding a New Skill to Marketplace
 
-For the full step-by-step guide with templates and examples, see [references/new-skill-guide.md](./references/new-skill-guide.md).
-
-**Files to update** (all required):
-
-| File | Locations to update |
-|------|-------------------|
-| `.claude-plugin/marketplace.json` | metadata.version + metadata.description + new plugin entry |
-| `CHANGELOG.md` | New version entry |
-| `README.md` | Review the user-facing surfaces for this skill: description, install command, unnumbered skill section, use case, docs link, requirements. Do not persist marketplace-version, skill-count, or catalog-position values; derive them from the manifest when needed. |
-| `README.zh-CN.md` | Same as above, translated |
-| `CLAUDE.md` | Stable manifest/README authority pointer only; do not reintroduce a numbered Skill snapshot |
-| `<skill-directory>/` | Canonical Skill source; disposable `.skill` packages stay outside the source tree |
-
-**Quick workflow**:
-```bash
-# 1. Validate & package the skill itself
-SKILL_DIR="<repo-root>/<skill-directory>"
-cd <repo-root>/daymade-skill/skill-creator
-uv run --frozen python -m scripts.security_scan "$SKILL_DIR" --verbose
-uv run --frozen python -m scripts.package_skill "$SKILL_DIR" <output-dir>
-
-# 2. Update all files listed above (see references/new-skill-guide.md for the
-#    detailed step-by-step)
-
-# 3. One-shot marketplace validation (ships with marketplace-dev skill)
-cd <repo-root>
-bash daymade-claude-code/marketplace-dev/scripts/check_marketplace.sh .
-# Runs: JSON syntax → claude plugin validate → source+skills resolution →
-# reverse sync (warns when a disk SKILL.md is not registered). A WARN on
-# reverse sync is the canary for orphan skills — register them or delete them.
-# Then verify the human-facing README catalogs and CLAUDE.md authority pointer:
-python3 daymade-claude-code/marketplace-dev/scripts/check_doc_skill_lists.py
-# Rejects missing/ghost README entries, numbered headings, copied version badges,
-# and a model-loaded CLAUDE.md Skill snapshot.
-
-# 4. Stage specific files by name, never `git add -A` or `git add .`
-#    (a parallel agent once piggybacked another session's unstaged changes
-#    into its commit via `git add -A`; the fix is to stage explicitly)
-git add .claude-plugin/marketplace.json CHANGELOG.md README.md README.zh-CN.md \
-        CLAUDE.md <skill-directory>/
-git commit -m "Release vX.Y.0: Add skill-name"
-git push
-
-# 5. Release
-gh release create vX.Y.0 --title "Release vX.Y.0: Add skill-name" --notes "..."
-```
-
-**Top mistakes**: Forgetting to push to GitHub, forgetting README.zh-CN.md, inconsistent version numbers across files, leaving an orphan SKILL.md on disk unregistered (caught by `check_marketplace.sh` reverse sync), using `git add -A` in a repo where multiple agents may have unstaged changes.
+Follow [Adding a New Skill to Marketplace](references/new-skill-guide.md) for
+registration, README updates, validation, and publication. Use the existing suite
+identity when adding a member; do not introduce a parallel standalone plugin.
+The local-availability gate under **Testing Skills Locally** applies when local
+use is part of the requested delivery.
 
 ## Chinese User Support
 
@@ -540,4 +492,5 @@ For full architecture documentation (core concepts, installation flow, data flow
 
 For systematic debugging steps (common errors, debugging process, pitfalls, real-world examples), see [references/plugin-troubleshooting.md](./references/plugin-troubleshooting.md).
 
-**Quick fix for most issues**: Commit → push → `claude plugin marketplace update daymade-skills` → retry install.
+For maintainer source/install/catalog drift, use **Testing Skills Locally** above.
+Identify the failing layer before updating a marketplace or reinstalling a plugin.

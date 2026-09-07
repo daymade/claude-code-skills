@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""skill-install-audit.py — read-only reconciliation of every skill install surface.
+"""skill-install-audit.py — read-only reconciliation of plugin and Codex source installation state.
 
 Inspect installation state across the following sources. This is an inventory,
 not a fresh-host discovery or successful-execution check:
@@ -39,6 +39,8 @@ Result sections (the human report prints each section, including empty sections)
 
 Plugin sections use NAME@marketplace identities; Codex sections use Skill names,
 including suite members and selections expanded from active_marketplaces.
+Claude personal links and claude_active_marketplaces are not audited here; use the
+source sync dry-run and a fresh Claude catalog probe for that route.
 Exit 0 means the inventory completed, even when findings are present. Without
 --json, an unknown --list section exits 2; --json takes precedence over --list.
 Missing configured registries are warned and skipped, but selected marketplaces
@@ -50,9 +52,13 @@ Usage:
     python3 skill-install-audit.py --json     # machine-readable
     python3 skill-install-audit.py --list ENABLED INSTALLED_DISABLED
 
-Env overrides (match the sibling sync scripts):
-    CLAUDE_BASE_DIR / CLAUDE_PROFILES_DIR / AGENTS_SKILLS_DIR
-    CODEX_ACTIVE_SKILLS / SKILL_SYNC_DAEMON_ENTRY
+Env overrides for this audit:
+    CLAUDE_BASE_DIR          default Claude configuration directory to inspect
+    CLAUDE_PROFILES_DIR      profile directories whose enabled state is inspected
+    AGENTS_SKILLS_DIR        Codex user Skill root to inspect
+    CODEX_ACTIVE_SKILLS      activation manifest path (audit-only; the source syncer
+                            uses --active-skills-manifest)
+    SKILL_SYNC_DAEMON_ENTRY  deployed daemon entry path (audit-only)
 """
 
 import argparse
