@@ -556,6 +556,16 @@ class CodexSkillSurfaceAuditTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, report)
         self.assertEqual(report["required_status"], "missing")
 
+    def test_required_gate_rejects_visible_name_from_wrong_source(self):
+        prompt, options, _, agents = self.market_case()
+        wrong = self.write_skill("wrong", "actual-name", "Wrong implementation.")
+        (agents / "actual-name").unlink()
+        (agents / "actual-name").symlink_to(wrong.parent)
+        prompt = self.write_prompt([("actual-name", "Wrong implementation.", agents / "actual-name/SKILL.md")])
+        result, report = self.run_audit(prompt, *options, "--require-visible", "actual-name", "--required-only")
+        self.assertEqual(result.returncode, 1, report)
+        self.assertEqual(report["findings"]["active_missing_links"], ["actual-name"])
+
 
 if __name__ == "__main__":
     unittest.main()

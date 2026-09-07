@@ -461,7 +461,8 @@ list. A source-only or package-only delivery does not authorize local activation
    a frozen initialization fixture; use a live probe for a live delivery claim.
 4. Require exit 0 for each requested target. Missing names exit 1; invalid or
    unavailable evidence exits 2. Codex `--required-only` gates the explicit target
-   names while retaining unrelated catalog pressure in the JSON report. For a
+   names and their source-link identity while retaining unrelated catalog pressure
+   in the JSON report. A visible name from the wrong source still fails. For a
    whole-host audit, omit it: the audit expands `active_marketplaces` through the
    source owner's `--print-source-inventory` resolver. `--source-sync-script`
    selects that resolver; `--source-inventory-json` supplies a frozen fixture.

@@ -848,14 +848,20 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Codex Skill surface: invalid\n  {exc}", file=sys.stderr)
         return 2
     if args.required_only:
-        report["required_status"] = "missing" if report["findings"]["required_missing_visible"] else "present"
+        failures = set(report["findings"]["required_missing_visible"])
+        failures.update(set(args.require_visible) & (
+            set(report["findings"]["active_missing_links"])
+            | set(report["findings"]["active_missing_visible"])
+        ))
+        report["required_failures"] = sorted(failures)
+        report["required_status"] = "missing" if failures else "present"
         report["exit_scope"] = "required_names"
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
     else:
         _print_human(report)
     if args.required_only:
-        return int(bool(report["findings"]["required_missing_visible"]))
+        return int(bool(report["required_failures"]))
     return 1 if report["status"] == "pressure" else 0
 
 
