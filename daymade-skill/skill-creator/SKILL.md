@@ -1720,6 +1720,17 @@ changelog, and follow marketplace-dev's guidance for the mechanics.
 
 ### Step 9: Ship or Iterate
 
+**When local availability is part of the requested delivery**, finish installation
+and verify the target host before calling the Skill ready. Invoke `skill-governance`
+and use its newly registered Skill checks. Supply the new Skill's identity from
+this task, independently of the current activation whitelist; an omitted name
+must not disappear from the expected set. For owned marketplaces approved for
+automatic activation, use `claude-switch-models-setup` to sync the declared hosts.
+Preserve explicit host-specific disables and existing router-only contracts.
+Do not infer Claude availability from a Codex link, or installation from a
+marketplace entry. A failed or unavailable host probe leaves local delivery
+incomplete. Package-only and source-only requests retain their narrower scope.
+
 After completing the skill, use **AskUserQuestion** to determine next steps:
 
 ```

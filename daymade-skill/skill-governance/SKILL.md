@@ -79,6 +79,11 @@ completely before using that workflow.
 
 ## Fast read-only Codex audit
 
+For a newly registered Skill whose local use is part of the delivery, run the
+target-name checks in `references/skill-surface-governance.md` §14 before calling
+it ready. This covers Claude's fresh command catalog and Codex's fresh prompt.
+The name must come from the requested delivery, not only the active whitelist.
+
 Run from this Skill bundle:
 
 ```bash

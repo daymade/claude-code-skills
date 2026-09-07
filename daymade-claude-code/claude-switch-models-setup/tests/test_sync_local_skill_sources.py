@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import contextlib
 import io
 import json
 from contextlib import contextmanager, redirect_stderr
@@ -2145,6 +2146,91 @@ class UserRootMigrationTests(unittest.TestCase):
             self.assertEqual(result, 0)
             self.assertFalse(agents_root.exists())
             self.assertFalse((claude_dir / sync.SYNC_LOCK_NAME).exists())
+
+
+class ClaudeActivationTests(unittest.TestCase):
+    _marketplace = UserRootMigrationTests._marketplace
+    _main_args = UserRootMigrationTests._main_args
+
+    def setup_case(self, root):
+        repo, manifest = self._marketplace(root)
+        (root / "claude").mkdir()
+        manifest.write_text(json.dumps({
+            "schema_version": 1, "active_skills": [],
+            "active_marketplaces": ["daymade-skills"],
+            "claude_active_marketplaces": ["daymade-skills"],
+        }))
+        return repo, manifest, self._main_args(root, repo, manifest)
+
+    def test_registration_alone_activates_future_member_in_both_hosts(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            repo, manifest, args = self.setup_case(root)
+            self.assertEqual(sync.main(args), 0)
+            unchanged_policy = manifest.read_bytes()
+            catalog = repo / ".claude-plugin/marketplace.json"
+            data = json.loads(catalog.read_text())
+            (repo / "later").mkdir()
+            (repo / "later/SKILL.md").write_text("---\nname: later\ndescription: added later\n---\n")
+            data["plugins"].append({"name": "later", "source": "./later", "version": "1.0.0"})
+            catalog.write_text(json.dumps(data))
+            self.assertEqual(sync.main(args), 0)
+            for host in [root / "claude/skills", root / "agents/skills"]:
+                self.assertEqual((host / "later").resolve(), (repo / "later").resolve())
+                self.assertEqual((host / "selected").resolve(), (repo / "selected").resolve())
+            self.assertEqual(manifest.read_bytes(), unchanged_policy)
+            self.assertEqual(sync.main(args), 0)
+
+    def test_disabled_plugin_does_not_gain_a_new_direct_alias(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            repo, _, args = self.setup_case(root)
+            (root / "claude").mkdir(exist_ok=True)
+            (root / "claude/settings.json").write_text(json.dumps({
+                "enabledPlugins": {"selected@daymade-skills": False},
+            }))
+            self.assertEqual(sync.main(args), 0)
+            self.assertFalse((root / "claude/skills/selected").exists())
+            self.assertTrue((root / "agents/skills/selected").is_symlink())
+            # A pre-existing direct entry is independent of its disabled plugin.
+            (root / "claude/skills/selected").symlink_to(repo / "selected")
+            self.assertEqual(sync.main(args), 0)
+            self.assertTrue((root / "claude/skills/selected").is_symlink())
+
+    def test_enabled_user_plugin_does_not_gain_a_duplicate_direct_entry(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            repo, _, args = self.setup_case(root)
+            (root / "claude/plugins").mkdir(parents=True)
+            (root / "claude/settings.json").write_text(json.dumps({
+                "enabledPlugins": {"selected@daymade-skills": True},
+            }))
+            (root / "claude/plugins/installed_plugins.json").write_text(json.dumps({
+                "plugins": {"selected@daymade-skills": [{"scope": "user", "installPath": str(repo / "selected")}]},
+            }))
+            self.assertEqual(sync.main(args), 0)
+            self.assertFalse((root / "claude/skills/selected").exists())
+
+    def test_real_personal_bundle_is_not_overwritten(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            _, _, args = self.setup_case(root)
+            collision = root / "claude/skills/selected"
+            collision.mkdir(parents=True)
+            (collision / "keep.txt").write_text("user-owned")
+            with self.assertRaisesRegex(RuntimeError, "real directory"):
+                sync.main(args)
+            self.assertEqual((collision / "keep.txt").read_text(), "user-owned")
+
+    def test_source_inventory_is_read_only_and_retains_registered_identity(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            repo, _ = self._marketplace(root)
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                self.assertEqual(sync.main(["--repo", str(repo), "--print-source-inventory"]), 0)
+            self.assertIn("selected", json.loads(output.getvalue())["marketplaces"]["daymade-skills"])
+            self.assertFalse((root / "claude").exists())
 
 
 if __name__ == "__main__":
