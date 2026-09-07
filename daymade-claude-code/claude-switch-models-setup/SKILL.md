@@ -15,7 +15,7 @@ description: >-
   configuration (the [1m] marker or explicit CLAUDE_CODE_MAX_CONTEXT_TOKENS).
 ---
 
-# Claude Code Multi-Provider Profiles
+# Claude Code Profiles and Local Skill Activation
 
 ## Overview
 
@@ -32,11 +32,13 @@ The result: you can open one terminal with Kimi, another with DeepSeek, another 
 - **State layer — `.claude.json` behavior keys:** `settings.json` is not the only per-profile config file. Claude Code also keeps a per-profile state file (the main profile's is `~/.claude.json`; each third-party profile's is `<profile>/.claude.json` — asymmetric paths, verified on disk), and a few **behavior** settings live only there (`workflowSizeGuideline`, notification/UI preferences). On 2026-08-17 `workflowSizeGuideline: small` existed only on the main profile and 10/11 third-party profiles had no copy — a Kimi session fanned one Dynamic Workflow out to 30+ agents with no size guidance in its system prompt. The same converger therefore also syncs an **allowlist of behavior keys** into each profile's `.claude.json`. The safety mechanism is a three-way classifier in the script, not a hand-maintained key list: allowlisted behavior keys sync; state/cache/counter/migration/credential keys (matched by name patterns) are never touched; anything unknown-and-different is **reported — one line per drifted key per run, until a human classifies it** (the tripwire that surfaces the next behavior key the day it appears). Writes are backup + atomic-replace; measured safe against a live harness rewriting the file (a marker key survived 30+ minutes of an active session). Applies next session — the harness reads this file at startup.
 - **Exception — `plugins/`:** marketplace content and install state are shared, but each profile keeps its **own** `known_marketplaces.json`. Claude validates a marketplace's `installLocation` with `path.resolve()` (which does NOT resolve symlinks), so a single shared file would make every non-writing profile report "corrupted installLocation". `claude-plugins-sync.py` builds and maintains this per-profile structure.
 - `claude-plugins-sync.py` also mirrors `enabledPlugins` from the default `~/.claude/settings.json` into each profile's `settings.json` (sharing cache files is not enough; Claude Code treats "enabled" state as config-dir-local). It runs at profile launch and reactively — the LaunchAgent in the next bullet re-runs it on every write to the default profile's `settings.json`, so `claude plugin enable`/`disable --scope user` typically propagates to every profile within seconds without a relaunch (verified 2026-08-22). The mirror **adopts first**: enabledPlugins keys that exist only in some profile's settings.json (the way `claude plugin install` writes them) are written back into the default profile before mirroring — consistent values only; cross-profile conflicts stay per-profile behind a standing warning instead of being silently overwritten (added 2026-09-03, after adopt-less mirroring was confirmed as the mechanical root cause of recurring skill-visibility losses). The SessionStart converger above covers the same key as part of its whole-settings sync; `claude-plugins-sync.py` remains the owner of the per-profile `known_marketplaces.json` structure. `skill-install-audit.py` reconciles the registry / installed / enabled / Codex-manifest / `~/.agents/skills` layers read-only, plus the daemon's pinned runtime version and whether the checkouts it judged everything against are themselves behind. `prune-source-sync-backups.py` removes only the `.source-sync-backups/` buckets git can reproduce; a bucket holding even one blob no repository has is reported and left alone.
-- Local source sync is automatic on maintainer machines, but **source inventory is not activation policy**. Claude plugin cache directories remain source-backed; Codex user Skills are selected explicitly by `~/.config/claude-switch-models-setup/codex-active-skills.json` and linked into the official user root `~/.agents/skills`. The manifest's optional `active_marketplaces` names managed marketplaces whose *whole* current membership is active, for a marketplace whose own charter is "every registered Skill is activated" — the declaration still lives in the manifest, only at marketplace granularity, and every marketplace not named there stays per-skill curated. `~/.codex/skills/.system` remains Codex-owned; the repair pass never edits it. After every selected replacement link is verified, the pass creates or confirms only the optional `legacy_codex_compat_skills` subset as same-source links under legacy `~/.codex/skills`; other managed legacy links are reported for reviewed cleanup, never deleted by the background task.
-  - The manifest is intentionally fail-fast about its own shape: missing file, non-array or duplicate name lists, a compatibility name absent from `active_skills`, or the same frontmatter name registered by two different source bundles aborts before root mutation. Explicit JSON `null` is malformed, not an empty compatibility choice. This prevents a Python dictionary or directory scan order from silently choosing the winner.
-  - An active name that no discovered checkout registers is the one condition that does not abort. The syncer reports it on stderr, `--quiet` included, naming each scanned checkout with the branch its `HEAD` file points at, skips it for that pass, and converges every other name; the skipped name is linked on the first pass after some checkout registers it. The manifest is written against the marketplace as published on `main`, but the syncer reads working trees, and a shared checkout parked on a feature branch registers only what that branch had when it forked. Until daymade-claude-code v3.15.0 that name raised `ValueError: unknown active skill name(s)` and aborted the pass: the daemon exited 1 on every trigger, and `~/.agents/skills` plus the `enabledPlugins` mirror queued behind it stayed frozen for every skill until someone read the log (observed 2026-09-05, after a manifest edit made against a checkout parked on another session's branch). A misspelled or retired name produces the same warning on every pass until the manifest is corrected; see [troubleshooting.md](references/troubleshooting.md).
-  - **Pitfalls with daemon-owned symlinks** (observed 2026-07): never hand-create a symlink over an existing daemon-owned entry. BSD `ln` can put the new link *inside* the target directory, leaving a self-referential stray. Change `active_skills` for normal activation; when a long-lived hook or process still holds an old `~/.codex/skills/<name>` path, add that already-active name to `legacy_codex_compat_skills`. Verify links with `readlink`, not `ls -la <link>`—`ls` follows the link and can make a failed replacement look successful.
-  - Third-party bundles already installed under `~/.agents/skills` are outside that manifest's ownership. Do not add them to the source manifest or delete them merely to reduce Codex prompt load. Route “keep the bundle on disk but hide it from Codex” to `/daymade-skill:skill-governance`; `references/local-source-sync-architecture.md` records the ownership boundary without duplicating that workflow.
+- Local source sync keeps approved source-backed routes aligned for each host.
+  Before selecting or repairing entries, read the
+  [host-specific activation contract](references/local-source-sync-architecture.md#host-specific-user-skill-activation).
+  It owns the manifest fields, marketplace expansion, Claude plugin/direct-link
+  distinction, unresolved-name handling, collision safety, and legacy compatibility.
+  Source registration alone does not choose activation policy; do not hand-create
+  links or repurpose the manifest to manage third-party inventory.
 - Sync scripts use a shared cross-process lock. This is required because users often open several provider windows from tmux or multiple terminals at once; concurrent launches must serialize marketplace/cache rewrites while still allowing all profiles to start.
 - For the full local-source architecture, read `references/local-source-sync-architecture.md` before changing these scripts.
 - Provider routing is done via `~/.claude/settings/<name>.json`, which sets `ANTHROPIC_MODEL`, `ANTHROPIC_BASE_URL`, and `ANTHROPIC_AUTH_TOKEN` for that window.
@@ -53,37 +55,17 @@ When the user says something like "set up Claude Code profiles" or "I want to us
 2. **Install the profile manager scripts — symlink them, do not copy**
 
    On a machine that has this repo checked out (the maintainer case), run the
-   bundled installer — it does exactly what the manual form below does:
+   bundled installer:
 
    ```bash
    <absolute-path-to-this-repo>/daymade-claude-code/claude-switch-models-setup/scripts/setup.sh
    ```
 
-   Or link them by hand. `REPO` **must be an absolute path**: with a relative
-   one every command below still succeeds and exits 0, leaving dangling
-   links that break `csk` and the LaunchAgent with no error to trace.
-
-   ```bash
-   REPO=<absolute-path-to-this-repo>/daymade-claude-code/claude-switch-models-setup
-   DST=~/.config/claude-switch-models-setup
-   mkdir -p "$DST"
-   for f in scripts/claude-profiles.sh \
-            scripts/claude-plugins-sync.py \
-            scripts/sync-local-skill-sources.py \
-            scripts/sync-local-skill-sources-daemon.sh \
-            scripts/sync-profile-settings.py; do
-     ln -sf "$REPO/$f" "$DST/$(basename "$f")"
-   done
-   python3 "$REPO/scripts/seed-codex-active-skills.py" \
-     "$REPO/assets/templates/codex-active-skills.json" \
-     "$DST/codex-active-skills.json"
-   ```
-
-   The deployed paths are spelled out rather than globbed so that reading this file
-   tells you which scripts exist and where — `scripts/*.sh` would not. No
-   `chmod` step: each listed script is committed executable, so setting the bit again
-   would only dirty the checkout with mode changes that then ride into somebody
-   else's commit.
+   `scripts/setup.sh` is the single source for the exact deployment set. It links
+   each helper into `~/.config/claude-switch-models-setup/` and seeds the activation
+   manifest only when it does not already exist. Do not maintain another helper list
+   here. No `chmod` step is needed: the deployment is by symlink, and the source
+   files retain their committed modes.
 
    **Why symlinks and not `cp`:** `~/.config/…` is what actually runs — the
    LaunchAgent and `claude-profile` invoke scripts by that path — while this
@@ -167,12 +149,11 @@ When the user says something like "set up Claude Code profiles" or "I want to us
    - Run `claude-profiles-doctor`
    - Confirm each profile directory has `.claude.json` and valid symlinks
 
-8. **Select and install Codex user Skills for maintainers**
+8. **Select local source Skills for Codex and Claude**
    - Skip this for normal students or users who do not edit the skill source repos
-   - Edit `~/.config/claude-switch-models-setup/codex-active-skills.json`; list only the source Skills that should be globally visible to Codex. An empty list is an explicit choice to activate none.
-   - If a still-running hook or process retains a legacy path, list that already-active Skill under `legacy_codex_compat_skills`; otherwise keep the compatibility list empty.
-   - Run `sync-local-skill-sources.py --apply`. It creates/verifies selected `~/.agents/skills` links before creating or confirming explicit compatibility links and reporting other managed legacy links for reviewed `skill-governance` cleanup.
-   - On a maintainer macOS machine, run `sync-local-skill-sources-daemon.sh --install`
+   - Read the [host-specific activation contract](references/local-source-sync-architecture.md#host-specific-user-skill-activation), then edit the machine's activation manifest for the requested hosts. Use its compatibility rules only for consumers that still retain a legacy path.
+   - Preview with `python3 ~/.config/claude-switch-models-setup/sync-local-skill-sources.py`, read every affected path, then apply with `python3 ~/.config/claude-switch-models-setup/sync-local-skill-sources.py --apply`.
+   - On a maintainer macOS machine, run `~/.config/claude-switch-models-setup/sync-local-skill-sources-daemon.sh --install`
    - This watches the activation manifest, default Claude install state, and local marketplace manifests, then repairs derived state after selection, install/uninstall, or plugin topology changes
 
 9. **Show the user how to launch**
@@ -206,9 +187,11 @@ python3 ~/.config/claude-switch-models-setup/sync-profile-settings.py --all
                                # permissions, preferences) + .claude.json behavior
                                # keys (workflowSizeGuideline etc.); --check --all
                                # audits without writing
+python3 ~/.config/claude-switch-models-setup/sync-local-skill-sources.py
+                               # Maintainers: preview host selections and affected paths
 python3 ~/.config/claude-switch-models-setup/sync-local-skill-sources.py --apply
-                               # Maintainers: activate the explicit Codex user set in
-                               # ~/.agents/skills; retain compat/report stale legacy links
+                               # Apply the inspected Codex, Claude, and explicit
+                               # legacy compatibility changes
 ~/.config/claude-switch-models-setup/sync-local-skill-sources-daemon.sh --install
                                # Maintainers: install automatic macOS watcher
 ```
@@ -217,18 +200,9 @@ These are not day-to-day commands. Normal source edits are live through symlinks
 
 ## Provider Templates
 
-Templates live in `assets/templates/`:
-
-- `minimax.json` — MiniMax-M3, global endpoint, 1M context, adaptive or disabled thinking
-- `minimax-cn.json` — MiniMax-M3, China endpoint, 1M context, adaptive or disabled thinking
-- `minimax-m2-7.json` — MiniMax-M2.7, global endpoint, 204800-token context, always-on thinking
-- `minimax-m2-7-cn.json` — MiniMax-M2.7, China endpoint, 204800-token context, always-on thinking
-- `kimi.json` — Kimi K3 (1M context via the `[1m]` marker — see "Configuring Context Window Size" below)
-- `kimi-highspeed.json` — Kimi K2.7 highspeed (legacy 200K context)
-- `glm.json`
-- `deepseek.json`
-- `stepfun.json`
-- `anthropic.json`
+Use the provider templates in [`assets/templates/`](assets/templates/). Read the
+chosen file for its model, endpoint, context settings, and thinking behavior;
+do not infer those values from a hand-maintained template summary.
 
 Every template uses the `<API_KEY>` placeholder. Templates for configurable gateways also use `<BASE_URL>`; the MiniMax templates pin the documented regional endpoint. Ask the user for every real placeholder value; do not guess or reuse values from the current machine unless the user explicitly provides them.
 
@@ -385,37 +359,15 @@ Then restart the affected Claude Code window.
 
 ### Local source edits do not show up in Claude Code or Codex
 
-For an owned marketplace whose new Skills should become available automatically,
-declare it once in `active_marketplaces` (Codex) and, independently,
-`claude_active_marketplaces` (Claude) in the existing activation manifest. Run the
-source sync dry-run before applying. Claude fills missing personal entries,
-preserves existing correct direct links, and avoids creating another entry for
-an installed user plugin. Existing disabled plugins do not gain a new direct
-alias. See `references/local-source-sync-architecture.md` for source selection,
-runtime installation, and verification.
+Read [the source-change and pin-update procedure](references/troubleshooting.md#local-skill-source-changes-do-not-appear-in-claude-code-or-codex).
+It distinguishes source-backed routes from pinned runtime copies and inventory
+reports from successful synchronization and fresh-host discovery.
 
-Symptom: you edit a skill in a local source repo, but Claude Code or Codex still loads an old installed copy.
+Source sync also manages derived cache artifacts:
 
-Expected design: normal edits to an installed Claude plugin or an explicitly selected Codex user Skill are live immediately because their runtime locations are symlinks. A source Skill that is absent from `codex-active-skills.json` is deliberately cold inventory, not sync drift. Existing Claude Code/Codex sessions may still need a restart because Skill metadata is loaded at session start.
 
-If the edit is structural (new plugin, new skill entry, version bump, install/uninstall, or marketplace manifest change), the macOS LaunchAgent should run automatically. Check:
-
-```bash
-launchctl print gui/$(id -u)/ai.daymade.claude-skill-source-sync
-```
-
-Repair manually only if the watcher is not installed or you are on a non-macOS machine:
-
-```bash
-python3 ~/.config/claude-switch-models-setup/sync-local-skill-sources.py --apply
-```
-
-This first validates the explicit activation manifest and resolves each active name against the discovered checkouts; a name none of them registers is reported and skipped for the pass (the manifest bullets under How It Works say why). Every registered Skill carries its marketplace-repo containment and load-time inode into the freeze step, which rechecks both before binding one source path and inode for the whole pass. It captures the existing identities of both user roots before the mutable phase, then opens every remaining component with no-follow directory handles and refuses a root that disappeared, appeared, or changed inode before pinning. It links the selected entries into `~/.agents/skills`, verifies every selected target, and only afterward creates or confirms `legacy_codex_compat_skills` under `~/.codex/skills`; a final cross-root check reads both links between source pre/post identity checks. A missing root is created exclusively only when the selected policy needs it. At a selected `.agents` destination, an empty path or the correct link is accepted; a wrong link into a managed source repo moves to timestamped recovery storage, while a real object, relative/broken link, or third-party link fails visibly and remains in place. Stale unselected managed links move to the same recovery storage; malformed foreign links are skipped as unowned. The move itself is exclusive: if the classified entry changes first, the concurrent winner is restored at the original name and selected replacement fails (unselected pruning skips it); if a newer winner already occupies that name, neither is overwritten and the run fails with the earlier winner retained in recovery. At a requested legacy compatibility path, only an already-correct same-source link or an empty path is accepted; every other existing object fails visibly and is never replaced. Creation publishes a known private symlink inode with an atomic no-overwrite hard link, so any competing path before, during, or after publication fails closed—even if it points to the expected source. Other source-backed legacy links are logged for explicit, reviewed cleanup through `skill-governance`; the LaunchAgent never unlinks them.
-
-It also cleans up after itself, which earlier versions did not:
-
-- **Version-alias symlinks.** Each cache link is named after the marketplace's current version, so every version bump left the previous link behind pointing at the very same source directory. One plugin had six version directories, four of them aliases for one source. The pass now removes sibling links that resolve to the same source; real directories are never touched, since Claude Code installs those and a live session may still hold them through `.in_use`.
-- **`installed_plugins.json` backups.** Every run that changes the JSON writes one, and nothing removed them — a month of runs left 453 files behind. The `KEEP_JSON_BACKUPS` constant in the script caps the retained set; the names end in a `YYYYMMDD-HHMMSS` stamp, so lexical order is chronological.
+- **Version-alias symlinks.** Each cache link is named after the marketplace's current version, so every version bump left the previous link behind pointing at the very same source directory. The pass now removes sibling links that resolve to the same source; real directories are never touched, since Claude Code installs those and a live session may still hold them through `.in_use`.
+- **`installed_plugins.json` backups.** Each run that changes the JSON writes a backup. The `KEEP_JSON_BACKUPS` constant in the script caps the retained set; the names end in a `YYYYMMDD-HHMMSS` stamp, so lexical order is chronological.
 
 Both are visible in a dry run before `--apply` touches anything.
 

@@ -4,22 +4,6 @@ This reference contains the detailed operating procedures for `skill-governance`
 The main Skill is the router. Read only the sections required by the selected
 workflow.
 
-## Contents
-
-- [1. The governed system](#1-the-governed-system)
-- [2. Authority and mutation boundaries](#2-authority-and-mutation-boundaries)
-- [3. Establish a bounded baseline](#3-establish-a-bounded-baseline)
-- [4. Audit the real Codex Skill surface](#4-audit-the-real-codex-skill-surface)
-- [5. Reconcile source-backed activation](#5-reconcile-source-backed-activation)
-- [6. Keep cold bundles without loading their catalog entries](#6-keep-cold-bundles-without-loading-their-catalog-entries)
-- [7. Audit and repair Claude plugin installs](#7-audit-and-repair-claude-plugin-installs)
-- [8. Reconcile a suite migration](#8-reconcile-a-suite-migration)
-- [9. Audit project dual roots](#9-audit-project-dual-roots)
-- [10. Retire a loose or duplicate Skill without losing value](#10-retire-a-loose-or-duplicate-skill-without-losing-value)
-- [11. Verify the user-visible outcome](#11-verify-the-user-visible-outcome)
-- [12. Report format](#12-report-format)
-- [13. Troubleshooting](#13-troubleshooting)
-
 ## 1. The governed system
 
 Treat these as different layers. A smaller number at one layer is not evidence
@@ -33,7 +17,7 @@ that the user's capability surface improved.
 | Model-visible catalog | What metadata did a fresh model prompt actually receive? | Fresh-host prompt inspection, never a filesystem count |
 | Runtime resources | Which hidden scripts, references, or assets remain reachable? | The selected router's real resolution path and read/run verification |
 
-Four distinctions prevent most governance mistakes:
+Keep these distinctions explicit:
 
 1. **Installed is not active.** A bundle may stay on disk while its individual
    entries are hidden behind a router.
@@ -163,17 +147,19 @@ Use this workflow for owned source repos managed by
 1. Read its current source-sync architecture reference and activation manifest.
 2. Run its syncer in dry-run mode first. Do not recreate its link logic inside
    this Skill.
-3. Reject duplicate frontmatter identities, unknown manifest names, real-path
-   collisions, and third-party links before mutation.
+3. Use the source owner's validation result to distinguish invalid policy or
+   source collisions from unresolved Skill names. Keep unresolved requested
+   targets in the expected set; do not remove them to obtain a passing audit.
 4. Apply only after the requested active set is explicit.
 5. Read back every selected `~/.agents/skills/<name>` link and verify it resolves
    into the declared canonical source.
 6. Run the real Codex surface audit. A correct symlink set with a wrong prompt
    catalog is not complete.
 
-The activation manifest is a selection policy, not an inventory dump. Do not
-put every source Skill into it, and do not add third-party cold bundles merely
-to explain why they exist on disk.
+The activation manifest is a selection policy. An approved whole marketplace
+can be selected without copying its computed membership into a per-Skill list.
+Keep the host-specific policy in the source owner's manifest; do not add
+third-party cold bundles merely to explain why they exist on disk.
 
 ## 6. Keep cold bundles without loading their catalog entries
 
@@ -322,7 +308,7 @@ owner and replacing a copy remains a repository-owner decision.
 Bound the scan to direct entries in the implicated roots. For a user-surface
 request, check the requested subset of `~/.agents/skills`, `~/.claude/skills`,
 and legacy `~/.codex/skills`; when the user asks to unify or clean the whole user
-surface, all three are implicated. Before classification, read each root's
+surface, these roots are implicated. Before classification, read each root's
 current package-manager ownership record, including the adjacent
 `.skill-lock.json` when present, current Claude plugin metadata, and any explicit
 source activation manifest. An unreadable or unfamiliar lock schema is
@@ -370,8 +356,10 @@ Verification follows the changed layer:
 2. **Installed state:** official list JSON plus filesystem readback proves
    identity, version, scope, and member files.
 3. **Discovery:** config/link readback proves the selected paths and policy.
-4. **Catalog:** a fresh prompt audit proves the model-visible entries and full
-   descriptions.
+4. **Catalog:** a fresh prompt audit records the visible entries, omissions, and
+   description truncation. Apply the metadata requirements of the requested
+   surface; the installation-only target gate in §14 does not certify the whole
+   catalog's description quality.
 5. **Cold capability:** one representative router action proves hidden resources
    remain reachable.
 6. **Recovery:** any retired/moved material and its hashes remain present.
@@ -418,9 +406,10 @@ audit when the user asks.
 
 - **Filesystem count differs from the prompt:** expected; inspect the discovery
   policy and fresh prompt. Disk inventory is not the catalog.
-- **A source description is truncated:** reduce catalog pressure by selecting
-  hot/router entries, not by shortening every description until trigger quality
-  collapses.
+- **A source description is truncated:** report the observed loss separately
+  from target availability. Change catalog selection only within the user's
+  declared policy; a full-marketplace decision is not permission to prune it.
+  Use actual task results when assessing whether truncation caused a failure.
 - **The prompt and `skills/list` disagree:** treat the audit as invalid or
   pressure according to the reported field. Do not fall back to a hand-written
   YAML approximation.
@@ -433,6 +422,11 @@ audit when the user asks.
   running sessions. Do not clean them solely to make a count reach one.
 - **Marketplace remove would affect installs:** stop and design a scope-preserving
   migration; do not rely on remove-then-add.
+
+- **A duplicate is byte-identical:** it is duplication debt, not evidence that
+  either copy can be deleted without identifying the owner and replacement.
+- **Current session still shows retired entries:** restart; startup metadata is
+  not retroactively rewritten.
 
 ## 14. Verify a newly registered Skill
 
@@ -473,7 +467,18 @@ list. A source-only or package-only delivery does not authorize local activation
 Do not use `skill-install-audit.py` exit 0 as this gate: it is an inventory report,
 can contain findings, and does not measure the fresh host catalog. Stop when the
 requested host discovers the target and the retained cold route still works.
-- **A duplicate is byte-identical:** it is duplication debt, not evidence that
-  either copy can be deleted without identifying the owner and replacement.
-- **Current session still shows retired entries:** restart; startup metadata is
-  not retroactively rewritten.
+
+### Task behavior when it is part of delivery
+
+Use the concrete requested task and check its returned material or state against
+an independent source. Keep the real read-only execution path available: a probe
+that excludes the Skill's script runner cannot establish how the ordinary
+workflow behaves. State any probe-only tool, hook, or MCP restrictions alongside
+the result.
+
+Record whether the host selected the Skill, completed the task, and returned a
+correct result as separate observations. A correct answer obtained through other
+tools is not by itself an installation defect; it also does not prove automatic
+Skill invocation. An unavailable provider or unfinished model request leaves the
+behavior check unverified. Do not rerun a passing task or add a description-tuning
+workflow unless a new failure or changed requirement calls for it.

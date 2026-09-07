@@ -100,7 +100,7 @@ python3 scripts/audit_codex_skill_surface.py \
 
 The script compares `codex debug prompt-input` with the complete metadata parsed
 by Codex's own app-server `skills/list`, plus exact activation/discovery policy.
-Exit `0` is clean, `1` is pressure or drift requiring a decision, and `2` means
+Exit `0` is clean, `1` is pressure or drift to classify, and `2` means
 the evidence is invalid. It is read-only. Do not convert exit `1` into automatic
 pruning.
 
@@ -153,8 +153,9 @@ use this Skill only to reconcile already-landed migrations on the current host.
 All applicable claims must be proven independently:
 
 - canonical source and current owner are named;
-- selected direct entries/routers appear in a fresh prompt with intact
-  descriptions;
+- selected direct entries/routers appear in a fresh prompt under the requested
+  discovery policy; report description truncation separately, including when
+  the installation-only target gate passes;
 - entries intended cold are absent from that catalog;
 - one representative cold capability still resolves and works;
 - source-backed links or Claude installs read back with the intended identity,
@@ -162,6 +163,9 @@ All applicable claims must be proven independently:
 - any retired bundle and its recovery manifest still exist;
 - unresolved ownership, host-version behavior, or deliberately retained
   exceptions are explicit.
+
+Use the reference's task-behavior check only when actual task execution is part
+of delivery; catalog visibility alone does not prove that result.
 
 Stop there. Do not create a new hook, manifest, report layer, or cleanup project
 unless the requested outcome still lacks evidence.
