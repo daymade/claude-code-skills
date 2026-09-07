@@ -112,6 +112,7 @@ class DaemonRuntimeLagTest(unittest.TestCase):
             # the machine running the tests must not change the outcome.
             with mock.patch.object(audit, "REGISTRY_REPOS", []), \
                 mock.patch.object(audit, "read_json", lambda _path: {}), \
+                mock.patch.object(audit, "load_codex", return_value=(set(), set())), \
                 mock.patch.object(audit, "PROFILES_DIR", absent), \
                 mock.patch.object(audit, "AGENTS_SKILLS", absent), \
                 mock.patch.object(audit, "DAEMON_ENTRY", absent):
