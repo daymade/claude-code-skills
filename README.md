@@ -504,6 +504,7 @@ Discovers, messages, broadcasts to, and independently verifies local Claude Code
 **When to use:**
 - Asking one terminal's Claude or Codex agent to coordinate with another
 - Sending a dependency, pause, handoff, or completion notice across sessions
+- Finding replies to a specific coordination message without manually inspecting local message stores
 - Reaching a Claude inbox from a third-party profile or Codex process
 - Unblocking messages held for per-message manual approval on an unattended endpoint (`crossSessionInbound`)
 - An inbound peer message asserting facts about your session or shared state, or asking you to pause/release — verify the premise against its own authority before acting

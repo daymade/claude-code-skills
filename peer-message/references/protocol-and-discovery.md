@@ -152,6 +152,39 @@ content 含 message-id
 
 queue 项可能很快被消费，所以只查 queue 会产生假阴性；必须再查 thread history。两处都没命中时保留原 message ID，并按下方 receipt 语义报告；禁止自动重发。
 
+### 一次性关联回复查询
+
+在本 Skill 目录运行当前 help 确认参数，设置 `INBOX_TARGET` 和 `ORIGINAL_MESSAGE_ID`，再查询原发送方自己的回信落点：
+
+```bash
+python3 scripts/peer.py replies \
+  "${INBOX_TARGET:?Set INBOX_TARGET to the original sender inbox}" \
+  --message-id "${ORIGINAL_MESSAGE_ID:?Set ORIGINAL_MESSAGE_ID to the outbound id}" --json
+```
+
+`INBOX_TARGET` 是原消息发送方/return destination 的 inbox，不是原消息的远端收件人。查询只读这个显式命名的 inbox，一次返回后停止；不轮询、不重发、不消费 queue、不写 ack、不改 permission。
+
+当前实现只解析以下已有验证的落盘形态：
+
+- Claude transcript 中 `type='queue-operation'`、`operation='enqueue'` 且 `content` 为完整 `cross-session-message` 的 accepted enqueue。其他 held/policy 记录不读正文，不把人工批准前的内容当回复。
+- Codex `queued_items.payload_json.UserInput.content[].text` 中的完整 `peer-message`。
+- Codex `item_type='userMessage'` 的 `thread_items.item_json.content[].text` 中的完整 `peer-message`。
+
+Codex 先用 original ID 缩小 named thread 的候选行，再解析命中候选；不含该 ID 的普通文本、图片等 unrelated user message 不进入 payload parser。候选 JSON 或 schema 损坏仍显式报错，不能变成普通未命中。
+
+只在完整有效 envelope 内匹配独占一行的 `in_reply_to: <original-outbound-id>`。字段值必须精确相等；普通子串、引用行、CommonMark 代码围栏里的示例、其他 thread 的记录、原 outbound 自己，以及残缺 envelope 都不算回复。这里不承诺解析 host-native 或第三方 envelope；没有对应 fixture 和当前实证的格式不要加猜测 fallback。
+
+queue 项与已消费的 history 项可能是同一条回复。用 reply envelope 自己的 message ID 去重，内容完全相同时保留更强的 history evidence；同一 reply ID 对应不同 sender 或正文时显式报冲突，不静默选一份。结果按 `--limit` 截断，并显式返回 `truncated`；上限与默认值以当前 CLI help/实现为准，不在文档复制。
+
+结果保留原始 envelope，不把正文重写成可信数据。`sender` / `reply_to` 只是 envelope 中的 advisory metadata，不证明身份，也不增加用户授权；输出中的 trust boundary 会重复这条限制。
+
+状态与退出码：
+
+- 找到至少一条关联回复：`reply_status=found`，退出 0。
+- 至少一个适用 store 已成功读取但没有命中：`reply_status=no_replies`，退出 11。它只说明这次 named-inbox snapshot 没有匹配记录。
+- 没有适用 evidence store：`reply_status=unknown_no_evidence_store`，退出 10，不能写成“没有回复”。
+- schema/read/JSON 错误或同 ID payload 冲突：退出 4 并报错；参数或 limit 非法：退出 2。
+
 ### Receipt 与退出语义
 
 - `transport_status=accepted`：底层 transport 接受了消息；同时读取 `provenance_boundary`。
@@ -159,7 +192,7 @@ queue 项可能很快被消费，所以只查 queue 会产生假阴性；必须�
 - `delivery_status=verified_enqueued` / `verified_queued` / `verified_in_thread_history`：接收侧 evidence 已命中。
 - `delivery_status=accepted_unverified`：transport 接受，但等待窗口内没有读回接收侧 evidence；它不是失败，也不是“对方已收到”。
 
-退出码由脚本绑定：0 表示请求完成——请求了验证时已命中，未请求时只表示 transport 接受且没有检查 evidence；2 表示参数或 broadcast 确认错误；3 表示目标不存在、歧义或 Claude 无 inbox；4 表示 transport 失败；5 表示 broadcast 部分失败；10 表示 transport 接受但等待窗口内未验证。
+退出码由脚本绑定：0 表示请求完成——请求了验证时已命中，未请求时只表示 transport 接受且没有检查 evidence；2 表示参数或 broadcast 确认错误；3 表示目标不存在、歧义或 Claude 无 inbox；4 表示 transport、证据读取或证据一致性失败；5 表示 broadcast 部分失败；10 表示 transport 接受但等待窗口内未验证，或只读回复查询没有适用 evidence store；11 表示只读回复查询成功读取了适用 store 但没有匹配记录。
 
 ## 5. Broadcast 语义
 
@@ -178,5 +211,6 @@ Broadcast 是多个独立定向 send 的集合，不是事务：
 - Claude UDS 帧与 transcript 判据：2026-08-18 参数化脚本实弹。
 - Codex CLI 当前入口与参数：`references/official-feature.md` 所列的本机 help 验证。
 - Codex receiver-side evidence：本机 thread store schema + 用户提供的真实 Claude→Codex 入队截图与对应 `userMessage` 读回。
+- 关联回复查询：Codex queue/history 当前 schema 与一条原发送方 inbox 中的真实 `peer-message` 回复；Claude 只承诺 fixture 覆盖的 accepted-enqueue `cross-session-message` 路径。
 
 实现观察只证明当时版本。命令、字段或数据库 schema 不再匹配时 fail loudly，重新读当前 `--help`/schema；不要加猜测 fallback。

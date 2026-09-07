@@ -24,7 +24,7 @@ until a step is explicitly labeled destructive — recovery must never make the 
 
 ## Outcome contract — keep the safety net subordinate to the user's job
 
-Before Mode B/E or any command that writes a ref or backup, state four lines in the conversation
+Before Mode B/E or any command that writes a ref or backup, state the following in the conversation
 (do not create another file):
 
 - **Outcome:** the user-visible end state, in the user's words.
@@ -50,6 +50,11 @@ Then enforce these boundaries:
    snapshot, transport chunk) belongs in a repository-external backup directory. Do not stage,
    commit, push, or route it through Git LFS merely to make the backup remote; Git LFS is for
    durable versioned project binaries, not a fallback transport for temporary recovery material.
+- **Keep preservation and retirement as separate phases.** A verified recovery artifact proves
+   recoverability; it does not prove the business code landed. Keep it through the destructive
+   action and the content-level postconditions. Retire an exact task-owned temporary artifact only
+   when every payload is landed or proven superseded and the artifact itself has explicit cleanup
+   authorization. Keep backup-only, unresolved, and mixed artifacts.
 - **Treat a new storage or execution surface as a scope change.** A second repository, new
    remote, cloud upload, Git LFS, or full-history export requires re-planning and explicit authority
    when the stated outcome actually depends on it. Do not solve a transport problem the user did
@@ -75,7 +80,7 @@ machine-wide discovery only when the outcome is an exhaustive loss audit or the 
 unknown. A named repository/branch/worktree task stays named; findings outside that target are
 report-only until the user expands the authorized targets.
 
-## The six load-bearing rules (internalize these; the modes apply them)
+## Load-bearing rules (internalize these; the modes apply them)
 
 1. **Get the EVIDENCE SCOPE right before you trust any verdict, without silently expanding the
    work scope: every instrument here only sees the repository it runs in.** `git worktree list`,
@@ -123,7 +128,7 @@ report-only until the user expands the authorized targets.
    branch, running `gc`, or force-pushing. Cleanup is reversible only while a ref (or the reflog
    window) still points at the work. **Critical asymmetry: `bundle`, `archive`, and `format-patch`
    can only reach objects git already knows about.** An untracked file that was never `git add`ed
-   and never `stash -u`ed is invisible to all three — the copy on disk is the only copy, so
+   and never `stash -u`ed is invisible to those formats — the copy on disk is the only copy, so
    preserving it means literally copying the file out. Backing up "the repository" and believing
    untracked work came along is how a clean-looking backup silently omits the only thing at risk.
 5. **Verify "merged" by CONTENT, never by commit count — and know that most content checks are
@@ -251,7 +256,7 @@ single `git gc` can't take it. Details + why triple-backup: **[references/recove
 **Untracked files need a different tool — plain copying (rule 4).** Put `<backup>` outside the
 target repository and every checkout being retired. Everything above moves *git
 objects*; a file git was never told about is not one. Preserve those explicitly, and keep the
-three channels separate so a later reader knows what each restores:
+channels separate so a later reader knows what each restores:
 
 ```bash
 git -C <checkout> status --porcelain | grep '^??'                     # what is untracked
@@ -506,7 +511,7 @@ and targeted exports instead:
 Anything you cannot prove superseded stays alive (same safety bias as Mode C: a false "superseded"
 loses work; a false "still live" costs a branch name). One warning that changes verdicts: **the
 leftover's label is not evidence** — a stash named "unfinished development" can be a fully-landed
-early draft; judge content against the current base, never the name. Worked examples of all three
+early draft; judge content against the current base, never the name. Worked examples of the
 rungs (including the squash-artifact and absorbed-into-refactor cases):
 **[references/merge_verification.md](references/merge_verification.md)** § Supersession triage.
 
@@ -608,6 +613,16 @@ a line the survivor genuinely lacks anywhere is the one to escalate.
 **Recovery, if you regret it:** patches re-apply with `git apply`; the untracked tar extracts
 in place; the bundle restores full history via `git fetch <file>.bundle <branch>:restored/<branch>`.
 
+**Step 5 — close the temporary recovery-artifact lifecycle only when it is separately
+authorized.** First finish Step 4 and prove the maintained survivor contains or intentionally
+supersedes every payload. Then follow
+**[references/merge_verification.md](references/merge_verification.md)** § Retire task-owned
+temporary recovery artifacts. A general request to converge onto one main branch does not
+authorize deleting the external backup. Keep any artifact that remains the only copy of work,
+contains an unresolved payload, mixes cleared and unresolved payloads, or was not created or
+explicitly adopted by this task. After an authorized retirement, independently prove every exact
+artifact path is absent; the deletion command's receipt is not the postcondition.
+
 ## Scripts (execute these; they are non-destructive unless noted)
 
 Every `scripts/...` path below is relative to this Skill's bundle root, not a command promised on
@@ -624,7 +639,7 @@ never tell a user to run bare `git_verify_branch_merged.sh` unless `command -v` 
 | `scripts/git_export_before_drop.sh --verify-current BUNDLE` | Fail if any bundled ref moved or disappeared since export | Nothing (read-only) |
 | `scripts/git_prepare_clone_retirement.sh --clone PATH --survivor PATH --out DIR` | Refuse hidden/unhandled clone state, then freeze every ref tip, symbolic-ref target, reflog identity, and scoped config/hooks/info metadata into a self-contained recovery set; after freezing an absent no-clobber destination and process occupancy, `--verify-current DIR` is the final probe and the move must be the next operation | Writes only the new external backup directory; disables lazy fetch/fsmonitor and refuses tracked content filters; never moves/deletes or changes refs |
 
-All six run from the repository root. They use read-only enumeration/configuration commands such as
+These helpers run from the repository root. They use read-only enumeration/configuration commands such as
 `find`, `config`, `symbolic-ref`, `submodule status`, `status`, `cat-file`, `rev-list`, `rev-parse`,
 `fsck`, `for-each-ref`, and `remote get-url`; plus scoped `fetch`, `archive`, `bundle create/verify`,
 metadata hashing/archive, and (preserve only) `update-ref` where each script's table row says so.
@@ -702,7 +717,7 @@ the helpers authorizes `checkout`, `reset`, `push`, `stash drop`, `branch -d`, o
   reports "still there" for a branch that is long gone. Use the exit code the command has for
   exactly this: `git ls-remote --exit-code <remote> refs/heads/<branch>` returns **0** when the ref
   matched, **2** when it did not, and anything else (**128** for an unreachable remote) means the
-  probe itself failed — three outcomes the file-size test collapses into two, differently each time.
+  probe itself failed — outcomes the file-size test collapses incorrectly, differently each time.
   On 128 the branch's fate is unknown, which is not the same as gone: keep whatever preserves it,
   retire nothing on this reading, and either retry once the remote is reachable or hand the question
   to a human. An unreachable remote is a reason to wait, never a reason to clean up.
