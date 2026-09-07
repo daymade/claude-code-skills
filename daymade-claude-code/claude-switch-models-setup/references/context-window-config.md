@@ -6,23 +6,16 @@ keeps only the decision rule (what to set per provider) and points here for the
 mechanism — because the rule is needed at template-writing time, while the
 mechanism is reference knowledge you reach for when something looks wrong.
 
-## Table of contents
-
-- [The `[1m]` marker — full mechanism](#the-1m-marker--full-mechanism)
-- [Verify the marker on each non-interactive invocation](#verify-the-marker-on-each-non-interactive-invocation)
-- [Decision-rule caveat: the step-2-16k war-story](#decision-rule-caveat-the-step-2-16k-war-story)
-- [Verifying an env var actually changes the outgoing request](#verifying-an-env-var-actually-changes-the-outgoing-request)
-
 ## The `[1m]` marker — full mechanism
 
-When `ANTHROPIC_MODEL` (or `ANTHROPIC_DEFAULT_HAIKU_MODEL` / `ANTHROPIC_DEFAULT_SONNET_MODEL` / `ANTHROPIC_DEFAULT_OPUS_MODEL` / `CLAUDE_CODE_SUBAGENT_MODEL`) ends in the literal four characters `[1m]`, Claude Code's own CLI — not the upstream provider — parses that suffix and does two things before it ever sends a request:
+When `ANTHROPIC_MODEL` (or `ANTHROPIC_DEFAULT_HAIKU_MODEL` / `ANTHROPIC_DEFAULT_SONNET_MODEL` / `ANTHROPIC_DEFAULT_OPUS_MODEL` / `CLAUDE_CODE_SUBAGENT_MODEL`) ends in the literal four characters `[1m]`, Claude Code's own CLI — not the upstream provider — parses that suffix before sending a request:
 
 1. Strips `[1m]` off the `model` field, so the upstream provider receives the clean ID (e.g. `moonshotai/kimi-k3`, never `moonshotai/kimi-k3[1m]`).
 2. Adds `context-1m-2025-08-07` to the outgoing `anthropic-beta` header.
 
-That's the entire effect — confirmed 2026-07-21 by pointing `ANTHROPIC_BASE_URL` at a local `http.server` that echoes back whatever it receives, then diffing a real Claude Code request sent with `moonshotai/kimi-k3[1m]` against one sent with the bare `moonshotai/kimi-k3`: every other field (`context_management`, `output_config`, `metadata`, the rest of the `anthropic-beta` list) was byte-identical; the beta flag was the only diff. `--debug api` will NOT show you this — it only logs Claude Code's internal state, never the literal bytes on the wire. See "Verifying an env var actually changes the outgoing request" below for the reusable recipe.
+In a 2026-07-21 local-server capture, the compared requests using `moonshotai/kimi-k3[1m]` and `moonshotai/kimi-k3` matched in the other inspected fields (`context_management`, `output_config`, `metadata`, and the remaining beta headers). Treat that as one measurement, not a guarantee that every request field stays fixed. Check the model field, context beta and reported client window directly; repeat the same condition before attributing other header differences to the suffix. Independently launched clients can carry different dynamic beta headers. Use the capture recipe below rather than internal debug logs to inspect the transmitted request.
 
-Three things follow from this that aren't obvious just from looking at the templates:
+Distinguish the client budget from provider capacity:
 
 - **It's entirely client-side.** The upstream provider never sees `[1m]`. Whatever the provider's real context ceiling is, it's set by their own backend, independent of this flag — a third-party model can genuinely accept 500K+ tokens with `[1m]` absent from the request the whole time (separately confirmed: a bare ~506K-token request to `moonshotai/kimi-k3`, no `[1m]` anywhere, HTTP 200'd and correctly recalled a marker word buried in the middle of it). So a missing `[1m]` does not mean the provider can't handle a big prompt.
 - **What `[1m]` actually buys you is Claude Code's own awareness** of that ceiling — the context percentage in the statusline, and, most consequentially, when auto-compact fires. Configure a genuinely-1M-context provider *without* `[1m]` and Claude Code has no way to know it isn't talking to a normal ~200K model; it will compact prematurely on long sessions even though the provider could hold much more.
@@ -51,21 +44,13 @@ allowed that input to reach the local server. Do not claim the latter is
 ineffective on every print-mode path; verify the caller's mode and settings.
 
 Judge `[claude-code:unrecognized_model]` alongside the exit status and captured
-request, rather than treating the diagnostic alone as rejection. Both successful
-small-input probes emitted it for `query_source: generate_session_title`.
-That observation does not establish the cause of a diagnostic from another
-query source, such as `sdk`.
+request, rather than treating the diagnostic alone as rejection. Successful
+isolated probes can emit it; the reported query source can vary, including
+`generate_session_title` or `sdk`. Record the actual diagnostic and result of the
+invocation under test rather than treating either query-source label as a verdict.
 
-Use this invocation with the local capture server and an isolated
-`CLAUDE_CONFIG_DIR` to check the measured bare-mode model selection:
-
-```bash
-ANTHROPIC_API_KEY=dummy ANTHROPIC_BASE_URL=http://127.0.0.1:18765 \
-NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost \
-claude --bare -p hi --model 'custom-model[1m]' --tools '' \
-  --disable-slash-commands --setting-sources '' --strict-mcp-config \
-  --output-format json --no-session-persistence
-```
+Run the capture recipe below to reproduce model normalization and the reported
+client window with an isolated configuration.
 
 ## Decision-rule caveat: the step-2-16k war-story
 
@@ -77,41 +62,83 @@ Template bug fixed 2026-07-21 (two layers, caught in two passes): `stepfun.json`
 
 Not specific to `[1m]` — reach for this any time you need to know whether a Claude Code env var or CLI flag genuinely changes the bytes sent over the wire, versus only affecting Claude Code's own internal bookkeeping. Trusting a template comment, or trusting `--debug api` (internal state only, never the literal request), is how the `[1m]` gap in this skill went unnoticed for as long as it did.
 
+Run this from a shell with Python 3.10+ and `claude` on PATH. It binds an unused
+loopback port before launching the client, uses dummy authentication and an empty
+configuration directory, disables tools and external MCP configuration, and
+removes its temporary configuration when finished. It does not call a real model
+provider. The mock response measures client request construction, not a provider's
+capacity or real token usage.
+
 ```bash
-# Minimal capture server: logs whatever JSON body/headers it receives, returns a
-# valid-enough Anthropic response so Claude Code doesn't just error out.
-python3 - <<'PY' &
-import http.server, json
-class H(http.server.BaseHTTPRequestHandler):
+python3 -B - <<'PY'
+import http.server
+import json
+import os
+import subprocess
+import tempfile
+import threading
+
+captured = []
+
+class Capture(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
-        n = int(self.headers.get('Content-Length', 0))
-        body = json.loads(self.rfile.read(n))
-        print(json.dumps({"model": body.get("model"),
-                           "anthropic-beta": self.headers.get("anthropic-beta")}), flush=True)
-        resp = json.dumps({"id": "msg_x", "type": "message", "role": "assistant",
-                            "model": body.get("model", "x"),
-                            "content": [{"type": "text", "text": "OK"}],
-                            "stop_reason": "end_turn",
-                            "usage": {"input_tokens": 1, "output_tokens": 1}}).encode()
+        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        captured.append({"model": body.get("model"),
+                         "beta": self.headers.get("anthropic-beta")})
+        response = json.dumps({
+            "id": "msg_probe", "type": "message", "role": "assistant",
+            "model": body.get("model"),
+            "content": [{"type": "text", "text": "OK"}],
+            "stop_reason": "end_turn",
+            "usage": {"input_tokens": 1, "output_tokens": 1},
+        }).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(resp)))
+        self.send_header("Content-Length", str(len(response)))
         self.end_headers()
-        self.wfile.write(resp)
-    def log_message(self, *a):
+        self.wfile.write(response)
+
+    def log_message(self, *args):
         pass
-http.server.HTTPServer(("127.0.0.1", 18765), H).serve_forever()
+
+server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Capture)
+worker = threading.Thread(target=server.serve_forever, daemon=True)
+worker.start()
+try:
+    for model in ("custom-model[1m]", "custom-model"):
+        with tempfile.TemporaryDirectory(prefix="context-probe-") as config:
+            env = {key: value for key, value in os.environ.items()
+                   if not key.startswith(("ANTHROPIC_", "CLAUDE_", "CLAUDECODE"))}
+            env.update(CLAUDE_CONFIG_DIR=config, ANTHROPIC_API_KEY="dummy",
+                       ANTHROPIC_BASE_URL=f"http://127.0.0.1:{server.server_port}",
+                       NO_PROXY="127.0.0.1,localhost", no_proxy="127.0.0.1,localhost")
+            first = len(captured)
+            result = subprocess.run([
+                "claude", "--bare", "-p", "hi", "--model", model, "--tools", "",
+                "--disable-slash-commands", "--setting-sources", "",
+                "--strict-mcp-config", "--output-format", "json",
+                "--no-session-persistence",
+            ], env=env, cwd=config, capture_output=True, text=True, timeout=30)
+            result.check_returncode()
+            output = json.loads(result.stdout)
+            print(json.dumps({"configured": model, "exit": result.returncode,
+                              "requests": captured[first:],
+                              "modelUsage": output.get("modelUsage"),
+                              "result": output.get("result"), "stderr": result.stderr}))
+            if output.get("is_error"):
+                raise RuntimeError(output)
+            if len(captured) == first:
+                raise RuntimeError("No model request reached the capture server")
+finally:
+    server.shutdown()
+    worker.join()
+    server.server_close()
 PY
-SERVER_PID=$!
-sleep 1  # give the server a moment to bind before the client connects
-CLAUDE_CONFIG_DIR=/tmp/cc-probe ANTHROPIC_BASE_URL=http://127.0.0.1:18765 \
-ANTHROPIC_AUTH_TOKEN=dummy ANTHROPIC_MODEL="<model-under-test>" \
-claude -p "hi" --dangerously-skip-permissions
-kill $SERVER_PID
-rm -rf /tmp/cc-probe
 ```
 
-This historical recipe uses plain `-p`. Replace its client invocation with the
-exact command under test; it is not itself evidence for `--bare -p` or SDK modes.
-
-Whatever the server prints is literally what left the machine — no guessing from debug logs, no trusting what a template or a teammate claims the config does. (Skipping the `sleep` is a real trap, not a hypothetical one — the first draft of this exact recipe omitted it and Claude Code intermittently reported "API returned an empty or malformed response" from a race between the server binding and the client's first connection.)
+Keep the command array explicit when adapting this recipe to another invocation.
+Change one flag or environment variable at a time, and compare the captured
+request, exit status and result's `modelUsage` together. Use a large input when
+checking rejection thresholds; the `hi` prompt only tests request construction.
+A zero-request failure is evidence of client-side rejection only after the same
+server has accepted a control request successfully.

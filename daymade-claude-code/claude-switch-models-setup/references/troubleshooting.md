@@ -211,17 +211,53 @@ but re-verification is cheap if a future Claude Code release changes write
 semantics: write a marker into an active profile's `.claude.json`, keep
 using the session, check the marker an hour later.
 
+## Installation audit reports missing or unselected Skills
+
+Run the inventory from the marketplace checkout root:
+
+```bash
+python3 daymade-claude-code/claude-switch-models-setup/scripts/skill-install-audit.py --json
+```
+
+Use the result definitions and environment overrides in
+[`skill-install-audit.py`](../scripts/skill-install-audit.py) as the contract.
+Read the reported items rather than treating exit 0 as a delivery verdict.
+Inspect `SOURCE_CHECKOUT_BEHIND` and `DAEMON_RUNTIME_LAG` before deciding that
+an empty finding is current; compare against fresh hosted state when that matters.
+The checkout comparison alone uses cached remote-tracking refs.
+
+For `CODEX_SELECTED_MISSING`, resolve the selected name against the source
+inventory and inspect its actual link. Check the expanded activation policy,
+including marketplace selections, before editing a name. Repair the source or
+link when the selection is intentional; remove a selection only when it is no
+longer wanted. For `CODEX_UNLISTED_ENABLED` or `MANUAL_LINK_RISK`, decide whether
+that Skill should be active before changing policy. Do not add every reported
+name or remove links merely to make the report empty.
+
+Follow the local-source workflow in [SKILL.md](../SKILL.md) and the
+[source topology](local-source-sync-architecture.md). Preview synchronization
+without `--apply`, inspect the exact affected paths, then apply an authorized
+repair through the installed sync entry. Do not hand-create Skill links or replace
+a pinned runtime with the checkout. For `NAME@marketplace` installation or
+enablement findings, use that exact qualified identity with the official plugin CLI.
+
+Re-run the inventory after repair. Then use the installed `skill-governance`
+fresh-host acceptance workflow for the requested Claude Code or Codex target.
+Existing sessions retain their startup catalog; a file/link check is not a fresh
+host discovery check.
+
 ## Local skill source changes do not appear in Claude Code or Codex
 
-Normal edits should be live because installed locations are symlinks to the source repos.
-If they are not live, first check whether the path is still a symlink:
+Start with the installation audit above. Inspect the affected Skill's resolved
+source using [local-source-sync-architecture.md](local-source-sync-architecture.md).
+The following command lists watched manifests; it does not verify Skill links:
 
 ```bash
 python3 ~/.config/claude-switch-models-setup/sync-local-skill-sources.py --print-watch-paths
 ```
 
-For structural changes such as new skill entries, removed skill entries, renamed skills,
-or version bumps, the macOS watcher should run automatically:
+For structural changes such as new or removed entries, renames, or version bumps,
+inspect the macOS watcher registration:
 
 ```bash
 launchctl print gui/$(id -u)/ai.daymade.claude-skill-source-sync
@@ -233,13 +269,15 @@ If the watcher is not installed, install it:
 ~/.config/claude-switch-models-setup/sync-local-skill-sources-daemon.sh --install
 ```
 
-If the watcher is installed, healthy and running, and the change still does not
-appear, check whether it is executing an older pinned copy than the source. The
+Registration alone does not prove a successful synchronization. Check its last
+successful run using the [watcher logs](local-source-sync-architecture.md#macos-watcher).
+If the change still does not appear, check whether it executes an older pinned copy
+than the source. The
 daemon deliberately runs an installed plugin version rather than the checkout, and
 nothing advances that pin on its own:
 
 ```bash
-python3 <this skill>/scripts/skill-install-audit.py --list DAEMON_RUNTIME_LAG SOURCE_CHECKOUT_BEHIND
+python3 daymade-claude-code/claude-switch-models-setup/scripts/skill-install-audit.py --list DAEMON_RUNTIME_LAG SOURCE_CHECKOUT_BEHIND
 ```
 
 A non-empty `DAEMON_RUNTIME_LAG` names both versions and the commands that advance
@@ -286,7 +324,7 @@ what that branch had when it forked. The pass already converged for every other
 name, so nothing else is waiting on this. Confirm where each checkout is:
 
 ```bash
-python3 <this skill>/scripts/skill-install-audit.py --list SOURCE_CHECKOUT_BEHIND
+python3 daymade-claude-code/claude-switch-models-setup/scripts/skill-install-audit.py --list SOURCE_CHECKOUT_BEHIND
 git -C <checkout> status --short --branch
 ```
 
