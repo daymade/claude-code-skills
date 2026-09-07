@@ -119,10 +119,23 @@ class InstallAuditTests(unittest.TestCase):
         (self.pool / "foreign").symlink_to(self.repo / "escape")
         self.assertEqual([], audit.audit()["MANUAL_LINK_RISK"])
 
-    def test_managed_relative_link_is_reported(self):
+    def test_relative_link_is_preserved_by_owner_and_not_reported(self):
         self.write(self.policy, {"schema_version": 1, "active_skills": []})
         (self.pool / "first-skill").symlink_to("../team-repo/bundle/first")
-        self.assertEqual(["first-skill"], audit.audit()["MANUAL_LINK_RISK"])
+        audit.source_sync().sync_skill_root(self.pool, {}, [self.repo], "probe", True, False)
+        self.assertEqual(Path("../team-repo/bundle/first"), (self.pool / "first-skill").readlink())
+        self.assertEqual([], audit.audit()["MANUAL_LINK_RISK"])
+
+    def test_foreign_symlink_loop_does_not_abort_audit(self):
+        self.write(self.policy, {"schema_version": 1, "active_skills": []})
+        loop = self.repo / "loop"
+        loop.symlink_to(loop)
+        (self.pool / "foreign").symlink_to(loop)
+        reported = "foreign" in audit.audit()["MANUAL_LINK_RISK"]
+        audit.source_sync().sync_skill_root(self.pool, {}, [self.repo], "probe", True, False)
+        # pathlib's non-strict cycle resolution differs between Python 3.12
+        # and 3.14. The report must match the owner's action on either runtime.
+        self.assertEqual(reported, not (self.pool / "foreign").is_symlink())
 
     def test_suite_is_not_mistaken_for_a_missing_skill(self):
         self.link("first-skill", "first")

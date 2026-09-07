@@ -327,16 +327,19 @@ def audit():
     orphans = sorted(r[0] for r in rows if r[3])
     manual_risk = []
     if AGENTS_SKILLS.is_dir():
-        for e in AGENTS_SKILLS.iterdir():
-            if not e.is_symlink():
-                continue
-            try:
-                target = Path(os.readlink(e))
-            except OSError:
-                continue
-            resolved = target if target.is_absolute() else (AGENTS_SKILLS / target)
-            if source_sync().path_is_under(resolved, [repo for _, repo in REGISTRY_REPOS]) and e.name not in manifest:
-                manual_risk.append(e.name)
+        resolver = source_sync()
+        with resolver.pin_skill_root(
+            resolver.absolute_without_symlink_resolution(AGENTS_SKILLS),
+            label="audit skill root", apply=False, create_missing=False,
+        ) as root:
+            if root is not None:
+                for entry in os.scandir(root.fd):
+                    snapshot = resolver.capture_entry_snapshot(root, entry.name)
+                    target = snapshot.absolute_link_target if snapshot else None
+                    # Use the same snapshot and ownership classifier as apply.
+                    if (target is not None and entry.name not in manifest
+                            and resolver.path_is_under(target, [repo for _, repo in REGISTRY_REPOS])):
+                        manual_risk.append(entry.name)
     # Plugin names are not Skill names: a suite has multiple independently
     # discoverable members. Audit only registered owned members, not vendor
     # plugins whose inventory this tool never loaded.
