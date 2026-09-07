@@ -29,9 +29,9 @@ Findings (each list is empty-friendly; a clean run prints only the summary):
   PROFILE_ONLY_RISK        enabledPlugins keys present in a profile but absent from main —
                            pre-fix these were wiped by the next mirror; now they are adopted
                            or preserved, but conflicts still deserve eyeballs
-  MANUAL_LINK_RISK         ~/.agents/skills symlink pointing into a managed repo but its
-                           name is absent from codex-active-skills.json -> the source-sync
-                           daemon will prune it
+  MANUAL_LINK_RISK         absolute symlink owned by a successfully loaded source, but not
+                           selected by activation policy -> the source-sync daemon will prune it;
+                           ownership follows the source-sync classifier; relative links are preserved
   CODEX_UNLISTED_ENABLED   enabled in Claude yet absent from both the Codex manifest and
                            ~/.agents/skills (fine if unwanted in Codex; informational)
 
@@ -302,6 +302,7 @@ def load_profile_only_keys():
 
 def audit():
     registry = load_registry()
+    sources = registered_sources()
     installed = load_installed()
     enabled = load_enabled()
     manifest, pool = load_codex()
@@ -338,13 +339,13 @@ def audit():
                     target = snapshot.absolute_link_target if snapshot else None
                     # Use the same snapshot and ownership classifier as apply.
                     if (target is not None and entry.name not in manifest
-                            and resolver.path_is_under(target, [repo for _, repo in REGISTRY_REPOS])):
+                            and resolver.path_is_under(target, [source.repo for source in sources])):
                         manual_risk.append(entry.name)
     # Plugin names are not Skill names: a suite has multiple independently
     # discoverable members. Audit only registered owned members, not vendor
     # plugins whose inventory this tool never loaded.
     enabled_skill_names = {
-        name for source in registered_sources() for name, skill in source.skills.items()
+        name for source in sources for name, skill in source.skills.items()
         if enabled.get(skill.plugin_id) is True
     }
     codex_unlisted = sorted(enabled_skill_names - manifest - pool)

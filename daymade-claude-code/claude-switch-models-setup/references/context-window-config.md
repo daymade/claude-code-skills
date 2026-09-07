@@ -30,8 +30,8 @@ Three things follow from this that aren't obvious just from looking at the templ
 
 ## Verify the marker on each non-interactive invocation
 
-Keep `[1m]` to select the 1M client budget in the verified `claude --bare -p`
-invocation below. Capture the exact command before applying this result to
+Keep `[1m]` to select the 1M client budget in the measured `claude --bare -p`
+invocation. Capture the exact command before applying this result to
 another print-mode or SDK entry point. Use the provider's bare model ID for a
 direct API caller that does not perform Claude Code's normalization.
 
@@ -55,6 +55,17 @@ request, rather than treating the diagnostic alone as rejection. Both successful
 small-input probes emitted it for `query_source: generate_session_title`.
 That observation does not establish the cause of a diagnostic from another
 query source, such as `sdk`.
+
+Use this invocation with the local capture server and an isolated
+`CLAUDE_CONFIG_DIR` to check the measured bare-mode model selection:
+
+```bash
+ANTHROPIC_API_KEY=dummy ANTHROPIC_BASE_URL=http://127.0.0.1:18765 \
+NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost \
+claude --bare -p hi --model 'custom-model[1m]' --tools '' \
+  --disable-slash-commands --setting-sources '' --strict-mcp-config \
+  --output-format json --no-session-persistence
+```
 
 ## Decision-rule caveat: the step-2-16k war-story
 
@@ -99,5 +110,8 @@ claude -p "hi" --dangerously-skip-permissions
 kill $SERVER_PID
 rm -rf /tmp/cc-probe
 ```
+
+This historical recipe uses plain `-p`. Replace its client invocation with the
+exact command under test; it is not itself evidence for `--bare -p` or SDK modes.
 
 Whatever the server prints is literally what left the machine — no guessing from debug logs, no trusting what a template or a teammate claims the config does. (Skipping the `sleep` is a real trap, not a hypothetical one — the first draft of this exact recipe omitted it and Claude Code intermittently reported "API returned an empty or malformed response" from a race between the server binding and the client's first connection.)
