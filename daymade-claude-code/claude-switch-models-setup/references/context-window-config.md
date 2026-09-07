@@ -13,7 +13,7 @@ When `ANTHROPIC_MODEL` (or `ANTHROPIC_DEFAULT_HAIKU_MODEL` / `ANTHROPIC_DEFAULT_
 1. Strips `[1m]` off the `model` field, so the upstream provider receives the clean ID (e.g. `moonshotai/kimi-k3`, never `moonshotai/kimi-k3[1m]`).
 2. Adds `context-1m-2025-08-07` to the outgoing `anthropic-beta` header.
 
-That's the entire effect — confirmed 2026-07-21 by pointing `ANTHROPIC_BASE_URL` at a local `http.server` that echoes back whatever it receives, then diffing a real Claude Code request sent with `moonshotai/kimi-k3[1m]` against one sent with the bare `moonshotai/kimi-k3`: every other field (`context_management`, `output_config`, `metadata`, the rest of the `anthropic-beta` list) was byte-identical; the beta flag was the only diff. `--debug api` will NOT show you this — it only logs Claude Code's internal state, never the literal bytes on the wire. See "Verifying an env var actually changes the outgoing request" below for the reusable recipe.
+In a 2026-07-21 local-server capture, the compared requests using `moonshotai/kimi-k3[1m]` and `moonshotai/kimi-k3` matched in the other inspected fields (`context_management`, `output_config`, `metadata`, and the remaining beta headers). Treat that as one measurement, not a guarantee that every request field stays fixed. Check the model field, context beta and reported client window directly; repeat the same condition before attributing other header differences to the suffix. Independently launched clients can carry different dynamic beta headers. Use the capture recipe below rather than internal debug logs to inspect the transmitted request.
 
 Distinguish the client budget from provider capacity:
 
@@ -44,10 +44,10 @@ allowed that input to reach the local server. Do not claim the latter is
 ineffective on every print-mode path; verify the caller's mode and settings.
 
 Judge `[claude-code:unrecognized_model]` alongside the exit status and captured
-request, rather than treating the diagnostic alone as rejection. Both successful
-small-input probes emitted it for `query_source: generate_session_title`.
-That observation does not establish the cause of a diagnostic from another
-query source, such as `sdk`.
+request, rather than treating the diagnostic alone as rejection. Successful
+isolated probes can emit it; the reported query source can vary, including
+`generate_session_title` or `sdk`. Record the actual diagnostic and result of the
+invocation under test rather than treating either query-source label as a verdict.
 
 Run the capture recipe below to reproduce model normalization and the reported
 client window with an isolated configuration.
@@ -69,7 +69,8 @@ removes its temporary configuration when finished. It does not call a real model
 provider. The mock response measures client request construction, not a provider's
 capacity or real token usage.
 
-```python
+```bash
+python3 -B - <<'PY'
 import http.server
 import json
 import os
@@ -132,6 +133,7 @@ finally:
     server.shutdown()
     worker.join()
     server.server_close()
+PY
 ```
 
 Keep the command array explicit when adapting this recipe to another invocation.

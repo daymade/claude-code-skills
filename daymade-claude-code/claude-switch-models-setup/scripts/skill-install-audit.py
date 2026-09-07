@@ -39,8 +39,10 @@ Result sections (the human report prints each section, including empty sections)
 
 Plugin sections use NAME@marketplace identities; Codex sections use Skill names,
 including suite members and selections expanded from active_marketplaces.
-Exit 0 means the inventory completed, even when findings are present. An unknown
---list section exits 2; invalid or unavailable source/configuration evidence fails.
+Exit 0 means the inventory completed, even when findings are present. Without
+--json, an unknown --list section exits 2; --json takes precedence over --list.
+Missing configured registries are warned and skipped, but selected marketplaces
+require available sources. Invalid or unreadable required configuration fails.
 Use references/troubleshooting.md for repair and fresh-host acceptance steps.
 
 Usage:
