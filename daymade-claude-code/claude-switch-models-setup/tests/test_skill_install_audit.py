@@ -111,6 +111,22 @@ class InstallAuditTests(unittest.TestCase):
         (self.pool / "foreign").symlink_to(target)
         self.assertEqual([], audit.audit()["MANUAL_LINK_RISK"])
 
+    def test_configured_repo_without_marketplace_is_not_owned(self):
+        self.write(self.policy, {"schema_version": 1, "active_skills": []})
+        unavailable = self.root / "unavailable-repo"
+        unavailable.mkdir()
+        link = self.pool / "ghost"
+        link.symlink_to(unavailable)
+        repos = audit.REGISTRY_REPOS + [("unavailable", unavailable)]
+        with mock.patch.object(audit, "REGISTRY_REPOS", repos):
+            result = audit.audit()
+            sources = audit.registered_sources()
+            audit.source_sync().sync_skill_root(
+                self.pool, {}, [source.repo for source in sources], "probe", True, False
+            )
+        self.assertTrue(link.is_symlink())
+        self.assertNotIn("ghost", result["MANUAL_LINK_RISK"])
+
     def test_escape_through_repo_symlink_is_not_owned(self):
         self.write(self.policy, {"schema_version": 1, "active_skills": []})
         outside = self.root / "outside"

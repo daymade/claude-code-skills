@@ -9,6 +9,7 @@ mechanism is reference knowledge you reach for when something looks wrong.
 ## Table of contents
 
 - [The `[1m]` marker — full mechanism](#the-1m-marker--full-mechanism)
+- [Verify the marker on each non-interactive invocation](#verify-the-marker-on-each-non-interactive-invocation)
 - [Decision-rule caveat: the step-2-16k war-story](#decision-rule-caveat-the-step-2-16k-war-story)
 - [Verifying an env var actually changes the outgoing request](#verifying-an-env-var-actually-changes-the-outgoing-request)
 
@@ -26,6 +27,45 @@ Three things follow from this that aren't obvious just from looking at the templ
 - **It's entirely client-side.** The upstream provider never sees `[1m]`. Whatever the provider's real context ceiling is, it's set by their own backend, independent of this flag — a third-party model can genuinely accept 500K+ tokens with `[1m]` absent from the request the whole time (separately confirmed: a bare ~506K-token request to `moonshotai/kimi-k3`, no `[1m]` anywhere, HTTP 200'd and correctly recalled a marker word buried in the middle of it). So a missing `[1m]` does not mean the provider can't handle a big prompt.
 - **What `[1m]` actually buys you is Claude Code's own awareness** of that ceiling — the context percentage in the statusline, and, most consequentially, when auto-compact fires. Configure a genuinely-1M-context provider *without* `[1m]` and Claude Code has no way to know it isn't talking to a normal ~200K model; it will compact prematurely on long sessions even though the provider could hold much more.
 - **It's a generic suffix match, not a whitelist of Anthropic's own model names.** It fired identically for `moonshotai/kimi-k3[1m]` — an arbitrary third-party ID Claude Code has never heard of — as it does for Anthropic's own native `sonnet-4-6[1m]`/`opus[1m]`-style 1M-beta models (those exist for the real Anthropic API too, and are where this convention originates). Any provider/model name works as the prefix as long as the string ends in exactly `[1m]`.
+
+## Verify the marker on each non-interactive invocation
+
+Keep `[1m]` to select the 1M client budget in the measured `claude --bare -p`
+invocation. Capture the exact command before applying this result to
+another print-mode or SDK entry point. Use the provider's bare model ID for a
+direct API caller that does not perform Claude Code's normalization.
+
+Verified with a local capture server on Claude Code 2.1.263: `--bare -p` configured
+with `custom-model[1m]` sends `custom-model` and the `context-1m-2025-08-07` beta
+header, while its result reports `contextWindow: 1000000`. Configuring the bare
+`custom-model` removes that beta header and reports `contextWindow: 200000`.
+Removing the suffix therefore changes the client's context budget, even though
+the provider receives the same model ID.
+
+Check context-limit overrides on the exact invocation before prescribing them.
+In the same `--bare -p` probe, a large input with a bare custom ID failed with
+`Prompt is too long`, `duration_api_ms: 0`, and no captured request. Both
+`CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000` and
+`CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT=1`, tested separately,
+allowed that input to reach the local server. Do not claim the latter is
+ineffective on every print-mode path; verify the caller's mode and settings.
+
+Judge `[claude-code:unrecognized_model]` alongside the exit status and captured
+request, rather than treating the diagnostic alone as rejection. Both successful
+small-input probes emitted it for `query_source: generate_session_title`.
+That observation does not establish the cause of a diagnostic from another
+query source, such as `sdk`.
+
+Use this invocation with the local capture server and an isolated
+`CLAUDE_CONFIG_DIR` to check the measured bare-mode model selection:
+
+```bash
+ANTHROPIC_API_KEY=dummy ANTHROPIC_BASE_URL=http://127.0.0.1:18765 \
+NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost \
+claude --bare -p hi --model 'custom-model[1m]' --tools '' \
+  --disable-slash-commands --setting-sources '' --strict-mcp-config \
+  --output-format json --no-session-persistence
+```
 
 ## Decision-rule caveat: the step-2-16k war-story
 
@@ -70,5 +110,8 @@ claude -p "hi" --dangerously-skip-permissions
 kill $SERVER_PID
 rm -rf /tmp/cc-probe
 ```
+
+This historical recipe uses plain `-p`. Replace its client invocation with the
+exact command under test; it is not itself evidence for `--bare -p` or SDK modes.
 
 Whatever the server prints is literally what left the machine — no guessing from debug logs, no trusting what a template or a teammate claims the config does. (Skipping the `sleep` is a real trap, not a hypothetical one — the first draft of this exact recipe omitted it and Claude Code intermittently reported "API returned an empty or malformed response" from a race between the server binding and the client's first connection.)
