@@ -7,7 +7,8 @@ Default mode is a dry-run audit. Use --apply to:
 - replace installed Claude plugin cache version directories with symlinks to the
   local source directories;
 - update the latest installed_plugins.json records for those local plugins;
-- activate only explicitly selected user skills in ~/.agents/skills; a selected
+- activate eligible Claude personal links under the independent Claude marketplace policy;
+- activate Codex names selected individually or by whole marketplace in ~/.agents/skills; a selected
   name that no discovered source checkout registers is reported on stderr and
   skipped for the pass instead of aborting it;
 - create explicitly selected compatibility symlinks in ~/.codex/skills after
@@ -19,7 +20,7 @@ moved. At an explicitly selected ~/.agents destination, only a wrong link into a
 managed source repo moves into a timestamped backup before replacement; stale
 unselected source-owned links are pruned from the active namespace the same
 recoverable way. Selected source and root identities are frozen before mutation,
-and both user roots are opened once as no-follow directory handles, so concurrent
+and affected user roots are opened once as no-follow directory handles, so concurrent
 source/root swaps fail instead of redirecting an operation. The legacy Codex root
 is report-only for stale entries; background sync never deletes a path there
 because unrelated writers do not share this process lock.
@@ -714,7 +715,7 @@ def load_skill_activation_policy(path: Path) -> SkillActivationPolicy:
     )
     if unknown_marketplaces:
         raise ValueError(
-            f"{path}: active_marketplaces must name managed marketplaces "
+            f"{path}: active_marketplaces and claude_active_marketplaces must name managed marketplaces "
             f"({', '.join(LOCAL_MARKETPLACE_NAMES)}); unknown: "
             f"{', '.join(unknown_marketplaces)}"
         )
@@ -1856,13 +1857,13 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--codex-skills", type=Path, default=DEFAULT_CODEX_SKILLS)
     parser.add_argument("--agents-skills", type=Path, default=DEFAULT_AGENTS_SKILLS)
     parser.add_argument("--claude-skills", type=Path, help="Personal root; defaults to <claude-dir>/skills")
-    parser.add_argument("--skip-claude-skills", action="store_true")
+    parser.add_argument("--skip-claude-skills", action="store_true", help="Leave the Claude personal Skill root unchanged; plugin cache sync is independent")
     parser.add_argument("--print-source-inventory", action="store_true", help="Print registered source identities as JSON, without syncing")
     parser.add_argument(
         "--active-skills-manifest",
         type=Path,
         default=DEFAULT_ACTIVE_SKILLS_MANIFEST,
-        help="Explicit manifest selecting source skills to activate in ~/.agents/skills",
+        help="Host activation manifest: Codex individual/marketplace selection, Claude marketplace selection, and explicit legacy compatibility",
     )
     parser.add_argument("--apply", action="store_true", help="Apply changes; default is dry-run")
     parser.add_argument("--quiet", action="store_true", help="Suppress normal progress output")
@@ -1924,7 +1925,7 @@ def main(argv: list[str]) -> int:
     )
     if undiscovered:
         raise ValueError(
-            f"{manifest}: active_marketplaces not found among discovered repos: "
+            f"{manifest}: marketplace activation fields name repos not discovered: "
             f"{', '.join(undiscovered)}"
         )
     whole_marketplace_names = {
