@@ -25,32 +25,13 @@ Usage:
     python3 profile_claude_md.py <path/to/CLAUDE.md> [--top N] [--tokens-per-byte R]
 """
 import argparse
-import re
-import sys
+from pathlib import Path
 
-HEADING_RE = re.compile(r'^(#{1,6}) (.+)$')
-
-
-def parse_headings(lines):
-    """Return [(line_idx, level, title)], skipping fenced code blocks."""
-    in_fence = False
-    heads = []
-    for i, line in enumerate(lines):
-        if line.lstrip().startswith('```'):
-            in_fence = not in_fence
-            continue
-        if in_fence:
-            continue
-        m = HEADING_RE.match(line)
-        if m:
-            heads.append((i, len(m.group(1)), m.group(2).strip()))
-    if in_fence:
-        print('WARN: unbalanced code fence — fence-aware parsing may be off', file=sys.stderr)
-    return heads
+from markdown_headings import line_text, parse_headings, split_markdown_lines
 
 
 def section_table(lines, heads, max_level=3):
-    """Each heading owns [its line, next heading of same-or-higher level)."""
+    """Attribute original lines (with terminators) through the next peer/ancestor."""
     rows = []
     for idx, (ln, lvl, title) in enumerate(heads):
         if lvl > max_level:
@@ -60,7 +41,7 @@ def section_table(lines, heads, max_level=3):
             if heads[j][1] <= lvl:
                 end = heads[j][0]
                 break
-        body = '\n'.join(lines[ln:end])
+        body = ''.join(lines[ln:end])
         rows.append((lvl, title, len(body.encode('utf-8')), end - ln))
     return rows
 
@@ -73,9 +54,10 @@ def main():
                     help='ratio from a live /context measurement; omit to skip token estimates')
     args = ap.parse_args()
 
-    src = open(args.path, encoding='utf-8').read()
-    lines = src.split('\n')
-    total = len(src.encode('utf-8'))
+    raw = Path(args.path).read_bytes()
+    lines = split_markdown_lines(raw.decode('utf-8'))
+    total = len(raw)
+    denominator = total or 1
     heads = parse_headings(lines)
 
     print(f'TOTAL {total} bytes / {len(lines)} lines / {len(heads)} headings')
@@ -90,18 +72,21 @@ def main():
     print('   （父节字节含全部子节——降序在**同层之间**比较；容器节跳过、看它最大的子节）')
     print(f"{'lvl':<5}{'bytes':>9}{'lines':>7}{'%':>7}  title")
     for lvl, title, b, nl in sorted(section_table(lines, heads), key=lambda r: -r[2]):
-        print(f"{'#'*lvl:<5}{b:>9}{nl:>7}{100*b/total:>6.1f}%  {title[:64]}")
+        print(f"{'#'*lvl:<5}{b:>9}{nl:>7}{100*b/denominator:>6.1f}%  {title[:64]}")
 
     print('\n== 行长分布 ==')
     buckets = [('<200B', 0, 200), ('200-500B', 200, 500), ('500B-1KB', 500, 1000),
                ('1-2KB', 1000, 2000), ('>2KB', 2000, 10**9)]
+    content_lines = [line_text(line) for line in lines]
     for name, lo, hi in buckets:
-        sel = [len(l.encode()) for l in lines if lo <= len(l.encode()) < hi]
+        sel = [len(l.encode('utf-8')) for l in content_lines
+               if lo <= len(l.encode('utf-8')) < hi]
         by = sum(sel)
-        print(f"{name:<10} {len(sel):>6} 行 {by:>9} B {100*by/total:>6.1f}%")
+        print(f"{name:<10} {len(sel):>6} 行 {by:>9} B {100*by/denominator:>6.1f}%")
 
     print(f'\n== 最长 {args.top} 行（巨型 bullet 定位） ==')
-    ranked = sorted(((len(l.encode()), i + 1, l) for i, l in enumerate(lines)), reverse=True)
+    ranked = sorted(((len(l.encode('utf-8')), i + 1, l)
+                     for i, l in enumerate(content_lines)), reverse=True)
     for b, i, l in ranked[:args.top]:
         print(f'{b:>7}B  L{i:<6} {l[:90]}')
 
