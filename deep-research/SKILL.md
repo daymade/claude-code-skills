@@ -173,7 +173,7 @@ Report: `[P1 complete] {N} tasks in {M} groups. Dispatching Group A.`
 
 ## Enterprise Research Mode (Specialized Pipeline)
 
-When researching a specific company/enterprise, follow this specialized workflow that ensures six-dimension coverage, quantified analysis frameworks, and three-level quality control.
+When researching a specific company, route each decision question through the relevant enterprise dimensions. Use the dimensions to find missing evidence paths; do not run all six or add quantified frameworks by default.
 
 ### E1: Intake
 
@@ -252,7 +252,7 @@ Plus appendices: Data Source Index, Glossary, Disclaimer.
 
 ### E3-E7: Enterprise Analysis, Drafting, and Review
 
-- **E3: Structured Analysis** — Apply frameworks from [references/enterprise_analysis_frameworks.md](references/enterprise_analysis_frameworks.md)
+- **E3: Structured Analysis** — Select a framework from [references/enterprise_analysis_frameworks.md](references/enterprise_analysis_frameworks.md) only when it improves the decision and its inputs are defensible; otherwise use a claim-evidence table
 - **E4: Quality Control** — Run L1/L2/L3 checks per [references/enterprise_quality_checklist.md](references/enterprise_quality_checklist.md)
 - **E5: Draft** — Use 7-chapter enterprise template
 - **E6-E7: Multi-Pass Drafting and Review** — Same as P4-P7 below
@@ -278,11 +278,11 @@ Lead agent reads all task notes and builds unified registry.
 CITATION REGISTRY
 
 Approved:
-[1] Author/Org — Title | URL | Source-Type: official | Accessibility: public | Date: 2026-03-01 | Auth: 8 | task-a
+[1] Author/Org — Title | URL | Source-Type: official | Accessibility: public | Evidence-Family: filing-123 | Date: 2026-03-01 | task-a
 [2] ...
 
 Dropped:
-x Source | URL | Source-Type: community | Accessibility: privileged | Auth: 3 | Reason: PRIVILEGED SOURCE - NOT ALLOWED
+x Source | URL | Source-Type: secondary-industry | Accessibility: public | Evidence-Family: unknown | Reason: original record could not be retrieved; summary cannot carry the claim
 
 Diagnostics: {approved}/{total}, {N} domains, {N} independent evidence families, source-type mix
 Coverage: {answered}/{total questions}; {N} load-bearing claims unresolved
@@ -331,13 +331,14 @@ Confidence: N/A - Insufficient evidence
 ```
 
 **DO NOT:**
-- ❌ Present an internal record as independent external confirmation
+- ❌ Describe an internally established fact as independently externally corroborated
 - ❌ Assume the company exists based on domain registration alone
 - ❌ Fill missing data with speculation
-- ❌ Claim to have "verified" information you accessed through privileged means
+- ❌ Discard an authorized first-party record when it directly establishes an internal business fact
 
 **DO:**
 - ✅ Clearly state what an external researcher can/cannot verify
+- ✅ Report authorized first-party facts as internally established, separately from external visibility
 - ✅ Document all failed search attempts
 - ✅ Mark claims as [unverified] or omit entirely
 - ✅ Narrow or stop when evidence cannot answer the decision question

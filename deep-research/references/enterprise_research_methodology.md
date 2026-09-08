@@ -69,9 +69,9 @@ Step 3.2: Competitor identification & comparison
 └── Output: Competitive comparison table
 
 Step 3.3: Competitive barriers assessment
-├── Use quantified barrier framework (see enterprise_analysis_frameworks.md)
-├── 7 dimensions: network effects, scale economies, brand, technology/patents, switching costs, regulatory licenses, data assets
-└── Output: Barrier scorecard with rating
+├── If barriers can change the decision, test the relevant dimensions: network effects, scale economies, brand, technology/patents, switching costs, regulatory licenses, data assets
+├── Use the quantified framework only when its weights, scales, and evidence are defensible for this comparison
+└── Otherwise output a claim-evidence table or omit barrier scoring
 ```
 
 ### Dimension 4: Financial & Operations
