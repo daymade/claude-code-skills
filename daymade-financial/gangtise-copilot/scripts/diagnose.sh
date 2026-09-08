@@ -13,6 +13,9 @@
 
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+CLASSIFIER="${SCRIPT_DIR}/classify_response.py"
+
 CANONICAL_ROOT="${GANGTISE_COPILOT_HOME:-$HOME/.local/share/gangtise-copilot}"
 CANONICAL_SKILLS_DIR="${CANONICAL_ROOT}/skills"
 XDG_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/gangtise"
@@ -23,11 +26,22 @@ AUTH_ENDPOINT="https://open.gangtise.com/application/auth/oauth/open/loginV2"
 RAG_ENDPOINT="https://open.gangtise.com/application/open-data/ai/search/knowledge_base"
 
 PASS=0; WARN=0; FAIL=0
+DIAG_ERROR=0
 
 status_ok()   { echo "✅ $1"; PASS=$((PASS + 1)); }
 status_warn() { echo "⚠️  $1"; WARN=$((WARN + 1)); }
 status_fail() { echo "❌ $1"; FAIL=$((FAIL + 1)); }
+status_diag_fail() { echo "❌ $1"; FAIL=$((FAIL + 1)); DIAG_ERROR=1; }
 status_info() { echo "ℹ️  $1"; }
+
+diagnostic_fields() {
+  local http_status="$1" code="$2" error_type="$3" trace_id="$4"
+  local fields="http_status=${http_status}"
+  [ "$code" = "-" ] || fields="${fields} code=${code}"
+  [ "$error_type" = "-" ] || fields="${fields} errorType=${error_type}"
+  [ "$trace_id" = "-" ] || fields="${fields} traceId=${trace_id}"
+  printf '%s' "$fields"
+}
 
 echo "=== Gangtise Copilot diagnostic report ==="
 echo
@@ -263,6 +277,9 @@ if [ ! -f "$AUTH_FILE" ]; then
 elif [ "$HAS_PYTHON" -ne 1 ]; then
   status_info "Skip (python3 not available — cannot parse credential file)"
 else
+  if [ ! -f "$CLASSIFIER" ]; then
+    status_diag_fail "Response classifier missing: $CLASSIFIER"
+  fi
   ACCESS_KEY=$(python3 -c "import json; print(json.load(open('$AUTH_FILE')).get('accessKey',''))" 2>/dev/null || echo "")
   SECRET_KEY=$(python3 -c "import json; print(json.load(open('$AUTH_FILE')).get('secretAccessKey',''))" 2>/dev/null || echo "")
 
@@ -273,49 +290,85 @@ else
     response=$(curl -sS -X POST "$AUTH_ENDPOINT" \
       -H "Content-Type: application/json" \
       --data "$payload" \
-      --max-time 20 2>&1 || echo "NETWORK_ERROR")
+      --max-time 20 \
+      -w $'\n__HTTP_STATUS__:%{http_code}' 2>/dev/null)
+    curl_rc=$?
 
-    if [ "$response" = "NETWORK_ERROR" ]; then
-      status_fail "Cannot reach Gangtise auth server — network or firewall issue"
-    elif echo "$response" | grep -q '"code":"000000"'; then
+    if [ "$curl_rc" -ne 0 ] || [[ "$response" != *$'\n__HTTP_STATUS__:'* ]]; then
+      status_diag_fail "Cannot reach Gangtise auth server — network or firewall issue"
+    elif [ ! -f "$CLASSIFIER" ]; then
+      :
+    else
+      auth_http="${response##*$'\n__HTTP_STATUS__:'}"
+      auth_body="${response%$'\n__HTTP_STATUS__:'*}"
+      IFS=$'\t' read -r auth_state auth_category _ auth_code auth_error_type auth_trace_id auth_message _ auth_missing < <(
+        printf '%s' "$auth_body" | python3 "$CLASSIFIER" auth --http-status "$auth_http"
+      )
+    if [ "$auth_state" = "success" ]; then
       status_ok "OAuth liveness (scope: auth) — credentials accepted"
+      if [ "$auth_missing" != "-" ]; then
+        status_info "Auth response omitted optional headers: $auth_missing (accessToken remains usable)"
+      fi
 
       # Extract token for the next liveness check
-      TOKEN=$(python3 -c "
-import json
-try:
-    d = json.loads('''$response''')
-    t = d.get('data',{}).get('accessToken','')
-    print(t)
-except Exception:
-    pass
-" 2>/dev/null || echo "")
+      TOKEN=$(printf '%s' "$auth_body" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["data"]["accessToken"])' 2>/dev/null || echo "")
+      UID_HEADER=$(printf '%s' "$auth_body" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["data"].get("uid", ""))' 2>/dev/null || echo "")
+      TENANT_HEADER=$(printf '%s' "$auth_body" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["data"].get("tenantId", ""))' 2>/dev/null || echo "")
+      PRODUCT_HEADER=$(printf '%s' "$auth_body" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["data"].get("productCode", ""))' 2>/dev/null || echo "")
 
       # ================================================================
       # Liveness check 2: RAG endpoint (proves 'rag' scope works —
       # this is the scope most Gangtise skills need)
       # ================================================================
       if [ -n "$TOKEN" ]; then
-        rag_headers="Authorization: $TOKEN"
+        rag_args=(-H "Authorization: $TOKEN" -H "Content-Type: application/json")
+        [ -z "$UID_HEADER" ] || rag_args+=(-H "uid: $UID_HEADER")
+        [ -z "$TENANT_HEADER" ] || rag_args+=(-H "tenantid: $TENANT_HEADER")
+        [ -z "$PRODUCT_HEADER" ] || rag_args+=(-H "productcode: $PRODUCT_HEADER")
         rag_response=$(curl -sS -X POST "$RAG_ENDPOINT" \
-          -H "$rag_headers" \
-          -H "Content-Type: application/json" \
+          "${rag_args[@]}" \
           --data '{"query":"test","top":1}' \
-          --max-time 20 2>&1 || echo "NETWORK_ERROR")
+          --max-time 20 \
+          -w $'\n__HTTP_STATUS__:%{http_code}' 2>/dev/null)
+        rag_curl_rc=$?
 
-        if [ "$rag_response" = "NETWORK_ERROR" ]; then
-          status_warn "Cannot reach RAG endpoint — network issue on scoped liveness check"
-        elif echo "$rag_response" | grep -q '"code":"000000"'; then
-          status_ok "RAG liveness (scope: rag) — knowledge base search is reachable"
+        if [ "$rag_curl_rc" -ne 0 ] || [[ "$rag_response" != *$'\n__HTTP_STATUS__:'* ]]; then
+          status_diag_fail "Cannot reach RAG endpoint — network issue on scoped liveness check"
         else
-          status_warn "RAG endpoint rejected the request — your account may not have 'rag' scope"
-          status_info "Response: $(echo "$rag_response" | head -c 200)"
+          rag_http="${rag_response##*$'\n__HTTP_STATUS__:'}"
+          rag_body="${rag_response%$'\n__HTTP_STATUS__:'*}"
+          IFS=$'\t' read -r rag_state rag_category _ rag_code rag_error_type rag_trace_id rag_message rag_empty _ < <(
+            printf '%s' "$rag_body" | python3 "$CLASSIFIER" rag --http-status "$rag_http"
+          )
+          rag_meta=$(diagnostic_fields "$rag_http" "$rag_code" "$rag_error_type" "$rag_trace_id")
+          if [ "$rag_state" = "success" ] && [ "$rag_empty" = "true" ]; then
+            status_ok "RAG liveness (scope: rag) — reachable; query returned 0 results [$rag_meta]"
+          elif [ "$rag_state" = "success" ]; then
+            status_ok "RAG liveness (scope: rag) — reachable [$rag_meta]"
+          elif [ "$rag_category" = "quota" ]; then
+            status_fail "RAG rejected with a quota/entitlement response [$rag_meta]"
+          elif [ "$rag_category" = "permission" ]; then
+            status_fail "RAG permission denied [$rag_meta]"
+          elif [ "$rag_category" = "auth" ]; then
+            status_fail "RAG authentication rejected [$rag_meta]"
+          else
+            status_fail "RAG request failed (category=$rag_category) [$rag_meta]"
+          fi
         fi
       fi
     else
-      status_fail "Credentials rejected by Gangtise auth server"
-      status_info "Response: $(echo "$response" | head -c 200)"
-      status_info "Run: bash configure_auth.sh  to re-enter credentials"
+      auth_meta=$(diagnostic_fields "$auth_http" "$auth_code" "$auth_error_type" "$auth_trace_id")
+      if [ "$auth_category" = "auth" ]; then
+        status_fail "Credentials rejected by Gangtise auth server [$auth_meta]"
+        status_info "Run: bash configure_auth.sh --verify-only after correcting the credential source"
+      elif [ "$auth_category" = "permission" ]; then
+        status_fail "Gangtise auth endpoint denied permission [$auth_meta]"
+      elif [ "$auth_category" = "response" ]; then
+        status_diag_fail "Gangtise auth endpoint returned a malformed response [$auth_meta]"
+      else
+        status_fail "Gangtise auth request failed (category=$auth_category) [$auth_meta]"
+      fi
+    fi
     fi
   fi
 fi
@@ -329,6 +382,11 @@ echo
 echo "--- Summary ---"
 echo "  ✅ ${PASS} pass   ⚠️  ${WARN} warn   ❌ ${FAIL} fail"
 echo
+
+if [ "$DIAG_ERROR" -gt 0 ]; then
+  echo "The diagnostic could not complete. Resolve the diagnostic error, then re-run diagnose.sh."
+  exit 2
+fi
 
 if [ "$FAIL" -gt 0 ]; then
   echo "Next step: fix the ❌ items above, then re-run diagnose.sh."

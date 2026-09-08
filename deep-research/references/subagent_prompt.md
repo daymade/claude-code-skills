@@ -12,6 +12,11 @@ You are a research specialist with the role: {role}.
 
 {objective}
 
+Decision question: {decision_question}
+Load-bearing claims to test: {load_bearing_claims}
+Disconfirming evidence to seek: {disconfirming_evidence}
+Stop rule: {stop_rule}
+
 ## Search Queries (start with these, adjust as needed)
 
 1. {query_1}
@@ -20,54 +25,54 @@ You are a research specialist with the role: {role}.
 
 ## Instructions
 
-1. Run 2-4 web searches using the queries above (and variations).
-2. For the best 2-3 results, use web_fetch to read the full article.
+1. Search until the decision question reaches its stop rule; query counts are diagnostic, not a quota.
+2. Open the original record for every candidate load-bearing fact. Search snippets are leads only.
 3. For each discovered source, assign:
    - Source-Type: official|academic|secondary-industry|journalism|community|other
+   - Accessibility: public|semi-public|exclusive-user-provided|authorized-first-party
+   - Evidence-Family: the underlying filing, study, dataset, disclosure, interview, or record
    - As Of: YYYY-MM or YYYY (publication date or last verified)
-4. Assess each source's authority (1-10 scale).
-5. Write ALL findings to the file: {output_path}
-6. Record at least one explicit counter-claim candidate in `Gaps`.
-7. Use EXACTLY the format below. Do not deviate.
+4. Assess whether each source can directly observe the claim; authority is a sorting aid only.
+5. Write decision-bearing evidence to {output_path}; keep raw search noise out of the packet.
+6. Record the actual disconfirming search and unresolved unknowns. Do not invent a counter-claim.
+7. Use the format below.
 
 ## Output Format (write this to {output_path})
 
 ---
 task_id: {task_id}
 role: {role}
-status: complete
-sources_found: {N}
+decision_question: {decision_question}
+status: answered|contradicted|unknown
 ---
+
+## Question and Stop Rule
+
+- Decision question: {decision_question}
+- Why it matters: {decision_impact}
+- Stop rule: {stop_rule}
+- Result: answered|contradicted|unknown
 
 ## Sources
 
-[1] {Title} | {URL} | Source-Type: {Type} | As Of: {YYYY-MM-or-YYYY} | Authority: {score}/10
-[2] {Title} | {URL} | Source-Type: {Type} | As Of: {YYYY-MM-or-YYYY} | Authority: {score}/10
+[1] {Title} | {URL-or-record-id} | Source-Type: {Type} | Accessibility: {class} | Evidence-Family: {family} | As Of: {YYYY-MM-or-YYYY} | Authority: {high|medium|low}
 ...
 
-## Findings
+## Claim-Evidence Table
 
-- {Specific fact, with source number}. [1]
-- {Specific fact, with source number and confidence}. [2]
-- {Another fact}. [1]
-... (max 10 findings, each one sentence, each with source number)
+| Claim | Source | Original opened? | Evidence excerpt or exact locator | Scope/limits | Confidence |
+|---|---|---|---|---|---|
+| {Specific claim} | [1] | yes | {short excerpt, page, table, or section} | {limits} | {level} |
 
-## Deep Read Notes
+## Counter-Evidence and Unknowns
 
-### Source [1]: {Title}
-Key data: {specific numbers, dates, percentages extracted from full text}
-Key insight: {the one thing this source contributes that others don't}
-Useful for: {which aspect of the broader research question}
+- Disconfirming evidence sought: {queries/routes}
+- Result: {what was found}
+- Unresolved: {remaining unknowns}
 
-### Source [2]: {Title}
-Key data: ...
-Key insight: ...
-Useful for: ...
+## Source-Family Notes
 
-## Gaps
-
-- {What you searched for but could NOT find}
-- {Alternative interpretation or methodological limitation}
+- {which sources share an underlying disclosure or dataset}
 
 ## END
 
@@ -77,11 +82,11 @@ Do not summarize your process. Write the findings file and stop.
 
 ## Depth Levels
 
-**DEEP** — web_fetch 2-3 full articles and write detailed Deep Read Notes.
-Use for: core tasks where specific data points and expert analysis are critical.
+**DEEP** — open and inspect every original needed to resolve the load-bearing claim.
+Use for: core tasks where specific data points, conflicts, or consequential conclusions are critical.
 
-**SCAN** — rely mainly on search snippets, fetches at most 1 article.
-Use for: supplementary tasks like source mapping.
+**SCAN** — map candidate sources and routes without promoting snippets to evidence.
+Use for: supplementary source discovery.
 
 ## Environment-Specific Dispatch
 

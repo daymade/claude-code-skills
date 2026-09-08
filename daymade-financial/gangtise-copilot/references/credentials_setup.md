@@ -15,7 +15,7 @@ Every Gangtise skill's own `<gangtise-skill-dir>/scripts/utils.py` looks for `<g
 }
 ```
 
-The skill calls `https://open.gangtise.com/application/auth/oauth/open/loginV2` with this payload, gets back a Bearer token (TTL: 10800 seconds / 3 hours), and uses that token for subsequent API calls. The token is refreshed automatically when it expires.
+The skill calls `https://open.gangtise.com/application/auth/oauth/open/loginV2` with this payload, gets back a Bearer token, and uses that token for subsequent API calls. A live response observed on 2026-09-08 included `expiresIn: 10800`; treat that value as response data rather than a permanent contract. The token is refreshed when the skill authenticates again.
 
 **Use this shape unless you have a specific reason to use Shape B.** It's the simplest to set up and it has no manual rotation step.
 
@@ -99,7 +99,9 @@ https://open.gangtise.com/application/auth/oauth/open/loginV2
 
 The configurator matches on `"code":"000000"` in the response body, not on HTTP status, and extracts the `userName` + `uid` from a successful response to echo back to the user as confirmation.
 
-This is a **scope-level** verification — it proves that the accessKey + secretAccessKey can mint an OAuth token. It does NOT prove that the resulting token has `rag` scope (which is what most Gangtise skills actually need). That second-level check is performed by `diagnose.sh`, which calls the RAG search endpoint after obtaining a token.
+This authentication check proves only that the accessKey + secretAccessKey can mint an OAuth token. It does not prove that a RAG request will succeed. `diagnose.sh` calls the RAG endpoint separately and names the observed outcome.
+
+The 2026-09-08 `loginV2` response contained `accessToken`, `expiresIn`, `time`, and `userName`, but omitted `uid`, `tenantId`, and `productCode`. The diagnostic therefore requires `accessToken` and treats those three identity headers as optional. Missing `accessToken` is a malformed auth response; missing optional headers are reported without discarding the usable token.
 
 ## Rotation procedure
 
