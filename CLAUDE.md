@@ -59,9 +59,16 @@ claude plugin install daymade-skill@daymade-skills
 
 ### Skill Validation and Packaging
 
-Behavior evaluation is risk-scaled by `daymade-skill:skill-creator`: bounded fixes use targeted deterministic checks and narrow instruction changes use at most one or two sampled replays. Tier 3 classifies broad/high-risk work but does not authorize paired baselines, agent fan-out, grading, benchmarking, or a viewer; an explicit user request or a decision-bearing plan plus opt-in passes the separate evidence-budget gate without changing the risk tier. A request to "optimize" an existing skill and a long preceding conversation do not by themselves trigger Tier 3 or conversation-mining. Before editing, classify each delta: only behavior-equivalent relocation/deduplication is compression; retirement, scope narrowing, workflow/safety redesign, and bug fixes are separate changes. Existing-skill regression, one bounded fresh-context review with a declared stopping rule, and packaging gates remain separate.
+Use [skill-creator](daymade-skill/skill-creator/SKILL.md) before creating or
+changing a skill. It owns change classification, evidence selection, regression
+review, validation, initialization, and packaging.
 
-Treat `daymade-skill/skill-creator/scripts/packaging_policy.py` as the shipping-policy SSOT. Add or remove shipping exclusions only there, require every consumer to import it, and do not copy its directory list into documentation or consumer-specific filters.
+Treat [packaging_policy.py](daymade-skill/skill-creator/scripts/packaging_policy.py)
+as the canonical inclusion policy for packaging, security attestation, source
+audits, and version checks. Keep consumers on this shared implementation. Preserve the recorded policy
+when verifying an existing baseline; consult
+[source snapshot archives](daymade-skill/skill-creator/references/source-snapshot-archives.md)
+before archiving or restoring it.
 
 For hook loop and reminder semantics, load
 `daymade-claude-code:claude-code-hooks` and follow rule 7. Keep recurring
@@ -89,20 +96,12 @@ being copied here.
 
 Treat `daymade-skill/skill-creator` as a locked uv project. Run its bundled Python tools from that directory with `uv run --frozen`; the project-local `.venv` is isolated from caller projects while uv's shared cache supplies the pinned packages. Do not reintroduce per-call `--with` overlays for dependencies already in its `pyproject.toml`.
 
+From the repository root, enter the locked tool project once and validate the
+selected skill (replace `<skill-path>` with its absolute path):
+
 ```bash
-# Quick validation of a skill
-cd daymade-skill/skill-creator && uv run --frozen python -m scripts.quick_validate ../skill-name
-
-# Existing-skill old-vs-new audit (use git-ref:<ref> for a Git-reconstructed baseline)
-cd daymade-skill/skill-creator && uv run --frozen python -m scripts.audit_skill_regression snapshot --source ../skill-name --output <old-bundle>
-cd daymade-skill/skill-creator && uv run --frozen python -m scripts.audit_skill_regression compare --before <old-bundle> --after ../skill-name --output <review.json> --baseline-origin pre-edit-snapshot
-cd daymade-skill/skill-creator && uv run --frozen python -m scripts.audit_skill_regression verify --before <old-bundle> --after ../skill-name --review <review.json>
-
-# Package a skill (every existing skill requires the completed review; marker alone is insufficient)
-cd daymade-skill/skill-creator && uv run --frozen python -m scripts.package_skill ../skill-name [output-dir] [--regression-review <review.json>]
-
-# Initialize a new skill from template
-cd daymade-skill/skill-creator && uv run --frozen python -m scripts.init_skill <skill-name> --path <output-directory>
+cd daymade-skill/skill-creator
+uv run --frozen python -m scripts.quick_validate <skill-path> --audience public
 ```
 
 ### Automated Test Suites (CI)
@@ -388,9 +387,7 @@ The marketplace is configured in `.claude-plugin/marketplace.json`:
 ### ⚠️ Updating Existing Skills (MANDATORY)
 
 Changes to a skill's shipped files require a version bump in
-`marketplace.json`. Shipping exclusions are defined by
-`daymade-skill/skill-creator/scripts/packaging_policy.py` and consumed by the
-version gate; do not maintain a second exclusion list here.
+`marketplace.json`.
 
 **Version bump rules:**
 - Content/doc updates (new sections, rewritten principles) → bump **MINOR** (1.0.1 → 1.1.0)
@@ -451,12 +448,6 @@ Before submitting or modifying skills:
 - No absolute paths or user-specific information
 - Comprehensive documentation
 - No TODOs or placeholders
-
-## Skill Creation Workflow
-
-Use [skill-creator](daymade-skill/skill-creator/SKILL.md) for authoring,
-behavior checks, regression review, and packaging. Its workflow is the authority;
-do not maintain a second sequence in this repository guide.
 
 ## Adding a New Skill to Marketplace
 
