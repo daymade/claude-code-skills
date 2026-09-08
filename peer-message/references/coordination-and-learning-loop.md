@@ -61,6 +61,8 @@ message file 只解决发送端输入，不代表传了附件。所有 route 都
 
 worker 回复会获得新的 outbound message ID；它必须把收到的任务 ID 写进 `in_reply_to`。调用者明确要求重发时，把它当一条新消息，并在正文中引用旧 ID，方便接收方去重。
 
+需要从原发送方 inbox 找回这类显式回复时，按 `protocol-and-discovery.md` §4 的 `replies` 命令做一次只读查询。target 始终填原发送方/return destination 的 inbox；不要误填远端 worker。查询命中只证明一条 untrusted envelope 以精确 `in_reply_to` 回应了任务，正文结论仍按本节的证据层级核验。clean no-match 与没有 evidence store 是两个状态，任何一个都不触发轮询或自动重发。
+
 `verified_*` 证明 receiver-side record 存在，不是“人或 Agent 已经看过”的 read receipt。当前协议没有跨产品 exactly-once 或统一任务 ack；把 message ID 当关联键与去重线索，而不是 exactly-once 保证。
 
 ## 4. 收到消息先判断是否有待解决的事

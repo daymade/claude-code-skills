@@ -129,8 +129,8 @@ already created by the current prompt. Detailed retrieval mechanics remain in
 
 For `peer-message`, treat `peer-message/scripts/peer.py` as the executable
 contract and `peer-message/SKILL.md` as the runtime router and owner of stable
-runtime prerequisites plus the peer-cannot-authorize safety boundary. Transport
-and discovery details belong in `peer-message/references/protocol-and-discovery.md`;
+runtime prerequisites plus the peer-cannot-authorize safety boundary. Reply lookup,
+transport and discovery details belong in `peer-message/references/protocol-and-discovery.md`;
 current product availability, provenance, and inbound-control mechanics belong in
 `peer-message/references/official-feature.md`; reply addressing, payload structure,
 delivery-status language, what to do when you find another session's in-flight work on a
@@ -234,7 +234,8 @@ git push
 
 For recovery or repository convergence under concurrent work, treat
 `git-safety-net/SKILL.md` as the canonical authorization and evidence router. It owns the
-change-authorized / inspect-only / excluded partition and the scoped-vs-exhaustive audit boundary;
+change-authorized / inspect-only / excluded partition, the scoped-vs-exhaustive audit
+boundary, and authorized temporary-backup retirement;
 do not copy its detailed commands here or treat a visible collaborator ref/worktree as a cleanup
 target merely because it appears in the inventory.
 
@@ -426,6 +427,11 @@ All Python scripts in this repository:
 - Follow PEP 8 style guidelines
 
 ## Quality Standards
+
+For changes to scripts, configuration, or operating procedures, use
+[docs-cleaner](daymade-docs/docs-cleaner/SKILL.md) for scoped documentation delivery:
+resolve implementation intent and authorization before updating the owning SOP,
+and validate the delivered command examples. Keep detailed governance in that Skill.
 
 Before submitting or modifying skills:
 - Valid YAML frontmatter with required fields

@@ -804,14 +804,52 @@ def test_valid_marker_is_informational_and_cannot_bypass_packaging_review(tmp_pa
     assert "informational only" in reason
 
 
-def test_classify_fills_dispositions_and_verify_passes(tmp_path):
+@pytest.mark.parametrize(
+    ("before_body", "after_body", "needle", "expected_contains"),
+    [
+        (
+            "- Verify the signed-in unauthorized branch with a genuinely role-less account.",
+            "- Reworded: verify the signed-in unauthorized branch using a genuinely role-less account.",
+            "verify the signed-in unauthorized branch using a genuinely role-less account",
+            "verify the signed-in unauthorized branch using a genuinely role-less account",
+        ),
+        (
+            "- Record a successful run using the watcher logs before reporting completion.",
+            "- Record a successful run using the "
+            "[watcher logs](local-source-sync-architecture.md#macos-watcher).",
+            "successful run using the [watcher logs]",
+            "- Record a successful run using the "
+            "[watcher logs](local-source-sync-architecture.md#macos-watcher).",
+        ),
+        (
+            "- Record a successful run using the watcher logs before reporting completion.",
+            "- Record a successful run using the "
+            "[watcher logs](local-source-sync-architecture.md#macos-watcher).",
+            "successful run using the [watcher",
+            "- Record a successful run using the "
+            "[watcher logs](local-source-sync-architecture.md#macos-watcher).",
+        ),
+        (
+            "- Record a successful run using the watcher logs before reporting completion.",
+            "- Record a successful run using the "
+            "[watcher logs](local-source-sync-architecture.md#macos-watcher).",
+            "successful run using the "
+            "[watcher logs](local-source-sync-architecture.md#macos-watcher)",
+            "successful run using the "
+            "[watcher logs](local-source-sync-architecture.md#macos-watcher)",
+        ),
+    ],
+)
+def test_classify_fills_dispositions_and_verify_passes(
+    tmp_path, before_body, after_body, needle, expected_contains
+):
     before = _make_skill(
         tmp_path / "before",
-        "- Verify the signed-in unauthorized branch with a genuinely role-less account.",
+        before_body,
     )
     after = _make_skill(
         tmp_path / "after",
-        "- Reworded: verify the signed-in unauthorized branch using a genuinely role-less account.",
+        after_body,
     )
     report = build_report(before, after)
     assert report["candidates"], "fixture must produce at least one candidate"
@@ -822,8 +860,8 @@ def test_classify_fills_dispositions_and_verify_passes(tmp_path):
             {
                 "0": {
                     "destination": "SKILL.md",
-                    "needle": "verify the signed-in unauthorized branch using a genuinely role-less account",
-                    "reason": "guidance sentence reworded in place; the unauthorized-branch check survives in SKILL.md",
+                    "needle": needle,
+                    "reason": "guidance sentence reworded in place; the cited runtime check survives in SKILL.md",
                 }
             }
         ),
@@ -835,22 +873,38 @@ def test_classify_fills_dispositions_and_verify_passes(tmp_path):
 
     assert classified == 1
     assert unclassified == []
+    classified_review = json.loads(review_path.read_text(encoding="utf-8"))
+    assert classified_review["candidates"][0]["evidence"][0]["contains"] == expected_contains
     ok, errors = verify_review(before, after, review_path)
     assert ok, errors
 
 
 def test_classify_fail_fast_writes_nothing_on_bad_map(tmp_path):
-    before = _make_skill(
-        tmp_path / "before",
-        "- Verify the signed-in unauthorized branch with a genuinely role-less account.",
-    )
     after = _make_skill(
         tmp_path / "after",
-        "- Completely different replacement guidance for the fixture skill body.",
+        "- Record a successful run using the "
+        "[watcher logs](local-source-sync-architecture.md#macos-watcher).\n"
+        "- Use the online workflow.",
     )
-    report = build_report(before, after)
-    assert report["candidates"]
-    review_path = _write_review(tmp_path / "review.json", report)
+    review_path = _write_review(
+        tmp_path / "review.json",
+        {
+            "candidates": [
+                {
+                    "id": "aaaa111111111111",
+                    "kind": "guidance",
+                    "text": "Record a successful run using the watcher logs.",
+                    "disposition": "unclassified",
+                },
+                {
+                    "id": "bbbb222222222222",
+                    "kind": "guidance",
+                    "text": "Keep the offline proof path available.",
+                    "disposition": "unclassified",
+                },
+            ]
+        },
+    )
     original = review_path.read_text(encoding="utf-8")
     map_path = tmp_path / "map.json"
     map_path.write_text(
@@ -858,8 +912,13 @@ def test_classify_fail_fast_writes_nothing_on_bad_map(tmp_path):
             {
                 "0": {
                     "destination": "SKILL.md",
-                    "needle": "this quote exists nowhere in the destination file",
-                    "reason": "long enough reason but the needle cannot be located anywhere",
+                    "needle": "successful run using the [watcher logs]",
+                    "reason": "the watcher evidence remains linked from the rewritten guidance",
+                },
+                "1": {
+                    "destination": "SKILL.md",
+                    "needle": "offline proof path remains available",
+                    "reason": "this proof is genuinely missing from the destination and must fail",
                 },
                 "99": {
                     "destination": "SKILL.md",

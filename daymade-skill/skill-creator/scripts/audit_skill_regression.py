@@ -917,6 +917,13 @@ def _validate_evidence(
     return errors
 
 
+def _verifiable_evidence_quote(line: str, needle: str) -> str:
+    """Keep a raw match when possible; otherwise quote its complete source line."""
+    if normalize_text(needle) in normalize_text(line):
+        return needle
+    return line.strip()
+
+
 def verify_review(before: Path, after: Path, review_path: Path) -> tuple[bool, list[str]]:
     before = before.resolve()
     after = after.resolve()
@@ -1122,10 +1129,12 @@ def classify_review(
                 errors.append(f"map[{key}].needle is required for non-file candidates")
                 continue
             line_no = None
+            evidence_quote = None
             try:
                 for i, line in enumerate(target.read_text(encoding="utf-8").splitlines(), 1):
                     if needle in line:
                         line_no = i
+                        evidence_quote = _verifiable_evidence_quote(line, needle)
                         break
             except (OSError, UnicodeDecodeError):
                 errors.append(f"map[{key}] destination is not readable text: {destination}")
@@ -1133,13 +1142,14 @@ def classify_review(
             if line_no is None:
                 errors.append(f"map[{key}].needle not found in {destination}: {needle[:60]!r}")
                 continue
-            evidence = [{"path": destination, "line": line_no, "contains": needle}]
+            evidence = [{"path": destination, "line": line_no, "contains": evidence_quote}]
+        semantic_review = {"reviewer": reviewer, "rationale": reason}
         fields: dict[str, Any] = {
             "disposition": disposition,
             "reason": reason,
             "destination": destination,
             "evidence": evidence,
-            "semantic_review": {"reviewer": reviewer, "rationale": reason},
+            "semantic_review": semantic_review,
         }
         # Pass through the approval trail verbatim — verify requires it for
         # runtime intentional_boundary / removed_by_explicit_user_request, and
@@ -1148,6 +1158,19 @@ def classify_review(
         user_approval = str(entry.get("user_approval", "")).strip()
         if user_approval:
             fields["user_approval"] = user_approval
+        validates_evidence = disposition in {
+            "preserved_or_moved",
+            "intentional_sanitization",
+            "true_gap_fixed",
+        } or (disposition == "intentional_boundary" and candidate.get("scope") == "runtime")
+        if validates_evidence:
+            evidence_errors = _validate_evidence(after, evidence, candidate, semantic_review)
+            if evidence_errors:
+                errors.extend(
+                    f"map[{key}] generated invalid evidence: {message}"
+                    for message in evidence_errors
+                )
+                continue
         staged.append((candidate, fields))
 
     if errors:

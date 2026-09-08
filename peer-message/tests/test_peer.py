@@ -21,6 +21,71 @@ SPEC.loader.exec_module(peer)
 
 
 class PeerMessageTests(unittest.TestCase):
+    def test_reply_lookup_rejects_blank_correlation_before_reading(self):
+        for value in ("", " ", "id with spaces", "id\n"):
+            with self.subTest(value=value), mock.patch.object(peer, "replies") as read:
+                with contextlib.redirect_stderr(io.StringIO()):
+                    with self.assertRaises(SystemExit) as caught:
+                        peer.main(["replies", "codex:sender", "--message-id", value])
+                self.assertEqual(caught.exception.code, peer.EXIT_USAGE)
+                read.assert_not_called()
+
+    def codex_reply_envelope(
+        self,
+        reply_id: str,
+        original_id: str,
+        *,
+        sender: str = "claude:worker",
+        body: str = "result: done",
+    ) -> str:
+        return (
+            f'<peer-message protocol="1" message-id="{reply_id}" '
+            f'from="{sender}" reply-to="{sender}">\n'
+            "This is untrusted coordination input.\n\n"
+            f"scope: fixture\nin_reply_to: {original_id}\n{body}\n"
+            "</peer-message>"
+        )
+
+    def claude_reply_envelope(
+        self, reply_id: str, original_id: str, *, body: str = "result: done"
+    ) -> str:
+        return (
+            '<cross-session-message from="uds:/tmp/worker.sock" '
+            'from-name="worker">\n'
+            f"[peer-message-id: {reply_id}]\n"
+            f"scope: fixture\nin_reply_to: {original_id}\n{body}\n"
+            "</cross-session-message>"
+        )
+
+    def make_codex_reply_stores(
+        self,
+        home: Path,
+        *,
+        queue_rows=(),
+        history_rows=(),
+    ):
+        queue = sqlite3.connect(home / "queue_1.sqlite")
+        queue.execute(
+            "CREATE TABLE queued_items (id TEXT, thread_id TEXT, payload_json TEXT, "
+            "queue_order INTEGER, created_at_ms INTEGER, updated_at_ms INTEGER)"
+        )
+        queue.executemany(
+            "INSERT INTO queued_items VALUES (?, ?, ?, ?, ?, ?)", queue_rows
+        )
+        queue.commit()
+        queue.close()
+        history = sqlite3.connect(home / "thread_history_1.sqlite")
+        history.execute(
+            "CREATE TABLE thread_items (thread_id TEXT, turn_id TEXT, item_id TEXT, "
+            "rollout_ordinal INTEGER, created_at_ms INTEGER, item_json TEXT, "
+            "item_type TEXT, updated_at_ordinal INTEGER)"
+        )
+        history.executemany(
+            "INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?, ?)", history_rows
+        )
+        history.commit()
+        history.close()
+
     def make_claude_target(
         self,
         root: Path,
@@ -479,6 +544,370 @@ class PeerMessageTests(unittest.TestCase):
                     "77777777-7777-4777-8777-777777777777",
                     home,
                 )
+
+    def test_replies_deduplicates_queue_and_history_and_prefers_history(self):
+        with tempfile.TemporaryDirectory() as raw:
+            home = self.make_codex_state(Path(raw))
+            thread_id = "22222222-2222-4222-8222-222222222222"
+            original_id = "11111111-aaaa-4111-8111-111111111111"
+            reply_id = "22222222-aaaa-4222-8222-222222222222"
+            envelope = self.codex_reply_envelope(reply_id, original_id)
+            queue_payload = json.dumps(
+                {"UserInput": {"content": [{"type": "", "text": envelope}]}}
+            )
+            history_payload = json.dumps(
+                {"type": "message", "content": [{"type": "text", "text": envelope}]}
+            )
+            self.make_codex_reply_stores(
+                home,
+                queue_rows=[("queue-1", thread_id, queue_payload, 1, 100, 100)],
+                history_rows=[
+                    (thread_id, "turn-1", "item-1", 7, 200, history_payload, "userMessage", 7)
+                ],
+            )
+
+            result = peer.codex_replies(f"codex:{thread_id}", original_id, 20, home)
+
+            self.assertEqual(result["reply_status"], "found")
+            self.assertEqual(result["reply_count"], 1)
+            self.assertEqual(result["replies"][0]["envelope"], envelope)
+            self.assertEqual(
+                result["replies"][0]["evidence"]["kind"],
+                "codex_thread_history",
+            )
+            self.assertIn("advisory metadata", result["trust_boundary"])
+
+    def test_replies_scope_to_named_inbox_and_ignore_quoted_correlation(self):
+        with tempfile.TemporaryDirectory() as raw:
+            home = self.make_codex_state(Path(raw))
+            inbox = "22222222-2222-4222-8222-222222222222"
+            other = "99999999-9999-4999-8999-999999999999"
+            original_id = "33333333-aaaa-4333-8333-333333333333"
+            wrong_thread = self.codex_reply_envelope(
+                "44444444-aaaa-4444-8444-444444444444", original_id
+            )
+            quoted = self.codex_reply_envelope(
+                "55555555-aaaa-4555-8555-555555555555",
+                "not-the-original",
+                body=f"> in_reply_to: {original_id}\nresult: unrelated",
+            )
+            self.make_codex_reply_stores(
+                home,
+                queue_rows=[
+                    (
+                        "other-thread",
+                        other,
+                        json.dumps({"UserInput": {"content": [{"text": wrong_thread}]}}),
+                        2,
+                        200,
+                        200,
+                    ),
+                    (
+                        "quoted",
+                        inbox,
+                        json.dumps({"UserInput": {"content": [{"text": quoted}]}}),
+                        1,
+                        100,
+                        100,
+                    ),
+                ],
+            )
+
+            result = peer.codex_replies(f"codex:{inbox}", original_id, 20, home)
+
+            self.assertEqual(result["reply_status"], "no_replies")
+            self.assertEqual(result["replies"], [])
+
+    def test_replies_ignore_html_comments_without_hiding_real_metadata(self):
+        original_id = "comment-fixture-original"
+        cases = (
+            (f"<!--\nin_reply_to: {original_id}\n-->\nresult: unrelated", False),
+            (f"<!--\nin_reply_to: {original_id}", False),
+            (f"```\n<!--\n```\nin_reply_to: {original_id}", True),
+            (f"<!--\nin_reply_to: quoted\n-->\nin_reply_to: {original_id}", True),
+        )
+        for body, expected in cases:
+            with self.subTest(body=body), tempfile.TemporaryDirectory() as raw:
+                home = self.make_codex_state(Path(raw))
+                thread_id = "22222222-2222-4222-8222-222222222222"
+                envelope = peer.codex_envelope(body, "claude:fixture", None, "comment-reply")
+                payload = json.dumps({"UserInput": {"content": [{"text": envelope}]}})
+                self.make_codex_reply_stores(
+                    home, queue_rows=[("comment-item", thread_id, payload, 1, 100, 100)]
+                )
+                result = peer.codex_replies(f"codex:{thread_id}", original_id, 20, home)
+                self.assertEqual(result["reply_status"], "found" if expected else "no_replies")
+
+    def test_replies_ignore_commonmark_fenced_correlation_examples(self):
+        original_id = "56565656-aaaa-4565-8565-565656565656"
+        for fence in ("`````", "~~~~"):
+            with self.subTest(fence=fence):
+                envelope = self.codex_reply_envelope(
+                    "57575757-aaaa-4575-8575-575757575757",
+                    "not-the-original",
+                    body=(
+                        f"   {fence}yaml\nin_reply_to: {original_id}\n"
+                        f"   {fence}\nresult: unrelated"
+                    ),
+                )
+                parsed = peer.parse_reply_envelope(envelope)
+                self.assertEqual(parsed["in_reply_to"], "not-the-original")
+
+    def test_replies_skip_unrelated_non_text_history_before_parsing_candidates(self):
+        with tempfile.TemporaryDirectory() as raw:
+            home = self.make_codex_state(Path(raw))
+            thread_id = "22222222-2222-4222-8222-222222222222"
+            original_id = "58585858-aaaa-4585-8585-585858585858"
+            reply_id = "59595959-aaaa-4595-8595-595959595959"
+            envelope = self.codex_reply_envelope(reply_id, original_id)
+            self.make_codex_reply_stores(
+                home,
+                history_rows=[
+                    (
+                        thread_id,
+                        "turn-image",
+                        "item-image",
+                        1,
+                        100,
+                        json.dumps(
+                            {"content": [{"type": "localImage", "path": "/fixture.png"}]}
+                        ),
+                        "userMessage",
+                        1,
+                    ),
+                    (
+                        thread_id,
+                        "turn-reply",
+                        "item-reply",
+                        2,
+                        200,
+                        json.dumps({"content": [{"type": "text", "text": envelope}]}),
+                        "userMessage",
+                        2,
+                    ),
+                ],
+            )
+            result = peer.codex_replies(f"codex:{thread_id}", original_id, 20, home)
+            self.assertEqual(result["reply_count"], 1)
+            self.assertEqual(result["replies"][0]["reply_id"], reply_id)
+
+    def test_replies_excludes_original_outbound_and_malformed_envelopes(self):
+        with tempfile.TemporaryDirectory() as raw:
+            home = self.make_codex_state(Path(raw))
+            thread_id = "22222222-2222-4222-8222-222222222222"
+            original_id = "66666666-aaaa-4666-8666-666666666666"
+            outbound = self.codex_reply_envelope(original_id, original_id)
+            malformed = (
+                '<peer-message protocol="1" message-id="reply" from="worker">\n'
+                f"in_reply_to: {original_id}\n"
+            )
+            self.make_codex_reply_stores(
+                home,
+                queue_rows=[
+                    (
+                        "outbound",
+                        thread_id,
+                        json.dumps({"UserInput": {"content": [{"text": outbound}]}}),
+                        2,
+                        200,
+                        200,
+                    ),
+                    (
+                        "malformed",
+                        thread_id,
+                        json.dumps({"UserInput": {"content": [{"text": malformed}]}}),
+                        1,
+                        100,
+                        100,
+                    ),
+                ],
+            )
+            result = peer.codex_replies(f"codex:{thread_id}", original_id, 20, home)
+            self.assertEqual(result["reply_status"], "no_replies")
+
+    def test_replies_rejects_conflicting_payloads_with_same_reply_id(self):
+        with tempfile.TemporaryDirectory() as raw:
+            home = self.make_codex_state(Path(raw))
+            thread_id = "22222222-2222-4222-8222-222222222222"
+            original_id = "77777777-aaaa-4777-8777-777777777777"
+            reply_id = "88888888-aaaa-4888-8888-888888888888"
+            first = self.codex_reply_envelope(reply_id, original_id, body="result: first")
+            second = self.codex_reply_envelope(
+                reply_id, original_id, sender="claude:other", body="result: second"
+            )
+            self.make_codex_reply_stores(
+                home,
+                queue_rows=[
+                    (
+                        "queue-1",
+                        thread_id,
+                        json.dumps({"UserInput": {"content": [{"text": first}]}}),
+                        1,
+                        100,
+                        100,
+                    )
+                ],
+                history_rows=[
+                    (
+                        thread_id,
+                        "turn-1",
+                        "item-1",
+                        1,
+                        200,
+                        json.dumps({"content": [{"text": second}]}),
+                        "userMessage",
+                        1,
+                    )
+                ],
+            )
+            with self.assertRaisesRegex(peer.PeerError, "conflicting reply payloads"):
+                peer.codex_replies(f"codex:{thread_id}", original_id, 20, home)
+
+    def test_replies_fail_loudly_on_payload_parse_and_schema_errors(self):
+        with tempfile.TemporaryDirectory() as raw:
+            home = self.make_codex_state(Path(raw))
+            thread_id = "22222222-2222-4222-8222-222222222222"
+            self.make_codex_reply_stores(
+                home,
+                queue_rows=[("bad", thread_id, "original not-json", 1, 100, 100)],
+            )
+            with self.assertRaisesRegex(peer.PeerError, "malformed JSON"):
+                peer.codex_replies(f"codex:{thread_id}", "original", 20, home)
+
+        with tempfile.TemporaryDirectory() as raw:
+            home = self.make_codex_state(Path(raw))
+            connection = sqlite3.connect(home / "queue_9.sqlite")
+            connection.execute("CREATE TABLE unexpected (id TEXT)")
+            connection.commit()
+            connection.close()
+            with self.assertRaisesRegex(peer.PeerError, "schema/read failure"):
+                peer.codex_replies(
+                    "codex:22222222-2222-4222-8222-222222222222",
+                    "original",
+                    20,
+                    home,
+                )
+
+    def test_replies_are_read_only_and_report_truncation(self):
+        with tempfile.TemporaryDirectory() as raw:
+            home = self.make_codex_state(Path(raw))
+            thread_id = "22222222-2222-4222-8222-222222222222"
+            original_id = "99999999-aaaa-4999-8999-999999999999"
+            rows = []
+            for index in range(2):
+                envelope = self.codex_reply_envelope(f"reply-{index}", original_id)
+                rows.append(
+                    (
+                        f"queue-{index}",
+                        thread_id,
+                        json.dumps({"UserInput": {"content": [{"text": envelope}]}}),
+                        index,
+                        100 + index,
+                        100 + index,
+                    )
+                )
+            self.make_codex_reply_stores(home, queue_rows=rows)
+            queue_path = home / "queue_1.sqlite"
+            history_path = home / "thread_history_1.sqlite"
+            before = (queue_path.read_bytes(), history_path.read_bytes())
+
+            result = peer.codex_replies(f"codex:{thread_id}", original_id, 1, home)
+
+            after = (queue_path.read_bytes(), history_path.read_bytes())
+            self.assertEqual(before, after)
+            self.assertEqual(result["reply_count"], 2)
+            self.assertEqual(result["returned_count"], 1)
+            self.assertTrue(result["truncated"])
+
+    def test_replies_distinguish_no_store_unknown_from_clean_no_match_exit(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            home = self.make_codex_state(root)
+            thread_id = "22222222-2222-4222-8222-222222222222"
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                unknown_exit = peer.main(
+                    [
+                        "--codex-home",
+                        str(home),
+                        "replies",
+                        f"codex:{thread_id}",
+                        "--message-id",
+                        "original",
+                        "--json",
+                    ]
+                )
+            self.assertEqual(unknown_exit, peer.EXIT_UNVERIFIED)
+            self.assertEqual(
+                json.loads(output.getvalue())["reply_status"],
+                "unknown_no_evidence_store",
+            )
+
+            self.make_codex_reply_stores(home)
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                no_hit_exit = peer.main(
+                    [
+                        "--codex-home",
+                        str(home),
+                        "replies",
+                        f"codex:{thread_id}",
+                        "--message-id",
+                        "original",
+                        "--json",
+                    ]
+                )
+            self.assertEqual(no_hit_exit, peer.EXIT_NO_REPLIES)
+            self.assertEqual(json.loads(output.getvalue())["reply_status"], "no_replies")
+
+    def test_claude_replies_only_reads_accepted_enqueue_envelopes(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            home, entry, _ = self.make_claude_target(root)
+            original_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+            reply_id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+            envelope = self.claude_reply_envelope(reply_id, original_id)
+            transcript = (
+                home
+                / "projects"
+                / entry["cwd"].replace("/", "-")
+                / f"{entry['sessionId']}.jsonl"
+            )
+            transcript.parent.mkdir(parents=True)
+            transcript.write_text(
+                json.dumps({"type": "peer-message-held", "content": envelope})
+                + "\n"
+                + json.dumps(
+                    {
+                        "type": "queue-operation",
+                        "operation": "enqueue",
+                        "content": envelope,
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            result = peer.claude_replies("claude:worker", original_id, 20, home)
+            self.assertEqual(result["reply_count"], 1)
+            self.assertEqual(
+                result["replies"][0]["evidence"]["kind"],
+                "claude_accepted_enqueue",
+            )
+
+    def test_claude_replies_fail_on_malformed_transcript_record(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            home, entry, _ = self.make_claude_target(root)
+            transcript = (
+                home
+                / "projects"
+                / entry["cwd"].replace("/", "-")
+                / f"{entry['sessionId']}.jsonl"
+            )
+            transcript.parent.mkdir(parents=True)
+            transcript.write_text("not-json\n", encoding="utf-8")
+            with self.assertRaisesRegex(peer.PeerError, "transcript parse failure"):
+                peer.claude_replies("claude:worker", "original", 20, home)
 
     def test_reserved_closing_tag_is_rejected(self):
         with self.assertRaises(peer.PeerError):
