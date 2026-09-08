@@ -1250,8 +1250,9 @@ class ReviewQueue:
         candidates: list[tuple[int, int]] = []  # (1-based line, absolute offset)
         for i in range(max(0, line_no - 1 - window), min(len(lines), line_no + window)):
             pos = lines[i].find(needle)
-            if pos != -1:
+            while pos != -1:
                 candidates.append((i + 1, offsets[i] + pos))
+                pos = lines[i].find(needle, pos + 1)
         if not candidates:
             raise ReAnchorNeeded(
                 f"anchor text appears {content.count(needle)} times but none within "
@@ -1274,6 +1275,22 @@ class ReviewQueue:
                     f"enqueue time — the file drifted; refusing to edit a look-alike "
                     f"(repair with --reanchor-review <id> first)"
                 )
+            # Line identity alone cannot select between repeated tokens on that
+            # line. A verbatim, narrower context containing the token once can;
+            # a full-line context containing it twice must remain ambiguous.
+            exact = snippet.strip()
+            if exact.count(needle) == 1:
+                contextual = []
+                for line_number, offset in candidates:
+                    line = lines[line_number - 1]
+                    start = line.find(exact)
+                    while start != -1:
+                        if offset == offsets[line_number - 1] + start + exact.index(needle):
+                            contextual.append((line_number, offset))
+                            break
+                        start = line.find(exact, start + 1)
+                if contextual:
+                    candidates = contextual
         on_hint = [c for c in candidates if c[0] == line_no]
         if len(on_hint) == 1:
             return on_hint[0][1]

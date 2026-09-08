@@ -775,6 +775,7 @@ python3 scripts/safe_mix.py /path/to/codebase
 
 **主要功能：**
 - Stage 1 + Native AI 完整纠错；Stage 1 单独运行不算完成
+- 分段或续跑时冻结复核文件清单，校验结果与覆盖范围，只补缺失或失败的复核段
 - 精确文件审核队列、deep link、时间戳音频播放和机器可读的 zero-pending 读回
 - file-only / dictionary / roster / context 四种沉淀边界，避免一次性错误污染长期规则
 - SQLite 审计、批处理和团队知识协作

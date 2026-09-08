@@ -162,6 +162,9 @@ where a repeated name is most likely. Measured on one real batch: ten items
 resolved, four of them left six more occurrences behind, two of those on a line a
 verdict had already touched. So a verdict batch has a second half:
 
+
+When the same token occurs twice on one line, supply a verbatim context that contains only the intended occurrence. A context covering both occurrences stays ambiguous and acceptance refuses; do not silently choose the first match or replace both.
+
 ```bash
 # 1. See what was actually decided. The default listing shows PENDING only —
 #    the items you just resolved are precisely the ones it hides.

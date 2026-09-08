@@ -729,6 +729,7 @@ Correct speech-to-text (ASR/STT) errors with a Stage 1 dictionary pre-filter, a 
 
 **Key features:**
 - Stage 1 + Native AI correction pipeline; Stage 1 alone is never completion
+- Frozen review packets and checked file/segment coverage for split or resumed Native reviews; malformed results stay unready and valid work can be reused
 - Exact-file review queue, deep-linked dashboard, timestamped audio playback, and machine-readable zero-pending readback
 - Conservative pattern learning: file-only, dictionary, roster, and context have separate admission rules
 - Domain-specific dictionaries (general, embodied_ai, finance, medical)
