@@ -1,11 +1,14 @@
 import json
+import hashlib
 import os
 import subprocess
+import zipfile
 from pathlib import Path
 
 import pytest
 
 from scripts.audit_skill_regression import (
+    archive_baseline_snapshot,
     build_report,
     create_baseline_snapshot,
     create_regression_marker,
@@ -14,6 +17,10 @@ from scripts.audit_skill_regression import (
     tree_hash,
     validate_regression_marker,
     verify_review,
+)
+from scripts.packaging_policy import (
+    LEGACY_INCLUSION_POLICY_VERSION,
+    inclusion_policy_metadata,
 )
 
 
@@ -38,6 +45,193 @@ def _write_review(path: Path, report: dict) -> Path:
 
 def _candidate_texts(report: dict) -> list[str]:
     return [candidate["text"] for candidate in report["candidates"]]
+
+
+def test_snapshot_records_replayable_policy_and_excludes_only_runtime_authorization(tmp_path):
+    skill = _make_skill(tmp_path / "skill", "Keep the fixture bundle intact.")
+    (skill / ".authorization").write_text("local root grant\n", encoding="utf-8")
+    (skill / "scripts").mkdir()
+    (skill / "scripts" / ".authorization").write_text("local script grant\n", encoding="utf-8")
+    (skill / "tests").mkdir()
+    (skill / "tests" / ".authorization").write_text("fake test grant\n", encoding="utf-8")
+    (skill / "evals").mkdir()
+    (skill / "evals" / ".authorization").write_text("fake eval grant\n", encoding="utf-8")
+    (skill / ".env.example").write_text("TOKEN=replace-me\n", encoding="utf-8")
+    (skill / "config").mkdir()
+    (skill / "config" / "authorization.json").write_text("{}\n", encoding="utf-8")
+    before = tmp_path / "before"
+
+    manifest_path = create_baseline_snapshot(skill, before)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    assert not (before / ".authorization").exists()
+    assert not (before / "scripts" / ".authorization").exists()
+    assert (before / "tests" / ".authorization").read_text() == "fake test grant\n"
+    assert (before / "evals" / ".authorization").read_text() == "fake eval grant\n"
+    assert (before / ".env.example").read_text() == "TOKEN=replace-me\n"
+    assert (before / "config" / "authorization.json").read_text() == "{}\n"
+    assert manifest["inclusion_policy"] == inclusion_policy_metadata(
+        include_evals=True, include_tests=True
+    )
+    assert tree_hash(before, manifest["inclusion_policy"]) == manifest["tree_hash"]
+    current_hash = tree_hash(skill, manifest["inclusion_policy"])
+    legacy_policy = inclusion_policy_metadata(
+        include_evals=True,
+        include_tests=True,
+        version=LEGACY_INCLUSION_POLICY_VERSION,
+    )
+    legacy_hash = tree_hash(skill, legacy_policy)
+    (skill / ".authorization").write_text("changed local root grant\n", encoding="utf-8")
+    assert tree_hash(skill, manifest["inclusion_policy"]) == current_hash
+    assert tree_hash(skill, legacy_policy) != legacy_hash
+
+
+def test_archive_snapshot_preserves_manifest_fixture_files_and_executable_mode(tmp_path):
+    skill = _make_skill(tmp_path / "skill", "Keep the fixture bundle intact.")
+    runner = skill / "scripts" / "runner.sh"
+    runner.parent.mkdir()
+    runner.write_text("#!/bin/sh\necho ok\n", encoding="utf-8")
+    os.chmod(runner, 0o755)
+    (skill / ".authorization").write_text("local grant\n", encoding="utf-8")
+    (skill / ".env.example").write_text("TOKEN=replace-me\n", encoding="utf-8")
+    (skill / "tests").mkdir()
+    (skill / "tests" / ".authorization").write_text("fake grant\n", encoding="utf-8")
+    before = tmp_path / "before"
+    create_baseline_snapshot(skill, before)
+
+    archive_path = archive_baseline_snapshot(before, tmp_path / "before.zip")
+
+    with zipfile.ZipFile(archive_path) as archive:
+        names = set(archive.namelist())
+        runner_info = archive.getinfo("before/scripts/runner.sh")
+    assert "before/.skill-regression-baseline.json" in names
+    assert "before/.env.example" in names
+    assert "before/tests/.authorization" in names
+    assert "before/.authorization" not in names
+    assert (runner_info.external_attr >> 16) & 0o111 == 0o111
+
+
+def test_archive_snapshot_cli_rejects_tampered_snapshot(tmp_path, capsys):
+    skill = _make_skill(tmp_path / "skill", "Keep the fixture bundle intact.")
+    before = tmp_path / "before"
+    create_baseline_snapshot(skill, before)
+    (before / "SKILL.md").write_text("tampered\n", encoding="utf-8")
+
+    exit_code = main([
+        "archive-snapshot",
+        "--source", str(before),
+        "--output", str(tmp_path / "before.zip"),
+    ])
+
+    assert exit_code == 2
+    assert "does not match its provenance manifest" in capsys.readouterr().err
+    assert not (tmp_path / "before.zip").exists()
+
+
+def test_archive_snapshot_does_not_overwrite_existing_output(tmp_path):
+    skill = _make_skill(tmp_path / "skill", "Keep the fixture bundle intact.")
+    before = tmp_path / "before"
+    create_baseline_snapshot(skill, before)
+    output = tmp_path / "before.zip"
+    output.write_bytes(b"existing artifact")
+
+    with pytest.raises(ValueError, match="must not already exist"):
+        archive_baseline_snapshot(before, output)
+
+    assert output.read_bytes() == b"existing artifact"
+
+
+@pytest.mark.parametrize(
+    "mutate,match",
+    [
+        (lambda policy: policy.update(name="wrong-policy"), "invalid name"),
+        (lambda policy: policy.update(version=999), "unsupported inclusion policy version"),
+        (
+            lambda policy: policy["scope"].update(include_tests=False),
+            "must include root evals and tests",
+        ),
+        (
+            lambda policy: policy["scope"].update(include_evals="yes"),
+            "boolean include_evals/include_tests",
+        ),
+    ],
+)
+def test_snapshot_policy_metadata_is_strictly_validated(tmp_path, mutate, match):
+    skill = _make_skill(tmp_path / "skill", "Keep the fixture bundle intact.")
+    before = tmp_path / "before"
+    manifest_path = create_baseline_snapshot(skill, before)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    mutate(manifest["inclusion_policy"])
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=match):
+        build_report(before, skill, baseline_origin="pre-edit-snapshot")
+
+
+@pytest.mark.parametrize(
+    "mutate,match",
+    [
+        (lambda review: review["before"]["inclusion_policy"].update(name="wrong"), "invalid name"),
+        (
+            lambda review: review["after"]["inclusion_policy"].update(version=999),
+            "unsupported inclusion policy version",
+        ),
+        (
+            lambda review: review["before"]["inclusion_policy"]["scope"].update(include_tests=False),
+            "must include root evals and tests",
+        ),
+        (lambda review: review["after"].pop("inclusion_policy"), "both before and after"),
+    ],
+)
+def test_review_policy_metadata_is_strictly_validated(tmp_path, mutate, match):
+    before = _make_skill(tmp_path / "before", "Keep the fixture bundle intact.")
+    after = _make_skill(tmp_path / "after", "Keep the fixture bundle intact.")
+    report = build_report(before, after)
+    mutate(report)
+    review_path = _write_review(tmp_path / "review.json", report)
+
+    ok, errors = verify_review(before, after, review_path)
+
+    assert ok is False
+    assert any(match in error for error in errors)
+
+
+def test_schema3_snapshot_and_review_without_policy_use_frozen_legacy_hash(tmp_path):
+    skill = _make_skill(tmp_path / "skill", "Keep the fixture bundle intact.")
+    (skill / ".authorization").write_text("legacy grant fixture\n", encoding="utf-8")
+    before = _make_skill(tmp_path / "before", "Keep the fixture bundle intact.")
+    (before / ".authorization").write_text("legacy grant fixture\n", encoding="utf-8")
+    legacy_policy = inclusion_policy_metadata(
+        include_evals=True,
+        include_tests=True,
+        version=LEGACY_INCLUSION_POLICY_VERSION,
+    )
+    manifest = {
+        "schema_version": 3,
+        "kind": "skill-regression-pre-edit-snapshot",
+        "source_path_hash": hashlib.sha256(str(skill.resolve()).encode("utf-8")).hexdigest(),
+        "tree_hash": tree_hash(before, legacy_policy),
+        "created_at": "2026-09-08T00:00:00+00:00",
+    }
+    (before / ".skill-regression-baseline.json").write_text(
+        json.dumps(manifest) + "\n", encoding="utf-8"
+    )
+
+    report = build_report(before, skill, baseline_origin="pre-edit-snapshot")
+    report["before"].pop("inclusion_policy")
+    report["after"].pop("inclusion_policy")
+    review_path = _write_review(tmp_path / "legacy-review.json", report)
+
+    ok, errors = verify_review(before, skill, review_path)
+
+    assert ok is True, errors
+    marker = create_regression_marker(skill, review_path)
+    assert "Inclusion policy:" in marker.read_text(encoding="utf-8")
+    assert validate_regression_marker(skill)[0] is True
+    with pytest.raises(ValueError, match="local runtime authorization files"):
+        archive_baseline_snapshot(before, tmp_path / "legacy-before.zip")
+    (skill / ".authorization").write_text("changed legacy fixture\n", encoding="utf-8")
+    assert validate_regression_marker(skill)[0] is False
 
 
 def test_exact_guidance_move_is_auto_preserved(tmp_path):
@@ -1132,3 +1326,32 @@ def test_classify_rejects_negative_index(tmp_path):
 
     with pytest.raises(ValueError, match="matches no candidate"):
         classify_review(review_path, after, map_path, "tester")
+
+
+@pytest.mark.parametrize("change", ["content", "mode", "manifest"])
+def test_archive_rejects_source_change_after_initial_validation(tmp_path, monkeypatch, change):
+    from scripts import audit_skill_regression as audit
+
+    source = _make_skill(tmp_path / "source", "- Preserve this source.")
+    before = tmp_path / "before"
+    audit.create_baseline_snapshot(source, before)
+    original_validate = audit._validated_snapshot_policy
+
+    def mutate_after_validation(root):
+        policy = original_validate(root)
+        if change == "content":
+            (root / "SKILL.md").write_text("# Changed during archive\n")
+        elif change == "mode":
+            target = root / "SKILL.md"
+            target.chmod(target.stat().st_mode ^ 0o100)
+        else:
+            manifest = root / audit.BASELINE_MANIFEST
+            manifest.write_text(manifest.read_text() + "\n")
+        return policy
+
+    monkeypatch.setattr(audit, "_validated_snapshot_policy", mutate_after_validation)
+    output = tmp_path / "snapshot.zip"
+    with pytest.raises(ValueError, match="snapshot archive (content|provenance)"):
+        audit.archive_baseline_snapshot(before, output)
+    assert not output.exists()
+    assert not list(tmp_path.glob(".snapshot.zip.*.tmp"))

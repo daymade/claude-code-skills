@@ -41,16 +41,18 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
+import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
 from scripts.packaging_policy import (
-    EXCLUDE_DIRS,
-    EXCLUDE_FILES,
-    EXCLUDE_GLOBS,
-    ROOT_EXCLUDE_DIRS,
+    LEGACY_INCLUSION_POLICY_VERSION,
+    inclusion_policy_metadata,
+    normalize_inclusion_policy,
+    should_exclude_skill_relative,
 )
 
 
@@ -60,9 +62,6 @@ TEXT_SUFFIXES = {
     ".jsx", ".sh", ".bash", ".json", ".yaml", ".yml", ".toml",
     ".html", ".css",
 }
-IGNORED_DIRS = {".git", *EXCLUDE_DIRS}
-ROOT_IGNORED_DIRS = ROOT_EXCLUDE_DIRS - {"evals", "tests"}
-IGNORED_FILES = set(EXCLUDE_FILES)
 REGRESSION_MARKER = ".skill-regression-reviewed"
 BASELINE_MANIFEST = ".skill-regression-baseline.json"
 DEVELOPMENT_ROOTS = {"evals", "tests"}
@@ -104,29 +103,52 @@ def _scope_for(rel_path: Path, reachable: set[Path] | None = None) -> str:
     return "unreachable"
 
 
-def _included_in_audit(rel: Path) -> bool:
-    if any(part in IGNORED_DIRS for part in rel.parts):
-        return False
-    if rel.parts and rel.parts[0] in ROOT_IGNORED_DIRS:
-        return False
-    if rel.name in IGNORED_FILES:
-        return False
-    return not any(rel.match(pattern) for pattern in EXCLUDE_GLOBS)
+def _current_audit_policy() -> dict[str, Any]:
+    return inclusion_policy_metadata(include_evals=True, include_tests=True)
 
 
-def _iter_files(root: Path) -> Iterable[tuple[Path, Path]]:
+def _legacy_audit_policy() -> dict[str, Any]:
+    return inclusion_policy_metadata(
+        include_evals=True,
+        include_tests=True,
+        version=LEGACY_INCLUSION_POLICY_VERSION,
+    )
+
+
+def _normalize_audit_policy(policy: Any) -> dict[str, Any]:
+    try:
+        normalized = normalize_inclusion_policy(policy)
+    except ValueError as error:
+        raise ValueError(f"invalid audit inclusion policy: {error}") from error
+    if normalized["scope"] != {"include_evals": True, "include_tests": True}:
+        raise ValueError("audit inclusion policy must include root evals and tests")
+    return normalized
+
+
+def _included_in_audit(rel: Path, inclusion_policy: Any) -> bool:
+    return not should_exclude_skill_relative(
+        rel,
+        policy=_normalize_audit_policy(inclusion_policy),
+    )
+
+
+def _iter_files(
+    root: Path,
+    inclusion_policy: Any | None = None,
+) -> Iterable[tuple[Path, Path]]:
+    policy = _normalize_audit_policy(inclusion_policy or _current_audit_policy())
     for path in sorted(root.rglob("*")):
         if not path.is_file():
             continue
         rel = path.relative_to(root)
-        if not _included_in_audit(rel):
+        if not _included_in_audit(rel, policy):
             continue
         yield rel, path
 
 
-def tree_hash(root: Path) -> str:
+def tree_hash(root: Path, inclusion_policy: Any | None = None) -> str:
     digest = hashlib.sha256()
-    for rel, path in _iter_files(root):
+    for rel, path in _iter_files(root, inclusion_policy):
         digest.update(str(rel).replace("\\", "/").encode("utf-8"))
         digest.update(b"\0")
         digest.update(f"{path.stat().st_mode & 0o111:o}".encode("ascii"))
@@ -146,7 +168,12 @@ def _git_output(repo: Path, *args: str, text: bool = True) -> str | bytes:
     return result.stdout
 
 
-def _git_tree_hash(repo: Path, commit: str, skill_rel: Path) -> str:
+def _git_tree_hash(
+    repo: Path,
+    commit: str,
+    skill_rel: Path,
+    inclusion_policy: Any,
+) -> str:
     """Hash the distributable/development skill tree exactly as stored in Git."""
     # skill_rel == Path(".")（skill 目录即仓根）时，git ls-tree 输出无前缀路径
     # （"SKILL.md"），而 ".".rstrip("/")+"/" 拼出的 "./" 永不匹配任何条目，
@@ -174,7 +201,7 @@ def _git_tree_hash(repo: Path, commit: str, skill_rel: Path) -> str:
         if object_type != "blob" or not full_path.startswith(prefix):
             continue
         rel = Path(full_path[len(prefix):])
-        if _included_in_audit(rel):
+        if _included_in_audit(rel, inclusion_policy):
             entries.append((rel, mode, object_id))
 
     if not any(rel == Path("SKILL.md") for rel, _mode, _object_id in entries):
@@ -202,12 +229,13 @@ def create_baseline_snapshot(source: Path, output: Path) -> Path:
     if output.exists():
         raise ValueError(f"snapshot output must not already exist: {output}")
     output.mkdir(parents=True)
-    for rel, path in _iter_files(source):
+    inclusion_policy = _current_audit_policy()
+    for rel, path in _iter_files(source, inclusion_policy):
         destination = output / rel
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(path, destination)
-    source_hash = tree_hash(source)
-    snapshot_hash = tree_hash(output)
+    source_hash = tree_hash(source, inclusion_policy)
+    snapshot_hash = tree_hash(output, inclusion_policy)
     if source_hash != snapshot_hash:
         raise ValueError("snapshot copy does not match the source skill tree")
     manifest = {
@@ -215,6 +243,7 @@ def create_baseline_snapshot(source: Path, output: Path) -> Path:
         "kind": "skill-regression-pre-edit-snapshot",
         "source_path_hash": hashlib.sha256(str(source).encode("utf-8")).hexdigest(),
         "tree_hash": snapshot_hash,
+        "inclusion_policy": inclusion_policy,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     (output / BASELINE_MANIFEST).write_text(
@@ -224,12 +253,146 @@ def create_baseline_snapshot(source: Path, output: Path) -> Path:
     return output / BASELINE_MANIFEST
 
 
+def _policy_for_report(
+    before: Path,
+    baseline_origin: str,
+    inclusion_policy: Any | None,
+) -> dict[str, Any]:
+    if inclusion_policy is not None:
+        return _normalize_audit_policy(inclusion_policy)
+    if baseline_origin == "pre-edit-snapshot":
+        manifest_path = before / BASELINE_MANIFEST
+        if not manifest_path.is_file():
+            raise ValueError(
+                "pre-edit snapshot is missing its provenance manifest; create it with the snapshot subcommand"
+            )
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise ValueError(f"cannot read pre-edit snapshot provenance: {error}") from error
+        persisted = manifest.get("inclusion_policy")
+        if persisted is None:
+            return _legacy_audit_policy()
+        return _normalize_audit_policy(persisted)
+    return _current_audit_policy()
+
+
+def _validated_snapshot_policy(snapshot: Path) -> dict[str, Any]:
+    manifest_path = snapshot / BASELINE_MANIFEST
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"cannot read pre-edit snapshot provenance: {error}") from error
+    if manifest.get("schema_version") != SCHEMA_VERSION:
+        raise ValueError("pre-edit snapshot provenance uses an obsolete schema")
+    if manifest.get("kind") != "skill-regression-pre-edit-snapshot":
+        raise ValueError("pre-edit snapshot provenance has an invalid kind")
+    persisted_policy = manifest.get("inclusion_policy")
+    policy = (
+        _legacy_audit_policy()
+        if persisted_policy is None
+        else _normalize_audit_policy(persisted_policy)
+    )
+    if manifest.get("tree_hash") != tree_hash(snapshot, policy):
+        raise ValueError("pre-edit snapshot content does not match its provenance manifest")
+    created_at = manifest.get("created_at")
+    try:
+        parsed = datetime.fromisoformat(str(created_at).replace("Z", "+00:00"))
+    except ValueError as error:
+        raise ValueError("pre-edit snapshot provenance timestamp is invalid") from error
+    if parsed.tzinfo is None:
+        raise ValueError("pre-edit snapshot provenance timestamp must include a timezone")
+    return policy
+
+
+def archive_baseline_snapshot(source: Path, output: Path) -> Path:
+    """Archive a verified snapshot without changing its hash-bearing file set."""
+    source = source.resolve()
+    output = output.resolve()
+    if not source.is_dir() or not (source / "SKILL.md").is_file():
+        raise ValueError(f"snapshot directory must contain SKILL.md: {source}")
+    if output.exists():
+        raise ValueError(f"snapshot archive output must not already exist: {output}")
+    if output.is_relative_to(source):
+        raise ValueError("snapshot archive output must be outside the snapshot directory")
+    manifest_bytes = (source / BASELINE_MANIFEST).read_bytes()
+    policy = _validated_snapshot_policy(source)
+    unsafe_runtime_authorizations = [
+        path.relative_to(source)
+        for path in sorted(source.rglob(".authorization"))
+        if path.is_file()
+        and path.relative_to(source).parts[0] not in DEVELOPMENT_ROOTS
+    ]
+    if unsafe_runtime_authorizations:
+        joined = ", ".join(path.as_posix() for path in unsafe_runtime_authorizations)
+        raise ValueError(
+            "snapshot contains local runtime authorization files that cannot be archived: "
+            + joined
+        )
+    members = [(rel, path) for rel, path in _iter_files(source, policy)]
+    members.append((Path(BASELINE_MANIFEST), source / BASELINE_MANIFEST))
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary_handle = tempfile.NamedTemporaryFile(
+        prefix=f".{output.name}.",
+        suffix=".tmp",
+        dir=output.parent,
+        delete=False,
+    )
+    temporary = Path(temporary_handle.name)
+    temporary_handle.close()
+    try:
+        with zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED) as archive:
+            for rel, path in members:
+                archive.write(path, Path(source.name) / rel)
+        expected = {
+            (Path(source.name) / rel).as_posix(): (
+                path.read_bytes(),
+                path.stat().st_mode & 0o111,
+            )
+            for rel, path in members
+        }
+        with zipfile.ZipFile(temporary, "r") as archive:
+            if set(archive.namelist()) != set(expected):
+                raise ValueError("snapshot archive readback has an unexpected member set")
+            for name, (content, executable_mode) in expected.items():
+                info = archive.getinfo(name)
+                if archive.read(name) != content:
+                    raise ValueError(f"snapshot archive readback content mismatch: {name}")
+                if ((info.external_attr >> 16) & 0o111) != executable_mode:
+                    raise ValueError(f"snapshot archive readback executable mode mismatch: {name}")
+            manifest_name = (Path(source.name) / BASELINE_MANIFEST).as_posix()
+            if archive.read(manifest_name) != manifest_bytes:
+                raise ValueError("snapshot archive provenance changed during archival")
+            archived_hash = hashlib.sha256()
+            for rel, _path in members:
+                if rel == Path(BASELINE_MANIFEST):
+                    continue
+                name = (Path(source.name) / rel).as_posix()
+                mode = (archive.getinfo(name).external_attr >> 16) & 0o111
+                archived_hash.update(rel.as_posix().encode("utf-8"))
+                archived_hash.update(b"\0")
+                archived_hash.update(f"{mode:o}".encode("ascii"))
+                archived_hash.update(b"\0")
+                archived_hash.update(archive.read(name))
+                archived_hash.update(b"\0")
+            if archived_hash.hexdigest() != json.loads(manifest_bytes)["tree_hash"]:
+                raise ValueError("snapshot archive content does not match its provenance manifest")
+        try:
+            os.link(temporary, output)
+        except FileExistsError as error:
+            raise ValueError(f"snapshot archive output must not already exist: {output}") from error
+    finally:
+        temporary.unlink(missing_ok=True)
+    return output
+
+
 def _resolve_baseline_provenance(
     before: Path,
     after: Path,
     baseline_origin: str,
     *,
     renamed_from: Path | None = None,
+    inclusion_policy: Any,
 ) -> dict[str, Any]:
     # Both provenance modes below identify the baseline by the SOURCE PATH the
     # skill lived at when the baseline was captured, not by directory content.
@@ -257,6 +420,13 @@ def _resolve_baseline_provenance(
             raise ValueError("pre-edit snapshot provenance uses an obsolete schema")
         if manifest.get("kind") != "skill-regression-pre-edit-snapshot":
             raise ValueError("pre-edit snapshot provenance has an invalid kind")
+        persisted_policy = manifest.get("inclusion_policy")
+        if persisted_policy is None:
+            expected_policy = _legacy_audit_policy()
+        else:
+            expected_policy = _normalize_audit_policy(persisted_policy)
+        if expected_policy != _normalize_audit_policy(inclusion_policy):
+            raise ValueError("pre-edit snapshot inclusion policy does not match the requested audit policy")
         expected_source_hash = hashlib.sha256(str(identity_source).encode("utf-8")).hexdigest()
         if manifest.get("source_path_hash") != expected_source_hash:
             if renamed_from is None:
@@ -268,7 +438,7 @@ def _resolve_baseline_provenance(
                     "resolves against the current working directory, not against --after)"
                 )
             raise ValueError(f"pre-edit snapshot source identity does not match the edited skill{hint}")
-        if manifest.get("tree_hash") != tree_hash(before):
+        if manifest.get("tree_hash") != tree_hash(before, expected_policy):
             raise ValueError("pre-edit snapshot content does not match its provenance manifest")
         created_at = manifest.get("created_at")
         try:
@@ -322,8 +492,8 @@ def _resolve_baseline_provenance(
             commit = commit_value.strip()
         except (subprocess.CalledProcessError, ValueError) as error:
             raise ValueError(f"could not resolve ref {requested_ref!r} in {repo}") from error
-        expected_hash = _git_tree_hash(repo, commit, skill_rel)
-        actual_hash = tree_hash(before)
+        expected_hash = _git_tree_hash(repo, commit, skill_rel, inclusion_policy)
+        actual_hash = tree_hash(before, inclusion_policy)
         if actual_hash != expected_hash:
             raise ValueError(
                 f"before tree does not match {requested_ref} for {skill_rel.as_posix()}"
@@ -348,10 +518,10 @@ def _file_fingerprint(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _reachable_runtime_files(root: Path) -> set[Path]:
+def _reachable_runtime_files(root: Path, inclusion_policy: Any | None = None) -> set[Path]:
     """Return files reachable through explicit pointers starting at SKILL.md."""
     root = root.resolve()
-    available = {rel for rel, _path in _iter_files(root)}
+    available = {rel for rel, _path in _iter_files(root, inclusion_policy)}
     reachable: set[Path] = {Path("SKILL.md")}
     queue = [Path("SKILL.md")]
     markdown_link = re.compile(r"\]\(([^)\s]+)\)")
@@ -645,10 +815,13 @@ def _eval_units(content: str, rel: Path, scope: str) -> list[tuple[str, Occurren
     return results
 
 
-def extract_units(root: Path) -> dict[tuple[str, str, str], Unit]:
+def extract_units(
+    root: Path,
+    inclusion_policy: Any | None = None,
+) -> dict[tuple[str, str, str], Unit]:
     units: dict[tuple[str, str, str], Unit] = {}
-    reachable = _reachable_runtime_files(root)
-    for rel, path in _iter_files(root):
+    reachable = _reachable_runtime_files(root, inclusion_policy)
+    for rel, path in _iter_files(root, inclusion_policy):
         scope = _scope_for(rel, reachable)
         content = _read_text(path)
         if content is None:
@@ -718,18 +891,30 @@ def build_report(
     *,
     baseline_origin: str = "test-fixture",
     renamed_from: Path | None = None,
+    inclusion_policy: Any | None = None,
 ) -> dict[str, Any]:
     before = before.resolve()
     after = after.resolve()
     for label, root in (("before", before), ("after", after)):
         if not root.is_dir() or not (root / "SKILL.md").is_file():
             raise ValueError(f"{label} skill directory must contain SKILL.md: {root}")
-    provenance = _resolve_baseline_provenance(before, after, baseline_origin, renamed_from=renamed_from)
+    policy = _policy_for_report(before, baseline_origin, inclusion_policy)
+    provenance = _resolve_baseline_provenance(
+        before,
+        after,
+        baseline_origin,
+        renamed_from=renamed_from,
+        inclusion_policy=policy,
+    )
 
-    before_files = {str(rel).replace("\\", "/"): path for rel, path in _iter_files(before)}
-    after_files = {str(rel).replace("\\", "/"): path for rel, path in _iter_files(after)}
-    before_reachable = _reachable_runtime_files(before)
-    after_reachable = _reachable_runtime_files(after)
+    before_files = {
+        str(rel).replace("\\", "/"): path for rel, path in _iter_files(before, policy)
+    }
+    after_files = {
+        str(rel).replace("\\", "/"): path for rel, path in _iter_files(after, policy)
+    }
+    before_reachable = _reachable_runtime_files(before, policy)
+    after_reachable = _reachable_runtime_files(after, policy)
     after_hash_to_paths: dict[str, list[str]] = {}
     for rel, path in after_files.items():
         digest = _file_fingerprint(path)
@@ -773,8 +958,8 @@ def build_report(
             observed_destinations=moved_to,
         ))
 
-    before_units = extract_units(before)
-    after_units = extract_units(after)
+    before_units = extract_units(before, policy)
+    after_units = extract_units(after, policy)
     for key, unit in before_units.items():
         if key in after_units:
             auto_preserved.append({
@@ -799,10 +984,15 @@ def build_report(
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "before": {
             "path": str(before),
-            "tree_hash": tree_hash(before),
+            "tree_hash": tree_hash(before, policy),
+            "inclusion_policy": policy,
             "provenance": provenance,
         },
-        "after": {"path": str(after), "tree_hash": tree_hash(after)},
+        "after": {
+            "path": str(after),
+            "tree_hash": tree_hash(after, policy),
+            "inclusion_policy": policy,
+        },
         "summary": {
             "auto_preserved": len(auto_preserved),
             "candidates": len(candidates),
@@ -924,6 +1114,20 @@ def _verifiable_evidence_quote(line: str, needle: str) -> str:
     return line.strip()
 
 
+def _review_inclusion_policy(review: dict[str, Any]) -> dict[str, Any]:
+    before_policy = review.get("before", {}).get("inclusion_policy")
+    after_policy = review.get("after", {}).get("inclusion_policy")
+    if before_policy is None and after_policy is None:
+        return _legacy_audit_policy()
+    if before_policy is None or after_policy is None:
+        raise ValueError("review must record the inclusion policy for both before and after")
+    before_normalized = _normalize_audit_policy(before_policy)
+    after_normalized = _normalize_audit_policy(after_policy)
+    if before_normalized != after_normalized:
+        raise ValueError("review before/after inclusion policies must match")
+    return before_normalized
+
+
 def verify_review(before: Path, after: Path, review_path: Path) -> tuple[bool, list[str]]:
     before = before.resolve()
     after = after.resolve()
@@ -938,10 +1142,18 @@ def verify_review(before: Path, after: Path, review_path: Path) -> tuple[bool, l
         if isinstance(renamed_from_value, str) and renamed_from_value
         else None
     )
-    current = build_report(
-        before, after, baseline_origin=baseline_origin or "", renamed_from=renamed_from
-    )
     errors: list[str] = []
+    try:
+        inclusion_policy = _review_inclusion_policy(review)
+        current = build_report(
+            before,
+            after,
+            baseline_origin=baseline_origin or "",
+            renamed_from=renamed_from,
+            inclusion_policy=inclusion_policy,
+        )
+    except ValueError as error:
+        return False, [str(error)]
     if review.get("schema_version") != SCHEMA_VERSION:
         errors.append(f"unsupported schema_version: {review.get('schema_version')!r}")
     if not isinstance(baseline_origin, str) or not (
@@ -1206,13 +1418,15 @@ def create_regression_marker(after: Path, review_path: Path) -> Path:
         raise ValueError("cannot attest an invalid review: " + "; ".join(errors[:5]))
     review_hash = hashlib.sha256(review_path.read_bytes()).hexdigest()
     before_hash = review["before"]["tree_hash"]
-    after_hash = tree_hash(after)
+    inclusion_policy = _review_inclusion_policy(review)
+    after_hash = tree_hash(after, inclusion_policy)
     attestation = _attestation_digest(before_hash, after_hash, review_hash)
     marker = after / REGRESSION_MARKER
     marker_tmp = marker.with_name(marker.name + ".tmp")
     marker_tmp.write_text(
         "Skill regression review passed\n"
         f"Schema version: {SCHEMA_VERSION}\n"
+        f"Inclusion policy: {json.dumps(inclusion_policy, sort_keys=True, separators=(',', ':'))}\n"
         f"Before tree hash: {before_hash}\n"
         f"After tree hash: {after_hash}\n"
         f"Review hash: {review_hash}\n"
@@ -1244,6 +1458,14 @@ def validate_regression_marker(skill_path: Path) -> tuple[bool, str]:
     schema_match = re.search(r"^Schema version:\s*(\d+)$", content, re.MULTILINE)
     if not schema_match or int(schema_match.group(1)) != SCHEMA_VERSION:
         return False, "regression review marker uses an obsolete schema"
+    policy_match = re.search(r"^Inclusion policy:\s*(\{.*\})$", content, re.MULTILINE)
+    if policy_match:
+        try:
+            inclusion_policy = _normalize_audit_policy(json.loads(policy_match.group(1)))
+        except (json.JSONDecodeError, ValueError) as error:
+            return False, f"regression review marker inclusion policy is invalid: {error}"
+    else:
+        inclusion_policy = _legacy_audit_policy()
     expected_attestation = _attestation_digest(
         before_match.group(1), after_match.group(1), review_match.group(1)
     )
@@ -1253,7 +1475,7 @@ def validate_regression_marker(skill_path: Path) -> tuple[bool, str]:
         datetime.fromisoformat(reviewed_at_match.group(1).replace("Z", "+00:00"))
     except ValueError:
         return False, "regression review marker timestamp is invalid"
-    if after_match.group(1) != tree_hash(skill_path):
+    if after_match.group(1) != tree_hash(skill_path, inclusion_policy):
         return False, "skill content changed since the regression review"
     return True, "regression review marker is current"
 
@@ -1325,6 +1547,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     snapshot.add_argument("--source", required=True, type=Path)
     snapshot.add_argument("--output", required=True, type=Path)
+    archive_snapshot = subparsers.add_parser(
+        "archive-snapshot",
+        help="write a verified pre-edit snapshot to a portable zip archive",
+    )
+    archive_snapshot.add_argument("--source", required=True, type=Path)
+    archive_snapshot.add_argument("--output", required=True, type=Path)
     compare = subparsers.add_parser("compare", help="generate an editable regression review")
     compare.add_argument("--before", required=True, type=Path)
     compare.add_argument("--after", required=True, type=Path)
@@ -1385,6 +1613,10 @@ def main(argv: list[str] | None = None) -> int:
             manifest = create_baseline_snapshot(args.source, args.output)
             print(f"Pre-edit skill snapshot created: {manifest.parent}")
             print(f"Provenance manifest: {manifest.name}")
+            return 0
+        if args.command == "archive-snapshot":
+            archive = archive_baseline_snapshot(args.source, args.output)
+            print(f"Verified pre-edit snapshot archive created: {archive}")
             return 0
         if args.command == "compare":
             if not (

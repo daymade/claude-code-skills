@@ -18,6 +18,10 @@ from scripts.security_scan import calculate_skill_hash
         (Path("my-skill/.ruff_cache/CACHEDIR.TAG"), True),
         (Path("my-skill/.DS_Store"), True),
         (Path("my-skill/.skill-regression-reviewed"), True),
+        (Path("my-skill/.authorization"), True),
+        (Path("my-skill/scripts/.authorization"), True),
+        (Path("my-skill/.env.example"), False),
+        (Path("my-skill/config/authorization.json"), False),
         (Path("my-skill/evals/evals.json"), True),
         (Path("my-skill/dist/my-skill.skill"), True),
         (Path("my-skill/tests/test_runtime.py"), True),
@@ -30,6 +34,10 @@ from scripts.security_scan import calculate_skill_hash
 )
 def test_should_exclude(rel_path, expected):
     assert should_exclude(rel_path) is expected
+
+
+def test_included_eval_fixture_can_use_exact_authorization_filename():
+    assert should_exclude(Path("my-skill/evals/.authorization"), include_evals=True) is False
 
 
 def _make_minimal_skill(tmp_path: Path, name: str = "minimal-skill") -> Path:
@@ -105,6 +113,14 @@ def test_package_skill_artifact_contains_skill_files(tmp_path):
     (skill_dir / ".in_use" / "12345").write_text("runtime lock\n", encoding="utf-8")
     (skill_dir / ".ruff_cache").mkdir()
     (skill_dir / ".ruff_cache" / "CACHEDIR.TAG").write_text("cache\n", encoding="utf-8")
+    (skill_dir / ".authorization").write_text("local runtime grant\n", encoding="utf-8")
+    (skill_dir / "scripts" / ".authorization").parent.mkdir(exist_ok=True)
+    (skill_dir / "scripts" / ".authorization").write_text(
+        "nested local runtime grant\n", encoding="utf-8"
+    )
+    (skill_dir / ".env.example").write_text("TOKEN=<token>\n", encoding="utf-8")
+    (skill_dir / "config").mkdir()
+    (skill_dir / "config" / "authorization.json").write_text("{}\n", encoding="utf-8")
     _add_security_marker(skill_dir)
 
     artifact = package_skill(skill_dir, new_skill=True)
@@ -120,6 +136,9 @@ def test_package_skill_artifact_contains_skill_files(tmp_path):
     assert not any(".enrich/" in n for n in names)
     assert not any(".in_use/" in n for n in names)
     assert not any(".ruff_cache/" in n for n in names)
+    assert not any(n.endswith("/.authorization") for n in names)
+    assert any(n.endswith("/.env.example") for n in names)
+    assert any(n.endswith("/config/authorization.json") for n in names)
 
 
 def test_package_skill_artifact_excludes_dist_directory(tmp_path):

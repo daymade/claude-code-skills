@@ -3,6 +3,7 @@
 Quick validation script for skills - minimal version
 """
 
+import argparse
 import sys
 import os
 import re
@@ -517,29 +518,29 @@ def validate_skill(skill_path, audience=None):
     return True, "Skill is valid!"
 
 
-if __name__ == "__main__":
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    flags = [a for a in sys.argv[1:] if a.startswith("--")]
-    if len(args) != 1:
-        print("Usage: uv run --frozen python -m scripts.quick_validate <skill_directory> [--audience public|private|auto]")
-        print("  --audience  who this skill ships to. Default 'auto' asks gh whether the")
-        print("              containing repo is private. Private skills get portability and")
-        print("              identifier findings as notes, not warnings — there, a real path")
-        print("              or credential is usually load-bearing, not a defect.")
-        sys.exit(1)
-
-    audience = "auto"
-    for f in flags:
-        if f.startswith("--audience"):
-            audience = f.split("=", 1)[1] if "=" in f else "auto"
-    if audience not in {"public", "private", "auto"}:
-        print(f"Unknown --audience {audience!r}; expected public, private, or auto")
-        sys.exit(1)
-
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Validate a skill directory.")
+    parser.add_argument("skill_directory")
+    parser.add_argument(
+        "--audience",
+        choices=("public", "private", "auto"),
+        default="auto",
+        help=(
+            "Who this skill ships to. 'auto' asks gh whether the containing repo "
+            "is private. Private skills get portability and identifier findings "
+            "as notes, not warnings."
+        ),
+    )
+    args = parser.parse_args(argv)
+    audience = args.audience
     if audience == "auto":
-        audience, how = detect_audience(Path(args[0]))
+        audience, how = detect_audience(Path(args.skill_directory))
         if audience == "private":
             print(f"{chr(128274)} audience: private ({how}) — portability/identifier findings are notes, not defects")
-    valid, message = validate_skill(args[0], audience=audience)
+    valid, message = validate_skill(args.skill_directory, audience=audience)
     print(message)
-    sys.exit(0 if valid else 1)
+    return 0 if valid else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
