@@ -1,77 +1,76 @@
-# Quality Gates V6
+# Quality Gates
 
-## Gate 1: Task Notes Quality (after P2)
+Use these gates to test research against its questions and consequential claims. Source counts, domain counts, source-type percentages, citation density, and word counts are diagnostics. They may reveal thin work, but they never prove coverage or quality by themselves.
 
-| Check | Standard | Lightweight | Fix |
-|-------|----------|-------------|-----|
-| All tasks completed | 100% | 100% | Re-dispatch failed tasks |
-| Sources per task | >= 2 | >= 1 | Run additional searches |
-| Findings per task | >= 3 | >= 2 | Deepen search or fetch more |
-| DEEP tasks have Deep Read Notes | 100% | 100% | Fetch and read top source |
-| All source URLs from actual search | 100% | 100% | Remove any invented URL |
+## Gate 1: Question and Task Coverage (after P2)
 
-## Gate 2: Citation Registry (after P3)
+| Check | Pass condition | Fix |
+|---|---|---|
+| Decision questions | Every in-scope question is answered, contradicted, or explicitly unknown | Continue the relevant evidence route or narrow the conclusion |
+| Load-bearing claims | Each claim that could change the conclusion has a named evidence route and stop rule | Define the missing route before drafting |
+| Original-source capture | Every candidate decisive source has a stable locator and usable excerpt/page/section | Open the original; do not rely on a snippet |
+| Counter-evidence | Each provisional conclusion records what could overturn it and what was searched | Run the disconfirming search or label the gap |
+| Search provenance | URLs and record identifiers come from actual retrievals | Remove invented or unresolved locators |
 
-| Check | Standard | Lightweight | Fix |
-|-------|----------|-------------|-----|
-| Total approved sources | >= 12 | >= 6 | Flag thin areas for P6 |
-| Unique domains | >= 5 | >= 3 | Diversify in re-search |
-| Max single-source share | <= 25% | <= 30% | Find alternatives |
-| Official source coverage | >= 30% for standard | >= 20% for lightweight | Add official sources |
-| Source-type balance | official + academic + secondary at least 2 types | same | Fill missing type
-| Dropped sources listed | All | All | Must be explicit |
-| No duplicate URLs | 0 duplicates | 0 | Merge during P3 |
+## Gate 2: Citation Registry and Evidence Families (after P3)
+
+| Check | Pass condition | Fix |
+|---|---|---|
+| Claim coverage matrix | Every load-bearing claim maps to supporting, conflicting, or missing evidence | Re-search the uncovered claim or mark unknown |
+| Evidence independence | Repeated reports derived from one disclosure, dataset, study, interview, or sponsor are grouped as one family | Collapse the family and correct confidence |
+| Source fitness | Each source can directly observe the claim it supports | Replace it or narrow the claim |
+| First-party boundary | Authorized internal records are labelled and never counted as external corroboration | Correct provenance and conclusion wording |
+| Exclusions | Material excluded sources have a reason | Record the reason and any effect on uncertainty |
+| Diagnostics | Counts, domains, type mix, and concentration are reported without pass/fail language | Remove quota-based conclusions |
 
 ## Gate 3: Draft Quality (after P5)
 
-| Check | Standard | Lightweight | Fix |
-|-------|----------|-------------|-----|
-| Every [n] in registry | 100% | 100% | Remove or fix |
-| No dropped source cited | 0 violations | 0 | Remove immediately |
-| Citation density | >= 1 per 200 words | >= 1 per 300 words | Add citations |
-| Every section has confidence marker | 100% | 100% | Add missing |
-| High-confidence claims backed by official source | 100% | 100% | Downgrade or re-source |
-| Counter-claim recorded for major sections | 100% | 70% | Add opposing interpretation |
-| Total word count | 3000-8000 | 2000-4000 | Adjust scope |
+| Check | Pass condition | Fix |
+|---|---|---|
+| Citation validity | Every citation resolves to an approved registry entry | Remove or repair it |
+| Claim fidelity | Each citation supports the exact claim, scope, and precision used | Rewrite the claim to match the original evidence or find better evidence |
+| Original readback | Every load-bearing claim, conflict, exact number/date, and quotation was checked in the original | Open and record the decisive passage |
+| Unknowns | Missing, conflicting, or non-independent evidence is visible at the point it affects the conclusion | Add an explicit limitation or lower confidence |
+| Counter-interpretation | Major conclusions include a real alternative when evidence supports one | Add the evidence-backed alternative; never invent a placeholder |
+| Format contract | Structure and length follow the user's request | Adjust the document, not the evidence |
 
-## Gate 4: Notes Traceability (after P6)
+## Gate 4: Counter-Review (after P6)
 
-| Check | Threshold | Fix |
-|-------|-----------|-----|
-| Every specific claim traceable to a task note finding | 100% | 100% | Remove or mark [unverified] |
-| Every statistic/number appears in some task note | 100% | 100% | Remove or verify |
-| No claim contradicts a task note | 0 contradictions | 0 | Rewrite to match notes |
-| Claims with recency sensitivity include source date and AS_OF | 100% | 100% | Add date metadata |
-| P6 evidence and counter-claim checks completed | Required; no minimum issue count | Complete missing checks; report supported issues or zero findings, and label unresolved uncertainty |
+| Check | Pass condition | Fix |
+|---|---|---|
+| Contradiction handling | The report does not silently choose between conflicting originals | Present the conflict and explain the decision rule |
+| Independence check | No conclusion counts syndicated or copied claims as corroboration | Recalculate support by evidence family |
+| Precision check | Numbers and quotations match the original source's precision and context | Correct or remove them |
+| P6 completion | Evidence and counter-evidence checks are complete; zero issues is allowed | Finish the missing checks and list unresolved uncertainty |
 
-## Gate 5: Verification (after P7)
+## Gate 5: Final Verification (after P7)
 
-| Check | Threshold | Fix |
-|-------|-----------|-----|
-| Registry cross-check: all [n] valid | 100% | 100% | Remove invalid [n] |
-| Spot-check: 5+ claims traced to notes | >= 4/5 pass | Fix failing claims |
-| No dropped source resurrected | 0 | Remove immediately |
-| Source concentration check for key claims | None > 25% | diversify |
+| Check | Pass condition | Fix |
+|---|---|---|
+| Registry cross-check | Every report citation is valid and every listed source is used | Remove or repair mismatches |
+| Load-bearing trace | Every decisive conclusion has a recorded original-source check | Complete it before delivery |
+| Low-impact sample | A sample of lower-impact claims traces correctly | If one fails, inspect the full affected claim class |
+| Excluded-source check | No excluded source was silently restored | Remove it or formally re-evaluate it |
+| Evidence concentration | Dependence on one evidence family is disclosed where it affects confidence | Seek independent evidence or lower confidence |
 
 ## Anti-Hallucination Patterns
 
-| Pattern | Where to detect | Fix |
-|---------|----------------|-----|
-| URL not from any subagent search | P7 registry check | Remove citation |
-| Claim not in any task note | P6 traceability check | Remove or mark [unverified] |
-| Number more precise than source | P6 ("73.2%" when note says "about 70%") | Use note's precision |
-| Source authority inflated | P3 registry building | Re-score from notes |
-| Source type mismatched to claim | P3 + P6 | Reclassify or replace source |
-| "Studies show..." without naming study | P6 | Name specific source or remove |
-| Dropped source reappears | P7 cross-check | Remove immediately |
-| Subagent invented a URL | Gate 1 (lead verifies subagent notes) | Remove from notes before P3 |
+| Pattern | Fix |
+|---|---|
+| URL or identifier was never retrieved | Remove it |
+| Claim exists only in a task note or search snippet | Open the original or mark unknown |
+| Number is more precise than the original | Use the original precision |
+| Multiple domains repeat one press release or dataset | Treat them as one evidence family |
+| Source authority is high but it cannot observe the claim | Replace it with a fit-for-claim source |
+| First-party record is described as external validation | Relabel provenance and narrow the conclusion |
+| "Studies show" without identifying evidence | Name the study or remove the phrase |
 
 ## Chinese-Specific Patterns
 
 | Pattern | Fix |
-|---------|-----|
-| Fake CNKI URL format | Remove, note gap |
+|---|---|
+| Fake CNKI URL format | Remove and note the gap |
 | "某专家表示" without name/institution | Name or remove |
-| "据统计" without data source | Add source or qualitative language |
+| "据统计" without data source | Add the source or use qualitative language |
 | Fabricated institution report | Verify existence or remove |
-| 旧模型信息未标注 AS_OF | 降级置信度并重搜 |
+| Time-sensitive model information lacks AS_OF | Re-search or lower confidence |

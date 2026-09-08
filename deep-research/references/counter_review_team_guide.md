@@ -17,7 +17,7 @@ counter-review-coordinator (协调者)
 | Agent | 职责 | 输出 |
 |-------|------|------|
 | **claim-validator** | 验证声明准确性，识别无证据/弱证据声明 | Claim Validation Report |
-| **source-diversity-checker** | 检查单一来源依赖，source-type 分布 | Source Diversity Report |
+| **source-diversity-checker** | 检查单一证据家族依赖、来源适配性与 source-type 分布 | Source Diversity Report |
 | **recency-validator** | 验证时敏声明的新鲜度，AS_OF 合规 | Recency Validation Report |
 | **contradiction-finder** | 发现内部矛盾，缺失的反向观点 | Contradiction and Bias Report |
 | **counter-review-coordinator** | 整合所有报告，生成最终 P6 报告 | P6 Counter-Review Report |
@@ -92,8 +92,9 @@ Coordinator 输出包含：
 | 检查项 | 标准模式 | 轻量模式 | 失败处理 |
 |--------|---------|---------|---------|
 | 证据与反向观点检查 | 完成，不设问题数下限 | 完成，不设问题数下限 | 补齐遗漏检查；无已核实问题时报告 0，不为凑数重审 |
-| 关键声明单来源 | 0 | 0 | 补充来源或降级 |
-| 官方来源占比 | ≥30% | ≥20% | 补充官方来源 |
+| 承重声明缺少决定性原件 | 0 | 0 | 打开原件、缩窄声明或标 unknown |
+| 单一证据家族依赖 | 必须披露 | 必须披露 | 寻找真正独立来源或降低置信度 |
+| 来源数/域名/类型分布 | 仅诊断 | 仅诊断 | 只有它暴露了具体问题覆盖缺口时才补来源 |
 | AS_OF 日期完整 | 100% | 100% | 补充日期 |
 | 核心争议文档化 | 必填 | 必填 | 补充争议部分 |
 
@@ -130,7 +131,7 @@ Coordinator 输出包含：
 | Gate | Status | Notes |
 |------|--------|-------|
 | P6 evidence checks completed | ✅ | 本例发现 7 个有证据的问题；实际数量可以为 0 |
-| No critical claim single-sourced | ❌ | 2 个问题待修复 |
+| Load-bearing originals checked | ❌ | 2 个问题待修复 |
 | AS_OF dates present | ❌ | 3 处缺失 |
 | Counter-claims documented | ✅ | 已添加 |
 ```

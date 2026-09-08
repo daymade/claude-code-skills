@@ -1,10 +1,10 @@
 # {{TITLE}}
 
-> 研究日期: {{DATE}} | 来源数量: {{SOURCE_COUNT}} | 字数: ~{{WORD_COUNT}} | 模式: {{MODE}} | AS_OF: {{AS_OF}} | 官方源占比: {{OFFICIAL_SHARE}}
+> 研究日期: {{DATE}} | 模式: {{MODE}} | AS_OF: {{AS_OF}}
 
 ## 摘要 / Executive Summary
 
-{{200-400 words summarizing key findings, methodology, conclusions, and risks.}}
+{{Summarize the decision-bearing findings, evidence limits, conclusions, and unresolved unknowns at the length needed by the reader.}}
 
 ---
 
@@ -21,31 +21,28 @@ For each section:
 ## N. [Topic-Specific Section Title]
 
 {{Section content with inline citations [1][2].
-Standard mode: 500-1000 words per section.
-Lightweight mode: 300-600 words per section.
-
 Rules:
 - 每个事实性论点都需要引用 [n]
 - 数字/百分比必须有来源
 - 出现不同证据时要成对给出支持与反驳
+- 承重声明、精确数字/日期/引语必须回到原件核对
 }}
 
 **置信度:** High/Medium/Low
 
 **依据:** {{Why this confidence level — source agreement, evidence quality, data availability}}
 
-**反方解释:** {{One explicit opposing interpretation with supporting citations if any, or [unverified] if insufficient.}}
+**反方解释:** {{Include an opposing interpretation only when evidence supports one. Otherwise state the disconfirming search and remaining unknown.}}
 
 ---
 
 {{COUNTER-REVIEW SUMMARY}}
 
-- **核心争议 1:** [主张 A 与反向证据 B 对比] [n][m]
-- **核心争议 2:** ...
+{{List evidence-backed controversies. If none were established, say so and list unresolved unknowns separately.}}
 
 ## 关键发现 / Key Findings
 
-{{3-5 findings in Standard mode, 2-3 in Lightweight. Each finding should:}}
+{{Include the findings that answer the decision questions. Each finding should:}}
 - 具体结论
 - 对应引文
 - 信心说明
@@ -63,6 +60,7 @@ Example:
 - What topics/angles couldn't be covered and why
 - Methodological limits (web-accessible sources, paywall, language, timing)
 - Source coverage gaps and counter-claim evidence gaps
+- Evidence-family dependence and first-party/external provenance boundaries
 }}
 
 ### 未来方向
@@ -79,4 +77,5 @@ Rules:
 - Every [n] in body MUST have matching entry here
 - Every entry here MUST be cited at least once
 - Source-Type and As Of fields are mandatory
-- All URLs MUST come from actual search results (P2 source pool)
+- All URLs or record identifiers MUST come from actual retrievals through the registry path
+- Reports derived from the same filing, study, dataset, disclosure, interview, or sponsor MUST be marked as one evidence family

@@ -312,6 +312,34 @@ If step 2 returns `1009` AND step 3 returns real data, you have ISSUE-007. Worka
 - Do not patch upstream scripts silently. A future wrapper revision may add a `client-liveness` check that probes `skills-backend/*` directly and emits a clear ISSUE-007 verdict in `diagnose.sh`.
 - Record this fallback in any deployment runbook so a future agent does not waste time debugging valid credentials.
 
+---
+
+### ISSUE-008 — OAuth succeeds but RAG returns `POINT_NOT_ENOUGH`
+
+**Status**: Observed and reproduced on 2026-09-08 against the public knowledge-base endpoint.
+
+**Symptom**: `loginV2` accepts the access key and secret key, then a RAG request returns HTTP 402 with these non-secret diagnostic fields:
+
+```text
+code=999005 errorType=POINT_NOT_ENOUGH msg=积分不足 traceId=<request trace>
+```
+
+**What the response proves**: Authentication and the RAG service gate are separate. A valid Bearer token proves who the caller is. `POINT_NOT_ENOUGH` proves that the RAG request was rejected with the service's quota/entitlement error type. The response alone does not distinguish a depleted point balance from a product entitlement or account-side provisioning problem.
+
+**Impact**: Retrying authentication, rewriting the query, or treating the response as zero search results hides the actual blocker. No research result has been returned.
+
+**How to explain it to the user**:
+
+> The credentials are valid, but the RAG service returned its quota/entitlement error. Keep the `traceId` for support. This response does not prove that a recharge alone will fix the account; only a later successful RAG response proves that the query path is restored.
+
+**Repair strategy**:
+
+1. Ask the account administrator or Gangtise support to check point balance, product entitlement, and account provisioning. Provide the `traceId`.
+2. After the account-side state changes, rerun `bash scripts/diagnose.sh`.
+3. Accept only a RAG success response as proof that the query path is restored. A success with an empty `data` list is a healthy zero-result query; `POINT_NOT_ENOUGH` is a failed query.
+
+The diagnostic prints the HTTP status, API code, `errorType`, and `traceId`. It does not print the token, credential values, or complete authentication response.
+
 ## Adding new issues to this file
 
 When you discover a new issue worth capturing:
