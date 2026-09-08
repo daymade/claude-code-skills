@@ -40,6 +40,62 @@ from core.review_queue import (  # noqa: E402
 SCHEMA_PATH = Path(__file__).parent.parent / "core" / "schema.sql"
 
 
+def test_same_line_repeated_span_is_not_the_first_match():
+    text = "先读旧词，再校对旧词。\n"
+    with pytest.raises(ReAnchorNeeded, match="more than once"):
+        ReviewQueue._locate_anchor(text, "旧词", 1, text.strip())
+
+
+def test_same_line_unique_context_selects_second_occurrence():
+    text = "先读旧词，再校对旧词。\n"
+    offset = ReviewQueue._locate_anchor(text, "旧词", 1, "再校对旧词。")
+    assert offset == text.rindex("旧词")
+
+
+def test_same_line_unique_span_still_works():
+    text = "先读说明，再校对旧词。\r\n"
+    assert ReviewQueue._locate_anchor(text, "旧词", 1, text.strip()) == text.index("旧词")
+
+
+def test_overlapping_same_line_span_refuses_ambiguous_context():
+    with pytest.raises(ReAnchorNeeded, match="more than once"):
+        ReviewQueue._locate_anchor("哈哈哈\n", "哈哈", 1, "哈哈哈")
+
+
+def test_overlapping_span_verdict_preserves_transcript_and_pending(queue, tmp_path):
+    target = tmp_path / "overlap.txt"
+    before = "哈哈哈\r\n".encode("utf-8")
+    target.write_bytes(before)
+    item_id = queue.enqueue([{"file": str(target), "line": 1, "original": "哈哈",
+                              "suggested": "笑声", "context": "哈哈哈"}])["added"][0]
+    with pytest.raises(ReAnchorNeeded, match="more than once"):
+        queue.resolve(item_id, "accepted")
+    assert target.read_bytes() == before
+    assert queue.get(item_id).status == "pending"
+
+
+def test_repeated_span_refusal_preserves_transcript_and_pending_verdict(queue, tmp_path):
+    target = tmp_path / "same-line.txt"
+    before = "先读旧词，再校对旧词。\r\n".encode("utf-8")
+    target.write_bytes(before)
+    item_id = queue.enqueue([{"file": str(target), "line": 1, "original": "旧词",
+                              "suggested": "新词", "context": before.decode().strip()}])["added"][0]
+    with pytest.raises(ReAnchorNeeded, match="more than once"):
+        queue.resolve(item_id, "accepted")
+    assert target.read_bytes() == before
+    assert queue.get(item_id).status == "pending"
+
+
+def test_unique_context_verdict_changes_only_the_selected_same_line_occurrence(queue, tmp_path):
+    target = tmp_path / "same-line.txt"
+    target.write_text("先读旧词，再校对旧词。", encoding="utf-8")
+    item_id = queue.enqueue([{"file": str(target), "line": 1, "original": "旧词",
+                              "suggested": "新词", "context": "再校对旧词。"}])["added"][0]
+    queue.resolve(item_id, "accepted")
+    assert target.read_text(encoding="utf-8") == "先读旧词，再校对新词。"
+    assert queue.get(item_id).status == "accepted"
+
+
 @pytest.fixture
 def fake_tempdir(tmp_path: Path, monkeypatch) -> Path:
     """Redirect the temp-dir boundary is_temp_path() checks against.

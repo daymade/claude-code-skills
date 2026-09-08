@@ -1013,7 +1013,7 @@ class ReviewQueue:
         # "<变体>→<正名>" became "<正名>→<正名>" — a ledger contradicting itself,
         # reported as a successful replace.)
         masked, ledger_spans = _mask_ledger_spans(content)
-        count = masked.count(old)
+        count = sum(1 for _ in re.finditer("(?=" + re.escape(old) + ")", masked))
         line_no = action.get("expect_line") or item.line_number
         verdict = self._already_applied_verdict(
             masked, old, new, item.context_snippet, line_no)
@@ -1250,8 +1250,9 @@ class ReviewQueue:
         candidates: list[tuple[int, int]] = []  # (1-based line, absolute offset)
         for i in range(max(0, line_no - 1 - window), min(len(lines), line_no + window)):
             pos = lines[i].find(needle)
-            if pos != -1:
+            while pos != -1:
                 candidates.append((i + 1, offsets[i] + pos))
+                pos = lines[i].find(needle, pos + 1)
         if not candidates:
             raise ReAnchorNeeded(
                 f"anchor text appears {content.count(needle)} times but none within "
@@ -1274,6 +1275,22 @@ class ReviewQueue:
                     f"enqueue time — the file drifted; refusing to edit a look-alike "
                     f"(repair with --reanchor-review <id> first)"
                 )
+            # Line identity alone cannot select between repeated tokens on that
+            # line. A verbatim, narrower context containing the token once can;
+            # a full-line context containing it twice must remain ambiguous.
+            exact = snippet.strip()
+            if sum(1 for _ in re.finditer("(?=" + re.escape(needle) + ")", exact)) == 1:
+                contextual = []
+                for line_number, offset in candidates:
+                    line = lines[line_number - 1]
+                    start = line.find(exact)
+                    while start != -1:
+                        if offset == offsets[line_number - 1] + start + exact.index(needle):
+                            contextual.append((line_number, offset))
+                            break
+                        start = line.find(exact, start + 1)
+                if contextual:
+                    candidates = contextual
         on_hint = [c for c in candidates if c[0] == line_no]
         if len(on_hint) == 1:
             return on_hint[0][1]
