@@ -2,6 +2,7 @@
 // rendered text; it does not decide whether the text deserves to be present.
 export function collectAttentionInventory({ limit = 2000 } = {}) {
   const selector = (el) => {
+    if (el === document.documentElement) return "html";
     const parts = [];
     for (let node = el; node && node !== document.body; node = node.parentElement) {
       const siblings = [...node.parentElement.children].filter((other) => other.tagName === node.tagName);
@@ -12,7 +13,7 @@ export function collectAttentionInventory({ limit = 2000 } = {}) {
   const rect = (r) => ({ x: r.x, y: r.y, width: r.width, height: r.height });
   const visible = (el, box) => {
     if (box.width <= 1 || box.height <= 1 || box.bottom <= 0 || box.right <= 0 || box.top >= innerHeight || box.left >= innerWidth) return false;
-    for (let node = el; node && node !== document.body; node = node.parentElement) {
+    for (let node = el; node; node = node.parentElement) {
       const style = getComputedStyle(node);
       if (style.display === "none" || ["hidden", "collapse"].includes(style.visibility) || Number(style.opacity) === 0) return false;
       const parent = node.getBoundingClientRect();
@@ -39,7 +40,7 @@ export function collectAttentionInventory({ limit = 2000 } = {}) {
     if (!visible(el, box)) continue;
     eligible += 1;
     if (items.length >= limit) continue;
-    const container = el.closest("button,a,label,[role=tab],header,footer,nav,p,th,td") || el.parentElement || el;
+    const container = el.closest("button,a,label,[role=tab],header,footer,nav,p,th,td") || (el === document.body ? el : el.parentElement) || el;
     const style = getComputedStyle(el);
     items.push({ id: `text-${items.length + 1}`, text, selector: selector(el), containerSelector: selector(container), tag: el.tagName.toLowerCase(), role: el.getAttribute("role"), rect: rect(box), lineBoxes: [...range.getClientRects()].map(rect), fontSize: parseFloat(style.fontSize), position: getComputedStyle(container).position });
   }

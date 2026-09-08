@@ -36,5 +36,10 @@ test("real renderer inventories unmentioned repetition without treating essentia
     await page.evaluate(() => { document.querySelector("#host").attachShadow({ mode: "open" }).innerHTML = "<p>Shadow task</p>"; });
     const opaque = await page.evaluate(collectAttentionInventory);
     assert.equal(opaque.opaqueSurfaces.length, 2);
+    await page.setContent('<body>Direct body text <main><p>Nested text</p></main></body>');
+    const direct = await page.evaluate(collectAttentionInventory);
+    assert.ok(direct.items.some((item) => item.text === 'Direct body text' && item.containerSelector === 'body'));
+    await page.evaluate(() => { document.body.style.opacity = '0'; });
+    assert.equal((await page.evaluate(collectAttentionInventory)).items.length, 0);
   } finally { await browser.close(); }
 });
