@@ -520,7 +520,7 @@ check the available agent tools can perform.
 - scripts/visual_layout_audit.mjs — Playwright-powered mechanical viewport,
   layout, and media-state sweep with screenshots and JSON evidence.
 - scripts/attention_inventory.mjs — observed text/geometry, repetition and label
-  echo inventory used by the sweep; coverage helper never certifies necessity.
+  echo inventory used by the sweep; it never certifies necessity.
 - references/history-derived-checklist.md — core visual/responsive defect
   catalog plus standards-backed checks.
 - references/journey-and-page-contracts.md — state, route, overlay,

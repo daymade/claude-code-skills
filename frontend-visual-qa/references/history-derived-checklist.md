@@ -204,7 +204,12 @@ same failure class have been examined; do not expand into unrelated workflows.
    when the answer is disputed. In audit-only mode use a diagnostic copy only
    when authorized; otherwise describe the counterfactual and leave it unknown.
 5. Record retain / relocate / remove / uncertain with the concrete task-loss
-   observation and screenshot/selector evidence. Measure the reclaimed space
+   observation and screenshot/selector evidence. Distinguish observation from
+   a predicted loss: "might help" or "could cause confusion" is a hypothesis,
+   not evidence that the current placement is necessary. A static artifact
+   cannot establish that moving a label makes a task slower; mark that claim
+   uncertain until the relevant comparison or interaction has been observed.
+   Measure the reclaimed space
    and verify that core values, relationships, warnings and actions remain
    usable. Do not count reduced lines, less text or a larger chart as acceptance
    by themselves. A failed explicit requirement remains failed until the actual
@@ -223,8 +228,8 @@ actually necessary. Give reviewers the primary task and original requirements,
 not the author's list of supposedly necessary bands. Do not turn a rejected
 candidate into a healthy control or soften the evaluator to preserve it.
 
-The inventory and its coverage helper cannot judge business relevance. Their
-verdict remains `not_evaluated` even with complete coverage. The auditor must
+The inventory cannot judge business relevance. Its verdict remains
+`not_evaluated` even with complete coverage. The auditor must
 perform the counterfactual reading check; this is not a machine guarantee of
 design quality, and the Skill being loaded does not prove this step happened.
 

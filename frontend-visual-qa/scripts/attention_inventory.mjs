@@ -67,19 +67,3 @@ export function collectAttentionInventory({ limit = 2000 } = {}) {
   const opaqueSurfaces = [...document.querySelectorAll("body *")].filter((el) => (el.tagName === "IFRAME" || el.shadowRoot !== null) && visible(el, el.getBoundingClientRect())).map((el) => selector(el));
   return { scope: "first_viewport_light_dom_text", inputValuesIncluded: false, pseudoContentIncluded: false, occlusionEvaluated: false, opaqueSurfaces, truncated: eligible > items.length, eligibleTextNodes: eligible, items, repeats, labelEchoes: echoes, necessityVerdict: "not_evaluated" };
 }
-
-// Coverage is objective; the task-loss claim is not. Never turn coverage into
-// acceptance. The caller must inspect screenshots and try the stated task.
-export function inspectNecessityCoverage(inventory, decisions) {
-  if (inventory.truncated) return { complete: false, reason: "inventory_truncated" };
-  if (inventory.opaqueSurfaces?.length) return { complete: false, reason: "opaque_surface_requires_separate_inspection" };
-  if (!Array.isArray(decisions)) return { complete: false, reason: "decisions_missing" };
-  const ids = new Set(inventory.items.map((item) => item.id));
-  const seen = new Set();
-  for (const decision of decisions) {
-    if (!ids.has(decision.id) || seen.has(decision.id)) return { complete: false, reason: "unknown_or_duplicate_id" };
-    if (!["retain", "relocate", "remove", "uncertain"].includes(decision.disposition) || typeof decision.taskLossWithoutIt !== "string" || !decision.taskLossWithoutIt.trim()) return { complete: false, reason: "decision_incomplete" };
-    seen.add(decision.id);
-  }
-  return { complete: seen.size === ids.size, missingIds: [...ids].filter((id) => !seen.has(id)), necessityVerdict: "not_evaluated" };
-}

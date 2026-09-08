@@ -2,19 +2,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import test from "node:test";
-import { collectAttentionInventory, inspectNecessityCoverage } from "../scripts/attention_inventory.mjs";
-
-const inventory = { truncated: false, opaqueSurfaces: [], items: [{ id: "a" }, { id: "b" }] };
-const decisions = ["a", "b"].map((id) => ({ id, disposition: "retain", taskLossWithoutIt: "A claimed task loss, not independently established." }));
-
-test("coverage never certifies necessity, even when every item is retained", () => {
-  assert.deepEqual(inspectNecessityCoverage(inventory, decisions), { complete: true, missingIds: [], necessityVerdict: "not_evaluated" });
-  assert.equal(inspectNecessityCoverage(inventory, decisions.slice(0, 1)).complete, false);
-  assert.equal(inspectNecessityCoverage(inventory, [decisions[0], decisions[0]]).reason, "unknown_or_duplicate_id");
-  assert.equal(inspectNecessityCoverage(inventory, [{ ...decisions[0], disposition: "not_supported" }]).reason, "decision_incomplete");
-  assert.equal(inspectNecessityCoverage({ ...inventory, truncated: true }, decisions).complete, false);
-  assert.equal(inspectNecessityCoverage({ ...inventory, opaqueSurfaces: ["iframe"] }, decisions).complete, false);
-});
+import { collectAttentionInventory } from "../scripts/attention_inventory.mjs";
 
 test("real renderer inventories unmentioned repetition without treating essential context as a defect", async (t) => {
   const require = createRequire(join(process.cwd(), "package.json"));
