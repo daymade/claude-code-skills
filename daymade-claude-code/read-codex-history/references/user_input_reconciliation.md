@@ -13,7 +13,16 @@ python scripts/reconcile_codex_inputs.py --session <exact-id> --format json
 ```
 
 The command reads only the selected rollout, its declared ancestors, and the
-prompt ledger through the existing readers. It does not resume a session or
+prompt ledger through the existing readers. For bounded output it also freezes
+the available same-session continuation to align repeated occurrences before
+applying the output cutoff. Later records constrain identity; they never enter
+the quotation. `alignment_snapshot_bytes` records this evidence extent and
+`scope_through_record` records the separate output boundary. An unreadable
+ancestor continuation is an `unresolved_continuation` gap, not permission to
+pair a later ledger row with an earlier identical raw record. If compatible
+mirror occurrences straddle the boundary or a relevant continuation record
+cannot be interpreted, keep that occurrence unknown. This can require moving
+an arbitrary cutoff past both mirrors; never invent which side was human. It does not resume a session or
 modify a source store. It preserves both unfiltered input-record streams rather
 than scraping the display briefing; a display filter can hide metadata needed
 to explain an exclusion. Match repeated occurrences in order. Combine proven
@@ -48,7 +57,7 @@ Use `--format markdown` for the complete numbered, literal quotations; JSON
 remains the exact-string surface. Attachment types are reported, but image/audio
 bytes are not reconstructed or included in the output.
 
-### Resolve only evidence-backed origin decisions
+### Resolve only evidence-backed injection exclusions
 
 After inspecting an unmatched record and verifying its harness origin, record
 that specific exclusion. Copy its exact session, record coordinate and
@@ -77,34 +86,6 @@ blanket exclusions or approve a candidate solely to obtain exit 0. If provenance
 is unresolved, deliver the partial result. Keep decisions with the private task
 evidence; do not install a global ignore list or copy real transcripts into this
 public skill.
-
-A bounded snapshot needs extra care for harness-shaped text: an identical human
-paste may have been submitted after the boundary, even with a backdated clock.
-`provenance_issue: bounded_harness_origin_requires_review` leaves that record
-unknown rather than inferring authorship from the text and time. When independent
-source evidence establishes that the exact occurrence was a human submission,
-add `human_confirmations` to the same decisions file:
-
-```json
-{
-  "schema_version": 1,
-  "human_confirmations": [{
-    "session_id": "<exact-session-id>",
-    "record": 123,
-    "record_sha256": "<copy the record hash from unmatched_records>",
-    "ledger_ordinal": 456,
-    "reason": "<evidence tying this exact record to this human submission>"
-  }]
-}
-```
-
-`ledger_ordinal` is the original ledger reader's row ordinal, not its position in
-a filtered list. A confirmation binds only this bounded harness-shaped record
-to that same-session occurrence; it cannot change text, bypass clock/schema
-conflicts, or reuse one submission twice in a stream. Confirmed evidence is
-labeled `reviewed_human` and the decision remains visible in the output. This
-is an evidence review, not a prompt to ask the user to confirm every envelope.
-Without independent origin evidence, keep the result partial.
 
 ## Validate with a bound fixture store
 

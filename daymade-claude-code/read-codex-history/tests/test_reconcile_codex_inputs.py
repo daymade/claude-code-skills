@@ -98,7 +98,7 @@ class ReconciliationTests(unittest.TestCase):
         self.assertEqual([r["text"] for r in data["inputs"]], ["opening", "middle", "current"])
         self.assertEqual(len(data["outside_snapshot_ledger_rows"]), 2)
 
-    def test_repeated_text_across_fork_is_ambiguous_not_guessed(self):
+    def test_repeated_text_across_fork_is_disambiguated_by_full_occurrences(self):
         parent = self.write("parent", [meta("parent"), message("same")])
         bound = parent.stat().st_size
         with parent.open("a") as out:
@@ -106,9 +106,8 @@ class ReconciliationTests(unittest.TestCase):
         self.write("child", [meta("child", history_base={"thread_id": "parent", "end_byte_offset": bound}), message("child")])
         self.prompts("parent", "same", "same")
         self.prompts("child", "child")
-        data = self.run_cli("child", expected=2)
-        self.assertIn("ambiguous_occurrence", [g["kind"] for g in data["gaps"]])
-        self.assertEqual([r["text"] for r in data["inputs"]], ["child"])
+        data = self.run_cli("child")
+        self.assertEqual([r["text"] for r in data["inputs"]], ["same", "child"])
 
     def test_missing_parent_keeps_verified_selected_portion(self):
         self.write("child", [meta("child", history_base={"thread_id": "absent", "end_byte_offset": 50}), message("known")])
@@ -217,70 +216,62 @@ class ReconciliationTests(unittest.TestCase):
             "session_id": sid, "record": number, "record_sha256": fingerprint(record), "reason": reason}]}))
         return p
 
-    def confirmation(self, record, sid="selected", number=2, ledger_ordinal=1):
-        p = self.home / "confirmations.json"
-        p.write_text(json.dumps({"schema_version": 1, "human_confirmations": [{
-            "session_id": sid, "record": number, "record_sha256": fingerprint(record),
-            "ledger_ordinal": ledger_ordinal,
-            "reason": "Verified this exact occurrence was submitted by the human"}]}))
-        return p
+    def test_backdated_later_plain_text_cannot_cross_cutoff_or_fork(self):
+        for text in ("same ordinary text", '<peer-message protocol="1">same text</peer-message>'):
+            with self.subTest(text=text):
+                earlier, later = message(text), message(text)
+                self.write("selected", [meta("selected"), earlier, message("separator"), later])
+                self.rows = [{"session_id": "selected", "ts": 1699999999, "text": text}]
+                data = self.run_cli("selected", "--through-record", "2", expected=2)
+                self.assertEqual(data["verified_input_count"], 0)
+                parent = self.write("parent", [meta("parent"), earlier])
+                boundary = parent.stat().st_size
+                with parent.open("a") as out:
+                    out.write(json.dumps(later) + "\n")
+                self.write("child", [meta("child", history_base={"thread_id": "parent", "end_byte_offset": boundary}), message("child input")])
+                self.rows = [{"session_id": "parent", "ts": 1699999999, "text": text},
+                             {"session_id": "child", "ts": 1700000000, "text": "child input"}]
+                data = self.run_cli("child", expected=2)
+                self.assertEqual([r["text"] for r in data["inputs"]], ["child input"])
 
-    def test_bounded_harness_paste_requires_explicit_origin_confirmation(self):
-        text = '<hook_prompt hook_run_id="human">literal user paste</hook_prompt>'
-        record = message(text)
-        self.write("selected", [meta("selected"), record])
-        self.prompts("selected", text)
-        data = self.run_cli("selected", "--through-record", "2", expected=2)
-        self.assertEqual(data["unmatched_records"][0]["provenance_issue"],
-                         "bounded_harness_origin_requires_review")
-        data = self.run_cli("selected", "--through-record", "2", "--decisions", str(self.confirmation(record)))
+    def test_full_occurrence_alignment_keeps_healthy_repeated_bounded_human_pastes(self):
+        text = '<hook_prompt hook_run_id="human">literal human paste</hook_prompt>'
+        self.write("selected", [meta("selected"), message(text), message(text)])
+        self.prompts("selected", text, text)
+        data = self.run_cli("selected", "--through-record", "2")
+        self.assertEqual(data["scope_input_count"], 1)
         self.assertEqual(data["inputs"][0]["text"], text)
-        self.assertEqual(data["inputs"][0]["evidence"][0]["match"], "reviewed_human")
-        self.assertEqual(len(data["human_confirmations"]), 1)
+        self.assertEqual(len(data["outside_snapshot_ledger_rows"]), 1)
 
-    def test_backdated_later_harness_paste_is_not_automatic_proof_of_origin(self):
-        text = '<peer-message protocol="1">same injected and pasted text</peer-message>'
-        injection, later = message(text), message(text)
-        self.write("selected", [meta("selected"), injection, later])
-        self.rows = [{"session_id": "selected", "ts": 1699999999, "text": text}]
+    def test_cross_boundary_mirror_cannot_prove_which_occurrence_was_human(self):
+        text = "same text across different streams"
+        self.write("selected", [meta("selected"), message(text), event(text)])
+        self.prompts("selected", text)
         data = self.run_cli("selected", "--through-record", "2", expected=2)
         self.assertEqual(data["verified_input_count"], 0)
-        self.assertEqual(data["unmatched_records"][0]["provenance_issue"],
-                         "bounded_harness_origin_requires_review")
-        self.run_cli("selected", "--through-record", "2", "--decisions",
-                     str(self.decision(injection, number=2)), expected=2)
+        self.assertIn("ambiguous_boundary_occurrence", [g["kind"] for g in data["gaps"]])
 
-    def test_confirmation_rejects_stale_conflicting_or_unbounded_bindings(self):
-        text = '<hook_prompt hook_run_id="human">human paste</hook_prompt>'
-        record = message(text)
-        self.write("selected", [meta("selected"), record])
+    def test_missing_tail_timestamp_does_not_restore_false_prefix_match(self):
+        text = "same text"
+        later = message(text)
+        later.pop("timestamp")
+        self.write("selected", [meta("selected"), message(text), later])
         self.prompts("selected", text)
-        path = self.confirmation(record)
-        original = json.loads(path.read_text())
-        for change in ({"record_sha256": "0" * 64}, {"ledger_ordinal": 2},
-                       {"ledger_ordinal": True}, {"record": 3}):
-            with self.subTest(change=change):
-                payload = json.loads(json.dumps(original))
-                payload["human_confirmations"][0].update(change)
-                path.write_text(json.dumps(payload))
-                self.run_cli("selected", "--through-record", "2", "--decisions", str(path), expected=2)
-        path.write_text(json.dumps(original))
-        self.run_cli("selected", "--decisions", str(path), expected=2)
-        original["exclusions"] = original["human_confirmations"]
-        path.write_text(json.dumps(original))
-        self.run_cli("selected", "--through-record", "2", "--decisions", str(path), expected=2)
+        data = self.run_cli("selected", "--through-record", "2", expected=2)
+        self.assertEqual(data["verified_input_count"], 0)
+        self.assertIn("unresolved_continuation_record", [g["kind"] for g in data["gaps"]])
 
-    def test_confirmation_cannot_bind_two_same_stream_records_to_one_submission(self):
-        text = '<hook_prompt hook_run_id="human">human paste</hook_prompt>'
-        record = message(text)
-        self.write("selected", [meta("selected"), record, record])
-        self.prompts("selected", text)
-        path = self.confirmation(record)
-        payload = json.loads(path.read_text())
-        payload["human_confirmations"].append({**payload["human_confirmations"][0], "record": 3})
-        path.write_text(json.dumps(payload))
-        data = self.run_cli("selected", "--through-record", "3", "--decisions", str(path), expected=2)
-        self.assertIn("stream_order_conflict", [gap["kind"] for gap in data["gaps"]])
+    def test_invalid_parent_continuation_keeps_child_but_does_not_guess_parent_membership(self):
+        parent = self.write("parent", [meta("parent"), message("parent input")])
+        boundary = parent.stat().st_size
+        with parent.open("a") as out:
+            out.write("{invalid}\n")
+        self.write("child", [meta("child", history_base={"thread_id": "parent", "end_byte_offset": boundary}), message("child input")])
+        self.prompts("parent", "parent input")
+        self.prompts("child", "child input")
+        data = self.run_cli("child", expected=2)
+        self.assertEqual([r["text"] for r in data["inputs"]], ["child input"])
+        self.assertIn("unresolved_continuation", [g["kind"] for g in data["gaps"]])
 
     def test_later_same_text_paste_cannot_enter_earlier_cutoff(self):
         text = '<hook_prompt hook_run_id="demo">same text</hook_prompt>'
@@ -331,11 +322,7 @@ class ReconciliationTests(unittest.TestCase):
                 self.rows = [{'session_id': 'parent', 'ts': 1700000000, 'text': text},
                              {'session_id': 'parent', 'ts': 1700000200, 'text': text},
                              {'session_id': 'child', 'ts': 1700000300, 'text': 'child input'}]
-                args = []
-                if text.startswith('<hook_prompt'):
-                    self.run_cli('child', expected=2)
-                    args = ['--decisions', str(self.confirmation(first, sid='parent'))]
-                data = self.run_cli('child', *args)
+                data = self.run_cli('child')
                 self.assertEqual([x['text'] for x in data['inputs']], [text, 'child input'])
                 self.assertEqual(len(data['outside_snapshot_ledger_rows']), 1)
 
