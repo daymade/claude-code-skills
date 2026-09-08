@@ -24,6 +24,8 @@ def _make_scan_fixture(tmp_path: Path) -> Path:
     (skill_dir / "tests" / "test_runtime.py").write_text("ignored\n", encoding="utf-8")
     (skill_dir / "dist" / "old.skill").write_text("ignored\n", encoding="utf-8")
     (skill_dir / "scripts" / "client.py").write_text("print('ok')\n", encoding="utf-8")
+    (skill_dir / ".authorization").write_text("local runtime grant\n", encoding="utf-8")
+    (skill_dir / ".env.example").write_text("TOKEN=replace-me\n", encoding="utf-8")
     return skill_dir
 
 
@@ -37,6 +39,8 @@ def test_run_gitleaks_stages_packaging_superset_only(tmp_path, monkeypatch):
         assert (source / "SKILL.md").exists()
         assert (source / "scripts" / "client.py").exists()
         assert (source / "evals" / "cases.json").exists()
+        assert (source / ".env.example").exists()
+        assert not (source / ".authorization").exists()
         assert not (source / ".enrich").exists()
         assert not (source / ".in_use").exists()
         assert not (source / ".ruff_cache").exists()
@@ -51,6 +55,17 @@ def test_run_gitleaks_stages_packaging_superset_only(tmp_path, monkeypatch):
 
     assert result is not None
     assert result.findings == []
+
+
+def test_security_hash_excludes_runtime_authorization_but_keeps_env_template(tmp_path):
+    skill_dir = _make_scan_fixture(tmp_path)
+    first = security_scan.calculate_skill_hash(skill_dir)
+
+    (skill_dir / ".authorization").write_text("changed local grant\n", encoding="utf-8")
+    assert security_scan.calculate_skill_hash(skill_dir) == first
+
+    (skill_dir / ".env.example").write_text("TOKEN=another-placeholder\n", encoding="utf-8")
+    assert security_scan.calculate_skill_hash(skill_dir) != first
 
 
 def test_run_gitleaks_remaps_staged_finding_to_source(tmp_path, monkeypatch):
