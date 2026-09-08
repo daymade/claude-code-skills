@@ -332,6 +332,7 @@ def resolve_inherited_lineage(
     *,
     max_depth: int = MAX_LINEAGE_DEPTH,
     on_parent: Optional[Callable[[str, Path, int], None]] = None,
+    on_verified_parent: Optional[Callable[[dict[str, Any]], None]] = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Resolve every declared ancestor at the exact snapshot inherited by its child.
 
@@ -404,6 +405,8 @@ def resolve_inherited_lineage(
                 "data": parent_data,
             }
         )
+        if on_verified_parent is not None:
+            on_verified_parent(lineage_nearest_first[-1])
         seen.add(parent_id)
         depth += 1
         current_data = parent_data
@@ -638,7 +641,10 @@ def recover_legacy_embedded_fork(
         path, parent_path, session_id, parent_id
     )
 
-    corrected_data = parse_codex_rollout(path, skip_record_index_range=(1, 1 + matched))
+    corrected_data = parse_codex_rollout(
+        path, end_byte_offset=data.get("snapshot_end_byte_offset"),
+        skip_record_index_range=(1, 1 + matched),
+    )
     parent_data = parse_codex_rollout(parent_path, end_byte_offset=parent_end_byte_offset)
     try:
         validate_selected_rollout_identity(parent_data, parent_id)
@@ -670,6 +676,7 @@ def extend_legacy_lineage(
     resolve_session: Callable[[str], Optional[Path]],
     *,
     on_parent: Optional[Callable[[str, Path, int], None]] = None,
+    on_verified_parent: Optional[Callable[[dict[str, Any]], None]] = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Root-first lineage for a selected session recovered via
     `recover_legacy_embedded_fork`: the legacy parent edge itself, preceded by
@@ -678,12 +685,15 @@ def extend_legacy_lineage(
     """
     if on_parent is not None:
         on_parent(parent_edge["session_id"], parent_edge["path"], parent_edge["end_byte_offset"])
+    if on_verified_parent is not None:
+        on_verified_parent(parent_edge)
     parent_meta = parent_edge["data"].get("meta") or {}
     further_lineage: list[dict[str, Any]] = []
     warnings: list[str] = []
     if parent_meta.get("history_base") is not None or parent_meta.get("forked_from_id"):
         further_lineage, warnings = resolve_inherited_lineage(
-            parent_edge["data"], resolve_session, on_parent=on_parent
+            parent_edge["data"], resolve_session, on_parent=on_parent,
+            on_verified_parent=on_verified_parent,
         )
     return [*further_lineage, parent_edge], warnings
 
@@ -858,6 +868,9 @@ def parse_codex_rollout(
         "ri_user_turns": [],
         "ri_assistant_turns": [],
         "turn_timeline": [],
+        # Unfiltered input evidence: preserve both mirror streams and whitespace.
+        # Briefing display filters must not decide human-input membership.
+        "input_evidence": [],
         "task_tail": "",  # last task_complete.last_agent_message (tail safeguard)
         "task_tail_ordinal": None,
         "task_error": None,  # last task_complete.error dict, last-task_complete-wins
@@ -878,6 +891,53 @@ def parse_codex_rollout(
         rtype = record.get("type")
         payload = record.get("payload") if isinstance(record.get("payload"), dict) else {}
         ptype = payload.get("type")
+
+        if (rtype == "event_msg" and ptype == "user_message") or (
+            rtype == "response_item" and ptype == "message" and payload.get("role") == "user"
+        ):
+            schema_issues: list[str] = []
+            attachments: list[str] = []
+            if rtype == "event_msg":
+                original = payload.get("message")
+                if not isinstance(original, str):
+                    schema_issues.append("user_message.message is not a string")
+                    original = ""
+                for key in ("images", "local_images"):
+                    value = payload.get(key)
+                    if isinstance(value, list):
+                        attachments.extend([key] * len(value))
+            else:
+                content = payload.get("content")
+                parts: list[str] = []
+                if isinstance(content, str):
+                    parts.append(content)
+                elif isinstance(content, list):
+                    for part in content:
+                        if not isinstance(part, dict):
+                            schema_issues.append("message.content contains a non-object")
+                        elif part.get("type") in {"input_text", "text"}:
+                            if isinstance(part.get("text"), str):
+                                parts.append(part["text"])
+                            else:
+                                schema_issues.append("text content is not a string")
+                        elif part.get("type") in {"input_image", "input_audio", "input_file"}:
+                            attachments.append(part["type"])
+                        else:
+                            schema_issues.append("unrecognized user content type")
+                else:
+                    schema_issues.append("message.content is not a string or list")
+                original = "\n".join(parts)
+            data["input_evidence"].append({
+                "ordinal": data["total_lines"],
+                "stream": rtype,
+                "text": original,
+                "timestamp": record.get("timestamp"),
+                "attachments": attachments,
+                "schema_issues": schema_issues,
+                "record_sha256": hashlib.sha256(json.dumps(
+                    record, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+                ).encode("utf-8")).hexdigest(),
+            })
 
         if rtype == "session_meta":
             meta_id = payload.get("id")
