@@ -50,13 +50,11 @@ Use adjacent skills by stage:
 - Use qa-expert for a full test strategy, defect program, and release metrics.
 - Use both this skill and qa-expert only when rendered visual evidence is one
   part of a broader QA gate.
-- This skill audits whether an artifact **renders** correctly, not whether it
-  **communicates**. A page can pass every check here while its labels are opaque
-  internal abbreviations and its numbers contradict each other between sections.
-  Route copy, terminology and audience fit to a content/writing-discipline skill,
-  and never let a green visual pass be reported as "a first-time reader can
-  follow this" — that is a different question, answered by a reader, not by a
-  rendering.
+- This skill owns rendered information hierarchy as well as geometry: whether
+  persistent labels, explanations and repeated context help the actor's task or
+  displace it. Do not route that question away as mere copy polish. Domain-fact
+  correctness, terminology and persuasion still need the appropriate content or
+  subject-matter review; a rendering pass cannot certify those claims.
 
 ## Required Outcome
 
@@ -120,6 +118,12 @@ logged-out or fully privileged evidence cannot stand in for it.
 Use the actor's task as the success target. “The chart exists” or “the tab
 switches” is not enough when the user needs to decide severity, finish a review,
 or recover from an error.
+
+Freeze the user's requirements separately from the implementation. A complaint
+about clutter, redundant explanation or wasted space identifies a failure class,
+not just the circled element. Inspect that class across the declared full surface.
+Do not silently narrow the review to the last screenshot's rectangles or rewrite
+the requirement as “the task remains possible” after a candidate fails.
 
 When the pass condition names a visual reference — a screenshot, another
 product's page, a "make ours look like theirs" — load
@@ -258,6 +262,11 @@ catalogued in the same reference at §4–§5.
 
 Load [references/history-derived-checklist.md](references/history-derived-checklist.md)
 for the core visual/responsive defect catalog and standards-backed checks.
+For composition or density audits, execute its **Information necessity before
+layout** check before fixing line breaks. The sweep's `attentionInventory` makes
+the visible text population and exact repetitions inspectable; review the full
+population against the task, not only its repetition candidates. Complete
+inventory coverage is not proof that the content is necessary.
 
 Some defects produce no diagnostic anywhere: a global reset outranking a
 component's own styles, a library renaming its internal DOM classes so whole
@@ -496,6 +505,9 @@ Call **current-render status** verified only when:
 - affected interactions and outputs were exercised at the required evidence
   level;
 - no unresolved Blocker/Major finding contradicts the pass;
+- every explicit pass condition is met, including information necessity when
+  layout/density is in scope; calling a violation Moderate, Minor, taste or
+  “still usable” does not override a user's requirement;
 - remaining limitations are explicit.
 
 Call **fix-closure status** verified only after an authorized fix is rechecked against the same canonical target/state/viewport; otherwise use partial or blocked.
@@ -507,6 +519,8 @@ check the available agent tools can perform.
 
 - scripts/visual_layout_audit.mjs — Playwright-powered mechanical viewport,
   layout, and media-state sweep with screenshots and JSON evidence.
+- scripts/attention_inventory.mjs — observed text/geometry, repetition and label
+  echo inventory used by the sweep; it never certifies necessity.
 - references/history-derived-checklist.md — core visual/responsive defect
   catalog plus standards-backed checks.
 - references/journey-and-page-contracts.md — state, route, overlay,

@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { collectAttentionInventory } from "./attention_inventory.mjs";
 
 function loadPlaywright() {
   // Resolve a Playwright browser driver across install layouts. Under a pnpm workspace,
@@ -269,6 +270,7 @@ for (const viewport of viewports) {
   });
   result.meta.href = targetEvidence(result.meta.href);
   result.meta.mediaPreparation = mediaPreparation;
+  result.meta.attentionInventory = await page.evaluate(collectAttentionInventory);
   if (mediaPreparation?.truncated) {
     result.issues.push({
       viewport: viewport.name,
@@ -371,6 +373,10 @@ for (const viewport of report.viewports) {
     : "";
   console.log(`${viewport.viewport}: outer=${viewport.outerWidth}x${viewport.outerHeight}, inner=${viewport.width}x${viewport.height}, outerMinusInner=${viewport.outerMinusInner}, client=${viewport.clientWidth}, scroll=${viewport.scrollWidth}, overflowX=${viewport.overflowX}${visual}${content}${primaryImage}${typography}${media}, title=${formatTextEvidence(viewport.titleEvidence)}, h1=${formatTextEvidence(viewport.h1Evidence)}, screenshot=${viewport.screenshot}`);
   if (sections) console.log(`  sectionAudit: ${sections}`);
+  if (viewport.attentionInventory) {
+    const inventory = viewport.attentionInventory;
+    console.log(`  attentionInventory: ${inventory.items.length}/${inventory.eligibleTextNodes} text nodes, ${inventory.repeats.length} repeated-text groups, ${inventory.labelEchoes.length} label echoes; truncated=${inventory.truncated}; necessity=${inventory.necessityVerdict}`);
+  }
   if (viewport.sectionScreenshots?.length) {
     const captured = viewport.sectionScreenshots.map((item) => item.screenshot).filter(Boolean);
     const failed = viewport.sectionScreenshots.filter((item) => !item.screenshot);
@@ -497,6 +503,10 @@ function protectRenderedEvidence(result, exactTarget) {
   protectedResult.meta.h1Evidence = textEvidence(protectedResult.meta.h1);
   delete protectedResult.meta.title;
   delete protectedResult.meta.h1;
+  for (const item of protectedResult.meta.attentionInventory?.items || []) {
+    item.textEvidence = textEvidence(item.text);
+    delete item.text;
+  }
   for (const heading of protectedResult.meta.typography?.keyHeadings || []) {
     heading.textEvidence = textEvidence(heading.text);
     delete heading.text;
