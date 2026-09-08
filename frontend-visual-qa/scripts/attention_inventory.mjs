@@ -15,7 +15,9 @@ export function collectAttentionInventory({ limit = 2000 } = {}) {
     if (box.width <= 1 || box.height <= 1 || box.bottom <= 0 || box.right <= 0 || box.top >= innerHeight || box.left >= innerWidth) return false;
     for (let node = el; node; node = node.parentElement) {
       const style = getComputedStyle(node);
-      if (style.display === "none" || ["hidden", "collapse"].includes(style.visibility) || Number(style.opacity) === 0) return false;
+      // A descendant may override inherited visibility, but cannot override
+      // an ancestor's display:none or opacity:0.
+      if (style.display === "none" || (node === el && ["hidden", "collapse"].includes(style.visibility)) || Number(style.opacity) === 0) return false;
       const parent = node.getBoundingClientRect();
       // Include partly visible scroll-edge text; exclude text entirely outside
       // its clipping ancestor, including the common 1px accessible-only label.

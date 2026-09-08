@@ -41,5 +41,8 @@ test("real renderer inventories unmentioned repetition without treating essentia
     assert.ok(direct.items.some((item) => item.text === 'Direct body text' && item.containerSelector === 'body'));
     await page.evaluate(() => { document.body.style.opacity = '0'; });
     assert.equal((await page.evaluate(collectAttentionInventory)).items.length, 0);
+    await page.setContent('<body style="visibility:hidden"><p style="visibility:visible">Visible override</p><p>Hidden inherited text</p></body>');
+    const visibility = await page.evaluate(collectAttentionInventory);
+    assert.deepEqual(visibility.items.map((item) => item.text), ['Visible override']);
   } finally { await browser.close(); }
 });
