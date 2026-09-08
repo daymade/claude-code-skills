@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **skill-creator** (`daymade-skill` v1.37.1): fix regression evidence generation for Markdown links so accepted evidence can pass verification; retain rejection of missing evidence.
-- **peer-message** v1.7.0: add read-only lookup of correlated replies in a named inbox, with explicit evidence status and bounded output. See the [protocol reference](peer-message/references/protocol-and-discovery.md) for the command and trust boundary.
+- **peer-message** v1.8.0: add read-only lookup of correlated replies in a named inbox, with explicit evidence status and bounded output. See the [protocol reference](peer-message/references/protocol-and-discovery.md) for the command and trust boundary.
 - **docs-cleaner** (`daymade-docs` v1.14.0): correct implementation-fix routing to honor existing task authorization and validate the literal delivered command examples.
 - **git-safety-net** v1.17.0: add authorized retirement of temporary recovery artifacts after proving no unique work remains only in the backup; distinguish preservation from delivery and cleanup completion.
 - **claude-md-progressive-disclosurer** (`daymade-claude-code` v3.21.1): correct outcome and evidence boundaries in instruction audits, keep diagnostic/audit mode read-only, and make review and templates conditional on the current contract. Move detailed verification recipes behind an explicit route. Repair physical-line/fence parsing, exact-byte section migration, heading checks, and target preflight; add focused script regressions. These are factual/contract bug fixes plus lossless relocation, not a new permission or automation capability.
@@ -332,6 +332,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now reset usage…"). Independent review caught two first-draft defects —
   an invented "<24h" duration contradicting the measured 29h10m span, and
   an order-inverted stitched quote — both fixed and re-verified pre-ship.
+- **peer-message** v1.6.0 → v1.7.0: triage inbound coordination before replying or checking state. Reuse resolved requests and prior replies, keep new blockers actionable, and avoid routine peer acknowledgements and per-message user notifications. Preserve explicit sends, delivery evidence, and authorization boundaries.
 
 ### Fixed
 - **daymade-audio** v1.34.1 (asr-transcribe-to-text): `align_speakers.py` no longer cuts a turn inside a Latin word. Char times inside a word are interpolated between whisper anchors and diarization edges do not fall on word boundaries, so a pause or speaker change measured mid-word is boundary jitter; it is now deferred to the next word boundary and the word stays with the turn it started in. A 49-minute English talk went from 53 words cut in half (`honor t` / `o introduce`, `Y` / `eah`) to 0; four regression tests added. Docs: `--no-diarization` drops every timestamp (now stated where the flag is introduced), unattended batches run one file per invocation because a deterministic failure exits the whole multi-input run, and `HF_HUB_OFFLINE=1` keeps the whisper timing leg off the network when the proxy tunnel flaps.
