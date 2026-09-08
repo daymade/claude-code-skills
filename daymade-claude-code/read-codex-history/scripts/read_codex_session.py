@@ -332,6 +332,7 @@ def resolve_inherited_lineage(
     *,
     max_depth: int = MAX_LINEAGE_DEPTH,
     on_parent: Optional[Callable[[str, Path, int], None]] = None,
+    on_verified_parent: Optional[Callable[[dict[str, Any]], None]] = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Resolve every declared ancestor at the exact snapshot inherited by its child.
 
@@ -404,6 +405,8 @@ def resolve_inherited_lineage(
                 "data": parent_data,
             }
         )
+        if on_verified_parent is not None:
+            on_verified_parent(lineage_nearest_first[-1])
         seen.add(parent_id)
         depth += 1
         current_data = parent_data
@@ -673,6 +676,7 @@ def extend_legacy_lineage(
     resolve_session: Callable[[str], Optional[Path]],
     *,
     on_parent: Optional[Callable[[str, Path, int], None]] = None,
+    on_verified_parent: Optional[Callable[[dict[str, Any]], None]] = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Root-first lineage for a selected session recovered via
     `recover_legacy_embedded_fork`: the legacy parent edge itself, preceded by
@@ -681,12 +685,15 @@ def extend_legacy_lineage(
     """
     if on_parent is not None:
         on_parent(parent_edge["session_id"], parent_edge["path"], parent_edge["end_byte_offset"])
+    if on_verified_parent is not None:
+        on_verified_parent(parent_edge)
     parent_meta = parent_edge["data"].get("meta") or {}
     further_lineage: list[dict[str, Any]] = []
     warnings: list[str] = []
     if parent_meta.get("history_base") is not None or parent_meta.get("forked_from_id"):
         further_lineage, warnings = resolve_inherited_lineage(
-            parent_edge["data"], resolve_session, on_parent=on_parent
+            parent_edge["data"], resolve_session, on_parent=on_parent,
+            on_verified_parent=on_verified_parent,
         )
     return [*further_lineage, parent_edge], warnings
 

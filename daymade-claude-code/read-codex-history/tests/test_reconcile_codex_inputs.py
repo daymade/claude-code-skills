@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "reconcile_codex_inputs.py"
@@ -19,12 +20,13 @@ def meta(sid, **extra):
 
 
 def message(text, **extra):
-    return {"type": "response_item", "payload": {
+    return {"type": "response_item", "timestamp": datetime.fromtimestamp(1700010000, timezone.utc).isoformat(), "payload": {
         "type": "message", "role": "user", "content": [{"type": "input_text", "text": text}], **extra}}
 
 
 def event(text):
-    return {"type": "event_msg", "payload": {"type": "user_message", "message": text}}
+    return {"type": "event_msg", "timestamp": datetime.fromtimestamp(1700010000, timezone.utc).isoformat(),
+            "payload": {"type": "user_message", "message": text}}
 
 
 def fingerprint(record):
@@ -188,7 +190,7 @@ class ReconciliationTests(unittest.TestCase):
         data = self.run_cli("selected", "--through-record", "2001", expected=2)
         ambiguous = [g for g in data["gaps"] if g["kind"] == "ambiguous_occurrence"]
         self.assertEqual(len(ambiguous), 2000)
-        self.assertEqual(ambiguous[0]["candidate_count"], 2001)
+        self.assertEqual(ambiguous[0]["candidate_count_upper_bound"], 2001)
         self.assertLess(len(json.dumps(data)), 2000000)
 
     def test_ledger_only_input_is_a_gap_not_silently_lost(self):
@@ -209,11 +211,165 @@ class ReconciliationTests(unittest.TestCase):
         self.prompts("selected", text)
         self.assertEqual(self.run_cli("selected")["inputs"][0]["text"], text)
 
-    def decision(self, record, reason="Verified harness origin in the task evidence"):
+    def decision(self, record, reason="Verified harness origin in the task evidence", number=3, sid="selected"):
         p = self.home / "decisions.json"
         p.write_text(json.dumps({"schema_version": 1, "exclusions": [{
-            "session_id": "selected", "record": 3, "record_sha256": fingerprint(record), "reason": reason}]}))
+            "session_id": sid, "record": number, "record_sha256": fingerprint(record), "reason": reason}]}))
         return p
+
+    def confirmation(self, record, sid="selected", number=2, ledger_ordinal=1):
+        p = self.home / "confirmations.json"
+        p.write_text(json.dumps({"schema_version": 1, "human_confirmations": [{
+            "session_id": sid, "record": number, "record_sha256": fingerprint(record),
+            "ledger_ordinal": ledger_ordinal,
+            "reason": "Verified this exact occurrence was submitted by the human"}]}))
+        return p
+
+    def test_bounded_harness_paste_requires_explicit_origin_confirmation(self):
+        text = '<hook_prompt hook_run_id="human">literal user paste</hook_prompt>'
+        record = message(text)
+        self.write("selected", [meta("selected"), record])
+        self.prompts("selected", text)
+        data = self.run_cli("selected", "--through-record", "2", expected=2)
+        self.assertEqual(data["unmatched_records"][0]["provenance_issue"],
+                         "bounded_harness_origin_requires_review")
+        data = self.run_cli("selected", "--through-record", "2", "--decisions", str(self.confirmation(record)))
+        self.assertEqual(data["inputs"][0]["text"], text)
+        self.assertEqual(data["inputs"][0]["evidence"][0]["match"], "reviewed_human")
+        self.assertEqual(len(data["human_confirmations"]), 1)
+
+    def test_backdated_later_harness_paste_is_not_automatic_proof_of_origin(self):
+        text = '<peer-message protocol="1">same injected and pasted text</peer-message>'
+        injection, later = message(text), message(text)
+        self.write("selected", [meta("selected"), injection, later])
+        self.rows = [{"session_id": "selected", "ts": 1699999999, "text": text}]
+        data = self.run_cli("selected", "--through-record", "2", expected=2)
+        self.assertEqual(data["verified_input_count"], 0)
+        self.assertEqual(data["unmatched_records"][0]["provenance_issue"],
+                         "bounded_harness_origin_requires_review")
+        self.run_cli("selected", "--through-record", "2", "--decisions",
+                     str(self.decision(injection, number=2)), expected=2)
+
+    def test_confirmation_rejects_stale_conflicting_or_unbounded_bindings(self):
+        text = '<hook_prompt hook_run_id="human">human paste</hook_prompt>'
+        record = message(text)
+        self.write("selected", [meta("selected"), record])
+        self.prompts("selected", text)
+        path = self.confirmation(record)
+        original = json.loads(path.read_text())
+        for change in ({"record_sha256": "0" * 64}, {"ledger_ordinal": 2},
+                       {"ledger_ordinal": True}, {"record": 3}):
+            with self.subTest(change=change):
+                payload = json.loads(json.dumps(original))
+                payload["human_confirmations"][0].update(change)
+                path.write_text(json.dumps(payload))
+                self.run_cli("selected", "--through-record", "2", "--decisions", str(path), expected=2)
+        path.write_text(json.dumps(original))
+        self.run_cli("selected", "--decisions", str(path), expected=2)
+        original["exclusions"] = original["human_confirmations"]
+        path.write_text(json.dumps(original))
+        self.run_cli("selected", "--through-record", "2", "--decisions", str(path), expected=2)
+
+    def test_confirmation_cannot_bind_two_same_stream_records_to_one_submission(self):
+        text = '<hook_prompt hook_run_id="human">human paste</hook_prompt>'
+        record = message(text)
+        self.write("selected", [meta("selected"), record, record])
+        self.prompts("selected", text)
+        path = self.confirmation(record)
+        payload = json.loads(path.read_text())
+        payload["human_confirmations"].append({**payload["human_confirmations"][0], "record": 3})
+        path.write_text(json.dumps(payload))
+        data = self.run_cli("selected", "--through-record", "3", "--decisions", str(path), expected=2)
+        self.assertIn("stream_order_conflict", [gap["kind"] for gap in data["gaps"]])
+
+    def test_later_same_text_paste_cannot_enter_earlier_cutoff(self):
+        text = '<hook_prompt hook_run_id="demo">same text</hook_prompt>'
+        injected = message(text)
+        injected['timestamp'] = datetime.fromtimestamp(1700000000, timezone.utc).isoformat()
+        later = message(text)
+        later['timestamp'] = datetime.fromtimestamp(1700000201, timezone.utc).isoformat()
+        self.write('selected', [meta('selected'), injected,
+                              {'type': 'event_msg', 'payload': {'type': 'task_complete'}}, later])
+        self.rows = [{'session_id': 'selected', 'ts': 1700000200, 'text': text}]
+        data = self.run_cli('selected', '--through-record', '3', expected=2)
+        self.assertEqual(data['verified_input_count'], 0)
+        self.assertEqual(data['unmatched_records'][0]['timestamp_issue'], 'ledger_candidates_after_record')
+        decision = self.decision(injected, number=2)
+        data = self.run_cli('selected', '--through-record', '3', '--decisions', str(decision))
+        self.assertEqual(data['scope_input_count'], 0)
+        self.assertEqual(len(data['outside_snapshot_ledger_rows']), 1)
+
+    def test_later_same_text_parent_paste_cannot_enter_fork_prefix(self):
+        text = '<peer-message protocol="1">same text</peer-message>'
+        injected = message(text)
+        injected['timestamp'] = datetime.fromtimestamp(1700000000, timezone.utc).isoformat()
+        parent = self.write('parent', [meta('parent'), injected])
+        boundary = parent.stat().st_size
+        later = message(text)
+        later['timestamp'] = datetime.fromtimestamp(1700000201, timezone.utc).isoformat()
+        with parent.open('a') as out:
+            out.write(json.dumps(later) + '\n')
+        self.write('child', [meta('child', history_base={'thread_id': 'parent', 'end_byte_offset': boundary}), message('child input')])
+        self.rows = [{'session_id': 'parent', 'ts': 1700000200, 'text': text},
+                     {'session_id': 'child', 'ts': 1700000300, 'text': 'child input'}]
+        data = self.run_cli('child', expected=2)
+        self.assertEqual([x['text'] for x in data['inputs']], ['child input'])
+        data = self.run_cli('child', '--decisions', str(self.decision(injected, number=2, sid='parent')))
+        self.assertEqual(data['scope_input_count'], 1)
+
+    def test_causal_time_disambiguates_a_genuine_parent_input_from_later_repeat(self):
+        for text in ('same', '<hook_prompt hook_run_id="human">human paste</hook_prompt>'):
+            with self.subTest(text=text):
+                first, later = message(text), message(text)
+                first['timestamp'] = datetime.fromtimestamp(1700000001, timezone.utc).isoformat()
+                later['timestamp'] = datetime.fromtimestamp(1700000201, timezone.utc).isoformat()
+                parent = self.write('parent', [meta('parent'), first])
+                boundary = parent.stat().st_size
+                with parent.open('a') as out:
+                    out.write(json.dumps(later) + '\n')
+                self.write('child', [meta('child', history_base={'thread_id': 'parent', 'end_byte_offset': boundary}), message('child input')])
+                self.rows = [{'session_id': 'parent', 'ts': 1700000000, 'text': text},
+                             {'session_id': 'parent', 'ts': 1700000200, 'text': text},
+                             {'session_id': 'child', 'ts': 1700000300, 'text': 'child input'}]
+                args = []
+                if text.startswith('<hook_prompt'):
+                    self.run_cli('child', expected=2)
+                    args = ['--decisions', str(self.confirmation(first, sid='parent'))]
+                data = self.run_cli('child', *args)
+                self.assertEqual([x['text'] for x in data['inputs']], [text, 'child input'])
+                self.assertEqual(len(data['outside_snapshot_ledger_rows']), 1)
+
+    def test_missing_deep_ancestor_retains_verified_near_ancestor(self):
+        parent_records = [meta('parent', history_base={'thread_id': 'missing-root', 'end_byte_offset': 20}), message('parent input')]
+        parent = self.write('parent', parent_records)
+        self.write('child', [meta('child', history_base={'thread_id': 'parent', 'end_byte_offset': parent.stat().st_size}), message('child input')])
+        self.prompts('parent', 'parent input')
+        self.prompts('child', 'child input')
+        data = self.run_cli('child', expected=2)
+        self.assertEqual([x['text'] for x in data['inputs']], ['parent input', 'child input'])
+        self.assertEqual(data['verified_input_count'], 2)
+        self.write('child', [meta('child', forked_from_id='parent', history_mode='legacy'), *parent_records, message('child input')])
+        data = self.run_cli('child', expected=2)
+        self.assertEqual([x['text'] for x in data['inputs']], ['parent input', 'child input'])
+
+    def test_clock_rollback_preserves_append_order(self):
+        first, second = message('first'), message('second')
+        first['timestamp'] = datetime.fromtimestamp(1700000201, timezone.utc).isoformat()
+        second['timestamp'] = datetime.fromtimestamp(1700000101, timezone.utc).isoformat()
+        self.write('selected', [meta('selected'), first, second])
+        self.rows = [{'session_id': 'selected', 'ts': 1700000200, 'text': 'first'},
+                     {'session_id': 'selected', 'ts': 1700000100, 'text': 'second'}]
+        data = self.run_cli('selected')
+        self.assertEqual([x['text'] for x in data['inputs']], ['first', 'second'])
+        self.assertGreater(data['inputs'][0]['timestamp'], data['inputs'][1]['timestamp'])
+
+    def test_missing_event_timestamp_stays_unknown(self):
+        record = message('known')
+        record.pop('timestamp')
+        self.write('selected', [meta('selected'), record])
+        self.prompts('selected', 'known')
+        data = self.run_cli('selected', expected=2)
+        self.assertEqual(data['unmatched_records'][0]['timestamp_issue'], 'missing_or_invalid_event_timestamp')
 
     def test_injection_requires_record_bound_review_and_stale_review_fails(self):
         injection = message('<hook_prompt hook_run_id="demo">injected instructions</hook_prompt>')

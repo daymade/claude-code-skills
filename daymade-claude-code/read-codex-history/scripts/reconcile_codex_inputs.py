@@ -14,6 +14,7 @@ import re
 import sys
 from bisect import bisect_left, bisect_right
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 
 import list_codex_user_inputs as ledger
@@ -31,6 +32,17 @@ SKILL_LINK = re.compile(r"\[(\$[A-Za-z0-9_-]+)\]\((?:/|[A-Za-z]:[\\/])[^\n)]*/SK
 
 def alignment_key(text: str) -> str:
     return SKILL_LINK.sub(r"\1", text)
+
+
+def event_epoch(value) -> float | None:
+    """Require an explicit source timezone; never invent a clock for a record."""
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return parsed.timestamp() if parsed.tzinfo is not None else None
+    except (ValueError, OverflowError, OSError):
+        return None
 
 
 def envelope_hint(text: str) -> str | None:
@@ -56,39 +68,51 @@ def load_decisions(path: Path | None) -> dict[tuple[str, int], dict]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict) or payload.get("schema_version") != 1:
         raise ReconciliationError("decisions require schema_version=1")
-    items = payload.get("exclusions")
-    if not isinstance(items, list):
-        raise ReconciliationError("decisions.exclusions must be a list")
+    exclusions = payload.get("exclusions", [])
+    confirmations = payload.get("human_confirmations", [])
+    if not isinstance(exclusions, list) or not isinstance(confirmations, list):
+        raise ReconciliationError("exclusions and human_confirmations must be lists")
+    if any(not isinstance(item, dict) for item in exclusions + confirmations):
+        raise ReconciliationError("a review decision is not an object")
+    items = [{**item, "_kind": "exclude"} for item in exclusions]
+    items += [{**item, "_kind": "human"} for item in confirmations]
     decisions = {}
     for item in items:
-        if not isinstance(item, dict):
-            raise ReconciliationError("an exclusion is not an object")
         sid, ordinal = item.get("session_id"), item.get("record")
         if (not isinstance(sid, str) or not sid or sid != sid.strip() or
                 isinstance(ordinal, bool) or not isinstance(ordinal, int) or ordinal < 1 or
                 not re.fullmatch(r"[0-9a-f]{64}", str(item.get("record_sha256", ""))) or
                 not isinstance(item.get("reason"), str) or len(item["reason"].strip()) < 12):
-            raise ReconciliationError("exclusion needs exact session_id, record, record_sha256 and evidence reason")
+            raise ReconciliationError("review decision needs exact session_id, record, record_sha256 and evidence reason")
         key = (sid, ordinal)
         if key in decisions:
-            raise ReconciliationError("duplicate exclusion coordinate")
+            raise ReconciliationError("duplicate review coordinate")
+        if item["_kind"] == "human" and (
+            isinstance(item.get("ledger_ordinal"), bool) or
+            not isinstance(item.get("ledger_ordinal"), int) or item["ledger_ordinal"] < 1
+        ):
+            raise ReconciliationError("human confirmation requires an exact ledger_ordinal")
         decisions[key] = item
     return decisions
 
 
-def embedding_bounds(needles: list[str], haystack: list[str]) -> tuple[list[int], list[int]] | None:
+def embedding_bounds(needles: list[str], haystack: list[str],
+                     recorded_at: list[float], submitted_at: list[float],
+                     fixed_indices: list[int | None]) -> tuple[list[int], list[int]] | None:
     """Find earliest/latest ordered embeddings in linear time, retaining repeats."""
     first, cursor = [], 0
-    for token in needles:
-        while cursor < len(haystack) and haystack[cursor] != token:
+    for token, timestamp, fixed in zip(needles, recorded_at, fixed_indices):
+        while cursor < len(haystack) and (haystack[cursor] != token or submitted_at[cursor] > timestamp or
+                                          (fixed is not None and cursor != fixed)):
             cursor += 1
         if cursor == len(haystack):
             return None
         first.append(cursor)
         cursor += 1
     last, cursor = [], len(haystack) - 1
-    for token in reversed(needles):
-        while cursor >= 0 and haystack[cursor] != token:
+    for token, timestamp, fixed in zip(reversed(needles), reversed(recorded_at), reversed(fixed_indices)):
+        while cursor >= 0 and (haystack[cursor] != token or submitted_at[cursor] > timestamp or
+                               (fixed is not None and cursor != fixed)):
             cursor -= 1
         if cursor < 0:
             return None
@@ -114,14 +138,18 @@ def load_segments(session_id: str, through_record: int | None) -> tuple[list[dic
         raise ReconciliationError("--through-record exceeds the selected snapshot")
     gaps: list[dict] = []
     lineage = []
+    verified_nearest_first = []
     try:
         if legacy is not None:
-            lineage, warnings = reader.extend_legacy_lineage(legacy, resolver)
+            lineage, warnings = reader.extend_legacy_lineage(
+                legacy, resolver, on_verified_parent=verified_nearest_first.append)
         else:
-            lineage, warnings = reader.resolve_inherited_lineage(data, resolver)
+            lineage, warnings = reader.resolve_inherited_lineage(
+                data, resolver, on_verified_parent=verified_nearest_first.append)
         gaps.extend({"kind": "unresolved_lineage", "detail": warning} for warning in warnings)
-    except reader.LineageResolutionError as error:
-        # The selected session is still verified; the ancestor total is unknown.
+    except (reader.LineageResolutionError, OSError, UnicodeError) as error:
+        # Retain every already-verified near ancestor when a deeper one is absent.
+        lineage = list(reversed(verified_nearest_first))
         gaps.append({"kind": "unresolved_lineage", "detail": str(error)})
     segments = [
         {"session_id": edge["session_id"], "path": str(edge["path"]),
@@ -142,25 +170,44 @@ def reconcile(segments: list[dict], rows: list[ledger.UserInput],
               decisions: dict[tuple[str, int], dict], initial_gaps: list[dict]) -> dict:
     inputs, unknown, excluded, omitted_ledger, gaps = [], [], [], [], list(initial_gaps)
     unassigned_mirrors = []
+    confirmed_humans = []
     used_decisions: set[tuple[str, int]] = set()
     for segment in segments:
         sid = segment["session_id"]
+        # Submission order is the ledger's append order. Wall clocks can go back.
         local_rows = sorted((row for row in rows if row.session_id == sid),
-                            key=lambda row: (row.timestamp, row.ordinal))
+                            key=lambda row: row.ordinal)
         keys = [alignment_key(row.text) for row in local_rows]
+        submitted_at = [row.timestamp for row in local_rows]
+        ordinal_index = {row.ordinal: index for index, row in enumerate(local_rows)}
         key_set = set(keys)
+        earliest_submission = {}
         key_positions = defaultdict(list)
         for index, key in enumerate(keys):
             key_positions[key].append(index)
+            earliest_submission[key] = min(earliest_submission.get(key, float("inf")), submitted_at[index])
         streams: dict[str, list[dict]] = defaultdict(list)
         for event in segment["events"]:
             coordinate = (sid, event["ordinal"])
             key = alignment_key(event["text"])
+            timestamp = event_epoch(event["timestamp"])
+            eligible = key in key_set and timestamp is not None and earliest_submission[key] <= timestamp
+            bounded_harness = segment["bounded"] and bool(event["text"].strip()) and (
+                envelope_hint(event["text"]) is not None or reader.is_noise_text(event["text"]))
             decision = decisions.get(coordinate)
             if decision:
                 if event["record_sha256"] != decision["record_sha256"]:
-                    raise ReconciliationError(f"stale exclusion at {sid}:{event['ordinal']}")
-                if key in key_set:
+                    raise ReconciliationError(f"stale review decision at {sid}:{event['ordinal']}")
+                if decision["_kind"] == "human":
+                    index = ordinal_index.get(decision["ledger_ordinal"])
+                    if (not bounded_harness or event["schema_issues"] or index is None or
+                            keys[index] != key or timestamp is None or submitted_at[index] > timestamp):
+                        raise ReconciliationError(f"human confirmation conflicts with source evidence at {sid}:{event['ordinal']}")
+                    streams[event["stream"]].append({**event, "_binding": index})
+                    confirmed_humans.append({k: v for k, v in decision.items() if k != "_kind"})
+                    used_decisions.add(coordinate)
+                    continue
+                if eligible or (key in key_set and timestamp is None):
                     raise ReconciliationError(f"cannot exclude ledger-backed input at {sid}:{event['ordinal']}")
                 if event["schema_issues"] or not envelope_hint(event["text"]):
                     raise ReconciliationError(f"exclusion is not a supported reviewed envelope at {sid}:{event['ordinal']}")
@@ -168,18 +215,24 @@ def reconcile(segments: list[dict], rows: list[ledger.UserInput],
                 excluded.append({"session_id": sid, "record": event["ordinal"],
                                  "record_sha256": event["record_sha256"], "reason": decision["reason"]})
                 continue
-            if event["schema_issues"] or key not in key_set:
+            if event["schema_issues"] or not eligible or bounded_harness:
                 unknown.append({"session_id": sid, "record": event["ordinal"],
                                 "record_sha256": event["record_sha256"], "text": event["text"],
                                 "stream": event["stream"], "attachments": event["attachments"],
                                 "schema_issues": event["schema_issues"],
+                                "source_timestamp": event["timestamp"] if isinstance(event["timestamp"], str) else None,
+                                "timestamp_issue": ("missing_or_invalid_event_timestamp" if timestamp is None else
+                                                    "ledger_candidates_after_record" if key in key_set and not eligible else None),
+                                "provenance_issue": "bounded_harness_origin_requires_review" if bounded_harness else None,
                                 "review_hint": envelope_hint(event["text"])})
             else:
                 streams[event["stream"]].append(event)
         matched: dict[int, list[dict]] = defaultdict(list)
         ambiguous = []
         for stream, events in streams.items():
-            bounds = embedding_bounds([alignment_key(event["text"]) for event in events], keys)
+            bounds = embedding_bounds([alignment_key(event["text"]) for event in events], keys,
+                                      [event_epoch(event["timestamp"]) for event in events], submitted_at,
+                                      [event.get("_binding") for event in events])
             if bounds is None:
                 gaps.append({"kind": "stream_order_conflict", "session_id": sid, "stream": stream})
                 continue
@@ -201,7 +254,9 @@ def reconcile(segments: list[dict], rows: list[ledger.UserInput],
             start, end = bisect_left(positions, left), bisect_right(positions, right)
             item = {"session_id": sid, "record": event["ordinal"],
                     "candidate_ledger_ordinal_bounds": [local_rows[left].ordinal, local_rows[right].ordinal],
-                    "candidate_count": end - start}
+                    # Clock eligibility can remove interior candidates; bounds
+                    # stay exact while this inexpensive size is an upper bound.
+                    "candidate_count_upper_bound": end - start}
             if uncovered_prefix[key][end] == uncovered_prefix[key][start]:
                 # Another stream already proves every possible human occurrence.
                 # Do not invent this mirror's attachment to one particular input.
@@ -226,11 +281,13 @@ def reconcile(segments: list[dict], rows: list[ledger.UserInput],
                 "timestamp": ledger.iso_timestamp(row.timestamp), "text": row.text,
                 "evidence": [{"record": event["ordinal"], "stream": event["stream"],
                               "record_sha256": event["record_sha256"],
-                              "match": "exact" if row.text == event["text"] else "local_skill_link",
+                              "source_timestamp": event["timestamp"],
+                              "match": ("reviewed_human" if "_binding" in event else
+                                        "exact" if row.text == event["text"] else "local_skill_link"),
                               "attachments": event["attachments"]} for event in evidence],
             })
     if set(decisions) != used_decisions:
-        raise ReconciliationError("exclusion contains coordinates outside the selected evidence scope")
+        raise ReconciliationError("review decision contains coordinates outside the selected evidence scope")
     if unknown:
         gaps.append({"kind": "unmatched_rollout_inputs", "count": len(unknown)})
     complete = not gaps
@@ -240,6 +297,7 @@ def reconcile(segments: list[dict], rows: list[ledger.UserInput],
         "verified_input_count": len(inputs), "inputs": inputs,
         "gaps": gaps, "unmatched_records": unknown,
         "unassigned_mirror_records": unassigned_mirrors,
+        "human_confirmations": confirmed_humans,
         "excluded_injections": excluded, "outside_snapshot_ledger_rows": omitted_ledger,
         "sources": [{k: segment[k] for k in ("session_id", "path", "snapshot_bytes", "bounded")}
                     for segment in segments],
@@ -286,7 +344,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--codex-home", type=Path, help="Explicit history store (use an isolated fixture store in tests)")
     parser.add_argument("--through-record", type=ledger.positive_integer,
                         help="Inclusive selected-session record ordinal, as used by the strict reader")
-    parser.add_argument("--decisions", type=Path, help="Reviewed, record-hash-bound injection exclusions JSON")
+    parser.add_argument("--decisions", type=Path, help="Record-hash-bound injection exclusions and bounded harness-origin confirmations JSON")
     parser.add_argument("--omit-first", action="store_true", help="Explicitly omit the first verified input; no semantic classification")
     parser.add_argument("--omit-last", action="store_true", help="Explicitly omit the last verified input; no semantic classification")
     parser.add_argument("--format", choices=("json", "markdown"), default="json")

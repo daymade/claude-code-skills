@@ -21,6 +21,14 @@ ledger occurrences across mirror streams once; report a compatible mirror whose
 particular occurrence cannot be assigned without pretending that assignment is
 known. Bound ambiguous candidate ranges instead of expanding all combinations.
 
+Keep each session in ledger append order, including when the wall clock moves
+backwards. Use the raw event timestamp only to reject a pairing with a ledger
+submission recorded later than that event; combine this causal check with the
+exact snapshot and ordered occurrences, never use time alone as membership.
+Missing event timestamps or clock conflicts remain gaps. A clock conflict does
+not establish that a record was injected. If a distant ancestor is unavailable,
+retain all nearer ancestors whose snapshots were already verified.
+
 Interpret the result before quoting a total:
 
 | Result | Meaning and next action |
@@ -40,7 +48,7 @@ Use `--format markdown` for the complete numbered, literal quotations; JSON
 remains the exact-string surface. Attachment types are reported, but image/audio
 bytes are not reconstructed or included in the output.
 
-### Resolve only evidence-backed injection exclusions
+### Resolve only evidence-backed origin decisions
 
 After inspecting an unmatched record and verifying its harness origin, record
 that specific exclusion. Copy its exact session, record coordinate and
@@ -61,12 +69,42 @@ The following is a template, not a populated decision:
 
 Then rerun with `--decisions <reviewed-exclusions.json>`. The command rejects
 stale hashes, out-of-scope coordinates, unsupported envelope types, schema
-errors, ordinary unmatched text, and exclusions that would drop a ledger-backed
-human submission. It cannot verify the truth of a written reason: never create
+errors, ordinary unmatched text, and exclusions that would drop a causally
+compatible ledger-backed human submission. A later same-text ledger row is not
+evidence that an earlier record was human. The command cannot verify the truth
+of a written reason: never create
 blanket exclusions or approve a candidate solely to obtain exit 0. If provenance
 is unresolved, deliver the partial result. Keep decisions with the private task
 evidence; do not install a global ignore list or copy real transcripts into this
 public skill.
+
+A bounded snapshot needs extra care for harness-shaped text: an identical human
+paste may have been submitted after the boundary, even with a backdated clock.
+`provenance_issue: bounded_harness_origin_requires_review` leaves that record
+unknown rather than inferring authorship from the text and time. When independent
+source evidence establishes that the exact occurrence was a human submission,
+add `human_confirmations` to the same decisions file:
+
+```json
+{
+  "schema_version": 1,
+  "human_confirmations": [{
+    "session_id": "<exact-session-id>",
+    "record": 123,
+    "record_sha256": "<copy the record hash from unmatched_records>",
+    "ledger_ordinal": 456,
+    "reason": "<evidence tying this exact record to this human submission>"
+  }]
+}
+```
+
+`ledger_ordinal` is the original ledger reader's row ordinal, not its position in
+a filtered list. A confirmation binds only this bounded harness-shaped record
+to that same-session occurrence; it cannot change text, bypass clock/schema
+conflicts, or reuse one submission twice in a stream. Confirmed evidence is
+labeled `reviewed_human` and the decision remains visible in the output. This
+is an evidence review, not a prompt to ask the user to confirm every envelope.
+Without independent origin evidence, keep the result partial.
 
 ## Validate with a bound fixture store
 
@@ -170,7 +208,8 @@ headings as an authoritative message parser.
 
 State the scope and total first, then quote every included message in order.
 For a whole-conversation request, use root-to-child chronological order and
-retain each original session's identity and message order. For a recent-input
+retain each original session's identity and append order even if its displayed
+timestamps go backwards. For a recent-input
 request, retain the ledger command's newest-first ordering unless asked otherwise.
 
 Preserve the original wording, repetitions, punctuation, paragraph boundaries,
