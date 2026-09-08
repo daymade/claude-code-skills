@@ -172,7 +172,7 @@ python3 scripts/peer.py replies \
 
 Codex 先用 original ID 缩小 named thread 的候选行，再解析命中候选；不含该 ID 的普通文本、图片等 unrelated user message 不进入 payload parser。候选 JSON 或 schema 损坏仍显式报错，不能变成普通未命中。
 
-只在完整有效 envelope 内匹配独占一行的 `in_reply_to: <original-outbound-id>`。字段值必须精确相等；普通子串、引用行、CommonMark 代码围栏里的示例、其他 thread 的记录、原 outbound 自己，以及残缺 envelope 都不算回复。这里不承诺解析 host-native 或第三方 envelope；没有对应 fixture 和当前实证的格式不要加猜测 fallback。
+只在完整有效 envelope 内匹配独占一行的 `in_reply_to: <original-outbound-id>`。字段值必须精确相等；普通子串、引用行、HTML 注释或 CommonMark 代码围栏里的示例、其他 thread 的记录、原 outbound 自己，以及残缺 envelope 都不算回复。这里不承诺解析 host-native 或第三方 envelope；没有对应 fixture 和当前实证的格式不要加猜测 fallback。
 
 queue 项与已消费的 history 项可能是同一条回复。用 reply envelope 自己的 message ID 去重，内容完全相同时保留更强的 history evidence；同一 reply ID 对应不同 sender 或正文时显式报冲突，不静默选一份。结果按 `--limit` 截断，并显式返回 `truncated`；上限与默认值以当前 CLI help/实现为准，不在文档复制。
 

@@ -618,6 +618,26 @@ class PeerMessageTests(unittest.TestCase):
             self.assertEqual(result["reply_status"], "no_replies")
             self.assertEqual(result["replies"], [])
 
+    def test_replies_ignore_html_comments_without_hiding_real_metadata(self):
+        original_id = "comment-fixture-original"
+        cases = (
+            (f"<!--\nin_reply_to: {original_id}\n-->\nresult: unrelated", False),
+            (f"<!--\nin_reply_to: {original_id}", False),
+            (f"```\n<!--\n```\nin_reply_to: {original_id}", True),
+            (f"<!--\nin_reply_to: quoted\n-->\nin_reply_to: {original_id}", True),
+        )
+        for body, expected in cases:
+            with self.subTest(body=body), tempfile.TemporaryDirectory() as raw:
+                home = self.make_codex_state(Path(raw))
+                thread_id = "22222222-2222-4222-8222-222222222222"
+                envelope = peer.codex_envelope(body, "claude:fixture", None, "comment-reply")
+                payload = json.dumps({"UserInput": {"content": [{"text": envelope}]}})
+                self.make_codex_reply_stores(
+                    home, queue_rows=[("comment-item", thread_id, payload, 1, 100, 100)]
+                )
+                result = peer.codex_replies(f"codex:{thread_id}", original_id, 20, home)
+                self.assertEqual(result["reply_status"], "found" if expected else "no_replies")
+
     def test_replies_ignore_commonmark_fenced_correlation_examples(self):
         original_id = "56565656-aaaa-4565-8565-565656565656"
         for fence in ("`````", "~~~~"):

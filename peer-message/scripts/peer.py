@@ -204,16 +204,12 @@ def codex_content_texts(value: Any, label: str) -> list[str]:
 
 
 def standalone_in_reply_to(body: str) -> str | None:
-    """Read one exact field line, ignoring quoted and fenced examples."""
+    """Read one exact field line, ignoring quoted, fenced and commented examples."""
     matches: list[str] = []
     fence_character: str | None = None
     fence_length = 0
+    in_comment = False
     for line in body.splitlines():
-        fence = re.match(r" {0,3}(`{3,}|~{3,})(.*)", line)
-        if fence_character is None and fence:
-            fence_character = fence.group(1)[0]
-            fence_length = len(fence.group(1))
-            continue
         if fence_character is not None:
             closing = re.fullmatch(
                 rf" {{0,3}}{re.escape(fence_character)}{{{fence_length},}}[ \t]*",
@@ -222,6 +218,23 @@ def standalone_in_reply_to(body: str) -> str | None:
             if closing:
                 fence_character = None
                 fence_length = 0
+            continue
+        comment_line = in_comment
+        offset = 0
+        while True:
+            marker = "-->" if in_comment else "<!--"
+            position = line.find(marker, offset)
+            if position < 0:
+                break
+            comment_line = True
+            in_comment = not in_comment
+            offset = position + len(marker)
+        if comment_line:
+            continue
+        fence = re.match(r" {0,3}(`{3,}|~{3,})(.*)", line)
+        if fence:
+            fence_character = fence.group(1)[0]
+            fence_length = len(fence.group(1))
             continue
         match = re.fullmatch(r"in_reply_to:[ \t]*([^\s]+)[ \t]*", line)
         if match:
