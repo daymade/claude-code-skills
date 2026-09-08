@@ -4,15 +4,28 @@ Use this checklist before calling the deepresearch tool.
 
 ## Scope and Questions
 - Define the primary research question
-- Break into 3-7 subquestions
+- Break it into the smallest set of decision questions that covers the requested conclusion
 - Define scope boundaries and exclusions
 - Define time range and geography
+- Mark which answers could change the recommendation
 
 ## Evidence Strategy
-- Identify primary sources needed
-- Identify secondary sources needed
+- List the provisional load-bearing claims under each question
+- Name what evidence would overturn or materially weaken each claim
+- Identify source owners that can directly observe each fact
 - Define inclusion and exclusion criteria
-- Define minimum number of sources per section
+- Define a stop rule: supported, contradicted, or still unknown
+
+## Enterprise Evidence Routes
+
+Use routes that match the claim rather than a generic web sweep:
+
+- **Customer adoption or spend:** buyer procurement portals, award notices, tender documents, customer financial reports, fund reports, board materials, or authorized first-party contracts and invoices.
+- **Ownership or investor position:** regulatory ownership filings, shareholder disclosures, fund holdings reports, issuer registers, and audited financial statements.
+- **Product deployment or engineering feasibility:** named customer engineering posts, supplier implementation case studies, architecture documentation, incident reports, and technical standards. Treat supplier case studies as first-party claims until independently corroborated.
+- **Regulatory status:** regulator registers, enforcement actions, licenses, statutes, and official decisions.
+
+Record when an expected route is unavailable; absence from one database is not proof that the event did not occur.
 
 ## Query Set
 - Create query variants per subquestion
@@ -21,6 +34,8 @@ Use this checklist before calling the deepresearch tool.
 
 ## Query Log Template
 - Query:
-- Intended section:
+- Decision question / claim:
+- Evidence route:
 - Date run:
-- Notes:
+- Result: support / conflict / lead / no result
+- Stop-rule effect:

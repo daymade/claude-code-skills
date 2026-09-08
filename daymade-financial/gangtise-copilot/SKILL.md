@@ -18,7 +18,7 @@ This is the **only section you need to read** to go from zero to fully working G
 **Primary method** (git clone):
 ```bash
 git clone --depth 1 https://github.com/daymade/claude-code-skills.git /tmp/gangtise-repo
-cp -r /tmp/gangtise-repo/gangtise-copilot <your-agent-skills-dir>/
+cp -r /tmp/gangtise-repo/daymade-financial/gangtise-copilot <your-agent-skills-dir>/
 ```
 
 **Fallback method** (when git clone times out or is unavailable — use GitHub API directly):
@@ -36,16 +36,17 @@ def fetch_github_file(repo_path, local_path):
 
 # Download all files:
 for path, local in [
-    ("gangtise-copilot/SKILL.md",                         "<skills-dir>/gangtise-copilot/SKILL.md"),
-    ("gangtise-copilot/scripts/install_gangtise.sh",      "<skills-dir>/gangtise-copilot/scripts/install_gangtise.sh"),
-    ("gangtise-copilot/scripts/configure_auth.sh",        "<skills-dir>/gangtise-copilot/scripts/configure_auth.sh"),
-    ("gangtise-copilot/scripts/diagnose.sh",              "<skills-dir>/gangtise-copilot/scripts/diagnose.sh"),
-    ("gangtise-copilot/references/installation_flow.md",   "<skills-dir>/gangtise-copilot/references/installation_flow.md"),
-    ("gangtise-copilot/references/credentials_setup.md",    "<skills-dir>/gangtise-copilot/references/credentials_setup.md"),
-    ("gangtise-copilot/references/skill_registry.md",       "<skills-dir>/gangtise-copilot/references/skill_registry.md"),
-    ("gangtise-copilot/references/known_issues.md",         "<skills-dir>/gangtise-copilot/references/known_issues.md"),
-    ("gangtise-copilot/references/best_practices.md",       "<skills-dir>/gangtise-copilot/references/best_practices.md"),
-    ("gangtise-copilot/config-template/authorization.json.example", "<skills-dir>/gangtise-copilot/config-template/authorization.json.example"),
+    ("daymade-financial/gangtise-copilot/SKILL.md",                         "<skills-dir>/gangtise-copilot/SKILL.md"),
+    ("daymade-financial/gangtise-copilot/scripts/install_gangtise.sh",      "<skills-dir>/gangtise-copilot/scripts/install_gangtise.sh"),
+    ("daymade-financial/gangtise-copilot/scripts/configure_auth.sh",        "<skills-dir>/gangtise-copilot/scripts/configure_auth.sh"),
+    ("daymade-financial/gangtise-copilot/scripts/diagnose.sh",              "<skills-dir>/gangtise-copilot/scripts/diagnose.sh"),
+    ("daymade-financial/gangtise-copilot/scripts/classify_response.py",     "<skills-dir>/gangtise-copilot/scripts/classify_response.py"),
+    ("daymade-financial/gangtise-copilot/references/installation_flow.md",   "<skills-dir>/gangtise-copilot/references/installation_flow.md"),
+    ("daymade-financial/gangtise-copilot/references/credentials_setup.md",    "<skills-dir>/gangtise-copilot/references/credentials_setup.md"),
+    ("daymade-financial/gangtise-copilot/references/skill_registry.md",       "<skills-dir>/gangtise-copilot/references/skill_registry.md"),
+    ("daymade-financial/gangtise-copilot/references/known_issues.md",         "<skills-dir>/gangtise-copilot/references/known_issues.md"),
+    ("daymade-financial/gangtise-copilot/references/best_practices.md",       "<skills-dir>/gangtise-copilot/references/best_practices.md"),
+    ("daymade-financial/gangtise-copilot/config-template/authorization.json.example", "<skills-dir>/gangtise-copilot/config-template/authorization.json.example"),
 ]:
     size = fetch_github_file(path, local)
     print(f"OK {path} → {local} ({size} bytes)")
@@ -109,7 +110,7 @@ bash <gangtise-copilot-dir>/scripts/configure_auth.sh \
 bash <gangtise-copilot-dir>/scripts/diagnose.sh
 ```
 
-Expected output: **9 pass ✅, 0 fail ❌** — all 19 skills present, credentials valid, RAG reachable.
+Expected output: no `❌` lines. The exact pass count depends on which agents and preset are installed. A successful OAuth check only proves that the credentials can mint a token; the RAG line separately reports reachable, empty success, permission denial, authentication rejection, or a quota/entitlement response.
 
 If any ❌ or ⚠️ remains, cross-reference with `references/known_issues.md`.
 
@@ -217,7 +218,7 @@ bash scripts/install_gangtise.sh --target claude-code  # force single target
 
 | Preset | Skills | Intended for |
 |---|---|---|
-| **minimal** (default) | `gangtise-data`, `gangtise-file`, `gangtise-kb` | Conservative install that works on any account that can authenticate. Uses public `open-*` endpoints only — immune to ISSUE-007. Covers OHLC, financials, announcements, foreign reports, RAG retrieval. |
+| **minimal** (default) | `gangtise-data`, `gangtise-file`, `gangtise-kb` | Conservative install for accounts with access to the public `open-*` endpoints. It avoids the ISSUE-007 `skills-backend/*` ACL, while API points and product permissions still apply. Covers OHLC, financials, announcements, foreign reports, and RAG retrieval. |
 | **workshop** | (alias for `minimal` — same 3 skills) | Historical preset bundled 7 `-client`-heavy skills, but those are blocked by ISSUE-007 on most accounts and produce a broken live demo. The preset now points at the same 3 skills as `minimal` so it can no longer footgun a workshop. |
 | **full** | All 19 skills | Both lines side-by-side. Useful for exploring the full Gangtise catalog. **Most `-client` skills will fail at runtime if your account lacks `skills-backend/*` ACL** — confirm with the diagnostic in ISSUE-007 first. |
 
@@ -281,7 +282,7 @@ The diagnostic script is **strictly read-only**. It checks:
 - Whether `~/.config/gangtise/authorization.json` exists with mode 600
 - Whether each skill's local credential file is a valid symlink pointing at the shared XDG file
 - Whether the stored credentials pass a live authentication call (short probe that only needs `oauth/open/loginV2`)
-- Whether the canonical RAG endpoint responds to a minimal query (scoped liveness check — proves the credential has `rag` scope, not just auth scope)
+- Whether the canonical RAG endpoint responds to a minimal query. The result distinguishes a successful response with matches, a successful empty response, authentication rejection, permission denial, a quota/entitlement response, malformed response, and network failure. It retains HTTP status, API code, `errorType`, and `traceId` without printing credentials or the complete token response.
 
 Exit codes:
 
