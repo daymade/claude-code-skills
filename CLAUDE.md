@@ -142,6 +142,16 @@ them instead of restating volatile protocol facts. The repository-wide
 local-source activation contract below still applies—never hand-create Codex
 Skill links.
 
+### Codex Quota and Account Checks
+
+For Codex reset announcements or account quota questions, enter
+[tibo-reset-codex](tibo-reset-codex/SKILL.md). Follow its
+[account usage SOP](tibo-reset-codex/references/account-usage.md) for authentication,
+per-account verification and browser restoration. Treat
+[query_usage.py](tibo-reset-codex/scripts/query_usage.py) as the executable authority
+for query parameters, supported response fields and exit behavior. Keep detailed
+commands and changing account state out of this file.
+
 ### WeCom Send Boundary
 
 WeCom sender skills must read an explicit target class. `self` may send to the

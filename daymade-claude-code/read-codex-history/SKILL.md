@@ -52,6 +52,14 @@ The requested output wins over the motivation. “Show my recent original inputs
 means a chronological raw-input table, not feedback classification, topic mining,
 an interactive app, or all historical sessions.
 
+For “how many messages/feedback did I give in this conversation; list them
+verbatim,” read [references/user_input_reconciliation.md](references/user_input_reconciliation.md).
+Combine the existing ledger and exact-lineage readers only when the requested
+conversation includes inherited history or needs its boundary verified. State
+the counting unit and cutoff, retain repeated submissions, and reconcile the
+number with the complete quoted list; do not call message counts a count of
+distinct criticisms. Keep ordinary recent-input requests on the ledger-only route.
+
 ## Commands
 
 Resolve scripts relative to this SKILL.md. Do not rebuild the join with ad-hoc
