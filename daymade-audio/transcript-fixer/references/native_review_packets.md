@@ -23,6 +23,9 @@ the remaining work. Resolve relative input paths against the manifest directory.
 }
 ```
 
+Run these commands from the transcript-fixer skill directory. Create
+`review-files.json` using the manifest shape above and real input paths.
+
 ```bash
 uv run scripts/native_review.py prepare \
   --manifest review-files.json --output native-review-run
@@ -36,8 +39,8 @@ its tier. `plan.json` records source hashes, all files, explicit
 Fast exclusions, and the expected segments. `packets/` contains numbered source
 lines with file-absolute, one-based line numbers. `results/` starts empty.
 
-Defaults limit each segment to 900 source lines and 18,000 Unicode characters,
-with up to 50 overlapping lines. These are input budgets, not token estimates;
+Read current segment defaults in [native_review.py](../scripts/native_review.py).
+Line, Unicode-character, and overlap limits are source-input budgets, not token estimates;
 packet headers and line-number prefixes add some text. Adjust `--max-lines`,
 `--max-chars`, and `--overlap` explicitly when necessary. A single source line
 larger than the character budget is refused before writing; raise the budget or
@@ -119,7 +122,7 @@ valid results; retry only missing or failed assignments. Remove or replace an
 invalid result only after preserving evidence needed to diagnose it. Conflicting
 results for one segment require explicit reconciliation, not last-file-wins.
 
-Keep three states separate in the final handoff: independent review coverage,
+Keep these states separate in the final handoff: independent review coverage,
 the exact-file queue's pending verdicts, and the owning repository's archival or
 publication state. A pushed file may still be a draft. Use current queue readbacks
 and the caller's Git workflow; this helper neither publishes nor grants approval.

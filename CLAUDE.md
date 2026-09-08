@@ -116,6 +116,19 @@ deterministic, Linux-verified) and the runner types (`python-unittest` via
 check the registry before assuming otherwise, and note `unittest discover`
 only collects `unittest.TestCase` subclasses, not bare pytest-style functions.
 
+### Transcript Correction
+
+Use [transcript-fixer](daymade-audio/transcript-fixer/SKILL.md) for transcript
+correction. Its Native checklist owns the correction and finalization order;
+[Native review packets](daymade-audio/transcript-fixer/references/native_review_packets.md)
+owns split, batch, and resumed review instructions. Keep CLI parameters and
+validation behavior in
+[native_review.py](daymade-audio/transcript-fixer/scripts/native_review.py), and
+queue anchor behavior in
+[review_queue.py](daymade-audio/transcript-fixer/scripts/core/review_queue.py).
+When changing these paths, update their owning instructions together; keep
+review coverage, unresolved verdicts, and repository publication distinct.
+
 ### Prior Work Retrieval Boundary
 
 `prior-work-retrieval` creates an obligation only for an explicit prior-work,
