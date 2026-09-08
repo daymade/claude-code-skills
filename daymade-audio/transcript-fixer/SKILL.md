@@ -79,7 +79,7 @@ The Stage 1 JSON contract is:
 }
 ~~~
 
-Read all eleven fields. `boundary_refused` counts dictionary matches the word-boundary check refused this run — neither applied nor deferred, so a caller comparing runs can see why a deferral disappeared; `--apply-all` switches that check off. `stage1_only_incomplete` is additive to the original six-field caller contract and must remain true for a Stage 1 script run; only the caller can close it by running Native AI, or by explicitly choosing the agent-less Stage 2/3 route. The three `stage2_*` telemetry fields are always present: Stage 1 reports `0`, `0`, and `false`; Stage 2/3 replace them with the actual API outcome. Do not infer no-op or success from whether a sidecar exists.
+Read every field in the result. `boundary_refused` counts dictionary matches the word-boundary check refused this run — neither applied nor deferred, so a caller comparing runs can see why a deferral disappeared; `--apply-all` switches that check off. `stage1_only_incomplete` is additive to the original caller contract and must remain true for a Stage 1 script run; only the caller can close it by running Native AI, or by explicitly choosing the agent-less Stage 2/3 route. The `stage2_*` telemetry fields are always present: Stage 1 reports `0`, `0`, and `false`; Stage 2/3 replace them with the actual API outcome. Do not infer no-op or success from whether a sidecar exists.
 
 For a native end-to-end example, read [references/example_session_dji_minutes.md](references/example_session_dji_minutes.md).
 
@@ -111,7 +111,8 @@ Use vocabulary and stakes as the primary tier signals; use length only as a tieb
 7. **Apply the smallest edit that explains the sound.** Do not add words the speaker did not say. Correct ASR-derived metadata too, while leaving `asr_note` intact. A Stage 1 deferral you now agree with is closed through its queue row, not re-applied with sed: `--resolve-review <id> --decision accepted` (ids from `--list-review --review-file "<absolute-canonical-file>" --json`) performs the edit, or records a fix you already applied by hand without writing. Either way the row ends `accepted`; `kept_original` asserts the transcript was right as spoken and is never the exit for a fix you applied.
 8. **Run a second pass.**
    - Every tier: run `--scan-traps` and inspect both hits and `unparsed`.
-   - Full tier: use a fresh-context reviewer on exactly one corrected file. Require a compact residual table or explicit `no new residuals`; an empty/truncated response is a failed review.
+   - Full tier: use fresh-context review. For a single unsplit review, assign one corrected file and require a compact residual table or explicit `no new residuals`; an empty/truncated response is a failed review.
+   - For a split, multi-file, or resumed Full review, follow [native_review_packets.md](references/native_review_packets.md) for packet assignment, JSON results, validation, and recovery.
    - High-stakes multi-recording: a sampled clip settles only that anchored item. If the user asked for a higher-quality or complete transcript and the baseline audio is available, load **`/daymade-audio:asr-transcribe-to-text`** and run its full-file transcription path across the complete clearest/canonical recording before claiming whole-transcript coverage; otherwise report `sampled cross-check only — incomplete`. Prefer a recognizer different from the producer of the canonical body. If only the same recognizer is available, the run proves complete-source coverage but is not independent cross-recognizer corroboration; state that boundary.
 9. **Enqueue every unresolved item and open only this file.** Follow `Review queue safety` below and [review_queue_dashboard.md](references/review_queue_dashboard.md). Detection and enqueueing are not correction: for a higher-quality/final claim, every queue row anchored to this exact file must leave `pending`. Start the dashboard with `uv run scripts/review-dashboard/server.py --file "<absolute-canonical-file>"`; add `--item <id>` to land on one fork. If a human is unavailable, keep the artifact explicitly labeled `draft / unresolved — incomplete` and enumerate the rows; do not ship the raw suspect text under a completed quality claim.
 10. **Read back the human state, then finalize.** When the human says they marked the dashboard, do not rerun ASR or ask the same questions again. First run `uv run scripts/fix_transcription.py --list-review --review-file "<absolute-canonical-file>" --review-status all --json`, apply any resulting file state, and require `stats.pending_total == 0` for that exact path; zero pending rows is required before the high-quality/final claim. Then diff the file actually edited, run numeric consistency when numbers matter, rerun plain Stage 1, re-grep known corrections, and confirm every change traces to a triage decision. Global queue counts cannot close or reopen this file's quality claim. Last, run `--close-sidecars --input "<absolute-canonical-file>"`: it re-reads every `*_changes.md`/`*_needs_review.md` entry against the file and the queue, refuses while an entry still reads as the original without a verdict or any row is pending, and removes the sidecars only when everything is closed (see `Finalization`).
@@ -126,13 +127,23 @@ Use vocabulary and stakes as the primary tier signals; use length only as a tieb
     ~~~
 
     Every emitted bullet is round-trip verified through the real trap parser before printing, and pairs already documented in the context file are skipped. A pair the bullet grammar cannot carry — a side with no lexical content or a `*` in it, such as a vendor's `***` redaction mask diffed against the real word — is dropped at the noise filter, and any bullet that still fails to parse is reported on stderr and excluded rather than aborting the run. High-frequency candidates are strong traps; single-occurrence ones need a human judgment — that is why `--write` leaves them out by default — and ⚠️ 裸形 candidates are never auto-written. This replaces hand-writing trap bullets from memory.
-12. **Propagate entity fixes deliberately.** Search only the owning project’s derived notes/summaries, review every hit, and exclude raw ASR and correction sidecars because they preserve the evidence trail.
+12. **Propagate entity fixes deliberately.**
+
+    First finish the same-file sweep: inspect `harvest_corrections.py --json`
+    entries with nonzero `remaining`, then check the observed spelling family of
+    each confirmed entity or technical identifier across body and ASR-derived
+    metadata. Use the authoritative spelling and conventional filename casing;
+    a user's informal dictation is not a request to preserve a typo. Preserve real
+    alternate referents, aliases, and generic-character hits. Do not turn a
+    same-file sweep into an unreviewed batch replacement or repeat settled questions. Then search
+    only the owning project’s derived notes/summaries and review every hit; exclude
+    raw ASR and correction sidecars because they preserve the evidence trail.
 
 The detailed provenance bar, local-first entity ladder, second-pass prompt, queue payload, and finalization rules are in [references/native_ai_full_workflow.md](references/native_ai_full_workflow.md).
 
 ## Cross-skill caller contract
 
-A caller pipeline has two independent obligations:
+A caller pipeline must:
 
 1. Run Stage 1 with the explicitly configured project domain(s), `--apply-domain`, and `--json`. If `deferred > review_enqueued`, persist the review sidecar outside any temporary directory or surface the gap as failure.
 2. Run Native AI with this skill loaded, or report `Stage 1 only — incomplete`. Agent-less automation may use Stage 3 instead.
@@ -200,7 +211,7 @@ Minimum item:
     "original": "<suspect-token-only>",
     "suggested": "<best-candidate>",
     "kind": "entity",
-    "context": "<verbatim whole sentence>",
+    "context": "<verbatim sentence, or unique clause/span for same-line repeats>",
     "evidence": "<what was checked>"
   }
 ]
@@ -331,6 +342,7 @@ All references are one level from this file.
 | Need | Read |
 |---|---|
 | Full native correction sequence | [native_ai_full_workflow.md](references/native_ai_full_workflow.md) |
+| Split/batch cold-review packets, result validation, and interruption recovery | [native_review_packets.md](references/native_review_packets.md) |
 | Dictionary, people roster, domain contexts | [dictionary_identity_and_context.md](references/dictionary_identity_and_context.md) |
 | False-positive policy | [false_positive_guide.md](references/false_positive_guide.md) |
 | Queue, dashboard, audio, re-anchor | [review_queue_dashboard.md](references/review_queue_dashboard.md) |

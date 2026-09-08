@@ -305,7 +305,7 @@
       "description": "Audio processing suite covering the full speech pipeline: ASR transcription (Qwen3, StepFun) with batch-mode guards against music-only repetition-loop hallucinations, speaker diarization and CAM++ voiceprint identification for multi-speaker recordings, transcript error correction, structured meeting minutes generation, and TTS voice synthesis (StepFun). Install once for the complete audio workflow.",
       "source": "./daymade-audio",
       "strict": false,
-      "version": "1.34.2",
+      "version": "1.35.1",
       "category": "suite",
       "keywords": [
         "suite",
@@ -772,7 +772,7 @@
       "description": "Diagnoses concrete tunnel and proxy-path failures across macOS and Windows/WSL: Tailscale routing, proxy env/system bypass, SSH double tunneling, VM/container propagation, stalled DNS, TUN DIRECT split-brain, Windows-host TUN cascades, and single-hop or chained proxy node/exit throughput. Use when Tailscale ping works but SSH/HTTP fails, browser returns 503 while curl works, Git SSH closes through the proxy, Docker pull/build fails behind TUN, getaddrinfo stalls while nslookup is fast, raw probes report physically impossible results, domestic DIRECT-routed sites fail while proxied sites work, a blocked port could be your tunnel or the destination's firewall, or the proxy is reachable but real downloads and full Git clones crawl. Also use when Git reports \"failed to begin relaying via HTTP\", ssh -vvv freezes at \"debug2: resolving\", ping works but dig times out, or setting up Tailscale SSH to WSL. Use debugging-network-issues only when the root cause remains unknown or belongs to an application/protocol layer.",
       "source": "./tunnel-doctor",
       "strict": false,
-      "version": "1.11.1",
+      "version": "1.11.2",
       "category": "developer-tools",
       "keywords": [
         "tailscale",
@@ -1157,7 +1157,7 @@
       "description": "查询 ChatGPT/Codex 重置公告及多个 Pro 账号的剩余额度、备用 Full reset；复用 Google 登录逐个核实并恢复网页账号，换算北京时间。区分 Tibo 官宣、未官宣的平台静默重置、banked reset 与账户级周期重置。Use when 用户问「什么时候重置」「额度什么时候恢复」「下次全员重置几点」 「banked reset 到了吗」「Tibo 说了什么」「usage limit when reset」，或说「额度突然回到 100%」「好像/肯定又重置了」，或问「几个账号都用完了吗」「哪个还满额」。必须用实时产品状态、独立用户实测与公告交叉核验；禁止因 Tibo Radar 没有新条目就否定已经发生的重置，并须把太平洋时间当场换算为北京时间。",
       "source": "./tibo-reset-codex",
       "strict": false,
-      "version": "1.6.1",
+      "version": "1.7.0",
       "category": "utilities",
       "keywords": [
         "chatgpt",
