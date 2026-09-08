@@ -3249,6 +3249,7 @@ main 在上次 review 后变了，重新告诉我现在真正会合进去什么
 **主要能力：**
 - 列出 Codex Session、内部时间范围和 active/archive 来源
 - 从 prompt ledger 精确读取用户输入，从新到旧且只按 Session 分组
+- 自动核对整段会话及精确继承范围内的原话与条数；明确报告未决归属，注入消息的排除须绑定已核实记录及其指纹
 - 把一个 rollout 重建为按时间交替的用户／Assistant 时间线，并保留 fork 精确字节边界与 compaction
 - Codex-only 搜索不会再把 Claude 命中混进来
 - 通过 schema 检查选择兼容的 Codex 状态数据库

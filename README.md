@@ -3244,6 +3244,7 @@ never silently substituted for one another.
 **Key features:**
 - Lists Codex sessions with internal time ranges and active/archive provenance
 - Extracts exact prompt-ledger inputs newest-first and groups them only by Session
+- Reconciles whole-conversation input counts and literal quotations across exact inherited snapshots; reports unresolved membership and accepts only record-bound reviewed injection exclusions
 - Reconstructs one rollout as a chronological user/assistant timeline with exact fork byte boundaries and compacted context
 - Searches Codex rollouts only; it cannot silently mix Claude matches into a Codex request
 - Selects a compatible Codex state database through schema introspection
