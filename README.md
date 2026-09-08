@@ -3572,7 +3572,7 @@ they become load-bearing data.
 
 > **Install**: `claude plugin install tibo-reset-codex@daymade-skills`
 
-查询重置公告，核实多个 Pro 账号的剩余额度与备用重置。
+查询重置公告，核实多个 Pro 账号的剩余额度与备用重置；预测下一轮时间，并在本地保存预测、核对结果，供后续判断调整。
 
 [操作说明](tibo-reset-codex/SKILL.md)
 
