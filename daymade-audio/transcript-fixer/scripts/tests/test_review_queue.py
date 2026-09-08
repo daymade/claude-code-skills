@@ -57,6 +57,23 @@ def test_same_line_unique_span_still_works():
     assert ReviewQueue._locate_anchor(text, "旧词", 1, text.strip()) == text.index("旧词")
 
 
+def test_overlapping_same_line_span_refuses_ambiguous_context():
+    with pytest.raises(ReAnchorNeeded, match="more than once"):
+        ReviewQueue._locate_anchor("哈哈哈\n", "哈哈", 1, "哈哈哈")
+
+
+def test_overlapping_span_verdict_preserves_transcript_and_pending(queue, tmp_path):
+    target = tmp_path / "overlap.txt"
+    before = "哈哈哈\r\n".encode("utf-8")
+    target.write_bytes(before)
+    item_id = queue.enqueue([{"file": str(target), "line": 1, "original": "哈哈",
+                              "suggested": "笑声", "context": "哈哈哈"}])["added"][0]
+    with pytest.raises(ReAnchorNeeded, match="more than once"):
+        queue.resolve(item_id, "accepted")
+    assert target.read_bytes() == before
+    assert queue.get(item_id).status == "pending"
+
+
 def test_repeated_span_refusal_preserves_transcript_and_pending_verdict(queue, tmp_path):
     target = tmp_path / "same-line.txt"
     before = "先读旧词，再校对旧词。\r\n".encode("utf-8")

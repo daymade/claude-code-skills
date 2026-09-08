@@ -82,7 +82,8 @@ labels, timestamps, user verdicts, and the correction ledger.
 uv run scripts/native_review.py check --run native-review-run
 ```
 
-The checker verifies snapshot and packet integrity, the expected coverage union,
+The checker verifies snapshot and packet integrity, reconstructs each packet from
+the validated snapshot, and checks the expected coverage union,
 result IDs/hashes/bounds, every literal span at its stated line, and whether the
 current canonical files still match the reviewed snapshots. It deduplicates exact
 overlap rows while retaining different suggestions for the same occurrence.

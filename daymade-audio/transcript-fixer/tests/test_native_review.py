@@ -150,6 +150,25 @@ class NativeReviewTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "packet changed"):
             nr.check(self.run)
 
+    def test_changed_packet_and_plan_digest_cannot_hide_omitted_text(self):
+        p = self.prepare()
+        self.results(p)
+        s = p["segments"][0]
+        packet = self.run / s["packet"]
+        packet.write_bytes(packet.read_bytes().replace("先读旧词，再校对旧词。".encode(), "别的文字。".encode()))
+        s["packet_sha256"] = nr.digest(packet.read_bytes())
+        (self.run / "plan.json").write_text(json.dumps(p))
+        with self.assertRaisesRegex(ValueError, "differs from source snapshot"):
+            nr.check(self.run)
+
+    def test_overlapping_occurrences_are_counted(self):
+        row = {"line": 1, "original": "哈哈", "suggested": "笑声", "reason": "合成例子。"}
+        segment = {"id": "s", "sha256": "h", "start": 1, "end": 1}
+        result = {"segment_id": "s", "sha256": "h", "start": 1, "end": 1,
+                  "read_complete": True, "residuals": [row]}
+        rows = nr.validate_result(result, segment, {"file": "x", "lines": ["哈哈哈"]})
+        self.assertEqual(rows[0]["occurrences_on_line"], 2)
+
     def test_existing_output_duplicate_input_and_bad_tier_preserve_files(self):
         self.prepare()
         before = (self.run / "plan.json").read_bytes()

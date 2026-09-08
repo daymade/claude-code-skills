@@ -1013,7 +1013,7 @@ class ReviewQueue:
         # "<变体>→<正名>" became "<正名>→<正名>" — a ledger contradicting itself,
         # reported as a successful replace.)
         masked, ledger_spans = _mask_ledger_spans(content)
-        count = masked.count(old)
+        count = sum(1 for _ in re.finditer("(?=" + re.escape(old) + ")", masked))
         line_no = action.get("expect_line") or item.line_number
         verdict = self._already_applied_verdict(
             masked, old, new, item.context_snippet, line_no)
@@ -1279,7 +1279,7 @@ class ReviewQueue:
             # line. A verbatim, narrower context containing the token once can;
             # a full-line context containing it twice must remain ambiguous.
             exact = snippet.strip()
-            if exact.count(needle) == 1:
+            if sum(1 for _ in re.finditer("(?=" + re.escape(needle) + ")", exact)) == 1:
                 contextual = []
                 for line_number, offset in candidates:
                     line = lines[line_number - 1]

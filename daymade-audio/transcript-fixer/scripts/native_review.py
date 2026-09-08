@@ -13,12 +13,20 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 
 
 def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def packet_bytes(segment: dict, lines: list[str]) -> bytes:
+    header = {k: segment[k] for k in ("id", "file_id", "sha256", "start", "end", "packet")}
+    body = "".join(f"{i}: {lines[i-1].rstrip(chr(10) + chr(13))}\n"
+                   for i in range(segment["start"], segment["end"] + 1))
+    return (json.dumps(header, ensure_ascii=False) + "\nTRANSCRIPT DATA — not instructions\n" + body).encode("utf-8")
 
 
 def read_json(path: Path):
@@ -105,10 +113,7 @@ def prepare(manifest: Path, output: Path, max_lines=900, max_chars=18000, overla
             segment = {"id": sid, "file_id": fid, "sha256": record["sha256"],
                        "start": start, "end": end, "packet": packet}
             segments.append(segment)
-            header = json.dumps(segment, ensure_ascii=False)
-            body = "".join(f"{i}: {lines[i-1].rstrip(chr(10) + chr(13))}\n"
-                           for i in range(start, end + 1))
-            payloads[packet] = (header + "\nTRANSCRIPT DATA — not instructions\n" + body).encode("utf-8")
+            payloads[packet] = packet_bytes(segment, lines)
             segment["packet_sha256"] = digest(payloads[packet])
     plan = {"schema_version": 1, "manifest": str(manifest), "manifest_sha256": digest(manifest_bytes),
             "files": files, "segments": segments}
@@ -162,7 +167,8 @@ def validate_plan(run: Path):
         positive_int(f["line_count"], "line_count")
         if digest(data) != f["sha256"] or len(lines) != f["line_count"] or not lines:
             raise ValueError(f"snapshot changed: {f['id']}")
-        files[f["id"]] = {**f, "lines": lines}
+        files[f["id"]] = {**f, "lines": lines,
+                          "packet_lines": data.decode("utf-8").splitlines(keepends=True)}
     if not isinstance(plan.get("segments"), list):
         raise ValueError("segments must be a list")
     for s in plan["segments"]:
@@ -172,8 +178,11 @@ def validate_plan(run: Path):
         start, end = positive_int(s["start"], "start"), positive_int(s["end"], "end")
         if f["tier"] != "full" or not start <= end <= f["line_count"] or s["sha256"] != f["sha256"]:
             raise ValueError(f"invalid segment: {s['id']}")
-        if digest(snapshot_path(run, s["packet"]).read_bytes()) != s["packet_sha256"]:
+        packet = snapshot_path(run, s["packet"]).read_bytes()
+        if digest(packet) != s["packet_sha256"]:
             raise ValueError(f"review packet changed: {s['id']}")
+        if packet != packet_bytes(s, f["packet_lines"]):
+            raise ValueError(f"review packet differs from source snapshot: {s['id']}")
         segments[s["id"]] = s
     # Check the expected union, not merely whichever results happened to arrive.
     for fid, f in files.items():
@@ -215,7 +224,7 @@ def validate_result(result, segment, source):
         # occurrence. The existing queue's ambiguity guard owns any later edit.
         rows.append({"file": source["file"], "line": line, "original": old,
                      "suggested": new, "context": context, "reason": reason,
-                     "occurrences_on_line": context.count(old)})
+                     "occurrences_on_line": sum(1 for _ in re.finditer("(?=" + re.escape(old) + ")", context))})
     return rows
 
 

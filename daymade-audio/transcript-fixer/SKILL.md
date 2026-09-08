@@ -209,7 +209,7 @@ Minimum item:
     "original": "<suspect-token-only>",
     "suggested": "<best-candidate>",
     "kind": "entity",
-    "context": "<verbatim whole sentence>",
+    "context": "<verbatim sentence, or unique clause/span for same-line repeats>",
     "evidence": "<what was checked>"
   }
 ]
