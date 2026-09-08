@@ -30,6 +30,34 @@ general method when the boundary is still unknown or the symptom belongs to
 SSE/CDN/application protocol behavior. This keeps one concrete operator instead
 of forcing the user to choose between two overlapping proxy doctors.
 
+## Target and task scope
+
+Before remote probes or changes, establish whether the target is a designated test machine,
+an explicitly requested colleague's working computer, or unknown. Use the owner's existing
+machine-purpose ledger and current task; do not log into a colleague's machine to classify it.
+Saved SSH access and previous successful tests do not grant ongoing use. Use designated test
+machines for routine testing; their unavailability does not authorize another person's computer.
+
+Keep an explicitly requested one-off test on a colleague's computer within its stated result
+and necessary verification. Stop there on completion, cancellation, or a need for an unapproved
+environment change. Move later performance, migration, and regression tests to designated test
+machines. A test failure does not authorize disabling that person's proxy/VPN, quitting apps,
+changing routes, or installing a background task. Proceed with disruptive repair there only
+when the user has explicitly requested that repair and its interruption. Existing authorization
+for owner test-machine maintenance remains valid; do not ask again for its routine steps.
+
+Apply this boundary even when invoked directly, through another Skill, after compaction, or
+through a peer handoff. After access is stopped, use existing records rather than another SSH
+probe to verify that it stopped.
+
+## Disruptive network changes
+
+Before any authorized VPN disconnect, app termination, route cutover, or service restart,
+read [network_change_recovery.md](references/network_change_recovery.md). Validate prerequisites
+before interruption, arm bounded recovery before the first disruptive action, and verify both
+the repaired path and the user's original network use. A successful stop command, a detached
+process, or a restart placed at the end of a script is not recovery evidence.
+
 ## Conflict Layers
 
 Proxy/VPN tools on macOS create conflicts at several independent layers. Layers 1-3 affect Tailscale connectivity; Layer 4 affects SSH git operations; Layer 5 affects VM/container runtimes. TUN-state failure modes beyond this table — SSH/git connection drops, resolver stall, DIRECT split-brain — are covered in Steps 2H–2J:
@@ -776,14 +804,16 @@ curl -sS -o /dev/null -w '%{http_code}\n' --resolve <domain>:443:<real-ip> https
 
 If step 3 also fails, this is not split-brain — treat it as a real local-network outage.
 
-**Fix** — restart the tunnel, then flush the OS DNS cache (stale fake-IP entries survive the reconnect):
+**Fix** — when network maintenance and its interruption are authorized, restart the exact
+tunnel under the [recovery contract](references/network_change_recovery.md), then flush the OS
+DNS cache if stale fake-IP entries remain. Identify the service from its current configuration;
+never substitute the Tailscale control tunnel or terminate the proxy app as a shortcut. For
+Shadowrocket, `shadowrocket://disconnect` and `shadowrocket://connect` request transitions;
+verify the actual VPN state after each. Do not chain them with `&&`: a failure between them
+must still reach the armed recovery action. Use the corresponding API or GUI for other clients.
 
-```bash
-# Shadowrocket (URL scheme; Clash/Surge: use their API or GUI toggle)
-open "shadowrocket://disconnect" && sleep 3 && open "shadowrocket://connect" && sleep 6
-
-sudo killall -HUP mDNSResponder
-```
+Run `sudo killall -HUP mDNSResponder` only within the authorized maintenance scope after the
+tunnel is confirmed connected; DNS cache flushing does not restore a disconnected VPN.
 
 **Verify all four planes** — a fix that restores one plane can leave (or put) another down:
 
