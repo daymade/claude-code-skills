@@ -1,11 +1,14 @@
 ---
 name: pdf-creator
-description: Convert markdown files to professional PDF documents with proper Chinese font support, theme system, and visual self-check. Use whenever the user asks to create PDFs, convert markdown to PDF, generate printable documents, or needs documents formatted for print or mobile reading. This skill MUST be used instead of manual pandoc/Chrome invocations — it handles CJK typography, Chrome header/footer suppression, and mandatory visual verification that manual approaches miss. **Scope — markdown → PDF only.** For Word (.docx) output use `daymade-docs:docx-creator`; this skill does not produce docx and the two pipelines are intentionally orthogonal.
+description: Convert markdown files to professional PDF documents with proper Chinese font support, theme system, and visual self-check. Use for Markdown → PDF, printable Markdown documents, and Markdown formatted for print or mobile reading. Prefer its CJK typography, header/footer suppression, and visual verification over manual pandoc/Chrome commands. Scope is Markdown → PDF only. Existing Word/WPS → PDF, including manuscript excerpts and layout repair, routes to daymade-docs:docx-creator; do not round-trip an authoritative Word manuscript through Markdown. Word output also routes to docx-creator.
 ---
 
 # PDF Creator
 
 Create professional PDF documents from markdown with Chinese font support and theme system.
+
+For an existing `.docx` source, use `docx-creator/references/word-to-pdf.md` instead.
+Choose by the authoritative input as well as the output suffix.
 
 ## Quick Start
 
@@ -152,7 +155,8 @@ uv run --with pdfplumber --with pillow --with numpy \
 | No theme system | One-size-fits-all; phone reading impossible | Three curated themes (default / warm-terra / mobile) |
 | `batch_convert.py` missing | Writing ad-hoc loops, inconsistent flags | Built-in batch mode with `--theme` support |
 
-**Rule:** When the user asks for PDF conversion, ALWAYS use this skill. Never bypass it with manual pandoc/Chrome commands.
+**Rule:** For Markdown → PDF, use this skill rather than manual pandoc/Chrome commands.
+For existing Word/WPS → PDF, use the docx-creator route above.
 
 ## Troubleshooting
 
