@@ -70,11 +70,14 @@ case of ROVER (Recognizer Output Voting Error Reduction, NIST 1997) — worth
 knowing by name, because the published work explains why voting across systems
 beats improving any one of them. Do not discard a "redundant" second recording
 of a meeting you already have; it is a reference transcript for exactly the
-values that matter most. If only one recording exists and a number is
-load-bearing, settle it by ear through the path this skill already has: wire the
+values that matter most. If only one recording exists, a number remains
+load-bearing and ambiguous, and the original audio is accessible, use the
 transcript's `audio:` frontmatter (see [review_queue_dashboard.md](review_queue_dashboard.md)), enqueue the number as a review item, and press `Q` in the review
-dashboard — it plays exactly the anchored utterance, so you hear the digits
-spoken instead of re-reading them. For names and terms rather than numbers, a
+dashboard — it plays the anchored utterance. If audio is inaccessible, return to
+[evidence selection and escalation](native_ai_full_workflow.md#evidence-selection-and-escalation):
+use available evidence, preserve unresolved readings, and continue other items.
+Do not require export permission or change the value merely to fit domain knowledge.
+For names and terms rather than numbers, a
 photographed in-room artifact can stand in as the second system — see "In-room
 artifacts are another independent engine" below.
 
@@ -163,6 +166,11 @@ sanctioned next step.**
 family and authorization are already known. Check those prerequisites before
 starting; do not install a model, download weights, or send audio externally just
 because this section names the capability.
+
+This is an optional evidence route. If the source cannot be downloaded or the
+recognizer is unavailable, return to [evidence selection and escalation](native_ai_full_workflow.md#evidence-selection-and-escalation).
+Do not turn this route's prerequisites into prerequisites for the entire correction
+task, or require someone to enable exports before other items can be adjudicated.
 
 - **Get the source audio** from whichever channel owns the recording — the
   meeting platform's API, the local file the transcript came from, the

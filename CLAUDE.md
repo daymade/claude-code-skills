@@ -119,7 +119,8 @@ only collects `unittest.TestCase` subclasses, not bare pytest-style functions.
 ### Transcript Correction
 
 Use [transcript-fixer](daymade-audio/transcript-fixer/SKILL.md) for transcript
-correction. Its Native checklist owns the correction and finalization order;
+correction. Its Native workflow owns evidence selection, selective human escalation,
+and correction/finalization order;
 [Native review packets](daymade-audio/transcript-fixer/references/native_review_packets.md)
 owns split, batch, and resumed review instructions. Keep CLI parameters and
 validation behavior in
