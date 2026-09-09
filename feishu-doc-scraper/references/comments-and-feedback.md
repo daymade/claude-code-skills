@@ -4,9 +4,13 @@ For each Feishu/Lark document being read, summarized, or archived, read its
 comments and replies alongside the body. Feedback may already explain how to
 handle a problem that the body still describes as unresolved. Acknowledgement,
 resolved status, implementation, and business acceptance remain separate facts.
+Apply this workflow to each referenced document actually opened, including children
+of a collection; do not wait for the user to mention comments.
 
 ## Capture
 
+Use [fetch_comments.py](../scripts/fetch_comments.py) as the executable authority
+for flags, defaults and exit behavior; inspect its `--help` when choosing options.
 Use the installed `lark-cli` guides for authentication and permissions. Before
 the first run, read `lark-drive`, its `lark-drive-list-comments.md`,
 `lark-drive-comments-guide.md`, and `lark-drive-comment-location.md` references.
@@ -43,7 +47,7 @@ a retry; this helper does not resume or alter old snapshots.
 The helper exhausts both pagination layers, deduplicates exact repeated IDs,
 and rejects changing IDs/records, missing cursors, or exhausted page limits.
 It always queries every thread's reply endpoint, including when the comment
-card does not advertise more replies. `--max-pages` caps each listing, default 100.
+card does not advertise more replies. Use `--max-pages` to cap each listing.
 
 Exit `0` means the selected threads and their text were captured completely,
 including a genuine empty scope. Exit `3` means partial: inspect `errors` and
