@@ -130,6 +130,16 @@ queue anchor behavior in
 When changing these paths, update their owning instructions together; keep
 review coverage, unresolved verdicts, and repository publication distinct.
 
+### Feishu Document Capture
+
+For Feishu document reads and archives, enter
+[feishu-doc-scraper](feishu-doc-scraper/SKILL.md). Its
+[comments and feedback SOP](feishu-doc-scraper/references/comments-and-feedback.md)
+owns discussion capture and interpretation; the bundled helper owns the CLI
+interface. For filing, use its
+[archive storage contract](feishu-doc-scraper/references/archive-storage-contract.md)
+alongside the destination repository's storage SOP.
+
 ### Prior Work Retrieval Boundary
 
 `prior-work-retrieval` creates an obligation only for an explicit prior-work,

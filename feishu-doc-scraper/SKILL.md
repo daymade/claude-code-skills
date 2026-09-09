@@ -13,14 +13,9 @@ Extract a Feishu/Lark source into faithful local Markdown. **Prefer the lark-cli
 
 This skill's contract is **faithful per-source Markdown + a record of what was extracted**. It does *not* decide how the resulting files are named, indexed, deduplicated against existing notes, or organized into a knowledge base — that belongs to the host PKM / the user's own conventions. Stopping at faithful extraction keeps this skill orthogonal and reusable. When the user wants the output filed into a vault, extract first, then hand the clean Markdown to their organizing workflow.
 
-**Read body and feedback together.** For every document read or archived, capture
-its comments and all replies using [comments and feedback](references/comments-and-feedback.md)
-and [fetch_comments.py](scripts/fetch_comments.py). This is part of ordinary reading,
-not a follow-up that waits for the user to mention comments. The default scope is
-unresolved comments; include resolved history when explicitly requested and record
-the scope. Link the discussion beside the body and read both before summarizing.
-An explicit body-only request may skip it with `comments: not_requested`. A failed
-comment read is an unknown coverage gap, not “no feedback”; retain the readable body.
+**For every document read or archived, load [comments and feedback](references/comments-and-feedback.md).**
+It owns the body-plus-discussion workflow, selected scope, body-only exception,
+snapshot commands, interpretation and coverage checks.
 
 **Extraction and durable storage are separate decisions.** A downloaded MP4/XLSX/DOCX/image is a working copy, not evidence that the file belongs in Git or Git LFS. For a knowledge-base archive, default to:
 
@@ -72,18 +67,6 @@ This does not conflict with any "Claude/Anthropic domains must use the proxy" ru
 - `…/minutes/<token>` — Minutes, go to **Path C**.
 
 **3. Fetch the body programmatically — never via the model.** The body field moved across lark-cli versions, so probe both rather than hard-coding one (this keeps working whichever version is installed):
-
-Pair each body capture with its discussion before interpreting the source. Follow
-the [comment capture reference](references/comments-and-feedback.md), using a
-document-specific output directory:
-
-```bash
-python3 <skill>/scripts/fetch_comments.py --url '<original-document-url>' --out-dir '<document-output>/discussion'
-```
-
-Preserve `discussion/comments.json`, link `discussion/comments.md` from the body
-as **Comments and feedback**, and read its complete threads. Run this for each
-referenced document actually opened, not just the collection's first page.
 
 ```bash
 lark-cli docs +fetch --doc <obj_token> --format json > /tmp/fetch.json 2> /tmp/fetch.err
@@ -169,17 +152,13 @@ These are the rules whose violation silently ruins the output. Each has a reason
 Stop only when all that apply are true:
 
 - Every fetched body reached disk via `jq`/script, not retyped by the model.
-- Every document has a captured and read discussion companion, or an explicit
-  body-only/unsupported/unavailable coverage state. Verify both comment and reply
-  pagination, selected solved scope, authors/timestamps, quoted source and anchor
-  status. Use relevant feedback in the summary; an “OK” reply or solved comment
-  does not prove the suggested work happened. See [comments and feedback](references/comments-and-feedback.md).
+- Apply the discussion acceptance rules in [comments and feedback](references/comments-and-feedback.md).
 - **Every fetched document — a lone doc as much as a collection**: every hit from the residual rich-media-tag check (Path A step 5, run recursively over the whole working directory) maps to a handled artifact — every `mention-doc`/`cite doc-id=`/`sheet`/cross-tenant reference was **followed** to a fetched leaf file, and every `whiteboard` reference was **exported and read** (not followed — a whiteboard is inline visual content, never a link to recurse into). Raw binaries then map to a stable platform/OSS locator plus optional verified local cache; structured/searchable derivatives map to versioned files. This is not a collections-only check: a standalone document can contain an unresolved `whiteboard` with zero other documents involved. Each document's own `.html` legitimately keeps showing its tags forever (it's an immutable raw capture, never rewritten — as long as each document got its own filename per step 3) — don't chase the grep itself to a literal zero.
 - The artifact manifest passes `python3 scripts/check_archive_storage.py <manifest>`: no raw binary is declared as Git storage, every external artifact has a stable locator, and every local cache is clearly marked as non-authoritative.
 - `LC_ALL=C grep -rl $'\xef\xbf\xbd' .` is empty.
 - docx path: rendered to an image and visually compared to the source; heading hierarchy and highlights match (see docx reference's checklist).
 - Browser fallback only: TOC coverage + scale check (see browser-failure-rules.md).
-- Each output file's frontmatter records `source` (the original URL/token) and, if any post-processing was applied, a `post_process` provenance line — the exact YAML shape and field list is **[references/lark-cli-api-extraction.md, Step 7](references/lark-cli-api-extraction.md)** (not shown in Path A's 5 numbered steps above, since it's a per-file finishing step rather than part of the fetch/recurse/check loop).
+- Each output file's frontmatter records `source` (the original URL/token) and, if any post-processing was applied, a `post_process` provenance line — use the **[per-file finishing procedure](references/lark-cli-api-extraction.md#step-7-frontmatter-and-provenance)**.
 - Permission gaps (131006 docs not exported yet, undownloadable images) are explicitly listed for the user — a transparent gap beats a silent omission.
 
 ## Do NOT attempt
@@ -194,7 +173,7 @@ Verified dead-ends — retrying them only wastes the session. Full table with fa
 
 ## Bundled resources
 
-- `scripts/fetch_comments.py` — capture comment cards and every reply page via lark-cli; writes a new JSON/Markdown snapshot and returns nonzero for partial coverage. Operating contract: [references/comments-and-feedback.md](references/comments-and-feedback.md).
+- [scripts/fetch_comments.py](scripts/fetch_comments.py) — executable comment-capture interface.
 - `scripts/feishu_extract_refs.py` — deterministic reference-token extractor; the recursion engine's core. Run it once per fetched document, on that document's own `<sanitized-title>.html` (prefer over `.md` — step 3), to enumerate `<mention-doc>`/`<sheet>`/`<image>`/`<whiteboard>`/cross-tenant/Minutes/Tencent-Meeting references as JSON.
 - `scripts/restore_docx_headings.py` — for Path B: reads true font sizes via python-docx, maps them to heading levels, restores `w:shd` highlights to Obsidian `==…==`, without retyping body text.
 - `scripts/feishu_dom_capture.js` — Path D: injectable end-to-end browser DOM capture.

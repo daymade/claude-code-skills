@@ -2,7 +2,7 @@
 
 Use this contract after faithful extraction and before filing the result into a knowledge base. It prevents a common category error: treating a successful download as proof that a raw binary belongs in Git.
 
-## One artifact, three independent properties
+## Artifact properties
 
 For each artifact record:
 
@@ -10,7 +10,12 @@ For each artifact record:
 2. `locator` says how to retrieve that durable object.
 3. `cache_path` is optional and never changes the source of record. A cache may disappear on another machine without making the archive incomplete.
 
-Git is the default only for searchable structured material: Markdown, CSV, JSON, YAML, text, XML, and source HTML. The artifact role, path, and MIME must also agree with that structured format. A structured path normally has exactly one extension; the only multi-extension exception is a terminal version suffix such as `report-v2.0.md`, and the filename before that version may not contain another dot. This rejects `clip.mp4.md`, `photo.heic.md`, and `clip.mp4-v2.0.md` without pretending that a filename replaces byte/MIME verification. MP4, Office files, PDFs, and raster/vector images are raw binaries and must not use `storage: git` or Git LFS under this contract.
+Git is the default only for searchable structured material: Markdown, CSV, JSON, YAML, text, XML, and source HTML. The artifact role, path, and MIME must also agree with that structured format. A structured path normally has exactly one extension; the only multi-extension exception is a terminal version suffix such as `report-v2.0.md`, and the filename before that version may not contain another dot. This rejects `clip.mp4.md`, `photo.heic.md`, and `clip.mp4-v2.0.md` without pretending that a filename replaces byte/MIME verification. MP4, Office files, PDFs, and raster/vector images are raw binaries and must not use `storage: git`.
+
+An LFS-compatible pointer does not identify the durable backend. If the host archive
+uses pointers with an authorized OSS transfer adapter, declare the binary as
+`storage: oss` with its OSS locator; the pointer and local checkout are retrieval
+mechanisms. Follow the host's storage SOP for upload and fresh-clone readback.
 
 `mime` records the capture-time detector result for the local artifact bytes. Markdown may therefore be `text/markdown`, `text/plain`, or `text/html` when faithful Markdown contains enough embedded HTML for the detector to classify it as HTML; the artifact role and path still remain structured Markdown.
 
