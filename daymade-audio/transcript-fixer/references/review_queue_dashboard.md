@@ -21,6 +21,11 @@ queue gives all three one persistent home in `corrections.db` (`review_items`),
 and the dashboard makes deciding them nearly free — that friction is what stood
 between "AI suspects an error" and "the dictionary learns the answer."
 
+A pending row records an unresolved occurrence; it does not assign the work to
+the user. Before asking for a verdict, follow [evidence selection and escalation](native_ai_full_workflow.md#evidence-selection-and-escalation).
+User-confirmed corrections are applied immediately; media-access failures do not
+reopen them or stop independent items.
+
 **Queue CLI** (all support `--json`):
 
 ```bash
