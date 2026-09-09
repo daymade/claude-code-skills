@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **github-ops** 1.3.0: Separate contributor Write access from default-branch integration, add the PR protection and entitlement/readback workflow, and document bounded recovery through an already authorized execution host.
+
 - **feishu-doc-scraper** 1.5.0: Capture document comments and complete reply threads alongside the body, preserving source anchors, authors, timestamps, and solved scope. Partial reads remain explicit and leave older snapshots untouched.
 
 ### Added

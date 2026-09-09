@@ -28,6 +28,7 @@ Read only the reference required for the task:
 | Create, edit, search, transfer, close, or bulk-manage issues | [`references/issue_operations.md`](references/issue_operations.md) |
 | Inspect, clone, create, edit, rename, archive, transfer, change visibility, or delete repositories | [`references/repository_operations.md`](references/repository_operations.md) |
 | Inspect or change collaborators, teams, base permissions, member privileges, or organization 2FA | [`references/organization_access_and_settings.md`](references/organization_access_and_settings.md) |
+| Protect a default branch while letting collaborators contribute through PRs | [`references/branch_protection.md`](references/branch_protection.md) |
 | Trigger, inspect, rerun, cancel, or purge Actions; manage secrets or variables | [`references/workflow_operations.md`](references/workflow_operations.md) |
 | Use raw REST/GraphQL endpoints, pagination, rate limits, webhooks, or Enterprise hosts | [`references/api_reference.md`](references/api_reference.md) |
 | Build scripts, retries, bulk operations, or machine-readable output | [`references/best_practices.md`](references/best_practices.md) |
@@ -51,6 +52,12 @@ This skill owns GitHub-hosted state.
 Do not turn a read-only investigation into a mutation because the fix looks obvious.
 Do not send a comment, review, issue, or invitation whose recipient or content was not
 authorized in the current task.
+
+For an authorized contributor, assess repository access against their ongoing contribution
+role, not just today's read or sync command. Repository Write access and permission to update
+the default branch are separate decisions. Follow the user's chosen contribution scope; use
+branch protection and PR review to control integration rather than silently reducing a
+contributor to Read. A diagnosis alone still does not authorize a grant.
 
 ### 2. Bind identity, host, and target
 
