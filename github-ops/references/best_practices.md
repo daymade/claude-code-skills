@@ -99,6 +99,26 @@ Do not blindly retry comments, reviews, invitations, workflow dispatches, releas
 creation, or PR/issue creation. After a timeout or 5xx, query by exact target/content/idempotency
 key first. Retry only if readback proves the first request did not land.
 
+### Use an already authorized execution host when the local path remains unavailable
+
+When bounded retries still show transport failures and a known owner-operated host offers a
+working route, continue the same GitHub operation there rather than changing the user's network
+to complete an unrelated task. Select that host from the owner's current machine registry;
+saved SSH access alone does not authorize using a colleague's working computer.
+
+Verify the remote OS identity, GitHub host and `gh api user` login, and the effective rights
+required by the requested operation. Require Admin for administrative changes, not for a
+contributor's ordinary branch push or PR. Use only that host's existing authorized login; do not copy tokens,
+borrow a colleague's credentials, or change the requested targets. Pass a reviewed JSON payload
+on stdin to `gh api --input -` when needed; keep secrets out of command arguments.
+
+If a prior mutation's outcome is uncertain, first read its exact target through the working
+route. A transport change is not permission to duplicate a PR, invitation, rule, or comment.
+Independently read the resulting state back, then stop using the temporary execution route.
+If no authorized host works, report the transport gap; do not invent a new proxy service or
+leave a background tunnel running. Topology and host-specific commands belong to the owner's
+machine runbook, not this public Skill.
+
 ## Safe bulk operations
 
 Bulk work is a sequence of exact single-object operations, not one unreviewed pipeline.
