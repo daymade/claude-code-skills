@@ -74,6 +74,13 @@ def require_id(item, field):
     return item[field]
 
 
+def element_text(element):
+    if not isinstance(element, dict) or element.get("type") != "text_run":
+        return None
+    run = element.get("text_run")
+    return run.get("text") if isinstance(run, dict) and isinstance(run.get("text"), str) else None
+
+
 def capture(url, solved_status="false", profile=None, max_pages=100, caller=call_cli):
     result = {"schema": "feishu-comments.v1", "source_url": url,
               "captured_at": datetime.now(timezone.utc).isoformat(),
@@ -131,20 +138,28 @@ def capture(url, solved_status="false", profile=None, max_pages=100, caller=call
                         elements = content.get("elements") if isinstance(content, dict) else None
                         if not isinstance(elements, list):
                             raise CaptureError("Reply has no content elements")
+                        extra = reply.get("extra")
+                        if extra is not None and not isinstance(extra, dict):
+                            raise CaptureError("Reply extra is not an object")
+                        images = (extra or {}).get("image_list")
+                        if images is not None and not isinstance(images, list):
+                            raise CaptureError("Reply image_list is not an array")
                         seen_replies[rid] = reply
                         thread["replies"].append(reply)
                         for element in elements:
-                            if (not isinstance(element, dict)
-                                    or element.get("type") != "text_run"
-                                    or not isinstance((element.get("text_run") or {}).get("text"), str)):
+                            if element_text(element) is None:
                                 result["unexpanded_content"].append({"comment_id": cid,
                                     "reply_id": rid, "element": element})
-                        images = (reply.get("extra") or {}).get("image_list")
                         if images:
                             result["unexpanded_content"].append({"comment_id": cid,
                                 "reply_id": rid, "image_list": images})
-                preview = (card.get("reply_list") or {}).get("replies", [])
-                if not thread["replies"] or any(r.get("reply_id") not in seen_replies for r in preview):
+                preview_list = card.get("reply_list")
+                if preview_list is not None and not isinstance(preview_list, dict):
+                    raise CaptureError("Comment reply_list is not an object")
+                preview = (preview_list or {}).get("replies", [])
+                if not isinstance(preview, list):
+                    raise CaptureError("Comment preview replies is not an array")
+                if not thread["replies"] or any(require_id(r, "reply_id") not in seen_replies for r in preview):
                     raise CaptureError("Reply listing is empty or lost replies from the comment preview")
                 thread["replies_complete"] = True
         result["threads_complete"] = True
@@ -184,8 +199,9 @@ def render(result):
             lines += [f"### {author} · reply {reply['reply_id']}",
                       f"Created (Unix seconds): {reply.get('create_time', 'unknown')}; updated: {reply.get('update_time', 'unknown')}", ""]
             for element in reply["content"]["elements"]:
-                if isinstance(element, dict) and element.get("type") == "text_run" and isinstance((element.get("text_run") or {}).get("text"), str):
-                    lines += [literal(element["text_run"]["text"]), ""]
+                text = element_text(element)
+                if text is not None:
+                    lines += [literal(text), ""]
                 else:
                     lines += ["Unexpanded content:", literal(json.dumps(element, ensure_ascii=False)), ""]
             if (reply.get("extra") or {}).get("image_list"):

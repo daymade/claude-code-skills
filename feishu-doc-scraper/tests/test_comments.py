@@ -116,6 +116,25 @@ class CommentTests(unittest.TestCase):
         got = mod.capture("https://example.feishu.cn/docx/doc", caller=lambda *_: responses.pop(0))
         self.assertEqual(got["status"], "partial")
 
+    def test_nested_wrong_types_produce_readable_partial_snapshots(self):
+        malformed = [
+            (card("c1"), {**reply("r1"), "content": {"elements": [{"type": "text_run", "text_run": "bad"}]}}),
+            (card("c1", reply_list="bad"), reply("r1")),
+            (card("c1", reply_list={"replies": "bad"}), reply("r1")),
+            (card("c1", reply_list={"replies": ["bad"]}), reply("r1")),
+            (card("c1"), reply("r1", extra="bad")),
+            (card("c1"), reply("r1", extra={"image_list": "bad"})),
+        ]
+        for c, r in malformed:
+            with self.subTest(card=c, reply=r):
+                responses = [page([c]), page([r])]
+                got = mod.capture("https://example.feishu.cn/docx/doc", caller=lambda *_: responses.pop(0))
+                self.assertEqual(got["status"], "partial")
+                self.assertIn("partial", mod.render(got))
+                with tempfile.TemporaryDirectory() as directory:
+                    mod.write_snapshot(Path(directory)/"discussion", got)
+                    self.assertEqual(json.loads((Path(directory)/"discussion/comments.json").read_text())["status"], "partial")
+
     def test_changed_duplicate_reply_is_rejected(self):
         responses = [page([card("c1")]), page([reply("r1")], True, "next"),
                      page([reply("r1", "different")])]
