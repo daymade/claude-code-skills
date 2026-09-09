@@ -2552,6 +2552,7 @@ Extract Feishu (Lark) Docs, Wiki pages/collections, spreadsheets (including cell
 - Converting an owner-exported `.docx` into faithful Markdown with heading/highlight restoration
 
 **Key features:**
+- Document comments and complete reply threads accompany the body, with quoted passages, source positions, author IDs, timestamps, solved scope, and explicit coverage gaps
 - lark-cli API extraction writes the body to disk via `jq` (never retyped by the model — the single most important fidelity rule)
 - Recursive reference-graph traversal (BFS) with `feishu_extract_refs.py`, plus a residual rich-media-tag acceptance gate so no referenced doc is silently missed
 - Native Minutes transcript export (never re-runs ASR on downloaded media)
