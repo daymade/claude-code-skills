@@ -6,12 +6,12 @@ description: >-
   file: 生成 Word 文档 / 做一份 docx / 写合同 docx / 起草协议 / 正式文书 / 公文 / offer / 劳动合同 /
   把 markdown 转成 Word / Word 排版 / 中文排版 / 签字栏 / 盖章版 / 甲方乙方, or any plain
   "give me a Word file" request. This skill adds the layer minimax-docx does not ship: a verified
-  markdown-to-docx OpenXML generator, the alignment-layering rule that stops justified text from
-  stretching 甲方/乙方 info blocks and signature blocks into garbage, per-list numbering restart,
+  markdown-to-docx OpenXML generator, alignment rules for info and signature blocks, list numbering,
   CJK font dual-slot setup, and a mandatory LibreOffice-to-PDF-to-PNG visual verification chain
   (qlmanage thumbnails are banned — they hide exactly the bugs that matter). Engine belongs to
-  minimax-docx; correct usage and the field-tested workarounds belong here. For PDF output use
-  daymade-docs:pdf-creator instead — the two pipelines are intentionally orthogonal.
+  minimax-docx; correct usage and the field-tested workarounds belong here. Also use for an
+  existing Word/WPS manuscript → layout repair or excerpt → PDF, preserving its revisions,
+  tables and images. For Markdown → PDF use daymade-docs:pdf-creator.
 ---
 
 # DOCX Creator
@@ -49,9 +49,10 @@ patterns. Do not reinvent them here.
 |---|---|
 | Chinese contract / agreement / 公文 / any doc with 甲乙方 info blocks, numbered clauses, signature block, tables | **C# OpenXML via `scripts/Program.cs`** (this skill) |
 | Plain prose, headings and paragraphs only, no bold / lists / tables | minimax-docx CLI `create --content-json` is enough |
-| Fill or edit an **existing** .docx | minimax-docx pipeline B (`edit-content`) — this skill has nothing to add |
+| Fill or edit an **existing** .docx | minimax-docx pipeline B (`edit-content`), plus this skill's layout and verification guidance |
 | Match an existing .docx's formatting | minimax-docx pipeline C (`apply-template`) |
-| Output should be a **PDF**, not Word | `daymade-docs:pdf-creator` — wrong skill, stop here |
+| Existing Word/WPS → repaired layout / selected excerpt → PDF | Keep the Word source; follow `references/word-to-pdf.md` and `references/verification_protocol.md` |
+| Markdown → PDF | `daymade-docs:pdf-creator` |
 
 Rule of thumb: the CLI's `--content-json` understands exactly three block types
 (`heading`, `paragraph`, `pagebreak`). Bold, lists, tables, borders, footers, fonts,
@@ -106,13 +107,16 @@ the `case ParagraphBlock p:` arm of `Main`'s block-dispatch switch, with the bre
 `InlineRuns`. (Line numbers are deliberately not given here — they drift every time the file
 grows; see `scripts/README.md`'s function-name lookup table instead.) Full write-up: ISSUE-004.
 
-### 2. Every list restarts at 1
+### 2. Independent lists restart; continuations retain numbering
 
-Each markdown list must get its **own** `NumId` plus a `LevelOverride` carrying
+Each independent markdown list must get its **own** `NumId` plus a `LevelOverride` carrying
 `StartOverrideNumberingValue = 1`. Reuse one `NumId` across clauses and clause 3's list
 silently continues from 4. Implemented across the `case ListBlock lb:` arm and the
 `NumberingDefinitionsPart` setup — see `scripts/README.md`'s lookup table for both.
 Two SDK traps come with it (wrong class name, wrong element order) — ISSUE-005, ISSUE-006.
+For existing Word lists, preserve intentional continuations. Resolve `numId` and its level
+before changing geometry; `numId=0` disables numbering. Typed ordinals are text, not an
+automatic list. See ISSUE-016.
 
 ### 3. CJK fonts need both slots
 
@@ -184,7 +188,9 @@ only check in the whole chain that would have caught this class of bug.
 
 ## References
 
-- `references/known_issues.md` — ISSUE-001…013: symptom / root cause / fix / verification for
+- `references/word-to-pdf.md` — existing Word source, excerpt selection, accepted revisions,
+  layout repair and PDF delivery; no Markdown round-trip.
+- `references/known_issues.md` — symptom / root cause / fix / verification for
   every trap hit while building this pipeline. Read before debugging anything.
 - `references/verification_protocol.md` — the full end-to-end verification chain, its
   prerequisites, its pass criteria, and the substitutions that are forbidden.
