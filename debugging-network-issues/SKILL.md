@@ -73,6 +73,18 @@ Before accepting "the monitor says it's healthy" as evidence, ask: **which exact
 
 The practical rule: **a probe measures the link only once transfer time dominates its total time.** So size it by the answer you need, not by convenience — if a probe returns in well under a second, essentially all of that was setup and you have measured setup. Sidestep the sizing question entirely by budgeting *time* instead of bytes (stream for N seconds, divide what arrived by N), which is what Step 0.7's commands do and why they stay cheap on a link that is already crawling. Extend the question to: **which path, and at what scale?**
 
+### 6. Exhaust the instruments before asking the user — escalate only what only they can provide
+
+A user's spoken observation ("the Wi-Fi drops for a few seconds", "some apps report connection errors") is a *lead*, not a question to hand back. Every open sub-question it contains — which apps failed, on which device, whether the link physically dropped — is an observable proposition with an instrument that answers it: a monitor or probe ledger (a running health daemon's log already holds the outage timetable the user would otherwise reconstruct from memory, with worse timestamps), system logs (kernel link/disassociation events settle "did Wi-Fi physically drop" without asking anyone), and a control host on the same network (a wired box with no proxy answers "whole network or just this stack" in one command). Run those channels first.
+
+Only three categories legitimately reach the user mid-investigation:
+
+1. **Decision rights** — production changes, restarts, spending, anything past your authorization boundary.
+2. **Physical actions and physical observations** — unplugging a box, reading a label password, watching whether an LED is on.
+3. **Credentials or access you do not have** — a management password that exists only on a device label.
+
+The anti-pattern, observed 2026-09-10: a home-network investigation closed its report with four questions for the user; two and a half of them ("which apps reported errors", "did Wi-Fi actually drop", "is the retired router still alive") were answerable from the health-daemon ledger, kernel logs, and an ARP-table scan that simply had not been run. Each such question costs the user's attention, stalls the diagnosis by exactly the round-trip you skipped, and — worst — teaches you to treat recollection as a data source on par with instruments. Before listing any question for the user, be able to say in one sentence why no instrument can answer it.
+
 ## Workflow
 
 Copy this checklist into the investigation notes and check items off:
