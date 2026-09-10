@@ -90,6 +90,7 @@ Determine which scenario applies:
 - **`docker pull` works but `docker build` still dies fetching base-image tokens (TLS/i-o timeout) on a WSL2 + Docker Desktop host, or every runbook proxy port on a Windows+v2rayN host silently died after a v2rayN upgrade** → buildkit direct-dials past the DD proxy override / v2rayN ≥7.17 LAN-port split (references/windows_host_tun_wsl_cascade.md §2026-08-23)
 - **`git clone` fails with `Connection closed by 198.18.x.x`** → two different mechanisms produce this; Step 2H separates them
 - **Every domestic/DIRECT-rule site fails at once (TLS `unexpected EOF` mid-handshake, proxy-port CONNECT returns 503, Node CLIs report `UNKNOWN_CERTIFICATE_VERIFICATION_ERROR`) while proxied overseas sites keep working** → TUN DIRECT split-brain (Step 2J)
+- **Everything on macOS fails at once — domestic AND overseas, and even Step 2J's real-IP probe fails** → do not declare an outage yet; run the physical-interface discriminator in "TUN full-stall vs genuine outage" (above Step 2A)
 - **SSH connects but `operation not permitted`** → Tailscale SSH config issue (Step 4)
 - **SSH connects but `be-child ssh` exits code 1** → WSL snap sandbox issue (Step 5)
 - **TCP port 22 reachable (`nc -z` succeeds) but SSH fails with `kex_exchange_identification: Connection closed`** → Tailscale SSH proxy intercept on WSL (Step 5A)
@@ -152,6 +153,35 @@ When a proxy tool runs in **TUN / global mode** (Shadowrocket, Clash, Surge), it
 - **The proxy/TUN config decoded from disk + the tool's own GUI** — the authoritative source of which node/route is actually active. Cross-check a file parse against the GUI; do not infer the active node from a network probe.
 
 **Counter-move**: before citing any latency / reachability number while a TUN is up, ask *"would this number be physically possible if the packet really traversed to the destination?"* A `0.00s` connect or a `0.2ms` ping to another continent is the tell that you measured the TUN, not the network. Switch to `time_appconnect`, or temporarily disable the TUN to get a clean baseline (raw probes become meaningful again once it is off).
+
+### TUN full-stall vs genuine outage (when EVERYTHING fails, prove the wire is dead before standing down)
+
+The contamination table has a systemic limit: every probe that goes *through* the TUN shares one fate. That includes "real-IP" probes (`dig @<resolver>` + `curl --resolve`) — the TUN intercepts UDP/53 too. When the TUN's forwarder stalls completely, domain probes, real-IP probes and proxied probes all fail together, and the picture is **indistinguishable from a genuine physical outage**. A watchdog or investigator that reads "all probes dead" as "the network is down" will stand down through a recoverable TUN stall — or worse, blame the router (observed 2026-09-10: a proxy health daemon recorded 13 "genuine network outage, standing down" windows in one day; the layer was never proven either way until a physical-path probe was added).
+
+The discriminator is a probe that **bypasses the TUN entirely** — bind the physical interface (curl `--interface` = `IP_BOUND_IF`, scoped routes take the packet straight out the physical NIC):
+
+```bash
+# 1) Find the physical interface that actually carries the LAN. Do NOT use
+#    `route -n get default` here — under TUN it answers with the utun itself.
+for i in en0 en1 en2 en3; do
+  addr=$(ipconfig getifaddr $i 2>/dev/null) && echo "$i $addr"
+done
+ping -c 1 -t 2 <gateway-ip>   # sanity: is the LAN itself alive at all
+
+# 2) Probe bare-IP targets through that interface — two independent ones.
+#    Both verified answering on a healthy link 2026-09-10 (AliDNS 443 → 404,
+#    DNSPod 80 → 404). Targets rot: 114.114.114.114 and 180.76.76.76 returned
+#    000 on a healthy wire that same day — re-verify a target before trusting it.
+for u in "https://223.5.5.5/" "http://119.29.29.29/"; do
+  curl -s --noproxy '*' --interface en0 -k --connect-timeout 3 --max-time 6 \
+    -o /dev/null -w "$u: %{http_code}\n" "$u"
+done
+```
+
+- Any non-`000` answer (even 404) → the physical path (NIC → AP → gateway → ISP) is alive and the TUN is the suspect: reconnect the tunnel **under the [recovery contract](references/network_change_recovery.md)** (the disconnect/connect mechanism lives in Step 2J) — do not stand down, do not reboot the router.
+- `000` from **both** targets → a genuine outage is earned. A single target's 000 proves only that target: enterprise/campus egress whitelists and resolver-side changes each produce a lone 000 on a healthy wire.
+
+Calibrate before trusting: on a healthy link each answer arrives in ~0.1s; a deliberately wrong interface must fail — `--interface en9` returns `000` with a nonzero exit (45 when the interface doesn't exist, 7/28 when it exists but is down or unrouted — the `000`, not the exit number, is the signal).
 
 ### Fast Path: Run Automated Checks
 
@@ -802,7 +832,7 @@ curl -sS -o /dev/null -w '%{http_code}\n' --resolve <domain>:443:<real-ip> https
 # → normal HTTP status  ← physical network is FINE; the TUN's DIRECT state is broken
 ```
 
-If step 3 also fails, this is not split-brain — treat it as a real local-network outage.
+If step 3 also fails, this is not split-brain — but it is not a proven outage either: step 3 still rides the TUN (UDP/53 is intercepted too). Run the interface-bound physical probe in "TUN full-stall vs genuine outage" (above Step 2A); only a double-000 there earns "real local-network outage".
 
 **Fix** — when network maintenance and its interruption are authorized, restart the exact
 tunnel under the [recovery contract](references/network_change_recovery.md), then flush the OS
