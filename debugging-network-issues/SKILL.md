@@ -73,6 +73,20 @@ Before accepting "the monitor says it's healthy" as evidence, ask: **which exact
 
 The practical rule: **a probe measures the link only once transfer time dominates its total time.** So size it by the answer you need, not by convenience — if a probe returns in well under a second, essentially all of that was setup and you have measured setup. Sidestep the sizing question entirely by budgeting *time* instead of bytes (stream for N seconds, divide what arrived by N), which is what Step 0.7's commands do and why they stay cheap on a link that is already crawling. Extend the question to: **which path, and at what scale?**
 
+### 6. Exhaust the instruments before asking the user — escalate only what only they can provide
+
+A user's spoken observation ("the Wi-Fi drops for a few seconds", "some apps report connection errors") is a *lead*, not a question to hand back. Treat each open sub-question it contains as presumed observable, and search for the instrument before asking: monitor/probe ledgers (where a health daemon exists, its log holds the failure timetable of the paths it probes — in both directions: a green ledger never falsifies the user's observation (Principle 5), and a red one says nothing about paths it never probed), system logs (kernel link/disassociation events settle "did Wi-Fi physically drop"; per-process error bursts settle "which apps failed" only for apps that log there), and control channels on the same network (a second host over a different medium — a wired box with no proxy, a hotspot comparison, even the router's own status page; when no control channel exists, say so explicitly rather than treating the question as answered). When the instrument search comes back empty for a sub-question, the move is Step 4 — stand up instrumentation and wait for recurrence — not "ask the user to recall".
+
+Only three categories legitimately reach the user mid-investigation:
+
+1. **Decision rights** — production changes, restarts, spending, anything past your authorization boundary.
+2. **Physical actions and first-person observations no instrument captured** — unplugging a box, reading a label password, whether the Wi-Fi icon itself disappeared on a device you have no telemetry for.
+3. **Credentials or access you do not have** — a management password that exists only on a device label.
+
+Observed 2026-09-10: a home-network investigation closed its report with four questions for the user. "Which apps reported errors" — its diagnostic content, a per-plane failure timetable — was already in the health daemon's ledger (the app-name list itself lives only on the user's screen, and adds no layer information the timetable lacks); "did Wi-Fi actually drop" was settled by twelve hours of kernel logs with zero disassociation events; both went to the user anyway. The fourth — "is the retired router still broadcasting" — is the honest counter-example: its ARP absence proved nothing (Trap 14: a probe certifies only the L2 domain it ran on), the platform redacted the Wi-Fi scan, so that one correctly reached the user as a five-second physical check.
+
+For every question you hand the user, write one sentence in the report naming why no instrument can answer it and which of the three categories it falls in. If you cannot produce that sentence, the question is not exhausted — go back to the instruments; do not ask.
+
 ## Workflow
 
 Copy this checklist into the investigation notes and check items off:
