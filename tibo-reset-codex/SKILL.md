@@ -120,6 +120,13 @@ curl -sS --max-time 20 "https://api.fxtwitter.com/<user>/status/<status-id>" \
   找转录源补充。但它返回 `replying_to`（被回复人 handle）与 `replying_to_status`（被回复帖
   id）——**足够判断「这条是不是回复、回复给谁」**，这正是上面 `type` 误标消歧的唯一字段；
   被回复帖本身再用同一条命令取一次即可。
+- **落地确认帖的回复链要读；tracker 的条目数不等于事件数**（2026-09-10 实测）：09-08
+  「All reset for everyone」官宣帖下，Tibo 回复「You forgot the part where I reset usage
+  twice in the middle」——正式落地之前当天已中途全局重置两次，这个口径只存在于回复里。
+  codexrunway 把这条回复标成了**第二条独立的** Completed Global reset（Confidence 93%）。
+  预告＋中途加码＋落地是一轮事件（归并规则见 next-reset-forecast），读回复用同一条
+  fxtwitter 命令；回复帖 id 从 tracker 页面里的 x.com 状态链接提取（2026-09-10 即从
+  codexrunway 静态 HTML 中 grep 得到），fxtwitter 自身没有 replies 列表。
 
 `codexlimitwatch.com/codex-reset-history` 与 Radar 都以 Tibo 动态为核心上游，属于**同一来源
 家族**，只能互查转录/解析是否一致，不能称为独立双源。**LunarWerx Codex Forecast**
@@ -283,7 +290,9 @@ if idt:
 **B 层 —— 这台机器上还存过哪些账号（仅在用户确实使用 cc-switch 时检查）**
 
 这是历史归因的可选线索，不是账号盘点入口。用户明确不用 cc-switch 就跳过本层，转官网和
-Google 已登录账号。下面的 `providers` 只证明其记录里出现过的身份，不能证明账号清单完整。
+Google 已登录账号。（逐账号额度查询的入口裁定见 account-usage：这批账号 2026-09-08 已
+裁定不用 CC Switch 管理——B 层的 providers 记录只作邮箱线索，不为查询额度重开此裁定。）
+下面的 `providers` 只证明其记录里出现过的身份，不能证明账号清单完整。
 
 `profiles` 表实测可能是空的（2026-09-03 该机 0 行），账号存在 `providers` 里；每条的
 `settings_config` 内嵌一个完整 `auth` 对象，解它的 `id_token` 才能拿到身份。
@@ -604,6 +613,12 @@ TZ=America/Los_Angeles date "+%F %T %Z(%z)"
   tracker 记落地推为 UTC 8/22 00:50——换算回太平洋是 8/21 17:50，**早于**承诺线；
   而媒体报道「8pm 过了很多账户没收到」。两个来源不矛盾（官宣早、部分账户晚到），
   不换算就写「跳票了几小时」会造出两个来源都没说的结论。
+- **UTC 与北京时间出现相同「HH:MM」数字时，先换算再比较，别把数字相同当同刻**
+  （2026-09-10 实测踩坑）：官宣帖 09-08 04:05:53 **UTC** 与本机快照归零 09-08 04:04
+  **北京**被当成「同一分钟互证」，实际相差 8 小时——北京 04:04 = PT 13:04，对应的是
+  Tibo 在回复帖里确认的「中途两次重置」之一；官宣落地对应的是本机 07:34→14:15 的宽归零
+  区间（PT 23:15 才见到 1%）。跨源绑定时间时每一条都过「时区换算」节的命令，结论里给
+  每个时刻标注时区；「小时:分钟数字一样」在 UTC vs 北京之间每小时都在发生，零证据价值。
 - **官宣 ≠ 你的账户已到账**：banked reset 有过分批延迟史，用户问「我怎么还没有」时
   引导看产品内余额，而不是拿官宣时间打包票。**2026-09-01 用本机 rollout 量化过这个差距**：
   25M 那次官方承诺 6pm PST（北京 09:00）、Tibo 落地确认帖发于北京 10:34，而账户实际归零
