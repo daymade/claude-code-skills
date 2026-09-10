@@ -130,7 +130,12 @@ CURRENT_SESSION_RECALL = re.compile(
 )
 HOOK_GUIDANCE_MARKER = "Prior Work Retrieval is required before substantial production"
 USER_OPTOUT = re.compile(
-    r"(?:不用|不要|无需|跳过).{0,12}(?:查历史|检索历史|已有工作检索|prior work|历史检索)"
+    # 「不需要」 matters: a trapped session's own advised escape phrase
+    # 「本任务不需要 prior-work 检索」 matched neither the verb list nor the
+    # space-only "prior work" spelling, classified as "none", and so never
+    # cleared the existing requirement — the session stayed gated (2026-09-10).
+    r"(?:不用|不要|无需|不需要|跳过).{0,12}"
+    r"(?:查历史|检索历史|已有工作检索|prior[-\s]work|历史检索)"
     # Recorded sub-agent prompts said "Do NOT perform prior-work retrieval" and
     # "The user explicitly opts out of prior-work retrieval" and were gated
     # anyway: the old pattern only accepted skip/disable, and only the
@@ -173,6 +178,19 @@ RETRIEVAL_ROUTES = {
     "history_index.py": {"recall", "status"},
     "analyze_sessions.py": {"search", "locate-codex"},
     "read_chat.py": None,
+}
+# Value-taking options each route script declares on its TOP-LEVEL argparse
+# parser. The canonical CLI form puts them before the subcommand
+# (`prior_work.py --manifest M retrieve ...`), so the route check must skip
+# them before matching the subcommand — requiring the subcommand immediately
+# after the script name denied the documented unlock command itself as an
+# unknown executor and deadlock-gated session 9916c656 for two days
+# (2026-09-08 → 2026-09-10). Options not listed here fail closed: an unknown
+# `--flag` is skipped as a flag, so a following value token is what gets
+# tested against the subcommand set and rejects the route.
+RETRIEVAL_GLOBAL_VALUE_OPTIONS = {
+    "prior_work.py": {"--manifest"},
+    "history_index.py": {"--db", "--simple-root"},
 }
 DIRECT_EXEC_WRITE_SIGNAL = re.compile(r"\b(?:tools\.)?apply_patch\s*\(")
 EXEC_COMMAND_LITERAL = re.compile(
@@ -383,7 +401,16 @@ def _segment_is_retrieval_route(segment: str) -> bool:
         return False
     if subcommands is None:
         return True
-    return index + 1 < len(words) and words[index + 1] in subcommands
+    index += 1
+    value_options = RETRIEVAL_GLOBAL_VALUE_OPTIONS.get(script, set())
+    while index < len(words) and words[index].startswith("-"):
+        option = words[index].split("=", 1)[0]
+        index += 1
+        if option in value_options and "=" not in words[index - 1]:
+            if index >= len(words):
+                return False
+            index += 1
+    return index < len(words) and words[index] in subcommands
 
 
 def _strip_quoted_text(fragment: str) -> str:
@@ -512,8 +539,19 @@ def substantial_tool_use(event: dict[str, Any]) -> tuple[bool, str]:
         if _has_formal_file_redirection(event):
             return True, f"{base}:write_signal"
         if any(
-            SHELL_UNKNOWN_EXECUTOR.search(segment)
-            and not SHELL_READ_ONLY_EXECUTOR.search(segment)
+            # Quoted arguments are data, not commands — for BOTH directions of
+            # this check. A peer message saying 「我当前 Bash 被闸门拦了」 must
+            # not read as an interpreter invocation (2026-09-10: exactly that
+            # prose word blocked even the help request about the gate); and a
+            # quoted "check" must not grant the read-only exemption either —
+            # under raw-text matching `bash -c "check; rm -rf x"` was allowed,
+            # because rm is not a write-signal word and the quoted "check"
+            # exempted the whole segment. The interpreter itself (`bash -c`,
+            # `python3 -c`) sits outside quotes and still gates here; code
+            # inside those quotes remains covered by the raw write-signal scan
+            # above, which also keeps `eval "git …"` closed.
+            SHELL_UNKNOWN_EXECUTOR.search(_strip_quoted_text(segment))
+            and not SHELL_READ_ONLY_EXECUTOR.search(_strip_quoted_text(segment))
             for segment in gated
         ):
             return True, f"{base}:unknown_executor"
@@ -718,7 +756,9 @@ def _guidance(reason: str, session_id: Any = None) -> str:
         "artifact/event --outcome-term values, and separate implementation terms "
         "across the explicit manifest; open and "
         "verify candidates, then complete a reuse/adapt/no-reuse receipt for this "
-        "session. Read-only discovery remains allowed."
+        "session. Read-only discovery remains allowed. If the user judges this "
+        "task needs no prior-work retrieval, their own prompt saying so (e.g. "
+        "不用查历史 / 不需要 prior work 检索) clears the requirement."
     )
     if isinstance(session_id, str) and session_id:
         text += (
