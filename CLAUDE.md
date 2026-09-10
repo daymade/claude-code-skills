@@ -525,3 +525,7 @@ For systematic debugging steps (common errors, debugging process, pitfalls, real
 
 For maintainer source/install/catalog drift, use **Testing Skills Locally** above.
 Identify the failing layer before updating a marketplace or reinstalling a plugin.
+
+## Cloudflare mail operations
+
+For domain forwarding diagnosis, use [Email Routing](cloudflare-troubleshooting/references/email-routing.md) through the owning Cloudflare Skill. Keep its endpoint sequence and delivery evidence contract in that reference.
