@@ -342,6 +342,9 @@ claude plugin install terraform-skill@daymade-skills
 
 # Evaluate any LLM endpoint across speed, concurrency, protocol, and quality
 claude plugin install llm-eval-harness@daymade-skills
+
+# Video/GIF memes with motion-tracked image overlays
+claude plugin install meme-creator@daymade-skills
 ```
 
 Standalone plugins can be installed independently; suite members install together with their suite.
@@ -3713,6 +3716,35 @@ and [board-contract.md](./daymade-codex/interaction-design-board/references/boar
 
 ---
 
+### **meme-creator** - Video/GIF Memes with Motion-Tracked Overlays
+
+Glue logos, avatars, or stickers onto moving objects in a video clip so they follow the motion frame by frame — then export MP4 + GIF. Semi-supervised tracking: you read boxes off grid sheets, OpenCV CSRT carries them, and re-anchors or hand-set keyframes take over where trackers die (shot changes, walk-toward-camera scale blowups, long smooth walkaways).
+
+**When to use:**
+- Making a meme, 梗图, or reaction GIF out of an existing video moment
+- Covering faces/heads in a clip, or putting a logo/avatar on a moving person or object
+- "贴 logo 到视频里跟着动" — any overlay that must track motion
+
+**Key features:**
+- Identity disambiguation gate before binding any name to an account/avatar/logo (enumerate candidates with a handle-free search; the peer entities in the request are the discriminating signal)
+- Segment picking from tiled contact sheets instead of scrubbing
+- CSRT tracking with backward tracking, segment re-anchors, and smoothing; manual keyframes with piecewise-linear interpolation for smooth long shots
+- Visibility windows and velocity-extrapolated fades, so badges leave the frame with their subject instead of parking mid-screen
+- Two-pass palette GIF encoding with a size-budget knob order (fps → width → colors)
+
+**Example usage:**
+```text
+"把这段视频里三只猫的头分别换成这三个 logo，做成梗图视频和 GIF"
+"Cover the CEO's face with our competitor's logo in this keynote clip"
+"Turn 6:30-6:50 of this bilibili video into a GIF with my avatar on the main character"
+```
+
+📚 **Documentation**: See [meme-creator/SKILL.md](./meme-creator/SKILL.md) and the bundled `references/` for the tracking playbook and the asset-binding gate.
+
+**Requirements**: `ffmpeg`; `uv` (bundled Python scripts carry inline dependencies). `yt-dlp` only when downloading from a URL.
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -3870,6 +3902,9 @@ Use **stepfun-tts** for Chinese / Japanese voice synthesis with emotional contro
 ### For Long-Audio Transcription (StepFun StepAudio 2.5)
 Use **stepfun-asr** for transcribing up to 30-minute Chinese / English audio in a single SSE call (32K context, ~85-101× RTF, no client-side chunking). Hides the #1 trap — the model does NOT live on `/v1/audio/transcriptions`; the wrong endpoint returns a misleading "model not supported" error. Combine with **transcript-fixer** for ASR error correction or with **meeting-minutes-taker** to turn long recordings into structured minutes.
 
+### For Meme & GIF Creation
+Use **meme-creator** to put logos, avatars, or stickers onto moving objects in a video clip with frame-accurate tracking, and export the result as MP4 plus a size-budgeted GIF. Combine with **youtube-downloader** (or yt-dlp directly) when the source footage is still online.
+
 ## 📚 Documentation
 
 Each skill includes:
@@ -3935,6 +3970,7 @@ Each skill includes:
 - **stepfun-tts**: See `stepfun-tts/SKILL.md` for the Contextual TTS decision tree and `stepfun-tts/references/migration_from_v2.md` for the `voice_label` → `instruction` migration playbook plus the censorship rewrite list
 - **stepfun-asr**: See `stepfun-asr/SKILL.md` for the SSE-endpoint workflow and the four ASR-side traps (wrong endpoint, Plan-vs-Normal key, repetition hallucination, SSE `error` event). `stepfun-asr/references/api_reference.md` documents the exact JSON request body and SSE event contract for raw HTTP integration
 - **llm-eval-harness**: See `llm-eval-harness/references/evaluation_disciplines.md` for the reasoning behind each discipline (env-var keys, thinking-aware throughput, proxy isolation, probabilistic protocol verdicts) and `llm-eval-harness/references/quality_blind_judge.md` for the independent blind-judge quality method
+- **meme-creator**: See `meme-creator/SKILL.md` for the pipeline and `meme-creator/references/tracking-playbook.md` for the CSRT failure taxonomy and manual-keyframe fallback
 
 ## 🛠️ Requirements
 
@@ -3968,6 +4004,7 @@ Each skill includes:
 - **Node.js 18+ + curl + unzip** (for ima-copilot): `npx skills` is fetched on demand from the npm registry; IMA OpenAPI credentials from [https://ima.qq.com/agent-interface](https://ima.qq.com/agent-interface)
 - **StepFun API key** (for stepfun-tts and stepfun-asr — must be "Normal" tier, Plan keys silently fail on audio endpoints): Available at [https://platform.stepfun.com/](https://platform.stepfun.com/) → API Keys
 - **uv + an endpoint API key** (for llm-eval-harness): `openai` and `aiohttp` are auto-installed via `uv run --with`; the key is passed by env-var name only
+- **FFmpeg + uv** (for meme-creator): `brew install ffmpeg`; bundled scripts resolve their own Python deps via `uv run`; `yt-dlp` only when the source is a URL
 
 ## ❓ FAQ
 

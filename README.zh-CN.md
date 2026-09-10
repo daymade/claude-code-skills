@@ -339,6 +339,9 @@ claude plugin install terraform-skill@daymade-skills
 
 # 跨速度、并发、协议、质量四个维度评测任意 LLM 端点
 claude plugin install llm-eval-harness@daymade-skills
+
+# 视频/GIF 梗图：贴图随画面运动逐帧跟踪
+claude plugin install meme-creator@daymade-skills
 ```
 
 独立插件可以单独安装；套件成员会随所属套件一起安装。
@@ -3689,6 +3692,34 @@ lark-cli 提示 user 身份缺少 scope
 
 ---
 
+### **meme-creator** - 视频/GIF 梗图：贴图跟随画面运动
+
+把 logo、头像、贴纸贴到视频里运动的对象上，逐帧跟随，导出 MP4 + GIF。半监督跟踪：在网格图上读坐标框，OpenCV CSRT 负责搬运；跟踪器必死的场景（镜头切换、走近镜头的尺度爆炸、长距离平稳远去）用重锚点或手工关键帧接管。
+
+**何时使用：**
+- 把一段视频名场面做成梗图、表情包或 GIF
+- 给视频里的人脸/猫头盖 logo 或头像，且要跟着动
+- 任何「贴个图进去，跟着画面动」的需求
+
+**核心特性：**
+- 身份消歧闸：先把名字绑到正确的账号/头像/logo，再抓素材（不含猜测 handle 的开放搜索枚举候选，同列实体是最强判别信号）
+- 用平铺拼图选段，不靠拖进度条
+- CSRT 跟踪含反向跟踪、分段重锚、平滑；平稳长镜头可切手工关键帧线性插值
+- 可见性窗口 + 速度外推淡出：贴图随目标一起出画，不停在空画面上
+- GIF 双通道调色板编码，体积旋钮有顺序（先降帧率，再降宽度，再降色数）
+
+**使用示例：**
+```text
+"把这段视频里三只猫的头分别换成这三个 logo，做成梗图视频和 GIF"
+"把 6:30 到 6:50 这段做成 GIF，把我的头像贴在主角头上"
+```
+
+📚 **文档**：参见 [meme-creator/SKILL.md](./meme-creator/SKILL.md) 及随包 `references/`（跟踪手册与素材绑定闸）。
+
+**运行要求**：`ffmpeg`；`uv`（随包 Python 脚本自带内联依赖）。源是 URL 时才需要 `yt-dlp`。
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -3842,6 +3873,9 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 ### 长音频转写（StepFun 阶跃 StepAudio 2.5）
 使用 **stepfun-asr** 单次 SSE 调用转写最长 30 分钟的中 / 英文音频（32K context、~85-101× RTF、无需客户端切片）。封装了 #1 大坑——模型**不在** `/v1/audio/transcriptions`，错端点返回误导性的 "model not supported" 错误。可与 **transcript-fixer** 组合做 ASR 纠错，或与 **meeting-minutes-taker** 把长录音变成结构化纪要。
 
+### 梗图与 GIF 制作
+使用 **meme-creator** 把 logo、头像或贴纸贴到视频里运动的对象上（逐帧跟踪），导出 MP4 和控制体积的 GIF。源视频还在线上时，配合 **youtube-downloader**（或直接用 yt-dlp）先抓取。
+
 ## 📚 文档
 
 每个技能包括：
@@ -3907,6 +3941,7 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 - **stepfun-tts**：参见 `stepfun-tts/SKILL.md` 了解 Contextual TTS 决策树，参见 `stepfun-tts/references/migration_from_v2.md` 查看 `voice_label` → `instruction` 迁移手册和审查改写清单
 - **stepfun-asr**：参见 `stepfun-asr/SKILL.md` 了解 SSE 端点工作流和 ASR 侧四个坑（错端点、Plan vs Normal key、重复幻觉、SSE `error` 事件）。`stepfun-asr/references/api_reference.md` 给出原始 HTTP 集成所需的 JSON 请求体和 SSE 事件契约
 - **llm-eval-harness**：参见 `llm-eval-harness/references/evaluation_disciplines.md` 了解每条纪律背后的推理（环境变量传 key、thinking-aware 吞吐、代理隔离、概率化协议判定），以及 `llm-eval-harness/references/quality_blind_judge.md` 了解独立盲审质量方法
+- **meme-creator**：参见 `meme-creator/SKILL.md` 了解完整流程，及 `meme-creator/references/tracking-playbook.md` 了解 CSRT 失效分类与手工关键帧接管
 
 ## 🛠️ 系统要求
 
@@ -3937,6 +3972,7 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 - **Node.js 18+ + curl + unzip**（用于 ima-copilot）：`npx skills` 按需从 npm registry 拉取；IMA OpenAPI 凭据从 [https://ima.qq.com/agent-interface](https://ima.qq.com/agent-interface) 获取
 - **StepFun API key**（用于 stepfun-tts 和 stepfun-asr——必须是 "Normal" 等级，Plan key 调音频端点会无声失败）：在 [https://platform.stepfun.com/](https://platform.stepfun.com/) → API Keys 获取
 - **uv + 被测端点的 API key**（用于 llm-eval-harness）：`openai` 和 `aiohttp` 通过 `uv run --with` 自动安装；key 仅按环境变量名传入
+- **FFmpeg + uv**（用于 meme-creator）：`brew install ffmpeg`；随包脚本通过 `uv run` 自行解析 Python 依赖；源是 URL 时才需要 `yt-dlp`
 
 ## ❓ 常见问题
 
