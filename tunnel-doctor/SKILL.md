@@ -153,6 +153,23 @@ When a proxy tool runs in **TUN / global mode** (Shadowrocket, Clash, Surge), it
 
 **Counter-move**: before citing any latency / reachability number while a TUN is up, ask *"would this number be physically possible if the packet really traversed to the destination?"* A `0.00s` connect or a `0.2ms` ping to another continent is the tell that you measured the TUN, not the network. Switch to `time_appconnect`, or temporarily disable the TUN to get a clean baseline (raw probes become meaningful again once it is off).
 
+### TUN full-stall vs genuine outage (when EVERYTHING fails, prove the wire is dead before standing down)
+
+The contamination table has a systemic limit: every probe that goes *through* the TUN shares one fate. That includes "real-IP" probes (`dig @<resolver>` + `curl --resolve`) — the TUN intercepts UDP/53 too. When the TUN's forwarder stalls completely, domain probes, real-IP probes and proxied probes all fail together, and the picture is **indistinguishable from a genuine physical outage**. A watchdog or investigator that reads "all probes dead" as "the network is down" will stand down through a recoverable TUN stall — or worse, blame the router (observed 2026-09-10: a proxy health daemon recorded 13 "genuine network outage, standing down" windows in one day; the layer was never proven either way until a physical-path probe was added).
+
+The discriminator is a probe that **bypasses the TUN entirely** — bind the physical interface (curl `--interface` = `IP_BOUND_IF`, scoped routes take the packet straight out the physical NIC):
+
+```bash
+curl -s --noproxy '*' --interface en0 -k \
+  --connect-timeout 3 --max-time 6 \
+  -o /dev/null -w '%{http_code}\n' https://223.5.5.5/
+```
+
+- Any non-`000` answer (even 404) → L1–L3 alive, the TUN is the suspect: reconnect the tunnel (disconnect/connect), do not stand down, do not reboot the router.
+- `000` → the physical path itself is dead; now "genuine outage" is actually earned.
+
+Calibrate before trusting: on a healthy link this returns a code in ~0.1s; with a deliberately wrong interface (`--interface en9`) it must fail `000`/exit 45 — an instrument that cannot fail cannot be trusted to pass. Replace `en0` with the actual access interface (`ipconfig getifaddr`-active one), and pick a bare-IP target on the user's side of any GFW/CDN ambiguity (a public DNS resolver's 443 works: it is meant to be reachable).
+
 ### Fast Path: Run Automated Checks
 
 For common macOS conflicts (env proxy, system proxy exceptions, direct/proxy path split, local TLS trust), run:
