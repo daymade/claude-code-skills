@@ -599,6 +599,7 @@ Investigate and resolve Cloudflare configuration issues using API-driven evidenc
 - Site shows ERR_TOO_MANY_REDIRECTS
 - SSL/TLS configuration errors
 - DNS resolution problems
+- Email Routing aliases, destination verification and forwarding delivery
 - Cloudflare-related issues
 
 **Key features:**

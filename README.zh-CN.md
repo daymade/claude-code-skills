@@ -615,6 +615,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 - 网站显示 ERR_TOO_MANY_REDIRECTS
 - SSL/TLS 配置错误
 - DNS 解析问题
+- Email Routing 别名、目标邮箱验证与转发收件
 - Cloudflare 相关问题
 
 **主要功能：**
