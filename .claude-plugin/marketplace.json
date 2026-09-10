@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Professional Claude Code and Codex skills marketplace — production-ready skills spanning GitHub and git operations (including current-base contributor PR review), document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, local inter-agent messaging, Claude Code operations, and model-aware Codex workstation setup. Suite plugins bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
-    "version": "3.10.0"
+    "version": "3.11.0"
   },
   "plugins": [
     {
@@ -1190,6 +1190,26 @@
         "image-layout",
         "puppeteer",
         "白板"
+      ]
+    },
+    {
+      "name": "meme-creator",
+      "description": "Creates video/GIF memes by overlaying images (logos, avatars, stickers) onto moving objects in a clip with frame-accurate tracking, then exports MP4 + GIF. Use whenever the user wants a meme, 梗图, 表情包, or reaction GIF from existing footage; to cover faces or heads in a video; to make a logo or avatar follow a moving person or object; to turn a video moment into a shareable GIF; or asks to 把 logo/头像贴到视频里跟着动. Handles source download (yt-dlp), segment picking via contact sheets, CSRT tracking with re-anchors and a manual-keyframe fallback, fades at frame edges and shot changes, and GIF size budgeting. Not for transcript-driven editing, programmatic scene generation, or subtitle work.",
+      "source": "./meme-creator",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "media",
+      "keywords": [
+        "meme",
+        "梗图",
+        "表情包",
+        "gif",
+        "video-overlay",
+        "object-tracking",
+        "csrt",
+        "sticker",
+        "avatar",
+        "logo"
       ]
     }
   ]
