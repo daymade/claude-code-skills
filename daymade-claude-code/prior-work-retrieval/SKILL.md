@@ -223,6 +223,12 @@ through `/hooks`; the installer never forges it.
 
 The user can explicitly say not to search prior work for the current prompt.
 That opt-out becomes prompt-scoped state, not an environment-variable bypass.
+Recognized phrasings pair a refusal verb (不用/不要/不需要/跳过, or
+skip/disable/opt out/do not perform) with a retrieval noun (查历史/历史检索/
+prior-work/prior work/history retrieval) in the same breath — a bare
+「不需要检索」without the carrier phrase does not match, so when advising the
+user mid-gate, quote a full working form such as 「本任务不需要 prior work
+检索」.
 Malformed/missing manifest or receipt state fails closed only at substantial
 production; read-only investigation and a write targeting exactly the manifest
 path remain possible so the agent can repair the gate without bypassing it.
