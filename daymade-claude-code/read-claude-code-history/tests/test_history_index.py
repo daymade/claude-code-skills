@@ -893,7 +893,7 @@ class MultiProviderIndexTests(unittest.TestCase):
         )
 
     def test_codex_rollouts_index_with_provider_and_skip_injected_preamble(self) -> None:
-        session_id = "019a4590-e21d-78a2-9e5b-2fc2ede15ef7"
+        session_id = "019a0000-0000-7000-8000-000000000001"
         codex_rollout(
             self.codex_home / "sessions" / "2026" / "05" / "01" / f"rollout-{session_id}.jsonl",
             session_id,
@@ -993,7 +993,7 @@ class MultiProviderIndexTests(unittest.TestCase):
             project_dir(self.active, self.workspace) / f"{claude_session}.jsonl",
             [user_record(claude_session, self.workspace, "claude marker", "2026-08-01T00:00:00Z")],
         )
-        codex_id = "019a4590-e21d-78a2-9e5b-2fc2ede15ef7"
+        codex_id = "019a0000-0000-7000-8000-000000000001"
         codex_rollout(
             self.codex_home / "sessions" / "2026" / "05" / "01" / f"rollout-{codex_id}.jsonl",
             codex_id,
@@ -1023,7 +1023,7 @@ class MultiProviderIndexTests(unittest.TestCase):
             project_dir(self.active, self.workspace) / f"{claude_session}.jsonl",
             [user_record(claude_session, self.workspace, "claude marker", "2026-08-01T00:00:00Z")],
         )
-        codex_id = "019a4590-e21d-78a2-9e5b-2fc2ede15ef7"
+        codex_id = "019a0000-0000-7000-8000-000000000001"
         codex_rollout(
             self.codex_home / "sessions" / "2026" / "05" / "01" / f"rollout-{codex_id}.jsonl",
             codex_id,
