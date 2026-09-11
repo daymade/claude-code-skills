@@ -200,9 +200,17 @@ them when needed.
 - Hybrid vectors require Apple Silicon, `sqlite-vec`, `mlx-embeddings`, NumPy,
   and one explicit Qwen snapshot. Multiple installed snapshots require
   `--model-path`; the tool never guesses which revision owns existing vectors.
-- Codex and Kimi histories remain opt-in exact-search providers. The first
-  recall-index version is Claude-only; do not imply `--codex` or `--kimi` was
-  indexed.
+- Codex and Kimi are indexable but never implicit. `index` covers Claude unless
+  `--codex` / `--kimi` is passed, and the database records which providers it
+  actually holds. Read that back rather than assuming: `status` reports the
+  bound sources, every `recall` result carries its `provider`, and the
+  `coverage` line names the providers the index does **not** hold. Asking
+  `recall --provider` for an uncovered provider fails loudly instead of
+  returning zero rows that look like absence.
+- Codex is a large corpus — roughly 9k rollouts and 40 GB on the maintainer
+  machine, of which about 9% of records are indexable prose. Adding it multiplies
+  record count and costs a proportional embedding pass, so turn it on
+  deliberately rather than wiring it into a daily job by default.
 
 ## State and recovery
 

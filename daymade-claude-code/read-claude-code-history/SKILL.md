@@ -30,6 +30,7 @@ hand the verified evidence to `daymade-claude-code:continue-claude-code-work`.
 | The user's recent words, including human queued prompts | `scripts/extract_user_messages.py` |
 | A conversation, quote, file, tool result, or action by keyword | `scripts/analyze_sessions.py search` |
 | Prior work whose wording may have changed | `scripts/history_index.py recall` after checking index status |
+| A broad keyword sweep with no known Session ID, date, or project | `scripts/history_index.py recall` first for leads, then `analyze_sessions.py search` scoped by what it returns |
 | How sessions in a time window ended | `scripts/analyze_sessions.py triage` |
 | A deleted/overwritten file preserved in Claude file-history records | `scripts/recover_content.py` |
 | Kimi CLI sessions — this Skill owns the only live Kimi surface | inventory: `scripts/list_local_history.py --source kimi`; full-text: `scripts/analyze_sessions.py search --kimi` |
@@ -154,7 +155,10 @@ be checked against raw records and the current workspace for load-bearing claims
 - Do not run `claude --resume` or `claude --continue`.
 - Do not use file mtime as conversation chronology.
 - Do not run an unbounded whole-history scan when an exact Session ID, date window,
-  project, or existing hybrid index can answer the question.
+  project, or existing hybrid index can answer the question. A multi-provider sweep
+  is the expensive case, not the exempt one: run `recall` for the providers the
+  index covers, then scan only what it does not. Check `recall`'s `coverage` line
+  before treating any of it as complete.
 - Do not share raw history outside the local machine without explicit user approval;
   it can contain credentials and private business context.
 - Do not report a search as complete after a timeout or malformed source.

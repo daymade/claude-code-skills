@@ -34,6 +34,19 @@ SESSION_ID_RE = re.compile(
     re.IGNORECASE,
 )
 STATE_DATABASE_RE = re.compile(r"^state_(\d+)\.sqlite$")
+CODEX_HOME_ENV = "CODEX_HOME"
+CODEX_DEFAULT_HOME_DIRNAME = ".codex"
+
+
+def default_codex_home() -> Path:
+    return Path.home() / CODEX_DEFAULT_HOME_DIRNAME
+
+
+def resolve_codex_home(explicit: Optional[str]) -> Path:
+    """Home precedence: CLI flag > ``CODEX_HOME`` env > ``~/.codex``."""
+    return Path(
+        explicit or os.environ.get(CODEX_HOME_ENV) or default_codex_home()
+    ).expanduser()
 
 
 def sqlite_uri(path: Path) -> str:
