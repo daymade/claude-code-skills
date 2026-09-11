@@ -780,5 +780,343 @@ class HistoryIndexTests(unittest.TestCase):
             self.assertIsNone(history_index.find_simple_runtime(explicit_bad))
 
 
+def codex_rollout(path, session_id, cwd, turns):
+    """Write a Codex rollout file: session_meta then response_item messages."""
+    records = [
+        {
+            "timestamp": "2026-05-01T00:00:00.000Z",
+            "type": "session_meta",
+            "payload": {"id": session_id, "cwd": str(cwd)},
+        }
+    ]
+    for ordinal, (role, text) in enumerate(turns, start=1):
+        records.append(
+            {
+                "timestamp": f"2026-05-01T00:00:{ordinal:02d}.000Z",
+                "ordinal": ordinal,
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": role,
+                    "content": [
+                        {
+                            "type": "input_text" if role == "user" else "output_text",
+                            "text": text,
+                        }
+                    ],
+                },
+            }
+        )
+    write_jsonl(path, records)
+
+
+def kimi_session(home, session_id, cwd, main_turns, subagent_turns=()):
+    """Write one Kimi session directory with a main wire and optional subagent."""
+    session_dir = home / "sessions" / "wd_demo_abc" / session_id
+    state = {
+        "id": session_id,
+        "cwd": str(cwd),
+        "title": "fixture",
+        "createdAt": 1757000000000,
+        "updatedAt": 1757000600000,
+    }
+    (session_dir).mkdir(parents=True, exist_ok=True)
+    (session_dir / "state.json").write_text(
+        json.dumps(state, ensure_ascii=False), encoding="utf-8"
+    )
+    main_records = [{"type": "metadata", "protocol_version": "1.5"}]
+    for offset, (role, text) in enumerate(main_turns, start=1):
+        if role == "user":
+            main_records.append(
+                {
+                    "type": "turn.prompt",
+                    "time": 1757000000000 + offset * 1000,
+                    "input": [{"type": "text", "text": text}],
+                    "origin": {"kind": "user"},
+                }
+            )
+        else:
+            main_records.append(
+                {
+                    "type": "context.append_message",
+                    "time": 1757000000000 + offset * 1000,
+                    "message": {"role": role, "content": text},
+                }
+            )
+    write_jsonl(session_dir / "agents" / "main" / "wire.jsonl", main_records)
+    if subagent_turns:
+        sub_records = [{"type": "metadata", "protocol_version": "1.5"}]
+        for offset, (role, text) in enumerate(subagent_turns, start=1):
+            sub_records.append(
+                {
+                    "type": "turn.prompt",
+                    "time": 1757000100000 + offset * 1000,
+                    "input": [{"type": "text", "text": text}],
+                    "origin": {"kind": "user"},
+                }
+            )
+        write_jsonl(session_dir / "agents" / "agent-1" / "wire.jsonl", sub_records)
+    return session_dir
+
+
+class MultiProviderIndexTests(unittest.TestCase):
+    """Cover indexing providers other than Claude, and the v1 upgrade path."""
+
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp_dir.name)
+        self.workspace = self.root / "workspaces" / "demo"
+        self.workspace.mkdir(parents=True)
+        self.active = self.root / "active"
+        self.codex_home = self.root / "codex"
+        self.kimi_home = self.root / "kimi"
+        self.db = self.root / "finder.db"
+        self.claude_source = history_index.HistorySource(
+            provider="claude", kind="active", label="main", home=self.active
+        )
+        self.codex_source = history_index.HistorySource(
+            provider="codex", kind="active", label="codex", home=self.codex_home
+        )
+        self.kimi_source = history_index.HistorySource(
+            provider="kimi", kind="active", label="kimi", home=self.kimi_home
+        )
+
+    def tearDown(self) -> None:
+        self.temp_dir.cleanup()
+
+    def scope(self, *sources, project_path=None):
+        return history_index.IndexScope(
+            sources=list(sources),
+            warnings=[],
+            project_path=project_path,
+            all_projects=project_path is None,
+        )
+
+    def test_codex_rollouts_index_with_provider_and_skip_injected_preamble(self) -> None:
+        session_id = "019a0000-0000-7000-8000-000000000001"
+        codex_rollout(
+            self.codex_home / "sessions" / "2026" / "05" / "01" / f"rollout-{session_id}.jsonl",
+            session_id,
+            self.workspace,
+            [
+                ("user", "<user_instructions>\nproject boilerplate\n</user_instructions>"),
+                ("user", "<environment_context>\n<cwd>/tmp</cwd>\n</environment_context>"),
+                ("user", "codex distinctive question"),
+                ("assistant", "codex distinctive answer"),
+            ],
+        )
+        with portable_backend():
+            result = history_index.update_index(
+                self.db, self.scope(self.codex_source), rebuild=True
+            )
+        self.assertEqual(result["sessions"], 1)
+        connection = plain_connect(self.db, readonly=True)
+        providers = connection.execute(
+            "SELECT provider, count(*) FROM sessions GROUP BY provider"
+        ).fetchall()
+        self.assertEqual([tuple(row) for row in providers], [("codex", 1)])
+        texts = [
+            row[0]
+            for row in connection.execute("SELECT fts_text FROM records ORDER BY seq")
+        ]
+        self.assertEqual(texts, ["codex distinctive question", "codex distinctive answer"])
+        connection.close()
+
+    def test_kimi_subagent_wire_keeps_its_own_records(self) -> None:
+        session_id = "session_11111111-2222-3333-4444-555555555555"
+        kimi_session(
+            self.kimi_home,
+            session_id,
+            self.workspace,
+            [("user", "kimi main prompt"), ("assistant", "kimi main reply")],
+            subagent_turns=[("user", "kimi subagent prompt")],
+        )
+        with portable_backend():
+            history_index.update_index(
+                self.db, self.scope(self.kimi_source), rebuild=True
+            )
+        connection = plain_connect(self.db, readonly=True)
+        rows = {
+            row[0]
+            for row in connection.execute("SELECT fts_text FROM records")
+        }
+        self.assertEqual(
+            rows, {"kimi main prompt", "kimi main reply", "kimi subagent prompt"}
+        )
+        self.assertEqual(
+            connection.execute("SELECT count(*) FROM sessions").fetchone()[0], 1
+        )
+        connection.close()
+
+    def test_kimi_boilerplate_records_stay_out_of_the_index(self) -> None:
+        session_id = "session_22222222-2222-4222-8222-222222222222"
+        session_dir = kimi_session(
+            self.kimi_home, session_id, self.workspace, [("user", "real kimi prompt")]
+        )
+        wire = session_dir / "agents" / "main" / "wire.jsonl"
+        with wire.open("a", encoding="utf-8") as handle:
+            handle.write(
+                json.dumps(
+                    {
+                        "type": "config.update",
+                        "time": 1757000500000,
+                        "content": "shared system prompt boilerplate",
+                    }
+                )
+                + "\n"
+            )
+        with portable_backend():
+            history_index.update_index(
+                self.db, self.scope(self.kimi_source), rebuild=True
+            )
+        connection = plain_connect(self.db, readonly=True)
+        texts = [row[0] for row in connection.execute("SELECT fts_text FROM records")]
+        self.assertEqual(texts, ["real kimi prompt"])
+        connection.close()
+
+    def test_project_scope_matches_a_cwd_spelled_through_a_symlink(self) -> None:
+        real = self.root / "real-project"
+        real.mkdir()
+        link = self.root / "linked-project"
+        link.symlink_to(real, target_is_directory=True)
+        resolved = str(real.resolve())
+        self.assertTrue(history_index._cwd_matches_project(str(link), resolved))
+        self.assertTrue(history_index._cwd_matches_project(resolved, resolved))
+        self.assertFalse(
+            history_index._cwd_matches_project(str(self.root / "other"), resolved)
+        )
+        self.assertTrue(history_index._cwd_matches_project("anything", None))
+
+    def test_widening_scope_adds_a_provider_without_dropping_sessions(self) -> None:
+        claude_session = "11111111-1111-4111-8111-111111111111"
+        write_jsonl(
+            project_dir(self.active, self.workspace) / f"{claude_session}.jsonl",
+            [user_record(claude_session, self.workspace, "claude marker", "2026-08-01T00:00:00Z")],
+        )
+        codex_id = "019a0000-0000-7000-8000-000000000001"
+        codex_rollout(
+            self.codex_home / "sessions" / "2026" / "05" / "01" / f"rollout-{codex_id}.jsonl",
+            codex_id,
+            self.workspace,
+            [("user", "codex marker")],
+        )
+        with portable_backend():
+            history_index.update_index(
+                self.db, self.scope(self.claude_source), rebuild=True
+            )
+            widened = history_index.update_index(
+                self.db, self.scope(self.claude_source, self.codex_source)
+            )
+        self.assertEqual(widened["removed"], 0)
+        connection = plain_connect(self.db, readonly=True)
+        providers = dict(
+            connection.execute(
+                "SELECT provider, count(*) FROM sessions GROUP BY provider"
+            ).fetchall()
+        )
+        self.assertEqual(providers, {"claude": 1, "codex": 1})
+        connection.close()
+
+    def test_narrowing_scope_is_refused_so_nothing_is_pruned(self) -> None:
+        claude_session = "11111111-1111-4111-8111-111111111111"
+        write_jsonl(
+            project_dir(self.active, self.workspace) / f"{claude_session}.jsonl",
+            [user_record(claude_session, self.workspace, "claude marker", "2026-08-01T00:00:00Z")],
+        )
+        codex_id = "019a0000-0000-7000-8000-000000000001"
+        codex_rollout(
+            self.codex_home / "sessions" / "2026" / "05" / "01" / f"rollout-{codex_id}.jsonl",
+            codex_id,
+            self.workspace,
+            [("user", "codex marker")],
+        )
+        with portable_backend():
+            history_index.update_index(
+                self.db,
+                self.scope(self.claude_source, self.codex_source),
+                rebuild=True,
+            )
+            with self.assertRaisesRegex(history_index.IndexError, "different source"):
+                history_index.update_index(self.db, self.scope(self.claude_source))
+        connection = plain_connect(self.db, readonly=True)
+        self.assertEqual(
+            connection.execute("SELECT count(*) FROM sessions").fetchone()[0], 2
+        )
+        connection.close()
+
+    def test_v1_index_migrates_in_place_and_keeps_every_record(self) -> None:
+        session_id = "11111111-1111-4111-8111-111111111111"
+        write_jsonl(
+            project_dir(self.active, self.workspace) / f"{session_id}.jsonl",
+            [user_record(session_id, self.workspace, "legacy marker", "2026-08-01T00:00:00Z")],
+        )
+        with portable_backend():
+            history_index.update_index(
+                self.db, self.scope(self.claude_source), rebuild=True
+            )
+        downgrade = plain_connect(self.db)
+        downgrade.execute("DROP INDEX IF EXISTS idx_sessions_provider")
+        downgrade.execute("ALTER TABLE sessions DROP COLUMN provider")
+        downgrade.execute("PRAGMA user_version=1")
+        downgrade.commit()
+        before = downgrade.execute("SELECT count(*) FROM records").fetchone()[0]
+        downgrade.close()
+
+        connection = plain_connect(self.db)
+        note = history_index._migrate_schema_if_needed(connection)
+        self.assertIsNotNone(note)
+        self.assertEqual(
+            connection.execute("PRAGMA user_version").fetchone()[0],
+            history_index.SCHEMA_VERSION,
+        )
+        self.assertEqual(
+            connection.execute("SELECT count(*) FROM records").fetchone()[0], before
+        )
+        self.assertEqual(
+            connection.execute("SELECT DISTINCT provider FROM sessions").fetchone()[0],
+            "claude",
+        )
+        self.assertIsNone(history_index._migrate_schema_if_needed(connection))
+        connection.close()
+
+    def test_recall_refuses_a_provider_the_index_does_not_cover(self) -> None:
+        session_id = "11111111-1111-4111-8111-111111111111"
+        write_jsonl(
+            project_dir(self.active, self.workspace) / f"{session_id}.jsonl",
+            [user_record(session_id, self.workspace, "claude marker", "2026-08-01T00:00:00Z")],
+        )
+        with portable_backend():
+            history_index.update_index(
+                self.db, self.scope(self.claude_source), rebuild=True
+            )
+            with self.assertRaisesRegex(history_index.IndexError, "does not cover"):
+                history_index.recall(
+                    self.db,
+                    "marker",
+                    mode="bm25",
+                    limit=5,
+                    project=None,
+                    exclude_sessions=[],
+                    include_agent_prompts=False,
+                    model_path=None,
+                    simple_root=None,
+                    providers=["codex"],
+                )
+
+    def test_coverage_names_the_providers_that_are_missing(self) -> None:
+        payload = {
+            "project_path": None,
+            "sources": [
+                {"provider": "claude", "kind": "active", "label": "main"},
+                {"provider": "kimi", "kind": "active", "label": "kimi"},
+            ],
+        }
+        description = history_index._coverage_description(payload)
+        self.assertIn("claude/kimi", description)
+        self.assertIn("Providers NOT indexed here: codex", description)
+        self.assertIn("kimi:active:kimi", description)
+        self.assertIn("active:main", description)
+
+
 if __name__ == "__main__":
     unittest.main()

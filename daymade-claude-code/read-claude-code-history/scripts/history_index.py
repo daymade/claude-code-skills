@@ -39,9 +39,10 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from _core.parse import parse_timestamp  # noqa: E402
 from _core.sources import (  # noqa: E402
+    SUPPORTED_PROVIDERS,
     HistorySource,
     HistorySourceConfigError,
-    discover_claude_sources,
+    discover_history_sources,
 )
 from _core.text import (  # noqa: E402
     is_claude_agent_prompt_record,
@@ -49,9 +50,26 @@ from _core.text import (  # noqa: E402
     iter_jsonl,
     searchable_segments,
 )
-from analyze_sessions import SessionAnalyzer, _record_identity  # noqa: E402
+from _core.codex import (  # noqa: E402
+    codex_meta_from_rollout,
+    codex_rollout_time_range,
+    codex_session_id,
+)
+from _core.kimi import (  # noqa: E402
+    kimi_wire_time_range,
+    load_kimi_state,
+    scrub_kimi_prompt,
+)
+from analyze_sessions import (  # noqa: E402
+    SessionAnalyzer,
+    _record_identity,
+    codex_searchable_segments,
+    discover_codex_rollouts,
+    discover_kimi_wires,
+    kimi_searchable_segments,
+)
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 INDEX_FILENAME = "finder-index-v1.db"
 BUILDING_SUFFIX = ".building"
 SIMPLE_VERSION = "v0.7.1"
@@ -373,8 +391,10 @@ CREATE TABLE IF NOT EXISTS sessions(
   sources_json TEXT NOT NULL,
   fingerprint TEXT NOT NULL,
   started REAL,
-  ended REAL
+  ended REAL,
+  provider TEXT NOT NULL DEFAULT 'claude'
 );
+CREATE INDEX IF NOT EXISTS idx_sessions_provider ON sessions(provider);
 CREATE TABLE IF NOT EXISTS records(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
@@ -428,12 +448,56 @@ def _meta_set(connection: sqlite3.Connection, key: str, value: Any) -> None:
     )
 
 
+MIGRATABLE_SCHEMA_VERSIONS = (1,)
+
+
+def _migrate_schema_if_needed(connection: sqlite3.Connection) -> str | None:
+    """Bring an older versioned index up to the current schema in place.
+
+    Return a short description when a migration ran, else ``None``.
+
+    The v1 index already holds every record and every embedding vector. Adding
+    provider provenance is a metadata change, so it runs as an in-place column
+    addition rather than a rebuild: forcing a rebuild here would discard
+    hundreds of thousands of embeddings that remain perfectly valid, and hours
+    of recompute is not an acceptable price for one new column. This is the
+    versioned finder index, not the retired POC database that must never be
+    altered.
+    """
+    version = connection.execute("PRAGMA user_version").fetchone()[0]
+    if version == SCHEMA_VERSION:
+        return None
+    if version not in MIGRATABLE_SCHEMA_VERSIONS:
+        return None
+    columns = {
+        row[1] for row in connection.execute("PRAGMA table_info(sessions)").fetchall()
+    }
+    if "provider" not in columns:
+        connection.execute(
+            "ALTER TABLE sessions ADD COLUMN provider TEXT NOT NULL DEFAULT 'claude'"
+        )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_sessions_provider ON sessions(provider)"
+    )
+    connection.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
+    _meta_set(connection, "schema_version", str(SCHEMA_VERSION))
+    connection.commit()
+    return (
+        f"schema v{version}->v{SCHEMA_VERSION}: sessions.provider added; "
+        "existing sessions recorded as claude, records and vectors preserved"
+    )
+
+
 def _validate_schema(connection: sqlite3.Connection) -> None:
     version = connection.execute("PRAGMA user_version").fetchone()[0]
     if version != SCHEMA_VERSION:
+        hint = (
+            "Run 'history_index.py index' once to migrate it in place."
+            if version in MIGRATABLE_SCHEMA_VERSIONS
+            else "Rebuild into the versioned finder index; do not ALTER the legacy POC DB."
+        )
         raise IndexError(
-            f"Index schema version is {version}, expected {SCHEMA_VERSION}. "
-            "Rebuild into the versioned finder index; do not ALTER the legacy POC DB."
+            f"Index schema version is {version}, expected {SCHEMA_VERSION}. {hint}"
         )
     required = {"meta", "sessions", "records", "records_fts", "chunks"}
     present = {
@@ -514,6 +578,50 @@ def _scope_identity(scope: IndexScope) -> str:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
+def _scope_widening(stored_raw: str | None, scope: IndexScope) -> list[str] | None:
+    """Return the added source labels when the new scope is a pure superset.
+
+    Refusing every scope change would force a full rebuild the first time a
+    provider is added, discarding embeddings that stay valid. Only *widening*
+    is safe to accept: the reconciliation loop prunes sessions that are known
+    but no longer in scope, so a superset can add sessions without deleting
+    any. A narrowed or otherwise different scope still fails, because that is
+    exactly the case where pruning would silently destroy covered history.
+    """
+    if not stored_raw:
+        return None
+    try:
+        stored = json.loads(stored_raw)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(stored, dict):
+        return None
+    if stored.get("project_path") != scope.project_path:
+        return None
+    if stored.get("all_projects") != scope.all_projects:
+        return None
+    stored_sources = stored.get("sources")
+    if not isinstance(stored_sources, list):
+        return None
+
+    def key(item: dict[str, Any]) -> tuple[str, str, str, str]:
+        return (
+            str(item.get("provider")),
+            str(item.get("kind")),
+            str(item.get("label")),
+            str(item.get("home")),
+        )
+
+    stored_keys = {key(item) for item in stored_sources if isinstance(item, dict)}
+    current = {key(item): item for item in _source_payload(scope.sources)}
+    if not stored_keys.issubset(current.keys()):
+        return None
+    added = sorted(current.keys() - stored_keys)
+    if not added:
+        return None
+    return [f"{item[0]}:{item[1]}:{item[2]}" for item in added]
+
+
 def _stored_scope(connection: sqlite3.Connection) -> dict[str, Any]:
     raw = _meta_get(connection, "index_scope")
     if not raw:
@@ -529,13 +637,31 @@ def _stored_scope(connection: sqlite3.Connection) -> dict[str, Any]:
     return payload
 
 
+def _scope_providers(scope_payload: dict[str, Any]) -> list[str]:
+    sources = scope_payload.get("sources")
+    if not isinstance(sources, list):
+        return []
+    seen: list[str] = []
+    for item in sources:
+        if not isinstance(item, dict):
+            continue
+        provider = str(item.get("provider") or "claude")
+        if provider not in seen:
+            seen.append(provider)
+    return sorted(seen)
+
+
 def _coverage_description(scope_payload: dict[str, Any]) -> str:
     project_path = scope_payload.get("project_path")
     sources = scope_payload.get("sources")
     labels = []
     if isinstance(sources, list):
+        # Spell non-Claude labels with their provider: a Claude profile named
+        # "kimi" and the Kimi CLI store would otherwise both print active:kimi.
         labels = [
             f"{item.get('kind')}:{item.get('label')}"
+            if str(item.get("provider") or "claude") == "claude"
+            else f"{item.get('provider')}:{item.get('kind')}:{item.get('label')}"
             for item in sources
             if isinstance(item, dict)
         ]
@@ -544,11 +670,32 @@ def _coverage_description(scope_payload: dict[str, Any]) -> str:
         if project_path
         else "all projects in the bound source set"
     )
-    return (
-        f"Claude user/assistant prose for {scope_text}; sources={labels}; ranked top-K, "
-        "not absence proof. Use exact search for thinking/tool/attachment/queue/"
-        "file-history evidence."
+    providers = _scope_providers(scope_payload) or ["claude"]
+    covered = "/".join(providers)
+    uncovered = [
+        name for name in ("claude", "codex", "kimi") if name not in providers
+    ]
+    gap = (
+        f" Providers NOT indexed here: {', '.join(uncovered)}."
+        if uncovered
+        else ""
     )
+    return (
+        f"{covered} user/assistant prose for {scope_text}; sources={labels}; "
+        f"ranked top-K, not absence proof.{gap} Use exact search for "
+        "thinking/tool/attachment/queue/file-history evidence."
+    )
+
+
+def _ref_provider(ref: dict[str, Any]) -> str:
+    """Return the provider that owns a session ref, defaulting to Claude."""
+    explicit = ref.get("provider")
+    if isinstance(explicit, str) and explicit:
+        return explicit
+    for source in ref.get("sources") or []:
+        if isinstance(source, HistorySource):
+            return source.provider
+    return "claude"
 
 
 def _session_copies(ref: dict[str, Any]) -> list[dict[str, Any]]:
@@ -625,6 +772,146 @@ def _message_role(record: dict[str, Any]) -> str | None:
     return event_type if event_type in {"user", "assistant"} else None
 
 
+def _finalize_records(extracted_by_key: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    extracted = []
+    for record in extracted_by_key.values():
+        record["copy_paths_json"] = json.dumps(
+            sorted(record.pop("copy_paths")), ensure_ascii=False
+        )
+        record["source_labels_json"] = json.dumps(
+            sorted(record.pop("source_labels")), ensure_ascii=False
+        )
+        extracted.append(record)
+    return extracted
+
+
+# Codex injects the same instruction and environment preambles into the first
+# user turn of every rollout. Indexing them would make one keyword match every
+# session the user ever ran, which is the opposite of a ranked recall aid.
+CODEX_PREAMBLE_PREFIXES = (
+    "<user_instructions>",
+    "<environment_context>",
+)
+
+
+def _extract_codex_records(ref: dict[str, Any]) -> list[dict[str, Any]]:
+    """Extract user/assistant prose from Codex rollout records.
+
+    Codex rollouts use ``response_item`` payloads rather than Claude's
+    user/assistant envelope, and carry an ``ordinal`` that is already unique
+    inside one rollout, so it serves as the record key without hashing.
+    """
+    extracted_by_key: dict[str, dict[str, Any]] = {}
+    seq = 0
+    for copy in _session_copies(ref):
+        for line_number, record in enumerate(iter_jsonl(copy["path"]), start=1):
+            if record.get("type") != "response_item":
+                continue
+            payload = record.get("payload")
+            if not isinstance(payload, dict) or payload.get("type") != "message":
+                continue
+            role = payload.get("role")
+            if role not in {"user", "assistant"}:
+                continue
+            segments = codex_searchable_segments(record)
+            prose_text = "\n".join(
+                segment.text
+                for segment in segments
+                if segment.source == "message" and segment.text
+            ).strip()
+            if not prose_text or is_noise_text(prose_text):
+                continue
+            if prose_text.startswith(CODEX_PREAMBLE_PREFIXES):
+                continue
+            ordinal = record.get("ordinal")
+            record_key = f"codex:{ordinal if ordinal is not None else line_number}"
+            if record_key in extracted_by_key:
+                continue
+            seq += 1
+            extracted_by_key[record_key] = {
+                "record_key": record_key,
+                "seq": seq,
+                "role": role,
+                "ts": parse_timestamp(record.get("timestamp")),
+                "fts_text": prose_text,
+                "semantic_text": prose_text,
+                "noise": 0,
+                "agent_prompt": 0,
+                "segment_sources_json": json.dumps(["message"], ensure_ascii=False),
+                "copy_paths": {str(copy["path"])},
+                "source_labels": set(copy["labels"]),
+            }
+    return _finalize_records(extracted_by_key)
+
+
+def _kimi_record_role(record: dict[str, Any]) -> str | None:
+    record_type = record.get("type")
+    if record_type in {"turn.prompt", "turn.steer"}:
+        return "user"
+    if record_type == "context.append_message":
+        message = record.get("message")
+        if isinstance(message, dict) and isinstance(message.get("role"), str):
+            return message["role"]
+        return None
+    if record_type == "context.append_loop_event":
+        return "assistant"
+    return None
+
+
+def _extract_kimi_records(ref: dict[str, Any]) -> list[dict[str, Any]]:
+    """Extract prose from Kimi CLI wire records.
+
+    One Kimi session directory holds a main wire plus one wire per subagent.
+    Those are distinct conversation streams rather than physical copies of one
+    file, so the record key is namespaced by wire path: merging them under a
+    shared key would drop subagent turns instead of de-duplicating anything.
+    """
+    extracted_by_key: dict[str, dict[str, Any]] = {}
+    seq = 0
+    for copy in _session_copies(ref):
+        stream = copy["path"].parent.name
+        for line_number, record in enumerate(iter_jsonl(copy["path"]), start=1):
+            role = _kimi_record_role(record)
+            if role is None:
+                continue
+            segments = kimi_searchable_segments(record)
+            prose_text = "\n".join(
+                segment.text
+                for segment in segments
+                if segment.source in {"message", "prompt"} and segment.text
+            ).strip()
+            if not prose_text or is_noise_text(prose_text):
+                continue
+            if role == "user":
+                prose_text = scrub_kimi_prompt(prose_text) or prose_text
+            record_key = f"kimi:{stream}:{line_number}"
+            if record_key in extracted_by_key:
+                continue
+            seq += 1
+            extracted_by_key[record_key] = {
+                "record_key": record_key,
+                "seq": seq,
+                "role": role,
+                "ts": _kimi_record_timestamp(record),
+                "fts_text": prose_text,
+                "semantic_text": prose_text,
+                "noise": 0,
+                "agent_prompt": 0,
+                "segment_sources_json": json.dumps(["message"], ensure_ascii=False),
+                "copy_paths": {str(copy["path"])},
+                "source_labels": set(copy["labels"]),
+            }
+    return _finalize_records(extracted_by_key)
+
+
+def _kimi_record_timestamp(record: dict[str, Any]) -> float | None:
+    """Convert a Kimi wire ``time`` field (epoch milliseconds) to seconds."""
+    value = record.get("time")
+    if isinstance(value, (int, float)):
+        return float(value) / 1000.0
+    return None
+
+
 def _extract_records(ref: dict[str, Any]) -> list[dict[str, Any]]:
     """Extract only human/assistant prose for ranked recall.
 
@@ -634,6 +921,11 @@ def _extract_records(ref: dict[str, Any]) -> list[dict[str, Any]]:
     a second forensic store. Keep the approximate layer intentionally narrow;
     a recall hit points back to the original JSONL for full evidence.
     """
+    provider = _ref_provider(ref)
+    if provider == "codex":
+        return _extract_codex_records(ref)
+    if provider == "kimi":
+        return _extract_kimi_records(ref)
     extracted_by_key: dict[str, dict[str, Any]] = {}
     seq = 0
     for copy in _session_copies(ref):
@@ -672,16 +964,7 @@ def _extract_records(ref: dict[str, Any]) -> list[dict[str, Any]]:
                 "copy_paths": {str(copy["path"])},
                 "source_labels": set(copy["labels"]),
             }
-    extracted = []
-    for record in extracted_by_key.values():
-        record["copy_paths_json"] = json.dumps(
-            sorted(record.pop("copy_paths")), ensure_ascii=False
-        )
-        record["source_labels_json"] = json.dumps(
-            sorted(record.pop("source_labels")), ensure_ascii=False
-        )
-        extracted.append(record)
-    return extracted
+    return _finalize_records(extracted_by_key)
 
 
 def _purge_session(connection: sqlite3.Connection, session_id: str) -> None:
@@ -703,8 +986,8 @@ def _insert_session(connection: sqlite3.Connection, ref: dict[str, Any]) -> int:
     sources = sorted(source.display_label for source in ref.get("sources", []))
     fingerprint = ref.get("_fingerprint") or _session_fingerprint(ref)
     connection.execute(
-        "INSERT INTO sessions(session_id,project,primary_path,sources_json,fingerprint,started,ended) "
-        "VALUES(?,?,?,?,?,?,?)",
+        "INSERT INTO sessions(session_id,project,primary_path,sources_json,fingerprint,"
+        "started,ended,provider) VALUES(?,?,?,?,?,?,?,?)",
         (
             session_id,
             project,
@@ -713,6 +996,7 @@ def _insert_session(connection: sqlite3.Connection, ref: dict[str, Any]) -> int:
             fingerprint,
             ref.get("created_at"),
             ref.get("updated_at"),
+            _ref_provider(ref),
         ),
     )
     records = _extract_records(ref)
@@ -746,21 +1030,26 @@ def _scope_from_args(args: argparse.Namespace) -> IndexScope:
         raise IndexError("--main-only cannot be combined with --home")
     if args.history_sources and (args.main_only or args.home):
         raise IndexError("--history-sources cannot be combined with --home/--main-only")
+    include_codex = bool(getattr(args, "codex", False))
+    include_kimi = bool(getattr(args, "kimi", False))
+    explicit_homes: list[Path] | list[str] | None = None
+    if args.main_only:
+        explicit_homes = [Path.home() / ".claude"]
+    elif args.home:
+        explicit_homes = args.home
     try:
-        if args.main_only:
-            sources, warnings = discover_claude_sources(
-                explicit_homes=[Path.home() / ".claude"]
-            )
-        elif args.home:
-            sources, warnings = discover_claude_sources(explicit_homes=args.home)
-        else:
-            sources, warnings = discover_claude_sources(
-                manifest_path=args.history_sources
-            )
+        sources, warnings = discover_history_sources(
+            explicit_homes=explicit_homes,
+            manifest_path=None if explicit_homes else args.history_sources,
+            include_codex=include_codex,
+            include_kimi=include_kimi,
+            codex_home=getattr(args, "codex_home", None),
+            kimi_home=getattr(args, "kimi_home", None),
+        )
     except HistorySourceConfigError as error:
         raise IndexError(str(error)) from error
     if not sources:
-        raise IndexError("No Claude history sources were discovered for this scope")
+        raise IndexError("No history sources were discovered for this scope")
     raw_project_path = getattr(args, "project", None)
     project_path = (
         str(Path(raw_project_path).expanduser().resolve())
@@ -771,14 +1060,121 @@ def _scope_from_args(args: argparse.Namespace) -> IndexScope:
     return IndexScope(sources, warnings, project_path, all_projects)
 
 
+def _project_label(cwd: Any, fallback: str) -> str:
+    """Normalize a working directory into the project label Claude already uses."""
+    if isinstance(cwd, str) and cwd.strip():
+        return str(Path(cwd)).replace("/", "-")
+    return fallback
+
+
+def _cwd_matches_project(cwd: Any, project_path: str | None) -> bool:
+    """Compare a recorded working directory against a requested project scope.
+
+    ``_scope_from_args`` resolves the requested path, so a literal comparison
+    would silently drop every session whose stored ``cwd`` is spelled through a
+    symlink — on macOS ``/tmp`` resolves to ``/private/tmp``, which would index
+    zero sessions while reporting success. Compare the resolved forms too, and
+    treat an unreadable path as a non-match rather than an error.
+    """
+    if not project_path:
+        return True
+    if not isinstance(cwd, str) or not cwd.strip():
+        return False
+    if cwd == project_path:
+        return True
+    try:
+        return str(Path(cwd).expanduser().resolve()) == project_path
+    except (OSError, RuntimeError):
+        return False
+
+
+def _codex_session_refs(
+    source: HistorySource,
+    project_path: str | None,
+) -> list[dict[str, Any]]:
+    refs: list[dict[str, Any]] = []
+    for path in discover_codex_rollouts(source.home):
+        meta = codex_meta_from_rollout(path)
+        session_id = codex_session_id(meta, path)
+        if not session_id:
+            continue
+        cwd = meta.get("cwd") if isinstance(meta, dict) else None
+        if not _cwd_matches_project(cwd, project_path):
+            continue
+        time_range = codex_rollout_time_range(path)
+        refs.append(
+            {
+                "session_id": session_id,
+                "path": path,
+                "project": _project_label(cwd, "codex"),
+                "provider": "codex",
+                "sources": [source],
+                "created_at": time_range.earliest,
+                "updated_at": time_range.latest,
+            }
+        )
+    return refs
+
+
+def _kimi_session_refs(
+    source: HistorySource,
+    project_path: str | None,
+) -> list[dict[str, Any]]:
+    by_session: dict[str, dict[str, Any]] = {}
+    for session_dir, _agent, wire_path in discover_kimi_wires(source.home):
+        state = load_kimi_state(session_dir) or {}
+        session_id = state.get("id") or session_dir.name
+        cwd = state.get("cwd")
+        if not _cwd_matches_project(cwd, project_path):
+            continue
+        time_range = kimi_wire_time_range(wire_path)
+        entry = by_session.get(session_id)
+        if entry is None:
+            by_session[session_id] = {
+                "session_id": session_id,
+                "path": wire_path,
+                "project": _project_label(cwd, "kimi"),
+                "provider": "kimi",
+                "sources": [source],
+                "copies": [{"path": wire_path, "source": source}],
+                "created_at": time_range.earliest,
+                "updated_at": time_range.latest,
+            }
+            continue
+        entry["copies"].append({"path": wire_path, "source": source})
+        entry["created_at"] = min(
+            [value for value in (entry["created_at"], time_range.earliest) if value],
+            default=None,
+        )
+        entry["updated_at"] = max(
+            [value for value in (entry["updated_at"], time_range.latest) if value],
+            default=None,
+        )
+    return list(by_session.values())
+
+
 def _session_refs(scope: IndexScope) -> list[dict[str, Any]]:
-    analyzer = SessionAnalyzer(sources=scope.sources, warnings=scope.warnings)
-    if scope.project_path:
-        refs = analyzer.find_project_sessions(scope.project_path)
-        for ref in refs:
-            ref["project"] = Path(ref["path"]).parent.name
-        return refs
-    return analyzer.find_all_projects_sessions()
+    claude_sources = [
+        source for source in scope.sources if source.provider == "claude"
+    ]
+    refs: list[dict[str, Any]] = []
+    if claude_sources:
+        analyzer = SessionAnalyzer(
+            sources=claude_sources, warnings=scope.warnings
+        )
+        if scope.project_path:
+            claude_refs = analyzer.find_project_sessions(scope.project_path)
+            for ref in claude_refs:
+                ref["project"] = Path(ref["path"]).parent.name
+        else:
+            claude_refs = analyzer.find_all_projects_sessions()
+        refs.extend(claude_refs)
+    for source in scope.sources:
+        if source.provider == "codex":
+            refs.extend(_codex_session_refs(source, scope.project_path))
+        elif source.provider == "kimi":
+            refs.extend(_kimi_session_refs(source, scope.project_path))
+    return refs
 
 
 def update_index(
@@ -798,17 +1194,31 @@ def update_index(
     connection = _new_database(target, simple_root) if target != db_path else _connect(
         target, simple_root=simple_root
     )
+    migration_note: str | None = None
     if target == db_path:
+        try:
+            migration_note = _migrate_schema_if_needed(connection)
+        except sqlite3.DatabaseError as error:
+            connection.close()
+            raise IndexError(f"Cannot migrate index schema in place: {error}") from error
         _validate_schema(connection)
         stored_scope = _meta_get(connection, "index_scope")
         current_scope = _scope_identity(scope)
         if stored_scope != current_scope:
-            connection.close()
-            raise IndexError(
-                "This database was built for a different source/project scope. "
-                "Use a separate --db for diagnostics or rebuild this database for "
-                "the requested scope; refusing to prune records outside the active scope."
+            widening = _scope_widening(stored_scope, scope)
+            if widening is None:
+                connection.close()
+                raise IndexError(
+                    "This database was built for a different source/project scope. "
+                    "Use a separate --db for diagnostics or rebuild this database for "
+                    "the requested scope; refusing to prune records outside the active scope."
+                )
+            print(
+                f"Widening indexed scope: adding {', '.join(widening)}",
+                file=sys.stderr,
             )
+    if migration_note:
+        print(migration_note, file=sys.stderr)
 
     try:
         refs = _session_refs(scope)
@@ -1368,6 +1778,7 @@ def recall(
     include_agent_prompts: bool,
     model_path: Path | None,
     simple_root: Path | None,
+    providers: Sequence[str] = (),
 ) -> dict[str, Any]:
     connection = _connect(
         db_path,
@@ -1444,6 +1855,20 @@ def recall(
         placeholders = ",".join("?" for _ in exclude_sessions)
         filters.append(f"sessions.session_id NOT IN ({placeholders})")
         params.extend(exclude_sessions)
+    if providers:
+        indexed_providers = _scope_providers(scope_payload) or ["claude"]
+        unknown = sorted(set(providers) - set(indexed_providers))
+        if unknown:
+            connection.close()
+            raise IndexError(
+                f"This index does not cover provider(s): {', '.join(unknown)}. "
+                f"Indexed providers: {', '.join(indexed_providers)}. "
+                "Re-run index with the matching --codex/--kimi flag, or use "
+                "analyze_sessions.py search for an exhaustive scan."
+            )
+        placeholders = ",".join("?" for _ in providers)
+        filters.append(f"sessions.provider IN ({placeholders})")
+        params.extend(providers)
     where = " AND ".join(filters)
 
     query_started = time.time()
@@ -1500,7 +1925,8 @@ def recall(
             SELECT records.id, records.role, records.ts, records.fts_text,
                    records.segment_sources_json, records.copy_paths_json,
                    records.source_labels_json, sessions.project,
-                   sessions.session_id, sessions.primary_path, sessions.sources_json
+                   sessions.session_id, sessions.primary_path, sessions.sources_json,
+                   sessions.provider
             FROM records
             JOIN sessions ON sessions.session_id=records.session_id
             WHERE records.id IN ({placeholders})
@@ -1526,6 +1952,7 @@ def recall(
         )
         results.append(
             {
+                "provider": row["provider"],
                 "role": row["role"],
                 "timestamp": (
                     datetime.fromtimestamp(row["ts"], tz=timezone.utc)
@@ -1673,10 +2100,12 @@ def _print_payload(payload: dict[str, Any], *, json_output: bool) -> None:
             f"mode={payload['mode']} · indexed_at={payload['last_indexed_at']} · "
             f"embed={payload['embedding_seconds']}s · query={payload['query_seconds']}s"
         )
+        print(f"coverage: {payload['coverage']}")
         print("Ranked recall only — do not use zero results as an absence claim.")
         for index, result in enumerate(payload["results"], start=1):
             print(
                 f"\n{index}. [{result['timestamp'] or 'unknown'}] "
+                f"{result.get('provider') or 'claude'} · "
                 f"{result['project']} · {result['session_id']}"
             )
             print(
@@ -1707,6 +2136,18 @@ def _add_source_scope(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--home", action="append", metavar="DIR")
     parser.add_argument("--main-only", action="store_true")
     parser.add_argument("--history-sources", metavar="FILE")
+    parser.add_argument(
+        "--codex",
+        action="store_true",
+        help="Also index Codex rollout history (~/.codex); opt-in, and a large corpus",
+    )
+    parser.add_argument(
+        "--kimi",
+        action="store_true",
+        help="Also index Kimi CLI sessions (~/.kimi-code); opt-in",
+    )
+    parser.add_argument("--codex-home", metavar="DIR")
+    parser.add_argument("--kimi-home", metavar="DIR")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1752,6 +2193,12 @@ def build_parser() -> argparse.ArgumentParser:
     recall_parser.add_argument("--exclude-session", action="append", default=[])
     recall_parser.add_argument("--include-agent-prompts", action="store_true")
     recall_parser.add_argument("--model-path", type=Path)
+    recall_parser.add_argument(
+        "--provider",
+        action="append",
+        choices=SUPPORTED_PROVIDERS,
+        help="Restrict recall to one or more indexed providers; repeatable",
+    )
     recall_parser.add_argument("--json", action="store_true")
 
     status_parser = subparsers.add_parser("status", help="Inspect index completeness")
@@ -1829,6 +2276,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 include_agent_prompts=args.include_agent_prompts,
                 model_path=args.model_path,
                 simple_root=args.simple_root,
+                providers=args.provider or (),
             )
             _print_payload(payload, json_output=args.json)
             return 0
