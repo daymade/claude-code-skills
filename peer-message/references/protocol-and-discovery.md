@@ -152,6 +152,8 @@ content 含 message-id
 
 queue 项可能很快被消费，所以只查 queue 会产生假阴性；必须再查 thread history。两处都没命中时保留原 message ID，并按下方 receipt 语义报告；禁止自动重发。
 
+`peer.py verify` 的 Codex 路由在 queue 命中时即返回，否则检查 thread history；它不检查完整 rollout 或后续 assistant 回应。要回答本机「对方读到了吗」，按 `coordination-and-learning-loop.md` §3 通过历史 Skill 补查精确目标 transcript。调用方的语义核对不改变 CLI 的 `delivery_status`，也不要求对方再发一条 ACK。
+
 ### 一次性关联回复查询
 
 在本 Skill 目录运行当前 help 确认参数，设置 `INBOX_TARGET` 和 `ORIGINAL_MESSAGE_ID`，再查询原发送方自己的回信落点：
