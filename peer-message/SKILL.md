@@ -29,6 +29,7 @@ description: >-
 | 目标是 Codex thread | 用 `scripts/peer.py` 的 Codex route |
 | 多目标协调 | 只用显式 broadcast；禁止从单发请求推断全机广播 |
 | 查找对某条 outbound 的显式回复 | 对原发送方自己的 inbox 运行一次 `replies`；命令与证据边界见 `references/protocol-and-discovery.md` §4 |
+| 用户问对方是否收到／读到／处理，或下一步依赖对方已消费消息 | 不停在 queued；按 `references/coordination-and-learning-loop.md` §3 核对本机目标 transcript 与关联回应，区分入队、进入对话、已回应与已执行 |
 | 消息被 hold 要人工批准，或建无人值守接收端点 | 按 `references/official-feature.md` §3 的 Held 修复路径处理 inbound 策略，不重发 |
 | 共享 checkout、分支、文件或锁上有别人的在制品挡着你 | 先核实它是否真在飞；真在飞才问，且只问你列出的候选（单发或显式 broadcast 都可，上一行的禁令针对的是从一次单发推断出全机广播）；见下文「撞见别人的在制品」 |
 
