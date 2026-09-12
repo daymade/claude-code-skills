@@ -32,6 +32,9 @@ description: >-
 
 - 每次调用先按[本地预测反馈](references/forecast-feedback.md)读取已有记录；查询获得相关事件
   证据后回填未决预测。只读记录为空时不创建文件；提出新预测时保存窗口、依据与本轮反馈。
+- 裸调用（没带具体问题，只想知道现在什么情况）→ 组合执行：台账回看 → 公告线 + 故障线（§1）→
+  本机落地状态（§2 脚本），按输出合同先给当前重置状态结论，再附下一窗口主判断（走预测路径）
+  与台账回填。点名额度/余额本身的问法走[账号 SOP](references/account-usage.md)，本条只管重置状态。
 - 用户问「我们几个账号 / 都用完了吗 / 还有两个满额 / 还有几次 Full reset」→ 先读
   [逐账号额度查询与网页登录恢复](references/account-usage.md)。
 - 用户问「Tibo 说了什么」或明确只要官宣 → 查**公告路径**。
@@ -202,7 +205,8 @@ done
    最近 N 天。实测同一分钟窗口 `08-28 00:25–00:29`：扫 7 个目录得 9 行，扫 9 个目录得 **67 行**
    ——少掉的正是长 session 交错写入的那些行，**而多账号交错恰好就长这样**。当天决定性的
    `used 0%→82%` 记录就住在前一天的目录里，按目录数天数的版本结构上看不见它。
-   **修法：多扫 2 天目录，再按时间戳过滤**（已内置在下面脚本的 `SCAN` / `cutoff` 两行）。
+   **修法：多扫 2 天目录，再按时间戳过滤**（已内置在 `scripts/scan_rollouts.py` 的
+   days+2 目录扫描与时间戳裁剪）。
 
 **窗口锚点的形状——注意「干净 +7d」本身不是重置的证据**（2026-09-01 与
 2026-09-03 两次实测）：
@@ -419,80 +423,10 @@ Codex 的时刻**——下「至今没有重置」之前先看最新快照有多
 折算成绝对时刻并标注折算时刻（读数时刻 + 已流逝时间），别把「21 小时之后」原样抄给用户。
 
 ```bash
-# 重建本机周额度曲线 + 多账号回跳检查（2026-09-03 实测；上述陷阱均已内置，见带「陷阱 N」注释的行）
-python3 - <<'PY'
-import json,glob,os,datetime
-BJ=datetime.timezone(datetime.timedelta(hours=8)); DAYS=7
-def find_rl(o):
-    if isinstance(o,dict):
-        if o.get('rate_limits'): return o['rate_limits']
-        for v in o.values():
-            r=find_rl(v)
-            if r is not None: return r
-    if isinstance(o,list):
-        for v in o:
-            r=find_rl(v)
-            if r is not None: return r
-now=datetime.datetime.now(); rows=[]
-SCAN=DAYS+2                                                                # 陷阱 4：目录按天分，
-cutoff=datetime.datetime.now(BJ)-datetime.timedelta(days=DAYS)             # 跨午夜的长 session 会把
-for i in range(SCAN):                                                      # 次日时间戳写进前一天目录，
-    d=(now-datetime.timedelta(days=i)).strftime('~/.codex/sessions/%Y/%m/%d')  # 故多扫再按时间戳裁
-    for f in glob.glob(os.path.expanduser(d)+'/rollout-*.jsonl'):
-        for line in open(f,encoding='utf-8',errors='replace'):
-            if 'rate_limits' not in line: continue
-            try: doc=json.loads(line)
-            except: continue
-            rl=find_rl(doc); ts=doc.get('timestamp')
-            if not rl or not ts or rl.get('limit_id')!='codex': continue   # 陷阱 2：滤掉诱饵桶
-            for slot in ('primary','secondary'):
-                p=rl.get(slot)
-                if not p or p.get('window_minutes')!=10080: continue       # 陷阱 1：按长度取周窗口
-                rows.append((ts,p['used_percent'],p['resets_at'],(rl.get('credits') or {}).get('balance')))
-T=lambda x: datetime.datetime.fromisoformat(x.replace('Z','+00:00')).astimezone(BJ)
-A=lambda e: datetime.datetime.fromtimestamp(e,BJ)
-rows=[r for r in rows if T(r[0])>=cutoff]                                  # 陷阱 4：按时间戳裁窗
-rows.sort()
-if not rows:                       # 空不是异常，是一种必须报告的状态：这段时间是盲区
-    raise SystemExit('没有可用快照：该窗口内没跑过 Codex，或 ~/.codex/sessions 为空。\n'
-                     '这不构成「没有重置」，只说明该区间无观测。')
-print(f"采样 {len(rows)} 行 | 最早 {T(rows[0][0]):%m-%d %H:%M} | 扫了 {SCAN} 个日期目录\n")
-
-# —— 第 1 步：多账号回跳检查（在人工去重之前跑）——
-# 比较严格相邻的原始快照；used% 上升本身是正常消费，不作为账号身份证据。
-# 别先按锚点分段再比段首：那样 before 值系统性取到整段最小值，会把 100%→0% 印成 0%→0%。
-back=0; prev=None
-for ts,u,ra,_ in rows:
-    if prev is not None:
-        pa=A(prev[2]).replace(second=0,microsecond=0)
-        ca=A(ra).replace(second=0,microsecond=0)
-        rose=u>prev[1]
-        # 陷阱 3 的余波：resets_at 秒级微漂跨分钟边界会造出 -0.0h 的假回跳。
-        # 阈值 5 分钟滤掉常见漂移；同时有 used% 上升的行保留为待核线索。
-        if ca<pa and ((pa-ca).total_seconds()>=300 or rose):
-            back+=1
-            up=' ⚠ 已用量上升且锚点回退：需核对身份与窗口配置' if rose else ''
-            print(f"回跳 {T(ts):%m-%d %H:%M:%S} 锚点 {pa:%m-%d %H:%M} → {ca:%m-%d %H:%M} "
-                  f"(-{(pa-ca).total_seconds()/3600:.1f}h) used {prev[1]:.0f}%→{u:.0f}%{up}")
-    prev=(ts,u,ra)
-print(f"回跳次数: {back}  （形状检查不证明账号数量；命中项需核对身份与窗口配置）\n")
-
-# —— 第 2 步：归零候选。峰值与回跳只作线索，定性需要身份与事件证据 ——
-prev=None
-for r in rows:
-    if prev and prev[1]-r[1] > 20:                                         # 陷阱 3：按用量降幅判
-        a=A(r[2])
-        clean=abs((a-(T(r[0])+datetime.timedelta(days=7))).total_seconds())<600
-        shape='干净+7d' if clean else '锚点回拨'
-        peak='打满触发' if prev[1]>=99 else '非打满(平台推送先验)'
-        print(f"归零区间 {T(prev[0]):%m-%d %H:%M:%S} {prev[1]:.0f}% → {T(r[0]):%m-%d %H:%M:%S} "
-              f"{r[1]:.0f}% | 新锚点 {a:%m-%d %H:%M} {shape} | {peak}")
-    prev=r
-if rows:
-    last=rows[-1]
-    print(f"\n最新快照 {T(last[0]):%F %H:%M:%S} 北京 | 已用 {last[1]:.0f}% | 窗口重置于 "
-          f"{A(last[2]):%F %H:%M} | purchased_credits={last[3]} | banked=unknown")
-PY
+# 重建本机周额度曲线 + 多账号回跳检查（上述陷阱已全部内置；2026-09-12 与内联版同窗口逐行对拍一致）
+uv run python scripts/scan_rollouts.py --days 7
+# 复现历史某时刻的切面（回填台账、复核旧结论时用）：加 --as-of "2026-09-12T17:44:00+08:00"
+# 自定义 CODEX_HOME 时：--codex-home <已授权主页>（auth 与 sessions 必须同属一个主页，不混用）
 ```
 
 ### 3. 静默重置路径：查账户事实，而不是继续等帖子
@@ -561,6 +495,9 @@ WebSearch `thsottiaux reset`
   （跨夏令时切换日的「tomorrow」按发推日偏移计算会错 1 小时）
 - 「tomorrow / today」以**他发推时刻的太平洋日期**为锚：`announced_at`（UTC）减 7（PDT）
   或 8（PST）小时得到发推的太平洋日期，再读 tomorrow 指哪天
+- 「midnight」同锚（2026-09-12 实测：「a reset is also landing by midnight today」发于
+  03:20 UTC = 太平洋前一日 20:20，「today」= 太平洋 9/11，即北京 9/12 15:00 前；
+  落地确认帖实际发于北京 16:09）
 - 历史模式（非承诺）：重置从不落在太平洋 1AM–8AM（他的睡眠时段），高峰在太平洋下午
 
 ## 时区换算（命令已实测，2026-08-23；**macOS only**——BSD `date -j`/`-f`，GNU date 无此参数）
@@ -623,7 +560,9 @@ TZ=America/Los_Angeles date "+%F %T %Z(%z)"
   引导看产品内余额，而不是拿官宣时间打包票。**2026-09-01 用本机 rollout 量化过这个差距**：
   25M 那次官方承诺 6pm PST（北京 09:00）、Tibo 落地确认帖发于北京 10:34，而账户实际归零
   区间是北京 10:10–12:06——比承诺线晚 1h10m 到 3h06m。「官方确认已落地」与「你的额度回来了」
-  之间有小时级差距，两件事分开说。
+  之间有小时级差距，两件事分开说。**兑现端也有实测故障**：2026-09-09 官方确认部分 banked
+  reset 在 ChatGPT Work/Codex 使用时未完全生效，受影响时段内的使用者补发一个并收到道歉
+  邮件——用户报「用了 banked 没变化」时先核对是否落在该故障窗口。
 - **「单账户」这个前提本身要先证，不能默认**（2026-09-03 修正了 2026-09-01 的一次结论）。
   09-01 那次取证报「7 次归零，4 次对上 Tibo 公告，另 3 次无公告、其中 2 次是锚点回拨」，
   并据此写下「一个账户能同时看到官宣重置与无公告的窗口重排」。**这个结论已被推翻**：那台
