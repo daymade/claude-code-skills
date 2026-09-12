@@ -1117,6 +1117,169 @@ class MultiProviderIndexTests(unittest.TestCase):
         self.assertIn("kimi:active:kimi", description)
         self.assertIn("active:main", description)
 
+    def test_codex_rollout_without_session_meta_uses_its_filename_id(self) -> None:
+        """A truncated rollout keeps its conversation instead of crashing the sweep.
+
+        Real stores contain rollouts with no session_meta record at all. The
+        first run over 8,919 real rollouts died on one of them, because the
+        meta lookup returns None and was passed straight into the id reader.
+        """
+        session_id = "019a0000-0000-7000-8000-00000000beef"
+        rollout = (
+            self.codex_home / "sessions" / "2026" / "05" / "02"
+            / f"rollout-2026-05-02T00-00-00-{session_id}.jsonl"
+        )
+        write_jsonl(
+            rollout,
+            [
+                {
+                    "timestamp": "2026-05-02T00:00:01.000Z",
+                    "ordinal": 1,
+                    "type": "response_item",
+                    "payload": {
+                        "type": "message",
+                        "role": "user",
+                        "content": [
+                            {"type": "input_text", "text": "orphan rollout prose"}
+                        ],
+                    },
+                }
+            ],
+        )
+        with portable_backend():
+            result = history_index.update_index(
+                self.db, self.scope(self.codex_source), rebuild=True
+            )
+        self.assertEqual(result["sessions"], 1)
+        connection = plain_connect(self.db, readonly=True)
+        row = connection.execute(
+            "SELECT session_id, provider, project FROM sessions"
+        ).fetchone()
+        self.assertEqual(row["session_id"], session_id)
+        self.assertEqual(row["provider"], "codex")
+        self.assertEqual(row["project"], "codex")
+        self.assertEqual(
+            connection.execute("SELECT fts_text FROM records").fetchone()[0],
+            "orphan rollout prose",
+        )
+        connection.close()
+
+    def test_one_unreadable_rollout_does_not_abort_the_sweep(self) -> None:
+        good_id = "019a0000-0000-7000-8000-000000000002"
+        codex_rollout(
+            self.codex_home / "sessions" / "2026" / "05" / "03"
+            / f"rollout-{good_id}.jsonl",
+            good_id,
+            self.workspace,
+            [("user", "surviving codex prose")],
+        )
+        broken = (
+            self.codex_home / "sessions" / "2026" / "05" / "03"
+            / "rollout-019a0000-0000-7000-8000-000000000003.jsonl"
+        )
+        broken.parent.mkdir(parents=True, exist_ok=True)
+        broken.write_bytes(b"\xff\xfe not valid utf-8 or json\n")
+        warnings: list[str] = []
+        refs = history_index._codex_session_refs(self.codex_source, None, warnings)
+        self.assertIn(good_id, {ref["session_id"] for ref in refs})
+
+    def test_resumed_codex_session_keeps_both_rollout_halves(self) -> None:
+        """Two rollouts sharing one session_meta.id are halves, not copies.
+
+        Resuming a Codex session writes a second rollout that keeps the
+        original id and appends a fork id to the filename. Treating them as
+        separate sessions violates the sessions PK; sharing a record key drops
+        the resumed half, because its ordinals restart at 1. Both failures were
+        hit on the real 8,924-rollout store.
+        """
+        session_id = "019a0000-0000-7000-8000-00000000f00d"
+        fork_id = "019a0000-0000-7000-8000-00000000f00e"
+        day = self.codex_home / "sessions" / "2026" / "05" / "04"
+        codex_rollout(
+            day / f"rollout-2026-05-04T01-00-00-{session_id}.jsonl",
+            session_id,
+            self.workspace,
+            [("user", "first half question")],
+        )
+        codex_rollout(
+            day / f"rollout-2026-05-04T02-00-00-{session_id}_{fork_id}.jsonl",
+            session_id,
+            self.workspace,
+            [("user", "resumed half question")],
+        )
+        with portable_backend():
+            result = history_index.update_index(
+                self.db, self.scope(self.codex_source), rebuild=True
+            )
+        self.assertEqual(result["sessions"], 1)
+        connection = plain_connect(self.db, readonly=True)
+        texts = {
+            row[0] for row in connection.execute("SELECT fts_text FROM records")
+        }
+        self.assertEqual(texts, {"first half question", "resumed half question"})
+        copies = json.loads(
+            connection.execute("SELECT copy_paths_json FROM records LIMIT 1").fetchone()[0]
+        )
+        self.assertTrue(copies)
+        connection.close()
+
+    def test_kimi_internal_agent_sessions_are_excluded_and_reported(self) -> None:
+        """Title/vault/skill-summary runs are machine chatter, not conversation.
+
+        A real Kimi store keeps them in the same sessions/ tree as real
+        conversations, separated only by a directory prefix. Left in, a
+        ctitle- run ("用户要求为以下对话生成一个简洁的标题") outranks the human's
+        own words for the very query that quotes them.
+        """
+        kimi_session(
+            self.kimi_home,
+            "conv-1111111111111111",
+            self.workspace,
+            [("user", "genuine kimi conversation")],
+        )
+        for internal in ("ctitle-2222", "dvlt-3333", "sklsum-4444"):
+            kimi_session(
+                self.kimi_home, internal, self.workspace, [("user", "machine chatter")]
+            )
+        warnings: list[str] = []
+        refs = history_index._kimi_session_refs(self.kimi_source, None, warnings)
+        self.assertEqual([ref["session_id"] for ref in refs], ["conv-1111111111111111"])
+        self.assertTrue(any("skipped 3 internal" in w for w in warnings), warnings)
+
+    def test_kimi_workdir_comes_from_the_session_index_when_state_lacks_cwd(self) -> None:
+        """Newer Kimi builds keep cwd only in session_index.jsonl.
+
+        Without that lookup every Kimi session collapses into one "kimi"
+        project label instead of joining the Claude and Codex sessions for the
+        same repository, which is the whole point of one shared index.
+        """
+        session_id = "conv-5555555555555555"
+        session_dir = kimi_session(
+            self.kimi_home, session_id, self.workspace, [("user", "kimi prose")]
+        )
+        state = json.loads((session_dir / "state.json").read_text(encoding="utf-8"))
+        state.pop("cwd", None)
+        (session_dir / "state.json").write_text(
+            json.dumps(state, ensure_ascii=False), encoding="utf-8"
+        )
+        (self.kimi_home / "session_index.jsonl").write_text(
+            json.dumps(
+                {
+                    "sessionId": session_id,
+                    "sessionDir": str(session_dir),
+                    "workDir": str(self.workspace),
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        refs = history_index._kimi_session_refs(self.kimi_source, None, [])
+        self.assertEqual(len(refs), 1)
+        self.assertEqual(
+            refs[0]["project"], str(self.workspace).replace("/", "-")
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

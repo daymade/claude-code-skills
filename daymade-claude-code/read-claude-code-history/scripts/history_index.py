@@ -57,6 +57,7 @@ from _core.codex import (  # noqa: E402
 )
 from _core.kimi import (  # noqa: E402
     kimi_wire_time_range,
+    load_kimi_session_index,
     load_kimi_state,
     scrub_kimi_prompt,
 )
@@ -824,7 +825,11 @@ def _extract_codex_records(ref: dict[str, Any]) -> list[dict[str, Any]]:
             if prose_text.startswith(CODEX_PREAMBLE_PREFIXES):
                 continue
             ordinal = record.get("ordinal")
-            record_key = f"codex:{ordinal if ordinal is not None else line_number}"
+            position = ordinal if ordinal is not None else line_number
+            # Namespace by file: a resumed session's second rollout restarts
+            # its ordinals at 1, so a bare ordinal would collide and silently
+            # drop the resumed half of the conversation.
+            record_key = f"codex:{copy['path'].stem}:{position}"
             if record_key in extracted_by_key:
                 continue
             seq += 1
@@ -842,6 +847,18 @@ def _extract_codex_records(ref: dict[str, Any]) -> list[dict[str, Any]]:
                 "source_labels": set(copy["labels"]),
             }
     return _finalize_records(extracted_by_key)
+
+
+# Kimi CLI runs internal agents in the same sessions/ tree as real
+# conversations, distinguished only by a session-directory prefix. Observed on
+# a real store: ``ctitle-`` sessions whose entire content is "用户要求为以下
+# 对话生成一个简洁的标题"; ``dvlt-`` vault-memory maintenance runs whose
+# workspace is an internal vault path; and ``sklsum-`` runs that open with
+# "You are the Daimon skill-summary system tool." Indexing them puts machine
+# chatter at the top of recall for a human's own words. Excluded by denylist
+# rather than a ``conv-`` allowlist, so a future user-facing prefix surfaces as
+# noise to fix rather than as history that silently went missing.
+KIMI_INTERNAL_SESSION_PREFIXES = ("ctitle-", "dvlt-", "sklsum-")
 
 
 def _kimi_record_role(record: dict[str, Any]) -> str | None:
@@ -1091,43 +1108,103 @@ def _cwd_matches_project(cwd: Any, project_path: str | None) -> bool:
 def _codex_session_refs(
     source: HistorySource,
     project_path: str | None,
+    warnings: list[str] | None = None,
 ) -> list[dict[str, Any]]:
-    refs: list[dict[str, Any]] = []
+    """Enumerate Codex rollouts as session refs.
+
+    A real store contains rollouts with no ``session_meta`` record at all
+    (truncated or interrupted runs). Those still carry their UUID in the
+    filename, so recover the identity from there rather than dropping the
+    conversation; only a rollout with no recoverable ID is skipped. One
+    unreadable file must not abort a sweep over thousands, so per-file errors
+    are collected as warnings instead of raised.
+    """
+    by_session: dict[str, dict[str, Any]] = {}
     for path in discover_codex_rollouts(source.home):
-        meta = codex_meta_from_rollout(path)
-        session_id = codex_session_id(meta, path)
-        if not session_id:
+        try:
+            meta = codex_meta_from_rollout(path) or {}
+            session_id = codex_session_id(meta, path)
+            if not session_id:
+                continue
+            cwd = meta.get("cwd")
+            if not _cwd_matches_project(cwd, project_path):
+                continue
+            time_range = codex_rollout_time_range(path)
+        except (OSError, ValueError) as error:
+            if warnings is not None:
+                warnings.append(
+                    f"Skipped unreadable Codex rollout {path}: "
+                    f"{type(error).__name__}: {error}"
+                )
             continue
-        cwd = meta.get("cwd") if isinstance(meta, dict) else None
-        if not _cwd_matches_project(cwd, project_path):
-            continue
-        time_range = codex_rollout_time_range(path)
-        refs.append(
-            {
+        entry = by_session.get(session_id)
+        if entry is None:
+            by_session[session_id] = {
                 "session_id": session_id,
                 "path": path,
                 "project": _project_label(cwd, "codex"),
                 "provider": "codex",
                 "sources": [source],
+                "copies": [{"path": path, "source": source}],
                 "created_at": time_range.earliest,
                 "updated_at": time_range.latest,
             }
+            continue
+        # Resuming a Codex session writes a second rollout that keeps the
+        # original session_meta.id and appends a fork id to its filename. The
+        # files are different halves of one conversation, not copies, so they
+        # attach as extra segments; per-file record keys keep both halves.
+        entry["copies"].append({"path": path, "source": source})
+        entry["created_at"] = min(
+            [
+                value
+                for value in (entry["created_at"], time_range.earliest)
+                if value is not None
+            ],
+            default=None,
         )
-    return refs
+        entry["updated_at"] = max(
+            [
+                value
+                for value in (entry["updated_at"], time_range.latest)
+                if value is not None
+            ],
+            default=None,
+        )
+    return list(by_session.values())
 
 
 def _kimi_session_refs(
     source: HistorySource,
     project_path: str | None,
+    warnings: list[str] | None = None,
 ) -> list[dict[str, Any]]:
+    # Newer Kimi CLI builds drop ``cwd`` (and ``id``) from state.json and keep
+    # the working directory only in session_index.jsonl, so read that map once
+    # per home. Without it every Kimi session collapses into one "kimi"
+    # project label instead of joining the Claude/Codex sessions for the same
+    # repository.
+    workdirs = load_kimi_session_index(source.home)
     by_session: dict[str, dict[str, Any]] = {}
+    skipped_internal = 0
     for session_dir, _agent, wire_path in discover_kimi_wires(source.home):
-        state = load_kimi_state(session_dir) or {}
-        session_id = state.get("id") or session_dir.name
-        cwd = state.get("cwd")
-        if not _cwd_matches_project(cwd, project_path):
+        if session_dir.name.startswith(KIMI_INTERNAL_SESSION_PREFIXES):
+            skipped_internal += 1
             continue
-        time_range = kimi_wire_time_range(wire_path)
+        try:
+            state = load_kimi_state(session_dir) or {}
+            session_id = state.get("id") or session_dir.name
+            cwd = state.get("cwd") or workdirs.get(session_dir.name)
+            if not _cwd_matches_project(cwd, project_path):
+                continue
+            time_range = kimi_wire_time_range(wire_path)
+        except (OSError, ValueError) as error:
+            if warnings is not None:
+                warnings.append(
+                    f"Skipped unreadable Kimi wire {wire_path}: "
+                    f"{type(error).__name__}: {error}"
+                )
+            continue
         entry = by_session.get(session_id)
         if entry is None:
             by_session[session_id] = {
@@ -1150,6 +1227,12 @@ def _kimi_session_refs(
             [value for value in (entry["updated_at"], time_range.latest) if value],
             default=None,
         )
+    if skipped_internal and warnings is not None:
+        warnings.append(
+            f"Kimi: skipped {skipped_internal} internal agent wire(s) "
+            f"({'/'.join(KIMI_INTERNAL_SESSION_PREFIXES)}); they are title and "
+            "vault-maintenance runs, not conversations"
+        )
     return list(by_session.values())
 
 
@@ -1171,9 +1254,13 @@ def _session_refs(scope: IndexScope) -> list[dict[str, Any]]:
         refs.extend(claude_refs)
     for source in scope.sources:
         if source.provider == "codex":
-            refs.extend(_codex_session_refs(source, scope.project_path))
+            refs.extend(
+                _codex_session_refs(source, scope.project_path, scope.warnings)
+            )
         elif source.provider == "kimi":
-            refs.extend(_kimi_session_refs(source, scope.project_path))
+            refs.extend(
+                _kimi_session_refs(source, scope.project_path, scope.warnings)
+            )
     return refs
 
 
