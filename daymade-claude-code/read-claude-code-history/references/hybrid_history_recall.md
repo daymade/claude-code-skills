@@ -168,8 +168,12 @@ Nothing is deleted, so a text that falls back under three copies is restored on
 the next pass. The pass is idempotent and runs on every `chunk` invocation,
 including one that added nothing — the policy depends on what is stored, not on
 what that run produced. The nightly `chunk` stage runs without `sqlite-vec`, so
-it defers dropping the demoted vectors (reported as `vectors_drop_deferred`)
-and `embed` removes them before it decides what to embed.
+it cannot drop the demoted vectors: `vectors_dropped` comes back `null` and
+`embed` removes them before it decides what to embed. `non_embeddable_chunks`
+is reported either way and is not that deferred work — it counts every
+`usable=0` chunk, demoted duplicates plus chunks too short to embed at all, so
+it is a standing property of the index rather than a queue that drains to
+zero.
 
 ## Embedding: pauses, progress, and one writer
 
@@ -185,10 +189,27 @@ above, backing off 1, 2, 4, 8, 16, 30 s and re-checking until it clears. Any
 probe failure, timeout or non-Darwin platform reads as normal: an unreadable
 level is not evidence of pressure, and refusing to embed because `sysctl` is
 missing would turn a diagnostic into an outage. A pause prints one line when it
-starts, one when it ends, and a heartbeat every minute in between, so a long
-wait is never mistaken for a hang. This signal is the right one because MLX's
-own counters cannot explain the failure: the process was killed twice by the
-host while MLX peaked at 2.07-2.41 GiB on a 128 GiB machine.
+starts, one when it ends, and a heartbeat every minute in between — on stderr,
+because stdout has to stay a single JSON document — so a long wait is never
+mistaken for a hang. This signal is the right one because MLX's own counters
+cannot explain the failure: the process was killed twice by the host while MLX
+peaked at 2.07-2.41 GiB on a 128 GiB machine.
+
+**A pause is bounded, and it is a safe point.** The pass holds the writer lock
+while it waits, so an unbounded pause does more than overrun: `--max-seconds
+10800` exists to keep the nightly embed out of the working day, and the next
+night's `index` refuses to start while the lock is held. The pause therefore
+takes the run's own deadline (`started + --max-seconds`) and returns when it is
+spent, letting the loop stop as `max_seconds`; it re-reads the deadline at the
+top of each iteration rather than mid-sleep, so it can overshoot by at most one
+backoff step. An unbounded run has no deadline, so a second bound applies to
+both: pressure that has not cleared in `EMBED_PAUSE_CEILING_SECONDS` (600 s,
+roughly four times a healthy end-to-end nightly embed) ends the pass through its normal
+commit path with `stop_reason=host_pressure`. The loop also commits the
+heartbeat and the vectors it already holds immediately *before* waiting: the
+pause fires every eight batches and the checkpoint every `EMBED_COMMIT_EVERY`
+chunks, so without that commit a kill during the very wait that exists to avoid
+being killed would discard up to a checkpoint's worth of finished work.
 
 **Batch size is not a throughput lever.** Compute-only, on this index's own
 365-token chunks: 44 chunks/s at batch 16 against 33 chunks/s at batch 48, with
@@ -202,13 +223,19 @@ backlog runs 365-602 tokens per chunk, so every commit prints embedded chunks
 line (not the average since the start, which hides a run that is slowing down),
 an ETA derived from remaining tokens over that recent token rate, and
 `mx.get_peak_memory()`. The old line printed active plus cache memory *after*
-`clear_cache()`, understating the real peak by about 1.8x. `embed` returns
+`clear_cache()`, understating the real peak by about 1.8x. Progress lines go to
+stderr, so `embed --json` leaves stdout one parseable document — the launchd
+job captures both streams in the same log, so nothing is lost. `embed` returns
 `embedded`, `embedded_tokens`, `remaining`, `remaining_tokens` and
 `stop_reason`.
 
 **One writer at a time.** `index`, `chunk` and `embed` take an exclusive
-`flock` on `<db_path>.lock` for the length of the command and fail with the
-lock's path if another run holds it. Nothing coordinated a manual run with the
+`flock` on `<db_path>.lock` for the length of the command, wait up to
+`WRITER_LOCK_WAIT_SECONDS` (900 s, announced on stderr) if another run holds
+it, and only then fail with the lock's path. The wait exists because the
+nightly script treats any non-zero exit as a failed night: refusing instantly
+made a one-second overlap with a manual run cost that night's index, chunk
+*and* embed. Nothing coordinated a manual run with the
 03:30 nightly one before: two embed passes read the same backlog and then
 insert the same `vec_chunks` rowids, and the loser dies on
 `sqlite3.IntegrityError`, which the memory-boundary handler does not catch. The
@@ -271,11 +298,17 @@ them when needed.
 
 It also reports the embedding lifecycle: `last_embedded_at` is written at every
 embed commit rather than only at the end, and `embed_stop_reason` is one of
-`complete` (the pass reached the end of its queue), `max_seconds` (it hit its
-time budget) or `memory_boundary` (MLX stopped at the configured limit; the
-marker is committed before the error surfaces). Read them together — a
+`running` (claimed in the same transaction that starts the pass), `complete`
+(the pass reached the end of its queue), `max_seconds` (it hit its time
+budget), `host_pressure` (host memory pressure outlasted the pause ceiling),
+`memory_boundary` (MLX stopped at the configured limit) or `warmup_failed`
+(MLX failed before the first batch); the last three commit their marker before
+the error surfaces. `running` is what makes a killed pass legible: host OOM and
+Ctrl-C run no handler, so without a marker written on the way in, status would
+report the *previous* pass's ending. Read the reason with the heartbeat — a
 `remaining` count alone cannot distinguish a run still working from one that
-stopped at a bound hours ago. `vectors_complete` is now derived from the live
+stopped at a bound hours ago, and `running` next to an hours-old
+`last_embedded_at` is a pass that was killed. `vectors_complete` is now derived from the live
 backlog at start, at every commit and at exit, so a status check that lands
 mid-run reads the last honest answer instead of a `false` the current run wrote
 about work it had not done yet.

@@ -18,7 +18,7 @@ import sys
 import tempfile
 import types
 import unittest
-from contextlib import ExitStack, contextmanager, redirect_stdout
+from contextlib import ExitStack, contextmanager, redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -1718,11 +1718,18 @@ class BoilerplatePolicyTests(unittest.TestCase):
             )
         result = history_index.apply_boilerplate_policy(self.connection)
         self.assertEqual(result["vectors_dropped"], 2)
-        self.assertEqual(result["vectors_drop_deferred"], 0)
+        self.assertEqual(result["non_embeddable_chunks"], 2)
         self.assertEqual(
             sorted(row[0] for row in self.connection.execute("SELECT rowid FROM vec_chunks")),
             sorted([ids[0], distinct]),
         )
+        # The count is a standing property of the index, not a queue: the two
+        # demoted copies stay non-embeddable after their vectors are gone, so a
+        # second pass reports the same total with nothing left to drop. Reading
+        # it as "work still owed" is what the old name invited.
+        repeat = history_index.apply_boilerplate_policy(self.connection)
+        self.assertEqual(repeat["vectors_dropped"], 0)
+        self.assertEqual(repeat["non_embeddable_chunks"], 2)
         # Every usable chunk still has its vector, so the marker is honest.
         self.assertEqual(
             history_index._meta_get(self.connection, "vectors_complete"), "true"
@@ -1732,10 +1739,15 @@ class BoilerplatePolicyTests(unittest.TestCase):
         """The nightly chunk stage runs without sqlite-vec; embed finishes it."""
         ids = [self.add_chunk(seq, self.repeated) for seq in range(3)]
         self.add_chunk(3, self.unique)
+        too_short = self.add_chunk(4, self.short)
         result = history_index.apply_boilerplate_policy(self.connection)
+        # A null count is the signal that embed still has to drop the vectors:
+        # without the backend there is no way to count how many rows that is.
         self.assertIsNone(result["vectors_dropped"])
-        self.assertEqual(result["vectors_drop_deferred"], 2)
         self.assertEqual(result["boilerplate_demoted"], 2)
+        # Not a count of deferred deletions: it also carries the chunk that was
+        # never embeddable and never had a vector to drop.
+        self.assertEqual(result["non_embeddable_chunks"], 3)
         self.assertEqual(
             sorted(
                 row[0]
@@ -1743,7 +1755,7 @@ class BoilerplatePolicyTests(unittest.TestCase):
                     "SELECT id FROM chunks WHERE usable=0"
                 )
             ),
-            sorted(ids[1:]),
+            sorted([*ids[1:], too_short]),
         )
         # No live count was possible, so the pass must not claim completeness.
         self.assertEqual(
@@ -1931,38 +1943,45 @@ class HostPressurePauseTests(unittest.TestCase):
             )
         runner.assert_not_called()
 
-    def test_a_healthy_host_is_never_paused(self) -> None:
+    def pause(self, levels, *, deadline=None, ceiling=None):
+        """Run the pause against a scripted pressure trace and a fake clock."""
         clock = FakeClock()
         stdout = io.StringIO()
+        stderr = io.StringIO()
+        trace = iter(levels)
         with ExitStack() as stack:
             stack.enter_context(mock.patch.object(history_index, "time", clock))
             stack.enter_context(
                 mock.patch.object(
-                    history_index, "_host_memory_pressure_level", lambda: 1
+                    history_index, "_host_memory_pressure_level", lambda: next(trace)
                 )
             )
+            if ceiling is not None:
+                stack.enter_context(
+                    mock.patch.object(
+                        history_index, "EMBED_PAUSE_CEILING_SECONDS", ceiling
+                    )
+                )
             stack.enter_context(redirect_stdout(stdout))
-            waited = history_index._pause_while_host_is_under_pressure()
-        self.assertEqual(waited, 0.0)
-        self.assertEqual(clock.slept, [])
+            stack.enter_context(redirect_stderr(stderr))
+            waited, outcome = history_index._pause_while_host_is_under_pressure(
+                deadline
+            )
+        # Progress is not a result: stdout has to stay a single JSON document.
         self.assertEqual(stdout.getvalue(), "")
+        return clock, waited, outcome, stderr.getvalue()
+
+    def test_a_healthy_host_is_never_paused(self) -> None:
+        clock, waited, outcome, output = self.pause([1])
+        self.assertEqual((waited, outcome), (0.0, "clear"))
+        self.assertEqual(clock.slept, [])
+        self.assertEqual(output, "")
 
     def test_pressure_backs_off_to_a_ceiling_and_reports_both_edges(self) -> None:
-        clock = FakeClock()
-        levels = iter([2, 2, 2, 4, 4, 4, 4, 2, 1])
-        stdout = io.StringIO()
-        with ExitStack() as stack:
-            stack.enter_context(mock.patch.object(history_index, "time", clock))
-            stack.enter_context(
-                mock.patch.object(
-                    history_index, "_host_memory_pressure_level", lambda: next(levels)
-                )
-            )
-            stack.enter_context(redirect_stdout(stdout))
-            waited = history_index._pause_while_host_is_under_pressure()
+        clock, waited, outcome, output = self.pause([2, 2, 2, 4, 4, 4, 4, 2, 1])
         self.assertEqual(clock.slept, [1, 2, 4, 8, 16, 30, 30, 30])
-        self.assertEqual(waited, 121.0)
-        lines = stdout.getvalue().splitlines()
+        self.assertEqual((waited, outcome), (121.0, "clear"))
+        lines = output.splitlines()
         self.assertEqual(
             lines[0],
             "  paused: host memory pressure 2 (1=normal, 2=warning, 4=critical); "
@@ -1974,6 +1993,32 @@ class HostPressurePauseTests(unittest.TestCase):
             lines[1], "  still paused after 61s · host memory pressure 4"
         )
         self.assertEqual(lines[-1], "  resumed after 121s · host memory pressure 1")
+
+    def test_the_callers_deadline_ends_the_pause(self) -> None:
+        """--max-seconds has to stay the run's upper bound.
+
+        The nightly job passes --max-seconds 10800 so embedding cannot run past
+        06:30. A pause with no deadline turned that into a suggestion: the loop
+        enters the pause before it checks its budget, so a host that stayed at
+        warning level kept the pass sleeping — and holding the writer lock —
+        indefinitely.
+        """
+        # FakeClock starts at 1000.0 and advances 0.25 s per read, so a deadline
+        # of 1000.5 is already spent by the time the second iteration looks.
+        clock, waited, outcome, output = self.pause([2] * 8, deadline=1000.5)
+        self.assertEqual(outcome, "deadline")
+        self.assertEqual(clock.slept, [1])
+        self.assertEqual(waited, 1.0)
+        self.assertIn("time budget spent", output.splitlines()[-1])
+
+    def test_pressure_that_never_clears_hits_a_ceiling(self) -> None:
+        """An unbounded run has no deadline; it still must not wait forever."""
+        clock, waited, outcome, output = self.pause([2] * 12, ceiling=10)
+        self.assertEqual(outcome, "ceiling")
+        # 1+2+4+8 = 15 is the first total at or above the ten-second ceiling.
+        self.assertEqual(clock.slept, [1, 2, 4, 8])
+        self.assertEqual(waited, 15.0)
+        self.assertIn("outlasted the 10s ceiling", output.splitlines()[-1])
 
 
 class EmbedLifecycleTests(unittest.TestCase):
@@ -2029,11 +2074,36 @@ class EmbedLifecycleTests(unittest.TestCase):
         max_seconds: int | None = None,
         clock_step: float = 0.25,
         generate_hook=None,
+        pressure=None,
+        pause_ceiling: float | None = None,
+        pause_hook=None,
     ):
         stdout = io.StringIO()
+        stderr = io.StringIO()
         with ExitStack() as stack:
             stack.enter_context(portable_backend())
             stack.enter_context(fake_embedding_backend(generate_hook=generate_hook))
+            # Entered after the backend, so these win over its healthy-host stub.
+            if pressure is not None:
+                stack.enter_context(
+                    mock.patch.object(
+                        history_index, "_host_memory_pressure_level", pressure
+                    )
+                )
+            if pause_ceiling is not None:
+                stack.enter_context(
+                    mock.patch.object(
+                        history_index, "EMBED_PAUSE_CEILING_SECONDS", pause_ceiling
+                    )
+                )
+            if pause_hook is not None:
+                stack.enter_context(
+                    mock.patch.object(
+                        history_index,
+                        "_pause_while_host_is_under_pressure",
+                        pause_hook,
+                    )
+                )
             stack.enter_context(
                 mock.patch.object(history_index, "EMBED_COMMIT_EVERY", commit_every)
             )
@@ -2041,16 +2111,23 @@ class EmbedLifecycleTests(unittest.TestCase):
                 mock.patch.object(history_index, "time", FakeClock(clock_step))
             )
             stack.enter_context(redirect_stdout(stdout))
-            result = history_index.embed_chunks(
-                self.db,
-                model_path=self.model,
-                download_model=False,
-                max_seconds=max_seconds,
-                batch_size=batch_size,
-                memory_limit_gb=8.0,
-                cache_limit_gb=0.5,
-            )
-        return result, stdout.getvalue()
+            stack.enter_context(redirect_stderr(stderr))
+            try:
+                result = history_index.embed_chunks(
+                    self.db,
+                    model_path=self.model,
+                    download_model=False,
+                    max_seconds=max_seconds,
+                    batch_size=batch_size,
+                    memory_limit_gb=8.0,
+                    cache_limit_gb=0.5,
+                )
+            finally:
+                # Every test in this class carries the invariant: embed writes
+                # progress to stderr, because `embed --json` has to leave stdout
+                # a single parseable document.
+                self.assertEqual(stdout.getvalue(), "")
+        return result, stderr.getvalue()
 
     def meta(self, key: str) -> str | None:
         return history_index._meta_get(self.connection, key)
@@ -2158,6 +2235,162 @@ class EmbedLifecycleTests(unittest.TestCase):
         self.assertEqual(self.meta("vectors_complete"), "true")
         self.assertEqual(output, "")
 
+    def test_a_pass_marks_itself_running_before_it_starts_working(self) -> None:
+        """A killed pass runs no handler, so it can only be told apart from a
+        finished one by a marker written on the way in.
+
+        Host OOM and Ctrl-C are exactly the endings this field exists to
+        diagnose, and neither reaches the RuntimeError handler. Without the
+        entry write, status reports the *previous* pass's `complete` next to a
+        stale heartbeat.
+        """
+        self.add_chunks(16)
+        # The previous pass finished cleanly; this one must not inherit its
+        # ending.
+        history_index._meta_set(self.connection, "embed_stop_reason", "complete")
+        self.connection.commit()
+        seen: dict[str, object] = {}
+
+        def watch(call_number: int) -> None:
+            if call_number != 2:  # warmup, then the first real batch
+                return
+            observer = plain_connect(self.db, readonly=True)
+            seen["stop_reason"] = history_index._meta_get(
+                observer, "embed_stop_reason"
+            )
+            observer.close()
+            raise KeyboardInterrupt("the host killed this pass")
+
+        with self.assertRaises(KeyboardInterrupt):
+            self.embed(generate_hook=watch)
+        self.assertEqual(seen["stop_reason"], "running")
+        # And it survives the kill: no handler ran, so this is what status sees.
+        observer = plain_connect(self.db, readonly=True)
+        self.assertEqual(
+            history_index._meta_get(observer, "embed_stop_reason"), "running"
+        )
+        observer.close()
+
+    def test_a_warmup_failure_is_recorded_before_the_error_surfaces(self) -> None:
+        self.add_chunks(8)
+
+        def fail_the_warmup(call_number: int) -> None:
+            if call_number == 1:
+                raise RuntimeError("[metal::malloc] attempted to allocate too much")
+
+        with self.assertRaisesRegex(history_index.IndexError, "warmup"):
+            self.embed(generate_hook=fail_the_warmup)
+        self.assertEqual(self.meta("embed_stop_reason"), "warmup_failed")
+        self.assertEqual(self.vector_count(), 0)
+
+    def test_a_pause_is_a_durable_safe_point(self) -> None:
+        """Being killed during the wait that exists to avoid being killed must
+        not throw away the batches already computed.
+
+        The pause fires every eight batches and the commit checkpoint every
+        EMBED_COMMIT_EVERY chunks; the cadences are not aligned, so without an
+        explicit commit the loop could start waiting with a whole checkpoint's
+        worth of vectors still only in this process.
+        """
+        self.add_chunks(40)
+        seen: dict[str, object] = {}
+
+        def pressure() -> int:
+            # The first probe runs inside the pause, i.e. after the safe point.
+            if "vectors" not in seen:
+                observer = plain_connect(self.db, readonly=True)
+                seen["vectors"] = observer.execute(
+                    "SELECT count(*) FROM vec_chunks"
+                ).fetchone()[0]
+                seen["last_embedded_at"] = history_index._meta_get(
+                    observer, "last_embedded_at"
+                )
+                observer.close()
+                return history_index.HOST_PRESSURE_WARNING
+            return history_index.HOST_PRESSURE_NORMAL
+
+        # A checkpoint far beyond this run, so the only commit that can have
+        # happened by the pause is the safe point itself.
+        result, output = self.embed(commit_every=10_000, pressure=pressure)
+        self.assertEqual(seen["vectors"], 32)  # eight batches of four
+        self.assertIsNotNone(seen["last_embedded_at"])
+        self.assertEqual(result["stop_reason"], "complete")
+        self.assertEqual(result["embedded"], 40)
+        self.assertIn("paused: host memory pressure 2", output)
+
+    def test_pressure_that_never_clears_stops_the_pass(self) -> None:
+        """Waiting forever is worse than stopping: the pass holds the writer
+        lock while it waits, so the next night's index cannot even start."""
+        self.add_chunks(40)
+        result, output = self.embed(
+            commit_every=10_000,
+            pressure=lambda: history_index.HOST_PRESSURE_WARNING,
+            pause_ceiling=10,
+        )
+        self.assertEqual(result["stop_reason"], "host_pressure")
+        self.assertEqual(self.meta("embed_stop_reason"), "host_pressure")
+        # Stopped through the normal exit: what was committed is resumable.
+        self.assertEqual(result["embedded"], 32)
+        self.assertEqual(result["remaining"], 8)
+        self.assertEqual(self.vector_count(), 32)
+        self.assertEqual(self.meta("vectors_complete"), "false")
+        self.assertIn("outlasted the 10s ceiling", output)
+
+    def test_the_pause_is_given_this_runs_own_deadline(self) -> None:
+        """--max-seconds is the run's upper bound, so the pause has to know it."""
+        self.add_chunks(40)
+        seen: list[float | None] = []
+
+        def pause(deadline=None):
+            seen.append(deadline)
+            return 0.0, "clear"
+
+        self.embed(commit_every=10_000, max_seconds=10_000, pause_hook=pause)
+        self.assertTrue(seen, "the loop never reached a pause point")
+        # FakeClock starts at 1000.0 and only moves forward.
+        self.assertTrue(all(value is not None for value in seen))
+        self.assertGreaterEqual(seen[0], 1000.0 + 10_000)
+
+        seen.clear()
+        self.connection.execute("DELETE FROM vec_chunks")
+        self.connection.commit()
+        self.embed(commit_every=10_000, pause_hook=pause)
+        self.assertTrue(seen, "the loop never reached a pause point")
+        # An unbounded run has no deadline to pass; the ceiling still bounds it.
+        self.assertEqual(seen, [None] * len(seen))
+
+    def test_embed_json_leaves_stdout_a_single_document(self) -> None:
+        """`embed --json | jq` has to work: progress is not a result."""
+        self.add_chunks(12)
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with ExitStack() as stack:
+            stack.enter_context(portable_backend())
+            stack.enter_context(fake_embedding_backend())
+            stack.enter_context(
+                mock.patch.object(history_index, "EMBED_COMMIT_EVERY", 4)
+            )
+            stack.enter_context(mock.patch.object(history_index, "time", FakeClock()))
+            stack.enter_context(redirect_stdout(stdout))
+            stack.enter_context(redirect_stderr(stderr))
+            code = history_index.main(
+                [
+                    "--db",
+                    str(self.db),
+                    "embed",
+                    "--model-path",
+                    str(self.model),
+                    "--batch-size",
+                    "4",
+                    "--json",
+                ]
+            )
+        self.assertEqual(code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["embedded"], 12)
+        self.assertEqual(payload["stop_reason"], "complete")
+        self.assertIn("embedded 4/12 chunks", stderr.getvalue())
+
     def test_status_surfaces_the_stop_reason_and_the_heartbeat(self) -> None:
         self.add_chunks(8)
         history_index._meta_set(
@@ -2209,12 +2442,60 @@ class WriterLockTests(unittest.TestCase):
                         side_effect=AssertionError("ran while another writer held the lock"),
                     )
                 )
+                # Zero budget: this test is about the refusal, not the wait.
+                stack.enter_context(
+                    mock.patch.object(history_index, "WRITER_LOCK_WAIT_SECONDS", 0.0)
+                )
                 stack.enter_context(mock.patch("sys.stderr", stderr))
                 code = history_index.main(["--db", str(self.db), "index"])
         self.assertEqual(code, 2)
         message = stderr.getvalue()
         self.assertIn(str(self.lock_path), message)
         self.assertIn("Wait for it to finish", message)
+
+    def test_a_short_overlap_is_waited_out_instead_of_failing_the_night(self) -> None:
+        """The nightly script fails the whole night on any non-zero exit.
+
+        Refusing the instant the lock is taken made a one-second overlap with a
+        manual run cost that night's index, chunk and embed; the run is waited
+        out instead, and only an overlap longer than the budget is refused.
+        """
+        handle = self.lock_path.open("a")
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        released: list[float] = []
+
+        def sleep(seconds: float) -> None:
+            """Stand in for the wall clock: the other writer finishes here."""
+            released.append(seconds)
+            if len(released) == 1:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+        stderr = io.StringIO()
+        payload = {"database": str(self.db)}
+        try:
+            with ExitStack() as stack:
+                stack.enter_context(
+                    mock.patch.object(history_index, "_scope_from_args", return_value=None)
+                )
+                stack.enter_context(
+                    mock.patch.object(history_index, "update_index", return_value=payload)
+                )
+                stack.enter_context(
+                    mock.patch.object(
+                        history_index,
+                        "time",
+                        types.SimpleNamespace(sleep=sleep, time=lambda: 0.0),
+                    )
+                )
+                stack.enter_context(mock.patch("sys.stderr", stderr))
+                stack.enter_context(redirect_stdout(io.StringIO()))
+                code = history_index.main(["--db", str(self.db), "index", "--json"])
+        finally:
+            handle.close()
+        self.assertEqual(code, 0)
+        self.assertEqual(released, [history_index.WRITER_LOCK_POLL_SECONDS])
+        # A wait is not a hang: it says what it is waiting for.
+        self.assertIn(str(self.lock_path), stderr.getvalue())
 
     def test_the_nightly_sequence_hands_the_lock_on_instead_of_deadlocking(self) -> None:
         payload = {"database": str(self.db)}

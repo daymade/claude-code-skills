@@ -114,6 +114,21 @@ HOST_PRESSURE_WARNING = 2
 HOST_PRESSURE_PROBE_TIMEOUT_SECONDS = 2
 EMBED_PAUSE_BACKOFF_SECONDS = (1, 2, 4, 8, 16, 30)
 EMBED_PAUSE_REPORT_SECONDS = 60
+# An upper bound on a single pause. Waiting is only worth it while the host is
+# expected to recover: a healthy nightly embed is 155 s end to end, so pressure
+# that has not cleared in roughly four times that is not going to make this pass
+# productive, and waiting on has a cost of its own — the pass holds the writer
+# lock, and the next night's index refuses to start while it does. At the
+# ceiling the pass stops through its normal commit path instead.
+EMBED_PAUSE_CEILING_SECONDS = 600
+
+# How long index/chunk/embed wait for the writer lock before refusing. The
+# nightly script treats any non-zero exit as a failed night, so a one-second
+# overlap with a manual run used to cost the whole night's indexing; a bounded
+# wait turns the common short overlap into a wait and still refuses rather than
+# blocking forever behind a long manual pass.
+WRITER_LOCK_WAIT_SECONDS = 900.0
+WRITER_LOCK_POLL_SECONDS = 5.0
 
 # How many identical chunk texts make a text boilerplate rather than content.
 # Measured on the live index (2026-09-12): 68% of the 125,687-chunk embedding
@@ -1727,17 +1742,22 @@ def apply_boilerplate_policy(connection: sqlite3.Connection) -> dict[str, Any]:
     # The chunk stage runs without sqlite-vec, so this normally defers to embed,
     # which drops the same rows before it decides what to embed.
     vectors_dropped: int | None
-    vectors_drop_deferred = 0
     try:
         vectors_dropped = connection.execute(
             "DELETE FROM vec_chunks WHERE rowid IN "
             "(SELECT id FROM chunks WHERE usable=0)"
         ).rowcount
     except sqlite3.OperationalError:
+        # Without the vector backend there is no way to count how many vectors
+        # are actually waiting to be dropped, so report what can be counted and
+        # let ``vectors_dropped: null`` be the signal that embed finishes the
+        # job. This total is every non-embeddable chunk — demoted duplicates
+        # plus chunks too short to embed at all — so it is a standing property
+        # of the index, not a queue that drains to zero.
         vectors_dropped = None
-        vectors_drop_deferred = connection.execute(
-            "SELECT count(*) FROM chunks WHERE usable=0"
-        ).fetchone()[0]
+    non_embeddable_chunks = connection.execute(
+        "SELECT count(*) FROM chunks WHERE usable=0"
+    ).fetchone()[0]
     # Recompute from the live rows: demoting shrinks the embedding backlog and
     # restoring grows it, so neither the old marker nor this run's counts can
     # stand in for a count of what is actually missing.
@@ -1759,7 +1779,7 @@ def apply_boilerplate_policy(connection: sqlite3.Connection) -> dict[str, Any]:
         "boilerplate_demoted": demoted,
         "boilerplate_restored": restored,
         "vectors_dropped": vectors_dropped,
-        "vectors_drop_deferred": vectors_drop_deferred,
+        "non_embeddable_chunks": non_embeddable_chunks,
     }
 
 
@@ -1909,8 +1929,14 @@ def _host_memory_pressure_level() -> int:
         return HOST_PRESSURE_NORMAL
 
 
-def _pause_while_host_is_under_pressure() -> float:
-    """Block until the host is no longer short of memory. Return seconds waited.
+def _pause_while_host_is_under_pressure(
+    deadline: float | None = None,
+) -> tuple[float, str]:
+    """Wait while the host is short of memory. Return (seconds waited, outcome).
+
+    The outcome is ``clear`` when the pressure lifted, ``deadline`` when the
+    caller's own time budget ran out first, and ``ceiling`` when the pressure
+    outlasted :data:`EMBED_PAUSE_CEILING_SECONDS`.
 
     This replaced an unconditional ``sleep(4)`` every eight batches. Measured
     2026-09-12, that sleep was 120 s of a 155 s nightly embed — 77% of the wall
@@ -1918,22 +1944,39 @@ def _pause_while_host_is_under_pressure() -> float:
     failure it was meant to prevent, because it slept just as long when the host
     was idle as when it was thrashing.
 
+    Both bounds exist because the caller holds the writer lock while it waits.
+    Without them a host that stayed at warning level turned ``--max-seconds``
+    into a suggestion: the nightly job passes ``--max-seconds 10800`` precisely
+    so embedding cannot run past 06:30, and a pass still sleeping at 09:00 also
+    keeps the next night's ``index`` from starting at all. The deadline is
+    re-read at the top of each iteration rather than mid-sleep, so a pause can
+    overshoot it by at most one backoff step (30 s) out of a 10,800 s budget.
+
     A pause is never silent: one line when it starts, one when it ends, and a
     heartbeat every minute in between, so a multi-minute wait can be told apart
-    from a hang.
+    from a hang. Those lines go to stderr — they are progress, and stdout has to
+    stay a single JSON document under ``--json``.
     """
     level = _host_memory_pressure_level()
     if level < HOST_PRESSURE_WARNING:
-        return 0.0
+        return 0.0, "clear"
     print(
         f"  paused: host memory pressure {level} (1=normal, 2=warning, "
         f"4=critical); waiting for it to clear",
+        file=sys.stderr,
         flush=True,
     )
     waited = 0.0
     reported = 0.0
     attempt = 0
+    outcome = "clear"
     while level >= HOST_PRESSURE_WARNING:
+        if deadline is not None and time.time() >= deadline:
+            outcome = "deadline"
+            break
+        if waited >= EMBED_PAUSE_CEILING_SECONDS:
+            outcome = "ceiling"
+            break
         delay = EMBED_PAUSE_BACKOFF_SECONDS[
             min(attempt, len(EMBED_PAUSE_BACKOFF_SECONDS) - 1)
         ]
@@ -1945,10 +1988,28 @@ def _pause_while_host_is_under_pressure() -> float:
             reported = waited
             print(
                 f"  still paused after {waited:.0f}s · host memory pressure {level}",
+                file=sys.stderr,
                 flush=True,
             )
-    print(f"  resumed after {waited:.0f}s · host memory pressure {level}", flush=True)
-    return waited
+    if outcome == "clear":
+        print(
+            f"  resumed after {waited:.0f}s · host memory pressure {level}",
+            file=sys.stderr,
+            flush=True,
+        )
+    else:
+        tail = (
+            "time budget spent"
+            if outcome == "deadline"
+            else f"pressure outlasted the {EMBED_PAUSE_CEILING_SECONDS:.0f}s ceiling"
+        )
+        print(
+            f"  stopped waiting after {waited:.0f}s · host memory pressure "
+            f"{level} · {tail}",
+            file=sys.stderr,
+            flush=True,
+        )
+    return waited, outcome
 
 
 def _vector_backlog(connection: sqlite3.Connection) -> tuple[int, int]:
@@ -2037,6 +2098,13 @@ def embed_chunks(
     # status check that lands while embed is running should read the last
     # honest answer, not a "false" this run wrote about work it has not done.
     _meta_set(connection, "vectors_complete", "true" if missing_count == 0 else "false")
+    # A pass that is killed outright — host OOM, Ctrl-C, launchd cutting the job
+    # short — runs no handler and writes no ending. Claim the marker on the way
+    # in so status reads "running" next to a stale heartbeat instead of the
+    # previous pass's "complete", which is exactly the killed-run case this
+    # field was added to diagnose. It describes this pass; vectors_complete
+    # describes the index.
+    _meta_set(connection, "embed_stop_reason", "running")
     connection.commit()
     if not missing_count:
         mx.clear_cache()
@@ -2080,6 +2148,8 @@ def embed_chunks(
         mx.clear_cache()
         gc.collect()
     except RuntimeError as error:
+        _meta_set(connection, "embed_stop_reason", "warmup_failed")
+        connection.commit()
         connection.close()
         raise IndexError(
             "MLX failed during embedding warmup under the configured memory limit "
@@ -2095,6 +2165,7 @@ def embed_chunks(
     window_embedded = 0
     window_tokens = 0
     stop_reason = "complete"
+    deadline = started + max_seconds if max_seconds else None
     batch = first_batch
     batch_number = 0
     try:
@@ -2123,7 +2194,22 @@ def embed_chunks(
             mx.clear_cache()
             if batch_number % 8 == 0:
                 gc.collect()
-                _pause_while_host_is_under_pressure()
+                # Commit before the probe, not after: a pause can be minutes
+                # long, and being killed during the very wait that exists to
+                # avoid being killed would throw away every vector computed
+                # since the last checkpoint (up to EMBED_COMMIT_EVERY-1 of
+                # them, because the two cadences are not aligned). The backlog
+                # recount stays on the slower checkpoint — it is a full scan of
+                # chunks — so this writes only the heartbeat.
+                _meta_set(connection, "last_embedded_at", utc_now())
+                connection.commit()
+                _, pause_outcome = _pause_while_host_is_under_pressure(deadline)
+                if pause_outcome == "ceiling":
+                    # The host never recovered. Stop through the normal exit so
+                    # the writer lock is released and the work already committed
+                    # is resumable, rather than waiting out the night.
+                    stop_reason = "host_pressure"
+                    break
             if embedded % EMBED_COMMIT_EVERY < batch_size:
                 remaining_now, remaining_tokens_now = _vector_backlog(connection)
                 # Heartbeat and completeness ride in the same transaction as the
@@ -2152,6 +2238,7 @@ def embed_chunks(
                     f"{recent_chunks:.0f} chunks/s ({recent_tokens:.0f} tok/s) · "
                     f"ETA {eta} min · "
                     f"MLX peak {mx.get_peak_memory() / 1024**3:.2f} GiB",
+                    file=sys.stderr,
                     flush=True,
                 )
                 window_started = now
@@ -2762,6 +2849,11 @@ def _writer_lock(db_path: Path):
     The lock is advisory and per open file description, released when this
     context exits, so the nightly ``index`` → ``chunk`` → ``embed`` sequence
     passes it hand to hand instead of deadlocking.
+
+    A contended lock is waited on for up to :data:`WRITER_LOCK_WAIT_SECONDS`
+    before it is refused. Refusing instantly made the grain of the failure the
+    whole night: the nightly script fails on any non-zero exit, so a one-second
+    overlap with a manual run skipped that night's index, chunk and embed.
     """
     lock_path = Path(str(db_path) + ".lock")
     if fcntl is None:  # pragma: no cover - Windows has no fcntl
@@ -2774,15 +2866,29 @@ def _writer_lock(db_path: Path):
         return
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     handle = lock_path.open("a")
-    try:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except OSError as error:
-        handle.close()
-        raise IndexError(
-            f"Another history-index write already holds {lock_path}. Wait for it "
-            "to finish and re-run: index, chunk and embed all write this "
-            "database, and two concurrent runs corrupt each other's progress."
-        ) from error
+    waited = 0.0
+    while True:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            break
+        except OSError as error:
+            if waited >= WRITER_LOCK_WAIT_SECONDS:
+                handle.close()
+                raise IndexError(
+                    f"Another history-index write still holds {lock_path} after "
+                    f"{waited:.0f}s. Wait for it to finish and re-run: index, "
+                    "chunk and embed all write this database, and two concurrent "
+                    "runs corrupt each other's progress."
+                ) from error
+            if waited == 0.0:
+                print(
+                    f"Waiting up to {WRITER_LOCK_WAIT_SECONDS:.0f}s for "
+                    f"{lock_path}: another history-index write holds it.",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            time.sleep(WRITER_LOCK_POLL_SECONDS)
+            waited += WRITER_LOCK_POLL_SECONDS
     try:
         yield
     finally:
