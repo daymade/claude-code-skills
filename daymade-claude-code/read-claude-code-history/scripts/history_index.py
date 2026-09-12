@@ -56,6 +56,8 @@ from _core.codex import (  # noqa: E402
     codex_session_id,
 )
 from _core.kimi import (  # noqa: E402
+    KIMI_INTERNAL_SESSION_PREFIXES,
+    is_kimi_internal_session,
     kimi_wire_time_range,
     load_kimi_session_index,
     load_kimi_state,
@@ -849,16 +851,6 @@ def _extract_codex_records(ref: dict[str, Any]) -> list[dict[str, Any]]:
     return _finalize_records(extracted_by_key)
 
 
-# Kimi CLI runs internal agents in the same sessions/ tree as real
-# conversations, distinguished only by a session-directory prefix. Observed on
-# a real store: ``ctitle-`` sessions whose entire content is "用户要求为以下
-# 对话生成一个简洁的标题"; ``dvlt-`` vault-memory maintenance runs whose
-# workspace is an internal vault path; and ``sklsum-`` runs that open with
-# "You are the Daimon skill-summary system tool." Indexing them puts machine
-# chatter at the top of recall for a human's own words. Excluded by denylist
-# rather than a ``conv-`` allowlist, so a future user-facing prefix surfaces as
-# noise to fix rather than as history that silently went missing.
-KIMI_INTERNAL_SESSION_PREFIXES = ("ctitle-", "dvlt-", "sklsum-")
 
 
 def _kimi_record_role(record: dict[str, Any]) -> str | None:
@@ -1188,7 +1180,7 @@ def _kimi_session_refs(
     by_session: dict[str, dict[str, Any]] = {}
     skipped_internal = 0
     for session_dir, _agent, wire_path in discover_kimi_wires(source.home):
-        if session_dir.name.startswith(KIMI_INTERNAL_SESSION_PREFIXES):
+        if is_kimi_internal_session(session_dir.name):
             skipped_internal += 1
             continue
         try:
