@@ -5,6 +5,8 @@
 - Contract: recall versus exact search
 - One-time setup
 - Build and refresh
+- Boilerplate policy: what never earns a vector
+- Embedding: pauses, progress, and one writer
 - Query
 - Status and freshness
 - Platform and dependency boundaries
@@ -129,6 +131,90 @@ cleared. After the fix, a 90-second real-index canary embedded 1,872 chunks,
 held observed process RSS near 1.5 GiB, reported a 2.13 GB MLX active-memory
 peak, and exited normally under the 8 GiB limit.
 
+## Boilerplate policy: what never earns a vector
+
+Most of what a harness writes into a transcript was never said by anyone. Two
+mechanisms keep it out, at two different layers.
+
+**Records: machine-injected blocks are dropped by prefix.** Each provider has
+its own list, because the evidence is per harness: Codex delivers
+`<user_instructions>`, `<environment_context>`, `<goal_context>`,
+`<subagent_notification>` and `<skill>` as `role="user"` messages, and Claude
+Code delivers `<task-notification>` and `<teammate-message` the same way on the
+main thread — past the sidechain test that hides agent prompts, so they used to
+rank exactly like something a person typed. The Claude pair was measured at
+4,417 records across 712 sessions and 7.66M tokens, 11.5% of all Claude token
+mass, every one of them stored with `noise=0` and `agent_prompt=0`. Extraction
+skips these, and `index` also sweeps records already stored, because a session
+is only re-extracted when its file changes: an archived rollout would otherwise
+keep its injected records forever. The sweep is reported as `records_pruned`,
+matched with `substr` rather than `LIKE` (every Codex prefix contains `_`, which
+LIKE reads as a wildcard), scoped to the provider the evidence came from, and
+run before the FTS rebuild — `records_fts` is external-content, so a deleted
+record stays lexically searchable until the index is rebuilt from its content
+table.
+
+**Chunks: a verbatim repeat keeps exactly one embeddable copy.**
+`BOILERPLATE_MIN_COPIES = 3` is the threshold, applied on `chunks.text_hash`
+(schema v3). Measured on the live index: 68% of the 125,687-chunk embedding
+backlog was exact duplicates by text, 94% of the duplicated texts appeared in
+two or more sessions, and tagged plus untagged boilerplate together accounted
+for 42.6M of the 60.7M backlog tokens. The already-embedded set carries roughly
+23M tokens of the same material. Only the lowest-id copy stays `usable=1`; the
+rest become `usable=0`, which means *lexically searchable, but no vector*:
+`usable` is consulted only by the embed queue, the vector query join and the
+status counts, while BM25 runs on `records.fts_text` and never looks at chunks.
+Nothing is deleted, so a text that falls back under three copies is restored on
+the next pass. The pass is idempotent and runs on every `chunk` invocation,
+including one that added nothing — the policy depends on what is stored, not on
+what that run produced. The nightly `chunk` stage runs without `sqlite-vec`, so
+it defers dropping the demoted vectors (reported as `vectors_drop_deferred`)
+and `embed` removes them before it decides what to embed.
+
+## Embedding: pauses, progress, and one writer
+
+**The loop pauses on host pressure, not on a timer.** It used to
+`time.sleep(4)` every eight batches unconditionally. Measured 2026-09-12, that
+sleep was 120 s of a 155 s nightly embed — 77% of the wall clock, and 41% even
+on the longest chunks — and it did nothing about the failure it was meant to
+prevent, because it slept exactly as long when the host was idle as when the
+host was thrashing. The loop now reads
+`sysctl -n kern.memorystatus_vm_pressure_level` (1 normal, 2 warning, 4
+critical) on the same cadence and only sleeps while the host is at warning or
+above, backing off 1, 2, 4, 8, 16, 30 s and re-checking until it clears. Any
+probe failure, timeout or non-Darwin platform reads as normal: an unreadable
+level is not evidence of pressure, and refusing to embed because `sysctl` is
+missing would turn a diagnostic into an outage. A pause prints one line when it
+starts, one when it ends, and a heartbeat every minute in between, so a long
+wait is never mistaken for a hang. This signal is the right one because MLX's
+own counters cannot explain the failure: the process was killed twice by the
+host while MLX peaked at 2.07-2.41 GiB on a 128 GiB machine.
+
+**Batch size is not a throughput lever.** Compute-only, on this index's own
+365-token chunks: 44 chunks/s at batch 16 against 33 chunks/s at batch 48, with
+MLX peak between 2.07 and 2.41 GiB in every configuration including 602-token
+chunks. The default stays 16. The nightly wall-clock difference people
+attributed to batch size was the sleep.
+
+**Progress is measured in tokens.** Chunks are a poor unit for an ETA when the
+backlog runs 365-602 tokens per chunk, so every commit prints embedded chunks
+*and* tokens against the totals, the rate over the window since the previous
+line (not the average since the start, which hides a run that is slowing down),
+an ETA derived from remaining tokens over that recent token rate, and
+`mx.get_peak_memory()`. The old line printed active plus cache memory *after*
+`clear_cache()`, understating the real peak by about 1.8x. `embed` returns
+`embedded`, `embedded_tokens`, `remaining`, `remaining_tokens` and
+`stop_reason`.
+
+**One writer at a time.** `index`, `chunk` and `embed` take an exclusive
+`flock` on `<db_path>.lock` for the length of the command and fail with the
+lock's path if another run holds it. Nothing coordinated a manual run with the
+03:30 nightly one before: two embed passes read the same backlog and then
+insert the same `vec_chunks` rowids, and the loser dies on
+`sqlite3.IntegrityError`, which the memory-boundary handler does not catch. The
+lock is released when each command exits, so the nightly `index` → `chunk` →
+`embed` sequence passes it hand to hand.
+
 ## Query
 
 Auto-select hybrid only when the indexed model revision and every usable vector
@@ -183,6 +269,17 @@ markers, last successful indexing time, complete frontier, and stale/missing
 session count. Do not copy those changing values into documentation; compute
 them when needed.
 
+It also reports the embedding lifecycle: `last_embedded_at` is written at every
+embed commit rather than only at the end, and `embed_stop_reason` is one of
+`complete` (the pass reached the end of its queue), `max_seconds` (it hit its
+time budget) or `memory_boundary` (MLX stopped at the configured limit; the
+marker is committed before the error surfaces). Read them together — a
+`remaining` count alone cannot distinguish a run still working from one that
+stopped at a bound hours ago. `vectors_complete` is now derived from the live
+backlog at start, at every commit and at exit, so a status check that lands
+mid-run reads the last honest answer instead of a `false` the current run wrote
+about work it had not done yet.
+
 ## Platform and dependency boundaries
 
 - `--help`, exact search, and registered unit tests import no optional ML
@@ -227,6 +324,14 @@ The index is rebuildable. The JSONL sources and their registered archives remain
 authority. If status reports schema mismatch, incomplete build, stale sessions,
 or model-revision mismatch, rebuild or refresh from those sources; do not patch
 the SQLite schema by hand.
+
+Schema v3 adds `chunks.text_hash` and its index for the duplicate-chunk policy.
+The upgrade is an in-place `ALTER TABLE` plus a batch-committed backfill, run by
+`index`, chaining v1 → v2 → v3 in one call: an older index already holds every
+record and every vector, and hours of recompute is not an acceptable price for
+one column. Each step checks the table before altering it and commits each
+backfill batch, so an interrupted migration re-runs cleanly, and none of it
+needs `sqlite-vec`.
 
 ## Maintainer smoke checks
 

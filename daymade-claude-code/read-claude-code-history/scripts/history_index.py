@@ -15,6 +15,7 @@ The index is user-owned mutable state under ``~/.claude-history-index`` (or
 from __future__ import annotations
 
 import argparse
+import contextlib
 import gc
 import hashlib
 import json
@@ -22,6 +23,7 @@ import os
 import platform
 import shutil
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import time
@@ -29,6 +31,13 @@ import urllib.request
 import zipfile
 from collections.abc import Sequence
 from dataclasses import dataclass
+
+try:
+    import fcntl
+except ModuleNotFoundError:  # pragma: no cover - Windows has no fcntl
+    # Only the single-writer lock needs it. Losing the lock on Windows is worth
+    # reporting once per run; losing `index` and `recall` there is not.
+    fcntl = None  # type: ignore[assignment]
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -82,10 +91,29 @@ RRF_K = 60
 CHUNK_SIZE = 512
 OVERLAP = 0.15
 MAX_LENGTH = 1024
+# Batch size is not a throughput lever: measured 2026-09-12 on this index's own
+# 365-token chunks, compute-only throughput was 44 chunks/s at batch 16 against
+# 33 chunks/s at batch 48, and MLX peak memory stayed at 2.07-2.41 GiB in every
+# configuration. The nightly wall-clock difference people attributed to batch
+# size was the unconditional sleep this loop no longer takes.
 DEFAULT_EMBED_BATCH_SIZE = 16
 DEFAULT_EMBED_MEMORY_LIMIT_GB = 8.0
 DEFAULT_EMBED_CACHE_LIMIT_GB = 0.5
 MIN_USABLE_CHUNK_CHARS = 20
+
+# Commit, heartbeat and report progress once every this many embedded chunks.
+EMBED_COMMIT_EVERY = 1600
+
+# Host memory-pressure levels as reported by
+# ``sysctl -n kern.memorystatus_vm_pressure_level``: 1 normal, 2 warning,
+# 4 critical. Anything at or above warning means the host — not MLX — is short
+# of memory, which is the only signal that explained this process being killed
+# twice while MLX itself peaked at 2.4 GiB on a 128 GiB machine.
+HOST_PRESSURE_NORMAL = 1
+HOST_PRESSURE_WARNING = 2
+HOST_PRESSURE_PROBE_TIMEOUT_SECONDS = 2
+EMBED_PAUSE_BACKOFF_SECONDS = (1, 2, 4, 8, 16, 30)
+EMBED_PAUSE_REPORT_SECONDS = 60
 
 # How many identical chunk texts make a text boilerplate rather than content.
 # Measured on the live index (2026-09-12): 68% of the 125,687-chunk embedding
@@ -1018,6 +1046,30 @@ def _kimi_record_timestamp(record: dict[str, Any]) -> float | None:
     return None
 
 
+# Claude Code delivers two of its own machine blocks as ordinary ``type="user"``
+# turns on the main thread, so neither the sidechain test in
+# ``is_claude_agent_prompt_record`` nor ``NOISE_PREFIXES`` catches them:
+#
+#   <task-notification>     background task/subagent completion handed back by
+#                           the harness; every sampled record carries
+#                           origin.kind="task-notification" and
+#                           promptSource="system"
+#   <teammate-message       one agent-team member's output wrapped in an
+#                           envelope by the harness; every sampled record
+#                           carries a teamName, and 68% of its token mass is
+#                           idle_notification / teammate_terminated JSON
+#
+# Measured on the live index (2026-09-12): 4,417 records across 712 sessions,
+# 7.66M tokens — 11.5% of all Claude token mass — all of it stored today with
+# noise=0 and agent_prompt=0, i.e. ranked exactly like something a person said.
+# Both tags resolve to one concrete template each (3,451/3,451 and 966/966), and
+# no sampled record was a human message that merely began with the string.
+CLAUDE_INJECTED_PREFIXES = (
+    "<task-notification>",
+    "<teammate-message",
+)
+
+
 def _extract_records(ref: dict[str, Any]) -> list[dict[str, Any]]:
     """Extract only human/assistant prose for ranked recall.
 
@@ -1056,6 +1108,11 @@ def _extract_records(ref: dict[str, Any]) -> list[dict[str, Any]]:
                 continue
             if record.get("isMeta") or is_noise_text(prose_text):
                 continue
+            # Matched on text, not on role: three sampled records were the
+            # assistant echoing the tag back rather than the harness injecting
+            # it, which is still machine text and still not worth a vector.
+            if prose_text.startswith(CLAUDE_INJECTED_PREFIXES):
+                continue
             seq += 1
             extracted_by_key[record_key] = {
                 "record_key": record_key,
@@ -1073,31 +1130,36 @@ def _extract_records(ref: dict[str, Any]) -> list[dict[str, Any]]:
     return _finalize_records(extracted_by_key)
 
 
-def _prune_injected_codex_records(connection: sqlite3.Connection) -> int:
-    """Delete stored Codex records that are machine-injected blocks.
+def _prune_injected_records(
+    connection: sqlite3.Connection,
+    provider: str,
+    prefixes: Sequence[str],
+) -> int:
+    """Delete stored records of one provider that are machine-injected blocks.
 
-    ``_extract_codex_records`` skips these at extraction, but every index built
-    before that list grew still holds them, and a session is only re-extracted
-    when its file changes — an archived rollout would keep its injected records
-    forever. Sweep them by prefix instead, and let the foreign key cascade take
-    their chunks.
+    Extraction skips these, but every index built before that list grew still
+    holds them, and a session is only re-extracted when its file changes — an
+    archived rollout would keep its injected records forever. Sweep them by
+    prefix instead, and let the foreign key cascade take their chunks.
 
-    Match with ``substr`` rather than ``LIKE``: every prefix contains ``_``,
+    Match with ``substr`` rather than ``LIKE``: several prefixes contain ``_``,
     which LIKE reads as a single-character wildcard, so ``<user_instructions>``
     would also delete a record starting ``<userXinstructions>``.
+
+    The provider is part of the predicate because these are per-harness
+    templates: a Codex rollout and a Claude session do not inject the same
+    blocks, and a prefix proven machine-generated in one store is not evidence
+    about the other.
     """
-    predicate = " OR ".join(
-        "substr(records.fts_text,1,?)=?" for _ in CODEX_INJECTED_PREFIXES
+    predicate = " OR ".join("substr(records.fts_text,1,?)=?" for _ in prefixes)
+    params: list[Any] = [provider]
+    params.extend(
+        value for prefix in prefixes for value in (len(prefix), prefix)
     )
-    params = [
-        value
-        for prefix in CODEX_INJECTED_PREFIXES
-        for value in (len(prefix), prefix)
-    ]
     selection = (
         "SELECT records.id FROM records "
         "JOIN sessions ON sessions.session_id=records.session_id "
-        f"WHERE sessions.provider='codex' AND ({predicate})"
+        f"WHERE sessions.provider=? AND ({predicate})"
     )
     # Vectors first: after the cascade there is no chunk row left to join
     # against, so the vector rows would become unreachable orphans. When the
@@ -1487,7 +1549,9 @@ def update_index(
         # index will keep. It has to run before the FTS rebuild: records_fts is
         # external-content, and a deleted record stays lexically searchable
         # until the index is rebuilt from the content table.
-        records_pruned = _prune_injected_codex_records(connection)
+        records_pruned = _prune_injected_records(
+            connection, "codex", CODEX_INJECTED_PREFIXES
+        ) + _prune_injected_records(connection, "claude", CLAUDE_INJECTED_PREFIXES)
 
         if added or changed or removed or records_pruned or target != db_path:
             connection.execute("INSERT INTO records_fts(records_fts) VALUES('rebuild')")
@@ -1813,6 +1877,89 @@ def build_chunks(
     }
 
 
+def _host_memory_pressure_level() -> int:
+    """Report the host's memory-pressure level, or ``normal`` if unknowable.
+
+    ``kern.memorystatus_vm_pressure_level`` is what macOS itself consults before
+    it starts killing processes, so it answers the question MLX's own counters
+    cannot: this loop peaked at 2.4 GiB on a 128 GiB machine and was still
+    killed twice, because the pressure came from everything else running.
+
+    Any failure reports normal. A probe that cannot read the level is not
+    evidence of pressure, and refusing to embed because ``sysctl`` is missing
+    would turn a diagnostic into an outage.
+    """
+    if platform.system() != "Darwin":
+        return HOST_PRESSURE_NORMAL
+    try:
+        completed = subprocess.run(
+            ["sysctl", "-n", "kern.memorystatus_vm_pressure_level"],
+            capture_output=True,
+            text=True,
+            timeout=HOST_PRESSURE_PROBE_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return HOST_PRESSURE_NORMAL
+    if completed.returncode != 0:
+        return HOST_PRESSURE_NORMAL
+    try:
+        return int(completed.stdout.strip())
+    except ValueError:
+        return HOST_PRESSURE_NORMAL
+
+
+def _pause_while_host_is_under_pressure() -> float:
+    """Block until the host is no longer short of memory. Return seconds waited.
+
+    This replaced an unconditional ``sleep(4)`` every eight batches. Measured
+    2026-09-12, that sleep was 120 s of a 155 s nightly embed — 77% of the wall
+    clock, and 41% even on the longest chunks — while doing nothing for the
+    failure it was meant to prevent, because it slept just as long when the host
+    was idle as when it was thrashing.
+
+    A pause is never silent: one line when it starts, one when it ends, and a
+    heartbeat every minute in between, so a multi-minute wait can be told apart
+    from a hang.
+    """
+    level = _host_memory_pressure_level()
+    if level < HOST_PRESSURE_WARNING:
+        return 0.0
+    print(
+        f"  paused: host memory pressure {level} (1=normal, 2=warning, "
+        f"4=critical); waiting for it to clear",
+        flush=True,
+    )
+    waited = 0.0
+    reported = 0.0
+    attempt = 0
+    while level >= HOST_PRESSURE_WARNING:
+        delay = EMBED_PAUSE_BACKOFF_SECONDS[
+            min(attempt, len(EMBED_PAUSE_BACKOFF_SECONDS) - 1)
+        ]
+        time.sleep(delay)
+        waited += delay
+        attempt += 1
+        level = _host_memory_pressure_level()
+        if level >= HOST_PRESSURE_WARNING and waited - reported >= EMBED_PAUSE_REPORT_SECONDS:
+            reported = waited
+            print(
+                f"  still paused after {waited:.0f}s · host memory pressure {level}",
+                flush=True,
+            )
+    print(f"  resumed after {waited:.0f}s · host memory pressure {level}", flush=True)
+    return waited
+
+
+def _vector_backlog(connection: sqlite3.Connection) -> tuple[int, int]:
+    """Return (chunks, tokens) that are embeddable and still have no vector."""
+    row = connection.execute(
+        "SELECT count(*),coalesce(sum(ntok),0) FROM chunks WHERE usable=1 "
+        "AND id NOT IN (SELECT rowid FROM vec_chunks)"
+    ).fetchone()
+    return int(row[0]), int(row[1])
+
+
 def embed_chunks(
     db_path: Path,
     *,
@@ -1885,12 +2032,12 @@ def embed_chunks(
         "DELETE FROM vec_chunks WHERE rowid IN "
         "(SELECT id FROM chunks WHERE usable=0)"
     )
-    _meta_set(connection, "vectors_complete", "false")
+    missing_count, missing_tokens = _vector_backlog(connection)
+    # Set this from the live backlog instead of blanking it on the way in. A
+    # status check that lands while embed is running should read the last
+    # honest answer, not a "false" this run wrote about work it has not done.
+    _meta_set(connection, "vectors_complete", "true" if missing_count == 0 else "false")
     connection.commit()
-    missing_count = connection.execute(
-        "SELECT count(*) FROM chunks WHERE usable=1 AND id NOT IN "
-        "(SELECT rowid FROM vec_chunks)"
-    ).fetchone()[0]
     if not missing_count:
         mx.clear_cache()
         gc.collect()
@@ -1900,11 +2047,15 @@ def embed_chunks(
         _meta_set(connection, "embedding_dimension", str(EMBEDDING_DIM))
         _meta_set(connection, "last_embedded_at", utc_now())
         _meta_set(connection, "vectors_complete", "true")
+        _meta_set(connection, "embed_stop_reason", "complete")
         connection.commit()
         connection.close()
         return {
             "embedded": 0,
+            "embedded_tokens": 0,
             "remaining": 0,
+            "remaining_tokens": 0,
+            "stop_reason": "complete",
             "model_path": str(resolved_model),
             "elapsed_seconds": 0.0,
             "memory_limit_bytes": memory_limit_bytes,
@@ -1912,7 +2063,7 @@ def embed_chunks(
             "peak_mlx_bytes": 0,
         }
     rows = connection.execute(
-        "SELECT id,text FROM chunks WHERE usable=1 AND id NOT IN "
+        "SELECT id,text,ntok FROM chunks WHERE usable=1 AND id NOT IN "
         "(SELECT rowid FROM vec_chunks) ORDER BY ntok,id"
     )
     first_batch = rows.fetchmany(batch_size)
@@ -1936,6 +2087,14 @@ def embed_chunks(
         ) from error
     started = time.time()
     embedded = 0
+    embedded_tokens = 0
+    # Rates are measured over the window since the previous report, not since
+    # the start: a run that slows down halfway through should say so while it
+    # is happening, and an ETA averaged over an hour of history hides that.
+    window_started = started
+    window_embedded = 0
+    window_tokens = 0
+    stop_reason = "complete"
     batch = first_batch
     batch_number = 0
     try:
@@ -1958,25 +2117,54 @@ def embed_chunks(
                 ],
             )
             embedded += len(batch)
+            embedded_tokens += sum(row[2] for row in batch)
             batch_number += 1
             del raw, vectors, generated
             mx.clear_cache()
             if batch_number % 8 == 0:
                 gc.collect()
-                time.sleep(4)
-            if embedded % 1600 < batch_size:
+                _pause_while_host_is_under_pressure()
+            if embedded % EMBED_COMMIT_EVERY < batch_size:
+                remaining_now, remaining_tokens_now = _vector_backlog(connection)
+                # Heartbeat and completeness ride in the same transaction as the
+                # vectors they describe, so a run killed between commits leaves
+                # a timestamp that is true rather than optimistic.
+                _meta_set(connection, "last_embedded_at", utc_now())
+                _meta_set(
+                    connection,
+                    "vectors_complete",
+                    "true" if remaining_now == 0 else "false",
+                )
                 connection.commit()
-                elapsed = max(time.time() - started, 0.001)
-                mlx_now = mx.get_active_memory() + mx.get_cache_memory()
+                now = time.time()
+                window = max(now - window_started, 0.001)
+                recent_chunks = (embedded - window_embedded) / window
+                recent_tokens = (embedded_tokens - window_tokens) / window
+                percent = 100 * embedded_tokens / missing_tokens if missing_tokens else 0.0
+                eta = (
+                    f"{remaining_tokens_now / recent_tokens / 60:.0f}"
+                    if recent_tokens > 0
+                    else "?"
+                )
                 print(
-                    f"  embedded {embedded}/{missing_count} · "
-                    f"{embedded/elapsed:.0f} chunks/s · MLX {mlx_now / 1024**3:.2f} GiB",
+                    f"  embedded {embedded}/{missing_count} chunks · "
+                    f"{embedded_tokens}/{missing_tokens} tok ({percent:.1f}%) · "
+                    f"{recent_chunks:.0f} chunks/s ({recent_tokens:.0f} tok/s) · "
+                    f"ETA {eta} min · "
+                    f"MLX peak {mx.get_peak_memory() / 1024**3:.2f} GiB",
                     flush=True,
                 )
+                window_started = now
+                window_embedded = embedded
+                window_tokens = embedded_tokens
             if max_seconds and time.time() - started >= max_seconds:
+                stop_reason = "max_seconds"
                 break
             batch = rows.fetchmany(batch_size)
     except RuntimeError as error:
+        connection.commit()
+        _meta_set(connection, "last_embedded_at", utc_now())
+        _meta_set(connection, "embed_stop_reason", "memory_boundary")
         connection.commit()
         active = mx.get_active_memory()
         cached = mx.get_cache_memory()
@@ -1987,16 +2175,16 @@ def embed_chunks(
             f"limit={memory_limit_bytes}; original error: {error}"
         ) from error
     connection.commit()
-    remaining = connection.execute(
-        "SELECT count(*) FROM chunks WHERE usable=1 AND id NOT IN "
-        "(SELECT rowid FROM vec_chunks)"
-    ).fetchone()[0]
+    remaining, remaining_tokens = _vector_backlog(connection)
     _meta_set(connection, "embedding_model_id", EMBEDDING_MODEL_ID)
     _meta_set(connection, "embedding_model_path", str(resolved_model))
     _meta_set(connection, "embedding_model_revision", resolved_model.name)
     _meta_set(connection, "embedding_dimension", str(EMBEDDING_DIM))
     _meta_set(connection, "last_embedded_at", utc_now())
     _meta_set(connection, "vectors_complete", "true" if remaining == 0 else "false")
+    # "complete" describes this pass reaching the end of its queue, not the
+    # index being finished; vectors_complete answers that separately.
+    _meta_set(connection, "embed_stop_reason", stop_reason)
     connection.commit()
     peak_mlx_bytes = mx.get_peak_memory()
     mx.clear_cache()
@@ -2004,7 +2192,10 @@ def embed_chunks(
     connection.close()
     return {
         "embedded": embedded,
+        "embedded_tokens": embedded_tokens,
         "remaining": remaining,
+        "remaining_tokens": remaining_tokens,
+        "stop_reason": stop_reason,
         "model_path": str(resolved_model),
         "elapsed_seconds": round(time.time() - started, 3),
         "memory_limit_bytes": memory_limit_bytes,
@@ -2419,6 +2610,11 @@ def index_status(
         "scope": _stored_scope(connection),
         "chunks_complete": _meta_get(connection, "chunks_complete") == "true",
         "vectors_complete": _meta_get(connection, "vectors_complete") == "true",
+        # How the last embed pass ended and when it last committed. Together
+        # they separate "still working" from "stopped at a bound hours ago",
+        # which a bare remaining count cannot.
+        "embed_stop_reason": _meta_get(connection, "embed_stop_reason"),
+        "last_embedded_at": _meta_get(connection, "last_embedded_at"),
         "vector_backend_error": vector_backend_error,
         "counts": {
             **counts,
@@ -2553,6 +2749,47 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+@contextlib.contextmanager
+def _writer_lock(db_path: Path):
+    """Hold the exclusive write lock for one index database.
+
+    ``index``, ``chunk`` and ``embed`` all write the same file, and nothing
+    coordinated a manual run with the 03:30 nightly one. Two embed passes read
+    the same backlog and then insert the same ``vec_chunks`` rowids: the loser
+    dies on ``sqlite3.IntegrityError``, which the memory-boundary handler does
+    not catch, so it surfaces as an uncaught traceback rather than a wait.
+
+    The lock is advisory and per open file description, released when this
+    context exits, so the nightly ``index`` → ``chunk`` → ``embed`` sequence
+    passes it hand to hand instead of deadlocking.
+    """
+    lock_path = Path(str(db_path) + ".lock")
+    if fcntl is None:  # pragma: no cover - Windows has no fcntl
+        print(
+            f"Warning: {platform.system()} has no advisory file locking here; "
+            "run index/chunk/embed one at a time.",
+            file=sys.stderr,
+        )
+        yield
+        return
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = lock_path.open("a")
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as error:
+        handle.close()
+        raise IndexError(
+            f"Another history-index write already holds {lock_path}. Wait for it "
+            "to finish and re-run: index, chunk and embed all write this "
+            "database, and two concurrent runs corrupt each other's progress."
+        ) from error
+    try:
+        yield
+    finally:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        handle.close()
+
+
 def _is_default_database(path: Path) -> bool:
     return path.expanduser().resolve() == default_db_path().expanduser().resolve()
 
@@ -2580,34 +2817,37 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "A restricted source/project scope cannot write the default full-history "
                     "database. Pass --db /path/to/a/separate.db before 'index'."
                 )
-            scope = _scope_from_args(args)
-            payload = update_index(
-                args.db.expanduser(),
-                scope,
-                rebuild=args.rebuild,
-                simple_root=args.simple_root,
-            )
+            with _writer_lock(args.db.expanduser()):
+                scope = _scope_from_args(args)
+                payload = update_index(
+                    args.db.expanduser(),
+                    scope,
+                    rebuild=args.rebuild,
+                    simple_root=args.simple_root,
+                )
             _print_payload(payload, json_output=args.json)
             return 0
         if args.command == "chunk":
-            payload = build_chunks(
-                args.db.expanduser(),
-                model_path=args.model_path,
-                simple_root=args.simple_root,
-            )
+            with _writer_lock(args.db.expanduser()):
+                payload = build_chunks(
+                    args.db.expanduser(),
+                    model_path=args.model_path,
+                    simple_root=args.simple_root,
+                )
             _print_payload(payload, json_output=args.json)
             return 0
         if args.command == "embed":
-            payload = embed_chunks(
-                args.db.expanduser(),
-                model_path=args.model_path,
-                download_model=args.download_model,
-                max_seconds=args.max_seconds,
-                batch_size=args.batch_size,
-                memory_limit_gb=args.memory_limit_gb,
-                cache_limit_gb=args.cache_limit_gb,
-                simple_root=args.simple_root,
-            )
+            with _writer_lock(args.db.expanduser()):
+                payload = embed_chunks(
+                    args.db.expanduser(),
+                    model_path=args.model_path,
+                    download_model=args.download_model,
+                    max_seconds=args.max_seconds,
+                    batch_size=args.batch_size,
+                    memory_limit_gb=args.memory_limit_gb,
+                    cache_limit_gb=args.cache_limit_gb,
+                    simple_root=args.simple_root,
+                )
             _print_payload(payload, json_output=args.json)
             return 0
         if args.command == "recall":

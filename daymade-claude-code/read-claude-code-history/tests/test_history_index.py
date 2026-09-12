@@ -7,15 +7,18 @@ explicit smoke run on supported machines, never by the registered Linux suite.
 
 from __future__ import annotations
 
+import fcntl
 import importlib.util
 import io
 import json
 import os
 import sqlite3
+import subprocess
 import sys
 import tempfile
+import types
 import unittest
-from contextlib import ExitStack, contextmanager
+from contextlib import ExitStack, contextmanager, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -1251,6 +1254,144 @@ class MultiProviderIndexTests(unittest.TestCase):
         )
         connection.close()
 
+    def test_claude_harness_envelopes_never_reach_the_index(self) -> None:
+        """Task notifications and teammate envelopes are harness text.
+
+        Both arrive as ``type=user`` on the main thread, so the sidechain test
+        that hides agent prompts never sees them, and neither tag is in
+        NOISE_PREFIXES: before this they ranked exactly like something a person
+        typed.
+        """
+        session_id = "44444444-4444-4444-8444-444444444444"
+        write_jsonl(
+            project_dir(self.active, self.workspace) / f"{session_id}.jsonl",
+            [
+                user_record(
+                    session_id,
+                    self.workspace,
+                    "<task-notification>\n<task-id>abc</task-id>\n<status>failed</status>\n"
+                    "</task-notification>",
+                    "2026-08-01T00:00:00Z",
+                ),
+                user_record(
+                    session_id,
+                    self.workspace,
+                    '<teammate-message teammate_id="reviewer" color="blue">\n'
+                    '{"type":"idle_notification","from":"reviewer"}\n</teammate-message>',
+                    "2026-08-01T00:00:01Z",
+                ),
+                {
+                    # The model echoing the tag back is still machine text, so
+                    # the match is on the text, not on the role.
+                    "type": "assistant",
+                    "sessionId": session_id,
+                    "cwd": str(self.workspace),
+                    "timestamp": "2026-08-01T00:00:02Z",
+                    "isSidechain": False,
+                    "message": {
+                        "role": "assistant",
+                        "content": "<task-notification>\n<task-id>echo</task-id>\n"
+                        "</task-notification>",
+                    },
+                },
+                user_record(
+                    session_id,
+                    self.workspace,
+                    "claude distinctive question",
+                    "2026-08-01T00:00:03Z",
+                ),
+            ],
+        )
+        with portable_backend():
+            result = history_index.update_index(
+                self.db, self.scope(self.claude_source), rebuild=True
+            )
+        self.assertEqual(result["sessions"], 1)
+        connection = plain_connect(self.db, readonly=True)
+        texts = [
+            row[0]
+            for row in connection.execute("SELECT fts_text FROM records ORDER BY seq")
+        ]
+        connection.close()
+        self.assertEqual(texts, ["claude distinctive question"])
+
+    def test_index_prunes_stored_claude_envelopes_within_their_provider(self) -> None:
+        session_id = "55555555-5555-4555-8555-555555555555"
+        path = project_dir(self.active, self.workspace) / f"{session_id}.jsonl"
+        write_jsonl(
+            path,
+            [
+                user_record(
+                    session_id,
+                    self.workspace,
+                    "claude distinctive question",
+                    "2026-08-01T00:00:00Z",
+                )
+            ],
+        )
+        with portable_backend():
+            history_index.update_index(
+                self.db, self.scope(self.claude_source), rebuild=True
+            )
+        legacy = plain_connect(self.db)
+        stored = [
+            "<task-notification>\n<task-id>zzteammarker</task-id>\n</task-notification>",
+            '<teammate-message teammate_id="zzteammarker">\nreport\n</teammate-message>',
+            # Neither prefix matches this one, and a shorter prefix would have.
+            "<taskmaster> zzteammarker kept",
+            # A Codex-only block inside a Claude session stays: the evidence
+            # that made these prefixes machine text was gathered per harness,
+            # so the sweep is scoped to the provider it was proven on.
+            "<goal_context>\nzzteammarker kept too\n</goal_context>",
+        ]
+        for seq, text in enumerate(stored, start=90):
+            legacy.execute(
+                "INSERT INTO records(session_id,record_key,seq,role,ts,fts_text,"
+                "semantic_text,noise,agent_prompt,segment_sources_json,"
+                "copy_paths_json,source_labels_json) "
+                "VALUES(?,?,?,'user',0,?,?,0,0,'[]',?,'[]')",
+                (session_id, f"legacy-{seq}", seq, text, text, json.dumps([str(path)])),
+            )
+        legacy.execute("INSERT INTO records_fts(records_fts) VALUES('rebuild')")
+        legacy.commit()
+        legacy.close()
+
+        def marker_hits():
+            return len(
+                history_index.recall(
+                    self.db,
+                    "zzteammarker",
+                    mode="bm25",
+                    limit=10,
+                    project=None,
+                    exclude_sessions=[],
+                    include_agent_prompts=False,
+                    model_path=None,
+                    simple_root=None,
+                )["results"]
+            )
+
+        with portable_backend():
+            self.assertEqual(marker_hits(), 4)
+            pruned = history_index.update_index(self.db, self.scope(self.claude_source))
+            after = marker_hits()
+            again = history_index.update_index(self.db, self.scope(self.claude_source))
+        self.assertEqual(pruned["records_pruned"], 2)
+        self.assertEqual(after, 2)
+        self.assertEqual(again["records_pruned"], 0)
+        connection = plain_connect(self.db, readonly=True)
+        self.assertEqual(
+            sorted(row[0] for row in connection.execute("SELECT fts_text FROM records")),
+            sorted(
+                [
+                    "claude distinctive question",
+                    "<taskmaster> zzteammarker kept",
+                    "<goal_context>\nzzteammarker kept too\n</goal_context>",
+                ]
+            ),
+        )
+        connection.close()
+
     def test_recall_refuses_a_provider_the_index_does_not_cover(self) -> None:
         session_id = "11111111-1111-4111-8111-111111111111"
         write_jsonl(
@@ -1608,6 +1749,494 @@ class BoilerplatePolicyTests(unittest.TestCase):
         self.assertEqual(
             history_index._meta_get(self.connection, "vectors_complete"), "false"
         )
+
+
+class FakeClock:
+    """A clock the embed loop reads instead of the wall clock.
+
+    ``time()`` advances by a fixed step on every read, so a bounded run stops
+    after an exact number of batches instead of after a real wait.
+    """
+
+    def __init__(self, step: float = 0.25) -> None:
+        self.now = 1000.0
+        self.step = step
+        self.slept: list[float] = []
+
+    def time(self) -> float:
+        value = self.now
+        self.now += self.step
+        return value
+
+    def sleep(self, seconds: float) -> None:
+        self.slept.append(seconds)
+        self.now += seconds
+
+
+class _FakeEmbeddings:
+    """One batch of MLX vectors: only the shape matters to the loop."""
+
+    def __init__(self, rows: int) -> None:
+        self.rows = rows
+
+    def astype(self, _dtype):
+        return self
+
+
+class _FakeGenerated:
+    def __init__(self, rows: int) -> None:
+        self.text_embeds = _FakeEmbeddings(rows)
+
+
+class _FakeVectorArray:
+    def __init__(self, rows: int) -> None:
+        self.rows = rows
+
+    def tobytes(self) -> bytes:
+        return bytes(history_index.EMBEDDING_DIM * 4 * self.rows)
+
+
+@contextmanager
+def fake_embedding_backend(*, generate_hook=None, peak_bytes: int = 2_300_000_000):
+    """Run the real embed loop against stand-in MLX/NumPy modules.
+
+    The registered suite is standard-library only and runs on Linux, so what is
+    under test is the loop's own bookkeeping — progress, commits, lifecycle
+    markers. MLX itself is exercised by the macOS smoke run.
+
+    ``generate_hook`` receives the call count; call 1 is the warmup, so loop
+    batch N is call N+1.
+    """
+    calls: list[list[str]] = []
+
+    def generate(model, tokenizer, *, texts, max_length):
+        calls.append(list(texts))
+        if generate_hook is not None:
+            generate_hook(len(calls))
+        return _FakeGenerated(len(texts))
+
+    core = types.SimpleNamespace(
+        float32="float32",
+        set_memory_limit=lambda value: None,
+        set_cache_limit=lambda value: None,
+        reset_peak_memory=lambda: None,
+        clear_cache=lambda: None,
+        eval=lambda value: None,
+        get_active_memory=lambda: 1024,
+        get_cache_memory=lambda: 2048,
+        get_peak_memory=lambda: peak_bytes,
+    )
+    mlx = types.ModuleType("mlx")
+    mlx.core = core
+    embeddings = types.ModuleType("mlx_embeddings")
+    embeddings.generate = generate
+    embeddings.load = lambda path: (object(), object())
+    numpy = types.ModuleType("numpy")
+    numpy.float32 = "float32"
+    numpy.array = lambda value, dtype=None: _FakeVectorArray(value.rows)
+    with ExitStack() as stack:
+        stack.enter_context(
+            mock.patch.dict(
+                sys.modules,
+                {
+                    "mlx": mlx,
+                    "mlx.core": core,
+                    "mlx_embeddings": embeddings,
+                    "numpy": numpy,
+                },
+            )
+        )
+        stack.enter_context(
+            mock.patch.object(
+                history_index,
+                "platform",
+                types.SimpleNamespace(system=lambda: "Darwin", machine=lambda: "arm64"),
+            )
+        )
+        # The pause policy has its own tests; it must never fire in these.
+        stack.enter_context(
+            mock.patch.object(
+                history_index,
+                "_host_memory_pressure_level",
+                lambda: history_index.HOST_PRESSURE_NORMAL,
+            )
+        )
+        yield calls
+
+
+class HostPressurePauseTests(unittest.TestCase):
+    """Cover the pause that replaced the unconditional four-second sleep."""
+
+    def probe(self, **run_kwargs):
+        with ExitStack() as stack:
+            stack.enter_context(
+                mock.patch.object(
+                    history_index,
+                    "platform",
+                    types.SimpleNamespace(system=lambda: "Darwin"),
+                )
+            )
+            stack.enter_context(
+                mock.patch.object(history_index.subprocess, "run", **run_kwargs)
+            )
+            return history_index._host_memory_pressure_level()
+
+    def test_the_probe_reads_the_level_and_treats_every_failure_as_normal(self) -> None:
+        self.assertEqual(
+            self.probe(
+                return_value=types.SimpleNamespace(returncode=0, stdout="4\n", stderr="")
+            ),
+            4,
+        )
+        # A level that cannot be read is not evidence of pressure: refusing to
+        # embed because sysctl is missing would turn a diagnostic into an outage.
+        self.assertEqual(
+            self.probe(
+                return_value=types.SimpleNamespace(returncode=1, stdout="", stderr="no")
+            ),
+            history_index.HOST_PRESSURE_NORMAL,
+        )
+        self.assertEqual(
+            self.probe(
+                return_value=types.SimpleNamespace(returncode=0, stdout="???", stderr="")
+            ),
+            history_index.HOST_PRESSURE_NORMAL,
+        )
+        self.assertEqual(
+            self.probe(
+                side_effect=subprocess.TimeoutExpired(cmd="sysctl", timeout=2)
+            ),
+            history_index.HOST_PRESSURE_NORMAL,
+        )
+        self.assertEqual(
+            self.probe(side_effect=FileNotFoundError("sysctl")),
+            history_index.HOST_PRESSURE_NORMAL,
+        )
+
+    def test_a_platform_without_the_sysctl_is_not_probed_at_all(self) -> None:
+        with ExitStack() as stack:
+            stack.enter_context(
+                mock.patch.object(
+                    history_index,
+                    "platform",
+                    types.SimpleNamespace(system=lambda: "Linux"),
+                )
+            )
+            runner = stack.enter_context(
+                mock.patch.object(history_index.subprocess, "run")
+            )
+            self.assertEqual(
+                history_index._host_memory_pressure_level(),
+                history_index.HOST_PRESSURE_NORMAL,
+            )
+        runner.assert_not_called()
+
+    def test_a_healthy_host_is_never_paused(self) -> None:
+        clock = FakeClock()
+        stdout = io.StringIO()
+        with ExitStack() as stack:
+            stack.enter_context(mock.patch.object(history_index, "time", clock))
+            stack.enter_context(
+                mock.patch.object(
+                    history_index, "_host_memory_pressure_level", lambda: 1
+                )
+            )
+            stack.enter_context(redirect_stdout(stdout))
+            waited = history_index._pause_while_host_is_under_pressure()
+        self.assertEqual(waited, 0.0)
+        self.assertEqual(clock.slept, [])
+        self.assertEqual(stdout.getvalue(), "")
+
+    def test_pressure_backs_off_to_a_ceiling_and_reports_both_edges(self) -> None:
+        clock = FakeClock()
+        levels = iter([2, 2, 2, 4, 4, 4, 4, 2, 1])
+        stdout = io.StringIO()
+        with ExitStack() as stack:
+            stack.enter_context(mock.patch.object(history_index, "time", clock))
+            stack.enter_context(
+                mock.patch.object(
+                    history_index, "_host_memory_pressure_level", lambda: next(levels)
+                )
+            )
+            stack.enter_context(redirect_stdout(stdout))
+            waited = history_index._pause_while_host_is_under_pressure()
+        self.assertEqual(clock.slept, [1, 2, 4, 8, 16, 30, 30, 30])
+        self.assertEqual(waited, 121.0)
+        lines = stdout.getvalue().splitlines()
+        self.assertEqual(
+            lines[0],
+            "  paused: host memory pressure 2 (1=normal, 2=warning, 4=critical); "
+            "waiting for it to clear",
+        )
+        # A multi-minute wait has to keep saying so, or it is indistinguishable
+        # from a hang.
+        self.assertEqual(
+            lines[1], "  still paused after 61s · host memory pressure 4"
+        )
+        self.assertEqual(lines[-1], "  resumed after 121s · host memory pressure 1")
+
+
+class EmbedLifecycleTests(unittest.TestCase):
+    """Cover token progress, the heartbeat and the recorded stop reason."""
+
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp_dir.name)
+        self.db = self.root / "finder.db"
+        self.model = self.root / "snapshot-abc123"
+        self.model.mkdir()
+        with portable_backend():
+            self.connection = history_index._new_database(self.db, None)
+        self.connection.execute(
+            "INSERT INTO sessions(session_id,project,primary_path,sources_json,"
+            "fingerprint,started,ended,provider) "
+            "VALUES('s','p','/p','[]','f',0,0,'claude')"
+        )
+        self.connection.execute(
+            "INSERT INTO records(id,session_id,record_key,seq,role,ts,fts_text,"
+            "semantic_text,noise,agent_prompt,segment_sources_json,copy_paths_json,"
+            "source_labels_json) "
+            "VALUES(1,'s','k',1,'user',0,'prose','prose',0,0,'[]','[]','[]')"
+        )
+        # Stand-in for the vec0 virtual table: CREATE VIRTUAL TABLE IF NOT
+        # EXISTS is a no-op once the name is taken, so the loop runs unchanged.
+        self.connection.execute("CREATE TABLE vec_chunks(embedding BLOB)")
+        history_index._meta_set(self.connection, "chunks_complete", "true")
+        history_index._meta_set(
+            self.connection, "embedding_model_revision", self.model.name
+        )
+        self.connection.commit()
+
+    def tearDown(self) -> None:
+        self.connection.close()
+        self.temp_dir.cleanup()
+
+    def add_chunks(self, count: int, *, ntok: int = 100) -> None:
+        for seq in range(count):
+            text = f"chunk body number {seq} with enough characters to embed"
+            self.connection.execute(
+                "INSERT INTO chunks(record_id,seq,ntok,text,usable,text_hash) "
+                "VALUES(1,?,?,?,1,?)",
+                (seq, ntok, text, history_index._chunk_text_hash(text)),
+            )
+        self.connection.commit()
+
+    def embed(
+        self,
+        *,
+        batch_size: int = 4,
+        commit_every: int = 4,
+        max_seconds: int | None = None,
+        clock_step: float = 0.25,
+        generate_hook=None,
+    ):
+        stdout = io.StringIO()
+        with ExitStack() as stack:
+            stack.enter_context(portable_backend())
+            stack.enter_context(fake_embedding_backend(generate_hook=generate_hook))
+            stack.enter_context(
+                mock.patch.object(history_index, "EMBED_COMMIT_EVERY", commit_every)
+            )
+            stack.enter_context(
+                mock.patch.object(history_index, "time", FakeClock(clock_step))
+            )
+            stack.enter_context(redirect_stdout(stdout))
+            result = history_index.embed_chunks(
+                self.db,
+                model_path=self.model,
+                download_model=False,
+                max_seconds=max_seconds,
+                batch_size=batch_size,
+                memory_limit_gb=8.0,
+                cache_limit_gb=0.5,
+            )
+        return result, stdout.getvalue()
+
+    def meta(self, key: str) -> str | None:
+        return history_index._meta_get(self.connection, key)
+
+    def vector_count(self) -> int:
+        return self.connection.execute("SELECT count(*) FROM vec_chunks").fetchone()[0]
+
+    def test_progress_counts_tokens_not_only_chunks(self) -> None:
+        """Chunks are a bad unit for an ETA: this backlog is 365-602 tokens
+        per chunk, so the remaining *token* mass is what predicts the time."""
+        self.add_chunks(12, ntok=100)
+        result, output = self.embed()
+        lines = [line for line in output.splitlines() if "embedded" in line]
+        self.assertEqual(
+            lines[0],
+            "  embedded 4/12 chunks · 400/1200 tok (33.3%) · 16 chunks/s "
+            "(1600 tok/s) · ETA 0 min · MLX peak 2.14 GiB",
+        )
+        self.assertEqual(
+            lines[-1],
+            "  embedded 12/12 chunks · 1200/1200 tok (100.0%) · 16 chunks/s "
+            "(1600 tok/s) · ETA 0 min · MLX peak 2.14 GiB",
+        )
+        self.assertEqual(result["embedded"], 12)
+        self.assertEqual(result["embedded_tokens"], 1200)
+        self.assertEqual(result["remaining"], 0)
+        self.assertEqual(result["remaining_tokens"], 0)
+        self.assertEqual(result["stop_reason"], "complete")
+        self.assertEqual(self.vector_count(), 12)
+        self.assertEqual(self.meta("vectors_complete"), "true")
+        self.assertEqual(self.meta("embed_stop_reason"), "complete")
+        self.assertIsNotNone(self.meta("last_embedded_at"))
+
+    def test_an_unmeasurable_rate_prints_a_question_mark_not_a_number(self) -> None:
+        self.add_chunks(8, ntok=0)
+        _, output = self.embed()
+        self.assertIn("0/0 tok (0.0%)", output)
+        self.assertIn("ETA ? min", output)
+
+    def test_the_heartbeat_is_on_disk_before_the_run_ends(self) -> None:
+        """A run that dies mid-pass must leave a timestamp that is already true.
+
+        Read the committed state from a second connection while the first is
+        mid-transaction: the value has to be on disk, not in this process.
+        """
+        self.add_chunks(16)
+        seen: dict[str, object] = {}
+
+        def snapshot(call_number: int) -> None:
+            if call_number != 4:  # warmup, batch 1, batch 2, then this one
+                return
+            observer = plain_connect(self.db, readonly=True)
+            seen["last_embedded_at"] = history_index._meta_get(
+                observer, "last_embedded_at"
+            )
+            seen["vectors_complete"] = history_index._meta_get(
+                observer, "vectors_complete"
+            )
+            seen["vectors"] = observer.execute(
+                "SELECT count(*) FROM vec_chunks"
+            ).fetchone()[0]
+            observer.close()
+
+        result, _ = self.embed(generate_hook=snapshot)
+        self.assertEqual(seen["vectors"], 8)
+        self.assertIsNotNone(seen["last_embedded_at"])
+        # Eight of sixteen are done, so the marker must not claim completeness.
+        self.assertEqual(seen["vectors_complete"], "false")
+        self.assertEqual(result["embedded"], 16)
+        self.assertEqual(self.meta("vectors_complete"), "true")
+
+    def test_a_bounded_run_records_why_it_stopped(self) -> None:
+        self.add_chunks(12)
+        result, _ = self.embed(max_seconds=1)
+        self.assertEqual(result["stop_reason"], "max_seconds")
+        self.assertEqual(result["embedded"], 8)
+        self.assertEqual(result["remaining"], 4)
+        self.assertEqual(result["remaining_tokens"], 400)
+        self.assertEqual(self.meta("embed_stop_reason"), "max_seconds")
+        self.assertEqual(self.meta("vectors_complete"), "false")
+
+    def test_a_memory_boundary_stop_is_recorded_before_the_error_surfaces(self) -> None:
+        self.add_chunks(12)
+
+        def fail_on_the_second_batch(call_number: int) -> None:
+            if call_number == 3:  # warmup, batch 1, then this one
+                raise RuntimeError("[metal::malloc] attempted to allocate too much")
+
+        with self.assertRaisesRegex(history_index.IndexError, "memory boundary"):
+            self.embed(generate_hook=fail_on_the_second_batch)
+        self.assertEqual(self.meta("embed_stop_reason"), "memory_boundary")
+        self.assertIsNotNone(self.meta("last_embedded_at"))
+        # The committed batch survives; the run is resumable, not lost.
+        self.assertEqual(self.vector_count(), 4)
+        self.assertEqual(self.meta("vectors_complete"), "false")
+
+    def test_an_empty_backlog_reports_complete_without_touching_the_model(self) -> None:
+        result, output = self.embed()
+        self.assertEqual(
+            (result["embedded"], result["embedded_tokens"], result["stop_reason"]),
+            (0, 0, "complete"),
+        )
+        self.assertEqual(result["remaining_tokens"], 0)
+        self.assertEqual(self.meta("embed_stop_reason"), "complete")
+        self.assertEqual(self.meta("vectors_complete"), "true")
+        self.assertEqual(output, "")
+
+    def test_status_surfaces_the_stop_reason_and_the_heartbeat(self) -> None:
+        self.add_chunks(8)
+        history_index._meta_set(
+            self.connection,
+            "index_scope",
+            json.dumps({"all_projects": True, "project_path": None, "sources": []}),
+        )
+        self.connection.commit()
+        self.embed(max_seconds=1)
+        with portable_backend():
+            payload = history_index.index_status(
+                self.db, simple_root=None, inspect_sources=False, scope=None
+            )
+        self.assertEqual(payload["embed_stop_reason"], "max_seconds")
+        self.assertEqual(payload["last_embedded_at"], self.meta("last_embedded_at"))
+
+
+class WriterLockTests(unittest.TestCase):
+    """One writer at a time: nothing coordinated manual and nightly runs."""
+
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp_dir.name)
+        self.db = self.root / "finder.db"
+        self.lock_path = Path(str(self.db) + ".lock")
+
+    def tearDown(self) -> None:
+        self.temp_dir.cleanup()
+
+    @contextmanager
+    def held_from_another_run(self):
+        """flock is per open file description, so this really does conflict."""
+        handle = self.lock_path.open("a")
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            handle.close()
+
+    def test_a_second_writer_is_refused_and_told_which_file_to_wait_on(self) -> None:
+        stderr = io.StringIO()
+        with self.held_from_another_run():
+            with ExitStack() as stack:
+                stack.enter_context(
+                    mock.patch.object(
+                        history_index,
+                        "update_index",
+                        side_effect=AssertionError("ran while another writer held the lock"),
+                    )
+                )
+                stack.enter_context(mock.patch("sys.stderr", stderr))
+                code = history_index.main(["--db", str(self.db), "index"])
+        self.assertEqual(code, 2)
+        message = stderr.getvalue()
+        self.assertIn(str(self.lock_path), message)
+        self.assertIn("Wait for it to finish", message)
+
+    def test_the_nightly_sequence_hands_the_lock_on_instead_of_deadlocking(self) -> None:
+        payload = {"database": str(self.db)}
+        with ExitStack() as stack:
+            stack.enter_context(
+                mock.patch.object(history_index, "_scope_from_args", return_value=None)
+            )
+            stack.enter_context(
+                mock.patch.object(history_index, "update_index", return_value=payload)
+            )
+            stack.enter_context(
+                mock.patch.object(history_index, "build_chunks", return_value=payload)
+            )
+            stack.enter_context(
+                mock.patch.object(history_index, "embed_chunks", return_value=payload)
+            )
+            stack.enter_context(redirect_stdout(io.StringIO()))
+            codes = [
+                history_index.main(["--db", str(self.db), command, "--json"])
+                for command in ("index", "chunk", "embed")
+            ]
+        self.assertEqual(codes, [0, 0, 0])
 
 
 if __name__ == "__main__":
