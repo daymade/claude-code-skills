@@ -3,6 +3,7 @@
 ## Contents
 
 - When to instrument
+- Signals the platform already emits (macOS unified log)
 - Env-gated TRACE pattern (the default)
 - Log tag conventions
 - Deployment checklist
@@ -21,6 +22,35 @@ Symptoms that justify adding instrumentation:
 - "The fix might not actually be triggering" — log entry/exit at the new code path
 
 Do not instrument for symptoms that already have direct evidence. If `tcpdump` shows the RST, you do not need a new log line to confirm it.
+
+## Signals the platform already emits (macOS unified log)
+
+Before adding instrumentation, check whether the platform is already writing the field you need. On macOS the networking stack narrates itself into the unified log, and one of the things it records is a fact `lsof` structurally cannot tell you: **which interface a listener is actually on**.
+
+`lsof -nP -iTCP -sTCP:LISTEN` reports the BSD socket layer, where a wildcard bind renders as `*:59807` whatever the service does afterwards. Services built on Network.framework bind the wildcard and then open one inbox per interface, and only the log says which interfaces those were:
+
+```bash
+# `log` is a zsh builtin — the absolute path matters.
+# --predicate matches only the message body, not the `[subsystem]` prefix,
+# so dump the window and grep rather than trying to filter server-side.
+/usr/bin/log show --last 1h --style compact > /tmp/ulog.txt
+grep 'nw_listener' /tmp/ulog.txt | grep -oE '\binterface: [a-z0-9]+' | sort | uniq -c | sort -rn
+# Scope it to one process by grepping the process name first:
+grep '<process>' /tmp/ulog.txt | grep -oE '\binterface: [a-z0-9]+' | sort -u
+```
+
+The lines look like this, and carry both the endpoint and the interface the framework chose:
+
+```
+Df rapportd[687:14048ca6] [com.apple.network:listener] nw_listener_reconcile_inboxes_on_queue
+  [L189] Started inbox socket: 18, endpoint: ::.62379, interface: awdl0 with parameters tcp, ...
+```
+
+**Worked example.** An exposure audit on a machine with a public IPv6 address: `lsof` showed `rapportd` on `*:59807`, `*:62389`, `*:62390`, which reads as three internet-facing ports. In the log, every `interface:` field in that process's listener records was `awdl0` — Apple's peer-to-peer radio, which carries `fe80::` link-local addresses only and needs the peer within radio range. None was `en0`. For contrast, `sharingd` on the same machine and in the same log window fanned out across `en0` plus five tunnel interfaces, which is what a listener that really is on every interface looks like. Same `*` in `lsof`, opposite exposure.
+
+**Cross-check that does not depend on the log.** Address class is decided by the interface, not by the service: a globally routable address only ever appears on a real network interface, and `awdl0` and friends carry only `fe80::`. So a service observed answering on a global address is genuinely exposed, and a service only ever seen on `fe80::` never left the link. Two instruments with different underlying mechanisms agreeing is worth more than running the same one three times.
+
+Two general points survive outside macOS. Platform-emitted signal beats added instrumentation when it exists, because it was already running before the incident. And a tool that answers at a lower layer than your question will answer confidently and wrongly — `lsof` is an inventory of sockets, not a verdict on reachability.
 
 ## Env-gated TRACE pattern (the default)
 
