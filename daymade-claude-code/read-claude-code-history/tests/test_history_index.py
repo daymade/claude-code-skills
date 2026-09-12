@@ -170,6 +170,14 @@ class HistoryIndexTests(unittest.TestCase):
             row[1] for row in connection.execute("PRAGMA table_info(chunks)")
         }
         self.assertIn("usable", columns)
+        self.assertIn("text_hash", columns)
+        indexes = {
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='index'"
+            )
+        }
+        self.assertIn("idx_chunks_text_hash", indexes)
         self.assertEqual(
             connection.execute("SELECT count(*) FROM records").fetchone()[0], 1
         )
@@ -901,6 +909,12 @@ class MultiProviderIndexTests(unittest.TestCase):
             [
                 ("user", "<user_instructions>\nproject boilerplate\n</user_instructions>"),
                 ("user", "<environment_context>\n<cwd>/tmp</cwd>\n</environment_context>"),
+                # Goal-mode context is re-sent every turn and subagent status is
+                # machine-to-machine; a skill block is a pasted file. None of
+                # the three is anything a person said.
+                ("user", "<goal_context>\ncurrent goal restated\n</goal_context>"),
+                ("user", "<subagent_notification>\nagent finished\n</subagent_notification>"),
+                ("user", "<skill>\nskill file contents\n</skill>"),
                 ("user", "codex distinctive question"),
                 ("assistant", "codex distinctive answer"),
             ],
@@ -1044,7 +1058,25 @@ class MultiProviderIndexTests(unittest.TestCase):
         )
         connection.close()
 
-    def test_v1_index_migrates_in_place_and_keeps_every_record(self) -> None:
+    def seed_legacy_chunk_and_vector(self, text: str) -> None:
+        """Give the index one chunk and one vector, as a pre-v3 index would."""
+        connection = plain_connect(self.db)
+        record_id = connection.execute("SELECT id FROM records").fetchone()[0]
+        connection.execute(
+            "INSERT INTO chunks(record_id,seq,ntok,text,usable,text_hash) "
+            "VALUES(?,0,5,?,1,?)",
+            (record_id, text, history_index._chunk_text_hash(text)),
+        )
+        chunk_id = connection.execute("SELECT id FROM chunks").fetchone()[0]
+        connection.execute("CREATE TABLE vec_chunks(embedding BLOB)")
+        connection.execute(
+            "INSERT INTO vec_chunks(rowid,embedding) VALUES(?,?)",
+            (chunk_id, b"fixture"),
+        )
+        connection.commit()
+        connection.close()
+
+    def build_one_claude_session(self) -> None:
         session_id = "11111111-1111-4111-8111-111111111111"
         write_jsonl(
             project_dir(self.active, self.workspace) / f"{session_id}.jsonl",
@@ -1054,9 +1086,17 @@ class MultiProviderIndexTests(unittest.TestCase):
             history_index.update_index(
                 self.db, self.scope(self.claude_source), rebuild=True
             )
+
+    def test_v1_index_migrates_in_place_and_keeps_every_record(self) -> None:
+        """A v1 index reaches v3 in one call, both steps chained."""
+        chunk_text = "legacy chunk text kept across the migration"
+        self.build_one_claude_session()
+        self.seed_legacy_chunk_and_vector(chunk_text)
         downgrade = plain_connect(self.db)
         downgrade.execute("DROP INDEX IF EXISTS idx_sessions_provider")
         downgrade.execute("ALTER TABLE sessions DROP COLUMN provider")
+        downgrade.execute("DROP INDEX IF EXISTS idx_chunks_text_hash")
+        downgrade.execute("ALTER TABLE chunks DROP COLUMN text_hash")
         downgrade.execute("PRAGMA user_version=1")
         downgrade.commit()
         before = downgrade.execute("SELECT count(*) FROM records").fetchone()[0]
@@ -1076,7 +1116,139 @@ class MultiProviderIndexTests(unittest.TestCase):
             connection.execute("SELECT DISTINCT provider FROM sessions").fetchone()[0],
             "claude",
         )
+        self.assertEqual(
+            connection.execute("SELECT text_hash FROM chunks").fetchone()[0],
+            history_index._chunk_text_hash(chunk_text),
+        )
+        self.assertEqual(
+            connection.execute("SELECT count(*) FROM vec_chunks").fetchone()[0], 1
+        )
+        history_index._validate_schema(connection)
         self.assertIsNone(history_index._migrate_schema_if_needed(connection))
+        connection.close()
+
+    def test_v2_index_gains_backfilled_text_hash_without_losing_vectors(self) -> None:
+        """v2->v3 adds one column; recomputing 678k vectors is not an option."""
+        chunk_text = "a v2 chunk that already has its vector computed"
+        self.build_one_claude_session()
+        self.seed_legacy_chunk_and_vector(chunk_text)
+        downgrade = plain_connect(self.db)
+        downgrade.execute("DROP INDEX IF EXISTS idx_chunks_text_hash")
+        downgrade.execute("ALTER TABLE chunks DROP COLUMN text_hash")
+        downgrade.execute("PRAGMA user_version=2")
+        downgrade.commit()
+        downgrade.close()
+
+        connection = plain_connect(self.db)
+        note = history_index._migrate_schema_if_needed(connection)
+        self.assertIn("text_hash", note)
+        self.assertEqual(
+            connection.execute("PRAGMA user_version").fetchone()[0],
+            history_index.SCHEMA_VERSION,
+        )
+        self.assertEqual(
+            connection.execute("SELECT text_hash FROM chunks").fetchone()[0],
+            history_index._chunk_text_hash(chunk_text),
+        )
+        self.assertEqual(
+            connection.execute("SELECT count(*) FROM records").fetchone()[0], 1
+        )
+        self.assertEqual(
+            connection.execute("SELECT count(*) FROM vec_chunks").fetchone()[0], 1
+        )
+        self.assertEqual(
+            connection.execute("SELECT DISTINCT provider FROM sessions").fetchone()[0],
+            "claude",
+        )
+        history_index._validate_schema(connection)
+        self.assertIsNone(history_index._migrate_schema_if_needed(connection))
+        connection.close()
+
+    def test_index_prunes_injected_codex_records_already_stored(self) -> None:
+        """An index built before the prefix list grew still holds the blocks.
+
+        The session file has not changed, so it is never re-extracted: without
+        a sweep over stored records, those blocks stay lexically searchable for
+        the life of the index.
+        """
+        session_id = "019a0000-0000-7000-8000-000000000002"
+        rollout = (
+            self.codex_home
+            / "sessions"
+            / "2026"
+            / "05"
+            / "01"
+            / f"rollout-{session_id}.jsonl"
+        )
+        codex_rollout(rollout, session_id, self.workspace, [("user", "codex distinctive question")])
+        with portable_backend():
+            history_index.update_index(
+                self.db, self.scope(self.codex_source), rebuild=True
+            )
+        legacy = plain_connect(self.db)
+        for seq, text in enumerate(
+            [
+                "<goal_context>\nzzgoalmarker restated goal\n</goal_context>",
+                "<subagent_notification>\nzzgoalmarker agent done\n</subagent_notification>",
+                "<skill>\nzzgoalmarker skill body\n</skill>",
+                # LIKE would read the '_' in every prefix as a wildcard and
+                # take this one too.
+                "<userXinstructions> zzdecoy kept",
+            ],
+            start=90,
+        ):
+            legacy.execute(
+                "INSERT INTO records(session_id,record_key,seq,role,ts,fts_text,"
+                "semantic_text,noise,agent_prompt,segment_sources_json,"
+                "copy_paths_json,source_labels_json) "
+                "VALUES(?,?,?,'user',0,?,?,0,0,'[]',?,'[]')",
+                (
+                    session_id,
+                    f"legacy-{seq}",
+                    seq,
+                    text,
+                    text,
+                    json.dumps([str(rollout)]),
+                ),
+            )
+        legacy.execute("INSERT INTO records_fts(records_fts) VALUES('rebuild')")
+        legacy.commit()
+        legacy.close()
+
+        with portable_backend():
+            before = history_index.recall(
+                self.db,
+                "zzgoalmarker",
+                mode="bm25",
+                limit=10,
+                project=None,
+                exclude_sessions=[],
+                include_agent_prompts=False,
+                model_path=None,
+                simple_root=None,
+            )
+            self.assertEqual(len(before["results"]), 3)
+            pruned = history_index.update_index(self.db, self.scope(self.codex_source))
+            after = history_index.recall(
+                self.db,
+                "zzgoalmarker",
+                mode="bm25",
+                limit=10,
+                project=None,
+                exclude_sessions=[],
+                include_agent_prompts=False,
+                model_path=None,
+                simple_root=None,
+            )
+            again = history_index.update_index(self.db, self.scope(self.codex_source))
+        self.assertEqual(pruned["records_pruned"], 3)
+        self.assertEqual(after["results"], [])
+        self.assertEqual(again["records_pruned"], 0)
+        connection = plain_connect(self.db, readonly=True)
+        self.assertEqual(
+            sorted(row[0] for row in connection.execute("SELECT fts_text FROM records")),
+            ["<userXinstructions> zzdecoy kept", "codex distinctive question"],
+        )
         connection.close()
 
     def test_recall_refuses_a_provider_the_index_does_not_cover(self) -> None:
@@ -1278,6 +1450,163 @@ class MultiProviderIndexTests(unittest.TestCase):
         self.assertEqual(len(refs), 1)
         self.assertEqual(
             refs[0]["project"], str(self.workspace).replace("/", "-")
+        )
+
+
+class BoilerplatePolicyTests(unittest.TestCase):
+    """Cover the chunk-time policy that decides which chunks earn a vector."""
+
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp_dir.name)
+        self.db = self.root / "finder.db"
+        self.repeated = "the same injected instruction block, verbatim again"
+        self.unique = "a sentence that occurs exactly once in this corpus"
+        self.short = "too short"
+        with portable_backend():
+            self.connection = history_index._new_database(self.db, None)
+        self.connection.execute(
+            "INSERT INTO sessions(session_id,project,primary_path,sources_json,"
+            "fingerprint,started,ended,provider) "
+            "VALUES('s','p','/p','[]','f',0,0,'codex')"
+        )
+        self.connection.execute(
+            "INSERT INTO records(id,session_id,record_key,seq,role,ts,fts_text,"
+            "semantic_text,noise,agent_prompt,segment_sources_json,copy_paths_json,"
+            "source_labels_json) "
+            "VALUES(1,'s','k',1,'user',0,'prose','prose',0,0,'[]','[]','[]')"
+        )
+
+    def tearDown(self) -> None:
+        self.connection.close()
+        self.temp_dir.cleanup()
+
+    def add_chunk(self, seq: int, text: str) -> int:
+        """Insert a chunk the way build_chunks does, minus the hash.
+
+        Leaving text_hash NULL is deliberate: it is what every chunk migrated
+        from v2 looks like, so the policy's backfill is exercised too.
+        """
+        self.connection.execute(
+            "INSERT INTO chunks(record_id,seq,ntok,text,usable) VALUES(1,?,?,?,?)",
+            (seq, len(text), text, int(history_index._is_length_eligible(text))),
+        )
+        return self.connection.execute("SELECT max(id) FROM chunks").fetchone()[0]
+
+    def usable_by_id(self) -> dict[int, int]:
+        return {
+            row[0]: row[1]
+            for row in self.connection.execute("SELECT id,usable FROM chunks")
+        }
+
+    def test_third_copy_demotes_every_copy_but_the_lowest_id(self) -> None:
+        first = self.add_chunk(0, self.repeated)
+        second = self.add_chunk(1, self.repeated)
+        third = self.add_chunk(2, self.repeated)
+        distinct = self.add_chunk(3, self.unique)
+        result = history_index.apply_boilerplate_policy(self.connection)
+        self.assertEqual(result["hashes_backfilled"], 4)
+        self.assertEqual(result["boilerplate_demoted"], 2)
+        self.assertEqual(result["boilerplate_restored"], 0)
+        self.assertEqual(
+            self.usable_by_id(),
+            {first: 1, second: 0, third: 0, distinct: 1},
+        )
+        hashes = {
+            row[0]: row[1]
+            for row in self.connection.execute("SELECT id,text_hash FROM chunks")
+        }
+        self.assertEqual(
+            hashes[first], history_index._chunk_text_hash(self.repeated)
+        )
+        self.assertEqual(hashes[first], hashes[third])
+
+    def test_two_copies_and_short_chunks_are_left_alone(self) -> None:
+        first = self.add_chunk(0, self.repeated)
+        second = self.add_chunk(1, self.repeated)
+        shorts = [self.add_chunk(seq, self.short) for seq in (2, 3, 4)]
+        result = history_index.apply_boilerplate_policy(self.connection)
+        self.assertEqual(result["boilerplate_demoted"], 0)
+        self.assertEqual(result["boilerplate_restored"], 0)
+        usable = self.usable_by_id()
+        self.assertEqual(usable[first], 1)
+        self.assertEqual(usable[second], 1)
+        # Three identical copies, but each is below the embed length gate, so
+        # they were never usable and must not be "restored" into usability.
+        self.assertEqual([usable[chunk_id] for chunk_id in shorts], [0, 0, 0])
+
+    def test_copies_dropping_below_the_threshold_are_restored(self) -> None:
+        first = self.add_chunk(0, self.repeated)
+        second = self.add_chunk(1, self.repeated)
+        third = self.add_chunk(2, self.repeated)
+        history_index.apply_boilerplate_policy(self.connection)
+        self.assertEqual(self.usable_by_id(), {first: 1, second: 0, third: 0})
+        # Pruning injected records takes their chunks with them, which is how a
+        # text falls back under BOILERPLATE_MIN_COPIES.
+        self.connection.execute("DELETE FROM chunks WHERE id=?", (third,))
+        result = history_index.apply_boilerplate_policy(self.connection)
+        self.assertEqual(result["boilerplate_restored"], 1)
+        self.assertEqual(result["boilerplate_demoted"], 0)
+        self.assertEqual(self.usable_by_id(), {first: 1, second: 1})
+
+    def test_pass_is_idempotent(self) -> None:
+        for seq in range(3):
+            self.add_chunk(seq, self.repeated)
+        self.add_chunk(3, self.unique)
+        history_index.apply_boilerplate_policy(self.connection)
+        settled = self.usable_by_id()
+        repeat = history_index.apply_boilerplate_policy(self.connection)
+        self.assertEqual(
+            (
+                repeat["hashes_backfilled"],
+                repeat["boilerplate_demoted"],
+                repeat["boilerplate_restored"],
+            ),
+            (0, 0, 0),
+        )
+        self.assertEqual(self.usable_by_id(), settled)
+
+    def test_demoted_vectors_are_dropped_when_the_backend_is_present(self) -> None:
+        ids = [self.add_chunk(seq, self.repeated) for seq in range(3)]
+        distinct = self.add_chunk(3, self.unique)
+        self.connection.execute("CREATE TABLE vec_chunks(embedding BLOB)")
+        for chunk_id in [*ids, distinct]:
+            self.connection.execute(
+                "INSERT INTO vec_chunks(rowid,embedding) VALUES(?,?)",
+                (chunk_id, b"fixture"),
+            )
+        result = history_index.apply_boilerplate_policy(self.connection)
+        self.assertEqual(result["vectors_dropped"], 2)
+        self.assertEqual(result["vectors_drop_deferred"], 0)
+        self.assertEqual(
+            sorted(row[0] for row in self.connection.execute("SELECT rowid FROM vec_chunks")),
+            sorted([ids[0], distinct]),
+        )
+        # Every usable chunk still has its vector, so the marker is honest.
+        self.assertEqual(
+            history_index._meta_get(self.connection, "vectors_complete"), "true"
+        )
+
+    def test_vector_drop_is_deferred_when_the_backend_is_absent(self) -> None:
+        """The nightly chunk stage runs without sqlite-vec; embed finishes it."""
+        ids = [self.add_chunk(seq, self.repeated) for seq in range(3)]
+        self.add_chunk(3, self.unique)
+        result = history_index.apply_boilerplate_policy(self.connection)
+        self.assertIsNone(result["vectors_dropped"])
+        self.assertEqual(result["vectors_drop_deferred"], 2)
+        self.assertEqual(result["boilerplate_demoted"], 2)
+        self.assertEqual(
+            sorted(
+                row[0]
+                for row in self.connection.execute(
+                    "SELECT id FROM chunks WHERE usable=0"
+                )
+            ),
+            sorted(ids[1:]),
+        )
+        # No live count was possible, so the pass must not claim completeness.
+        self.assertEqual(
+            history_index._meta_get(self.connection, "vectors_complete"), "false"
         )
 
 

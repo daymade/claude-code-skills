@@ -72,7 +72,7 @@ from analyze_sessions import (  # noqa: E402
     kimi_searchable_segments,
 )
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 INDEX_FILENAME = "finder-index-v1.db"
 BUILDING_SUFFIX = ".building"
 SIMPLE_VERSION = "v0.7.1"
@@ -85,6 +85,18 @@ MAX_LENGTH = 1024
 DEFAULT_EMBED_BATCH_SIZE = 16
 DEFAULT_EMBED_MEMORY_LIMIT_GB = 8.0
 DEFAULT_EMBED_CACHE_LIMIT_GB = 0.5
+MIN_USABLE_CHUNK_CHARS = 20
+
+# How many identical chunk texts make a text boilerplate rather than content.
+# Measured on the live index (2026-09-12): 68% of the 125,687-chunk embedding
+# backlog was exact duplicates by text, and 94% of the duplicated texts appeared
+# in two or more sessions — hook-injected instruction blocks, per-turn goal
+# context and pasted fixtures, not things anyone said once. Three copies is the
+# first count that cannot be a coincidence of two sessions quoting each other.
+# Only the lowest-id copy keeps a vector: the text stays reachable by meaning
+# once, and BM25 still finds every copy because it runs on records.fts_text and
+# never consults chunks.
+BOILERPLATE_MIN_COPIES = 3
 
 # Official wangfenjin/simple v0.7.1 assets, observed through the GitHub release
 # API on 2026-08-26. GitHub supplies the SHA-256 digests; setup refuses any
@@ -429,12 +441,34 @@ CREATE TABLE IF NOT EXISTS chunks(
   ntok INTEGER NOT NULL,
   text TEXT NOT NULL,
   usable INTEGER NOT NULL DEFAULT 1,
+  text_hash TEXT,
   UNIQUE(record_id, seq)
 );
 CREATE INDEX IF NOT EXISTS idx_chunks_record ON chunks(record_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_usable ON chunks(usable);
+CREATE INDEX IF NOT EXISTS idx_chunks_text_hash ON chunks(text_hash);
 PRAGMA user_version={SCHEMA_VERSION};
 """
+
+
+def _chunk_text_hash(text: str) -> str:
+    """Identity of a chunk's exact text, for duplicate detection.
+
+    sha1 over the UTF-8 bytes: this groups byte-identical texts, it is not a
+    security boundary, and collisions here would only mean two unrelated texts
+    share one vector slot.
+    """
+    return hashlib.sha1(text.encode("utf-8")).hexdigest()
+
+
+def _is_length_eligible(text: str | None) -> bool:
+    """Whether a chunk is long enough to be worth a vector.
+
+    One definition, used at insert time and again by the boilerplate pass, so a
+    chunk can never be demoted and then "restored" into a state the insert path
+    would never have produced.
+    """
+    return bool(text) and len(text.strip()) >= MIN_USABLE_CHUNK_CHARS
 
 
 def _meta_get(connection: sqlite3.Connection, key: str) -> str | None:
@@ -451,7 +485,30 @@ def _meta_set(connection: sqlite3.Connection, key: str, value: Any) -> None:
     )
 
 
-MIGRATABLE_SCHEMA_VERSIONS = (1,)
+MIGRATABLE_SCHEMA_VERSIONS = (1, 2)
+
+
+def _backfill_chunk_hashes(connection: sqlite3.Connection) -> int:
+    """Fill ``chunks.text_hash`` for every chunk that lacks one.
+
+    Committed in batches: on a real index this touches ~840k rows, and the work
+    is idempotent, so an interrupted run should keep what it finished rather
+    than replay the whole table. Each batch re-queries instead of walking one
+    cursor while updating the rows it is reading.
+    """
+    backfilled = 0
+    while True:
+        batch = connection.execute(
+            "SELECT id,text FROM chunks WHERE text_hash IS NULL ORDER BY id LIMIT 5000"
+        ).fetchall()
+        if not batch:
+            return backfilled
+        connection.executemany(
+            "UPDATE chunks SET text_hash=? WHERE id=?",
+            [(_chunk_text_hash(row[1]), row[0]) for row in batch],
+        )
+        backfilled += len(batch)
+        connection.commit()
 
 
 def _migrate_schema_if_needed(connection: sqlite3.Connection) -> str | None:
@@ -459,35 +516,56 @@ def _migrate_schema_if_needed(connection: sqlite3.Connection) -> str | None:
 
     Return a short description when a migration ran, else ``None``.
 
-    The v1 index already holds every record and every embedding vector. Adding
-    provider provenance is a metadata change, so it runs as an in-place column
-    addition rather than a rebuild: forcing a rebuild here would discard
-    hundreds of thousands of embeddings that remain perfectly valid, and hours
-    of recompute is not an acceptable price for one new column. This is the
-    versioned finder index, not the retired POC database that must never be
-    altered.
+    An older index already holds every record and every embedding vector. Both
+    steps here are additive column changes, so they run in place rather than as
+    a rebuild: forcing a rebuild would discard hundreds of thousands of
+    embeddings that remain perfectly valid, and hours of recompute is not an
+    acceptable price for two new columns. This is the versioned finder index,
+    not the retired POC database that must never be altered.
+
+    The steps chain, so a v1 index reaches v3 in one call, and each step checks
+    the table before altering it: an interrupted migration re-runs cleanly.
     """
     version = connection.execute("PRAGMA user_version").fetchone()[0]
     if version == SCHEMA_VERSION:
         return None
     if version not in MIGRATABLE_SCHEMA_VERSIONS:
         return None
-    columns = {
-        row[1] for row in connection.execute("PRAGMA table_info(sessions)").fetchall()
-    }
-    if "provider" not in columns:
+    started_at = version
+    notes: list[str] = []
+    if version < 2:
+        session_columns = {
+            row[1]
+            for row in connection.execute("PRAGMA table_info(sessions)").fetchall()
+        }
+        if "provider" not in session_columns:
+            connection.execute(
+                "ALTER TABLE sessions ADD COLUMN provider TEXT NOT NULL DEFAULT 'claude'"
+            )
         connection.execute(
-            "ALTER TABLE sessions ADD COLUMN provider TEXT NOT NULL DEFAULT 'claude'"
+            "CREATE INDEX IF NOT EXISTS idx_sessions_provider ON sessions(provider)"
         )
-    connection.execute(
-        "CREATE INDEX IF NOT EXISTS idx_sessions_provider ON sessions(provider)"
-    )
+        notes.append("sessions.provider added, existing sessions recorded as claude")
+        version = 2
+    if version < 3:
+        chunk_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(chunks)").fetchall()
+        }
+        if "text_hash" not in chunk_columns:
+            connection.execute("ALTER TABLE chunks ADD COLUMN text_hash TEXT")
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_chunks_text_hash ON chunks(text_hash)"
+        )
+        backfilled = _backfill_chunk_hashes(connection)
+        notes.append(f"chunks.text_hash added and backfilled for {backfilled} chunk(s)")
+        version = 3
     connection.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
     _meta_set(connection, "schema_version", str(SCHEMA_VERSION))
     connection.commit()
     return (
-        f"schema v{version}->v{SCHEMA_VERSION}: sessions.provider added; "
-        "existing sessions recorded as claude, records and vectors preserved"
+        f"schema v{started_at}->v{SCHEMA_VERSION}: "
+        + "; ".join(notes)
+        + "; records and vectors preserved"
     )
 
 
@@ -517,6 +595,11 @@ def _validate_schema(connection: sqlite3.Connection) -> None:
     }
     if "usable" not in chunk_columns:
         raise IndexError("Index chunks table lacks required usable column")
+    if "text_hash" not in chunk_columns:
+        raise IndexError(
+            "Index chunks table lacks required text_hash column. Run "
+            "'history_index.py index' once to migrate it in place."
+        )
     record_columns = {
         row[1] for row in connection.execute("PRAGMA table_info(records)").fetchall()
     }
@@ -788,12 +871,26 @@ def _finalize_records(extracted_by_key: dict[str, dict[str, Any]]) -> list[dict[
     return extracted
 
 
-# Codex injects the same instruction and environment preambles into the first
-# user turn of every rollout. Indexing them would make one keyword match every
-# session the user ever ran, which is the opposite of a ranked recall aid.
-CODEX_PREAMBLE_PREFIXES = (
+# Codex writes machine-injected blocks into the rollout as ordinary
+# ``role="user"`` messages, each opening with its own tag:
+#
+#   <user_instructions>     instruction preamble, once per rollout
+#   <environment_context>   machine/cwd preamble, once per rollout
+#   <goal_context>          goal-mode context re-sent on *every* turn — one
+#                           100 MB rollout carried 139 identical copies
+#   <subagent_notification> machine-to-machine status handed back by subagents
+#   <skill>                 the contents of a skill file, pasted in verbatim
+#
+# None of it is anything the user or the assistant said, and indexing it makes
+# one keyword match every session ever run, which is the opposite of a ranked
+# recall aid. Measured on the live index (2026-09-12): these blocks account for
+# 27.6M of the 60.7M-token embedding backlog.
+CODEX_INJECTED_PREFIXES = (
     "<user_instructions>",
     "<environment_context>",
+    "<goal_context>",
+    "<subagent_notification>",
+    "<skill>",
 )
 
 
@@ -824,7 +921,7 @@ def _extract_codex_records(ref: dict[str, Any]) -> list[dict[str, Any]]:
             ).strip()
             if not prose_text or is_noise_text(prose_text):
                 continue
-            if prose_text.startswith(CODEX_PREAMBLE_PREFIXES):
+            if prose_text.startswith(CODEX_INJECTED_PREFIXES):
                 continue
             ordinal = record.get("ordinal")
             position = ordinal if ordinal is not None else line_number
@@ -974,6 +1071,49 @@ def _extract_records(ref: dict[str, Any]) -> list[dict[str, Any]]:
                 "source_labels": set(copy["labels"]),
             }
     return _finalize_records(extracted_by_key)
+
+
+def _prune_injected_codex_records(connection: sqlite3.Connection) -> int:
+    """Delete stored Codex records that are machine-injected blocks.
+
+    ``_extract_codex_records`` skips these at extraction, but every index built
+    before that list grew still holds them, and a session is only re-extracted
+    when its file changes — an archived rollout would keep its injected records
+    forever. Sweep them by prefix instead, and let the foreign key cascade take
+    their chunks.
+
+    Match with ``substr`` rather than ``LIKE``: every prefix contains ``_``,
+    which LIKE reads as a single-character wildcard, so ``<user_instructions>``
+    would also delete a record starting ``<userXinstructions>``.
+    """
+    predicate = " OR ".join(
+        "substr(records.fts_text,1,?)=?" for _ in CODEX_INJECTED_PREFIXES
+    )
+    params = [
+        value
+        for prefix in CODEX_INJECTED_PREFIXES
+        for value in (len(prefix), prefix)
+    ]
+    selection = (
+        "SELECT records.id FROM records "
+        "JOIN sessions ON sessions.session_id=records.session_id "
+        f"WHERE sessions.provider='codex' AND ({predicate})"
+    )
+    # Vectors first: after the cascade there is no chunk row left to join
+    # against, so the vector rows would become unreachable orphans. When the
+    # vector backend is not loaded — the lexical index stage never loads it —
+    # leave them; embed drops orphans before it decides what to embed.
+    try:
+        connection.execute(
+            "DELETE FROM vec_chunks WHERE rowid IN ("
+            f"SELECT chunks.id FROM chunks WHERE chunks.record_id IN ({selection}))",
+            params,
+        )
+    except sqlite3.OperationalError:
+        pass
+    return connection.execute(
+        f"DELETE FROM records WHERE id IN ({selection})", params
+    ).rowcount
 
 
 def _purge_session(connection: sqlite3.Connection, session_id: str) -> None:
@@ -1311,7 +1451,7 @@ def update_index(
     except Exception:
         connection.close()
         raise
-    added = changed = unchanged = removed = records_added = 0
+    added = changed = unchanged = removed = records_added = records_pruned = 0
     started = time.time()
     try:
         for index, ref in enumerate(refs, start=1):
@@ -1343,7 +1483,13 @@ def update_index(
             _purge_session(connection, session_id)
             removed += 1
 
-        if added or changed or removed or target != db_path:
+        # Reconciliation is finished, so this sees exactly the records the
+        # index will keep. It has to run before the FTS rebuild: records_fts is
+        # external-content, and a deleted record stays lexically searchable
+        # until the index is rebuilt from the content table.
+        records_pruned = _prune_injected_codex_records(connection)
+
+        if added or changed or removed or records_pruned or target != db_path:
             connection.execute("INSERT INTO records_fts(records_fts) VALUES('rebuild')")
         if added or changed or removed:
             _meta_set(connection, "chunks_complete", "false")
@@ -1384,6 +1530,7 @@ def update_index(
         "unchanged": unchanged,
         "removed": removed,
         "records_added": records_added,
+        "records_pruned": records_pruned,
         "elapsed_seconds": round(time.time() - started, 3),
     }
 
@@ -1457,6 +1604,101 @@ def _bind_chunk_model(connection: sqlite3.Connection, resolved_model: Path) -> N
     connection.commit()
 
 
+def apply_boilerplate_policy(connection: sqlite3.Connection) -> dict[str, Any]:
+    """Leave exactly one embeddable copy of any text that repeats verbatim.
+
+    ``usable`` ends up meaning (long enough to embed) AND (not a demoted
+    duplicate). It is consulted only by the embed queue, the vector query join
+    and the status counts, so a demoted chunk keeps a third state the index
+    already relies on: lexically searchable, no vector. BM25 runs on
+    ``records.fts_text`` and never looks at chunks, so every copy stays findable
+    by keyword; only the redundant vectors go.
+
+    The pass is a function of the stored rows, not of what this run happened to
+    add, so it also runs when there are zero new chunks — and it un-demotes: if
+    pruning records drops a text below ``BOILERPLATE_MIN_COPIES``, its surviving
+    copies become usable again on the next run.
+    """
+    # Same predicate the insert path uses, evaluated inside SQLite so the
+    # grouping stays in the database instead of pulling ~840k texts into Python.
+    connection.create_function(
+        "history_index_length_eligible",
+        1,
+        lambda text: int(_is_length_eligible(text)),
+    )
+    hashes_backfilled = _backfill_chunk_hashes(connection)
+    # A NULL hash would group every un-hashed chunk together and demote the lot,
+    # so the backfill above is a precondition, not a convenience.
+    duplicate_sets = (
+        "WITH eligible AS ("
+        "  SELECT id, text_hash FROM chunks"
+        "  WHERE text_hash IS NOT NULL AND history_index_length_eligible(text)=1"
+        "), grouped AS ("
+        "  SELECT text_hash, count(*) AS copies, min(id) AS keeper"
+        "  FROM eligible GROUP BY text_hash"
+        "), demoted AS ("
+        "  SELECT eligible.id AS id FROM eligible"
+        "  JOIN grouped ON grouped.text_hash=eligible.text_hash"
+        "  WHERE grouped.copies>=? AND eligible.id<>grouped.keeper"
+        ") "
+    )
+    # Count through total_changes, not cursor.rowcount: sqlite3 decides a
+    # statement is DML by its leading keyword, so a WITH-prefixed UPDATE always
+    # reports -1 and every count here would silently be a lie.
+    before = connection.total_changes
+    connection.execute(
+        duplicate_sets + "UPDATE chunks SET usable=0 "
+        "WHERE usable=1 AND id IN (SELECT id FROM demoted)",
+        (BOILERPLATE_MIN_COPIES,),
+    )
+    demoted = connection.total_changes - before
+    before = connection.total_changes
+    connection.execute(
+        duplicate_sets + "UPDATE chunks SET usable=1 "
+        "WHERE usable=0 AND id IN (SELECT id FROM eligible) "
+        "AND id NOT IN (SELECT id FROM demoted)",
+        (BOILERPLATE_MIN_COPIES,),
+    )
+    restored = connection.total_changes - before
+    # The chunk stage runs without sqlite-vec, so this normally defers to embed,
+    # which drops the same rows before it decides what to embed.
+    vectors_dropped: int | None
+    vectors_drop_deferred = 0
+    try:
+        vectors_dropped = connection.execute(
+            "DELETE FROM vec_chunks WHERE rowid IN "
+            "(SELECT id FROM chunks WHERE usable=0)"
+        ).rowcount
+    except sqlite3.OperationalError:
+        vectors_dropped = None
+        vectors_drop_deferred = connection.execute(
+            "SELECT count(*) FROM chunks WHERE usable=0"
+        ).fetchone()[0]
+    # Recompute from the live rows: demoting shrinks the embedding backlog and
+    # restoring grows it, so neither the old marker nor this run's counts can
+    # stand in for a count of what is actually missing.
+    try:
+        missing_vectors = connection.execute(
+            "SELECT count(*) FROM chunks WHERE usable=1 AND id NOT IN "
+            "(SELECT rowid FROM vec_chunks)"
+        ).fetchone()[0]
+    except sqlite3.OperationalError:
+        missing_vectors = None
+    if missing_vectors is not None:
+        _meta_set(
+            connection,
+            "vectors_complete",
+            "true" if missing_vectors == 0 else "false",
+        )
+    return {
+        "hashes_backfilled": hashes_backfilled,
+        "boilerplate_demoted": demoted,
+        "boilerplate_restored": restored,
+        "vectors_dropped": vectors_dropped,
+        "vectors_drop_deferred": vectors_drop_deferred,
+    }
+
+
 def build_chunks(
     db_path: Path,
     *,
@@ -1491,9 +1733,13 @@ def build_chunks(
         "SELECT id,semantic_text FROM records WHERE semantic_text IS NOT NULL "
         "AND id NOT IN (SELECT DISTINCT record_id FROM chunks) ORDER BY id"
     ).fetchall()
-    buffer: list[tuple[int, int, int, str, int]] = []
+    buffer: list[tuple[int, int, int, str, int, str]] = []
     started = time.time()
     chunks_added = 0
+    insert_chunk = (
+        "INSERT INTO chunks(record_id,seq,ntok,text,usable,text_hash) "
+        "VALUES(?,?,?,?,?,?)"
+    )
     for record_id, text in rows:
         try:
             pieces = overlap(chunker(text))
@@ -1508,25 +1754,39 @@ def build_chunks(
             for seq, piece in enumerate(pieces):
                 piece_text = piece.text
                 buffer.append(
-                    (record_id, seq, piece.token_count, piece_text, int(len(piece_text.strip()) >= 20))
+                    (
+                        record_id,
+                        seq,
+                        piece.token_count,
+                        piece_text,
+                        int(_is_length_eligible(piece_text)),
+                        _chunk_text_hash(piece_text),
+                    )
                 )
         else:
             ntok = len(tokenizer.encode(text, add_special_tokens=False))
-            buffer.append((record_id, 0, ntok, text, int(len(text.strip()) >= 20)))
-        if len(buffer) >= 5000:
-            connection.executemany(
-                "INSERT INTO chunks(record_id,seq,ntok,text,usable) VALUES(?,?,?,?,?)",
-                buffer,
+            buffer.append(
+                (
+                    record_id,
+                    0,
+                    ntok,
+                    text,
+                    int(_is_length_eligible(text)),
+                    _chunk_text_hash(text),
+                )
             )
+        if len(buffer) >= 5000:
+            connection.executemany(insert_chunk, buffer)
             chunks_added += len(buffer)
             buffer.clear()
             connection.commit()
     if buffer:
-        connection.executemany(
-            "INSERT INTO chunks(record_id,seq,ntok,text,usable) VALUES(?,?,?,?,?)",
-            buffer,
-        )
+        connection.executemany(insert_chunk, buffer)
         chunks_added += len(buffer)
+    connection.commit()
+    # Runs on every chunk invocation, including one that added nothing: the
+    # policy depends on what is stored, not on what this run produced.
+    policy = apply_boilerplate_policy(connection)
     _meta_set(connection, "embedding_model_id", EMBEDDING_MODEL_ID)
     _meta_set(connection, "embedding_model_path", str(resolved_model))
     _meta_set(connection, "embedding_model_revision", resolved_model.name)
@@ -1547,6 +1807,7 @@ def build_chunks(
         "records_processed": len(rows),
         "chunks_added": chunks_added,
         "missing_records": missing_records,
+        **policy,
         "model_path": str(resolved_model),
         "elapsed_seconds": round(time.time() - started, 3),
     }
@@ -1613,11 +1874,16 @@ def embed_chunks(
     connection.execute(
         f"CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks USING vec0(embedding float[{EMBEDDING_DIM}])"
     )
-    # Incremental lexical updates can remove chunks without loading sqlite-vec.
-    # Once the vector backend is available, remove those orphan rows before
+    # Incremental lexical updates can remove chunks without loading sqlite-vec,
+    # and the chunk stage demotes duplicate chunks without it either. Once the
+    # vector backend is available, remove both kinds of dead vector row before
     # deciding which live chunks still need embeddings.
     connection.execute(
         "DELETE FROM vec_chunks WHERE rowid NOT IN (SELECT id FROM chunks)"
+    )
+    connection.execute(
+        "DELETE FROM vec_chunks WHERE rowid IN "
+        "(SELECT id FROM chunks WHERE usable=0)"
     )
     _meta_set(connection, "vectors_complete", "false")
     connection.commit()
