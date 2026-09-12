@@ -57,12 +57,26 @@ section exists to prevent.
 |---|---|---|
 | **Inventory** — "what have I been working on", "list my recent chats", session titles/dates/IDs | `read-claude-code-history`, its bundled inventory | `--source all`, or `--source kimi` for Kimi alone |
 | **Content search** — "did we ever discuss X", find the conversation containing a quote, file, or tool result | `read-claude-code-history`, its bundled full-event search | add `--codex` and `--kimi` to the Claude search; each is a separate store the Claude registry never covers |
+| **Ranked recall** — the same question when the wording may have drifted, or the sweep has no session ID, date, or project to bound it | `read-claude-code-history`, its optional hybrid recall index | The index states which providers it holds; read the coverage line it prints instead of assuming it spans all three |
 
 Both readers ship the same inventory command and its `--source` already defaults
 to `all` — but each reader's own task table pins it to that reader's provider
 (`--source claude`, `--source codex`), so the default never fires on its own.
 Search is the mirror image: it is Claude-only unless the other two stores are
 added explicitly.
+
+**Order the last two rows rather than picking one.** A cross-provider content
+search is the expensive shape: it reads every event of every store, so the cost
+scales with the whole corpus rather than with the question. When an index exists
+and covers the providers in scope, recall answers in about a second and returns
+leads — sessions, dates, projects — that turn the exhaustive scan into a bounded
+one. Run it first, then scan only what the index does not hold. Skip straight to
+search when the request needs an exhaustive guarantee, because ranked recall
+returns top-K candidates and can never support an absence claim.
+
+The index is optional. On a machine that never built one, recall exits non-zero
+saying the index does not exist — that is a routing signal, not a failure to
+report: fall back to the search row and say the sweep ran unindexed.
 
 **Kimi CLI has no other entry anywhere** — no dedicated skill exists for either
 axis, so both routes above land in `read-claude-code-history`, which documents
@@ -102,6 +116,20 @@ the explanation's topic clues do not convert the request into a content search.
 - **Zero results are not absence.** Ranked recall and a bounded search both
   return nothing for wording that exists under different words. Widen, or say
   what was searched — do not convert an empty result into "it never happened".
+- **A zero has three causes and only one of them is "no history".** The other
+  two are a home that was never found and a scope that excluded everything, and
+  none of the three looks different in an empty table. This bites Kimi hardest:
+  its documented default home is not where every install puts it — a desktop
+  client can bundle the CLI inside its own runtime and keep sessions there — and
+  its sessions belong to their own workspaces, so a default run inside some other
+  repository returns nothing on a store full of conversations. Rule out both
+  before reporting absence: name the home that was actually read, and say what
+  project scope was in effect. The inventory prints a diagnostic line when a home
+  is missing, so quote it when it appears — but a **located** home that yields
+  zero prints no diagnostic at all, and the search path prints none in either
+  case, so never treat a silent empty result as the reader confirming absence.
+  `read-claude-code-history` owns how to locate a home and which scope flags the
+  inventory needs.
 
 ## Do not
 
