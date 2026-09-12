@@ -142,6 +142,45 @@ class ForecastLogTests(unittest.TestCase):
         self.review(fid)
         self.assertEqual(log.summarize(self.path)["cycle_counts"], {})
 
+    def test_catalyst_labels_roundtrip_and_default_null(self):
+        row = self.record(catalyst_expected="quality_release")
+        self.assertEqual(row["catalyst_expected"], "quality_release")
+        plain = self.record(rationale="No catalyst label on this one.")
+        self.assertIsNone(plain["catalyst_expected"])
+        reviewed = self.review(row["id"], catalyst_actual="quality_release")
+        self.assertEqual(reviewed["catalyst_actual"], "quality_release")
+        result = log.summarize(self.path)
+        resolved = [p for p in result["recent_resolved"] if p["id"] == row["id"]][0]
+        self.assertEqual(resolved["catalyst_expected"], "quality_release")
+        self.assertEqual(resolved["latest_review"]["catalyst_actual"], "quality_release")
+
+    def test_invalid_catalyst_labels_rejected(self):
+        with self.assertRaises(ValueError):
+            self.record(catalyst_expected="vibes")
+        fid = self.record()["id"]
+        with self.assertRaises(ValueError):
+            self.review(fid, catalyst_actual="vibes")
+
+    def test_pre_catalyst_journal_rows_remain_readable_and_reviewable(self):
+        # Rows written before the catalyst fields existed carry no such keys at all;
+        # schema evolution must not strand them. Pin the exact old shape by hand.
+        old_forecast = {"schema_version": 1, "id": "old-1", "record_type": "forecast",
+                        "recorded_at": "2026-10-01T00:00:00+00:00", "kind": "global_reset",
+                        "confidence": "low", "window_start": "2026-10-12T00:00:00+00:00",
+                        "window_end": "2026-10-14T00:00:00+00:00", "anchor_event_url": None,
+                        "evidence_urls": ["https://example.invalid/e"],
+                        "rationale": "r", "revision_trigger": "t", "feedback_applied": "f",
+                        "revision_of": None}
+        self.path.parent.mkdir(parents=True)
+        self.path.write_text(json.dumps(old_forecast) + "\n", encoding="utf-8")
+        result = log.summarize(self.path)
+        self.assertEqual(result["forecast_count"], 1)
+        self.assertNotIn("catalyst_expected", result["pending"][0])
+        row = self.review("old-1", catalyst_actual="milestone")
+        self.assertEqual(row["outcome"], "hit")
+        self.assertEqual(row["catalyst_actual"], "milestone")
+        self.assertEqual(log.summarize(self.path)["recent_resolved"][0]["id"], "old-1")
+
     def test_corrupt_and_partial_journal_fail_without_overwriting(self):
         self.record()
         for suffix in ('{broken', json.dumps({"schema_version": 1, "id": "x", "record_type": "forecast"})):

@@ -29,7 +29,8 @@ uv run python scripts/forecast_log.py summary
    查询无需为台账另开一轮全局调查；缺证据的记录继续保留，下次有相关证据再核验。
 3. 对可核验的记录追加 `review`。核对**预测发出后首个同类型事件**，不能挑后面恰好命中
    窗口的那次；不能用备用重置兑现全局重置预测，也不能用个人额度回满证明全局发生。
-4. 读最新结果再预测。关注是否持续偏早/偏晚、哪个催化信号有效、窗口是否过宽；结合当前
+4. 读最新结果再预测。关注是否持续偏早/偏晚、哪个催化信号有效（预测的 `catalyst_expected`
+   对照回填的 `catalyst_actual`）、窗口是否过宽；结合当前
    产品规则判断旧结果是否仍可比。用一句话说明本次因此怎样调整窗口/信心/信号权重；
    不调整也写理由。一次失误不足以归纳固定规律，不能把本来不知道的信息写成当时应知。
 
@@ -50,6 +51,7 @@ uv run python scripts/forecast_log.py summary
 | `window_start` / `window_end` | 明确带时区的 ISO 时间；起点在当前时刻之后，终点晚于起点 |
 | `confidence` | `low` / `medium` / `high`；定性信心，不是校准概率 |
 | `anchor_event_url` | 预测之前最近一轮同类型已确认事件的规范原帖 URL；未知用 `null` |
+| `catalyst_expected` | 可选；预测押注的催化类型：`milestone` / `outage_compensation` / `quality_release` / `none` / `other`，缺省 null |
 | `evidence_urls` | 支撑本次判断的非空 HTTPS 链接数组 |
 | `rationale` | 基线、当前信号与主要反证，含输入样本范围 |
 | `revision_trigger` | 哪些新消息或时间条件会使预测提前、推迟或失效 |
@@ -74,6 +76,14 @@ uv run python scripts/forecast_log.py summary
 
 输入包含 `forecast_id`、`reason`、`lesson`。取不到证据时另加 `"unknown": true`，说明缺口；
 有事件证据时再提供 `kind`、`event_start`、`event_end`、`evidence_urls`，以及：
+
+- `catalyst_actual`：可选，回填事件实际的催化类型（枚举同上），与预测时的
+  `catalyst_expected` 对照后，「哪个催化信号有效」才可机械统计。它与是否有事件证据
+  无关——`unknown: true` 的核验同样接受（代码先于 unknown 早退解析该字段）。
+- 本机 rollout 快照覆盖落地窗口时，用观测到的归零区间收窄 `event_start`/`event_end`，
+  不要把确认帖时刻当唯一上界——窗口收窄到日内量级时，这决定 hit 与 unknown 的差别
+  （2026-09-12 实测：两条官宣帖夹逼出 4.8h 宽区间，本机快照的 79%→0% 归零
+  （11:03→17:52 北京）可再收窄）。
 
 - `time_basis`：`occurrence` 表示明确发生时刻（起止相同）；`observed_interval` 表示已核实的
   发生区间；`confirmation_only` 表示只有完成帖时间，不能把它冒充发生时间。

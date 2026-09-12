@@ -18,6 +18,18 @@ import uuid
 
 KINDS = ("global_reset", "banked_reset")
 CONFIDENCES = ("low", "medium", "high")
+# Catalyst labels make "which signal actually preceded the event" machine-checkable
+# across reviews instead of buried in free-text rationale.
+CATALYSTS = ("milestone", "outage_compensation", "quality_release", "none", "other")
+
+
+def optional_catalyst(data, key):
+    value = data.get(key)
+    if value is None:
+        return None
+    if value not in CATALYSTS:
+        raise ValueError(f"{key} must be one of {', '.join(CATALYSTS)} or null")
+    return value
 
 
 def instant(value):
@@ -85,6 +97,7 @@ def make_forecast(data):
     return {"kind": kind, "confidence": confidence,
             "window_start": start.isoformat(), "window_end": end.isoformat(),
             "anchor_event_url": anchor, "evidence_urls": evidence(data),
+            "catalyst_expected": optional_catalyst(data, "catalyst_expected"),
             **{key: required_text(data, key) for key in
                ("rationale", "revision_trigger", "feedback_applied")}}
 
@@ -95,7 +108,8 @@ def make_review(data, forecasts, now):
         raise ValueError("forecast_id not found")
     forecast = forecasts[fid]
     result = {"forecast_id": fid, "reason": required_text(data, "reason"),
-              "lesson": required_text(data, "lesson"), "outcome": "unknown"}
+              "lesson": required_text(data, "lesson"), "outcome": "unknown",
+              "catalyst_actual": optional_catalyst(data, "catalyst_actual")}
     if data.get("unknown") is True:
         return result
     if data.get("kind") != forecast["kind"]:
