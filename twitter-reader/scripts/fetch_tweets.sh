@@ -16,6 +16,8 @@ if [ $# -eq 0 ]; then
     exit 1
 fi
 
+failed=0
+
 for url in "$@"; do
     if [[ ! "$url" =~ ^https?://(x\.com|twitter\.com)/ ]]; then
         echo "Skipping invalid URL: $url" >&2
@@ -23,9 +25,26 @@ for url in "$@"; do
     fi
 
     echo "Fetching: $url"
-    curl -s "https://r.jina.ai/${url}" \
-        -H "Authorization: Bearer ${JINA_API_KEY}"
+    # curl without --fail exits 0 on an HTTP error, and r.jina.ai signals refusal
+    # with a JSON envelope in the body (403 AbuseAlleviationError while anonymous
+    # access to x.com is blocked, 402 InsufficientBalanceError on a lapsed key).
+    # Printing that envelope as if it were the post is worse than printing
+    # nothing, so require the reader's marker before treating it as content.
+    body=$(curl -s "https://r.jina.ai/${url}" \
+        -H "Authorization: Bearer ${JINA_API_KEY}")
+    if [[ "$body" != *"Markdown Content:"* ]]; then
+        echo "Error: Jina returned no post content for $url" >&2
+        echo "  Response was: $(echo "$body" | tr -s '[:space:]' ' ' | cut -c1-200)" >&2
+        failed=1
+        echo ""
+        echo "---"
+        echo ""
+        continue
+    fi
+    printf '%s\n' "$body"
     echo ""
     echo "---"
     echo ""
 done
+
+exit $failed

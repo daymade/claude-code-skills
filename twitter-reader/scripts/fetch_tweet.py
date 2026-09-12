@@ -19,6 +19,9 @@ import sys
 from pathlib import Path
 
 
+JINA_MARKER = "Markdown Content:"
+
+
 def fetch_tweet(url: str, output_file: str = None) -> str:
     """Fetch tweet content using jina.ai API via curl."""
     if not url.startswith(("https://x.com/", "https://twitter.com/")):
@@ -46,6 +49,20 @@ def fetch_tweet(url: str, output_file: str = None) -> str:
         raise RuntimeError(f"Failed to fetch tweet: {detail}")
 
     content = result.stdout
+
+    # curl without --fail exits 0 on an HTTP error, and r.jina.ai signals refusal
+    # with a JSON envelope in the body: 403 AbuseAlleviationError while anonymous
+    # access to x.com is blocked, 402 InsufficientBalanceError on a lapsed key.
+    # Without this check the envelope is written to the output file and reported
+    # as saved. The reader's "Markdown Content:" marker is the only signal
+    # independent of HTTP status and of which curl build is installed.
+    if JINA_MARKER not in content:
+        preview = " ".join(content.split())[:200] or "(empty response)"
+        raise RuntimeError(
+            "Jina returned no post content, so nothing was saved. This is "
+            "usually a refusal rather than an empty post. Response was: "
+            f"{preview}"
+        )
 
     if output_file:
         output_path = Path(output_file)
