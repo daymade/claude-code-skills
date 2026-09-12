@@ -169,11 +169,11 @@ the next pass. The pass is idempotent and runs on every `chunk` invocation,
 including one that added nothing — the policy depends on what is stored, not on
 what that run produced. The nightly `chunk` stage runs without `sqlite-vec`, so
 it cannot drop the demoted vectors: `vectors_dropped` comes back `null` and
-`embed` removes them before it decides what to embed. `non_embeddable_chunks`
-is reported either way and is not that deferred work — it counts every
-`usable=0` chunk, demoted duplicates plus chunks too short to embed at all, so
-it is a standing property of the index rather than a queue that drains to
-zero.
+`embed` removes them before it decides what to embed, reporting how many as
+`demoted_vectors_dropped`. `non_embeddable_chunks` is reported either way and
+is not that deferred work — it counts every `usable=0` chunk, demoted
+duplicates plus chunks too short to embed at all, so it is a standing property
+of the index rather than a queue that drains to zero.
 
 ## Embedding: pauses, progress, and one writer
 
@@ -226,8 +226,14 @@ an ETA derived from remaining tokens over that recent token rate, and
 `clear_cache()`, understating the real peak by about 1.8x. Progress lines go to
 stderr, so `embed --json` leaves stdout one parseable document — the launchd
 job captures both streams in the same log, so nothing is lost. `embed` returns
-`embedded`, `embedded_tokens`, `remaining`, `remaining_tokens` and
-`stop_reason`.
+`embedded`, `embedded_tokens`, `remaining`, `remaining_tokens`,
+`orphan_vectors_dropped`, `demoted_vectors_dropped` and `stop_reason`. The two
+drop counts are the receipt for the only destructive step in this stage, and
+they are the deferred half of the chunk stage's `vectors_dropped: null`: an
+orphan is a vector whose chunk no longer exists, a demoted one is a vector
+whose chunk is now `usable=0`. `index --json` keeps the same rule — its
+per-500-session build progress goes to stderr too, so a fresh build or
+`--rebuild` still prints one JSON document on stdout.
 
 **One writer at a time.** `index`, `chunk` and `embed` take an exclusive
 `flock` on `<db_path>.lock` for the length of the command, wait up to
@@ -302,9 +308,15 @@ embed commit rather than only at the end, and `embed_stop_reason` is one of
 (the pass reached the end of its queue), `max_seconds` (it hit its time
 budget), `host_pressure` (host memory pressure outlasted the pause ceiling),
 `memory_boundary` (MLX stopped at the configured limit) or `warmup_failed`
-(MLX failed before the first batch); the last three commit their marker before
-the error surfaces. `running` is what makes a killed pass legible: host OOM and
-Ctrl-C run no handler, so without a marker written on the way in, status would
+(MLX failed before the first batch); the last two commit their marker before
+the error surfaces. `complete`, `max_seconds` and `host_pressure` all exit 0:
+the pressure stop leaves through the normal ending, not through an error. A
+host that stays under pressure therefore advances a few batches a night and
+stops, while the exit code — the only thing the nightly wrapper checks — still
+says OK. Nothing but `embed_stop_reason` and a `remaining` count that will not
+fall can show that, so alert on the status fields rather than on the exit
+status. `running` is what makes a killed pass legible: host OOM and Ctrl-C run
+no handler, so without a marker written on the way in, status would
 report the *previous* pass's ending. Read the reason with the heartbeat — a
 `remaining` count alone cannot distinguish a run still working from one that
 stopped at a bound hours ago, and `running` next to an hours-old

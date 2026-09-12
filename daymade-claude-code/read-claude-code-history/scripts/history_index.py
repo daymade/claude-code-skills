@@ -101,6 +101,10 @@ DEFAULT_EMBED_MEMORY_LIMIT_GB = 8.0
 DEFAULT_EMBED_CACHE_LIMIT_GB = 0.5
 MIN_USABLE_CHUNK_CHARS = 20
 
+# Checkpoint and report progress once every this many sessions, but only while
+# building a disposable database (see update_index).
+INDEX_CHECKPOINT_EVERY = 500
+
 # Commit, heartbeat and report progress once every this many embedded chunks.
 EMBED_COMMIT_EVERY = 1600
 
@@ -1548,11 +1552,15 @@ def update_index(
             # The active database must remain one transaction: otherwise a
             # mid-update failure can commit a half-reconciled index whose old
             # build_complete marker still says true.
-            if index % 500 == 0 and target != db_path:
+            if index % INDEX_CHECKPOINT_EVERY == 0 and target != db_path:
                 connection.commit()
+                # stderr, like every other progress line here: `index --json`
+                # has to leave stdout a single parseable document, and this
+                # branch is exactly the one a fresh build or --rebuild takes.
                 print(
                     f"  indexed {index}/{len(refs)} sessions · "
                     f"{time.time()-started:.0f}s",
+                    file=sys.stderr,
                     flush=True,
                 )
 
@@ -2086,13 +2094,19 @@ def embed_chunks(
     # and the chunk stage demotes duplicate chunks without it either. Once the
     # vector backend is available, remove both kinds of dead vector row before
     # deciding which live chunks still need embeddings.
-    connection.execute(
+    #
+    # Both counts are reported: this is the only destructive step in the embed
+    # stage, and it is the half of the work the chunk stage deferred with
+    # ``vectors_dropped: null``. Without a number in the JSON the night that
+    # drops tens of thousands of stale vectors is indistinguishable from the
+    # night that drops none, except by diffing status counts across runs.
+    orphan_vectors_dropped = connection.execute(
         "DELETE FROM vec_chunks WHERE rowid NOT IN (SELECT id FROM chunks)"
-    )
-    connection.execute(
+    ).rowcount
+    demoted_vectors_dropped = connection.execute(
         "DELETE FROM vec_chunks WHERE rowid IN "
         "(SELECT id FROM chunks WHERE usable=0)"
-    )
+    ).rowcount
     missing_count, missing_tokens = _vector_backlog(connection)
     # Set this from the live backlog instead of blanking it on the way in. A
     # status check that lands while embed is running should read the last
@@ -2123,6 +2137,8 @@ def embed_chunks(
             "embedded_tokens": 0,
             "remaining": 0,
             "remaining_tokens": 0,
+            "orphan_vectors_dropped": orphan_vectors_dropped,
+            "demoted_vectors_dropped": demoted_vectors_dropped,
             "stop_reason": "complete",
             "model_path": str(resolved_model),
             "elapsed_seconds": 0.0,
@@ -2282,6 +2298,8 @@ def embed_chunks(
         "embedded_tokens": embedded_tokens,
         "remaining": remaining,
         "remaining_tokens": remaining_tokens,
+        "orphan_vectors_dropped": orphan_vectors_dropped,
+        "demoted_vectors_dropped": demoted_vectors_dropped,
         "stop_reason": stop_reason,
         "model_path": str(resolved_model),
         "elapsed_seconds": round(time.time() - started, 3),

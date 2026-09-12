@@ -504,6 +504,52 @@ class HistoryIndexTests(unittest.TestCase):
             )
         self.assertEqual(self.db.read_bytes(), b"old-index-sentinel")
 
+    def test_index_json_leaves_stdout_a_single_document_while_building(self) -> None:
+        """`index --json | jq` has to work on a fresh build too.
+
+        The per-checkpoint progress line only prints while building a
+        disposable database — a first install or ``--rebuild`` — which is
+        exactly the run nobody watches interactively. On the live index that
+        branch fires once per 500 sessions, so its output lands ahead of the
+        JSON document rather than after it.
+        """
+        for number in range(4):
+            session_id = f"6666666{number}-6666-4666-8666-666666666666"
+            write_jsonl(
+                project_dir(self.active, self.workspace) / f"{session_id}.jsonl",
+                [
+                    user_record(
+                        session_id,
+                        self.workspace,
+                        f"body number {number}",
+                        f"2026-08-01T00:00:0{number}Z",
+                    )
+                ],
+            )
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with ExitStack() as stack:
+            stack.enter_context(portable_backend())
+            stack.enter_context(
+                mock.patch.object(history_index, "INDEX_CHECKPOINT_EVERY", 2)
+            )
+            stack.enter_context(
+                mock.patch.object(
+                    history_index,
+                    "_scope_from_args",
+                    return_value=self.scope(self.active_source),
+                )
+            )
+            stack.enter_context(redirect_stdout(stdout))
+            stack.enter_context(redirect_stderr(stderr))
+            code = history_index.main(["--db", str(self.db), "index", "--json"])
+        self.assertEqual(code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["added"], 4)
+        # The progress the checkpoint produced went somewhere — to stderr.
+        self.assertIn("indexed 2/4 sessions", stderr.getvalue())
+        self.assertIn("indexed 4/4 sessions", stderr.getvalue())
+
     def test_scope_change_refuses_to_prune_an_existing_database(self) -> None:
         second_workspace = self.root / "workspaces" / "other"
         second_workspace.mkdir(parents=True)
@@ -2235,6 +2281,53 @@ class EmbedLifecycleTests(unittest.TestCase):
         self.assertEqual(self.meta("vectors_complete"), "true")
         self.assertEqual(output, "")
 
+    def test_the_dead_vectors_embed_drops_are_counted_in_its_result(self) -> None:
+        """The one destructive step in this stage needs a receipt.
+
+        The nightly chunk stage runs without sqlite-vec, so it defers both
+        deletions here and says so with ``vectors_dropped: null``. On the live
+        index the first pass after the boilerplate policy lands drops tens of
+        thousands of already-embedded vectors; without a number in the JSON
+        that night is indistinguishable from a night that dropped none, except
+        by diffing status counts across runs.
+        """
+        self.add_chunks(4)
+        demoted_text = "a demoted duplicate chunk with enough characters to embed"
+        demoted_id = self.connection.execute(
+            "INSERT INTO chunks(record_id,seq,ntok,text,usable,text_hash) "
+            "VALUES(1,?,?,?,0,?)",
+            (99, 100, demoted_text, history_index._chunk_text_hash(demoted_text)),
+        ).lastrowid
+        for rowid in (demoted_id, 4242):
+            self.connection.execute(
+                "INSERT INTO vec_chunks(rowid,embedding) VALUES(?,?)",
+                (rowid, b"fixture"),
+            )
+        self.connection.commit()
+
+        result, _ = self.embed(commit_every=10_000)
+        # An orphan is a vector whose chunk is gone; a demoted one is a vector
+        # whose chunk is still there but is no longer embeddable.
+        self.assertEqual(result["orphan_vectors_dropped"], 1)
+        self.assertEqual(result["demoted_vectors_dropped"], 1)
+        self.assertEqual(result["embedded"], 4)
+        # Only the four live chunks keep vectors, and they are the new ones.
+        self.assertEqual(
+            sorted(
+                row[0]
+                for row in self.connection.execute("SELECT rowid FROM vec_chunks")
+            ),
+            [1, 2, 3, 4],
+        )
+
+        # Idempotent, and it still says so: the second night reports zero
+        # rather than going quiet, which is what makes the first night's
+        # large number readable as one-off cleanup.
+        second, _ = self.embed(commit_every=10_000)
+        self.assertEqual(second["stop_reason"], "complete")
+        self.assertEqual(second["orphan_vectors_dropped"], 0)
+        self.assertEqual(second["demoted_vectors_dropped"], 0)
+
     def test_a_pass_marks_itself_running_before_it_starts_working(self) -> None:
         """A killed pass runs no handler, so it can only be told apart from a
         finished one by a marker written on the way in.
@@ -2335,6 +2428,59 @@ class EmbedLifecycleTests(unittest.TestCase):
         self.assertEqual(self.vector_count(), 32)
         self.assertEqual(self.meta("vectors_complete"), "false")
         self.assertIn("outlasted the 10s ceiling", output)
+
+    def test_a_host_pressure_stop_exits_zero_so_only_status_can_show_it(self) -> None:
+        """Stopping on host pressure is a success as far as the shell knows.
+
+        The nightly wrapper's only failure signal is the exit code, so a host
+        that stays under pressure advances a few batches a night and still
+        writes OK. That is a real blind spot and the reason the reference doc
+        has to route the alert through `embed_stop_reason` instead of `$?` —
+        this test is what keeps the two honest about each other.
+        """
+        self.add_chunks(40)
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with ExitStack() as stack:
+            stack.enter_context(portable_backend())
+            stack.enter_context(fake_embedding_backend())
+            # After the backend, so this wins over its healthy-host stub.
+            stack.enter_context(
+                mock.patch.object(
+                    history_index,
+                    "_host_memory_pressure_level",
+                    lambda: history_index.HOST_PRESSURE_WARNING,
+                )
+            )
+            stack.enter_context(
+                mock.patch.object(history_index, "EMBED_PAUSE_CEILING_SECONDS", 10)
+            )
+            stack.enter_context(
+                mock.patch.object(history_index, "EMBED_COMMIT_EVERY", 10_000)
+            )
+            stack.enter_context(mock.patch.object(history_index, "time", FakeClock()))
+            stack.enter_context(redirect_stdout(stdout))
+            stack.enter_context(redirect_stderr(stderr))
+            code = history_index.main(
+                [
+                    "--db",
+                    str(self.db),
+                    "embed",
+                    "--model-path",
+                    str(self.model),
+                    "--batch-size",
+                    "4",
+                    "--json",
+                ]
+            )
+        self.assertEqual(code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["stop_reason"], "host_pressure")
+        # Exit 0 with the queue not drained: the exit code cannot show this.
+        self.assertEqual(payload["embedded"], 32)
+        self.assertEqual(payload["remaining"], 8)
+        self.assertEqual(self.meta("embed_stop_reason"), "host_pressure")
+        self.assertEqual(self.meta("vectors_complete"), "false")
 
     def test_the_pause_is_given_this_runs_own_deadline(self) -> None:
         """--max-seconds is the run's upper bound, so the pause has to know it."""
