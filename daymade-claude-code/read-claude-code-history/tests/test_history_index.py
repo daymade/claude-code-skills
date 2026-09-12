@@ -7,15 +7,18 @@ explicit smoke run on supported machines, never by the registered Linux suite.
 
 from __future__ import annotations
 
+import fcntl
 import importlib.util
 import io
 import json
 import os
 import sqlite3
+import subprocess
 import sys
 import tempfile
+import types
 import unittest
-from contextlib import ExitStack, contextmanager
+from contextlib import ExitStack, contextmanager, redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -170,6 +173,14 @@ class HistoryIndexTests(unittest.TestCase):
             row[1] for row in connection.execute("PRAGMA table_info(chunks)")
         }
         self.assertIn("usable", columns)
+        self.assertIn("text_hash", columns)
+        indexes = {
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='index'"
+            )
+        }
+        self.assertIn("idx_chunks_text_hash", indexes)
         self.assertEqual(
             connection.execute("SELECT count(*) FROM records").fetchone()[0], 1
         )
@@ -492,6 +503,52 @@ class HistoryIndexTests(unittest.TestCase):
                 self.db, self.scope(self.active_source), rebuild=True
             )
         self.assertEqual(self.db.read_bytes(), b"old-index-sentinel")
+
+    def test_index_json_leaves_stdout_a_single_document_while_building(self) -> None:
+        """`index --json | jq` has to work on a fresh build too.
+
+        The per-checkpoint progress line only prints while building a
+        disposable database — a first install or ``--rebuild`` — which is
+        exactly the run nobody watches interactively. On the live index that
+        branch fires once per 500 sessions, so its output lands ahead of the
+        JSON document rather than after it.
+        """
+        for number in range(4):
+            session_id = f"6666666{number}-6666-4666-8666-666666666666"
+            write_jsonl(
+                project_dir(self.active, self.workspace) / f"{session_id}.jsonl",
+                [
+                    user_record(
+                        session_id,
+                        self.workspace,
+                        f"body number {number}",
+                        f"2026-08-01T00:00:0{number}Z",
+                    )
+                ],
+            )
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with ExitStack() as stack:
+            stack.enter_context(portable_backend())
+            stack.enter_context(
+                mock.patch.object(history_index, "INDEX_CHECKPOINT_EVERY", 2)
+            )
+            stack.enter_context(
+                mock.patch.object(
+                    history_index,
+                    "_scope_from_args",
+                    return_value=self.scope(self.active_source),
+                )
+            )
+            stack.enter_context(redirect_stdout(stdout))
+            stack.enter_context(redirect_stderr(stderr))
+            code = history_index.main(["--db", str(self.db), "index", "--json"])
+        self.assertEqual(code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["added"], 4)
+        # The progress the checkpoint produced went somewhere — to stderr.
+        self.assertIn("indexed 2/4 sessions", stderr.getvalue())
+        self.assertIn("indexed 4/4 sessions", stderr.getvalue())
 
     def test_scope_change_refuses_to_prune_an_existing_database(self) -> None:
         second_workspace = self.root / "workspaces" / "other"
@@ -901,6 +958,12 @@ class MultiProviderIndexTests(unittest.TestCase):
             [
                 ("user", "<user_instructions>\nproject boilerplate\n</user_instructions>"),
                 ("user", "<environment_context>\n<cwd>/tmp</cwd>\n</environment_context>"),
+                # Goal-mode context is re-sent every turn and subagent status is
+                # machine-to-machine; a skill block is a pasted file. None of
+                # the three is anything a person said.
+                ("user", "<goal_context>\ncurrent goal restated\n</goal_context>"),
+                ("user", "<subagent_notification>\nagent finished\n</subagent_notification>"),
+                ("user", "<skill>\nskill file contents\n</skill>"),
                 ("user", "codex distinctive question"),
                 ("assistant", "codex distinctive answer"),
             ],
@@ -1044,7 +1107,25 @@ class MultiProviderIndexTests(unittest.TestCase):
         )
         connection.close()
 
-    def test_v1_index_migrates_in_place_and_keeps_every_record(self) -> None:
+    def seed_legacy_chunk_and_vector(self, text: str) -> None:
+        """Give the index one chunk and one vector, as a pre-v3 index would."""
+        connection = plain_connect(self.db)
+        record_id = connection.execute("SELECT id FROM records").fetchone()[0]
+        connection.execute(
+            "INSERT INTO chunks(record_id,seq,ntok,text,usable,text_hash) "
+            "VALUES(?,0,5,?,1,?)",
+            (record_id, text, history_index._chunk_text_hash(text)),
+        )
+        chunk_id = connection.execute("SELECT id FROM chunks").fetchone()[0]
+        connection.execute("CREATE TABLE vec_chunks(embedding BLOB)")
+        connection.execute(
+            "INSERT INTO vec_chunks(rowid,embedding) VALUES(?,?)",
+            (chunk_id, b"fixture"),
+        )
+        connection.commit()
+        connection.close()
+
+    def build_one_claude_session(self) -> None:
         session_id = "11111111-1111-4111-8111-111111111111"
         write_jsonl(
             project_dir(self.active, self.workspace) / f"{session_id}.jsonl",
@@ -1054,9 +1135,17 @@ class MultiProviderIndexTests(unittest.TestCase):
             history_index.update_index(
                 self.db, self.scope(self.claude_source), rebuild=True
             )
+
+    def test_v1_index_migrates_in_place_and_keeps_every_record(self) -> None:
+        """A v1 index reaches v3 in one call, both steps chained."""
+        chunk_text = "legacy chunk text kept across the migration"
+        self.build_one_claude_session()
+        self.seed_legacy_chunk_and_vector(chunk_text)
         downgrade = plain_connect(self.db)
         downgrade.execute("DROP INDEX IF EXISTS idx_sessions_provider")
         downgrade.execute("ALTER TABLE sessions DROP COLUMN provider")
+        downgrade.execute("DROP INDEX IF EXISTS idx_chunks_text_hash")
+        downgrade.execute("ALTER TABLE chunks DROP COLUMN text_hash")
         downgrade.execute("PRAGMA user_version=1")
         downgrade.commit()
         before = downgrade.execute("SELECT count(*) FROM records").fetchone()[0]
@@ -1076,7 +1165,277 @@ class MultiProviderIndexTests(unittest.TestCase):
             connection.execute("SELECT DISTINCT provider FROM sessions").fetchone()[0],
             "claude",
         )
+        self.assertEqual(
+            connection.execute("SELECT text_hash FROM chunks").fetchone()[0],
+            history_index._chunk_text_hash(chunk_text),
+        )
+        self.assertEqual(
+            connection.execute("SELECT count(*) FROM vec_chunks").fetchone()[0], 1
+        )
+        history_index._validate_schema(connection)
         self.assertIsNone(history_index._migrate_schema_if_needed(connection))
+        connection.close()
+
+    def test_v2_index_gains_backfilled_text_hash_without_losing_vectors(self) -> None:
+        """v2->v3 adds one column; recomputing 678k vectors is not an option."""
+        chunk_text = "a v2 chunk that already has its vector computed"
+        self.build_one_claude_session()
+        self.seed_legacy_chunk_and_vector(chunk_text)
+        downgrade = plain_connect(self.db)
+        downgrade.execute("DROP INDEX IF EXISTS idx_chunks_text_hash")
+        downgrade.execute("ALTER TABLE chunks DROP COLUMN text_hash")
+        downgrade.execute("PRAGMA user_version=2")
+        downgrade.commit()
+        downgrade.close()
+
+        connection = plain_connect(self.db)
+        note = history_index._migrate_schema_if_needed(connection)
+        self.assertIn("text_hash", note)
+        self.assertEqual(
+            connection.execute("PRAGMA user_version").fetchone()[0],
+            history_index.SCHEMA_VERSION,
+        )
+        self.assertEqual(
+            connection.execute("SELECT text_hash FROM chunks").fetchone()[0],
+            history_index._chunk_text_hash(chunk_text),
+        )
+        self.assertEqual(
+            connection.execute("SELECT count(*) FROM records").fetchone()[0], 1
+        )
+        self.assertEqual(
+            connection.execute("SELECT count(*) FROM vec_chunks").fetchone()[0], 1
+        )
+        self.assertEqual(
+            connection.execute("SELECT DISTINCT provider FROM sessions").fetchone()[0],
+            "claude",
+        )
+        history_index._validate_schema(connection)
+        self.assertIsNone(history_index._migrate_schema_if_needed(connection))
+        connection.close()
+
+    def test_index_prunes_injected_codex_records_already_stored(self) -> None:
+        """An index built before the prefix list grew still holds the blocks.
+
+        The session file has not changed, so it is never re-extracted: without
+        a sweep over stored records, those blocks stay lexically searchable for
+        the life of the index.
+        """
+        session_id = "019a0000-0000-7000-8000-000000000002"
+        rollout = (
+            self.codex_home
+            / "sessions"
+            / "2026"
+            / "05"
+            / "01"
+            / f"rollout-{session_id}.jsonl"
+        )
+        codex_rollout(rollout, session_id, self.workspace, [("user", "codex distinctive question")])
+        with portable_backend():
+            history_index.update_index(
+                self.db, self.scope(self.codex_source), rebuild=True
+            )
+        legacy = plain_connect(self.db)
+        for seq, text in enumerate(
+            [
+                "<goal_context>\nzzgoalmarker restated goal\n</goal_context>",
+                "<subagent_notification>\nzzgoalmarker agent done\n</subagent_notification>",
+                "<skill>\nzzgoalmarker skill body\n</skill>",
+                # LIKE would read the '_' in every prefix as a wildcard and
+                # take this one too.
+                "<userXinstructions> zzdecoy kept",
+            ],
+            start=90,
+        ):
+            legacy.execute(
+                "INSERT INTO records(session_id,record_key,seq,role,ts,fts_text,"
+                "semantic_text,noise,agent_prompt,segment_sources_json,"
+                "copy_paths_json,source_labels_json) "
+                "VALUES(?,?,?,'user',0,?,?,0,0,'[]',?,'[]')",
+                (
+                    session_id,
+                    f"legacy-{seq}",
+                    seq,
+                    text,
+                    text,
+                    json.dumps([str(rollout)]),
+                ),
+            )
+        legacy.execute("INSERT INTO records_fts(records_fts) VALUES('rebuild')")
+        legacy.commit()
+        legacy.close()
+
+        with portable_backend():
+            before = history_index.recall(
+                self.db,
+                "zzgoalmarker",
+                mode="bm25",
+                limit=10,
+                project=None,
+                exclude_sessions=[],
+                include_agent_prompts=False,
+                model_path=None,
+                simple_root=None,
+            )
+            self.assertEqual(len(before["results"]), 3)
+            pruned = history_index.update_index(self.db, self.scope(self.codex_source))
+            after = history_index.recall(
+                self.db,
+                "zzgoalmarker",
+                mode="bm25",
+                limit=10,
+                project=None,
+                exclude_sessions=[],
+                include_agent_prompts=False,
+                model_path=None,
+                simple_root=None,
+            )
+            again = history_index.update_index(self.db, self.scope(self.codex_source))
+        self.assertEqual(pruned["records_pruned"], 3)
+        self.assertEqual(after["results"], [])
+        self.assertEqual(again["records_pruned"], 0)
+        connection = plain_connect(self.db, readonly=True)
+        self.assertEqual(
+            sorted(row[0] for row in connection.execute("SELECT fts_text FROM records")),
+            ["<userXinstructions> zzdecoy kept", "codex distinctive question"],
+        )
+        connection.close()
+
+    def test_claude_harness_envelopes_never_reach_the_index(self) -> None:
+        """Task notifications and teammate envelopes are harness text.
+
+        Both arrive as ``type=user`` on the main thread, so the sidechain test
+        that hides agent prompts never sees them, and neither tag is in
+        NOISE_PREFIXES: before this they ranked exactly like something a person
+        typed.
+        """
+        session_id = "44444444-4444-4444-8444-444444444444"
+        write_jsonl(
+            project_dir(self.active, self.workspace) / f"{session_id}.jsonl",
+            [
+                user_record(
+                    session_id,
+                    self.workspace,
+                    "<task-notification>\n<task-id>abc</task-id>\n<status>failed</status>\n"
+                    "</task-notification>",
+                    "2026-08-01T00:00:00Z",
+                ),
+                user_record(
+                    session_id,
+                    self.workspace,
+                    '<teammate-message teammate_id="reviewer" color="blue">\n'
+                    '{"type":"idle_notification","from":"reviewer"}\n</teammate-message>',
+                    "2026-08-01T00:00:01Z",
+                ),
+                {
+                    # The model echoing the tag back is still machine text, so
+                    # the match is on the text, not on the role.
+                    "type": "assistant",
+                    "sessionId": session_id,
+                    "cwd": str(self.workspace),
+                    "timestamp": "2026-08-01T00:00:02Z",
+                    "isSidechain": False,
+                    "message": {
+                        "role": "assistant",
+                        "content": "<task-notification>\n<task-id>echo</task-id>\n"
+                        "</task-notification>",
+                    },
+                },
+                user_record(
+                    session_id,
+                    self.workspace,
+                    "claude distinctive question",
+                    "2026-08-01T00:00:03Z",
+                ),
+            ],
+        )
+        with portable_backend():
+            result = history_index.update_index(
+                self.db, self.scope(self.claude_source), rebuild=True
+            )
+        self.assertEqual(result["sessions"], 1)
+        connection = plain_connect(self.db, readonly=True)
+        texts = [
+            row[0]
+            for row in connection.execute("SELECT fts_text FROM records ORDER BY seq")
+        ]
+        connection.close()
+        self.assertEqual(texts, ["claude distinctive question"])
+
+    def test_index_prunes_stored_claude_envelopes_within_their_provider(self) -> None:
+        session_id = "55555555-5555-4555-8555-555555555555"
+        path = project_dir(self.active, self.workspace) / f"{session_id}.jsonl"
+        write_jsonl(
+            path,
+            [
+                user_record(
+                    session_id,
+                    self.workspace,
+                    "claude distinctive question",
+                    "2026-08-01T00:00:00Z",
+                )
+            ],
+        )
+        with portable_backend():
+            history_index.update_index(
+                self.db, self.scope(self.claude_source), rebuild=True
+            )
+        legacy = plain_connect(self.db)
+        stored = [
+            "<task-notification>\n<task-id>zzteammarker</task-id>\n</task-notification>",
+            '<teammate-message teammate_id="zzteammarker">\nreport\n</teammate-message>',
+            # Neither prefix matches this one, and a shorter prefix would have.
+            "<taskmaster> zzteammarker kept",
+            # A Codex-only block inside a Claude session stays: the evidence
+            # that made these prefixes machine text was gathered per harness,
+            # so the sweep is scoped to the provider it was proven on.
+            "<goal_context>\nzzteammarker kept too\n</goal_context>",
+        ]
+        for seq, text in enumerate(stored, start=90):
+            legacy.execute(
+                "INSERT INTO records(session_id,record_key,seq,role,ts,fts_text,"
+                "semantic_text,noise,agent_prompt,segment_sources_json,"
+                "copy_paths_json,source_labels_json) "
+                "VALUES(?,?,?,'user',0,?,?,0,0,'[]',?,'[]')",
+                (session_id, f"legacy-{seq}", seq, text, text, json.dumps([str(path)])),
+            )
+        legacy.execute("INSERT INTO records_fts(records_fts) VALUES('rebuild')")
+        legacy.commit()
+        legacy.close()
+
+        def marker_hits():
+            return len(
+                history_index.recall(
+                    self.db,
+                    "zzteammarker",
+                    mode="bm25",
+                    limit=10,
+                    project=None,
+                    exclude_sessions=[],
+                    include_agent_prompts=False,
+                    model_path=None,
+                    simple_root=None,
+                )["results"]
+            )
+
+        with portable_backend():
+            self.assertEqual(marker_hits(), 4)
+            pruned = history_index.update_index(self.db, self.scope(self.claude_source))
+            after = marker_hits()
+            again = history_index.update_index(self.db, self.scope(self.claude_source))
+        self.assertEqual(pruned["records_pruned"], 2)
+        self.assertEqual(after, 2)
+        self.assertEqual(again["records_pruned"], 0)
+        connection = plain_connect(self.db, readonly=True)
+        self.assertEqual(
+            sorted(row[0] for row in connection.execute("SELECT fts_text FROM records")),
+            sorted(
+                [
+                    "claude distinctive question",
+                    "<taskmaster> zzteammarker kept",
+                    "<goal_context>\nzzteammarker kept too\n</goal_context>",
+                ]
+            ),
+        )
         connection.close()
 
     def test_recall_refuses_a_provider_the_index_does_not_cover(self) -> None:
@@ -1279,6 +1638,1032 @@ class MultiProviderIndexTests(unittest.TestCase):
         self.assertEqual(
             refs[0]["project"], str(self.workspace).replace("/", "-")
         )
+
+
+class BoilerplatePolicyTests(unittest.TestCase):
+    """Cover the chunk-time policy that decides which chunks earn a vector."""
+
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp_dir.name)
+        self.db = self.root / "finder.db"
+        self.repeated = "the same injected instruction block, verbatim again"
+        self.unique = "a sentence that occurs exactly once in this corpus"
+        self.short = "too short"
+        with portable_backend():
+            self.connection = history_index._new_database(self.db, None)
+        self.connection.execute(
+            "INSERT INTO sessions(session_id,project,primary_path,sources_json,"
+            "fingerprint,started,ended,provider) "
+            "VALUES('s','p','/p','[]','f',0,0,'codex')"
+        )
+        self.connection.execute(
+            "INSERT INTO records(id,session_id,record_key,seq,role,ts,fts_text,"
+            "semantic_text,noise,agent_prompt,segment_sources_json,copy_paths_json,"
+            "source_labels_json) "
+            "VALUES(1,'s','k',1,'user',0,'prose','prose',0,0,'[]','[]','[]')"
+        )
+
+    def tearDown(self) -> None:
+        self.connection.close()
+        self.temp_dir.cleanup()
+
+    def add_chunk(self, seq: int, text: str) -> int:
+        """Insert a chunk the way build_chunks does, minus the hash.
+
+        Leaving text_hash NULL is deliberate: it is what every chunk migrated
+        from v2 looks like, so the policy's backfill is exercised too.
+        """
+        self.connection.execute(
+            "INSERT INTO chunks(record_id,seq,ntok,text,usable) VALUES(1,?,?,?,?)",
+            (seq, len(text), text, int(history_index._is_length_eligible(text))),
+        )
+        return self.connection.execute("SELECT max(id) FROM chunks").fetchone()[0]
+
+    def usable_by_id(self) -> dict[int, int]:
+        return {
+            row[0]: row[1]
+            for row in self.connection.execute("SELECT id,usable FROM chunks")
+        }
+
+    def test_third_copy_demotes_every_copy_but_the_lowest_id(self) -> None:
+        first = self.add_chunk(0, self.repeated)
+        second = self.add_chunk(1, self.repeated)
+        third = self.add_chunk(2, self.repeated)
+        distinct = self.add_chunk(3, self.unique)
+        result = history_index.apply_boilerplate_policy(self.connection)
+        self.assertEqual(result["hashes_backfilled"], 4)
+        self.assertEqual(result["boilerplate_demoted"], 2)
+        self.assertEqual(result["boilerplate_restored"], 0)
+        self.assertEqual(
+            self.usable_by_id(),
+            {first: 1, second: 0, third: 0, distinct: 1},
+        )
+        hashes = {
+            row[0]: row[1]
+            for row in self.connection.execute("SELECT id,text_hash FROM chunks")
+        }
+        self.assertEqual(
+            hashes[first], history_index._chunk_text_hash(self.repeated)
+        )
+        self.assertEqual(hashes[first], hashes[third])
+
+    def test_two_copies_and_short_chunks_are_left_alone(self) -> None:
+        first = self.add_chunk(0, self.repeated)
+        second = self.add_chunk(1, self.repeated)
+        shorts = [self.add_chunk(seq, self.short) for seq in (2, 3, 4)]
+        result = history_index.apply_boilerplate_policy(self.connection)
+        self.assertEqual(result["boilerplate_demoted"], 0)
+        self.assertEqual(result["boilerplate_restored"], 0)
+        usable = self.usable_by_id()
+        self.assertEqual(usable[first], 1)
+        self.assertEqual(usable[second], 1)
+        # Three identical copies, but each is below the embed length gate, so
+        # they were never usable and must not be "restored" into usability.
+        self.assertEqual([usable[chunk_id] for chunk_id in shorts], [0, 0, 0])
+
+    def test_copies_dropping_below_the_threshold_are_restored(self) -> None:
+        first = self.add_chunk(0, self.repeated)
+        second = self.add_chunk(1, self.repeated)
+        third = self.add_chunk(2, self.repeated)
+        history_index.apply_boilerplate_policy(self.connection)
+        self.assertEqual(self.usable_by_id(), {first: 1, second: 0, third: 0})
+        # Pruning injected records takes their chunks with them, which is how a
+        # text falls back under BOILERPLATE_MIN_COPIES.
+        self.connection.execute("DELETE FROM chunks WHERE id=?", (third,))
+        result = history_index.apply_boilerplate_policy(self.connection)
+        self.assertEqual(result["boilerplate_restored"], 1)
+        self.assertEqual(result["boilerplate_demoted"], 0)
+        self.assertEqual(self.usable_by_id(), {first: 1, second: 1})
+
+    def test_pass_is_idempotent(self) -> None:
+        for seq in range(3):
+            self.add_chunk(seq, self.repeated)
+        self.add_chunk(3, self.unique)
+        history_index.apply_boilerplate_policy(self.connection)
+        settled = self.usable_by_id()
+        repeat = history_index.apply_boilerplate_policy(self.connection)
+        self.assertEqual(
+            (
+                repeat["hashes_backfilled"],
+                repeat["boilerplate_demoted"],
+                repeat["boilerplate_restored"],
+            ),
+            (0, 0, 0),
+        )
+        self.assertEqual(self.usable_by_id(), settled)
+
+    def test_demoted_vectors_are_dropped_when_the_backend_is_present(self) -> None:
+        ids = [self.add_chunk(seq, self.repeated) for seq in range(3)]
+        distinct = self.add_chunk(3, self.unique)
+        self.connection.execute("CREATE TABLE vec_chunks(embedding BLOB)")
+        for chunk_id in [*ids, distinct]:
+            self.connection.execute(
+                "INSERT INTO vec_chunks(rowid,embedding) VALUES(?,?)",
+                (chunk_id, b"fixture"),
+            )
+        result = history_index.apply_boilerplate_policy(self.connection)
+        self.assertEqual(result["vectors_dropped"], 2)
+        self.assertEqual(result["non_embeddable_chunks"], 2)
+        self.assertEqual(
+            sorted(row[0] for row in self.connection.execute("SELECT rowid FROM vec_chunks")),
+            sorted([ids[0], distinct]),
+        )
+        # The count is a standing property of the index, not a queue: the two
+        # demoted copies stay non-embeddable after their vectors are gone, so a
+        # second pass reports the same total with nothing left to drop. Reading
+        # it as "work still owed" is what the old name invited.
+        repeat = history_index.apply_boilerplate_policy(self.connection)
+        self.assertEqual(repeat["vectors_dropped"], 0)
+        self.assertEqual(repeat["non_embeddable_chunks"], 2)
+        # Every usable chunk still has its vector, so the marker is honest.
+        self.assertEqual(
+            history_index._meta_get(self.connection, "vectors_complete"), "true"
+        )
+
+    def test_vector_drop_is_deferred_when_the_backend_is_absent(self) -> None:
+        """The nightly chunk stage runs without sqlite-vec; embed finishes it."""
+        ids = [self.add_chunk(seq, self.repeated) for seq in range(3)]
+        self.add_chunk(3, self.unique)
+        too_short = self.add_chunk(4, self.short)
+        result = history_index.apply_boilerplate_policy(self.connection)
+        # A null count is the signal that embed still has to drop the vectors:
+        # without the backend there is no way to count how many rows that is.
+        self.assertIsNone(result["vectors_dropped"])
+        self.assertEqual(result["boilerplate_demoted"], 2)
+        # Not a count of deferred deletions: it also carries the chunk that was
+        # never embeddable and never had a vector to drop.
+        self.assertEqual(result["non_embeddable_chunks"], 3)
+        self.assertEqual(
+            sorted(
+                row[0]
+                for row in self.connection.execute(
+                    "SELECT id FROM chunks WHERE usable=0"
+                )
+            ),
+            sorted([*ids[1:], too_short]),
+        )
+        # No live count was possible, so the pass must not claim completeness.
+        self.assertEqual(
+            history_index._meta_get(self.connection, "vectors_complete"), "false"
+        )
+
+
+class FakeClock:
+    """A clock the embed loop reads instead of the wall clock.
+
+    ``time()`` advances by a fixed step on every read, so a bounded run stops
+    after an exact number of batches instead of after a real wait.
+    """
+
+    def __init__(self, step: float = 0.25) -> None:
+        self.now = 1000.0
+        self.step = step
+        self.slept: list[float] = []
+
+    def time(self) -> float:
+        value = self.now
+        self.now += self.step
+        return value
+
+    def sleep(self, seconds: float) -> None:
+        self.slept.append(seconds)
+        self.now += seconds
+
+
+class _FakeEmbeddings:
+    """One batch of MLX vectors: only the shape matters to the loop."""
+
+    def __init__(self, rows: int) -> None:
+        self.rows = rows
+
+    def astype(self, _dtype):
+        return self
+
+
+class _FakeGenerated:
+    def __init__(self, rows: int) -> None:
+        self.text_embeds = _FakeEmbeddings(rows)
+
+
+class _FakeVectorArray:
+    def __init__(self, rows: int) -> None:
+        self.rows = rows
+
+    def tobytes(self) -> bytes:
+        return bytes(history_index.EMBEDDING_DIM * 4 * self.rows)
+
+
+@contextmanager
+def fake_embedding_backend(*, generate_hook=None, peak_bytes: int = 2_300_000_000):
+    """Run the real embed loop against stand-in MLX/NumPy modules.
+
+    The registered suite is standard-library only and runs on Linux, so what is
+    under test is the loop's own bookkeeping — progress, commits, lifecycle
+    markers. MLX itself is exercised by the macOS smoke run.
+
+    ``generate_hook`` receives the call count; call 1 is the warmup, so loop
+    batch N is call N+1.
+    """
+    calls: list[list[str]] = []
+
+    def generate(model, tokenizer, *, texts, max_length):
+        calls.append(list(texts))
+        if generate_hook is not None:
+            generate_hook(len(calls))
+        return _FakeGenerated(len(texts))
+
+    core = types.SimpleNamespace(
+        float32="float32",
+        set_memory_limit=lambda value: None,
+        set_cache_limit=lambda value: None,
+        reset_peak_memory=lambda: None,
+        clear_cache=lambda: None,
+        eval=lambda value: None,
+        get_active_memory=lambda: 1024,
+        get_cache_memory=lambda: 2048,
+        get_peak_memory=lambda: peak_bytes,
+    )
+    mlx = types.ModuleType("mlx")
+    mlx.core = core
+    embeddings = types.ModuleType("mlx_embeddings")
+    embeddings.generate = generate
+    embeddings.load = lambda path: (object(), object())
+    numpy = types.ModuleType("numpy")
+    numpy.float32 = "float32"
+    numpy.array = lambda value, dtype=None: _FakeVectorArray(value.rows)
+    with ExitStack() as stack:
+        stack.enter_context(
+            mock.patch.dict(
+                sys.modules,
+                {
+                    "mlx": mlx,
+                    "mlx.core": core,
+                    "mlx_embeddings": embeddings,
+                    "numpy": numpy,
+                },
+            )
+        )
+        stack.enter_context(
+            mock.patch.object(
+                history_index,
+                "platform",
+                types.SimpleNamespace(system=lambda: "Darwin", machine=lambda: "arm64"),
+            )
+        )
+        # The pause policy has its own tests; it must never fire in these.
+        stack.enter_context(
+            mock.patch.object(
+                history_index,
+                "_host_memory_pressure_level",
+                lambda: history_index.HOST_PRESSURE_NORMAL,
+            )
+        )
+        yield calls
+
+
+class HostPressurePauseTests(unittest.TestCase):
+    """Cover the pause that replaced the unconditional four-second sleep."""
+
+    def probe(self, **run_kwargs):
+        with ExitStack() as stack:
+            stack.enter_context(
+                mock.patch.object(
+                    history_index,
+                    "platform",
+                    types.SimpleNamespace(system=lambda: "Darwin"),
+                )
+            )
+            stack.enter_context(
+                mock.patch.object(history_index.subprocess, "run", **run_kwargs)
+            )
+            return history_index._host_memory_pressure_level()
+
+    def test_the_probe_reads_the_level_and_treats_every_failure_as_normal(self) -> None:
+        self.assertEqual(
+            self.probe(
+                return_value=types.SimpleNamespace(returncode=0, stdout="4\n", stderr="")
+            ),
+            4,
+        )
+        # A level that cannot be read is not evidence of pressure: refusing to
+        # embed because sysctl is missing would turn a diagnostic into an outage.
+        self.assertEqual(
+            self.probe(
+                return_value=types.SimpleNamespace(returncode=1, stdout="", stderr="no")
+            ),
+            history_index.HOST_PRESSURE_NORMAL,
+        )
+        self.assertEqual(
+            self.probe(
+                return_value=types.SimpleNamespace(returncode=0, stdout="???", stderr="")
+            ),
+            history_index.HOST_PRESSURE_NORMAL,
+        )
+        self.assertEqual(
+            self.probe(
+                side_effect=subprocess.TimeoutExpired(cmd="sysctl", timeout=2)
+            ),
+            history_index.HOST_PRESSURE_NORMAL,
+        )
+        self.assertEqual(
+            self.probe(side_effect=FileNotFoundError("sysctl")),
+            history_index.HOST_PRESSURE_NORMAL,
+        )
+
+    def test_a_platform_without_the_sysctl_is_not_probed_at_all(self) -> None:
+        with ExitStack() as stack:
+            stack.enter_context(
+                mock.patch.object(
+                    history_index,
+                    "platform",
+                    types.SimpleNamespace(system=lambda: "Linux"),
+                )
+            )
+            runner = stack.enter_context(
+                mock.patch.object(history_index.subprocess, "run")
+            )
+            self.assertEqual(
+                history_index._host_memory_pressure_level(),
+                history_index.HOST_PRESSURE_NORMAL,
+            )
+        runner.assert_not_called()
+
+    def pause(self, levels, *, deadline=None, ceiling=None):
+        """Run the pause against a scripted pressure trace and a fake clock."""
+        clock = FakeClock()
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        trace = iter(levels)
+        with ExitStack() as stack:
+            stack.enter_context(mock.patch.object(history_index, "time", clock))
+            stack.enter_context(
+                mock.patch.object(
+                    history_index, "_host_memory_pressure_level", lambda: next(trace)
+                )
+            )
+            if ceiling is not None:
+                stack.enter_context(
+                    mock.patch.object(
+                        history_index, "EMBED_PAUSE_CEILING_SECONDS", ceiling
+                    )
+                )
+            stack.enter_context(redirect_stdout(stdout))
+            stack.enter_context(redirect_stderr(stderr))
+            waited, outcome = history_index._pause_while_host_is_under_pressure(
+                deadline
+            )
+        # Progress is not a result: stdout has to stay a single JSON document.
+        self.assertEqual(stdout.getvalue(), "")
+        return clock, waited, outcome, stderr.getvalue()
+
+    def test_a_healthy_host_is_never_paused(self) -> None:
+        clock, waited, outcome, output = self.pause([1])
+        self.assertEqual((waited, outcome), (0.0, "clear"))
+        self.assertEqual(clock.slept, [])
+        self.assertEqual(output, "")
+
+    def test_pressure_backs_off_to_a_ceiling_and_reports_both_edges(self) -> None:
+        clock, waited, outcome, output = self.pause([2, 2, 2, 4, 4, 4, 4, 2, 1])
+        self.assertEqual(clock.slept, [1, 2, 4, 8, 16, 30, 30, 30])
+        self.assertEqual((waited, outcome), (121.0, "clear"))
+        lines = output.splitlines()
+        self.assertEqual(
+            lines[0],
+            "  paused: host memory pressure 2 (1=normal, 2=warning, 4=critical); "
+            "waiting for it to clear",
+        )
+        # A multi-minute wait has to keep saying so, or it is indistinguishable
+        # from a hang.
+        self.assertEqual(
+            lines[1], "  still paused after 61s · host memory pressure 4"
+        )
+        self.assertEqual(lines[-1], "  resumed after 121s · host memory pressure 1")
+
+    def test_the_callers_deadline_ends_the_pause(self) -> None:
+        """--max-seconds has to stay the run's upper bound.
+
+        The nightly job passes --max-seconds 10800 so embedding cannot run past
+        06:30. A pause with no deadline turned that into a suggestion: the loop
+        enters the pause before it checks its budget, so a host that stayed at
+        warning level kept the pass sleeping — and holding the writer lock —
+        indefinitely.
+        """
+        # FakeClock starts at 1000.0 and advances 0.25 s per read, so a deadline
+        # of 1000.5 is already spent by the time the second iteration looks.
+        clock, waited, outcome, output = self.pause([2] * 8, deadline=1000.5)
+        self.assertEqual(outcome, "deadline")
+        self.assertEqual(clock.slept, [1])
+        self.assertEqual(waited, 1.0)
+        self.assertIn("time budget spent", output.splitlines()[-1])
+
+    def test_pressure_that_never_clears_hits_a_ceiling(self) -> None:
+        """An unbounded run has no deadline; it still must not wait forever."""
+        clock, waited, outcome, output = self.pause([2] * 12, ceiling=10)
+        self.assertEqual(outcome, "ceiling")
+        # 1+2+4+8 = 15 is the first total at or above the ten-second ceiling.
+        self.assertEqual(clock.slept, [1, 2, 4, 8])
+        self.assertEqual(waited, 15.0)
+        self.assertIn("outlasted the 10s ceiling", output.splitlines()[-1])
+
+
+class EmbedLifecycleTests(unittest.TestCase):
+    """Cover token progress, the heartbeat and the recorded stop reason."""
+
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp_dir.name)
+        self.db = self.root / "finder.db"
+        self.model = self.root / "snapshot-abc123"
+        self.model.mkdir()
+        with portable_backend():
+            self.connection = history_index._new_database(self.db, None)
+        self.connection.execute(
+            "INSERT INTO sessions(session_id,project,primary_path,sources_json,"
+            "fingerprint,started,ended,provider) "
+            "VALUES('s','p','/p','[]','f',0,0,'claude')"
+        )
+        self.connection.execute(
+            "INSERT INTO records(id,session_id,record_key,seq,role,ts,fts_text,"
+            "semantic_text,noise,agent_prompt,segment_sources_json,copy_paths_json,"
+            "source_labels_json) "
+            "VALUES(1,'s','k',1,'user',0,'prose','prose',0,0,'[]','[]','[]')"
+        )
+        # Stand-in for the vec0 virtual table: CREATE VIRTUAL TABLE IF NOT
+        # EXISTS is a no-op once the name is taken, so the loop runs unchanged.
+        self.connection.execute("CREATE TABLE vec_chunks(embedding BLOB)")
+        history_index._meta_set(self.connection, "chunks_complete", "true")
+        history_index._meta_set(
+            self.connection, "embedding_model_revision", self.model.name
+        )
+        self.connection.commit()
+
+    def tearDown(self) -> None:
+        self.connection.close()
+        self.temp_dir.cleanup()
+
+    def add_chunks(self, count: int, *, ntok: int = 100) -> None:
+        for seq in range(count):
+            text = f"chunk body number {seq} with enough characters to embed"
+            self.connection.execute(
+                "INSERT INTO chunks(record_id,seq,ntok,text,usable,text_hash) "
+                "VALUES(1,?,?,?,1,?)",
+                (seq, ntok, text, history_index._chunk_text_hash(text)),
+            )
+        self.connection.commit()
+
+    def embed(
+        self,
+        *,
+        batch_size: int = 4,
+        commit_every: int = 4,
+        max_seconds: int | None = None,
+        clock_step: float = 0.25,
+        generate_hook=None,
+        pressure=None,
+        pause_ceiling: float | None = None,
+        pause_hook=None,
+    ):
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with ExitStack() as stack:
+            stack.enter_context(portable_backend())
+            stack.enter_context(fake_embedding_backend(generate_hook=generate_hook))
+            # Entered after the backend, so these win over its healthy-host stub.
+            if pressure is not None:
+                stack.enter_context(
+                    mock.patch.object(
+                        history_index, "_host_memory_pressure_level", pressure
+                    )
+                )
+            if pause_ceiling is not None:
+                stack.enter_context(
+                    mock.patch.object(
+                        history_index, "EMBED_PAUSE_CEILING_SECONDS", pause_ceiling
+                    )
+                )
+            if pause_hook is not None:
+                stack.enter_context(
+                    mock.patch.object(
+                        history_index,
+                        "_pause_while_host_is_under_pressure",
+                        pause_hook,
+                    )
+                )
+            stack.enter_context(
+                mock.patch.object(history_index, "EMBED_COMMIT_EVERY", commit_every)
+            )
+            stack.enter_context(
+                mock.patch.object(history_index, "time", FakeClock(clock_step))
+            )
+            stack.enter_context(redirect_stdout(stdout))
+            stack.enter_context(redirect_stderr(stderr))
+            try:
+                result = history_index.embed_chunks(
+                    self.db,
+                    model_path=self.model,
+                    download_model=False,
+                    max_seconds=max_seconds,
+                    batch_size=batch_size,
+                    memory_limit_gb=8.0,
+                    cache_limit_gb=0.5,
+                )
+            finally:
+                # Every test in this class carries the invariant: embed writes
+                # progress to stderr, because `embed --json` has to leave stdout
+                # a single parseable document.
+                self.assertEqual(stdout.getvalue(), "")
+        return result, stderr.getvalue()
+
+    def meta(self, key: str) -> str | None:
+        return history_index._meta_get(self.connection, key)
+
+    def vector_count(self) -> int:
+        return self.connection.execute("SELECT count(*) FROM vec_chunks").fetchone()[0]
+
+    def test_progress_counts_tokens_not_only_chunks(self) -> None:
+        """Chunks are a bad unit for an ETA: this backlog is 365-602 tokens
+        per chunk, so the remaining *token* mass is what predicts the time."""
+        self.add_chunks(12, ntok=100)
+        result, output = self.embed()
+        lines = [line for line in output.splitlines() if "embedded" in line]
+        self.assertEqual(
+            lines[0],
+            "  embedded 4/12 chunks · 400/1200 tok (33.3%) · 16 chunks/s "
+            "(1600 tok/s) · ETA 0 min · MLX peak 2.14 GiB",
+        )
+        self.assertEqual(
+            lines[-1],
+            "  embedded 12/12 chunks · 1200/1200 tok (100.0%) · 16 chunks/s "
+            "(1600 tok/s) · ETA 0 min · MLX peak 2.14 GiB",
+        )
+        self.assertEqual(result["embedded"], 12)
+        self.assertEqual(result["embedded_tokens"], 1200)
+        self.assertEqual(result["remaining"], 0)
+        self.assertEqual(result["remaining_tokens"], 0)
+        self.assertEqual(result["stop_reason"], "complete")
+        self.assertEqual(self.vector_count(), 12)
+        self.assertEqual(self.meta("vectors_complete"), "true")
+        self.assertEqual(self.meta("embed_stop_reason"), "complete")
+        self.assertIsNotNone(self.meta("last_embedded_at"))
+
+    def test_an_unmeasurable_rate_prints_a_question_mark_not_a_number(self) -> None:
+        self.add_chunks(8, ntok=0)
+        _, output = self.embed()
+        self.assertIn("0/0 tok (0.0%)", output)
+        self.assertIn("ETA ? min", output)
+
+    def test_the_heartbeat_is_on_disk_before_the_run_ends(self) -> None:
+        """A run that dies mid-pass must leave a timestamp that is already true.
+
+        Read the committed state from a second connection while the first is
+        mid-transaction: the value has to be on disk, not in this process.
+        """
+        self.add_chunks(16)
+        seen: dict[str, object] = {}
+
+        def snapshot(call_number: int) -> None:
+            if call_number != 4:  # warmup, batch 1, batch 2, then this one
+                return
+            observer = plain_connect(self.db, readonly=True)
+            seen["last_embedded_at"] = history_index._meta_get(
+                observer, "last_embedded_at"
+            )
+            seen["vectors_complete"] = history_index._meta_get(
+                observer, "vectors_complete"
+            )
+            seen["vectors"] = observer.execute(
+                "SELECT count(*) FROM vec_chunks"
+            ).fetchone()[0]
+            observer.close()
+
+        result, _ = self.embed(generate_hook=snapshot)
+        self.assertEqual(seen["vectors"], 8)
+        self.assertIsNotNone(seen["last_embedded_at"])
+        # Eight of sixteen are done, so the marker must not claim completeness.
+        self.assertEqual(seen["vectors_complete"], "false")
+        self.assertEqual(result["embedded"], 16)
+        self.assertEqual(self.meta("vectors_complete"), "true")
+
+    def test_a_bounded_run_records_why_it_stopped(self) -> None:
+        self.add_chunks(12)
+        result, _ = self.embed(max_seconds=1)
+        self.assertEqual(result["stop_reason"], "max_seconds")
+        self.assertEqual(result["embedded"], 8)
+        self.assertEqual(result["remaining"], 4)
+        self.assertEqual(result["remaining_tokens"], 400)
+        self.assertEqual(self.meta("embed_stop_reason"), "max_seconds")
+        self.assertEqual(self.meta("vectors_complete"), "false")
+
+    def test_a_memory_boundary_stop_is_recorded_before_the_error_surfaces(self) -> None:
+        self.add_chunks(12)
+
+        def fail_on_the_second_batch(call_number: int) -> None:
+            if call_number == 3:  # warmup, batch 1, then this one
+                raise RuntimeError("[metal::malloc] attempted to allocate too much")
+
+        with self.assertRaisesRegex(history_index.IndexError, "memory boundary"):
+            self.embed(generate_hook=fail_on_the_second_batch)
+        self.assertEqual(self.meta("embed_stop_reason"), "memory_boundary")
+        self.assertIsNotNone(self.meta("last_embedded_at"))
+        # The committed batch survives; the run is resumable, not lost.
+        self.assertEqual(self.vector_count(), 4)
+        self.assertEqual(self.meta("vectors_complete"), "false")
+
+    def test_an_empty_backlog_reports_complete_without_touching_the_model(self) -> None:
+        result, output = self.embed()
+        self.assertEqual(
+            (result["embedded"], result["embedded_tokens"], result["stop_reason"]),
+            (0, 0, "complete"),
+        )
+        self.assertEqual(result["remaining_tokens"], 0)
+        self.assertEqual(self.meta("embed_stop_reason"), "complete")
+        self.assertEqual(self.meta("vectors_complete"), "true")
+        self.assertEqual(output, "")
+
+    def test_the_dead_vectors_embed_drops_are_counted_in_its_result(self) -> None:
+        """The one destructive step in this stage needs a receipt.
+
+        The nightly chunk stage runs without sqlite-vec, so it defers both
+        deletions here and says so with ``vectors_dropped: null``. On the live
+        index the first pass after the boilerplate policy lands drops tens of
+        thousands of already-embedded vectors; without a number in the JSON
+        that night is indistinguishable from a night that dropped none, except
+        by diffing status counts across runs.
+        """
+        self.add_chunks(4)
+        demoted_text = "a demoted duplicate chunk with enough characters to embed"
+        demoted_id = self.connection.execute(
+            "INSERT INTO chunks(record_id,seq,ntok,text,usable,text_hash) "
+            "VALUES(1,?,?,?,0,?)",
+            (99, 100, demoted_text, history_index._chunk_text_hash(demoted_text)),
+        ).lastrowid
+        for rowid in (demoted_id, 4242):
+            self.connection.execute(
+                "INSERT INTO vec_chunks(rowid,embedding) VALUES(?,?)",
+                (rowid, b"fixture"),
+            )
+        self.connection.commit()
+
+        result, _ = self.embed(commit_every=10_000)
+        # An orphan is a vector whose chunk is gone; a demoted one is a vector
+        # whose chunk is still there but is no longer embeddable.
+        self.assertEqual(result["orphan_vectors_dropped"], 1)
+        self.assertEqual(result["demoted_vectors_dropped"], 1)
+        self.assertEqual(result["embedded"], 4)
+        # Only the four live chunks keep vectors, and they are the new ones.
+        self.assertEqual(
+            sorted(
+                row[0]
+                for row in self.connection.execute("SELECT rowid FROM vec_chunks")
+            ),
+            [1, 2, 3, 4],
+        )
+
+        # Idempotent, and it still says so: the second night reports zero
+        # rather than going quiet, which is what makes the first night's
+        # large number readable as one-off cleanup.
+        second, _ = self.embed(commit_every=10_000)
+        self.assertEqual(second["stop_reason"], "complete")
+        self.assertEqual(second["orphan_vectors_dropped"], 0)
+        self.assertEqual(second["demoted_vectors_dropped"], 0)
+
+    def test_a_pass_marks_itself_running_before_it_starts_working(self) -> None:
+        """A killed pass runs no handler, so it can only be told apart from a
+        finished one by a marker written on the way in.
+
+        Host OOM and Ctrl-C are exactly the endings this field exists to
+        diagnose, and neither reaches the RuntimeError handler. Without the
+        entry write, status reports the *previous* pass's `complete` next to a
+        stale heartbeat.
+        """
+        self.add_chunks(16)
+        # The previous pass finished cleanly; this one must not inherit its
+        # ending.
+        history_index._meta_set(self.connection, "embed_stop_reason", "complete")
+        self.connection.commit()
+        seen: dict[str, object] = {}
+
+        def watch(call_number: int) -> None:
+            if call_number != 2:  # warmup, then the first real batch
+                return
+            observer = plain_connect(self.db, readonly=True)
+            seen["stop_reason"] = history_index._meta_get(
+                observer, "embed_stop_reason"
+            )
+            observer.close()
+            raise KeyboardInterrupt("the host killed this pass")
+
+        with self.assertRaises(KeyboardInterrupt):
+            self.embed(generate_hook=watch)
+        self.assertEqual(seen["stop_reason"], "running")
+        # And it survives the kill: no handler ran, so this is what status sees.
+        observer = plain_connect(self.db, readonly=True)
+        self.assertEqual(
+            history_index._meta_get(observer, "embed_stop_reason"), "running"
+        )
+        observer.close()
+
+    def test_a_warmup_failure_is_recorded_before_the_error_surfaces(self) -> None:
+        self.add_chunks(8)
+
+        def fail_the_warmup(call_number: int) -> None:
+            if call_number == 1:
+                raise RuntimeError("[metal::malloc] attempted to allocate too much")
+
+        with self.assertRaisesRegex(history_index.IndexError, "warmup"):
+            self.embed(generate_hook=fail_the_warmup)
+        self.assertEqual(self.meta("embed_stop_reason"), "warmup_failed")
+        self.assertEqual(self.vector_count(), 0)
+
+    def test_a_pause_is_a_durable_safe_point(self) -> None:
+        """Being killed during the wait that exists to avoid being killed must
+        not throw away the batches already computed.
+
+        The pause fires every eight batches and the commit checkpoint every
+        EMBED_COMMIT_EVERY chunks; the cadences are not aligned, so without an
+        explicit commit the loop could start waiting with a whole checkpoint's
+        worth of vectors still only in this process.
+        """
+        self.add_chunks(40)
+        seen: dict[str, object] = {}
+
+        def pressure() -> int:
+            # The first probe runs inside the pause, i.e. after the safe point.
+            if "vectors" not in seen:
+                observer = plain_connect(self.db, readonly=True)
+                seen["vectors"] = observer.execute(
+                    "SELECT count(*) FROM vec_chunks"
+                ).fetchone()[0]
+                seen["last_embedded_at"] = history_index._meta_get(
+                    observer, "last_embedded_at"
+                )
+                observer.close()
+                return history_index.HOST_PRESSURE_WARNING
+            return history_index.HOST_PRESSURE_NORMAL
+
+        # A checkpoint far beyond this run, so the only commit that can have
+        # happened by the pause is the safe point itself.
+        result, output = self.embed(commit_every=10_000, pressure=pressure)
+        self.assertEqual(seen["vectors"], 32)  # eight batches of four
+        self.assertIsNotNone(seen["last_embedded_at"])
+        self.assertEqual(result["stop_reason"], "complete")
+        self.assertEqual(result["embedded"], 40)
+        self.assertIn("paused: host memory pressure 2", output)
+
+    def test_pressure_that_never_clears_stops_the_pass(self) -> None:
+        """Waiting forever is worse than stopping: the pass holds the writer
+        lock while it waits, so the next night's index cannot even start."""
+        self.add_chunks(40)
+        result, output = self.embed(
+            commit_every=10_000,
+            pressure=lambda: history_index.HOST_PRESSURE_WARNING,
+            pause_ceiling=10,
+        )
+        self.assertEqual(result["stop_reason"], "host_pressure")
+        self.assertEqual(self.meta("embed_stop_reason"), "host_pressure")
+        # Stopped through the normal exit: what was committed is resumable.
+        self.assertEqual(result["embedded"], 32)
+        self.assertEqual(result["remaining"], 8)
+        self.assertEqual(self.vector_count(), 32)
+        self.assertEqual(self.meta("vectors_complete"), "false")
+        self.assertIn("outlasted the 10s ceiling", output)
+
+    def test_a_host_pressure_stop_exits_zero_so_only_status_can_show_it(self) -> None:
+        """Stopping on host pressure is a success as far as the shell knows.
+
+        The nightly wrapper's only failure signal is the exit code, so a host
+        that stays under pressure advances a few batches a night and still
+        writes OK. That is a real blind spot and the reason the reference doc
+        has to route the alert through `embed_stop_reason` instead of `$?` —
+        this test is what keeps the two honest about each other.
+        """
+        self.add_chunks(40)
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with ExitStack() as stack:
+            stack.enter_context(portable_backend())
+            stack.enter_context(fake_embedding_backend())
+            # After the backend, so this wins over its healthy-host stub.
+            stack.enter_context(
+                mock.patch.object(
+                    history_index,
+                    "_host_memory_pressure_level",
+                    lambda: history_index.HOST_PRESSURE_WARNING,
+                )
+            )
+            stack.enter_context(
+                mock.patch.object(history_index, "EMBED_PAUSE_CEILING_SECONDS", 10)
+            )
+            stack.enter_context(
+                mock.patch.object(history_index, "EMBED_COMMIT_EVERY", 10_000)
+            )
+            stack.enter_context(mock.patch.object(history_index, "time", FakeClock()))
+            stack.enter_context(redirect_stdout(stdout))
+            stack.enter_context(redirect_stderr(stderr))
+            code = history_index.main(
+                [
+                    "--db",
+                    str(self.db),
+                    "embed",
+                    "--model-path",
+                    str(self.model),
+                    "--batch-size",
+                    "4",
+                    "--json",
+                ]
+            )
+        self.assertEqual(code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["stop_reason"], "host_pressure")
+        # Exit 0 with the queue not drained: the exit code cannot show this.
+        self.assertEqual(payload["embedded"], 32)
+        self.assertEqual(payload["remaining"], 8)
+        self.assertEqual(self.meta("embed_stop_reason"), "host_pressure")
+        self.assertEqual(self.meta("vectors_complete"), "false")
+
+    def test_the_pause_is_given_this_runs_own_deadline(self) -> None:
+        """--max-seconds is the run's upper bound, so the pause has to know it."""
+        self.add_chunks(40)
+        seen: list[float | None] = []
+
+        def pause(deadline=None):
+            seen.append(deadline)
+            return 0.0, "clear"
+
+        self.embed(commit_every=10_000, max_seconds=10_000, pause_hook=pause)
+        self.assertTrue(seen, "the loop never reached a pause point")
+        # FakeClock starts at 1000.0 and only moves forward.
+        self.assertTrue(all(value is not None for value in seen))
+        self.assertGreaterEqual(seen[0], 1000.0 + 10_000)
+
+        seen.clear()
+        self.connection.execute("DELETE FROM vec_chunks")
+        self.connection.commit()
+        self.embed(commit_every=10_000, pause_hook=pause)
+        self.assertTrue(seen, "the loop never reached a pause point")
+        # An unbounded run has no deadline to pass; the ceiling still bounds it.
+        self.assertEqual(seen, [None] * len(seen))
+
+    def test_embed_json_leaves_stdout_a_single_document(self) -> None:
+        """`embed --json | jq` has to work: progress is not a result."""
+        self.add_chunks(12)
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with ExitStack() as stack:
+            stack.enter_context(portable_backend())
+            stack.enter_context(fake_embedding_backend())
+            stack.enter_context(
+                mock.patch.object(history_index, "EMBED_COMMIT_EVERY", 4)
+            )
+            stack.enter_context(mock.patch.object(history_index, "time", FakeClock()))
+            stack.enter_context(redirect_stdout(stdout))
+            stack.enter_context(redirect_stderr(stderr))
+            code = history_index.main(
+                [
+                    "--db",
+                    str(self.db),
+                    "embed",
+                    "--model-path",
+                    str(self.model),
+                    "--batch-size",
+                    "4",
+                    "--json",
+                ]
+            )
+        self.assertEqual(code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["embedded"], 12)
+        self.assertEqual(payload["stop_reason"], "complete")
+        self.assertIn("embedded 4/12 chunks", stderr.getvalue())
+
+    def test_status_surfaces_the_stop_reason_and_the_heartbeat(self) -> None:
+        self.add_chunks(8)
+        history_index._meta_set(
+            self.connection,
+            "index_scope",
+            json.dumps({"all_projects": True, "project_path": None, "sources": []}),
+        )
+        self.connection.commit()
+        self.embed(max_seconds=1)
+        with portable_backend():
+            payload = history_index.index_status(
+                self.db, simple_root=None, inspect_sources=False, scope=None
+            )
+        self.assertEqual(payload["embed_stop_reason"], "max_seconds")
+        self.assertEqual(payload["last_embedded_at"], self.meta("last_embedded_at"))
+
+
+class WriterLockTests(unittest.TestCase):
+    """One writer at a time: nothing coordinated manual and nightly runs."""
+
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp_dir.name)
+        self.db = self.root / "finder.db"
+        self.lock_path = Path(str(self.db) + ".lock")
+
+    def tearDown(self) -> None:
+        self.temp_dir.cleanup()
+
+    @contextmanager
+    def held_from_another_run(self):
+        """flock is per open file description, so this really does conflict."""
+        handle = self.lock_path.open("a")
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            handle.close()
+
+    def test_a_second_writer_is_refused_and_told_which_file_to_wait_on(self) -> None:
+        stderr = io.StringIO()
+        with self.held_from_another_run():
+            with ExitStack() as stack:
+                stack.enter_context(
+                    mock.patch.object(
+                        history_index,
+                        "update_index",
+                        side_effect=AssertionError("ran while another writer held the lock"),
+                    )
+                )
+                # Zero budget: this test is about the refusal, not the wait.
+                stack.enter_context(
+                    mock.patch.object(history_index, "WRITER_LOCK_WAIT_SECONDS", 0.0)
+                )
+                stack.enter_context(mock.patch("sys.stderr", stderr))
+                code = history_index.main(["--db", str(self.db), "index"])
+        self.assertEqual(code, 2)
+        message = stderr.getvalue()
+        self.assertIn(str(self.lock_path), message)
+        self.assertIn("Wait for it to finish", message)
+
+    def test_a_short_overlap_is_waited_out_instead_of_failing_the_night(self) -> None:
+        """The nightly script fails the whole night on any non-zero exit.
+
+        Refusing the instant the lock is taken made a one-second overlap with a
+        manual run cost that night's index, chunk and embed; the run is waited
+        out instead, and only an overlap longer than the budget is refused.
+        """
+        handle = self.lock_path.open("a")
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        released: list[float] = []
+
+        def sleep(seconds: float) -> None:
+            """Stand in for the wall clock: the other writer finishes here."""
+            released.append(seconds)
+            if len(released) == 1:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+        stderr = io.StringIO()
+        payload = {"database": str(self.db)}
+        try:
+            with ExitStack() as stack:
+                stack.enter_context(
+                    mock.patch.object(history_index, "_scope_from_args", return_value=None)
+                )
+                stack.enter_context(
+                    mock.patch.object(history_index, "update_index", return_value=payload)
+                )
+                stack.enter_context(
+                    mock.patch.object(
+                        history_index,
+                        "time",
+                        types.SimpleNamespace(sleep=sleep, time=lambda: 0.0),
+                    )
+                )
+                stack.enter_context(mock.patch("sys.stderr", stderr))
+                stack.enter_context(redirect_stdout(io.StringIO()))
+                code = history_index.main(["--db", str(self.db), "index", "--json"])
+        finally:
+            handle.close()
+        self.assertEqual(code, 0)
+        self.assertEqual(released, [history_index.WRITER_LOCK_POLL_SECONDS])
+        # A wait is not a hang: it says what it is waiting for.
+        self.assertIn(str(self.lock_path), stderr.getvalue())
+
+    def test_the_nightly_sequence_hands_the_lock_on_instead_of_deadlocking(self) -> None:
+        payload = {"database": str(self.db)}
+        with ExitStack() as stack:
+            stack.enter_context(
+                mock.patch.object(history_index, "_scope_from_args", return_value=None)
+            )
+            stack.enter_context(
+                mock.patch.object(history_index, "update_index", return_value=payload)
+            )
+            stack.enter_context(
+                mock.patch.object(history_index, "build_chunks", return_value=payload)
+            )
+            stack.enter_context(
+                mock.patch.object(history_index, "embed_chunks", return_value=payload)
+            )
+            stack.enter_context(redirect_stdout(io.StringIO()))
+            codes = [
+                history_index.main(["--db", str(self.db), command, "--json"])
+                for command in ("index", "chunk", "embed")
+            ]
+        self.assertEqual(codes, [0, 0, 0])
 
 
 if __name__ == "__main__":
