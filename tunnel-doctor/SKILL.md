@@ -99,6 +99,7 @@ Determine which scenario applies:
 - **Any tool using system DNS (`ssh`, `curl`, `git`) hangs ~60s before resolving, but `nslookup` returns instantly** → Stalled resolver in `getaddrinfo` chain (Step 2I)
 - **Windows+WSL host: everything offline at once (domestic AND overseas), WSL dead too, "even Tailscale won't come online" — and/or the user tried several recovery actions (switched NICs, toggled TUN) and can't tell which one fixed it** → Windows host TUN cascade + event-log forensics (Step 5C)
 - **Tailscale, DNS, route ownership, and proxy reachability all pass, but large transfers remain slow and switching the active proxy node changes throughput** → proxy node / exit / chain capacity workflow in [references/proxy_node_chain_throughput.md](references/proxy_node_chain_throughput.md)
+- **You want one app's bulk traffic (BaiduNetdisk downloads, Feishu/Lark uploads) off the metered proxy — or out of the status-bar counter entirely** → not a conflict; a splitting task. [references/proxy_conflict_reference.md](references/proxy_conflict_reference.md) § "Per-app traffic splitting on macOS" — which of the three mechanisms (DIRECT rule / `tun-excluded-routes` / `always-real-ip`) can work for the app depends on whether it connects to literal IPs or the system resolver, and the DNS-layer keys are inert on the macOS Catalyst build.
 
 **Key distinctions**:
 - SSH does NOT use `http_proxy`/`NO_PROXY` env vars. If SSH works but HTTP doesn't → Layer 2.
