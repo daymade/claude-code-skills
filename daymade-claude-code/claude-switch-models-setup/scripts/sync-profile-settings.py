@@ -169,6 +169,8 @@ STATE_EXACT = {
     # 按 profile 记的「自动模式环境设置」拒绝计数器（{"denials": N}），同步会把
     # main 的计数抹到别的 profile（2026-09-13 分类）。
     "autoModeEnvSetup",
+    # diff 侧栏开/合状态，纯瞬态 UI 状态（2026-09-13 分类）。
+    "diffSidebarOpen",
 }
 STATE_PREFIX = ("cached", "has", "num", "unpin", "remotecontrol")
 STATE_SUBSTR = (
