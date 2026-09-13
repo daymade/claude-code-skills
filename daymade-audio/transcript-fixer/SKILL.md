@@ -23,7 +23,7 @@ Use a two-phase loop:
 - Before correcting any person name, directly read both the configured global people roster and the owning project's explicit identity roster or alias ledger. Stage 1 auto-loads only global `ASR 变体` entries; it does not load project rosters or expose suppressed, disabled, and unlisted entries. If an expected source is missing or the sources conflict, leave the name unchanged and enqueue or ask once. Never use occurrence frequency as identity evidence. Read [references/dictionary_identity_and_context.md](references/dictionary_identity_and_context.md) before settling the name.
 - Resolve doubts from available evidence before escalating. Audio download is one evidence channel, not a prerequisite for Native correction. When it is unavailable, follow [evidence selection and escalation](references/native_ai_full_workflow.md#evidence-selection-and-escalation); do not require the user to change download permissions or treat every pending row as a question only they can answer.
 - Leave genuinely unresolved text unchanged and enqueue it. A visible garble is safer than a fluent wrong guess; a pending row records uncertainty, not an automatic human handoff.
-- Treat an unfamiliar token as unknown, not as an error. Exhaust the local evidence ladder first. For a load-bearing token that remains unresolved, use the clip-level cross-recognizer rung only when source audio and a permitted second engine are already available; otherwise continue with the available evidence under the escalation policy above. Agreement from a genuinely different recognizer family strongly corroborates the sound, but never chooses between homophonic spellings or overrides the person-name gate. Read native workflow step 4, rung 7 before using it.
+- Treat an unfamiliar token as unknown, not as an error. Exhaust the local evidence ladder first. For a load-bearing token that remains unresolved, use the clip-level cross-recognizer rung only when source audio and a permitted second engine are already available; otherwise continue with the available evidence under the escalation policy above. Agreement from a genuinely different recognizer family strongly corroborates the sound, but never chooses between homophonic spellings or overrides the person-name gate. Read native workflow step 4, rung 7 before using it. **A backlog of exhausted pendings is the batch form of this rung**: when a native pass leaves a queue of locally-unresolvable rows, do not hand the queue to the user wholesale — adjudicate it with `verify_queue_audio.py` (one transcript, one source audio, one second engine, both windows per row); the adjudication matrix and timestamp-mapping pitfalls live in `advanced_correction_evidence.md` § Batch pending adjudication. Only rows whose two windows disagree or stay silent survive to the human.
 - Treat a single-line `asr_note` value as correction provenance: it intentionally cites old forms and is excluded from matching. Multi-line YAML ledger values are not masked; keywords, titles, other ASR-derived metadata, and body text remain in correction scope.
 - Read [references/native_ai_full_workflow.md](references/native_ai_full_workflow.md) in full before performing a native pass. Read the task-specific references named below before their corresponding action.
 
@@ -318,6 +318,12 @@ uv run scripts/generate_word_diff.py original.md corrected.md output.html
 uv run scripts/harvest_corrections.py raw.md corrected.md \
   --context-file ~/.transcript-fixer/contexts/myproject.md --write
 
+# Batch-adjudicate a transcript's pending queue rows via clip-level
+# cross-recognition (one source audio, one second engine, both windows)
+uv run scripts/verify_queue_audio.py \
+  --transcript /abs/meeting.md --audio /abs/source.wav \
+  --speed 1.0 --engine-script /abs/stepfun-asr/scripts/asr_transcribe.py
+
 # Multi-format Stage 1/API comparison report
 uv run scripts/generate_diff_report.py \
   original.md original_stage1.md original_stage2.md \
@@ -347,7 +353,7 @@ All references are one level from this file.
 | Dictionary, people roster, domain contexts | [dictionary_identity_and_context.md](references/dictionary_identity_and_context.md) |
 | False-positive policy | [false_positive_guide.md](references/false_positive_guide.md) |
 | Queue, dashboard, audio, re-anchor | [review_queue_dashboard.md](references/review_queue_dashboard.md) |
-| Numbers, photos, multi-recording, clip cross-check, batches | [advanced_correction_evidence.md](references/advanced_correction_evidence.md) |
+| Numbers, photos, multi-recording, clip cross-check, batches, batch pending-queue audio adjudication | [advanced_correction_evidence.md](references/advanced_correction_evidence.md) |
 | Context-file grammar/template | [domain_context_guide.md](references/domain_context_guide.md) |
 | CLI flags and review-item schema | [script_parameters.md](references/script_parameters.md) |
 | Database schema and queries | [database_schema.md](references/database_schema.md), [sql_queries.md](references/sql_queries.md) |
