@@ -26,7 +26,13 @@ RECEIPT_MAX_AGE_SECONDS = 24 * 60 * 60
 # Strong signals name prior work outright ("我们之前…", "复用", "reuse"). They
 # arm the gate on their own.
 PRIOR_WORK_STRONG_SIGNAL = re.compile(
-    r"(?:我们之前|以前|之前做过|之前(?:用|跑|做|配|装|搭|建|写)|"
+    r"(?:我们之前|之前做过|之前(?:用|跑|做|配|装|搭|建|写)|"
+    # 裸「以前」不再独立武装（2026-09-13 审计实证：「和以前的那些 agent browser
+    # 有什么区别」是对比句式，被「以前」一词武装）。「以前」须带工作名词或
+    # 做事形态才算检索请求；真召回「我们以前是怎么做的」经 做的 命中。
+    r"以前[^\n，,。；;]{0,8}"
+    r"(?:代码|脚本|方案|框架|配置|文档|流程|做法|做的|做过|工具|库|接口|命令|"
+    r"模板|仓库|分支|模块|服务|规则|SOP)|"
     # Bare 已有/现有/既有 used to arm ordinary references to the current
     # checkout ("现有测试或 README 如果冲突才同步"). Existing work must name a
     # reusable asset; current tests/files/behavior are not a history request.
@@ -35,7 +41,10 @@ PRIOR_WORK_STRONG_SIGNAL = re.compile(
     r"(?:个|套|份|条|版|组|批|项|段)?\s*"
     r"(?:代码|脚本|方案|资产|成果|SOP|流程|做法|工具|模板|系统)|"
     r"历史经验|历史决策|以前的代码|已有代码|"
-    # 成功的经验 — the 的 particle broke the literal 成功经验.
+    # 成功的经验 — the 的 particle broke the literal 成功经验.（2026-09-13 收窄而
+    # 不是删除：该词同时是纠偏话术高频词「记得/保证你成功的经验」（语义=记住
+    # 本次，非检索已有），系统性误触发 4 个 session；疑问形「成功的经验又是
+    # 什么」是真召回。指令形由 IMPERATIVE_REMEMBER 剔除，见下。）
     r"成功(?:的)?经验|"
     # 不希望你重新造轮子 — the literal 不要重新/不要重造/别重复 missed every
     # natural phrasing of the same ask.
@@ -107,6 +116,12 @@ NEGATED_PRIOR_SIGNAL = re.compile(
 # "这些 Skill 也是很久之前写的" dates something to argue it is stale — the
 # opposite of asking to go find it. Excised like a negation.
 STALE_AGE_IDIOM = re.compile(r"(?:很久|太久|好久|老早|早就)\s*(?:以前|之前)")
+# 「记得/保证/记住…成功的经验」是让对方**记住本次**的纠偏话术，不是检索已有
+# 工作的请求（2026-09-13 审计：4 个 session 被它武装后，只读动作/peer 消息接连
+# 被拦）。疑问形「成功的经验又是什么」不在此模式内，仍武装。
+IMPERATIVE_REMEMBER = re.compile(
+    r"(?:记得|记住|保证|别忘了?|沉淀|记录)[^\n，,。；;]{0,12}成功(?:的)?经验"
+)
 # 「我们这个对话最开始是想要干什么来着」/「我们的主线任务是什么来着」ask what the
 # CURRENT session is about. The answer is the conversation already in front of the
 # executor: no carrier to search, no candidate to verify, and no artifact produced —
@@ -165,7 +180,12 @@ SHELL_UNKNOWN_EXECUTOR = re.compile(
     # The lookbehind keeps file-suffix collisions out: `report.sh` is a path
     # argument to read, not the interpreter `sh` — a dot (or word char)
     # immediately before the token means it is a filename component.
-    r"(?<![\w.])(?:python(?:3)?|node|bash|zsh|sh)\b",
+    # The lookahead keeps directory components out: `cd /workspace/python/x`
+    # has `python` followed by `/` — a path segment, not an interpreter
+    # (2026-09-13 审计实证：jeepay-monorepo 一条纯只读 sed/grep 被
+    # `/python/` 目录名误拦)。绝对路径解释器 `/usr/bin/python3 -c …`
+    # 后面跟的是空格，不在豁免内，照样拦。
+    r"(?<![\w.])(?:python(?:3)?|node|bash|zsh|sh)\b(?!/)",
     re.IGNORECASE,
 )
 SHELL_READ_ONLY_EXECUTOR = re.compile(
@@ -175,7 +195,7 @@ SHELL_READ_ONLY_EXECUTOR = re.compile(
 )
 RETRIEVAL_ROUTES = {
     "prior_work.py": {"validate-manifest", "retrieve", "complete", "check"},
-    "history_index.py": {"recall", "status"},
+    "history_index.py": {"recall", "status", "index"},
     "analyze_sessions.py": {"search", "locate-codex"},
     "read_chat.py": None,
 }
@@ -225,7 +245,8 @@ def classify_prompt(prompt: str, receipt_valid: bool = False) -> str:
     if USER_OPTOUT.search(text):
         return "opt_out"
     scannable = CURRENT_SESSION_RECALL.sub(
-        " ", STALE_AGE_IDIOM.sub(" ", NEGATED_PRIOR_SIGNAL.sub(" ", text))
+        " ", STALE_AGE_IDIOM.sub(" ", IMPERATIVE_REMEMBER.sub(
+            " ", NEGATED_PRIOR_SIGNAL.sub(" ", text)))
     )
     if PRIOR_WORK_STRONG_SIGNAL.search(scannable):
         return "required_prior_signal"
@@ -342,6 +363,16 @@ def _segment_is_retrieval_route(segment: str) -> bool:
         words = shlex.split(segment, posix=True)
     except ValueError:
         return False
+    # VAR=$(route …) 整段就是「检索并接住输出」：解开赋值+替换包装递归判定
+    # （2026-09-13 审计：receipt 过期后的标准解锁动作被 $( 包装误拦）。
+    # 只解「整段=赋值* + 一个替换 + 可选 stderr 合并」的形态；藏在参数里的
+    # 替换（script.py "$(rm -rf x)"）仍由下方 fail-closed 检查拦死。
+    unwrapped = re.match(
+        r"^\s*(?:[A-Za-z_][A-Za-z0-9_]*=\s*)*\$\((?P<inner>.*)\)"
+        r"\s*(?:2>&1|2>/dev/null)?\s*$",
+        segment, re.DOTALL)
+    if unwrapped:
+        return _segment_is_retrieval_route(unwrapped.group("inner"))
     substitution_tokens = ("$(", "`", "<(", ">(", "=(")
     if not words or any(
         token in word for word in words for token in substitution_tokens
@@ -457,11 +488,17 @@ def _strip_quoted_text(fragment: str) -> str:
 
 def _has_formal_file_redirection(event: dict[str, Any]) -> bool:
     for fragment in _shell_fragments(event):
-        for match in FILE_REDIRECTION.finditer(_strip_quoted_text(fragment)):
-            target = match.group("target").strip("\"'")
-            if target in {"/dev/null", "&1", "&2"}:
+        for segment in _shell_segments(fragment):
+            # 检索路由自身的输出落盘是检索动作的一部分（2026-09-13 审计实证：
+            # 「receipt 过期后重新 retrieve > /tmp/out」被当写信号拦）。
+            # 非路由段里的重定向不受影响，照旧计写信号。
+            if _segment_is_retrieval_route(segment):
                 continue
-            return True
+            for match in FILE_REDIRECTION.finditer(_strip_quoted_text(segment)):
+                target = match.group("target").strip("\"'")
+                if target in {"/dev/null", "&1", "&2"}:
+                    continue
+                return True
     return False
 
 

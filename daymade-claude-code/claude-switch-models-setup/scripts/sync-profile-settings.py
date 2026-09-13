@@ -139,6 +139,7 @@ BEHAVIOR_KEYS = {
     "fleetViewGroupMode",      # agent fleet view grouping
     "prStatusFooterEnabled",   # PR status in the footer
     "deepLinkTerminal",        # terminal for deep links
+    "showExpandedTodos",       # todo list expanded/collapsed display (bool, 2026-09-13)
 }
 
 # Keys a sync must NEVER touch: per-profile runtime state, caches, counters,
@@ -165,12 +166,17 @@ STATE_EXACT = {
     "seenNotifications", "tipsHistory", "tipLifetimeShownCounts",
     "announcementImpressions", "clientDataCacheSlots", "groveConfigCache",
     "fotwUpsellFulfilled",
+    # 按 profile 记的「自动模式环境设置」拒绝计数器（{"denials": N}），同步会把
+    # main 的计数抹到别的 profile（2026-09-13 分类）。
+    "autoModeEnvSetup",
 }
 STATE_PREFIX = ("cached", "has", "num", "unpin", "remotecontrol")
 STATE_SUBSTR = (
     "cache", "count", "seen", "dismissed", "fulfilled", "impressions",
     "watermark", "upsell", "nudge", "usage", "oauth", "apikey", "last",
     "tip", "token", "credential", "secret", "migration", "declin",
+    # 「已回答某一次性提示」的时间戳家族（XxxAnsweredAt），永不同步（2026-09-13）。
+    "answeredat",
 )
 
 # Gray keys a human already classified as "deliberately not synced", with the

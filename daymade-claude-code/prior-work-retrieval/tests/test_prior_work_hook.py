@@ -318,19 +318,96 @@ class PriorWorkHookTests(unittest.TestCase):
         substantial, reason = hook.substantial_tool_use(double_quoted)
         self.assertFalse(substantial, reason)
 
-    def test_unquoted_redirection_even_after_route_stays_gated(self) -> None:
-        # Stripping quoted text must not weaken the gate: a real redirection
-        # in unquoted position — even trailing a whitelisted route command —
-        # is still a write.
-        event = {
+    def test_route_output_capture_is_exempt_nonroute_redirection_stays_gated(self) -> None:
+        # 2026-09-13 审计后有意反转旧锁定（旧测试名：unquoted redirection even
+        # after route stays gated）：receipt 过期后的标准解锁动作
+        # 「retrieve … > /tmp/out」被当写信号拦死，而重定向写的就是路由自己的
+        # stdout——检索输出落盘是检索动作的一部分，豁免。
+        # 非路由段的重定向照旧计写信号。
+        route_capture = {
             "tool_name": "Bash",
             "tool_input": {
                 "command": "uv run python scripts/prior_work.py check > receipt.json"
             },
         }
-        substantial, reason = hook.substantial_tool_use(event)
+        substantial, reason = hook.substantial_tool_use(route_capture)
+        self.assertFalse(substantial, reason)
+        nonroute_write = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": "uv run python scripts/prior_work.py check && ls > /tmp/x"
+            },
+        }
+        substantial, reason = hook.substantial_tool_use(nonroute_write)
         self.assertTrue(substantial, reason)
         self.assertEqual(reason, "Bash:write_signal")
+
+    def test_audit_20260913_regressions(self) -> None:
+        # 2026-09-13 高频闸门审计的四个误拦实证（逐条来自真实 transcript）。
+        # #5 unknown_executor：路径组件 /python/ 不是解释器调用
+        path_seg = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": "cd ~/workspace/python/video-rough-cut && sed -n '461,486p' tests/x.py"
+            },
+        }
+        substantial, reason = hook.substantial_tool_use(path_seg)
+        self.assertFalse(substantial, reason)
+        # 绝对路径解释器仍然拦（lookahead 只排除后紧跟 / 的目录形态）
+        abs_interp = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "/usr/bin/python3 -c 'open(\"/tmp/e\",\"w\")'"},
+        }
+        substantial, reason = hook.substantial_tool_use(abs_interp)
+        self.assertTrue(substantial, reason)
+        # #4 赋值+替换包裹的 retrieve 是检索动作
+        wrapped = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": "RUN=$(uv run python scripts/prior_work.py retrieve --business-outcome 'x') 2>&1; ec=$?"
+            },
+        }
+        substantial, reason = hook.substantial_tool_use(wrapped)
+        self.assertFalse(substantial, reason)
+        # 藏在参数里的替换仍 fail-closed
+        hidden = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": "uv run python scripts/prior_work.py retrieve --business-outcome \"$(rm -rf /tmp/y)\""
+            },
+        }
+        substantial, reason = hook.substantial_tool_use(hidden)
+        self.assertTrue(substantial, reason)
+
+    def test_audit_20260913_prompt_regressions(self) -> None:
+        # #9 对比句式的「以前」不武装
+        self.assertEqual(
+            hook.classify_prompt(
+                "到底和以前的那些 agent browser 有什么区别", False),
+            "none",
+        )
+        # 「以前」带做事形态仍武装
+        self.assertEqual(
+            hook.classify_prompt("不要复用 aicms-docs，但看看我们以前是怎么做的", False),
+            "required_prior_signal",
+        )
+        # 纠偏话术「记得你成功的经验」（指令形）不武装
+        self.assertEqual(
+            hook.classify_prompt(
+                "保证你在压缩上下文之后还能记得你成功的经验", False),
+            "none",
+        )
+        # 疑问形「成功的经验又是什么」仍武装
+        self.assertEqual(
+            hook.classify_prompt(
+                "最后成功的经验又是什么？如果我们以后还想去抓微信公众号", False),
+            "required_prior_signal",
+        )
+        # 召回主干不动：「我们之前」裸形态仍武装
+        self.assertEqual(
+            hook.classify_prompt("帮我回忆一下，我们之前已经见过两次了", False),
+            "required_prior_signal",
+        )
 
     def test_gate_messages_carry_the_real_session_id(self) -> None:
         # Regression (2026-08-27): the deny message only ever showed the
