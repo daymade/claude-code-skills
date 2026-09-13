@@ -87,6 +87,14 @@ uv run --no-project python scripts/prior_work.py retrieve \
   --session-id "$CODEX_SESSION_ID"
 ```
 
+Do NOT redirect the output (`> /tmp/run.txt`) to save it: by design
+(2026-08-27, regression-locked in `test_unquoted_redirection_even_after_
+route_stays_gated`) a file redirection trips the write gate even on a
+read-only route command, so a redirected retrieve is blocked and the run
+JSON never lands where you aimed. Let the output print and read it from the
+transcript; the durable copy is the run JSON under the manifest's `state_dir`
+(its `run_path` is printed on the last line).
+
 `--session-id`: use it only with `retrieve`, `complete`, and `check`; `validate-manifest`
 does not accept it. On Codex use `$CODEX_SESSION_ID`. Claude Code has no such env
 var, so take the exact id carried verbatim in prior-work hook messages
