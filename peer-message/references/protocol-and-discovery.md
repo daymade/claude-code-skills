@@ -5,6 +5,8 @@ description: Transport-neutral addressing, Claude UDS and Codex queue contracts,
 
 # 协议与发现
 
+仅在 `SKILL.md` 已选定脚本补缺，或需要排查脚本信封与接收证据时加载本文件。原生通信沿宿主地址、包装和结果通道；不为兼容本文件改写原生 agent/thread 标识，也不在原生消息之后追加脚本发送或验证。
+
 ## 1. 统一地址
 
 | 地址 | 解析 |
@@ -33,18 +35,18 @@ description: Transport-neutral addressing, Claude UDS and Codex queue contracts,
 
 **回信**：把信封的 `from` 抄进官方工具的 `to`——这就是官方工具自己给的指示，对本 Skill 发出的信封成立，对 host 自己发的信封也成立。
 
-信封没有 `from` 时，用同一行的 `from-name`：host 发的信封里它就是官方要的裸名。**但这条退路只对 host 发的信封有效**——一个产生者若两个字段同源，坏起来会一起坏，所以正解永远是产生者归一化（本 Skill 在 `send_claude` 里做），不是接收方补救。都没有就走 `peer.py send`，它认 UUID。
+信封没有 `from` 时，用同一行的 `from-name`：host 发的信封里它就是官方要的裸名。**但这条退路只对 host 发的信封有效**——一个产生者若两个字段同源，坏起来会一起坏，所以正解永远是产生者归一化（本 Skill 在 `send_claude` 里做），不是接收方补救。两个字段都不可用时，先用当前原生发现消歧；仅当目标身份已确认且原生工具未覆盖它时，才按主路由考虑 `peer.py send`，不要靠切换地址空间猜人。
 
 **`No agent named ... is reachable` 不证明对方不存在。** 地址形式不对会得到同一条报错，而官方列表每行显示成 `name [ref]`、那个 ref 不是 session-UUID 的前缀，所以拿 UUID 去肉眼比对也对不上——三件事叠在一起，很容易把「形式用错」读成「对方没了」。
 
 **查不到就是查不到，不要换 route 重试。** `peer.py list` 与 `peer.py send` 读的是同一个 `claude_registry()`，list 里没有的 send 也送不到（exit 3）。不在 registry 里通常意味着对方进程已经退出，换 route 只会多一次失败。
 
 **When** 手上有一个信封的 `from`，准备回信。
-**Do** 直接抄进 `to`；`from` 缺失或是 `claude:<uuid>` 时改用 `from-name`，都没有再走 `peer.py send`。
+**Do** 对原生可达的 Claude 发送方直接抄有效 `from` 进 `to`；`from` 缺失或是 `claude:<uuid>` 时改用有效 `from-name`。地址仍不明确就先消歧，不自动改用脚本。Codex 发送方按主路由选择可达它的通道。
 **Expected evidence** 发送回执 `success` / `transport_status=accepted`。
-**If missing** 报「对方不可达」并停止，不要枚举地址形式重试。
+**If missing** 报「当前地址未解析／送达未确认」及实际证据范围并停止，不把工具缺席或地址错误推断为对方不存在。
 **Do not infer** `No agent named` 既不证明对方不存在，也不证明它不可达。
-**Stop** 同一目标失败两次即停，把地址原样报给调用者。
+**Stop** Held、拒绝、超时或结果不明时停止发送并沿原通道核查；地址尚未解析时停止发送并报告缺口，不以重发或换通道验证身份。
 
 ## 2. Claude 发现与 UDS fallback
 
@@ -91,9 +93,9 @@ UDS 连接写两行 NDJSON 后关闭：
 
 `from` 是接收方回信要用的地址，`from-name` 是显示来源。**`from` 必须是官方工具也能解析的形式**（当前实现发 `uds:<socket>`，见 §1）——收信的那个 session 可能根本没装本 Skill，它手上只有 host 那句「回信就把 `from` 抄进 `to`」和官方工具；`from` 若是 `claude:<session-uuid>`，它会得到 `No agent named ...`，而且**没有任何接收侧的补救路径**（官方列表的 `[ref]` 不是 UUID 前缀，对不上）。这类缺陷只能由信封的产生者修。
 
-**Codex 发送方：标识符是好的，缺的是官方工具能解析的形式。** `codex:<thread-id>` 是可用的回信地址——`codex queue --thread` 收它（help 逐字："Session UUID or exact session name"），`resolve_codex` 解析它；只是官方 Claude 工具用任何地址都到不了 Codex thread，这是两个产品之间的事实、不是缺陷。
+**Codex 发送方：标识符是好的，缺的是官方工具能解析的形式。** `codex:<thread-id>` 是本脚本可解析的回信地址——`resolve_codex` 去掉前缀、解析目标后，把 thread UUID 传给 `codex queue --thread`（help 逐字："Session UUID or exact session name"）；只是官方 Claude 工具用任何地址都到不了 Codex thread，这是两个产品之间的事实、不是缺陷。
 
-所以 `from` **保持** `codex:<thread-id>`，同时在正文首行补 `[reply: peer.py send codex:<id>]`——属性集合是固定的，正文首行是唯一还能说话的地方。**两个一起走**：删掉地址只为了让一类接收方少踩一次可恢复的失败，会同时夺走另一类接收方手里能用的东西，还让路由脱离了它所路由的对象。
+所以 `from` **保持** `codex:<thread-id>`，同时在正文首行补 `[reply: peer.py send codex:<id>]`（这是跨产品脚本补缺提示，接收者仍先按主路由检查原生工具是否覆盖目标）——属性集合是固定的，正文首行是唯一还能说话的地方。**两个一起走**：删掉地址只为了让一类接收方少踩一次可恢复的失败，会同时夺走另一类接收方手里能用的东西，还让路由脱离了它所路由的对象。
 
 当前 Claude parser 只接受它定义的 peer 属性集合与顺序；`message-id` 因此留在正文首行，不能自创 XML attribute。脚本拒绝正文自行闭合 `cross-session-message`/`peer-message`，避免正文逃出来源边界。官方 `SendMessage` 可用时不要手写这层；让官方通道负责包装和版本适配。
 

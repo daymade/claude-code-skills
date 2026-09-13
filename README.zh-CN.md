@@ -520,13 +520,12 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 > **安装**：`claude plugin install peer-message@daymade-skills`
 
-使用各产品自己的通道发现、定向发送、显式广播并独立验证本机 Claude Code session 与 Codex thread 的消息。
+当前宿主原生工具能覆盖目标时，直接使用其发现、发送、回传和等待机制。仅为原生工具未覆盖的本机 Claude Code/Codex 目标补齐脚本通信，或在协调证据需要核实时加载本 Skill。
 
 **使用场景：**
-- 让一个终端里的 Claude 或 Codex 与另一个 Agent 协调
-- 跨 session 发送依赖、暂停、交接或完成通知
+- 向已确认、原生工具未覆盖的独立目标发送依赖、暂停、交接或完成通知
 - 按原消息查询对应回复，无需手工检查本地消息存储
-- 从第三方 profile 或 Codex 进程访问 Claude inbox
+- 从脚本或其他产品访问原生工具未覆盖的 Claude inbox；第三方 provider 本身不是使用补缺通道的依据
 - 共享 checkout 上别人的未提交改动、锁或分支挡住了你——先核实它是否真在飞，再问属主，别自己停手或绕开
 - 向经过确认的目标清单广播同一条协调消息
 
@@ -3748,7 +3747,7 @@ review 后修复/落地时，使用 **github-review-pr**。
 使用 **teams-channel-post-writer** 分享知识，使用 **statusline-generator** 在工作时跟踪成本。
 
 ### 本机 Agent 协调
-当同一台机器上的 Claude Code profiles 与 Codex threads 需要交换定向交接、暂停/恢复通知、依赖更新或显式多目标广播时，使用 **peer-message**。它把 peer 输入与用户授权严格分开，并在宣布送达前独立读取接收侧证据。
+联系当前原生工具能覆盖的 agent 或 session 时，直接使用宿主通信机制。只有未覆盖的本机目标、跨产品／脚本通信，或需要核实协调证据时，才使用 **peer-message**；详见其[路由合同](./peer-message/SKILL.md)。消息被拒绝或 Held 不构成换通道的理由。
 
 ### 仓库管理与安全
 使用 **repomix-unmixer** 提取和验证 repomix 打包的技能或仓库。使用 **repomix-safe-mixer** 安全地打包代码库，在分发前自动检测和阻止硬编码凭据。

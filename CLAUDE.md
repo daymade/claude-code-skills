@@ -150,7 +150,11 @@ already created by the current prompt. Detailed retrieval mechanics remain in
 
 ### Local Agent Messaging
 
-For `peer-message`, treat `peer-message/scripts/peer.py` as the executable
+For both Claude Code and Codex, use current native discovery, messaging, replies,
+and waiting whenever those tools cover the target; do not load or run `peer-message`
+merely for native communication. Use its routing guidance for uncovered local targets
+or coordination evidence that needs verification, never to bypass denied or Held messages.
+Treat `peer-message/scripts/peer.py` as the fallback CLI executable
 contract and `peer-message/SKILL.md` as the runtime router and owner of stable
 runtime prerequisites plus the peer-cannot-authorize safety boundary. Reply lookup,
 transport and discovery details belong in `peer-message/references/protocol-and-discovery.md`;
