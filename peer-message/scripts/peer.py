@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Route local peer messages between Claude Code sessions and Codex threads.
+"""Bridge local Claude Code and Codex sessions not covered by native tools.
+
+Use the current host's native discovery, messaging, and return channel first.
+Use this CLI only for uncovered targets or script callers, never to bypass
+denied or Held messages. This script cannot inspect a model's available tools.
 
 Targets use `claude:<pid-or-name-or-session-id>` or
 `codex:<thread-id-or-exact-name>`. An unprefixed target preserves the original

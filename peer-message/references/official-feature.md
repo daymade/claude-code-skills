@@ -5,6 +5,12 @@ description: Current Claude Code and Codex messaging surfaces, availability chec
 
 # 当前官方通道与 fallback 决策
 
+## 0. 两个产品使用同一套选择流程
+
+先读当前宿主工具契约；有工具发现入口时先查询原生通信工具。使用能覆盖目标的原生发现、发送、回传与等待机制，不先执行 `peer.py list`、`whoami` 或 `verify`。只有已确认的目标不在原生能力范围内，才按 `SKILL.md` 进入脚本补缺。
+
+区分三层证据：安装包含有实现、当前会话暴露了可调用工具、消息真实送达。前一层不能证明后一层。原生工具拒绝、Held、超时或返回不明确时，在原通道核查，不换脚本重发；无可确认的目标身份时保持 unknown。
+
 ## 1. Claude Code：先用官方 cross-session messaging
 
 当前 Claude Code 官方入口：
@@ -14,7 +20,7 @@ description: Current Claude Code and Codex messaging surfaces, availability chec
 - 输入框：`@<session-name>`。
 - 地址：同机 UDS/named pipe、Remote Control session 或 cloud session，均由官方列表解析。
 
-当官方工具存在时，让 Claude 自己发现并发送。不要仅因为以前某个第三方 profile 没有工具，就永久固定走私有线格式。
+当官方工具存在且覆盖目标时，让 Claude 自己发现并发送。`SendMessage` 同时覆盖受支持的 subagent、agent-team 成员和独立 session；具体地址与参数以当前工具契约为准。内部任务沿原生关系回传，不执行脚本 `whoami`。不要仅因为以前某个第三方 profile 没有工具，就永久固定走私有线格式。
 
 ## 2. Availability（2026-08-31 重查）
 
@@ -86,7 +92,21 @@ Claude Code 官方明确限制 peer 消息：
 
 官方文档描述的是向自己 session 回帖的 token 出口；跨 session 读取目标 key 文件仍是当前本地实现 fallback，必须受版本漂移 smoke test 约束。
 
-## 6. Codex：`codex queue`
+## 6. Codex / ChatGPT：先辨原生目标范围，再考虑 queue
+
+### 当前任务内的 agent
+
+沿当前宿主提供的协作工具联系 agent。已观察到的宿主提供 `collaboration.send_message`、`followup_task`、`list_agents`、`wait_agent`，并自动向父任务交付子任务结果。其他宿主可能使用不同名称；不要把示例当成保证存在的命令。
+
+按每个工具的契约使用创建时返回的 agent 标识或任务路径。`send_message` 与能唤醒空闲 agent 的 follow-up 不一定同义；等待与结束通知也按宿主契约执行。任务树地址不能直接传给 `codex queue`，内部工具可达子 agent 也不证明它能联系另一个独立 session。
+
+### App 的独立任务
+
+当当前会话暴露 `list_threads`、`send_message_to_thread`、`wait_threads` 等 App 原生工具时，直接用工具返回的 thread/host 标识，沿其状态与回传机制协调，不执行 `peer.py`。工具参数、可见目标和等待行为以当前 schema 为准。
+
+证据范围（2026-09-13）：本机 ChatGPT App 26.908.40834 的程序包包含上述工具定义及发送执行分支，并包含 “Sent by ChatGPT from another task” 对应的产品名模板和携带来源 thread ID 的 `codex_delegation` 包装。该检查证明实现存在，未验证发送成功；同次被检查的模型工具目录没有暴露这些 App 线程工具。不要仅凭界面提示或安装包定义宣称任意会话都能调用它们，也不要手写原生包装冒充宿主来源。
+
+### 原生工具未覆盖的本机独立 thread
 
 当前本机 Codex CLI 暴露：
 
@@ -94,13 +114,13 @@ Claude Code 官方明确限制 peer 消息：
 codex queue --thread <THREAD> --message <TEXT>
 ```
 
-这是 Claude/Codex 跨产品投递的首选 Codex 入口。官方 OpenAI 文档检索目前没有给出一个独立的 queue 页面，因此运行时参数以本机 `codex queue --help` 与真实返回为准；Skill 不从 ChatKit、Assistants API 或 Responses conversation API 类推 Codex 本地 thread 行为。
+仅在原生工具未覆盖已确认的 Codex 独立目标，或由 hook/script 调用时使用这个 CLI。`peer.py` 在它外面提供地址解析、来源信封和独立读回；它不替代原生 agent 协作。官方 OpenAI 文档检索目前没有给出一个独立的 queue 页面，因此运行时参数以本机 `codex queue --help` 与真实返回为准；Skill 不从 ChatKit、Assistants API 或 Responses conversation API 类推 Codex 本地 thread 行为。
 
 `codex agents` 是交互式 TUI，适合人浏览 shared app-server sessions；脚本化发现读取本地 thread catalog，但只把它叫 saved catalog，不据此判断活性。
 
 ## 7. 跨机器边界
 
-本 Skill 当前只承诺同机协调：
+本 Skill 的脚本 transport 当前只承诺同机协调；原生通道遵循各自范围：
 
 - Claude 同机官方消息留在本地 socket/named pipe。
 - Claude 跨机器/cloud 走官方 Remote Control/Anthropic 通道，并受 `isolatePeerMachines`。
@@ -108,5 +128,7 @@ codex queue --thread <THREAD> --message <TEXT>
 
 ## Sources
 
-- Claude Code: `https://code.claude.com/docs/en/cross-session-messaging`（2026-08-31 重查）。
+- Claude Code: [Cross-session messaging](https://code.claude.com/docs/en/cross-session-messaging)（2026-09-13 重查原生目标范围）。
+- Codex: [Subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents) 与当前宿主实际工具契约（2026-09-13）。
+- ChatGPT App: §6 所列版本的工具 schema、发送分支和界面模板；仅实现与暴露面取证，无真实发送测试。
 - Codex: 本机 `codex queue --help`、错误目标非零实验、真实入队截图与 thread-history 读回（2026-08-31）。

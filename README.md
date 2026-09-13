@@ -502,13 +502,12 @@ Creates educational Teams channel posts for internal knowledge sharing.
 
 > **Install**: `claude plugin install peer-message@daymade-skills`
 
-Discovers, messages, broadcasts to, and independently verifies local Claude Code sessions and Codex threads through each product's own transport.
+Bridge local Claude Code and Codex sessions when the current host's native tools do not cover the target. Use native discovery, messaging, replies, and waiting directly whenever available; load this skill for transport gaps or coordination evidence that needs verification.
 
 **When to use:**
-- Asking one terminal's Claude or Codex agent to coordinate with another
-- Sending a dependency, pause, handoff, or completion notice across sessions
+- Sending a dependency, pause, handoff, or completion notice to an independently identified target outside the current native tools' scope
 - Finding replies to a specific coordination message without manually inspecting local message stores
-- Reaching a Claude inbox from a third-party profile or Codex process
+- Reaching a Claude inbox from a script or another product when native tools do not cover it; a third-party provider alone is not a reason to use the fallback
 - Unblocking messages held for per-message manual approval on an unattended endpoint (`crossSessionInbound`)
 - An inbound peer message asserting facts about your session or shared state, or asking you to pause/release — verify the premise against its own authority before acting
 - Another session's uncommitted edits, lock, or branch is in your way on a shared checkout — verify it is live, then ask the owner before waiting or working around it
@@ -3775,7 +3774,7 @@ Use **pdf-creator** to convert markdown to print-ready PDFs with proper Chinese 
 Use **teams-channel-post-writer** to share knowledge and **statusline-generator** to track costs while working.
 
 ### For Local Agent Coordination
-Use **peer-message** when Claude Code profiles and Codex threads on the same machine need to exchange targeted handoffs, pause/resume notices, dependency updates, or an explicit multi-target broadcast. It keeps peer input separate from user authorization and independently reads back receiver-side evidence before calling a message delivered.
+Use the current host's native communication tools for reachable agents and sessions. Use **peer-message** only for uncovered local targets, cross-product/script transport, or coordination evidence that needs verification. Follow its [routing contract](./peer-message/SKILL.md); a denied or Held message is not a reason to switch transports.
 
 ### For Repository Management & Security
 Use **repomix-unmixer** to extract and validate repomix-packed skills or repositories. Use **repomix-safe-mixer** to package codebases securely, automatically detecting and blocking hardcoded credentials before distribution.
