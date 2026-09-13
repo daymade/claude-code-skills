@@ -88,6 +88,61 @@ curl -s -X POST "http://<ip>:8080/api/save" -d @config.txt
 
 **Important**: The API `save` only writes to the editor buffer. The user must click **Save** in the Shadowrocket UI to persist changes. After saving, the VPN connection must be restarted for route changes to take effect.
 
+**API lifecycle and exposure** (verified 2026-09-13, macOS Catalyst build): the API listens on `*:8080` — **all interfaces, so the whole LAN can read *and* rewrite the proxy config while it is up** — and exists only while the Edit Plain Text view is open. Leaving that view (back button) stops the listener. Never leave the editor open unattended; verify shutdown with `lsof -nP -iTCP:8080 -sTCP:LISTEN` (expect zero rows). `api/read` returns the editor buffer with a `# Shadowrocket: <timestamp>` header line, so it reflects unsaved edits, not necessarily the on-disk config.
+
+### Direct database writes (default.db) — when the GUI is not an option
+
+The live config on macOS is a SQLite FTS3 table, not the `.conf` text (the text is an export view):
+
+```
+~/Library/Containers/com.liguangming.Shadowrocket/Data/Documents/Databases/default.db
+  table config(section, name, value, option, ext, remarks, created)
+```
+
+Rules match in **ascending rowid order**; `FINAL` sits at the highest rowid. An `INSERT` lands *after* FINAL and never matches — to add rules you must renumber: insert your rows, `DELETE` the trailing `# China`/`GEOIP`/`# Final`/`FINAL` rows, then re-insert them so they come last. The compiled product the tunnel consumes lives at `~/Library/Group Containers/group.com.liguangming.Shadowrocket/rule.db` (NSKeyedArchiver bplists per config section) — parse it to confirm what the app actually accepted.
+
+Contract for safe writes:
+
+1. `osascript -e 'quit app "Shadowrocket"'` first — a running app holds its own copy and will overwrite the db on exit.
+2. Write with a transaction; back up `default.db` first.
+3. Relaunch the app, then reconnect the tunnel (`shadowrocket://disconnect` / `shadowrocket://connect`) — a tunnel that survived the app quit keeps the old config.
+4. **Subscription refresh (`DLWSubscribeAutoUpdateKey = true` by default) wipes direct db writes.** Direct writes are for one-shot experiments or need a replay script; durable rule injection belongs in modules (below).
+
+### Local modules (.sgmodule) — the durable injection point
+
+Local module files live at `~/Library/Containers/com.liguangming.Shadowrocket/Data/Documents/Modules/*.sgmodule` and are picked up from that directory without any plist registration (`DLWModuleManager` staying empty is normal). `[Rule]` entries in a module do apply; **`[General]` keys in a module are silently ignored** (verified 2026-09-13: `always-real-ip`/`tun-excluded-routes` in a module had no runtime effect while the same keys in the config body worked). Survive subscription refreshes; stack-safe way to ship DIRECT rules.
+
+### Per-app traffic splitting on macOS — what can and cannot escape the TUN
+
+Goal shape: "app X's traffic should not touch the metered proxy (and ideally not even the TUN/status-bar counters)". Three mechanisms stack, and they operate at different layers:
+
+| Mechanism | Layer | Effect | Limit |
+|---|---|---|---|
+| `[Rule]` DIRECT (config body or module) | policy | zero proxy cost, traffic forwarded by the tunnel directly | still traverses TUN → still counted in the status-bar speed |
+| `tun-excluded-routes` += app CIDRs | route table | packets to those CIDRs never enter the TUN; status bar silent | only catches packets whose destination IP is the real CDN IP **at connect time** |
+| `always-real-ip` / `fake-ip-filter` | DNS answer | would return real IPs so excluded-routes can catch them | **non-functional on the macOS Catalyst build** (see below) |
+
+The decisive variable is **how the app resolves** its download/upload hosts:
+
+- **Apps that connect to literal IPs** (e.g. BaiduNetdisk's downloader, which gets CDN IPs from its dispatch API and never asks the system resolver): packets carry real destination IPs, so `tun-excluded-routes` catches them at the route layer. Verified working: 90+ tunnel-forwarded connections to its CDN ranges dropped to zero after exclusion; the status bar went silent during active downloads.
+- **Apps that use the system resolver** (Feishu/Lark and most): they receive fake IPs (`198.18.0.0/15`) — under this TUN *every* domain resolves to a fake IP, including DIRECT-ruled ones, so `dig` cannot discriminate policy. The packet enters the TUN with a fake destination, excluded-routes never match, and the tunnel forwards post-resolution. For these apps the status bar always counts.
+
+`always-real-ip` / `fake-ip-filter` would close this gap, but on the macOS Catalyst build they are accepted by the config layer and inert at runtime — verified dead via four independent paths: module `[General]`, direct db writes with three syntax variants, the official Edit Plain Text API + GUI Save chain, and the absence of any Fake IP settings page (the `DLWFakeIPViewController` in the binary is iOS-only). Until a build ships them working, the only way to silence the status bar for a system-resolver app is to disconnect the VPN during its bulk transfer.
+
+**Instruments that tell the truth on this machine:**
+
+```bash
+# Which form an app's traffic takes: fake-IP (system resolver) vs real-IP (literal connect)
+lsof -nP -iTCP -a -p <pid> | grep ESTABLISHED    # destination column: 198.18.x vs real
+
+# Split-brain-proof per-policy throughput (status bar shows the SUM of these two):
+plutil -p ~/Library/Group\ Containers/group.com.liguangming.Shadowrocket/NetworkUsage
+#   directInPerBytes + proxyInPerBytes == inPerBytes (exactly) — DIRECT traffic IS counted.
+
+# What the tunnel is forwarding where (DIRECT forwarding shows as real-IP sockets owned by the tunnel):
+lsof -nP -iTCP -a -p $(pgrep -f MacPacketTunnel) | grep ESTABLISHED
+```
+
 ### Example tun-excluded-routes (correct)
 
 ```
