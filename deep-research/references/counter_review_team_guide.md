@@ -17,7 +17,7 @@ counter-review-coordinator (协调者)
 | Agent | 职责 | 输出 |
 |-------|------|------|
 | **claim-validator** | 验证声明准确性，识别无证据/弱证据声明 | Claim Validation Report |
-| **source-diversity-checker** | 检查单一来源依赖，source-type 分布 | Source Diversity Report |
+| **source-diversity-checker** | 检查单一证据家族依赖、来源适配性与 source-type 分布 | Source Diversity Report |
 | **recency-validator** | 验证时敏声明的新鲜度，AS_OF 合规 | Recency Validation Report |
 | **contradiction-finder** | 发现内部矛盾，缺失的反向观点 | Contradiction and Bias Report |
 | **counter-review-coordinator** | 整合所有报告，生成最终 P6 报告 | P6 Counter-Review Report |
@@ -82,8 +82,8 @@ SendMessage to: counter-review-coordinator
 ### 4. 获取最终输出
 
 Coordinator 输出包含：
-- 问题汇总（必须 ≥3 个）
-- 关键争议部分（可直接复制到最终报告）
+- 问题汇总（允许 0 个；每个问题须有具体证据，未核实项单独标明）
+- 关键争议部分（可直接复制到最终报告；没有已核实争议时明确说明，不生成占位争议）
 - 强制修复清单
 - 质量门状态
 
@@ -91,9 +91,10 @@ Coordinator 输出包含：
 
 | 检查项 | 标准模式 | 轻量模式 | 失败处理 |
 |--------|---------|---------|---------|
-| 发现问题数 | ≥3 | ≥3 | 重新审查 |
-| 关键声明单来源 | 0 | 0 | 补充来源或降级 |
-| 官方来源占比 | ≥30% | ≥20% | 补充官方来源 |
+| 证据与反向观点检查 | 完成，不设问题数下限 | 完成，不设问题数下限 | 补齐遗漏检查；无已核实问题时报告 0，不为凑数重审 |
+| 承重声明缺少决定性原件 | 0 | 0 | 打开原件、缩窄声明或标 unknown |
+| 单一证据家族依赖 | 必须披露 | 必须披露 | 寻找真正独立来源或降低置信度 |
+| 来源数/域名/类型分布 | 仅诊断 | 仅诊断 | 只有它暴露了具体问题覆盖缺口时才补来源 |
 | AS_OF 日期完整 | 100% | 100% | 补充日期 |
 | 核心争议文档化 | 必填 | 必填 | 补充争议部分 |
 
@@ -129,27 +130,27 @@ Coordinator 输出包含：
 ## Quality Gates Status
 | Gate | Status | Notes |
 |------|--------|-------|
-| P6 ≥3 issues found | ✅ | 发现 7 个问题 |
-| No critical claim single-sourced | ❌ | 2 个问题待修复 |
+| P6 evidence checks completed | ✅ | 本例发现 7 个有证据的问题；实际数量可以为 0 |
+| Load-bearing originals checked | ❌ | 2 个问题待修复 |
 | AS_OF dates present | ❌ | 3 处缺失 |
 | Counter-claims documented | ✅ | 已添加 |
 ```
 
 ## 集成到 SKILL.md 工作流
 
-在 SKILL.md 的 P6 阶段，添加以下指令：
+仅当用户请求或适用的工作区指令要求、且本次已选择团队审阅时，才在 P6 使用以下团队流程。未选择团队时执行 SKILL.md 的单 agent 证据检查；本指南不自行创建团队审阅义务。
 
 ```markdown
 ## P6: Counter-Review (Mandatory)
 
-**使用 Counter-Review Team 执行并行审查：**
+**已选择团队审阅时，使用 Counter-Review Team 执行以下流程：**
 
 1. **准备材料**: draft_report.md, citation_registry.md, task-notes/, p0_config.md
 2. **并行分发**: 同时发送给 4 个 specialist agent
 3. **等待完成**: 收集 4 份 specialist 报告
 4. **协调汇总**: 发送给 coordinator 生成最终 P6 报告
 5. **强制执行**: 所有 Critical 问题必须在 P7 前修复
-6. **输出**: 将"核心争议"部分复制到最终报告
+6. **输出**: 将有证据支持的"核心争议"复制到最终报告；没有时明确说明，不填充占位争议
 
 **Report**: `[P6 complete] {N} issues found: {critical} critical, {high} high, {medium} medium.`
 ```
@@ -175,7 +176,7 @@ message: {"type": "shutdown_request", "reason": "任务完成"}
 
 ## 注意事项
 
-1. **必须发现 ≥3 个问题** - 如果 coordinator 报告 <3 个问题，需要重新审查
+1. **按证据报告实际问题，允许零发现** - 只有遗漏检查或未解决的具体疑点才继续核查；不得因问题数少而制造发现或重复已完成检查。
 2. **Critical 问题必须修复** - 才能进入 P7
 3. **保留所有审查记录** - 作为研究方法论的一部分
 4. **中文输入中文输出** - 所有 agent 支持中英文双语

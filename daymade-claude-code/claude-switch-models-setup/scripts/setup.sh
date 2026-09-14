@@ -12,6 +12,15 @@ ACTIVE_SKILLS_MANIFEST="${CONFIG_DIR}/codex-active-skills.json"
 ACTIVE_SKILLS_TEMPLATE="${SCRIPT_DIR}/../assets/templates/codex-active-skills.json"
 ACTIVE_SKILLS_SEEDER="${SCRIPT_DIR}/seed-codex-active-skills.py"
 
+# The deployment set is defined here; both safety preflight and link creation use it.
+readonly PROFILE_HELPERS=(
+    claude-profiles.sh
+    claude-plugins-sync.py
+    sync-local-skill-sources.py
+    sync-local-skill-sources-daemon.sh
+    sync-profile-settings.py
+)
+
 mkdir -p "$CONFIG_DIR"
 mkdir -p "$CLAUDE_SETTINGS_DIR"
 
@@ -28,11 +37,29 @@ echo "Installing Claude Code profile manager..."
 #
 # sync-profile-settings.py was missing from this list while step 6 of the skill
 # depends on it, so a machine set up by this script had no settings converger.
-for f in claude-profiles.sh \
-         claude-plugins-sync.py \
-         sync-local-skill-sources.py \
-         sync-local-skill-sources-daemon.sh \
-         sync-profile-settings.py; do
+#
+# A machine whose LaunchAgent runs the PINNED plugin copy (references/
+# local-source-sync-architecture.md, "pinned plugin copy") points these links at
+# a .../plugins/cache/<marketplace>/<plugin>/<version>/... directory and moves
+# them only when the pin is advanced. Relinking such a machine to this checkout
+# would make the daemon and claude-profile follow whatever branch the checkout
+# sits on, so refuse unless the operator says so explicitly.
+for f in "${PROFILE_HELPERS[@]}"; do
+    existing="$CONFIG_DIR/$f"
+    [ -L "$existing" ] || continue
+    target="$(readlink "$existing")"
+    case "$target" in
+        */plugins/cache/*)
+            if [ "${CSMS_SETUP_RELINK_TO_CHECKOUT:-}" != "1" ]; then
+                echo "Refusing to relink: $existing -> $target is a pinned plugin copy." >&2
+                echo "This machine advances these links with the pin (references/troubleshooting.md, 'advance the pin')." >&2
+                echo "Set CSMS_SETUP_RELINK_TO_CHECKOUT=1 to link into this checkout anyway." >&2
+                exit 1
+            fi
+            ;;
+    esac
+done
+for f in "${PROFILE_HELPERS[@]}"; do
     ln -sf "$SCRIPT_DIR/$f" "$CONFIG_DIR/$f"
 done
 
@@ -68,13 +95,16 @@ echo "5. Run: claude-profiles-init"
 echo ""
 echo "6. Launch a profile: csk"
 echo ""
-echo "7. (Maintainers only) Select Codex user Skills in:"
+echo "7. (Maintainers only) Select source Skills for each host in:"
 echo "   ${ACTIVE_SKILLS_MANIFEST}"
-echo "   An empty active_skills list intentionally activates no marketplace source Skills."
+echo "   active_skills selects individual Codex names; active_marketplaces expands whole marketplaces."
+echo "   claude_active_marketplaces independently selects Claude personal links, not plugin installs."
+echo "   Empty individual selection does not disable a whole-marketplace selection."
 echo "   legacy_codex_compat_skills is an optional active_skills subset for long-lived"
 echo "   hooks or processes that still hold a legacy ~/.codex/skills path."
 echo ""
-echo "8. (Maintainers only) Link selected local Skill sources into ~/.agents/skills:"
+echo "8. (Maintainers only) Preview the selected host paths, then apply after inspection:"
+echo "   python3 ${CONFIG_DIR}/sync-local-skill-sources.py"
 echo "   python3 ${CONFIG_DIR}/sync-local-skill-sources.py --apply"
 echo ""
 echo "9. (Maintainers only, macOS) Install automatic source-sync watcher:"

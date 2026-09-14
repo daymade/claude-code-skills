@@ -1,6 +1,6 @@
 # Enterprise Analysis Frameworks
 
-Apply these frameworks after completing the six-dimension data collection. Execute in order: SWOT → Competitive Barriers → Risk Matrix → Comprehensive Scoring.
+Use these frameworks only when they help answer the user's decision. Do not execute them as a fixed sequence. Omit empty quadrants, unsupported risk categories, or synthetic scores rather than manufacturing completeness.
 
 ## SWOT Analysis Template
 
@@ -23,11 +23,11 @@ Each SWOT entry MUST include evidence and source attribution.
 |              |    • Impact: {assessment}         |    • Impact: {assessment}         |
 ```
 
-**Requirements**:
-- Each quadrant: 3-5 entries minimum
+**Requirements when SWOT is selected**:
+- Include only material entries; entry counts are diagnostic
 - Every entry must have evidence with source
 - S/W must be data-backed (not opinions)
-- O/T must include probability and impact estimates
+- O/T include probability and impact only when the evidence supports estimates; otherwise use qualitative uncertainty
 
 **Strategic Implications Matrix** (generate after SWOT):
 - **SO Strategy** (leverage strengths to capture opportunities): 1-2 specific recommendations
@@ -37,7 +37,7 @@ Each SWOT entry MUST include evidence and source attribution.
 
 ## Competitive Barrier Quantification Framework
 
-7 barrier dimensions with weighted scoring:
+Use the dimensions below as a candidate checklist. Score only when the user needs a comparative rating and the weights are defensible for that decision.
 
 | Dimension | Weight | Strong | Moderate | Weak |
 |-----------|--------|--------|----------|------|
@@ -49,7 +49,7 @@ Each SWOT entry MUST include evidence and source attribution.
 | **Regulatory Licenses** | 10% | 3.5 — Heavy regulation, hard to obtain | 2.0 — Standard regulatory requirements | 0.5 — Light regulation |
 | **Data Assets** | 10% | 3.5 — Massive proprietary high-quality data | 2.0 — Some data accumulation | 0.5 — Limited or public data |
 
-**Scoring**: Total = Σ(dimension score × weight)
+**Scoring**: Total = Σ(dimension score × weight). Treat the listed weights and thresholds as an illustrative starting model, not observed facts. Confirm or replace them before presenting a score as decision evidence.
 
 **Rating Scale**:
 | Score | Rating | Interpretation |
@@ -65,7 +65,7 @@ Each SWOT entry MUST include evidence and source attribution.
 
 ## Risk Matrix Framework
 
-Assess 8 mandatory risk categories:
+Consider the risk categories that could materially change the decision. Add domain-specific categories and omit irrelevant ones with a short reason.
 
 ### Risk Assessment Scales
 
@@ -108,17 +108,15 @@ Assess 8 mandatory risk categories:
 | Category | Specific Risk | Probability | Impact | Risk Value | Level | Evidence/Triggers | Current Mitigations | Recommended Actions |
 |----------|--------------|-------------|--------|------------|-------|-------------------|--------------------|--------------------|
 
-**Requirements**:
-- All 8 categories must be assessed (no skipping)
+**Requirements when a risk matrix is selected**:
+- Cover every material risk identified by the question map; category count is diagnostic
 - Each risk entry must cite specific evidence or triggers
-- Provide current mitigations AND recommended actions
-- High risks: require immediate action plans
-- Medium risks: require monitoring plans
-- Low risks: require periodic review schedule
+- Distinguish observed probability/impact evidence from analyst judgment
+- Provide mitigations or actions only when the user requested recommendations
 
 ## Comprehensive Scoring (Final Section)
 
-After completing SWOT, barriers, and risk matrix, generate a comprehensive scorecard:
+Generate a comprehensive scorecard only when the user needs a weighted comparison and has accepted the dimensions, scales, and weights:
 
 ```
 | Dimension | Score | Weight | Weighted | Key Evidence |
@@ -132,4 +130,4 @@ After completing SWOT, barriers, and risk matrix, generate a comprehensive score
 | **Total** | | 100% | **X/10** | |
 ```
 
-Every score must reference specific evidence from the six-dimension data collection.
+Every score must reference specific evidence. Label uncalibrated weights and judgment calls; if they would create false precision, present an evidence table without a total score.

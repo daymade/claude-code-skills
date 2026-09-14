@@ -29,15 +29,15 @@ class PeopleRosterTests(unittest.TestCase):
 
     def test_plain_comma_list(self) -> None:
         corrections = self.roster(
-            "### 甲明\n- **ASR 变体**: 金老师, 纪明\n"
+            "### 甲明\n- **ASR 变体**: 甲铭, 纪明\n"
         )
-        self.assertEqual(corrections, {"金老师": "甲明", "纪明": "甲明"})
+        self.assertEqual(corrections, {"甲铭": "甲明", "纪明": "甲明"})
 
     def test_per_variant_parenthetical_note_is_stripped(self) -> None:
         corrections = self.roster(
-            "### 甲明\n- **ASR 变体**: 金老师（甲→金同音）, 纪明\n"
+            "### 甲明\n- **ASR 变体**: 甲铭（甲→金同音）, 纪明\n"
         )
-        self.assertEqual(corrections, {"金老师": "甲明", "纪明": "甲明"})
+        self.assertEqual(corrections, {"甲铭": "甲明", "纪明": "甲明"})
 
     def test_slash_is_not_a_separator(self) -> None:
         corrections = self.roster(
@@ -69,10 +69,55 @@ class PeopleRosterTests(unittest.TestCase):
         )
         self.assertEqual(corrections, {"丙月": "丙远"})
 
+    def test_bare_numeric_variant_is_refused_with_loud_warning(self) -> None:
+        # A bare number matches timestamps/scores everywhere; it must be refused
+        # at load (not deferred), while legitimate siblings still load.
+        self.roster_path.write_text(
+            "### 甲明\n- **ASR 变体**: 甲铭, 95, 纪明\n",
+            encoding="utf-8",
+        )
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            corrections, _ = load_people_roster(self.roster_path)
+        self.assertEqual(corrections, {"甲铭": "甲明", "纪明": "甲明"})
+        self.assertNotIn("95", corrections)
+        self.assertIn("refused", stderr.getvalue())
+        self.assertIn("95", stderr.getvalue())
+
+    def test_single_surname_honorific_variant_is_refused(self) -> None:
+        # 朱老师 / 傅老师 name everyone with that surname; one meeting's misheard
+        # surname must not rewrite them all. A given-name + 总 (明源总) and a bare
+        # given-name variant (小铭) still load; quotes do not bypass the gate.
+        self.roster_path.write_text(
+            '### 甲强\n- **ASR 变体**: 朱老师, 傅老师, 明源总, 小铭, "王总", 朱老師, 王總, 欧阳老师\n',
+            encoding="utf-8",
+        )
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            corrections, _ = load_people_roster(self.roster_path)
+        self.assertEqual(corrections, {"明源总": "甲强", "小铭": "甲强", "欧阳老师": "甲强"})   # two-char surnames are out of scope by design
+        self.assertIn("refused", stderr.getvalue())
+        for refused in ("朱老师", "傅老师", "王总", "朱老師", "王總"):
+            self.assertIn(refused, stderr.getvalue())
+
+    def test_quoted_numeric_variant_is_still_refused(self) -> None:
+        # Outer quotes are the escape hatch for exotic name shapes, but they must
+        # not bypass the numeric refusal (the gate runs after normalization).
+        self.roster_path.write_text(
+            '### 甲明\n- **ASR 变体**: 甲铭, "95"\n',
+            encoding="utf-8",
+        )
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            corrections, _ = load_people_roster(self.roster_path)
+        self.assertNotIn("95", corrections)
+        self.assertEqual(corrections, {"甲铭": "甲明"})
+        self.assertIn("refused", stderr.getvalue())
+
     def test_representative_roster_yields_no_prose_entries(self) -> None:
         corrections = self.roster(
             "### 甲明\n"
-            "- **ASR 变体**: 金老师（同音）, 纪明\n"
+            "- **ASR 变体**: 甲铭（同音）, 纪明\n"
             "- **别名**: 老甲\n"
             "### 乙山\n"
             "- **ASR 变体**: 乙州, 亦洲, 易舟\n"
@@ -83,19 +128,19 @@ class PeopleRosterTests(unittest.TestCase):
 
     def test_canonical_never_maps_to_itself(self) -> None:
         corrections = self.roster(
-            "### 甲明\n- **ASR 变体**: 甲明, 金老师\n"
+            "### 甲明\n- **ASR 变体**: 甲明, 甲铭\n"
         )
         self.assertNotIn("甲明", corrections)
-        self.assertEqual(corrections, {"金老师": "甲明"})
+        self.assertEqual(corrections, {"甲铭": "甲明"})
 
     def test_alias_and_confusable_lines_are_ignored(self) -> None:
         corrections = self.roster(
             "### 甲明\n"
-            "- **ASR 变体**: 金老师\n"
+            "- **ASR 变体**: 甲铭\n"
             "- **别名**: 老甲\n"
-            "- **易混**: 李老师\n"
+            "- **易混**: 李铭\n"
         )
-        self.assertEqual(corrections, {"金老师": "甲明"})
+        self.assertEqual(corrections, {"甲铭": "甲明"})
 
     def test_first_seen_variant_wins(self) -> None:
         corrections = self.roster(

@@ -73,6 +73,27 @@ _KIMI_WRAPPER_RES = tuple(
     for tag in _KIMI_INJECTED_WRAPPERS
 )
 
+# Kimi runs internal agents inside the same ``sessions/`` tree as real
+# conversations, distinguished only by a session-directory prefix. Observed on a
+# real store: ``ctitle-`` title generation (its whole transcript is the title
+# system prompt), ``dvlt-`` vault-memory maintenance, ``sklsum-`` skill
+# summarization ("You are the Daimon skill-summary system tool."). They are
+# automated sessions in exactly the sense ``--include-automated`` already means,
+# so they are excluded by default and remain reachable with that flag rather
+# than being dropped outright.
+#
+# Excluded by prefix denylist rather than a ``conv-`` allowlist: a future
+# user-facing prefix should surface as noise to fix, never as history that
+# silently went missing. On a real store these outnumbered the genuine
+# conversations (51 of 83 wires), and their titles are English system prompts
+# that crowd the user's own words out of an inventory listing.
+KIMI_INTERNAL_SESSION_PREFIXES = ("ctitle-", "dvlt-", "sklsum-")
+
+
+def is_kimi_internal_session(session_id: str) -> bool:
+    """Report whether a Kimi session directory belongs to an internal agent."""
+    return session_id.startswith(KIMI_INTERNAL_SESSION_PREFIXES)
+
 
 def default_kimi_home() -> Path:
     return Path.home() / KIMI_DEFAULT_HOME_DIRNAME
@@ -316,6 +337,9 @@ def collect_kimi(args: argparse.Namespace, home: Path) -> ProviderResult:
     index = load_kimi_session_index(home)
     metadata_backends: set[str] = set()
     for session_dir in iter_kimi_session_dirs(home):
+        if is_kimi_internal_session(session_dir.name) and not args.include_automated:
+            result.excluded_automated += 1
+            continue
         summary = scan_kimi_session(session_dir, index, args.max_title_chars)
         metadata_backends.add(summary.metadata_source)
         if summary.archived and not args.include_archived:

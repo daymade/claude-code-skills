@@ -26,6 +26,83 @@ from core.protected_spans import mask_speaker_labels, restore_speaker_labels
 
 logger = logging.getLogger(__name__)
 
+# Word-boundary segmenter for match-time safety check 3 (see straddles_word_boundary).
+# jieba is already a declared dependency of the Stage 1 entrypoint (the 4+ char
+# real-word guard uses it), so this adds no install cost; it is loaded lazily
+# because building its prefix dictionary costs about a second and --list/--add
+# never need it.
+_SEGMENTER = None
+_SEGMENTER_UNAVAILABLE = False
+# Characters of context handed to the segmenter on each side of a match: wide
+# enough for the longest ordinary word to complete on either side, narrow
+# enough that a distant garble cannot reshape the tokens around this one.
+_STRADDLE_WINDOW = 8
+
+
+def _get_segmenter():
+    """Lazy jieba loader; None when jieba is not importable (the check then no-ops)."""
+    global _SEGMENTER, _SEGMENTER_UNAVAILABLE
+    if _SEGMENTER is None and not _SEGMENTER_UNAVAILABLE:
+        try:
+            import jieba
+            jieba.setLogLevel(logging.ERROR)  # silence "Building prefix dict..."
+            _SEGMENTER = jieba
+        except ImportError:
+            _SEGMENTER_UNAVAILABLE = True
+    return _SEGMENTER
+
+
+def straddles_word_boundary(text: str, pos: int, match: str) -> bool:
+    """True when the match at ``pos`` is a fragment of real words, not a mishearing.
+
+    Two rules, chosen by script. For a pure-ASCII match (letters, digits,
+    spaces or punctuation — ``Cloud Code`` included) the question is the
+    classic word boundary: an ASCII *letter* immediately before or after
+    the match means the match is inside a longer word (``Cloud`` in ``iCloud``,
+    ``Joe`` in ``Joey``); digits do not count, so ``cloud3`` and ``fiber5``
+    still correct. For anything containing CJK, a dictionary-only jieba cut of
+    the neighbourhood (HMM off, so nothing is invented) decides: the match is
+    refused only when EVERY segment overlapping it is a multi-character
+    dictionary word AND at least one of them crosses a match boundary — 新一
+    inside 更新|一下, 下电 inside 楼下|电动车, 问题记 inside 问题|记录, 同龄
+    inside 同龄人. One single-character segment anywhere under the match
+    (巨|神智|能, 章|伟大|概, 叫|新|一下|单) is what an unknown fragment looks
+    like, so those pass through to risk scoring unchanged; so does a match that
+    is exactly one segment. The remaining blind spot is a real mishearing whose
+    neighbours complete whole words on both sides; safe mode only ever deferred
+    that class, the native read-through still owns it, and ``--apply-all``
+    switches the check off. A context rule skips the check but is still risk
+    scored, so in safe mode it is deferred rather than applied.
+    """
+    if not match:
+        return False
+    if match.isascii():
+        before = text[pos - 1] if pos > 0 else ""
+        after = text[pos + len(match)] if pos + len(match) < len(text) else ""
+        return before.isascii() and before.isalpha() or after.isascii() and after.isalpha()
+    seg = _get_segmenter()
+    if seg is None:
+        return False
+    start = max(0, pos - _STRADDLE_WINDOW)
+    end = min(len(text), pos + len(match) + _STRADDLE_WINDOW)
+    window = text[start:end]
+    rel_start = pos - start
+    rel_end = rel_start + len(match)
+    cursor = 0
+    crossing = False
+    for token in seg.lcut(window, HMM=False):
+        token_end = cursor + len(token)
+        overlaps = cursor < rel_end and token_end > rel_start
+        if overlaps:
+            if len(token) < 2:
+                return False
+            if cursor < rel_start or token_end > rel_end:
+                crossing = True
+        cursor = token_end
+        if cursor >= rel_end:
+            break
+    return crossing
+
 
 # Frontmatter fields whose values are correction LEDGERS (e.g. `asr_note`
 # records the correction history as "旧形→正确形" lists). The old forms quoted
@@ -202,13 +279,22 @@ class DictionaryProcessor:
         self.context_rules = context_rules
         self.correction_meta = correction_meta or {}
         self.speaker_labels = speaker_labels or set()
+        # (line_number, from_text, to_text, snippet) for every dictionary match
+        # the word-boundary check refused in the last process() call. Reported,
+        # not silently dropped: a caller comparing runs must be able to see why
+        # a deferral disappeared.
+        self.boundary_skips: List[Tuple[int, str, str, str]] = []
 
-    def process(self, text: str, review_mode: bool = False) -> Tuple[str, List[Change]]:
+    def process(self, text: str, review_mode: bool = False,
+                boundary_check: bool = True) -> Tuple[str, List[Change]]:
         """
         Apply all corrections to text.
 
         Args:
             text: Input text
+            boundary_check: Refuse dictionary matches that straddle word
+                boundaries (match-time safety check 3). The CLI switches it off under
+                --apply-all, the operator's explicit "apply every match" override.
             review_mode: If True, only apply low-risk corrections; medium/high
                 are tracked but not applied. NOTE: this engine-level default is
                 False (apply everything) so the function stays a pure
@@ -228,13 +314,15 @@ class DictionaryProcessor:
         )
         corrected_text = masked_text
         all_changes = []
+        self.boundary_skips = []
 
         # Step 1: Apply context rules (more specific, higher priority)
         corrected_text, context_changes = self._apply_context_rules(corrected_text, review_mode=review_mode)
         all_changes.extend(context_changes)
 
         # Step 2: Apply dictionary replacements (more general)
-        corrected_text, dict_changes = self._apply_dictionary(corrected_text, review_mode=review_mode)
+        corrected_text, dict_changes = self._apply_dictionary(
+            corrected_text, review_mode=review_mode, boundary_check=boundary_check)
         all_changes.extend(dict_changes)
 
         if speaker_spans:
@@ -292,7 +380,8 @@ class DictionaryProcessor:
 
         return corrected, changes
 
-    def _apply_dictionary(self, text: str, review_mode: bool = False) -> Tuple[str, List[Change]]:
+    def _apply_dictionary(self, text: str, review_mode: bool = False,
+                          boundary_check: bool = True) -> Tuple[str, List[Change]]:
         """
         Apply dictionary replacements with substring safety checks.
 
@@ -302,6 +391,10 @@ class DictionaryProcessor:
            This applies to ALL rules regardless of length.
         2. Boundary check (short rules only, <=3 chars): if the match is inside
            a longer common word, skip to prevent collateral damage.
+        3. Word-boundary straddle check (every rule): if the match is a
+           fragment of real words by script (see straddles_word_boundary),
+           skip and count it; --apply-all switches this check off.
+        These are the match-time layer of references/false_positive_guide.md.
         """
         changes = []
         corrected = text
@@ -316,7 +409,7 @@ class DictionaryProcessor:
             needs_boundary_check = len(wrong) <= 3
             corrected, new_changes = self._apply_with_safety_checks(
                 corrected, wrong, correct, needs_boundary_check,
-                review_mode=review_mode,
+                review_mode=review_mode, straddle_check=boundary_check,
             )
             changes.extend(new_changes)
 
@@ -342,6 +435,7 @@ class DictionaryProcessor:
         correct: str,
         check_boundaries: bool,
         review_mode: bool = False,
+        straddle_check: bool = True,
     ) -> Tuple[str, List[Change]]:
         """
         Apply replacement at each match position with safety layers.
@@ -353,7 +447,9 @@ class DictionaryProcessor:
         2. Boundary check (short rules only): Check if the match is inside
            a longer common word (e.g., "天差" inside "天差地别").
 
-        3. Risk classification: low/medium/high based on confidence and
+        3. Word-boundary straddle check (every rule): a fragment of real
+           words by script is skipped and counted (see straddles_word_boundary).
+        4. Risk classification: low/medium/high based on confidence and
            common-word membership. In review_mode, high/medium changes are
            tracked but not applied.
         """
@@ -387,6 +483,24 @@ class DictionaryProcessor:
                 search_start = pos + len(wrong)
                 logger.debug(
                     f"Skipped '{wrong}' at pos {pos}: part of longer word"
+                )
+                continue
+
+            # Safety layer 3: word-boundary straddle check (every rule).
+            # The curated common-word list above only catches a match sitting
+            # INSIDE one listed word; most real false positives cut ACROSS two
+            # ordinary words instead (新一 in 更新|一下), and safe mode used to
+            # defer every one of them into the review sidecar and queue on
+            # every rerun. A dictionary-only segmentation decides that case.
+            if straddle_check and straddles_word_boundary(text, pos, wrong):
+                result_parts.append(text[search_start:pos + len(wrong)])
+                search_start = pos + len(wrong)
+                self.boundary_skips.append((
+                    text[:pos].count('\n') + 1, wrong, correct,
+                    text[max(0, pos - 6):pos + len(wrong) + 6],
+                ))
+                logger.debug(
+                    f"Skipped '{wrong}' at pos {pos}: straddles a word boundary"
                 )
                 continue
 
@@ -562,6 +676,7 @@ class DictionaryProcessor:
         summary = {
             "total_changes": len(changes),
             "dictionary_changes": sum(1 for c in changes if c.rule_type == "dictionary"),
-            "context_rule_changes": sum(1 for c in changes if c.rule_type == "context_rule")
+            "context_rule_changes": sum(1 for c in changes if c.rule_type == "context_rule"),
+            "boundary_skips": len(self.boundary_skips)
         }
         return summary

@@ -57,6 +57,46 @@ mistake), delete the key from that profile's settings.json.
 
 Set `CLAUDE_CODE_SUBAGENT_MODEL` to the same value as `ANTHROPIC_MODEL` in the profile settings. Otherwise subagents may fall back to the default Anthropic model.
 
+## The advisor answers on the same model as the session
+
+Symptom: the session runs on the flagship tier and every advisor call comes
+back from that same model — each advisor record in the session JSONL carries
+an `advisorModel` equal to the session's `model` string (observed 2026-09-05
+on a `claude-fable-5-1` session) — and it looks as if the pairing is
+misconfigured.
+
+Cause: an equal pair is allowed and nothing announces it. `advisorModel` is
+its own setting; `/model` rewrites `model` and leaves it alone (observed
+2026-09-05). The pairing check rejects an advisor that is *less* capable than
+the main model or one the main model does not support — those are the only
+two `/advisor` warnings in the 2.1.260 binary — so raising the main model to
+the advisor's tier silently turns the advisor into a same-model second read.
+It still gets the whole transcript as a separate call; it just brings no
+stronger reasoning.
+
+Fix — pick one:
+
+- Pin a different advisor: `/advisor <model>`. **It writes the top-level
+  `advisorModel` key into the global `~/.claude/settings.json`**, not the
+  project's `.claude/settings.json` (observed 2026-08-13: run inside one
+  project checkout, the key appeared in the global file), so the choice
+  follows every project — and, as a DENYLIST key, reaches no third-party
+  profile.
+- Turn it off: `/advisor off` removes that key from the same global file
+  (observed 2026-09-05: run inside another project, the global file's mtime
+  matched the command to the second and the key was gone). It takes effect
+  in the session that ran it and in every session started afterwards — that
+  session made no further advisor calls, and later sessions on the same
+  model carry no `advisorModel` on any record — but a *different* session
+  that was already running kept calling the advisor (all observed
+  2026-09-05). Restart those windows if the `off` must reach them.
+  `CLAUDE_CODE_DISABLE_ADVISOR_TOOL` also exists in the 2.1.260 binary; it
+  has not been exercised here.
+
+Which model answered a given call is on the assistant record itself
+(`advisorModel`, next to `effort`) — see
+`read-claude-code-history/references/session_file_format.md`.
+
 ## Marketplace says "corrupted installLocation"
 
 Each profile needs its OWN `known_marketplaces.json` — its `installLocation` is
@@ -171,63 +211,163 @@ but re-verification is cheap if a future Claude Code release changes write
 semantics: write a marker into an active profile's `.claude.json`, keep
 using the session, check the marker an hour later.
 
+## Installation audit reports missing or unselected Skills
+
+Run the inventory from the marketplace checkout root:
+
+```bash
+python3 daymade-claude-code/claude-switch-models-setup/scripts/skill-install-audit.py --json
+```
+
+Use the result definitions and environment overrides in
+[`skill-install-audit.py`](../scripts/skill-install-audit.py) as the contract.
+Read the reported items rather than treating exit 0 as a delivery verdict.
+Inspect `SOURCE_CHECKOUT_BEHIND` and `DAEMON_RUNTIME_LAG` before deciding that
+an empty finding is current; compare against fresh hosted state when that matters.
+The checkout comparison alone uses cached remote-tracking refs.
+
+The `CODEX_*` sections inspect Codex's expanded selection and source links.
+This audit does not inspect `claude_active_marketplaces` or Claude personal Skill
+links. For that route, use the source syncer's dry-run and registered source
+inventory, then the requested Claude target's fresh-host gate. Plugin inventory
+alone cannot determine whether a personal Skill is available.
+
+For `CODEX_SELECTED_MISSING`, resolve the selected name against the source
+inventory and inspect its actual link. Check the expanded activation policy,
+including marketplace selections, before editing a name. Repair the source or
+link when the selection is intentional; remove a selection only when it is no
+longer wanted. For `CODEX_UNLISTED_ENABLED` or `MANUAL_LINK_RISK`, decide whether
+that Skill should be active before changing policy. Do not add every reported
+name or remove links merely to make the report empty.
+
+Follow the local-source workflow in [SKILL.md](../SKILL.md) and the
+[source topology](local-source-sync-architecture.md). Preview synchronization
+without `--apply`, inspect the exact affected paths, then apply an authorized
+repair through the installed sync entry. Do not hand-create Skill links or replace
+a pinned runtime with the checkout. For `NAME@marketplace` installation or
+enablement findings, use that exact qualified identity with the official plugin CLI.
+
+Re-run the inventory after repair. Then use the installed `skill-governance`
+fresh-host acceptance workflow for the requested Claude Code or Codex target.
+Existing sessions retain their startup catalog; a file/link check is not a fresh
+host discovery check.
+
 ## Local skill source changes do not appear in Claude Code or Codex
 
-Normal edits should be live because installed locations are symlinks to the source repos.
-If they are not live, first check whether the path is still a symlink:
+Resolve the affected Skill's source and host policy using
+[local-source-sync-architecture.md](local-source-sync-architecture.md). Use the
+installation audit above for its plugin and Codex coverage; for Claude personal
+links, inspect the source sync dry-run. `--print-watch-paths` lists inputs to the
+watcher and does not verify links.
+
+For structural changes, inspect registration, the generated plist, and the
+[watcher logs](local-source-sync-architecture.md#macos-watcher). Require a successful
+pass after the change; registration and exit status alone cannot prove it ran.
+If no watcher is installed, run the installed daemon entry with `--install`.
+
+### Advance the pin
+
+Use this procedure only when the deployed helper links resolve into an installed
+plugin cache. Checkout-linked deployments already read their source; do not switch
+layouts as a version repair.
+
+1. Read the deployed symlink targets, the corresponding installation record, and
+   the source revision. Identify the daemon's separate configuration directory,
+   qualified plugin identity, and the intended published revision before updating.
+   Run the audit from the marketplace checkout root:
+
+   ```bash
+   python3 daymade-claude-code/claude-switch-models-setup/scripts/skill-install-audit.py --list DAEMON_RUNTIME_LAG SOURCE_CHECKOUT_BEHIND
+   ```
+
+   A non-empty `DAEMON_RUNTIME_LAG` proves the detected semantic version is older
+   than the inspected source version. An empty section does not prove parity:
+   an unrecognized/non-symlink entry, unavailable source, or unparseable version
+   can also produce no lag finding. The checkout check uses cached remote refs;
+   use a fresh hosted revision when verifying a published update.
+2. Update the existing installation in that daemon configuration, not the normal
+   Claude profile. Replace the placeholders with the identities read above:
+
+   ```bash
+   CLAUDE_CONFIG_DIR="<daemon-config-dir>" claude plugin marketplace update <marketplace>
+   CLAUDE_CONFIG_DIR="<daemon-config-dir>" claude plugin update <plugin>@<marketplace>
+   ```
+
+3. Read back that profile's installed plugin record and its new cache directory.
+   Use the deployment set defined by `scripts/setup.sh` to identify the helper
+   links. Verify each candidate file against the intended source revision, retain
+   the current link targets for rollback, then repoint those links to the new
+   version. Use absolute targets and replace the link itself; do not run the
+   checkout installer over a pinned layout or overwrite a real local file.
+4. Reinstall the LaunchAgent from the updated deployed entry:
+
+   ```bash
+   ~/.config/claude-switch-models-setup/sync-local-skill-sources-daemon.sh --install
+   ```
+
+   This provisions the installer-owned interpreter and runs a synchronization
+   pass. Independently read back the helper targets, installation record, plist
+   interpreter and scheduling fields, and a new success timestamp in the watcher
+   log. Compare scheduling with the daemon implementation, not a copied interval
+   in prose. Repeat the target-specific fresh-host gate from `skill-governance`.
+
+For an authorized one-shot source-link repair, preview before applying:
 
 ```bash
-python3 ~/.config/claude-switch-models-setup/sync-local-skill-sources.py --print-watch-paths
-```
-
-For structural changes such as new skill entries, removed skill entries, renamed skills,
-or version bumps, the macOS watcher should run automatically:
-
-```bash
-launchctl print gui/$(id -u)/ai.daymade.claude-skill-source-sync
-```
-
-If the watcher is not installed, install it:
-
-```bash
-~/.config/claude-switch-models-setup/sync-local-skill-sources-daemon.sh --install
-```
-
-Manual repair fallback:
-
-```bash
+python3 ~/.config/claude-switch-models-setup/sync-local-skill-sources.py
 python3 ~/.config/claude-switch-models-setup/sync-local-skill-sources.py --apply
 ```
 
-At a selected `~/.agents/skills` name, the script replaces only an empty path,
-the correct link, or a wrong link that still belongs to a managed source repo;
-the last case moves to recoverable backup storage first. A real object,
-relative/broken link, or third-party link fails visibly and stays in place. The
-script moves stale unselected source-owned links out of the active root, but
-never removes entries from legacy `~/.codex/skills`: non-compatible managed
-links are reported for reviewed `skill-governance` cleanup, while real
-directories, third-party links, malformed foreign links, and `.system` stay
-untouched. Restart any already-running Claude Code/Codex sessions after
-repairing because Skill metadata is loaded at session start.
+Inspect the dry-run between those commands. Follow the source architecture's
+collision and recovery rules; legacy entries are not automatically retired.
+Restart affected existing sessions after repairing metadata discovery.
+
+## Source sync warns that an active skill name is registered by no checkout
+
+`csk` prints this at launch, and the daemon writes it to `source-sync.err.log`:
+
+```
+WARN: <manifest>: 1 active skill name(s) registered by no discovered source checkout; skipped this pass: new-skill
+WARN:   scanned <marketplace>: <checkout> (branch feat/other-work)
+WARN:   scanned <other marketplace>: <checkout> (branch main)
+WARN:   a checkout on a branch that predates the skill links it on the first pass after it catches up; a misspelled or retired name repeats this warning until the manifest is corrected
+```
+
+The name is usually right and a checkout is the problem. The manifest is written
+against the marketplace as published on `main`; the syncer reads the working tree
+of each local checkout, and a checkout parked on a feature branch registers only
+what that branch had when it forked. The pass already converged for every other
+name, so nothing else is waiting on this. Confirm where each checkout is:
+
+```bash
+python3 daymade-claude-code/claude-switch-models-setup/scripts/skill-install-audit.py --list SOURCE_CHECKOUT_BEHIND
+git -C <checkout> status --short --branch
+```
+
+What to do depends on who owns that checkout. A clean checkout of your own goes
+back with `git checkout main && git pull --ff-only`; the next pass links the name
+with no further step. A checkout another session is working on (uncommitted
+changes, commits in the last hours) stays as it is: the name links on the first
+pass after that work lands and the checkout returns to `main`. Switching,
+stashing, or rebasing someone else's working tree to silence a warning destroys
+their state.
+
+If every checkout is on a current `main` and the warning persists, the name is
+misspelled or the skill was renamed or retired. Correct the manifest.
+
+Before daymade-claude-code v3.15.0 the same condition was a traceback,
+`ValueError: unknown active skill name(s)`, that aborted the pass: the daemon
+exited 1 on every trigger, and `~/.agents/skills` and the `enabledPlugins` mirror
+stayed frozen for every skill (observed 2026-09-05, after a manifest edit made
+against a checkout parked on another session's branch). A daemon still printing
+that traceback runs a pinned copy older than the fix; advance the pin as the
+previous section describes.
 
 ## Several profiles launched at once fail with sync tracebacks
 
 This should not happen on current scripts: `sync-local-skill-sources.py` and `claude-plugins-sync.py` share a cross-process lock before writing marketplace JSON, installed plugin metadata, or cache symlinks.
 
-If you still see `FileExistsError` while creating a symlink or `FileNotFoundError` while replacing `known_marketplaces.json`, re-link (not copy — see "Why symlinks and not `cp`" in SKILL.md's install steps; a `cp` here statically forks these files and reintroduces the exact silent-drift failure that section exists to prevent) the installed helper scripts from the source skill and rerun. This is the same explicit install set owned by SKILL.md:
-
-```bash
-REPO=<absolute-path-to-this-repo>/daymade-claude-code/claude-switch-models-setup
-DST=~/.config/claude-switch-models-setup
-mkdir -p "$DST"
-for f in scripts/claude-profiles.sh \
-         scripts/claude-plugins-sync.py \
-         scripts/sync-local-skill-sources.py \
-         scripts/sync-local-skill-sources-daemon.sh \
-         scripts/sync-profile-settings.py; do
-  ln -sf "$REPO/$f" "$DST/$(basename "$f")"
-done
-```
+If you still see `FileExistsError` while creating a symlink or `FileNotFoundError` while replacing `known_marketplaces.json`, re-link the installed helper scripts and rerun. The install set and both link layouts (checkout-linked, or pinned plugin copy) are owned by step 2 of the setup workflow in SKILL.md: do not copy the files (a copy forks them and reintroduces the silent drift that step exists to prevent), and do not relink a pinned machine to the checkout.
 
 Then verify with concurrent version probes:
 

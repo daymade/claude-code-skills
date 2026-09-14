@@ -134,7 +134,7 @@ Approximate wall-clock timings for live invocations of each workflow skill (base
 
 ## What TO do after install
 
-1. **Run `diagnose.sh` once** to confirm everything is healthy (9 checks should pass).
+1. **Run `diagnose.sh` once** and require no `❌` lines. The pass count varies with the installed agents and preset.
 2. **Try one workflow skill on one stock** — pick `gangtise-stock-research L1 宁德时代` as a smoke test. You should get a ~1 minute run and an MD + HTML pair on disk.
 3. **Open the HTML in a browser** to see Gangtise's professional report template render. This is the output your workshop audience will see.
 4. **Read the MD file's "data sources" section** at the bottom — it lists which underlying skills were called. Use this to build intuition about the workflow → data-layer mapping.

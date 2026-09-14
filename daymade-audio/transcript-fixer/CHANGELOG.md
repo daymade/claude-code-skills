@@ -1,6 +1,8 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+> **Frozen at #438 (2026-09-02).** Release notes for transcript-fixer are recorded in the repository-level `CHANGELOG.md` (entries `- **transcript-fixer** vX → vY`), which the release process updates on every version bump; this file was the only per-skill changelog in the repository and had already missed 1.33.1 and 1.33.2. The entries below are kept as history and are not extended.
+
+All notable changes to this project were documented in this file until #438.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).

@@ -69,6 +69,12 @@ Returns `{"code":0,"data":{"node":{"node_token":"…","obj_token":"<DOC_TOKEN>",
 
 ## Step 3: fetch the body programmatically
 
+**Comments are a parallel source, not part of the body field.** For each document
+actually opened, run [comment capture](comments-and-feedback.md) and read all
+selected threads before summarizing. Preserve its JSON and Markdown companion,
+add a visible discussion link beside the body, and report its scope and gaps.
+The same step applies to documents reached recursively in Step 5.
+
 The body field moved between lark-cli versions, so probe both instead of hard-coding one — this keeps working whichever version is installed:
 
 ```bash

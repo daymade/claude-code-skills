@@ -27,7 +27,8 @@ from .correction_repository import (
 
 # Import safety check for common words
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from utils.common_words import check_correction_safety, audit_corrections, SafetyWarning
+from utils.common_words import (check_correction_safety, audit_corrections, SafetyWarning,
+                                UNFORCEABLE_CATEGORIES, unforceable_shape)
 
 logger = logging.getLogger(__name__)
 
@@ -230,6 +231,17 @@ class CorrectionService:
         if safety_warnings:
             errors = [w for w in safety_warnings if w.level == "error"]
             warns = [w for w in safety_warnings if w.level == "warning"]
+
+            unforceable = [w for w in errors if w.category in UNFORCEABLE_CATEGORIES]
+            if unforceable:
+                # Not a judgement call --force can take: the shape is wrong for
+                # every transcript, so the mapping belongs in a context trap.
+                raise ValidationError(
+                    f"Safety check BLOCKED adding '{from_text}' -> '{to_text}':\n"
+                    + "\n".join(f"[{w.category}] {w.message}\n  Suggestion: {w.suggestion}"
+                                for w in unforceable)
+                    + "\n\nThis shape cannot be forced; scope it as a context-file trap."
+                )
 
             if errors and not force:
                 # Block the addition
@@ -438,6 +450,21 @@ class CorrectionService:
             logger.info(f"Pre-validating {len(corrections)} corrections...")
             invalid_count = 0
             for from_text, to_text in corrections.items():
+                # Shapes no rule may carry are refused here too: this import
+                # path bypasses check_correction_safety, and such a rule would
+                # silently auto-apply under a trusted domain. Same predicate as
+                # add time (utils/common_words.py) and the roster loader.
+                shape = unforceable_shape(from_text)
+                if shape:
+                    logger.error(
+                        f"Validation failed for '{from_text}' → '{to_text}': "
+                        + ("bare numeric FROM can never be a rule; use a context-file trap"
+                           if shape == "numeric_text" else
+                           "a single surname + honorific names everyone with that surname; "
+                           "use a context-file trap")
+                    )
+                    invalid_count += 1
+                    continue
                 try:
                     self.validate_correction_text(from_text, "from_text")
                     self.validate_correction_text(to_text, "to_text")

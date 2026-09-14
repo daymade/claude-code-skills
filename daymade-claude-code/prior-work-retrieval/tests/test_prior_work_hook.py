@@ -318,19 +318,96 @@ class PriorWorkHookTests(unittest.TestCase):
         substantial, reason = hook.substantial_tool_use(double_quoted)
         self.assertFalse(substantial, reason)
 
-    def test_unquoted_redirection_even_after_route_stays_gated(self) -> None:
-        # Stripping quoted text must not weaken the gate: a real redirection
-        # in unquoted position — even trailing a whitelisted route command —
-        # is still a write.
-        event = {
+    def test_route_output_capture_is_exempt_nonroute_redirection_stays_gated(self) -> None:
+        # 2026-09-13 审计后有意反转旧锁定（旧测试名：unquoted redirection even
+        # after route stays gated）：receipt 过期后的标准解锁动作
+        # 「retrieve … > /tmp/out」被当写信号拦死，而重定向写的就是路由自己的
+        # stdout——检索输出落盘是检索动作的一部分，豁免。
+        # 非路由段的重定向照旧计写信号。
+        route_capture = {
             "tool_name": "Bash",
             "tool_input": {
                 "command": "uv run python scripts/prior_work.py check > receipt.json"
             },
         }
-        substantial, reason = hook.substantial_tool_use(event)
+        substantial, reason = hook.substantial_tool_use(route_capture)
+        self.assertFalse(substantial, reason)
+        nonroute_write = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": "uv run python scripts/prior_work.py check && ls > /tmp/x"
+            },
+        }
+        substantial, reason = hook.substantial_tool_use(nonroute_write)
         self.assertTrue(substantial, reason)
         self.assertEqual(reason, "Bash:write_signal")
+
+    def test_audit_20260913_regressions(self) -> None:
+        # 2026-09-13 高频闸门审计的四个误拦实证（逐条来自真实 transcript）。
+        # #5 unknown_executor：路径组件 /python/ 不是解释器调用
+        path_seg = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": "cd ~/workspace/python/video-rough-cut && sed -n '461,486p' tests/x.py"
+            },
+        }
+        substantial, reason = hook.substantial_tool_use(path_seg)
+        self.assertFalse(substantial, reason)
+        # 绝对路径解释器仍然拦（lookahead 只排除后紧跟 / 的目录形态）
+        abs_interp = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "/usr/bin/python3 -c 'open(\"/tmp/e\",\"w\")'"},
+        }
+        substantial, reason = hook.substantial_tool_use(abs_interp)
+        self.assertTrue(substantial, reason)
+        # #4 赋值+替换包裹的 retrieve 是检索动作
+        wrapped = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": "RUN=$(uv run python scripts/prior_work.py retrieve --business-outcome 'x') 2>&1; ec=$?"
+            },
+        }
+        substantial, reason = hook.substantial_tool_use(wrapped)
+        self.assertFalse(substantial, reason)
+        # 藏在参数里的替换仍 fail-closed
+        hidden = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": "uv run python scripts/prior_work.py retrieve --business-outcome \"$(rm -rf /tmp/y)\""
+            },
+        }
+        substantial, reason = hook.substantial_tool_use(hidden)
+        self.assertTrue(substantial, reason)
+
+    def test_audit_20260913_prompt_regressions(self) -> None:
+        # #9 对比句式的「以前」不武装
+        self.assertEqual(
+            hook.classify_prompt(
+                "到底和以前的那些 agent browser 有什么区别", False),
+            "none",
+        )
+        # 「以前」带做事形态仍武装
+        self.assertEqual(
+            hook.classify_prompt("不要复用 aicms-docs，但看看我们以前是怎么做的", False),
+            "required_prior_signal",
+        )
+        # 纠偏话术「记得你成功的经验」（指令形）不武装
+        self.assertEqual(
+            hook.classify_prompt(
+                "保证你在压缩上下文之后还能记得你成功的经验", False),
+            "none",
+        )
+        # 疑问形「成功的经验又是什么」仍武装
+        self.assertEqual(
+            hook.classify_prompt(
+                "最后成功的经验又是什么？如果我们以后还想去抓微信公众号", False),
+            "required_prior_signal",
+        )
+        # 召回主干不动：「我们之前」裸形态仍武装
+        self.assertEqual(
+            hook.classify_prompt("帮我回忆一下，我们之前已经见过两次了", False),
+            "required_prior_signal",
+        )
 
     def test_gate_messages_carry_the_real_session_id(self) -> None:
         # Regression (2026-08-27): the deny message only ever showed the
@@ -432,6 +509,101 @@ class PriorWorkHookTests(unittest.TestCase):
             "echo 'prior_work.py retrieve'"
         ))
 
+    def test_global_option_before_subcommand_keeps_retrieval_route(self) -> None:
+        # Regression (2026-09-10, session 9916c656 deadlocked two days): the
+        # canonical CLI form puts --manifest before the subcommand
+        # (`prior_work.py --manifest M retrieve ...`), but the route check
+        # required the subcommand immediately after the script name, so the
+        # gate's own documented unlock command fell through to
+        # unknown_executor and no receipt could ever be minted.
+        self.assertTrue(hook._segment_is_retrieval_route(
+            "uv run --no-project python scripts/prior_work.py "
+            "--manifest ~/.config/daymade/prior-work/sources.json retrieve "
+            "--business-outcome x --session-id SID"
+        ))
+        self.assertTrue(hook._segment_is_retrieval_route(
+            "python3 scripts/prior_work.py --manifest=/tmp/m.json complete "
+            "--run R --session-id SID"
+        ))
+        self.assertTrue(hook._segment_is_retrieval_route(
+            "python3 scripts/history_index.py --db /tmp/h.db status"
+        ))
+        # Unknown value-options still fail closed: the following value token
+        # is tested as the subcommand and rejects the route.
+        self.assertFalse(hook._segment_is_retrieval_route(
+            "python scripts/prior_work.py --output /tmp/x retrieve"
+        ))
+        # A substitution anywhere in the words still fails closed.
+        self.assertFalse(hook._segment_is_retrieval_route(
+            "python scripts/prior_work.py --manifest $(cat /tmp/m) retrieve"
+        ))
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": (
+                    "cd /some/skill && uv run --no-project python "
+                    "scripts/prior_work.py --manifest /tmp/m.json retrieve "
+                    "--business-outcome x --session-id SID"
+                )
+            },
+        }
+        substantial, reason = hook.substantial_tool_use(event)
+        self.assertFalse(substantial, reason)
+        self.assertEqual(reason, "Bash:retrieval_route")
+
+    def test_quoted_prose_is_not_an_executor_invocation(self) -> None:
+        # Regression (2026-09-10): `peer.py send "...我当前 Bash 被闸门拦了..."`
+        # — the word "Bash" inside the quoted message body matched
+        # SHELL_UNKNOWN_EXECUTOR, so the gate blocked even the message asking
+        # for help about the gate.
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": (
+                    'uv run scripts/peer.py send "codex:abc" '
+                    '"3. 协调窗口确认收到。我当前 Bash 被闸门拦了"'
+                )
+            },
+        }
+        substantial, reason = hook.substantial_tool_use(event)
+        self.assertFalse(substantial, reason)
+
+    def test_interpreter_outside_quotes_still_gates(self) -> None:
+        # Stripping quoted text must not weaken the gate: the interpreter word
+        # itself sits outside quotes in every real invocation form.
+        for command in (
+            "bash -c 'echo hi'",
+            'python3 -c "print(1)"',
+            "sh /tmp/x.sh",
+        ):
+            with self.subTest(command=command):
+                substantial, reason = hook.substantial_tool_use(
+                    {"tool_name": "Bash", "tool_input": {"command": command}}
+                )
+                self.assertTrue(substantial, reason)
+                self.assertEqual(reason, "Bash:unknown_executor")
+
+    def test_opt_out_accepts_buxuyao_and_hyphenated_prior_work(self) -> None:
+        # Regression (2026-09-10): the trapped session's advised escape phrase
+        # 「本任务不需要 prior-work 检索」 matched neither the verb list
+        # (不需要 missing) nor the space-only "prior work" spelling, so it
+        # classified as "none" — which never clears an existing requirement.
+        for prompt in [
+            "本任务不需要 prior-work 检索",
+            "本任务不需要 prior work 检索",
+            "不需要查历史，直接继续",
+        ]:
+            with self.subTest(prompt=prompt):
+                self.assertEqual(hook.classify_prompt(prompt, False), "opt_out")
+        # The arming phrase that started the incident still arms.
+        self.assertEqual(
+            hook.classify_prompt(
+                "有些东西我也裁决不了，按照我们之前的那种方式用多个数据源核对",
+                False,
+            ),
+            "required_prior_signal",
+        )
+
     def test_escaped_separator_in_retrieval_reason_is_argument_data(self) -> None:
         event = {
             "tool_name": "Bash",
@@ -518,6 +690,13 @@ class PriorWorkHookTests(unittest.TestCase):
             'ssh host "prior_work.py check; git push"',
             # F-new-3: $'…' ANSI-C quoting desyncs a naive quote state machine.
             "prior_work.py check $'x\\'y'; git push",
+            # Re-pinned 2026-09-10 from allowed to gated: the old raw-text
+            # read-only exemption let the quoted word "check" whitewash the
+            # whole segment, so `bash -c "check; rm -rf x"` passed (rm is not
+            # a write-signal word). Executor and exemption now both scan
+            # quote-stripped text; the direct route form stays allowed below.
+            'bash -c "prior_work.py check"',
+            'bash -c "check; rm -rf x"',
         ]
         for command in gated:
             with self.subTest(command=command):
@@ -527,8 +706,6 @@ class PriorWorkHookTests(unittest.TestCase):
         allowed = [
             # Backgrounding the route command itself is benign.
             "uv run python scripts/prior_work.py check --session-id S &",
-            # A wrapped route call without any write token stays allowed.
-            'bash -c "prior_work.py check"',
             # >&- is fd close, not a separator.
             "uv run python scripts/prior_work.py check 2>&- --session-id S",
         ]

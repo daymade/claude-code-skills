@@ -342,6 +342,9 @@ claude plugin install terraform-skill@daymade-skills
 
 # Evaluate any LLM endpoint across speed, concurrency, protocol, and quality
 claude plugin install llm-eval-harness@daymade-skills
+
+# Video/GIF memes with motion-tracked image overlays
+claude plugin install meme-creator@daymade-skills
 ```
 
 Standalone plugins can be installed independently; suite members install together with their suite.
@@ -499,15 +502,18 @@ Creates educational Teams channel posts for internal knowledge sharing.
 
 > **Install**: `claude plugin install peer-message@daymade-skills`
 
-Discovers, messages, broadcasts to, and independently verifies local Claude Code sessions and Codex threads through each product's own transport.
+Bridge local Claude Code and Codex sessions when the current host's native tools do not cover the target. Use native discovery, messaging, replies, and waiting directly whenever available; load this skill for transport gaps or coordination evidence that needs verification.
 
 **When to use:**
-- Asking one terminal's Claude or Codex agent to coordinate with another
-- Sending a dependency, pause, handoff, or completion notice across sessions
-- Reaching a Claude inbox from a third-party profile or Codex process
+- Sending a dependency, pause, handoff, or completion notice to an independently identified target outside the current native tools' scope
+- Finding replies to a specific coordination message without manually inspecting local message stores
+- Reaching a Claude inbox from a script or another product when native tools do not cover it; a third-party provider alone is not a reason to use the fallback
+- Unblocking messages held for per-message manual approval on an unattended endpoint (`crossSessionInbound`)
+- An inbound peer message asserting facts about your session or shared state, or asking you to pause/release — verify the premise against its own authority before acting
+- Another session's uncommitted edits, lock, or branch is in your way on a shared checkout — verify it is live, then ask the owner before waiting or working around it
 - Broadcasting one explicit coordination message to a reviewed target list
 
-📚 **Documentation and commands**: [peer-message/SKILL.md](./peer-message/SKILL.md) owns routing, stable runtime prerequisites, and the peer-cannot-authorize boundary; `peer-message/scripts/peer.py --help` owns CLI syntax; [protocol-and-discovery.md](./peer-message/references/protocol-and-discovery.md) owns addressing, envelopes, and delivery evidence; [official-feature.md](./peer-message/references/official-feature.md) owns volatile product-specific requirements and mechanics; [coordination-and-learning-loop.md](./peer-message/references/coordination-and-learning-loop.md) owns parent/worker handoff language and evidence-gated Skill improvement.
+📚 **Documentation and commands**: [peer-message/SKILL.md](./peer-message/SKILL.md) owns routing, stable runtime prerequisites, and the peer-cannot-authorize boundary; `peer-message/scripts/peer.py --help` owns CLI syntax; [protocol-and-discovery.md](./peer-message/references/protocol-and-discovery.md) owns addressing, envelopes, and delivery evidence; [official-feature.md](./peer-message/references/official-feature.md) owns volatile product-specific requirements and mechanics; [coordination-and-learning-loop.md](./peer-message/references/coordination-and-learning-loop.md) owns reply addressing, payload and delivery-status language, what to do when you find another session's in-flight work on a shared resource, what an inbound peer assertion and a set of peer denials are each worth, and the evidence-gated improvement loop.
 
 ---
 
@@ -592,6 +598,7 @@ Investigate and resolve Cloudflare configuration issues using API-driven evidenc
 - Site shows ERR_TOO_MANY_REDIRECTS
 - SSL/TLS configuration errors
 - DNS resolution problems
+- Email Routing aliases, destination verification and forwarding delivery
 - Cloudflare-related issues
 
 **Key features:**
@@ -725,6 +732,7 @@ Correct speech-to-text (ASR/STT) errors with a Stage 1 dictionary pre-filter, a 
 
 **Key features:**
 - Stage 1 + Native AI correction pipeline; Stage 1 alone is never completion
+- Frozen review packets and checked file/segment coverage for split or resumed Native reviews; malformed results stay unready and valid work can be reused
 - Exact-file review queue, deep-linked dashboard, timestamped audio playback, and machine-readable zero-pending readback
 - Conservative pattern learning: file-only, dictionary, roster, and context have separate admission rules
 - Domain-specific dictionaries (general, embodied_ai, finance, medical)
@@ -2227,6 +2235,35 @@ Guides users through structured narrative design (ABCDEFG model), then delegates
 
 ---
 
+### **excalidraw-use** - Place Images onto an Excalidraw Board
+
+Batch-place existing images onto an Excalidraw whiteboard, laid out on a generous grid so nobody has to drag them apart afterwards. Also turns a slide deck into clean per-slide images first, and inspects what is inside a `.excalidraw` file. The available Excalidraw MCP servers and skills cover element CRUD and export but document no image element type, no `dataURL` handling, and no `files` map — embedding your own pictures is the gap this fills.
+
+**When to use:**
+- Putting screenshots, a picture library, or deck slides onto a whiteboard
+- Spacing many images out so they never need manual adjustment
+- Turning a Vite/React slide deck into images you can draw over
+- Inspecting a scene file: element mix, embedded payload size, occupied extent
+
+**Key features:**
+- Content-hash dedupe and `--exclude` for images already on the board
+- `--template-from` copies the image-element field set out of your own board — Excalidraw's published schema stops before `fileId`/`status`/`scale`/`crop`
+- Write-back verification: fails on a missing file entry, a distorted aspect ratio, or any overlap
+- Deck capture hides presenter chrome, expands staged reveals, and reports fragments that never rendered
+- Documents the two silent destroyers: *Open* and drag-and-drop **replace** a scene (only the clipboard merges), and a stale build removes a source feature while `innerText` still reads hidden fragments as present
+
+**Example usage:**
+```bash
+# Trigger the skill naturally
+"Put these screenshots on my Excalidraw board"
+"Add my old workshop images to the canvas, spaced out"
+"Turn this deck into images I can draw on"
+```
+
+**Note**: Not for generating a diagram from a text description — that is a different job.
+
+---
+
 ### **debugging-network-issues** - Evidence-Driven Network Investigation
 
 Falsification-first methodology for network, streaming, and protocol-layer bugs where the obvious cause is probably wrong. Built from a real 5-hour SSE incident where assumption-stacking wasted hours that a 10-minute layered experiment would have resolved.
@@ -2518,6 +2555,7 @@ Extract Feishu (Lark) Docs, Wiki pages/collections, spreadsheets (including cell
 - Converting an owner-exported `.docx` into faithful Markdown with heading/highlight restoration
 
 **Key features:**
+- Document comments and complete reply threads accompany the body, with quoted passages, source positions, author IDs, timestamps, solved scope, and explicit coverage gaps
 - lark-cli API extraction writes the body to disk via `jq` (never retyped by the model — the single most important fidelity rule)
 - Recursive reference-graph traversal (BFS) with `feishu_extract_refs.py`, plus a residual rich-media-tag acceptance gate so no referenced doc is silently missed
 - Native Minutes transcript export (never re-runs ASR on downloaded media)
@@ -3211,6 +3249,7 @@ never silently substituted for one another.
 **Key features:**
 - Lists Codex sessions with internal time ranges and active/archive provenance
 - Extracts exact prompt-ledger inputs newest-first and groups them only by Session
+- Reconciles whole-conversation input counts and literal quotations across exact inherited snapshots; reports unresolved membership and accepts only record-bound reviewed injection exclusions
 - Reconstructs one rollout as a chronological user/assistant timeline with exact fork byte boundaries and compacted context
 - Searches Codex rollouts only; it cannot silently mix Claude matches into a Codex request
 - Selects a compatible Codex state database through schema introspection
@@ -3537,22 +3576,14 @@ they become load-bearing data.
 
 > **Install**: `claude plugin install tibo-reset-codex@daymade-skills`
 
-查询 ChatGPT/Codex 额度重置时间，解读 Tibo（OpenAI Codex 负责人 @thsottiaux）
-的重置公告。别再凭记忆回答「什么时候重置」——用权威追踪站 API 现查。
+查询重置公告，核实多个 Pro 账号的剩余额度与备用重置；预测下一轮时间，并在本地保存预测、核对结果，供后续判断调整。
 
-**Key features:**
-- 公告索引 Tibo Radar JSON API 现查；读 X 原帖走 fxtwitter 镜像拿完整长文（30 秒出结果）
-- 解读 Tibo 糙时间写法（「14pm PST」混用 24 小时制、常年写 PST 实为 PDT）
-- 太平洋时间→北京时间当场实测换算命令，含夏令时跨时令处理
-- 本机 `~/.codex` rollout 快照取证：重建周额度曲线、把重置定位到分钟级区间，不必让用户去截图
-- 同时查官方故障线（@ChatGPT / status.openai.com）——重置有里程碑与故障补偿两个触发，Radar 只索引前者
-- 证据纪律：tracker 标签 ≠ 已到账，官宣 ≠ 你的账户已到账；celebration 帖 = 里程碑重置预告
+[操作说明](tibo-reset-codex/SKILL.md)
 
-**Example usage:**
 ```text
 ChatGPT 什么时候重置额度
+几个 Pro 账号都用完了吗，哪个还有额度
 banked reset 到了吗
-Tibo 说的 2pm PST 是北京时间几点
 ```
 
 ### **prior-work-retrieval** - Retrieve Proven Work Before Producing
@@ -3685,6 +3716,35 @@ and [board-contract.md](./daymade-codex/interaction-design-board/references/boar
 
 ---
 
+### **meme-creator** - Video/GIF Memes with Motion-Tracked Overlays
+
+Glue logos, avatars, or stickers onto moving objects in a video clip so they follow the motion frame by frame — then export MP4 + GIF. Semi-supervised tracking: you read boxes off grid sheets, OpenCV CSRT carries them, and re-anchors or hand-set keyframes take over where trackers die (shot changes, walk-toward-camera scale blowups, long smooth walkaways).
+
+**When to use:**
+- Making a meme, 梗图, or reaction GIF out of an existing video moment
+- Covering faces/heads in a clip, or putting a logo/avatar on a moving person or object
+- "贴 logo 到视频里跟着动" — any overlay that must track motion
+
+**Key features:**
+- Identity disambiguation gate before binding any name to an account/avatar/logo (enumerate candidates with a handle-free search; the peer entities in the request are the discriminating signal)
+- Segment picking from tiled contact sheets instead of scrubbing
+- CSRT tracking with backward tracking, segment re-anchors, and smoothing; manual keyframes with piecewise-linear interpolation for smooth long shots
+- Visibility windows and velocity-extrapolated fades, so badges leave the frame with their subject instead of parking mid-screen
+- Two-pass palette GIF encoding with a size-budget knob order (fps → width → colors)
+
+**Example usage:**
+```text
+"把这段视频里三只猫的头分别换成这三个 logo，做成梗图视频和 GIF"
+"Cover the CEO's face with our competitor's logo in this keynote clip"
+"Turn 6:30-6:50 of this bilibili video into a GIF with my avatar on the main character"
+```
+
+📚 **Documentation**: See [meme-creator/SKILL.md](./meme-creator/SKILL.md) and the bundled `references/` for the tracking playbook and the asset-binding gate.
+
+**Requirements**: `ffmpeg`; `uv` (bundled Python scripts carry inline dependencies). `yt-dlp` only when downloading from a URL.
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -3714,7 +3774,7 @@ Use **pdf-creator** to convert markdown to print-ready PDFs with proper Chinese 
 Use **teams-channel-post-writer** to share knowledge and **statusline-generator** to track costs while working.
 
 ### For Local Agent Coordination
-Use **peer-message** when Claude Code profiles and Codex threads on the same machine need to exchange targeted handoffs, pause/resume notices, dependency updates, or an explicit multi-target broadcast. It keeps peer input separate from user authorization and independently reads back receiver-side evidence before calling a message delivered.
+Use the current host's native communication tools for reachable agents and sessions. Use **peer-message** only for uncovered local targets, cross-product/script transport, or coordination evidence that needs verification. Follow its [routing contract](./peer-message/SKILL.md); a denied or Held message is not a reason to switch transports.
 
 ### For Repository Management & Security
 Use **repomix-unmixer** to extract and validate repomix-packed skills or repositories. Use **repomix-safe-mixer** to package codebases securely, automatically detecting and blocking hardcoded credentials before distribution.
@@ -3842,6 +3902,9 @@ Use **stepfun-tts** for Chinese / Japanese voice synthesis with emotional contro
 ### For Long-Audio Transcription (StepFun StepAudio 2.5)
 Use **stepfun-asr** for transcribing up to 30-minute Chinese / English audio in a single SSE call (32K context, ~85-101× RTF, no client-side chunking). Hides the #1 trap — the model does NOT live on `/v1/audio/transcriptions`; the wrong endpoint returns a misleading "model not supported" error. Combine with **transcript-fixer** for ASR error correction or with **meeting-minutes-taker** to turn long recordings into structured minutes.
 
+### For Meme & GIF Creation
+Use **meme-creator** to put logos, avatars, or stickers onto moving objects in a video clip with frame-accurate tracking, and export the result as MP4 plus a size-budgeted GIF. Combine with **youtube-downloader** (or yt-dlp directly) when the source footage is still online.
+
 ## 📚 Documentation
 
 Each skill includes:
@@ -3907,6 +3970,7 @@ Each skill includes:
 - **stepfun-tts**: See `stepfun-tts/SKILL.md` for the Contextual TTS decision tree and `stepfun-tts/references/migration_from_v2.md` for the `voice_label` → `instruction` migration playbook plus the censorship rewrite list
 - **stepfun-asr**: See `stepfun-asr/SKILL.md` for the SSE-endpoint workflow and the four ASR-side traps (wrong endpoint, Plan-vs-Normal key, repetition hallucination, SSE `error` event). `stepfun-asr/references/api_reference.md` documents the exact JSON request body and SSE event contract for raw HTTP integration
 - **llm-eval-harness**: See `llm-eval-harness/references/evaluation_disciplines.md` for the reasoning behind each discipline (env-var keys, thinking-aware throughput, proxy isolation, probabilistic protocol verdicts) and `llm-eval-harness/references/quality_blind_judge.md` for the independent blind-judge quality method
+- **meme-creator**: See `meme-creator/SKILL.md` for the pipeline and `meme-creator/references/tracking-playbook.md` for the CSRT failure taxonomy and manual-keyframe fallback
 
 ## 🛠️ Requirements
 
@@ -3940,6 +4004,7 @@ Each skill includes:
 - **Node.js 18+ + curl + unzip** (for ima-copilot): `npx skills` is fetched on demand from the npm registry; IMA OpenAPI credentials from [https://ima.qq.com/agent-interface](https://ima.qq.com/agent-interface)
 - **StepFun API key** (for stepfun-tts and stepfun-asr — must be "Normal" tier, Plan keys silently fail on audio endpoints): Available at [https://platform.stepfun.com/](https://platform.stepfun.com/) → API Keys
 - **uv + an endpoint API key** (for llm-eval-harness): `openai` and `aiohttp` are auto-installed via `uv run --with`; the key is passed by env-var name only
+- **FFmpeg + uv** (for meme-creator): `brew install ffmpeg`; bundled scripts resolve their own Python deps via `uv run`; `yt-dlp` only when the source is a URL
 
 ## ❓ FAQ
 

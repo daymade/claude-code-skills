@@ -26,12 +26,13 @@ Design (borrowed from annotation-tool practice — Prodigy/Argilla):
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, NamedTuple
 
 # Ledger frontmatter (`asr_note`) masking, shared with Stage 1 and the AI
 # passes. Imported here so the ACCEPT path honours the same contract the
@@ -44,6 +45,10 @@ from core.dictionary_processor import (
 VALID_SOURCES = ("native_pass", "stage1_deferred", "learned_suggestion", "manual")
 VALID_KINDS = ("entity", "homophone", "wording", "unknown")
 VALID_DECISIONS = ("accepted", "overridden", "kept_original", "skipped", "reopen")
+# Lines either side of the recorded line hint that resolve-time anchoring and
+# enqueue-time hint repair treat as "near the hint". One definition; the prose
+# in references/review_queue_dashboard.md states it once and nowhere else.
+RESOLVE_WINDOW_LINES = 3
 PENDING = "pending"
 
 # Priority conventions (higher = review first). Entities compound the most
@@ -63,7 +68,21 @@ class ReviewQueueError(Exception):
 
 class ReAnchorNeeded(ReviewQueueError):
     """The item's anchor text no longer matches the target file — the file
-    changed since enqueue. The decision is NOT recorded; fail closed."""
+    changed since enqueue. The decision is NOT recorded; fail closed.
+
+    One shape is told apart before this is raised: on `accepted` / `overridden`,
+    when the context recorded at enqueue reappears in the ledger-masked file
+    with the resolved text in its slot and nothing near the hint contradicts
+    it, the fix was applied by hand and the verdict is recorded without
+    writing (`_already_applied_verdict`). Every other missing-anchor shape
+    still lands here."""
+
+
+class AppliedVerdict(NamedTuple):
+    """Result of `ReviewQueue._already_applied_verdict`."""
+    kind: str                 # applied | survivor | other_form | absent
+    hit_lines: list[int]      # lines where the recorded context reads with `new`
+    other_lines: list[int]    # survivor / other_form lines (empty otherwise)
 
 
 @dataclass
@@ -186,7 +205,7 @@ class ReviewQueue:
     # ==================== Enqueue ====================
 
     def enqueue(self, items: list[dict[str, Any]]) -> dict[str, Any]:
-        """Insert items; duplicates (same file/original/suggested/domain in ANY
+        """Insert items; duplicates (same file/original/suggested/domain/line in ANY
         status) are skipped so re-runs never re-ask an answered question.
         Returns {added: [ids], skipped_duplicates: int, skipped_temp: int,
         rejected_unanchored: [{original, file, reason}], repaired_hints:
@@ -306,12 +325,12 @@ class ReviewQueue:
         if item["line_number"] is not None:
             hits = [i + 1 for i, ln in enumerate(content.splitlines()) if original in ln]
             if hits and item["line_number"] not in hits and len(hits) == 1:
-                # Only repair a hint that would actually break resolve: the
-                # resolve-time window is ±3 lines, so a hint within window of
-                # the unique match works fine as-is and must NOT be rewritten
-                # (rewriting a functional hint silently broke dashboard
-                # context fallback, tests/test_dashboard_context.py:150).
-                if abs(hits[0] - item["line_number"]) > 3:
+                # Only repair a hint that would actually break resolve: a hint
+                # within RESOLVE_WINDOW_LINES of the unique match works fine
+                # as-is and must NOT be rewritten (rewriting a functional hint
+                # silently broke dashboard context fallback,
+                # tests/test_dashboard_context.py:150).
+                if abs(hits[0] - item["line_number"]) > RESOLVE_WINDOW_LINES:
                     item["_hint_repaired_to"] = hits[0]
                     item["line_number"] = hits[0]
         snippet = item["context_snippet"]
@@ -370,8 +389,10 @@ class ReviewQueue:
             elif not hits:
                 roots = [str(path.parent)] + [str(r) for r in (search_roots or [])]
                 raise ReviewQueueError(
-                    f"file gone and original not found under {roots} — "
-                    f"resolve kept_original/skipped, or re-enqueue against the new file")
+                    f"file gone and original not found under {roots} — pass "
+                    f"--reanchor-to <path> if the transcript moved; if the utterance "
+                    f"is gone, close the row with --decision skipped --note <why> "
+                    f"(kept_original asserts the transcript keeps the original form)")
             else:
                 raise ReviewQueueError(
                     f"file gone and original found in {len(hits)} files — ambiguous, "
@@ -380,10 +401,34 @@ class ReviewQueue:
 
         lines = content.splitlines()
         matches = [i + 1 for i, ln in enumerate(lines) if item.original_text in ln]
+        masked, _ = _mask_ledger_spans(content)
+        verdict = self._already_applied_verdict(
+            masked, item.original_text, item.suggested_text or "",
+            item.context_snippet, item.line_number)
+        if verdict.hit_lines:
+            # The recorded context already reads with the suggestion: this
+            # row's fix is in place. Re-locating the ORIGINAL would re-point
+            # the row at a different utterance and a later accept would edit
+            # that one under this row's id (observed in review, 2026-09-05).
+            raise ReviewQueueError(
+                f"this row's recorded context already reads with "
+                f"{(item.suggested_text or '')[:60]!r} at line(s) {verdict.hit_lines} — "
+                f"nothing to re-anchor: resolve it with --resolve-review {item_id} "
+                f"--decision accepted (recorded without writing once no look-alike "
+                f"near the hint still carries the original). "
+                + (f"The original at line(s) {matches} belongs to other utterances: "
+                   f"enqueue those separately or fix them by hand. " if matches else "")
+                + f"If "
+                f"line(s) {verdict.hit_lines} is not the utterance this row meant, "
+                f"close the row with --decision skipped --note <why> and enqueue "
+                f"the garbled one afresh")
         if not matches:
             raise ReviewQueueError(
                 f"original {item.original_text[:60]!r} no longer in {path.name} — "
-                f"kept_original/skipped 才是正确退场")
+                f"nothing to re-anchor to. A fix already applied by hand is recorded "
+                f"by --resolve-review {item_id} --decision accepted (no write); an "
+                f"utterance that is gone closes with --decision skipped --note <why>. "
+                f"kept_original asserts the transcript keeps the original form")
         # Disambiguate with the RECORDED context first (it is the best evidence
         # for WHICH occurrence the item meant) — picking purely by distance and
         # then overwriting context_snippet with the chosen line would feed the
@@ -867,6 +912,12 @@ class ReviewQueue:
                 path = Path(action["path"]).resolve()
                 content = self._load(contents, path)
                 new_content, applied_new = self._plan_file_edit(content, action, item)
+                if new_content is None:
+                    planned.append({
+                        "action": action, "mode": "skip_already_present",
+                        "msg": "already in place at the anchor — recorded without writing",
+                    })
+                    continue
                 contents[path] = new_content
                 dirty.add(path)
                 planned.append({"action": action, "mode": "file_edit",
@@ -901,7 +952,7 @@ class ReviewQueue:
                 # skipped=True keeps _revert_applied from removing a line this
                 # action never wrote (it was pre-existing content).
                 log.append({"action": action, "ok": True, "skipped": True,
-                            "msg": "already present — skipped"})
+                            "msg": plan.get("msg", "already present — skipped")})
             elif mode == "file_edit":
                 log.append({"action": action, "ok": True, "applied_new": plan["applied_new"],
                             "msg": f"replaced in {plan['path'].name}"})
@@ -928,7 +979,8 @@ class ReviewQueue:
             raise ReAnchorNeeded(
                 f"file gone: {path} — the transcript moved since enqueue; "
                 f"run `fix_transcription.py --reanchor-review <id> [--reanchor-root DIR]` "
-                f"to repair the anchor (or resolve kept_original/skipped)"
+                f"to repair the anchor, or close the row with --decision skipped "
+                f"--note <why> if the utterance is gone"
             )
         with open(path, "r", encoding="utf-8", newline="") as f:
             return f.read()
@@ -947,7 +999,8 @@ class ReviewQueue:
 
     def _plan_file_edit(
         self, content: str, action: dict[str, Any], item: ReviewItem
-    ) -> tuple[str, str]:
+    ) -> tuple[Optional[str], str]:
+        """Returns (new_content, applied_new); (None, new) = already in place."""
         old, new = action["old"], action["new"]
         # A correction-ledger frontmatter field (`asr_note`) quotes old forms on
         # purpose — "修正含：<旧形>→<正确形>". Stage 1 and trap-scan both mask it;
@@ -960,14 +1013,37 @@ class ReviewQueue:
         # "<变体>→<正名>" became "<正名>→<正名>" — a ledger contradicting itself,
         # reported as a successful replace.)
         masked, ledger_spans = _mask_ledger_spans(content)
-        count = masked.count(old)
+        count = sum(1 for _ in re.finditer("(?=" + re.escape(old) + ")", masked))
+        line_no = action.get("expect_line") or item.line_number
+        verdict = self._already_applied_verdict(
+            masked, old, new, item.context_snippet, line_no)
+        if verdict.kind == "applied":
+            # A hand edit landed the suggestion before the verdict. The
+            # verdict is still "accepted" — recording it as kept_original
+            # would describe the transcript as right as spoken, which it
+            # was not. Nothing is written; the caller logs it as skipped.
+            # This runs before the occurrence count on purpose: a suggestion
+            # that contains the original (阿里→阿里云) leaves `old` in the
+            # file forever, and an original surviving in a different utterance
+            # far from the hint is that utterance's business, not this row's.
+            return None, new
         if count == 0:
+            if verdict.kind == "other_form":
+                raise ReAnchorNeeded(
+                    f"anchor text not found: {old[:60]!r} — the recorded context "
+                    f"reappears with {new[:60]!r} in its slot at line(s) "
+                    f"{verdict.hit_lines}, but line(s) {verdict.other_lines} carry a "
+                    f"different form there, so which line this row meant is "
+                    f"ambiguous; nothing was modified. Settle those line(s) first "
+                    f"(their own rows, or by hand), then resolve this one"
+                )
             raise ReAnchorNeeded(
                 f"anchor text not found: {old[:60]!r} — the file changed since "
-                f"enqueue (or an earlier action in this pack consumed it); "
-                f"nothing was modified (repair with --reanchor-review <id> first)"
+                f"enqueue (or an earlier action in this pack consumed it) and the "
+                f"recorded context does not reappear with {new[:60]!r} in its slot; "
+                f"nothing was modified (if the utterance is gone, close the row "
+                f"with --decision skipped --note <why>)"
             )
-        line_no = action.get("expect_line") or item.line_number
         if count == 1 and not line_no:
             # No hint to validate against; a sole occurrence is all we have.
             idx = masked.find(old)
@@ -977,16 +1053,175 @@ class ReviewQueue:
             # anchored line already fixed, `count == 1` matched a different
             # line entirely and the careful ladder below never ran. "CONTENT
             # outranks POSITION" has to hold at every count, not just >1.
-            idx = self._locate_anchor(masked, old, line_no, item.context_snippet)
+            try:
+                idx = self._locate_anchor(masked, old, line_no, item.context_snippet)
+            except ReAnchorNeeded as exc:
+                if verdict.hit_lines:
+                    # The recorded context already reads with the suggestion,
+                    # and the original that is left belongs to another
+                    # utterance (or to a look-alike near the hint). Sending the
+                    # reader to --reanchor-review here would re-point this row
+                    # at that other utterance and edit it under this row's id.
+                    base = str(exc).replace(
+                        " (repair with --reanchor-review <id> first)", "")
+                    raise ReAnchorNeeded(
+                        f"{base}. This row's recorded context already reads with "
+                        f"{new[:60]!r} at line(s) {verdict.hit_lines}; the original "
+                        f"surviving at line(s) {verdict.other_lines} belongs to a "
+                        f"different utterance (or a look-alike near the hint) — "
+                        f"settle it on its own row or by hand, then resolve this "
+                        f"row; do not --reanchor-review it onto that line"
+                    ) from exc
+                raise
         edited = masked[:idx] + new + masked[idx + len(old):]
         if ledger_spans:
             edited = _restore_ledger_spans(edited, ledger_spans)
         return edited, new
 
     @staticmethod
+    def _already_applied(
+        content: str, old: str, new: str, snippet: Optional[str],
+        line_no: Optional[int] = None, window: int = RESOLVE_WINDOW_LINES,
+    ) -> bool:
+        """True when `_already_applied_verdict` is `applied` — see there."""
+        return ReviewQueue._already_applied_verdict(
+            content, old, new, snippet, line_no, window).kind == "applied"
+
+    @staticmethod
+    def _already_applied_verdict(
+        content: str, old: str, new: str, snippet: Optional[str],
+        line_no: Optional[int] = None, window: int = RESOLVE_WINDOW_LINES,
+    ) -> "AppliedVerdict":
+        """Is the suggestion already sitting where the anchor was?
+
+        The accept path fails closed once the anchored occurrence cannot be
+        located, because "not where it was" alone cannot tell a hand-applied
+        fix from a drifted file. This is the one shape it CAN tell apart: the
+        context recorded at enqueue time reappears in the file with `new` in
+        the exact slot `old` occupied and the recorded neighbours on both
+        sides of that slot intact. The whole file is searched, not a window
+        around the line hint: frontmatter growth or a deleted paragraph
+        shifts every later line, and with the original gone a hint that
+        drifted past the resolve window would otherwise strand a row
+        whose fix is in place. The occurrence count of `old` is deliberately
+        not a precondition — a suggestion that contains the original
+        (阿里→阿里云) never lets `old` disappear.
+
+        Neighbour width is tried from 8 characters down to 2, so a second
+        correction on the same line that leaves at least two recorded
+        characters between itself and this slot does not defeat the check; an
+        edit touching the slot does (fail closed). A one-sided neighbourhood
+        (anchor at a snippet edge) must be at least 3 characters to stand in
+        for the missing side, and a snippet that is the bare token carries no
+        neighbours to verify — fail closed. No snippet: fail closed.
+
+        Verdicts, each fail-closed except the first:
+          applied     — the neighbourhood reads with `new` and nothing below
+                        contradicts it; `hit_lines` says where.
+          survivor    — `old` still occurs within ±window lines of the hint
+                        outside any occurrence of `new`: the anchored
+                        utterance, or a look-alike right next to it, is still
+                        garbled; the normal locate-and-edit ladder decides.
+          other_form  — the recorded neighbourhood occurs somewhere with a
+                        third form in the slot: anywhere in the file at the
+                        width that matched, or within ±window lines of the
+                        hint at any width down to 2 (a hand edit that changed
+                        the anchored line to something else, with an
+                        adjacent co-edit, is caught here as long as two
+                        recorded characters survive on each side of the
+                        slot). Which line the row meant is ambiguous; the
+                        row needs a human exit, not a recorded `accepted`.
+          absent      — the neighbourhood does not read with `new` anywhere.
+
+        Boundaries this cannot see, by construction: the anchored utterance
+        deleted outright (or rewritten past both neighbours) while an
+        identical neighbourhood elsewhere already reads with `new` — that is
+        indistinguishable from drift and is `applied`; nothing is written
+        either way, `reopen` re-pends the row, and a garble that is still in
+        the file is re-deferred by the next Stage 1 run. `content` is the
+        ledger-masked text, so an `asr_note` citation of the new form can
+        never satisfy this.
+        """
+        if not old or not new or not snippet or not snippet.strip():
+            return AppliedVerdict("absent", [], [])
+        snip = snippet.strip()
+        lines = content.splitlines(keepends=True)
+        # 1. Widest recorded neighbourhood that reads with `new` somewhere.
+        found: Optional[tuple[int, str, str]] = None
+        start = 0
+        while found is None:
+            p = snip.find(old, start)
+            if p < 0:
+                return AppliedVerdict("absent", [], [])
+            start = p + len(old)
+            for k in (8, 6, 4, 3, 2):
+                left = snip[max(0, p - k):p]
+                right = snip[p + len(old):p + len(old) + k]
+                if not left and not right:
+                    break
+                if (not left or not right) and len(left + right) < 3:
+                    continue
+                if left + new + right in content:
+                    found = (p, left, right)
+                    break
+        p, left, right = found
+        hit_lines = [i + 1 for i, ln in enumerate(lines) if left + new + right in ln]
+        lo = max(0, (line_no or 1) - 1 - window)
+        hi = min(len(lines), (line_no or 1) + window)
+        # 2. The original itself still near the hint, outside any `new`.
+        if line_no:
+            survivors = [
+                i + 1 for i in range(lo, hi)
+                if old in lines[i].replace(new, "\x00")
+            ]
+            if survivors:
+                return AppliedVerdict("survivor", hit_lines, survivors)
+        # 3. Third forms: whole file at the matched width, hint window at every width.
+        others: set[int] = set()
+        for i, ln in enumerate(lines):
+            if ReviewQueue._slot_holds_other_form(ln, left, right, new):
+                others.add(i + 1)
+        if line_no:
+            for k in (8, 6, 4, 3, 2):
+                l2 = snip[max(0, p - k):p]
+                r2 = snip[p + len(old):p + len(old) + k]
+                if not l2 and not r2:
+                    break
+                if (not l2 or not r2) and len(l2 + r2) < 3:
+                    continue
+                for i in range(lo, hi):
+                    if ReviewQueue._slot_holds_other_form(lines[i], l2, r2, new):
+                        others.add(i + 1)
+        if others:
+            return AppliedVerdict("other_form", hit_lines, sorted(others))
+        return AppliedVerdict("applied", hit_lines, [])
+
+    @staticmethod
+    def _slot_holds_other_form(line: str, left: str, right: str, new: str) -> bool:
+        """Does `left … right` occur on this line with something other than
+        `new` in the slot? Two-sided: the nearest pairing (the filler may not
+        itself contain either neighbour), any length, one line. One-sided: the
+        `len(new)` characters adjoining the neighbour. Matches are found with
+        a lookahead so overlapping occurrences are all examined."""
+        if left and right:
+            filler = r"((?:(?!" + re.escape(left) + "|" + re.escape(right) + r").)*?)"
+            pattern = "(?=" + re.escape(left) + filler + re.escape(right) + ")"
+            return any(m.group(1) != new for m in re.finditer(pattern, line))
+        if left:
+            n = len(left)
+            return any(
+                line[m.start() + n:m.start() + n + len(new)] != new
+                for m in re.finditer("(?=" + re.escape(left) + ")", line)
+            )
+        return any(
+            line[max(0, m.start() - len(new)):m.start()] != new
+            for m in re.finditer("(?=" + re.escape(right) + ")", line)
+        )
+
+    @staticmethod
     def _locate_anchor(
         content: str, needle: str, line_no: Optional[int],
-        snippet: Optional[str], window: int = 3,
+        snippet: Optional[str], window: int = RESOLVE_WINDOW_LINES,
     ) -> int:
         """Choose ONE occurrence of `needle` when several exist.
 
@@ -1015,12 +1250,16 @@ class ReviewQueue:
         candidates: list[tuple[int, int]] = []  # (1-based line, absolute offset)
         for i in range(max(0, line_no - 1 - window), min(len(lines), line_no + window)):
             pos = lines[i].find(needle)
-            if pos != -1:
+            while pos != -1:
                 candidates.append((i + 1, offsets[i] + pos))
+                pos = lines[i].find(needle, pos + 1)
         if not candidates:
             raise ReAnchorNeeded(
                 f"anchor text appears {content.count(needle)} times but none within "
-                f"±{window} lines of line {line_no} — refusing an ambiguous edit"
+                f"±{window} lines of line {line_no} — refusing an ambiguous edit "
+                f"(a fix applied by hand is recognised when the recorded context reads "
+                f"with the suggestion in its slot and no look-alike near the hint still "
+                f"carries the original; occurrences elsewhere are separate decisions)"
             )
         if snippet and snippet.strip():
             probe = snippet.strip()[:80]
@@ -1036,6 +1275,22 @@ class ReviewQueue:
                     f"enqueue time — the file drifted; refusing to edit a look-alike "
                     f"(repair with --reanchor-review <id> first)"
                 )
+            # Line identity alone cannot select between repeated tokens on that
+            # line. A verbatim, narrower context containing the token once can;
+            # a full-line context containing it twice must remain ambiguous.
+            exact = snippet.strip()
+            if sum(1 for _ in re.finditer("(?=" + re.escape(needle) + ")", exact)) == 1:
+                contextual = []
+                for line_number, offset in candidates:
+                    line = lines[line_number - 1]
+                    start = line.find(exact)
+                    while start != -1:
+                        if offset == offsets[line_number - 1] + start + exact.index(needle):
+                            contextual.append((line_number, offset))
+                            break
+                        start = line.find(exact, start + 1)
+                if contextual:
+                    candidates = contextual
         on_hint = [c for c in candidates if c[0] == line_no]
         if len(on_hint) == 1:
             return on_hint[0][1]

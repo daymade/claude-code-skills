@@ -139,6 +139,23 @@ that Stage 1 does not expose. If either expected source is unavailable or the
 sources disagree, leave the token unchanged and enqueue it or ask once. Never
 use the most frequent spelling in the transcript as identity evidence.
 
+When the disagreement is about **canonical direction** — one source lists
+spelling A as the canonical form with B as the variant, the other lists the
+reverse — you have found a defect in the records, not just in this transcript.
+Surface the conflict to the user in the same turn, get the direction ruled,
+and repair the losing source immediately; a conflict left standing re-decides
+itself wrongly on every future run. Two cautions on the evidence you bring to
+that ruling: a **count cited inside a context file** ("form A appears 128
+times, form B 5") is a point-in-time observation that a historical bad rule
+may have manufactured — re-measure the corpus before repeating it, so the
+number you lay in front of the user is real rather than inherited pollution
+(real case 2026-09: a context file's majority claim was inherited from a
+window when a reversed dictionary rule had been rewriting the correct form
+into the wrong one; re-measured after the repair, the corpus ran 209:32 the
+other way). And no count, however clean, settles canonical direction at all —
+the frequency ban above covers identity, and it covers direction for the same
+reason: prevalence is not provenance.
+
 **Roster format** (canonical: `### Name` + `- **ASR 变体**: variant1, variant2`):
 ```markdown
 ### Ada Lovelace
@@ -155,6 +172,29 @@ variants (`小铭`). List only the misrecognized name token, not a whole
 honorific-bearing form: the `小铭` rule can correct `小铭老师` while preserving
 the spoken `老师`; a whole-string `小铭老师` roster entry would wrongly replace
 the honorific too. List only forms that actually recurred and are safe to reuse.
+
+**Bare numbers are refused at load, not merely deferred.** A numeric variant
+(`95` → a person) matches timestamps, scores, and prices in every transcript,
+so the roster loader rejects it with a loud stderr warning instead of letting
+the risk gate defer it a hundred times, and `--add` / `--import` likewise
+refuse a pure-digit FROM with an error that `--force` does not override. A number genuinely heard as a name in
+one recurring context belongs in the owning domain's context file as a
+cue-scoped trap, never on `ASR 变体` or in the dictionary. (Real case 2026-09:
+a roster line carrying a numeric variant deferred 122 items across five files
+in a single rerun — most of them `.950` millisecond timestamps.) The refusal
+covers decimal digits only; CJK numerals (e.g. 九五) are ordinary real-word
+variants — they load, defer under safe mode, and stay a human-judged class
+like any other common-word variant.
+
+**A single surname plus an honorific is refused the same way.** `朱老师` or `王总`
+names everyone with that surname, so one person's misheard surname recorded as a
+variant rewrites people who were named correctly (real case 2026-09-07: seven
+such variants from one meeting turned an unrelated `朱老师` into a different
+person). The loader refuses a one-character surname followed by `老师`/`老師` or
+`总`/`總`, and `--add` / `--import` refuse it as a FROM — `--force` does not
+override it either. A given name plus an honorific
+(`明源总`) and a bare misheard name token (`小铭`) still load. When the mapping
+really holds only under a cue, put it in the owning domain's context file.
 
 **Keep legitimate aliases out of the replacement field.** An English name,
 Chinese full name, and nickname may all identify one person while each remains
@@ -237,6 +277,11 @@ strongest source for what this occurrence says, but it does not prove that the
 same from→to pair is safe on future transcripts. A user verdict that
 contradicts your search results is still the verdict winning, not an anomaly to
 double-check.
+
+**Three more verdict shapes worth naming, because all three get mishandled.**
+- *"Fix this occurrence — never a rule."* The user confirms the swap for the sentence in front of you while explicitly forbidding the standing pair. Landing spots, all in the same turn: the file edit; a caution line in the owning roster or domain context ("A→X forbidden as a rule — one-off mishearing, judge per occurrence"); if a queue item exists for this occurrence, its `decision_note` quoting the prohibition verbatim — a mid-turn chat verdict often has none, and in that case do **not** manufacture a queue item just to hold the note, the caution line is the carrier; and *nothing* in the dictionary. The verdict fixes one occurrence; the recorded prohibition is what saves the next session from compounding it.
+- *A rejected merge is not a person.* `kept_original` — or the user rejecting your merge candidate — settles only that the text stands as written. It does not establish that the token is a real entity, and it does not license creating a roster entry asserting real-personhood for a token you know nothing about. Roster entries require positive identity knowledge (who this person is, from the user or a ledger); manufacturing an entry from the negation of your own wrong guess poisons the very SSOT the next run reads. If the user then tells you the token is nobody, or names the actual person, *that* is the fact to record.
+- *One token, two real referents — within one domain.* The same garbled string can be a mishearing of person X in one file and person Y in another — same week, same engine. Once a verdict reveals that, record **both** directions as trap bullets marked `禁裸词` in the owning domain's context file (the veto machinery under "Domain Correction Contexts" below demotes any same-FROM dictionary rule, and `--scan-traps` then surfaces each new occurrence for per-case enqueue); there is no dictionary-safe form of "A sometimes means X, sometimes Y" *in the same domain*. The cross-project escape hatch is narrower than it looks: if the two referents separate cleanly by project, domain-scoped rules (`A→X` under `--domain P1`, `A→Y` under `--domain P2`) are the domain-isolation section's sanctioned move **only when the FROM token is garble-shaped** — when the FROM is itself a plausible real name, the matrix's *real name → different real name* row still wins, because a P1 transcript can always mention the person from P2.
 
 ## Domain Correction Contexts (per-domain AI priors)
 

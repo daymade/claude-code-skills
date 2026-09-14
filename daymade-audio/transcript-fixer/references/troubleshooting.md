@@ -313,7 +313,14 @@ for suffix in ['_stage1.md','_dryrun.md','_uncertain.md','_stage2.md','_对比.h
 "
 ```
 
-The manual cleanup also leaves `_changes.md` and `_needs_review.md` untouched. Remove them separately only after every represented item has an explicit disposition.
+The manual cleanup also leaves `_changes.md` and `_needs_review.md` untouched. Close those with the command built for it rather than by hand:
+
+```bash
+uv run scripts/fix_transcription.py --close-sidecars --input file.md --dry-run   # verdict only
+uv run scripts/fix_transcription.py --close-sidecars --input file.md             # removes on `closed`
+```
+
+It re-reads every entry of both reports against the transcript (ledger line masked) and the review queue for that exact file: `closed` (exit 0) removes the evidence and stale run outputs; `open` (exit 1) names each entry that still reads as the original without a verdict and each pending queue id; `blocked` (exit 2) means a `_stage1.md` newer than the file is waiting for the plain Stage 1 rerun above, or a report carries entries the tool cannot read (`report_unparsed`) — inspect that file by hand instead of deleting it. `--decide-raw kept_original|skipped --by <who> --note <why>` records a verdict through the queue for entries that have no row, so nothing is deleted without an audit trail. A `_stage2.md`/`_dryrun.md` newer than the transcript is retained and named; add `--discard-unpromoted` to drop it.
 
 **Why not a bare `mv`**: On macOS, `mv` is commonly aliased to `mv -i`. A bare `mv file_stage1.md file.md && echo done` can skip the overwrite (still exit 0) when the target already exists, leaving the uncorrected file in place. Use the Python one-liner above, or `/bin/mv -f`, if you must use the shell:
 

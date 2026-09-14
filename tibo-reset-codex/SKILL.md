@@ -1,10 +1,11 @@
 ---
 name: tibo-reset-codex
 description: >-
-  查询 ChatGPT/Codex 额度重置时间，区分 Tibo 官宣、未官宣的平台静默重置、banked reset
-  与账户级周期重置。Use when 用户问「什么时候重置」「额度什么时候恢复」「下次全员重置几点」
+  查询 ChatGPT/Codex 重置公告及多个 Pro 账号的剩余额度、备用 Full reset；复用 Google
+  登录逐个核实并恢复网页账号，换算北京时间。区分 Tibo 官宣、未官宣的平台静默重置、banked
+  reset 与账户级周期重置。Use when 用户问「什么时候重置」「额度什么时候恢复」「下次全员重置几点」
   「banked reset 到了吗」「Tibo 说了什么」「usage limit when reset」，或说「额度突然回到
-  100%」「好像/肯定又重置了」。必须用实时产品状态、独立用户实测与公告交叉核验；禁止因
+  100%」「好像/肯定又重置了」，或问「几个账号都用完了吗」「哪个还满额」。必须用实时产品状态、独立用户实测与公告交叉核验；禁止因
   Tibo Radar 没有新条目就否定已经发生的重置，并须把太平洋时间当场换算为北京时间。
 ---
 
@@ -18,25 +19,34 @@ description: >-
 配置切换时**不发 reset 帖而直接重置账户**。所以「没有 Tibo 帖」只证明没有官宣，不能证明
 没有重置。
 
-**四种「重置」别混淆**（回答用户前先分清问的是哪种）：
+**先分清用户问的是哪种重置**：
 
 | 类型 | 谁触发 | 在哪看 | 性质 |
 |---|---|---|---|
 | **官宣广域 RESET** | Tibo / OpenAI | 官方 X 原帖；追踪站只作公告索引 | 无固定排期，常用于里程碑或故障补偿 |
 | **静默平台重置** | OpenAI 后端或限额配置发布 | 产品 usage 状态 + 同时段多账户第一手实测 + 排除各自正常周期；官方限额变更只作上下文 | 可以没有 reset 帖；未获官方范围声明时只能称「大范围观测到」，不能称「全员」 |
-| **BANKED reset** | Tibo 推文 | 官宣：追踪站 API（`type=credits`）；到账确认：ChatGPT 产品内余额 | 一次性「存着随你用」的额度包；官宣 ≠ 人人到账（有过分批延迟） |
-| **账户级周重置** | 系统按开通日 | ChatGPT 产品内「Next reset: …」 | 每人时间不同，与 Tibo 无关 |
+| **BANKED reset** | Tibo 推文 | 官宣：追踪站 API（`type=credits`）；到账确认：ChatGPT 产品内余额 | 一次性「存着随你用」的额度包，**到账后不自动消耗**，由用户在 usage 页手动兑现；官宣 ≠ 人人到账（有过分批延迟）。触发形态含里程碑庆祝与故障补偿——§1 所述 rollout 延迟补偿属后者（按无访问天数累积，可一人多笔；2026-09 GPT-6 Astra 补偿即此形态） |
+| **账户级周重置** | 系统按该账户当前用量窗口 | ChatGPT 产品内「Next reset: …」 | 每人时间不同；使用 Full reset 也会改变周重置日期，不从订阅开通日推算 |
 
 ## 入口分流
 
-- 用户问「Tibo 说了什么 / 下一次几点」→ 查**公告路径**。
+- 每次调用先按[本地预测反馈](references/forecast-feedback.md)读取已有记录；查询获得相关事件
+  证据后回填未决预测。只读记录为空时不创建文件；提出新预测时保存窗口、依据与本轮反馈。
+- 裸调用（没带具体问题，只想知道现在什么情况）→ 组合执行：台账回看 → 公告线 + 故障线（§1）→
+  本机落地状态（§2 脚本），按输出合同先给当前重置状态结论，再附下一窗口主判断（走预测路径）
+  与台账回填。点名额度/余额本身的问法走[账号 SOP](references/account-usage.md)，本条只管重置状态。
+- 用户问「我们几个账号 / 都用完了吗 / 还有两个满额 / 还有几次 Full reset」→ 先读
+  [逐账号额度查询与网页登录恢复](references/account-usage.md)。
+- 用户问「Tibo 说了什么」或明确只要官宣 → 查**公告路径**。
+- 用户问「下一次是什么时候 / 明天会不会重置 / 值不值得等」，包括上一轮刚重置后的追问 →
+  查公告后读[下一轮重置预测](references/next-reset-forecast.md)，给出主判断、依据和更新时间。
+  默认继承上文的重置类型；明确问个人周期时仍走账号 SOP，不用个人周重置日期代答全局预测。
 - 用户说自己的 weekly/5h 回到 100%、`Next reset` 改了，或贴出 usage 截图 → 先把它记为
   **该账户的直接观测**，再查是个人周期还是跨账户事件。
 - 用户明确说「肯定又重置了」且聚合器无记录 → 立即走**静默重置路径**；禁止重复查询同一
   聚合器后再次用空结果驳回用户。
-- 用户只问自己的周期性时间 → 以产品 usage 页或 Codex CLI `/status` 为权威，不拿 Tibo
-  时间线代替。**在本机能读到 `~/.codex` 时，先走 §2 的 rollout 快照**——它同样是账户第一手
-  证据，且能直接给出历史曲线，不必让用户去截图。
+- 用户只问当前剩余或下一次周期重置 → 同样进入账号 SOP 的实时查询；需要解释历史跳变时
+  再走 §2 的 rollout 快照。当前余额查询不要求先跑整段历史重建或重查公告。
 
 ## 输出合同：先给结论，再交代边界
 
@@ -51,6 +61,10 @@ description: >-
 - 证据、竞争解释和待核字段放在结论之后。拿不到某账户的 `Next reset` 或 banked 状态时，
   仍先对已知事实下结论，再说明哪一层属性不能确认；禁止以「你检查后自行判断」收尾。
 - 后续核验动作只用于证实/证伪这个结论，不得把它写成让用户代替 agent 做判断的选择题。
+- **未来时间问题要给预测判断。** 有明确预告时先报换算后的官宣窗口；没有时继续分析近期同类
+  事件与当前信号，按[预测路径](references/next-reset-forecast.md)给出有依据的主窗口、信心和
+  改判条件。「未官宣 / 没有固定排期 / There is no schedule」只说明公告状态，不能独自结束
+  回答。资料不足以支持日期时，给出等待是否值得的判断及缺口，不编日期或精确概率。
 
 ## 查证工作流
 
@@ -72,6 +86,20 @@ for e in json.load(sys.stdin)['events'][:5]:
 `official_window`、`reset_verification_status`。`type` 是内部小写值：`reset` = 广域
 重置公告、`credits` = banked/额度包、`boost`/`promo` = 消耗规则类。
 
+**摘要截断也会藏住预告**：2026-09-08 实测最新条目的 `summary` 只截到开头玩笑，
+`official_window=null`、`announcement_state=none`、核验标签为 pending；
+[原帖全文](https://x.com/thsottiaux/status/2097043464538264003) 却明确预告所有付费订阅的全局重置，
+时间为发帖当日太平洋 18:00 左右。先读全文再判断，不能按索引字段宣布“无新预告”。
+当次发帖北京 09-08 03:24、太平洋 09-07 12:24，故预告换算为北京 09-08 09:00；
+这是当次预告的换算案例，不是固定排期，也不是已到账证据。
+
+⚠️ **`type` 是 Radar 编辑者打的标签，不是事件性质的机器判定——跨平台互动也会被打上
+`reset`。** 2026-09-05 实测：Tibo 回复 Anthropic 的 Lydia Hallie（原帖：「We've just reset
+weekly limits for everyone on a Claude Max plan」，Claude 官方学重置传统），只回了句
+「Wow, huge, wonder why!」的调侃，Radar 照样给它 `type=reset`。读原帖是唯一消歧手段；
+fxtwitter 响应里的 `replying_to`（被回复人）+ `replying_to_status`（被回复帖 id）就是为
+这一步准备的字段。
+
 `url` 已在上面命令的输出里（2026-08-31 起直接打印，免去二次查询），拿到后优先读原帖。X 帖正文的制胜通道是 **fxtwitter 公开镜像 API**（2026-08-30 实测：
 免登录、直连即可、返回完整 JSON；**完整正文在 `tweet.text` 字段——不是 `full_text`**，该键
 不存在、照抄会 KeyError；note_tweet 长文全文也给，8-29 官宣长文实测 2324 字符完整拿到、以
@@ -79,7 +107,7 @@ for e in json.load(sys.stdin)['events'][:5]:
 
 ```bash
 curl -sS --max-time 20 "https://api.fxtwitter.com/<user>/status/<status-id>" \
-  | python3 -c "import json,sys; t=json.load(sys.stdin)['tweet']; print(t['created_at']); print(t['text'])"
+  | python3 -c "import json,sys; t=json.load(sys.stdin)['tweet']; print(t['created_at']); print('reply_to:', t.get('replying_to'), t.get('replying_to_status') or ''); print(t['text'])"
 ```
 
 备胎与死路（同日实测）：
@@ -91,8 +119,17 @@ curl -sS --max-time 20 "https://api.fxtwitter.com/<user>/status/<status-id>" \
 - ~~Jina Reader~~ **可用但间歇，不作主通道依赖**：匿名访问 x.com 会因他人滥用被**间歇性全局
   封禁**（403，2026-08-30 实测：封禁数小时后解除，解除后匿名仍能拿到帖子正文；错误信息点名
   触发滥用的第三方账号）；本仓 jina key 已 402 余额尽。fxtwitter 优先，Jina 只作它的备用。
-- fxtwitter 不返回回复内容（`replies` 字段只是数值计数）；帖子下的 Tibo 澄清需要 WebSearch
-  找转录源补充。
+- fxtwitter 不返回回复**内容**（`replies` 字段只是数值计数）；帖子下的 Tibo 澄清需要 WebSearch
+  找转录源补充。但它返回 `replying_to`（被回复人 handle）与 `replying_to_status`（被回复帖
+  id）——**足够判断「这条是不是回复、回复给谁」**，这正是上面 `type` 误标消歧的唯一字段；
+  被回复帖本身再用同一条命令取一次即可。
+- **落地确认帖的回复链要读；tracker 的条目数不等于事件数**（2026-09-10 实测）：09-08
+  「All reset for everyone」官宣帖下，Tibo 回复「You forgot the part where I reset usage
+  twice in the middle」——正式落地之前当天已中途全局重置两次，这个口径只存在于回复里。
+  codexrunway 把这条回复标成了**第二条独立的** Completed Global reset（Confidence 93%）。
+  预告＋中途加码＋落地是一轮事件（归并规则见 next-reset-forecast），读回复用同一条
+  fxtwitter 命令；回复帖 id 从 tracker 页面里的 x.com 状态链接提取（2026-09-10 即从
+  codexrunway 静态 HTML 中 grep 得到），fxtwitter 自身没有 replies 列表。
 
 `codexlimitwatch.com/codex-reset-history` 与 Radar 都以 Tibo 动态为核心上游，属于**同一来源
 家族**，只能互查转录/解析是否一致，不能称为独立双源。**LunarWerx Codex Forecast**
@@ -132,9 +169,11 @@ for i in d.get('incidents',[]): print(' 未解决事故:', i['name'],'|',i['stat
 done
 ```
 
-@ChatGPT 的帖子用 fxtwitter 同一条命令，把 `<user>` 换成 `ChatGPT` 即可。本机走代理时这些
-端点会间歇抖动（同一分钟内 `status.json` 取空而 `summary.json` 成功）——**失败先重试 2–3 次
-再判定端点不可用**，一次失败不构成「站点挂了」。
+@ChatGPT 的帖子用 fxtwitter 同一条命令，把 `<user>` 换成 `ChatGPT` 即可。**本节所有外部端点
+（Radar、fxtwitter、状态页）都会间歇抖动**——本机走代理时实测同一分钟内 `status.json` 取空
+而 `summary.json` 成功、Radar 首跑吐空响应体直接 `JSONDecodeError`、fxtwitter 连续两次
+`SSL_ERROR_SYSCALL` 第三次成功（2026-09-07 独立复测）——**失败先重试 2–3 次再判定端点
+不可用**，一次失败不构成「站点挂了」。
 
 ### 2. 本机取证：Codex rollout 快照 = 可脚本化的第一手账户证据
 
@@ -147,10 +186,12 @@ done
  "secondary":null,"credits":{"has_credits":false,"balance":"0"},"plan_type":"pro"}
 ```
 
-`resets_at` 是 epoch 秒；`window_minutes` 10080 = 周窗口、300 = 5h 窗口；`credits` 就是
-banked 余额（`has_credits:false` + `balance:"0"` = 没有 banked reset 在手）。
+本节命令针对默认 `~/.codex` 主页；使用自定义 `CODEX_HOME` 时，将本节 auth 与 sessions 路径
+统一替换为同一个已授权主页，不能将两个主页的快照混用。
+`resets_at` 是 epoch 秒；`window_minutes` 10080 = 周窗口、300 = 5h 窗口。快照中的
+`credits` 与备用重置的区别，见[账号 SOP 的字段读法](references/account-usage.md#实时-api只读一个明确账号)。
 
-**三个会给出貌似合理错答案的陷阱（2026-09-01 同一次会话里连踩三次，每次都不报错）**：
+**会给出貌似合理错答案的陷阱（每一条都不报错；1–3 于 2026-09-01 同一次会话里连踩，4 于 2026-09-03 补）**：
 
 1. **`primary` 槽位不固定指向周窗口。** 同期快照里 `primary` 有时是 300（5h）。按
    `window_minutes` 分桶，别假设 `primary` = weekly——混着读会把 5h 窗口的 0% 当成周额度重置。
@@ -159,70 +200,233 @@ banked 余额（`has_credits:false` + `balance:"0"` = 没有 banked reset 在手
    「重置」。**先 `limit_id == "codex"` 过滤再做任何判断。**
 3. **`resets_at` 每条快照都秒级微漂。** 用「`resets_at` 变了」判重置会得到几百个假阳性；
    判据用 `used_percent` 大幅下降（>20 点）。
+4. **目录日期 ≠ 时间戳范围——按 `sessions/<Y>/<M>/<D>/` 数天数会静默少采样。** 跨午夜的
+   长 session 把**次日**的时间戳继续写进**前一天**的目录，所以「扫最近 N 个日期目录」拿不全
+   最近 N 天。实测同一分钟窗口 `08-28 00:25–00:29`：扫 7 个目录得 9 行，扫 9 个目录得 **67 行**
+   ——少掉的正是长 session 交错写入的那些行，**而多账号交错恰好就长这样**。当天决定性的
+   `used 0%→82%` 记录就住在前一天的目录里，按目录数天数的版本结构上看不见它。
+   **修法：多扫 2 天目录，再按时间戳过滤**（已内置在 `scripts/scan_rollouts.py` 的
+   days+2 目录扫描与时间戳裁剪）。
 
-**窗口锚点的形状能区分两类事件**（2026-09-01 实测）：
+**窗口锚点的形状——注意「干净 +7d」本身不是重置的证据**（2026-09-01 与
+2026-09-03 两次实测）：
 
-- **干净重置**：新 `resets_at` ≈ 归零时刻 + 窗口长度。这是按钮式重置（官宣或静默都可能）。
-- **窗口重排 / 限额配置切换**：新锚点被设到**过去**（实测 -12.6h 与 -23h，后者甚至早于它
-  替换掉的旧锚点）。这不是「按了重置」，叙述时与干净重置分开，别一律叫重置。
+- **干净 +7d**：新 `resets_at` ≈ 归零时刻 + 窗口长度。这**只说明窗口从归零那刻重新起算**，
+  它同时是按钮式重置和「换到另一个有额度的账号」的形状——两者在这个维度上不可分。**单看
+  +7d 就叫重置是本节最贵的错误**：2026-09-03 实测的一台机器上，8 天内出现 **8 次**干净 +7d
+  （按新锚点去重后；去重前 9 条），按这条读会得出「静默重置 8 次」，而真相是账号轮替。要
+  定性必须再过下面的多账号归因检查。
+- **锚点回拨**：新锚点被设到**过去**（实测 -12.6h、-23h，后者甚至早于它替换掉的旧锚点）。
+  历史上归因为窗口重排 / 限额配置切换，但**在多账号机器上它同样是「切回另一个账号」的
+  签名**（那个账号的窗口开得更早）——先排除账号，再谈配置切换。
+- **账号切换**：见下面的多账号检查。它可以伪装成上面任何一种。
 
 **并发 session 会让同一次重置输出两条。** 滞后的 session 先报旧值、再各自更新，于是脚本会
 打印两条时间相邻、**新锚点相同**的归零记录（实测 08-28 00:26 与 00:27 是同一次）。**按新锚点
 去重再数次数**，否则会把 7 次数成 8 次。
 
-**先排除多账号交错，再按单账户下结论。** rollout **不记 `account_id`**，多账号切换产生的
-交错快照与真重置在所有只读信号上同形。查两处：`~/.codex/auth.json` 的 `tokens.account_id`
-有几个，以及 `~/.cc-switch/cc-switch.db` 的 `profiles` / `providers` 表里有几个 OpenAI 条目。
-两处都只有一个 → 单账户成立。
+⚠️ **别把「并发 session 滞后」当成万能解释——它专门用来掩盖多账号。** 按锚点去重合并的是
+**新锚点相同**的两条，机械上碰不到锚点不同的记录；真正的风险在**判断层**：看到两条时间相邻
+而数值矛盾的记录，顺手归给「滞后 session」，就会漏掉账号交错的线索。
+**`used_percent` 是已用量，正常使用本来就会上升**。短间隔内大幅上升并伴随锚点回拨时，
+核对身份、取样间隔、会话来源和限额配置；不能仅凭形状排除其他解释。
+2026-09-03 实测的 `used 0%→82%`（锚点 09-04 → 09-03）是当时检查账号轮替的重要线索。
 
-**归零只能报区间，不能报时刻。** 相邻快照间隔可达小时级（实测最宽 1h56m），写「落地在
-A–B 之间」，别把「首个见到 0% 的快照时间」当成到账时刻。**另外快照只更新到用户最后一次跑
-Codex 的时刻**——下「至今没有重置」之前先看最新快照有多旧，那之后是盲区；要消除盲区就让
-用户随便跑一条 Codex 命令再读一次。
+它**不在归零列表里**，而在脚本第 1 步的「回跳」输出里（两段是不同的代码路径）——去归零输出
+里找它一定找不到。所以：**先读第 1 步的回跳行，再去数第 2 步的归零次数。**
+
+另注：脚本本身**不做去重**，第 2 步会把重复的两条都打印出来（锚点相同即可辨认）；
+「按新锚点去重再数次数」是人工步骤。
+
+#### 多账号归因检查
+
+本节采用的 rollout 快照**不记 `account_id`**，仅凭这些无身份快照不能区分账号交错与真实重置。
+
+**先说清楚一个结构性陷阱：直觉上的那个检查永远返回「只有一个」。** `~/.codex/auth.json`
+只保存**当前登录的那一个**账号，切走的账号不留痕；`~/.cc-switch/cc-switch.db` 只记它自己
+管过的条目，手工 `codex login` 换的账号它完全看不见。**拿这两处的当前状态去回答「历史上
+用过几个账号」，是用当前快照回答历史问题——它不会报错，只会给一个貌似合理的错答案。**
+（2026-09-03 实测：一台确有两个 Pro 账号在轮替的机器，这两个探针都报「只有一个」，导致整份
+归因写反。）
+
+按下面 A/B/C 检查收集线索，再按 §3 的证据范围命名。身份不一致证明机器用过多个账号；
+要判断某次跳变的原因，仍需把前后读数绑定到具体身份。
+
+没有发现异常也**不能证明单账户**：A 只保留最近刷新时刻，B 不覆盖手工登录，C 看不到锚点
+恰好单调的账号轮替。若用户尚未说明该时段是否切号，且答案会改变历史归因，再问一次；
+已经确认的事实不重复问。身份无法分离时报告混合记录的归因限制，不把检查全绿当证明。
+
+**执行顺序：先跑本节最后那段重建脚本**，取得归零区间与 C 的回跳；再读 A，只有用户确实
+使用 cc-switch 才读 B。A 的刷新时刻需要与归零区间对齐。
+
+**A 层 —— 当前身份 +（指示性的）最后一次刷新时刻**
+
+分别读取身份与刷新时刻，两者证据强度不同：
+
+1. **当前登录身份**（`id_token` 解出的 email / `chatgpt_account_id` / plan）——这是硬事实，
+   在 B 层适用时作身份比对。
+2. `last_refresh` 时刻——**指示性，不是判决**：
+   - **语义未标定**：字段名就叫 refresh，token 续期也会写它。实测该机 `last_refresh` 与
+     `id_token` 的 `iat` 同刻、`exp` 恰好 +3600s，**与一次纯 token 续期无法区分**。所以
+     「落在归零区间内」不能单独定案；归因条件见 §3。
+   - **覆盖面只有一个点**：它是单个时间戳，最多解释**一个**归零区间。本机 7 天窗口内有
+     10 个归零事件，A 层对其余 9 个**什么都没说**。
+   - **不落在区间内 ≠ 该层干净**：只说明「最近一次刷新不在这个区间」，更早的切换早已被
+     覆盖掉（这正是 `auth.json` 只存当前状态的后果）。
 
 ```bash
-# 重建本机周额度曲线与重置点（2026-09-01 实测；三个陷阱已内置在带注释的三行过滤里）
-python3 - <<'PY'
-import json,glob,os,datetime
-BJ=datetime.timezone(datetime.timedelta(hours=8)); DAYS=7
-def find_rl(o):
-    if isinstance(o,dict):
-        if o.get('rate_limits'): return o['rate_limits']
-        for v in o.values():
-            r=find_rl(v)
-            if r is not None: return r
-    if isinstance(o,list):
-        for v in o:
-            r=find_rl(v)
-            if r is not None: return r
-now=datetime.datetime.now(); rows=[]
-for i in range(DAYS):
-    d=(now-datetime.timedelta(days=i)).strftime('~/.codex/sessions/%Y/%m/%d')
-    for f in glob.glob(os.path.expanduser(d)+'/rollout-*.jsonl'):
-        for line in open(f,encoding='utf-8',errors='replace'):
-            if 'rate_limits' not in line: continue
-            try: doc=json.loads(line)
-            except: continue
-            rl=find_rl(doc); ts=doc.get('timestamp')
-            if not rl or not ts or rl.get('limit_id')!='codex': continue   # 陷阱 2：滤掉诱饵桶
-            p=rl.get('primary')
-            if not p or p.get('window_minutes')!=10080: continue           # 陷阱 1：只取周窗口
-            rows.append((ts,p['used_percent'],p['resets_at'],(rl.get('credits') or {}).get('balance')))
-rows.sort()
+python3 -c "
+import json,os,base64
+d=json.load(open(os.path.expanduser('~/.codex/auth.json')))
+t=d.get('tokens') or {}
+print('last_refresh:', d.get('last_refresh'), ' <-- 与归零区间对齐')
+print('account_id  :', t.get('account_id'))
+idt=t.get('id_token')
+if idt:
+    p=idt.split('.')[1]; p+='='*(-len(p)%4)
+    pl=json.loads(base64.urlsafe_b64decode(p))
+    a=pl.get('https://api.openai.com/auth') or {}
+    print('email       :', pl.get('email'))
+    print('plan_type   :', a.get('chatgpt_plan_type'))
+"
+```
+
+**B 层 —— 这台机器上还存过哪些账号（仅在用户确实使用 cc-switch 时检查）**
+
+这是历史归因的可选线索，不是账号盘点入口。用户明确不用 cc-switch 就跳过本层，转官网和
+Google 已登录账号。（逐账号额度查询的入口裁定见 account-usage：这批账号 2026-09-08 已
+裁定不用 CC Switch 管理——B 层的 providers 记录只作邮箱线索，不为查询额度重开此裁定。）
+下面的 `providers` 只证明其记录里出现过的身份，不能证明账号清单完整。
+
+`profiles` 表实测可能是空的（2026-09-03 该机 0 行），账号存在 `providers` 里；每条的
+`settings_config` 内嵌一个完整 `auth` 对象，解它的 `id_token` 才能拿到身份。
+
+```bash
+python3 -c "
+import sqlite3,os,json,base64
+db=os.path.expanduser('~/.cc-switch/cc-switch.db')
+if not os.path.exists(db): raise SystemExit('no cc-switch.db (不构成单账户证据)')
+c=sqlite3.connect('file:'+db+'?mode=ro',uri=True)
+for pid,name,cur,cfg in c.execute(\"select id,name,is_current,settings_config from providers where app_type='codex'\"):
+    auth=(json.loads(cfg).get('auth') or {}); tk=auth.get('tokens') or {}; email=None
+    if tk.get('id_token'):
+        p=tk['id_token'].split('.')[1]; p+='='*(-len(p)%4)
+        email=json.loads(base64.urlsafe_b64decode(p)).get('email')
+    mode=auth.get('auth_mode')
+    kind='ChatGPT 账号(计入)' if mode=='chatgpt' and email else 'API-key provider(不是账号,忽略)'
+    print(f'{name!r} is_current={cur} auth_mode={mode} email={email}  <- {kind}')
+"
+```
+
+判读规则（**只数真正的 ChatGPT 订阅账号**）：`app_type='codex'` 底下混着 API-key provider
+（实测该机有一条 DeepSeek，`auth_mode=None`、`email=None`）——那不是 ChatGPT 账号，**不参与
+账号计数**。只看 `auth_mode='chatgpt'` 且 email 非空的行。
+
+- 这类行里出现**与 A 层不同的 email** → 两个账号的直接证据（2026-09-03 与 2026-09-04 两次
+  实测都是这样命中的）。
+- 只有一行且与 A 层一致 → 该层无阳性证据。
+- `email=None` 或 `auth_mode` 非 `chatgpt` 的行 → **忽略**，别拿它跟 A 层比「不一致」。
+
+⚠️ **`is_current=1` 不是「当前登录」的判据。** 它只表示 cc-switch 自己最后切换到谁；用户绕过
+它手工 `codex login` 之后这个标记不会更新。2026-09-04 实测：该机 is_current 指向的
+email 与 A 层 `auth.json` 显示的实际登录 email 是**两个不同的真实账号**——同一份
+读数同时演示了这条陷阱和 B 层的命中形态（两处 email 不一致本身就是多账号的直接证据）。
+**当前 CLI 登录身份以 A 层为准；网页身份另从网页核对。is_current 只回答旧工具记录过谁。**
+
+B 层安静**不代表单账户**——它看不见手工 `codex login`。
+
+**C 层 —— 行为签名：锚点回跳（只靠 rollout，A/B 都失效时仍然有效）**
+
+回跳检查不依赖 auth 文件，但它只检测快照形状，不输出账号身份。窗口配置、取样间隔与
+账号交错都需要核对；判读：
+
+- `回跳次数 = 0` → 没有阳性证据（**不等于单账户**，见本节开头的闸门说明）
+- 回跳带 **used% 上升** → 标记需核对的交错/配置线索，不直接写成多账号事实。
+- **大幅**回跳（实测 10.9h、18.7h）→ 优先查账号切换与限额配置变化，归因条件见 §3。
+- 回跳存在但**既不大幅、也没有 used% 上升**（中间带）→ 保留待核，不忽略，也不直接定性。
+  这一带里限额配置切换与账号切换真的不可分；不要因为「看起来不够大」就默默放行。
+  另外注意：`clean` 判定用的是 600 秒容差，而相邻快照间隔实测可达 9.65h——**取样稀疏本身
+  就会把一次干净重置误标成锚点回拨**，所以单凭一个中间带回跳不足以下多账号结论。
+
+**辅助判据 —— 归零前的用量峰值（先验，不是判决）**
+
+- **打满触发**（归零前 99–100%，且几十秒到几十分钟内归零）：先验偏向「撞上限后换账号」。
+- **非打满**（归零时用量明显没满，实测 82% / 72% / 50%）：先验偏向平台推送，因为平台重置
+  不挑你用到几成。2026-09-03 实测：**3 次**非打满归零（去重后；去重前 4 条）**一条不差地各
+  对上一条 Tibo 公告**。注意公告时刻与按钮时刻的关系并不固定：08-28 那次按钮早于发帖 9 分钟，
+  08-31 那次的归零区间（10:10–12:06）反而把发帖时刻 10:34 包在里面。**公告时间不能当落地
+  时刻用**，只能用来判断「这次归零有没有对应的官宣」。
+
+**别把它当判决**：同一份数据里 08-27 那次是打满触发、却落在一条 Tibo 公告前 62 分钟——平台
+重置**可以**发生在你已经撞上限的时刻，那时它看起来就是打满触发。峰值只调整先验，定性仍然
+按 §3 的证据范围命名。
+
+**免费的账号指纹 —— usage-limit 报错里的 `try again at`**
+
+撞上限时 Codex 会写一条 `task_complete` 错误，正文形如：
+
+```
+You've hit your usage limit. Visit <codex usage settings URL> to purchase more credits
+or try again at Sep 7th, 2026 3:23 PM.
+```
+
+`try again at` 是产生报错的登录上下文当时报告的重置时刻。**非单调回退**可提示账号交错，
+但不携带身份，也不能独自排除窗口配置变化。下面这条
+命令扫全量历史并自己标出回退，实测该机打印 **17 次**（两个桶来回交替时每次切换都记一次，
+所以它是「有没有交替」的指示器，不是「切了几次账号」的计数）。最硬的一处是 `08-25 14:46`
+同一分钟内出现 4 个不同取值——几个并发 session 各挂在不同账号上同时撞墙。（不是「聚成两簇」：
+每次重置都会生成新窗口，取值本来就一直在变，簇数不是信号，单调性才是。）
+
+```bash
+python3 -c "
+import json,glob,os,datetime,re
+BJ=datetime.timezone(datetime.timedelta(hours=8))
 T=lambda x: datetime.datetime.fromisoformat(x.replace('Z','+00:00')).astimezone(BJ)
-prev=None
-for r in rows:
-    if prev and prev[1]-r[1] > 20:                                         # 陷阱 3：按用量降幅判
-        a=datetime.datetime.fromtimestamp(r[2],BJ)
-        clean=abs((a-(T(r[0])+datetime.timedelta(days=7))).total_seconds())<600
-        print(f"归零区间 {T(prev[0]):%m-%d %H:%M:%S} {prev[1]:.0f}% → {T(r[0]):%m-%d %H:%M:%S} "
-              f"{r[1]:.0f}% | 新锚点 {a:%m-%d %H:%M} {'干净+7d' if clean else '锚点回拨=配置切换'}")
-    prev=r
-if rows:
-    last=rows[-1]
-    print(f"最新快照 {T(last[0]):%F %H:%M:%S} 北京 | 已用 {last[1]:.0f}% | 窗口重置于 "
-          f"{datetime.datetime.fromtimestamp(last[2],BJ):%F %H:%M} | banked={last[3]}")
-PY
+rows=[]; prevdt=None
+for f in sorted(glob.glob(os.path.expanduser('~/.codex/sessions/*/*/*/rollout-*.jsonl'))):
+    for line in open(f,encoding='utf-8',errors='replace'):
+        if 'usage limit' not in line: continue
+        try: d=json.loads(line)
+        except: continue
+        e=((d.get('payload') or {}).get('error') or {})
+        m=e.get('message') if isinstance(e,dict) else None
+        if not m or not d.get('timestamp'): continue
+        v=m.split('try again at')[-1].strip().rstrip('.')
+        try: dt=datetime.datetime.strptime(re.sub(r'(\d+)(st|nd|rd|th)',r'\1',v),'%b %d, %Y %I:%M %p')
+        except Exception: continue
+        rows.append((T(d['timestamp']),v,dt))
+rows.sort(); prev=None; back=0
+for t,v,dt in rows:
+    if v==prev: continue                      # 只看取值变化
+    mark=''
+    if prevdt is not None and dt<prevdt:
+        back+=1; mark='   <-- 非单调回退：需核对账号或窗口配置'
+    print(f'{t:%m-%d %H:%M} | try again at {v}{mark}')
+    prev=v; prevdt=dt
+print(f'\n非单调回退次数: {back}   （只报告形状，不证明账号数量或归零原因）')
+"
+```
+
+**归零只能报区间，不能报时刻。** 相邻快照间隔可达小时级（2026-09-03 实测最宽 **9.65h**；
+7 天窗口内有 39 个相邻间隔超过 600 秒），写「落地在
+A–B 之间」，别把「首个见到 0% 的快照时间」当成到账时刻。**另外快照只更新到用户最后一次跑
+Codex 的时刻**——下「至今没有重置」之前先看最新快照有多旧，那之后是盲区。
+按账号 SOP 读取实时接口或产品页可以确认当前状态，但补不上过去的历史盲区。
+
+**rollout 还有一个覆盖边界：每条只观测产生它的登录上下文，历史集合可能混有多个账号，且没有
+逐条身份标签。** 没运行过 Codex 的其他账号没有快照，不能从集合的最后一行推断全部账号——
+2026-09-04~06 实测快照停在 09-03 连续三个 session 不动（用户一直没跑 Codex，盲区
+28h→49h→70h），那只是「这个账号没新观测」，不是「所有账号都没动静」。此时用户从产品 usage
+页抄出的**多账号统计**（每个账号的重置倒计时 + 「有 N 次 full reset」）是覆盖全部账号的
+第一手观测，证据级别等同产品页，还能直接闭环「官宣≠到账」（09-06 实测：4 个付费账号各显示
+两次 full reset，确认前一日官宣的 full banked reset 已全部到账）。引用这类相对倒计时时
+折算成绝对时刻并标注折算时刻（读数时刻 + 已流逝时间），别把「21 小时之后」原样抄给用户。
+
+```bash
+# 重建本机周额度曲线 + 多账号回跳检查（上述陷阱已全部内置；2026-09-12 与内联版同窗口逐行对拍一致）
+uv run python scripts/scan_rollouts.py --days 7
+# 复现历史某时刻的切面（回填台账、复核旧结论时用）：加 --as-of "2026-09-12T17:44:00+08:00"
+# 自定义 CODEX_HOME 时：--codex-home <已授权主页>（auth 与 sessions 必须同属一个主页，不混用）
 ```
 
 ### 3. 静默重置路径：查账户事实，而不是继续等帖子
@@ -231,7 +435,9 @@ PY
 
 1. **定账户事实**：记录 weekly 与 5h 是否回到 100%、`Next reset` 是否移动、banked reset
    是否仍在，以及变化是否正好发生在此前已显示的正常重置时刻。产品 usage 页或 `/status`
-   只证明该账户，但证据级别高于聚合器的空结果。**本机有 `~/.codex` 就先跑 §2**：它给的是
+   只证明该账户，但证据级别高于聚合器的空结果。**用户口头或聊天里转述的产品页观测**（多账号
+   额度统计、banked 余额、「有 N 次 full reset」）**记为直接观测，与产品页同级**——不必为了
+   「亲眼看」逼用户再截图或跑命令。**本机有 `~/.codex` 就先跑 §2**：它给的是
    同一层证据，但带历史曲线和分钟级归零区间，能直接回答「这次跳变能不能被正常周期解释」。
 2. **找同时段实测**：用当前 UTC/PT 日期搜索最近帖子，例如 `Codex reset today back to 100%`、
    `Codex reset again 5h`、`site:reddit.com/r/codex reset today`。优先截图、明确的前后百分比、
@@ -241,6 +447,9 @@ PY
 3. **找发布上下文**：搜索 Tibo/OpenAI 是否正在切换 5h/weekly 限额、修计量或处理事故。上下文
    与重置同刻发生只支持因果推断；官方没说「因此重置」就明确标为推断。
 4. **按证据范围命名**：
+   - 先排除账号轮替。A/B 身份不一致证明机器用过多个账号，不证明某次归零必然由换号引起；
+     `last_refresh` 落在区间里也只能作提示。能把该次前后读数绑定到不同身份时才称「这次是
+     账号切换」；否则写「混合账号记录，归零原因未核实」，不升级为平台重置。
    - 只有一个账户 → 「该账户已重置；原因未定」，不能外推。
    - 多个不同账户在紧邻时间内回满，但尚未排除各自正常周期 → 「观测到跨账户近同时重置；
      是否为同一平台事件未定」。
@@ -281,11 +490,14 @@ WebSearch `thsottiaux reset`
 实测原话：`Reset will land around 14pm PST tomorrow.`（2026-08-23 06:29 UTC 发）
 
 - 「14pm」= 14:00 = 下午 2 点（他混用 24 小时制和 am/pm，照字面取数即可）
-- 他常年写「PST」，但美国夏令时是 **3 月第二个周日～11 月第一个周日**（2026：3/8–11/1），
+- 他常年写「PST」，但美国夏令时是 **3 月第二个周日～11 月第一个周日**，
   期间太平洋实为 PDT（UTC-7）——按**重置落地时刻**的时令换算，不是发推日期
-  （3/7 发「tomorrow 2pm」就跨时令，按发推日算会错 1 小时；一年只影响 ~2 天）
+  （跨夏令时切换日的「tomorrow」按发推日偏移计算会错 1 小时）
 - 「tomorrow / today」以**他发推时刻的太平洋日期**为锚：`announced_at`（UTC）减 7（PDT）
   或 8（PST）小时得到发推的太平洋日期，再读 tomorrow 指哪天
+- 「midnight」同锚（2026-09-12 实测：「a reset is also landing by midnight today」发于
+  03:20 UTC = 太平洋前一日 20:20，「today」= 太平洋 9/11，即北京 9/12 15:00 前；
+  落地确认帖实际发于北京 16:09）
 - 历史模式（非承诺）：重置从不落在太平洋 1AM–8AM（他的睡眠时段），高峰在太平洋下午
 
 ## 时区换算（命令已实测，2026-08-23；**macOS only**——BSD `date -j`/`-f`，GNU date 无此参数）
@@ -302,8 +514,6 @@ TZ=Asia/Shanghai date -j -f "%Y-%m-%d %H:%M %z" "2026-08-23 14:00 -0700" "+%F %H
 # 反查：此刻太平洋几点（判断「tomorrow」锚哪天用）
 TZ=America/Los_Angeles date "+%F %T %Z(%z)"
 ```
-
-常用对照（PT → 北京）：PDT 14:00 → 次日 05:00；PDT 20:00 → 次日 11:00；PST 各 +1 小时。
 
 ## 证据纪律（踩过的坑）
 
@@ -340,12 +550,25 @@ TZ=America/Los_Angeles date "+%F %T %Z(%z)"
   tracker 记落地推为 UTC 8/22 00:50——换算回太平洋是 8/21 17:50，**早于**承诺线；
   而媒体报道「8pm 过了很多账户没收到」。两个来源不矛盾（官宣早、部分账户晚到），
   不换算就写「跳票了几小时」会造出两个来源都没说的结论。
+- **UTC 与北京时间出现相同「HH:MM」数字时，先换算再比较，别把数字相同当同刻**
+  （2026-09-10 实测踩坑）：官宣帖 09-08 04:05:53 **UTC** 与本机快照归零 09-08 04:04
+  **北京**被当成「同一分钟互证」，实际相差 8 小时——北京 04:04 = PT 13:04，对应的是
+  Tibo 在回复帖里确认的「中途两次重置」之一；官宣落地对应的是本机 07:34→14:15 的宽归零
+  区间（PT 23:15 才见到 1%）。跨源绑定时间时每一条都过「时区换算」节的命令，结论里给
+  每个时刻标注时区；「小时:分钟数字一样」在 UTC vs 北京之间每小时都在发生，零证据价值。
 - **官宣 ≠ 你的账户已到账**：banked reset 有过分批延迟史，用户问「我怎么还没有」时
   引导看产品内余额，而不是拿官宣时间打包票。**2026-09-01 用本机 rollout 量化过这个差距**：
   25M 那次官方承诺 6pm PST（北京 09:00）、Tibo 落地确认帖发于北京 10:34，而账户实际归零
   区间是北京 10:10–12:06——比承诺线晚 1h10m 到 3h06m。「官方确认已落地」与「你的额度回来了」
-  之间有小时级差距，两件事分开说。
-- **一个账户能同时看到官宣重置与无公告的窗口重排**：同一次取证里，7 次归零有 4 次能对上
-  Tibo 公告（其中 2 次发帖晚于按钮 9 分钟到 1 小时），另 3 次没有任何公告，且其中 2 次是
-  锚点回拨形状。正确措辞是「该账户另有 N 次无公告的归零/窗口重排，原因与范围未核实」，
-  **不能**升格成「平台静默重置了 N 次」——单账户证据永远只支撑单账户结论。
+  之间有小时级差距，两件事分开说。**兑现端也有实测故障**：2026-09-09 官方确认部分 banked
+  reset 在 ChatGPT Work/Codex 使用时未完全生效，受影响时段内的使用者补发一个并收到道歉
+  邮件——用户报「用了 banked 没变化」时先核对是否落在该故障窗口。
+- **「单账户」这个前提本身要先证，不能默认**（2026-09-03 修正了 2026-09-01 的一次结论）。
+  09-01 那次取证报「7 次归零，4 次对上 Tibo 公告，另 3 次无公告、其中 2 次是锚点回拨」，
+  并据此写下「一个账户能同时看到官宣重置与无公告的窗口重排」。**这个结论已被推翻**：那台
+  机器当时就在两个 Pro 账号之间轮替，「另 3 次无公告」里含账号切换，而当时用来排除多账号的
+  检查（数 `auth.json` 里的 `account_id`）结构上不可能失败。数字本身没错，错的是把它们全
+  归给一个账户。
+  仍然成立的那半条教训：**单账户证据永远只支撑单账户结论**，所以措辞用「该账户另有 N 次
+  无公告的归零，原因与范围未核实」，不能升格成「平台静默重置了 N 次」。新增的那半条：
+  下历史归因结论前使用 §2 收集身份与窗口线索，再按 §3 命名；检查未命中不能证明单账户。

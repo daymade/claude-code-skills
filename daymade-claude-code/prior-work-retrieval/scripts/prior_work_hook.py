@@ -26,7 +26,13 @@ RECEIPT_MAX_AGE_SECONDS = 24 * 60 * 60
 # Strong signals name prior work outright ("我们之前…", "复用", "reuse"). They
 # arm the gate on their own.
 PRIOR_WORK_STRONG_SIGNAL = re.compile(
-    r"(?:我们之前|以前|之前做过|之前(?:用|跑|做|配|装|搭|建|写)|"
+    r"(?:我们之前|之前做过|之前(?:用|跑|做|配|装|搭|建|写)|"
+    # 裸「以前」不再独立武装（2026-09-13 审计实证：「和以前的那些 agent browser
+    # 有什么区别」是对比句式，被「以前」一词武装）。「以前」须带工作名词或
+    # 做事形态才算检索请求；真召回「我们以前是怎么做的」经 做的 命中。
+    r"以前[^\n，,。；;]{0,8}"
+    r"(?:代码|脚本|方案|框架|配置|文档|流程|做法|做的|做过|工具|库|接口|命令|"
+    r"模板|仓库|分支|模块|服务|规则|SOP)|"
     # Bare 已有/现有/既有 used to arm ordinary references to the current
     # checkout ("现有测试或 README 如果冲突才同步"). Existing work must name a
     # reusable asset; current tests/files/behavior are not a history request.
@@ -35,7 +41,10 @@ PRIOR_WORK_STRONG_SIGNAL = re.compile(
     r"(?:个|套|份|条|版|组|批|项|段)?\s*"
     r"(?:代码|脚本|方案|资产|成果|SOP|流程|做法|工具|模板|系统)|"
     r"历史经验|历史决策|以前的代码|已有代码|"
-    # 成功的经验 — the 的 particle broke the literal 成功经验.
+    # 成功的经验 — the 的 particle broke the literal 成功经验.（2026-09-13 收窄而
+    # 不是删除：该词同时是纠偏话术高频词「记得/保证你成功的经验」（语义=记住
+    # 本次，非检索已有），系统性误触发 4 个 session；疑问形「成功的经验又是
+    # 什么」是真召回。指令形由 IMPERATIVE_REMEMBER 剔除，见下。）
     r"成功(?:的)?经验|"
     # 不希望你重新造轮子 — the literal 不要重新/不要重造/别重复 missed every
     # natural phrasing of the same ask.
@@ -107,6 +116,12 @@ NEGATED_PRIOR_SIGNAL = re.compile(
 # "这些 Skill 也是很久之前写的" dates something to argue it is stale — the
 # opposite of asking to go find it. Excised like a negation.
 STALE_AGE_IDIOM = re.compile(r"(?:很久|太久|好久|老早|早就)\s*(?:以前|之前)")
+# 「记得/保证/记住…成功的经验」是让对方**记住本次**的纠偏话术，不是检索已有
+# 工作的请求（2026-09-13 审计：4 个 session 被它武装后，只读动作/peer 消息接连
+# 被拦）。疑问形「成功的经验又是什么」不在此模式内，仍武装。
+IMPERATIVE_REMEMBER = re.compile(
+    r"(?:记得|记住|保证|别忘了?|沉淀|记录)[^\n，,。；;]{0,12}成功(?:的)?经验"
+)
 # 「我们这个对话最开始是想要干什么来着」/「我们的主线任务是什么来着」ask what the
 # CURRENT session is about. The answer is the conversation already in front of the
 # executor: no carrier to search, no candidate to verify, and no artifact produced —
@@ -130,7 +145,12 @@ CURRENT_SESSION_RECALL = re.compile(
 )
 HOOK_GUIDANCE_MARKER = "Prior Work Retrieval is required before substantial production"
 USER_OPTOUT = re.compile(
-    r"(?:不用|不要|无需|跳过).{0,12}(?:查历史|检索历史|已有工作检索|prior work|历史检索)"
+    # 「不需要」 matters: a trapped session's own advised escape phrase
+    # 「本任务不需要 prior-work 检索」 matched neither the verb list nor the
+    # space-only "prior work" spelling, classified as "none", and so never
+    # cleared the existing requirement — the session stayed gated (2026-09-10).
+    r"(?:不用|不要|无需|不需要|跳过).{0,12}"
+    r"(?:查历史|检索历史|已有工作检索|prior[-\s]work|历史检索)"
     # Recorded sub-agent prompts said "Do NOT perform prior-work retrieval" and
     # "The user explicitly opts out of prior-work retrieval" and were gated
     # anyway: the old pattern only accepted skip/disable, and only the
@@ -160,7 +180,12 @@ SHELL_UNKNOWN_EXECUTOR = re.compile(
     # The lookbehind keeps file-suffix collisions out: `report.sh` is a path
     # argument to read, not the interpreter `sh` — a dot (or word char)
     # immediately before the token means it is a filename component.
-    r"(?<![\w.])(?:python(?:3)?|node|bash|zsh|sh)\b",
+    # The lookahead keeps directory components out: `cd /workspace/python/x`
+    # has `python` followed by `/` — a path segment, not an interpreter
+    # (2026-09-13 审计实证：jeepay-monorepo 一条纯只读 sed/grep 被
+    # `/python/` 目录名误拦)。绝对路径解释器 `/usr/bin/python3 -c …`
+    # 后面跟的是空格，不在豁免内，照样拦。
+    r"(?<![\w.])(?:python(?:3)?|node|bash|zsh|sh)\b(?!/)",
     re.IGNORECASE,
 )
 SHELL_READ_ONLY_EXECUTOR = re.compile(
@@ -170,9 +195,22 @@ SHELL_READ_ONLY_EXECUTOR = re.compile(
 )
 RETRIEVAL_ROUTES = {
     "prior_work.py": {"validate-manifest", "retrieve", "complete", "check"},
-    "history_index.py": {"recall", "status"},
+    "history_index.py": {"recall", "status", "index"},
     "analyze_sessions.py": {"search", "locate-codex"},
     "read_chat.py": None,
+}
+# Value-taking options each route script declares on its TOP-LEVEL argparse
+# parser. The canonical CLI form puts them before the subcommand
+# (`prior_work.py --manifest M retrieve ...`), so the route check must skip
+# them before matching the subcommand — requiring the subcommand immediately
+# after the script name denied the documented unlock command itself as an
+# unknown executor and deadlock-gated session 9916c656 for two days
+# (2026-09-08 → 2026-09-10). Options not listed here fail closed: an unknown
+# `--flag` is skipped as a flag, so a following value token is what gets
+# tested against the subcommand set and rejects the route.
+RETRIEVAL_GLOBAL_VALUE_OPTIONS = {
+    "prior_work.py": {"--manifest"},
+    "history_index.py": {"--db", "--simple-root"},
 }
 DIRECT_EXEC_WRITE_SIGNAL = re.compile(r"\b(?:tools\.)?apply_patch\s*\(")
 EXEC_COMMAND_LITERAL = re.compile(
@@ -207,7 +245,8 @@ def classify_prompt(prompt: str, receipt_valid: bool = False) -> str:
     if USER_OPTOUT.search(text):
         return "opt_out"
     scannable = CURRENT_SESSION_RECALL.sub(
-        " ", STALE_AGE_IDIOM.sub(" ", NEGATED_PRIOR_SIGNAL.sub(" ", text))
+        " ", STALE_AGE_IDIOM.sub(" ", IMPERATIVE_REMEMBER.sub(
+            " ", NEGATED_PRIOR_SIGNAL.sub(" ", text)))
     )
     if PRIOR_WORK_STRONG_SIGNAL.search(scannable):
         return "required_prior_signal"
@@ -324,6 +363,16 @@ def _segment_is_retrieval_route(segment: str) -> bool:
         words = shlex.split(segment, posix=True)
     except ValueError:
         return False
+    # VAR=$(route …) 整段就是「检索并接住输出」：解开赋值+替换包装递归判定
+    # （2026-09-13 审计：receipt 过期后的标准解锁动作被 $( 包装误拦）。
+    # 只解「整段=赋值* + 一个替换 + 可选 stderr 合并」的形态；藏在参数里的
+    # 替换（script.py "$(rm -rf x)"）仍由下方 fail-closed 检查拦死。
+    unwrapped = re.match(
+        r"^\s*(?:[A-Za-z_][A-Za-z0-9_]*=\s*)*\$\((?P<inner>.*)\)"
+        r"\s*(?:2>&1|2>/dev/null)?\s*$",
+        segment, re.DOTALL)
+    if unwrapped:
+        return _segment_is_retrieval_route(unwrapped.group("inner"))
     substitution_tokens = ("$(", "`", "<(", ">(", "=(")
     if not words or any(
         token in word for word in words for token in substitution_tokens
@@ -383,7 +432,16 @@ def _segment_is_retrieval_route(segment: str) -> bool:
         return False
     if subcommands is None:
         return True
-    return index + 1 < len(words) and words[index + 1] in subcommands
+    index += 1
+    value_options = RETRIEVAL_GLOBAL_VALUE_OPTIONS.get(script, set())
+    while index < len(words) and words[index].startswith("-"):
+        option = words[index].split("=", 1)[0]
+        index += 1
+        if option in value_options and "=" not in words[index - 1]:
+            if index >= len(words):
+                return False
+            index += 1
+    return index < len(words) and words[index] in subcommands
 
 
 def _strip_quoted_text(fragment: str) -> str:
@@ -430,11 +488,17 @@ def _strip_quoted_text(fragment: str) -> str:
 
 def _has_formal_file_redirection(event: dict[str, Any]) -> bool:
     for fragment in _shell_fragments(event):
-        for match in FILE_REDIRECTION.finditer(_strip_quoted_text(fragment)):
-            target = match.group("target").strip("\"'")
-            if target in {"/dev/null", "&1", "&2"}:
+        for segment in _shell_segments(fragment):
+            # 检索路由自身的输出落盘是检索动作的一部分（2026-09-13 审计实证：
+            # 「receipt 过期后重新 retrieve > /tmp/out」被当写信号拦）。
+            # 非路由段里的重定向不受影响，照旧计写信号。
+            if _segment_is_retrieval_route(segment):
                 continue
-            return True
+            for match in FILE_REDIRECTION.finditer(_strip_quoted_text(segment)):
+                target = match.group("target").strip("\"'")
+                if target in {"/dev/null", "&1", "&2"}:
+                    continue
+                return True
     return False
 
 
@@ -512,8 +576,19 @@ def substantial_tool_use(event: dict[str, Any]) -> tuple[bool, str]:
         if _has_formal_file_redirection(event):
             return True, f"{base}:write_signal"
         if any(
-            SHELL_UNKNOWN_EXECUTOR.search(segment)
-            and not SHELL_READ_ONLY_EXECUTOR.search(segment)
+            # Quoted arguments are data, not commands — for BOTH directions of
+            # this check. A peer message saying 「我当前 Bash 被闸门拦了」 must
+            # not read as an interpreter invocation (2026-09-10: exactly that
+            # prose word blocked even the help request about the gate); and a
+            # quoted "check" must not grant the read-only exemption either —
+            # under raw-text matching `bash -c "check; rm -rf x"` was allowed,
+            # because rm is not a write-signal word and the quoted "check"
+            # exempted the whole segment. The interpreter itself (`bash -c`,
+            # `python3 -c`) sits outside quotes and still gates here; code
+            # inside those quotes remains covered by the raw write-signal scan
+            # above, which also keeps `eval "git …"` closed.
+            SHELL_UNKNOWN_EXECUTOR.search(_strip_quoted_text(segment))
+            and not SHELL_READ_ONLY_EXECUTOR.search(_strip_quoted_text(segment))
             for segment in gated
         ):
             return True, f"{base}:unknown_executor"
@@ -718,7 +793,9 @@ def _guidance(reason: str, session_id: Any = None) -> str:
         "artifact/event --outcome-term values, and separate implementation terms "
         "across the explicit manifest; open and "
         "verify candidates, then complete a reuse/adapt/no-reuse receipt for this "
-        "session. Read-only discovery remains allowed."
+        "session. Read-only discovery remains allowed. If the user judges this "
+        "task needs no prior-work retrieval, their own prompt saying so (e.g. "
+        "不用查历史 / 不需要 prior work 检索) clears the requirement."
     )
     if isinstance(session_id, str) and session_id:
         text += (

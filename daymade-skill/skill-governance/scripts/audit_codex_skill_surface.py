@@ -494,7 +494,62 @@ def _read_activation_manifest(path: Path, explicitly_requested: bool) -> dict[st
         )
     if len(names) != len(set(names)):
         raise AuditInputError(f"{path}: active_skills contains duplicates")
-    return {"path": str(path), "active_names": names}
+    markets = data.get("active_marketplaces", [])
+    if (not isinstance(markets, list)
+            or any(not isinstance(n, str) or not NAME_PATTERN.fullmatch(n) for n in markets)
+            or len(set(markets)) != len(markets)):
+        raise AuditInputError(f"{path}: active_marketplaces must contain unique marketplace names")
+    return {"path": str(path), "active_names": names, "active_marketplaces": markets}
+
+
+def _expand_activation(activation: dict[str, Any], args: argparse.Namespace) -> None:
+    """Use the source owner's inventory; never infer membership from installed links."""
+    if not activation["active_marketplaces"]:
+        return
+    if args.source_inventory_json:
+        payload = _load_json(args.source_inventory_json, "source inventory")
+    else:
+        script = args.source_sync_script or (
+            Path.home() / ".config/claude-switch-models-setup/sync-local-skill-sources.py"
+        )
+        if not script.is_file():
+            raise AuditInputError("source sync resolver missing; specify --source-sync-script")
+        try:
+            result = subprocess.run(
+                [sys.executable, str(script), "--print-source-inventory"],
+                capture_output=True, text=True, timeout=60, check=False,
+            )
+            if result.returncode:
+                raise AuditInputError(f"source inventory failed: {result.stderr.strip()}")
+            payload = json.loads(result.stdout)
+        except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError) as exc:
+            raise AuditInputError(f"invalid source inventory: {exc}") from exc
+    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+        raise AuditInputError("source inventory must use schema_version 1")
+    markets = payload.get("marketplaces")
+    if not isinstance(markets, dict):
+        raise AuditInputError("source inventory has no marketplace mapping")
+    names = set(activation["active_names"])
+    expected_sources = {}
+    for market in activation["active_marketplaces"]:
+        members = markets.get(market)
+        if not isinstance(members, dict):
+            raise AuditInputError(f"active marketplace absent from source inventory: {market}")
+        for name, member in members.items():
+            if not NAME_PATTERN.fullmatch(name) or not isinstance(member, dict):
+                raise AuditInputError(f"invalid registered skill in {market}")
+            source = member.get("source_dir")
+            if not isinstance(source, str) or not Path(source).is_absolute():
+                raise AuditInputError(f"invalid source path for {market}/{name}")
+            if name in expected_sources:
+                raise AuditInputError(f"duplicate source identity: {name}")
+            skill_path = Path(source) / "SKILL.md"
+            if not skill_path.is_file():
+                raise AuditInputError(f"registered source missing: {skill_path}")
+            expected_sources[name] = str(skill_path.resolve())
+            names.add(name)
+    activation["active_names"] = sorted(names)
+    activation["expected_sources"] = expected_sources
 
 
 def _duplicates(
@@ -551,6 +606,8 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         args.activation_manifest.expanduser().absolute(),
         args.activation_manifest_explicit,
     )
+    if activation:
+        _expand_activation(activation, args)
 
     lexical_visible = {_lexical_path(Path(entry["path"])) for entry in entries}
     disabled_but_visible: list[str] = []
@@ -582,6 +639,7 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
     active_missing_links: list[str] = []
     active_missing_visible: list[str] = []
     active_names: list[str] = []
+    active_disabled: list[str] = []
     if activation:
         active_names = list(activation["active_names"])
         agents_root = args.agents_root.expanduser().absolute()
@@ -596,8 +654,15 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
                 active_missing_links.append(name)
                 continue
             meta = inventory_by_resolved_path.get(resolved_skill_file)
+            expected = activation.get("expected_sources", {}).get(name)
+            if expected and str(resolved_skill_file) != expected:
+                active_missing_links.append(name)
+                continue
             if meta is None or meta["name"] != name:
                 active_missing_links.append(name)
+            if skill_file in {_lexical_path(path) for path in disabled_paths}:
+                active_disabled.append(name)
+                continue
             if not any(
                 entry["display_name"] == name
                 and _lexical_path(Path(entry["path"])) == skill_file
@@ -664,6 +729,7 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         "skills_probe_source": skills_probe_source,
         "config_path": str(args.config.expanduser().absolute()),
         "activation_manifest": activation,
+        "active_disabled": sorted(active_disabled),
         "counts": {
             "visible": len(entries),
             "inventory": len(inventory),
@@ -735,6 +801,9 @@ def _parser() -> argparse.ArgumentParser:
         help="Managed source activation policy; omitted automatically when the default is absent",
     )
     parser.add_argument("--agents-root", type=Path, default=DEFAULT_AGENTS_ROOT)
+    parser.add_argument("--source-sync-script", type=Path, help="Managed source resolver providing --print-source-inventory")
+    parser.add_argument("--source-inventory-json", type=Path, help="Use a frozen source inventory instead of running the resolver")
+    parser.add_argument("--required-only", action="store_true", help="Gate only explicitly required names; keep all other findings in the report")
     parser.add_argument(
         "--require-visible",
         action="append",
@@ -762,6 +831,8 @@ def main(argv: list[str] | None = None) -> int:
         args.activation_manifest = DEFAULT_ACTIVATION_MANIFEST
     if args.max_visible is not None and args.max_visible < 0:
         parser.error("--max-visible must be non-negative")
+    if args.required_only and not args.require_visible:
+        parser.error("--required-only requires --require-visible")
     try:
         report = build_report(args)
     except AuditInputError as exc:
@@ -776,10 +847,21 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(f"Codex Skill surface: invalid\n  {exc}", file=sys.stderr)
         return 2
+    if args.required_only:
+        failures = set(report["findings"]["required_missing_visible"])
+        failures.update(set(args.require_visible) & (
+            set(report["findings"]["active_missing_links"])
+            | set(report["findings"]["active_missing_visible"])
+        ))
+        report["required_failures"] = sorted(failures)
+        report["required_status"] = "missing" if failures else "present"
+        report["exit_scope"] = "required_names"
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
     else:
         _print_human(report)
+    if args.required_only:
+        return int(bool(report["required_failures"]))
     return 1 if report["status"] == "pressure" else 0
 
 

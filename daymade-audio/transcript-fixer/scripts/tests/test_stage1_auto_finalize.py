@@ -273,6 +273,7 @@ class TestStage1AutoFinalize(unittest.TestCase):
                 "stage2_total_chunks": 0,
                 "stage2_failed_chunks": 0,
                 "stage2_degraded": False,
+                "boundary_refused": 0,
             },
         )
 

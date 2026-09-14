@@ -21,6 +21,17 @@ The derived corrections are merged into Stage 1 at runtime (in-memory only, NEVE
 written to the DB) and go through the normal risk gate: long variants auto-apply;
 short/common ones surface in *_needs_review.md for confirmation against the roster
 context — so the curated roster feeds the system without bypassing safety.
+
+Two semantic refusals live at load time. A **bare numeric variant** (a number heard
+as a person, e.g. `95` -> someone) can never be a global rule, because digits match
+timestamps, scores, and prices in every transcript — deferring it for review just
+converts the mistake into queue spam (real case 2026-09: one roster line deferred
+122 items across five files in a single rerun, most of them `.950` millisecond
+timestamps). A **single surname plus an honorific** (朱老师, 王总) is refused for
+the mirror reason: it names everyone with that surname, so one person's misheard
+surname must not become a rule for all of them (real case 2026-09-07). Both are
+refused with a loud stderr warning; record such a mapping as a cue-scoped trap in
+the owning domain's context file instead.
 """
 
 from __future__ import annotations
@@ -59,6 +70,31 @@ _NON_APOSTROPHE_QUOTE_CHARS = _ALL_QUOTE_CHARS - {"'", "’"}
 _UNQUOTED_FORBIDDEN_RE = re.compile(
     r'[/／]|->|=>|[→←⇒⇐↔⇄]|[。！？!?=:<>]|——'
 )
+# Decimal digits, Unicode-aware (\d matches full-width ９５ etc.). A bare number
+# matches timestamps/scores/prices in every transcript, so it is refused at load
+# rather than risk-gated (see module docstring). Same predicate semantics as the
+# numeric_text check in utils/common_words.py — keep the two in sync.
+_NUMERIC_ONLY_RE = re.compile(r'^\d+$')
+# A single CJK character followed by an honorific (朱老师, 王总) is a real form
+# shared by everyone with that surname. One meeting's mishearing of one person's
+# surname must not become a global rule for all of them (real case 2026-09-07:
+# seven such variants recorded from a single meeting turned an unrelated 朱老师
+# into a different person). Refused at load; the mapping belongs in the owning
+# domain's context file as a cue-scoped trap. Same predicate as the
+# honorific_only check in utils/common_words.py — keep the two in sync.
+# The refused atoms are echoed on purpose: a bare number or a surname + honorific
+# is a generic form, not a person's canonical name, and the maintainer needs the
+# exact atom to move; the malformed-atom branch below stays silent because a
+# malformed atom can carry a full name.
+_HONORIFIC_SUFFIXES = ("老师", "老師", "总", "總")
+
+
+def _is_single_surname_honorific(value: str) -> bool:
+    """One CJK character (any block _is_cjk_char knows) + 老师/老師/总/總."""
+    for suffix in _HONORIFIC_SUFFIXES:
+        if value.endswith(suffix) and len(value) == len(suffix) + 1 and _is_cjk_char(value[0]):
+            return True
+    return False
 
 
 def load_people_roster(path: Path) -> Tuple[Dict[str, str], Dict[str, str]]:
@@ -82,6 +118,8 @@ def load_people_roster(path: Path) -> Tuple[Dict[str, str], Dict[str, str]]:
     corrections: Dict[str, str] = {}
     current_canonical: str | None = None
     dropped: list[str] = []
+    refused_numeric: list[str] = []
+    refused_honorific: list[str] = []
 
     with open(path, 'r', encoding='utf-8') as f:
         for raw in f:
@@ -96,6 +134,12 @@ def load_people_roster(path: Path) -> Tuple[Dict[str, str], Dict[str, str]]:
             if m and current_canonical:
                 for variant in _split_variants(m.group(1), dropped):
                     variant = variant.strip()
+                    if variant and _NUMERIC_ONLY_RE.fullmatch(variant):
+                        refused_numeric.append(variant)
+                        continue
+                    if variant and _is_single_surname_honorific(variant):
+                        refused_honorific.append(variant)
+                        continue
                     # Never map a canonical to itself, and first-seen wins so a
                     # variant can't be hijacked by a later (less relevant) person.
                     if variant and variant != current_canonical and variant not in corrections:
@@ -119,6 +163,27 @@ def load_people_roster(path: Path) -> Tuple[Dict[str, str], Dict[str, str]]:
         print(
             "    Dropped content is omitted from logs. Use balanced outer quotes "
             "for comma-bearing or otherwise ambiguous names.",
+            file=sys.stderr,
+        )
+
+    if refused_numeric:
+        unique = sorted(set(refused_numeric))
+        print(
+            f"⚠️  people roster: refused {len(unique)} bare numeric ASR "
+            f"variant(s) from {path.name}: {', '.join(unique)}. Digits match "
+            "timestamps, scores and prices in every transcript, so a bare number "
+            "can never be a global name rule — record that mapping as a cue-scoped "
+            "trap in the owning domain's context file instead.",
+            file=sys.stderr,
+        )
+    if refused_honorific:
+        unique = sorted(set(refused_honorific))
+        print(
+            f"⚠️  people roster: refused {len(unique)} single-surname honorific ASR "
+            f"variant(s) from {path.name}: {', '.join(unique)}. A surname + 老师/老師/总/總 "
+            "names everyone with that surname, so one person's misheard surname can "
+            "never be a global name rule — record that mapping as a cue-scoped trap "
+            "in the owning domain's context file instead.",
             file=sys.stderr,
         )
 

@@ -6,7 +6,7 @@
 - Author or team (optional)
 
 ## Executive Summary
-- 3-6 bullets, each supported by evidence
+- Use the number of bullets needed to answer the decision questions, each supported by evidence
 - Include top conclusions and implications
 
 ## Research Question and Scope
@@ -20,7 +20,7 @@
 - Limitations and known gaps
 
 ## Key Findings
-- 5-10 findings, each with citations
+- Decision-bearing findings, each with citations and confidence limits
 
 ## Analysis
 ### Section 1: [Theme]
@@ -43,7 +43,7 @@
 - Each recommendation cites evidence
 
 ## Appendix A: Evidence Table
-- Table mapping claims to sources
+- Table mapping load-bearing claims to sources, evidence families, decisive originals, counter-evidence, and unknowns
 
 ## Appendix B: Sources
 - Full citations or links

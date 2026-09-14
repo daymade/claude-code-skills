@@ -208,6 +208,23 @@ class TestCorrectionService(unittest.TestCase):
 
     # ==================== Import/Export Tests ====================
 
+    def test_unforceable_shapes_are_refused_even_with_force(self):
+        """A bare number or a single surname + honorific is wrong for every
+        transcript, so --force is not offered and does not apply."""
+        for from_text in ("朱老师", "95", " 95", "朱老师 "):
+            with self.assertRaises(Exception) as cm:
+                self.service.add_correction(from_text, "甲强", "test_domain", force=True)
+            self.assertIn("cannot be forced", str(cm.exception))
+            self.assertNotIn("--force", str(cm.exception))
+        self.assertNotIn("朱老师", self.service.get_corrections("test_domain"))
+
+    def test_import_refuses_unforceable_shapes_in_pre_validation(self):
+        with self.assertRaises(Exception) as cm:
+            self.service.import_corrections({"95": "某人", "朱老师": "甲强", " 95": "某人", "甲铭": "甲明"},
+                                            domain="test_domain")
+        self.assertIn("Pre-validation failed", str(cm.exception))
+        self.assertNotIn("甲铭", self.service.get_corrections("test_domain"))
+
     def test_import_corrections(self):
         """Test importing corrections."""
         import_data = {

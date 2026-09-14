@@ -12,7 +12,36 @@ valid corrections for one ASR model that corrupt correct text from better models
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Set
+from typing import List, Optional, Set
+
+# Shapes that can never be a global rule, with or without --force. One predicate
+# serves check_correction_safety (add time) and the import path; the people-roster
+# loader carries a copy of the same rule (core/people_roster.py) — keep in sync.
+HONORIFIC_SUFFIXES = ("老师", "老師", "总", "總")
+UNFORCEABLE_CATEGORIES = frozenset({"numeric_text", "honorific_only"})
+
+
+def _is_cjk_char(ch: str) -> bool:
+    cp = ord(ch)
+    return (0x3400 <= cp <= 0x4DBF or 0x4E00 <= cp <= 0x9FFF or 0xF900 <= cp <= 0xFAFF
+            or 0x20000 <= cp <= 0x2EE5F or 0x2F800 <= cp <= 0x2FA1F or 0x30000 <= cp <= 0x323AF)
+
+
+def unforceable_shape(from_text: str) -> Optional[str]:
+    """Return ``numeric_text`` / ``honorific_only`` when the FROM (surrounding
+    whitespace ignored) is a shape no rule may carry, else ``None``.
+
+    A bare number matches timestamps, scores and prices in every transcript; a
+    one-character surname plus 老师/老師/总/總 names everyone with that surname.
+    Neither is a judgement call, so ``--force`` does not apply.
+    """
+    v = from_text.strip()
+    if v and re.fullmatch(r"\d+", v):
+        return "numeric_text"
+    for suffix in HONORIFIC_SUFFIXES:
+        if v.endswith(suffix) and len(v) == len(suffix) + 1 and _is_cjk_char(v[0]):
+            return "honorific_only"
+    return None
 
 # jieba is an OPTIONAL enhancement used only by the audit-time "valid phrase"
 # heuristic (is_likely_valid_phrase). It is advisory — it NEVER gates
@@ -26,6 +55,7 @@ from typing import List, Set
 # the import.
 import functools
 import importlib.util
+import re
 
 _JIEBA_AVAILABLE = importlib.util.find_spec("jieba") is not None
 _JIEBA_MODULE = None
@@ -250,6 +280,41 @@ def check_correction_safety(
         List of SafetyWarning objects (empty = safe)
     """
     warnings: List[SafetyWarning] = []
+
+    # Check 0: shapes no rule may carry (see unforceable_shape). Errors in every
+    # mode and not overridable by --force: a bare number matches timestamps,
+    # scores and prices everywhere (real incident 2026-09: a numeric
+    # name-variant deferred 122 items in one rerun); a single surname plus an
+    # honorific names everyone with that surname (real incident 2026-09-07).
+    shape = unforceable_shape(from_text)
+    if shape == "numeric_text":
+        warnings.append(SafetyWarning(
+            level="error",
+            category="numeric_text",
+            message=(
+                f"'{from_text}' is a bare number. Numbers appear correctly as "
+                f"timestamps, scores, prices and quantities in normal text, so "
+                f"replacing them with '{to_text}' always produces false positives."
+            ),
+            suggestion=(
+                "A number heard as a name/term needs a context rule scoped to the "
+                "exact recurring phrase (a context-file trap), not a dictionary entry."
+            ),
+        ))
+    elif shape == "honorific_only":
+        warnings.append(SafetyWarning(
+            level="error",
+            category="honorific_only",
+            message=(
+                f"'{from_text}' is a single surname plus an honorific. It names "
+                f"everyone with that surname, so replacing it with '{to_text}' "
+                f"rewrites people who were named correctly."
+            ),
+            suggestion=(
+                "Put the misheard token itself on the roster if it recurs, or scope "
+                "the mapping to the exact recurring phrase as a context-file trap."
+            ),
+        ))
 
     # Check 1: Is from_text a known common word?
     if from_text in ALL_COMMON_WORDS:

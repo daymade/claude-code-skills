@@ -139,6 +139,18 @@ sqlite3 ~/.transcript-fixer/corrections.db "SELECT * FROM correction_statistics;
 sqlite3 ~/.transcript-fixer/corrections.db "SELECT pattern, replacement, priority FROM context_rules WHERE is_active = 1 ORDER BY priority DESC;"
 ```
 
+## Lookup and sidecar closure
+
+```bash
+# Every existing claim on a term (dictionary active/disabled, context rules, roster, queue)
+uv run scripts/fix_transcription.py --lookup "候选词"
+
+# Decide whether one finished transcript's review sidecars are closed (exit 0 closed / 1 open / 2 blocked)
+uv run scripts/fix_transcription.py --close-sidecars --input "/absolute/canonical.md" --dry-run
+uv run scripts/fix_transcription.py --close-sidecars --input "/absolute/canonical.md" \
+  --decide-raw kept_original --by reviewer --note "子串误命中"   # record verdicts for rowless entries, then remove
+```
+
 ## Review Queue
 
 Uncertain corrections wait in a persistent queue for a human verdict (full

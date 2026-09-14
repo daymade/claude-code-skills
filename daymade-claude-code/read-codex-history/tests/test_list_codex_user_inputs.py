@@ -123,6 +123,20 @@ class CodexUserInputTests(unittest.TestCase):
 
         self.assertEqual(result.stdout.count("## Session <code>session-a</code>"), 1)
 
+    def test_invalid_timestamp_and_utf8_fail_without_partial_output(self) -> None:
+        for timestamp in (float("nan"), float("inf"), 1e20):
+            with self.subTest(timestamp=timestamp):
+                self.write_rows([{"session_id": "session-a", "ts": timestamp, "text": "input"}])
+                result = self.run_cli("--session-id", "session-a", check=False)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(result.stdout, "")
+                self.assertNotIn("Traceback", result.stderr)
+        (self.codex_home / "history.jsonl").write_bytes(b"\xff\n")
+        result = self.run_cli("--session-id", "session-a", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "")
+        self.assertNotIn("Traceback", result.stderr)
+
     def test_markdown_keeps_literal_markup_distinct_from_display_structure(self) -> None:
         self.write_rows(
             [

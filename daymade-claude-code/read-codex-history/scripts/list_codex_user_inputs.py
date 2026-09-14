@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import math
 import os
 import sys
 from collections import Counter
@@ -120,6 +121,7 @@ def load_user_inputs(path: Path) -> list[UserInput]:
                 or session_id != session_id.strip()
                 or isinstance(timestamp, bool)
                 or not isinstance(timestamp, (int, float))
+                or not math.isfinite(timestamp)
                 or not isinstance(text, str)
             ):
                 raise PromptHistoryError(
@@ -127,6 +129,12 @@ def load_user_inputs(path: Path) -> list[UserInput]:
                     "expected session_id without surrounding whitespace, numeric ts, "
                     "and string text"
                 )
+            try:
+                datetime.fromtimestamp(float(timestamp)).astimezone()
+            except (ValueError, OverflowError, OSError) as error:
+                raise PromptHistoryError(
+                    f"Timestamp outside supported datetime range at {path}:{line_number}"
+                ) from error
             records.append(
                 UserInput(
                     session_id=session_id,
@@ -312,7 +320,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     try:
         records = load_user_inputs(codex_home / "history.jsonl")
         groups, mode, _ledger_count = select_groups(records, args)
-    except PromptHistoryError as error:
+    except (PromptHistoryError, OSError, UnicodeError, ValueError, OverflowError) as error:
         parser.error(str(error))
     output = (
         render_json(groups, mode, records)

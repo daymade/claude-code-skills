@@ -30,6 +30,34 @@ general method when the boundary is still unknown or the symptom belongs to
 SSE/CDN/application protocol behavior. This keeps one concrete operator instead
 of forcing the user to choose between two overlapping proxy doctors.
 
+## Target and task scope
+
+Before remote probes or changes, establish whether the target is a designated test machine,
+an explicitly requested colleague's working computer, or unknown. Use the owner's existing
+machine-purpose ledger and current task; do not log into a colleague's machine to classify it.
+Saved SSH access and previous successful tests do not grant ongoing use. Use designated test
+machines for routine testing; their unavailability does not authorize another person's computer.
+
+Keep an explicitly requested one-off test on a colleague's computer within its stated result
+and necessary verification. Stop there on completion, cancellation, or a need for an unapproved
+environment change. Move later performance, migration, and regression tests to designated test
+machines. A test failure does not authorize disabling that person's proxy/VPN, quitting apps,
+changing routes, or installing a background task. Proceed with disruptive repair there only
+when the user has explicitly requested that repair and its interruption. Existing authorization
+for owner test-machine maintenance remains valid; do not ask again for its routine steps.
+
+Apply this boundary even when invoked directly, through another Skill, after compaction, or
+through a peer handoff. After access is stopped, use existing records rather than another SSH
+probe to verify that it stopped.
+
+## Disruptive network changes
+
+Before any authorized VPN disconnect, app termination, route cutover, or service restart,
+read [network_change_recovery.md](references/network_change_recovery.md). Validate prerequisites
+before interruption, arm bounded recovery before the first disruptive action, and verify both
+the repaired path and the user's original network use. A successful stop command, a detached
+process, or a restart placed at the end of a script is not recovery evidence.
+
 ## Conflict Layers
 
 Proxy/VPN tools on macOS create conflicts at several independent layers. Layers 1-3 affect Tailscale connectivity; Layer 4 affects SSH git operations; Layer 5 affects VM/container runtimes. TUN-state failure modes beyond this table — SSH/git connection drops, resolver stall, DIRECT split-brain — are covered in Steps 2H–2J:
@@ -62,6 +90,7 @@ Determine which scenario applies:
 - **`docker pull` works but `docker build` still dies fetching base-image tokens (TLS/i-o timeout) on a WSL2 + Docker Desktop host, or every runbook proxy port on a Windows+v2rayN host silently died after a v2rayN upgrade** → buildkit direct-dials past the DD proxy override / v2rayN ≥7.17 LAN-port split (references/windows_host_tun_wsl_cascade.md §2026-08-23)
 - **`git clone` fails with `Connection closed by 198.18.x.x`** → two different mechanisms produce this; Step 2H separates them
 - **Every domestic/DIRECT-rule site fails at once (TLS `unexpected EOF` mid-handshake, proxy-port CONNECT returns 503, Node CLIs report `UNKNOWN_CERTIFICATE_VERIFICATION_ERROR`) while proxied overseas sites keep working** → TUN DIRECT split-brain (Step 2J)
+- **Everything on macOS fails at once — domestic AND overseas, and even Step 2J's real-IP probe fails** → do not declare an outage yet; run the physical-interface discriminator in "TUN full-stall vs genuine outage" (above Step 2A)
 - **SSH connects but `operation not permitted`** → Tailscale SSH config issue (Step 4)
 - **SSH connects but `be-child ssh` exits code 1** → WSL snap sandbox issue (Step 5)
 - **TCP port 22 reachable (`nc -z` succeeds) but SSH fails with `kex_exchange_identification: Connection closed`** → Tailscale SSH proxy intercept on WSL (Step 5A)
@@ -70,6 +99,7 @@ Determine which scenario applies:
 - **Any tool using system DNS (`ssh`, `curl`, `git`) hangs ~60s before resolving, but `nslookup` returns instantly** → Stalled resolver in `getaddrinfo` chain (Step 2I)
 - **Windows+WSL host: everything offline at once (domestic AND overseas), WSL dead too, "even Tailscale won't come online" — and/or the user tried several recovery actions (switched NICs, toggled TUN) and can't tell which one fixed it** → Windows host TUN cascade + event-log forensics (Step 5C)
 - **Tailscale, DNS, route ownership, and proxy reachability all pass, but large transfers remain slow and switching the active proxy node changes throughput** → proxy node / exit / chain capacity workflow in [references/proxy_node_chain_throughput.md](references/proxy_node_chain_throughput.md)
+- **You want one app's bulk traffic (BaiduNetdisk downloads, Feishu/Lark uploads) off the metered proxy — or out of the status-bar counter entirely** → not a conflict; a splitting task. On this Mac the `shadowrocket-splitting` skill owns the whole workflow (target list, replay, CIDR capture, wipe guard); the mechanism background is [references/proxy_conflict_reference.md](references/proxy_conflict_reference.md) § "Per-app traffic splitting on macOS" — which of the three mechanisms (DIRECT rule / `tun-excluded-routes` / `always-real-ip`) can work for the app depends on whether it connects to literal IPs or the system resolver, and the DNS-layer keys are inert on the macOS Catalyst build.
 
 **Key distinctions**:
 - SSH does NOT use `http_proxy`/`NO_PROXY` env vars. If SSH works but HTTP doesn't → Layer 2.
@@ -124,6 +154,35 @@ When a proxy tool runs in **TUN / global mode** (Shadowrocket, Clash, Surge), it
 - **The proxy/TUN config decoded from disk + the tool's own GUI** — the authoritative source of which node/route is actually active. Cross-check a file parse against the GUI; do not infer the active node from a network probe.
 
 **Counter-move**: before citing any latency / reachability number while a TUN is up, ask *"would this number be physically possible if the packet really traversed to the destination?"* A `0.00s` connect or a `0.2ms` ping to another continent is the tell that you measured the TUN, not the network. Switch to `time_appconnect`, or temporarily disable the TUN to get a clean baseline (raw probes become meaningful again once it is off).
+
+### TUN full-stall vs genuine outage (when EVERYTHING fails, prove the wire is dead before standing down)
+
+The contamination table has a systemic limit: every probe that goes *through* the TUN shares one fate. That includes "real-IP" probes (`dig @<resolver>` + `curl --resolve`) — the TUN intercepts UDP/53 too. When the TUN's forwarder stalls completely, domain probes, real-IP probes and proxied probes all fail together, and the picture is **indistinguishable from a genuine physical outage**. A watchdog or investigator that reads "all probes dead" as "the network is down" will stand down through a recoverable TUN stall — or worse, blame the router (observed 2026-09-10: a proxy health daemon recorded 13 "genuine network outage, standing down" windows in one day; the layer was never proven either way until a physical-path probe was added).
+
+The discriminator is a probe that **bypasses the TUN entirely** — bind the physical interface (curl `--interface` = `IP_BOUND_IF`, scoped routes take the packet straight out the physical NIC):
+
+```bash
+# 1) Find the physical interface that actually carries the LAN. Do NOT use
+#    `route -n get default` here — under TUN it answers with the utun itself.
+for i in en0 en1 en2 en3; do
+  addr=$(ipconfig getifaddr $i 2>/dev/null) && echo "$i $addr"
+done
+ping -c 1 -t 2 <gateway-ip>   # sanity: is the LAN itself alive at all
+
+# 2) Probe bare-IP targets through that interface — two independent ones.
+#    Both verified answering on a healthy link 2026-09-10 (AliDNS 443 → 404,
+#    DNSPod 80 → 404). Targets rot: 114.114.114.114 and 180.76.76.76 returned
+#    000 on a healthy wire that same day — re-verify a target before trusting it.
+for u in "https://223.5.5.5/" "http://119.29.29.29/"; do
+  curl -s --noproxy '*' --interface en0 -k --connect-timeout 3 --max-time 6 \
+    -o /dev/null -w "$u: %{http_code}\n" "$u"
+done
+```
+
+- Any non-`000` answer (even 404) → the physical path (NIC → AP → gateway → ISP) is alive and the TUN is the suspect: reconnect the tunnel **under the [recovery contract](references/network_change_recovery.md)** (the disconnect/connect mechanism lives in Step 2J) — do not stand down, do not reboot the router.
+- `000` from **both** targets → a genuine outage is earned. A single target's 000 proves only that target: enterprise/campus egress whitelists and resolver-side changes each produce a lone 000 on a healthy wire.
+
+Calibrate before trusting: on a healthy link each answer arrives in ~0.1s; a deliberately wrong interface must fail — `--interface en9` returns `000` with a nonzero exit (45 when the interface doesn't exist, 7/28 when it exists but is down or unrouted — the `000`, not the exit number, is the signal).
 
 ### Fast Path: Run Automated Checks
 
@@ -628,6 +687,15 @@ Two things that wrapper must get right:
 
 ⚠️ Beware stacking retries. If a wrapper script or cron job already retries pushes, adding a transport-layer retry underneath multiplies them (5 × 3 = 15 connections), and the outer layer's logs will undercount actual connection attempts.
 
+**(C) "The SSH channel is down entirely" — a verdict shape to resist, not a mechanism.** A window of back-to-back SSH failures (`ssh.github.com:443` banner timeouts, port 22 also `Connection closed`) with HTTPS 100% clean looks like a new mechanism. It isn't: re-measured across windows the same host showed `ssh -T git@github.com` succeeding 75–84% over 25 attempts — mechanism (B)'s bad-window peak all along. **N consecutive failures inside one time window are not N independent samples**: forwarding instability is time-varying, and a bad window produces 5-in-a-row failures routinely. Before concluding "the channel is dead," re-measure minutes later.
+
+How much sampling is enough depends on the **shape of the refusal**, not the count of failures. A named policy code (e.g. an API returning `KEYLESS_ACCESS_NOT_AVAILABLE`) is the endpoint *stating a rule* — a few same-session samples settle it. A challenge page, a rate limit, or a connection reset is *state* — it drifts with time and IP reputation, so a same-window losing streak counts as one sample, and only a cross-window re-measure can separate "dead" from "bad window."
+
+Two facts to keep regardless:
+
+- `nc -vz github.com 22` reporting **succeeded** proves nothing — under a TUN the local stack answers for the destination on any port. Only trust a real handshake (`ssh -T`).
+- When the retry wrapper's attempts are genuinely exhausted, the one-shot HTTPS bypass leaves shared remote config untouched: `git push https://github.com/<owner>/<repo>.git HEAD:refs/heads/main` (prefix `HTTPS_PROXY=http://127.0.0.1:<proxy-port>` if the direct attempt dies with `SSL_ERROR_SYSCALL`).
+
 **Fix for (A) — a DIRECT rule** (requires proxy tool config access), so the TUN passes this traffic through without protocol inspection:
 
 ```
@@ -774,16 +842,18 @@ curl -sS -o /dev/null -w '%{http_code}\n' --resolve <domain>:443:<real-ip> https
 # → normal HTTP status  ← physical network is FINE; the TUN's DIRECT state is broken
 ```
 
-If step 3 also fails, this is not split-brain — treat it as a real local-network outage.
+If step 3 also fails, this is not split-brain — but it is not a proven outage either: step 3 still rides the TUN (UDP/53 is intercepted too). Run the interface-bound physical probe in "TUN full-stall vs genuine outage" (above Step 2A); only a double-000 there earns "real local-network outage".
 
-**Fix** — restart the tunnel, then flush the OS DNS cache (stale fake-IP entries survive the reconnect):
+**Fix** — when network maintenance and its interruption are authorized, restart the exact
+tunnel under the [recovery contract](references/network_change_recovery.md), then flush the OS
+DNS cache if stale fake-IP entries remain. Identify the service from its current configuration;
+never substitute the Tailscale control tunnel or terminate the proxy app as a shortcut. For
+Shadowrocket, `shadowrocket://disconnect` and `shadowrocket://connect` request transitions;
+verify the actual VPN state after each. Do not chain them with `&&`: a failure between them
+must still reach the armed recovery action. Use the corresponding API or GUI for other clients.
 
-```bash
-# Shadowrocket (URL scheme; Clash/Surge: use their API or GUI toggle)
-open "shadowrocket://disconnect" && sleep 3 && open "shadowrocket://connect" && sleep 6
-
-sudo killall -HUP mDNSResponder
-```
+Run `sudo killall -HUP mDNSResponder` only within the authorized maintenance scope after the
+tunnel is confirmed connected; DNS cache flushing does not restore a disconnected VPN.
 
 **Verify all four planes** — a fix that restores one plane can leave (or put) another down:
 

@@ -14,6 +14,11 @@ Ground-truth reference for `~/.claude/` directory layout and JSONL session forma
         subagents/
           agent-<agent-id>.meta.json  # Agent metadata
           agent-<agent-id>.jsonl      # Agent transcript
+          workflows/
+            <workflow-id>/
+              agent-<agent-id>.jsonl      # Workflow-spawned agent transcript
+              agent-<agent-id>.meta.json  # Workflow-spawned agent metadata
+              journal.jsonl               # started / result events (no timestamps)
         tool-results/
           toolu_<tool-id>.txt         # Large tool outputs
       memory/                         # Persistent memory files (MEMORY.md, etc.)
@@ -175,7 +180,7 @@ Each `.jsonl` file has one JSON object per line. Common types:
 }
 ```
 
-Content block types in assistant messages:
+Content block types in assistant messages (the three most common for extraction, not an exhaustive list — see `session_file_format.md` for the complete set of block types and fields):
 - `thinking` — internal reasoning (skip when extracting actionable context)
 - `text` — visible response to user (extract this)
 - `tool_use` — tool invocations (useful for understanding what was done)

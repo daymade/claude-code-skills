@@ -1,0 +1,48 @@
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+import { join } from "node:path";
+import test from "node:test";
+import { collectAttentionInventory } from "../scripts/attention_inventory.mjs";
+
+test("real renderer inventories unmentioned repetition without treating essential context as a defect", async (t) => {
+  const require = createRequire(join(process.cwd(), "package.json"));
+  let chromium;
+  for (const name of ["playwright", "@playwright/test", "playwright-core"]) {
+    try { chromium = require(name).chromium; if (chromium) break; } catch { /* try the next installed layout */ }
+  }
+  if (!chromium) return t.skip("Run from the audited project that supplies Playwright; browser behavior is unverified here.");
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1000, height: 700 } });
+    await page.setContent(`<style>body{font:16px sans-serif}.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.hidden{display:none}.scroll{height:36px;overflow:auto}.row{height:36px}</style>
+      <h1 class="sr">Accessible page name</h1><nav><button><span>System diagnostics</span><small>diagnostics</small></button></nav>
+      <main><svg width="400" height="60"><text x="10" y="30">26·02</text></svg><div class="axis">26·02</div>
+      <p>Amount <strong>USD</strong></p><label>Transfer amount<input value="INPUT_VALUE_NOT_FOR_EXPORT"></label>
+      <p role="alert">This action cannot be reversed.</p><div class="hidden">Hidden variant</div>
+      <div class="scroll"><div class="row">Visible source</div><div class="row">Offscreen source</div></div></main>`);
+    const result = await page.evaluate(collectAttentionInventory);
+    assert.equal(result.truncated, false);
+    assert.equal(result.necessityVerdict, "not_evaluated");
+    const texts = result.items.map((item) => item.text);
+    for (const value of ["Accessible page name", "Hidden variant", "Offscreen source", "INPUT_VALUE_NOT_FOR_EXPORT"]) assert.ok(!texts.includes(value), value);
+    for (const value of ["USD", "Transfer amount", "This action cannot be reversed."]) assert.ok(texts.includes(value), value);
+    assert.ok(result.repeats.some((ids) => ids.length === 2 && ids.every((id) => result.items.find((item) => item.id === id).text === "26·02")));
+    assert.ok(result.labelEchoes.some((ids) => ids.map((id) => result.items.find((item) => item.id === id).text).join(" / ") === "System diagnostics / diagnostics"));
+    assert.ok(result.items.every((item) => item.rect.height > 1 && item.selector.startsWith("body > ")));
+    const limited = await page.evaluate(collectAttentionInventory, { limit: 1 });
+    assert.equal(limited.items.length, 1);
+    assert.equal(limited.truncated, true);
+    await page.setContent('<iframe srcdoc="<p>Frame task</p>"></iframe><div id="host"></div>');
+    await page.evaluate(() => { document.querySelector("#host").attachShadow({ mode: "open" }).innerHTML = "<p>Shadow task</p>"; });
+    const opaque = await page.evaluate(collectAttentionInventory);
+    assert.equal(opaque.opaqueSurfaces.length, 2);
+    await page.setContent('<body>Direct body text <main><p>Nested text</p></main></body>');
+    const direct = await page.evaluate(collectAttentionInventory);
+    assert.ok(direct.items.some((item) => item.text === 'Direct body text' && item.containerSelector === 'body'));
+    await page.evaluate(() => { document.body.style.opacity = '0'; });
+    assert.equal((await page.evaluate(collectAttentionInventory)).items.length, 0);
+    await page.setContent('<body style="visibility:hidden"><p style="visibility:visible">Visible override</p><p>Hidden inherited text</p></body>');
+    const visibility = await page.evaluate(collectAttentionInventory);
+    assert.deepEqual(visibility.items.map((item) => item.text), ['Visible override']);
+  } finally { await browser.close(); }
+});

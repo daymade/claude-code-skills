@@ -39,7 +39,9 @@ class ConfiguredPeopleRosterIntegrationTests(unittest.TestCase):
         self.assertEqual(
             stderr.getvalue(),
             "",
-            "configured roster contains an entry rejected by the public parser grammar",
+            "the configured roster carries an entry the loader dropped or refused "
+            "(malformed syntax, a bare number, or a single surname + honorific); "
+            "move it to a context note or fix its syntax:\n" + stderr.getvalue(),
         )
 
 

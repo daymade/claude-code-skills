@@ -24,7 +24,7 @@ until a step is explicitly labeled destructive — recovery must never make the 
 
 ## Outcome contract — keep the safety net subordinate to the user's job
 
-Before Mode B/E or any command that writes a ref or backup, state four lines in the conversation
+Before Mode B/E or any command that writes a ref or backup, state the following in the conversation
 (do not create another file):
 
 - **Outcome:** the user-visible end state, in the user's words.
@@ -50,6 +50,11 @@ Then enforce these boundaries:
    snapshot, transport chunk) belongs in a repository-external backup directory. Do not stage,
    commit, push, or route it through Git LFS merely to make the backup remote; Git LFS is for
    durable versioned project binaries, not a fallback transport for temporary recovery material.
+- **Keep preservation and retirement as separate phases.** A verified recovery artifact proves
+   recoverability; it does not prove the business code landed. Keep it through the destructive
+   action and the content-level postconditions. Retire an exact task-owned temporary artifact only
+   when every payload is landed or proven superseded and the artifact itself has explicit cleanup
+   authorization. Keep backup-only, unresolved, and mixed artifacts.
 - **Treat a new storage or execution surface as a scope change.** A second repository, new
    remote, cloud upload, Git LFS, or full-history export requires re-planning and explicit authority
    when the stated outcome actually depends on it. Do not solve a transport problem the user did
@@ -75,7 +80,7 @@ machine-wide discovery only when the outcome is an exhaustive loss audit or the 
 unknown. A named repository/branch/worktree task stays named; findings outside that target are
 report-only until the user expands the authorized targets.
 
-## The six load-bearing rules (internalize these; the modes apply them)
+## Load-bearing rules (internalize these; the modes apply them)
 
 1. **Get the EVIDENCE SCOPE right before you trust any verdict, without silently expanding the
    work scope: every instrument here only sees the repository it runs in.** `git worktree list`,
@@ -123,7 +128,7 @@ report-only until the user expands the authorized targets.
    branch, running `gc`, or force-pushing. Cleanup is reversible only while a ref (or the reflog
    window) still points at the work. **Critical asymmetry: `bundle`, `archive`, and `format-patch`
    can only reach objects git already knows about.** An untracked file that was never `git add`ed
-   and never `stash -u`ed is invisible to all three — the copy on disk is the only copy, so
+   and never `stash -u`ed is invisible to those formats — the copy on disk is the only copy, so
    preserving it means literally copying the file out. Backing up "the repository" and believing
    untracked work came along is how a clean-looking backup silently omits the only thing at risk.
 5. **Verify "merged" by CONTENT, never by commit count — and know that most content checks are
@@ -144,9 +149,13 @@ report-only until the user expands the authorized targets.
 
 ## Mode A — Recover lost work
 
-A commit/branch/stash that "disappeared" is almost always still in the object store for ~90 days.
-Full ladder (reflog → fsck → dangling) with exact commands and the canonical Git facts:
-**[references/recovery_playbook.md](references/recovery_playbook.md)**. The 30-second version:
+A commit/branch/stash that "disappeared" is almost always still in the object store for ~90 days —
+why that is true, and what ends it, is **[references/recovery_playbook.md](references/recovery_playbook.md)** § Mental model: nothing is gone
+until gc runs. The ladder there is indexed by symptom, so go straight to your rung —
+§ Ladder step 1 — `git reflog` (where most recoveries end),
+§ Ladder step 2 — dropped stashes,
+§ Ladder step 3 — detached-HEAD work,
+§ Ladder step 4 — `git fsck` for true orphans. The 30-second version:
 
 ```bash
 git reflog --date=iso | head -40          # find the lost HEAD position (most recoveries are here)
@@ -154,12 +163,17 @@ git show <sha>                            # CONFIRM it's the right commit before
 git switch -c rescue/<name> <sha>         # recover onto a NEW branch — never reset onto live work
 ```
 
-If reflog doesn't show it (e.g. a dropped stash, an orphan from a rebase), fall through to
-`git fsck --dangling` — see the playbook.
+If reflog doesn't show it, fall through by symptom rather than reaching for `fsck` first: a
+dropped stash has its own recovery route (**[references/recovery_playbook.md](references/recovery_playbook.md)** § Ladder step 2), work
+abandoned on a detached HEAD has another (§ Ladder step 3), and only a true orphan — from a rebase, say —
+needs `git fsck --dangling` (§ Ladder step 4).
 
 ## Mode B — Audit what's at risk, then preserve it
 
-**Step 0 — establish the evidence scope (rule 1).** Run machine-wide checkout discovery only when
+**Step 0 — establish the evidence scope (rule 1).** What "at risk" covers, and the checkout kinds
+that hide it, are **[references/recovery_playbook.md](references/recovery_playbook.md)** § The authoritative "is anything at risk" check and
+§ Linked worktrees and detached worktree HEADs.
+Run machine-wide checkout discovery only when
 the Outcome contract calls for an exhaustive audit or the target checkout is unknown. For a named
 target, record that checkout and continue to Step 1 without turning an unrelated clone into work.
 When exhaustive discovery is warranted, find every checkout of this repository on the machine,
@@ -229,16 +243,20 @@ helper only when every reported dangler is actually in the authorized target set
 scripts/git_preserve_danglers.sh --patch-dir ~/git-danglers   # pin + export patches
 ```
 
+Why pinning survives `gc`, and the targeted single-ref form when the whole set is not in scope:
+**[references/recovery_playbook.md](references/recovery_playbook.md)** § Preserve: pin authorized danglers so gc can never take them.
+
 This pins every dangling commit under `refs/dangling-backup/<sha>` (garbage collection can never
 reach a referenced commit) without cluttering `git branch`, and optionally writes a `.patch` per
 non-stash commit. For a *specific* important commit, also give it the full treatment — local
 branch **and** a pushed remote branch **and** a `git format-patch` file — so a single disk or a
-single `git gc` can't take it. Details + why triple-backup: **[references/recovery_playbook.md](references/recovery_playbook.md)**.
+single `git gc` can't take it. Details + why triple-backup: **[references/recovery_playbook.md](references/recovery_playbook.md)**
+§ Triple-backup a critical commit.
 
 **Untracked files need a different tool — plain copying (rule 4).** Put `<backup>` outside the
 target repository and every checkout being retired. Everything above moves *git
 objects*; a file git was never told about is not one. Preserve those explicitly, and keep the
-three channels separate so a later reader knows what each restores:
+channels separate so a later reader knows what each restores:
 
 ```bash
 git -C <checkout> status --porcelain | grep '^??'                     # what is untracked
@@ -255,7 +273,9 @@ and the person reading it will not be the person who made it.
 ## Mode C — Verify everything is merged (without being fooled by counts)
 
 The trap: a stale branch shows "173 commits ahead of main" yet every line is already on main
-(squash-merge artifact). Never conclude "unmerged" from counts. Per-branch content check:
+(squash-merge artifact) — the mechanism is **[references/merge_verification.md](references/merge_verification.md)** § Why commit counts lie.
+Never conclude "unmerged" from counts. Per-branch content check (procedure and output reading:
+§ Per-branch verdict procedure):
 
 ```bash
 scripts/git_verify_branch_merged.sh <branch> [<base>]   # base defaults to origin/main
@@ -270,7 +290,10 @@ read-only and report that the merge verdict is unavailable. If the fetch itself 
 ownership transfer, the script falls back to cached refs and says so **on stderr only**.
 Treat that line as a blocker, not a footnote: rerun once the network is back before acting on the
 verdict. Comparing by hand (`git diff origin/main <branch>`, `git log origin/main..<branch>`) has
-no such safety net at all — the sole writer must refresh authority first.
+no such safety net at all — the sole writer must refresh authority first, and two-dot vs three-dot
+answers different questions (**[references/merge_verification.md](references/merge_verification.md)** § Pick the diff FORM from the question
+you're asking). Signals that may inform a human but must never auto-decide are fenced off in
+§ Manual-only investigation hints.
 
 It reports **MERGED (ancestor)** or **MERGED (content contained)** — content-safe for a separately
 authorized Mode E deletion gate — versus
@@ -279,31 +302,41 @@ not heuristic: it does a trial 3-way merge of the branch *into* the base with `g
 (in memory, no checkout) and only reports content containment when that merge changes nothing — so a
 squash-merged branch reads MERGED despite a nonzero commit count, while a revert/edit/new-file the
 base lacks reads UNMERGED. It is **safety-biased**: anything it can't prove contained is reported
-for review, because a false "merged" loses work while a false "unmerged" only costs a look. Full
-technique (and why `--find-object`/blob heuristics are unsound for auto-decisions), plus the
-**adversarial multi-agent verification** pattern for a whole repo of branches (read-only agents,
-one per batch, each told to *falsify* "everything is merged," every finding independently
-re-checked): **[references/merge_verification.md](references/merge_verification.md)**.
+for review, because a false "merged" loses work while a false "unmerged" only costs a look
+(**[references/merge_verification.md](references/merge_verification.md)**
+§ Why safety-biased). Why the trial merge is sound rather than a
+heuristic, and why `--find-object`/blob comparison is not: § The sound content check. For a whole
+repo of branches, the read-only fan-out pattern — one agent per batch, each told to *falsify*
+"everything is merged," every finding independently re-checked — is
+§ Adversarial multi-agent verification, with the constraints those agents must be given in
+§ Rules for the verification agents.
 
 ## Mode D — Prevent the disaster
 
 The habits that keep a branch tangle from ever stranding work:
-**[references/prevention_practices.md](references/prevention_practices.md)**. The load-bearing few:
+**[references/prevention_practices.md](references/prevention_practices.md)**. Each bullet below carries the `§` name of its full
+treatment there — follow the one that matches your situation rather than reading the whole file.
+The load-bearing few:
 
 - **Read the current collaboration contract before prescribing topology.** An explicit user or
   project decision about shared checkouts, worktrees, branches, or contribution flow outranks this
   generic guidance. Do not turn one messy audit into a permanent "one worktree per session" rule.
+  (§ Choose topology from current authority.)
 - **One physical checkout gets one writer; parallel agents and sessions stay read-only.** A topic
   branch inside the same checkout does not isolate the shared working files, current branch, or
   index. Writer ownership comes from the repository's task/coordination contract, not a guessed
   file list. If ownership is unclear or another writer is active, do not mutate the checkout.
+  (§ Shared checkout and concurrent sessions: one writer — also governs the two "parallel session"
+  bullets below.)
 - **Commit before switching and push WIP early.** Prefer a remote-backed commit over stash
   juggling, but preserve a higher-authority narrow stash exception; never use an unscoped stash
   to make a dirty checkout look ready.
+  (§ Parallel / multi-branch work; § Push work-in-progress branches early.)
 - **Worktrees are explicitly authorized, named exceptions — not the standing default.** They
   isolate working files, `HEAD`, and index but still share refs, stashes, object storage, config,
   and hooks, and do not copy ignored dependencies. When approved, a linked worktree is safer than
   an invisible independent clone but remains a separately audited retirement target.
+  (§ Audit every authorized worktree before retirement.)
 - **Handoff and merge by exact commit, then finish with an AND gate.** Record branch, local `HEAD`,
   and fresh remote tip; require them to equal the handoff SHA. Direct merges name that SHA, not the
   branch. Hosted merges use an expected-head-SHA precondition when available, or an immediately
@@ -314,9 +347,11 @@ The habits that keep a branch tangle from ever stranding work:
   the project's existing coordination must prove it quiescent and transfer exclusive ownership;
   without that mechanism, stay read-only and report the gap. Do not stop, reconfigure, or invent a
   lease for automation under this generic Skill. Retire refs or checkouts only through separately
-  authorized Mode E evidence.
+  authorized Mode E evidence. (§ Known automated writers are not session-owned WIP.)
 - **Confirm the current branch before committing** (`git branch --show-current`) — a fix committed
   onto the wrong feature branch is invisible to its real PR and easy to lose on cleanup.
+  (§ Confirm the branch before every commit — including why removal from the wrong branch waits
+  for Mode E.)
 - **Never race another writer with checkout-relative mutation.** If another writer is active, stop
   until the repository's coordination system transfers exclusive write ownership. After transfer,
   name the exact ref and object when repairing or advancing state; do not rely on whichever branch
@@ -334,7 +369,8 @@ The habits that keep a branch tangle from ever stranding work:
   checkout position part of the operation.
 - **If a parallel session previously switched the shared tree and stranded your uncommitted work,**
   do not mutate it until that session is quiescent and exclusive ownership has transferred. Then
-  follow the incident-only relocation procedure in the prevention reference: prove your files match
+  follow the incident-only relocation procedure in § Recover stranded work after a parallel session
+  switched the shared tree: prove your files match
   across bases, commit only explicit paths, and restore the prior branch before handing ownership
   back. Branch deletion remains a separately authorized Mode E action.
 - **The inverse case: another session's *commit* lands on your branch, and every check you already
@@ -350,20 +386,15 @@ The habits that keep a branch tangle from ever stranding work:
   git log  --oneline "$base"..HEAD     # every commit here must be yours
   git diff --name-only "$base" HEAD    # every path here must be yours
   ```
-  **The verify line is load-bearing, for one input in particular.** If `$base` is **empty** —
-  unset variable, a command substitution that failed — `"$base"..HEAD` becomes `HEAD..HEAD`, and the
-  `git log` prints nothing at exit 0, indistinguishable from "no foreign commits". A non-empty but
-  unresolvable base is not this problem: it fails loudly (`fatal: Invalid revision range`, exit
-  128). Measured — so the case the guard is there for is the quiet one, and it is the only one you
-  would otherwise miss. And **"yours" is not
-  derivable from Git**: in a shared checkout both sessions write the same author and committer, so
-  no flag separates them. It comes from the SHAs you recorded as you committed. If you cannot say
-  which commits are yours, stop and ask — the repair deletes a commit, so a guess here is the loss
-  this skill exists to prevent.
-  Record that base SHA when you branch. Recovering it later with `git merge-base origin/main HEAD`
-  reads a *cached* remote ref, and the fetch that would refresh it is itself gated on exclusive
-  ownership — so on a contended checkout the derived base is the one input you cannot safely
-  recompute at the moment you need it.
+  **The verify line is load-bearing.** An **empty** `$base` turns `"$base"..HEAD` into `HEAD..HEAD`:
+  no output at exit 0, indistinguishable from "no foreign commits". That silent case is the one the
+  guard exists for; § A foreign commit adopted onto your branch has it and the louder one measured.
+  And **"yours" is not derivable from Git**: in a shared checkout both sessions write the same
+  author and committer, so no flag separates them. It comes from the SHAs you recorded as you
+  committed. If you cannot say which commits are yours, stop and ask — the repair deletes a commit,
+  so a guess here is the loss this skill exists to prevent.
+  Record that base SHA when you branch — deriving it later reads a cached remote ref, and the fetch
+  that would refresh it is itself ownership-gated § A foreign commit adopted onto your branch.
   **A foreign commit in that range is evidence another writer was in this checkout, so repair is
   not yours to start.** Stop; the ownership rules above apply unchanged. Once ownership has
   transferred, repair is a history rewrite of *your* branch — `git rebase --onto` checks out the
@@ -437,12 +468,13 @@ The habits that keep a branch tangle from ever stranding work:
   session's own staged entries are theirs, not yours to clear). **And before any bare commit on a
   shared tree, read that same diff as your blast radius** — every entry, `D` lines included, must
   be one you intended; an entry you don't recognize means stop, not commit.
+  (§ Commit-scope hygiene.)
 - **Before any rebase or branch-delete, run the applicable Mode B evidence path.** Use the full
   loss audit only when every worktree/ref/tag/stash/dangler it enumerates is in evidence scope;
   otherwise use the authorized checkout/ref's scoped checks and limit the safety claim accordingly.
 - **Before bumping a shared version/lockfile, check the base's current value** so two parallel
   branches don't both claim the same bump (a silent collision that blocks the later change from
-  shipping).
+  shipping). (§ Version / lockfile collisions between parallel branches.)
 
 ## Mode E — Retire worktrees, stashes, and branches safely
 
@@ -479,7 +511,7 @@ and targeted exports instead:
 Anything you cannot prove superseded stays alive (same safety bias as Mode C: a false "superseded"
 loses work; a false "still live" costs a branch name). One warning that changes verdicts: **the
 leftover's label is not evidence** — a stash named "unfinished development" can be a fully-landed
-early draft; judge content against the current base, never the name. Worked examples of all three
+early draft; judge content against the current base, never the name. Worked examples of the
 rungs (including the squash-artifact and absorbed-into-refactor cases):
 **[references/merge_verification.md](references/merge_verification.md)** § Supersession triage.
 
@@ -581,6 +613,16 @@ a line the survivor genuinely lacks anywhere is the one to escalate.
 **Recovery, if you regret it:** patches re-apply with `git apply`; the untracked tar extracts
 in place; the bundle restores full history via `git fetch <file>.bundle <branch>:restored/<branch>`.
 
+**Step 5 — close the temporary recovery-artifact lifecycle only when it is separately
+authorized.** First finish Step 4 and prove the maintained survivor contains or intentionally
+supersedes every payload. Then follow
+**[references/merge_verification.md](references/merge_verification.md)** § Retire task-owned
+temporary recovery artifacts. A general request to converge onto one main branch does not
+authorize deleting the external backup. Keep any artifact that remains the only copy of work,
+contains an unresolved payload, mixes cleared and unresolved payloads, or was not created or
+explicitly adopted by this task. After an authorized retirement, independently prove every exact
+artifact path is absent; the deletion command's receipt is not the postcondition.
+
 ## Scripts (execute these; they are non-destructive unless noted)
 
 Every `scripts/...` path below is relative to this Skill's bundle root, not a command promised on
@@ -597,7 +639,7 @@ never tell a user to run bare `git_verify_branch_merged.sh` unless `command -v` 
 | `scripts/git_export_before_drop.sh --verify-current BUNDLE` | Fail if any bundled ref moved or disappeared since export | Nothing (read-only) |
 | `scripts/git_prepare_clone_retirement.sh --clone PATH --survivor PATH --out DIR` | Refuse hidden/unhandled clone state, then freeze every ref tip, symbolic-ref target, reflog identity, and scoped config/hooks/info metadata into a self-contained recovery set; after freezing an absent no-clobber destination and process occupancy, `--verify-current DIR` is the final probe and the move must be the next operation | Writes only the new external backup directory; disables lazy fetch/fsmonitor and refuses tracked content filters; never moves/deletes or changes refs |
 
-All six run from the repository root. They use read-only enumeration/configuration commands such as
+These helpers run from the repository root. They use read-only enumeration/configuration commands such as
 `find`, `config`, `symbolic-ref`, `submodule status`, `status`, `cat-file`, `rev-list`, `rev-parse`,
 `fsck`, `for-each-ref`, and `remote get-url`; plus scoped `fetch`, `archive`, `bundle create/verify`,
 metadata hashing/archive, and (preserve only) `update-ref` where each script's table row says so.
@@ -675,7 +717,7 @@ the helpers authorizes `checkout`, `reset`, `push`, `stash drop`, `branch -d`, o
   reports "still there" for a branch that is long gone. Use the exit code the command has for
   exactly this: `git ls-remote --exit-code <remote> refs/heads/<branch>` returns **0** when the ref
   matched, **2** when it did not, and anything else (**128** for an unreachable remote) means the
-  probe itself failed — three outcomes the file-size test collapses into two, differently each time.
+  probe itself failed — outcomes the file-size test collapses incorrectly, differently each time.
   On 128 the branch's fate is unknown, which is not the same as gone: keep whatever preserves it,
   retire nothing on this reading, and either retry once the remote is reachable or hand the question
   to a human. An unreachable remote is a reason to wait, never a reason to clean up.
@@ -689,7 +731,11 @@ the helpers authorizes `checkout`, `reset`, `push`, `stash drop`, `branch -d`, o
   with.
 - **You're on a detached HEAD after checking out a commit** — that commit is safe as long as you
   `git switch -c <branch> HEAD` (or the reflog remembers it for ~90 days). Don't leave important
-  new work on a detached HEAD across a `gc`.
+  new work on a detached HEAD across a `gc`. Recovering work already abandoned there:
+  **[references/recovery_playbook.md](references/recovery_playbook.md)** § Ladder step 3 — detached-HEAD work. If ~90 days is too short
+  for how this repo is used, widen it once: that reference's § Widen the safety window (config),
+  and **[references/prevention_practices.md](references/prevention_practices.md)** § Set a wider reflog safety
+  window once.
 - **Only one worktree remains after cleanup** — `git worktree list` always includes the primary
   repository checkout. Do not delete it merely to make the count zero; the goal is one maintained
   checkout, not no checkout.

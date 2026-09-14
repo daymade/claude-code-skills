@@ -15,10 +15,7 @@ description: Investigate and resolve Cloudflare configuration issues using API-d
 
 ### 1. Gather Credentials
 
-Request from user:
-- Domain name
-- Cloudflare account email
-- Cloudflare Global API Key (or API Token)
+Reuse the domain and authorized Cloudflare connection already supplied by the user or project configuration. Ask only for missing connection information: domain, account email plus Global API Key, or API Token. Keep the working authentication method; troubleshooting does not require replacing it.
 
 Global API Key location: Cloudflare Dashboard → My Profile → API Tokens → View Global API Key
 
@@ -32,7 +29,7 @@ curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=<domain>" \
   -H "X-Auth-Key: <api_key>" | jq '.'
 ```
 
-Extract `zone_id` from `result[0].id` for subsequent API calls.
+Select the exact matching zone and account before extracting its `id`; do not blindly select the first result when account or domain identity is ambiguous. Use that zone’s `account.id` for account-scoped calls.
 
 ### 3. Investigate Systematically
 
@@ -98,6 +95,10 @@ curl -X POST "https://api.cloudflare.com/client/v4/zones/{zone_id}/purge_cache" 
   -H "X-Auth-Key: key" \
   -d '{"purge_everything":true}'
 ```
+
+### Email Routing and Forwarding
+
+For alias delivery, destination verification, catch-all behavior or forwarding MX issues, follow [Email Routing](references/email-routing.md). It supplies the account/zone API read sequence and separates saved configuration from actual Inbox arrival.
 
 ### DNS Issues
 
@@ -265,7 +266,7 @@ Consult `references/common_issues.md` for:
 ## Workflow Template
 
 ```
-1. Gather: domain, email, API key
+1. Reuse the configured domain and authorized API connection; obtain only missing values
 2. Get zone_id via zones API
 3. Investigate:
    - Query relevant APIs for evidence
@@ -286,8 +287,9 @@ When user reports "site shows ERR_TOO_MANY_REDIRECTS":
 # 1. Get zone ID
 curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=example.com" \
   -H "X-Auth-Email: user@example.com" \
-  -H "X-Auth-Key: abc123" | jq '.result[0].id'
+  -H "X-Auth-Key: abc123" | jq '.result[] | select(.name == "example.com") | {id, account}'
 
+# Select the intended account from the exact-domain result before using its id.
 # 2. Check SSL mode (primary suspect for redirect loops)
 curl -s -X GET "https://api.cloudflare.com/client/v4/zones/ZONE_ID/settings/ssl" \
   -H "X-Auth-Email: user@example.com" \

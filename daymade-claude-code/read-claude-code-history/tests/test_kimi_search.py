@@ -9,6 +9,7 @@ on-disk contract), the search API works in epoch seconds floats.
 from __future__ import annotations
 
 import importlib.util
+import argparse
 import json
 import os
 import subprocess
@@ -21,6 +22,11 @@ from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
 SCRIPT = SKILL_DIR / "scripts" / "analyze_sessions.py"
+# The bundled shared core is imported as a top-level `_core` package by the
+# scripts themselves, so tests that exercise it directly need scripts/ on the
+# path too — not just the single module loaded by importlib below.
+if str(SKILL_DIR / "scripts") not in sys.path:
+    sys.path.insert(0, str(SKILL_DIR / "scripts"))
 
 
 def load_analyze_module():
@@ -648,6 +654,76 @@ class KimiCliSearchTests(unittest.TestCase):
         self.assertNotIn("Kimi CLI session matches", without_flag.stdout)
         self.assertNotIn(session_id, without_flag.stdout)
         self.assertIn("No matches found.", without_flag.stdout)
+
+
+class KimiInternalAgentSessionTests(unittest.TestCase):
+    """Internal agent runs are automated sessions, not conversations.
+
+    Kimi keeps title generation, vault maintenance and skill summarization in
+    the same sessions/ tree as real conversations, separated only by a
+    directory prefix. Their transcripts are system prompts, so an inventory
+    that lists them shows the user rows titled "Generate a concise title for
+    the conversation below..." instead of their own words. On a real store
+    they outnumbered the genuine conversations 51 to 32.
+    """
+
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.home = Path(self.temp_dir.name) / "kimi-home"
+        from _core import kimi as kimi_core
+
+        self.kimi_core = kimi_core
+        created = epoch_ms(2026, 4, 1)
+        write_kimi_session(
+            self.home,
+            "conv-real0000000000000000",
+            state=kimi_state(
+                "conv-real0000000000000000", "/work/demo", "real work", created, created
+            ),
+            wires={"main": [kimi_metadata_record(created)]},
+        )
+        for internal in ("ctitle-0001", "dvlt-0002", "sklsum-0003"):
+            write_kimi_session(
+                self.home,
+                internal,
+                state=kimi_state(internal, "/work/demo", "machine", created, created),
+                wires={"main": [kimi_metadata_record(created)]},
+            )
+
+    def tearDown(self) -> None:
+        self.temp_dir.cleanup()
+
+    def _collect(self, *, include_automated: bool):
+        args = argparse.Namespace(
+            max_title_chars=120,
+            include_archived=False,
+            include_automated=include_automated,
+            include_subagents=False,
+            all_projects=True,
+            cwd=None,
+            recursive=False,
+        )
+        return self.kimi_core.collect_kimi(args, self.home)
+
+    def test_prefix_classifier_matches_the_three_observed_internal_kinds(self) -> None:
+        for internal in ("ctitle-0001", "dvlt-0002", "sklsum-0003"):
+            self.assertTrue(self.kimi_core.is_kimi_internal_session(internal), internal)
+        self.assertFalse(
+            self.kimi_core.is_kimi_internal_session("conv-real0000000000000000")
+        )
+
+    def test_inventory_excludes_internal_sessions_and_counts_them(self) -> None:
+        result = self._collect(include_automated=False)
+        self.assertEqual(
+            [conversation.session_id for conversation in result.conversations],
+            ["conv-real0000000000000000"],
+        )
+        self.assertEqual(result.excluded_automated, 3)
+
+    def test_include_automated_restores_them(self) -> None:
+        result = self._collect(include_automated=True)
+        self.assertEqual(len(result.conversations), 4)
+        self.assertEqual(result.excluded_automated, 0)
 
 
 if __name__ == "__main__":

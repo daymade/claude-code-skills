@@ -1,179 +1,74 @@
-# Source Accessibility Policy
+# Source Accessibility and First-Party Evidence Policy
 
-**Version**: V6.1  
-**Purpose**: Distinguish between legitimate exclusive information advantages and circular verification traps
+Classify access separately from evidentiary role. A private or paid source can be excellent evidence; a public page can still be copied, circular, or unable to observe the claim.
 
----
+## Accessibility Classes
 
-## The Problem
+| Class | Definition | Examples | Permitted use |
+|---|---|---|---|
+| `public` | Open to an external researcher | Regulatory filings, government data, public papers, company sites | Use within the source's observation scope |
+| `semi-public` | Registration or limited access required | Free-tier databases, registered portals | Use with access disclosure |
+| `exclusive-user-provided` | Paid or proprietary access supplied by the user for third-party research | Licensed databases, private market feeds | Use and label the access boundary |
+| `authorized-first-party` | User-authorized records about the user's own organization, work, or transactions | Contracts, invoices, CRM exports, meeting transcripts, internal operating data | Use for business facts the record directly captures |
 
-In the "字节跳动" case study, we made a **methodology error**:
+Never expose credentials or confidential source material beyond the user's requested output.
 
-**What happened**:
-1. User asked to research **their own company**: "字节跳动某子公司"
-2. We accessed user's **own Spaceship account** (their private registrar)
-3. Found 25 domains **the user already owned**
-4. Reported back: "The company owns these 25 domains"
+## First-Party Evidence Boundary
 
-**Why this is wrong**:
-- This is **circular reasoning**, not research
-- User asked us to *discover* information about their company
-- We instead *queried* their private data and presented it as findings
-- It's like looking in someone's wallet to tell them how much money they have
+Authorized first-party records can establish facts such as:
 
-**The real question**: Can an external investigator confirm this company exists?
-**Answer**: No (WHOIS privacy, no public records)
+- what the organization agreed, bought, paid, delivered, recorded, or measured;
+- what a named participant said in an authenticated meeting or message record;
+- what the organization's own system logged at a specific time.
 
----
+They cannot, by themselves, establish:
 
-## Core Principle: No Circular Verification
+- independent customer sentiment or market reputation;
+- regulatory compliance or legal sufficiency;
+- competitor behavior;
+- an external party's state of mind;
+- an independently verified market, performance, or quality claim.
 
-### ❌ FORBIDDEN: Self-Verification
+Write the resulting status explicitly:
 
-When researching **the user's own assets/company/identity**:
+| Status | Meaning |
+|---|---|
+| `internally-established` | A first-party original directly records the business fact |
+| `externally-corroborated` | An independent external source confirms the relevant claim |
+| `conflicted` | Material sources disagree |
+| `externally-unknown` | No fit-for-purpose independent source was found |
 
-| Scenario | WRONG | RIGHT |
-|----------|-------|-------|
-| User's company | "I found in YOUR registrar that YOU own these domains" | "Public WHOIS shows privacy protection - ownership not externally verifiable" |
-| User's identity | "I checked YOUR email and found YOUR address" | "Please provide address if relevant to the research" |
-| User's property | "I accessed YOUR bank to see YOUR balance" | Not applicable to research |
+Do not discard a valid internal fact merely because it is not external. Do not upgrade it to external validation merely because the user authorized access.
 
-**Rule**: Cannot use user's private data to "discover" what user already knows about themselves.
+## Exclusive Sources for Third-Party Research
 
----
+Use authorized paid subscriptions, private APIs, and proprietary databases to research competitors, markets, and investments. Record:
 
-### ✅ ALLOWED: Exclusive Information Advantage
+- the source owner and access class;
+- the claim it can observe;
+- its methodology or data lineage when available;
+- whether an independent source shares the same underlying dataset.
 
-When researching **third parties** (competitors, markets, investments):
+An exclusive source is a competitive information advantage. It still needs ordinary claim fitness, freshness, and conflict checks.
 
-| Source Type | Example | Usage |
-|-------------|---------|-------|
-| **User's paid subscriptions** | Crunchbase Pro, PitchBook, Wind | ✅ Use to research competitors |
-| **User's proprietary databases** | Internal CRM, industry databases | ✅ Use to research market |
-| **User's private APIs** | Trading APIs, data feeds | ✅ Use for investment research |
-| **User's internal documents** | Prior research, memos | ✅ Use as background for new research |
+## External-Footprint Questions
 
-**Rule**: User's exclusive information sources are competitive advantages - USE THEM for third-party research.
+When the question is specifically what an external investigator can verify, restrict the evidence set to sources available to that investigator. Internal records may explain the difference but cannot fill the public-footprint result.
 
----
+Example output:
 
-## The Distinction
-
-```
-Research Target: 字节跳动某子公司
-├─ Is this the user's own company? → YES
-├─ Can we use user's private data about it? → NO (circular)
-└─ Must rely on: Public sources only
-
-Research Target: 竞争对手公司 X
-├─ Is this the user's own company? → NO
-├─ Can we use user's Crunchbase Pro? → YES (competitive advantage)
-└─ Can use: Public + User's exclusive sources
+```text
+External visibility: minimal
+Public evidence checked: official registries, procurement records, regulatory filings, web presence
+Externally verifiable claims: [list]
+Externally unknown: [list]
+Internal records supplied by the user: excluded from the external-verifiability conclusion
 ```
 
----
+## Decision Checklist
 
-## Corrected Methodology
-
-### When Researching User's Own Company
-
-**Approach**: External investigator perspective
-
-```
-User: "Research my company 字节跳动子公司"
-
-CORRECT RESPONSE:
-1. Search public sources (WHOIS, web, news)
-2. Find: Website placeholder, privacy-protected WHOIS, no news
-3. Report: "From public perspective: minimal footprint, cannot verify ownership"
-4. Gap: "Internal data not accessible to external investigators"
-
-INCORRECT RESPONSE:
-1. Access user's Spaceship account
-2. Find: 25 domains user already knows they own
-3. Report: "The company owns 25 domains" (user already knows this!)
-```
-
-### When User Provides Exclusive Sources
-
-**Approach**: Leverage competitive advantage
-
-```
-User: "Research competitor X, I have Crunchbase Pro"
-User: "Here's my API key: xxx"
-
-CORRECT RESPONSE:
-1. Use provided Crunchbase Pro API
-2. Find: Funding history, team info not in public sources
-3. Report: "Per Crunchbase Pro [exclusive source], X raised $Y in Series Z"
-4. Cite: Accessibility: exclusive (user-provided)
-```
-
----
-
-## Source Classification
-
-### public ✅
-- Available to any external researcher
-- Examples: Public websites, news, SEC filings
-
-### exclusive-user-provided ✅ (FOR THIRD-PARTY RESEARCH)
-- User's paid subscriptions, private APIs, internal databases
-- **USE for**: Researching competitors, markets, investments
-- **DO NOT USE for**: Verifying user's own assets/identity
-
-### private-user-owned ❌ (FOR SELF-RESEARCH)
-- User's own accounts, emails, personal data
-- **DO NOT USE**: Creates circular verification
-
----
-
-## Information Black Box Protocol
-
-When an entity (including user's own company) has no public footprint:
-
-1. **Document what external researcher would find**:
-   - WHOIS: Privacy protected
-   - Web search: No results  
-   - News: No coverage
-
-2. **Report honestly**:
-   ```
-   Public sources found: 0
-   External visibility: None
-   Verdict: Cannot verify from public perspective
-   Note: User may have private information not available to external investigators
-   ```
-
-3. **Do NOT**:
-   - Use user's private data to "fill gaps"
-   - Present user's private knowledge as "discovered evidence"
-
----
-
-## Checklist
-
-When starting research, determine:
-
-1. **Who is the research target?**
-   - User's own company/asset? → Public sources ONLY
-   - Third party? → Can use user's exclusive sources
-
-2. **Am I discovering or querying?**
-   - Discovering new info? → Research
-   - Querying user's own data? → Circular, not allowed
-
-3. **Would this finding surprise the user?**
-   - Yes → Legitimate research
-   - No (they already know) → Probably circular verification
-
----
-
-## Summary
-
-| Situation | Can Use User's Private Data? | Why? |
-|-----------|------------------------------|------|
-| Research user's own company | ❌ NO | Circular verification |
-| Research competitor using user's Crunchbase | ✅ YES | Competitive advantage |
-| Research market using user's database | ✅ YES | Exclusive information |
-| "Discover" user's own domain ownership | ❌ NO | User already knows this |
+1. What exact claim is being tested: an internal business fact, an external-verifiability claim, or a third-party claim?
+2. Who created the record, and what could they directly observe?
+3. Is the user authorized to provide it for this task?
+4. Does another citation repeat the same underlying record or add independent evidence?
+5. Which conclusion status follows: internally established, externally corroborated, conflicted, or externally unknown?

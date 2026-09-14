@@ -57,7 +57,10 @@ Configuration persists in `${CLAUDE_PLUGIN_DATA}/config.json`.
 
 > **Speaker labels are the default.** Every run produces `[start-end] SPEAKER_xx: text`
 > + CSV. Plain-text-only output is the opt-out (`--no-diarization`) for monologues,
-> podcasts, or when you just want a summary — see Step 3.
+> podcasts, or when you just want a summary — see Step 3. It also drops every
+> timestamp: the plain-text path returns the session text and nothing else. A
+> monologue that needs line-level timestamps (subtitles, jump-to-moment archives)
+> runs the full pipeline and ignores the `SPEAKER_00` labels.
 >
 > **One-time setup for diarization:** pyannote is a gated HuggingFace model — it
 > needs a token once (`## Speaker Diarization & Identification` below). First run
@@ -418,6 +421,13 @@ bytes; the temporary WAV is never a completion artifact.
 uv run ${CLAUDE_SKILL_DIR}/scripts/speaker_transcribe.py \
   INPUT_AUDIO [INPUT_AUDIO2 ...] OUTPUT_DIR
 ```
+
+Unattended batches: one file per invocation. A deterministic failure in any leg
+(for example `ASR_DETERMINISTIC_BLOCKED: ChunkTokenLimitError` when one recording
+hits the per-chunk token ceiling) exits the whole multi-input run by design, and
+the files queued after it are never started — a 31-file batch died on file 11 that
+way. Per-file calls contain the damage to the one recording; the intermediate
+legs are cached, so a rerun of the others costs only the alignment.
 
 Expected output (per file):
 
@@ -973,6 +983,15 @@ limits that fail in confusing ways" section.
 | Server won't start: "couldn't find them in the cached files" while the model *is* cached | Startup tried to reach huggingface.co → `HF_HUB_OFFLINE=1`; if containerized, its `HF_HOME` may simply not see the host's cache |
 | Long file fails, and you are about to chunk it client-side | vLLM already splits at low-energy points — lift the caps instead, unless you can't restart the server (Step 5 explains when chunking *is* right) |
 
+### The whisper timing leg dies with `httpx.ProxyError: 503 Service Unavailable`
+
+`word_timestamps_whisper.py` asks huggingface.co about the model before loading it
+from the local cache. Behind a proxy tunnel that is flapping, that request fails and
+the leg exits, which fails the whole file even though every model file is already on
+disk (6 of 44 files in one batch). Set `HF_HUB_OFFLINE=1` for the run: offline mode
+loads straight from the cache and never opens the connection. Same variable, same
+reason as the vLLM server row above.
+
 ### `${CLAUDE_SKILL_DIR}` is not substituted
 
 Script paths in this skill use `${CLAUDE_SKILL_DIR}` — the skill's own directory, which Claude Code substitutes when the skill loads. If a command reaches you with the literal `${CLAUDE_SKILL_DIR}` (some runtimes don't substitute), resolve the skill directory in this order:
@@ -992,7 +1011,7 @@ Substitute the resolved absolute path for `${CLAUDE_SKILL_DIR}` everywhere in th
 - `transcribe_long_whispercpp.py` — **DEFAULT LONG-AUDIO ASR**: explicit source-time blocks + overlap ownership + whisper.cpp/Silero VAD + atomic checkpoint/resume
 - `fuse_whispercpp_diarization.py` — Late-fuse normalized whisper.cpp time segments with pyannote speech/speakers; remove ungrounded silence hallucinations and emit TXT/CSV/receipt
 - `speaker_transcribe.py` — Short/medium decoupled pipeline (session-wide Qwen3-ASR + whisper timing + pyannote); `--no-diarization` plain-text fast path; `--text-file` for remote/pre-made ASR text
-- `align_speakers.py` — Decoupled alignment core (stdlib): maps full transcript onto whisper word lattice + pyannote segments; usable standalone for debugging
+- `align_speakers.py` — Decoupled alignment core (stdlib): maps full transcript onto whisper word lattice + pyannote segments; cuts turns at pauses and speaker changes but never inside a Latin word; usable standalone for debugging
 - `word_timestamps_whisper.py` — mlx-whisper word-level timestamps → JSON timing lattice (Apple Silicon)
 - `speaker_transcribe_cascade.py` — LEGACY cut-then-transcribe variant (extremely noisy / heavy-overlap audio only)
 - `diarize_speakers.py` — Speaker diarization alone (pyannote 3.1 @ MPS) → per-segment JSON

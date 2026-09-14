@@ -226,6 +226,13 @@ See `references/best_practices.md` for detailed guidelines.
 | Hidden commands leak into GIF | Add `clear` + `Sleep 500ms` before `Show` |
 | Commands execute before previous finishes | Increase `Sleep` duration |
 
+## Tape File Syntax
+
+`references/vhs_syntax.md` is the full VHS tape-file reference — every command,
+setting, and key name, with the argument forms each accepts. Read it when writing
+a tape by hand, when a tape parses but behaves unexpectedly, or when you need a
+command this SKILL.md does not show an example of.
+
 ## Dependencies
 
 **Required:** VHS (`brew install charmbracelet/tap/vhs`)

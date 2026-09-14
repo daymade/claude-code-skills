@@ -12,33 +12,55 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LABEL="ai.daymade.claude-skill-source-sync"
 PLIST_PATH="$HOME/Library/LaunchAgents/${LABEL}.plist"
 LOG_DIR="$HOME/Library/Logs/claude-switch-models-setup"
-LOCK_DIR="${TMPDIR:-/tmp}/${LABEL}.lock"
+RUNTIME_DIR="$HOME/.config/claude-switch-models-setup/python"
+INTERPRETER_FILE="$HOME/.config/claude-switch-models-setup/runtime-python.path"
+
+load_interpreter() {
+    if [ ! -f "$INTERPRETER_FILE" ]; then
+        echo "Missing owned Python runtime; run $0 --install" >&2
+        exit 1
+    fi
+    IFS= read -r SYNC_PYTHON < "$INTERPRETER_FILE"
+    case "$SYNC_PYTHON" in
+        "$RUNTIME_DIR"/*/bin/python*) ;;
+        *) echo "Runtime interpreter is outside its owned directory" >&2; exit 1 ;;
+    esac
+    [ -x "$SYNC_PYTHON" ] || { echo "Runtime Python missing: $SYNC_PYTHON" >&2; exit 1; }
+}
 
 run_sync() {
-    if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-        exit 0
-    fi
-    trap 'rmdir "$LOCK_DIR"' EXIT
-
-    python3 "$SCRIPT_DIR/sync-local-skill-sources.py" --apply --quiet
+    load_interpreter
+    # The Python commands serialize through their shared PID-aware lock.
+    # A second shell lock used to silently discard a pending registration event.
+    "$SYNC_PYTHON" "$SCRIPT_DIR/sync-local-skill-sources.py" --apply --quiet
     if [ -f "$SCRIPT_DIR/claude-plugins-sync.py" ]; then
-        python3 "$SCRIPT_DIR/claude-plugins-sync.py" >/dev/null
+        "$SYNC_PYTHON" "$SCRIPT_DIR/claude-plugins-sync.py" >/dev/null
     fi
+    /bin/date -u '+source-sync verified links and profiles at %Y-%m-%dT%H:%M:%SZ'
 }
 
 install_launchagent() {
     mkdir -p "$HOME/Library/LaunchAgents" "$LOG_DIR"
+    # Only installation invokes a package manager. Runtime uses an absolute
+    # interpreter inside this installer's directory, unaffected by other tools.
+    uv python install 3.12 --install-dir "$RUNTIME_DIR" --no-bin
+    local owned_python interpreter_temp
+    owned_python="$(UV_PYTHON_INSTALL_DIR="$RUNTIME_DIR" uv python find --managed-python 3.12)"
+    interpreter_temp="$(mktemp "${INTERPRETER_FILE}.XXXXXX")"
+    printf '%s\n' "$owned_python" > "$interpreter_temp"
+    mv "$interpreter_temp" "$INTERPRETER_FILE"
+    load_interpreter
 
     local watch_paths
     watch_paths="$HOME/.claude/settings.json
 $HOME/.claude/plugins/installed_plugins.json
-$(python3 "$SCRIPT_DIR/sync-local-skill-sources.py" --print-watch-paths)"
+$("$SYNC_PYTHON" "$SCRIPT_DIR/sync-local-skill-sources.py" --print-watch-paths)"
     if [ -z "$watch_paths" ]; then
         echo "No local marketplace manifests found to watch." >&2
         exit 1
     fi
 
-    WATCH_PATHS="$watch_paths" PLIST_PATH="$PLIST_PATH" SCRIPT_PATH="$SCRIPT_DIR/sync-local-skill-sources-daemon.sh" LOG_DIR="$LOG_DIR" LABEL="$LABEL" python3 - <<'PY'
+    WATCH_PATHS="$watch_paths" PLIST_PATH="$PLIST_PATH" SCRIPT_PATH="$SCRIPT_DIR/sync-local-skill-sources-daemon.sh" LOG_DIR="$LOG_DIR" LABEL="$LABEL" "$SYNC_PYTHON" - <<'PY'
 import os
 import plistlib
 from pathlib import Path
@@ -52,6 +74,7 @@ plist = {
     "Label": os.environ["LABEL"],
     "ProgramArguments": [os.environ["SCRIPT_PATH"]],
     "RunAtLoad": True,
+    "StartInterval": 300,
     "WatchPaths": watch_paths,
     "StandardOutPath": str(Path(os.environ["LOG_DIR"]) / "source-sync.out.log"),
     "StandardErrorPath": str(Path(os.environ["LOG_DIR"]) / "source-sync.err.log"),

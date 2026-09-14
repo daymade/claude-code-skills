@@ -170,7 +170,7 @@ def create_argument_parser() -> argparse.ArgumentParser:
              "(the human-readable log is routed to stderr). Fields: applied, deferred, "
              "output_path, needs_review_path, input_unchanged, review_enqueued, "
              "stage1_only_incomplete, stage2_total_chunks, stage2_failed_chunks, "
-             "stage2_degraded. All ten status fields are always present. Lets "
+             "stage2_degraded, boundary_refused. All eleven status fields are always present. Lets "
              "consumers stop inferring no-op vs failure from whether a *_stage1.md "
              "sidecar exists. Also applies to the review-queue commands "
              "(--enqueue-review/--list-review/--show-review/--resolve-review)."
@@ -436,6 +436,38 @@ def create_argument_parser() -> argparse.ArgumentParser:
              "path and scopes both items and status totals to that one file."
     )
     parser.add_argument(
+        "--close-sidecars",
+        action="store_true",
+        dest="close_sidecars",
+        help="Decide whether the Stage 1/2 sidecars beside --input are closed (every "
+             "*_changes/*_needs_review entry applied or decided, zero pending queue rows "
+             "for that exact file) and remove them; --dry-run reports only. "
+             "Exit 0 closed, 1 open, 2 blocked"
+    )
+    parser.add_argument(
+        "--decide-raw",
+        dest="decide_raw",
+        choices=["kept_original", "skipped"],
+        help="With --close-sidecars: record this verdict through the review queue for "
+             "report entries that still read as the original and have no queue row "
+             "(use --by/--note for provenance)"
+    )
+    parser.add_argument(
+        "--discard-unpromoted",
+        action="store_true",
+        dest="discard_unpromoted",
+        help="With --close-sidecars: also remove a *_stage2.md/*_dryrun.md that is newer "
+             "than the transcript (unpromoted API/preview output)"
+    )
+    parser.add_argument(
+        "--lookup",
+        metavar="TERM",
+        dest="lookup_term",
+        help="Show every trace of TERM: dictionary rules where it is FROM or TO (active "
+             "and disabled), context rules, roster-loaded name variants, review-queue "
+             "rows; --domain narrows the dictionary and context-rule sections"
+    )
+    parser.add_argument(
         "--show-review",
         metavar="ID",
         type=int,
@@ -481,9 +513,10 @@ def create_argument_parser() -> argparse.ArgumentParser:
         "--decision",
         dest="review_decision",
         choices=["accepted", "overridden", "kept_original", "skipped", "reopen"],
-        help="Verdict for --resolve-review: accepted (apply suggestion), overridden "
-             "(apply --override-to text), kept_original (transcript is correct), "
-             "skipped (can't judge), reopen (undo a recorded verdict)"
+        help="Verdict for --resolve-review: accepted (apply suggestion, or record it "
+             "if a hand edit already put it in place), overridden (apply --override-to "
+             "text, or record it if already in place), kept_original (transcript is correct as spoken), skipped (can't "
+             "judge, or the utterance is gone), reopen (undo a recorded verdict)"
     )
     parser.add_argument(
         "--override-to",

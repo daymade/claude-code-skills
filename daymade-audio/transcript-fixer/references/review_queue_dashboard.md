@@ -21,6 +21,11 @@ queue gives all three one persistent home in `corrections.db` (`review_items`),
 and the dashboard makes deciding them nearly free — that friction is what stood
 between "AI suspects an error" and "the dictionary learns the answer."
 
+A pending row records an unresolved occurrence; it does not assign the work to
+the user. Before asking for a verdict, follow [evidence selection and escalation](native_ai_full_workflow.md#evidence-selection-and-escalation).
+User-confirmed corrections are applied immediately; media-access failures do not
+reopen them or stop independent items.
+
 **Queue CLI** (all support `--json`):
 
 ```bash
@@ -54,8 +59,25 @@ ambiguous (multiple occurrences with no unique winner near the line hint), or a
 drifted context (no nearby line matches the snippet recorded at enqueue) →
 nothing is written, the CLI exits 2 with a `{"error": "re_anchor_needed"}`
 status object, and the item stays pending. A wrong auto-edit is worse than a
-missed one. Machine callers should parse the stdout `error` field rather than
-the bare return code (argparse usage errors also exit 2). On `overridden`, only
+missed one. One shape is recognised instead of refused: the context recorded
+at enqueue reappears in the ledger-masked file with the resolved text in the
+slot the original occupied — a fix applied by hand before the verdict (the
+original may survive in other utterances far from the hint, or inside the
+suggestion itself). The verdict is recorded, nothing is written, and the apply
+log carries `already in place at the anchor — recorded without writing`
+(`reopen` then re-pends the row without reverting anything). The recognition
+fails closed, and the message says which, when the original still sits within
+the resolve window (±3 lines around the line hint) outside the suggestion,
+when the same neighbourhood
+also appears with a third form in the slot (anywhere at the matched width, or
+near the hint at any width down to two characters a side), or when the edit
+touched the characters next to the slot; an anchored utterance deleted or
+rewritten past both neighbours while an identical one elsewhere reads corrected
+cannot be told from drift and is recorded as accepted. `--reanchor-review`
+refuses a row whose context already reads corrected rather than re-pointing it
+at a surviving occurrence. Machine callers should parse the stdout `error`
+field rather than the bare return code (argparse usage errors also exit 2). On
+`overridden`, only
 retargeted `file_edit`s run — suggestion-specific `dict_add`/`append_note`
 actions are dropped (they were planned for a suggestion the human rejected).
 (One scope note: the context check only runs when the original occurs MORE
@@ -122,7 +144,7 @@ stops at `resolved_text`, and the reason stops at `decision_note`.
 **Enqueue validates anchors verbatim — authoring errors die at enqueue, not
 at verdict.** When an item declares a readable `file`, `--enqueue-review`
 checks that `original` (and `context`, if given) literally appears in it, and
-repairs a line hint that points beyond the resolve window (±3 lines) of a
+repairs a line hint that points beyond the resolve window of a
 UNIQUE match (a hint inside the window works as-is and is left alone; repairs
 are printed to stderr). Anything else is REJECTED on the spot with the
 reason, and the run exits 3 — the JSON carries the rejects under
@@ -144,6 +166,9 @@ equally near it. Either way the other occurrences are left standing,
 where a repeated name is most likely. Measured on one real batch: ten items
 resolved, four of them left six more occurrences behind, two of those on a line a
 verdict had already touched. So a verdict batch has a second half:
+
+
+When the same token occurs twice on one line, supply a verbatim context that contains only the intended occurrence. A context covering both occurrences stays ambiguous and acceptance refuses; do not silently choose the first match or replace both.
 
 ```bash
 # 1. See what was actually decided. The default listing shows PENDING only —
@@ -183,8 +208,11 @@ the same entity in the same sense; that is the ordinary case, and the one the
 measurement above counted.
 
 **Sweep after the whole batch is resolved, not between verdicts.** A swept
-occurrence that a still-pending item is anchored to will fail that item's guard
-(`re_anchor_needed`, exit 2) and have to be re-enqueued.
+occurrence that a still-pending item is anchored to is recognised by that item's
+guard only when the sweep put exactly the item's suggestion there (the item then
+records `accepted` without writing); a sweep to anything else fails the guard
+(`re_anchor_needed`, exit 2) and the item closes with `skipped` plus a note or
+is enqueued afresh.
 
 **An override fixes this occurrence; reusable learning is a separate decision.** On
 `overridden` the queue drops the `dict_add` / `append_note` actions (they were

@@ -161,3 +161,54 @@ class PositiveTurnDurationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LatinWordBoundaryTests(unittest.TestCase):
+    """A pause measured inside a Latin word must not cut the word (char times inside
+    words are interpolated, so such a gap is jitter, not speech)."""
+
+    def setUp(self):
+        self.align = load_module()
+
+    def _times(self, raw, gap_after_raw_index, gap):
+        _chars, raw_idx = self.align.normalize_stream(raw)
+        times, t = [], 0.0
+        for k, ri in enumerate(raw_idx):
+            if k and raw_idx[k - 1] == gap_after_raw_index:
+                t += gap
+            times.append(round(t, 3))
+            t += 0.1
+        return raw_idx, times
+
+    def test_gap_inside_word_moves_the_cut_to_the_next_word_boundary(self):
+        raw = "honor to introduce"
+        raw_idx, times = self._times(raw, raw.index("t"), 1.0)  # pause between "t" and "o" of "to"
+        turns = self.align.build_turns(raw, raw_idx, times, ["SPEAKER_00"] * len(raw_idx), max_gap=0.4)
+        self.assertEqual([turn["text"] for turn in turns], ["honor to", "introduce"])
+
+    def test_gap_at_word_boundary_still_cuts_there(self):
+        raw = "honor to introduce"
+        raw_idx, times = self._times(raw, raw.index("r"), 1.0)  # pause right after "honor"
+        turns = self.align.build_turns(raw, raw_idx, times, ["SPEAKER_00"] * len(raw_idx), max_gap=0.4)
+        self.assertEqual([turn["text"] for turn in turns], ["honor", "to introduce"])
+
+    def test_cjk_text_is_unaffected(self):
+        raw = "你好世界"
+        raw_idx, times = self._times(raw, 1, 1.0)  # pause between 好 and 世
+        turns = self.align.build_turns(raw, raw_idx, times, ["SPEAKER_00"] * len(raw_idx), max_gap=0.4)
+        self.assertEqual([turn["text"] for turn in turns], ["你好", "世界"])
+
+    def test_speaker_change_inside_word_keeps_the_word_whole(self):
+        raw = "yeah sure"
+        raw_idx, times = self._times(raw, -1, 0.0)
+        speakers = ["SPEAKER_00"] + ["SPEAKER_01"] * (len(raw_idx) - 1)  # diarization edge after "y"
+        turns = self.align.build_turns(raw, raw_idx, times, speakers, max_gap=2.0)
+        self.assertEqual([(turn["text"], turn["speaker"]) for turn in turns],
+                         [("yeah", "SPEAKER_00"), ("sure", "SPEAKER_01")])
+
+    def test_speaker_change_between_cjk_chars_still_cuts_immediately(self):
+        raw = "甲乙"
+        raw_idx, times = self._times(raw, -1, 0.0)
+        turns = self.align.build_turns(raw, raw_idx, times, ["SPEAKER_00", "SPEAKER_01"], max_gap=2.0)
+        self.assertEqual(len(turns), 2)
+

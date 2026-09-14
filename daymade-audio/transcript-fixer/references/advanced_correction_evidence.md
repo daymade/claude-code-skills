@@ -70,11 +70,14 @@ case of ROVER (Recognizer Output Voting Error Reduction, NIST 1997) — worth
 knowing by name, because the published work explains why voting across systems
 beats improving any one of them. Do not discard a "redundant" second recording
 of a meeting you already have; it is a reference transcript for exactly the
-values that matter most. If only one recording exists and a number is
-load-bearing, settle it by ear through the path this skill already has: wire the
+values that matter most. If only one recording exists, a number remains
+load-bearing and ambiguous, and the original audio is accessible, use the
 transcript's `audio:` frontmatter (see [review_queue_dashboard.md](review_queue_dashboard.md)), enqueue the number as a review item, and press `Q` in the review
-dashboard — it plays exactly the anchored utterance, so you hear the digits
-spoken instead of re-reading them. For names and terms rather than numbers, a
+dashboard — it plays the anchored utterance. If audio is inaccessible, return to
+[evidence selection and escalation](native_ai_full_workflow.md#evidence-selection-and-escalation):
+use available evidence, preserve unresolved readings, and continue other items.
+Do not require export permission or change the value merely to fit domain knowledge.
+For names and terms rather than numbers, a
 photographed in-room artifact can stand in as the second system — see "In-room
 artifacts are another independent engine" below.
 
@@ -163,6 +166,11 @@ sanctioned next step.**
 family and authorization are already known. Check those prerequisites before
 starting; do not install a model, download weights, or send audio externally just
 because this section names the capability.
+
+This is an optional evidence route. If the source cannot be downloaded or the
+recognizer is unavailable, return to [evidence selection and escalation](native_ai_full_workflow.md#evidence-selection-and-escalation).
+Do not turn this route's prerequisites into prerequisites for the entire correction
+task, or require someone to enable exports before other items can be adjudicated.
 
 - **Get the source audio** from whichever channel owns the recording — the
   meeting platform's API, the local file the transcript came from, the
@@ -258,7 +266,7 @@ because this section names the capability.
 | Engines | Verdict |
 |---|---|
 | **Agree on token X** | The sound is strongly corroborated, not proven. Reject an unsupported rewrite of X into something that sounds different. If X is unfamiliar, keep it unchanged while checking an authority that is permitted for that token. |
-| **Disagree, and one reading is settled by the in-document self-proof** — step 6's three conditions, all required: the proof occurrence is verified in the **raw** text, only one of the candidates occurs correctly, and the passage is genuinely *about* that referent | Minimal edit to that reading, recorded like any other fix. **Person names are excluded from this row** — they go to the human gate whatever the clip says. |
+| **Disagree, and one reading is settled by the in-document self-proof** — step 6's conditions, all required: the proof occurrence is verified in the **raw** text, only one of the candidates occurs correctly, and the passage is genuinely *about* that referent | Minimal edit to that reading, recorded like any other fix. **Person names are excluded from this row** — they go to the human gate whatever the clip says. |
 | **Don't converge** | Keep the original, enqueue it (the review queue), and wire the clip so a human listens once instead of the agent guessing four times. |
 
 **For an alphabetic token, try an exact local search before the clip.** An
@@ -301,6 +309,96 @@ alphabetic token and its neighbouring words prove the window is correct, keep
 that token unchanged and search the permitted local authorities for its exact
 spelling. Do not replace it with a familiar phrase merely because the phrase
 fits the topic.
+
+### Batch pending adjudication — queue-level clip cross-check
+
+The single-token rung above scales to a backlog. A finished native pass often
+leaves a queue of pendings whose local ladder is already exhausted (entities,
+garbled terms, numbers). Handing that queue to the user wholesale is the
+failure this section exists to prevent (real case 2026-09-13: 38 pendings
+presented as "awaiting user verdict"; the user's ruling was "don't push work
+you can do yourself onto me" — 33 of the 38 were then settled mechanically in
+one batch, leaving 5 genuinely unresolved). The batch unit is *one transcript's
+own pending rows*, one source audio, one second recognizer. The tool is
+`scripts/verify_queue_audio.py`:
+
+```bash
+uv run scripts/verify_queue_audio.py \
+  --transcript /abs/path/meeting.md --audio /abs/path/source.wav \
+  --speed 1.3 --engine-script /abs/stepfun-asr/scripts/asr_transcribe.py
+```
+
+It parses speaker turns, maps each pending row to its turn, estimates the token
+offset by character position inside the turn, scales by `--speed`, cuts
+tight+medium windows, and writes `<outdir>/results.json` with both windows'
+recognized text per row. You then adjudicate every row — the script surfaces,
+it never decides.
+
+**Know the timestamp-to-audio mapping before cutting anything.** `ffmpeg -ss`
+counts from the start of the media file; the transcript's clock may be
+different. The recurring shapes:
+
+- **Straight-through** (local recording, same file): transcript timestamps are
+  media offsets. `--speed 1.0`.
+- **Uniformly sped-up upload** (e.g. a DJI auto-sync that uploads a 1.3x
+  m4a to save minute quota): transcript timestamps run on the *sped-up* clock,
+  so a token's position in the original-speed master is `timestamp × 1.3` —
+  pass `--speed 1.3`. Recover the factor from evidence, never assume: ratio of
+  source duration to platform duration (`ffprobe` on the master vs the
+  platform's reported duration), upload logs, or the producer's provenance
+  file. A wrong factor puts every clip on the wrong audio, and each window then
+  "fails to corroborate" for the wrong reason.
+- **Wall-clock start** (platform records the sync/upload time as the meeting
+  start): the relative offsets inside the body are still usable, but verify one
+  anchor word before trusting any absolute position.
+
+**Long turns defeat the character-ratio estimate.** A timestamp marks the
+turn's *start*; inside a multi-minute turn the ratio estimate can drift tens
+of seconds (measured: ±70 s on a >90 s turn, enough to land the clip on a
+different game segment). Treat the estimate as a starting point, not a cut
+line: when a window returns text that visibly belongs to a *different* topic
+than the anchor, the offset drifted — re-anchor by sliding ±30–60 s, or by
+listening for the turn's *end* (the estimate's error grows toward it). Cap
+re-cuts at two; a token that cannot be pinned after that stays pending with
+the drift recorded as evidence. A cut that lands silently off-target is worse
+than no cut, because "the engine didn't produce the token" reads as
+corroboration of a wrong guess.
+
+**Adjudication matrix** (per row, both windows in hand):
+
+- **Both windows agree, and agree with a candidate** (yours or the queue's
+  suggestion) → `accepted`. This is the strong case; the engine's own output
+  settles it.
+- **Both windows agree on a *different* form** → `overridden` to the engine's
+  form when it also makes sense, or `kept_original` when the agreement proves
+  the transcript was right all along (real case: `OPC` returned identically by
+  both engines — it is a real abbreviation, One Person Company; record it as
+  confirmed-correct so no future run re-opens it).
+- **Windows disagree, one window empty, or the audio is genuinely noisy**
+  (break-room chatter) → the row stays pending with both outputs recorded.
+  Disagreement between windows is itself the signal; do not pick the window
+  you like better, and do not escalate by switching to a *reasoning* pass —
+  that replaces the instrument with the guesswork this rung exists to remove.
+- **The engine returns a plausible familiar form that contradicts your domain
+  prior** — trust the engine. Real case 2026-09-13: an operator "corrected"
+  `京剧名段` into `金骏眉` because the lecturer runs a tea business; the
+  second recognizer returned `京剧名段`/`西湖风景图` in both windows, and the
+  tea reading was the fluent wrong guess. Domain plausibility is a hypothesis
+  to be tested, not evidence — a consistent second-engine reading outranks it
+  every time.
+
+**Numbers are the exception, not the rule.** For money/score arithmetic inside
+a game or estimate, both windows frequently disagree with each other and with
+the transcript (speakers misadd, engines mis-hear digits). A number row that
+stays contradictory after both windows stays pending — arithmetic truth is not
+recoverable from acoustics.
+
+**Cost and scope.** One batch costs one download plus two recognizer calls per
+row — run it on a transcript's *own* queue, not across files. It adjudicates
+queue rows only; it is not a completeness claim about the transcript (that
+stays with the full-file path above), and it never overrides the person-name
+gate: a name the engine spells differently still walks the roster ladder, and
+speaker identity is never settled from audio by an agent.
 
 ### In-room artifacts are another independent engine (whiteboard and slide photos)
 
@@ -382,13 +480,14 @@ When fixing multiple files (e.g., 5 transcripts from one day):
 2. **Read all files first**: build a mental model of speakers, topics, and recurring terms before fixing anything
 3. **Compile a global correction list**: many errors repeat across files from the same session (same speakers, same topics). **If an error recurs — especially a person name or project term — route it through [dictionary_identity_and_context.md](dictionary_identity_and_context.md) instead of replacing it inline; it then compounds into future files, not just this batch.**
 4. **Apply the remaining one-off corrections** (sed with multiple `-e` flags, for genuinely non-recurring fixes only), then per-file context-dependent fixes
-5. **Verify all diffs**, archive all final files, and clean only disposable sidecars; retain every `*_changes.md` and `*_needs_review.md` report until step 7 closes the decisions it represents. Then do one dictionary addition pass
+5. **Verify all diffs.** Keep reviewed working files and their correction sidecars for the independent pass and verdict reconciliation below. If archived now, label them as drafts; use the [Native finalization workflow](native_ai_full_workflow.md) after reconciliation before claiming final quality.
 6. **Run the trap-scan** ([native_ai_full_workflow.md](native_ai_full_workflow.md) step 6) across the whole batch once — the domain's documented homophone traps, mechanically, after your read-through, to catch what the read missed
-7. **Reconcile your uncertains against the user in ONE pass, then route each verdict** — a batch produces a shortlist of unverifiable candidates (a garbled name, a version number your training data contradicts, a name variant you cannot canonicalize). Present the whole shortlist at once (not item-by-item as you go): the user can hear the audio / know the person. Fix every confirmed occurrence immediately, then use the destination matrix in `SKILL.md`: only recurring deterministic garbles go to `--add`; important people go to the roster; contextual traps go to the domain context; rare sentence-local errors stay file-only. A human verdict proves the occurrence, not the replacement's reusability. Only after every item represented by a retained `*_changes.md` / `*_needs_review.md` report has an explicit disposition may that report be removed. A version-number claim your training data contradicts is NOT an error until the user says so — "the current date is 2026, v4 exists" outranks a stale recollection of when v3 shipped; present, don't pre-judge.
+   For the Full-tier independent pass, use [Native review packets and recovery](native_review_packets.md) to account for all expected files and segments before claiming batch coverage; missing results are not Fast-tier exclusions.
+7. **Reconcile your uncertains against the user in ONE pass, then route each verdict** — a batch produces a shortlist of unverifiable candidates (a garbled name, a version number your training data contradicts, a name variant you cannot canonicalize). Present the whole shortlist at once (not item-by-item as you go): the user can hear the audio / know the person. Fix every confirmed occurrence immediately, then use the destination matrix in `SKILL.md`: only recurring deterministic garbles go to `--add`; important people go to the roster; contextual traps go to the domain context; rare sentence-local errors stay file-only. A human verdict proves the occurrence, not the replacement's reusability. Only after every item represented by a retained `*_changes.md` / `*_needs_review.md` report has an explicit disposition may that report be removed. `--close-sidecars --input <file>` decides that mechanically and removes the reports on `closed` (script_parameters.md). A version-number claim your training data contradicts is NOT an error until the user says so — "the current date is 2026, v4 exists" outranks a stale recollection of when v3 shipped; present, don't pre-judge.
 
 ### Parallel via Dynamic Workflow (large batches)
 
-For a large batch (10+ files), a Dynamic Workflow — one subagent per file, running in parallel — is faster than a shell loop and gives each file full AI attention. Four rules earned the hard way; skipping any of them has caused real damage:
+For a large batch (10+ files), a Dynamic Workflow — one subagent per file, running in parallel — is faster than a shell loop and gives each file full AI attention. These rules were established from prior failures; skipping any of them has caused real damage:
 
 1. **Hardcode the file list into the script — don't pass it through `args`.** A Workflow `args` array of strings containing non-ASCII characters, brackets, or path separators can silently arrive empty: the script sees zero files, no agents spawn, and it exits instantly with something like "no files". Plain alphanumeric tokens pass fine, but file paths should go straight into a `const FILES = [...]` literal in the script body, guarded with `if (!FILES.length) return`.
 

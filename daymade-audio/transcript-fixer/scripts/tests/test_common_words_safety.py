@@ -44,6 +44,30 @@ class TestSafetyChecks(unittest.TestCase):
             "Expected 'common_word' category",
         )
 
+    def test_single_surname_honorific_is_an_error_in_both_modes(self):
+        """朱老师 names everyone surnamed 朱 — error, not warning; 明源总 is not this shape."""
+        for strict in (True, False):
+            warnings = check_correction_safety("朱老师", "甲强", strict=strict)
+            self.assertTrue(any(w.category == "honorific_only" and w.level == "error" for w in warnings),
+                            f"Expected an honorific_only error with strict={strict}")
+        self.assertFalse(any(w.category == "honorific_only"
+                             for w in check_correction_safety("明源总", "明远总", strict=True)))
+
+    def test_unforceable_shapes_ignore_surrounding_whitespace(self):
+        """' 95' and '朱老师 ' are the same shapes; the predicate strips before deciding."""
+        self.assertTrue(any(w.category == "numeric_text" for w in check_correction_safety(" 95", "某人")))
+        self.assertTrue(any(w.category == "honorific_only" for w in check_correction_safety("朱老师 ", "甲强")))
+        self.assertTrue(any(w.category == "honorific_only" for w in check_correction_safety("朱老師", "甲强")))
+
+    def test_bare_number_is_an_error_in_both_modes(self):
+        """A pure-digit from_text matches timestamps/scores everywhere — error, not warning."""
+        for strict in (True, False):
+            warnings = check_correction_safety("95", "某人", strict=strict)
+            self.assertTrue(
+                any(w.category == "numeric_text" and w.level == "error" for w in warnings),
+                f"Expected a numeric_text error with strict={strict}",
+            )
+
     def test_common_word_warning_nonstrict(self):
         """In non-strict mode, common words produce warnings, not errors."""
         warnings = check_correction_safety("仿佛", "反复", strict=False)

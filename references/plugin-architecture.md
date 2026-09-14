@@ -17,9 +17,9 @@ skill-name/
 └── assets/ (optional)           # Templates and resources
 ```
 
-**Loading mechanism** (Progressive Disclosure):
-1. **Metadata** (~100 tokens): Always in context (name + description from YAML frontmatter)
-2. **SKILL.md body** (<5k tokens): Loaded when Claude determines the skill applies
+**Loading mechanism** ([official Skill lifecycle](https://code.claude.com/docs/en/skills)):
+1. **Metadata**: Advertised under the host's discovery policy and catalog budget; not every installed description is guaranteed to reach a fresh prompt
+2. **SKILL.md body**: Loaded when Claude invokes the Skill or reads its instructions
 3. **Bundled resources**: Loaded only as needed by Claude
 
 **Location**:
@@ -72,7 +72,7 @@ Suite plugin (multiple skills under one namespace — `skills` required):
 }
 ```
 
-**Example**: The `github-ops` plugin contains one skill (`source: "./github-ops"`), while the `daymade-docs` suite plugin bundles multiple skills like `doc-to-markdown`, `pdf-creator`, `mermaid-tools`, and `excel-automation`.
+Use the marketplace manifest for current plugin sources and suite membership. The shapes above illustrate the distinction; they are not a maintained catalog.
 
 ### 3. Agents (Subagents)
 
@@ -128,7 +128,7 @@ Marketplace (GitHub)
         └── SKILL.md
     ↓ (Claude loads)
 Claude Code Context
-    ├── Metadata (always loaded)
+    ├── Metadata (subject to discovery policy and catalog budget)
     ├── SKILL.md (loaded when relevant)
     └── Resources (loaded as needed)
 ```
@@ -146,48 +146,24 @@ claude plugin install daymade-macos@daymade-skills
 # If not exists, git clone from GitHub
 ```
 
-### Step 3: Read marketplace.json
-```json
-{
-  "plugins": [
-    {
-      "name": "daymade-macos",
-      "source": "./daymade-macos",
-      "version": "1.0.0",
-      "skills": [
-        "./capture-screen",
-        "./developing-ios-apps",
-        "./macos-cleaner",
-        "./macos-watchdog"
-      ]
-    }
-  ]
-}
-```
+### Step 3: Resolve the registered plugin
 
-### Step 4: Download to cache
-```bash
-# Copy the suite source to:
-~/.claude/plugins/cache/daymade-skills/daymade-macos/1.0.0/
+Read the plugin's `source` and optional `skills` membership from
+`.claude-plugin/marketplace.json`. Resolve suite members relative to the suite
+source; do not copy a current member list or version into this guide.
 
-# Suite members are available beneath that cache root:
-~/.claude/plugins/cache/daymade-skills/daymade-macos/1.0.0/macos-cleaner/
-```
+### Step 4: Install the plugin content
 
-### Step 5: Record installation
-```json
-// ~/.claude/plugins/installed_plugins.json
-{
-  "plugins": {
-    "daymade-macos@daymade-skills": [{
-      "scope": "user",
-      "installPath": "~/.claude/plugins/cache/daymade-skills/daymade-macos/1.0.0",
-      "version": "1.0.0",
-      "installedAt": "2026-01-11T08:03:46.593Z"
-    }]
-  }
-}
-```
+The official CLI installs into a versioned cache directory. The maintainer
+[source-backed layout](../daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md)
+is a separate supported local workflow; its cache and personal links can resolve
+to canonical checkouts.
+
+### Step 5: Read the installation record
+
+Inspect the current CLI output and `installed_plugins.json` for the exact
+qualified identity, scope, version, and install path. Do not infer the active
+route from a cache basename or a sample record.
 
 ### Step 6: Claude Code loads skill
 ```
@@ -213,32 +189,6 @@ Loads references/scripts as needed
 | `marketplace.json` | `~/.claude/plugins/marketplaces/{name}/.claude-plugin/` | Defines available plugins |
 | `installed_plugins.json` | `~/.claude/plugins/` | Tracks installed plugins |
 | `known_marketplaces.json` | `~/.claude/plugins/` | Lists registered marketplaces |
-
-### Directory Structure
-
-```
-~/.claude/
-├── skills/                          # Personal skills (not from marketplace)
-├── plugins/
-│   ├── marketplaces/                # Marketplace clones
-│   │   ├── daymade-skills/          # Marketplace name
-│   │   │   └── .claude-plugin/
-│   │   │       └── marketplace.json
-│   │   └── anthropic-agent-skills/
-│   ├── cache/                       # Installed plugins
-│   │   └── daymade-skills/
-│   │       └── daymade-macos/
-│   │           └── 1.0.0/           # Version
-│   │               ├── capture-screen/
-│   │               ├── developing-ios-apps/
-│   │               ├── macos-cleaner/  # Skill directory
-│   │               │   ├── SKILL.md
-│   │               │   ├── scripts/
-│   │               │   └── references/
-│   │               └── macos-watchdog/
-│   ├── installed_plugins.json       # Installation registry
-│   └── known_marketplaces.json      # Marketplace registry
-```
 
 ## Data Flow
 
@@ -284,11 +234,11 @@ Updates installed_plugins.json
 
 | Myth | Reality |
 |------|---------|
-| "Updating local files immediately updates the plugin" | Plugins are distributed via GitHub. Local changes require `git push` before users can install updates. |
+| "Updating local files immediately updates the plugin" | Git-backed installed copies need publication and update; source-backed maintainer links read their checkout. Identify the layout first. |
 | "Skills and plugins are the same thing" | Skills are functional units (SKILL.md + resources). Plugins are distribution packages (can contain multiple skills). |
 | "marketplace.json is just metadata" | marketplace.json is the **source of truth** for plugin discovery. Without correct configuration here, `claude plugin install` will fail. |
-| "Cache is just for performance" | Cache (`~/.claude/plugins/cache/`) is where installed plugins actually live. Deleting cache uninstalls all plugins. |
-| "Skills in ~/.claude/skills/ work the same as plugin skills" | `~/.claude/skills/` = Personal skills (manual, no versioning). Plugin cache = Managed by CLI (versioned, updateable, shareable). |
+| "Cache is just for performance" | Installed records can point at cache content. Deleting it can break live references without updating the installation registry; use official update/uninstall operations. |
+| "Skills in ~/.claude/skills/ work the same as plugin skills" | Personal Skills can be source-backed links; plugins have qualified identities, versions, and scope. Verify the actual route and owner rather than treating the paths as equivalent. |
 
 ## Best Practices
 
@@ -296,7 +246,7 @@ Updates installed_plugins.json
 
 1. **Clear metadata**: Description should clearly state "Use when..." to help Claude match user intent
 2. **Progressive disclosure**: Keep SKILL.md lean, move details to `references/`
-3. **Test locally first**: Copy to `~/.claude/skills/` for testing before packaging
+3. **Test locally first**: Follow [the maintainer source workflow](../CLAUDE.md#testing-skills-locally) and its target-host gate; do not create a mutable second copy
 4. **Version properly**: Use semver (MAJOR.MINOR.PATCH) in marketplace.json
 5. **Document bundled resources**: All scripts and references should be mentioned in SKILL.md
 
@@ -311,7 +261,7 @@ Updates installed_plugins.json
 
 1. **Update marketplaces**: Run `claude plugin marketplace update {name}` periodically
 2. **Check installed plugins**: Inspect `~/.claude/plugins/installed_plugins.json`
-3. **Clear cache on issues**: `rm -rf ~/.claude/plugins/cache/{marketplace-name}` then reinstall
+3. **Repair the affected install**: Follow the installed `skill-governance` plugin workflow; preserve running-session resources and avoid blanket cache deletion
 4. **Understand scopes**:
    - `--scope user`: Only you (default)
    - `--scope project`: Shared with team via `.claude/plugins/`

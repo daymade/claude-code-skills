@@ -6,7 +6,36 @@ missing table rules, font fallback — is invisible in the exit code, invisible 
 text, and invisible in a macOS Quick Look thumbnail. The only thing that surfaces them is a
 Word-grade rendering, looked at.
 
-This protocol is mandatory before delivering any .docx produced with this skill.
+This protocol covers DOCX and existing-Word → PDF delivery. Apply the gate for the actual
+deliverable: Word application checks matter when delivering DOCX; a PDF-only handoff needs
+final-PDF inspection in the intended reader, not a claim that the disposable DOCX is Word-ready.
+
+## Existing Word → PDF: delivery gate
+
+- Pin the source file/hash, selected content and revision view. Preserve the original and
+  compare the selected accepted text, tables and image references before/after formatting.
+  Compare code whitespace exactly; any permitted ordinal-separator normalization is narrow
+  and explicit. Text equality proves content preservation, not readable layout.
+- Check role relationships: body first line; list marker, text and wrapped continuation;
+  code panel edge and internal padding. Inspect typed and automatic numbering separately,
+  including two-digit labels and disabled numbering (ISSUE-015/016).
+- Render after the last edit and inspect **every page at a readable scale**. Small contact
+  sheets help navigation but do not clear indentation, punctuation, captions or table rules.
+  Inspect code glyphs, full images, heading/page-break relationships, notes and table cells.
+  If a fix causes reflow, inspect all changed pages and boundaries. Unchanged page-image hashes
+  may reuse a recorded prior inspection; rerendering is not itself a new inspection.
+- Reopen the final delivered path independently, check page count, bookmarks, attachments
+  and selected content, then inspect it in the intended PDF reader. A temporary preview or
+  old open tab is not the delivered file. Scope any unavailable consumer check explicitly.
+- Failures return to the generator and repeat the affected checks. Do not stop after each
+  patch to ask the user to find the next defect. Stop when the agreed deliverable passes
+  content, layout and consumer checks; present one final artifact for user acceptance.
+
+Use synthetic bad/good fixtures for recurring failures. Cover a long list item, a two-digit
+ordinal, a code panel, literal URL punctuation and an inline image under exact line spacing.
+A delivery file is not a user-approved golden template merely because it was sent.
+
+The remaining steps describe the DOCX-specific chain.
 
 ---
 
@@ -171,13 +200,13 @@ appears.
 
 | Symptom | Fix in |
 |---|---|
-| Wrong text, wrong clause order, wrong wording | the markdown |
-| Info block stretched, list restarting wrong, font/size/spacing/borders wrong | `scripts/Program.cs` |
-| Structural feature missing entirely (image, TOC, header, track change) | `scripts/Program.cs`, after reading the matching `Samples/*.cs` in minimax-docx |
+| Wrong text, wrong clause order, wrong wording | The authoritative source: Markdown for new generation, a derived Word revision for an existing manuscript |
+| New Markdown-generated DOCX: alignment, numbering, typography or missing structural feature | `scripts/Program.cs`; read the matching minimax-docx sample before adding structure |
+| Existing Word-derived DOCX/PDF: alignment, numbering, typography or missing structural feature | The project's derived-copy Word formatter/selection script; preserve the authoritative Word structure, and read the relevant minimax-docx sample if extending its support |
 
 Never patch a rendering bug by contorting the markdown — the next document will hit it again.
-Rerun the whole chain after any fix; a fix in one layer routinely breaks another (changing
-paragraph spacing moves page breaks, which is check 5).
+Revalidate changed structure and rerender after a layout fix. Reuse unchanged checks; inspect
+all pages affected by reflow (changing spacing moves page breaks, which is check 5).
 
 ---
 

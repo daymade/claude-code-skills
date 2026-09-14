@@ -12,6 +12,7 @@ native shells, GIS, or review tools.
 - Viewport And Responsive Checks
 - Typography And Line Breaks
 - Layout And Composition
+- Information necessity before layout
 - Images And Media
 - Reference Parity And Taste
 - Mechanical Finding Triage
@@ -171,6 +172,72 @@ on the same visual row.
 Cards are not inherently wrong. Flag card piles when they replace information
 architecture, not when they represent genuine repeated items, specimens, or
 modal surfaces.
+
+## Information necessity before layout
+
+Run this check for whole-surface composition/density review, or when the user
+rejects clutter, repeated context, explanations or wasted space. The auditor
+owns it before local typography work. Stop when the declared surface and the
+same failure class have been examined; do not expand into unrelated workflows.
+
+1. State the actor's immediate reading/decision task and the information that
+   would cause a wrong decision if absent. Start from the user contract, not a
+   list of existing components. A title/helper/status slot in a template is not
+   a requirement to fill it.
+2. Inventory the whole visible composition. Use the sweep's `attentionInventory`
+   plus its screenshot, or an equivalent DOM/visible-window inventory from the
+   canonical harness. Each text item has a structural selector and coordinates;
+   JSON hashes labels rather than exporting private page text. Use those
+   coordinates to read the screenshot/DOM. Exact repeats and label echoes are
+   leads, not an exhaustive or semantic redundancy detector. Record uninspected
+   frames/shadow content, input values, pseudo-content and occluded areas.
+3. Group the observed items by the information they convey, across component
+   boundaries. Inspect brand versus product identity, repeated axes and units,
+   section titles that restate visible objects, status words echoing navigation,
+   explanatory subtitles, provenance/process descriptions and permanent footer
+   bands. Inspect all groups, including ones the script did not flag.
+4. For each ancillary group, ask the falsifiable counterfactual: **what specific
+   mistake would this actor make if it were absent here?** Check whether another
+   visible encoding already supplies that information. “It explains the section”,
+   “it has a role”, and “it fits on one line” do not answer the question. Compare
+   a deletion/relocation variant using the same data, viewport and reading task
+   when the answer is disputed. In audit-only mode use a diagnostic copy only
+   when authorized; otherwise describe the counterfactual and leave it unknown.
+5. Record retain / relocate / remove / uncertain with the concrete task-loss
+   observation and screenshot/selector evidence. Distinguish observation from
+   a predicted loss: "might help" or "could cause confusion" is a hypothesis,
+   not evidence that the current placement is necessary. A static artifact
+   cannot establish that moving a label makes a task slower; mark that claim
+   uncertain until the relevant comparison or interaction has been observed.
+   Measure the reclaimed space
+   and verify that core values, relationships, warnings and actions remain
+   usable. Do not count reduced lines, less text or a larger chart as acceptance
+   by themselves. A failed explicit requirement remains failed until the actual
+   layout changes or the user changes the requirement.
+
+Keep necessary labels, units, dangerous-state warnings and unfamiliar controls
+at the point of use. Repeated labels can be necessary in independently scrolling
+or independently consumed views; shared, visibly aligned regions may need only
+one axis. Neither “always explain” nor “remove every caption” is a general rule.
+Do not trade needless prose for unlabeled icons, hidden risk or lost provenance.
+
+After a structural rejection, validate the **class**, not only named instances:
+retain the rejected page as a negative control, check an unmentioned occurrence
+of the same class, and include a near-boundary healthy case where the context is
+actually necessary. Give reviewers the primary task and original requirements,
+not the author's list of supposedly necessary bands. Do not turn a rejected
+candidate into a healthy control or soften the evaluator to preserve it.
+
+The inventory cannot judge business relevance. Its verdict remains
+`not_evaluated` even with complete coverage. The auditor must
+perform the counterfactual reading check; this is not a machine guarantee of
+design quality, and the Skill being loaded does not prove this step happened.
+
+Basis: [NN/g's aesthetic and minimalist design heuristic](https://www.nngroup.com/articles/aesthetic-minimalist-design/)
+requires enough information for the task without competing irrelevant detail;
+[GOV.UK's details guidance](https://design-system.service.gov.uk/components/details/)
+supports disclosure for information only some users need, not hiding information
+most users need. Apply those task-dependent boundaries, not a minimalism style.
 
 ## Images And Media
 

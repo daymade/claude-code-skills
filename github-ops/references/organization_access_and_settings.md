@@ -27,6 +27,22 @@ base-permission, and enterprise-policy evidence.
 
 Choose the narrowest grant that meets the actual job:
 
+Bind that job to the person's authorized role across the selected repositories. An immediate
+task such as pulling updates does not redefine an existing contributor as a read-only user.
+Distinguish the operations before recommending or applying a role:
+
+| Authorized work | Repository access | Integration control |
+|---|---|---|
+| Read, clone, or consume artifacts only | Read (`pull`) | No contribution capability claimed |
+| Edit code, data, Skills, or documents and submit branches for review | Write (`push`) | Protect the default branch and require PRs under the approved review policy |
+| Merge approved PRs | Verify effective role and applicable rules separately | Write is not permission to bypass review |
+| Administer access or repository settings | Explicit administrative authorization | Do not infer Admin from a request to contribute |
+
+Inspect `archived` before treating a read-only repository as a missing collaborator grant.
+An archived repository is frozen for everyone; report its replacement or lifecycle decision
+when known, and do not unarchive it as a side effect of granting access. For a requested
+Write-plus-PR arrangement, use [branch protection](branch_protection.md) and verify both halves.
+
 - One repository, no organization-wide role: outside collaborator or explicit repository
   collaborator, subject to organization policy.
 - A stable group that needs the same repositories: organization membership plus team access.
@@ -83,10 +99,11 @@ Interpret absence carefully:
 ## Grant repository access
 
 Before adding someone, record the current membership, direct access, effective role, and
-whether an invitation is already pending. Then grant the minimum role required:
+whether an invitation is already pending. Set `ROLE` to the role authorized above; do not
+copy a Read example into a contributor workflow:
 
 ```bash
-gh api -X PUT "repos/ORG/REPO/collaborators/USER" -f permission=pull
+gh api -X PUT "repos/ORG/REPO/collaborators/USER" -f permission="$ROLE"
 ```
 
 GitHub may return `201` for a new invitation or `204` when an existing collaborator/member is

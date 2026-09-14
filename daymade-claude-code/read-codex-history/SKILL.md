@@ -43,6 +43,7 @@ interpreting fork snapshots, compaction, event streams, or end reasons.
 |---|---|
 | Recent Codex sessions, titles, IDs, or positive writer-lock evidence | `scripts/list_local_history.py --source codex` |
 | Exact recent user inputs from newest to oldest, grouped by Session | `scripts/list_codex_user_inputs.py` |
+| Whole-conversation original-input counts and quotations, including inherited history | `scripts/reconcile_codex_inputs.py --session <ID>` |
 | Locate one exact rollout by internal identity | `scripts/analyze_sessions.py locate-codex <ID>` |
 | Reconstruct one Session and its declared parent snapshots | `scripts/read_codex_session.py --session <ID>` |
 | Search full rollout events by keyword | `scripts/analyze_sessions.py search --codex-only` |
@@ -51,6 +52,16 @@ interpreting fork snapshots, compaction, event streams, or end reasons.
 The requested output wins over the motivation. “Show my recent original inputs”
 means a chronological raw-input table, not feedback classification, topic mining,
 an interactive app, or all historical sessions.
+
+For “how many messages/feedback did I give in this conversation; list them
+verbatim,” read [references/user_input_reconciliation.md](references/user_input_reconciliation.md).
+Use the reconciler to compose the existing ledger and strict lineage readers.
+It preserves occurrences, original strings, and source coordinates. Treat exit 2
+or `complete: false` as an incomplete result: `scope_input_count: null` is not
+zero, and verified inputs are not a complete total. Review unmatched records
+against their actual source before supplying any hash-bound injection exclusion.
+State the counting unit and cutoff; do not call message counts a count of
+distinct criticisms. Keep ordinary recent-input requests on the ledger-only route.
 
 ## Commands
 
@@ -83,6 +94,19 @@ an unmarked row does not prove the Session stopped.
 Markdown is the human surface; JSON preserves the stored string value for forensic
 or machine use. Preserve duplicates, line order, timestamps, wording, and Session
 boundaries. Do not invent titles or split one Session into semantic categories.
+
+### Reconciled whole-conversation inputs
+
+```text
+<skill-dir>/scripts/reconcile_codex_inputs.py --session <EXACT_ID> --format json
+```
+
+Use `--through-record` for an explicit inclusive cutoff in the selected session,
+and `--omit-first` / `--omit-last` only for exclusions the user actually requested.
+Neither option decides whether a message is an opening instruction or feedback.
+Use `--format markdown` for literal numbered quotations after resolving gaps.
+Read the linked reconciliation reference for result fields, reviewed exclusions,
+partial results, and deterministic fixture-only validation.
 
 ### Exact Session evidence and lineage
 
@@ -130,7 +154,10 @@ Before making any behavior claim about a named Session:
 3. Parse the selected rollout and require `session_meta.id == requested ID`.
 4. For each fork edge, require the declared parent ID and exact
    `history_base.end_byte_offset`; reject missing, ambiguous, cyclic, or mismatched
-   ancestry rather than reading the parent's current tail.
+   ancestry rather than reading the parent's current tail. A legacy rollout with no
+   `history_base` that inlines its parent's session_meta as the very next record is
+   instead verified record-for-record against the real parent file before its
+   derived byte boundary is trusted.
 5. Report prompt-only or rollout-only gaps explicitly.
 
 This gate is the direct correction for two observed cases: a prompt-ledger Session

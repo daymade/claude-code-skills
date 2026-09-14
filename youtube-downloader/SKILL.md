@@ -490,6 +490,7 @@ ffmpeg -i video.mp4 -i audio.m4a -c copy merged.mp4
 ## Further Reading
 
 - **PO Token Setup**: See `references/po-token-setup.md` for detailed installation and troubleshooting
+- **Internal SOP**: `references/internal-sop.md` — the short list of yt-dlp failures that look like something else (URLs unquoted in zsh, proxy not reaching the PO Token provider). Read it first when a download fails for no obvious reason
 - **yt-dlp Documentation**: https://github.com/yt-dlp/yt-dlp
 - **Format Selection Guide**: https://github.com/yt-dlp/yt-dlp#format-selection
 

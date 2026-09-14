@@ -10,6 +10,7 @@ those releases.
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import re
 import subprocess
@@ -19,6 +20,7 @@ from pathlib import Path
 
 
 MANIFEST_PATH = ".claude-plugin/marketplace.json"
+PACKAGING_POLICY_PATH = Path("daymade-skill/skill-creator/scripts/packaging_policy.py")
 SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 
 
@@ -125,6 +127,55 @@ def parse_manifest(
     return metadata_version, catalog_payload, plugins
 
 
+def load_packaging_policy(repo: Path):
+    """Load the repo's single shipping-policy module, or None when absent.
+
+    The exclusion set lives in exactly one place on purpose; a consumer that
+    keeps its own copy drifts from it silently.  When the module is not there
+    -- a synthetic fixture repository, or any checkout without that Skill --
+    this returns None and no path is excluded, which is the behaviour this
+    check had before it consumed the policy.  That direction is deliberate:
+    excluding nothing can only make the gate stricter, never weaker, so a
+    missing module costs a false alarm at worst and never a silent pass.
+    """
+    import importlib.util
+
+    path = repo / PACKAGING_POLICY_PATH
+    if not path.is_file():
+        return None
+    spec = importlib.util.spec_from_file_location("packaging_policy_for_ci", path)
+    if spec is None or spec.loader is None:
+        return None
+    module = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+    except Exception:
+        return None
+    for attr in ("EXCLUDE_DIRS", "EXCLUDE_FILES", "EXCLUDE_GLOBS"):
+        if not hasattr(module, attr):
+            return None
+    return module
+
+
+def never_ships(policy, path: str) -> bool:
+    """Whether this path is excluded from every package, wherever it sits.
+
+    Only the position-independent half of the policy is applied.  Its
+    directory rules for `evals`/`dist`/`tests` are indexed from a skill root,
+    so they do not carry over to repository-relative paths, and applying them
+    here would quietly stop the version gate from firing on real test changes.
+    """
+    if policy is None:
+        return False
+    parts = Path(path).parts
+    if any(part in policy.EXCLUDE_DIRS for part in parts):
+        return True
+    name = Path(path).name
+    if name in policy.EXCLUDE_FILES:
+        return True
+    return any(fnmatch.fnmatch(name, pattern) for pattern in policy.EXCLUDE_GLOBS)
+
+
 def changed_paths(repo: Path, base: str, candidate: str | None) -> list[str]:
     if candidate is None:
         raw = subprocess.run(
@@ -216,7 +267,8 @@ def check(repo: Path, base: str, candidate: str | None) -> list[str]:
             f"marketplace metadata bump above {base_metadata}"
         )
 
-    paths = changed_paths(repo, base, candidate)
+    policy = load_packaging_policy(repo)
+    paths = [p for p in changed_paths(repo, base, candidate) if not never_ships(policy, p)]
     touched_plugins: set[str] = set()
     for path in paths:
         if path == MANIFEST_PATH:

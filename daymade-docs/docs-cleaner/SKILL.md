@@ -2,7 +2,7 @@
 name: docs-cleaner
 description: >-
   Consolidates redundant documentation while preserving all valuable content; keeps a doc
-  set truthful after things change. Two modes. (1) POST-CHANGE GOVERNANCE — when code,
+  set truthful after things change. Modes: (1) POST-CHANGE GOVERNANCE — when code,
   scripts, config, env vars, ports, paths, deployment, auth, tests, or a documented
   procedure changed; also "which docs are now wrong", "check docs for inconsistencies",
   "过时的命令/路径", "文档同步". Use it even when the user mentions only the change and never
@@ -18,7 +18,7 @@ description: >-
 
 # Docs Cleaner
 
-Documentation goes wrong in two different ways, and they need different work.
+Documentation goes wrong in recurring ways, and they need different work.
 
 **It rots.** Something changed — a port, a path, a procedure, a decision — and the docs
 still describe the old world. The field's name for this is *documentation rot* or *version
@@ -27,7 +27,7 @@ drift*: artifacts fall out of sync one at a time until people stop trusting the 
 **It sprawls.** The same topic accumulates three files, each partly right, none
 authoritative.
 
-Both trace to one root cause: **a fact was written down in more places than it was
+They trace to one root cause: **a fact was written down in more places than it was
 defined.** Everything below follows from fixing that.
 
 ## Core principle (governs both modes)
@@ -191,16 +191,17 @@ docs already cite. Then say in your report which you picked and on which of thos
 an arbitrary pick becomes permanent once step 2 points everything else at it, so it should
 be a stated decision rather than an accident of which file you opened first.
 
-**3. Let the implementation win — as evidence, not as an invitation to edit it.**
-Where code, a script, a config file, or an observed run contradicts the docs, the
-implementation is the evidence and the doc is the claim. Document what is actually true;
-never write documentation describing what you wish the code did.
+**3. Resolve implementation disagreements from established intent and authorization.**
+Treat code, scripts, config, and observed runs as evidence of current behavior, not as
+automatic authority over intended behavior. When a requirement, authoritative source, or
+test establishes the intended behavior and the user has already authorized the scoped
+implementation fix, repair and verify the implementation first, then update the docs to
+match. Keep that repair within the facts and files already authorized by the task.
 
-**If the implementation itself is what is wrong, stop and report it — do not fix code under
-this skill.** You cannot tell "the doc is stale" from "the code has a bug" by reading the
-disagreement; that judgment needs the intent behind the change, which is the user's. A
-documentation pass that silently becomes a code change is the same unbounded-scope failure
-step 1 forbids, with worse consequences.
+When intended behavior is ambiguous or the implementation change is not already authorized,
+report the disagreement and obtain the missing decision or authority before editing code.
+Do not make the documentation describe wished-for behavior, and do not silently turn a
+documentation pass into an implementation project.
 
 **4. Decide each affected doc's disposition before editing it.**
 
@@ -503,12 +504,19 @@ what you would delete.
 
 ## Verifying
 
-Two properties make a documentation check trustworthy: it must match **literally** (facts
+Make documentation checks match **literally** (facts
 contain characters a regex engine reads as wildcards — searched as a pattern, `v1.0.0`
-also matches `v1X0X0`, and `[2026-08-13]` aborts as an invalid character range), and it
-must match **contiguously** (a fact spanning two lines is one fact, not two).
+also matches `v1X0X0`, and `[2026-08-13]` aborts as an invalid character range) and
+**contiguously** (a fact spanning two lines is one fact, not two).
 
 `ripgrep` gives you both: `-F` matches literally, `-U` lets a match span lines.
+
+Before delivering a literal command example, run the exact safe snippet as written in its
+declared shell and environment against an isolated fixture. Compare its accepted flags,
+flag precedence, result, and exit status with the implementation or CLI contract. Do not
+execute destructive, external-send, production-mutating, or credential-bearing examples
+against a live target; verify their flags and precedence from code or help output and state
+which end-to-end behavior was not exercised.
 
 **Always pass an explicit path.** This is not a style preference: with no path argument and
 a non-interactive stdin — which is what an agent's shell has — `rg` searches *stdin*
@@ -773,7 +781,7 @@ derived value teaches the reader why it should not come back.
 | Linking a derived value | Scaffolding that also goes stale, plus false confidence the two are aligned | Same — the value should not exist |
 | Patching a doc whose premise died | Internally consistent, globally wrong | Archive it (disposition, step 4) |
 | Updating the obvious occurrence only | Quiet copies survive and contradict it later | Search before editing (step 5) |
-| Documenting intended behavior | Doc and reality diverge from day one | Implementation wins (step 3) |
+| Documenting unimplemented wishes | Doc and reality diverge from day one | Follow step 3: repair only established, already-authorized behavior; otherwise report the disagreement |
 | Unbounded "while I'm here" sweeps | Unreviewable diff; real changes get lost in it | Bounded cleanup (step 6) |
 
 ---

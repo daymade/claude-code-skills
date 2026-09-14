@@ -339,6 +339,9 @@ claude plugin install terraform-skill@daymade-skills
 
 # 跨速度、并发、协议、质量四个维度评测任意 LLM 端点
 claude plugin install llm-eval-harness@daymade-skills
+
+# 视频/GIF 梗图：贴图随画面运动逐帧跟踪
+claude plugin install meme-creator@daymade-skills
 ```
 
 独立插件可以单独安装；套件成员会随所属套件一起安装。
@@ -517,15 +520,16 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 > **安装**：`claude plugin install peer-message@daymade-skills`
 
-使用各产品自己的通道发现、定向发送、显式广播并独立验证本机 Claude Code session 与 Codex thread 的消息。
+当前宿主原生工具能覆盖目标时，直接使用其发现、发送、回传和等待机制。仅为原生工具未覆盖的本机 Claude Code/Codex 目标补齐脚本通信，或在协调证据需要核实时加载本 Skill。
 
 **使用场景：**
-- 让一个终端里的 Claude 或 Codex 与另一个 Agent 协调
-- 跨 session 发送依赖、暂停、交接或完成通知
-- 从第三方 profile 或 Codex 进程访问 Claude inbox
+- 向已确认、原生工具未覆盖的独立目标发送依赖、暂停、交接或完成通知
+- 按原消息查询对应回复，无需手工检查本地消息存储
+- 从脚本或其他产品访问原生工具未覆盖的 Claude inbox；第三方 provider 本身不是使用补缺通道的依据
+- 共享 checkout 上别人的未提交改动、锁或分支挡住了你——先核实它是否真在飞，再问属主，别自己停手或绕开
 - 向经过确认的目标清单广播同一条协调消息
 
-📚 **文档与命令**：[peer-message/SKILL.md](./peer-message/SKILL.md) 拥有路由、稳定运行前置与“peer 不得代替用户授权”的边界；`peer-message/scripts/peer.py --help` 拥有 CLI 语法；[protocol-and-discovery.md](./peer-message/references/protocol-and-discovery.md) 拥有寻址、信封与送达证据；[official-feature.md](./peer-message/references/official-feature.md) 拥有会随产品变化的运行要求与具体机制；[coordination-and-learning-loop.md](./peer-message/references/coordination-and-learning-loop.md) 拥有 parent/worker 回传语言与证据闸门下的 Skill 演进。
+📚 **文档与命令**：[peer-message/SKILL.md](./peer-message/SKILL.md) 拥有路由、稳定运行前置与“peer 不得代替用户授权”的边界；`peer-message/scripts/peer.py --help` 拥有 CLI 语法；[protocol-and-discovery.md](./peer-message/references/protocol-and-discovery.md) 拥有寻址、信封与送达证据；[official-feature.md](./peer-message/references/official-feature.md) 拥有会随产品变化的运行要求与具体机制；[coordination-and-learning-loop.md](./peer-message/references/coordination-and-learning-loop.md) 拥有回传寻址、正文与送达状态措辞、发现共享资源上有别人在制品时怎么核实、怎么开口、等多久、等不到怎么继续，判定一条 peer 断言与一组 peer 否认各值多少的两份核验合同，以及证据闸门下的改进循环。
 
 ---
 
@@ -610,6 +614,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 - 网站显示 ERR_TOO_MANY_REDIRECTS
 - SSL/TLS 配置错误
 - DNS 解析问题
+- Email Routing 别名、目标邮箱验证与转发收件
 - Cloudflare 相关问题
 
 **主要功能：**
@@ -773,6 +778,7 @@ python3 scripts/safe_mix.py /path/to/codebase
 
 **主要功能：**
 - Stage 1 + Native AI 完整纠错；Stage 1 单独运行不算完成
+- 分段或续跑时冻结复核文件清单，校验结果与覆盖范围，只补缺失或失败的复核段
 - 精确文件审核队列、deep link、时间戳音频播放和机器可读的 zero-pending 读回
 - file-only / dictionary / roster / context 四种沉淀边界，避免一次性错误污染长期规则
 - SQLite 审计、批处理和团队知识协作
@@ -2244,6 +2250,35 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 
 ---
 
+### **excalidraw-use** - 把图片批量放上 Excalidraw 白板
+
+把已有图片批量放进 Excalidraw 白板，按大间距网格排好，不用再手动拖开。也能先把 slide deck 转成逐页干净截图，以及盘点一个 `.excalidraw` 文件里有什么。现有的 Excalidraw MCP 与 skill 覆盖了元素 CRUD 和导出，但都没有 image 元素类型、没有 `dataURL`、没有 `files` map——嵌入自己的图片正是这块空缺。
+
+**适用场景：**
+- 把截图、图库或 deck 页面放上白板
+- 大量图片一次排好，间距不用再调
+- 把 Vite/React slide deck 转成可以在上面手绘的图片
+- 盘点场景文件：元素分布、内嵌负载大小、占用范围
+
+**核心特性：**
+- 按内容哈希去重，`--exclude` 跳过已在白板上的图
+- `--template-from` 从你自己的白板深拷贝 image 元素字段集——Excalidraw 公开的 schema 并未列出 `fileId`/`status`/`scale`/`crop`
+- 回读验收：文件条目缺失、长宽比失真、任意重叠都会失败
+- Deck 截图会隐藏讲师专用元素、展开分步显示，并报告始终没有渲染出来的 fragment
+- 记录了两个会静默毁掉工作的坑：*Open* 与拖放会**取代**整个场景（只有剪贴板是合并），以及旧构建会让源码里的功能消失、而 `innerText` 仍把隐藏的 fragment 读成存在
+
+**使用示例：**
+```bash
+# 自然触发
+"把这些截图放到我的 Excalidraw 白板上"
+"把以前 workshop 的图都加到画板里，间距大一点"
+"把这个 deck 转成我能在上面画的图片"
+```
+
+**注意**：不负责从文字描述生成图表——那是另一件事。
+
+---
+
 ### **debugging-network-issues** - 证据驱动的网络问题排查
 
 针对网络、流式、协议层 bug 的"先证伪、再下结论"方法论。源自一次真实的 5 小时 SSE 生产事故——堆假设浪费的几个小时，10 分钟分层实验就能解决。
@@ -3218,6 +3253,7 @@ main 在上次 review 后变了，重新告诉我现在真正会合进去什么
 **主要能力：**
 - 列出 Codex Session、内部时间范围和 active/archive 来源
 - 从 prompt ledger 精确读取用户输入，从新到旧且只按 Session 分组
+- 自动核对整段会话及精确继承范围内的原话与条数；明确报告未决归属，注入消息的排除须绑定已核实记录及其指纹
 - 把一个 rollout 重建为按时间交替的用户／Assistant 时间线，并保留 fork 精确字节边界与 compaction
 - Codex-only 搜索不会再把 Claude 命中混进来
 - 通过 schema 检查选择兼容的 Codex 状态数据库
@@ -3524,22 +3560,14 @@ A 股行业投研工作流：全板块成分股 Top N 涨幅计算、公告窗�
 
 > **安装**：`claude plugin install tibo-reset-codex@daymade-skills`
 
-查询 ChatGPT/Codex 额度重置时间，解读 OpenAI Codex 负责人 Tibo 的重置公告。
-不要凭记忆回答“什么时候恢复额度”，应通过权威追踪通道现查并换算北京时间。
+查询重置公告，核实多个 Pro 账号的剩余额度与备用重置；预测下一轮时间，并在本地保存预测、核对结果，供后续判断调整。
 
-**核心能力：**
-- Tibo Radar JSON API 现查公告；Radar 与 codexlimitwatch 属同一来源家族，只能互查解析一致，不作独立双源
-- 另查官方故障线（@ChatGPT / status.openai.com）：重置有里程碑与故障补偿两个触发，Radar 只索引前者
-- 本机 `~/.codex` rollout 快照取证：重建周额度曲线、把重置定位到分钟级区间
-- 识别公告中的混合时间写法和 PST/PDT 夏令时差异
-- 太平洋时间到北京时间的当场实测换算
-- 区分 tracker 标签、官方公告与用户账户实际到账状态
+[操作说明](tibo-reset-codex/SKILL.md)
 
-**使用示例：**
 ```text
 ChatGPT 什么时候重置额度
+几个 Pro 账号都用完了吗，哪个还有额度
 banked reset 到了吗
-Tibo 最新的重置公告换算成北京时间是几点
 ```
 
 ### **prior-work-retrieval** - 产出前检索并核实已有成功工作
@@ -3664,6 +3692,34 @@ lark-cli 提示 user 身份缺少 scope
 
 ---
 
+### **meme-creator** - 视频/GIF 梗图：贴图跟随画面运动
+
+把 logo、头像、贴纸贴到视频里运动的对象上，逐帧跟随，导出 MP4 + GIF。半监督跟踪：在网格图上读坐标框，OpenCV CSRT 负责搬运；跟踪器必死的场景（镜头切换、走近镜头的尺度爆炸、长距离平稳远去）用重锚点或手工关键帧接管。
+
+**何时使用：**
+- 把一段视频名场面做成梗图、表情包或 GIF
+- 给视频里的人脸/猫头盖 logo 或头像，且要跟着动
+- 任何「贴个图进去，跟着画面动」的需求
+
+**核心特性：**
+- 身份消歧闸：先把名字绑到正确的账号/头像/logo，再抓素材（不含猜测 handle 的开放搜索枚举候选，同列实体是最强判别信号）
+- 用平铺拼图选段，不靠拖进度条
+- CSRT 跟踪含反向跟踪、分段重锚、平滑；平稳长镜头可切手工关键帧线性插值
+- 可见性窗口 + 速度外推淡出：贴图随目标一起出画，不停在空画面上
+- GIF 双通道调色板编码，体积旋钮有顺序（先降帧率，再降宽度，再降色数）
+
+**使用示例：**
+```text
+"把这段视频里三只猫的头分别换成这三个 logo，做成梗图视频和 GIF"
+"把 6:30 到 6:50 这段做成 GIF，把我的头像贴在主角头上"
+```
+
+📚 **文档**：参见 [meme-creator/SKILL.md](./meme-creator/SKILL.md) 及随包 `references/`（跟踪手册与素材绑定闸）。
+
+**运行要求**：`ffmpeg`；`uv`（随包 Python 脚本自带内联依赖）。源是 URL 时才需要 `yt-dlp`。
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -3691,7 +3747,7 @@ review 后修复/落地时，使用 **github-review-pr**。
 使用 **teams-channel-post-writer** 分享知识，使用 **statusline-generator** 在工作时跟踪成本。
 
 ### 本机 Agent 协调
-当同一台机器上的 Claude Code profiles 与 Codex threads 需要交换定向交接、暂停/恢复通知、依赖更新或显式多目标广播时，使用 **peer-message**。它把 peer 输入与用户授权严格分开，并在宣布送达前独立读取接收侧证据。
+联系当前原生工具能覆盖的 agent 或 session 时，直接使用宿主通信机制。只有未覆盖的本机目标、跨产品／脚本通信，或需要核实协调证据时，才使用 **peer-message**；详见其[路由合同](./peer-message/SKILL.md)。消息被拒绝或 Held 不构成换通道的理由。
 
 ### 仓库管理与安全
 使用 **repomix-unmixer** 提取和验证 repomix 打包的技能或仓库。使用 **repomix-safe-mixer** 安全地打包代码库，在分发前自动检测和阻止硬编码凭据。
@@ -3817,6 +3873,9 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 ### 长音频转写（StepFun 阶跃 StepAudio 2.5）
 使用 **stepfun-asr** 单次 SSE 调用转写最长 30 分钟的中 / 英文音频（32K context、~85-101× RTF、无需客户端切片）。封装了 #1 大坑——模型**不在** `/v1/audio/transcriptions`，错端点返回误导性的 "model not supported" 错误。可与 **transcript-fixer** 组合做 ASR 纠错，或与 **meeting-minutes-taker** 把长录音变成结构化纪要。
 
+### 梗图与 GIF 制作
+使用 **meme-creator** 把 logo、头像或贴纸贴到视频里运动的对象上（逐帧跟踪），导出 MP4 和控制体积的 GIF。源视频还在线上时，配合 **youtube-downloader**（或直接用 yt-dlp）先抓取。
+
 ## 📚 文档
 
 每个技能包括：
@@ -3882,6 +3941,7 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 - **stepfun-tts**：参见 `stepfun-tts/SKILL.md` 了解 Contextual TTS 决策树，参见 `stepfun-tts/references/migration_from_v2.md` 查看 `voice_label` → `instruction` 迁移手册和审查改写清单
 - **stepfun-asr**：参见 `stepfun-asr/SKILL.md` 了解 SSE 端点工作流和 ASR 侧四个坑（错端点、Plan vs Normal key、重复幻觉、SSE `error` 事件）。`stepfun-asr/references/api_reference.md` 给出原始 HTTP 集成所需的 JSON 请求体和 SSE 事件契约
 - **llm-eval-harness**：参见 `llm-eval-harness/references/evaluation_disciplines.md` 了解每条纪律背后的推理（环境变量传 key、thinking-aware 吞吐、代理隔离、概率化协议判定），以及 `llm-eval-harness/references/quality_blind_judge.md` 了解独立盲审质量方法
+- **meme-creator**：参见 `meme-creator/SKILL.md` 了解完整流程，及 `meme-creator/references/tracking-playbook.md` 了解 CSRT 失效分类与手工关键帧接管
 
 ## 🛠️ 系统要求
 
@@ -3912,6 +3972,7 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 - **Node.js 18+ + curl + unzip**（用于 ima-copilot）：`npx skills` 按需从 npm registry 拉取；IMA OpenAPI 凭据从 [https://ima.qq.com/agent-interface](https://ima.qq.com/agent-interface) 获取
 - **StepFun API key**（用于 stepfun-tts 和 stepfun-asr——必须是 "Normal" 等级，Plan key 调音频端点会无声失败）：在 [https://platform.stepfun.com/](https://platform.stepfun.com/) → API Keys 获取
 - **uv + 被测端点的 API key**（用于 llm-eval-harness）：`openai` 和 `aiohttp` 通过 `uv run --with` 自动安装；key 仅按环境变量名传入
+- **FFmpeg + uv**（用于 meme-creator）：`brew install ffmpeg`；随包脚本通过 `uv run` 自行解析 Python 依赖；源是 URL 时才需要 `yt-dlp`
 
 ## ❓ 常见问题
 

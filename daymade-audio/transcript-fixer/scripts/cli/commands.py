@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -357,6 +358,406 @@ def _auto_finalize_stage1(input_path: Path, output_dir: Path, dry_run: bool = Fa
         print(f"🗂️  Preserved review evidence: {', '.join(preserved)}")
 
     return True
+
+
+# ---------------------------------------------------------------------------
+# Sidecar closure (--close-sidecars): decide mechanically that the review
+# evidence a Stage 1 run left beside a transcript is closed, then remove it.
+# ---------------------------------------------------------------------------
+
+# Grammar of the entries _format_changes_report writes; kept in sync with it.
+_REPORT_ENTRY_RE = re.compile(
+    r"### \d+\. Line (?P<line>\d+)\n"
+    r"- \*\*From\*\*: `(?P<frm>[^`]*)`\n"
+    r"- \*\*To\*\*: `(?P<to>[^`]*)`\n"
+    r"- \*\*Type\*\*: (?P<type>\w+)\n"
+    r"- \*\*Context\*\*: (?P<ctx>.*?)(?=\n\n###|\n\n## |\Z)",
+    re.S,
+)
+# Run-scoped outputs: *_stage1.md is promoted by the plain Stage 1 rerun,
+# *_stage2.md is the agent-less API's full text and *_dryrun.md a preview.
+# Each is promoted or discarded inside the run that produced it; one that is
+# still NEWER than the transcript has not been dealt with.
+_RUN_OUTPUT_SUFFIXES = ("_stage1.md", "_stage2.md", "_dryrun.md")
+_CLOSE_ANCHOR_CHARS = 24
+
+
+_REPORT_TOTAL_RE = re.compile(r"^Total changes: (\d+)\s*$", re.M)
+_REPORT_EMPTY_MARKER = "No Stage 1 corrections applied."
+
+
+def parse_stage1_report(text: str) -> tuple[list[dict], int | None]:
+    """Entries of a *_changes.md / *_needs_review.md report, as written by
+    _format_changes_report, plus the ``Total changes: N`` the report declares.
+
+    Returns ``(entries, declared)``. ``declared`` is None for a report with no
+    header at all; a parsed count below ``declared`` means the report carries
+    entries in a shape this parser does not recognise, and the caller must
+    treat the report as unreadable rather than as empty — the failure direction
+    of "unparsed == nothing to close" would be deleting evidence.
+    """
+    entries = [
+        {"line": int(m["line"]), "from": m["frm"], "to": m["to"],
+         "type": m["type"], "context": m["ctx"].strip()}
+        for m in _REPORT_ENTRY_RE.finditer(text)
+    ]
+    m = _REPORT_TOTAL_RE.search(text)
+    if m is not None:
+        return entries, int(m.group(1))
+    if _REPORT_EMPTY_MARKER in text:
+        return entries, 0
+    return entries, None
+
+
+def _report_entry_state(entry: dict, canonical: str) -> str:
+    """'applied' | 'raw' | 'gone' for one report entry against the transcript now.
+
+    The recorded context is the utterance as it read when the report was
+    written. Probe the (ledger-masked) transcript for that utterance with the
+    suggestion in the slot the original occupied (applied), with the original
+    still there (raw), or with neither form at the anchor (gone — rewritten
+    past both, so the review-queue row is the only remaining authority). Line
+    numbers are never trusted: any frontmatter edit shifts them.
+    """
+    frm, to, ctx = entry["from"], entry["to"], entry["context"]
+    if not frm or frm == to:
+        return "applied"
+    if ctx and frm in ctx:
+        i = ctx.index(frm)
+        before = ctx[max(0, i - _CLOSE_ANCHOR_CHARS):i]
+        after = ctx[i + len(frm):i + len(frm) + _CLOSE_ANCHOR_CHARS]
+        if before or after:
+            def found(form: str) -> bool:
+                probes = [before + form + after]
+                if before:
+                    probes.append(before + form)
+                if after:
+                    probes.append(form + after)
+                return any(p in canonical for p in probes)
+            if found(to):
+                return "applied"
+            if found(frm):
+                return "raw"
+            # Anchor unrecognisable (a sibling edit on the same line is enough):
+            # only the whole file can say whether the original form survives.
+            return "raw" if frm in canonical else "gone"
+    return "raw" if frm in canonical else "applied"
+
+
+def close_sidecars(input_path: Path, output_dir: Path, *, dry_run: bool = False,
+                   discard_unpromoted: bool = False, decide_raw: str | None = None,
+                   domain: str = "general", decided_by: str | None = None,
+                   note: str | None = None, queue=None,
+                   disabled_pairs: set | None = None) -> dict:
+    """Decide whether the sidecars beside ``input_path`` are closed; remove them if so.
+
+    Closed means every *_changes.md / *_needs_review.md entry now reads applied
+    (or the original form no longer appears anywhere in the ledger-masked
+    transcript), or a review-queue row for that FROM→TO pair on this exact file
+    carries a non-pending verdict — and the file has zero pending rows. A
+    report whose declared ``Total changes`` exceeds what this parser reads, or
+    that has no header at all, blocks: unreadable evidence is not empty
+    evidence. ``decide_raw`` records ``kept_original`` or
+    ``skipped`` through the queue for entries that still read as the original
+    and have no row at all, so closure leaves an audit trail instead of a
+    silent deletion. A *_stage1.md newer than the transcript is an unpromoted
+    Stage 1 output: refuse, the plain Stage 1 rerun is its promotion path.
+    *_stage2.md / *_dryrun.md newer than the transcript are unpromoted run
+    outputs, retained unless ``discard_unpromoted``. Nothing is written or
+    deleted in ``dry_run``.
+    """
+    from core.dictionary_processor import project_without_ledger_values
+
+    input_path = Path(input_path)
+    stem = input_path.stem
+    input_mtime = input_path.stat().st_mtime
+    present = {suffix: output_dir / f"{stem}{suffix}" for suffix in STAGE1_SIDECAR_SUFFIXES
+               if (output_dir / f"{stem}{suffix}").exists()}
+    report: dict = {
+        "file": str(input_path), "dir": str(output_dir), "dry_run": dry_run,
+        "sidecars": {"present": sorted(p.name for p in present.values()), "removed": [], "retained": []},
+        "entries": {"total": 0, "applied": 0, "gone": 0, "decided": 0, "undecided": 0, "pending": 0,
+                    "disabled": 0},
+        "blockers": {"pending_ids": [], "undecided": [], "stage1_unpromoted": False, "report_unparsed": []},
+        "decisions_recorded": 0,
+    }
+
+    stage1 = present.get("_stage1.md")
+    if stage1 is not None and stage1.stat().st_mtime > input_mtime:
+        report["blockers"]["stage1_unpromoted"] = True
+        report["verdict"] = "blocked"
+        return report
+
+    canonical = project_without_ledger_values(input_path.read_text(encoding="utf-8"))
+    entries: list[dict] = []
+    seen: set[tuple] = set()
+    unparsed: list[str] = []
+    for suffix in PRESERVED_REVIEW_EVIDENCE_SUFFIXES:
+        sidecar = present.get(suffix)
+        if sidecar is None:
+            continue
+        parsed, declared = parse_stage1_report(sidecar.read_text(encoding="utf-8"))
+        if declared is None or len(parsed) < declared:
+            # A report this parser cannot read is evidence of unknown content,
+            # never an empty report; refuse rather than delete it.
+            unparsed.append(sidecar.name)
+        for entry in parsed:
+            key = (entry["from"], entry["to"], entry["context"])
+            if key not in seen:
+                seen.add(key)
+                entries.append(entry)
+    report["blockers"]["report_unparsed"] = unparsed
+    if unparsed:
+        report["verdict"] = "blocked"
+        return report
+
+    rows = queue.list_items(file_path=str(input_path), limit=5000) if queue is not None else []
+    pending_ids = sorted(r.id for r in rows if r.status == "pending")
+    # The queue keys a row by line as well as by pair (two occurrences are two
+    # questions), so one row answers one report entry, matched by nearest line
+    # across EVERY entry of the pair: an applied or gone entry claims its own
+    # row first, so a decided row is never borrowed by a second occurrence that
+    # has none. A raw entry matched to a pending row is pending; a raw entry
+    # with no row of its own is undecided — and is what --decide-raw records.
+    rows_by_pair: dict[tuple[str, str], list[tuple[int, str]]] = {}
+    for r in rows:
+        rows_by_pair.setdefault((r.original_text, r.suggested_text), []).append(
+            (r.line_number if r.line_number is not None else -1, r.status))
+
+    undecided: list[dict] = []
+    entries_by_pair: dict[tuple[str, str], list[tuple[dict, str]]] = {}
+    for entry in entries:
+        entries_by_pair.setdefault((entry["from"], entry["to"]), []).append(
+            (entry, _report_entry_state(entry, canonical)))
+    for pair, pair_entries in entries_by_pair.items():
+        pair_rows = rows_by_pair.get(pair, [])
+        matched: dict[int, int] = {}   # entry index -> row index
+        used: set[int] = set()
+        # closest (entry, row) distances first, each side used at most once
+        for _, i, j in sorted((abs(ln - e["line"]), i, j)
+                              for i, (e, _state) in enumerate(pair_entries)
+                              for j, (ln, _status) in enumerate(pair_rows)):
+            if i not in matched and j not in used:
+                matched[i] = j
+                used.add(j)
+        for i, (entry, state) in enumerate(pair_entries):
+            if state == "raw":
+                if i in matched:
+                    # a queue row is a live question or a recorded verdict; it
+                    # outranks the rule's later retirement
+                    state = "pending" if pair_rows[matched[i]][1] == "pending" else "decided"
+                elif disabled_pairs and pair in disabled_pairs:
+                    # The FROM→TO rule was disabled as a false positive after this
+                    # report was written and no active rule is left in scope: the
+                    # entry is no longer a question, so it closes without a verdict.
+                    state = "disabled"
+                else:
+                    state = "undecided"
+                    undecided.append(entry)
+            report["entries"][state] += 1
+    undecided.sort(key=lambda e: e["line"])
+    report["entries"]["total"] = len(entries)
+
+    if undecided and decide_raw and not dry_run and queue is not None:
+        items = [{
+            "source": "stage1_deferred", "domain": domain, "file": str(input_path),
+            "line": e["line"], "context": e["context"][:200],
+            "original": e["from"], "suggested": e["to"], "kind": "homophone",
+            "evidence": ("close-sidecars: the report entry still reads as the original; "
+                         f"verdict {decide_raw} recorded at closure"),
+        } for e in undecided]
+        added = queue.enqueue(items)["added"]
+        for item_id in added:
+            queue.resolve(item_id, decide_raw, note=note, by=decided_by)
+        report["decisions_recorded"] = len(added)
+        if added:
+            recorded = {(e["from"], e["to"]) for e in undecided[:len(added)]}
+            # enqueue keeps input order, so the first len(added) entries are the
+            # ones it accepted; a temp-dir anchor is the only way one is skipped.
+            still = [e for e in undecided if (e["from"], e["to"]) not in recorded]
+            report["entries"]["decided"] += len(undecided) - len(still)
+            report["entries"]["undecided"] -= len(undecided) - len(still)
+            undecided = still
+
+    report["blockers"]["pending_ids"] = pending_ids
+    report["blockers"]["undecided"] = [
+        {"line": e["line"], "from": e["from"], "to": e["to"], "context": e["context"][:120]}
+        for e in undecided
+    ]
+    if pending_ids or undecided:
+        report["verdict"] = "open"
+        return report
+    report["verdict"] = "closed"
+
+    for suffix, sidecar in present.items():
+        unpromoted = (suffix in _RUN_OUTPUT_SUFFIXES and sidecar.stat().st_mtime > input_mtime)
+        if unpromoted and not discard_unpromoted:
+            report["sidecars"]["retained"].append(sidecar.name)
+            continue
+        if dry_run:
+            report["sidecars"]["removed"].append(sidecar.name)
+            continue
+        try:
+            sidecar.unlink()
+            report["sidecars"]["removed"].append(sidecar.name)
+        except OSError as exc:
+            print(f"⚠️  Could not remove {sidecar.name}: {exc}", file=sys.stderr)
+            report["sidecars"]["retained"].append(sidecar.name)
+    report["sidecars"]["removed"].sort()
+    report["sidecars"]["retained"].sort()
+    return report
+
+
+def _retired_pairs(domains) -> set:
+    """FROM→TO pairs disabled as false positives with no active rule left in scope.
+
+    Scope is the --domain list when given, else every domain. A pair disabled in
+    one domain but still active in another still fires under that domain, so its
+    report entries are still questions — mirroring Stage 1's per-domain veto.
+    """
+    service = _get_service()
+    scope = domains or None
+    disabled = service.get_disabled_pairs(scope)
+    active = {(c.from_text, c.to_text)
+              for c in service.repository.get_all_corrections(domain=scope, active_only=True)}
+    return disabled - active
+
+
+def cmd_close_sidecars(args: argparse.Namespace) -> None:
+    """--close-sidecars: mechanical closure of a transcript's review sidecars."""
+    if not getattr(args, "input", None):
+        _queue_cmd_error(args, "usage", "--close-sidecars requires --input <transcript>", code=2)
+    input_path = Path(args.input).expanduser().resolve()
+    if not input_path.is_file():
+        _queue_cmd_error(args, "input_not_found", f"transcript does not exist: {input_path}", code=2)
+    output_dir = input_path.parent
+    if getattr(args, "output", None):
+        output_dir = Path(args.output).expanduser()
+        if not output_dir.is_dir():
+            _queue_cmd_error(args, "output_not_found",
+                             f"--output is not an existing directory: {output_dir}", code=2)
+        output_dir = output_dir.resolve()
+    domains = _parse_domains(getattr(args, "domain", None))
+    report = close_sidecars(
+        input_path, output_dir,
+        dry_run=getattr(args, "dry_run", False),
+        discard_unpromoted=getattr(args, "discard_unpromoted", False),
+        decide_raw=getattr(args, "decide_raw", None),
+        domain=(domains[0] if domains else "general"),
+        decided_by=getattr(args, "review_by", None),
+        note=getattr(args, "review_note", None),
+        queue=_get_review_queue(),
+        disabled_pairs=_retired_pairs(domains),
+    )
+    exit_code = {"closed": 0, "open": 1}.get(report["verdict"], 2)
+    if getattr(args, "json_output", False):
+        _emit_json(report)
+        sys.exit(exit_code)
+
+    e = report["entries"]
+    print(f"🧾 Sidecar closure — {input_path.name}" + ("  (DRY RUN)" if report["dry_run"] else ""))
+    print(f"   directory: {report['dir']}")
+    print(f"   sidecars present: {', '.join(report['sidecars']['present']) or 'none'}")
+    print(f"   report entries: {e['total']} (applied {e['applied']}, rewritten {e['gone']}, "
+          f"decided {e['decided']}, rule disabled {e['disabled']}, pending {e['pending']}, undecided {e['undecided']})")
+    print(f"   pending queue rows for this file: {len(report['blockers']['pending_ids'])}")
+    if report["decisions_recorded"]:
+        print(f"   verdicts recorded through the queue: {report['decisions_recorded']}")
+    print(f"   verdict: {report['verdict']}")
+    if report["blockers"]["stage1_unpromoted"]:
+        print("   ⛔ *_stage1.md is newer than the transcript — unpromoted Stage 1 output. "
+              "Rerun plain --stage 1 (no --apply-all) to promote it, then close again.")
+    for name in report["blockers"]["report_unparsed"]:
+        print(f"   ⛔ {name} carries entries this tool cannot read (declared count exceeds the "
+              f"parsed entries, or no report header) — an unreadable report is evidence, not "
+              f"an empty one; inspect it by hand before closing")
+    for item_id in report["blockers"]["pending_ids"]:
+        print(f"   ⏳ pending row #{item_id} — resolve it (--resolve-review) before closing")
+    for u in report["blockers"]["undecided"]:
+        print(f"   ❓ L{u['line']} {u['from']!r} → {u['to']!r} still reads as the original and has "
+              f"no verdict — fix the line, or record --decide-raw kept_original|skipped (--by/--note)")
+    if report["sidecars"]["removed"]:
+        verb = "Would remove" if report["dry_run"] else "Removed"
+        print(f"🧹 {verb}: {', '.join(report['sidecars']['removed'])}")
+    if report["sidecars"]["retained"]:
+        print(f"🗂️  Retained (newer than the transcript, unpromoted): "
+              f"{', '.join(report['sidecars']['retained'])} — pass --discard-unpromoted to remove")
+    sys.exit(exit_code)
+
+
+def cmd_lookup(args: argparse.Namespace) -> None:
+    """--lookup TERM: every trace of a term across the dictionary, context rules,
+    the people roster and the review queue, so "is there already a rule for X"
+    is one command instead of a corpus probe or a raw SQL query."""
+    term = (getattr(args, "lookup_term", "") or "").strip()
+    if not term:
+        _queue_cmd_error(args, "usage", "--lookup needs a non-empty TERM", code=2)
+    needle = term.lower()
+
+    def hit(*texts) -> bool:
+        return any(needle in (t or "").lower() for t in texts)
+
+    service = _get_service()
+    domains = _parse_domains(getattr(args, "domain", None))
+    dictionary = [
+        {"domain": c.domain, "from": c.from_text, "to": c.to_text, "is_active": bool(c.is_active),
+         "confidence": c.confidence, "source": c.source, "added_at": c.added_at, "notes": c.notes}
+        for c in service.repository.get_all_corrections(domain=domains, active_only=False)
+        if hit(c.from_text, c.to_text)
+    ]
+    context_rules = [
+        {"id": r["id"], "pattern": r["pattern"], "replacement": r["replacement"],
+         "domain": r["domain"], "is_active": r["is_active"], "priority": r["priority"]}
+        for r in service.list_context_rules(domain=None, include_inactive=True)
+        if hit(r["pattern"], r["replacement"])
+        and (not domains or not r["domain"] or r["domain"] in domains)   # global + the named domains
+    ]
+    roster: dict = {"path": None, "hits": []}
+    roster_path = os.getenv("TRANSCRIPT_FIXER_PEOPLE_ROSTER") or get_config().paths.people_roster_path
+    if roster_path:
+        roster_file = Path(roster_path).expanduser()
+        if roster_file.exists():
+            from core.people_roster import load_people_roster
+            variants, _ = load_people_roster(roster_file)
+            roster = {"path": str(roster_file), "hits": [
+                {"variant": v, "canonical": canon} for v, canon in variants.items()
+                if hit(v, canon)
+            ]}
+    review_queue = [
+        {"id": r.id, "status": r.status, "source": r.source, "domain": r.domain,
+         "file": r.file_path, "line": r.line_number,
+         "original": r.original_text, "suggested": r.suggested_text}
+        for r in _get_review_queue().list_items(limit=5000)
+        if hit(r.original_text, r.suggested_text)
+    ]
+    payload = {"term": term, "dictionary": dictionary, "context_rules": context_rules,
+               "roster": roster, "review_queue": review_queue}
+    if getattr(args, "json_output", False):
+        _emit_json(payload)
+        return
+
+    print(f"🔎 Lookup {term!r}")
+    print(f"Dictionary rules ({len(dictionary)}):")
+    for d in dictionary:
+        state = "active" if d["is_active"] else "DISABLED"
+        print(f"  [{d['domain']}] {d['from']!r} → {d['to']!r}  {state}, confidence {d['confidence']}, "
+              f"{d['source']}, added {d['added_at']}" + (f", note: {d['notes']}" if d["notes"] else ""))
+    print(f"Context rules ({len(context_rules)}):")
+    for r in context_rules:
+        state = "active" if r["is_active"] else "DISABLED"
+        print(f"  #{r['id']} /{r['pattern']}/ → {r['replacement']!r}  [{r['domain'] or 'global'}] {state}")
+    if roster["path"]:
+        print(f"People roster ({len(roster['hits'])}) — {roster['path']}:")
+        for h in roster["hits"]:
+            print(f"  {h['variant']!r} → {h['canonical']!r}")
+    else:
+        print("People roster: not configured")
+    print(f"Review queue ({len(review_queue)}):")
+    for r in review_queue:
+        anchor = f"  {Path(r['file']).name}:{r['line']}" if r["file"] else ""
+        print(f"  #{r['id']} [{r['status']}/{r['source']}] {r['original']!r} → {r['suggested']!r}{anchor}")
+    if not (dictionary or context_rules or roster["hits"] or review_queue):
+        print("  (no trace anywhere — nothing already claims this term)")
 
 
 def cmd_init(args: argparse.Namespace) -> None:
@@ -838,6 +1239,7 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
                 "stage2_total_chunks": 0,
                 "stage2_failed_chunks": 0,
                 "stage2_degraded": False,
+                "boundary_refused": 0,
             }
 
     # Initialize service
@@ -1023,6 +1425,7 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
     # --json consumers never infer no-op vs failure from a sidecar's existence.
     applied_count = 0
     skipped_count = 0
+    boundary_refused = 0
     stage1_output_written: Path | None = None
     needs_review_written: Path | None = None
     review_enqueued = 0
@@ -1045,9 +1448,13 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
             correction_meta,
             speaker_labels=speaker_labels,
         )
-        stage1_text, stage1_changes = processor.process(original_text, review_mode=review_mode)
+        # --apply-all is the operator's explicit "apply every match" override:
+        # it also switches off the word-boundary refusal (match-time safety check 3).
+        stage1_text, stage1_changes = processor.process(
+            original_text, review_mode=review_mode, boundary_check=not apply_all)
 
         summary = processor.get_summary(stage1_changes)
+        boundary_refused = summary.get("boundary_skips", 0)
         risk_counts = {"low": 0, "medium": 0, "high": 0}
         for c in stage1_changes:
             risk_counts[c.risk] = risk_counts.get(c.risk, 0) + 1
@@ -1062,6 +1469,12 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
         if review_mode:
             print(f"  - Applied (low risk): {applied_count}")
             print(f"  - Skipped for review: {skipped_count}")
+        if summary.get("boundary_skips"):
+            print(f"  - Refused at word boundaries: {summary['boundary_skips']} "
+                  f"(match cut across dictionary words — a fragment, not a mishearing; "
+                  f"--apply-all or a context rule overrides)")
+            for line_no, frm, to, snippet in processor.boundary_skips[:10]:
+                print(f"      L{line_no} {frm!r}→{to!r} in …{snippet.strip()!r}…")
 
         if not dry_run:
             # Honor an explicit --output FILE path; otherwise use the
@@ -1316,6 +1729,10 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
         "stage2_total_chunks": stage2_total_chunks,
         "stage2_failed_chunks": stage2_failed_chunks,
         "stage2_degraded": stage2_failed_chunks > 0,
+        # Additive: dictionary matches refused at word boundaries this run
+        # (match-time safety check 3) — neither applied nor deferred, so a caller
+        # comparing runs can see why a deferral disappeared.
+        "boundary_refused": boundary_refused,
     }
 
 

@@ -1,18 +1,5 @@
 # Merge Verification — prove content is merged without being fooled by counts
 
-## Contents
-- Why commit counts lie (the squash-merge illusion)
-- The sound content check (a trial merge, not a heuristic)
-- Per-branch verdict procedure
-- Pick the diff FORM from the question you're asking (two-dot vs three-dot)
-- Why safety-biased: a false "merged" loses work, a false "unmerged" only costs a look
-- Manual-only investigation hints (do NOT auto-decide on these)
-- Converging many branches to one main through single-writer windows
-- Independent clone retirement — preserve refs, metadata, and borrowed objects
-- Worktree retirement — prove the checkout is disposable before removal
-- Adversarial multi-agent verification (for a whole repo of branches)
-- Rules for the verification agents
-
 ## Why commit counts lie (the squash-merge illusion)
 
 When a PR is **squash-merged**, main gets one new commit whose *content* equals the branch, but
@@ -73,7 +60,7 @@ base's parallel work is the point. It is the wrong form for "what does the base 
 
 ## Per-branch verdict procedure
 
-For each branch, the script decides among three outcomes:
+For each branch, the script returns one of these outcomes:
 
 - **MERGED (ancestor)** — in the base's history. Content containment is proven; deletion still
   requires the separately authorized Mode E target, current ref equality, and preservation gate.
@@ -232,7 +219,7 @@ content evidence below and have no automatic enforcement.
 
 ### 1. Freeze the outcome and the first ref snapshot
 
-Before interpreting the inventory, partition objects into three sets:
+Before interpreting the inventory, partition objects as follows:
 
 - **change-authorized:** exact checkout/ref/PR targets this task may mutate;
 - **inspect-only:** objects the evidence question genuinely requires reading but not changing;
@@ -352,7 +339,8 @@ explicitly change-authorized, the task is complete only when all are independent
 - the index has no staged residue from the convergence;
 - every pre-existing WIP path still byte-matches its frozen source/backup, even if Git now reports
   a different tracked/untracked classification;
-- the recovery bundle still verifies and lists the retired exact tips.
+- until separately authorized artifact retirement completes, the recovery bundle still verifies
+  and lists the retired exact tips.
 
 Tags, stashes, and dangling commits do not block a branch/worktree convergence claim unless the
 Outcome contract separately names them as retirement targets; preserve or report them under their
@@ -363,6 +351,53 @@ convergence. Report **scoped completion** instead: the authorized refs/PRs are m
 the maintained main identities agree, and every excluded branch/worktree/PR is listed as untouched.
 Those exclusions are not blockers and must not be deleted to make a count reach one. Counts and
 checksums support these claims; they do not replace them.
+
+### 6. Retire task-owned temporary recovery artifacts
+
+Treat recovery-artifact retirement as a separate destructive phase after convergence, never as an
+implied final line of the initial "one main" request. A verified bundle, diff, copied file, or
+metadata archive is a temporary safety net only after the underlying payload is independently
+accounted for; before that, it may be the sole surviving copy of the work.
+
+Classify every exact artifact path recorded by this task before proposing cleanup:
+
+| Payload status | Terminal action |
+|---|---|
+| Every ref, diff, copied byte, and metadata item is on the maintained survivor or proven intentionally superseded | Eligible for separately authorized retirement after stating that deletion removes this recovery route |
+| Any content exists only in the backup | Keep it; the artifact is still the delivery copy, not temporary residue |
+| Any content is unresolved, or one artifact mixes cleared and unresolved payloads | Keep the whole artifact; do not let the cleared entries authorize deletion of the unresolved ones |
+
+Use the same evidence that cleared the source: trial-merge or the supersession ladder for refs;
+blob/path comparison for committed content; byte hashes or symlink targets for copied dirty and
+ignored paths; and the clone-retirement receipt for clone metadata. Re-run `git bundle verify` and
+`git bundle list-heads` before retiring a bundle, then map every listed identity to its content
+proof. Recoverability alone is not delivery evidence.
+
+Obtain deletion authority for the exact files or one exact task-exclusive backup directory. Show
+the paths, their classification, and the lost recovery route. Do not infer this authority from age,
+inactivity, successful convergence, or authorization to delete the original refs/worktrees/clones.
+Do not sweep a machine-wide backup root, delete a parent that may contain another task's material,
+or create a persistent registry of recovery artifacts. If an exact directory was not freshly
+created for this task or its inventory does not match this task's recorded artifacts, authorize and
+retire individual paths instead.
+
+A Trash/quarantine move keeps the artifact at a new path; verify the old path is absent and the new
+path is readable, but report that recovery material remains. Claim artifact retirement only after
+an explicitly authorized permanent removal. Then perform a separate filesystem readback for every
+exact path, including the dangling-symlink case:
+
+```bash
+: "${ARTIFACT_PATH:?set one exact authorized artifact path}"
+if [ -e "$ARTIFACT_PATH" ] || [ -L "$ARTIFACT_PATH" ]; then
+  printf 'STILL_PRESENT %s\n' "$ARTIFACT_PATH" >&2
+  exit 1
+fi
+printf 'ABSENT %s\n' "$ARTIFACT_PATH"
+```
+
+The lifecycle has two valid terminal states: a verified recovery set remains available, or every
+separately authorized temporary artifact has been retired and independently proven absent. Never
+report the second state when backup-only or unresolved work remains.
 
 ## Independent clone retirement — preserve refs, metadata, and borrowed objects
 
@@ -448,7 +483,8 @@ Use this READ-DO sequence for one explicitly authorized clone:
    stop instead of claiming safety. Treat postconditions—not `mv`'s exit code—as authority: the old
    path must be absent and the quarantine path must contain the clone's `.git` directory. Do not
    target the clone's parent unless a separate inventory proves that parent contains nothing else.
-   Keep the external recovery set after the move.
+   Keep the external recovery set after the move. Retire it later only through § Retire task-owned
+   temporary recovery artifacts; moving the clone does not itself clear the archive's payload.
 6. **Verify the user-visible result.** The survivor's HEAD/index/worktree must be unchanged; the
    old active path is absent; the quarantine copy or permanent backup is readable; `git bundle
    verify` still succeeds; `git bundle list-heads` still lists the frozen identities; and
@@ -516,6 +552,9 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
    does not authorize branch deletion. If Git refuses after a
    proven squash/supersession case, require the verified backup and explicit deletion authority
    before `-D`. A worktree removal does not itself prove a remote branch may be deleted.
+
+The recovery artifacts created in step 6 may later follow § Retire task-owned temporary recovery
+artifacts. A copied ignored path that exists only in that backup keeps the artifact ineligible.
 
 ## Adversarial multi-agent verification (for a whole repo of branches)
 

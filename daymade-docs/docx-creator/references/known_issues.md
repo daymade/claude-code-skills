@@ -447,3 +447,71 @@ if (bold) { rp.Append(new Bold()); rp.Append(new BoldComplexScript()); }  // Lat
 **Verify.** Convert to PDF and read the page PNG: a bolded multi-stroke name must show clean,
 separated strokes （黑体's even weight), not a thickened 宋体 with merged counters. Check a
 mixed line — Latin bold must remain Times New Roman Bold, visibly distinct from the 黑体 run.
+
+
+## ISSUE-015 — Body, lists and code share one arbitrary left coordinate
+
+**Symptom.** List markers crowd the margin, wrapped list lines drift, or a code example looks
+like an indented prose paragraph even though every measured left coordinate matches.
+
+**Cause.** Body first-line indentation, list marker position, list text position, code panel
+edge and panel padding were treated as the same property. Inherited character-unit indents
+can also override newly written twip values.
+
+**Fix.** Define roles in the project profile. Body has a first-line indent; lists have a marker
+and a text column with a hanging indent; wrapped lines align with the text column. Code has
+a panel edge and uniform internal padding, with no prose first-line indent. Clear conflicting
+character-unit/direct/style indents before setting the chosen values. Preserve source code
+whitespace and literal Markdown markers. Do not make one book's point values universal.
+
+**Verify.** Read a normal-scale page containing body + short and wrapped lists + a multiline
+code example. Compare the relationships above, not equality of all left coordinates.
+
+## ISSUE-016 — Disabled numbering or typed ordinals become automatic lists
+
+**Symptom.** A paragraph runs off-page, a typed “1）” gains an extra bullet, or two-digit items
+and continuation lines no longer align.
+
+**Cause.** `numId=0` was treated as a real list, a producer-specific `ilvl=255` sentinel was
+multiplied as nesting depth, or a typed ordinal and automatic numbering were both emitted.
+
+**Fix.** Resolve the effective numbering first. `numId=0` removes numbering; retain that
+suppression if a style would otherwise reintroduce it. A sentinel is not a depth: unknown
+levels must be diagnosed, not converted to an enormous indent. Distinguish literal ordinals
+from automatic numbering; do not erase meaningful text. Use a tab stop and sufficient label
+width for typed ordinals when normalizing their separator whitespace. Preserve intentional
+numbering continuations and semantic code lists.
+
+**Verify.** Exercise disabled numbering with an inherited list style, automatic bullet and
+decimal lists, and typed 1）/10） items wrapping to a second line. Ensure one marker per item
+and one continuation column. The Microsoft contract for the disabling value is in
+[NumberingId](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.numberingid?view=openxml-3.0.1).
+
+## ISSUE-017 — Code punctuation changes shape despite intact extracted text
+
+**Symptom.** URLs, arrows or ellipses look wrong while text comparison passes.
+
+**Cause.** A programming font substitutes ligatures; the renderer may ignore the document's
+ligature-disable setting. Theme/direct font overrides or missing CJK glyphs cause a second
+class of fallback defects.
+
+**Fix.** Verify installed fonts and the exported PDF's actual faces. When the target renderer
+ignores ligature controls, use a verified non-ligature Latin mono face and an appropriate CJK
+face. Inspect mixed-font lines; do not assume one font file covers every symbol.
+
+**Verify.** Render literal `https://example.invalid`, `>>`, `...`, `#`, Chinese, and symbols
+used by the document. Compare visible glyphs as well as extracted text.
+
+## ISSUE-018 — Images are present in the file but clipped to a text-height strip
+
+**Symptom.** Image relationships and counts match, but the PDF shows only a narrow strip or
+a blank-looking page region.
+
+**Cause.** A body-wide exact line height was also applied to inline-image paragraphs.
+
+**Fix.** Give image paragraphs automatic/minimum line height, bound the image dimensions to
+the available page area, and keep the caption attached. Do not apply exact body line height
+to every paragraph.
+
+**Verify.** Inspect the complete visible figure and its caption in the final PDF, including
+a tall figure and a figure beside a page break. An image-object count alone cannot pass it.

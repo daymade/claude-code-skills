@@ -71,6 +71,8 @@ from cli import (
     cmd_resolve_review,
     cmd_scan_traps,
     cmd_probe,
+    cmd_close_sidecars,
+    cmd_lookup,
     create_argument_parser,
 )
 
@@ -168,6 +170,10 @@ def main() -> None:
         cmd_scan_traps(args)
     elif getattr(args, "probe_term", None):
         cmd_probe(args)
+    elif getattr(args, "close_sidecars", False):
+        cmd_close_sidecars(args)
+    elif getattr(args, "lookup_term", None) is not None:
+        cmd_lookup(args)
     elif args.input:
         if getattr(args, "json_output", False):
             # --json contract: stdout carries ONLY the machine-readable Stage 1

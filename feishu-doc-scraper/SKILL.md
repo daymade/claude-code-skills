@@ -1,6 +1,6 @@
 ---
 name: feishu-doc-scraper
-description: Extract Feishu (Lark) Docs, Wiki pages/collections, spreadsheets, and Minutes (妙记) transcripts into faithful local Markdown via the lark-cli API (no LLM rewriting of the body; browser-DOM fallback when lark-cli can't reach the content). Use whenever the source is a Feishu/Lark URL and fidelity matters — 导出飞书文档/合集/妙记转写, 把飞书 wiki/知识库转 markdown, archiving a Feishu collection, exporting a 妙记 transcript, or saving a Feishu page — even if the user only says clipping, archiving, converting, or "save this". Also covers the owner-exported .docx → faithful Markdown path.
+description: Extract Feishu (Lark) Docs, Wiki pages/collections, spreadsheets, and Minutes (妙记) transcripts into faithful local Markdown via the lark-cli API (no LLM rewriting of the body; browser-DOM fallback when lark-cli can't reach the content). Use whenever the source is a Feishu/Lark URL and fidelity matters — 导出飞书文档/合集/妙记转写, 把飞书 wiki/知识库转 markdown, archiving a Feishu collection, exporting a 妙记 transcript, or saving a Feishu page — even if the user only says clipping, archiving, converting, or "save this". Also covers the owner-exported .docx → faithful Markdown path. Document reading includes comments, feedback and all replies in the selected solved scope; Minutes comments are outside this capability.
 compatibility: Primary path needs the `lark-cli` binary (npm `@larksuite/cli`; verified 1.0.32, 2026-05, and re-verified 1.0.80, 2026-08 — the `.data.markdown` field is null on 1.0.80 and the pandoc/`source.html` path in step 3 is load-bearing there) authenticated to the target tenant. Fallback path needs a browser automation surface with an authenticated session (Chrome DevTools MCP / Browser Use / Computer Use). docx path needs `python-docx` and a docx→md converter (the bundled doc-to-markdown skill or pandoc).
 argument-hint: "[feishu-url-or-output-path]"
 ---
@@ -12,6 +12,10 @@ Extract a Feishu/Lark source into faithful local Markdown. **Prefer the lark-cli
 ## Scope (read this first)
 
 This skill's contract is **faithful per-source Markdown + a record of what was extracted**. It does *not* decide how the resulting files are named, indexed, deduplicated against existing notes, or organized into a knowledge base — that belongs to the host PKM / the user's own conventions. Stopping at faithful extraction keeps this skill orthogonal and reusable. When the user wants the output filed into a vault, extract first, then hand the clean Markdown to their organizing workflow.
+
+**For every document read or archived, load [comments and feedback](references/comments-and-feedback.md).**
+It owns the body-plus-discussion workflow, selected scope, body-only exception,
+snapshot commands, interpretation and coverage checks.
 
 **Extraction and durable storage are separate decisions.** A downloaded MP4/XLSX/DOCX/image is a working copy, not evidence that the file belongs in Git or Git LFS. For a knowledge-base archive, default to:
 
@@ -148,12 +152,13 @@ These are the rules whose violation silently ruins the output. Each has a reason
 Stop only when all that apply are true:
 
 - Every fetched body reached disk via `jq`/script, not retyped by the model.
+- Apply the discussion acceptance rules in [comments and feedback](references/comments-and-feedback.md).
 - **Every fetched document — a lone doc as much as a collection**: every hit from the residual rich-media-tag check (Path A step 5, run recursively over the whole working directory) maps to a handled artifact — every `mention-doc`/`cite doc-id=`/`sheet`/cross-tenant reference was **followed** to a fetched leaf file, and every `whiteboard` reference was **exported and read** (not followed — a whiteboard is inline visual content, never a link to recurse into). Raw binaries then map to a stable platform/OSS locator plus optional verified local cache; structured/searchable derivatives map to versioned files. This is not a collections-only check: a standalone document can contain an unresolved `whiteboard` with zero other documents involved. Each document's own `.html` legitimately keeps showing its tags forever (it's an immutable raw capture, never rewritten — as long as each document got its own filename per step 3) — don't chase the grep itself to a literal zero.
 - The artifact manifest passes `python3 scripts/check_archive_storage.py <manifest>`: no raw binary is declared as Git storage, every external artifact has a stable locator, and every local cache is clearly marked as non-authoritative.
 - `LC_ALL=C grep -rl $'\xef\xbf\xbd' .` is empty.
 - docx path: rendered to an image and visually compared to the source; heading hierarchy and highlights match (see docx reference's checklist).
 - Browser fallback only: TOC coverage + scale check (see browser-failure-rules.md).
-- Each output file's frontmatter records `source` (the original URL/token) and, if any post-processing was applied, a `post_process` provenance line — the exact YAML shape and field list is **[references/lark-cli-api-extraction.md, Step 7](references/lark-cli-api-extraction.md)** (not shown in Path A's 5 numbered steps above, since it's a per-file finishing step rather than part of the fetch/recurse/check loop).
+- Each output file's frontmatter records `source` (the original URL/token) and, if any post-processing was applied, a `post_process` provenance line — use the **[per-file finishing procedure](references/lark-cli-api-extraction.md#step-7-frontmatter-and-provenance)**.
 - Permission gaps (131006 docs not exported yet, undownloadable images) are explicitly listed for the user — a transparent gap beats a silent omission.
 
 ## Do NOT attempt
@@ -168,6 +173,7 @@ Verified dead-ends — retrying them only wastes the session. Full table with fa
 
 ## Bundled resources
 
+- [scripts/fetch_comments.py](scripts/fetch_comments.py) — executable comment-capture interface.
 - `scripts/feishu_extract_refs.py` — deterministic reference-token extractor; the recursion engine's core. Run it once per fetched document, on that document's own `<sanitized-title>.html` (prefer over `.md` — step 3), to enumerate `<mention-doc>`/`<sheet>`/`<image>`/`<whiteboard>`/cross-tenant/Minutes/Tencent-Meeting references as JSON.
 - `scripts/restore_docx_headings.py` — for Path B: reads true font sizes via python-docx, maps them to heading levels, restores `w:shd` highlights to Obsidian `==…==`, without retyping body text.
 - `scripts/feishu_dom_capture.js` — Path D: injectable end-to-end browser DOM capture.
