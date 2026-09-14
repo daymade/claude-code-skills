@@ -30,6 +30,7 @@ Read only the reference required for the task:
 | Inspect or change collaborators, teams, base permissions, member privileges, or organization 2FA | [`references/organization_access_and_settings.md`](references/organization_access_and_settings.md) |
 | Protect a default branch while letting collaborators contribute through PRs | [`references/branch_protection.md`](references/branch_protection.md) |
 | Trigger, inspect, rerun, cancel, or purge Actions; manage secrets or variables | [`references/workflow_operations.md`](references/workflow_operations.md) |
+| Build and publish a Docker/OCI image to GitHub Container Registry (GHCR) | [`references/ghcr_publishing.md`](references/ghcr_publishing.md) |
 | Use raw REST/GraphQL endpoints, pagination, rate limits, webhooks, or Enterprise hosts | [`references/api_reference.md`](references/api_reference.md) |
 | Build scripts, retries, bulk operations, or machine-readable output | [`references/best_practices.md`](references/best_practices.md) |
 
@@ -159,6 +160,23 @@ End with one of four honest states:
 - **pending** — accepted but not yet terminal, with the next authoritative check;
 - **failed/no-op or partial** — requested and observed states differ, with recovery and
   unresolved risk.
+
+### 8. Authenticate only for the named write
+
+Authentication is scoped to the authorized operation; it is not a reason to reopen an
+already-authorized exact write. Before starting an interactive browser or device flow, state
+the GitHub application, active account, target host, and the exact permission delta. Continue
+the steps the browser can complete after that explanation. Hand control to the user only when
+their physical presence is required, such as MFA, a hardware key, or an account-selection
+decision. Never request broader scopes, a different account, or an unrelated approval merely
+because the normal flow is interactive.
+
+Do not expose credential values in terminal output, URLs, arguments, committed files, or
+reports. A production host's pull-only registry credential is not authorization to publish.
+Reuse the current, already-authorized credential when it has been verified for the exact write;
+use a temporary local Docker configuration and remove that configuration after the operation.
+GHCR publication has its own preflight and digest readback; load
+`references/ghcr_publishing.md` before building or pushing an image.
 
 ## High-impact boundaries
 
