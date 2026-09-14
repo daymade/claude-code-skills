@@ -36,19 +36,14 @@ separate GitHub CLI operation truly needs an interactive scope refresh, follow t
 flow rule in [`../SKILL.md`](../SKILL.md); registry publication itself uses the protected
 registry credential below.
 
-GitHub documents a classic personal access token for GitHub Packages registry login. Obtain that
-separate, already-authorized write credential through the operator's protected secret mechanism,
-then prove its identity and its access to this target *before* the build. `GH_TOKEN` here only
-passes the credential to `gh` for the command; it is neither printed nor persisted:
+Use the current GitHub CLI credential when the preflight has verified that it is authorized for
+this exact write. Do not ask for, create, or substitute another credential merely because GitHub
+also documents classic personal access tokens for GitHub Packages. A classic token is a fallback
+only when the current verified credential cannot perform the requested write. The checks below
+reuse the active CLI identity and do not print or persist a credential:
 
 ```bash
-write_login=$(GH_TOKEN="$GHCR_WRITE_TOKEN" gh api --hostname "$host" user --jq '.login')
-test "$write_login" = "$GHCR_ACTOR" || {
-  printf 'GHCR write credential identity does not match the authorized actor\n' >&2
-  exit 1
-}
-
-GH_TOKEN="$GHCR_WRITE_TOKEN" gh repo view "$repo" \
+gh repo view "$repo" \
   --json nameWithOwner,visibility,isPrivate,viewerPermission,url
 ```
 
@@ -62,11 +57,11 @@ does not prove creation is allowed:
 
 ```bash
 # Personal namespace
-GH_TOKEN="$GHCR_WRITE_TOKEN" gh api "user/packages/container/PACKAGE" \
+gh api "user/packages/container/PACKAGE" \
   --jq '{name,package_type,visibility,repository:(.repository.full_name // null)}'
 
 # Organization namespace
-GH_TOKEN="$GHCR_WRITE_TOKEN" gh api "orgs/NAMESPACE/packages/container/PACKAGE" \
+gh api "orgs/NAMESPACE/packages/container/PACKAGE" \
   --jq '{name,package_type,visibility,repository:(.repository.full_name // null)}'
 ```
 
@@ -76,12 +71,9 @@ to establish its visibility, linked repository, and package access, or stop. A p
 repository association or visibility differs from the frozen target is a target/access mismatch,
 not a build failure.
 
-Package metadata does not expose an effective package-write permission for the current actor.
-For a package with granular access, use its authenticated Package settings UI to verify that the
-same `GHCR_ACTOR` has Write or Admin package access before the build. For a package inheriting
-repository permissions, record that inheritance and use the same credential's `viewerPermission`
-readback above. If neither route proves package write access, stop before the build; a registry
-push is not a harmless permission probe.
+Package metadata and the repository `viewerPermission` establish the existing target and the
+current actor's repository access. Keep those reads with the actual credential that will publish;
+do not replace a verified publish path with a separate permission-probe workflow.
 
 GitHub's current documentation says Container Registry publication uses GitHub Packages
 authentication and documents `write:packages` for upload; a linked package can inherit the
@@ -92,10 +84,9 @@ The package API endpoints and their user/organization access limits are document
 
 ## Authenticate and publish with an ephemeral Docker config
 
-Use a separate, already-authorized write credential delivered through the operator's protected
-secret mechanism. GitHub documents a classic personal access token for GitHub Packages; do not
-copy a value from `gh auth token`, a remote deployment host, shell history, or another user's
-credential store. The variable names below are placeholders and the commands never echo them.
+Use the current, verified GitHub CLI credential. The pipe sends it directly to Docker's password
+stdin; it does not print, persist, or place its value in an argument. Do not use a remote
+deployment host's pull-only credential, shell history, or another user's credential store.
 
 ```bash
 docker_config=$(mktemp -d)
@@ -107,11 +98,11 @@ cleanup_ghcr() {
 }
 trap cleanup_ghcr EXIT HUP INT TERM
 
-printf '%s' "$GHCR_WRITE_TOKEN" \
+gh auth token --hostname "$host" \
   | docker --config "$docker_config" login ghcr.io \
       --username "$GHCR_ACTOR" --password-stdin
 
-docker buildx build --platform linux/amd64 \
+docker --config "$docker_config" buildx build --platform linux/amd64 \
   --metadata-file "$metadata_file" \
   --tag "$image" --push .
 ```
@@ -131,9 +122,9 @@ the same temporary Docker configuration, and compare it with the tag resolution:
 image_repo='ghcr.io/NAMESPACE/PACKAGE'
 published_digest=$(jq -er '."containerimage.digest"' "$metadata_file")
 digest_readback=$(docker --config "$docker_config" buildx imagetools inspect \
-  --format '{{.Digest}}' "${image_repo}@${published_digest}")
+  --format '{{.Manifest.Digest}}' "${image_repo}@${published_digest}")
 tag_readback=$(docker --config "$docker_config" buildx imagetools inspect \
-  --format '{{.Digest}}' "$image")
+  --format '{{.Manifest.Digest}}' "$image")
 test "$digest_readback" = "$published_digest"
 test "$tag_readback" = "$published_digest"
 ```
