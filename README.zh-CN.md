@@ -236,6 +236,7 @@ claude plugin install daymade-claude-code@daymade-skills
 /daymade-claude-code:prior-work-retrieval
 /daymade-claude-code:lark-cli-router
 /daymade-claude-code:claude-code-ping-start-5h-quota
+/daymade-claude-code:agent-web-search-setup
 ```
 
 安装后调用统一显示为 `daymade-claude-code:<skill>`，共享同一命名空间。这些技能仅作为套件发布——安装套件即可获得全部技能。
@@ -3634,6 +3635,36 @@ lark-cli 提示 user 身份缺少 scope
 ```text
 还有 1 小时 20 分钟重置额度，帮我定时戳一下 Claude
 我去睡觉了，额度重置后帮我 ping 一下开启新窗口
+```
+
+### **agent-web-search-setup** - 模型后端跑不了搜索时，给 Agent 装上能用的联网搜索
+
+> **安装**：`claude plugin install daymade-claude-code@daymade-skills`
+>（仅作为套件成员发布，调用方式 `daymade-claude-code:agent-web-search-setup`）
+
+中转站或代理把 Claude、Codex 转发到别的云（Vertex AI、Bedrock 或 OpenAI 兼容层）
+之后，Anthropic 服务端执行的 `web_search` 与 `web_fetch` 跑不起来。请求本身是成功的，
+不报任何错——模型只是拿不到结果，于是断定最近发生的事情不存在，看起来像「模型变笨了」
+而不像工具坏了。本 Skill 先探测端点、确认哪些内置工具真的是死的，把它们从客户端摘掉
+让模型不再去够，再装一个客户端执行、模型真调得动的替代品，最后用一条实时查询验证。
+它是去配置 Agent 的，本身不提供搜索。
+
+**核心能力：**
+- `diagnose.py`（纯标准库，在装任何东西之前就能跑）看回包结构不看正文：`server_tool_use` 表示工具真的执行了，裸 `tool_use` 表示被甩回客户端、从未执行，HTTP 400 表示这层翻译连工具定义都表达不了
+- Codex 和 Claude Code 都覆盖：`--api openai` 去 OpenAI Responses API 问同一个问题（真执行时回包里有 `web_search_call`），`--api both` 应付一个网关同时提供两种形状的常见情况
+- 市面上多数「给 Agent 加联网能力」的包，是在编排模型**自己已声明**的那些工具——在坏掉的中转站上它们继承的正是同一个故障，还在上面盖了一层看着很像在工作的东西；本 Skill 给出判据：只有真正走本地进程（CLI / curl / 脚本）的那种才免疫
+- 26 个标定测试，已注册进 CI，其中一半专门钉死假阳性那一侧：只回文本、空回包、超时、路由不存在，四种情况都必须报「无法判定」而不是「坏了」
+- 从 tool id 前缀认出真实后端（`toolu_vrtx_` 是 Vertex AI，`toolu_bdrk_` 是 Bedrock）——能力属于后端不属于模型，所以同一端点换模型不解决问题
+- 摘掉坏工具是前置条件不是可选项：`WebSearch` 还留在菜单上时，实测模型调它 21 次、调已装好的替代品 0 次，哪怕替代品的说明里写明内置的已经坏了
+- 替代品菜单给一个免注册、免本地安装的默认项，其余实测可用的保留为真选项，排除掉的逐条写明原因
+- 慢不判死——实测同一网关在两个模型 id 上约 15 秒、在第三个上约 146 秒，所以超时只报「无法判定」
+- 验证时只留新装的那一个后端可用：装了两个时，能用的那个会替坏的那个作答，让一份并不工作的配置显示为绿
+
+**使用示例：**
+```text
+搜索返回空的，模型说这东西不存在
+我用的是中转站的 key，联网搜索好像坏了
+给这个 agent 加上联网搜索能力
 ```
 
 ### **codex-1m-context-window-setup** - 为 Codex 设置模型感知的长上下文

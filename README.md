@@ -239,6 +239,7 @@ This suite bundles the skills that extend Claude Code itself — cross-project p
 /daymade-claude-code:prior-work-retrieval
 /daymade-claude-code:lark-cli-router
 /daymade-claude-code:claude-code-ping-start-5h-quota
+/daymade-claude-code:agent-web-search-setup
 ```
 
 Installed names render as `daymade-claude-code:<skill>` under a single shared namespace. These skills are bundle-only — install the suite to get all members.
@@ -3655,6 +3656,39 @@ ping survives closing the session, and a live session is re-woken to verify the
 ```text
 还有 1 小时 20 分钟重置额度，帮我定时戳一下 Claude
 我去睡觉了，额度重置后帮我 ping 一下开启新窗口
+```
+
+### **agent-web-search-setup** - Working Web Search When the Model Backend Cannot Run It
+
+> **Install**: `claude plugin install daymade-claude-code@daymade-skills`
+> (suite-only — invoked as `daymade-claude-code:agent-web-search-setup`)
+
+A reseller or relay that proxies Claude or Codex to another cloud (Vertex AI,
+Bedrock, or an OpenAI-compatible layer) cannot execute Anthropic's server-side
+`web_search` and `web_fetch`. The request still succeeds, so nothing errors — the
+model simply gets no results and reports that recent things do not exist, which
+reads as "the model got stupid" rather than as a broken tool. This skill probes
+the endpoint to establish which built-in tools are actually dead, removes those
+from the client so the model stops reaching for them, installs a client-executed
+replacement it can really call, and proves it with a live query. It configures
+the agent; it is not itself a search engine.
+
+**Key features:**
+- `diagnose.py` (standard library only, runs before anything is installed) reads the shape of the reply rather than its text: `server_tool_use` means the tool really ran, a plain `tool_use` means it was handed back and never executed, HTTP 400 means the translation layer cannot express the tool at all
+- Covers Codex as well as Claude Code: `--api openai` asks the same question of the OpenAI Responses API, where a working endpoint returns a `web_search_call` item, and `--api both` handles a relay serving both shapes
+- Most "give your agent internet access" bundles orchestrate the tools the model already declares, so on a broken relay they inherit the exact failure and hide it behind a convincing layer; the skill says how to tell those apart from the ones that shell out to a local process
+- 26 calibration tests, registered in CI, half of them pinning the false-positive side: a text-only reply, an empty reply, a timeout and a missing route all have to come back inconclusive rather than broken
+- Names the real backend from the tool-call id prefix (`toolu_vrtx_` Vertex AI, `toolu_bdrk_` Bedrock), which is why switching models on the same endpoint does not help
+- Removing the dead tool is a precondition, not a preference: with `WebSearch` still on the menu, a model made 21 calls to it and 0 to an installed alternative whose description said the built-in was broken
+- A replacement menu with one default that needs no account and no local runtime, live-tested alternatives kept as real options, and the rejected candidates each carrying its reason
+- Slow is never reported as dead — one gateway was measured answering in about 15 seconds on two model ids and about 146 on a third, so a timeout returns inconclusive
+- Verification runs with only the newly installed backend available, because a second working one will answer for a broken one and turn the check green on a configuration that does not work
+
+**Example usage:**
+```text
+搜索返回空的，模型说这东西不存在
+我用的是中转站的 key，联网搜索好像坏了
+give this agent internet access — web search does nothing
 ```
 
 ### **codex-1m-context-window-setup** - Model-Aware Long Context for Codex
