@@ -173,9 +173,10 @@ because the normal flow is interactive.
 
 Do not expose credential values in terminal output, URLs, arguments, committed files, or
 reports. A production host's pull-only registry credential is not authorization to publish.
-Use a separately authorized write credential in a temporary local Docker configuration and
-remove that configuration after the operation. GHCR publication has its own preflight and
-digest readback; load `references/ghcr_publishing.md` before building or pushing an image.
+Reuse the current, already-authorized credential when it has been verified for the exact write;
+use a temporary local Docker configuration and remove that configuration after the operation.
+GHCR publication has its own preflight and digest readback; load
+`references/ghcr_publishing.md` before building or pushing an image.
 
 ## High-impact boundaries
 
