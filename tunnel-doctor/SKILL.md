@@ -687,10 +687,12 @@ Two things that wrapper must get right:
 
 ⚠️ Beware stacking retries. If a wrapper script or cron job already retries pushes, adding a transport-layer retry underneath multiplies them (5 × 3 = 15 connections), and the outer layer's logs will undercount actual connection attempts.
 
-**(C) A third mechanism: the SSH channel is down entirely, not episodically (measured 2026-09-14).** `ssh.github.com:443` times out during banner exchange on *every* attempt, and falling back to port 22 also returns `Connection closed by 198.18.x` — while HTTPS to the same host is fully working in the same window. The (A)/(B) test above still separates it: (C) is (B)-shaped for SSH (0% success) but (A)-shaped for HTTPS (100% clean), which neither (A) nor (B) predicts — that combination *is* the signature. Two traps specific to (C):
+**(C) "The SSH channel is down entirely" — a verdict shape to resist, not a mechanism.** A window of back-to-back SSH failures (`ssh.github.com:443` banner timeouts, port 22 also `Connection closed`) with HTTPS 100% clean looks like a new mechanism. It isn't: re-measured across windows the same host showed `ssh -T git@github.com` succeeding 75–84% over 25 attempts — mechanism (B)'s bad-window peak all along. **N consecutive failures inside one time window are not N independent samples**: forwarding instability is time-varying, and a bad window produces 5-in-a-row failures routinely. Before concluding "the channel is dead," re-measure minutes later.
 
-- `nc -vz github.com 22` reports **succeeded** — under a TUN the local stack answers for the destination on any port, so it says nothing about SSH health. Only trust a real handshake (`ssh -T git@github.com`).
-- The one-shot HTTPS bypass works without touching shared remote config: `git push https://github.com/<owner>/<repo>.git HEAD:refs/heads/main`. If the direct HTTPS attempt dies with `SSL_ERROR_SYSCALL`, prefix `HTTPS_PROXY=http://127.0.0.1:<proxy-port>` and retry.
+Two facts to keep regardless:
+
+- `nc -vz github.com 22` reporting **succeeded** proves nothing — under a TUN the local stack answers for the destination on any port. Only trust a real handshake (`ssh -T`).
+- When the retry wrapper's attempts are genuinely exhausted, the one-shot HTTPS bypass leaves shared remote config untouched: `git push https://github.com/<owner>/<repo>.git HEAD:refs/heads/main` (prefix `HTTPS_PROXY=http://127.0.0.1:<proxy-port>` if the direct attempt dies with `SSL_ERROR_SYSCALL`).
 
 **Fix for (A) — a DIRECT rule** (requires proxy tool config access), so the TUN passes this traffic through without protocol inspection:
 
