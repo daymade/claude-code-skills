@@ -689,6 +689,8 @@ Two things that wrapper must get right:
 
 **(C) "The SSH channel is down entirely" — a verdict shape to resist, not a mechanism.** A window of back-to-back SSH failures (`ssh.github.com:443` banner timeouts, port 22 also `Connection closed`) with HTTPS 100% clean looks like a new mechanism. It isn't: re-measured across windows the same host showed `ssh -T git@github.com` succeeding 75–84% over 25 attempts — mechanism (B)'s bad-window peak all along. **N consecutive failures inside one time window are not N independent samples**: forwarding instability is time-varying, and a bad window produces 5-in-a-row failures routinely. Before concluding "the channel is dead," re-measure minutes later.
 
+How much sampling is enough depends on the **shape of the refusal**, not the count of failures. A named policy code (e.g. an API returning `KEYLESS_ACCESS_NOT_AVAILABLE`) is the endpoint *stating a rule* — a few same-session samples settle it. A challenge page, a rate limit, or a connection reset is *state* — it drifts with time and IP reputation, so a same-window losing streak counts as one sample, and only a cross-window re-measure can separate "dead" from "bad window."
+
 Two facts to keep regardless:
 
 - `nc -vz github.com 22` reporting **succeeded** proves nothing — under a TUN the local stack answers for the destination on any port. Only trust a real handshake (`ssh -T`).
