@@ -9,8 +9,10 @@ import argparse
 import json
 import os
 import select
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import uuid
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -42,15 +44,26 @@ def run_single_query(
 ) -> bool:
     """Run a single query and return whether the skill was triggered.
 
-    Creates a command file in .claude/commands/ so it appears in Claude's
-    available_skills list, then runs `claude -p` with the raw query.
+    Creates a command file in an isolated temporary directory's .claude/commands/
+    so it appears in Claude's available_skills list, then runs `claude -p` with
+    the raw query. Each call gets its own throwaway directory rather than writing
+    into the shared project directory: run_eval() fans this out across up to
+    num_workers concurrent calls (default 10), and if they all wrote into the same
+    .claude/commands/, every claude -p subprocess would see every other in-flight
+    worker's synthetic candidate as a competing "available_skill" too, diluting
+    triggering and producing a systematically depressed, noisy trigger rate that
+    has nothing to do with the description under test. Isolating each probe also
+    means a run never leaves stray files in the real project being evaluated.
+    `project_root` is accepted for backward compatibility with existing callers
+    and tests but is intentionally unused here now that probes are self-contained.
     Uses --include-partial-messages to detect triggering early from
     stream events (content_block_start) rather than waiting for the
     full assistant message, which only arrives after tool execution.
     """
     unique_id = uuid.uuid4().hex[:8]
     clean_name = f"{skill_name}-skill-{unique_id}"
-    project_commands_dir = Path(project_root) / ".claude" / "commands"
+    probe_dir = Path(tempfile.mkdtemp(prefix="skill-eval-probe-"))
+    project_commands_dir = probe_dir / ".claude" / "commands"
     command_file = project_commands_dir / f"{clean_name}.md"
 
     try:
@@ -86,7 +99,7 @@ def run_single_query(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
-            cwd=project_root,
+            cwd=probe_dir,
             env=env,
         )
 
@@ -177,8 +190,7 @@ def run_single_query(
 
         return triggered
     finally:
-        if command_file.exists():
-            command_file.unlink()
+        shutil.rmtree(probe_dir, ignore_errors=True)
 
 
 def run_eval(
