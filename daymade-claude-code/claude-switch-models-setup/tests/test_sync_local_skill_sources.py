@@ -55,6 +55,35 @@ class ActiveManifestTests(unittest.TestCase):
             policy = sync.load_skill_activation_policy(manifest)
             self.assertEqual(policy.active_marketplaces, ())
 
+    def test_v1_manifest_is_accepted_with_empty_include_exclude(self) -> None:
+        """Rollout tolerance: the v2 reader must keep working on a v1 manifest.
+
+        The live manifest migrates to schema_version 2 only as the last
+        rollout step, so "v2 reader + v1 manifest" is a production state —
+        and was the exact combination that aborted every csg launch when the
+        reader only accepted its own version.
+        """
+        with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
+            manifest = Path(raw) / "active.json"
+            manifest.write_text(
+                json.dumps({"schema_version": 1, "active_skills": ["alpha"]}),
+                encoding="utf-8",
+            )
+            policy = sync.load_skill_activation_policy(manifest)
+            self.assertEqual(policy.active_names, ("alpha",))
+            self.assertEqual(policy.include_skills, ())
+            self.assertEqual(policy.exclude_skills, ())
+
+    def test_unsupported_schema_version_still_fails_fast(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
+            manifest = Path(raw) / "active.json"
+            manifest.write_text(
+                json.dumps({"schema_version": 99, "active_skills": []}),
+                encoding="utf-8",
+            )
+            with self.assertRaises(ValueError):
+                sync.load_skill_activation_policy(manifest)
+
     def test_active_marketplaces_is_read_from_the_manifest(self) -> None:
         with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
             manifest = Path(raw) / "active.json"

@@ -680,9 +680,16 @@ def load_skill_activation_policy(path: Path) -> SkillActivationPolicy:
     data = load_json(path)
     if not isinstance(data, dict):
         raise ValueError(f"{path}: root must be an object")
-    if data.get("schema_version") != ACTIVE_SKILLS_SCHEMA_VERSION:
+    # Accept v1 and v2 manifests. v1 predates include_skills/exclude_skills;
+    # those keys simply read as empty on a v1 file. Reading v1 must keep
+    # working after the v2 reader lands in the plugin cache — the live
+    # manifest is migrated to schema_version 2 as the LAST rollout step, so
+    # every intermediate state (v2 reader + v1 manifest) is production.
+    # The reverse combination (v2 manifest + v1 reader) still fails fast on
+    # the old reader, which is why the reader ships first.
+    if data.get("schema_version") not in (1, ACTIVE_SKILLS_SCHEMA_VERSION):
         raise ValueError(
-            f"{path}: schema_version must be {ACTIVE_SKILLS_SCHEMA_VERSION}"
+            f"{path}: schema_version must be 1 or {ACTIVE_SKILLS_SCHEMA_VERSION}"
         )
     active_names = _load_skill_name_array(
         data,
