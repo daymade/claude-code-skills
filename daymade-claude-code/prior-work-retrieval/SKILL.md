@@ -155,11 +155,17 @@ uv run --no-project python scripts/verify_artifact.py \
 
 The checker accepts JSON/gzip bundles with `request_id`, a timezone-qualified
 `timestamp`, and `request.body.messages` in Anthropic tool-call format. Omit
-`--member` for a plain file. Exit 0 means exact bytes appeared in a successful
-correlated `read` at the recorded time; 1 means no matching proof; 2 means
-invalid/ambiguous evidence. Path mentions, failed reads and related old files do
-not pass. Other evidence formats remain supported by the source-specific reader;
-do not convert an unsupported format into a negative claim.
+`--member` for a plain file. Exit 0 means the candidate's bytes appeared in a
+successful correlated `read` at the recorded time — byte-exact for raw-byte
+readers (`read`/`read_file`), or, for Claude Code's `Read`, a line-numbered
+result whose absolute row numbers provably span the whole file and reconstruct
+it (a partial `offset`/`limit` read can never pass; the JSON's `match_basis`
+says which proof held, and `rejected_read_reconstructions` counts numbered
+reads that failed the coverage preconditions). 1 means no matching proof; 2
+means invalid/ambiguous evidence. Path mentions, failed reads and related old
+files do not pass. Other evidence formats remain supported by the
+source-specific reader; do not convert an unsupported format into a negative
+claim.
 
 The archive must come from the verified system's source-specific reader or
 observability tool. This check cannot authenticate an archive, decide which

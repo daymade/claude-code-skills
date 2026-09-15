@@ -53,6 +53,15 @@ def queued(uuid, prompt, kind='human', ts=TS):
     return {'type': 'attachment', 'uuid': uuid, 'sessionId': 's1', 'timestamp': ts, 'attachment': att}
 
 
+def tool_call(uuid, tid, name, ts=TS_EARLIER):
+    return {
+        'type': 'assistant', 'uuid': uuid, 'sessionId': 's1', 'timestamp': ts,
+        'message': {'role': 'assistant', 'content': [
+            {'type': 'tool_use', 'id': tid, 'name': name, 'input': {}},
+        ]},
+    }
+
+
 def run_extract(home: Path, records: list) -> ex.Extraction:
     write_jsonl(home / 'projects' / '-tmp-proj' / 's1.jsonl', records)
     sources, _ = discover_claude_sources(explicit_homes=[str(home)])
@@ -99,6 +108,52 @@ class ExtractUserMessagesTest(unittest.TestCase):
             user('u7', 'This session is being continued from a previous conversation that ran out of context. Summary: ...'),
         ])
         self.assertEqual([e.text for e in ext.entries], ['real words'])
+        # u5's tool_use_id has no matching tool_use in the file: dropped, but counted.
+        self.assertEqual(ext.unresolved_tool_result_records, 1)
+
+    def test_auq_answer_recovered_from_structured_answers(self):
+        ext = run_extract(self.home, [
+            tool_call('a-auq', 't-auq', 'AskUserQuestion'),
+            user('u-auq',
+                 [{'type': 'tool_result', 'tool_use_id': 't-auq',
+                   'content': 'Your questions have been answered: "选哪个？"="方案甲". '
+                              'You can now continue with these answers in mind.'}],
+                 toolUseResult={'questions': [{'question': '选哪个？'}],
+                                'answers': {'选哪个？': '方案甲'}}),
+        ])
+        self.assertEqual([e.text for e in ext.entries], ['选哪个？ → 方案甲'])
+        self.assertEqual(ext.unresolved_tool_result_records, 0)
+
+    def test_auq_answer_recovered_from_synthesized_string_fallback(self):
+        dialog = ('Your questions have been answered: "去哪家？"="东边那家". '
+                  'You can now continue with these answers in mind.')
+        ext = run_extract(self.home, [
+            tool_call('a-fb', 't-fb', 'AskUserQuestion'),
+            user('u-fb', [{'type': 'tool_result', 'tool_use_id': 't-fb', 'content': dialog}]),
+        ])
+        self.assertEqual([e.text for e in ext.entries], [dialog])
+        self.assertEqual(ext.unresolved_tool_result_records, 0)
+
+    def test_auq_answer_recovered_when_result_precedes_call(self):
+        # tool_result written before its tool_use: resolve after the file scan,
+        # not incrementally.
+        ext = run_extract(self.home, [
+            user('u-rev',
+                 [{'type': 'tool_result', 'tool_use_id': 't-rev', 'content': 'ignored'}],
+                 toolUseResult={'answers': {'先迈哪只脚？': '左脚'}}),
+            tool_call('a-rev', 't-rev', 'AskUserQuestion', ts=TS_LATER),
+        ])
+        self.assertEqual([e.text for e in ext.entries], ['先迈哪只脚？ → 左脚'])
+        self.assertEqual(ext.unresolved_tool_result_records, 0)
+
+    def test_other_tools_pure_tool_result_is_still_dropped(self):
+        ext = run_extract(self.home, [
+            tool_call('a-b1', 't-bash', 'Bash'),
+            user('u-b1', [{'type': 'tool_result', 'tool_use_id': 't-bash',
+                           'content': 'file1.txt\nfile2.txt'}]),
+        ])
+        self.assertEqual([e.text for e in ext.entries], [])
+        self.assertEqual(ext.unresolved_tool_result_records, 1)
 
     def test_command_envelopes_go_to_appendix_with_args(self):
         ext = run_extract(self.home, [

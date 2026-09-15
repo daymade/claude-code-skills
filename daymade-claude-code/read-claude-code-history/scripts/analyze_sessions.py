@@ -148,6 +148,10 @@ class SessionTail:
     last_assistant_kind: str  # "text" | "tool_use" | "thinking_only" | "none"
     last_assistant_text: str
     last_assistant_timestamp: Optional[float]
+    # Whole-file tool_use ids with no matching tool_result, computed as the
+    # order-independent set difference. Exposed so sibling parsers can be
+    # pinned to the same answer by a shared test (see test_read_claude_session).
+    pending_tool_use_ids: frozenset = frozenset()
 
 
 def classify_session_tail(path: Path) -> SessionTail:
@@ -303,6 +307,7 @@ def classify_session_tail(path: Path) -> SessionTail:
         last_assistant_kind=last_assistant_kind,
         last_assistant_text=last_assistant_text,
         last_assistant_timestamp=last_assistant_timestamp,
+        pending_tool_use_ids=frozenset(pending_tool_use_ids),
     )
 
 

@@ -19,6 +19,13 @@ SPEC = importlib.util.spec_from_file_location("read_claude_session", SCRIPT)
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 
+sys.path.insert(0, str(SKILL_DIR / "scripts"))  # analyze_sessions imports _core.*
+ANALYZE_SPEC = importlib.util.spec_from_file_location(
+    "analyze_sessions", SKILL_DIR / "scripts" / "analyze_sessions.py"
+)
+ANALYZE = importlib.util.module_from_spec(ANALYZE_SPEC)
+ANALYZE_SPEC.loader.exec_module(ANALYZE)
+
 
 class ClaudeSessionEvidenceTests(unittest.TestCase):
     def _session_file(self, records: list[dict]) -> Path:
@@ -517,6 +524,129 @@ class ClaudeSessionEvidenceTests(unittest.TestCase):
             self.assertIn("# Claude Code Session Evidence Briefing", briefing)
             self.assertLess(briefing.index("回答一"), briefing.index("纠正二"))
             self.assertIn("Unanswered retained request", briefing)
+
+    def test_reversed_tool_result_before_use_is_not_interrupted(self):
+        # A tool_result can be written to the file before the tool_use it
+        # answers ("Tool Use / Tool Result Ordering",
+        # references/session_file_format.md); the pair must resolve anyway.
+        session_file = self._session_file(
+            [
+                {
+                    "type": "user",
+                    "sessionId": "session-order",
+                    "message": {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": "toolu_1",
+                                "content": "ok",
+                            }
+                        ],
+                    },
+                },
+                {
+                    "type": "assistant",
+                    "sessionId": "session-order",
+                    "message": {
+                        "role": "assistant",
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "id": "toolu_1",
+                                "name": "Bash",
+                                "input": {"command": "ls"},
+                            },
+                            {"type": "text", "text": "完成"},
+                        ],
+                    },
+                },
+            ]
+        )
+
+        parsed = MODULE.parse_session_structure(session_file)
+
+        self.assertEqual(parsed["unresolved_tool_calls"], {})
+        self.assertEqual(parsed["end_reason"], "completed")
+
+    def test_genuinely_unanswered_tool_use_is_still_interrupted(self):
+        session_file = self._session_file(
+            [
+                {
+                    "type": "assistant",
+                    "sessionId": "session-pending",
+                    "message": {
+                        "role": "assistant",
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "id": "toolu_9",
+                                "name": "Bash",
+                                "input": {"command": "sleep 99"},
+                            }
+                        ],
+                    },
+                },
+            ]
+        )
+
+        parsed = MODULE.parse_session_structure(session_file)
+
+        self.assertEqual(set(parsed["unresolved_tool_calls"]), {"toolu_9"})
+        self.assertEqual(parsed["end_reason"], "interrupted")
+
+    def test_pending_set_matches_classify_session_tail(self):
+        # Fork guard: parse_session_structure and classify_session_tail resolve
+        # tool_use/tool_result in two independent implementations; the same
+        # fixture must produce the same pending set on both, or one drifted.
+        session_file = self._session_file(
+            [
+                {  # reversed pair: result physically precedes its call
+                    "type": "user",
+                    "sessionId": "session-xmod",
+                    "message": {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": "toolu_done",
+                                "content": "ok",
+                            }
+                        ],
+                    },
+                },
+                {
+                    "type": "assistant",
+                    "sessionId": "session-xmod",
+                    "message": {
+                        "role": "assistant",
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "id": "toolu_done",
+                                "name": "Bash",
+                                "input": {"command": "ls"},
+                            },
+                            {
+                                "type": "tool_use",
+                                "id": "toolu_open",
+                                "name": "Read",
+                                "input": {"file_path": "/tmp/x"},
+                            },
+                        ],
+                    },
+                },
+            ]
+        )
+
+        parsed = MODULE.parse_session_structure(session_file)
+        tail = ANALYZE.classify_session_tail(session_file)
+
+        self.assertEqual(
+            set(parsed["unresolved_tool_calls"]),
+            set(tail.pending_tool_use_ids),
+        )
+        self.assertEqual(set(tail.pending_tool_use_ids), {"toolu_open"})
 
 
 if __name__ == "__main__":

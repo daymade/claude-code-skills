@@ -75,6 +75,62 @@ class ArtifactProofTests(unittest.TestCase):
         with self.assertRaises(verify_artifact.EvidenceError):
             self.run_proof()
 
+    def numbered_read_messages(self, numbered_text, tool_input=None, name="Read"):
+        # Claude Code's Read returns `LINE_NUMBER\tcontent` rows — model the
+        # real format, never read_text() (that mismatch caused the defect).
+        if tool_input is None:
+            tool_input = {"file_path": "/agent/skills/title/SKILL.md"}
+        return [
+            {"role": "assistant", "content": [{"type": "tool_use", "id": "read-1", "name": name, "input": tool_input}]},
+            {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "read-1", "content": numbered_text}]},
+        ]
+
+    def test_claude_code_numbered_full_read_matches(self):
+        # Candidate is "# Current prompt\n完整原文\n" (2 lines, trailing newline).
+        self.messages = self.numbered_read_messages("1\t# Current prompt\n2\t完整原文")
+        result = self.run_proof()
+        self.assertEqual(result["status"], "matched")
+        self.assertEqual(result["match_basis"], "line_numbered_read")
+
+    def test_offset_read_does_not_match_partial_candidate(self):
+        self.candidate.write_text("l1\nl2\nl3\n")
+        self.messages = self.numbered_read_messages(
+            "2\tl2\n3\tl3", {"file_path": "/agent/skills/title/SKILL.md", "offset": 2}
+        )
+        self.assertEqual(self.run_proof()["status"], "not_matched")
+
+    def test_truncated_numbered_read_with_missing_tail_is_not_proof(self):
+        self.candidate.write_text("l1\nl2\nl3\n")
+        self.messages = self.numbered_read_messages("1\tl1\n2\tl2")
+        self.assertEqual(self.run_proof()["status"], "not_matched")
+
+    def test_raw_bytes_read_tool_still_matches_exactly(self):
+        result = self.run_proof()
+        self.assertEqual(result["status"], "matched")
+        self.assertEqual(result["match_basis"], "exact_bytes")
+        self.assertEqual(result["rejected_read_reconstructions"], 0)
+
+    def test_numbered_read_differing_only_by_trailing_newline_matches(self):
+        self.candidate.write_text("# Current prompt\n完整原文")  # no trailing newline
+        self.messages = self.numbered_read_messages("1\t# Current prompt\n2\t完整原文")
+        result = self.run_proof()
+        self.assertEqual(result["status"], "matched")
+        self.assertEqual(result["match_basis"], "line_numbered_read")
+
+    def test_non_contiguous_numbering_falls_back_to_exact_bytes(self):
+        self.candidate.write_text("l1\nl2\nl3\n")
+        self.messages = self.numbered_read_messages("1\tl1\n3\tl3")
+        result = self.run_proof()
+        self.assertEqual(result["status"], "not_matched")
+        self.assertEqual(result["rejected_read_reconstructions"], 1)
+
+    def test_numbered_read_interior_whitespace_difference_does_not_match(self):
+        # Only a single trailing-newline difference is tolerated; any other
+        # whitespace divergence still does not match.
+        self.candidate.write_text("# Current prompt \n完整原文\n")  # trailing space
+        self.messages = self.numbered_read_messages("1\t# Current prompt\n2\t完整原文")
+        self.assertEqual(self.run_proof()["status"], "not_matched")
+
 
 if __name__ == "__main__":
     unittest.main()

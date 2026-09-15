@@ -103,6 +103,9 @@ class Extraction:
     injected: list = field(default_factory=list)     # list[Entry] boilerplate
     pastes: list = field(default_factory=list)       # list[Entry]
     subtracted: int = 0                              # agent-voiced re-injections dropped
+    # Pure tool_result records that were not recoverable AskUserQuestion
+    # answers — counted so the gap is visible instead of silent.
+    unresolved_tool_result_records: int = 0
 
 
 def normalize_text(s: str) -> str:
@@ -173,14 +176,24 @@ def build_agent_corpus(sources, cutoff: datetime):
     return exact, long_texts, giant
 
 
+# Sentinel for a user record carrying ONLY tool_result blocks: not prose, but
+# possibly an AskUserQuestion answer — deferred and resolved against the file's
+# tool_use index after the scan (order cannot be assumed, same lesson as the
+# tool_use/tool_result set-difference in analyze_sessions.py).
+_PURE_TOOL_RESULT = object()
+
+
 def _user_candidate_text(record: dict):
-    """Return (text, n_images) for a user record, or None if it is not prose-shaped."""
+    """Return (text, n_images) for a user record, None if it is not prose-shaped,
+    or _PURE_TOOL_RESULT when the content is exclusively tool_result blocks."""
     content = (record.get('message') or {}).get('content') if isinstance(record.get('message'), dict) else None
     if isinstance(content, str):
         return content, 0
     if isinstance(content, list):
         if any(isinstance(b, dict) and b.get('type') == 'tool_result' for b in content):
-            return None
+            if any(isinstance(b, dict) and b.get('type') == 'text' for b in content):
+                return None  # mixed text+tool_result: stay conservative, do not read as prose
+            return _PURE_TOOL_RESULT
         parts, n_img = [], 0
         for b in content:
             if not isinstance(b, dict):
@@ -191,6 +204,31 @@ def _user_candidate_text(record: dict):
                 n_img += 1
         return '\n'.join(p for p in parts if p), n_img
     return None
+
+
+def _auq_answer_text(record: dict, content: list) -> str:
+    """Render AskUserQuestion answer(s) as 'question → answer' lines.
+
+    Structured channel first: toolUseResult.answers is the authoritative
+    {question: answer} map; the synthesized dialog string in the tool_result
+    content is only its rendering byproduct (absent in most of the corpus).
+    The fallback takes that string verbatim — no parsing of the dialog format."""
+    tur = record.get('toolUseResult')
+    if isinstance(tur, dict):
+        answers = tur.get('answers')
+        if isinstance(answers, dict) and answers:
+            return '\n'.join(f'{q} → {a}' for q, a in answers.items())
+    for b in content:
+        if isinstance(b, dict) and b.get('type') == 'tool_result':
+            c = b.get('content')
+            if isinstance(c, str) and c.strip():
+                return c.strip()
+            if isinstance(c, list):
+                parts = [x.get('text', '') for x in c if isinstance(x, dict) and x.get('type') == 'text']
+                joined = '\n'.join(p for p in parts if p).strip()
+                if joined:
+                    return joined
+    return ''
 
 
 def _command_label(text: str):
@@ -219,8 +257,19 @@ def extract(sources, cutoff: datetime, min_dup: int = 5) -> Extraction:
             records = iter_jsonl(f)
         except Exception:
             continue
+        tool_use_index = {}  # tool_use_id -> tool name, for this file
+        deferred = []        # (ts, record) pure-tool_result user records
         for record in records:
             rtype = record.get('type')
+            if rtype == 'assistant':
+                ac = (record.get('message') or {}).get('content') if isinstance(record.get('message'), dict) else None
+                if isinstance(ac, list):
+                    for b in ac:
+                        if isinstance(b, dict) and b.get('type') == 'tool_use':
+                            tid = b.get('id')
+                            if isinstance(tid, str) and tid:
+                                tool_use_index.setdefault(tid, b.get('name') or '')
+                continue
             if rtype not in ('user', 'attachment'):
                 continue
             if record.get('isSidechain') or record.get('isMeta'):
@@ -246,6 +295,9 @@ def extract(sources, cutoff: datetime, min_dup: int = 5) -> Extraction:
             got = _user_candidate_text(record)
             if got is None:
                 continue
+            if got is _PURE_TOOL_RESULT:
+                deferred.append((ts, record))
+                continue
             text, n_img = got
             text = text.strip()
             if not text or text.startswith(NOISE_PREFIX):
@@ -256,6 +308,23 @@ def extract(sources, cutoff: datetime, min_dup: int = 5) -> Extraction:
                     continue
                 seen_uuid.add(uuid)
             raw_user.append((ts, project, session_id, text, n_img))
+
+        # Resolve this file's deferred tool_result records: recover
+        # AskUserQuestion answers; count everything else as a visible gap
+        # rather than dropping it silently.
+        for ts, record in deferred:
+            content = (record.get('message') or {}).get('content')
+            ids = [
+                b.get('tool_use_id')
+                for b in content
+                if isinstance(b, dict) and b.get('type') == 'tool_result'
+            ] if isinstance(content, list) else []
+            if ids and all(tool_use_index.get(i) == 'AskUserQuestion' for i in ids):
+                text = _auq_answer_text(record, content)
+                if text:
+                    raw_user.append((ts, project, session_id, text, 0))
+                    continue
+            result.unresolved_tool_result_records += 1
 
     # --- generic boilerplate detection: identical long text repeated many times ---
     # Frequency is counted on raw text (standalone injections are byte-identical);
@@ -497,7 +566,8 @@ def main() -> int:
 
     n_filler = sum(1 for e in ext.entries if e.filler)
     print(f'entries={len(ext.entries)} (filler={n_filler}) commands={len(ext.commands)} '
-          f'injected={len(ext.injected)} pastes={len(ext.pastes)} agent-subtracted={ext.subtracted}')
+          f'injected={len(ext.injected)} pastes={len(ext.pastes)} agent-subtracted={ext.subtracted} '
+          f'unresolved-tool-results={ext.unresolved_tool_result_records}')
     print(f'out={out}.html / {out}.md')
     return 0
 
