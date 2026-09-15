@@ -76,7 +76,9 @@ INSTALLATION.md
 
 # Backup files
 *.bak
+*.bak-*
 *.backup
+*.backup-*
 *~
 
 # Private/commercial skills (moved to claude-code-skills-pro)

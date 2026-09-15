@@ -57,6 +57,36 @@ mistake), delete the key from that profile's settings.json.
 
 Set `CLAUDE_CODE_SUBAGENT_MODEL` to the same value as `ANTHROPIC_MODEL` in the profile settings. Otherwise subagents may fall back to the default Anthropic model.
 
+## Statusline ctx jumps or reads far above the real context
+
+Symptom: the statusline's `ctx` figure leaps by hundreds of thousands of
+tokens in one turn with no large content entering (observed 2026-09-15:
+94,087 → 719,177 across a turn whose only new input was a ~2 KB hook
+message), or climbs well above what the transcript actually contains.
+
+Cause: the numerator is the endpoint's own usage report, not a measurement of
+the conversation. Statusline scripts sum the provider-reported
+`input_tokens` / `cache_read_input_tokens` / `cache_creation_input_tokens` of
+the last response, and some Anthropic-compatible relays and shims inflate or
+double-count those fields on long sessions (observed the same day: one turn
+reported `input_tokens=359,753` plus `cache_read_input_tokens=359,424` for a
+real prompt of roughly 96K, and a long session's `cache_read` drifted to
+~2.4x its actual content). The denominator — the configured or assumed
+window — is a separate number and is fine. Fresh single-shot requests are
+unaffected: with no cache history, reported usage matched the sent prompt
+within tens of tokens.
+
+Fix: treat the `ctx` figure on third-party endpoints as a magnitude hint, not
+a measurement. To learn a provider's real context size, send known-size
+inputs and compare reported vs. sent — a ladder (e.g. 150K / 300K / 700K /
+1M tokens, with a needle early in the filler and a question about it at the
+end) also verifies the model actually reads that deep. Claude Code's own
+compaction does not appear to consume these inflated reports — it fired far
+later than the inflated figure implied — but the mechanism is unverified
+here. Anchor the window explicitly (`[1m]` marker or
+`CLAUDE_CODE_MAX_CONTEXT_TOKENS` / `CLAUDE_CODE_AUTO_COMPACT_WINDOW`) instead
+of trusting the displayed number.
+
 ## The advisor answers on the same model as the session
 
 Symptom: the session runs on the flagship tier and every advisor call comes
@@ -292,11 +322,6 @@ layouts as a version repair.
    CLAUDE_CONFIG_DIR="<daemon-config-dir>" claude plugin marketplace update <marketplace>
    CLAUDE_CONFIG_DIR="<daemon-config-dir>" claude plugin update <plugin>@<marketplace>
    ```
-
-   `marketplace update` advances the marketplace's own git clone to the hosted
-   default branch and reads the manifest from that clone — it never sees the
-   source checkout's working tree. Push the version bump before updating, or
-   the plugin resolves to the previously published version instead.
 
 3. Read back that profile's installed plugin record and its new cache directory.
    Use the deployment set defined by `scripts/setup.sh` to identify the helper
