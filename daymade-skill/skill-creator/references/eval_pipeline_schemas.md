@@ -2,6 +2,8 @@
 
 This document defines the JSON schemas used by skill-creator's evaluation pipeline (evals, grading, benchmark, feedback).
 
+**Coverage rule:** when a new pipeline artifact is introduced — or an existing one gains a second consumer — pin its canonical location and each consumer's lookup behavior here. Two scripts relying on an undocumented location convention is a bug waiting for a user report (#443: the aggregator and the viewer disagreed on `eval_metadata.json`'s directory level until the convention was pinned in this document).
+
 ## Contents
 
 - **evals.json** — test case definitions (prompts, expected output, assertions)
