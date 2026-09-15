@@ -1,0 +1,3 @@
+{"type":"attachment","sessionId":"fx-plan","timestamp":"2026-09-16T05:00:00Z","attachment":{"type":"plan_mode","reminderType":"full","isSubAgent":false,"planFilePath":"/fixture-home/.claude/plans/fx-plan.md","planExists":false}}
+{"type":"attachment","sessionId":"fx-plan","timestamp":"2026-09-16T05:00:01Z","attachment":{"type":"plan_file_reference","planFilePath":"/fixture-home/.claude/plans/fx-plan.md","planContent":"# 合成计划\n步骤甲"}}
+{"type":"user","sessionId":"fx-plan","timestamp":"2026-09-16T05:00:02Z","message":{"role":"user","content":"设置回显 plan_mode_required:false 与绑定无关"}}

@@ -1,0 +1,4 @@
+{"type":"assistant","sessionId":"fx-read","timestamp":"2026-09-16T01:00:00Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"rd1","name":"Read","input":{"file_path":"/fixture-home/notes.md"}}]}}
+{"type":"user","sessionId":"fx-read","timestamp":"2026-09-16T01:00:01Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd1","content":"1\talpha\n2\tbeta\n3\tgamma"}]}}
+{"type":"assistant","sessionId":"fx-read","timestamp":"2026-09-16T01:00:02Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"rd2","name":"Read","input":{"file_path":"/fixture-home/notes.md","offset":3,"limit":2}}]}}
+{"type":"user","sessionId":"fx-read","timestamp":"2026-09-16T01:00:03Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd2","content":"3\tgamma\n4\tdelta"}]}}

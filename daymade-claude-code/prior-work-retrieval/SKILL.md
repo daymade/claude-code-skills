@@ -187,7 +187,13 @@ uv run --no-project python scripts/prior_work.py complete \
 
 If none qualify, use `--no-reuse-reason` with the verified mismatch. “No hits”
 is not a reason; it is a retrieval observation and may require widening terms or
-resolving a failed carrier.
+resolving a failed carrier. And a zero-candidate required carrier cannot be
+reported as "none exists" by paraphrase either: attach the label census — run
+`analyze_sessions.py search --all-projects --exclude-session <CURRENT_ID> '<term>'`
+for each outcome term and report the per-label hit counts (`message` /
+`thinking` / `tool_input:<name>` / `tool_result` / `attachment` / `summary`).
+The census does not change the conclusion; it closes the "re-derive the query
+syntax" path by showing where the terms do live.
 
 The completed receipt preserves `business_outcome` and `outcome_terms`; `check`
 rejects legacy or hand-built receipts that omit either field. Receipt freshness
@@ -305,6 +311,15 @@ path remain possible so the agent can repair the gate without bypassing it.
 - This Skill is the workflow. Companion hooks may require a fresh receipt before
   `Write`/`Edit`; Stop may enforce that same existing obligation, but final-answer
   shape cannot create a new one. Hooks do not decide which candidate is good.
+
+## Surface contract
+
+First use in a session: run `python3 scripts/surface_version.py` once and note
+the 12-char fingerprint — the sha256 of this skill's `scripts/**/*.py` code
+surface. If it differs from the fingerprint you last saw for this skill, the
+code changed under you: re-read this SKILL.md and the references from disk
+before acting on in-context echoes of them. The fingerprint covers code only;
+documentation edits do not change it.
 
 ## Maintainer verification
 
