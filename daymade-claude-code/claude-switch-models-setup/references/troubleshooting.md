@@ -324,11 +324,18 @@ layouts as a version repair.
    ```
 
 3. Read back that profile's installed plugin record and its new cache directory.
-   Use the deployment set defined by `scripts/setup.sh` to identify the helper
-   links. Verify each candidate file against the intended source revision, retain
-   the current link targets for rollback, then repoint those links to the new
-   version. Use absolute targets and replace the link itself; do not run the
-   checkout installer over a pinned layout or overwrite a real local file.
+   **Identify the helper links by listing the symlinks actually in the config
+   directory, not by reading the deployment set in `scripts/setup.sh`.** That set
+   is what the installer creates; a machine can carry links beyond it, and every
+   link the list omits is one this step silently leaves on the old version.
+   Measured 2026-09-16: the config dir held seven symlinks while the installer's
+   set named five, and one of the two extras was `skill-install-audit.py` — the
+   very tool that reports this lag, which would have gone on reporting from
+   superseded code. Verify each candidate file against the intended source
+   revision, retain the current link targets for rollback, then repoint those
+   links to the new version. Use absolute targets and replace the link itself; do
+   not run the checkout installer over a pinned layout or overwrite a real local
+   file.
 4. Reinstall the LaunchAgent from the updated deployed entry:
 
    ```bash
