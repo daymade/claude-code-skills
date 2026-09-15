@@ -134,6 +134,13 @@ truncation and fuse the outputs into a complete-looking chronology.
 
 ### Bounded full-event search
 
+Codex searches include native `event_msg/item_completed` command output as
+`tool_result:CommandExecution`. Stream output takes precedence over duplicate
+aggregate/formatted views. Matching item/call ID plus exact text deduplicates
+repeated results; equal output from different command IDs remains separate.
+User/assistant event mirrors continue to be excluded. Wrappers with unrelated
+IDs cannot be assumed to be mirrors merely because their text overlaps.
+
 ```text
 <skill-dir>/scripts/analyze_sessions.py search \
   --codex-only --all-projects --exclude-session <CURRENT_ID> \
