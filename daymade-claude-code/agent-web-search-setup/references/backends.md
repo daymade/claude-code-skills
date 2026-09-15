@@ -225,9 +225,15 @@ reinstalling the backend.
 
 ## For a user inside mainland China
 
-None of the options above is confirmed reachable from there, and none was
-measured from there — no machine involved in this work was on that side of it.
-Every reachability claim in this file, in both directions, is an inference from
+Exactly one of the options above has been measured from there, and the
+measurement is narrower than it looks. On 2026-09-15 the default, Exa, was
+live-tested from a mainland machine and answered — through that machine's own
+proxy, whose DNS resolves the host into a fake-IP range, so every request
+reached the endpoint by that route. Whether Exa answers a mainland connection
+with no proxy in front of it is still unmeasured, and `curl --noproxy` cannot
+settle it: that flag bypasses the proxy environment variables while the TUN
+interface keeps intercepting, so it returns 200 either way. Every other
+reachability claim in this file, in both directions, remains an inference from
 where a vendor operates.
 
 Domestic hosted endpoints do exist, and they are **not** found on the search
