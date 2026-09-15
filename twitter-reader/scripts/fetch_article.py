@@ -36,22 +36,54 @@ def run_twitter_cli(url: str) -> dict:
     return parse_yaml_output(result.stdout)
 
 
+JINA_MARKER = "Markdown Content:"
+
+
 def run_jina_api(url: str) -> str:
-    """Fetch article text with images using Jina API."""
+    """Fetch article text with images via Jina's reader.
+
+    Returns the markdown body with Jina's header already stripped, or "" when
+    Jina did not deliver readable content -- the caller then falls back to the
+    text twitter-cli already gave us.
+
+    The emptiness check is the marker, not curl's exit status, and not
+    ``--fail``: r.jina.ai signals refusal by returning a JSON envelope such as
+    ``{"code":403,"name":"AbuseAlleviationError",...}`` (seen when anonymous
+    access to x.com is temporarily blocked) or a 402 when a key is out of
+    balance, and plain curl exits 0 on those, so "the process succeeded" says
+    nothing about whether an article came back. Verified 2026-09-12: a 537-byte
+    refusal envelope flowed straight into the generated Markdown as the article
+    body while this function reported success, and the working twitter-cli
+    fallback below was never reached. ``--fail`` does not close that hole either
+    -- this endpoint was observed answering 200 with the envelope in the body --
+    so the marker is the only signal independent of HTTP status and of which
+    curl build the reader happens to have installed.
+    """
     api_key = os.getenv("JINA_API_KEY", "")
     jina_url = f"https://r.jina.ai/{url}"
 
-    cmd = ["curl", "-s", jina_url]
+    # -sS keeps curl quiet but still reports its own transport errors;
+    # --max-time stops a stalled proxy from hanging the run forever.
+    cmd = ["curl", "-sS", "--max-time", "60", jina_url]
     if api_key:
         cmd.extend(["-H", f"Authorization: Bearer {api_key}"])
 
     result = subprocess.run(cmd, capture_output=True, text=True)
 
     if result.returncode != 0:
-        print(f"Warning: Jina API failed: {result.stderr}", file=sys.stderr)
+        print(f"Warning: Jina request failed ({result.stderr.strip()}); "
+              f"using twitter-cli text instead.", file=sys.stderr)
         return ""
 
-    return result.stdout
+    idx = result.stdout.find(JINA_MARKER)
+    if idx == -1:
+        preview = " ".join(result.stdout.split())[:200] or "(empty response)"
+        print(f"Warning: Jina returned no article content, so images cannot be "
+              f"extracted; using twitter-cli text instead. Response was: {preview}",
+              file=sys.stderr)
+        return ""
+
+    return result.stdout[idx + len(JINA_MARKER):].lstrip()
 
 
 def parse_yaml_output(output: str) -> dict:
@@ -195,17 +227,13 @@ def main():
     print("\nGetting content and images...")
     jina_content = run_jina_api(args.url)
 
-    # Use Jina content if available, otherwise fall back to twitter-cli text
-    if jina_content:
-        text = jina_content
-        # Remove Jina header lines to get clean markdown
-        # Find "Markdown Content:" and keep everything after it
-        marker = "Markdown Content:"
-        idx = text.find(marker)
-        if idx != -1:
-            text = text[idx + len(marker):].lstrip()
-    else:
-        text = data.get("articleText", "")
+    # Jina carries the images; twitter-cli's own text is the fallback when it
+    # refuses. run_jina_api() returns "" rather than an error page, so this
+    # branch can never put a refusal envelope in the article body.
+    text = jina_content or data.get("articleText", "")
+    if not text:
+        print("Warning: neither Jina nor twitter-cli returned any body text; "
+              "the Markdown will contain metadata only.", file=sys.stderr)
 
     # Extract image URLs
     image_urls = extract_image_urls(text)
