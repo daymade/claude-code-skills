@@ -87,8 +87,14 @@ def build_run(root: Path, run_dir: Path) -> dict | None:
     prompt = ""
     eval_id = None
 
-    # Try eval_metadata.json
-    for candidate in [run_dir / "eval_metadata.json", run_dir.parent / "eval_metadata.json"]:
+    # Try eval_metadata.json at the run dir, config dir, and eval dir levels
+    # (the eval dir level matches aggregate_benchmark.py's convention, which is
+    # what the documented paired-pipeline layout produces).
+    candidates = [run_dir / "eval_metadata.json", run_dir.parent / "eval_metadata.json"]
+    eval_dir = run_dir.parent.parent
+    if eval_dir == root or root in eval_dir.parents:
+        candidates.append(eval_dir / "eval_metadata.json")
+    for candidate in candidates:
         if candidate.exists():
             try:
                 metadata = json.loads(candidate.read_text())
