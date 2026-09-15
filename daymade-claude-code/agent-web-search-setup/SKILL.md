@@ -147,6 +147,24 @@ entirely, which is what you want. Verified by reading the session's `init` event
 the tool is absent from the list the model receives, rather than present with
 advice against using it.
 
+That event is referred to several times below, so here is how to actually get it —
+it is the first line of a streaming run, and nothing else has to be parsed:
+
+```bash
+claude -p "reply ok" --output-format stream-json --verbose < /dev/null > /tmp/init.jsonl
+python3 -c "
+import json
+for line in open('/tmp/init.jsonl'):
+    d = json.loads(line)
+    if d.get('type') == 'system' and d.get('subtype') == 'init':
+        print('WebSearch:', 'WebSearch' in d['tools'], ' WebFetch:', 'WebFetch' in d['tools'])
+        break"
+```
+
+Two `False` values mean the tools are gone from what the model receives. The same
+event carries `permissionMode`, which is worth reading at the same time for the
+reason given in step 4.
+
 **A deny travels further than a grant does, and that asymmetry matters in step 4.**
 `permissions.deny` is honoured out of a project's own `.claude/settings.json` even
 in a directory nobody has ever trusted — measured there by reading the `init`
@@ -154,6 +172,25 @@ event, which listed 24 tools with `WebSearch` and `WebFetch` absent and printed 
 warning. The grant in step 4 does not behave this way. A restriction arriving from
 an untrusted file is safe to obey; a privilege is not, and the client is right to
 treat the two differently.
+
+Both edits are small enough to show literally, which beats describing a shape the
+reader then has to build:
+
+```json
+{ "permissions": { "deny": ["WebSearch", "WebFetch"] } }
+```
+
+```toml
+web_search = "disabled"
+```
+
+**That TOML line has to go above the first `[table]` header in the file, and
+appending it to the end is the way to get this wrong.** It is a bare key, so TOML
+binds it to whatever table precedes it — drop it after a `[model_providers.…]`
+block, which step 1 has just sent you into that same file to read, and it becomes
+`model_providers.<name>.web_search`, a setting nothing reads. The file changes, the
+command succeeds, and hosted search is still on. Put it on its own line at the top
+of the file and read the file back.
 
 **Merge, never replace.** These files hold the user's own configuration. Add the
 one key and leave the rest byte-identical. Show them the before and after.
@@ -240,15 +277,27 @@ from where, and the one marked default. Pick from criteria, in this order:
 Do not present the whole menu to a non-technical user. Choose, tell them what you
 chose and why in one sentence, and keep the rest as options if they ask.
 
-**On Codex two things happen that do not happen on Claude Code, and both stop an
-unattended run dead.** `codex mcp add <name> --url <url>` writes the config entry,
-then notices the endpoint advertises OAuth, starts a browser flow, prints an
-authorize URL and blocks — with no timeout, so in a non-interactive shell it hangs
-until something kills it. Interrupt it and check the file: the `[mcp_servers.<name>]`
-block is already written, and the default backend answered anonymously afterwards
-with that flow never completed. Second, `codex exec` outside a git repository
-refuses with `Not inside a trusted directory and --skip-git-repo-check was not
-specified`; pass the flag or run it somewhere tracked.
+**On Codex, do not register a hosted server with `codex mcp add`. Write the two
+lines yourself.** `codex mcp add <name> --url <url>` writes the config entry, then
+notices the endpoint advertises OAuth, starts a browser flow, prints an authorize
+URL and blocks with no timeout — so an agent that issues it synchronously stalls
+its own session with no bound on how long. There is nothing to wait for: the entry
+is already on disk before the flow starts, and the default backend answered
+anonymously afterwards with that flow never completed. Skip the command and append
+this, which is byte-for-byte what it writes:
+
+```toml
+[mcp_servers.exa]
+url = "https://mcp.exa.ai/mcp"
+```
+
+Unlike the `web_search` line in step 2, this one carries its own table header, so
+it is safe at the end of the file.
+
+Second, `codex exec` outside a git repository refuses with `Not inside a trusted
+directory and --skip-git-repo-check was not specified`; pass the flag or run it
+somewhere tracked. And `timeout` is not a way out of either problem on a stock Mac
+— it is not in the base system, only in Homebrew's coreutils.
 
 That whole half was run end to end against the real backend rather than reasoned
 about: `web_search = "disabled"`, one `codex mcp add`, and the model answered a
@@ -280,14 +329,27 @@ the answer carried real URLs published that week. Read the transcript for the to
 name rather than skipping to the answer — an earlier run of the same steps looked
 green for the wrong reason, and only the tool name showed it.
 
+**Do the grant first.** It is written up further down this section because that is
+where its evidence belongs, but it happens *before* this command — run the check on
+an ungranted server and you get the refusal, which reads like the fix having failed
+rather than like a step not yet taken.
+
 On Claude Code the isolation is two flags on the verification run, both confirmed
 present on the CLI. Run the check as one command:
 
 ```bash
-claude -p "search the web for news published this week about <topic> and give me the source URLs" \
+claude -p "search the web for news published this week about <topic>, open one of them and quote a line from the page" \
   --disallowedTools WebSearch,WebFetch \
-  --disable-slash-commands < /dev/null
+  --disable-slash-commands < /dev/null 2> /tmp/verify-stderr.log
 ```
+
+The query asks for a search **and** a fetch on purpose: a search-only check passes
+on a configuration where the fetch tool was never granted, which is the "found it,
+cannot open it" half of the original failure.
+
+`2> /tmp/verify-stderr.log` matters as much as the flags. The one warning that
+explains a silently dropped grant appears there and nowhere else, so read that file
+afterwards — an empty file is part of the pass, not an absence of information.
 
 `< /dev/null` is not decoration. Without it the command waits for input that never
 arrives and prints a warning about stdin, which to somebody watching over the
@@ -308,14 +370,24 @@ another installed skill can claim a search-shaped request before any tool is
 considered, which was measured happening on a real machine and cost a dollar of
 tokens on the wrong path.
 
-**On Codex, look for the prefixed tool name anywhere in the rollout, not for a
-`function_call` record.** The build measured here hands MCP tools to the model
-through its exec surface — the model writes JavaScript calling
-`tools.mcp__exa__web_search_exa(...)` — so the session file under
-`$CODEX_HOME/sessions/` holds `custom_tool_call` records named `exec`, and a grep
-for `function_call` returns zero on a run that worked perfectly. Grep for
-`mcp__<server>__` instead. The exec shape is a version detail and will move; the
-prefixed name is the stable thing.
+**On Codex the equivalent check is two commands, and the obvious grep is the
+wrong one.** Run the query, then read the rollout it just wrote:
+
+```bash
+codex exec --skip-git-repo-check \
+  "search the web for news published this week about <topic> and give me the source URLs"
+
+ls -t "${CODEX_HOME:-$HOME/.codex}"/sessions/*/*/*/rollout-*.jsonl | head -1 | \
+  xargs grep -o 'mcp__[a-z0-9_]*' | sort -u
+```
+
+The second command should print the tool names of the backend you installed. **Do
+not grep for `function_call`** — the build measured here hands MCP tools to the
+model through its exec surface, so the model writes JavaScript calling
+`tools.mcp__exa__web_search_exa(...)` and the file holds `custom_tool_call` records
+named `exec`. A `function_call` grep returns zero on a run that worked perfectly.
+That exec shape is a version detail and will move; the prefixed name is the stable
+thing to look for.
 
 **Registering the server is not the last step. Granting it is.** A newly added MCP
 server starts unapproved, and in a session running under normal permissions its
@@ -323,9 +395,22 @@ tools are refused with `Claude requested permissions to use
 mcp__<server>__<tool>, but you haven't granted it yet`. The model then tells the
 user it needs authorisation and stops — which, from the user's chair, is
 indistinguishable from the broken search they asked you to fix. Grant it by adding
-the prefixed tool name to `permissions.allow` — the name the diagnostic and the
-client both use, for example `mcp__exa__web_search_exa`. Running `claude` once
-interactively and accepting does the same thing.
+the prefixed tool names to `permissions.allow` — the names the diagnostic and the
+client both use. Running `claude` once interactively and accepting does the same
+thing.
+
+**Grant every tool you are relying on, not just the search one.** If `web_fetch`
+died too and you installed a backend that replaces both, the fetch tool needs its
+own entry; granting only search produces a run that finds pages and cannot open
+them, and a search-only verification query will not notice. For the default backend
+that is two names:
+
+```json
+{ "permissions": { "allow": ["mcp__exa__web_search_exa", "mcp__exa__web_fetch_exa"] } }
+```
+
+`claude mcp list` will not tell you which tools a server exposes. The backend's
+entry in [references/backends.md](references/backends.md) names them.
 
 **Put that grant in `~/.claude/settings.json`. In the project's own
 `.claude/settings.json` it is silently ignored, and an earlier version of this
@@ -366,7 +451,14 @@ belongs to your machine and not to theirs.
 capability, and it kept saying `Pending approval` in both runs — the one where the
 tool answered and the one where it was refused. An agent that treats the listing as
 verification will reinstall something that is already installed, and will still not
-know whether it works. The live query, with the tool name read back from the
+know whether it works.
+
+`claude mcp get <name>` is better and still not sufficient. It health-checks the
+server and prints `Status: ✔ Connected` or the actual transport error, plus the
+scope it was registered at — which separates "registered" from "reachable", a
+distinction `list` does not make. Both states were seen on the same endpoint
+minutes apart. What it does not tell you is whether the grant landed, or which
+tools the server exposes, so it cannot close this step on its own. The live query, with the tool name read back from the
 transcript, is the only check that answers the question being asked.
 
 **What to look for is a trigger list, not a name.** Read the installed skills'
@@ -398,10 +490,16 @@ built-ins are still denied, so a user who stops here has no search at all rather
 than the broken search they started with — a worse position than the one they came
 in with, arrived at by following the uninstall instructions. Removing the
 replacement means also putting back what step 2 took away: delete the tool names
-from `permissions.deny`, and on Codex set `web_search` back to its old value, which
-`codex mcp remove` does not touch — confirmed by reading `config.toml` afterwards
-and finding `web_search = "disabled"` still there. **Record that old value in step
-2, when you can still see it**, or there is nothing to put back.
+from `permissions.deny`, and on Codex restore `web_search`, which `codex mcp remove`
+does not touch — confirmed by reading `config.toml` afterwards and finding
+`web_search = "disabled"` still there.
+
+**Do not rely on remembering the old value.** In step 2, read the setting before
+changing it and put the result in your message to the user, which is the one place
+that survives the session. If the key was not in the file at all, that is the more
+useful thing to have recorded: the rollback is then to delete the line, not to guess
+at a default. Restoring a value nobody wrote down means picking one, and the
+plausible wrong pick here leaves hosted search off on a backend where it works.
 
 ## What done looks like
 

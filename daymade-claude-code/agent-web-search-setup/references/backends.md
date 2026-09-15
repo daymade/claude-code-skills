@@ -123,17 +123,23 @@ somebody predicted in advance.
 it alone.** From their chair a ceiling looks exactly like the bug you just fixed:
 the agent stops finding things. Give them the one sentence that separates the two —
 *if searching stops working again, it is the free allowance, not the same fault
-coming back* — and one command they can paste, which swaps in the next backend
-without touching anything else:
+coming back* — and tell them the fix is to ask their agent to run this procedure
+again and pick the next backend down.
 
-```
-claude mcp add --scope user --transport http tavily "https://mcp.tavily.com/mcp/?tavilyApiKey=<key>"
-```
+**Resist writing that fallback down as a single command they can paste.** Swapping
+backends is not one command: the new server has to be registered *and* its tools
+granted by name in `permissions.allow`, and those names differ per backend. A
+paste-able `claude mcp add` line with no grant beside it reproduces exactly the
+failure the main workflow exists to prevent — registered, refused, and the model
+reporting that it is waiting for permission — this time with no agent present to
+notice. Tavily in particular cannot be pre-written even by someone willing to:
+its endpoint rejects an unauthenticated MCP handshake outright (HTTP 401, empty
+body, before `tools/list`), so the tool names needed for the grant are not
+discoverable until an account exists.
 
-That needs a free Tavily key, so either get one during the install while you are
-there, or tell them the step is "sign up, paste the key into this command". A user
-who knows the fallback exists will use it. A user who does not will conclude the
-fix wore off.
+What you can do before leaving is remove the account step from their path: get the
+free Tavily key during the install while you are there, register it alongside the
+default, and grant both. Then the fallback really is nothing for them to run.
 
 Tools are `web_search_exa` and `web_fetch_exa`, so it replaces **both** halves
 when fetch is dead too. Once registered they appear to the model as
@@ -259,6 +265,12 @@ rather than a typo. So budget a console visit before the first call: an ordinary
 DashScope key that already works for model inference does **not** carry this. The
 free allowance and the endpoint shape were not contradicted by anything observed;
 they were also not reached.
+
+The console is `https://bailian.console.aliyun.com/`. **The clicks inside it are not
+recorded here and should not be guessed at** — which is a real problem for the agent
+doing this, because its own web search is by definition broken at that moment, so it
+cannot go and look them up either. Hand this step to the user with the URL and the
+exact error string, rather than narrating a menu you cannot see.
 
 Aliyun's is the better documented of the two and was corroborated across three
 independent sources; Tencent's command shape was derived from its documentation
