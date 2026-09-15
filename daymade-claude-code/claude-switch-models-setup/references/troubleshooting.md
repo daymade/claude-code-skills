@@ -293,6 +293,11 @@ layouts as a version repair.
    CLAUDE_CONFIG_DIR="<daemon-config-dir>" claude plugin update <plugin>@<marketplace>
    ```
 
+   `marketplace update` advances the marketplace's own git clone to the hosted
+   default branch and reads the manifest from that clone — it never sees the
+   source checkout's working tree. Push the version bump before updating, or
+   the plugin resolves to the previously published version instead.
+
 3. Read back that profile's installed plugin record and its new cache directory.
    Use the deployment set defined by `scripts/setup.sh` to identify the helper
    links. Verify each candidate file against the intended source revision, retain
