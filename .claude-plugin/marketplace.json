@@ -52,7 +52,7 @@
       "description": "Bridge local Claude Code and Codex sessions only when the current host's native communication tools do not cover the target. Use for cross-product messages, hooks/scripts posting to sessions, fallback reply lookup and delivery verification, or diagnosing Held peer messages. Also use its coordination guidance when shared-work ownership or an inbound peer assertion needs verification. For ordinary parent/subagent, teammate, or independent-session communication, first discover and use available native tools; do not load this skill merely to send a native message. Never bypass a denied or Held message with another transport. Not for spawning agents, moving full history, or granting user approval. Triggers: 跨产品通信、原生工具未覆盖的会话、脚本回帖、peer 送达排查、共享在制品归属核实。",
       "source": "./peer-message",
       "strict": false,
-      "version": "1.11.0",
+      "version": "1.12.0",
       "category": "communication",
       "keywords": [
         "agent-communication",
@@ -332,7 +332,7 @@
       "description": "Daymade skills core suite. Bundles skill creation, quality review, real Claude/Codex Skill-surface governance, suite-migration reconciliation, and marketplace development tooling under one shared namespace. Skill governance separates canonical source, installed inventory, discovery policy, the fresh model-visible catalog, and router-resolved cold resources instead of optimizing cache counts; it preserves Claude's official versioned-cache lifecycle and verifies selected entries in the real host prompt. Skill verification separates risk classification from evaluation spend: bounded fixes use targeted checks, narrow behavior changes use sampled replays, and paired baselines, graders, benchmarks, or a viewer run only after explicit user authorization or a decision-bearing evidence plan plus opt-in; that authorization does not change the risk tier. Existing-skill edits retain an old-vs-new capability audit and content-bound packaging attestation so prompt compression cannot silently delete runtime contracts. When the official skill-creator plugin is also installed, skill-creator detects the coexistence and offers a consent-based, reversible SessionStart routing hook so the daymade edition wins deterministically; on machines without the official plugin nothing is ever installed.",
       "source": "./daymade-skill",
       "strict": false,
-      "version": "1.39.0",
+      "version": "1.40.0",
       "category": "suite",
       "keywords": [
         "suite",
