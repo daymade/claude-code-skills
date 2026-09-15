@@ -128,7 +128,14 @@ Text the user types while the assistant is still working does NOT land as a
 - The payload field is `attachment.prompt` — a string, or (observed variant) a
   list of content blocks. There is no `command` field.
 - `attachment.origin.kind` carries authorship: `"human"` = typed by the user;
-  `"peer"` = delivered from another agent/session; absent = harness
+  `"peer"` = delivered from another agent/session; `"auto-continuation"` = the
+  harness (re)delivering text the user already typed, not a system-authored
+  message — do not read this kind as proof of non-human origin (observed
+  2026-09: a mid-turn `"Goal set: <condition>"` queued command carried
+  `origin.kind: "auto-continuation"` and was the user's genuine command, typed
+  while the assistant was busy; a classifier that only counted
+  `origin.kind == "human"` as human-authored concluded — wrongly, and
+  confidently — that the user had never said it); absent = harness
   notifications (e.g. `<task-notification>`).
 - Interruptions carry the sharpest corrections by definition. An extractor that
   only reads `type == "user"` silently drops them — observed 2026-08: one such
