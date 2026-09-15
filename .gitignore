@@ -111,3 +111,6 @@ recovered_deep_research/
 # Generated artifacts
 coverage/
 node_modules/
+
+# Agent memory / local notes (this repo is PUBLIC — never commit)
+.workbuddy/

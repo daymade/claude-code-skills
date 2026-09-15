@@ -149,6 +149,29 @@ Every answer must state:
 Do not call a compact summary verbatim history; it is a continuation aid and must
 be checked against raw records and the current workspace for load-bearing claims.
 
+Before writing any negative or absolute claim ("never said," "never appears,"
+"could not have happened," "impossible to satisfy"), clear all three:
+
+1. **Every record type, not only user/assistant text.** A grep for the literal
+   string must also cover `attachment` (`queued_command.prompt`), `tool_result`,
+   and `thinking` — a record's top-level `type`/`isMeta` alone does not prove or
+   disprove human authorship. Classifying hits by `type:user vs assistant` while
+   skipping `attachment` is exactly how a real mid-turn human command gets
+   reported as never having been said.
+2. **The cheap next step before "unrecoverable."** If the gap could close with a
+   tool this Skill already documents — `analyze_sessions.py search
+   --all-projects`, `history_index.py recall`, or re-reading a file you already
+   have but only partially inspected — run it before writing "Gaps." A boundary
+   you have not tested is not evidence of a boundary.
+3. **A contradicting firsthand account reopens the question; it does not lose to
+   your reading.** If the user states they did something and your evidence says
+   otherwise, treat the conflict as a signal to redo (1) and (2), not as a
+   result to defend.
+
+If a tool result states it was truncated or paginated ("showing lines X-Y of
+Z... do not answer from this page alone"), that warning is binding: read the
+remainder before any conclusion that depends on it.
+
 ## Guardrails
 
 - Keep ordinary read modes read-only.
@@ -162,6 +185,8 @@ be checked against raw records and the current workspace for load-bearing claims
 - Do not share raw history outside the local machine without explicit user approval;
   it can contain credentials and private business context.
 - Do not report a search as complete after a timeout or malformed source.
+- Do not assert a negative ("never said," "never appears," "impossible to
+  satisfy") without clearing the checklist in Read-result contract.
 
 ## Router and legacy compatibility
 
