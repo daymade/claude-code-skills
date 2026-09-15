@@ -147,8 +147,10 @@ entirely, which is what you want. Verified by reading the session's `init` event
 the tool is absent from the list the model receives, rather than present with
 advice against using it.
 
-That event is referred to several times below, so here is how to actually get it —
-it is the first line of a streaming run, and nothing else has to be parsed:
+That event is referred to several times below, so here is how to actually get it.
+**Do not reach for the first line** — on a machine with `SessionStart` hooks
+configured it was measured arriving as line 24 of 24, behind the hooks' own output.
+Filter by type instead, which is what this does:
 
 ```bash
 claude -p "reply ok" --output-format stream-json --verbose < /dev/null > /tmp/init.jsonl
@@ -376,19 +378,48 @@ wrong one.** Run the query, then read the rollout it just wrote:
 
 ```bash
 codex exec --skip-git-repo-check \
-  "search the web for news published this week about <topic> and give me the source URLs"
+  "search the web for news published this week about <topic>, open one and quote a line" \
+  2> /tmp/codex-verify.log
 
-ls -t "${CODEX_HOME:-$HOME/.codex}"/sessions/*/*/*/rollout-*.jsonl | head -1 | \
-  xargs grep -o 'mcp__[a-z0-9_]*' | sort -u
+SID=$(grep -o 'session id: [0-9a-f-]*' /tmp/codex-verify.log | tail -1 | awk '{print $3}')
+[ -z "$SID" ] && echo "no session id in the log -- stop and read it" && exit 1
+
+find "${CODEX_HOME:-$HOME/.codex}/sessions" -name "rollout-*$SID.jsonl" -exec python3 -c "
+import json, re, sys
+names = set()
+for line in open(sys.argv[1]):
+    try: d = json.loads(line)
+    except Exception: continue
+    p = d.get('payload') or d
+    if p.get('type') in ('custom_tool_call', 'function_call'):
+        names.update(re.findall(r'mcp__[a-z0-9_]+', json.dumps(p)))
+print('\n'.join(sorted(names)) if names else 'NO MCP TOOL CALLS IN THIS SESSION')
+" {} \;
 ```
 
-The second command should print the tool names of the backend you installed. **Do
-not grep for `function_call`** — the build measured here hands MCP tools to the
-model through its exec surface, so the model writes JavaScript calling
-`tools.mcp__exa__web_search_exa(...)` and the file holds `custom_tool_call` records
-named `exec`. A `function_call` grep returns zero on a run that worked perfectly.
-That exec shape is a version detail and will move; the prefixed name is the stable
-thing to look for.
+**Three things in there are load-bearing, and the obvious shortcuts all fail.**
+
+Finding the file by the session id Codex prints on stderr, rather than by globbing
+for the newest rollout, is not fussiness. `ls -t .../sessions/*/*/*/rollout-*.jsonl`
+was measured dying with `argument list too long` on an ordinary install carrying
+9,021 accumulated sessions — and piped into `head`, the whole line then **exits 0
+with no output**, which looks exactly like "the model made no MCP calls". A
+verification step that reports success because it could not run is the failure this
+skill exists to correct, wearing a different hat. `find -exec` batches, so it has no
+such ceiling.
+
+Reading only the **tool-call records** matters for the same reason in the other
+direction. A plain `grep mcp__` over the file also matches the tool *list* the model
+was handed, so it goes green on a server that was declared and never called.
+Calibrated both ways on one real session: the parser above returns the two Exa tools
+that were actually called, and none of the 38 `mcp__codex_apps__*` tools that appear
+in the same file as declarations only.
+
+And **do not grep for `function_call`** — the build measured here hands MCP tools to
+the model through its exec surface, so the model writes JavaScript calling
+`tools.mcp__exa__web_search_exa(...)` and the records are `custom_tool_call` named
+`exec`. A `function_call` grep returns zero on a run that worked perfectly. The
+parser accepts either shape.
 
 **Registering the server is not the last step. Granting it is.** A newly added MCP
 server starts unapproved, and in a session running under normal permissions its
@@ -410,8 +441,16 @@ that is two names:
 { "permissions": { "allow": ["mcp__exa__web_search_exa", "mcp__exa__web_fetch_exa"] } }
 ```
 
-`claude mcp list` will not tell you which tools a server exposes. The backend's
-entry in [references/backends.md](references/backends.md) names them.
+`claude mcp list` will not tell you which tools a server exposes, and neither does
+`claude mcp get`. [references/backends.md](references/backends.md) names them for
+some entries and not others — the default's two are there; several are not, and one
+candidate's names turned out not to be discoverable at all without an account.
+
+**So use the refusal itself, which always names the tool.** Run the query once with
+nothing granted and read the name straight out of `Claude requested permissions to
+use mcp__<server>__<tool>`, or out of `permission_denials[].tool_name` in
+`--output-format json`. That is the one route that works for a backend nobody has
+written down, and it costs one run.
 
 **Put that grant in `~/.claude/settings.json`. In the project's own
 `.claude/settings.json` it is silently ignored, and an earlier version of this
@@ -430,8 +469,11 @@ dialog, or set projects["<dir>"].hasTrustDialogAccepted: true in <config>/.claud
 The count is the number of entries dropped, so it tracks how many tools you
 granted. Search for `has not been trusted`, not for the whole sentence.
 
-Five runs on one machine through a relay in strict `default` mode, with the server
-registered identically in all five and **only the grant's location changing**:
+Five runs on one machine through a relay, with the server registered identically in
+all five and **only the grant's location changing** — plus a sixth capture of the
+failing case as a stream, which is where the mode is read from: that session's
+`init` event reports `permissionMode: default`, the strict one, and the same event
+shows 24 tools with `WebSearch` already absent. The five results:
 `~/.claude/settings.json` works; `.claude/settings.local.json` works; the project's
 shared `.claude/settings.json` is refused, with that warning on stderr; the same
 file in a workspace carrying `hasTrustDialogAccepted` works; and granting nothing

@@ -259,12 +259,23 @@ with no subscription:
 **Aliyun's endpoint was exercised with a real DashScope key, and the result is the
 useful part: the URL is right and the account is not enough.** The MCP handshake
 came back HTTP 404 carrying a specific business error —
-`未开通该MCP或非可用开通状态`, "this MCP is not activated" — rather than a generic
-not-found, which is what tells you the route exists and the gate is provisioning
-rather than a typo. So budget a console visit before the first call: an ordinary
-DashScope key that already works for model inference does **not** carry this. The
-free allowance and the endpoint shape were not contradicted by anything observed;
-they were also not reached.
+`未开通该MCP或非可用开通状态`, "this MCP is not activated". A control settles that the
+key itself was fine: the same request with a bogus key of the same shape returns
+HTTP 401 `InvalidApiKey` / `Invalid API-key provided`, and with no header at all,
+HTTP 401 / `No API-key provided`. So the real key authenticated and reached the
+feature gate.
+
+**That gives the reader a two-way diagnosis worth more than the endpoint itself**:
+
+| what comes back | what it means |
+|---|---|
+| 401 `InvalidApiKey` | the key is wrong or missing |
+| 404 `未开通该MCP...` | the key is right; the MCP is not activated on that account |
+
+So budget a console visit before the first call: an ordinary DashScope key that
+already works for model inference does **not** carry this. The free allowance and
+the endpoint shape were not contradicted by anything observed; they were also not
+reached.
 
 The console is `https://bailian.console.aliyun.com/`. **The clicks inside it are not
 recorded here and should not be guessed at** — which is a real problem for the agent
@@ -352,11 +363,15 @@ Three things worth knowing before running it:
   workspace carries `hasTrustDialogAccepted`. `permissions.deny` was honoured from
   the project file in every case, so the asymmetry is between restricting and
   granting, not between the files.
-- **On Codex, `mcp add` against a hosted URL can hang instead of finishing.** It
-  writes the `[mcp_servers.<name>]` block, then detects OAuth support, prints an
-  authorize URL and waits with no timeout. Interrupt it and read the file — the
-  entry is there, and the default backend answered anonymously afterwards without
-  the flow ever being completed.
+- **On Codex, do not use `mcp add` for a hosted URL at all — write the table
+  yourself.** The command writes the `[mcp_servers.<name>]` block, then detects
+  OAuth support, prints an authorize URL and waits with no timeout, so an agent
+  that issues it synchronously stalls. There is nothing to wait for: the entry is
+  already on disk, and the default backend answered anonymously afterwards with the
+  flow never completed. Two lines at the end of `config.toml` do the same job with
+  no way to hang — the shape is in the main workflow's step 3, which is the SSOT
+  for this; the note here exists so nobody reaches for `codex mcp add` from this
+  page and gets stuck.
 - **Claude Desktop's chat surface is not a target for any of this.** As observed in
   September 2026 it cannot take a remote endpoint from its config file; that path is
   a click-through connector
