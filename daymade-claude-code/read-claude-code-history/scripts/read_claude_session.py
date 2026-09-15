@@ -443,7 +443,15 @@ def parse_session_structure(session_file: Path) -> Dict:
     # Second pass: extract the complete physical Session chronology.
     parsed_range_start = 0
     messages = []
-    unresolved_tool_calls = {}  # tool_use_id -> tool_use_info
+    # Order-independent tool_use/tool_result resolution: a tool_result can be
+    # written to the file BEFORE the tool_use it answers (see "Tool Use /
+    # Tool Result Ordering" in references/session_file_format.md and the
+    # 11/14-files-flipped measurement in analyze_sessions.py's
+    # classify_session_tail, which already uses this two-set shape).
+    # Accumulate both sides without removal and diff once after the loop —
+    # incremental add/discard silently strands ids when the result lands first.
+    dispatched_tool_calls = {}  # tool_use_id -> tool_use_info
+    resolved_tool_use_ids = set()
     errors = []
     files_touched = set()
     last_message_role = None
@@ -521,10 +529,13 @@ def parse_session_structure(session_file: Path) -> Dict:
                     tool_id = block.get("id", "")
                     tool_name = block.get("name", "?")
                     inp = block.get("input", {})
-                    unresolved_tool_calls[tool_id] = {
-                        "name": tool_name,
-                        "input_preview": str(inp)[:200],
-                    }
+                    dispatched_tool_calls.setdefault(
+                        tool_id,
+                        {
+                            "name": tool_name,
+                            "input_preview": str(inp)[:200],
+                        },
+                    )
                     # Track file operations
                     if tool_name in ("Write", "Edit", "Read"):
                         fp = inp.get("file_path", "")
@@ -541,7 +552,7 @@ def parse_session_structure(session_file: Path) -> Dict:
                 for block in content:
                     if isinstance(block, dict) and block.get("type") == "tool_result":
                         tool_id = block.get("tool_use_id", "")
-                        unresolved_tool_calls.pop(tool_id, None)
+                        resolved_tool_use_ids.add(tool_id)
                         is_error = block.get("is_error", False)
                         result_content = block.get("content", "")
                         if is_error and isinstance(result_content, str):
@@ -551,6 +562,12 @@ def parse_session_structure(session_file: Path) -> Dict:
             if role in ("user", "assistant"):
                 last_message_role = role
                 messages.append(obj)
+
+    unresolved_tool_calls = {
+        tool_id: info
+        for tool_id, info in dispatched_tool_calls.items()
+        if tool_id not in resolved_tool_use_ids
+    }
 
     # Detect session end reason
     end_reason = _detect_end_reason(

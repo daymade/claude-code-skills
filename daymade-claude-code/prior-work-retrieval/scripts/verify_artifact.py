@@ -11,6 +11,7 @@ import argparse
 import gzip
 import hashlib
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 import zipfile
@@ -18,6 +19,9 @@ import zipfile
 
 class EvidenceError(ValueError):
     pass
+
+
+_NUMBERED_ROW = re.compile(r"^(\d+)\t(.*)$")
 
 
 def candidate_bytes(path, member=None):
@@ -38,6 +42,48 @@ def result_text(content):
         if isinstance(block, dict) and block.get("type") == "text":
             return block.get("text")
     return None  # Do not guess separators between multiple output blocks.
+
+
+def _line_numbered_reconstruction(text, tool_input, data):
+    """Rebuild candidate bytes from a Claude Code Read tool_result, or None.
+
+    Claude Code's Read returns `LINE_NUMBER<TAB>content` rows with absolute
+    numbering (an offset read starts at its offset) and NO truncation notice
+    (measured: 1305/1305 results in local corpus). Every precondition must
+    hold before anything is stripped; any failure returns None — no error, no
+    re-judgment — leaving the exact-bytes verdict in place:
+      1. every row matches `^\\d+\\t`;
+      2. row numbers are strictly contiguous (step 1);
+      3. the first number equals the call's offset (default 1);
+      4. the last number equals the candidate's total line count on disk —
+      the check a partial (offset/limit) read can never pass;
+      5. after stripping exactly one numeric prefix per row, content equals
+      the candidate, tolerating a single trailing newline and nothing else.
+    """
+    lines = text.split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()  # trailing newline after the last numbered row
+    if not lines:
+        return None
+    nums, rows = [], []
+    for line in lines:
+        match = _NUMBERED_ROW.match(line)
+        if match is None:
+            return None
+        nums.append(int(match.group(1)))
+        rows.append(match.group(2))
+    if any(b != a + 1 for a, b in zip(nums, nums[1:])):
+        return None
+    expected_first = tool_input.get("offset", 1)
+    if not isinstance(expected_first, int) or nums[0] != expected_first:
+        return None
+    total = data.count(b"\n") + (0 if data.endswith(b"\n") else 1)
+    if nums[-1] != total:
+        return None
+    stripped = "\n".join(rows).encode("utf-8")
+    if stripped == data or stripped + b"\n" == data:
+        return stripped
+    return None
 
 
 def verify(candidate, archive, read_path, member=None):
@@ -72,7 +118,7 @@ def verify(candidate, archive, read_path, member=None):
                 args = block.get("input", {})
                 if block.get("name") in {"read", "Read", "read_file"} and isinstance(args, dict):
                     if args.get("path", args.get("file_path")) == read_path:
-                        calls[cid] = True
+                        calls[cid] = (block.get("name"), args)
             elif message.get("role") == "user" and block.get("type") == "tool_result":
                 cid = block.get("tool_use_id")
                 if cid not in calls:
@@ -92,8 +138,22 @@ def verify(candidate, archive, read_path, member=None):
                     envelope = None
                 if isinstance(envelope, dict) and (envelope.get("status") == "error" or "error" in envelope):
                     continue
-                outputs.append((cid, text.encode("utf-8")))
-    matching = [cid for cid, output in outputs if output == data]
+                tool_name, tool_input = calls[cid]
+                outputs.append((cid, text, tool_name, tool_input))
+    matching, match_basis, rejected = [], None, 0
+    for cid, text, tool_name, tool_input in outputs:
+        if text.encode("utf-8") == data:
+            matching.append(cid)
+            match_basis = "exact_bytes"
+        elif tool_name == "Read":
+            # Claude Code's Read numbers its rows; prove full-file coverage
+            # before treating the reconstruction as equality.
+            rebuilt = _line_numbered_reconstruction(text, tool_input, data)
+            if rebuilt is not None:
+                matching.append(cid)
+                match_basis = "line_numbered_read"
+            else:
+                rejected += 1
     return {
         "status": "matched" if matching else "not_matched",
         "claim": "content_seen_in_archived_read" if matching else "unverified",
@@ -102,6 +162,8 @@ def verify(candidate, archive, read_path, member=None):
         "archive_sha256": hashlib.sha256(raw).hexdigest(),
         "request_id": request_id, "observed_at": stamp, "read_path": read_path,
         "matching_tool_call_ids": matching,
+        "match_basis": match_basis,
+        "rejected_read_reconstructions": rejected,
         "successful_read_results": len(outputs),
         "current_deployment": "not_checked",
         "target_identity": "operator_must_verify",
