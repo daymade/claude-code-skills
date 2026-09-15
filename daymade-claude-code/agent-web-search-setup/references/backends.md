@@ -4,9 +4,15 @@ The menu this skill picks from. One default, the rest kept as real options
 rather than footnotes, because the right answer changes with who the user is.
 
 Each entry says how it was checked. **Live-tested** means a query actually ran
-through it and returned real, current URLs on 2026-09-14. **Documented** means a
-vendor page said so and nobody exercised it. The difference matters: one keyless
-option that looked fine on paper failed outright in testing.
+through it and returned real, current URLs, on 2026-09-14 or 2026-09-15.
+**Documented** means a vendor page said so and nobody exercised it. The difference
+matters: one keyless option that looked fine on paper failed outright in testing.
+
+A third state turned up often enough to name: **reached but gated** — the endpoint
+answered, the credential authenticated far enough to produce a product-specific
+error, and something on the account was missing. That is worth more than either of
+the other two labels, because it confirms the URL and hands you the exact next
+step, which a vendor page rarely does.
 
 **A third distinction runs underneath those two, and it decides how far a failure
 generalises.** When an endpoint refuses with a named policy — Firecrawl's
@@ -23,17 +29,6 @@ that was never approached.
 Quotas and prices are the volatile part. Treat them as what the vendor said that
 day and read the current page before quoting a number to anyone. Endpoints and
 auth shapes move far more slowly.
-
-## Contents
-
-- [How to choose](#how-to-choose)
-- [Default — Exa](#default--exa)
-- [Other options worth keeping](#other-options-worth-keeping)
-- [Documented but untested](#documented-but-untested)
-- [Ruled out](#ruled-out)
-- [After installing, check nothing else answers first](#after-installing-check-nothing-else-answers-first)
-- [The mainland-China question](#the-mainland-china-question)
-- [Registering it](#registering-it)
 
 ## How to choose
 
@@ -83,8 +78,20 @@ repeating a free claim to a user.
 One command, no key, nothing installed:
 
 ```
-claude mcp add --scope project --transport http exa https://mcp.exa.ai/mcp
+claude mcp add --scope user --transport http exa https://mcp.exa.ai/mcp
 ```
+
+Then grant it, in `~/.claude/settings.json`, or the model will register the tool
+and be refused when it calls it:
+
+```json
+{ "permissions": { "allow": ["mcp__exa__web_search_exa", "mcp__exa__web_fetch_exa"] } }
+```
+
+Merge that into the file; do not replace it. **Both lines have to be at the user
+level.** Putting the grant in a project's `.claude/settings.json` looks identical
+and does not work — see *Registering it* at the end of this file for what the
+client does instead and how it tells you.
 
 Of the candidates in this file, it is the only one that took first place on every
 criterion at once. The anonymous tier needs no account at all, and adding a key
@@ -100,6 +107,28 @@ honest state is that a ceiling probably exists and its size is unknown. The sign
 to act on is therefore an observed one: when requests start failing or being
 throttled, that is the moment to add a key or move down the order, not a number
 somebody predicted in advance.
+
+**Say that out loud to a non-technical user before you leave, because they will hit
+it alone.** From their chair a ceiling looks exactly like the bug you just fixed:
+the agent stops finding things. Give them the one sentence that separates the two —
+*if searching stops working again, it is the free allowance, not the same fault
+coming back* — and tell them the fix is to ask their agent to run this procedure
+again and pick the next backend down.
+
+**Resist writing that fallback down as a single command they can paste.** Swapping
+backends is not one command: the new server has to be registered *and* its tools
+granted by name in `permissions.allow`, and those names differ per backend. A
+paste-able `claude mcp add` line with no grant beside it reproduces exactly the
+failure the main workflow exists to prevent — registered, refused, and the model
+reporting that it is waiting for permission — this time with no agent present to
+notice. Tavily in particular cannot be pre-written even by someone willing to:
+its endpoint rejects an unauthenticated MCP handshake outright (HTTP 401, empty
+body, before `tools/list`), so the tool names needed for the grant are not
+discoverable until an account exists.
+
+What you can do before leaving is remove the account step from their path: get the
+free Tavily key during the install while you are there, register it alongside the
+default, and grant both. Then the fallback really is nothing for them to run.
 
 Tools are `web_search_exa` and `web_fetch_exa`, so it replaces **both** halves
 when fetch is dead too. Once registered they appear to the model as
@@ -216,10 +245,41 @@ with no subscription:
 | Aliyun Bailian web search | `https://dashscope.aliyuncs.com/api/v1/mcps/WebSearch/mcp` | first 2,000 calls free, then per-thousand |
 | Tencent Cloud WSA | `https://api.wsa.cloud.tencent.com/Mcp` | per-thousand, no enterprise tier required for the entry plan |
 
-Both authenticate with a `Bearer` header holding the platform's ordinary API key.
+**Aliyun's endpoint was exercised with a real DashScope key, and the result is the
+useful part: the URL is right and the account is not enough.** The MCP handshake
+came back HTTP 404 carrying a specific business error —
+`未开通该MCP或非可用开通状态`, "this MCP is not activated". A control settles that the
+key itself was fine: the same request with a bogus key of the same shape returns
+HTTP 401 `InvalidApiKey` / `Invalid API-key provided`, and with no header at all,
+HTTP 401 / `No API-key provided`. So the real key authenticated and reached the
+feature gate.
+
+**That gives the reader a two-way diagnosis worth more than the endpoint itself**:
+
+| what comes back | what it means |
+|---|---|
+| 401 `InvalidApiKey` | the key is wrong or missing |
+| 404 `未开通该MCP...` | the key is right; the MCP is not activated on that account |
+
+So budget a console visit before the first call: an ordinary DashScope key that
+already works for model inference does **not** carry this. The free allowance and
+the endpoint shape were not contradicted by anything observed; they were also not
+reached.
+
+The console is `https://bailian.console.aliyun.com/`. **The clicks inside it are not
+recorded here and should not be guessed at** — which is a real problem for the agent
+doing this, because its own web search is by definition broken at that moment, so it
+cannot go and look them up either. Hand this step to the user with the URL and the
+exact error string, rather than narrating a menu you cannot see.
+
 Aliyun's is the better documented of the two and was corroborated across three
 independent sources; Tencent's command shape was derived from its documentation
-rather than copied from an official example.
+rather than copied from an official example, and its credential is the looser
+claim of the two. What a Tencent Cloud account issues by default is a
+SecretId/SecretKey pair meant for TC3 request signing, not a bearer token — checked
+against a real account. Whether WSA mints a separate bearer key of its own was not
+established, so treat the `Bearer` line as the thing to verify first rather than
+the thing to build on.
 
 Two further leads stop one step short of confirmed, and are worth finishing
 before concluding anything: **Zhipu's mainland platform** publishes an MCP
@@ -268,7 +328,10 @@ Three things worth knowing before running it:
 - **Scope is not optional in practice.** `claude mcp add --scope` takes `local`,
   `user` or `project` and defaults to `local`, a name that sounds contained but
   writes into the user's real `~/.claude.json`. Pass `--scope` explicitly every
-  time, and say which file is about to change before changing it.
+  time. You do not have to guess which file: both `add` and `remove` print the
+  absolute path they modified, which is the line to show the user. `--scope user`
+  was measured landing as a top-level `mcpServers` entry in that same
+  `~/.claude.json`; `--scope project` writes a `.mcp.json` beside the cwd.
 - **A new server starts unapproved, and that really does block its tools.** Every
   hosted server registered during this work showed as pending approval, and the
   refusal is explicit: `Claude requested permissions to use mcp__<server>__<tool>,
@@ -278,6 +341,26 @@ Three things worth knowing before running it:
   the prefixed tool name to `permissions.allow` — and do not read `claude mcp list`
   as a readiness check, because its status line said the same thing in the run that
   worked and the run that was refused.
+- **Put the grant in `~/.claude/settings.json`; a project's `.claude/settings.json`
+  is ignored unless that workspace has been trusted.** The client drops the entry
+  and prints `Ignoring N permissions.allow entries from .claude/settings.json: this
+  workspace has not been trusted`, where N is however many you granted — on
+  **stderr only**, so it is absent from
+  `--output-format json` and an agent parsing that sees a bare denial. Measured with
+  nothing changing but the grant's location: user settings works,
+  `.claude/settings.local.json` works, the shared project file works only once the
+  workspace carries `hasTrustDialogAccepted`. `permissions.deny` was honoured from
+  the project file in every case, so the asymmetry is between restricting and
+  granting, not between the files.
+- **On Codex, do not use `mcp add` for a hosted URL at all — write the table
+  yourself.** The command writes the `[mcp_servers.<name>]` block, then detects
+  OAuth support, prints an authorize URL and waits with no timeout, so an agent
+  that issues it synchronously stalls. There is nothing to wait for: the entry is
+  already on disk, and the default backend answered anonymously afterwards with the
+  flow never completed. Two lines at the end of `config.toml` do the same job with
+  no way to hang — the shape is in the main workflow's step 3, which is the SSOT
+  for this; the note here exists so nobody reaches for `codex mcp add` from this
+  page and gets stuck.
 - **Claude Desktop's chat surface is not a target for any of this.** As observed in
   September 2026 it cannot take a remote endpoint from its config file; that path is
   a click-through connector
