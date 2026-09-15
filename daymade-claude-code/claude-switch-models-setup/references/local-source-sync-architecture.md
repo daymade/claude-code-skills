@@ -38,6 +38,7 @@ global prompt. The sync scripts exist for topology repair, not day-to-day editin
 | Remove or rename a skill entry | Marketplace manifest changes; the watcher prunes stale managed links from `.agents/skills` but only reports legacy `.codex/skills` links for reviewed cleanup |
 | Bump `plugins[].version` | Marketplace manifest changes; LaunchAgent watcher creates/updates the version symlink and installed metadata |
 | Change the Codex global user set | Edit `active_skills` for individual names or `active_marketplaces` for whole managed marketplaces; the watcher links the expanded set into `~/.agents/skills` |
+| Include/exclude skills without enumerating the full set | Schema v2: `include_skills` adds names on top of the other selectors, `exclude_skills` removes names even if another selector activated them. The two must not overlap (load-time abort). Final selection resolves in the order `active_skills` → `active_marketplaces` → `include_skills` → `legacy_codex_compat_skills`, then `exclude_skills` subtracts |
 | Change Claude personal source links | Edit `claude_active_marketplaces`; the watcher reconciles allowed direct entries under `~/.claude/skills` without installing or bypassing plugin state |
 | A long-lived hook/process still holds `~/.codex/skills/<name>` | Add that already-active name to `legacy_codex_compat_skills`; the watcher keeps a same-source legacy link without reactivating the full source inventory |
 | Add a new Claude profile | `claude-profiles-init` runs source sync and plugin profile sync |
@@ -80,6 +81,14 @@ Rules:
 
 - `active_skills` selects individual frontmatter names for Codex. Names refer to
   frontmatter `name`, not directory basename or plugin name.
+- When a selected marketplace declares suite plugins, expand each suite member
+  to its final skill directory name before writing `active_skills`. The syncer
+  treats suite entries as source routes, not as Codex-facing skill names.
+- If the syncer reports that a checkout is on a branch that predates the skill
+  links, switch that source repo to `main` before syncing. A feature branch
+  forked before a skill was merged does not register that skill, so the syncer
+  skips and warns instead of linking it. The warning is about branch state, not
+  manifest correctness.
 - Missing manifest, unsupported schema, duplicates, or two source bundles
   declaring the same name abort before any affected root is changed.
 - An active name that no discovered checkout registers does not abort. It is

@@ -49,7 +49,7 @@ DEFAULT_AGENTS_SKILLS = HOME / ".agents" / "skills"
 DEFAULT_ACTIVE_SKILLS_MANIFEST = (
     HOME / ".config" / "claude-switch-models-setup" / "codex-active-skills.json"
 )
-ACTIVE_SKILLS_SCHEMA_VERSION = 1
+ACTIVE_SKILLS_SCHEMA_VERSION = 2
 SKILL_NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 LOCAL_MARKETPLACE_NAMES = ("daymade-skills", "daymade-skills-pro", "cmks-skills")
 SYNC_LOCK_NAME = ".daymade-skill-sync.lock"
@@ -92,12 +92,10 @@ class SkillSource:
 class SkillActivationPolicy:
     active_names: tuple[str, ...]
     legacy_codex_compat_names: tuple[str, ...]
-    # Marketplaces whose whole current membership is active. Per-skill curation is
-    # still the default; this is the declared exception for a marketplace whose own
-    # charter is "every registered Skill is activated", so its additions and removals
-    # no longer need a manual edit here to stay in sync.
     active_marketplaces: tuple[str, ...] = ()
     claude_active_marketplaces: tuple[str, ...] = ()
+    include_skills: tuple[str, ...] = ()
+    exclude_skills: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -682,9 +680,16 @@ def load_skill_activation_policy(path: Path) -> SkillActivationPolicy:
     data = load_json(path)
     if not isinstance(data, dict):
         raise ValueError(f"{path}: root must be an object")
-    if data.get("schema_version") != ACTIVE_SKILLS_SCHEMA_VERSION:
+    # Accept v1 and v2 manifests. v1 predates include_skills/exclude_skills;
+    # those keys simply read as empty on a v1 file. Reading v1 must keep
+    # working after the v2 reader lands in the plugin cache — the live
+    # manifest is migrated to schema_version 2 as the LAST rollout step, so
+    # every intermediate state (v2 reader + v1 manifest) is production.
+    # The reverse combination (v2 manifest + v1 reader) still fails fast on
+    # the old reader, which is why the reader ships first.
+    if data.get("schema_version") not in (1, ACTIVE_SKILLS_SCHEMA_VERSION):
         raise ValueError(
-            f"{path}: schema_version must be {ACTIVE_SKILLS_SCHEMA_VERSION}"
+            f"{path}: schema_version must be 1 or {ACTIVE_SKILLS_SCHEMA_VERSION}"
         )
     active_names = _load_skill_name_array(
         data,
@@ -710,6 +715,12 @@ def load_skill_activation_policy(path: Path) -> SkillActivationPolicy:
     claude_marketplaces = _load_skill_name_array(
         data, path, "claude_active_marketplaces", "Claude active marketplace", required=False,
     )
+    include_names = _load_skill_name_array(
+        data, path, "include_skills", "included skill", required=False,
+    )
+    exclude_names = _load_skill_name_array(
+        data, path, "exclude_skills", "excluded skill", required=False,
+    )
     unknown_marketplaces = sorted(
         (set(active_marketplaces) | set(claude_marketplaces)) - set(LOCAL_MARKETPLACE_NAMES)
     )
@@ -719,13 +730,20 @@ def load_skill_activation_policy(path: Path) -> SkillActivationPolicy:
             f"({', '.join(LOCAL_MARKETPLACE_NAMES)}); unknown: "
             f"{', '.join(unknown_marketplaces)}"
         )
-    inactive_legacy_names = sorted(set(legacy_names) - set(active_names))
-    if inactive_legacy_names:
+    overlapping = sorted(set(include_names) & set(exclude_names))
+    if overlapping:
         raise ValueError(
-            f"{path}: legacy_codex_compat_skills must be a subset of active_skills; "
-            f"inactive: {', '.join(inactive_legacy_names)}"
+            f"{path}: include_skills and exclude_skills must not overlap; "
+            f"conflicts: {', '.join(overlapping)}"
         )
-    return SkillActivationPolicy(active_names, legacy_names, active_marketplaces, claude_marketplaces)
+    return SkillActivationPolicy(
+        active_names=active_names,
+        legacy_codex_compat_names=legacy_names,
+        active_marketplaces=active_marketplaces,
+        claude_active_marketplaces=claude_marketplaces,
+        include_skills=include_names,
+        exclude_skills=exclude_names,
+    )
 
 
 def load_active_skill_names(path: Path) -> tuple[str, ...]:
@@ -1001,6 +1019,50 @@ def merge_source_skills(sources: list[MarketplaceSource]) -> dict[str, SkillSour
                 f"{skill.source_dir} ({skill.plugin_id})"
             )
     return merged
+
+
+def resolve_activation(
+    policy: SkillActivationPolicy,
+    skills: dict[str, SkillSource],
+    sources: list[MarketplaceSource],
+) -> tuple[frozenset[str], tuple[str, ...]]:
+    """Return the final active skill name set and any unresolved references.
+
+    Resolution order:
+    1. explicit ``active_skills``
+    2. whole active marketplaces
+    3. ``include_skills``
+    4. ``legacy_codex_compat_skills``
+
+    Any name in ``exclude_skills`` is removed even if it would otherwise
+    have been activated by the above rules. Unresolved names in every
+    category are returned separately and must be reported by the caller.
+    """
+    selected: dict[str, SkillSource] = {}
+    unresolved: list[str] = []
+
+    def absorb(names: tuple[str, ...], *, label: str) -> None:
+        picked, skipped = select_active_skills(skills, names)
+        if skipped:
+            unresolved.extend(skipped)
+        selected.update(picked)
+
+    absorb(policy.active_names, label="active_skills")
+    whole_marketplace_names = tuple(
+        name
+        for src in sources
+        if src.name in policy.active_marketplaces
+        for name in src.skills
+    )
+    absorb(whole_marketplace_names, label="active_marketplaces")
+    absorb(policy.include_skills, label="include_skills")
+    absorb(policy.legacy_codex_compat_names, label="legacy_codex_compat_skills")
+
+    for name in policy.exclude_skills:
+        if name in selected:
+            del selected[name]
+
+    return frozenset(selected), tuple(sorted(set(unresolved)))
 
 
 def select_active_skills(
@@ -1928,22 +1990,21 @@ def main(argv: list[str]) -> int:
             f"{manifest}: marketplace activation fields name repos not discovered: "
             f"{', '.join(undiscovered)}"
         )
-    whole_marketplace_names = {
-        name
-        for src in sources
-        if src.name in policy.active_marketplaces
-        for name in src.skills
-    }
-    active_names = tuple(sorted(set(policy.active_names) | whole_marketplace_names))
-    selected_skills, unresolved_names = select_active_skills(skills, active_names)
+    active_names, unresolved_names = resolve_activation(policy, skills, sources)
     report_unresolved_active_names(unresolved_names, sources, manifest)
+    selected_skills = {name: skills[name] for name in active_names if name in skills}
     active_skills = freeze_selected_skill_sources(selected_skills)
-    # Manifest load already made legacy names a subset of active_skills, so an
-    # unresolved legacy name is one of unresolved_names and was reported above.
-    legacy_compat_skills, _ = select_active_skills(
-        active_skills,
-        policy.legacy_codex_compat_names,
+    # Legacy compatibility names are resolved from the full discovered inventory,
+    # not only active skills, because they document historical aliases that may
+    # point to sources the author did not activate. An unresolved legacy name is
+    # reported and skipped; a resolved one is added to the explicit override map
+    # so the symlink targets the current canonical source even if that skill is
+    # not otherwise selected.
+    legacy_compat_skills, legacy_unresolved = select_active_skills(
+        skills, policy.legacy_codex_compat_names
     )
+    if legacy_unresolved:
+        report_unresolved_active_names(legacy_unresolved, sources, manifest)
     source_roots = [src.repo for src in sources]
     claude_sources = [src for src in sources if src.name in policy.claude_active_marketplaces]
     claude_candidates = freeze_selected_skill_sources({

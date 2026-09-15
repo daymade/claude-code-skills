@@ -49,11 +49,40 @@ class ActiveManifestTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
             manifest = Path(raw) / "active.json"
             manifest.write_text(
-                json.dumps({"schema_version": 1, "active_skills": ["alpha"]}),
+                json.dumps({"schema_version": 2, "active_skills": ["alpha"]}),
                 encoding="utf-8",
             )
             policy = sync.load_skill_activation_policy(manifest)
             self.assertEqual(policy.active_marketplaces, ())
+
+    def test_v1_manifest_is_accepted_with_empty_include_exclude(self) -> None:
+        """Rollout tolerance: the v2 reader must keep working on a v1 manifest.
+
+        The live manifest migrates to schema_version 2 only as the last
+        rollout step, so "v2 reader + v1 manifest" is a production state —
+        and was the exact combination that aborted every csg launch when the
+        reader only accepted its own version.
+        """
+        with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
+            manifest = Path(raw) / "active.json"
+            manifest.write_text(
+                json.dumps({"schema_version": 1, "active_skills": ["alpha"]}),
+                encoding="utf-8",
+            )
+            policy = sync.load_skill_activation_policy(manifest)
+            self.assertEqual(policy.active_names, ("alpha",))
+            self.assertEqual(policy.include_skills, ())
+            self.assertEqual(policy.exclude_skills, ())
+
+    def test_unsupported_schema_version_still_fails_fast(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
+            manifest = Path(raw) / "active.json"
+            manifest.write_text(
+                json.dumps({"schema_version": 99, "active_skills": []}),
+                encoding="utf-8",
+            )
+            with self.assertRaises(ValueError):
+                sync.load_skill_activation_policy(manifest)
 
     def test_active_marketplaces_is_read_from_the_manifest(self) -> None:
         with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
@@ -61,7 +90,7 @@ class ActiveManifestTests(unittest.TestCase):
             manifest.write_text(
                 json.dumps(
                     {
-                        "schema_version": 1,
+                        "schema_version": 2,
                         "active_skills": ["alpha"],
                         "active_marketplaces": ["cmks-skills"],
                     }
@@ -78,7 +107,7 @@ class ActiveManifestTests(unittest.TestCase):
             manifest.write_text(
                 json.dumps(
                     {
-                        "schema_version": 1,
+                        "schema_version": 2,
                         "active_skills": ["alpha"],
                         "active_marketplaces": ["not-a-real-marketplace"],
                     }
@@ -127,13 +156,13 @@ class ActiveManifestTests(unittest.TestCase):
         # An unselected member of a NON-declared marketplace stays cold inventory.
         self.assertNotIn("uncurated", selected)
 
-    def test_legacy_codex_compatibility_must_be_an_active_subset(self) -> None:
+    def test_legacy_codex_compatibility_is_not_required_to_be_an_active_subset(self) -> None:
         with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
             manifest = Path(raw) / "active.json"
             manifest.write_text(
                 json.dumps(
                     {
-                        "schema_version": 1,
+                        "schema_version": 2,
                         "active_skills": ["alpha", "beta"],
                         "legacy_codex_compat_skills": ["alpha"],
                     }
@@ -147,18 +176,18 @@ class ActiveManifestTests(unittest.TestCase):
             manifest.write_text(
                 json.dumps(
                     {
-                        "schema_version": 1,
+                        "schema_version": 2,
                         "active_skills": ["alpha"],
-                        "legacy_codex_compat_skills": ["missing"],
+                        "legacy_codex_compat_skills": ["missing-legacy-name"],
                     }
                 ),
                 encoding="utf-8",
             )
-            with self.assertRaisesRegex(
-                ValueError,
-                "legacy_codex_compat_skills must be a subset of active_skills",
-            ):
-                sync.load_skill_activation_policy(manifest)
+            # v2 allows legacy compatibility names that are not in active_skills,
+            # because the syncer resolves them separately and they do not represent
+            # author-selected activation decisions.
+            policy = sync.load_skill_activation_policy(manifest)
+            self.assertEqual(policy.legacy_codex_compat_names, ("missing-legacy-name",))
 
     def test_legacy_codex_compatibility_names_are_validated(self) -> None:
         with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
@@ -166,7 +195,7 @@ class ActiveManifestTests(unittest.TestCase):
             manifest.write_text(
                 json.dumps(
                     {
-                        "schema_version": 1,
+                        "schema_version": 2,
                         "active_skills": ["alpha"],
                         "legacy_codex_compat_skills": ["alpha", "alpha"],
                     }
@@ -182,7 +211,7 @@ class ActiveManifestTests(unittest.TestCase):
             manifest.write_text(
                 json.dumps(
                     {
-                        "schema_version": 1,
+                        "schema_version": 2,
                         "active_skills": ["alpha"],
                         "legacy_codex_compat_skills": None,
                     }
@@ -201,7 +230,7 @@ class ActiveManifestTests(unittest.TestCase):
             manifest.write_text(
                 json.dumps(
                     {
-                        "schema_version": 1,
+                        "schema_version": 2,
                         "active_skills": ["alpha", "alpha"],
                     }
                 ),
@@ -213,7 +242,7 @@ class ActiveManifestTests(unittest.TestCase):
             manifest.write_text(
                 json.dumps(
                     {
-                        "schema_version": 1,
+                        "schema_version": 2,
                         "active_skills": [" alpha"],
                     }
                 ),
@@ -272,7 +301,7 @@ class ActiveManifestTests(unittest.TestCase):
                     manifest.write_text(
                         json.dumps(
                             {
-                                "schema_version": 1,
+                                "schema_version": 2,
                                 "active_skills": [unsafe],
                             }
                         ),
@@ -474,7 +503,7 @@ class UserRootMigrationTests(unittest.TestCase):
         )
         manifest = root / "active.json"
         manifest.write_text(
-            json.dumps({"schema_version": 1, "active_skills": [name]}),
+            json.dumps({"schema_version": 2, "active_skills": [name]}),
             encoding="utf-8",
         )
         return repo, manifest
@@ -526,7 +555,7 @@ class UserRootMigrationTests(unittest.TestCase):
             manifest.write_text(
                 json.dumps(
                     {
-                        "schema_version": 1,
+                        "schema_version": 2,
                         "active_skills": ["selected"],
                         "legacy_codex_compat_skills": ["selected"],
                     }
@@ -612,7 +641,7 @@ class UserRootMigrationTests(unittest.TestCase):
             repo, manifest = self._marketplace(root)
             manifest.write_text(
                 json.dumps(
-                    {"schema_version": 1, "active_skills": ["not-yet-merged", "selected"]}
+                    {"schema_version": 2, "active_skills": ["not-yet-merged", "selected"]}
                 ),
                 encoding="utf-8",
             )
@@ -647,7 +676,7 @@ class UserRootMigrationTests(unittest.TestCase):
             repo, manifest = self._marketplace(root)
             manifest.write_text(
                 json.dumps(
-                    {"schema_version": 1, "active_skills": ["not-yet-merged", "selected"]}
+                    {"schema_version": 2, "active_skills": ["not-yet-merged", "selected"]}
                 ),
                 encoding="utf-8",
             )
@@ -685,7 +714,7 @@ class UserRootMigrationTests(unittest.TestCase):
             self._skill(repo, "gone")
             self._register(repo, ["selected", "gone"])
             manifest.write_text(
-                json.dumps({"schema_version": 1, "active_skills": ["gone", "selected"]}),
+                json.dumps({"schema_version": 2, "active_skills": ["gone", "selected"]}),
                 encoding="utf-8",
             )
             (root / "claude").mkdir()
@@ -1495,7 +1524,7 @@ class UserRootMigrationTests(unittest.TestCase):
             root = Path(raw)
             repo, manifest = self._marketplace(root)
             manifest.write_text(
-                json.dumps({"schema_version": 1, "active_skills": []}),
+                json.dumps({"schema_version": 2, "active_skills": []}),
                 encoding="utf-8",
             )
             claude_dir = root / "claude"
@@ -1620,7 +1649,7 @@ class UserRootMigrationTests(unittest.TestCase):
             manifest.write_text(
                 json.dumps(
                     {
-                        "schema_version": 1,
+                        "schema_version": 2,
                         "active_skills": ["selected"],
                         "legacy_codex_compat_skills": ["selected"],
                     }
@@ -2156,7 +2185,7 @@ class ClaudeActivationTests(unittest.TestCase):
         repo, manifest = self._marketplace(root)
         (root / "claude").mkdir()
         manifest.write_text(json.dumps({
-            "schema_version": 1, "active_skills": [],
+            "schema_version": 2, "active_skills": [],
             "active_marketplaces": ["daymade-skills"],
             "claude_active_marketplaces": ["daymade-skills"],
         }))
