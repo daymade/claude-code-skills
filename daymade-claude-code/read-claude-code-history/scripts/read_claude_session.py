@@ -452,6 +452,8 @@ def parse_session_structure(session_file: Path) -> Dict:
     # incremental add/discard silently strands ids when the result lands first.
     dispatched_tool_calls = {}  # tool_use_id -> tool_use_info
     resolved_tool_use_ids = set()
+    plan_bindings = []
+    tail_is_interrupt = False
     errors = []
     files_touched = set()
     last_message_role = None
@@ -514,6 +516,24 @@ def parse_session_structure(session_file: Path) -> Dict:
                             }
                         )
                         last_message_role = "user"
+                elif attachment.get("type") in ("plan_mode", "plan_file_reference"):
+                    # Plan binding attachments (references/session_file_format.md
+                    # "Plan binding attachments"). `plan_mode` carries the path
+                    # only; `plan_file_reference` carries the full plan content
+                    # (the post-compaction re-injection), so a deleted plan file
+                    # is still recoverable from the transcript.
+                    plan_path = attachment.get("planFilePath")
+                    if isinstance(plan_path, str) and plan_path:
+                        plan_content = attachment.get("planContent")
+                        plan_bindings.append(
+                            {
+                                "kind": attachment["type"],
+                                "plan_file_path": plan_path,
+                                "plan_exists": attachment.get("planExists"),
+                                "has_content": isinstance(plan_content, str)
+                                and bool(plan_content.strip()),
+                            }
+                        )
                 continue
 
             # Track tool calls and results
@@ -558,8 +578,21 @@ def parse_session_structure(session_file: Path) -> Dict:
                         if is_error and isinstance(result_content, str):
                             errors.append(result_content[:500])
 
-            # Track last message for end-reason detection
+            # Track last message for end-reason detection. The interruption
+            # marker survives as `tail_is_interrupt` only when it is the LAST
+            # relevant record: any later user/assistant record resets it
+            # (same semantics as analyze_sessions.classify_session_tail — a
+            # mid-session Ctrl+C the conversation continued past is not a
+            # tail interruption).
             if role in ("user", "assistant"):
+                if (
+                    role == "user"
+                    and isinstance(content, str)
+                    and "[Request interrupted by user" in content
+                ):
+                    tail_is_interrupt = True
+                else:
+                    tail_is_interrupt = False
                 last_message_role = role
                 messages.append(obj)
 
@@ -571,7 +604,7 @@ def parse_session_structure(session_file: Path) -> Dict:
 
     # Detect session end reason
     end_reason = _detect_end_reason(
-        last_message_role, unresolved_tool_calls, error_count,
+        last_message_role, unresolved_tool_calls, error_count, tail_is_interrupt,
     )
 
     return {
@@ -581,6 +614,7 @@ def parse_session_structure(session_file: Path) -> Dict:
         "parsed_range_start": parsed_range_start,
         "messages": messages,
         "unresolved_tool_calls": dict(unresolved_tool_calls),
+        "plan_bindings": plan_bindings,
         "errors": errors,
         "error_count": error_count,
         "files_touched": files_touched,
@@ -593,8 +627,11 @@ def _detect_end_reason(
     last_role: Optional[str],
     unresolved: Dict,
     error_count: int,
+    tail_is_interrupt: bool = False,
 ) -> str:
     """Detect why the session ended."""
+    if tail_is_interrupt:
+        return "interrupted_explicit"  # Explicit esc marker as the last relevant record — outranks inference
     if unresolved:
         return "interrupted"  # Tool calls dispatched but no results — likely ctrl-c
     if error_count >= 3:
@@ -615,7 +652,11 @@ def _is_noise_user_text(text: str) -> bool:
 
 
 def extract_user_text(messages: List[Dict], limit: int = 5) -> List[str]:
-    """Extract the last N user text messages (not tool results or system noise)."""
+    """Extract the last N user text messages (not tool results or system noise).
+
+    Not called anywhere in this skill (public API surface kept, not retired).
+    The live path is ``_turn_kinds`` → ``extract_turn_timeline`` → briefing.
+    """
     user_texts = []
     for msg_obj in reversed(messages):
         if msg_obj.get("isCompactSummary"):
@@ -644,7 +685,12 @@ def extract_user_text(messages: List[Dict], limit: int = 5) -> List[str]:
 
 
 def extract_assistant_text(messages: List[Dict], limit: int = 3) -> List[str]:
-    """Extract the last N assistant text responses (no thinking/tool_use)."""
+    """Extract the last N assistant text responses (no thinking/tool_use).
+
+    Not called anywhere in this skill (public API surface kept, not retired).
+    The live path is ``_turn_kinds`` → ``extract_turn_timeline`` → briefing,
+    which does emit thinking turns.
+    """
     assistant_texts = []
     for msg_obj in reversed(messages):
         msg = msg_obj.get("message", {})
@@ -666,23 +712,54 @@ def extract_assistant_text(messages: List[Dict], limit: int = 3) -> List[str]:
     return assistant_texts
 
 
-def _turn_text(msg_obj: Dict) -> str:
+def _turn_kinds(msg_obj: Dict) -> List[tuple]:
+    """Yield (kind, text) turns for one record in physical block order.
+
+    Assistant records can carry thinking blocks: they are part of the same
+    chronology as prose (the skill's search contract already requires
+    thinking coverage), so a thinking-only record must not be silently
+    skipped. Thinking `signature` fields are never emitted — they create
+    false-positive search hits. Consecutive text blocks keep joining into one
+    turn (previous behavior); a thinking block flushes any buffered text
+    first so the two kinds never merge into one turn.
+    """
     msg = msg_obj.get("message", {})
     content = msg.get("content", "")
+    role = msg.get("role", "")
+    text_kind = "assistant_text" if role == "assistant" else "user"
     if isinstance(content, str):
-        return content.strip()
+        text = content.strip()
+        return [(text_kind, text)] if text else []
     if not isinstance(content, list):
-        return ""
-    texts = [
-        block.get("text", "")
-        for block in content
-        if isinstance(block, dict) and block.get("type") == "text"
-    ]
-    return "\n".join(text for text in texts if text.strip()).strip()
+        return []
+    turns, buf = [], []
+
+    def flush() -> None:
+        joined = "\n".join(buf).strip()
+        buf.clear()
+        if joined:
+            turns.append((text_kind, joined))
+
+    for block in content:
+        if not isinstance(block, dict):
+            continue
+        block_type = block.get("type")
+        if block_type == "text":
+            text = block.get("text", "")
+            if text.strip():
+                buf.append(text)
+        elif role == "assistant" and block_type == "thinking":
+            thinking = block.get("thinking", "")
+            if thinking.strip():
+                flush()
+                turns.append(("assistant_thinking", thinking.strip()))
+    flush()
+    return turns
 
 
 def extract_turn_timeline(messages: List[Dict]) -> List[Dict]:
-    """Return human/assistant text in physical record order."""
+    """Return human/assistant text and assistant thinking turns in physical
+    record order."""
     turns = []
     for ordinal, msg_obj in enumerate(messages):
         if msg_obj.get("isCompactSummary"):
@@ -693,19 +770,24 @@ def extract_turn_timeline(messages: List[Dict]) -> List[Dict]:
         role = msg.get("role")
         if role not in ("user", "assistant"):
             continue
-        text = _turn_text(msg_obj)
-        if not text:
-            continue
-        if role == "user" and _is_noise_user_text(text):
-            continue
-        turns.append(
-            {
-                "ordinal": ordinal,
-                "role": role,
-                "text": text,
-                "queued": bool(msg_obj.get("_queued_human")),
-            }
-        )
+        for kind, text in _turn_kinds(msg_obj):
+            if kind == "user" and "[Request interrupted by user" in text:
+                # Harness-written esc marker, not human prose — labeled apart
+                # from the user's own words (and deliberately NOT in
+                # NOISE_USER_PATTERNS: verbatim export keeps it, end-state
+                # triage reads it).
+                kind = "interrupt_marker"
+            if kind == "user" and _is_noise_user_text(text):
+                continue
+            turns.append(
+                {
+                    "ordinal": ordinal,
+                    "role": role,
+                    "kind": kind,
+                    "text": text,
+                    "queued": bool(msg_obj.get("_queued_human")),
+                }
+            )
     return turns
 
 
@@ -732,12 +814,17 @@ def _append_timeline(sections: List[str], messages: List[Dict], full: bool) -> N
         return
     sections.append("\n## Chronological Handoff Timeline\n")
     sections.append(
-        "Every retained human and assistant text turn is shown in physical record "
-        "order. Default mode clips long turns; `--full` changes only clipping.\n"
+        "Every retained human and assistant turn — prose and thinking, kept as "
+        "separate records, never merged — is shown in physical record order. "
+        "Default mode clips long turns; `--full` changes only clipping.\n"
     )
     for segment in _handoff_segments(timeline):
         for turn in segment:
             role = turn["role"].upper()
+            if turn.get("kind") == "assistant_thinking":
+                role = "ASSISTANT (thinking)"
+            elif turn.get("kind") == "interrupt_marker":
+                role = "USER (interrupt marker)"
             queued = " · queued human input" if turn["queued"] else ""
             sections.append(f"### Record {turn['ordinal']} · {role}{queued}\n")
             limit = 1000 if role == "USER" else 1600
@@ -916,6 +1003,7 @@ def get_session_memory(session_file: Path) -> Optional[str]:
 
 END_REASON_LABELS = {
     "completed": "Clean exit (assistant completed response)",
+    "interrupted_explicit": "Interrupted by user (esc marker is the last relevant record)",
     "interrupted": "Interrupted (unresolved tool calls — likely ctrl-c or timeout)",
     "error_cascade": "Error cascade (multiple API errors)",
     "abandoned": "Abandoned (user message with no response)",
@@ -992,6 +1080,25 @@ def build_briefing(
         if last_summary:
             sections.append("\n## Compact Summary (auto-generated by previous session)\n")
             sections.append(_clip(last_summary, 8000, full))
+
+    # Plan bindings (plan_mode / plan_file_reference attachments)
+    if parsed.get("plan_bindings"):
+        sections.append("\n## Plan Bindings\n")
+        for binding in parsed["plan_bindings"]:
+            recovery = (
+                "full plan content attached — recoverable even if the file is deleted"
+                if binding["has_content"]
+                else (
+                    f"path only (planExists={binding['plan_exists']}); content unavailable if the file is gone"
+                )
+            )
+            sections.append(
+                f"- `{binding['plan_file_path']}` — {binding['kind']}; {recovery}"
+            )
+        sections.append(
+            "Reverse lookup (plan file → owning session): "
+            "`analyze_sessions.py plan-bindings <absolute plan path>`\n"
+        )
 
     _append_timeline(sections, parsed["messages"], full)
 

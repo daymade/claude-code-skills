@@ -191,7 +191,7 @@ def load_manifest(path: Path) -> dict[str, Any]:
                 isinstance(part, str) and part for part in argv
             ):
                 raise PriorWorkError(f"{source_id}: argv must be non-empty strings")
-            allowed_placeholders = {"{query}", "{limit}", "{session_id}"}
+            allowed_placeholders = {"{query}", "{limit}", "{session_id}", "{terms}"}
             for part in argv:
                 residual = part
                 for placeholder in allowed_placeholders:
@@ -508,13 +508,46 @@ def _filesystem_candidates(
     }
 
 
+def _payload_freshness(payload: dict[str, Any]) -> dict[str, Any]:
+    """Read index freshness out of a finder_recall_v1 payload.
+
+    Freshness is a readable receipt field, never a gate: `status` stays
+    "searched" so a stale-but-required source can never deadlock
+    complete_receipt. A stale retrieval means "may have missed something",
+    not "does not exist" — visible, but never blocking.
+    """
+    indexed_at = payload.get("last_indexed_at") if isinstance(payload, dict) else None
+    complete_frontier = (
+        payload.get("complete_frontier") if isinstance(payload, dict) else None
+    )
+    parsed = None
+    if isinstance(indexed_at, str) and indexed_at:
+        try:
+            parsed = datetime.fromisoformat(indexed_at.replace("Z", "+00:00"))
+        except ValueError:
+            parsed = None
+    if parsed is None:
+        freshness, reason = "unknown", "indexed_at_unparseable"
+    elif not complete_frontier:
+        freshness, reason = "stale", "index_incomplete"
+    else:
+        freshness, reason = "fresh", "index_complete"
+    return {
+        "indexed_at": indexed_at,
+        "complete_frontier": complete_frontier,
+        "freshness": freshness,
+        "freshness_reason": reason,
+    }
+
+
 def _command_candidates(
-    source: dict[str, Any], query: str, session_id: str
+    source: dict[str, Any], query: str, terms: Sequence[str], session_id: str
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     argv = [
         part.replace("{query}", query)
         .replace("{limit}", str(source["max_results"]))
         .replace("{session_id}", session_id)
+        .replace("{terms}", " ".join(terms))
         for part in source["argv"]
     ]
     try:
@@ -597,11 +630,15 @@ def _command_candidates(
                 **(_file_metadata(path) if path else {"path_exists": False}),
             }
         )
+    terms_passed = any("{terms}" in part for part in source["argv"])
     return candidates, {
         "status": "searched",
         "result_count": len(candidates),
         "adapter_mode": payload.get("mode") if isinstance(payload, dict) else None,
         "adapter_coverage": payload.get("coverage") if isinstance(payload, dict) else None,
+        "terms_passed": terms_passed,
+        "terms": list(terms),
+        **_payload_freshness(payload),
     }
 
 
@@ -612,7 +649,7 @@ def _automatic_source_result(
     if source["mode"] == "filesystem":
         candidates, detail = _filesystem_candidates(source, terms)
     elif source["mode"] == "command":
-        candidates, detail = _command_candidates(source, query, session_id)
+        candidates, detail = _command_candidates(source, query, terms, session_id)
     else:
         raise PriorWorkError(f"Source {source['id']} is not an automatic adapter")
     detail["elapsed_ms"] = round((time.perf_counter() - started) * 1000, 1)

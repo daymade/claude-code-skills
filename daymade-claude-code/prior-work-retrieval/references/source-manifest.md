@@ -25,7 +25,7 @@ outside these declarations.
       "mode": "command",
       "argv": [
         "/absolute/uv", "run", "--no-project", "python",
-        "/absolute/history_index.py", "recall", "{query}",
+        "/absolute/history_index.py", "recall", "--terms", "{terms}", "{query}",
         "--mode", "auto", "--limit", "{limit}", "--json"
       ],
       "result_format": "finder_recall_v1",
@@ -62,9 +62,19 @@ Filesystem sources require `root` and non-empty `includes`. `excludes` is
 optional. Patterns are passed as explicit `rg --glob` arguments; the script does
 not invent an include convention.
 
-Command sources require an `argv` array. Only `{query}`, `{limit}`, and
-`{session_id}` are expanded. The executable is invoked directly, never through a shell. Supported
+Command sources require an `argv` array. Only `{query}`, `{limit}`,
+`{session_id}`, and `{terms}` are expanded (`{terms}` is optional: it expands to
+the space-joined implementation terms — add it once as a single argv element, as
+in the example above; a manifest without the slot keeps working unchanged and the
+receipt records `terms_passed: false`). The executable is invoked directly, never
+through a shell. Supported
 result formats are named in the script; an unknown format fails validation.
+
+A command adapter's payload may carry `last_indexed_at` and `complete_frontier`.
+They surface on the receipt as readable freshness fields (`freshness`:
+`fresh`/`stale`/`unknown` plus `freshness_reason`) — visibility, never a gate:
+`status` stays `searched`, so a stale index means "may have missed something",
+not "does not exist", and can never block receipt completion.
 
 Manual sources never pretend to be searched. The receipt reports
 `manual_required` until an agent completes the named route and records that

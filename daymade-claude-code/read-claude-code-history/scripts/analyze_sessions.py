@@ -59,6 +59,7 @@ from _core.sources import (  # noqa: E402
     HistorySource,
     HistorySourceConfigError,
     discover_claude_sources,
+    group_claude_sources_by_projects,
 )
 from _core.text import (  # noqa: E402
     SearchSegment,
@@ -2188,6 +2189,113 @@ def _print_search_widening_hint(args) -> None:
         print(f"  - {tip}", file=sys.stderr)
 
 
+def _cmd_plan_bindings(args) -> int:
+    """Reverse lookup: which session(s) bind this plan file.
+
+    Matches only the two binding attachments (`plan_mode`, `plan_file_reference`)
+    by absolute planFilePath identity — never a bare `plan_mode` grep, which
+    `plan_mode_required:false` noise pollutes by an order of magnitude. When the
+    plan file is gone from disk, fall back to the `plan_file_reference` content
+    carried by the transcript instead of reporting absence.
+    """
+    target = os.path.normpath(str(Path(args.plan_file).expanduser()))
+    sources, _narrowed, warnings = _sources_for(args)
+    for warning in warnings:
+        print(f"Warning: {warning}", file=sys.stderr)
+    bindings = []
+    for group in group_claude_sources_by_projects(sources):
+        src = group[0]
+        projects = src.home / "projects"
+        if not projects.is_dir():
+            continue
+        for session_file in projects.glob("*/*.jsonl"):
+            if session_file.name.startswith("agent-"):
+                continue
+            try:
+                handle = session_file.open(encoding="utf-8")
+            except OSError:
+                continue
+            with handle:
+                for line in handle:
+                    if "planFilePath" not in line:
+                        continue
+                    try:
+                        record = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    attachment = record.get("attachment")
+                    if not isinstance(attachment, dict):
+                        continue
+                    kind = attachment.get("type")
+                    if kind not in ("plan_mode", "plan_file_reference"):
+                        continue
+                    plan_path = attachment.get("planFilePath")
+                    if not isinstance(plan_path, str) or os.path.normpath(plan_path) != target:
+                        continue
+                    content = attachment.get("planContent")
+                    bindings.append(
+                        {
+                            "session_id": session_file.stem,
+                            "kind": kind,
+                            "plan_exists": attachment.get("planExists"),
+                            "content": content
+                            if isinstance(content, str) and content.strip()
+                            else None,
+                            "timestamp": record.get("timestamp"),
+                        }
+                    )
+    if not bindings:
+        print(f"No session binds plan file: {target}")
+        print(
+            "(searched plan_mode/plan_file_reference attachments across all sources)",
+            file=sys.stderr,
+        )
+        return 1
+    # The same binding can surface twice when a session file is reachable via
+    # two physical copies (active + archive) that were not grouped; dedup.
+    unique, seen = [], set()
+    for binding in bindings:
+        key = (
+            binding["session_id"],
+            binding["kind"],
+            binding["timestamp"],
+            binding["plan_exists"],
+            bool(binding["content"]),
+        )
+        if key not in seen:
+            seen.add(key)
+            unique.append(binding)
+    bindings = unique
+    on_disk = Path(target).is_file()
+    print(f"plan: {target} ({'exists on disk' if on_disk else 'missing from disk'})")
+    for binding in bindings:
+        if binding["content"]:
+            recovery = "full plan content attached"
+        elif binding["kind"] == "plan_mode":
+            recovery = f"path only (planExists={binding['plan_exists']})"
+        else:
+            recovery = "no content attached"
+        print(
+            f"session {binding['session_id']} · {binding['kind']} · "
+            f"{recovery} · {binding['timestamp']}"
+        )
+    if on_disk:
+        return 0
+    for binding in bindings:
+        if binding["content"]:
+            print(
+                f"\n## Plan content recovered from session "
+                f"{binding['session_id']} (plan_file_reference)\n"
+            )
+            print(binding["content"])
+            return 0
+    print(
+        "\nPlan content unavailable: every binding is plan_mode path-only "
+        "(planExists:false); the transcript carries no plan text."
+    )
+    return 0
+
+
 def main():
     """Main entry point."""
     import argparse
@@ -2222,6 +2330,16 @@ def main():
         "--limit", type=int, default=10, help="Max sessions to show (default: 10)"
     )
     _add_home_flags(list_parser)
+
+    # Plan bindings command — reverse lookup: which session(s) bind a plan file
+    plan_parser = subparsers.add_parser(
+        "plan-bindings",
+        help="Find the session(s) bound to a plan file (plan_mode / "
+        "plan_file_reference attachments), with content recovery when the "
+        "file is deleted",
+    )
+    plan_parser.add_argument("plan_file", help="Absolute path of the plan file")
+    _add_home_flags(plan_parser)
 
     # Triage command — classify how sessions in scope ended (crash recovery,
     # backlog audit). Distinct from `list`: prints the full last-assistant
@@ -2434,6 +2552,9 @@ def main():
             raise SystemExit(
                 _print_codex_locations(_codex_home_for(args), args.keywords[0])
             )
+
+    if args.command == "plan-bindings":
+        sys.exit(_cmd_plan_bindings(args))
 
     if args.command == "list":
         _validate_project_scope(args, parser)

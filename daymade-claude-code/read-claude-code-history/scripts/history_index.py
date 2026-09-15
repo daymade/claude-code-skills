@@ -2420,6 +2420,7 @@ def recall(
     model_path: Path | None,
     simple_root: Path | None,
     providers: Sequence[str] = (),
+    terms: str | None = None,
 ) -> dict[str, Any]:
     connection = _connect(
         db_path,
@@ -2520,6 +2521,12 @@ def recall(
 
     fts_limit = max(limit * 6, 30)
     vector_limit = max(limit * 6, 30)
+    # --terms adds one extra ANDed FTS constraint with the exact same
+    # simple_query semantics as the main query (libsimple does the
+    # tokenizing; multiple MATCH clauses on one FTS table are legal and
+    # ANDed). Without --terms the query text and params are unchanged.
+    terms_match = " AND records_fts MATCH simple_query(?)" if terms else ""
+    terms_params: list[Any] = [terms] if terms else []
     # Keep FTS ranking out of a window function. On a real 32k-message project,
     # ``row_number() over (order by rank)`` forced SQLite to rank every broad
     # CJK match before applying LIMIT and consumed a full CPU core for >80s.
@@ -2532,11 +2539,11 @@ def recall(
         FROM records_fts
         JOIN records ON records.id=records_fts.rowid
         JOIN sessions ON sessions.session_id=records.session_id
-        WHERE records_fts MATCH simple_query(?) AND {where}
+        WHERE records_fts MATCH simple_query(?){terms_match} AND {where}
         ORDER BY records_fts.rank
         LIMIT ?
         """,
-        [query, *params, fts_limit],
+        [query, *terms_params, *params, fts_limit],
     ).fetchall()
     fts_ranks = {row[0]: rank for rank, row in enumerate(fts_rows, start=1)}
     fts_snippets = {row[0]: row[1] for row in fts_rows}
@@ -2623,6 +2630,7 @@ def recall(
     payload = {
         "mode": actual_mode,
         "query": query,
+        "terms": terms,
         "database": str(db_path),
         "last_indexed_at": _meta_get(connection, "last_indexed_at"),
         "complete_frontier": _meta_get(connection, "complete_frontier"),
@@ -2845,6 +2853,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=SUPPORTED_PROVIDERS,
         help="Restrict recall to one or more indexed providers; repeatable",
     )
+    recall_parser.add_argument(
+        "--terms",
+        default=None,
+        help="Extra ANDed FTS constraint, same simple_query semantics as the "
+        "positional query (e.g. outcome terms forwarded by prior-work retrieval)",
+    )
     recall_parser.add_argument("--json", action="store_true")
 
     status_parser = subparsers.add_parser("status", help="Inspect index completeness")
@@ -2986,6 +3000,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 model_path=args.model_path,
                 simple_root=args.simple_root,
                 providers=args.provider or (),
+                terms=args.terms,
             )
             _print_payload(payload, json_output=args.json)
             return 0
