@@ -123,6 +123,14 @@ coverage.
 
 ### 4. Verify candidates at authority
 
+For a request to recover a deployed artifact, first bind the named system and
+the requested state (historical edition, used at a specific time, or current
+deployment). A related design document is a candidate, not the recovered file.
+Follow the project's artifact/deployment owner before selecting a similarly
+named experiment. If runtime proof is accessible, obtain it before delivering;
+an “unverified” disclaimer does not complete the lookup. If the user explicitly
+wants a historical draft, return that edition without imposing a live check.
+
 Open promising candidates at their original path. Check:
 
 - **Match**: does it solve the same business problem, not merely share words?
@@ -134,6 +142,32 @@ Open promising candidates at their original path. Check:
   results over a process that merely looks complete.
 
 ### 5. Complete the reuse receipt
+
+When an archived request contains an actual file read, first use
+[`verify_artifact.py`](scripts/verify_artifact.py) to compare the **selected
+deliverable**, not a nearby reference, against its correlated tool result:
+
+```bash
+uv run --no-project python scripts/verify_artifact.py \
+  --candidate /tmp/agent-backup.zip --member skills/editor/SKILL.md \
+  --archive /tmp/request.json.gz --read-path /agent/skills/editor/SKILL.md
+```
+
+The checker accepts JSON/gzip bundles with `request_id`, a timezone-qualified
+`timestamp`, and `request.body.messages` in Anthropic tool-call format. Omit
+`--member` for a plain file. Exit 0 means exact bytes appeared in a successful
+correlated `read` at the recorded time; 1 means no matching proof; 2 means
+invalid/ambiguous evidence. Path mentions, failed reads and related old files do
+not pass. Other evidence formats remain supported by the source-specific reader;
+do not convert an unsupported format into a negative claim.
+
+The archive must come from the verified system's source-specific reader or
+observability tool. This check cannot authenticate an archive, decide which
+system the user meant, or establish current deployment. It also does not prove
+that every dependency was recovered. Preserve these distinctions in the handoff.
+For artifact retrieval, record the selected artifact/member and its matching
+evidence in the adoption reason. A receipt about a locator document alone does
+not establish that the final artifact is correct.
 
 Classify the items you actually inspected:
 

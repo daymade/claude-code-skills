@@ -36,6 +36,7 @@ from collections import Counter, defaultdict
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _core.claude import scan_claude_session  # noqa: E402
 from _core.codex import codex_meta_from_rollout, codex_session_id  # noqa: E402
+from _core.native_output import native_command_segments, distinct_result_segments  # noqa: E402
 from _core.kimi import (  # noqa: E402
     iter_kimi_session_dirs,
     kimi_wire_files,
@@ -316,7 +317,8 @@ def classify_session_tail(path: Path) -> SessionTail:
 # user-visible payload of each response_item variant. event_msg user/agent
 # message records are deliberate strict mirrors of response_item message text
 # (verified 2026-07-16: 26/26 and 104/104 subset on a real rollout), so they
-# are skipped to avoid double-counting.
+# are skipped to avoid double-counting. Native CommandExecution completions
+# are separate tool results and must remain searchable.
 # ---------------------------------------------------------------------------
 
 
@@ -347,7 +349,7 @@ def codex_searchable_segments(record: Dict[str, Any]) -> List[SearchSegment]:
         return list(dict.fromkeys(segments))
 
     if record.get("type") != "response_item":
-        return segments
+        return native_command_segments(record)
     payload = record.get("payload")
     if not isinstance(payload, dict):
         return segments
@@ -646,6 +648,7 @@ def search_codex_rollouts(
         session_range = TimestampRange()
         match_range = TimestampRange()
         excluded_untimed = 0
+        seen_result_segments = set()
         try:
             for record_index, record in enumerate(
                 iter_jsonl(path, line_keywords=line_keywords, strict=True)
@@ -673,7 +676,9 @@ def search_codex_rollouts(
                         continue
                 record_counts: Dict[str, int] = defaultdict(int)
                 record_sources: set[str] = set()
-                for segment in codex_searchable_segments(record):
+                for segment in distinct_result_segments(
+                    record, codex_searchable_segments(record), seen_result_segments
+                ):
                     search_text = (
                         segment.text if case_sensitive else segment.text.casefold()
                     )

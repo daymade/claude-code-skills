@@ -20,7 +20,7 @@ The session id is a UUIDv7 embedded in the rollout filename and repeated inside 
 
 ## Rollout JSONL — record schema
 
-Every line is one JSON object with a top-level `timestamp`, `type`, and (usually) `payload`. The `payload.type` further discriminates `event_msg` and `response_item` records. Reasoning and tool-execution records dominate by volume; the table below lists what the parser reads and what it deliberately ignores.
+Every line is one JSON object with a top-level `timestamp`, `type`, and (usually) `payload`. The `payload.type` further discriminates `event_msg` and `response_item` records. Reasoning and tool-execution records dominate by volume; the table below lists what the parser reads and what it deliberately ignores. The table describes the chronological briefing. Keyword search additionally reads native `CommandExecution` completions as tool results; it does not treat them as conversation turns.
 
 | `type` | `payload.type` | Carries | Used for |
 |--------|----------------|---------|----------|

@@ -145,7 +145,9 @@ alongside the destination repository's storage SOP.
 `prior-work-retrieval` creates an obligation only for an explicit prior-work,
 reuse, or history request. Ordinary implementation, reports, and read-only
 inspection do not arm it; PreToolUse and Stop may enforce only a requirement
-already created by the current prompt. Detailed retrieval mechanics remain in
+already created by the current prompt. Artifact selection and runtime-read
+comparison are owned by that Skill; a receipt about a locator is not proof of
+the delivered artifact. Detailed retrieval mechanics remain in
 `daymade-claude-code/prior-work-retrieval/SKILL.md`.
 
 ### Local Agent Messaging
