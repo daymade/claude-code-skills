@@ -153,6 +153,12 @@ Every answer must state:
    or any scope that was not searched.
 
 “Not found” means “not found in the stated coverage,” never “never happened.”
+Report it only with the label census attached: run the same term(s) through the
+full-label search and state how many hits each source label carried
+(`message`, `thinking`, `tool_input:<name>`, `tool_result`, `attachment`,
+`summary`) — a user/assistant-text-only search cannot support the sentence.
+If the census shows the term living under labels you excluded, the answer is
+“found under X”, not “not found”.
 Do not call a compact summary verbatim history; it is a continuation aid and must
 be checked against raw records and the current workspace for load-bearing claims.
 
@@ -194,6 +200,28 @@ remainder before any conclusion that depends on it.
 - Do not report a search as complete after a timeout or malformed source.
 - Do not assert a negative ("never said," "never appears," "impossible to
   satisfy") without clearing the checklist in Read-result contract.
+
+## Surface contract
+
+First use in a session: run `python3 scripts/surface_version.py` once and note
+the 12-char fingerprint — the sha256 of this skill's `scripts/**/*.py` code
+surface. If it differs from the fingerprint you last saw for this skill, the
+code changed under you: re-read this SKILL.md and the references from disk
+before acting on in-context echoes of them. The fingerprint covers code only;
+documentation edits do not change it.
+
+## CC behavior claims
+
+`references/cc-behavior-claims.json` is the per-release ledger of every
+"Claude Code behaves like X" assertion this skill depends on (Read row
+numbering, tool_use/tool_result ordering, AUQ answer shape, interrupt markers,
+plan bindings, sidechain semantics). `python3 scripts/verify_cc_claims.py
+--fixtures` is the CI gate — exit 1 means the implementation, a fixture, or
+the ledger broke a claimed shape. `--corpus <dir>` re-verifies the ledger
+against live transcripts: exit 2 means the schema drifted, which is a
+correctness task, not a test failure — update `observed`/`last_verified`/
+`evidence` or fix the implementation, and name the drifted claim(s) in the
+CHANGELOG.
 
 ## Router and legacy compatibility
 

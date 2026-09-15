@@ -1,0 +1,233 @@
+{
+  "version": 1,
+  "fixtures_dir": "tests/fixtures/real-derived",
+  "claims": [
+    {
+      "id": "C1",
+      "statement": "常规文件的 `Read` tool_result 是 `行号\\t内容` 格式且行号严格连续（步长 1）；PDF 读取（`PDF pages extracted:` / `PDF file read:` 前缀）与提示/错误回包（permission/dedup/ENOENT 等）是各自独立的形状，不进编号体系",
+      "observed": "7464/7464 numbered & contiguous; unnumbered_other=0; pdf_extract=42; notice=118 (corpus 1436 files, 2026-09-16)",
+      "fixture_expect": {
+        "read_results_total": 2,
+        "read_results_numbered": 2,
+        "read_results_contiguous": 2,
+        "read_results_pdf_extract": 0,
+        "read_results_notice": 0,
+        "read_results_unnumbered_other": 0
+      },
+      "corpus_property": [
+        [
+          "read_results_numbered",
+          ">=",
+          1
+        ],
+        [
+          "read_results_contiguous",
+          "==metric",
+          "read_results_numbered"
+        ],
+        [
+          "read_results_unnumbered_other",
+          "==",
+          0
+        ]
+      ],
+      "last_verified": "2026-09-16",
+      "evidence": "local corpus measurement 2026-09-15 (433/433 contiguous, 1305/1305 numbered); first full-corpus run 2026-09-16 refined the claim: unnumbered results are all PDF page extractions (16/7862), never regular files; fixture: read-numbered-result.jsonl",
+      "status": "verified"
+    },
+    {
+      "id": "C2",
+      "statement": "`Read` 带 `offset` 时行号是**绝对**行号（offset=300 首行 `300\\t`）",
+      "observed": "3608/3608 content offset reads absolute (2026-09-16)",
+      "fixture_expect": {
+        "read_offset_total": 1,
+        "read_offset_absolute": 1
+      },
+      "corpus_property": [
+        [
+          "read_offset_total",
+          ">=",
+          1
+        ],
+        [
+          "read_offset_absolute",
+          "==metric",
+          "read_offset_total"
+        ]
+      ],
+      "last_verified": "2026-09-16",
+      "evidence": "local corpus measurement 2026-09-15 (offset=300 → 300\\t; offset=146 → 146\\t); fixture: read-numbered-result.jsonl",
+      "status": "verified"
+    },
+    {
+      "id": "C3",
+      "statement": "`Read` 截断**不写**任何提示（limit 截断静默发生）",
+      "observed": "0 truncation notes in 7624 results (2026-09-16)",
+      "fixture_expect": {
+        "read_truncation_notes": 0
+      },
+      "corpus_property": [
+        [
+          "read_truncation_notes",
+          "==",
+          0
+        ]
+      ],
+      "last_verified": "2026-09-16",
+      "evidence": "local corpus measurement 2026-09-15 (0 notes in 1305 results); fixture: read-numbered-result.jsonl",
+      "status": "verified"
+    },
+    {
+      "id": "C4",
+      "statement": "`tool_result` 物理行可以先于其 `tool_use` 行出现",
+      "observed": "43/1436 files carry a reversed pair (2026-09-16)",
+      "fixture_expect": {
+        "files_with_reversed_pair": 1
+      },
+      "corpus_property": [
+        [
+          "files_with_reversed_pair",
+          ">=",
+          1
+        ]
+      ],
+      "last_verified": "2026-09-16",
+      "evidence": "local corpus 2026-09-15 (7/373 files with tool calls; analyze_sessions docstring records 11/14 flips); fixture: tool-result-before-use.jsonl",
+      "status": "verified"
+    },
+    {
+      "id": "C5",
+      "statement": "`isSidechain` 内联 record 不改变全文件 pending 工具集合",
+      "observed": "0/1436 files differ (2026-09-16)",
+      "fixture_expect": {
+        "sidechain_pending_differs": 0
+      },
+      "corpus_property": [
+        [
+          "sidechain_pending_differs",
+          "==",
+          0
+        ]
+      ],
+      "last_verified": "2026-09-16",
+      "evidence": "local corpus 2026-09-15 (60/60 both sides identical); fixture: tool-result-before-use.jsonl",
+      "status": "verified"
+    },
+    {
+      "id": "C6",
+      "statement": "AskUserQuestion 答案骑在 tool_result 上；主形态是 `toolUseResult.answers` 结构化映射，合成串 `Your questions have been answered: …` 只是其渲染副产品",
+      "observed": "structured 143 / synth-only 0 (corpus 1436 files, 2026-09-16)",
+      "fixture_expect": {
+        "auq_structured": 1,
+        "auq_synth_only": 1
+      },
+      "corpus_property": [
+        [
+          "auq_structured",
+          ">=",
+          1
+        ],
+        [
+          "auq_structured",
+          ">=metric",
+          "auq_synth_only"
+        ]
+      ],
+      "last_verified": "2026-09-16",
+      "evidence": "local corpus 2026-09-15 (sample 200: toolUseResult 183 / synth 15 / intersection 15); fixture: askuserquestion-answer.jsonl",
+      "status": "verified"
+    },
+    {
+      "id": "C7",
+      "statement": "`[Request interrupted by user` 作为 session 最后一条相关 record 极罕见；出现时多为刚开始即被打断的活动会话，不是稳定终态",
+      "observed": "9/1436 files contain marker as user string record; 1 marker-last (just-started session interrupted seconds in) (2026-09-16)",
+      "fixture_expect": {
+        "files_with_marker": 1,
+        "interrupt_marker_last": 0
+      },
+      "corpus_property": [
+        [
+          "files_with_marker",
+          ">=",
+          1
+        ],
+        [
+          "interrupt_marker_last",
+          "<=",
+          2
+        ]
+      ],
+      "last_verified": "2026-09-16",
+      "evidence": "local corpus 2026-09-15 (80/1128 files contain it, 0 as last record); first full-corpus run 2026-09-16 found 1 marker-last file — a just-started session interrupted seconds in, i.e. a live/paused state, not a dead end; fixture: tool-result-before-use.jsonl",
+      "status": "verified"
+    },
+    {
+      "id": "C8",
+      "statement": "thinking-only 的 assistant record 占比高到不能丢（与含 text 的 record 同量级）",
+      "observed": "22494 thinking-only vs 41134 text records (2026-09-16)",
+      "fixture_expect": {
+        "thinking_only_records": 1,
+        "text_records": 3
+      },
+      "corpus_property": [
+        [
+          "thinking_only_records",
+          ">=",
+          1
+        ]
+      ],
+      "last_verified": "2026-09-16",
+      "evidence": "local corpus 2026-09-15 (1423 thinking-only vs 2604 with-text in 50 newest); fixture: thinking-only-assistant.jsonl",
+      "status": "verified"
+    },
+    {
+      "id": "C9",
+      "statement": "plan 绑定有两种 attachment：`plan_file_reference`（带 `planContent` 全文）与 `plan_mode`（只带 `planFilePath`+`planExists`）；且 `planExists` 常为 false",
+      "observed": "21 plan_file_reference / 16 plan_mode / 13 planExists:false (2026-09-16)",
+      "fixture_expect": {
+        "plan_mode": 1,
+        "plan_file_reference": 1,
+        "plan_exists_false": 1
+      },
+      "corpus_property": [
+        [
+          "plan_file_reference",
+          ">=",
+          1
+        ],
+        [
+          "plan_mode",
+          ">=",
+          1
+        ],
+        [
+          "plan_exists_false",
+          ">=",
+          1
+        ]
+      ],
+      "last_verified": "2026-09-16",
+      "evidence": "local corpus 2026-09-15 (sample 400: 12 plan_file_reference / 7 plan_mode; planExists false in 4/6); fixture: plan-binding-attachment.jsonl",
+      "status": "verified"
+    },
+    {
+      "id": "C10",
+      "statement": "裸 grep `plan_mode` 会被 `plan_mode_required:false` 污染——噪声行与绑定 attachment 是不同集合",
+      "observed": "4 noise records vs 37 binding attachments (2026-09-16)",
+      "fixture_expect": {
+        "plan_mode_required_noise": 1,
+        "plan_mode": 1
+      },
+      "corpus_property": [
+        [
+          "plan_mode_required_noise",
+          ">=",
+          1
+        ]
+      ],
+      "last_verified": "2026-09-16",
+      "evidence": "local corpus 2026-09-15 (bare grep inflated to 25/300 vs 2/300 real bindings); fixture: plan-binding-attachment.jsonl",
+      "status": "verified"
+    }
+  ]
+}
