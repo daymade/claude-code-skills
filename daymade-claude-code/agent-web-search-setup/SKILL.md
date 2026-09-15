@@ -130,7 +130,7 @@ regression, not a safety margin.
 
 | Agent | Where | What |
 |---|---|---|
-| Claude Code, terminal or the Code surface of the desktop app | `settings.json` | add the dead tool names to `permissions.deny` |
+| Claude Code, terminal or the Code surface of the desktop app | `~/.claude/settings.json` | add the dead tool names to `permissions.deny` |
 | Codex | `~/.codex/config.toml` | `web_search = "disabled"` |
 | Claude Desktop, the chat surface | **not a supported target** | see below |
 
@@ -147,6 +147,14 @@ entirely, which is what you want. Verified by reading the session's `init` event
 the tool is absent from the list the model receives, rather than present with
 advice against using it.
 
+**A deny travels further than a grant does, and that asymmetry matters in step 4.**
+`permissions.deny` is honoured out of a project's own `.claude/settings.json` even
+in a directory nobody has ever trusted — measured there by reading the `init`
+event, which listed 24 tools with `WebSearch` and `WebFetch` absent and printed no
+warning. The grant in step 4 does not behave this way. A restriction arriving from
+an untrusted file is safe to obey; a privilege is not, and the client is right to
+treat the two differently.
+
 **Merge, never replace.** These files hold the user's own configuration. Add the
 one key and leave the rest byte-identical. Show them the before and after.
 
@@ -156,13 +164,15 @@ writing the secret into a config file. These files get screenshotted into help
 requests and shared wholesale; a key pasted into one travels with it.
 
 **The desktop app is two clients, not one.** Its Code surface runs a real
-`claude` binary the app downloads, carries the Claude Code settings engine, and
-resolves configuration the standard way — `CLAUDE_CONFIG_DIR` when set, otherwise
-`~/.claude`, with no separate configuration directory anywhere on disk. So the
-Claude Code row above very probably covers it. That was not confirmed: the app
-passes `CLAUDE_CONFIG_DIR` into the session it spawns and that value was not
-traced, so read the session's `init` event and see the tool actually gone before
-telling anyone it is fixed. Do not reach for the app's `coworkWebSearchEnabled`
+`claude` binary the app downloads and carries the Claude Code settings engine, so
+the row above covers it. The app's own bundle settles where that engine looks: the
+config root is the value held in the app's settings store if one is set, otherwise
+`process.env.CLAUDE_CONFIG_DIR`, otherwise `~/.claude`. The app spells that out in
+an error string of its own — relocating the config root is supported by pointing
+`CLAUDE_CONFIG_DIR` at it *via Desktop Settings*. So editing `~/.claude/settings.json`
+reaches both clients, and the single case that breaks the assumption is a user who
+relocated their config root in that screen. Ask, or read the session's `init` event
+and see the tool actually gone, before telling anyone it is fixed. Do not reach for the app's `coworkWebSearchEnabled`
 preference on the way past — the app writes it from whether the feature is
 available to the account rather than reading it as a setting, so editing it by
 hand is overwritten on the next launch.
@@ -230,6 +240,23 @@ from where, and the one marked default. Pick from criteria, in this order:
 Do not present the whole menu to a non-technical user. Choose, tell them what you
 chose and why in one sentence, and keep the rest as options if they ask.
 
+**On Codex two things happen that do not happen on Claude Code, and both stop an
+unattended run dead.** `codex mcp add <name> --url <url>` writes the config entry,
+then notices the endpoint advertises OAuth, starts a browser flow, prints an
+authorize URL and blocks — with no timeout, so in a non-interactive shell it hangs
+until something kills it. Interrupt it and check the file: the `[mcp_servers.<name>]`
+block is already written, and the default backend answered anonymously afterwards
+with that flow never completed. Second, `codex exec` outside a git repository
+refuses with `Not inside a trusted directory and --skip-git-repo-check was not
+specified`; pass the flag or run it somewhere tracked.
+
+That whole half was run end to end against the real backend rather than reasoned
+about: `web_search = "disabled"`, one `codex mcp add`, and the model answered a
+current-news question by calling `mcp__exa__web_search_exa` and
+`mcp__exa__web_fetch_exa`, returning articles published that day. It had no hosted
+search tool to fall back on — the enumeration it made of its own tools did not
+contain one.
+
 ## 4. Prove it works
 
 Configuration written is not the deliverable. Run a query whose answer the model
@@ -281,17 +308,50 @@ another installed skill can claim a search-shaped request before any tool is
 considered, which was measured happening on a real machine and cost a dollar of
 tokens on the wrong path.
 
+**On Codex, look for the prefixed tool name anywhere in the rollout, not for a
+`function_call` record.** The build measured here hands MCP tools to the model
+through its exec surface — the model writes JavaScript calling
+`tools.mcp__exa__web_search_exa(...)` — so the session file under
+`$CODEX_HOME/sessions/` holds `custom_tool_call` records named `exec`, and a grep
+for `function_call` returns zero on a run that worked perfectly. Grep for
+`mcp__<server>__` instead. The exec shape is a version detail and will move; the
+prefixed name is the stable thing.
+
 **Registering the server is not the last step. Granting it is.** A newly added MCP
 server starts unapproved, and in a session running under normal permissions its
 tools are refused with `Claude requested permissions to use
 mcp__<server>__<tool>, but you haven't granted it yet`. The model then tells the
 user it needs authorisation and stops — which, from the user's chair, is
-indistinguishable from the broken search they asked you to fix. Grant it before
-declaring anything done, either by running `claude` once interactively and
-approving, or by adding the prefixed tool name to `permissions.allow`, which is the
-same file and the same mechanism used to remove the dead tool above. The prefixed
-name is what the diagnostic and the client both use, for example
-`mcp__exa__web_search_exa`.
+indistinguishable from the broken search they asked you to fix. Grant it by adding
+the prefixed tool name to `permissions.allow` — the name the diagnostic and the
+client both use, for example `mcp__exa__web_search_exa`. Running `claude` once
+interactively and accepting does the same thing.
+
+**Put that grant in `~/.claude/settings.json`. In the project's own
+`.claude/settings.json` it is silently ignored, and an earlier version of this
+skill sent people there.** Claude Code accepts `permissions.allow` from a project's
+shared settings file only in a workspace whose trust dialog the user has accepted.
+Anywhere else it drops the entry and reports that on **stderr** — never in
+`--output-format json`, so an agent reading the structured output sees the denial
+and no reason for it:
+
+```
+Ignoring 1 permissions.allow entry from .claude/settings.json: this workspace has
+not been trusted. Run Claude Code interactively here once and accept the trust
+dialog, or set projects["<dir>"].hasTrustDialogAccepted: true in <config>/.claude.json.
+```
+
+Measured with only the grant's location changing, on one machine, through a relay,
+in strict `default` mode: `~/.claude/settings.json` works; `.claude/settings.local.json`
+works; the project's shared `.claude/settings.json` is ignored until that workspace
+is trusted, and with the identical file plus `hasTrustDialogAccepted` the refusal
+disappears. That is the whole mechanism — it is about trust, not about the word
+`project`, so do not go looking for a scope flag that fixes it.
+
+Register the server at the same level for the same reason. A grant in the user file
+paired with a server registered into one project works, but stops working the moment
+that user opens their agent in a different folder — which is not what somebody asking
+for "internet access" is asking for.
 
 **A permission check that passes on your machine can fail on theirs, and this one
 did.** Two runs of the identical configuration diverged: one where the session
@@ -319,6 +379,30 @@ check itself; for daily use the user has to know the other skill is there.
 Search in the language the answer lives in. A Chinese question about a Chinese
 product returns better sources asked in Chinese.
 
+## Undoing it
+
+Somebody will ask for this back the way it was — a trial that did not help, a
+backend that started refusing, a machine being handed to someone else. Two
+commands, each of which prints the exact file it changed:
+
+```bash
+claude mcp remove <name> --scope user
+codex mcp remove <name>
+```
+
+Both were run. Each leaves the rest of the file byte-identical; Codex's keeps every
+other key in `config.toml` untouched.
+
+**The trap is that this undoes half the procedure, and the wrong half.** The dead
+built-ins are still denied, so a user who stops here has no search at all rather
+than the broken search they started with — a worse position than the one they came
+in with, arrived at by following the uninstall instructions. Removing the
+replacement means also putting back what step 2 took away: delete the tool names
+from `permissions.deny`, and on Codex set `web_search` back to its old value, which
+`codex mcp remove` does not touch — confirmed by reading `config.toml` afterwards
+and finding `web_search = "disabled"` still there. **Record that old value in step
+2, when you can still see it**, or there is nothing to put back.
+
 ## What done looks like
 
 - `diagnose.py` reported which tools were dead, and only those were removed.
@@ -328,6 +412,10 @@ product returns better sources asked in Chinese.
 - The transcript names the tool that answered, and it is the new one.
 - That query ran under the configuration the user actually has, relay credential
   included, not under a looser one that happened to be on this machine.
+- The grant lives somewhere the client actually reads it, and the verification run
+  printed nothing on stderr about an ignored entry.
+- The old value of every setting step 2 changed is written down, so the procedure
+  can be undone without leaving the user worse off than when they started.
 - Every file touched was merged into, not overwritten, and the user saw the diff.
 
 ## Reference

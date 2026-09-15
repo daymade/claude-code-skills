@@ -18,6 +18,7 @@ import io
 import json
 import os
 import pathlib
+import re
 import sys
 import unittest
 from contextlib import redirect_stdout, redirect_stderr
@@ -473,6 +474,89 @@ class MissingKeyGuidance(unittest.TestCase):
             for k, v in saved.items():
                 if v is not None:
                     os.environ[k] = v
+
+
+class TheDocumentedProcedureStaysRunnable(unittest.TestCase):
+    """Guards the two instructions a reader copies verbatim.
+
+    These are prose, not code, which is exactly why they need a mechanical check:
+    the first published version of this skill told the reader to register the
+    server at ``--scope project`` and then add the grant to ``permissions.allow``.
+    Both lines were individually true. Together they produce a setup where the
+    client silently drops the grant and the model answers that it is waiting for
+    permission -- indistinguishable, from the user's chair, from the broken search
+    the procedure exists to fix. Nothing in the test suite could fail on that,
+    because nothing in the test suite read the documents.
+
+    The assertions are deliberately narrow. They pin the two strings that were
+    wrong; they do not police wording, so ordinary editing cannot trip them.
+    """
+
+    SKILL = _HERE.parent / "SKILL.md"
+    BACKENDS = _HERE.parent / "references" / "backends.md"
+
+    @staticmethod
+    def _install_commands(text):
+        """Every `claude mcp add ...` a reader could copy, one per match."""
+        return re.findall(r"claude mcp add[^\n`]*", text)
+
+    def test_the_fixtures_are_where_the_test_thinks_they_are(self):
+        # Calibration: if these files move, the checks below would pass by
+        # reading nothing at all. Fail loudly instead.
+        for path in (self.SKILL, self.BACKENDS):
+            self.assertTrue(path.is_file(), f"{path} missing")
+            self.assertGreater(len(path.read_text(encoding="utf-8")), 2000)
+
+    def test_the_install_command_is_calibrated_against_a_known_positive(self):
+        # Prove the extractor finds a command at all before trusting it to
+        # report that none is malformed.
+        found = self._install_commands(self.BACKENDS.read_text(encoding="utf-8"))
+        self.assertTrue(found, "extractor found no install command -- it is broken")
+        self.assertTrue(any("--scope" in c for c in found))
+
+    def test_no_documented_install_registers_into_a_project(self):
+        for path in (self.SKILL, self.BACKENDS):
+            for command in self._install_commands(path.read_text(encoding="utf-8")):
+                self.assertNotIn(
+                    "--scope project", command,
+                    f"{path.name} tells the reader to register at project scope; "
+                    "the grant that follows is then dropped in any untrusted "
+                    "workspace and the procedure ends in a permission refusal",
+                )
+
+    def test_both_documents_send_the_grant_to_the_user_settings_file(self):
+        for path in (self.SKILL, self.BACKENDS):
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("permissions.allow", text)
+            self.assertIn(
+                "~/.claude/settings.json", text,
+                f"{path.name} mentions the grant without naming the file the "
+                "client actually reads it from",
+            )
+
+    def test_the_stderr_only_warning_is_quoted_so_a_reader_can_search_for_it(self):
+        # The client reports this on stderr and nowhere else; an agent reading
+        # --output-format json sees the denial with no reason attached. The exact
+        # string is the only thing that makes it findable.
+        #
+        # Collapse whitespace first. Prose wraps, and the first version of this
+        # check searched the raw text for a phrase the document had split across
+        # two lines -- a red that said "the warning is missing" about a file that
+        # quotes it in full. An instrument that fails that way on healthy input is
+        # the one that gets switched off.
+        for path in (self.SKILL, self.BACKENDS):
+            flat = " ".join(path.read_text(encoding="utf-8").split())
+            self.assertTrue(
+                "this workspace has not been trusted" in flat,
+                f"{path.name} drops the one line that explains the refusal",
+            )
+
+    def test_that_warning_check_can_still_go_red(self):
+        # Calibration for the check above: the same predicate, run against text
+        # that genuinely lacks the line, must fail. Otherwise a whitespace-
+        # collapsing search that matched everything would look identical.
+        flat = " ".join("permissions.allow goes in the settings file".split())
+        self.assertFalse("this workspace has not been trusted" in flat)
 
 
 if __name__ == "__main__":
