@@ -384,7 +384,10 @@ codex exec --skip-git-repo-check \
 SID=$(grep -o 'session id: [0-9a-f-]*' /tmp/codex-verify.log | tail -1 | awk '{print $3}')
 [ -z "$SID" ] && echo "no session id in the log -- stop and read it" && exit 1
 
-find "${CODEX_HOME:-$HOME/.codex}/sessions" -name "rollout-*$SID.jsonl" -exec python3 -c "
+ROLLOUT=$(find "${CODEX_HOME:-$HOME/.codex}/sessions" -name "rollout-*$SID.jsonl" | head -1)
+[ -z "$ROLLOUT" ] && echo "no rollout file for $SID -- is CODEX_HOME the one codex just wrote to?" && exit 1
+
+python3 -c "
 import json, re, sys
 names = set()
 for line in open(sys.argv[1]):
@@ -394,7 +397,7 @@ for line in open(sys.argv[1]):
     if p.get('type') in ('custom_tool_call', 'function_call'):
         names.update(re.findall(r'mcp__[a-z0-9_]+', json.dumps(p)))
 print('\n'.join(sorted(names)) if names else 'NO MCP TOOL CALLS IN THIS SESSION')
-" {} \;
+" "$ROLLOUT"
 ```
 
 **Three things in there are load-bearing, and the obvious shortcuts all fail.**
@@ -405,8 +408,16 @@ was measured dying with `argument list too long` on an ordinary install carrying
 9,021 accumulated sessions — and piped into `head`, the whole line then **exits 0
 with no output**, which looks exactly like "the model made no MCP calls". A
 verification step that reports success because it could not run is the failure this
-skill exists to correct, wearing a different hat. `find -exec` batches, so it has no
-such ceiling.
+skill exists to correct, wearing a different hat. `find` walks rather than expanding
+an argument list, so it has no such ceiling at any number of sessions.
+
+**Both `exit 1` lines are there because each silence has a different cause.** Without
+the first, a `codex exec` that never started leaves an empty log and the command
+parses nothing. Without the second, a `CODEX_HOME` pointing at the wrong sessions
+tree matches no file, and the parser — including its own
+`NO MCP TOOL CALLS IN THIS SESSION` fallback — never runs at all, so the check goes
+quiet and returns 0. Every branch here either prints a tool name, prints that there
+were none, or says which step could not be completed.
 
 Reading only the **tool-call records** matters for the same reason in the other
 direction. A plain `grep mcp__` over the file also matches the tool *list* the model
@@ -440,6 +451,14 @@ that is two names:
 ```json
 { "permissions": { "allow": ["mcp__exa__web_search_exa", "mcp__exa__web_fetch_exa"] } }
 ```
+
+**If this machine runs more than one Claude Code config profile, put the grant in
+the one the profiles are synced *from*.** A profile synchroniser that converges
+`settings.json` across profiles treats nested collections — `permissions.allow`
+among them — as whole values taken from the source profile, so a grant written into
+any other profile is dropped on the next sync. `claude-switch-models-setup` in this
+same marketplace is one such synchroniser and is the reference for how it decides;
+this is only here because step 4 puts the grant in exactly the file it converges.
 
 `claude mcp list` will not tell you which tools a server exposes, and neither does
 `claude mcp get`. [references/backends.md](references/backends.md) names them for

@@ -30,17 +30,6 @@ Quotas and prices are the volatile part. Treat them as what the vendor said that
 day and read the current page before quoting a number to anyone. Endpoints and
 auth shapes move far more slowly.
 
-## Contents
-
-- [How to choose](#how-to-choose)
-- [Default — Exa](#default--exa)
-- [Other options worth keeping](#other-options-worth-keeping)
-- [Documented but untested](#documented-but-untested)
-- [Ruled out](#ruled-out)
-- [After installing, check nothing else answers first](#after-installing-check-nothing-else-answers-first)
-- [The mainland-China question](#the-mainland-china-question)
-- [Registering it](#registering-it)
-
 ## How to choose
 
 In order. A later criterion never overrules an earlier one.
