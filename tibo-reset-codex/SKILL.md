@@ -47,6 +47,9 @@ description: >-
   聚合器后再次用空结果驳回用户。
 - 用户只问当前剩余或下一次周期重置 → 同样进入账号 SOP 的实时查询；需要解释历史跳变时
   再走 §2 的 rollout 快照。当前余额查询不要求先跑整段历史重建或重查公告。
+- 想跳过网页手动登录、把日常 Chrome 已登录的 Google 账号直接接到隔离查询 profile →
+  `scripts/launch-usage-profile.sh <a|b>` 建/开隔离 Chrome profile，`scripts/import-google-cookies.py --profile <a|b>`
+  搬运 `.google.com` 系 cookie（机制与安全论证见脚本自身 docstring，2026-09-15 验证过）。
 
 ## 输出合同：先给结论，再交代边界
 
