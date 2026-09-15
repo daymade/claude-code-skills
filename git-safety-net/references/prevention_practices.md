@@ -11,8 +11,10 @@ ceremony; adopt the ones whose failure mode you're exposed to.
 - Parallel / multi-branch work: commit before switching; exceptions follow current authority
 - Push work-in-progress branches early
 - Confirm the branch before every commit
+- Confirm the branch before every checkout/switch on a shared tree
 - Recover stranded work after a parallel session switched the shared tree
 - A foreign commit adopted onto your branch (the inverse case)
+- Distinguish live WIP, a stale copy, and a published projection by diff direction
 - Audit before rebase / branch-delete
 - Audit every authorized worktree before retirement
 - Snapshot before any history rewrite
@@ -199,6 +201,16 @@ It doesn't need to be a PR — just a remote copy. Re-push as you go, then use
 `scripts/git_loss_audit.sh` only when every surface it enumerates is in evidence scope; otherwise
 verify the current branch against its exact remote ref and leave the broader state unclaimed.
 
+When pushing is not yet authorized, an **unpushed commit whose worktree sits in a volatile
+location** — `/private/tmp`, a temp jobs directory, anything a reboot or cleaner reaps — is the
+same loss profile with a shorter fuse. Drop a targeted bundle into a stable repo-external
+directory first (additive, needs no push authorization), then rebase/push from a calm position:
+
+```bash
+git bundle create <stable-backup-dir>/<branch>-<sha>.bundle origin/main..<branch>
+git bundle list-heads <stable-backup-dir>/<branch>-<sha>.bundle   # prove it restores
+```
+
 ## Confirm the branch before every commit
 
 **Failure mode:** committing a fix onto the wrong feature branch (easy when juggling several, or
@@ -214,6 +226,28 @@ git branch --show-current      # is this where this change belongs?
 If you commit to the wrong branch anyway, it's recoverable: `git log` the SHA, then create a
 preserving ref with `git branch correct-branch <sha>`. Leave removal from the wrong branch to
 separately authorized Mode E retirement; confirming up front is free.
+
+## Confirm the branch before every checkout/switch on a shared tree
+
+**Failure mode:** the mirror image of the commit case. You hold a minutes-old
+`git worktree list` / `git status` snapshot saying the shared checkout is already on `main`,
+and run `git checkout main` as a no-op. In between, a parallel session created its fix branch
+there — your "no-op" switches the shared tree out from under its uncommitted work. The other
+session's edits survive the switch (checkout carries them along), but the tree it was building
+on is gone, and it may not notice until its next command fails or lands on the wrong base.
+
+**Prevention:** the snapshot TTL is one tool call, not minutes. Re-read the branch immediately
+before any command that moves HEAD (`checkout`, `switch`, `restore`, `reset`):
+
+```bash
+git branch --show-current      # re-read NOW; earlier output (even your own) is not evidence
+```
+
+If it shows a branch that is not yours, stop and route through the coordination channel
+(see "Recover stranded work…" below for the other side of this pairing) — never run the
+checkout anyway and never switch it back yourself; either one is a second writer deciding
+unilaterally. And prefer commands that never move HEAD when they achieve the goal:
+`git fetch`, `git pull --ff-only`, and `git show <ref>:<path>` need no checkout at all.
 
 ## Recover stranded work after a parallel session switched the shared tree
 
@@ -426,6 +460,33 @@ a real commit whose work had definitively shipped:
   authority: it reads one string in one file, while Mode C's trial merge is the check this skill
   records as right every time. If the work turns out to exist only on your branch, it was never
   yours to drop — keep the rescue ref, tell the other session where it is, and let them re-land it.
+
+## Distinguish live WIP, a stale copy, and a published projection by diff direction
+
+**Failure mode:** auditing a shared tree and treating every uncommitted path as live WIP —
+so you either preserve stale copies forever, or (worse) hesitate to clean a path whose
+content already shipped and now blocks a pull. The inverse error exists too: assuming an
+untracked file is junk when it is actually the only copy of unshipped work.
+
+**Prevention:** classify each uncommitted or untracked path against a freshly fetched base
+before any preservation or cleanup decision, and read the diff *direction*:
+
+```bash
+git fetch origin
+git diff origin/main -- <path>          # tracked: empty output = content already on main
+git diff <(git show origin/main:<path>) <path>   # untracked: byte-compare against the base copy
+```
+
+- **Empty diff → published projection.** The content already landed (someone shipped it from
+  elsewhere). After a byte-level confirmation the local copy is redundant — its removal loses
+  nothing, but confirm first, because "looks identical" is not "is identical".
+- **Additions relative to the base → live or stranded WIP.** Never classify it yourself:
+  route through coordination, and before touching anything, **capture the diff to a
+  repo-external file** (`git diff origin/main -- <path> > <backup-dir>/<name>.patch`). If a
+  parallel session later switches the tree and destroys the edits, that patch is the only
+  verbatim reconstruction source — uncommitted content exists in no ref, no reflog, no fsck.
+- **Deletions relative to the base → a stale, older copy.** The tree simply predates the base;
+  the "change" vanishes when the checkout advances. Nothing to preserve.
 
 ## Audit before rebase / branch-delete
 
