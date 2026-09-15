@@ -256,7 +256,29 @@ Git rejects the deletion. Never use an unspecified `--force-with-lease` or uncon
 `--delete` for this path. After deletion, verify both the hosted branch list and local
 remote-tracking refs; success in one does not prove the other converged.
 
-#### 5. Terminal state
+#### 5. `--delete-branch` can fail on BOTH ends; strict protection queues later PRs for rebase
+
+Two merge-adjacent behaviors observed repeatedly, both invisible unless you read back:
+
+- **`gh pr merge --delete-branch` reports failure when the local half fails, and the remote
+  branch can survive too.** If the local branch is checked out in a linked worktree, the merge
+  succeeds but the command exits non-zero ("failed to delete local branch … used by worktree"),
+  and the hosted branch may remain. After every merge with `--delete-branch`, independently
+  verify the hosted ref is gone — never trust the command receipt:
+
+  ```bash
+  git ls-remote origin "refs/heads/<branch>"   # empty output = deleted; a ref line = residue
+  git push origin --delete <branch>            # retire residue explicitly, then re-verify
+  ```
+
+- **Under a strict (require-up-to-date) ruleset, landing one PR moves every other open PR to
+  BEHIND.** The next `gh pr merge` is refused with "the head branch is not up to date with the
+  base branch" even when GitHub reports `MERGEABLE`. The expected loop is: rebase onto the new
+  base, `git push --force-with-lease`, wait for checks on the new head SHA, re-verify the exact
+  head before merging. Do not reach for `--admin` to skip the queue without separate
+  authorization — the strict rule is the repository's chosen invariant.
+
+#### 6. Terminal state
 
 Report the GitHub outcome only when the PR is merged/closed as intended, required checks passed,
 the hosted branch set matches the user's target, and the fetched base contains the accepted
