@@ -278,6 +278,134 @@ class PriorWorkTests(unittest.TestCase):
                 "Inspected the available artifacts and verified that their lifecycle differs.",
             )
 
+    def _adapter_with_payload(self, name: str, extra: str) -> Path:
+        adapter = self.root / name
+        adapter.write_text(
+            "import json\n"
+            "print(json.dumps({'mode':'bm25','coverage':'fixture history',"
+            f"{extra}"
+            "'results':[{'session_id':'session-1','timestamp':'2026-08-01T00:00:00Z',"
+            f"'path':{str(self.docs / 'provider-contract.md')!r},"
+            "'snippet':'Earlier provider endpoint decision','sources':['archive:test']}]}))\n",
+            encoding="utf-8",
+        )
+        return adapter
+
+    def _conversation_source(self, adapter: Path, argv_tail: list[str]) -> dict:
+        source = self.manifest()["sources"][3]
+        source["argv"] = [sys.executable, str(adapter), *argv_tail]
+        return source
+
+    def test_command_adapter_freshness_is_readable_not_blocking(self) -> None:
+        for name, extra, expected in (
+            (
+                "fresh_adapter.py",
+                "'last_indexed_at':'2026-09-01T00:00:00Z','complete_frontier':'2026-09-01T00:00:00Z',",
+                ("fresh", "index_complete"),
+            ),
+            (
+                "stale_adapter.py",
+                "'last_indexed_at':'2026-09-01T00:00:00Z','complete_frontier':None,",
+                ("stale", "index_incomplete"),
+            ),
+            (
+                "unknown_adapter.py",
+                "'complete_frontier':'2026-09-01T00:00:00Z',",
+                ("unknown", "indexed_at_unparseable"),
+            ),
+        ):
+            with self.subTest(adapter=name):
+                source = self._conversation_source(
+                    self._adapter_with_payload(name, extra), ["{query}", "{limit}"]
+                )
+                _candidates, detail = prior_work._command_candidates(
+                    source, "query", ["t1"], "session-X"
+                )
+                self.assertEqual(detail["status"], "searched")
+                self.assertEqual(
+                    (detail["freshness"], detail["freshness_reason"]), expected
+                )
+
+    def test_stale_required_source_still_completes_coverage(self) -> None:
+        # Deadlock regression: a stale index must be visible on the receipt but
+        # can never block it — complete_receipt raises for any required source
+        # whose status is not searched/manual_completed.
+        adapter = self._adapter_with_payload(
+            "stale_required.py",
+            "'last_indexed_at':'2026-09-01T00:00:00Z','complete_frontier':None,",
+        )
+        payload = json.loads(self.manifest_path.read_text(encoding="utf-8"))
+        for source in payload["sources"]:
+            source["required"] = source["id"] == "conversation"
+            if source["id"] == "conversation":
+                source["argv"] = [sys.executable, str(adapter), "{query}", "{limit}"]
+        self.manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+        run = prior_work.retrieve(
+            self.manifest(),
+            "Reuse the verified provider contract and existing pipeline.",
+            ["Mercury"],
+            "reuse the Mercury provider pipeline",
+            ["Mercury"],
+            "session-stale",
+        )
+        coverage = {row["source_id"]: row for row in run["coverage"]}
+        self.assertEqual(coverage["conversation"]["status"], "searched")
+        self.assertEqual(coverage["conversation"]["freshness"], "stale")
+        self.assertEqual(
+            coverage["conversation"]["freshness_reason"], "index_incomplete"
+        )
+        self.assertTrue(run["coverage_complete"])
+        # The full receipt chain must stay valid: retrieve → complete → check.
+        candidate = next(
+            item for item in run["candidates"] if item["source_id"] == "conversation"
+        )
+        receipt = prior_work.complete(
+            self.manifest(),
+            run["run_id"],
+            "session-stale",
+            [f"{candidate['candidate_id']}=reuse the verified current contract"],
+            [],
+            [],
+            [],
+            None,
+        )
+        self.assertEqual(receipt["status"], "complete")
+        checked = prior_work.check_receipt(self.manifest(), "session-stale", 60)
+        self.assertEqual(checked["status"], "valid")
+
+    def test_terms_placeholder_reaches_command_adapter(self) -> None:
+        source = self._conversation_source(
+            self.fake_adapter, ["{query}", "--terms", "{terms}", "{limit}"]
+        )
+        with mock.patch.object(
+            prior_work.subprocess, "run", wraps=prior_work.subprocess.run
+        ) as run_spy:
+            _candidates, detail = prior_work._command_candidates(
+                source, "query", ["alpha", "beta"], "session-T"
+            )
+        command = run_spy.call_args_list[0].args[0]
+        self.assertEqual(command[command.index("--terms") + 1], "alpha beta")
+        self.assertTrue(detail["terms_passed"])
+        self.assertEqual(detail["terms"], ["alpha", "beta"])
+
+    def test_legacy_manifest_without_terms_slot_is_not_an_error(self) -> None:
+        source = self.manifest()["sources"][3]  # argv carries no {terms} slot
+        _candidates, detail = prior_work._command_candidates(
+            source, "query", ["alpha"], "session-T"
+        )
+        self.assertEqual(detail["status"], "searched")
+        self.assertFalse(detail["terms_passed"])
+
+    def test_terms_placeholder_validates_and_unknown_placeholder_still_rejected(self) -> None:
+        payload = json.loads(self.manifest_path.read_text(encoding="utf-8"))
+        payload["sources"][3]["argv"].extend(["--terms", "{terms}"])
+        self.manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+        self.manifest()  # {terms} must now be an accepted placeholder
+        payload["sources"][3]["argv"].append("{foo}")
+        self.manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+        with self.assertRaisesRegex(prior_work.PriorWorkError, "unsupported argv placeholder"):
+            self.manifest()
+
     def test_repository_head_change_invalidates_an_unchanged_candidate(self) -> None:
         subprocess.run(["git", "init", "-q", str(self.docs)], check=True)
         subprocess.run(

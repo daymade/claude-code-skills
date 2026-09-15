@@ -141,6 +141,46 @@ Text the user types while the assistant is still working does NOT land as a
   only reads `type == "user"` silently drops them — observed 2026-08: one such
   extractor lost 153 of a user's messages over a 7-day window.
 
+### Plan binding attachments
+
+A session entering Plan Mode records the binding as an `attachment` record —
+two shapes (measured 2026-09 on local corpus: `plan_mode` 7 hits and
+`plan_file_reference` 12 hits in a 400-file sample):
+
+```json
+{ "type": "attachment",
+  "attachment": { "type": "plan_mode", "reminderType": "full",
+                  "isSubAgent": false,
+                  "planFilePath": "/Users/<user>/.claude/plans/<slug>.md",
+                  "planExists": false } }
+```
+
+```json
+{ "type": "attachment",
+  "attachment": { "type": "plan_file_reference",
+                  "planFilePath": "/Users/<user>/.claude/plans/<slug>.md",
+                  "planContent": "<the whole plan text>" } }
+```
+
+- `planFilePath` is an **absolute** path and can point into any profile home
+  (`~/.claude/plans/`, `~/.claude-profiles/<name>/plans/`); bind on the path,
+  never on a slug guess.
+- `planExists` is **often `false`** (4 of 6 sampled `plan_mode` records): the
+  file is minted only when content is first written, and plans are routinely
+  deleted. A deleted plan is therefore an ordinary state, not an absence.
+- `plan_file_reference` carries `planContent` — the post-compaction
+  re-injection of the bound plan's whole text. This is the recovery channel:
+  when the file is gone from disk, fall back to this content instead of
+  reporting "not found". `plan_mode` alone is path-only; with
+  `planExists:false` its content is unrecoverable from the transcript and
+  must be reported as "content unavailable", never as "does not exist".
+- **False signal**: `plan_mode_required:false` appears in many records that
+  have nothing to do with plan binding (25/300 sampled files by bare grep vs
+  2/300 real bindings). Match only the attachment structures above.
+- Forward (session → plan): `read_claude_session.py` emits `plan_bindings`
+  in the parsed structure and briefing. Reverse (plan file → owning
+  session): `analyze_sessions.py plan-bindings <absolute path>`.
+
 ### File-history snapshot
 
 Current Claude Code sessions can record a path-to-backup map separate from tool
@@ -476,7 +516,12 @@ Steps:
    marker `## A user-role record is not necessarily user-authored text`
    documents as safe to *drop* when extracting verbatim prose; here it is
    read for the opposite purpose — as a positive interruption signal, not
-   noise to filter.)
+   noise to filter.) `read_claude_session.py` implements this rule: the
+   marker surfaces as the `interrupted_explicit` end reason **only** when it
+   is the last relevant record (any later user/assistant record resets the
+   flag — a mid-session Ctrl+C the conversation continued past is not a tail
+   interruption), and the marker's timeline turn is labeled
+   `interrupt_marker` instead of being read as human prose.
 3. Absent that marker, classify the *last assistant record's raw content only*
    — do not let an earlier turn's classification carry forward when the final
    turn produces neither text nor a tool call (thinking-only, or empty
