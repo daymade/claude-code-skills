@@ -343,8 +343,9 @@ Three things worth knowing before running it:
   worked and the run that was refused.
 - **Put the grant in `~/.claude/settings.json`; a project's `.claude/settings.json`
   is ignored unless that workspace has been trusted.** The client drops the entry
-  and prints `Ignoring 1 permissions.allow entry from .claude/settings.json: this
-  workspace has not been trusted` — on **stderr only**, so it is absent from
+  and prints `Ignoring N permissions.allow entries from .claude/settings.json: this
+  workspace has not been trusted`, where N is however many you granted — on
+  **stderr only**, so it is absent from
   `--output-format json` and an agent parsing that sees a bare denial. Measured with
   nothing changing but the grant's location: user settings works,
   `.claude/settings.local.json` works, the shared project file works only once the

@@ -302,9 +302,10 @@ somewhere tracked. And `timeout` is not a way out of either problem on a stock M
 That whole half was run end to end against the real backend rather than reasoned
 about: `web_search = "disabled"`, one `codex mcp add`, and the model answered a
 current-news question by calling `mcp__exa__web_search_exa` and
-`mcp__exa__web_fetch_exa`, returning articles published that day. It had no hosted
-search tool to fall back on — the enumeration it made of its own tools did not
-contain one.
+`mcp__exa__web_fetch_exa`, and the pages it opened carried a publication date one
+day before the run — recent enough that no training data could have supplied them.
+It had no hosted search tool to fall back on: the enumeration it made of its own
+tools did not contain one.
 
 ## 4. Prove it works
 
@@ -421,17 +422,25 @@ Anywhere else it drops the entry and reports that on **stderr** — never in
 and no reason for it:
 
 ```
-Ignoring 1 permissions.allow entry from .claude/settings.json: this workspace has
+Ignoring 2 permissions.allow entries from .claude/settings.json: this workspace has
 not been trusted. Run Claude Code interactively here once and accept the trust
 dialog, or set projects["<dir>"].hasTrustDialogAccepted: true in <config>/.claude.json.
 ```
 
-Measured with only the grant's location changing, on one machine, through a relay,
-in strict `default` mode: `~/.claude/settings.json` works; `.claude/settings.local.json`
-works; the project's shared `.claude/settings.json` is ignored until that workspace
-is trusted, and with the identical file plus `hasTrustDialogAccepted` the refusal
-disappears. That is the whole mechanism — it is about trust, not about the word
-`project`, so do not go looking for a scope flag that fixes it.
+The count is the number of entries dropped, so it tracks how many tools you
+granted. Search for `has not been trusted`, not for the whole sentence.
+
+Five runs on one machine through a relay in strict `default` mode, with the server
+registered identically in all five and **only the grant's location changing**:
+`~/.claude/settings.json` works; `.claude/settings.local.json` works; the project's
+shared `.claude/settings.json` is refused, with that warning on stderr; the same
+file in a workspace carrying `hasTrustDialogAccepted` works; and granting nothing
+at all fails the same way the untrusted shared file does — which is the point, and
+the reason this is hard to spot from inside the conversation. Both refusals reach
+the user as the model asking to be granted permission.
+
+That is the whole mechanism. It is about trust, not about the word `project`, so do
+not go looking for a scope flag that fixes it.
 
 Register the server at the same level for the same reason. A grant in the user file
 paired with a server registered into one project works, but stops working the moment
