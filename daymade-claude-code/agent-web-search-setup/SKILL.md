@@ -175,6 +175,20 @@ warning. The grant in step 4 does not behave this way. A restriction arriving fr
 an untrusted file is safe to obey; a privilege is not, and the client is right to
 treat the two differently.
 
+**A second asymmetry, this one about synchronisation, decides where the deny goes
+on a multi-profile machine.** Step 4 sends the grant to the profile the others
+sync from, because a synchroniser that converges `settings.json` drops it
+anywhere else. The deny cannot follow it there: the source profile is the one
+every other profile copies from, so a deny placed in it lands on profiles whose
+built-in search works, and removing a working tool is the regression the top of
+this step warns against. The layer that is both per-profile and out of the
+synchroniser's reach is the settings file the profile launcher passes with
+`--settings`; `claude-switch-models-setup` in this same marketplace documents
+that file and the measurement showing a deny taking effect from it. Getting this
+wrong has a symptom worth recognising on sight: the fix works in the session that
+made it and stops working after the restart you asked the user to do, which reads
+as the restart not taking rather than as something rewriting the file.
+
 Both edits are small enough to show literally, which beats describing a shape the
 reader then has to build:
 
@@ -328,9 +342,26 @@ built-in search this same diagnostic had just reported dead, in a session report
 strict `default` permissions, on a machine carrying four other connected MCP
 servers that could have answered instead. The transcript shows the replacement tool
 called and nothing else, the run's counters show zero built-in search calls, and
-the answer carried real URLs published that week. Read the transcript for the tool
-name rather than skipping to the answer — an earlier run of the same steps looked
-green for the wrong reason, and only the tool name showed it.
+the answer carried real URLs published that week. Read the tool name rather than
+skipping to the answer — an earlier run of the same steps looked green for the
+wrong reason, and only the tool name showed it.
+
+**Read it out of the run's own output rather than going to find a transcript
+file.** Add `--verbose --output-format stream-json` to the verification command
+and the run prints the `init` event read above, plus one `assistant` event per
+`tool_use` block; counting the names in those blocks answers this step, and they
+can only have come from this run. Those flags turn stdout into JSONL, so the
+answer the user sees comes out of the final `result` event rather than off the
+screen — and the stderr redirect above is unaffected, since it is a separate
+stream. Going to look for the transcript instead fails
+in three ways that each return a confident wrong answer: a `-p` subprocess files
+its transcript under a directory derived from its own working directory rather
+than the caller's, so the newest file in the obvious directory is the caller's
+own session; that session's transcript records the caller's own earlier built-in
+search calls, which read as evidence against a fix that worked; and a non-ASCII
+prompt is stored escaped, so grepping the file for the prompt as typed matches
+nothing. One session lost three attempts to this and then reported a pre-fix run
+as proof the fix had worked.
 
 **Do the grant first.** It is written up further down this section because that is
 where its evidence belongs, but it happens *before* this command — run the check on
@@ -362,6 +393,13 @@ user's shoulder looks exactly like the failure they asked you to fix.
 the config directory, so pointing it at an empty one answers `Not logged in`, which
 has nothing to do with search and sends the session down a wrong path. The two
 flags isolate the run without touching where the login lives.
+
+That message has a second cause on a multi-profile machine, and it reads
+identically. Where the credential lives in the settings file the profile launcher
+passes with `--settings`, a run that sets `CLAUDE_CONFIG_DIR` but leaves that flag
+off answers `Not logged in` too, because nothing else loads the token. Reproduce
+the user's own launch command with every flag it carries rather than assembling
+one that looks equivalent.
 
 `--disallowedTools` keeps the built-ins out of the comparison and takes the client
 spelling, the same one a deny list takes. `--disable-slash-commands` turns off every
@@ -523,13 +561,30 @@ tool answered and the one where it was refused. An agent that treats the listing
 verification will reinstall something that is already installed, and will still not
 know whether it works.
 
+**A server that `curl` reaches can still fail to load, and the health check says
+`Connected` while it does.** The whole signature: registered, the status line
+reporting `Connected`, its own detail reading `tools fetch failed — MCP error
+-32001: Request timed out`, the tools absent from the model's context, and a bare
+`curl` to that same URL returning 200 throughout. On one machine the cause was
+latency per round trip rather than reachability — `initialize` 7.1s,
+`tools/list` 8.1s, 23.2s for a cold handshake, past whatever the client allows;
+after the user restarted their proxy the same handshake took 7.3s and the tools
+loaded. So time the round trip, and time a second host from the same machine as a
+control: one host answering in a fraction of a second while the MCP host takes
+seconds puts the problem on the route rather than in the configuration. **Resist
+the tidy explanation on the way past.** That session blamed the MCP host being
+resolved into the proxy's fake-IP range, and a later check disproved it: both
+hosts sat in that range, twenty times apart in latency. Sitting in that range is
+not what separates a working host from a failing one; round-trip time is.
+
 `claude mcp get <name>` is better and still not sufficient. It health-checks the
 server and prints `Status: ✔ Connected` or the actual transport error, plus the
 scope it was registered at — which separates "registered" from "reachable", a
 distinction `list` does not make. Both states were seen on the same endpoint
 minutes apart. What it does not tell you is whether the grant landed, or which
-tools the server exposes, so it cannot close this step on its own. The live query, with the tool name read back from the
-transcript, is the only check that answers the question being asked.
+tools the server exposes, so it cannot close this step on its own. The live query,
+with the tool name read back from the run's own `init` and `tool_use` events, is
+the only check that answers the question being asked.
 
 **What to look for is a trigger list, not a name.** Read the installed skills'
 front matter and find any whose triggers include bare search words — "search",
@@ -537,6 +592,16 @@ front matter and find any whose triggers include bare search words — "search",
 that list, so on that machine every verification query would have been claimed
 before an MCP tool was considered. `--disable-slash-commands` settles it for the
 check itself; for daily use the user has to know the other skill is there.
+
+**Spot-check the URLs, and calibrate before calling one fake.** A backend can
+return a plausible title over a URL that does not resolve, so the links quoted to
+the user are worth a `curl -sIL`. A non-200 on its own does not mean the link was
+invented: news sites refuse unattended requests, and a page that answers 401 or
+404 to `curl` often loads fine in a browser. Fetch the site's root with the same
+command before concluding anything — a root that fails the same way means the site
+is refusing the client, not that the link was fabricated. Two runs of this
+procedure reached for "the backend made it up" first and both were wrong, once on
+a site-wide 404 and once on a domain that answers 401 to everything.
 
 Search in the language the answer lives in. A Chinese question about a Chinese
 product returns better sources asked in Chinese.
@@ -577,7 +642,7 @@ plausible wrong pick here leaves hosted search off on a backend where it works.
 - A replacement is registered **and granted** — the model calls it and is not
   refused for permission.
 - A live query returned real, current, citable URLs, shown to the user.
-- The transcript names the tool that answered, and it is the new one.
+- The run's own output names the tool that answered, and it is the new one.
 - That query ran under the configuration the user actually has, relay credential
   included, not under a looser one that happened to be on this machine.
 - The grant lives somewhere the client actually reads it, and the verification run
