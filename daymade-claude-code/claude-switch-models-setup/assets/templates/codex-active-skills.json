@@ -1,7 +1,9 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "active_skills": [],
   "active_marketplaces": [],
   "claude_active_marketplaces": [],
-  "legacy_codex_compat_skills": []
+  "legacy_codex_compat_skills": [],
+  "include_skills": [],
+  "exclude_skills": []
 }
