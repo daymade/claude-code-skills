@@ -59,6 +59,8 @@ Claude Code 当前在 `<claude-config>/sessions/<pid>.json` 登记顶层 session
 
 脚本把主 config root、`~/.claude` 与标准 `~/.claude-profiles/*` 的 registry 合并，并在 profile 通过 symlink 共用 sessions 时按 pid/session/socket identity 去重。每条记录保留它实际所属的 config home，读取 peer token 时不会错误回落到 sender 的 profile。自定义 profile 根不在标准目录时，把其中一个根传给 `--claude-home`；脚本也会扫描其标准 sibling profiles。
 
+**覆盖面是 best-effort，不是 census。** 存在活跃 session 不出现于任何发现面的情形（2026-09-15 实测：一条 transcript mtime 仍在推进的 session，原生 `ListAgents` 与本脚本合并 registry 双双查无此行）。所以「`list` 里没有」只回答「不可投递」，不回答「不存在 / 不在飞」——归属与在飞判断按 `coordination-and-learning-loop.md` §5 的证据走，发现面只是投递手段。
+
 `messagingSocketPath` 缺失表示接收进程没有 inbox；脚本不能在另一个已经运行的 Claude 进程里补建它。socket 字段存在但 pid 已死或 socket 文件消失时也不可投递。
 
 socket 接受字节不等于 inbound delivered。当前 receiver policy、permission-mode 与 hold/refuse 行为按 `references/official-feature.md` 判断；协议层不得伪造 permission 字段绕过。
