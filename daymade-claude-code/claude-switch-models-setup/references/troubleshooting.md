@@ -32,6 +32,18 @@ The shell function is loaded by sourcing `claude-profiles.sh`. Either:
 - Run `source ~/.config/claude-switch-models-setup/claude-profiles.sh`, or
 - Open a new terminal so the rc-file source takes effect.
 
+## Plugin installed from a profile does not appear in `claude plugin list`
+
+In this multi-profile setup, each profile's `installed_plugins.json` is a symlink into the shared base store. The CLI (observed on 2.1.273) silently skips writing that file when the path is a symlink: install prints "Successfully installed", the cache and `enabledPlugins` update, but the plugin never registers, so `claude plugin list` and the session's skill list never see it.
+
+After any `claude plugin install`, verify against the file, not the CLI receipt:
+
+```bash
+grep -c plugin-name ~/.claude/plugins/installed_plugins.json
+```
+
+Count 0 → reinstall from the config dir that owns the real file (`CLAUDE_CONFIG_DIR=~/.claude claude plugin install name@marketplace`), or add the entry manually. Full failure signature, three-way reproduction, and ghost-enable cleanup: [`claude-skills-troubleshooting/references/known_issues.md`](../claude-skills-troubleshooting/references/known_issues.md) → "Symlinked installed_plugins.json Silently Skipped on Install".
+
 ## Third-party model gets Anthropic errors
 
 Make sure the profile's `env` block includes:
