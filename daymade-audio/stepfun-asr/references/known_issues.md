@@ -84,7 +84,9 @@ The bundled `scripts/asr_transcribe.py` handles this correctly — see `_consume
 
 ## Pricing opacity
 
-As of 2026-04-23, `stepaudio-2.5-asr` is in invitation beta. No public per-minute rate. `step-asr-1.1` baseline is 2.2 元/小时. The invitation PDF mentions "成本直降 80%" implying roughly 0.4 元/小时, but this is not yet on the pricing page. Do not quote a price to a stakeholder without re-verifying at https://platform.stepfun.com/docs/zh/guides/pricing/details.
+Verified 2026-09-17 on the official pages: `stepaudio-3-asr-max` is 2.8 元/小时 ([model page](https://stepfun.mintlify.app/zh/guides/models/stepaudio-3-asr)); `stepaudio-2.5-asr` is 0.15 元/小时 (~18.7× cheaper). Prices move — re-verify at https://platform.stepfun.com/docs/zh/guides/pricing/details before quoting to a stakeholder.
+
+**Usage metering caveat (2026-09-17 measured, both generations):** the SSE `usage` object always reports `audio_tokens: 0` — billing is by audio duration and never appears on the token meter. Don't build cost observability on `usage`; track audio duration yourself.
 
 ## Empty transcript with no error
 
@@ -94,6 +96,7 @@ As of 2026-04-23, `stepaudio-2.5-asr` is in invitation beta. No public per-minut
 1. Audio is silent / pure noise / corrupted
 2. Audio language doesn't match the `language` parameter (e.g., sending English audio with `language: zh`)
 3. Audio format mismatch (e.g., `format.type: mp3` but actual bytes are wav)
+4. **Audio too short — sub-second clips silently return empty (2026-09-17 measured, BOTH generations)**: duration ladder on the same synthesized speech clip — 0.4s and 0.8s → empty `text` with all-zero usage; 1.5s and 3.0s → normal transcript. Identical on `stepaudio-3-asr-max` and `stepaudio-2.5-asr`. No error, no warning — check duration before treating empty as a failure.
 
 The bundled script falls back to concatenating delta chunks if the `done` event has empty text — but if both are empty, the issue is upstream (the audio itself, not the API).
 
