@@ -14,8 +14,15 @@ Roster format (the SSOT the human maintains):
     - **易混**: ...                                  <- IGNORED (prose notes; often too risky
                                                        to auto-correct, e.g. 李老师→刘老师)
 
-Only `###` sections with an `ASR 变体` line contribute. The canonical name is the
-`### ` header — it MUST be clean (no parenthetical aliases; those belong in `别名`).
+Only `###` sections with an `ASR 变体` line contribute *corrections*. The canonical
+name is the `### ` header — it MUST be clean (no parenthetical aliases; those belong
+in `别名`).
+
+A `###` section with no variant line still registers the person: `load_roster_names`
+reads every header, and `--lookup` reports those hits, so "this name is in the roster,
+it is not an ASR error" is answerable for someone who has never been misheard. Without
+that, a roster entry carrying only `身份` is indistinguishable from an unknown string —
+which is the state that lets a real name get collapsed onto a phonetic neighbour.
 
 The derived corrections are merged into Stage 1 at runtime (in-memory only, NEVER
 written to the DB) and go through the normal risk gate: long variants auto-apply;
@@ -52,6 +59,12 @@ _ASR_RE = re.compile(
     r'(?:\s*(?:\([^()]*\)|（[^（）]*）))?\s*[:：]\s*(.+?)\s*$'
 )
 _ASR_PREFIX_RE = re.compile(r'^-\s+\*\*ASR\s*变体\*\*')
+# The alias line. Aliases are findable but never correctable: a 花名 is a real
+# name the person goes by, not a mishearing, so rewriting it would destroy
+# information. Indexing it answers "who is 赤脚大仙" without ever editing it.
+_ALIAS_RE = re.compile(r'^-\s+\*\*别名\*\*\s*[:：]\s*(.+?)\s*$')
+# The identity line, shown by --lookup so a name hit says *which* person it is.
+_IDENTITY_RE = re.compile(r'^-\s+\*\*身份\*\*\s*[:：]\s*(.+?)\s*$')
 
 # Unquoted atoms deliberately use a narrow, observable grammar. Ambiguous long
 # forms remain expressible by wrapping the exact variant in balanced quotes.
@@ -188,6 +201,85 @@ def load_people_roster(path: Path) -> Tuple[Dict[str, str], Dict[str, str]]:
         )
 
     return corrections, dict(corrections)
+
+
+def load_roster_names(path: Path) -> Dict[str, Dict[str, str]]:
+    """Parse the roster into {findable_name: {"canonical", "identity"}}.
+
+    Separate from ``load_people_roster`` because the two answer different
+    questions. That one answers "what does this misheard string correct to",
+    so by construction it can only see people who already have an
+    ``ASR 变体`` line. This one answers "is this string a real person at
+    all" — the question that has to be settled *before* deciding a name is
+    an ASR error. A roster entry with no variants is the normal state for
+    someone who has simply never been misheard yet, and it is exactly the
+    entry that must still refuse the "not in any roster, so collapse it onto
+    the nearest-sounding sibling" move (real case 2026-09-16: 艺霖 and 徐盛
+    were each overwritten with a phonetic neighbour while sitting in a
+    34-person cohort ledger the tool could not read).
+
+    ``别名`` values are indexed too, mapping to the person's canonical name —
+    findable but still never correctable, because a 花名 is a name the person
+    actually goes by, not a mishearing. Half of a cohort can appear in a
+    transcript under one, so "who is 赤脚大仙" has to be answerable without
+    that ever becoming an edit.
+
+    Identity text is returned so the caller can show *which* person matched
+    without a second read of the file; entries without one map to ''.
+
+    Raises:
+        FileNotFoundError: if the roster path does not exist.
+    """
+    path = Path(path).expanduser()
+    if not path.exists():
+        raise FileNotFoundError(f"People roster not found: {path}")
+
+    names: Dict[str, Dict[str, str]] = {}
+    dropped: list[str] = []
+    current: str | None = None
+    with open(path, 'r', encoding='utf-8') as f:
+        for raw in f:
+            line = raw.rstrip('\n')
+            m = _HEADER_RE.match(line)
+            if m:
+                current = m.group(1).strip()
+                # First header wins, matching the variant map's first-seen rule.
+                names.setdefault(current, {"canonical": current, "identity": ""})
+                continue
+            if not current:
+                continue
+
+            m = _IDENTITY_RE.match(line)
+            if m and not names[current]["identity"]:
+                names[current]["identity"] = m.group(1).strip()
+                continue
+
+            m = _ALIAS_RE.match(line)
+            if m:
+                for alias in _split_variants(m.group(1), dropped):
+                    alias = alias.strip()
+                    # An alias never displaces a person's own header entry.
+                    if alias and alias not in names:
+                        names[alias] = {"canonical": current, "identity": ""}
+    if dropped:
+        # Same reason the variant loader is loud: an alias that vanishes leaves the
+        # person looking unregistered, which is the exact state that lets a real
+        # name be "corrected" into a phonetic neighbour.
+        print(
+            f"⚠️  people roster: dropped {len(dropped)} malformed 别名 entry/entries "
+            f"from {path.name} (unsupported spacing, brackets or separators). Wrap the "
+            "exact alias in balanced quotes — e.g. `- **别名**: 「天择 Y1」` — or it stays "
+            "unfindable by --lookup.",
+            file=sys.stderr,
+        )
+
+    # Aliases inherit the identity line, which may be read after the alias line.
+    for entry in names.values():
+        if not entry["identity"]:
+            owner = names.get(entry["canonical"])
+            if owner is not None:
+                entry["identity"] = owner["identity"]
+    return names
 
 
 def _split_variants(s: str, dropped: list[str] | None = None) -> list[str]:
