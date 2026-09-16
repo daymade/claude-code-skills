@@ -156,6 +156,54 @@ other way). And no count, however clean, settles canonical direction at all —
 the frequency ban above covers identity, and it covers direction for the same
 reason: prevalence is not provenance.
 
+### A person absent from every roster: the user-controlled sources come first
+
+The frequency ban above says the transcript's own majority is not identity
+evidence. It does not say "then guess the nearest homophone". When neither the
+global roster nor the project ledger holds the person, **stop converging and go
+look where the user controls the spelling.** Those sources outrank every
+inference you can make from the audio, because a human typed them:
+
+- **WeChat group member nicknames.** The single most productive rung found so
+  far. Training/cohort/community groups routinely name members in a fixed
+  shape — `真名-业务方向-期数`, `Name-Company-Role` — and the person typed it
+  themselves. Read it with `read-wechat-messages` (`read_chat.py --find <群名>`
+  to resolve the room, then `--talker <id> --layout ai` to read the roster and
+  recent messages). The group itself is findable from a nickname the transcript
+  already contains — a trainer's name, a brand, a cohort label.
+- **Project delivery docs, attendee lists, contracts, reimbursement ledgers** —
+  already rung 2 of the native ladder; the point here is only that they are not
+  optional once the rosters come up empty.
+- **Anything the user typed in chat** around the meeting window (rung 4).
+
+Then read the roster entry the group hands you *as a name*, not as a variant to
+be normalized away.
+
+**Real case (2026-09-16, cost two wrong fixes shipped to a pushed commit).** A
+post-class debrief named a classmate four ways across one file — `依林/依琳/依玲/
+艺灵` — plus a second person as `徐胜/徐盛`. Neither was in the global roster nor
+the project ledger. Both were "resolved" by collapsing each family onto its
+transcript-majority form, which is exactly the banned move; the two fixes went
+out in a commit. The user then pointed out that the class had a WeChat group,
+whose nicknames read `艺霖-老板IP操盘-第一期` and `徐盛-ip变现-第一期` — **both
+canonical forms were the minority spellings, and both of my fixes were wrong.**
+One `--find` would have settled it before any edit was made.
+
+**The shape to remember: a homophone family with no roster entry is a question,
+not a coin flip.** Enumerate the family, find the user-controlled source, and if
+none is reachable leave the raw form and enqueue `kind: entity`. What you must
+not do is pick whichever variant the transcript used most — that manufactures a
+confident wrong name that then gets committed, quoted into notes, and swept into
+a dictionary rule where it keeps firing.
+
+**Recording it:** once the group settles a canonical name, write both sides
+where they compound — the roster's `ASR 变体` line (listing every observed
+misspelling, explicitly marked as misspelling) *and* the domain context file,
+where you also name the group as the authority for that project's people so the
+next run reads it instead of re-deriving. A project whose people live in a
+nicknamed group should say so in its context file, with the room's findable
+label.
+
 **Roster format** (canonical: `### Name` + `- **ASR 变体**: variant1, variant2`):
 ```markdown
 ### Ada Lovelace
