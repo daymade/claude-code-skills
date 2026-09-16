@@ -137,8 +137,11 @@ class ScanRolloutsTests(unittest.TestCase):
         rows = self.collect()
         report = scan.format_report(rows, 7, scan.find_backjumps(rows), scan.find_zeroings(rows))
         for marker in ("采样 2 行", "回跳次数: 0", "归零区间 09-11 22:59:00 98%",
-                       "干净+7d", "非打满(平台推送先验)", "最新快照", "banked=unknown"):
+                       "干净+7d", "非打满(平台推送先验)", "最新快照",
+                       "banked：本数据源无此字段，改跑 query_usage.py"):
             self.assertIn(marker, report)
+        # 旧字面量 banked=unknown 长得像「本次没查到」，必须不再出现
+        self.assertNotIn("banked=unknown", report)
 
 
 if __name__ == "__main__":
