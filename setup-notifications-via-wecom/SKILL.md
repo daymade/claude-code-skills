@@ -19,8 +19,7 @@ It covers two things:
 2. **Send messages**: craft messages that distinguish state from delta, define every number, and avoid
    the misleading patterns that made earlier backup-sync notifications confusing.
 
-The bundled script `scripts/send_wecom.py` handles the actual HTTP call, including the proxy-unset rule
-required for Tencent services in mainland China. Recipient identity is explicit configuration:
+The bundled script `scripts/send_wecom.py` handles the actual HTTP call, using the host network configuration. Recipient identity is explicit configuration:
 `self` may send automatically; `others` requires human confirmation; missing identity fails fast.
 
 ## When to Use This Skill
@@ -214,8 +213,7 @@ uv run --no-project python scripts/send_wecom.py \
 If you prefer not to use the script:
 
 ```bash
-env -u http_proxy -u https_proxy -u all_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY \
-  curl -s -X POST 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY' \
+curl -s -X POST 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY' \
   -H 'Content-Type: application/json' \
   -d '{
     "msgtype": "text",
@@ -225,7 +223,11 @@ env -u http_proxy -u https_proxy -u all_proxy -u HTTP_PROXY -u HTTPS_PROXY -u AL
   }'
 ```
 
-**Critical**: Tencent services (WeChat/WeCom) must bypass the local proxy. The `env -u ...` prefix is required.
+**Network**: Inherit the host/project HTTP(S) proxy and `no_proxy` policy. A required proxy must remain in use; do not infer a direct-connect requirement from the Tencent domain. Configure an HTTP(S) proxy explicitly when the host requires one: Python urllib does not implement generic SOCKS `ALL_PROXY` routing.
+
+After upgrading the sender, refresh its configured digest using the existing
+`set_recipient.py` workflow, preserving the same scope and label. Do not relabel
+a group as `self` merely to pass the guard.
 
 ## Workflow: Add WeCom Notification to a Script
 
@@ -247,23 +249,19 @@ When a user asks "let my backup script send WeCom notifications", do the followi
 - Manual `--message` / `--file` sends retry transient errors up to 3 times. Guard-owned
   automatic `--outbox` delivery makes exactly one HTTP attempt and requires the
   guard-approved payload digest; a later run never sends a pre-existing payload.
-- It does not send messages without the proxy-unset guard.
+- It does not change host proxy configuration or switch routes automatically after a failure.
 
 ## Troubleshooting
 
 ### `Connection closed` or timeout
 
-WeCom endpoints may fail if local proxy env vars leak into the request. The script and inline curl examples already unset them. If it still fails:
-
-```bash
-env | grep -i proxy
-```
-
-Unset any that are set before running the sender.
+Inspect the configured route without printing proxy credentials. Follow the host's
+approved direct/proxy policy and diagnose the failing connection on that route.
+Do not silently clear proxies, try another endpoint, or replay an ambiguous send.
 
 ### Message not received, but curl returned 200
 
-Check the response body. WeCom returns 200 even for errors like invalid key or message-too-long. The script prints the full response; read it.
+Check the response body: HTTP 200 with nonzero `errcode` is failure. `errcode=0` means API acceptance, not recipient receipt. Verify the intended group and message where receipt matters. A direct bot test cannot validate an SLS/other scheduler: exercise and inspect that native path separately within the authorized test count.
 
 ### Config file not found
 

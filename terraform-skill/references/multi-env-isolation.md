@@ -1,6 +1,6 @@
 # Multi-Environment Isolation Checklist
 
-When creating a second Terraform environment (`staging`, `lab`, etc.) in the same cloud account alongside production, every item below must be verified. Skip one and you get silent name collisions or cross-contamination.
+Use when creating, changing or retiring an environment alongside production. Verify both state isolation and physical data ownership; separate Terraform addresses do not prove separate cloud backends.
 
 ## Configuration contract parity
 
@@ -20,7 +20,7 @@ ambient overrides or print `docker compose config --environment` as evidence.
 
 ## Terraform state isolation
 
-Two environments MUST use different state paths. Same OSS/S3 bucket is fine — different prefix isolates completely:
+Two environments MUST use different state paths. Different prefixes isolate state objects, not the cloud resources or service-side deletion effects:
 
 ```hcl
 # production
@@ -36,7 +36,7 @@ backend "oss" {
 }
 ```
 
-**Verification**: `terraform state list` in one environment must show ZERO resources from the other.
+**Verification**: Compare physical resource IDs and consumer bindings across the relevant states and live APIs. Different addresses or names in state lists do not prove separation.
 
 ## Resource naming collision matrix
 
@@ -119,11 +119,37 @@ When one environment is destroyed:
   ```
   IDs must be different.
 
-## Shared resources (safe to share)
+## Backend deletion and data lifecycle
 
-These are referenced but NOT managed by the second environment:
+Before a destroy, replacement, integration uninstall or environment retirement:
 
-| Resource | Why safe |
+1. Map the exact account/region/physical backend IDs to every active consumer.
+   Separate the environment owning compute/configuration from the owner of durable
+   metrics, logs, databases and object storage. Reused VPCs can share integrations.
+2. Inspect the selected provider version's delete implementation and current cloud
+   API semantics, including cascade/delete-data flags. An environment-only plan can
+   still delete a shared backend through one provider API call. Unknown cascade
+   behavior is an unresolved destructive boundary, not evidence of safety.
+3. If durable data is shared, remove the teardown's ownership of it through the
+   project's reviewed lifecycle/state-migration process. Do not solve this by
+   ad-hoc state removal, disabling guards or restoring over current data.
+4. Bind the destructive plan to the authorized physical IDs and documented effects.
+   Use provider lifecycle protection and cloud-side delete denial where available;
+   Terraform `prevent_destroy` alone cannot guard console/API or parent cascades.
+5. Verify the last successful independent backup and a real scratch restore of
+   pre-incident data. A snapshot policy, timer, recreated ID or new ingestion is
+   not historical recovery evidence. Query an old known-nonempty time window and
+   current consumer continuity after the authorized change.
+
+Stop before mutation if a surviving consumer or unknown data-deletion effect
+remains. Execute only the resolved, authorized plan; do not expand a routine
+read-only audit into a destructive recovery exercise.
+
+## Shared resources (verify ownership before sharing)
+
+These may be referenced without being managed by the second environment. Verify that deleting its child integrations cannot cascade into them; a reference alone is not protection.
+
+| Resource | Required isolation |
 |---|---|
 | VPC / VSwitch | Referenced by ID, not created |
 | Cloudflare zone ID | Referenced, records are independent |

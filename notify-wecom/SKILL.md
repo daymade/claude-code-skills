@@ -44,7 +44,7 @@ This skill is a lightweight companion to `setup-notifications-via-wecom`. Either
 ## What It Does
 
 1. Reads `~/.config/setup-notifications-via-wecom/config.json` for `webhook_url`, `recipient_scope`, and `recipient_label`.
-2. Unsets all local proxy env vars (Tencent endpoints must be reached directly).
+2. Inherits the host/project HTTP(S) proxy and no_proxy policy; never forces direct access.
 3. If scope is `self`, sends without an authorization prompt. If scope is `others`, presents the exact label and message for human confirmation.
 4. Sends via the WeCom webhook using the sender from `setup-notifications-via-wecom` (or an equivalent inline curl call).
 5. Reports success or the exact WeCom error; authorization alone is not delivery proof.
@@ -72,11 +72,11 @@ For multi-line messages, wrap in triple quotes or use a file:
 - **Config missing**: Run the setup step from `setup-notifications-via-wecom`, or create the config file manually.
 - **Recipient or sender identity missing/invalid**: Use `setup-notifications-via-wecom`'s `set_recipient.py` command; never infer self versus others from the webhook URL, and never trust a script merely because its basename is `send_wecom.py`.
 - **Webhook key invalid**: WeCom returns an `errcode`; the skill prints it.
-- **Proxy still interfering**: If you have proxy vars set outside the standard names, unset them first.
+- **Network failure**: Inspect the approved route; do not clear required proxies or switch paths automatically. Follow the sender Skill’s network guidance.
 
 ## Limitations
 
 - Plain text only. No markdown cards, images, or @mentions.
 - Message length limit is 4096 bytes (UTF-8).
 - No templating — use `setup-notifications-via-wecom` for structured backup/alert/status messages.
-- A prepared pending item is not a delivery receipt; only the sender response proves delivery.
+- A prepared pending item is not a delivery receipt; a zero `errcode` proves API acceptance. Recipient receipt and native SLS delivery require their own evidence.

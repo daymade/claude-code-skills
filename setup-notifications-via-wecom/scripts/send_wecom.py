@@ -19,14 +19,13 @@ Configuration:
     }
 
 Network:
-    WeCom/Tencent services must bypass the local HTTP proxy. This script explicitly
-    clears proxy-related environment variables before making the request.
+    Inherit the host HTTP/HTTPS proxy and no_proxy configuration. Never switch
+    network routes automatically after a failure.
 """
 
 import argparse
 import hashlib
 import json
-import os
 import sys
 import time
 import urllib.error
@@ -169,19 +168,6 @@ def load_outbox(path: Path, config: dict, expected_sha256: str) -> str:
     return message
 
 
-def clear_proxy_env():
-    """Remove proxy env vars so Tencent endpoints are reached directly."""
-    for name in (
-        "http_proxy",
-        "https_proxy",
-        "all_proxy",
-        "HTTP_PROXY",
-        "HTTPS_PROXY",
-        "ALL_PROXY",
-    ):
-        os.environ.pop(name, None)
-
-
 def send_message(
     webhook_url: str,
     message: str,
@@ -274,7 +260,6 @@ def main():
         f"Recipient: {config['recipient_label']} "
         f"[{config['recipient_scope']}]"
     )
-    clear_proxy_env()
 
     try:
         result = send_message(
@@ -295,7 +280,7 @@ def main():
         )
         sys.exit(1)
 
-    print("Message sent successfully.")
+    print("WeCom API accepted the message; recipient receipt is not verified here.")
 
 
 if __name__ == "__main__":

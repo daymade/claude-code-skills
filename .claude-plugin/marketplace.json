@@ -758,7 +758,7 @@
       "description": "Diagnoses and designs safe Terraform releases, provisioners, multi-environment isolation, and fresh-host bootstrap. Use when writing or reviewing plan/apply wrappers, null_resource, remote-exec, local-exec, file provisioners, cloud-init, Docker Compose or Caddy deployment; when staging and production configuration may differ; when an IaC rollout can mutate a shared gateway; or when debugging drift, saved-plan, provenance, TLS, Restarting/unhealthy containers, DNS duplication, snapshot contamination, and post-apply failures. It emphasizes exact reviewed artifacts, pre-mutation validation, explicit production authorization, and independent live readback.",
       "source": "./terraform-skill",
       "strict": false,
-      "version": "1.1.0",
+      "version": "1.2.0",
       "category": "developer-tools",
       "keywords": [
         "terraform",
@@ -993,7 +993,7 @@
       "description": "Set up and send technical status notifications through WeCom (Enterprise WeChat) webhooks. Use this skill whenever the user needs to send notifications, alerts, backup completion reports, or status updates via WeCom; when they mention 企业微信, 企微机器人, webhook, or alerting; or when a message needs to be clear, unambiguous, and technically precise rather than vague or condescending.",
       "source": "./setup-notifications-via-wecom",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.0.1",
       "category": "developer-tools",
       "keywords": [
         "wecom",
@@ -1012,7 +1012,7 @@
       "description": "Send a single one-off message to a WeCom (Enterprise WeChat) group bot. Use this skill whenever the user says \"/notify-wecom\", \"send a quick WeCom message\", \"企微通知一下\", \"临时发一条企业微信\", or any one-shot notification that does not need a reusable template or setup workflow.",
       "source": "./notify-wecom",
       "strict": false,
-      "version": "1.1.0",
+      "version": "1.1.1",
       "category": "developer-tools",
       "keywords": [
         "wecom",
