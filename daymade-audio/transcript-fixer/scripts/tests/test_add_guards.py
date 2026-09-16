@@ -69,8 +69,9 @@ class TestDomainWriteGuards:
     def test_add_writes_normalized_domain(self, isolated_config, capsys):
         # Trailing comma used to pass the count check and then die in the
         # pattern validator with a misleading attribution; the write must use
-        # the normalized single domain.
-        cmd_add_correction(_args(domain="demo ,"))
+        # the normalized single domain. (from_text is 3 chars and word-free so
+        # the newer real-word/name guards — not under test here — stay silent.)
+        cmd_add_correction(_args(from_text="样例词", to_text="正确词", domain="demo ,"))
         out = capsys.readouterr().out
         assert "(domain: demo)" in out
 
@@ -81,8 +82,9 @@ class TestDomainWriteGuards:
 
     def test_add_without_domain_falls_back_to_general(self, isolated_config, capsys):
         # Pre-existing crash (explicit None defeated the service default);
-        # no --domain now lands in "general".
-        cmd_add_correction(_args(domain=None))
+        # no --domain now lands in "general". (3-char word-free from_text keeps
+        # the newer real-word/name guards — not under test here — silent.)
+        cmd_add_correction(_args(from_text="样例词", to_text="正确词", domain=None))
         out = capsys.readouterr().out
         assert "(domain: general)" in out
 

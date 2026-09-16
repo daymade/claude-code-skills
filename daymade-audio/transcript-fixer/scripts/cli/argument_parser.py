@@ -527,7 +527,10 @@ def create_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--note",
         dest="review_note",
-        help="Free-text note recorded with the verdict"
+        help="Free-text note recorded with the verdict. With --add of a "
+             "person-name mapping it doubles as the authority-evidence "
+             "channel the name-convergence guard reads (roster 行 / 群 "
+             "displayName+nickName 双读 / 用户裁决 / 音证)"
     )
     parser.add_argument(
         "--by",

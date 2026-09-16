@@ -255,6 +255,7 @@ bytes on disk: `kept_original` = "original stays", `skipped` = "nothing to do,
 already handled elsewhere". A row the queue can neither re-anchor nor recognise closes with `--decision skipped --note <what happened>`. `kept_original` asserts the transcript keeps the original form — never the exit for a fix you applied.
 - If the file moved or drifted, run `--reanchor-review`. Add `--reanchor-root` or `--reanchor-to` when requested. Do not hand-edit around a pending item.
 - Promote every `decision_note` by meaning; storing a note does not change the dictionary, roster, context, or false-positive state.
+- The engine enforces the name-convergence gate at both write points: `--resolve-review --decision accepted/overridden` and a person-name-shaped `--add` refuse a target that is only someone's roster variant, or that nothing claims while the evidence names no authority (details and the sibling `--add` gates — open-row conflict, real-word probe — in [dictionary_identity_and_context.md](references/dictionary_identity_and_context.md)).
 
 Core commands:
 
