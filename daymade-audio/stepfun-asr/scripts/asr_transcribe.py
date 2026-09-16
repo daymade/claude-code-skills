@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-stepaudio-2.5-asr transcription — single file, SSE endpoint.
+stepaudio-3-asr-max transcription — single file, SSE endpoint.
 
 Endpoint: POST https://api.stepfun.com/v1/audio/asr/sse (NOT /v1/audio/transcriptions)
 
 Why a dedicated script: naive implementations try to reuse the step-asr-era endpoint
-(/v1/audio/transcriptions with multipart), get back `model stepaudio-2.5-asr not supported`,
+(/v1/audio/transcriptions with multipart), get back `model stepaudio-3-asr-max not supported`,
 and waste time debugging what looks like a model/permission issue. The actual cause is
-that stepaudio-2.5-asr is a different endpoint entirely — SSE streaming, JSON body,
+that stepaudio-3-asr-max is a different endpoint entirely — SSE streaming, JSON body,
 base64-encoded audio.
 
 Handles:
@@ -37,7 +37,7 @@ from pathlib import Path
 from typing import Any
 
 ASR_URL = "https://api.stepfun.com/v1/audio/asr/sse"
-MODEL = "stepaudio-2.5-asr"
+MODEL = "stepaudio-3-asr-max"
 
 # Extensions that StepAudio 2.5 ASR accepts natively (no conversion needed)
 EXT_TO_FORMAT = {
@@ -165,7 +165,7 @@ def transcribe(
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="stepaudio-2.5-asr transcription (SSE endpoint)")
+    ap = argparse.ArgumentParser(description="stepaudio-3-asr-max transcription (SSE endpoint)")
     ap.add_argument("audio", type=Path, help="Path to audio file (mp3/wav/ogg/opus/pcm)")
     ap.add_argument("--language", default="zh", help="Language code (zh/en). Default: zh")
     ap.add_argument("--format", help="Audio format override (mp3/wav/ogg/pcm)")

@@ -1,5 +1,8 @@
 # stepaudio-2.5-tts — Known Issues and Non-Obvious Behavior
 
+> **版本框定**：本文件全部条目为 2.5 时代（2026-04）实测证据。当前默认模型是 `stepaudio-3-tts`（2026-09-16 起）；这些条目多数与模型版本无关（端点形状 / key 类型 / SSE 行为），但与 censorship、幻觉等模型行为相关的条目在 v3 上未经回归实测。
+
+
 Collected from end-to-end testing 2026-04-23. These are things that burned real time to discover; they are not in the official docs.
 
 ## Stricter content censorship than step-tts-2
