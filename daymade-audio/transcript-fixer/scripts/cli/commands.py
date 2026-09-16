@@ -712,17 +712,28 @@ def cmd_lookup(args: argparse.Namespace) -> None:
         if hit(r["pattern"], r["replacement"])
         and (not domains or not r["domain"] or r["domain"] in domains)   # global + the named domains
     ]
-    roster: dict = {"path": None, "hits": []}
+    roster: dict = {"path": None, "hits": [], "names": []}
     roster_path = os.getenv("TRANSCRIPT_FIXER_PEOPLE_ROSTER") or get_config().paths.people_roster_path
     if roster_path:
         roster_file = Path(roster_path).expanduser()
         if roster_file.exists():
-            from core.people_roster import load_people_roster
+            from core.people_roster import load_people_roster, load_roster_names
             variants, _ = load_people_roster(roster_file)
-            roster = {"path": str(roster_file), "hits": [
+            hits = [
                 {"variant": v, "canonical": canon} for v, canon in variants.items()
                 if hit(v, canon)
-            ]}
+            ]
+            # Roster people whose name matches but who have no variant registered.
+            # Their absence from `hits` is not absence from the roster — reporting
+            # them is what stops "no trace anywhere" from reading as "unknown
+            # string, safe to normalize away".
+            claimed = {h["canonical"] for h in hits}
+            names = [
+                {"name": name, "canonical": e["canonical"], "identity": e["identity"]}
+                for name, e in load_roster_names(roster_file).items()
+                if hit(name) and e["canonical"] not in claimed
+            ]
+            roster = {"path": str(roster_file), "hits": hits, "names": names}
     review_queue = [
         {"id": r.id, "status": r.status, "source": r.source, "domain": r.domain,
          "file": r.file_path, "line": r.line_number,
@@ -747,16 +758,25 @@ def cmd_lookup(args: argparse.Namespace) -> None:
         state = "active" if r["is_active"] else "DISABLED"
         print(f"  #{r['id']} /{r['pattern']}/ → {r['replacement']!r}  [{r['domain'] or 'global'}] {state}")
     if roster["path"]:
-        print(f"People roster ({len(roster['hits'])}) — {roster['path']}:")
+        n_hits, n_names = len(roster["hits"]), len(roster["names"])
+        # The bare count stays the output for the common case; the wording only
+        # widens when there is a name-only hit it would otherwise hide.
+        summary = f"{n_hits} variant(s), {n_names} name(s)" if n_names else f"{n_hits}"
+        print(f"People roster ({summary}) — {roster['path']}:")
         for h in roster["hits"]:
             print(f"  {h['variant']!r} → {h['canonical']!r}")
+        for n in roster["names"]:
+            note = f" — {n['identity']}" if n["identity"] else ""
+            label = (f"roster entry {n['name']!r}" if n["name"] == n["canonical"]
+                     else f"alias {n['name']!r} of {n['canonical']!r}")
+            print(f"  {label}, no ASR variant registered{note}")
     else:
         print("People roster: not configured")
     print(f"Review queue ({len(review_queue)}):")
     for r in review_queue:
         anchor = f"  {Path(r['file']).name}:{r['line']}" if r["file"] else ""
         print(f"  #{r['id']} [{r['status']}/{r['source']}] {r['original']!r} → {r['suggested']!r}{anchor}")
-    if not (dictionary or context_rules or roster["hits"] or review_queue):
+    if not (dictionary or context_rules or roster["hits"] or roster["names"] or review_queue):
         print("  (no trace anywhere — nothing already claims this term)")
 
 

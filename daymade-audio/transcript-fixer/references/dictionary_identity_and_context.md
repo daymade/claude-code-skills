@@ -171,8 +171,8 @@ inference you can make from the audio, because a human typed them:
 
   | Field | Who typed it | Use for name correction? |
   |---|---|---|
-  | `displayName` (group nickname) | **the member, for this group** | ✅ the only usable one |
-  | `nickName` (WeChat nickname) | the member, but globally | ⚠️ often a handle/花名, not a real name |
+  | `displayName` (group nickname) | **the member, for this group** | ✅ wins when the two disagree |
+  | `nickName` (WeChat nickname) | the member, but globally | ✅ usable, and the only field everyone has |
   | `remark` | **you, about them** | ❌ never — validating your own memory against your own memory |
 
   So do **not** take the name off a chat read: `read_chat.py --talker … --layout ai`
@@ -189,11 +189,27 @@ inference you can make from the audio, because a human typed them:
   work at once. The group itself is findable from something the transcript
   already contains — a trainer's name, a brand, a cohort label.
 
-  **Expect partial coverage, and say so.** Setting a per-group nickname is
-  optional, so most members will have `displayName` empty (measured 2026-09-16:
-  7 of 34 in a cohort group). An empty one is not evidence of anything — fall
-  through to the next rung for that person rather than promoting their
-  `nickName`, and never fill the gap from `remark`.
+  **`displayName` is sparse; `nickName` is not.** Setting a per-group nickname
+  is optional — measured 2026-09-16 in a 34-person cohort group, 7 had one. All
+  34 had a `nickName`. Treating the other 27 as unreachable is what leaves a
+  cohort mostly unregistered, so read both: the group nickname decides the
+  canonical spelling when the two disagree, and the WeChat nickname is what you
+  have for everyone else.
+
+  A `nickName` is often decorated, and the real name is usually still in there:
+  `文案有为王艺霖🐱京杭传媒` → 王艺霖 (a *fuller* name than the group nickname's
+  `艺霖`), `赤脚大仙（杜悦）` → 杜悦, `Eric@刘强|青析商学` → 刘强, `HerLiu何流` → 何流.
+  Take the name, record the decorated form as `别名`, and never convert either
+  into an `ASR 变体` — a 花名 is a name the person actually uses, not a mishearing,
+  so it is findable but never rewritten. Still never fill a gap from `remark`.
+
+  **Register the whole group, not just the names today's file needed.** The
+  roster's second job is answering "is this string even a person" *before*
+  anyone decides it is an ASR error, and that only works for people who are in
+  it. Same 2026-09-16 cohort: 6 of the 34 had entries, and the two names that
+  got overwritten with phonetic neighbours were both in the unregistered 28.
+  A member with no known mishearing still gets a `###` entry with `身份` — it
+  costs one line and it is the line that refuses the collapse.
 - **Project delivery docs, attendee lists, contracts, reimbursement ledgers** —
   already rung 2 of the native ladder; the point here is only that they are not
   optional once the rosters come up empty.
@@ -233,13 +249,30 @@ label.
 - **ASR 变体**: Aida, 艾达
 
 ### 小明
-- **ASR 变体**: 晓明, 小铭
+- **身份**: 项目组成员            # 身份 alone is a complete entry
+- **别名**: 「小明 M2」            # findable, never rewritten; quote if it has spaces
+- **ASR 变体**: 晓明, 小铭          # optional — only for forms actually misheard
 ```
 
-**The shape is load-bearing and a wrong one fails silently.** The loader wants a
-`###` heading followed by a `- **ASR 变体**:` line. Write the same facts as a
-bullet list, a table row, or under a different heading level and nothing is
-loaded — no warning, no error, exit 0. The entry looks filed and is inert.
+**Three lines, three different jobs.** `ASR 变体` is the only one that changes
+text: each variant is rewritten to the heading. `别名` and the heading itself are
+*findable but never rewritten* — `--lookup` reports them so "is this string a
+real person" is answerable, while nothing edits them. That distinction is why a
+花名 goes on `别名`: `赤脚大仙` is a name its owner uses, and auto-replacing it
+with `杜悦` would destroy information, but a run that cannot find `赤脚大仙` at
+all is one step from deciding it is a mishearing of something else.
+
+So an entry with no `ASR 变体` line is not a dead entry. It is the normal state
+for someone who has never been misheard, and it still does the roster's other
+job. Write it for every person you know about, not only the ones a file has
+already gotten wrong.
+
+**The shape is load-bearing and a wrong one fails silently.** The loader keys on
+the `###` heading and on `- **别名**:` / `- **ASR 变体**:` lines under it. Write
+the same facts as a bullet list, a table row, or under a different heading level
+and nothing is loaded — no warning, no error, exit 0. The entry looks filed and
+is inert. A 34-person cohort written up as a markdown table scored zero on every
+one of them while reading, to a human, like a complete ledger.
 
 Two ways to catch it, both cheap. The run prints what it actually took:
 `👥 People roster: +N person-name corrections (people.md)` — N should climb by
