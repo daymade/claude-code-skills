@@ -2,6 +2,8 @@
 
 > **版本框定**：本文件全部条目为 2.5 时代（2026-04）实测证据。当前默认模型是 `stepaudio-3-asr-max`（2026-09-16 起）；这些条目多数与模型版本无关（端点形状 / key 类型 / SSE 行为），但与 censorship、幻觉等模型行为相关的条目在 v3 上未经回归实测。
 
+> **v3 能力缺口（2026-09-17 官方文档核对 + 实测）**：`stepaudio-3-asr-max` 响应只有句段级 `start_time`/`end_time`，无逐词时间戳（[官方 SSE API 参考](https://stepfun.mintlify.app/zh/api-reference/audio/asr-sse)无 word 级字段）。`hotwords` 参数虽在该 API 参考中对 v3 列出（无版本限定），但实测两个同音陷阱（「李郑」「赋芯」）带与不带结果逐字相同——按「接受但不生效」对待。依赖逐词时间戳或热词纠名的集成留在 `stepaudio-2.5-asr`，或先自行实测。
+
 
 Collected from end-to-end testing 2026-04-23. These are things that burned real time to discover; they are not in the official docs.
 
