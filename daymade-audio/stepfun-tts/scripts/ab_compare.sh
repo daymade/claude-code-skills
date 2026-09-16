@@ -2,8 +2,8 @@
 #
 # ab_compare.sh — compare two directories of mp3 files (size + duration).
 #
-# Typical use: after regenerating a voice corpus with stepaudio-2.5-tts into a
-# parallel `zh_v25/` directory, compare against the step-tts-2 baseline `zh/`.
+# Typical use: after regenerating a voice corpus with stepaudio-3-tts into a
+# parallel `zh_v3/` directory, compare against the previous generation's baseline `zh/`.
 # Outputs a GitHub-flavored markdown table so you can paste it into a report.
 #
 # Usage:

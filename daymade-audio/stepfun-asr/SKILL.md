@@ -1,17 +1,17 @@
 ---
 name: stepfun-asr
-description: Transcribe audio with StepFun's stepaudio-2.5-asr — an SSE endpoint (NOT /v1/audio/transcriptions) with 32K context, ~85-101x RTF on long audio, and a single-call ceiling around 30 minutes (no client-side chunking). Use when transcribing Chinese / English audio with StepFun, when long-form recordings (5-30 min) need to land in one request, when migrating from step-asr / step-asr-1.1, or when hitting the misleading `model stepaudio-2.5-asr not supported` error (which actually means wrong endpoint). Triggers on 阶跃 ASR, StepFun ASR, stepaudio-2.5-asr, 转录, 语音识别, 长音频转写, 语音转文字. For TTS with the sibling stepaudio-2.5-tts model, use the stepfun-tts skill instead.
+description: Transcribe audio with StepFun's stepaudio-3-asr-max — an SSE endpoint (NOT /v1/audio/transcriptions), single call handles long audio with no client-side chunking. Use when transcribing Chinese / English audio with StepFun, when long-form recordings (5-30 min) need to land in one request, when migrating from step-asr / step-asr-1.1 / stepaudio-2.5-asr, or when hitting the misleading `model stepaudio-3-asr-max not supported` error (which actually means wrong endpoint). Triggers on 阶跃 ASR, StepFun ASR, stepaudio-3-asr-max, stepaudio-2.5-asr, 转录, 语音识别, 长音频转写, 语音转文字. For TTS with the sibling stepaudio-3-tts model, use the stepfun-tts skill instead.
 ---
 
-# StepFun stepaudio-2.5-asr
+# StepFun stepaudio-3-asr-max
 
-Transcribe audio with StepFun's `stepaudio-2.5-asr` (released 2026-04, verified 2026-04-23). Long audio in one call, no chunking — but **only** if the request hits the right endpoint with the right body shape. The wrong endpoint returns an error that looks identical to "model doesn't exist", which is the #1 reason this skill exists.
+Transcribe audio with StepFun's `stepaudio-3-asr-max` (StepAudio 3, released 2026-09-15, verified 2026-09-16; supersedes `stepaudio-2.5-asr` on the same endpoint). Long audio in one call, no chunking — but **only** if the request hits the right endpoint with the right body shape. The wrong endpoint returns an error that looks identical to "model doesn't exist", which is the #1 reason this skill exists.
 
-> Companion: for TTS with `stepaudio-2.5-tts` (the sibling model), use the `stepfun-tts` skill — they share an API key but live on different endpoints with different body shapes.
+> Companion: for TTS with `stepaudio-3-tts` (the sibling model), use the `stepfun-tts` skill — they share an API key but live on different endpoints with different body shapes.
 
 ## Why this skill exists — three traps that cost hours
 
-1. **Wrong endpoint, wrong error**. `stepaudio-2.5-asr` does **not** live on `/v1/audio/transcriptions` (that endpoint serves the older `step-asr` family). It lives on `/v1/audio/asr/sse` — SSE streaming, JSON body, base64 audio. Sending it to the wrong endpoint returns `{"error":{"message":"model stepaudio-2.5-asr not supported"}}`, which is **identical in structure** to a genuinely nonexistent model name. People waste hours filing whitelist tickets.
+1. **Wrong endpoint, wrong error**. `stepaudio-3-asr-max` does **not** live on `/v1/audio/transcriptions` (that endpoint serves the older `step-asr` family). It lives on `/v1/audio/asr/sse` — SSE streaming, JSON body, base64 audio. Sending it to the wrong endpoint returns `{"error":{"message":"model stepaudio-3-asr-max not supported"}}`, which is **identical in structure** to a genuinely nonexistent model name. People waste hours filing whitelist tickets.
 
 2. **Plan key vs Normal key, silent failure**. StepFun's "Plan" subscription keys (cheap, text-only) cannot call audio endpoints, but the failure manifests as a 4xx with no auth-shaped error message. If your account has a Plan subscription, you need a separate "Normal" key from the same console.
 
@@ -64,8 +64,8 @@ The script handles base64 encoding, the nested `{audio: {data, input: {transcrip
 | Long audio (5-30 min) | Same script — 32K context handles it in a single call, no chunking needed |
 | Audio > 30 min | Split with ffmpeg before sending; the API rejects oversized payloads |
 | Need usage/billing data | Add `--json` to capture `usage.input_tokens` / `usage.total_tokens` from `transcript.text.done` |
-| Highly repetitive content (same phrase 5+ times, > 90s) | Cross-validate with `step-asr-1.1` — see repetition hallucination in `references/known_issues.md` |
-| Hit `model stepaudio-2.5-asr not supported` | Wrong endpoint. Switch from `/v1/audio/transcriptions` to `/v1/audio/asr/sse` |
+| Highly repetitive content (same phrase 5+ times, > 90s) | Cross-validate with `step-asr-1.1` — see repetition hallucination in `references/known_issues.md` (2.5-era issue, unverified on v3) |
+| Hit `model stepaudio-3-asr-max not supported` | Wrong endpoint. Switch from `/v1/audio/transcriptions` to `/v1/audio/asr/sse` |
 | Hit silent 4xx auth failure | Verify your key is "Normal" not "Plan" — Plan keys cannot call audio endpoints |
 | Need to write raw HTTP (no Python) | Read `references/api_reference.md` for exact JSON body and SSE event shapes |
 
@@ -83,18 +83,15 @@ The script auto-detects from extension; pass `--format` to override:
 
 For mp4/m4a/webm/etc., transcode to one of the above first via ffmpeg. Production pipelines often pre-transcode everything to OGG/Opus 16kHz mono to minimize base64 payload size.
 
-## Capacity and performance (verified 2026-04-23)
+## Capacity and performance
 
-- **32K context window** — single-call upper limit, no chunking needed for ≤ 30 min audio
-- **~85-101× RTF** on long audio (17.4 min audio → 10.4s wall clock)
-- **~5.3× speedup vs step-asr-1.1** at the 100s+ length range
-- **Only ~2× speedup** at the 5-15s range — the LLM spin-up cost dominates short clips. If your workload is many short clips, the migration ROI is modest
+v3 spot measurements (verified 2026-09-16): 10s clip → 1.1s, 53s real-world clip → 2.6s (~20× RTF). v2.5-era baseline for reference (2026-04-23, same endpoint): 32K context window, ~85-101× RTF on 17.4 min audio, single-call ceiling ≈ 30 min — treat 30 min as the working ceiling for v3 until re-probed, and re-measure before quoting long-audio numbers.
 
 ## Common error patterns
 
 | Error response | Actual cause | Fix |
 |---|---|---|
-| `"model stepaudio-2.5-asr not supported"` on `/v1/audio/transcriptions` | Wrong endpoint | Switch to `/v1/audio/asr/sse` (script does this) |
+| `"model stepaudio-3-asr-max not supported"` on `/v1/audio/transcriptions` | Wrong endpoint | Switch to `/v1/audio/asr/sse` (script does this) |
 | Silent 4xx with no auth message | Using a "Plan" key on audio endpoint | Get a "Normal" key from the StepFun console |
 | ASR returns 3-4× expected character count | Repetition hallucination on highly-repetitive audio | Cross-validate with `step-asr-1.1`; see `references/known_issues.md` |
 | `data: {"type":"error","message":"content blocked..."}` mid-stream | Censorship fired on user-uploaded content | Handle SSE `error` event explicitly; don't assume only `delta`/`done` arrive |
@@ -113,9 +110,9 @@ More edge cases in `references/known_issues.md`.
 - `references/api_reference.md` — exact JSON request body, all fields, all SSE event types, response examples. Read when writing raw HTTP calls instead of using the bundled script.
 - `references/known_issues.md` — repetition hallucination details, the wrong-endpoint diagnostic trail, Plan-vs-Normal key gotcha, ASR-side censorship handling, pricing opacity. Read when debugging anomalous output or evaluating whether to migrate from `step-asr-1.1`.
 
-## Pricing (verified 2026-04-23, volatile)
+## Pricing (verified 2026-09-16, volatile)
 
-`stepaudio-2.5-asr` is in invitation beta as of 2026-04-23 — no public per-minute rate. The `step-asr-1.1` baseline is 2.2 元/小时. The invitation PDF mentions "成本直降 80%" implying ~0.4 元/小时, but this is not yet on the pricing page. Re-verify at https://platform.stepfun.com/docs/zh/guides/pricing/details before quoting to stakeholders.
+`stepaudio-3-asr-max`: 2.8 元/小时 (official model page, 2026-09-16). The older `stepaudio-2.5-asr` remains served on the same endpoint as a fallback. Re-verify at https://platform.stepfun.com/docs/zh/guides/pricing/details before quoting to stakeholders.
 
 ## Next Step
 

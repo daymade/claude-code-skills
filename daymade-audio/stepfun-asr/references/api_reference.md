@@ -1,6 +1,6 @@
-# stepaudio-2.5-asr API Reference
+# stepaudio-3-asr-max API Reference
 
-Exact request/response shapes for `stepaudio-2.5-asr`. Verified 2026-04-23 against the live StepFun API. Read this when calling the API by hand (curl, custom HTTP client) instead of using the bundled `scripts/asr_transcribe.py`.
+Exact request/response shapes for `stepaudio-3-asr-max`. Body shape verified 2026-09-16 against the live StepFun API (identical to the 2.5 shape, which was verified 2026-04-23). Read this when calling the API by hand (curl, custom HTTP client) instead of using the bundled `scripts/asr_transcribe.py`.
 
 ## Endpoint (NOT the one you'd guess)
 
@@ -11,7 +11,7 @@ Accept: text/event-stream
 Authorization: Bearer <STEPFUN_API_KEY>
 ```
 
-**Do NOT** send `stepaudio-2.5-asr` to `/v1/audio/transcriptions` — that endpoint serves the older `step-asr` / `step-asr-1.1` family and returns a misleading `model stepaudio-2.5-asr not supported` error which looks identical to a permission/whitelist error. See `known_issues.md` for the full diagnostic trail.
+**Do NOT** send `stepaudio-3-asr-max` to `/v1/audio/transcriptions` — that endpoint serves the older `step-asr` / `step-asr-1.1` family and returns a misleading `model stepaudio-3-asr-max not supported` error which looks identical to a permission/whitelist error. See `known_issues.md` for the full diagnostic trail.
 
 ## Request body
 
@@ -22,7 +22,7 @@ Authorization: Bearer <STEPFUN_API_KEY>
     "input": {
       "transcription": {
         "language": "zh",
-        "model": "stepaudio-2.5-asr",
+        "model": "stepaudio-3-asr-max",
         "enable_itn": true
       },
       "format": {
@@ -37,7 +37,7 @@ Authorization: Bearer <STEPFUN_API_KEY>
 |---|---|---|---|
 | `audio.data` | yes | string | base64-encoded audio bytes. Accepts mp3, wav, ogg, opus (in ogg container), pcm |
 | `audio.input.transcription.language` | yes | string | `zh` or `en`. Dialects and Japanese are not officially supported |
-| `audio.input.transcription.model` | yes | string | Must be `stepaudio-2.5-asr` |
+| `audio.input.transcription.model` | yes | string | `stepaudio-3-asr-max` (current) or `stepaudio-2.5-asr` / `stepaudio-2-asr-pro` (still served) |
 | `audio.input.transcription.enable_itn` | no | bool | Inverse text normalization (数字→words). Default true |
 | `audio.input.format.type` | yes | string | `mp3` / `wav` / `ogg` / `pcm` |
 | `audio.input.format.rate` | pcm only | int | Sample rate (required for raw PCM) |
@@ -72,7 +72,7 @@ data: {"type":"transcript.text.done","meta":{...},"text":"你好，我是蕾格�
 ## Known error responses
 
 ```json
-{"error":{"message":"model stepaudio-2.5-asr not supported","type":"request_params_invalid"}}
+{"error":{"message":"model stepaudio-3-asr-max not supported","type":"request_params_invalid"}}
 ```
 → Wrong endpoint. Switch from `/v1/audio/transcriptions` to `/v1/audio/asr/sse`.
 
@@ -85,12 +85,12 @@ data: {"type":"error","message":"content blocked ..."}
 
 | Model | Endpoint | Request format |
 |---|---|---|
-| `stepaudio-2.5-asr` (this skill) | `/v1/audio/asr/sse` | JSON + base64 audio + SSE response |
-| `stepaudio-2.5-tts` (sibling, see `stepfun-tts` skill) | `/v1/audio/speech` | JSON with `instruction` (no `voice_label`) |
+| `stepaudio-3-asr-max` (this skill) | `/v1/audio/asr/sse` | JSON + base64 audio + SSE response |
+| `stepaudio-3-tts` (sibling, see `stepfun-tts` skill) | `/v1/audio/speech` | JSON with `instruction` (no `voice_label`) |
 | `step-asr` / `step-asr-1.1` (legacy) | `/v1/audio/transcriptions` | multipart/form-data |
 | `step-tts-2` / `step-tts-mini` (legacy) | `/v1/audio/speech` | JSON with `voice_label` |
 
-Legacy `step-asr-1.1` is the fallback when `stepaudio-2.5-asr` hits the repetition-hallucination edge case (see `known_issues.md`). The endpoint and body shape are entirely different — multipart upload to `/v1/audio/transcriptions`, no SSE.
+Legacy `step-asr-1.1` is the fallback when the current model hits the repetition-hallucination edge case (see `known_issues.md`). The endpoint and body shape are entirely different — multipart upload to `/v1/audio/transcriptions`, no SSE.
 
 ## Auth and key handling
 

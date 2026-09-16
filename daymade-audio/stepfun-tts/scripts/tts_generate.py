@@ -91,8 +91,9 @@ def synthesize(
         "volume": volume,
     }
     if instruction:
-        if len(instruction) > 200:
-            return {"ok": False, "status": 0, "err": f"instruction too long: {len(instruction)} > 200 chars"}
+        _limit = 500 if MODEL.startswith("stepaudio-3") else 200
+        if len(instruction) > _limit:
+            return {"ok": False, "status": 0, "err": f"instruction too long: {len(instruction)} > {_limit} chars (model={MODEL})"}
         body["instruction"] = instruction
 
     req = urllib.request.Request(
@@ -114,7 +115,7 @@ def synthesize(
         # Detect the known voice_label migration error and make the message actionable
         if "voice_label is not supported" in raw:
             hint = (
-                "\n  HINT: stepaudio-2.5-tts does not accept voice_label. "
+                "\n  HINT: this Contextual TTS model does not accept voice_label. "
                 "Put emotion/prosody into `instruction` (natural language) instead."
             )
             raw = raw + hint
