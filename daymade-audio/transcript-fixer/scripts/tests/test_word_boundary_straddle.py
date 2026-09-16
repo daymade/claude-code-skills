@@ -8,7 +8,9 @@ overlapping segment is a multi-character word and one of them crosses a match
 boundary — one single-character segment under the match is what an unknown
 fragment looks like, so genuine garbles pass through. Whole-word matches are
 untouched, --apply-all (boundary_check=False) overrides, and a missing segmenter
-degrades to the old behaviour instead of failing.
+degrades to the old behaviour instead of failing — loudly, because a disarmed
+check and a check with nothing to refuse produce the same exit code and the same
+`boundary_refused: 0`.
 """
 
 import contextlib
@@ -75,14 +77,60 @@ class TestStraddlesWordBoundary(unittest.TestCase):
         self.assertFalse(straddles_word_boundary("", 0, ""))
 
     def test_missing_segmenter_degrades_to_no_refusal_for_cjk(self):
-        saved = (dp._SEGMENTER, dp._SEGMENTER_UNAVAILABLE)
+        saved = (dp._SEGMENTER, dp._SEGMENTER_UNAVAILABLE, dp._SEGMENTER_WARNED)
         try:
             dp._SEGMENTER, dp._SEGMENTER_UNAVAILABLE = None, True
             self.assertFalse(straddles_word_boundary("你更新一下客户端", 2, "新一"))
             # the ASCII rule needs no segmenter
             self.assertTrue(straddles_word_boundary("iCloud", 1, "Cloud"))
         finally:
-            dp._SEGMENTER, dp._SEGMENTER_UNAVAILABLE = saved
+            dp._SEGMENTER, dp._SEGMENTER_UNAVAILABLE, dp._SEGMENTER_WARNED = saved
+
+
+class TestFailOpenIsAnnounced(unittest.TestCase):
+    """Degrading to no-refusal is allowed; doing it quietly is not.
+
+    Without jieba every CJK match skips the check, and the run otherwise looks
+    exactly like one where nothing straddled a word: same exit code, same
+    `boundary_refused: 0`. These pin the two signals that tell the cases apart.
+    """
+
+    def setUp(self):
+        self._saved = (dp._SEGMENTER, dp._SEGMENTER_UNAVAILABLE, dp._SEGMENTER_WARNED)
+
+    def tearDown(self):
+        dp._SEGMENTER, dp._SEGMENTER_UNAVAILABLE, dp._SEGMENTER_WARNED = self._saved
+
+    def test_unavailable_segmenter_warns_once_on_stderr(self):
+        dp._SEGMENTER, dp._SEGMENTER_UNAVAILABLE, dp._SEGMENTER_WARNED = None, True, False
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            straddles_word_boundary("你更新一下客户端", 2, "新一")
+            straddles_word_boundary("你更新一下客户端", 2, "新一")
+        text = err.getvalue()
+        self.assertIn("jieba is not importable", text)
+        self.assertIn("OFF", text)
+        # Once per process: a per-match warning on a long transcript is noise
+        # that gets scrolled past, which is the same as no warning.
+        self.assertEqual(text.count("jieba is not importable"), 1)
+
+    def test_available_segmenter_warns_not_at_all(self):
+        dp._SEGMENTER_WARNED = False
+        if dp._get_segmenter() is None:
+            self.skipTest("jieba not installed; the positive side is untestable here")
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            straddles_word_boundary("你更新一下客户端", 2, "新一")
+        self.assertEqual(err.getvalue(), "")
+
+    def test_availability_predicate_tracks_the_segmenter(self):
+        from core.dictionary_processor import boundary_check_available
+        dp._SEGMENTER, dp._SEGMENTER_UNAVAILABLE, dp._SEGMENTER_WARNED = None, True, True
+        self.assertFalse(boundary_check_available())
+        dp._SEGMENTER, dp._SEGMENTER_UNAVAILABLE, dp._SEGMENTER_WARNED = self._saved
+        dp._SEGMENTER_WARNED = False
+        if dp._get_segmenter() is not None:
+            self.assertTrue(boundary_check_available())
 
 
 class TestProcessorIntegration(unittest.TestCase):

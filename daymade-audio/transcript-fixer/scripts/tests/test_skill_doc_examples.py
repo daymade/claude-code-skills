@@ -230,14 +230,14 @@ def test_public_json_contract_lists_the_complete_always_present_shape():
     )
     for field in fields:
         assert field in stage1_contract
-    assert "All eleven fields are always present" in parameters
+    assert "All twelve fields are always present" in parameters
     assert "Stage 2/3 runs add" not in parameters
 
     parser = runpy.run_path(str(ARGUMENT_PARSER_PY))["create_argument_parser"]()
     help_text = parser.format_help()
     for field in fields:
         assert field.strip('"') in help_text
-    assert "All eleven status fields are always present" in " ".join(help_text.split())
+    assert "All twelve status fields are always present" in " ".join(help_text.split())
 
 
 def test_multi_recording_completion_is_not_satisfied_by_sampled_clips():

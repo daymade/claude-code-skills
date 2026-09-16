@@ -24,6 +24,13 @@ from core import (
     DictionaryProcessor,
 )
 from core.correction_repository import normalize_domains
+
+
+def _boundary_check_available() -> bool:
+    """Imported lazily: dictionary_processor pulls jieba's prefix dictionary in,
+    and --list / --add must not pay that second."""
+    from core.dictionary_processor import boundary_check_available
+    return boundary_check_available()
 from utils.config import get_config
 
 # Heavy command-specific imports are deferred to the functions that use them
@@ -1260,6 +1267,10 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
                 "stage2_failed_chunks": 0,
                 "stage2_degraded": False,
                 "boundary_refused": 0,
+                # A property of the environment, not of this invocation: report it
+                # truthfully even on a path that ran no corrections, so a consumer
+                # never sees the field flip between runs of the same install.
+                "boundary_check_active": _boundary_check_available(),
             }
 
     # Initialize service
@@ -1446,6 +1457,7 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
     applied_count = 0
     skipped_count = 0
     boundary_refused = 0
+    boundary_check_active = _boundary_check_available()
     stage1_output_written: Path | None = None
     needs_review_written: Path | None = None
     review_enqueued = 0
@@ -1489,7 +1501,12 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
         if review_mode:
             print(f"  - Applied (low risk): {applied_count}")
             print(f"  - Skipped for review: {skipped_count}")
-        if summary.get("boundary_skips"):
+        if not boundary_check_active:
+            # Printed instead of the refusal line, not alongside it: a count of 0
+            # here would read as "nothing straddled" when nothing was examined.
+            print("  - Refused at word boundaries: CHECK OFF "
+                  "(jieba unavailable — CJK matches were not boundary-checked this run)")
+        elif summary.get("boundary_skips"):
             print(f"  - Refused at word boundaries: {summary['boundary_skips']} "
                   f"(match cut across dictionary words — a fragment, not a mishearing; "
                   f"--apply-all or a context rule overrides)")
@@ -1753,6 +1770,10 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
         # (match-time safety check 3) — neither applied nor deferred, so a caller
         # comparing runs can see why a deferral disappeared.
         "boundary_refused": boundary_refused,
+        # Additive: whether the word-boundary check could run at all. Without it,
+        # boundary_refused=0 is ambiguous between "nothing straddled" and "never
+        # checked", and automation cannot tell a healthy run from a disarmed one.
+        "boundary_check_active": boundary_check_active,
     }
 
 

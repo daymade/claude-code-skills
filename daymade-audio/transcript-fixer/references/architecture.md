@@ -666,6 +666,27 @@ if target_file.exists():
 
 ## Testing Strategy
 
+### Running the suites
+
+```bash
+uv run scripts/run_tests.py                       # the whole pytest suite
+uv run scripts/run_tests.py -k roster -q          # arguments pass through
+python3 -m unittest discover -s tests             # the stdlib suite CI runs
+```
+
+There are two, and they are not interchangeable. `tests/` is standard-library
+unittest and is registered in the repo's CI (`scripts/ci/test-suites.txt`).
+`scripts/tests/` is pytest and needs jieba, httpx, filelock, rapidfuzz and
+pytest-asyncio, which is exactly why that registry does not admit it — see its
+header for the reasoning. `scripts/run_tests.py` declares those dependencies
+inline so the local suite has one correct invocation instead of a `--with` list
+nobody remembers.
+
+**Running it without them does not look like a missing dependency.** A bare
+`pytest scripts/tests/` reports 16 failures and 3 collection errors, several of
+them in the word-boundary guard's own tests — which reads as "this safety check
+is broken" when the only thing absent is jieba.
+
 ### Unit Testing (Recommended)
 
 ```python
