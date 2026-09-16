@@ -18,7 +18,7 @@ python3 scripts/diagnose_plugins.py
 ```
 
 The script checks:
-- Installed vs enabled plugins mismatch
+- Installed vs enabled plugins mismatch in both directions (installed-but-not-enabled and enabled-but-not-registered)
 - Missing enabledPlugins entries in settings.json
 - Stale marketplace cache using `known_marketplaces.json` `lastUpdated`
 - Missing, malformed, timezone-free, or future `lastUpdated` metadata
@@ -57,6 +57,16 @@ claude plugin enable plugin-name@marketplace-name
 # Option 2: Manually edit settings.json
 # Add to enabledPlugins section:
 # "plugin-name@marketplace-name": true
+```
+
+**Mirror variant — enabled but not registered:** If diagnosis instead shows the plugin in `enabledPlugins` but NOT in `installed_plugins.json`, the cause is the symlink-skip bug: the install ran under a config dir where `installed_plugins.json` is a symlink (multi-profile shared setups), and the CLI silently skipped writing it. See `references/known_issues.md` → "Symlinked installed_plugins.json". Fix:
+
+```bash
+# Reinstall from the config dir owning the real file
+CLAUDE_CONFIG_DIR=~/.claude claude plugin install plugin-name@marketplace-name
+
+# Then confirm
+claude plugin list
 ```
 
 ### Issue 2: Understanding Plugin State Architecture

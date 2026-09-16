@@ -109,6 +109,23 @@ def find_missing_enabled(installed, enabled):
     return missing
 
 
+def find_missing_installed(installed, enabled):
+    """Find plugins that are enabled but absent from installed_plugins.json.
+
+    Mirror of find_missing_enabled. Typical cause: the install ran under a
+    config dir whose installed_plugins.json is a symlink (multi-profile
+    shared-file setups) — the CLI reports success but silently skips writing
+    the entry. See references/known_issues.md.
+    """
+    missing = []
+
+    for plugin_name, is_enabled in enabled.items():
+        if is_enabled and plugin_name not in installed:
+            missing.append(plugin_name)
+
+    return missing
+
+
 def _parse_last_updated(value):
     """Parse a timezone-qualified ISO-8601 timestamp as aware UTC."""
     if not isinstance(value, str) or not value:
@@ -225,6 +242,28 @@ def main():
         print()
     else:
         print("✅ All installed plugins are enabled!")
+        print()
+
+    # Find the mirror mismatch: enabled but absent from installed_plugins.json
+    unregistered = find_missing_installed(installed, enabled)
+    if unregistered:
+        print("=" * 60)
+        print(f"⚠️  WARNING: {len(unregistered)} plugins enabled but NOT registered!")
+        print("=" * 60)
+        print()
+        print("These plugins are enabled in settings.json but have no entry in")
+        print("installed_plugins.json, so `claude plugin list` will not show them.")
+        print("Typical cause: the install ran where installed_plugins.json is a")
+        print("symlink (multi-profile shared setups) and the CLI silently skipped it.")
+        print()
+        for plugin in sorted(unregistered):
+            print(f"   - {plugin}")
+        print()
+        print("To fix, reinstall from the config dir owning the real file:")
+        print("   CLAUDE_CONFIG_DIR=~/.claude claude plugin install <plugin>@<marketplace>")
+        print()
+    else:
+        print("✅ All enabled plugins are registered in installed_plugins.json!")
         print()
 
     # Check cache freshness
