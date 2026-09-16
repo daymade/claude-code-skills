@@ -1,6 +1,6 @@
 # stepaudio-3-tts API Reference
 
-Exact request/response shapes for `stepaudio-3-tts`. Verified 2026-04-23 against the live StepFun API. Read this when you need to call the API by hand (curl, custom HTTP client) instead of using the bundled `scripts/tts_generate.py`.
+Exact request/response shapes for `stepaudio-3-tts`. Request/response shape verified 2026-09-16 against the live StepFun API (identical to the 2.5 shape, which was verified 2026-04-23). Read this when you need to call the API by hand (curl, custom HTTP client) instead of using the bundled `scripts/tts_generate.py`.
 
 ## Endpoint
 
@@ -28,7 +28,7 @@ Authorization: Bearer <STEPFUN_API_KEY>
 |---|---|---|---|
 | `model` | yes | string | Must be `stepaudio-3-tts` |
 | `input` | yes | string | ≤1000 chars; can contain inline `(directive)` parentheses |
-| `voice` | yes | string | e.g. `shuangkuaijiejie`. Zero-shot clones use the clone's ID |
+| `voice` | yes | string | e.g. `shuangkuaijiejie`. Zero-shot clones use the clone's ID — **but NOT with stepaudio-3-tts**: v3 silently drops any cloned voice ID to a default female voice (falsified 2026-09-16, SIM 0.272/0.195 vs the 0.773 anchor). Cloned voices only work with `stepaudio-2.5-tts` / `step-tts-2` / `step-tts-mini`; synthesize clones with `stepaudio-2.5-tts`. |
 | `response_format` | yes | string | `mp3` (default), `wav`, or `opus` |
 | `speed` | no | float | 0.5-2.0, default 1.0 |
 | `volume` | no | float | 0.0-2.0, default 1.0 |
