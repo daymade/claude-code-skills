@@ -227,7 +227,32 @@ Safety rules:
 - Resolve one occurrence at a time; sweep sibling entity occurrences only after the whole batch is resolved.
 - A `pending` row is a blocking state for a high-quality/final transcript, not proof that the issue was handled. Queue detection without a human/evidence verdict leaves the artifact incomplete.
 - Read `resolved_text` after an override; the listing can still display the rejected suggestion.
-- A single-line `asr_note` ledger is masked on the accept path too, so resolving an item never edits the provenance line that cites the old form. A fix you applied by hand before resolving is still closed with `--decision accepted` (or `overridden` for its override text): when the context recorded at enqueue reappears anywhere in the file with the suggestion in the slot the original occupied, the verdict is recorded without writing (`already in place at the anchor — recorded without writing`). Line drift does not matter, and neither does the original surviving in other utterances far from the hint, or inside the suggestion itself (阿里→阿里云). It fails closed with `ReAnchorNeeded`, and the message says which, when the original still sits within the resolve window of the hint outside the suggestion (the anchored utterance, or a look-alike beside it, is still garbled — settle that line on its own row or by hand, then resolve; do not `--reanchor-review` this row onto it), when the recorded neighbourhood also appears with a third form in the slot (anywhere in the file at the width that matched, or near the hint at any width down to two characters a side), or when the edit touched the characters next to the slot. What it cannot see: an anchored utterance deleted or rewritten past both neighbours while an identical one elsewhere reads corrected — that records `accepted` with nothing written, and a garble still in the file is re-deferred by the next Stage 1 run. `--reanchor-review <id>` repairs a row whose original moved or drifted and refuses one whose context already reads corrected. A row the queue can neither re-anchor nor recognise closes with `--decision skipped --note <what happened>`. `kept_original` asserts the transcript keeps the original form — never the exit for a fix you applied.
+- A single-line `asr_note` ledger is masked on the accept path too, so resolving an item never edits the provenance line that cites the old form. A fix you applied by hand before resolving is still closed with `--decision accepted` (or `overridden` for its override text): when the context recorded at enqueue reappears anywhere in the file with the suggestion in the slot the original occupied, the verdict is recorded without writing (`already in place at the anchor — recorded without writing`). Line drift does not matter, and neither does the original surviving in other utterances far from the hint, or inside the suggestion itself (阿里→阿里云). It fails closed with `ReAnchorNeeded`, and the message says which, when the original still sits within the resolve window of the hint outside the suggestion (the anchored utterance, or a look-alike beside it, is still garbled — settle that line on its own row or by hand, then resolve; do not `--reanchor-review` this row onto it), when the recorded neighbourhood also appears with a third form in the slot (anywhere in the file at the width that matched, or near the hint at any width down to two characters a side), or when the edit touched the characters next to the slot. What it cannot see: an anchored utterance deleted or rewritten past both neighbours while an identical one elsewhere reads corrected — that records `accepted` with nothing written, and a garble still in the file is re-deferred by the next Stage 1 run. `--reanchor-review <id>` repairs a row whose original moved or drifted and refuses one whose context already reads corrected.
+
+**Choosing the exit when `accepted` refuses to write — three shapes, three exits.**
+`accepted` is fail-closed by design: it declines to edit when the anchor is
+ambiguous, and a refusal is information, not an obstacle to route around. Match
+the exit to *why* it refused (2026-09-16: 9 rows hit these three shapes; picking
+wrong cost six retries):
+
+| What the refusal says | What actually happened | Correct exit |
+|---|---|---|
+| `anchor text not found` — original is simply gone from the file | Your earlier edit (or a sibling row's) already consumed it, and a grep of the **corrected form** confirms it landed | `skipped --note "<which row/edit consumed it; grep <newform> = N>"` |
+| `anchor text appears more than once on line N` / `a different form there, so which line this row meant is ambiguous` | The line holds several instances of the variant; a whole-line replace already fixed all of them | `skipped --note "<the line-level replace that covered them; grep of both forms>"` |
+| original is a **substring of a form an earlier row already replaced** (e.g. row A held `杨峰中`, this row holds `杨峰`) | The longer form went first, so this row's token vanished with it | `skipped --note "<row id that consumed it as a substring>"` |
+
+The gate on all three is the same and it is not optional: **grep the corrected form
+and confirm the old form reads zero before you close anything as `skipped`.** A
+`skipped` row asserts "there is nothing left to fix here", so if the garble is
+still in the file, `skipped` launders a real error into a closed row — the exact
+outcome `Review queue safety` warns about. When the grep comes back non-zero, the
+row is not skippable: fix the remaining occurrence by hand, then re-resolve.
+
+`skipped` is also **not** the exit when you changed your mind and the original was
+right as spoken — that is `kept_original`, and it asserts the transcript keeps the
+raw form (so grep it still present). The two differ in what they claim about the
+bytes on disk: `kept_original` = "original stays", `skipped` = "nothing to do,
+already handled elsewhere". A row the queue can neither re-anchor nor recognise closes with `--decision skipped --note <what happened>`. `kept_original` asserts the transcript keeps the original form — never the exit for a fix you applied.
 - If the file moved or drifted, run `--reanchor-review`. Add `--reanchor-root` or `--reanchor-to` when requested. Do not hand-edit around a pending item.
 - Promote every `decision_note` by meaning; storing a note does not change the dictionary, roster, context, or false-positive state.
 
