@@ -164,13 +164,36 @@ global roster nor the project ledger holds the person, **stop converging and go
 look where the user controls the spelling.** Those sources outrank every
 inference you can make from the audio, because a human typed them:
 
-- **WeChat group member nicknames.** The single most productive rung found so
-  far. Training/cohort/community groups routinely name members in a fixed
-  shape — `真名-业务方向-期数`, `Name-Company-Role` — and the person typed it
-  themselves. Read it with `read-wechat-messages` (`read_chat.py --find <群名>`
-  to resolve the room, then `--talker <id> --layout ai` to read the roster and
-  recent messages). The group itself is findable from a nickname the transcript
+- **A WeChat group member's own group nickname.** The most productive rung
+  found so far — but only one of the three names a chat store holds for a
+  person qualifies, and reading the wrong one turns this rung into a fresh way
+  to launder a guess:
+
+  | Field | Who typed it | Use for name correction? |
+  |---|---|---|
+  | `displayName` (group nickname) | **the member, for this group** | ✅ the only usable one |
+  | `nickName` (WeChat nickname) | the member, but globally | ⚠️ often a handle/花名, not a real name |
+  | `remark` | **you, about them** | ❌ never — validating your own memory against your own memory |
+
+  So do **not** take the name off a chat read: `read_chat.py --talker … --layout ai`
+  labels speakers by `remark` first, which is exactly the field that is yours,
+  not theirs. Go to the directory endpoint and read `users[].displayName`:
+
+  ```bash
+  curl -s --noproxy '*' -G --data-urlencode "keyword=<群名>" \
+    --data-urlencode "format=json" "http://<host>:5030/api/v1/chatroom"
+  ```
+
+  Training/cohort groups often shape it as `真名-业务方向-期数` or
+  `Name-Company-Role`, which hands you the real name and the person's line of
+  work at once. The group itself is findable from something the transcript
   already contains — a trainer's name, a brand, a cohort label.
+
+  **Expect partial coverage, and say so.** Setting a per-group nickname is
+  optional, so most members will have `displayName` empty (measured 2026-09-16:
+  7 of 34 in a cohort group). An empty one is not evidence of anything — fall
+  through to the next rung for that person rather than promoting their
+  `nickName`, and never fill the gap from `remark`.
 - **Project delivery docs, attendee lists, contracts, reimbursement ledgers** —
   already rung 2 of the native ladder; the point here is only that they are not
   optional once the rosters come up empty.
@@ -212,6 +235,20 @@ label.
 ### 小明
 - **ASR 变体**: 晓明, 小铭
 ```
+
+**The shape is load-bearing and a wrong one fails silently.** The loader wants a
+`###` heading followed by a `- **ASR 变体**:` line. Write the same facts as a
+bullet list, a table row, or under a different heading level and nothing is
+loaded — no warning, no error, exit 0. The entry looks filed and is inert.
+
+Two ways to catch it, both cheap. The run prints what it actually took:
+`👥 People roster: +N person-name corrections (people.md)` — N should climb by
+roughly the variants you added. And `--lookup <the canonical name>` should
+answer from the roster; a `no trace anywhere` on a name you just filed means the
+shape is wrong, not that the file is unsaved. (2026-09-16: six new people were
+added as `- **Name**（role）— **ASR 变体**：…` bullets; `--lookup` returned zero
+for every one of them, and the rules were dead until they were rewritten as
+headings.)
 
 Both example shapes are worth copying. An English given name spoken inside
 Chinese speech produces *two* kinds of variant — a misspelling (`Aida`) and a

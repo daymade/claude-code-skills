@@ -32,6 +32,30 @@ A recording can be long but still fast-tier (two known speakers, plain language)
 
 **One metadata field is the exception by design: `asr_note`.** When you record a run's correction history in the transcript's frontmatter, use the key `asr_note` — Stage 1 masks its value before matching, so the verbatim old forms your ledger cites (`修正含：<old-form>→<canonical>`) never re-fire as phantom matches, and no phantom review items get enqueued from it. The field stays a full-fidelity ledger; the masking keeps line numbers exact and splices the ledger back untouched. Before this existed, one such ledger line produced 18 phantom Stage 1 matches and 9 phantom queue enqueues on every re-run — a per-file tax that recurred forever. **Two constraints, both load-bearing: the value must sit on the same line as the key (single-line flow style — a multi-line `asr_note: |` / folded value is out of the masker's reach and stays unprotected), and other frontmatter keys are processed normally — keep correction ledgers under `asr_note` and nowhere else.**
 
+**The masker guards Stage 1's matcher — it does not guard YOUR edits.** It runs
+inside the dictionary pass, so it stops the *tool* from re-firing on the old
+forms your ledger cites. Nothing stops a whole-file `sed -i` or
+`text.replace(old, new)` in the native pass from rewriting those same citations,
+because that replacement never goes through the matcher at all. The failure is
+silent and it corrupts the one artifact whose entire job is to record what you
+did.
+
+Real case (2026-09-16): a native pass corrected a name family one way, was later
+overturned by better evidence, and applied the reversal with a whole-file
+`replace('依林', '艺霖')`. That swept the frontmatter too, turning the ledger's
+`依玲×3/艺灵×2/依琳→依林` — the decision actually taken, and later found wrong —
+into `→艺霖`. The file then read as though the first pass had judged correctly;
+the misjudgment it existed to record was gone. A sibling entry degraded into the
+self-referential `徐盛→徐盛`.
+
+So in the native pass, **anchor every body edit**: replace at a known line
+index, or include enough surrounding words that the frontmatter cannot match.
+Reserve whole-file replacement for tokens you have just confirmed appear nowhere
+in the frontmatter. After any reversal, re-read the ledger line itself: it should
+still name the original decision *and* the overturn — `A→B（据X，后经Y推翻，终态C）`
+— because "what was decided, then corrected" is the provenance; "what turned out
+right" alone is not.
+
 ### Evidence selection and escalation
 
 Use this branch when a term remains uncertain, a review queue is being resumed,
