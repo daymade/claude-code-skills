@@ -243,6 +243,38 @@ next run reads it instead of re-deriving. A project whose people live in a
 nicknamed group should say so in its context file, with the room's findable
 label.
 
+**The engine now refuses the banned move at both write points.** Everything
+above was prose when the 2026-09-16 pair shipped; it is since a fail-closed
+gate (`scripts/core/name_convergence_guard.py`), not a reminder. The gate
+fires when the mapping is a person-name question — the review item's `kind`
+is `entity`/`homophone`, or the pair is 2-4 CJK characters one edit apart
+(the phonetic-neighbour shape, so `--add` is gated without any kind) — at
+`--resolve-review --decision accepted|overridden` and at `--add`, and decides
+in order:
+
+| The target form is… | Verdict |
+|---|---|
+| a roster `###` entry, or an ACTIVE dictionary rule's `to_text` | pass — converging onto a claimed canonical form is the ordinary correction |
+| ONLY someone's recorded `ASR 变体` | refuse, naming the canonical — rewriting onto a documented mishearing manufactures the error |
+| found NOWHERE (dictionary / roster / context rules / **decided** queue rows) AND the evidence names no authority | refuse — the majority-collapse shape verbatim; the message names the exits (`--enqueue-review` `kind:entity`, or name the authority) |
+| evidence names an authority — roster line / 名册 / group `displayName` / 群昵称 / 用户…裁决 / 音证 / 音频 / StepFun / dashboard | pass |
+
+Two rules keep the gate honest. A PENDING review row never counts as a claim:
+at resolve time it is the question testifying for its own answer, and the
+incident pair would otherwise read "claimed" at its own accept. And `--force`
+buys nothing past the gate — the missing piece is named evidence, not
+confidence. `--add` has no evidence field, so `--note` doubles as its
+authority channel.
+
+Two sibling `--add` gates shipped with it. An OPEN review row touching either
+text refuses the add (a dictionary rule written over an undecided question
+short-circuits it — resolve the row first). And a real-word FROM (common word
+/ ≤2 chars / substring of common words / jieba-decomposable phrase) refuses
+without `--check-corpus --corpus <dir>` on the record — 真实词只能作 context
+rule（`--add-context-rule`）或先 `--probe` 标定, because the add-time
+validators can only say "it is a real word in Chinese", never "how often it
+is real in this corpus".
+
 **Roster format** (canonical: `### Name` + `- **ASR 变体**: variant1, variant2`):
 ```markdown
 ### Ada Lovelace

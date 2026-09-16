@@ -623,6 +623,24 @@ class ReviewQueue:
             ).fetchone()
         return self._row_to_item(row) if row else None
 
+    def pending_text_conflicts(self, texts: list[str]) -> list[ReviewItem]:
+        """Open (pending) items whose original or suggested text IS one of
+        `texts` (exact match). A dictionary rule written over an open review
+        question short-circuits it — --add refuses while one is open."""
+        uniq = sorted({t for t in texts if t})
+        if not uniq:
+            return []
+        marks = ",".join("?" for _ in uniq)
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""SELECT * FROM review_items
+                    WHERE status = ?
+                      AND (original_text IN ({marks}) OR suggested_text IN ({marks}))
+                    ORDER BY id ASC""",
+                [PENDING, *uniq, *uniq],
+            ).fetchall()
+        return [self._row_to_item(r) for r in rows]
+
     def stats(
         self,
         domain: Optional[str] = None,
