@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` 1.41.0): resolve ownership before creating a sibling or wrapper; prefer verified official dependencies over automatic copying, preserve owned-helper/offline boundaries, and check task routing before accepting a multi-workflow layout. Align wrapper guidance with the same decision.
+
+
 - **terraform-skill**: verify physical backend ownership and provider/API deletion cascades before retiring an environment.
 - **setup-notifications-via-wecom / notify-wecom**: preserve host proxy settings, keep API acceptance distinct from recipient receipt, and test HTTP-success/business-error responses.
 
