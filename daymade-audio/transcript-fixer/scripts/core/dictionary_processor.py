@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 # never need it.
 _SEGMENTER = None
 _SEGMENTER_UNAVAILABLE = False
+_SEGMENTER_WARNED = False
 # Characters of context handed to the segmenter on each side of a match: wide
 # enough for the longest ordinary word to complete on either side, narrow
 # enough that a distant garble cannot reshape the tokens around this one.
@@ -40,8 +41,16 @@ _STRADDLE_WINDOW = 8
 
 
 def _get_segmenter():
-    """Lazy jieba loader; None when jieba is not importable (the check then no-ops)."""
-    global _SEGMENTER, _SEGMENTER_UNAVAILABLE
+    """Lazy jieba loader; None when jieba is not importable.
+
+    Without it the CJK half of the word-boundary check cannot run and every
+    CJK match passes through to risk scoring. That is fail-open, so it says so
+    — once, on stderr. jieba is a declared dependency of every Stage 1
+    entrypoint, so reaching this branch means the environment is already not
+    the one the skill ships with, and a guard that turns itself off in silence
+    is indistinguishable from a guard with nothing to refuse.
+    """
+    global _SEGMENTER, _SEGMENTER_UNAVAILABLE, _SEGMENTER_WARNED
     if _SEGMENTER is None and not _SEGMENTER_UNAVAILABLE:
         try:
             import jieba
@@ -49,7 +58,27 @@ def _get_segmenter():
             _SEGMENTER = jieba
         except ImportError:
             _SEGMENTER_UNAVAILABLE = True
+    if _SEGMENTER_UNAVAILABLE and not _SEGMENTER_WARNED:
+        _SEGMENTER_WARNED = True
+        print(
+            "⚠️  jieba is not importable — the CJK word-boundary check is OFF for this "
+            "run. Every CJK dictionary match goes straight to risk scoring, so fragments "
+            "that cut across real words (新一 inside 更新|一下) are no longer refused. "
+            "jieba is a declared dependency of this entrypoint; install it "
+            "(`uv run --with jieba …` or `pip install 'jieba>=0.42.1'`) to restore the check.",
+            file=sys.stderr,
+        )
     return _SEGMENTER
+
+
+def boundary_check_available() -> bool:
+    """Whether the CJK half of the word-boundary check can run in this process.
+
+    Callers report this alongside the refusal count, because a count of 0 means
+    two different things — nothing straddled, or nothing was ever checked — and
+    only this predicate separates them.
+    """
+    return _get_segmenter() is not None
 
 
 def straddles_word_boundary(text: str, pos: int, match: str) -> bool:

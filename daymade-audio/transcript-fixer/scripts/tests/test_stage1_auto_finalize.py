@@ -274,6 +274,12 @@ class TestStage1AutoFinalize(unittest.TestCase):
                 "stage2_failed_chunks": 0,
                 "stage2_degraded": False,
                 "boundary_refused": 0,
+                # True whenever jieba is importable, which it is under the
+                # declared test dependencies. Pinned as part of the exact
+                # payload so a silent field drop fails here rather than
+                # downstream, where boundary_refused=0 would be read as
+                # "nothing straddled" by a consumer that never saw the flag.
+                "boundary_check_active": True,
             },
         )
 
