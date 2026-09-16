@@ -280,6 +280,31 @@ class TestAddNameConvergenceGuard:
         assert "Added: '依琳' -> '依林' (domain: demo)" in capsys.readouterr().out
 
 
+class TestAuthorityRegexBoundary:
+    """_AUTHORITY_RE 的「用户…裁决」腿必须有界且取完整词形——裸「用户.*裁」曾把
+    「用户在讨论裁员时提到的名字」当用户裁决（2026-09-16 verify 端到端实测放行洞）。"""
+
+    @pytest.mark.parametrize("text", [
+        "用户在讨论裁员时提到的名字",
+        "用户群里聊仲裁的事",
+        "用户找裁判投诉的那次",
+        "用户在群里问了裁缝",
+    ])
+    def test_layoff_arbitration_words_are_not_authority(self, text):
+        from core.name_convergence_guard import _AUTHORITY_RE
+        assert not _AUTHORITY_RE.search(text), f"误放行: {text!r}"
+
+    @pytest.mark.parametrize("text", [
+        "用户 2026-09-16 直接裁决",
+        "用户当场裁定",
+        "用户裁决",
+        "由用户拍板的名字",
+    ])
+    def test_real_rulings_are_authority(self, text):
+        from core.name_convergence_guard import _AUTHORITY_RE
+        assert _AUTHORITY_RE.search(text), f"误拦截: {text!r}"
+
+
 class TestResolveNameConvergenceGuard:
     def test_accept_majority_collapse_refused_and_stays_pending(self, isolated_config, capsys):
         # The incident's entry point: accepting 依琳→依林 on 同段互证 alone.

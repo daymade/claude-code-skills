@@ -181,7 +181,14 @@ If the scaffolding script is missing or fails (e.g. the target repo has an unusu
 
 If the tool has no meaningful user preferences (no priority lists, no per-user config), drop `config-template/` entirely. Don't invent configuration surface area that wasn't in the original session.
 
-**Bundling complementary skills**: if the wrapped tool needs a sub-capability that another skill already provides (e.g., statusline rendering, validation utilities), bundle that skill's self-contained assets into your `scripts/` or `references/` rather than writing "install other-skill first" in your SKILL.md. A wrapper skill should work standalone after its own install.
+**Resolve complementary capabilities by ownership.** Follow the main Skill's
+“Complementary Skills: preserve the update owner” decision before choosing assets.
+Keep official/independently maintained Skills as verified dependencies; the wrapper
+owns discovery, authorized setup and handoff, not a copied engine. Bundle owned
+self-contained helpers or an explicitly selected standalone/offline distribution
+with provenance and an update owner. Do not strand the user at “install another
+skill first,” and do not create a new wrapper when the existing router can own the
+verified usage increment.
 
 ## Step 4 — Fill SKILL.md
 

@@ -51,7 +51,11 @@ PERSON_NAME_KINDS = frozenset({"entity", "homophone"})
 # the group-chat displayName (+nickName double-read), an explicit user ruling,
 # or audio evidence (音证/音频/StepFun re-transcription/dashboard listen).
 _AUTHORITY_RE = re.compile(
-    r"roster|名册|displayName|群昵称|用户.*裁|音证|音频|StepFun|dashboard",
+    # 「用户…裁决/裁定/拍板」要有界且取完整词形：裸「用户.*裁」会把
+    # 「用户在讨论裁员时提到的名字」「用户群里聊仲裁的事」当成用户裁决
+    # （2026-09-16 verify 端到端实测放行洞）。{0,16} 容忍「用户 2026-09-16
+    # 直接裁决」这类日期+副词插段；裁员/仲裁/裁判/裁军 均不含三词，不匹配。
+    r"roster|名册|displayName|群昵称|用户.{0,16}(?:裁决|裁定|拍板)|音证|音频|StepFun|dashboard",
     re.IGNORECASE,
 )
 
