@@ -34,7 +34,19 @@ while read -r runner target _rest; do
 
   case "$runner" in
     python-unittest) command=(python3 -m unittest discover -s "$target" -v) ;;
-    node-test)       command=(node --test "$target") ;;
+    # Bare-directory `node --test <dir>` regressed on Node 24 (dir resolved as a
+    # CJS entry → MODULE_NOT_FOUND). Glob conventional test-file names instead;
+    # nullglob keeps unmatched patterns from reaching node as literal paths.
+    node-test)
+      shopt -s nullglob
+      _files=( "${target}"/test_*.mjs "${target}"/test-*.mjs "${target}"/*.test.mjs )
+      shopt -u nullglob
+      if [ ${#_files[@]} -eq 0 ]; then
+        echo "FAIL: node-test suite '$target' has no test_*.mjs / test-*.mjs / *.test.mjs files"
+        failed=$((failed + 1))
+        continue
+      fi
+      command=(node --test "${_files[@]}") ;;
     *)
       echo "FAIL: unknown runner '$runner' — add it to this script and document it in $REGISTRY"
       failed=$((failed + 1))
