@@ -188,5 +188,40 @@ jobs:
       # --no-git scans the tree as it stands. Scanning history instead would re-litigate
       # every commit ever made on every pull request, and would fail on things no author
       # of a current pull request can fix.
+      # A broken config does not make gitleaks fail — it makes it PASS. Measured
+      # 2026-09-18: an empty .gitleaks.toml gives exit 0 and "no leaks found" on a
+      # file holding a live-shaped API key. So every truncation, bad edit or merge
+      # accident in the config turns this job green rather than red, and the one
+      # job whose whole purpose is to be the last line reports success loudest at
+      # the moment it has stopped working.
+      #
+      # Positive control: plant a known-bad file OUTSIDE the repo, assert the
+      # scanner still catches it, and only then trust the real scan's verdict. The
+      # canary is generated here rather than committed, so it can never itself be
+      # the thing that leaks.
+      - name: Prove the scanner still works
+        run: |
+          set -euo pipefail
+          ctl="$(mktemp -d)"
+          # openssl, not a pipe: `tr -dc < /dev/urandom | head -c` makes tr die of
+          # SIGPIPE, which the pipefail two lines up turns into a step failure.
+          printf 'ANTHROPIC_API_KEY = "sk-ant-api03-%s"\n' "$(openssl rand -hex 48)" \
+            > "$ctl/canary.txt"
+          # Assert on the REPORT, never the exit code: gitleaks exits 1 both for
+          # "leaks found" and for "unable to load config" (measured 2026-09-18), so
+          # an unparseable config would otherwise read as a healthy detection — the
+          # control would be greenest exactly when it had stopped controlling.
+          gitleaks detect --no-git --source "$ctl" --config .gitleaks.toml \
+            --redact --no-banner --report-format json \
+            --report-path "$ctl/control.json" >/dev/null 2>&1 || true
+          n="$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))))' \
+                "$ctl/control.json" 2>/dev/null || echo 0)"
+          if [ "$n" -lt 1 ]; then
+            echo "::error file=.gitleaks.toml::gitleaks did not flag a planted Anthropic key. The config is broken or unparseable, so a green scan below would mean nothing."
+            exit 1
+          fi
+          echo "positive control OK - planted key detected ($n finding(s))"
+          rm -rf "$ctl"
+
       - name: Scan working tree
         run: gitleaks detect --no-git --config .gitleaks.toml --redact --verbose

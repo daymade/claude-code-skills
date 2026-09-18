@@ -12,8 +12,12 @@ useDefault = true
 paths = [
   '''\.gitleaks\.toml$''',
   '''\.githooks/''',
-  '''CONTRIBUTING\.md$''',
-  '''CLAUDE\.md$''',
+  # NOTE: CONTRIBUTING.md and CLAUDE.md used to sit here, exempting those two
+  # files from EVERY rule. They are prose files where example names, paths and
+  # keys get written by hand — the exact place a leak is authored — so a blanket
+  # exemption there inverted the gate. Measured 2026-09-18 before removing it:
+  # zero findings appear across this repo's whole tree without it, so the
+  # exemption was buying nothing and hiding a class.
 ]
 regexes = [
   # Douban mobile app's public API key (documented as public, hardcoded for zero-config usage)
@@ -60,3 +64,51 @@ id = "email-personal"
 description = "Personal email address"
 regex = '''[a-zA-Z0-9._%+-]+@(?:gmail|qq|163|126|outlook|hotmail|yahoo|icloud|foxmail)\.[a-zA-Z]{2,}'''
 tags = ["pii", "email"]
+
+
+# ── LLM / AI provider API keys ──────────────────────────────────────────────
+# gitleaks' bundled ruleset covers OpenAI, AWS and GitHub but has no Anthropic
+# rule. Measured 2026-09-18 against this repo's own CI config: a realistic
+# sk-ant-api03-… key scanned clean. For a repository of Claude Code skills that
+# is the single most likely key shape to be pasted in by mistake.
+
+[[rules]]
+id = "anthropic-api-key"
+description = "Anthropic API key (sk-ant-api/admin)"
+regex = '''\bsk-ant-(api|admin)[0-9]{2}-[a-zA-Z0-9_-]{60,}\b'''
+tags = ["key", "anthropic"]
+
+[[rules]]
+id = "moonshot-kimi-api-key"
+description = "Moonshot / Kimi API key (sk-kimi- prefix)"
+regex = '''\bsk-kimi-[a-zA-Z0-9]{40,}\b'''
+tags = ["key", "moonshot", "kimi"]
+
+[[rules]]
+id = "openrouter-api-key"
+description = "OpenRouter API key (sk-or-v1-)"
+regex = '''\bsk-or-v1-[a-f0-9]{40,}\b'''
+tags = ["key", "openrouter"]
+
+[[rules]]
+id = "openai-project-key"
+description = "OpenAI project/service/admin key"
+regex = '''\bsk-(proj|svcacct|admin)-[a-zA-Z0-9_-]{20,}\b'''
+tags = ["key", "openai"]
+
+[[rules]]
+id = "generic-sk-bearer"
+description = "Generic sk- prefixed secret (fallback for unknown providers)"
+regex = '''(?:^|[^a-zA-Z0-9_-])sk-[a-zA-Z][a-zA-Z0-9_-]{39,}(?:$|[^a-zA-Z0-9_-])'''
+tags = ["key", "generic"]
+[rules.allowlist]
+regexes = [
+  '''sk-test-''',
+  '''sk-example''',
+  '''sk-placeholder''',
+  '''sk-your-''',
+  '''sk-xxx''',
+  '''sk-<[a-z_-]+>''',
+  # SK hynix, the memory manufacturer, in any prose about hardware.
+  '''(?i)sk-hynix''',
+]
