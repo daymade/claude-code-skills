@@ -296,6 +296,53 @@ r = run_cli(["--bogus"], e3)
 check("unknown arg refused with exit 2, no writes", r.returncode == 2 and "unknown arg" in r.stdout,
       f"rc={r.returncode} out={r.stdout!r}")
 
+print("== mcpServers: merged across profiles, never replaced (2026-09-18) ==")
+MCP_MAIN = dict(BASE_MAIN, mcpServers={"anydo": {"type": "sse", "url": "A"},
+                                       "exa": {"type": "http", "url": "E"}})
+
+# A profile with no mcpServers key at all gets main's registry.
+prof = make_tree(MCP_MAIN, {})
+sps.sync_claude_json(prof, write=True)
+got = json.loads((prof / ".claude.json").read_text()).get("mcpServers", {})
+check("missing mcpServers key receives main's servers", set(got) == {"anydo", "exa"}, f"got={sorted(got)}")
+
+# An empty mapping is a DISTINCT side from a missing key: both must fill.
+prof = make_tree(MCP_MAIN, {"mcpServers": {}})
+sps.sync_claude_json(prof, write=True)
+got = json.loads((prof / ".claude.json").read_text()).get("mcpServers", {})
+check("empty mcpServers {} receives main's servers", set(got) == {"anydo", "exa"}, f"got={sorted(got)}")
+
+# The regression this merge exists for: a profile-only server must SURVIVE.
+prof = make_tree(MCP_MAIN, {"mcpServers": {"only-here": {"type": "stdio", "command": "x"}}})
+sps.sync_claude_json(prof, write=True)
+got = json.loads((prof / ".claude.json").read_text())["mcpServers"]
+check("profile-only server survives the sync", set(got) == {"anydo", "exa", "only-here"}, f"got={sorted(got)}")
+
+# On a shared name, main is the SSOT and wins.
+prof = make_tree(MCP_MAIN, {"mcpServers": {"anydo": {"type": "STALE"}}})
+sps.sync_claude_json(prof, write=True)
+got = json.loads((prof / ".claude.json").read_text())["mcpServers"]
+check("main wins on a name both sides define", got["anydo"]["type"] == "sse", f"got={got['anydo']}")
+
+# Already converged: no write, so a SessionStart run stays silent.
+prof = make_tree(MCP_MAIN, {"mcpServers": {"anydo": {"type": "sse", "url": "A"},
+                                           "exa": {"type": "http", "url": "E"}}})
+changed, _ = sps.sync_claude_json(prof, write=True)
+check("converged mcpServers reports no change", "mcpServers" not in changed, f"changed={changed}")
+
+# A non-dict value is corrupt, not a mapping to merge: main's registry replaces it.
+prof = make_tree(MCP_MAIN, {"mcpServers": "garbage"})
+sps.sync_claude_json(prof, write=True)
+got = json.loads((prof / ".claude.json").read_text())["mcpServers"]
+check("non-dict mcpServers replaced by main's", set(got) == {"anydo", "exa"}, f"got={got!r}")
+
+# Reclassification must not drag identity keys along with it.
+check("mcpServers left STATE_EXACT", not sps.is_state_key("mcpServers"))
+check("mcpServers entered BEHAVIOR_KEYS", "mcpServers" in sps.BEHAVIOR_KEYS)
+for _k in ("userID", "oauthAccount", "projects", "machineID", "claudeAiMcpEverConnected"):
+    check(f"identity key {_k} still never synced",
+          sps.is_state_key(_k) and _k not in sps.BEHAVIOR_KEYS)
+
 print()
 if FAILURES:
     print(f"{len(FAILURES)} FAILURES: {FAILURES}")
