@@ -147,6 +147,16 @@ For each finding, decide:
 **Live secrets must be rotated before history cleanup.** Removing history does
 not invalidate a secret that has already been exposed.
 
+**Verify ownership claims before choosing a route.** The route depends on who
+controls the resource: a fork/branch/document you control allows self-serve
+deletion; a third party's forces the GitHub Support / owner-cooperation route.
+Treat an audit report's annotation of who owns an account, fork, or document as
+an unverified claim, however confidently it is written — check
+`gh api repos/<owner>/<repo>`, `gh auth status`, or ask the user. (2026-09-18:
+an inherited report labeled an external contributor's fork as the user's own
+agent account, silently downgrading the route from "support ticket" to
+"delete it yourself" — it would have failed at execution time.)
+
 ### Step 3: Prepare a replacements file
 
 Create a text file with one replacement per line in `git-filter-repo`
