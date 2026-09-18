@@ -29,6 +29,15 @@ When no canonical transcript exists:
 2. Use local ASR when the user requires offline/privacy handling, Feishu is
    unavailable or failed, or the task explicitly needs an independent quality
    comparison.
+2b. **For a second, independent speaker timeline**, use StepFun's async file
+   endpoint via the `stepfun-asr` skill's `asr_file.py`. It is the only vendor
+   diarization route here that does not share code or models with local pyannote, so
+   agreement between the two is real corroboration rather than one tool agreeing
+   with itself. Measured 2026-09-19 on a 10-minute film: both split the key turn
+   identically, while Feishu Minutes mis-attributed it. The constraint is that it
+   fetches a public URL — base64 is rejected — so it needs staging (see
+   `aliyun-multi-account.md`); reach for it when an attribution is load-bearing,
+   not for routine transcripts.
 3. For non-meeting media or an explicit local/remote ASR request, choose the
    execution location by the audio-location rule below.
 

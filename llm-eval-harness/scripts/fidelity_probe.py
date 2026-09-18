@@ -284,7 +284,7 @@ async def check_auth(session, args, key):
         for scheme in ("x-api-key", "bearer"):
             url = endpoint(args.base_url, fmt)
             hdrs = headers_for(fmt, key, scheme)
-            body = {"model": args.model, "max_tokens": 32,
+            body = {"model": args.model, "max_tokens": 32,  # max-tokens-intentional: 保真维度比对的是请求回声，不是模型正文
                     "messages": [{"role": "user", "content": "Reply: ok"}]}
             try:
                 status, _ = await post(session, url, hdrs, body)

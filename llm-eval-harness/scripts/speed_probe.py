@@ -184,7 +184,7 @@ def detect_usage_support(client, model) -> bool:
     try:
         for _ in client.chat.completions.create(
             model=model, messages=[{"role": "user", "content": "hi"}],
-            max_tokens=4, stream=True, stream_options={"include_usage": True},
+            max_tokens=4, stream=True, stream_options={"include_usage": True},  # max-tokens-intentional: 速度维度测首字延迟，正文长度会污染测量
         ):
             pass
         return True

@@ -85,7 +85,7 @@ def build_request(fmt, model, api_key, index):
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}",
         }
-    payload = {"model": model, "max_tokens": 16, "messages": [{"role": "user", "content": prompt}]}
+    payload = {"model": model, "max_tokens": 16, "messages": [{"role": "user", "content": prompt}]}  # max-tokens-intentional: 并发维度只测吞吐与限流，正文内容不参与判定
     return headers, payload
 
 
