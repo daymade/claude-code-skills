@@ -103,6 +103,38 @@ mouseReleased 序列）；宿主没有真实输入通道时不自起浏览器、
 去掉 URL 的查询参数与片段；OAuth 回调可能把 token 或授权码放进 URL。不要保存完整回调
 URL，不从聊天记录、浏览器 Cookie 库或旧工具回执中搜 token 来替代正常登录。
 
+### 隔离 Chrome profile 自动化：真实输入通道的适用边界（2026-09-16 实测）
+
+用隔离 profile（`~/.chrome-profiles/tibo-codex-{a,b}`）+ Playwright `connectOverCDP` 自动
+查询时，逐条是踩过的可执行事实，不是通用教程：
+
+- **`open -na "Google Chrome"` 不继承 macOS 系统代理**。必须显式 `--proxy-server=…`
+  （本机 `http://127.0.0.1:1082`），否则 chatgpt.com 直连挂起或 403。日常 Chrome 走系统
+  代理正常，隔离 Chrome 不共享这份设置。
+- **真实点击走 CDP `Input.dispatchMouseEvent`（mouseMoved→mousePressed→mouseReleased），
+  对登录页 `/auth/login` 的 `Continue with Google` 按钮点得动**；但 chatgpt.com 首页那个
+  `Log in` 按钮**实测点不动**（事件挂载不同，派发真实事件也无导航）。所以自动化登录一律
+  先导航到 `/auth/login` 再点 SSO 按钮，别在首页点 Log in。按钮 `disabled:false`、
+  `pointer-events:auto`、坐标在视口内也可能点了没反应——换入口比调坐标有用。
+- **登录态判据用正面证据，不猜 URL**：解析到邮箱或 `Weekly usage limit` 文本才算已登录。
+  登出时 usage 页可能留在 `/` 首页（有 Log in/Sign up）、也可能重定向到 `/auth/login`，
+  两种 URL 都得覆盖，只认 `/auth/` 会漏掉首页登出态。
+- **隔离 profile 无 Google 会话 token，免密直登做不到**。`import-google-cookies.py` 只搬
+  `ACCOUNT_CHOOSER`（账号记忆列表）+ `LSOLH` + 分析类 cookie，实测 `SID`/`__Secure-1PSID`/
+  `__Secure-3PSID`/`HSID`/`SSID`/`SAPISID` 全无。Google 账号选择器会列出全部账号但**每个都
+  标 `Signed out`**，点任意一个都要密码/验证码。所以自动化只能驱动到「Google 账号选择器」
+  为止；密码/验证码/授权确认交人工，**不自动化输入**。人工登录一次后会话 cookie 存进隔离
+  profile，之后读模式才全自动——这段「登录后读取」需人工首登后实测，不能预先宣称已验证。
+- **Google cookie 读不出明文邮箱**。CDP `Network.getAllCookies` 拿到的是 Google 侧编码值
+  （`ACCOUNT_CHOOSER`/`LSOLH` 已是密文/编码），账号身份只能从页面 DOM 读（账号选择器或
+  `myaccount.google.com`）。别试图解密 cookie 取邮箱。
+- **Google OAuth 页渲染慢**：点击后约需 8–10s 才跳到 `accounts.google.com/…/accountchooser`
+  并渲染出账号列表；固定 sleep 7s 会漏。检测用**轮询**等 `accounts.google.com` 页出现，别用
+  单次长 sleep。
+- **`connectOverCDP` 会间歇 handshake 卡死**（`/json/version` 有响应但 browser-level ws 挂起），
+  连续重试无效时是这个 Chrome 实例坏了——`pkill -f 'user-data-dir=…tibo-codex-<x>'` 杀掉重拉
+  一个干净的，比重试连接有效。成品脚本已内置 4 次重试。
+
 ## 登录上限与恢复
 
 2026-09-08，官方帮助页写每个会话最多两个账号；同日实际点击第三个账号入口，弹窗要求

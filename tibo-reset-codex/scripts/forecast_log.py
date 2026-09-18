@@ -202,6 +202,12 @@ def summarize(path, kind=None, now=None):
                                        ("hit", "early", "late", "unknown", "unreviewed")})
             bucket[outcome] += 1
     resolved.sort(key=lambda item: review_order[item["id"]])
+    # pending 不能靠 JSONL 的追加顺序：它现在恰好等于「最新在后」，但那是隐式保证
+    # ——任何按 id/kind 重写、合并或过滤台账的命令都会打乱它，而 summary 的读者
+    # （含下个 session 的 agent）恰恰依赖「最后一条是当前有效预测」来读到最新核验，
+    # 不是读到一条已被 revision_of 取代的旧论据。显式按发出时间排，与 resolved 的
+    # 「最新核验优先」对齐；同刻追加时保持文件顺序（stable sort）。
+    pending.sort(key=lambda item: instant(item["recorded_at"]))
     return {"journal": str(path), "checked_at": now.isoformat(),
             "forecast_count": len(forecasts), "cycle_counts": counts,
             "pending": pending, "recent_resolved": resolved[-10:],

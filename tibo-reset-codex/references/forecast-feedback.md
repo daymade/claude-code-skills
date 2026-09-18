@@ -65,6 +65,12 @@ uv run python scripts/forecast_log.py summary
 会自动标为 `revision_of`；必须沿用同一规范原帖 URL，不用不同镜像伪造不同轮次。
 完全相同的输入重试返回原记录。脚本记录真实写入时刻，不为以前的口头预测伪造精确发出时间。
 
+**`pending` 按 `recorded_at` 递增排序，`recent_resolved` 按最新核验排序，两者都不依赖台账的
+文件顺序**（2026-09-16 起为显式保证；此前 `pending` 只靠 JSONL 追加顺序，任何重写、合并或
+按 id 过滤台账的命令都会打乱它）。所以读 `pending` 时**最后一条就是当前有效预测**——它一定
+是同一锚点下的最新 `record`，`revision_of` 链上更早的论据不会因为台账被动过而浮到前面。
+倒序台账上已验证：`summary` 仍报出递增顺序。据此判断，**不要自己按文件位置挑记录**。
+
 ## 回填证据：review
 
 准备 UTF-8 JSON 对象文件后运行：

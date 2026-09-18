@@ -52,6 +52,31 @@ class ForecastLogTests(unittest.TestCase):
         self.assertEqual(log.summarize(self.path)["pending"][0]["feedback_applied"],
                          self.forecast["feedback_applied"])
 
+    def test_pending_is_ordered_by_recorded_at_not_file_order(self):
+        """乱序的台账也必须让 summary 报出「最新在后」。
+
+        pending 一度只靠 JSONL 追加顺序，那是隐式保证：任何重写/合并/按 id 过滤
+        台账的命令都会打乱它，而读者（含下个 session 的 agent）依赖最后一条是
+        当前有效预测——读到已被 revision_of 取代的旧论据时不会报错。
+        """
+        def write(ident, recorded_at, marker):
+            row = {**self.forecast, "schema_version": 1, "id": ident,
+                   "record_type": "forecast", "recorded_at": recorded_at,
+                   "revision_of": None, "latest_review": None}
+            # 用 marker 冒充 feedback_applied 以便断言顺序
+            row["feedback_applied"] = marker
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            with self.path.open("a", encoding="utf-8") as stream:
+                stream.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+        # 故意倒序写入：最新的一条写在最前面
+        write("b-later", "2026-10-12T00:00:00+00:00", "LATEST")
+        write("a-earlier", "2026-10-11T00:00:00+00:00", "EARLIER")
+        result = log.summarize(self.path)
+        order = [p["feedback_applied"] for p in result["pending"]]
+        self.assertEqual(order, ["EARLIER", "LATEST"],
+                         "pending 必须按 recorded_at 递增，最新在后")
+
     def test_missing_timezone_past_window_and_missing_feedback_are_rejected(self):
         for changes in ({"window_start": "2026-10-12T00:00:00"},
                         {"window_start": "2026-10-09T00:00:00Z"},

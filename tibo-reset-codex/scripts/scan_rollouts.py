@@ -141,7 +141,12 @@ def format_report(rows, scan, backjumps, zeroings):
     lines.append("")
     lines.append(f"最新快照 {parse_ts(last[0]):%F %H:%M:%S} 北京 | 已用 {last[1]:.0f}%"
                  f" | 窗口重置于 {anchor_text(last[2]):%F %H:%M}"
-                 f" | purchased_credits={last[3]} | banked=unknown")
+                 f" | purchased_credits={last[3]}"
+                 # rollout 快照的 credits 结构上只有 balance/has_credits/unlimited，
+                 # 不携带备用重置数量——所以这里绝不能打印 banked=unknown（它长得像
+                 # 「本次没查到」，会让人把这行当成本轮一个诚实的未知项，而正确的动作
+                 # 是换源跑 query_usage.py）。明说换源，2026-09-16 实测踩过。
+                 f" | banked：本数据源无此字段，改跑 query_usage.py")
     return "\n".join(lines)
 
 
