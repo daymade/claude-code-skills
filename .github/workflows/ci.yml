@@ -42,6 +42,13 @@ jobs:
       - name: Shell scripts parse
         run: scripts/ci/check_shell_syntax.sh
 
+      # A second, buried "## [Unreleased]" heading let six commits (2026-06-13 to
+      # 2026-09-16) append entries to the wrong section for three months (#603)
+      # before anyone noticed. Nothing stopped that second heading from existing,
+      # so an unanchored search for "## [Unreleased]" could land on either one.
+      - name: CHANGELOG structure
+        run: python3 scripts/ci/check_changelog_structure.py
+
   skills:
     name: Touched skills still validate
     runs-on: ubuntu-latest
