@@ -310,6 +310,7 @@ path remain possible so the agent can repair the gate without bypassing it.
 | Archived WeChat text/voice transcription | Declared WeChat archive carrier |
 | Live/latest WeChat | `read-wechat-messages`; record manual coverage |
 | Current code behavior | Open implementation/tests at current Git revision |
+| Work targets a remote box or a foreign checkout (deploy dir, upstream fork) | That repo's own `docs/`, `Makefile`, deploy README **first** — they are not manifest carriers, so record them as manual coverage; never reconstruct a build/deploy command the box already documents |
 
 ## Boundaries
 
