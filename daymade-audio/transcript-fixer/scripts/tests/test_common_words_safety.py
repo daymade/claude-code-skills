@@ -790,7 +790,7 @@ class TestProductionFalsePositives2026_08(unittest.TestCase):
     """Regression tests for ordinary words seen in a 2026-08 corpus."""
 
     def test_production_common_words_are_protected(self):
-        for source, target in (("买买", "卖卖"), ("争论", "蒸馏"), ("冲锋", "聪聪")):
+        for source, target in (("买买", "卖卖"), ("争论", "蒸馏"), ("冲锋", "壬聪")):
             with self.subTest(source=source):
                 self.assertIn(source, ALL_COMMON_WORDS)
                 errors = [

@@ -254,8 +254,8 @@ class TestDroppedCoverage:
         """Rejecting prose is _BAD_VARIANT's job; only a bullet that yields
         nothing scannable is evidence of lost coverage."""
         dropped = []
-        entries = extract_trap_entries("- **卖吸引/卖 新鲜 → 卖点**\n", dropped)
-        assert [v for e in entries for v in e.from_variants] == ["卖吸引"]
+        entries = extract_trap_entries("- **甲吸引/卖 新鲜 → 卖点**\n", dropped)
+        assert [v for e in entries for v in e.from_variants] == ["甲吸引"]
         assert dropped == []
 
     def test_annotation_quoting_another_rule_is_not_two_traps(self):

@@ -52,7 +52,7 @@ A memory file about the prod cutover was referenced by the project's own `CLAUDE
 
 ## 14. A real-name identity map almost migrated into project docs (2026-07-06)
 
-`project_user_management_sop.md` contained a table mapping `user3 → 慧如` and other real-name-to-system-username pairs. It was project-relevant (useful for ops), but the real names are PII and the mapping is not a team artifact. Migrating it into version-controlled `docs/` would have leaked identifying information. The fix: keep identity-mapping in private memory, thin it to a pointer to the public SOP, and add an explicit privacy check in Phase 1.
+`project_user_management_sop.md` contained a table mapping `user3 → <a coworker's real name>` and other real-name-to-system-username pairs. It was project-relevant (useful for ops), but the real names are PII and the mapping is not a team artifact. Migrating it into version-controlled `docs/` would have leaked identifying information. The fix: keep identity-mapping in private memory, thin it to a pointer to the public SOP, and add an explicit privacy check in Phase 1.
 
 ## 15. Partial duplicates were overwritten instead of merged (2026-07-06)
 

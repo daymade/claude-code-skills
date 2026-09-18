@@ -145,7 +145,7 @@ Update the memory index (e.g. `MEMORY.md`) to drop migrated entries and add one 
 - **Don't make the user verify.** Running codex and grepping the log is agent-doable — own the verification loop, don't hand it back.
 - **Don't treat "the symlink exists" as Codex verification.** A correct symlink is necessary but not sufficient; the only proof is a real `codex exec` session whose rollout log contains your inlined hardcore section.
 - **Don't put the archive inside `memory/`.** It remains readable as live memory there, defeating the cleanup. Move it to a sibling dir outside `memory/`.
-- **Don't migrate real-name identity maps or PII into project docs.** Project docs are version-controlled and shared. If a memory file maps `user3 → 慧如`, keep it in private memory (thinned to a pointer if the SSOT lives elsewhere) — do not move it to `docs/`.
+- **Don't migrate real-name identity maps or PII into project docs.** Project docs are version-controlled and shared. If a memory file maps `user3 → <a coworker's real name>`, keep it in private memory (thinned to a pointer if the SSOT lives elsewhere) — do not move it to `docs/`.
 - **Don't overwrite an existing doc with a memory duplicate without diffing first.** Many memory files are *partial* duplicates of docs (e.g., `architecture_v2_decision.md` vs `docs/decisions/2026-02-21-v2-architecture.md`). Migrate only the **unique** details; append them to the existing doc rather than replacing it.
 - **Don't forget to repoint links in project docs, not just memory.** `CLAUDE.md` and handoff docs often cite memory files by basename. Grep them before archiving.
 

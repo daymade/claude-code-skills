@@ -49,10 +49,10 @@ class TestExtractDemotionSets:
         assert sets.banned_froms == frozenset()
 
     def test_multi_variant_from_side_all_banned(self):
-        text = "- **卖吸引/卖新鲜 → 麦锡颖（禁入词典）** — cue\n"
+        text = "- **甲吸引/甲新鲜 → 甲锡颖（禁入词典）** — cue\n"
         sets = extract_demotion_sets(text)
-        assert "卖吸引" in sets.banned_froms
-        assert "卖新鲜" in sets.banned_froms
+        assert "甲吸引" in sets.banned_froms
+        assert "甲新鲜" in sets.banned_froms
 
     def test_confirmed_correct_record_becomes_keep_token(self):
         text = "- **薛辉 = 真实实体，勿修** — 域内 11 处引用\n"
@@ -148,12 +148,12 @@ class TestLoadTrapDemotionSets:
             "- **妙计 → 妙记（禁裸词）** — cue\n- **薛辉 = 真实实体，勿修**\n",
             encoding="utf-8")
         (contexts / "pkm.md").write_text(
-            "- **新一 → 星壹（禁入词典）** — cue\n", encoding="utf-8")
+            "- **云锅 → 云国（禁入词典）** — cue\n", encoding="utf-8")
         monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
 
         from cli.commands import _load_trap_demotion_sets
         banned, keep = _load_trap_demotion_sets(["huawei", "pkm"])
-        assert banned == frozenset({"妙计", "新一"})
+        assert banned == frozenset({"妙计", "云锅"})
         assert keep == frozenset({"薛辉"})
 
     def test_no_domain_returns_empty(self):

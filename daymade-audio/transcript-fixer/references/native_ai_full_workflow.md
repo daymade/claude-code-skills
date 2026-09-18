@@ -42,11 +42,11 @@ did.
 
 Real case (2026-09-16): a native pass corrected a name family one way, was later
 overturned by better evidence, and applied the reversal with a whole-file
-`replace('依林', '艺霖')`. That swept the frontmatter too, turning the ledger's
-`依玲×3/艺灵×2/依琳→依林` — the decision actually taken, and later found wrong —
-into `→艺霖`. The file then read as though the first pass had judged correctly;
+`replace('乙林', '乙霖')`. That swept the frontmatter too, turning the ledger's
+`乙玲×3/乙灵×2/乙琳→乙林` — the decision actually taken, and later found wrong —
+into `→乙霖`. The file then read as though the first pass had judged correctly;
 the misjudgment it existed to record was gone. A sibling entry degraded into the
-self-referential `徐盛→徐盛`.
+self-referential `丙盛→丙盛`.
 
 So in the native pass, **anchor every body edit**: replace at a known line
 index, or include enough surrounding words that the frontmatter cannot match.

@@ -214,7 +214,7 @@ def load_roster_names(path: Path) -> Dict[str, Dict[str, str]]:
     an ASR error. A roster entry with no variants is the normal state for
     someone who has simply never been misheard yet, and it is exactly the
     entry that must still refuse the "not in any roster, so collapse it onto
-    the nearest-sounding sibling" move (real case 2026-09-16: 艺霖 and 徐盛
+    the nearest-sounding sibling" move (real case 2026-09-16: 乙霖 and 丙盛
     were each overwritten with a phonetic neighbour while sitting in a
     34-person cohort ledger the tool could not read).
 

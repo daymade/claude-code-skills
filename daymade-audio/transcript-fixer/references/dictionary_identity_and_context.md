@@ -197,8 +197,8 @@ inference you can make from the audio, because a human typed them:
   have for everyone else.
 
   A `nickName` is often decorated, and the real name is usually still in there:
-  `文案有为王艺霖🐱京杭传媒` → 王艺霖 (a *fuller* name than the group nickname's
-  `艺霖`), `赤脚大仙（杜悦）` → 杜悦, `Eric@刘强|青析商学` → 刘强, `HerLiu何流` → 何流.
+  `文案有为王乙霖🐱京杭传媒` → 王乙霖 (a *fuller* name than the group nickname's
+  `乙霖`), `赤脚大仙（戊悦）` → 戊悦, `Eric@己强|某商学院` → 己强, `HerX庚流` → 庚流.
   Take the name, record the decorated form as `别名`, and never convert either
   into an `ASR 变体` — a 花名 is a name the person actually uses, not a mishearing,
   so it is findable but never rewritten. Still never fill a gap from `remark`.
@@ -219,12 +219,12 @@ Then read the roster entry the group hands you *as a name*, not as a variant to
 be normalized away.
 
 **Real case (2026-09-16, cost two wrong fixes shipped to a pushed commit).** A
-post-class debrief named a classmate four ways across one file — `依林/依琳/依玲/
-艺灵` — plus a second person as `徐胜/徐盛`. Neither was in the global roster nor
+post-class debrief named a classmate four ways across one file — `乙林/乙琳/乙玲/
+乙灵` — plus a second person as `丙胜/丙盛`. Neither was in the global roster nor
 the project ledger. Both were "resolved" by collapsing each family onto its
 transcript-majority form, which is exactly the banned move; the two fixes went
 out in a commit. The user then pointed out that the class had a WeChat group,
-whose nicknames read `艺霖-老板IP操盘-第一期` and `徐盛-ip变现-第一期` — **both
+whose nicknames read `乙霖-老板IP操盘-第一期` and `丙盛-ip变现-第一期` — **both
 canonical forms were the minority spellings, and both of my fixes were wrong.**
 One `--find` would have settled it before any edit was made.
 
@@ -291,7 +291,7 @@ text: each variant is rewritten to the heading. `别名` and the heading itself 
 *findable but never rewritten* — `--lookup` reports them so "is this string a
 real person" is answerable, while nothing edits them. That distinction is why a
 花名 goes on `别名`: `赤脚大仙` is a name its owner uses, and auto-replacing it
-with `杜悦` would destroy information, but a run that cannot find `赤脚大仙` at
+with `戊悦` would destroy information, but a run that cannot find `赤脚大仙` at
 all is one step from deciding it is a mishearing of something else.
 
 So an entry with no `ASR 变体` line is not a dead entry. It is the normal state
