@@ -49,10 +49,10 @@ class TestExtractDemotionSets:
         assert sets.banned_froms == frozenset()
 
     def test_multi_variant_from_side_all_banned(self):
-        text = "- **卖吸引/卖新鲜 → 麦锡颖（禁入词典）** — cue\n"
+        text = "- **甲吸引/甲新鲜 → 甲锡颖（禁入词典）** — cue\n"
         sets = extract_demotion_sets(text)
-        assert "卖吸引" in sets.banned_froms
-        assert "卖新鲜" in sets.banned_froms
+        assert "甲吸引" in sets.banned_froms
+        assert "甲新鲜" in sets.banned_froms
 
     def test_confirmed_correct_record_becomes_keep_token(self):
         text = "- **薛辉 = 真实实体，勿修** — 域内 11 处引用\n"
