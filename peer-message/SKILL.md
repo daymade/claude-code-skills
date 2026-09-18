@@ -1,10 +1,12 @@
 ---
 name: peer-message
 description: >-
-  Bridge local Claude Code and Codex sessions only when the current host's native communication tools do not cover the target. Use for cross-product messages, hooks/scripts posting to sessions, fallback reply lookup and delivery verification, or diagnosing Held peer messages. Also use its coordination guidance when shared-work ownership or an inbound peer assertion needs verification. For ordinary parent/subagent, teammate, or independent-session communication, first discover and use available native tools; do not load this skill merely to send a native message. Never bypass a denied or Held message with another transport. Not for spawning agents, moving full history, or granting user approval. Triggers: 跨产品通信、原生工具未覆盖的会话、脚本回帖、peer 送达排查、共享在制品归属核实。
+  Bridge local Claude Code and Codex sessions only when the current host's native communication tools do not cover the target. Use for cross-product messages, hooks/scripts posting to sessions, fallback reply lookup and delivery verification, or diagnosing Held peer messages. Also use its coordination guidance when shared-work ownership or an inbound peer assertion needs verification. For ordinary parent/subagent, teammate, or independent-session communication, first discover and use available native tools; do not load this skill merely to send a native message. When the target sits on another machine entirely, route through the network preview: paired contacts over an operator-provided relay answering from explicitly shared, read-only documents (peer-message:v1 invitations). Never bypass a denied or Held message with another transport. Not for spawning agents, moving full history, or granting user approval. Triggers: 跨产品通信、原生工具未覆盖的会话、脚本回帖、peer 送达排查、共享在制品归属核实、跨机器配对问答。
 ---
 
-# peer-message — 原生通信未覆盖时的本机补缺
+# peer-message — 原生通信未覆盖时的补缺（本机 + 跨机器预览）
+
+收到 `peer-message:v1:` 邀请，或用户要求跨机器联系、配对和资料问答时，进入 [网络预览](references/network-preview.md)。先区分本机地址与配对联系人；网络命令使用 `scripts/peer-network.mjs`，不要把网络联系人交给本机发现命令。预览使用独立联络 worker 回答获准文档问题；保留原会话的工作与权限。
 
 对 Claude Code 与 Codex 使用同一条规则：先检查当前宿主实际暴露的通信工具及其目标范围；有工具发现入口时先查询原生工具。原生工具能到达目标，就直接使用其发现、发送、回传和等待机制，到此结束路由判断，不运行 `peer.py`。只有原生工具未覆盖的独立会话、跨产品目标或脚本回帖才使用本 Skill 的 transport。
 
@@ -26,6 +28,7 @@ description: >-
 
 | 场景 | 路由 |
 |---|---|
+| 跨机器邀请、配对联系人、获准资料问答 | 读取 `references/network-preview.md`，使用网络 CLI；未配对或未授权共享资料时不执行问答 |
 | 原生工具覆盖 parent/subagent、同级 agent 或独立 session | 直接使用当前宿主工具、原生地址及回传；不查 `whoami`、不套脚本信封、不额外运行脚本验证 |
 | 原生工具未覆盖已确认的 Claude 目标，且目标有本地 inbox | 用 `scripts/peer.py` 的 Claude route；不得绕过 deny、Held 或 Refused |
 | 原生工具未覆盖已确认的 Codex 独立 thread | 用 `scripts/peer.py` 的 Codex route；不要把内部 agent 地址当独立 thread UUID |

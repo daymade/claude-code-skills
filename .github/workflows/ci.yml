@@ -138,6 +138,12 @@ jobs:
         with:
           python-version: '3.12'
 
+      # node-test suites need node:sqlite (NetworkState) — DatabaseSync exists only
+      # on Node 22.5+; the ubuntu image default is older. Provision explicitly.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       # Registered suites stay free of pip/npm dependencies, but may exercise a
       # production CLI when this job provisions it explicitly. prior-work-retrieval
       # delegates filesystem search to ripgrep and must fail visibly when it is absent.
