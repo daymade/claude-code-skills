@@ -175,6 +175,11 @@ STATE_EXACT = {
     "projects", "userID", "machineID", "oauthAccount",
     "companion", "chromeExtension", "githubRepoPaths", "replBridgePlaceholders",
     "claudeAiMcpEverConnected", "claudeCodeFirstTokenDate", "firstStartTime",
+    # Which MCP servers this profile has already shown the "needs authentication"
+    # notice for. Same family as seenNotifications: syncing it would mark the
+    # notice as delivered in a profile that never showed it, suppressing the one
+    # prompt that tells you an OAuth server is unauthorized (2026-09-18).
+    "mcpNeedsAuthNoticed",
     "installMethod", "officialMarketplaceAutoInstallAttempted",
     "officialMarketplaceAutoInstalled", "autoUpdatesProtectedForNative",
     "penguinModeOrgEnabled", "agentLastUsed", "skillUsage", "pluginUsage",

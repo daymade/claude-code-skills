@@ -343,6 +343,12 @@ for _k in ("userID", "oauthAccount", "projects", "machineID", "claudeAiMcpEverCo
     check(f"identity key {_k} still never synced",
           sps.is_state_key(_k) and _k not in sps.BEHAVIOR_KEYS)
 
+# The notice-delivered ledger rides alongside mcpServers but is per-profile state:
+# syncing it would suppress the prompt in a profile that never saw it.
+check("mcpNeedsAuthNoticed classified as state",
+      sps.is_state_key("mcpNeedsAuthNoticed")
+      and "mcpNeedsAuthNoticed" not in sps.BEHAVIOR_KEYS)
+
 print()
 if FAILURES:
     print(f"{len(FAILURES)} FAILURES: {FAILURES}")
