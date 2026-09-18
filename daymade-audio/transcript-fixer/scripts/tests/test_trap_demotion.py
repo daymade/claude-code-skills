@@ -148,12 +148,12 @@ class TestLoadTrapDemotionSets:
             "- **妙计 → 妙记（禁裸词）** — cue\n- **薛辉 = 真实实体，勿修**\n",
             encoding="utf-8")
         (contexts / "pkm.md").write_text(
-            "- **新一 → 星壹（禁入词典）** — cue\n", encoding="utf-8")
+            "- **云锅 → 云国（禁入词典）** — cue\n", encoding="utf-8")
         monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
 
         from cli.commands import _load_trap_demotion_sets
         banned, keep = _load_trap_demotion_sets(["huawei", "pkm"])
-        assert banned == frozenset({"妙计", "新一"})
+        assert banned == frozenset({"妙计", "云锅"})
         assert keep == frozenset({"薛辉"})
 
     def test_no_domain_returns_empty(self):

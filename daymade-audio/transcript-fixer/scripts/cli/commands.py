@@ -864,7 +864,7 @@ def cmd_add_correction(args: argparse.Namespace) -> None:
 
     # Guard 2 (fail-closed): name-convergence gate. Fires only when the new
     # mapping is person-name shaped (2-4 char CJK, one edit apart — the
-    # 2026-09-16 依琳→依林 collapse shape); --note carries the authority
+    # 2026-09-16 乙琳→乙林 collapse shape); --note carries the authority
     # evidence when the target is deliberately unrostered.
     _name_convergence_refusal(
         args, args.from_text, args.to_text,
@@ -2763,7 +2763,7 @@ def cmd_resolve_review(args: argparse.Namespace) -> None:
 
     # Name-convergence gate on the two decisions that WRITE (accepted applies
     # the suggestion, overridden applies --override-to). The 2026-09-16
-    # incident pair (依琳→依林, 徐盛→徐胜) entered exactly here: a majority-
+    # incident pair (乙琳→乙林, 丙盛→丙胜) entered exactly here: a majority-
     # spelling collapse accepted with no authority named. kept_original /
     # skipped / reopen write no target form, so they are not gated.
     if decision in ("accepted", "overridden"):

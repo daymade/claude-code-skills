@@ -1,7 +1,7 @@
 """Name-convergence guard: fail-closed gate against collapsing a person name
 onto a phonetic neighbour whose target form nothing in the library claims.
 
-Real incident 2026-09-16: an agent normalized 依琳→依林 and 徐盛→徐胜 by
+Real incident 2026-09-16: an agent normalized 乙琳→乙林 and 丙盛→丙胜 by
 transcript-majority spelling; both targets were wrong (the group-chat
 displayName said so afterwards), and the error reached a pushed commit before
 anyone re-read the roster. triage / accept / --add all ran on agent
@@ -102,7 +102,7 @@ def _is_cjk_char(ch: str) -> bool:
 
 def is_person_name_shape(from_text: str, to_text: str) -> bool:
     """Phonetic-neighbour heuristic: both sides 2-4 char all-CJK, one edit
-    apart (依琳→依林, 徐盛→徐胜). Catches the person-name collapse shape at
+    apart (乙琳→乙林, 丙盛→丙胜). Catches the person-name collapse shape at
     --add, where no review kind exists to classify the mapping."""
     for s in (from_text, to_text):
         if not (2 <= len(s) <= 4) or not all(_is_cjk_char(c) for c in s):

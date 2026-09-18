@@ -1,7 +1,7 @@
 """Tests for the name-convergence guard and the two --add write guards.
 
-The guard is the mechanical gate born from the 2026-09-16 incident: 依琳→依林
-and 徐盛→徐胜 were normalized by transcript-majority spelling, both targets
+The guard is the mechanical gate born from the 2026-09-16 incident: 乙琳→乙林
+and 丙盛→丙胜 were normalized by transcript-majority spelling, both targets
 were wrong, and nothing mechanical stood between that judgement and a pushed
 commit. These tests pin the incident pairs as POSITIVE cases (must refuse) so
 the gate cannot silently widen back into discretion.
@@ -45,52 +45,52 @@ class TestGuardPositive:
     """The incident shapes — every one of these MUST be refused."""
 
     def test_incident_pair_yilin_majority_collapse_rejected(self):
-        # 阳性①: from=依琳 to=依林, target claimed nowhere, evidence="同段互证"
+        # 阳性①: from=乙琳 to=乙林, target claimed nowhere, evidence="同段互证"
         # names no authority — the exact 2026-09-16 first pair.
-        r = guard("依琳", "依林", "同段互证", "entity", lookup_fn=lambda t: _lookup())
+        r = guard("乙琳", "乙林", "同段互证", "entity", lookup_fn=lambda t: _lookup())
         assert isinstance(r, GuardRejection)
         assert r.code == "target_unknown"
         assert "--enqueue-review" in r.message
 
     def test_incident_pair_xusheng_majority_collapse_rejected(self):
-        # 阳性②: from=徐盛 to=徐胜 — the second incident pair.
-        r = guard("徐盛", "徐胜", "同段互证", "entity", lookup_fn=lambda t: _lookup())
+        # 阳性②: from=丙盛 to=丙胜 — the second incident pair.
+        r = guard("丙盛", "丙胜", "同段互证", "entity", lookup_fn=lambda t: _lookup())
         assert isinstance(r, GuardRejection)
         assert r.code == "target_unknown"
 
     def test_phonetic_shape_alone_gates_without_kind(self):
         # --add carries no kind; the 2-4 char CJK one-edit shape must gate on
         # its own, or the --add path stays exactly as discretionary as before.
-        r = guard("依琳", "依林", None, None, lookup_fn=lambda t: _lookup())
+        r = guard("乙琳", "乙林", None, None, lookup_fn=lambda t: _lookup())
         assert isinstance(r, GuardRejection)
         assert r.code == "target_unknown"
 
     def test_target_that_is_someones_variant_points_at_canonical(self):
-        # 阳性③: 依林 exists ONLY as 艺霖's recorded ASR 变体 — converging onto
-        # it manufactures the documented mishearing; the refusal must name 艺霖.
+        # 阳性③: 乙林 exists ONLY as 乙霖's recorded ASR 变体 — converging onto
+        # it manufactures the documented mishearing; the refusal must name 乙霖.
         r = guard(
-            "依琳", "依林", None, "entity",
-            lookup_fn=lambda t: _lookup(roster_variant_of="艺霖", found_anywhere=True),
+            "乙琳", "乙林", None, "entity",
+            lookup_fn=lambda t: _lookup(roster_variant_of="乙霖", found_anywhere=True),
         )
         assert isinstance(r, GuardRejection)
         assert r.code == "target_is_variant"
-        assert "艺霖" in r.message
+        assert "乙霖" in r.message
 
 
 class TestGuardNegative:
     """Writes the guard must NOT touch."""
 
     def test_target_is_roster_entry_passes(self):
-        # 阴性①: from=依琳 to=艺霖, and 艺霖 is a roster ### entry.
+        # 阴性①: from=乙琳 to=乙霖, and 乙霖 is a roster ### entry.
         assert guard(
-            "依琳", "艺霖", None, "entity",
+            "乙琳", "乙霖", None, "entity",
             lookup_fn=lambda t: _lookup(roster_entry=True, found_anywhere=True),
         ) is None
 
     def test_target_is_active_dictionary_to_passes(self):
-        # 阴性② first leg: from=骗见 to=翩姐, 翩姐 already an active rule's to.
+        # 阴性② first leg: from=顶见 to=丁姐, 丁姐 already an active rule's to.
         assert guard(
-            "骗见", "翩姐", None, "entity",
+            "顶见", "丁姐", None, "entity",
             lookup_fn=lambda t: _lookup(dictionary_active_to=True, found_anywhere=True),
         ) is None
 
@@ -98,7 +98,7 @@ class TestGuardNegative:
         # 阴性② second leg: target claimed nowhere, but the evidence names the
         # user ruling — a named authority, not majority spelling.
         assert guard(
-            "骗见", "翩姐", "用户裁决 2026-09-16", "entity",
+            "顶见", "丁姐", "用户裁决 2026-09-16", "entity",
             lookup_fn=lambda t: _lookup(),
         ) is None
 
@@ -123,13 +123,13 @@ class TestGuardNegative:
 
 class TestShapeAndEvidencePrimitives:
     @pytest.mark.parametrize("a,b,expected", [
-        ("依琳", "依林", True),     # one substitution
-        ("徐盛", "徐胜", True),     # one substitution
+        ("乙琳", "乙林", True),     # one substitution
+        ("丙盛", "丙胜", True),     # one substitution
         ("妙计", "妙记", True),     # one substitution — shape fires, kind decides
-        ("骗见", "翩姐", False),    # two substitutions — no shape
-        ("艺霖", "艺霖", True),     # identical is one-edit-away (service blocks a==b)
+        ("顶见", "丁姐", False),    # two substitutions — no shape
+        ("乙霖", "乙霖", True),     # identical is one-edit-away (service blocks a==b)
         ("小明", "小明同学", False),  # 4-char side vs 2-char side is fine, but two inserts
-        ("依琳", "yilin", False),   # not all-CJK
+        ("乙琳", "yilin", False),   # not all-CJK
         ("一", "二", False),        # below the 2-char floor
     ])
     def test_person_name_shape(self, a, b, expected):
@@ -158,7 +158,7 @@ class TestShapeAndEvidencePrimitives:
 
 def _args(**kw):
     base = dict(
-        add_correction=("萍姐", "翩姐"), from_text="萍姐", to_text="翩姐",
+        add_correction=("萍姐", "丁姐"), from_text="萍姐", to_text="丁姐",
         domain=None, force=False, check_corpus=False, corpus_dir=None,
         json_output=False, review_note=None,
         resolve_review=None, review_decision=None, review_override_to=None,
@@ -180,11 +180,11 @@ def isolated_config(tmp_path, monkeypatch):
 
 @pytest.fixture()
 def roster_with_target(tmp_path, monkeypatch):
-    """A people roster that claims 翩姐 as a ### entry, so the name guard's
+    """A people roster that claims 丁姐 as a ### entry, so the name guard's
     branch (a) passes and the --add tests exercise the guard under test rather
     than the name gate."""
     roster = tmp_path / "people.md"
-    roster.write_text("### 翩姐\n- **身份**: 测试名册条目\n", encoding="utf-8")
+    roster.write_text("### 丁姐\n- **身份**: 测试名册条目\n", encoding="utf-8")
     monkeypatch.setenv("TRANSCRIPT_FIXER_PEOPLE_ROSTER", str(roster))
     return roster
 
@@ -211,9 +211,9 @@ class TestAddPendingConflictGuard:
         assert not _get_service().repository.get_all_corrections(active_only=False)
 
     def test_open_item_about_to_text_refuses_add(self, isolated_config, capsys):
-        _enqueue_pending("别的问题", "翩姐")
+        _enqueue_pending("别的问题", "丁姐")
         with pytest.raises(SystemExit) as exc:
-            cmd_add_correction(_args(from_text="萍姐", to_text="翩姐"))
+            cmd_add_correction(_args(from_text="萍姐", to_text="丁姐"))
         assert exc.value.code == 2
 
     def test_decided_item_does_not_block(self, isolated_config, roster_with_target):
@@ -230,7 +230,7 @@ class TestAddRealWordProbeGuard:
         # 萍姐 is 2 chars — substring-prone real-word shape; add-time
         # validators alone cannot measure how often it is real in THIS corpus.
         with pytest.raises(SystemExit) as exc:
-            cmd_add_correction(_args(from_text="萍姐", to_text="翩姐"))
+            cmd_add_correction(_args(from_text="萍姐", to_text="丁姐"))
         assert exc.value.code == 2
         assert "--check-corpus" in capsys.readouterr().err
 
@@ -239,11 +239,11 @@ class TestAddRealWordProbeGuard:
         corpus.mkdir()
         (corpus / "a.md").write_text("萍姐没有出现，只是语料。", encoding="utf-8")
         cmd_add_correction(_args(
-            from_text="萍姐", to_text="翩姐",
+            from_text="萍姐", to_text="丁姐",
             check_corpus=True, corpus_dir=str(corpus), domain="demo",
         ))
         out = capsys.readouterr().out
-        assert "Added: '萍姐' -> '翩姐' (domain: demo)" in out
+        assert "Added: '萍姐' -> '丁姐' (domain: demo)" in out
 
     def test_non_real_word_shape_needs_no_probe(self, isolated_config, roster_with_target, capsys):
         # A 4-char ASR-garble FROM is not a real-word shape; the gate is silent.
@@ -259,7 +259,7 @@ class TestAddNameConvergenceGuard:
         # no authority named. (No roster configured in this fixture.)
         with pytest.raises(SystemExit) as exc:
             cmd_add_correction(_args(
-                from_text="依琳", to_text="依林", review_note=None, domain="demo",
+                from_text="乙琳", to_text="乙林", review_note=None, domain="demo",
             ))
         assert exc.value.code == 2
         assert "--enqueue-review" in capsys.readouterr().err
@@ -273,11 +273,11 @@ class TestAddNameConvergenceGuard:
         corpus.mkdir()
         (corpus / "a.md").write_text("占位语料。", encoding="utf-8")
         cmd_add_correction(_args(
-            from_text="依琳", to_text="依林",
+            from_text="乙琳", to_text="乙林",
             review_note="用户裁决 2026-09-16：以群 displayName 为准",
             check_corpus=True, corpus_dir=str(corpus), domain="demo",
         ))
-        assert "Added: '依琳' -> '依林' (domain: demo)" in capsys.readouterr().out
+        assert "Added: '乙琳' -> '乙林' (domain: demo)" in capsys.readouterr().out
 
 
 class TestAuthorityRegexBoundary:
@@ -307,8 +307,8 @@ class TestAuthorityRegexBoundary:
 
 class TestResolveNameConvergenceGuard:
     def test_accept_majority_collapse_refused_and_stays_pending(self, isolated_config, capsys):
-        # The incident's entry point: accepting 依琳→依林 on 同段互证 alone.
-        item_id = _enqueue_pending("依琳", "依林", kind="entity", evidence="同段互证")
+        # The incident's entry point: accepting 乙琳→乙林 on 同段互证 alone.
+        item_id = _enqueue_pending("乙琳", "乙林", kind="entity", evidence="同段互证")
         with pytest.raises(SystemExit) as exc:
             cmd_resolve_review(_args(
                 resolve_review=item_id, review_decision="accepted",
@@ -320,36 +320,36 @@ class TestResolveNameConvergenceGuard:
 
     def test_accept_with_authority_evidence_records(self, isolated_config, capsys):
         item_id = _enqueue_pending(
-            "依琳", "艺霖", kind="entity",
+            "乙琳", "乙霖", kind="entity",
             evidence="用户裁决 + 群 displayName 双读",
         )
         cmd_resolve_review(_args(resolve_review=item_id, review_decision="accepted"))
         item = _get_review_queue().get(item_id)
         assert item.status == "accepted"
-        assert item.resolved_text == "艺霖"
+        assert item.resolved_text == "乙霖"
 
     def test_override_to_someones_variant_refused(self, isolated_config, tmp_path, monkeypatch, capsys):
-        # 依林 registered ONLY as 艺霖's roster variant: overriding onto it is
-        # refused and must point at 艺霖.
+        # 乙林 registered ONLY as 乙霖's roster variant: overriding onto it is
+        # refused and must point at 乙霖.
         roster = tmp_path / "people.md"
         roster.write_text(
-            "### 艺霖\n- **身份**: 测试\n- **ASR 变体**: 依林\n", encoding="utf-8",
+            "### 乙霖\n- **身份**: 测试\n- **ASR 变体**: 乙林\n", encoding="utf-8",
         )
         monkeypatch.setenv("TRANSCRIPT_FIXER_PEOPLE_ROSTER", str(roster))
-        item_id = _enqueue_pending("依琳", "一琳", kind="entity", evidence="同段互证")
+        item_id = _enqueue_pending("乙琳", "一琳", kind="entity", evidence="同段互证")
         with pytest.raises(SystemExit) as exc:
             cmd_resolve_review(_args(
                 resolve_review=item_id, review_decision="overridden",
-                review_override_to="依林",
+                review_override_to="乙林",
             ))
         assert exc.value.code == 2
-        assert "艺霖" in capsys.readouterr().err
+        assert "乙霖" in capsys.readouterr().err
         assert _get_review_queue().get(item_id).status == "pending"
 
     def test_kept_original_not_gated(self, isolated_config):
         # kept_original writes no target form, so the guard does not fire even
         # on an incident-shaped pair.
-        item_id = _enqueue_pending("依琳", "依林", kind="entity", evidence="同段互证")
+        item_id = _enqueue_pending("乙琳", "乙林", kind="entity", evidence="同段互证")
         cmd_resolve_review(_args(
             resolve_review=item_id, review_decision="kept_original",
             review_note="original was right as spoken",

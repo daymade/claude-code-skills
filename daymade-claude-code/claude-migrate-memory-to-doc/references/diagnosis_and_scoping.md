@@ -34,7 +34,7 @@ So: agents may **surface candidates**, but the user (or you, holding full contex
 Some memory contains personally identifying information: real-name-to-username maps, private contacts, home addresses, medical/life details, etc. Even when the *topic* is project-relevant, the *identifying payload* is not a team artifact. Route it like this:
 
 - **Identity mapping / real names** → keep in private memory (thin to a pointer if the SSOT is elsewhere); do not put in project docs.
-- **Operational facts that happen to contain a name** (e.g., "ask 星月 for the Alipay key") → de-identify if you migrate them, or leave in memory.
+- **Operational facts that happen to contain a name** (e.g., "ask <coworker> for the Alipay key") → de-identify if you migrate them, or leave in memory.
 - **PII that is also cross-tool user profile** (rare) → `~/.claude/references/user/` is still private to the user's machine, but mark the file clearly as privacy-sensitive.
 
 ## Inline discipline: some rules belong in CLAUDE.md body, not just references/
