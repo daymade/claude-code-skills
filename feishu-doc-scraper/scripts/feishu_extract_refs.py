@@ -66,8 +66,11 @@ _HOST = r"[a-z0-9-]+\.(?:feishu\.cn|larksuite\.com)"
 # doc-id) against real `.data.document.content` raw HTML: the tag is NOT
 # `<mention-doc token="..." type="...">Title</mention-doc>`. It is an
 # empty-bodied <cite> tag with the title in an ATTRIBUTE, not inner text:
-#   <cite doc-id="FRigwwIkWiy5PSkBNiMcwN98nsY" file-type="wiki"
-#         title="手工记录反馈维度" type="doc"></cite>
+#   <cite doc-id="<DOC_ID>" file-type="wiki"
+#         title="Example Doc Title" type="doc"></cite>
+# Keep placeholders in this example: the real token it used to show was a
+# live internal document id (scrubbed 2026-09-18) -- never paste live
+# doc/media tokens into this file.
 # Confirmed file-type values: "wiki", "docx" (both independently verified
 # against real documents). `pandoc -f html -t gfm` makes this tag VANISH
 # WITH ZERO TRACE -- not even the bare title text survives (worse than
@@ -107,8 +110,10 @@ RE_SHEET_TAG = re.compile(r'<sheet\s+token="([^"]+)"\s*/?>')
 # element with the drive token in `src=`, not `token=`:
 #   <img id="..." name="filename.jpeg" alt="<long AI-generated description>"
 #        height="1920" href="https://internal-api-drive-stream.feishu.cn/..."
-#        mime="image/jpeg" scale="0.288889" src="TP29bjDJSoUsilxKjiLcGi3UnTh"
+#        mime="image/jpeg" scale="0.288889" src="<MEDIA_TOKEN>"
 #        width="1080"/>
+# Same scrub rule as the <cite> example above: <MEDIA_TOKEN> stands in for a
+# real drive token that was live internal data -- do not paste real ones.
 # Unlike mention-doc, this does NOT vanish under pandoc: `pandoc -f html -t
 # gfm` re-serializes the whole <img> as raw HTML passthrough (src/id/href/
 # width/height/alt survive verbatim; `name=` is dropped; `mime=`/`scale=` are
