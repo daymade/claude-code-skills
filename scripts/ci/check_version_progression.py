@@ -216,6 +216,77 @@ def owner_for_path(path: str, plugins: dict[str, Plugin]) -> str | None:
     return owners[0] if owners else None
 
 
+CHANGELOG_PATH = "CHANGELOG.md"
+# `- **skill** (`plugin` v1.2.3 → v1.3.0): ...` — only the plugin-qualified form,
+# because a bare `(v1.2.3 → v1.3.0)` names a Skill's own version, which the
+# marketplace manifest does not carry and this check cannot adjudicate.
+CHANGELOG_BUMP = re.compile(
+    r"\(`([a-z0-9-]+)`\s+v(\d+\.\d+\.\d+)\s*(?:→|->)\s*v(\d+\.\d+\.\d+)\)"
+)
+
+
+def load_changelog_text(repo: Path, spec: str | None) -> str:
+    """Read CHANGELOG.md from a commit, or from the index when spec is None."""
+    if spec is None:
+        return git(repo, "show", f":{CHANGELOG_PATH}")
+    return git(repo, "show", f"{spec}:{CHANGELOG_PATH}")
+
+
+def check_changelog_versions(
+    repo: Path,
+    base: str,
+    candidate: str | None,
+    base_plugins: dict,
+    candidate_plugins: dict,
+) -> list[str]:
+    """Verify that version arrows ADDED by this change name the real endpoints.
+
+    A `vX → vY` line is a claim about two facts that live in the manifest: X is
+    what the base ships, Y is what this change ships. Writing it by hand means
+    re-deriving both, and a rebase can move X after the line was written. Only
+    added lines are examined — historical entries were written against a base
+    that is no longer current, and re-judging them against today's manifest
+    would fail every one of them.
+    """
+    try:
+        base_text = load_changelog_text(repo, base)
+    except CheckError:
+        return []  # no CHANGELOG at base: nothing to diff against
+    try:
+        candidate_text = load_changelog_text(repo, candidate)
+    except CheckError:
+        return []
+
+    base_lines = set(base_text.splitlines())
+    added = [ln for ln in candidate_text.splitlines()
+             if ln.strip() and ln not in base_lines]
+
+    failures: list[str] = []
+    for line in added:
+        for plugin, claimed_from, claimed_to in CHANGELOG_BUMP.findall(line):
+            if plugin not in candidate_plugins or plugin not in base_plugins:
+                continue  # not defined on both sides; nothing to adjudicate
+            actual_to = ".".join(str(n) for n in candidate_plugins[plugin].version)
+            if claimed_to != actual_to:
+                # The arrow does not end at what this tree ships, so it is not
+                # this release's entry — an older line that a prose edit (a
+                # rename, a de-identification pass) rewrote, which a plain
+                # added-lines diff cannot tell from a new one. Measured: the only
+                # false positive across a 25-commit replay of main was exactly
+                # this, in a commit that both released a plugin AND edited an
+                # older entry for it.
+                continue
+            actual_from = ".".join(str(n) for n in base_plugins[plugin].version)
+            if claimed_from != actual_from:
+                failures.append(
+                    f"CHANGELOG claims {plugin!r} bumps FROM v{claimed_from} but "
+                    f"base {base} ships {actual_from} (a rebase past another "
+                    f"release moves this; re-read the manifest instead of "
+                    f"hand-writing the arrow)"
+                )
+    return failures
+
+
 def check(repo: Path, base: str, candidate: str | None) -> list[str]:
     git(repo, "rev-parse", "--verify", f"{base}^{{commit}}")
     if candidate is not None:
@@ -290,6 +361,10 @@ def check(repo: Path, base: str, candidate: str | None) -> list[str]:
                 f"plugin {name!r} content changed but version did not strictly increase "
                 f"above {before.version}; candidate has {after.version}"
             )
+
+    failures.extend(
+        check_changelog_versions(repo, base, candidate, base_plugins, candidate_plugins)
+    )
 
     return failures
 
