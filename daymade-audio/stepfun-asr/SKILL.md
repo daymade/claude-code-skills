@@ -54,6 +54,25 @@ For non-Chinese audio:
 python3 scripts/asr_transcribe.py /path/to/audio.mp3 --language en
 ```
 
+For per-word timestamps (adds `segments` to `--json`):
+
+```bash
+python3 scripts/asr_transcribe.py /path/to/audio.mp3 --timestamps --json
+```
+
+`segments` is `[{"text": "Understand ", "start_ms": 228, "end_ms": 1108}, ...]` — one entry
+per word, monotonic. **`--timestamps` is load-bearing**: without it the API still returns
+`start_time`/`end_time` on every delta but leaves them at 0, so a check for field presence
+reports "supported" while every value is useless. A few words share their predecessor's
+timestamp (server flushes in blocks); that is fine for locating a moment, not for forced
+alignment. See `references/known_issues.md`.
+
+To use an older model:
+
+```bash
+python3 scripts/asr_transcribe.py /path/to/audio.mp3 --model stepaudio-2.5-asr
+```
+
 The script handles base64 encoding, the nested `{audio: {data, input: {transcription, format}}}` body, SSE parsing, and the misleading-endpoint pitfall. Prefer it over hand-rolled HTTP calls unless integrating into a larger pipeline.
 
 ## Decision table
@@ -64,6 +83,8 @@ The script handles base64 encoding, the nested `{audio: {data, input: {transcrip
 | Long audio (5-30 min) | Same script — 32K context handles it in a single call, no chunking needed |
 | Audio > 30 min | Split with ffmpeg before sending; the API rejects oversized payloads |
 | Need usage/billing data | Add `--json` to capture `usage.input_tokens` / `usage.total_tokens` from `transcript.text.done` |
+| Need to know when each word was said | Add `--timestamps --json`, read `segments`. Works on `stepaudio-3-asr-max` and `stepaudio-2.5-asr` |
+| `--model stepaudio-2-asr-pro` returns `internal error` | That model is not usable on `/v1/audio/asr/sse` (measured 2026-09-18); use the default or `stepaudio-2.5-asr` |
 | Highly repetitive content (same phrase 5+ times, > 90s) | Cross-validate with `step-asr-1.1` — see repetition hallucination in `references/known_issues.md` (2.5-era issue, unverified on v3) |
 | Hit `model stepaudio-3-asr-max not supported` | Wrong endpoint. Switch from `/v1/audio/transcriptions` to `/v1/audio/asr/sse` |
 | Hit silent 4xx auth failure | Verify your key is "Normal" not "Plan" — Plan keys cannot call audio endpoints |

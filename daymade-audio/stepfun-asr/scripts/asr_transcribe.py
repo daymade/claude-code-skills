@@ -94,10 +94,13 @@ def transcribe(
     audio_format: str,
     language: str = "zh",
     enable_itn: bool = True,
+    enable_timestamp: bool = False,
+    model: str = MODEL,
     timeout: int = 1200,
 ) -> dict[str, Any]:
     """
-    Returns {ok, text?, usage?, elapsed, deltas_count, err?, censored?}.
+    Returns {ok, text?, usage?, elapsed, deltas_count, segments?, err?, censored?}.
+    segments (per-word start_ms/end_ms) only when enable_timestamp=True.
     Parses the SSE stream; takes the text from transcript.text.done.
     """
     audio_b64 = base64.b64encode(audio_path.read_bytes()).decode("ascii")
@@ -108,8 +111,12 @@ def transcribe(
                 "input": {
                     "transcription": {
                         "language": language,
-                        "model": MODEL,
+                        "model": model,
                         "enable_itn": enable_itn,
+                        # 必须显式发送才有真值。2026-09-18 实测：不发时服务端
+                        # 仍返回 start_time/end_time 字段，但恒为 0——只判字段
+                        # 存在会误判成「已支持」，必须比对数值。
+                        **({"enable_timestamp": True} if enable_timestamp else {}),
                     },
                     "format": {"type": audio_format},
                 },
@@ -139,6 +146,7 @@ def transcribe(
     text = ""
     usage: dict[str, Any] | None = None
     deltas = 0
+    segments: list[dict[str, Any]] = []
     errors: list[str] = []
     for line in raw.splitlines():
         if not line.startswith("data:"):
@@ -153,6 +161,14 @@ def transcribe(
         t = ev.get("type")
         if t == "transcript.text.delta":
             deltas += 1
+            # 形如 {"delta":"Understand ","start_time":228,"end_time":1108}（毫秒）。
+            # 旧实现只做 deltas += 1，把整个载荷连同时间戳一起丢了。
+            if enable_timestamp and ("start_time" in ev or "end_time" in ev):
+                segments.append({
+                    "text": ev.get("delta", ""),
+                    "start_ms": ev.get("start_time"),
+                    "end_ms": ev.get("end_time"),
+                })
         elif t == "transcript.text.done":
             text = ev.get("text", "")
             usage = ev.get("usage")
@@ -161,7 +177,10 @@ def transcribe(
 
     if not text and errors:
         return {"ok": False, "status": 200, "err": "; ".join(errors), "elapsed": elapsed}
-    return {"ok": True, "text": text, "usage": usage, "elapsed": elapsed, "deltas_count": deltas}
+    out = {"ok": True, "text": text, "usage": usage, "elapsed": elapsed, "deltas_count": deltas}
+    if segments:
+        out["segments"] = segments
+    return out
 
 
 def main() -> int:
@@ -170,6 +189,12 @@ def main() -> int:
     ap.add_argument("--language", default="zh", help="Language code (zh/en). Default: zh")
     ap.add_argument("--format", help="Audio format override (mp3/wav/ogg/pcm)")
     ap.add_argument("--no-itn", action="store_true", help="Disable inverse text normalization")
+    ap.add_argument("--model", default=MODEL,
+                    help=f"ASR model on /v1/audio/asr/sse. Default: {MODEL}. "
+                         "Older: stepaudio-2.5-asr, stepaudio-2-asr-pro")
+    ap.add_argument("--timestamps", action="store_true",
+                    help="Ask for per-word timestamps; adds `segments` (text/start_ms/end_ms) to --json. "
+                         "Without it the API still returns the fields but zeroed.")
     ap.add_argument("--json", action="store_true", help="Output full JSON (text + usage + timing)")
     args = ap.parse_args()
 
@@ -185,6 +210,8 @@ def main() -> int:
         audio_format=fmt,
         language=args.language,
         enable_itn=not args.no_itn,
+        enable_timestamp=args.timestamps,
+        model=args.model,
     )
 
     if not result["ok"]:

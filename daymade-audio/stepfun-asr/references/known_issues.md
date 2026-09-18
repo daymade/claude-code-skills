@@ -2,7 +2,7 @@
 
 > **版本框定**：本文件多数条目为 2.5 时代（2026-04）实测证据；2026-09 起新增的 v3/两代条目自带日期标注。当前默认模型是 `stepaudio-3-asr-max`（2026-09-16 起）；这些条目多数与模型版本无关（端点形状 / key 类型 / SSE 行为），但与 censorship、幻觉等模型行为相关的条目在 v3 上未经回归实测。
 
-> **v3 能力缺口（2026-09-17 官方文档核对 + 实测）**：`stepaudio-3-asr-max` 响应只有句段级 `start_time`/`end_time`，无逐词时间戳（[官方 SSE API 参考](https://stepfun.mintlify.app/zh/api-reference/audio/asr-sse)无 word 级字段）。`hotwords` 参数虽在该 API 参考中对 v3 列出（无版本限定），但实测两个同音陷阱（「某人名」「某机构名」）带与不带结果逐字相同——按「接受但不生效」对待。依赖逐词时间戳或热词纠名的集成留在 `stepaudio-2.5-asr`，或先自行实测。
+> **v3 能力缺口（2026-09-17 核对，时间戳一条已于 2026-09-18 撤回）**：~~`stepaudio-3-asr-max` 响应只有句段级 `start_time`/`end_time`，无逐词时间戳~~——**此断言错误**。实测 `stepaudio-3-asr-max` 与 `stepaudio-2.5-asr` 都逐词返回毫秒时间戳，见下方「逐词时间戳要显式开」。官方 SSE API 参考里确实没有 word 级字段，但文档缺字段不等于响应缺字段。`hotwords` 参数虽在该 API 参考中对 v3 列出（无版本限定），但实测两个同音陷阱（「某人名」「某机构名」）带与不带结果逐字相同——按「接受但不生效」对待（此条未在 2026-09-18 复测）。
 
 
 Collected from end-to-end testing 2026-04-23. These are things that burned real time to discover; they are not in the official docs.
@@ -103,3 +103,29 @@ The bundled script falls back to concatenating delta chunks if the `done` event 
 ## Long-audio timeout behavior
 
 The default `urllib`/`requests` timeout is too short for 17+ minute audio. The bundled script uses `timeout=1200` (20 minutes). If you write your own client, set the timeout to at least 2× expected wall clock time (RTF ~100× means 17 min audio takes ~10s wall clock, but TCP retries and network jitter can stretch this).
+
+## 逐词时间戳要显式开，否则字段在、值恒为 0
+
+**Symptom:** SSE 的每个 `transcript.text.delta` 都带 `start_time`/`end_time` 字段，看起来「已支持」，但值全是 0。
+
+**Cause:** 请求体没发 `enable_timestamp: true`。服务端此时仍然返回这两个字段，只是不填值。
+**只判字段存不存在会得出「支持」或「不支持」两种相反的错误结论**——必须比对数值。
+
+**Fix:** 请求体加 `"enable_timestamp": true`（脚本为 `--timestamps`）。
+
+同一段 30 秒英文音频，2026-09-18 实测：
+
+| 模型 | `--timestamps` | 段数 | 非零时间戳 | 覆盖 |
+|---|---|---|---|---|
+| `stepaudio-3-asr-max` | on | 61 | 55/61 | 228→29920ms |
+| `stepaudio-3-asr-max` | off | 73 | 0/61 | 全 0 |
+| `stepaudio-2.5-asr` | on | 59 | 57/59 | 388→29920ms |
+
+开与关的分词结果也不同（61 vs 73 段），纯文本输出不受影响。
+
+**粒度**：一个 delta 一个词，单调不回退。但少量词与前一个词共用同一时刻
+（v3 6/61，2.5 2/59）——服务端按块 flush，块内多个词共享块尾时刻。
+用于定位「这句话在第几秒」足够；用于逐词强制对齐不够，那种精度仍需 whisper word timestamps。
+
+**`stepaudio-2-asr-pro` 在该端点整体不可用**：2026-09-18 实测返回 `status=200: internal error`，
+带不带 `--timestamps` 都一样，与时间戳无关。

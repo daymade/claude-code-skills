@@ -23,7 +23,8 @@ Authorization: Bearer <STEPFUN_API_KEY>
       "transcription": {
         "language": "zh",
         "model": "stepaudio-3-asr-max",
-        "enable_itn": true
+        "enable_itn": true,
+        "enable_timestamp": true
       },
       "format": {
         "type": "mp3"
@@ -39,6 +40,7 @@ Authorization: Bearer <STEPFUN_API_KEY>
 | `audio.input.transcription.language` | yes | string | `zh` or `en`. Dialects and Japanese are not officially supported |
 | `audio.input.transcription.model` | yes | string | `stepaudio-3-asr-max` (current) or `stepaudio-2.5-asr` / `stepaudio-2-asr-pro` (still served) |
 | `audio.input.transcription.enable_itn` | no | bool | Inverse text normalization (数字→words). Default true |
+| `audio.input.transcription.enable_timestamp` | no | bool | Default false. **Omitting it does not omit the timestamp fields** — each `transcript.text.delta` still carries `start_time`/`end_time`, but every value is 0. Send `true` to get real milliseconds (measured 2026-09-18; absent from the official reference) |
 | `audio.input.format.type` | yes | string | `mp3` / `wav` / `ogg` / `pcm` |
 | `audio.input.format.rate` | pcm only | int | Sample rate (required for raw PCM) |
 | `audio.input.format.channel` | pcm only | int | Channel count (required for raw PCM) |
@@ -58,7 +60,7 @@ data: {"type":"transcript.text.done","meta":{...},"text":"你好，我是蕾格�
 
 | Event type | Meaning | How to handle |
 |---|---|---|
-| `transcript.text.delta` | Incremental piece of the transcription | Concatenate for progressive UI; optional if you only need final text |
+| `transcript.text.delta` (carries `delta`, plus `start_time`/`end_time` in ms — real values only with `enable_timestamp: true`) | Incremental piece of the transcription | Concatenate for progressive UI; optional if you only need final text |
 | `transcript.text.done` | Final, full transcription + usage | Take `text` as the authoritative result. Also contains `usage` for billing/telemetry |
 | `error` | Server-side error mid-stream | Abort and propagate `message` to the caller |
 
