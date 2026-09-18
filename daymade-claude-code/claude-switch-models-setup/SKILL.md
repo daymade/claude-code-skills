@@ -19,7 +19,7 @@ description: >-
 
 ## Overview
 
-This skill creates an isolated-but-shared profile system for Claude Code CLI. Each profile gets its own `.claude.json` state file (credentials and session history) while sharing skills, projects, hook scripts, agents, and installed plugin state across all profiles — and converging each profile's `settings.json` (hook registration, marketplaces, env feature flags, permissions, preferences) plus the **behavior slice of its `.claude.json`** (e.g. `workflowSizeGuideline`) from the default profile, so the only intended difference between profiles is the model/provider.
+This skill creates an isolated-but-shared profile system for Claude Code CLI. Each profile gets its own `.claude.json` state file (provider credentials and session history) while sharing skills, projects, hook scripts, agents, and installed plugin state across all profiles — and converging each profile's `settings.json` (hook registration, marketplaces, env feature flags, permissions, preferences) plus the **behavior slice of its `.claude.json`** (e.g. `workflowSizeGuideline`) from the default profile, so the only intended difference between profiles is the model/provider.
 
 The result: you can open one terminal with Kimi, another with DeepSeek, another with Anthropic — each running as a fully independent Claude Code process, without configuration bleed.
 
@@ -260,6 +260,7 @@ The full step-2-16k template-correctness war-story (why an internally-consistent
 |------|----------|---------|
 | Session history | `~/.claude-profiles/<name>/.claude.json` | **Isolated per profile** |
 | Auth tokens/cache | `~/.claude-profiles/<name>/.claude.json` | **Isolated per profile** |
+| Account + MCP OAuth tokens | macOS Keychain, entry named from the config dir | **Isolated by default**; set `CLAUDE_SECURESTORAGE_CONFIG_DIR=""` to make every profile share one entry, so an MCP server authorized once is connected everywhere — see [credential-storage.md](references/credential-storage.md) |
 | Skills | `~/.claude/skills/` | Shared via symlink |
 | Plugin content | `~/.claude/plugins/marketplaces`, `cache`, `data`, ... | Shared via symlink |
 | Plugin install registry | `~/.claude/plugins/installed_plugins.json` | Shared via symlink |

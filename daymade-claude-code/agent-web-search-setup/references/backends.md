@@ -338,6 +338,17 @@ Three things worth knowing before running it:
   absolute path they modified, which is the line to show the user. `--scope user`
   was measured landing as a top-level `mcpServers` entry in that same
   `~/.claude.json`; `--scope project` writes a `.mcp.json` beside the cwd.
+- **`CLAUDE_CONFIG_DIR` moves that file, and `~/.claude` is not the value that
+  keeps it where you expect.** The user-scope registry lives at
+  `<config-dir>.json` — the sibling of the directory, not a file inside it. With
+  the variable unset it resolves to `~/.claude.json`. Setting it to
+  `~/.claude`, on the assumption that this names the default profile, instead
+  writes `~/.claude/.claude.json`: a different, nearly empty file that the
+  default profile never reads. Both spellings print a confident
+  `File modified:` line, so the receipt does not distinguish them (measured
+  2026-09-18, registering an SSE server three times before it landed in the file
+  the main profile actually loads). Read the registry back by path afterwards
+  rather than trusting the write receipt.
 - **A new server starts unapproved, and that really does block its tools.** Every
   hosted server registered during this work showed as pending approval, and the
   refusal is explicit: `Claude requested permissions to use mcp__<server>__<tool>,
