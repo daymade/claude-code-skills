@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **github-review-pr** (v1.2.0 → v1.3.0): new step 10 — delete the `refs/review-pr/...` snapshot refs once the verdict is issued, with a `for-each-ref` sweep to prove none remain. Stale review refs pollute every `--all`-scoped operation with third-party commits that never touched public history; a 2026-09 audit of this repo counted 98 contributor commits from two months-stale review refs as "identities in history", which fed a wrong account-ownership annotation. Re-fetch from `refs/pull/N/head` if the objects are needed again.
+
 - **github-sensitive-data-cleanup** (v1.1.0 → v1.2.0): Step 2 gains an ownership-verification rule — remediation routes depend on who controls the resource (self-serve delete vs GitHub Support ticket), and an audit report's annotation of who owns an account/fork/document is an unverified claim however confidently written. Inherited from a 2026-09-18 near-miss: a taken-over audit report labeled an external contributor's fork as the user's own agent account, which would have silently downgraded the cleanup route to a self-delete that fails at execution time.
 
 - **feishu-doc-scraper** (v1.5.1 → v1.5.2): scrub a real Feishu wiki doc id, its document title, and a real drive media token from the example comments in `scripts/feishu_extract_refs.py` (the regexes only ever needed the tag *shape*). Placeholders now carry an explicit do-not-paste-live-tokens note so the next verified-against-real-HTML update does not reintroduce them.
