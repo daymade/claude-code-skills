@@ -2,7 +2,7 @@
 
 > **版本框定**：本文件多数条目为 2.5 时代（2026-04）实测证据；2026-09 起新增的 v3/两代条目自带日期标注。当前默认模型是 `stepaudio-3-asr-max`（2026-09-16 起）；这些条目多数与模型版本无关（端点形状 / key 类型 / SSE 行为），但与 censorship、幻觉等模型行为相关的条目在 v3 上未经回归实测。
 
-> **v3 能力缺口（2026-09-17 核对，时间戳一条已于 2026-09-18 撤回）**：~~`stepaudio-3-asr-max` 响应只有句段级 `start_time`/`end_time`，无逐词时间戳~~——**此断言错误**。实测 `stepaudio-3-asr-max` 与 `stepaudio-2.5-asr` 都逐词返回毫秒时间戳，见下方「逐词时间戳要显式开」。官方 SSE API 参考里确实没有 word 级字段，但文档缺字段不等于响应缺字段。`hotwords` 参数虽在该 API 参考中对 v3 列出（无版本限定），但实测两个同音陷阱（「某人名」「某机构名」）带与不带结果逐字相同——按「接受但不生效」对待（此条未在 2026-09-18 复测）。
+> **v3 能力缺口（2026-09-17 核对，时间戳一条已于 2026-09-18 撤回）**：~~`stepaudio-3-asr-max` 响应只有句段级 `start_time`/`end_time`，无逐词时间戳~~——**此断言错误**。实测 `stepaudio-3-asr-max` 与 `stepaudio-2.5-asr` 都逐词返回毫秒时间戳，见下方「逐词时间戳要显式开」。失误不在文档缺字段——`enable_timestamp` 一直写在官方**请求**字段表里，而只读了**响应**字段表（那里确实没有 word 级字段）。`hotwords` 参数虽在该 API 参考中对 v3 列出（无版本限定），但实测两个同音陷阱（「某人名」「某机构名」）带与不带结果逐字相同——按「接受但不生效」对待（此条未在 2026-09-18 复测）。
 
 
 Collected from end-to-end testing 2026-04-23. These are things that burned real time to discover; they are not in the official docs.
@@ -111,21 +111,52 @@ The default `urllib`/`requests` timeout is too short for 17+ minute audio. The b
 **Cause:** 请求体没发 `enable_timestamp: true`。服务端此时仍然返回这两个字段，只是不填值。
 **只判字段存不存在会得出「支持」或「不支持」两种相反的错误结论**——必须比对数值。
 
-**Fix:** 请求体加 `"enable_timestamp": true`（脚本为 `--timestamps`）。
+**Fix:** 请求体加 `"enable_timestamp": true`。脚本已默认发送，无需开关——
+参数不额外计费，没有关闭的理由。`scripts/check_params.py` 拿官方字段表对账，
+防止下一个字段被同样漏掉。
 
 同一段 30 秒英文音频，2026-09-18 实测：
 
-| 模型 | `--timestamps` | 段数 | 非零时间戳 | 覆盖 |
+| 模型 | `enable_timestamp` | 段数 | 非零时间戳 | 覆盖 |
 |---|---|---|---|---|
-| `stepaudio-3-asr-max` | on | 61 | 55/61 | 228→29920ms |
-| `stepaudio-3-asr-max` | off | 73 | 0/61 | 全 0 |
-| `stepaudio-2.5-asr` | on | 59 | 57/59 | 388→29920ms |
+| `stepaudio-3-asr-max` | 发 | 61 | 55/61 | 228→29920ms |
+| `stepaudio-3-asr-max` | 不发 | 73 | 0/73 | 全 0 |
+| `stepaudio-2.5-asr` | 发 | 59 | 57/59 | 388→29920ms |
 
-开与关的分词结果也不同（61 vs 73 段），纯文本输出不受影响。
+发与不发的分词结果也不同（61 vs 73 段），纯文本输出不受影响。
 
 **粒度**：一个 delta 一个词，单调不回退。但少量词与前一个词共用同一时刻
 （v3 6/61，2.5 2/59）——服务端按块 flush，块内多个词共享块尾时刻。
 用于定位「这句话在第几秒」足够；用于逐词强制对齐不够，那种精度仍需 whisper word timestamps。
 
-**`stepaudio-2-asr-pro` 在该端点整体不可用**：2026-09-18 实测返回 `status=200: internal error`，
-带不带 `--timestamps` 都一样，与时间戳无关。
+**`stepaudio-2-asr-pro` 在该端点整体不可用**：官方请求字段表把它列为支持的 model，
+但 2026-09-18 实测恒返回 `status=200: internal error`，与时间戳无关。
+
+## 说话人识别在另一个端点，且必须公网 URL
+
+**这个 SSE 端点没有说话人能力**，两个方向的证据：官方请求字段表无任何 speaker 字段；
+14 个候选字段名（`enable_speaker_diarization` / `enable_diarization` / `enable_speaker` /
+`speaker_diarization` / `diarization` / `enable_spk` / `enable_speaker_label` / `speaker_label` /
+`enable_multi_speaker` / `speaker_info` / `enable_speaker_info` / `num_speakers` / `speaker_num` /
+`max_speaker_num`）在双人音频上逐一实测，响应与基线零差异。
+
+**判据先标定过再用**：这个端点对未知字段**静默接受**（`enable_zzz_definitely_not_a_field`
+照样 200），所以「没报错」零信息量，只有响应变化算数；而只比字段名同样不行——
+`enable_timestamp` 不改字段名只改值。最终判据＝字段名＋值形态＋时间戳非零数＋文本，
+同请求两次跑出零差异（假阳性 0），且能抓到 `enable_timestamp`（召回有效）。
+
+**有说话人能力的是异步文件端点**：
+
+| | `/v1/audio/asr/sse`（本 skill） | `/v1/audio/asr/file/submit` + `/file/query` |
+|---|---|---|
+| 音频入参 | `audio.data`（base64） | `audio.url`，公网可访问、<100MB |
+| 说话人 | 无 | `enable_speaker_info` → 每个 utterance 带 `speaker.id`（`spk_1`…），单任务上限 10 人；需同时 `show_utterances=true` |
+| 分句/分词 | 无 | `show_utterances` |
+| 双声道分轨 | 无 | `enable_channel_split`（需 `audio.channel=2`） |
+| 模型 | `stepaudio-3-asr-max` | `stepaudio-2.5-asr` / `step-asr-1.1` |
+
+**base64 走不通**，2026-09-18 实测三条路都失败，不要再试：
+`audio.data` → `FAILED / audio_download / invalid audio url`；
+`https://api.stepfun.com/v1/files/<id>/content`（先传到 StepFun files）→ `failed to download audio`（需鉴权）；
+`stepfile://<id>` → `invalid audio url`。
+用这个端点就必须先把音频放到一个公网可取的地址，这是对外动作，先问用户。

@@ -39,6 +39,31 @@ from typing import Any
 ASR_URL = "https://api.stepfun.com/v1/audio/asr/sse"
 MODEL = "stepaudio-3-asr-max"
 
+# 官方 /v1/audio/asr/sse 请求字段清单 —— 这是 scripts/check_params.py 的对账基准。
+# 参数不额外计费，所以默认策略是「能发就发」；每个不发的字段必须在此写明理由。
+# 官方字段表新增了这里没有的字段时，check_params.py 非零退出。
+REQUEST_PARAMS = {
+    "audio.data":                              "always: base64 音频",
+    "audio.input.transcription.model":         "always: --model",
+    "audio.input.transcription.language":      "always: --language",
+    "audio.input.transcription.enable_itn":    "always: true，--no-itn 关闭",
+    "audio.input.transcription.enable_timestamp": "always: true。不发时 start_time/end_time 字段仍返回但恒为 0",
+    "audio.input.transcription.hotwords":      "opt-in: --hotwords。2026-09-18 实测对结果无影响，保留接口",
+    "audio.input.format.type":                 "always: 由扩展名推断，--format 覆盖",
+    "audio.input.format.codec":                "opt-in: --codec，仅 pcm 需要",
+    "audio.input.format.rate":                 "opt-in: --rate，pcm 必填",
+    "audio.input.format.bits":                 "opt-in: --bits，pcm 必填",
+    "audio.input.format.channel":              "opt-in: --channel，pcm 必填",
+}
+
+# 本脚本真正消费的响应字段。服务端发来别的字段时 unhandled_response_fields 会报出来
+# ——这次的时间戳漏接就属于此类：start_time/end_time 一直在发，解析器一直在丢。
+CONSUMED_RESPONSE_FIELDS = {
+    "transcript.text.delta": {"type", "delta", "start_time", "end_time", "meta"},
+    "transcript.text.done": {"type", "text", "usage", "meta"},
+    "error": {"type", "message", "meta"},
+}
+
 # Extensions that StepAudio 2.5 ASR accepts natively (no conversion needed)
 EXT_TO_FORMAT = {
     ".mp3": "mp3",
@@ -94,13 +119,15 @@ def transcribe(
     audio_format: str,
     language: str = "zh",
     enable_itn: bool = True,
-    enable_timestamp: bool = False,
+    enable_timestamp: bool = True,
+    hotwords: list[str] | None = None,
+    fmt_extra: dict[str, Any] | None = None,
     model: str = MODEL,
     timeout: int = 1200,
 ) -> dict[str, Any]:
     """
-    Returns {ok, text?, usage?, elapsed, deltas_count, segments?, err?, censored?}.
-    segments (per-word start_ms/end_ms) only when enable_timestamp=True.
+    Returns {ok, text?, usage?, elapsed, deltas_count, segments?,
+             unhandled_response_fields?, err?, censored?}.
     Parses the SSE stream; takes the text from transcript.text.done.
     """
     audio_b64 = base64.b64encode(audio_path.read_bytes()).decode("ascii")
@@ -113,12 +140,13 @@ def transcribe(
                         "language": language,
                         "model": model,
                         "enable_itn": enable_itn,
-                        # 必须显式发送才有真值。2026-09-18 实测：不发时服务端
-                        # 仍返回 start_time/end_time 字段，但恒为 0——只判字段
-                        # 存在会误判成「已支持」，必须比对数值。
-                        **({"enable_timestamp": True} if enable_timestamp else {}),
+                        # 默认开。不发时服务端仍返回 start_time/end_time 字段，
+                        # 但值恒为 0——只判字段存在会同时支撑「支持」和「不支持」
+                        # 两个相反结论，必须比对数值。参数不额外计费，没有关闭的理由。
+                        "enable_timestamp": enable_timestamp,
+                        **({"hotwords": hotwords} if hotwords else {}),
                     },
-                    "format": {"type": audio_format},
+                    "format": {"type": audio_format, **(fmt_extra or {})},
                 },
             }
         }
@@ -148,6 +176,7 @@ def transcribe(
     deltas = 0
     segments: list[dict[str, Any]] = []
     errors: list[str] = []
+    unhandled: dict[str, set[str]] = {}
     for line in raw.splitlines():
         if not line.startswith("data:"):
             continue
@@ -159,6 +188,9 @@ def transcribe(
         except json.JSONDecodeError:
             continue
         t = ev.get("type")
+        extra = set(ev) - CONSUMED_RESPONSE_FIELDS.get(t, {"type"})
+        if extra:
+            unhandled.setdefault(t or "?", set()).update(extra)
         if t == "transcript.text.delta":
             deltas += 1
             # 形如 {"delta":"Understand ","start_time":228,"end_time":1108}（毫秒）。
@@ -180,6 +212,8 @@ def transcribe(
     out = {"ok": True, "text": text, "usage": usage, "elapsed": elapsed, "deltas_count": deltas}
     if segments:
         out["segments"] = segments
+    if unhandled:
+        out["unhandled_response_fields"] = {k: sorted(v) for k, v in unhandled.items()}
     return out
 
 
@@ -192,9 +226,12 @@ def main() -> int:
     ap.add_argument("--model", default=MODEL,
                     help=f"ASR model on /v1/audio/asr/sse. Default: {MODEL}. "
                          "Older: stepaudio-2.5-asr, stepaudio-2-asr-pro")
-    ap.add_argument("--timestamps", action="store_true",
-                    help="Ask for per-word timestamps; adds `segments` (text/start_ms/end_ms) to --json. "
-                         "Without it the API still returns the fields but zeroed.")
+    ap.add_argument("--hotwords", help="Comma-separated hotwords. Measured 2026-09-18 as having no "
+                                       "effect on output; wired up anyway because it costs nothing.")
+    ap.add_argument("--codec", help="pcm only: raw|opus")
+    ap.add_argument("--rate", type=int, help="pcm only: sample rate, e.g. 16000")
+    ap.add_argument("--bits", type=int, help="pcm only: sample width, currently only 16")
+    ap.add_argument("--channel", type=int, help="pcm only: 1 or 2")
     ap.add_argument("--json", action="store_true", help="Output full JSON (text + usage + timing)")
     args = ap.parse_args()
 
@@ -210,9 +247,15 @@ def main() -> int:
         audio_format=fmt,
         language=args.language,
         enable_itn=not args.no_itn,
-        enable_timestamp=args.timestamps,
+        hotwords=[w.strip() for w in args.hotwords.split(",")] if args.hotwords else None,
+        fmt_extra={k: v for k, v in (("codec", args.codec), ("rate", args.rate),
+                                     ("bits", args.bits), ("channel", args.channel)) if v is not None},
         model=args.model,
     )
+
+    if result.get("unhandled_response_fields"):
+        print(f"NOTE: server sent fields this script ignores: {result['unhandled_response_fields']} "
+              "— check whether a request param would make them useful.", file=sys.stderr)
 
     if not result["ok"]:
         if result.get("censored"):
