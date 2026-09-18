@@ -1,0 +1,12 @@
+{
+  "name": "peer-message-network-runtime",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Pinned AgentPair transport for the peer-message network preview",
+  "engines": { "node": ">=22.13" },
+  "dependencies": {
+    "agentpair": "0.1.20",
+    "@agentpair/protocol": "0.5.5"
+  }
+}
