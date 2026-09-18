@@ -255,6 +255,11 @@ rg -n '"name": "<skill-or-suite-name>"' .claude-plugin/marketplace.json
 find . -path '*/SKILL.md' -maxdepth 4 | rg '(^|/)<skill-name>/SKILL.md$'
 ```
 
+After editing, commit and run `scripts/ci/validate_changed_skills.sh origin/main` (it examines the committed
+diff, so it sees nothing until you commit). It runs the same per-skill `quick_validate` the CI uses;
+repo-level `claude plugin validate --strict .` passes even when a description exceeds the 1024-character
+cap, so a green repo-level validate is not evidence the touched skill will pass.
+
 If the user gives a source path, use that path. If the available skill list points to a different installed copy, update the source first, then sync the installed copy only if the user explicitly needs the current session to use the new version immediately.
 
 ### Git Operations
