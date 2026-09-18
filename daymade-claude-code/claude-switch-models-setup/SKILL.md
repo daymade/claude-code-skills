@@ -270,6 +270,7 @@ The full step-2-16k template-correctness war-story (why an internally-consistent
 | Hook scripts | `~/.claude/hooks/`, `~/.claude/commands/` | Shared via symlink (scripts only — NOT registration) |
 | `settings.json` config: hook registration, marketplaces, env flags, permissions, preferences | `<profile>/settings.json` | **Converged from default profile** by `sync-profile-settings.py` at session start (identity keys like `model` and provider-routing/isolation env vars are never synced) |
 | `.claude.json` behavior keys (`workflowSizeGuideline`, notification/UI preferences) | `~/.claude.json` → `<profile>/.claude.json` | **Behavior allowlist converged** by the same script; state/cache/counter/migration/credential keys (incl. `projects`, `oauthAccount`, `userID`) are never synced; unknown drifted keys are reported for human classification |
+| MCP server registry (`mcpServers`) | `~/.claude.json` → `<profile>/.claude.json` | **Converged as a union**: main's entries propagate, a server defined only in one profile survives, main wins on a shared name. It is a behavior key, not a credential — the OAuth token it needs lives in the Keychain and is governed by the row above, so a registry entry without a shared credential store still costs one authorization per profile |
 | Provider settings | `~/.claude/settings/<name>.json` | Shared source, loaded per profile |
 
 ## Troubleshooting
