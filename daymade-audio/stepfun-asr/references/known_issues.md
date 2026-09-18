@@ -132,7 +132,7 @@ The default `urllib`/`requests` timeout is too short for 17+ minute audio. The b
 **`stepaudio-2-asr-pro` 在该端点整体不可用**：官方请求字段表把它列为支持的 model，
 但 2026-09-18 实测恒返回 `status=200: internal error`，与时间戳无关。
 
-## 说话人识别在另一个端点，且必须公网 URL
+## 说话人识别在另一个端点（已跑通），音频必须公网 URL
 
 **这个 SSE 端点没有说话人能力**，两个方向的证据：官方请求字段表无任何 speaker 字段；
 14 个候选字段名（`enable_speaker_diarization` / `enable_diarization` / `enable_speaker` /
@@ -153,10 +153,27 @@ The default `urllib`/`requests` timeout is too short for 17+ minute audio. The b
 | 说话人 | 无 | `enable_speaker_info` → 每个 utterance 带 `speaker.id`（`spk_1`…），单任务上限 10 人；需同时 `show_utterances=true` |
 | 分句/分词 | 无 | `show_utterances` |
 | 双声道分轨 | 无 | `enable_channel_split`（需 `audio.channel=2`） |
-| 模型 | `stepaudio-3-asr-max` | `stepaudio-2.5-asr` / `step-asr-1.1` |
+| 模型 | `stepaudio-3-asr-max` | `stepaudio-2.5-asr` / `step-asr-1.1`（v3 不在此端点） |
+| 脚本 | `scripts/asr_transcribe.py` | `scripts/asr_file.py` |
 
-**base64 走不通**，2026-09-18 实测三条路都失败，不要再试：
+**已端到端验证**（2026-09-18，pyannote 双人教程样本 30s）：8 个 utterance，
+`speaker_0` ×4 / `speaker_1` ×4，切分与真实轮次一致，每句带逐词时间戳。
+
+三个文档没写、会直接坑到人的事实：
+
+1. **说话人 id 是 `speaker_0` / `speaker_1`，不是文档写的 `spk_1`。**
+2. **`audio_download` 失败经常是抖动，必须重试。** 同一个 URL 实测连失败两次、
+   第三次成功。一次失败就断定 URL 不可用是错的；真正不可用的 URL 是 3/3 全败
+   （下面两条都复测过三次）。
+3. **不跟随跳转。** `https://github.com/<o>/<r>/raw/<b>/<f>` 3/3 失败，
+   换成 `https://raw.githubusercontent.com/<o>/<r>/<b>/<f>` 即成功。
+
+**base64 与 StepFun 自家文件存储都走不通**，2026-09-18 实测，不要再试：
 `audio.data` → `FAILED / audio_download / invalid audio url`；
-`https://api.stepfun.com/v1/files/<id>/content`（先传到 StepFun files）→ `failed to download audio`（需鉴权）；
-`stepfile://<id>` → `invalid audio url`。
-用这个端点就必须先把音频放到一个公网可取的地址，这是对外动作，先问用户。
+`https://api.stepfun.com/v1/files/<id>/content`（先传到 StepFun files，`purpose=storage`）→ 3/3 `failed to download audio`；
+官方文档明确 `files/{id}/content` 只对 `purpose=file-extract` 的文件返回**解析后的纯文本**，本就不可能当音频源。
+`stepfile://<id>` → `invalid audio url`。`stepfile://` 是 StepFun 引用已上传文件的正式约定，
+但只在 Chat API 的 `video_url` / `image_url` 生效，ASR 文件端点不认。
+
+**结论：StepFun 没有能产出公网音频直链的上传位。** 用这个端点就必须自备一个
+公网可取的地址（例如自有对象存储的签名临时链接）。那是对外动作，先问用户。

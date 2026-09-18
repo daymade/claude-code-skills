@@ -122,8 +122,13 @@ Legacy `step-asr-1.1` is the fallback when the current model hits the repetition
 | `audio.url` | Publicly fetchable, <100MB. **Base64 is not accepted** — see `known_issues.md` for the three routes that fail |
 | `request.model_name` | `stepaudio-2.5-asr` / `step-asr-1.1` (not `stepaudio-3-asr-max`) |
 | `request.show_utterances` | Sentence + word segmentation with ms timestamps; required for speaker info |
-| `request.enable_speaker_info` | Adds `speaker.id` (`spk_1`…) per utterance, max 10 per task |
+| `request.enable_speaker_info` | Adds `speaker.id` per utterance, max 10 per task. **Measured format is `speaker_0`/`speaker_1`; the docs' `spk_1` is wrong** |
 | `request.enable_channel_split` | Per-channel results; needs `audio.channel=2` |
 
 `submit` returns `{task_id}`; poll `query` until it stops returning `{"status":"RUNNING"}`.
 Failures come back as `{"status":"FAILED","error":{"stage":"audio_download","message":...}}`.
+
+`audio_download` is frequently transient — the same URL failed twice then succeeded on the
+third submit (2026-09-18). Retry before blaming the URL; a genuinely unreachable one fails
+every attempt. Redirects are not followed (`github.com/.../raw/...` fails 3/3,
+`raw.githubusercontent.com/...` succeeds). `scripts/asr_file.py` wraps all of this.

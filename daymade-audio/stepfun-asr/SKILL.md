@@ -80,12 +80,32 @@ The script handles base64 encoding, the nested `{audio: {data, input: {transcrip
 | Audio > 30 min | Split with ffmpeg before sending; the API rejects oversized payloads |
 | Need usage/billing data | Add `--json` to capture `usage.input_tokens` / `usage.total_tokens` from `transcript.text.done` |
 | Need to know when each word was said | `--json`, read `segments`. On by default |
-| **Need speaker labels (who said what)** | **Not this endpoint.** Use `/v1/audio/asr/file/submit` with `enable_speaker_info` — requires a publicly fetchable audio URL (base64 is rejected). See `references/api_reference.md` |
+| **Need speaker labels (who said what)** | `python3 scripts/asr_file.py <public-url>` — a different, async endpoint. **Takes a URL, not a local file**: base64 and StepFun's own file store are both rejected, so hosting the audio somewhere fetchable is a decision for whoever runs it |
 | `--model stepaudio-2-asr-pro` returns `internal error` | That model is not usable on `/v1/audio/asr/sse` (measured 2026-09-18); use the default or `stepaudio-2.5-asr` |
 | Highly repetitive content (same phrase 5+ times, > 90s) | Cross-validate with `step-asr-1.1` — see repetition hallucination in `references/known_issues.md` (2.5-era issue, unverified on v3) |
 | Hit `model stepaudio-3-asr-max not supported` | Wrong endpoint. Switch from `/v1/audio/transcriptions` to `/v1/audio/asr/sse` |
 | Hit silent 4xx auth failure | Verify your key is "Normal" not "Plan" — Plan keys cannot call audio endpoints |
 | Need to write raw HTTP (no Python) | Read `references/api_reference.md` for exact JSON body and SSE event shapes |
+
+## Speaker labels — `scripts/asr_file.py`
+
+`stepaudio-3-asr-max` on `/v1/audio/asr/sse` has no speaker capability at all (14 candidate
+request fields measured inert). Diarization lives on the async file endpoint:
+
+```bash
+python3 scripts/asr_file.py https://example.com/talk.mp3
+# [   6.61-   8.43] speaker_0: Hello. Hello. Oh,
+# [   8.21-  10.11] speaker_1: hello! I didn't know you were there.
+```
+
+Verified end-to-end 2026-09-18 on a two-speaker sample: correct turn boundaries, per-word
+timestamps inside each utterance, up to 10 speakers per task. Uses `stepaudio-2.5-asr` —
+v3 is not served on this endpoint.
+
+The hard constraint: **it fetches a URL and nothing else.** Base64 is rejected and so is
+StepFun's own `stepfile://` file store, so there is no way to feed it a local file without
+first putting that file somewhere publicly fetchable. Treat that as the caller's decision.
+`references/known_issues.md` has the three dead ends and the retry/redirect behaviour.
 
 ## Parameters are free — never omit one silently
 
