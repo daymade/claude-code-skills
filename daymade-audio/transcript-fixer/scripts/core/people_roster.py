@@ -268,7 +268,7 @@ def load_roster_names(path: Path) -> Dict[str, Dict[str, str]]:
         print(
             f"⚠️  people roster: dropped {len(dropped)} malformed 别名 entry/entries "
             f"from {path.name} (unsupported spacing, brackets or separators). Wrap the "
-            "exact alias in balanced quotes — e.g. `- **别名**: 「天择 Y1」` — or it stays "
+            "exact alias in balanced quotes — e.g. `- **别名**: 「甲乙 X1」` — or it stays "
             "unfindable by --lookup.",
             file=sys.stderr,
         )
