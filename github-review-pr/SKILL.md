@@ -478,6 +478,27 @@ decision, next owner, and smallest next action. Keep dynamic contributor counts 
 other derived queue totals out of persistent repository docs; compute them live in the
 report when relevant.
 
+### 10. Release the Local Review Refs
+
+The `refs/review-pr/...` refs exist to pin a stable snapshot while the review runs.
+Once the verdict is issued, delete every one this review created — they are local
+forensic scaffolding, not deliverables:
+
+```bash
+git update-ref -d "refs/review-pr/$PR_NUMBER/base"
+git update-ref -d "refs/review-pr/$PR_NUMBER/head"
+# plus refs/review-pr/$PR_NUMBER/recorded-base if you created it
+git for-each-ref "refs/review-pr/" --format='%(refname)'   # sweep: should print nothing
+```
+
+Leftover review refs pollute every `--all`-scoped operation (`git log --all`, author
+statistics, `-S` sweeps, security audits) with third-party commits that never touched
+the repository's public history. Real cost: a 2026-09 audit of this repo counted 98
+contributor commits from two months-stale review refs as "identities in history",
+which fed a wrong account-ownership annotation. If a later task needs the same
+objects, re-fetch `refs/pull/$PR_NUMBER/head` or use the evidence ledger's SHAs —
+do not keep refs "just in case".
+
 ## Perform Authorized Follow-Up Only
 
 Read [references/remediation_and_landing.md](references/remediation_and_landing.md)
