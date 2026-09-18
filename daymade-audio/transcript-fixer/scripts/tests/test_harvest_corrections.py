@@ -382,3 +382,68 @@ class TestUnrenderablePairs20260905:
             c["from"] != "云信信" for c in data["candidates"])
         assert any("云信信" in b for b in data["unrenderable"])
         assert all("云信信" not in b for b in data["bullets"])
+
+
+class TestLedgerProjectionAtTheReadSite:
+    """`remaining` must not count the corrected file's own correction ledger.
+
+    A native pass records what it fixed in `asr_note: 云锅=云国`. That line
+    quotes the OLD form, so a raw `corrected.count(old)` is > 0 on a file that
+    is in fact clean — and harvest prints 「残留 N」, i.e. "本轮没修干净",
+    sending the operator back to a transcript with nothing left to fix.
+    Measured 2026-09-01: 8 of 11 candidates carried that false warning
+    (independent-review-20260831, "harvest 走同一个投影").
+    """
+
+    RAW = (
+        "---\ntitle: 讨论\n---\n\n他说云锅很好用。\n后来云锅又崩了。\n"
+    )
+    CORRECTED = (
+        "---\ntitle: 讨论\n"
+        "asr_note: 云锅=云国\n"
+        "---\n\n他说云国很好用。\n后来云国又崩了。\n"
+    )
+
+    def _run(self, tmp_path, raw_text, corrected_text):
+        import json as _json
+        import harvest_corrections as hc
+        raw_p = tmp_path / "raw.md"
+        cor_p = tmp_path / "corrected.md"
+        raw_p.write_text(raw_text, encoding="utf-8")
+        cor_p.write_text(corrected_text, encoding="utf-8")
+        argv = sys.argv
+        sys.argv = ["harvest", str(raw_p), str(cor_p), "--json"]
+        try:
+            import io, contextlib
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = hc.main()
+            return rc, buf.getvalue()
+        finally:
+            sys.argv = argv
+
+    def test_ledger_citation_does_not_inflate_remaining(self, tmp_path):
+        import json as _json
+        rc, out = self._run(tmp_path, self.RAW, self.CORRECTED)
+        assert rc == 0
+        payload = _json.loads(out)
+        rows = payload if isinstance(payload, list) else payload.get("candidates", [])
+        assert rows, "the 云锅→云国 fix should still be harvested"
+        for row in rows:
+            assert row["remaining"] == 0, (
+                f"{row['from']}→{row['to']} reported 残留 "
+                f"{row['remaining']} from the asr_note ledger alone")
+
+    def test_ledger_only_delta_is_not_a_correction(self, tmp_path):
+        """If the ONLY difference is the ledger line, there is nothing to harvest."""
+        import json as _json
+        corrected_ledger_only = self.RAW.replace(
+            "---\n\n", "asr_note: 云锅=云国\n---\n\n", 1)
+        rc, out = self._run(tmp_path, self.RAW, corrected_ledger_only)
+        assert rc == 0
+        # The projection leaves the bare `asr_note:` key (only its value is
+        # stripped), so the two texts are not byte-identical and the early
+        # exit does not fire — but nothing may be harvested from a ledger line.
+        payload = _json.loads(out)
+        assert payload["candidates"] == [], payload
+        assert payload["bullets"] == [], payload

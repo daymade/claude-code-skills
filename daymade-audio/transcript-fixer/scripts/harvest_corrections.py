@@ -50,6 +50,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from core.trap_scanner import extract_trap_entries  # noqa: E402
+from core.dictionary_processor import project_without_ledger_values  # noqa: E402
 
 # Same token shape as generate_word_diff.py: CJK runs, Latin/digit runs,
 # single punctuation chars, whitespace runs.
@@ -412,8 +413,16 @@ def main() -> int:
     ap.add_argument("--json", action="store_true", help="机器可读输出")
     args = ap.parse_args()
 
-    raw = Path(args.raw).read_text(encoding="utf-8")
-    corrected = Path(args.corrected).read_text(encoding="utf-8")
+    # Both sides go through the same ledger projection Stage 1, trap-scan and
+    # --probe consume. The corrected file's `asr_note` quotes every old form it
+    # just fixed, so without this every completed correction re-enters as diff
+    # noise AND keeps `remaining` permanently > 0 — which prints 「残留 N」,
+    # i.e. "本轮没修干净", on a file that is in fact clean. Measured 2026-09-01:
+    # 8 of 11 candidates carried that false warning.
+    raw = project_without_ledger_values(
+        Path(args.raw).read_text(encoding="utf-8"))
+    corrected = project_without_ledger_values(
+        Path(args.corrected).read_text(encoding="utf-8"))
     if raw == corrected:
         print("harvest: raw 与 corrected 完全一致，无可收获", file=sys.stderr)
         return 0

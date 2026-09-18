@@ -27,6 +27,21 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
+from core.dictionary_processor import project_without_ledger_values
+
+# Mirrors cli.commands.STAGE1_SIDECAR_SUFFIXES. Imported by value rather than
+# by reference: core must not depend on cli, and test_probe_ledger.py asserts
+# the two lists stay identical so this copy cannot drift unnoticed.
+_SIDECAR_SUFFIXES = (
+    "_stage1.md",
+    "_stage2.md",
+    "_dryrun.md",
+    "_changes.md",
+    "_needs_review.md",
+    "_uncertain.md",
+    "_对比.html",
+)
+
 
 @dataclass
 class ProbeSample:
@@ -41,6 +56,9 @@ class ProbeResult:
     total: int = 0
     per_file: List[tuple[str, int]] = field(default_factory=list)
     samples: List[ProbeSample] = field(default_factory=list)
+    # Occurrences deliberately kept out of `total` — see probe_corpus().
+    excluded_ledger: int = 0    # asr_note-style correction provenance
+    excluded_sidecar: int = 0   # this tool's own *_changes/*_needs_review/…
 
 
 def probe_corpus(
@@ -57,14 +75,33 @@ def probe_corpus(
     Substring counting via str.count / str.find — terms are literal words,
     and a regex would invite metacharacter surprises for no benefit at this
     scale (dozens of files, tens of MB).
+
+    Two classes of occurrence are excluded from the evidence, because both
+    are *records of past corrections* and therefore quote the old form by
+    construction — counting them biases the probe toward "every occurrence is
+    an ASR error", which is the exact verdict this command exists to inform:
+
+    - single-line correction ledgers in frontmatter (`asr_note: old → new`),
+      removed by the same projection Stage 1 and trap-scan already consume;
+    - this tool's own sidecars (`*_changes.md`, `*_needs_review.md`, …),
+      which are transcript-fixer output, not corpus evidence.
+
+    The excluded count is reported, never silently folded away: a smaller
+    denominator the operator cannot see is its own kind of lie.
     """
     result = ProbeResult(term=term)
     corpus_dir = Path(corpus_dir)
     for path in sorted(corpus_dir.rglob("*.md")):
         try:
-            text = path.read_text(encoding="utf-8", errors="replace")
+            raw = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
+        if any(path.name.endswith(suffix) for suffix in _SIDECAR_SUFFIXES):
+            result.excluded_sidecar += raw.count(term)
+            continue
+        # Preserves every newline, so sample line numbers stay true to the file.
+        text = project_without_ledger_values(raw)
+        result.excluded_ledger += raw.count(term) - text.count(term)
         count = text.count(term)
         if count == 0:
             continue
@@ -99,6 +136,18 @@ def format_probe(result: ProbeResult, corpus_dir: Path) -> str:
     out.append(f"  total: {result.total} occurrence(s) across {len(result.per_file)} file(s)")
     for rel, count in result.per_file:
         out.append(f"    {count:>4}  {rel}")
+    excluded = result.excluded_ledger + result.excluded_sidecar
+    if excluded:
+        parts = []
+        if result.excluded_ledger:
+            parts.append(f"{result.excluded_ledger} in correction ledgers (asr_note)")
+        if result.excluded_sidecar:
+            parts.append(f"{result.excluded_sidecar} in transcript-fixer sidecars")
+        out.append(f"  excluded from the count: {excluded} — " + ", ".join(parts))
+        out.append("    (both quote the OLD form by construction; counting them would make "
+                   "every past correction read as fresh evidence for this rule. A prose "
+                   "ledger outside frontmatter — e.g. a project's own ingest log — is NOT "
+                   "auto-detected: check the per-file list above for one.)")
     if result.samples:
         sampled_files = {s.file for s in result.samples}
         out.append(f"  samples ({len(result.samples)} shown — from {len(sampled_files)} of "
@@ -123,6 +172,8 @@ def probe_to_json(result: ProbeResult) -> dict:
     return {
         "term": result.term,
         "total": result.total,
+        "excluded_ledger": result.excluded_ledger,
+        "excluded_sidecar": result.excluded_sidecar,
         "per_file": [{"file": f, "count": c} for f, c in result.per_file],
         "samples": [
             {"file": s.file, "line": s.line, "context": s.context}
