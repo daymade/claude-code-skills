@@ -1,6 +1,6 @@
 ---
 name: llm-wiki-setup
-description: Co-create a personal investment-research LLM Wiki (Andrej Karpathy's pattern) where the user's OWN analysis framework becomes a living CLAUDE.md — by interviewing them, NOT by handing them a template. Use whenever the user wants to build a compounding research knowledge base, 投研第二大脑, 投研知识库, or 个人投研 wiki; instantiate Karpathy's LLM Wiki gist for finance/investing; turn their stock-picking, analyst-tracking, or earnings-watching workflow into a structured markdown vault; or build a wiki tracking companies / industries / macro / analysts over time. Pure markdown + wikilinks, NO RAG / vector DB (Karpathy's core idea — do not over-engineer). Also triggers for ingesting research reports / earnings calls / expert notes into an existing wiki, and for post-earnings prediction→fulfillment reviews. Core value = extracting the user's personal investment preferences into THEIR OWN schema, never imposing a standard one.
+description: Co-create a personal investment-research LLM Wiki (Andrej Karpathy's pattern) where the user's OWN analysis framework becomes a living CLAUDE.md — by interviewing them, NOT by handing them a template. Use whenever the user wants to build a compounding research knowledge base, 投研第二大脑, 投研知识库, or 个人投研 wiki; instantiate Karpathy's LLM Wiki gist for finance/investing; turn their stock-picking, analyst-tracking, or earnings-watching workflow into a structured markdown vault; or build a wiki tracking companies / industries / macro / analysts over time. Pure markdown + wikilinks; no RAG in place of compilation (Karpathy's core idea — qmd search over the grown wiki is in-pattern). Also triggers for ingesting research reports / earnings calls / expert notes into an existing wiki, and for post-earnings prediction→fulfillment reviews. Core value = extracting the user's personal investment preferences into THEIR OWN schema, never imposing a standard one.
 ---
 
 # LLM Wiki Setup（投研第二大脑共创）
@@ -22,7 +22,7 @@ description: Co-create a personal investment-research LLM Wiki (Andrej Karpathy'
 
 ## 不碰的红线（Karpathy 原意，别 over-engineer）
 
-纯 markdown + wikilink + grep。**不加 RAG / 向量库 / embedding。** 知识靠预编译进结构化页「复利」，不是每次 query 重新检索原始文档——这是本模式相对 RAG 的根本区别，也是 Karpathy 的核心 idea。别加回任何检索层，别加 knowledge graph / 自动 health-check 之类机制（社区有些版本加了，那是 over-engineer）。
+纯 markdown + wikilink。**不用检索替代编译**：知识靠预编译进结构化页「复利」，不是每次 query 重新检索原始文档——这是本模式相对 RAG 的根本区别，也是 Karpathy 的核心 idea。搜索层不在禁区：他的 gist 写明百来个来源靠 `index.md` 就够，wiki 长大后要正经搜索，并点名 qmd（本地 BM25 + 向量 + 重排）——搜的是编译好的 wiki 页，不是拿原始文档的片段替代编译。别加 knowledge graph / 自动 health-check 之类机制（社区有些版本加了，那是 over-engineer）。
 
 ## 机制层 vs 规则层（贯穿全程的区分）
 

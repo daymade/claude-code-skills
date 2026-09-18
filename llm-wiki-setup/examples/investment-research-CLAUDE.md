@@ -13,7 +13,7 @@
 
 这是一个 **金融投研 LLM Wiki**，instantiate 自 Karpathy 的 gist
 （<https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f>）。
-纯 markdown + `[[wikilink]]` + grep，无 RAG/向量库/embedding——Karpathy 原意，别加检索层。
+纯 markdown + `[[wikilink]]`；知识编译进页面，不靠查询时检索原始文档替代——Karpathy 原意。wiki 长大后的搜索层（如 qmd）不在此限。
 
 > 下面 H1-H11 是【这位机构投资者】选择的规则。它们**不是 LLM Wiki 的「标准」**，
 > 是「看卖方研报、追踪分析师、按季报节奏复盘」这套工作方式的显性化。
@@ -208,4 +208,4 @@ ingest 一份新源时，**禁止一气呵成**。必须在以下 5 个卡点跟
 - ❌ 不要跨层级写——macro 内容不进 companies 页
 - ❌ 不要一次 ingest 一份长研报不停下来问 HITL 5 问
 - ❌ 不要相信 doc 扩展名——`file` + 用户确认 doc_type
-- ❌ 不要加 RAG / 向量库 / embedding —— 纯 markdown 是本模式的本质，不是限制
+- ❌ 不用查询时检索原始文档替代编译进页面 —— 编译是本模式的本质；给长大的 wiki 加搜索层（qmd）不算违反
