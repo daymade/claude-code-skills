@@ -95,6 +95,7 @@ grep -rniE "ultrathink|internal-only|confidential" skill-folder/
 - Author attributions that reveal identity
 
 **How to replace:**
+- Real incident cases are not exempt: keep the date, mechanics, and failure shape, but swap every person for an invented name — a case's persuasiveness comes from its concrete detail, never from a real name. Check the invented name against your actual team roster so the fiction doesn't accidentally land on a real colleague (short common names do).
 - Use generic names: "Alice", "Bob", "the developer", "the reviewer"
 - Use role-based references: "Backend team", "PM", "Designer"
 - Remove author attributions or use placeholders
