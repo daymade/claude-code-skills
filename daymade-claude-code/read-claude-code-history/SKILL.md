@@ -41,7 +41,7 @@ hand the verified evidence to `daymade-claude-code:continue-claude-code-work`.
 按词搜不到时换这三个判据，别扩词硬搜：
 
 1. **时间约束是第一筛子**。用户给了时间窗（「前两天」「本周」）→ 先按 mtime 筛文件系统（`find <root> -newermt '<日期>' -name '*.html'`），候选面缩到几十条再按形态排。全库关键词搜索应该在时间筛之后，不是之前。
-2. **session scratchpad 必须在搜索面内**（`/private/tmp/claude-501/**/scratchpad/`）。Claude session 的默认产物落点在那，不在 workspace——「我们之前写的 X」有相当概率躺在 scratchpad。找产物类目标时显式包含它。
+2. **session scratchpad 必须在搜索面内**（`/private/tmp/claude-$(id -u)/**/scratchpad/`，macOS 单用户通常是 `claude-501`）。Claude session 的默认产物落点在那，不在 workspace——「我们之前写的 X」有相当概率躺在 scratchpad。找产物类目标时显式包含它。
 3. **恢复出的版本 ≠ 最终版**。从 session jsonl 恢复文件（取 Write 的 content）只拿到某次全量写，后续增量 Edit 不会自动合入——恢复产物可能只有真实文件的零头（实测：28KB 恢复片段 vs 2.45MB 完整版）。打开/渲染后觉得「不像目标」时，先怀疑「我拿到的不是完整版」（原路径文件还在不在、session 里还有没有后续 Edit），不要直接排除目标。
 
 战例（2026-09-18）：找「之前做的聚类网页」，十几轮全库关键词搜索无果；目标一直在 9-13 的 session scratchpad（favorites-ledger.html，2.45MB），恢复的 28KB 片段渲染成裸样式被误判排除，用户给出精确路径后才定位。
