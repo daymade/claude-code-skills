@@ -140,7 +140,22 @@ BEHAVIOR_KEYS = {
     "prStatusFooterEnabled",   # PR status in the footer
     "deepLinkTerminal",        # terminal for deep links
     "showExpandedTodos",       # todo list expanded/collapsed display (bool, 2026-09-13)
+    # MCP server registry. Tooling, not identity: the 2026-07-18 directive
+    # ("same functionality as main except model/provider") covers it, and a
+    # server registered once should be callable from every profile. It sat in
+    # STATE_EXACT beside userID/oauthAccount until 2026-09-18, which was a
+    # category error -- those name WHO a profile is, this names what it can
+    # call. All profiles live under one $HOME as one OS user, so propagating a
+    # server's env keys crosses no trust boundary. Merged, not replaced: see
+    # MERGE_KEYS.
+    "mcpServers",
 }
+
+# Behavior keys whose value is a MAPPING of independent entries. Main's entries
+# propagate, but an entry only this profile has is KEPT. Plain replacement would
+# silently delete a server registered in one profile only -- and unlike Layer 1,
+# Layer 2 has no "dropped nested entries" report to make that loss visible.
+MERGE_KEYS = {"mcpServers"}
 
 # Keys a sync must NEVER touch: per-profile runtime state, caches, counters,
 # migration/one-shot flags, identity and credentials. Patterns first, exact
@@ -157,7 +172,7 @@ BEHAVIOR_KEYS = {
 # names. Widening the tripwire to cover these would fire on healthy state
 # keys constantly (hasUsedStash et al.) and train the report into noise.
 STATE_EXACT = {
-    "projects", "mcpServers", "userID", "machineID", "oauthAccount",
+    "projects", "userID", "machineID", "oauthAccount",
     "companion", "chromeExtension", "githubRepoPaths", "replBridgePlaceholders",
     "claudeAiMcpEverConnected", "claudeCodeFirstTokenDate", "firstStartTime",
     "installMethod", "officialMarketplaceAutoInstallAttempted",
@@ -353,11 +368,18 @@ def sync_claude_json(profile_dir: Path, write: bool):
     if not main:
         return [], []  # nothing to propagate; a CORRUPT main is alarmed on in run()
     prof = load(target)  # an empty object {} is valid content, not a load failure
-    changed = {
-        k: main[k]
-        for k in BEHAVIOR_KEYS
-        if k in main and prof.get(k) != main[k]
-    }
+    changed = {}
+    for k in BEHAVIOR_KEYS:
+        if k not in main:
+            continue
+        cur = prof.get(k)
+        if k in MERGE_KEYS and isinstance(main[k], dict):
+            # Union: main wins on a shared name, profile-only entries survive.
+            merged = {**(cur if isinstance(cur, dict) else {}), **main[k]}
+            if merged != cur:
+                changed[k] = merged
+        elif cur != main[k]:
+            changed[k] = main[k]
     gray = sorted(
         k for k in main
         if k not in BEHAVIOR_KEYS
