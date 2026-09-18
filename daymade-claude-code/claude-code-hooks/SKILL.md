@@ -303,6 +303,15 @@ bash -n hook.sh                                # syntax
 printf '%s' '{"tool_name":"Bash","tool_input":{"command":"<trigger case>"}}'    | ./hook.sh; echo "exit=$?"  # want 2
 printf '%s' '{"tool_name":"Bash","tool_input":{"command":"<healthy lookalike>"}}'| ./hook.sh; echo "exit=$?"  # want 0
 ```
+Run the end-to-end case in the **verbatim form the registration will use** —
+if settings.json will say `$HOME/.claude/hooks/x.sh`, execute exactly that string.
+Any interpreter-explicit form (`bash hook.sh`, `python3 hook.py`, and a hook's own
+`--selftest` that re-invokes itself through `bash`) bypasses the exec bit, so it
+structurally cannot catch a dead-on-arrival registration. Symptom index: a
+repeating non-blocking `PreToolUse hook error: … Permission denied` after install
+means a bare-path-registered hook lost its exec bit — **the gate has been dead
+since install**; a green selftest is not evidence against this, because the
+selftest never exercised the registered form.
 Bundle the harness: [scripts/test_hook.sh](scripts/test_hook.sh) runs a whole
 table of trigger/allow cases. **Self-block gotcha:** once the hook is live in the
 session you cannot test it by putting the trigger string in your *own* Bash
@@ -1084,7 +1093,11 @@ wall time.
      failure `bash -n` and steps 4-7 below both structurally miss: a hook that has
      **degraded into a permanent no-op**. That failure is invisible by construction —
      a guard that never fires produces output identical to a session with nothing to
-     report, which is why it can persist for weeks. Two fixtures is the *floor*, not
+     report, which is why it can persist for weeks. Keep the coverage boundary straight:
+     `--selftest` proves the *logic* still fires; the exec bit, the symlink and the
+     registered path resolving are *deployment* facts the health check's own
+     executable/registration scans cover — a green selftest says nothing about wiring,
+     and the wiring scans say nothing about logic. Neither substitutes for the other. Two fixtures is the *floor*, not
      the target: a must-block sample **and** a must-pass sample, so it catches "stopped
      firing" and "started false-blocking" alike — one of either kind alone cannot.
      **Size it by mutants killed, not by a fixture count**, and calibrate the way you
