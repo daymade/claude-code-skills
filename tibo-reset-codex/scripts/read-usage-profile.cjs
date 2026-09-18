@@ -2,10 +2,10 @@
 // 隔离 profile 第二/多账号 ChatGPT/Codex 用量查询的自动化"手"。
 //
 // 用法：
-//   node read_usage_auto.cjs                    # 读模式：读当前登录账号的 usage（默认 profile a）
-//   node read_usage_auto.cjs --drive-login      # 未登录时驱动到 Google 账号选择器（交人工输密码）
-//   TIBO_PROFILE=b node read_usage_auto.cjs     # 换 profile b
-//   TIBO_PROXY=... node read_usage_auto.cjs     # 自定义代理（默认 127.0.0.1:1082）
+//   node read-usage-profile.cjs                    # 读模式：读当前登录账号的 usage（默认 profile a）
+//   node read-usage-profile.cjs --drive-login      # 未登录时驱动到 Google 账号选择器（交人工输密码）
+//   TIBO_PROFILE=b node read-usage-profile.cjs     # 换 profile b
+//   TIBO_PROXY=... node read-usage-profile.cjs     # 自定义代理（默认 127.0.0.1:1082）
 //
 // 边界（重要，勿越界）：
 //   - 只驱动到 Google「选择账号」页为止。密码/验证码/授权确认一律交人工，绝不自动化输入。
