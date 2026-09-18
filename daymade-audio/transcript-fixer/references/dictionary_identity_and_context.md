@@ -198,7 +198,7 @@ inference you can make from the audio, because a human typed them:
 
   A `nickName` is often decorated, and the real name is usually still in there:
   `文案有为王乙霖🐱京杭传媒` → 王乙霖 (a *fuller* name than the group nickname's
-  `乙霖`), `赤脚大仙（戊悦）` → 戊悦, `Eric@己强|某商学院` → 己强, `HerX庚流` → 庚流.
+  `乙霖`), `踏雪无痕（戊悦）` → 戊悦, `Eric@己强|某商学院` → 己强, `HerX庚流` → 庚流.
   Take the name, record the decorated form as `别名`, and never convert either
   into an `ASR 变体` — a 花名 is a name the person actually uses, not a mishearing,
   so it is findable but never rewritten. Still never fill a gap from `remark`.
@@ -290,8 +290,8 @@ is real in this corpus".
 text: each variant is rewritten to the heading. `别名` and the heading itself are
 *findable but never rewritten* — `--lookup` reports them so "is this string a
 real person" is answerable, while nothing edits them. That distinction is why a
-花名 goes on `别名`: `赤脚大仙` is a name its owner uses, and auto-replacing it
-with `戊悦` would destroy information, but a run that cannot find `赤脚大仙` at
+花名 goes on `别名`: `踏雪无痕` is a name its owner uses, and auto-replacing it
+with `戊悦` would destroy information, but a run that cannot find `踏雪无痕` at
 all is one step from deciding it is a mishearing of something else.
 
 So an entry with no `ASR 变体` line is not a dead entry. It is the normal state

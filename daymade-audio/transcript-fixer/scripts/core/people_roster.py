@@ -12,7 +12,7 @@ Roster format (the SSOT the human maintains):
     - **ASR 变体**: variant1, variant2, variant3   <- each maps -> Canonical Name
     - **别名**: ...                                  <- IGNORED (valid aliases, not errors)
     - **易混**: ...                                  <- IGNORED (prose notes; often too risky
-                                                       to auto-correct, e.g. 李老师→刘老师)
+                                                       to auto-correct, e.g. 李老师→黎老师)
 
 Only `###` sections with an `ASR 变体` line contribute *corrections*. The canonical
 name is the `### ` header — it MUST be clean (no parenthetical aliases; those belong
@@ -61,7 +61,7 @@ _ASR_RE = re.compile(
 _ASR_PREFIX_RE = re.compile(r'^-\s+\*\*ASR\s*变体\*\*')
 # The alias line. Aliases are findable but never correctable: a 花名 is a real
 # name the person goes by, not a mishearing, so rewriting it would destroy
-# information. Indexing it answers "who is 赤脚大仙" without ever editing it.
+# information. Indexing it answers "who is 踏雪无痕" without ever editing it.
 _ALIAS_RE = re.compile(r'^-\s+\*\*别名\*\*\s*[:：]\s*(.+?)\s*$')
 # The identity line, shown by --lookup so a name hit says *which* person it is.
 _IDENTITY_RE = re.compile(r'^-\s+\*\*身份\*\*\s*[:：]\s*(.+?)\s*$')
@@ -221,7 +221,7 @@ def load_roster_names(path: Path) -> Dict[str, Dict[str, str]]:
     ``别名`` values are indexed too, mapping to the person's canonical name —
     findable but still never correctable, because a 花名 is a name the person
     actually goes by, not a mishearing. Half of a cohort can appear in a
-    transcript under one, so "who is 赤脚大仙" has to be answerable without
+    transcript under one, so "who is 踏雪无痕" has to be answerable without
     that ever becoming an edit.
 
     Identity text is returned so the caller can show *which* person matched
