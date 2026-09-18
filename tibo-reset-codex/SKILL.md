@@ -37,6 +37,9 @@ description: >-
   与台账回填。**§2 之后必须再跑一次实时 banked 查询**（`scripts/query_usage.py`，读法与字段表见
   [账号 SOP](references/account-usage.md)）——§2 的 rollout 快照结构上没有备用重置字段，不跑就
   答不全「现在什么情况」这个最常被问的维度；只取 banked 一个数即可，本条其余部分仍只管重置状态。
+  定时循环（如 `/loop`）重复触发时，若距上次检查间隔很短（<10 分钟）且上轮无改判信号，可只跑
+  公告线确认无新官宣、跳过 incidents/banked/本机扫描全套——官宣与补偿型重置最小间隔为小时级，
+  短间隔内不会漏事件；间隔正常或上轮出现过新信号时仍跑全套。
   点名额度/余额本身的问法整条走账号 SOP，本条只管重置状态。
 - 用户问「我们几个账号 / 都用完了吗 / 还有两个满额 / 还有几次 Full reset」→ 先读
   [逐账号额度查询与网页登录恢复](references/account-usage.md)。
@@ -53,6 +56,13 @@ description: >-
 - 想跳过网页手动登录、把日常 Chrome 已登录的 Google 账号直接接到隔离查询 profile →
   `scripts/launch-usage-profile.sh <a|b>` 建/开隔离 Chrome profile，`scripts/import-google-cookies.py --profile <a|b>`
   搬运 `.google.com` 系 cookie（机制与安全论证见脚本自身 docstring，2026-09-15 验证过）。
+- 想**自动**驱动隔离 Chrome 查第二账号用量 → `node scripts/read-usage-profile.cjs`（依赖
+  `~/.chrome-profiles/tibo-cdp/` 的 playwright；默认 profile a）。读模式直接解析当前登录账号
+  usage；加 `--drive-login` 在未登录时自动点 `Continue with Google` 驱动到 Google 账号选择器
+  并列出全部账号。**实测边界（2026-09-16）**：隔离 profile 无 Google 会话 token，账号选择器
+  每个账号都标 `Signed out`，免密直登做不到——密码/验证码交人工，首登一次后读模式才全自动。
+  踩过的可执行细节（代理、真实输入通道对哪个按钮有效、登录态判据、OAuth 轮询）见
+  [account-usage.md 隔离 Chrome 自动化节](references/account-usage.md#隔离-chrome-profile-自动化真实输入通道的适用边界2026-09-16-实测)。
 
 ## 输出合同：先给结论，再交代边界
 
@@ -180,6 +190,66 @@ done
 而 `summary.json` 成功、Radar 首跑吐空响应体直接 `JSONDecodeError`、fxtwitter 连续两次
 `SSL_ERROR_SYSCALL` 第三次成功（2026-09-07 独立复测）——**失败先重试 2–3 次再判定端点
 不可用**，一次失败不构成「站点挂了」。
+
+**⚠️ `summary.json` 只看当前绿不绿，读不到历史故障——必须同时查 `incidents.json`。**
+只跑 summary 会漏掉两类事件，都落在「上一轮官宣后无新重置」窗口内，是「补偿型重置／静默重置」
+（Tibo 两个触发）的候选触发点：①「补偿型」= Codex/Work 故障（例 09-14 02:46 UTC「Elevated
+error rates for Codex and ChatGPT Work」）；②**「静默型」= 平台主动调查意外额度重置**（例
+09-09 17:29「Investigating unexpected usage limit resets」，正文 "Some Codex users may be
+experiencing unexpected usage limit resets"）。**第②类比①更直接，且名字不含 Codex——只按
+Codex/Work 命名 flag 会漏掉它。** 只看当前状态页 = 放弃这两条预测信号。每轮把下面这条和
+summary 一起跑：
+
+```bash
+# 近期 incident + 完整正文（summary.json 看不到）。flag 命中两类：
+#   [补偿型] 名字含 Codex/Work
+#   [静默型] 名字或正文含 usage limit / unexpected reset / billed / quota（不依赖 Codex 命名）
+for i in 1 2 3; do
+  o=$(curl -s -m 20 -A "Mozilla/5.0" "https://status.openai.com/api/v2/incidents.json")
+  if printf '%s' "$o" | head -c1 | grep -q '{'; then
+    printf '%s' "$o" | python3 -c "
+import json,sys,re
+d=json.load(sys.stdin)
+silent=re.compile(r'usage limit|unexpected.*reset|billed|billing|quota|payment',re.I)
+for inc in d.get('incidents',[])[:14]:
+    name=inc.get('name','')
+    body=' '.join((u.get('body') or '') for u in inc.get('incident_updates',[]))
+    f=''
+    if 'Codex' in name or 'Work' in name: f+=' [补偿型]'
+    if silent.search(name) or silent.search(body): f+=' [静默型-额度]'
+    print(f\"{inc.get('created_at','')[:16]} | {inc.get('impact',''):6} | {inc.get('status','')} | {name[:52]}{f}\")"
+    break
+  fi
+  echo "  attempt $i 空响应，重试中"; sleep 3
+done
+```
+
+命中候选时用 `incident_updates[].body` 读正文再判：含补偿/reset/额度措辞 → 升级为强信号（对照
+09-12 的 "reset is also landing by midnight today"）；纯错误率抖动无补偿措辞 → 只记候选。
+`impact: none` 且 <2h 恢复、正文无额度语义的按噪声忽略。
+
+**③ 社区 monitor —— 静默重置下唯一的独立第二眼，纳入常规轮询。** Radar 只索引 @thsottiaux、
+incidents 是 OpenAI 自述；两者都空时，社区实测是能独立发现"静默重置已发生"的通道。每轮和上面
+一起跑（两站同源家族，只作交叉不增独立计数；verdict=No 是正常态，只有变 Yes 才触发静默路径）：
+
+```bash
+# 社区 reset monitor（独立第二眼，判 verdict）。http!=200 就跳过，不阻塞。
+for u in "https://hascodexratelimitreset.today" "https://lidless.app/did-codex-reset-today"; do
+  f="/tmp/tibo_c_$(echo "$u"|md5).html"
+  code=$(curl -sS -m 15 -A "Mozilla/5.0" -o "$f" -w '%{http_code}' -L "$u" 2>/dev/null)
+  [ "$code" = "200" ] || { echo "  $u http=$code 跳过"; continue; }
+  python3 -c "
+import re,html
+t=open('$f',encoding='utf-8',errors='replace').read()
+txt=re.sub(r'<script.*?</script>|<style.*?</style>','',t,flags=re.S)
+txt=re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>',' ',txt))).strip()
+m=re.search(r'(No sign.{0,80}|Verdict: (Yes|No))',txt)
+print('  monitor:', (m.group(0) if m else 'verdict 未解析')[:90])"
+done
+```
+
+`verdict` 变 **Yes**、或 lidless 文案从 "No sign" 变实锤 → 立即走 §3 静默重置路径（用实时 API +
+同时段实测交叉，按证据范围命名，不外推全员）。verdict=No / 解析不到 → 正常态，不动。
 
 ### 2. 本机取证：Codex rollout 快照 = 可脚本化的第一手账户证据
 
