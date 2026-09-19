@@ -77,10 +77,12 @@ else. Scope is EVERY profile in all of them:
               Never blocks the session: a corrupt main aborts convergence
               with exit 0, an unreadable profile is reported and skipped, and
               an unexpected exception prints a traceback and still exits 0.
-  --all       same scope, same writes; human-run, so a corrupt main exits 2.
-              Kept as the explicit form the docs tell you to run after a
-              manual settings edit — it is no longer what makes a run cover
-              every profile.
+  --all       same scope, same writes; human-run, so it is strict — a corrupt
+              main exits 2, and so does a profile that could not be read (a
+              strict mode exits 2 so an audit cannot claim to have covered
+              profiles it never reached). Kept as the explicit form the docs
+              tell you to run after a manual settings edit — it is no longer
+              what makes a run cover every profile.
   --check     audit every profile, write nothing; exit 1 when drifted, exit 2
               when a main file is corrupt (a corrupt main reads as empty and
               would otherwise fake-green the audit) or a profile could not be

@@ -480,6 +480,44 @@ check("the broken profile's non-dict env was replaced by main's",
       json.loads((r3g / "profiles/aaa-broken/settings.json").read_text()))
 check("SessionStart still exits 0 with a malformed profile present", r.returncode == 0, r.returncode)
 
+print("== a profile the run could not process: 2 in both audit modes, 0 in SessionStart ==")
+# The half of the exit-code contract the docs state but the suite never pinned.
+# A whole file that is valid JSON but not an object is what raises inside
+# _converge_one (load() returns the list as-is) and sets `failed`. p1 is left
+# drifted on purpose: the assertion is that 2 wins over 1, not that the run
+# happens to be clean. The name sorts before p1, so "p1 still converged" also
+# proves the failing profile did not cancel the one after it.
+r3i, e3i = cli_tree3(names=("aaa-wrongshape", "p1"), drift=("p1",))
+(r3i / "profiles/aaa-wrongshape/settings.json").write_text("[]")
+(r3i / "profiles/aaa-wrongshape/.claude.json").write_text("{}")
+
+r = run_cli(["--check"], e3i)
+check("a wrong-shape profile is reported and skipped, not silently audited",
+      "aaa-wrongshape" in r.stdout and "ERROR" in r.stdout, f"out={r.stdout!r}")
+check("--check exits 2 on a profile it could not read (2, not the drift's 1)",
+      r.returncode == 2, f"rc={r.returncode} err={r.stderr[-200:]!r}")
+check("--check wrote nothing for that profile",
+      not (r3i / "profiles/aaa-wrongshape/settings.json.sync-backup").exists())
+
+r = run_cli(["--all"], e3i)
+check("--all exits 2 on a profile it could not read", r.returncode == 2,
+      f"rc={r.returncode} err={r.stderr[-200:]!r}")
+check("--all still converged the profile after the failing one",
+      json.loads((r3i / "profiles/p1/.claude.json").read_text())["workflowSizeGuideline"] == "small",
+      json.loads((r3i / "profiles/p1/.claude.json").read_text()))
+
+# Re-drift p1 first: the --all step above already converged it, so without this
+# the assertion below would only prove p1 is in a converged state, not that the
+# bare run put it there.
+(r3i / "profiles/p1/.claude.json").write_text(json.dumps({"workflowSizeGuideline": "medium"}))
+r = run_cli([], e3i)
+check("argument-free SessionStart exits 0 on that same failing profile", r.returncode == 0,
+      f"rc={r.returncode} err={r.stderr[-200:]!r}")
+check("SessionStart converged p1 despite the failing profile",
+      json.loads((r3i / "profiles/p1/.claude.json").read_text())["workflowSizeGuideline"] == "small")
+check("SessionStart names the failing profile in its output",
+      "aaa-wrongshape" in r.stdout, f"out={r.stdout!r}")
+
 print("== corrupt main writes nothing in EVERY writing mode (not just no-args) ==")
 
 

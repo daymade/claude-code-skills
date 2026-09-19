@@ -32,10 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refused rather than falling through. Exit codes: the argument-free run returns
   0 unconditionally — including when a main file is corrupt, where it warns,
   converges nothing and returns 0 (a corrupt main reads as empty, so converging
-  would strip keys from every profile); `--check` returns 1 on drift and 2 on a
-  corrupt main; `--all` returns 2 on a corrupt main or a profile it could not
-  read. Convergence still prints one line only per profile it actually changed
-  and nothing when converged, so drift is visible in session-start output
+  would strip keys from every profile); `--check` returns 1 on drift, and 2 on a
+  corrupt main file or a profile it could not read; `--all` returns 2 on both of
+  those failures. Convergence still prints one line only per profile it actually
+  changed and nothing when converged, so drift is visible in session-start output
   instead of hiding. A missing `~/.claude-profiles` is now an empty set rather
   than an exception on every session start.
 
@@ -59,6 +59,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   profile through the out-of-root union — a synthetic main then converges that
   profile's real `hooks` down to nothing, and every guard registered in it goes
   with them.
+- **claude-code-hooks** (`daymade-claude-code` v3.40.0 → v3.41.0): two shipped
+  instructions named a manual convergence step that no longer exists — register a
+  guard in the main profile, then run `sync-profile-settings.py --all`. That was
+  written when `--all` was the only way to reach the other profiles; the converger
+  is now registered argument-free and converges every profile on any invocation,
+  so the next profile to start a session does it. `--all` stays in both places as
+  the human mode, for propagating an edit immediately instead of at the next
+  session start. The same pass corrects the exit-code line in the
+  `claude-switch-models-setup` entry above, which understated `--check`'s 2 as
+  corrupt-main-only; the `--all` clause is restated to share that wording and
+  was already correct.
+- **claude-switch-models-setup** (`daymade-claude-code` v3.40.0 → v3.41.0) —
+  ships in the same release as the entry above: four places described the
+  human-run modes' exit 2 as corrupt-main-only, when a profile that could not be
+  read returns 2 from `--all` as well. `failed` is set per profile inside the
+  convergence loop's except, and `--all` is strict, so it takes
+  `return 2 if (failed and strict) else 0`. Every description of these codes now
+  agrees: a corrupt main file and an unreadable profile each return 2 under
+  both `--check` and `--all`, and what separates the two modes is that `--check`
+  writes nothing. Fixed in SKILL.md's exit-code list, SKILL.md's
+  SessionStart-registration rule, and the script's own mode docstring; the
+  troubleshooting reference's exit-code sentence covered only the corrupt-main
+  case and now names the per-profile split too. The fixture suite pinned only the
+  corrupt-main side, so the per-profile half of this contract had no assertion
+  behind it — the fixture suite now asserts that a profile whose whole file is
+  valid JSON but not an object makes `--check` and `--all` exit 2 while the
+  argument-free SessionStart call still exits 0, with a drifted profile left in
+  the tree so the 2 is proved to be the failure's rather than the drift's 1.
+  Both new assertions are mutation-calibrated: mutating only the audit return
+  reddens the `--check` one and leaves the `--all` one green, and mutating only
+  the write return does the reverse. 136 → 144 assertions.
 - **stepfun-asr** (`daymade-audio` v1.40.0 → v1.41.0): `transcribe()` now always
   returns an `errors` list of the raw SSE `error`-event payloads (empty when none
   fired), including on the success path, where any error event used to be silently
