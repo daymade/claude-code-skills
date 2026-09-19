@@ -17,8 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `lsof`/`fuser` for the PID holding it open, then `ps`'s parent chain up to the owning process —
   instead of guessing a session by name and getting a false "not me" from the wrong one. Review
   calibration: `lsof`'s empty result is identical whether no one holds the file or the path is
-  wrong (only stderr's `status error` separates them), and macOS `fuser` exits 0 echoing `path: `
-  when no one holds the file — so `[ -z "$(fuser <path>)" ]` misreads that as a writer. The
+  wrong (only stderr's `status error` separates them); macOS `fuser` splits its answer across
+  streams — the PID on stdout, the `path: ` echo on stderr — and exits 0 whether or not anyone
+  holds the file, so an exit code cannot answer the writer question and the criterion is whether a
+  PID is present. A `2>&1` capture pulls the echo onto stdout and reads as a writer when there is
+  none; Linux prints `path: <pids>` together on stdout. The
   writer-discovery block now reads the two probes apart, the lineage gate's way out is reordered to
   "this work's own remote → new repository → ask the user," and the block ends read-only like the
   rest of the section.

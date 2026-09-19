@@ -95,7 +95,9 @@ empty" is not a portable criterion and the two probes must not share one. Decide
 whether a PID is present: on macOS that is a non-empty `$(fuser <path>)` (stdout carries the PID,
 and nothing when no one holds it); on Linux it is a PID after the colon. Never read the `path: `
 echo as a writer — under a `2>&1` capture it lands on stdout and reads as output when there is
-none, putting the false positive on the dangerous side. No process found and the
+none, putting the false positive on the dangerous side. Like `lsof`, a wrong path is not "no
+writer": a non-zero exit or a `does not exist` on stderr means the path itself is wrong — fix the
+path before reading it for a writer. No process found and the
 file has stopped moving: report the gap, do not mutate, and stay read-only rather than inventing a
 session to ask — the same stop-the-write-path default as above.
 

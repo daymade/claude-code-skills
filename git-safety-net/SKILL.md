@@ -611,8 +611,9 @@ and final branch-count gates that a single-branch retirement does not need.
   READ-DO sequence and `--shared` boundary:
   **[references/merge_verification.md](references/merge_verification.md)** § Independent clone retirement.
   This retirement occupancy check is the second of the Skill's three `lsof` uses — the shared-file
-  writer probe in `references/prevention_practices.md` and the clone-occupancy probe above share the
-  same read-only, stop-on-any-genuine-writer rule; change the criterion in one, change it in the others.
+  writer probe in `references/prevention_practices.md` and `references/merge_verification.md`'s
+  clone-occupancy probe share the same read-only, stop-on-any-genuine-writer rule; change the
+  criterion in one, change it in the others.
 
 **Step 4 — after the delete, re-check by content, not by filename.** When a cleanup (or a batch of
 squash-merges) is already done and the question becomes "did any of it drop work?", the naming-based
