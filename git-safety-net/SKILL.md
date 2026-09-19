@@ -258,12 +258,16 @@ single `git gc` can't take it. Details + why triple-backup: **[references/recove
 
 **Before pushing that preservation branch into an already-existing repository, verify shared
 history first — a similar name is not evidence of the right repository.** Fetch the candidate
-repository's default branch and run `git merge-base <that-default-branch> <ref>`; a local
+repository's default branch (`git fetch <candidate-url> <default-branch>`) and run
+`git merge-base <that-default-branch> <ref>`; a local
 `merge-base` exiting 1, or the hosting service's own compare view reporting no common ancestor,
-means the two share no history and the target is a different project — pick a repository that
-already shares this work's history, create a new one, or ask the user, but never push anyway
-because the name matched. Real incident: a deployment source's backup branch was pushed to an
-unrelated private repository chosen by name resemblance alone. If a push already landed and a
+means the two share no history and the target is a different project. Push the branch back to this
+work's own remote first; if none exists, create a new repository; if neither applies or the correct
+home is unclear, ask the user — but never push anyway because the name matched. Keep the merge-base
+check as the test whenever the right home is not obvious: only a repository that already shares
+this work's history can host the branch without being a different project. Real incident: a
+deployment source's backup branch was pushed to an unrelated private repository chosen by name
+resemblance alone. If a push already landed and a
 later readback finds no common ancestor, treat the branch as misplaced: move its content to the
 correct home, then delete it from the wrong one, rather than leaving it there as "already backed
 up somewhere."
@@ -606,6 +610,9 @@ and final branch-count gates that a single-branch retirement does not need.
   old-path absence + new-path presence; permanent deletion is a separate explicit decision. Full
   READ-DO sequence and `--shared` boundary:
   **[references/merge_verification.md](references/merge_verification.md)** § Independent clone retirement.
+  This retirement occupancy check is the second of the Skill's three `lsof` uses — the shared-file
+  writer probe in `references/prevention_practices.md` and the clone-occupancy probe above share the
+  same read-only, stop-on-any-genuine-writer rule; change the criterion in one, change it in the others.
 
 **Step 4 — after the delete, re-check by content, not by filename.** When a cleanup (or a batch of
 squash-merges) is already done and the question becomes "did any of it drop work?", the naming-based

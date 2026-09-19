@@ -75,16 +75,29 @@ changing under you either way. Get process evidence first:
 
 ```bash
 lsof -- <path>                        # or: fuser <path> — PID(s) currently holding the file open
-ps -o pid=,ppid=,command= -p <pid>    # walk the parent chain up to the owning process
+ps -o pid=,ppid=,command= -p <pid>    # this pid + its ppid; rerun on the ppid to climb
 ```
 
 A PID found this way still needs walking: follow `ps`'s parent chain past any short-lived shell or
 write call to the process that actually owns the session, then reach that owner through whatever
 session-addressing mechanism the current host provides — never guess an address from a directory,
 branch, or task label. A fast writer that opens, writes, and closes per line can leave no open
-handle even while the file keeps growing; when `lsof`/`fuser` come back empty, confirm by watching
-size or `mtime` still advancing before concluding no one is writing. No process found and the file
-has stopped moving: report the gap rather than inventing a session to ask.
+handle even while the file keeps growing; watch size or `mtime` still advancing before concluding
+no one is writing. But the two probes share no empty shape, so read them apart. `lsof` exits 1
+with empty stdout both when nothing holds the file and when the path is wrong — only stderr
+separates them, and a `status error on <path>: No such file or directory` means the path itself is
+wrong (fix the path first; a nonexistent path has no size or `mtime` to watch and was never a
+writer check at all). `fuser` never returns an empty line: with no holder it exits 0 and echoes
+`path: ` with nothing after the colon, and a PID after the colon is the writer. Decide a writer by
+what follows the colon, not by whether the output is empty — `[ -z "$(fuser <path>)" ]` reads
+`path: ` as a writer and lands the false positive on the dangerous side. No process found and the
+file has stopped moving: report the gap, do not mutate, and stay read-only rather than inventing a
+session to ask — the same stop-the-write-path default as above.
+
+This shared-file writer probe is one of the Skill's three `lsof` uses — the others are SKILL.md's
+retirement occupancy check and `references/merge_verification.md` § Independent clone retirement's
+`lsof +D <absolute-clone>` — and all three keep the same read-only, stop-on-any-genuine-writer
+rule; change the criterion in one, change it in the others.
 
 ## Exact-SHA handoff and scoped completion
 

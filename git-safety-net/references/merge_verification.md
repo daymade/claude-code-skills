@@ -464,7 +464,10 @@ Use this READ-DO sequence for one explicitly authorized clone:
    On macOS, `/usr/sbin/lsof +D <absolute-clone>` is one available probe; use the platform-native
    equivalent elsewhere. A process result gathered in parallel with another Git probe can be the
    auditor observing its own sibling process, so it cannot authorize a move. Any genuine writer or
-   unknown occupant stops the retirement.
+   unknown occupant stops the retirement. This `lsof +D` occupancy probe is the third of the
+   Skill's three `lsof` uses — the shared-file writer probe in `references/prevention_practices.md`
+   and SKILL.md's retirement occupancy check are the others — and all three stop on any genuine
+   writer or unknown occupant; change the criterion in one, change it in the others.
 5. **Re-freeze, then make the quarantine move the next operation:**
 
    ```bash

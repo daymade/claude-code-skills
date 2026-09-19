@@ -15,7 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   private repo on exactly that basis. `references/prevention_practices.md`'s shared-checkout
   section gains a process-evidence method for finding an unidentified writer of a shared file —
   `lsof`/`fuser` for the PID holding it open, then `ps`'s parent chain up to the owning process —
-  instead of guessing a session by name and getting a false "not me" from the wrong one.
+  instead of guessing a session by name and getting a false "not me" from the wrong one. Review
+  calibration: `lsof`'s empty result is identical whether no one holds the file or the path is
+  wrong (only stderr's `status error` separates them), and macOS `fuser` exits 0 echoing `path: `
+  when no one holds the file — so `[ -z "$(fuser <path>)" ]` misreads that as a writer. The
+  writer-discovery block now reads the two probes apart, the lineage gate's way out is reordered to
+  "this work's own remote → new repository → ask the user," and the block ends read-only like the
+  rest of the section.
 
 - **stepfun-asr / stepfun-tts / asr-transcribe-to-text** (`daymade-audio` v1.39.10 → v1.40.0): StepFun ASR now sends `enable_timestamp` (the field comes back either way, but its values are all 0 unless you ask — the earlier "v3 has no word timestamps" claim is retracted), sends every request parameter by default with `check_params.py` diffing the official field table in both directions, and gains `asr_file.py` for speaker diarization on the async file endpoint (public URL only; ids are `speaker_0`, not the documented `spk_1`). `asr-transcribe-to-text` routes that official diarization as a second independent speaker track. `stepfun-tts`'s `synthesize()` takes `model=` and `extra=` and returns the server's JSON envelope (`timestamp` + `return_url` → `{"data": {"url", "subtitles"}}`) under `json`, so callers that need per-character timing stop hand-rolling `/v1/audio/speech`; it is the wrapper `llmreg.wrapper_for("stepfun-tts")` resolves to.
 - **llm-eval-harness** (v1.4.1 → v1.4.2): the three probes declare their deliberately tiny budgets with `# max-tokens-intentional: <reason>` so the `llm-entry-guard` hook (max_tokens floor 16000 for reasoning models) passes them on purpose instead of by accident.
