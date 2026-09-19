@@ -69,25 +69,53 @@ regardless. Backup + atomic replace + post-write validation apply here
 too; the main profile's own `.claude.json` is never written (it is the
 SSOT), and a profile missing `.claude.json` is skipped, never created.
 
-Modes:
-  (no args)   SessionStart mode — sync the ACTIVE profile ($CLAUDE_CONFIG_DIR).
-              No-op for the main profile itself. Silent when converged,
-              one line when it synced. Never blocks the session: unexpected
-              exceptions print a traceback and still exit 0 in this mode
-              (interactive --check/--all runs exit nonzero instead).
-  --all       sync every profile under ~/.claude-profiles/* (initial
-              alignment and manual re-convergence). Dot-prefixed archive
-              dirs (e.g. .archived-profiles) are skipped.
-  --check     report drift, no writes; exit 1 when drifted, exit 2 when a
-              main file is corrupt (a corrupt main reads as empty and would
-              otherwise fake-green the audit).
+Modes — the flag set selects write-vs-audit and strict-vs-lenient, and nothing
+else. Scope is EVERY profile in all of them:
+  (no args)   SessionStart mode — converge every profile under
+              ~/.claude-profiles/* plus $CLAUDE_CONFIG_DIR. Silent when
+              converged; one line per profile per layer when it synced.
+              Never blocks the session: a corrupt main aborts convergence
+              with exit 0, an unreadable profile is reported and skipped, and
+              an unexpected exception prints a traceback and still exits 0.
+  --all       same scope, same writes; human-run, so a corrupt main exits 2.
+              Kept as the explicit form the docs tell you to run after a
+              manual settings edit — it is no longer what makes a run cover
+              every profile.
+  --check     audit every profile, write nothing; exit 1 when drifted, exit 2
+              when a main file is corrupt (a corrupt main reads as empty and
+              would otherwise fake-green the audit) or a profile could not be
+              read. `--check --all` is the same audit.
+
+Scope used to mean "the profile this session happens to live in" for the
+argument-free call, and nothing ran `--all` on a schedule — so a hook added to
+the main profile only reached the profiles that had started a session since.
+Measured 2026-09-19: `llm-entry-guard` registered on 4/14 profiles, three more
+hooks on 5-6/14, and no output anywhere naming the gap. The default is
+therefore "converge everything": the next profile to start a session carries
+the backlog for every profile that had not.
+
+Three things make that default safe to have, and each one used to be derived
+from `interactive = bool(args)` or from the single-profile scope:
+1. Scope is not a flag. Adding a scope flag can never again silently widen or
+   narrow what a SessionStart run touches.
+2. Strictness is not a flag count. `--all` — a human asking for wider coverage
+   — also used to switch on "exit 2 on a corrupt main", which is exactly why
+   "just add `--all` to the hook command" is not the fix: it would turn a
+   corrupt main file into a blocked session. Each mode now declares its own
+   strictness, and an unlisted flag set is refused rather than falling through.
+3. The two blast radii a single-profile scope had kept local are closed: one
+   malformed profile can no longer cancel the run for the others, and
+   $CLAUDE_CONFIG_DIR is unioned in only when it already looks like a profile
+   (an unset value resolves to the cwd, and the settings layer creates files).
 
 Asymmetry worth knowing when maintaining this: the settings.json layer
 CREATES a profile's settings.json if missing (pure config, harmless), while
 the .claude.json layer SKIPS a missing file (the harness creates it on first
 launch, and it carries identity/session state a sync must not fabricate).
-Also, no-args mode syncs whatever directory CLAUDE_CONFIG_DIR points at —
-it does not require the dir to live under PROFILES_ROOT.
+Also, every mode converges every profile under PROFILES_ROOT and unions in
+$CLAUDE_CONFIG_DIR when it already carries a config file — that file is what
+keeps an unset variable from resolving to the cwd and having a settings.json
+fabricated into it.
 
 Backup: before each write, target is copied to <file>.sync-backup
 (single rolling file, chmod 600 regardless of source permissions); writes
@@ -238,6 +266,38 @@ def _env_key_is_identity(key: str) -> bool:
     return key in ENV_KEY_DENYLIST
 
 
+# ---------------------------------------------------------------------------
+# Modes: resolved from the EXACT flag set through a total table.
+#
+# (writes, strict) per mode:
+#   writes  — profiles are modified (False = audit only)
+#   strict  — a corrupt MAIN file exits 2 instead of 0
+#
+# Scope is deliberately absent: every mode converges every profile. When scope
+# and strictness were both derived from `interactive = bool(args)`, the flag a
+# human typed to widen SCOPE (`--all`) also switched on the exit-code
+# semantics, and any flag added later would have inherited strictness from
+# nothing more than "an argument was passed" — turning the argument-free
+# SessionStart hook into a session blocker. Declaring both fields per mode,
+# and refusing a flag set with no row, removes that coupling.
+# ---------------------------------------------------------------------------
+SESSION_START, WRITE_ALL, CHECK_ONLY = "session-start", "write-all", "check"
+
+MODES = {
+    SESSION_START: (True, False),
+    WRITE_ALL: (True, True),
+    CHECK_ONLY: (False, True),
+}
+
+FLAG_SET_TO_MODE = {
+    frozenset(): SESSION_START,
+    frozenset({"--all"}): WRITE_ALL,
+    frozenset({"--check"}): CHECK_ONLY,
+    # The documented audit form; identical to `--check` alone.
+    frozenset({"--check", "--all"}): CHECK_ONLY,
+}
+
+
 def merge_env(main_env: dict) -> dict:
     """Env keys main propagates: everything except identity env vars."""
     return {k: v for k, v in main_env.items() if not _env_key_is_identity(k)}
@@ -341,8 +401,16 @@ def sync_profile(profile_dir: Path, write: bool):
             continue
         if k == "env" and isinstance(v, dict):
             filtered = merge_env(v)
-            if filtered and prof.get("env", {}) != {**prof.get("env", {}), **filtered}:
-                changed[k] = {**prof.get("env", {}), **filtered}
+            # A profile whose `env` is valid JSON but not an object must not
+            # raise here: `{**"oops", **filtered}` is a TypeError, and under
+            # "converge every profile" one malformed file used to abort the
+            # whole run. Treat a non-dict as empty and let main's env replace
+            # it — the same rebuild-from-main semantic as a corrupt file.
+            cur_env = prof.get("env")
+            if not isinstance(cur_env, dict):
+                cur_env = {}
+            if filtered and cur_env != {**cur_env, **filtered}:
+                changed[k] = {**cur_env, **filtered}
             continue
         if prof.get(k) != v:
             changed[k] = v
@@ -398,8 +466,12 @@ def sync_claude_json(profile_dir: Path, write: bool):
 
 
 def _iter_profile_dirs():
-    """--all enumeration: real profile dirs only — no dot-prefixed archive
-    dirs, and never the main config dir itself through a symlink."""
+    """Real profile dirs only — no dot-prefixed archive dirs, and never the
+    main config dir itself through a symlink. A missing PROFILES_ROOT is an
+    empty set, not an error: a machine with no third-party profiles has
+    nothing to converge and must not raise on every session start."""
+    if not PROFILES_ROOT.is_dir():
+        return []
     return sorted(
         p for p in PROFILES_ROOT.iterdir()
         if p.is_dir() and not p.name.startswith(".")
@@ -407,64 +479,133 @@ def _iter_profile_dirs():
     )
 
 
+def _looks_like_profile(p: Path) -> bool:
+    """True if the dir already carries a config file, i.e. is really a profile.
+
+    The membership test exists because $CLAUDE_CONFIG_DIR is UNIONED into the
+    scope. `Path(os.environ.get("CLAUDE_CONFIG_DIR", ""))` is `Path('.')` when
+    the variable is unset or empty, and `Path('.').is_dir()` is unconditionally
+    true — so without this test an unset variable makes the CWD a profile, and
+    the settings layer creates a settings.json there, fabricating a profile in
+    whatever directory the session happened to start in and then reporting it
+    as converged forever. A genuine profile always has at least one of the two
+    config files by the time a SessionStart hook runs (the harness writes
+    `.claude.json` at launch); a project directory has neither.
+
+    Applied to the unioned dir ONLY. A directory under PROFILES_ROOT is a
+    profile by construction, and creating its settings.json when absent is the
+    documented, harmless behaviour of the settings layer.
+    """
+    return (p / "settings.json").exists() or (p / ".claude.json").exists()
+
+
+def _profile_dirs_to_converge():
+    """Every profile that must converge — all of them, in every mode.
+
+    Scope used to mean "the profile this session happens to live in" for the
+    argument-free SessionStart call, and nothing ran `--all` on a schedule, so
+    a hook added to the main profile only reached profiles that had started a
+    session since (2026-09-19: `llm-entry-guard` on 4/14 profiles, three more
+    hooks on 5-6/14, no output naming the gap). Converging everything means
+    the next profile to start a session carries the backlog for every profile
+    that has not.
+
+    $CLAUDE_CONFIG_DIR is unioned in rather than replacing the enumeration: a
+    profile may live outside PROFILES_ROOT, and it must not be skipped for
+    being unconventional — see _looks_like_profile() for how that union is
+    kept from admitting a non-profile directory.
+    """
+    dirs, seen = [], set()
+
+    def add(p: Path):
+        key = p.resolve()
+        if key not in seen:
+            seen.add(key)
+            dirs.append(p)
+
+    for p in _iter_profile_dirs():
+        add(p)
+    active_raw = os.environ.get("CLAUDE_CONFIG_DIR", "")
+    if active_raw:
+        active = Path(active_raw)
+        if active.is_dir() and active.resolve() != MAIN_DIR.resolve() and _looks_like_profile(active):
+            add(active)
+    return sorted(dirs, key=lambda p: p.name)
+
+
+def _converge_one(profile_dir: Path, write: bool) -> bool:
+    """Converge both config layers of one profile. Returns True when drifted."""
+    drifted = False
+    for layer in ("settings.json", ".claude.json"):
+        if file_corrupt(profile_dir / layer):
+            print(f"[{profile_dir.name}] WARNING: {layer} is corrupt — "
+                  "rebuilding from main (original retained in .sync-backup)")
+    changed, extra, nested_lost = sync_profile(profile_dir, write=write)
+    if changed:
+        drifted = True
+        verb = "drift" if not write else "synced"
+        suffix = "" if not write else " (applies next session)"
+        print(f"[{profile_dir.name}] {verb} {len(changed)} key(s): {', '.join(changed)}{suffix}")
+    for k, items in sorted(nested_lost.items()):
+        if not write:
+            print(f"[{profile_dir.name}] {k}: {len(items)} profile-only nested entr(y/ies) "
+                  f"main would overwrite: {items!r}")
+        else:
+            print(f"[{profile_dir.name}] note: {k} overwrite dropped {len(items)} "
+                  "profile-only nested entr(y/ies) (rerun --check to list them)")
+    if extra and not write:
+        print(f"[{profile_dir.name}] profile-only keys (preserved): {', '.join(extra)}")
+    cj_changed, gray = sync_claude_json(profile_dir, write=write)
+    if cj_changed:
+        drifted = True
+        verb = "drift" if not write else "synced"
+        suffix = "" if not write else " (applies next session)"
+        print(f"[{profile_dir.name}] .claude.json {verb} {len(cj_changed)} behavior key(s): {', '.join(cj_changed)}{suffix}")
+    for k in gray:
+        print(
+            f"[{profile_dir.name}] .claude.json UNCLASSIFIED drift: {k!r} — "
+            "classify in sync-profile-settings.py: BEHAVIOR_KEYS (sync it) / "
+            "is_state_key pattern (never sync) / GRAY_ACKNOWLEDGED (snooze with reason)"
+        )
+    return drifted
+
+
 def run() -> int:
-    args = set(sys.argv[1:])
-    unknown = args - {"--check", "--all"}
-    if unknown:
+    mode = FLAG_SET_TO_MODE.get(frozenset(sys.argv[1:]))
+    if mode is None:
+        unknown = set(sys.argv[1:]) - {"--check", "--all"}
         print(f"[sync-profile-settings] unknown arg(s): {', '.join(sorted(unknown))} "
               "(usage: [--check] [--all]) — refusing to guess the mode")
         return 2
-    check = "--check" in args
-    interactive = bool(args)  # after the unknown-arg guard, any arg = human-run
+    write, strict = MODES[mode]
     bad = main_files_corrupt()
     if bad:
         for p in bad:
             print(f"[sync-profile-settings] WARNING: main file is not valid JSON: {p} — "
                   "skipping convergence (a corrupt main reads as empty and would fake-green the audit)")
-        if interactive:
-            return 2
-        return 0  # SessionStart must never block the session
-    if "--all" in args:
-        dirs = _iter_profile_dirs()
-    else:
-        active = Path(os.environ.get("CLAUDE_CONFIG_DIR", str(MAIN_DIR)))
-        if active.resolve() == MAIN_DIR.resolve():
-            return 0  # main profile is the SSOT itself
-        dirs = [active]
-    drifted = False
-    for d in dirs:
-        for layer in ("settings.json", ".claude.json"):
-            if file_corrupt(d / layer):
-                print(f"[{d.name}] WARNING: {layer} is corrupt — "
-                      "rebuilding from main (original retained in .sync-backup)")
-        changed, extra, nested_lost = sync_profile(d, write=not check)
-        if changed:
-            drifted = True
-            verb = "drift" if check else "synced"
-            suffix = "" if check else " (applies next session)"
-            print(f"[{d.name}] {verb} {len(changed)} key(s): {', '.join(changed)}{suffix}")
-        for k, items in sorted(nested_lost.items()):
-            if check:
-                print(f"[{d.name}] {k}: {len(items)} profile-only nested entr(y/ies) "
-                      f"main would overwrite: {items!r}")
-            else:
-                print(f"[{d.name}] note: {k} overwrite dropped {len(items)} "
-                      "profile-only nested entr(y/ies) (rerun --check to list them)")
-        if extra and check:
-            print(f"[{d.name}] profile-only keys (preserved): {', '.join(extra)}")
-        cj_changed, gray = sync_claude_json(d, write=not check)
-        if cj_changed:
-            drifted = True
-            verb = "drift" if check else "synced"
-            suffix = "" if check else " (applies next session)"
-            print(f"[{d.name}] .claude.json {verb} {len(cj_changed)} behavior key(s): {', '.join(cj_changed)}{suffix}")
-        for k in gray:
-            print(
-                f"[{d.name}] .claude.json UNCLASSIFIED drift: {k!r} — "
-                "classify in sync-profile-settings.py: BEHAVIOR_KEYS (sync it) / "
-                "is_state_key pattern (never sync) / GRAY_ACKNOWLEDGED (snooze with reason)"
-            )
-    return 1 if (check and drifted) else 0
+        # Convergence is abandoned in EVERY mode: a corrupt main reads as {},
+        # so proceeding would converge every profile toward empty. Only the
+        # exit code differs — a human audit says 2, SessionStart says 0
+        # (starting a session is never this script's business to block).
+        return 2 if strict else 0
+    drifted = failed = False
+    for d in _profile_dirs_to_converge():
+        try:
+            drifted |= _converge_one(d, write=write)
+        except Exception as exc:
+            # "Converge every profile" gives one malformed profile the power to
+            # cancel convergence for all the rest: an unguarded loop would
+            # abandon every profile after the broken one, and the lenient
+            # SessionStart mode would leave a traceback line as the only
+            # signal. Report this profile and keep going — the others are the
+            # point of the run. A strict mode returns 2 so an audit cannot
+            # claim to have covered profiles it never reached.
+            failed = True
+            print(f"[{d.name}] ERROR: convergence aborted for this profile: "
+                  f"{type(exc).__name__}: {exc} — continuing with the others")
+    if not write:
+        return 2 if failed else (1 if drifted else 0)
+    return 2 if (failed and strict) else 0
 
 
 if __name__ == "__main__":
@@ -473,7 +614,9 @@ if __name__ == "__main__":
     except Exception:
         import traceback
         traceback.print_exc()
-        # SessionStart mode must never block a session on an unexpected
-        # failure; an interactive --check/--all run exits nonzero so the
-        # traceback cannot masquerade as a clean audit.
-        sys.exit(0 if len(sys.argv) == 1 else 2)
+        # Only the argument-free SessionStart invocation may swallow an
+        # unexpected failure; every other mode (and any unrecognized flag set)
+        # exits 2 so a traceback cannot masquerade as a clean audit. Resolved
+        # through the same mode table, so this cannot drift from run()'s own
+        # strictness decision the way `len(sys.argv) == 1` could.
+        sys.exit(0 if FLAG_SET_TO_MODE.get(frozenset(sys.argv[1:])) == SESSION_START else 2)
