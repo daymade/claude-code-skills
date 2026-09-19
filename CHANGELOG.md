@@ -34,6 +34,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a shell profile sets these variables and `unset` inside a script does not
   reliably reach a child process.
 
+- **claude-switch-models-setup** (`daymade-claude-code` v3.41.0 → v3.42.0): the
+  fixture suite's hermeticity tripwire could not see a leak that only touched
+  `.claude.json`. `real_profile_fingerprint()` recorded each real profile's
+  `settings.json` hook-entry and env-key counts and nothing else, and `.claude.json`
+  is inside the converger's scope — the second config layer exists precisely
+  because behavior keys live there. A leak whose synthetic main has an empty
+  `settings.json` layer therefore left the one signal that existed flat while
+  real profiles' behavior keys were rewritten. The same function also did
+  `continue` on `JSONDecodeError`, silently dropping a damaged profile out of the
+  baseline: the tripwire passed on exactly the damage it exists to catch, in the
+  fail-open direction. Two signals replace it. The artifact census counts every
+  `*.sync-backup` and `.sync-*.json` under the profiles root — `write_json_atomic()`
+  makes both and nothing else in the harness names files either way, so a write
+  on *either* layer leaves one behind regardless of which keys moved; it compares
+  (path, size) rather than existence, because these backups already exist in a
+  real tree and the pre-existing ones are not a finding. The profile fingerprint
+  additionally records the `.claude.json` subset the converger is allowed to write
+  (`BEHAVIOR_KEYS | MERGE_KEYS`), each key mapped to its value or an ABSENT
+  sentinel — ABSENT so an *added* key is caught too. Deliberately not the whole
+  file: the harness rewrites a live profile's `.claude.json` continuously
+  (measured during a fixture run — exactly the two profiles with an open session
+  changed, no non-live profile did), so a byte or key-count comparison would
+  redden every run on any machine with a session open and train the tripwire into
+  noise. Restricting to the converger's write set needs no oracle for "is this
+  profile live", which has no reliable machine-readable signal here. A red
+  tripwire now names which profile and which signal moved instead of printing two
+  nested structures. Both sides calibrated rather than trusted for being green: an
+  injected converger write into a synthetic tree — reached through
+  `$CLAUDE_CONFIG_DIR` with `CLAUDE_PROFILES_ROOT` pointed elsewhere, the same
+  union mechanism as the incident — must move the fingerprint and leave a backup,
+  and harness-style churn of keys the converger never touches must move neither.
+  Removing either signal reddens exactly its own assertion. 144 → 153 assertions.
+
 - **claude-switch-models-setup** (`daymade-claude-code` v3.39.0 → v3.40.0): the
   profile converger's **default mode now converges every profile**, closing a
   gap that had been invisible for as long as it existed. Scope used to mean "the
