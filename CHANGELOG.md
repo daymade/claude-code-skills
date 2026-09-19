@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tibo-reset-codex** (`tibo-reset-codex` v1.13.1 → v1.13.2): forecast-feedback.md now describes
+  what forecast_log.py actually does since the findings layer shipped — the script works locally
+  only but takes a best-effort local git snapshot per append (the "reads and writes local JSONL
+  only" wording predated it), and the global-parameter line lists `--no-git`. Doc-only change.
 - **tibo-reset-codex** (`tibo-reset-codex` v1.13.0 → v1.13.1): collects an uncommitted SKILL.md
   revision left behind by an overnight session (owner exited, diff verified complete and applied
   verbatim on top of #609). Content: scan/banked queries must not be chained with `&&` (a
