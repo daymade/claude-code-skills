@@ -8,14 +8,17 @@
 在 Skill 目录运行 `scripts/forecast_log.py`，需要 Python 3.10+ 与 macOS/Linux。
 默认文件是 `${XDG_STATE_HOME:-~/.local/state}/tibo-reset-codex/forecasts.jsonl`；
 未设置 `XDG_STATE_HOME` 时解析用户家目录，已设置时使用该环境变量的目录。
-可用全局参数 `--state-dir` 显式选择另一个数据目录，之后查询与追加必须使用同一目录。
+可用全局参数 `--state-dir` 显式选择另一个数据目录，之后查询与追加必须使用同一目录；
+`--no-git` 关闭本地 git 快照（规则见下方 findings 节）。
 
 ```bash
 uv run python scripts/forecast_log.py --help
 uv run python scripts/forecast_log.py summary
 ```
 
-脚本只读写本地 JSONL，不联网、不取账号凭据、不兑换额度。首次写入创建权限为 0600 的文件，
+脚本只在本地工作：读写 JSONL，并为每次成功追加做一次 best-effort 的本地 git 快照
+（自动 init、逐次 commit、失败不阻塞，规则见下方 findings 节）；不联网、不取账号凭据、
+不兑换额度。首次写入创建权限为 0600 的文件，
 并以文件锁串行追加；读写遇到损坏或未写完的记录会报错并保留原文件。不要清空台账来消除错误。
 记录中只放预测、公开证据链接与分析，不放邮箱、token 或产品凭据，不提交到公开仓库。
 本地保存不等于已有异机备份，本流程不宣称提供备份或后台追踪。
