@@ -123,13 +123,17 @@ fabricated into it.
 CLAUDE_PROFILES_ROOT or $CLAUDE_CONFIG_DIR still reaches a real profile. The
 union scope then converges that real profile toward the fake main: its whole
 `hooks` object is replaced by whatever the fake main holds and its `env` gains
-the fake main's keys, so every guard registered there stops firing — with no
-unusual output. All three variables must point at synthetic, disposable
-directories together; a synthetic main alone is not safe.
+the fake main's keys, so every guard registered there stops firing. The run does
+name `hooks` among the keys it synced and reports the entries the overwrite
+dropped, so it reads as routine convergence — nothing says guards are gone.
+All three variables must point at synthetic, disposable directories together;
+a synthetic main alone is not safe.
 
-Before a manual run, `echo "$CLAUDE_CONFIG_DIR"` and stop if it names a real
-profile. Test fixtures must build the subprocess env from a scrubbed base,
-not from the live one: `env -u CLAUDE_CONFIG_DIR -u CLAUDE_MAIN_CONFIG_DIR
+Before a manual run, `echo "$CLAUDE_MAIN_CONFIG_DIR" "$CLAUDE_PROFILES_ROOT"
+"$CLAUDE_CONFIG_DIR"`. An unset CLAUDE_PROFILES_ROOT is not a green light: it
+defaults to the real ~/.claude-profiles, so every real profile converges. Test
+fixtures must build the subprocess env from a scrubbed base, not from the live
+one: `env -u CLAUDE_CONFIG_DIR -u CLAUDE_MAIN_CONFIG_DIR
 -u CLAUDE_PROFILES_ROOT …`. A shell profile sets these variables, and `unset`
 inside a script does not reliably reach a child process.
 

@@ -287,8 +287,9 @@ Cause: the converger ran with a synthetic `CLAUDE_MAIN_CONFIG_DIR` while
 `CLAUDE_PROFILES_ROOT` or `$CLAUDE_CONFIG_DIR` still reached the real profile.
 Scope is the union of those two, so the real profile converged toward the fake
 main — `hooks` replaced wholesale by the fake main's object, `env` merged
-per-key so the fake main's keys were added. Nothing in the output says this
-happened.
+per-key so the fake main's keys were added. The run does name `hooks` among the
+keys it synced and reports the entries the overwrite dropped, but nothing in it
+says guards stopped firing — it reads as the converger doing its job.
 
 Fix: restore from that profile's own backup, then verify byte-for-byte.
 

@@ -55,20 +55,24 @@ directory while `CLAUDE_PROFILES_ROOT` or `$CLAUDE_CONFIG_DIR` still reaches a
 **real** profile, and the run converges that real profile toward the synthetic
 main: its whole `hooks` object is replaced by whatever the fake main holds, and
 its `env` gains the fake main's keys. **Every guard registered in that profile
-stops firing, and the run reports nothing unusual.** A synthetic main is safe
-only when the profiles root and `$CLAUDE_CONFIG_DIR` are synthetic and
-disposable too.
+stops firing.** The output does name `hooks` among the keys it synced and
+reports the profile-only entries the overwrite dropped — but nothing in it says
+guards stopped firing, so it reads as the converger doing its job. A synthetic
+main is safe only when the profiles root and `$CLAUDE_CONFIG_DIR` are synthetic
+and disposable too.
 
-Before running it by hand, check what you would actually touch:
+Before running it by hand, check both halves of the scope:
 
 ```bash
-echo "$CLAUDE_CONFIG_DIR"
+echo "MAIN=$CLAUDE_MAIN_CONFIG_DIR ROOT=$CLAUDE_PROFILES_ROOT ACTIVE=$CLAUDE_CONFIG_DIR"
 ```
 
-If that names a real profile, do not run the script. Test fixtures must build
-the subprocess environment from a scrubbed base instead of inheriting the live
-one — a shell profile sets these variables, and `unset` inside a script does not
-reliably reach a child process:
+An unset `CLAUDE_PROFILES_ROOT` is **not** a green light — it defaults to the
+real `~/.claude-profiles`, so every real profile converges. Stop unless both
+`CLAUDE_PROFILES_ROOT` and `$CLAUDE_CONFIG_DIR` are synthetic and disposable.
+Test fixtures must build the subprocess environment from a scrubbed base instead
+of inheriting the live one — a shell profile sets these variables, and `unset`
+inside a script does not reliably reach a child process:
 
 ```bash
 env -u CLAUDE_CONFIG_DIR -u CLAUDE_MAIN_CONFIG_DIR -u CLAUDE_PROFILES_ROOT …

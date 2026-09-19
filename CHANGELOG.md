@@ -14,20 +14,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   root or `$CLAUDE_CONFIG_DIR` still reaching a real profile — converges that
   real profile toward the fake main: its whole `hooks` object is replaced by
   whatever the fake main holds and its `env` gains the fake main's keys, so
-  **every guard registered there stops firing, and the run reports nothing
-  unusual**. All three variables must be synthetic and disposable together.
+  **every guard registered there stops firing**. The run does name `hooks` among
+  the keys it synced, so it reads as routine convergence rather than as damage.
+  All three variables must be synthetic and disposable together.
   Landed in three places: a dedicated section in `SKILL.md` immediately after
   the converger's scope and exit-code rules, a short version in the script's
   module docstring beside the existing scope WHY, and a troubleshooting entry
   keyed to the symptom (guard hooks gone, unfamiliar `env` keys) with
-  byte-level recovery. The criteria are mechanical rather than visual: record
-  the target profile's `settings.json` size before the run and compare after,
-  because `.sync-backup` is written with `shutil.copy2` and therefore preserves
-  the source mtime — **an old backup timestamp does not prove nothing was
-  written**. Fixtures are told to build the subprocess environment from a
-  scrubbed base (`env -u CLAUDE_CONFIG_DIR -u CLAUDE_MAIN_CONFIG_DIR
-  -u CLAUDE_PROFILES_ROOT`), since a shell profile sets these variables and
-  `unset` inside a script does not reliably reach a child process.
+  byte-level recovery. The criteria are mechanical rather than visual: echo
+  **both halves of the scope** before a manual run, because an unset
+  `CLAUDE_PROFILES_ROOT` is not a green light — it defaults to the real
+  `~/.claude-profiles`, so every real profile converges while a
+  `CLAUDE_CONFIG_DIR`-only check reads clean. Record the target profile's
+  `settings.json` size before the run and compare after, because `.sync-backup`
+  is written with `shutil.copy2` and therefore preserves the source mtime —
+  **an old backup timestamp does not prove nothing was written**. Fixtures are
+  told to build the subprocess environment from a scrubbed base (`env -u
+  CLAUDE_CONFIG_DIR -u CLAUDE_MAIN_CONFIG_DIR -u CLAUDE_PROFILES_ROOT`), since
+  a shell profile sets these variables and `unset` inside a script does not
+  reliably reach a child process.
 
 - **claude-switch-models-setup** (`daymade-claude-code` v3.39.0 → v3.40.0): the
   profile converger's **default mode now converges every profile**, closing a
