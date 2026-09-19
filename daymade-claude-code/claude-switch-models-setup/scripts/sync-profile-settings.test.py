@@ -850,6 +850,27 @@ try:
           and "<redacted>" in _rendered, _rendered)
     check("calibration: it keeps the non-secret value so the diff is still readable",
           "SAFE" in _rendered and "'ok'" in _rendered, _rendered)
+
+    # The property nothing else pins: the FINGERPRINT compares raw values and
+    # scrubbing happens only when the text is rendered. Move `_scrub` into
+    # `_converger_writable` and two dicts differing only in a secret collapse onto
+    # one `<redacted>`, the fingerprints compare equal, and signal 1 goes blind to a
+    # secret-only write — while every scrub assertion above stays green, because
+    # they only check that plaintext is absent from what gets printed. Both
+    # properties would fail silently together, so they are pinned separately.
+    _secret_a = {"mcpServers": {"srv": {"env": {"API_KEY": "aaa-secret", "SAFE": "ok"}}},
+                 "workflowSizeGuideline": "small"}
+    _secret_b = {"mcpServers": {"srv": {"env": {"API_KEY": "bbb-secret", "SAFE": "ok"}}},
+                 "workflowSizeGuideline": "small"}
+    check("calibration: the fingerprint compares RAW values — a secret-only change still moves it",
+          _converger_writable(_secret_a) != _converger_writable(_secret_b),
+          f"a={_converger_writable(_secret_a)!r}\nb={_converger_writable(_secret_b)!r}")
+    _rendered2 = "\n".join(diff_signals(
+        {"x": {".claude.json": _converger_writable(_secret_a)}},
+        {"x": {".claude.json": _converger_writable(_secret_b)}}))
+    check("calibration: that same secret-only change renders without the plaintext",
+          "aaa-secret" not in _rendered2 and "bbb-secret" not in _rendered2
+          and "<redacted>" in _rendered2, _rendered2)
 finally:
     shutil.rmtree(_cal, ignore_errors=True)
 
