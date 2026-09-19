@@ -119,6 +119,30 @@ $CLAUDE_CONFIG_DIR when it already carries a config file — that file is what
 keeps an unset variable from resolving to the cwd and having a settings.json
 fabricated into it.
 
+⚠️ NEVER run this script with a synthetic CLAUDE_MAIN_CONFIG_DIR while
+CLAUDE_PROFILES_ROOT or $CLAUDE_CONFIG_DIR still reaches a real profile. The
+union scope then converges that real profile toward the fake main: its whole
+`hooks` object is replaced by whatever the fake main holds and its `env` gains
+the fake main's keys, so every guard registered there stops firing. The run does
+name `hooks` among the keys it synced (and, when the overwrite drops
+profile-only entries, reports how many), so it reads as routine convergence —
+nothing says guards are gone.
+All three variables must point at synthetic, disposable directories together;
+a synthetic main alone is not safe.
+
+Before a manual run, `echo "$CLAUDE_MAIN_CONFIG_DIR" "$CLAUDE_PROFILES_ROOT"
+"$CLAUDE_CONFIG_DIR"`. An unset CLAUDE_PROFILES_ROOT is not a green light: it
+defaults to the real ~/.claude-profiles, so every real profile converges. Test
+fixtures must build the subprocess env from a scrubbed base, not from the live
+one: `env -u CLAUDE_CONFIG_DIR -u CLAUDE_MAIN_CONFIG_DIR
+-u CLAUDE_PROFILES_ROOT …`. A shell profile sets these variables, and `unset`
+inside a script does not reliably reach a child process.
+
+To decide whether a run wrote anything, compare the target profile's
+settings.json SIZE AND BYTES. `.sync-backup` is written with shutil.copy2,
+which preserves the source mtime — an old backup timestamp therefore proves
+nothing about whether a write happened.
+
 Backup: before each write, target is copied to <file>.sync-backup
 (single rolling file, chmod 600 regardless of source permissions); writes
 are atomic (tmp + os.replace) and validated.
