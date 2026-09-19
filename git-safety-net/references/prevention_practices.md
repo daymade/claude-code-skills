@@ -87,10 +87,15 @@ no one is writing. But the two probes share no empty shape, so read them apart. 
 with empty stdout both when nothing holds the file and when the path is wrong — only stderr
 separates them, and a `status error on <path>: No such file or directory` means the path itself is
 wrong (fix the path first; a nonexistent path has no size or `mtime` to watch and was never a
-writer check at all). `fuser` never returns an empty line: with no holder it exits 0 and echoes
-`path: ` with nothing after the colon, and a PID after the colon is the writer. Decide a writer by
-what follows the colon, not by whether the output is empty — `[ -z "$(fuser <path>)" ]` reads
-`path: ` as a writer and lands the false positive on the dangerous side. No process found and the
+writer check at all). `fuser`'s shape is the opposite trap: it exits 0 whether or not anyone holds the file, so its
+exit code cannot answer the writer question the way `lsof`'s exit 1 does. It also splits its
+answer across streams differently by platform — on macOS the PID goes to stdout while the `path: `
+echo goes to stderr, whereas Linux prints `path: <pids>` together on stdout — so "the output is
+empty" is not a portable criterion and the two probes must not share one. Decide a writer by
+whether a PID is present: on macOS that is a non-empty `$(fuser <path>)` (stdout carries the PID,
+and nothing when no one holds it); on Linux it is a PID after the colon. Never read the `path: `
+echo as a writer — under a `2>&1` capture it lands on stdout and reads as output when there is
+none, putting the false positive on the dangerous side. No process found and the
 file has stopped moving: report the gap, do not mutate, and stay read-only rather than inventing a
 session to ask — the same stop-the-write-path default as above.
 
