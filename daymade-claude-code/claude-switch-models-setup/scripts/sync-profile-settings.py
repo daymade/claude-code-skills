@@ -124,8 +124,9 @@ CLAUDE_PROFILES_ROOT or $CLAUDE_CONFIG_DIR still reaches a real profile. The
 union scope then converges that real profile toward the fake main: its whole
 `hooks` object is replaced by whatever the fake main holds and its `env` gains
 the fake main's keys, so every guard registered there stops firing. The run does
-name `hooks` among the keys it synced and reports the entries the overwrite
-dropped, so it reads as routine convergence — nothing says guards are gone.
+name `hooks` among the keys it synced (and, when the overwrite drops
+profile-only entries, reports how many), so it reads as routine convergence —
+nothing says guards are gone.
 All three variables must point at synthetic, disposable directories together;
 a synthetic main alone is not safe.
 

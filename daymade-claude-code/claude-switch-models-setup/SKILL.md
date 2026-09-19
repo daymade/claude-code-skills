@@ -55,11 +55,11 @@ directory while `CLAUDE_PROFILES_ROOT` or `$CLAUDE_CONFIG_DIR` still reaches a
 **real** profile, and the run converges that real profile toward the synthetic
 main: its whole `hooks` object is replaced by whatever the fake main holds, and
 its `env` gains the fake main's keys. **Every guard registered in that profile
-stops firing.** The output does name `hooks` among the keys it synced and
-reports the profile-only entries the overwrite dropped — but nothing in it says
-guards stopped firing, so it reads as the converger doing its job. A synthetic
-main is safe only when the profiles root and `$CLAUDE_CONFIG_DIR` are synthetic
-and disposable too.
+stops firing.** The output does name `hooks` among the keys it synced and, when
+the overwrite drops profile-only entries, reports how many — but nothing in it
+says guards stopped firing, so it reads as the converger doing its job. A
+synthetic main is safe only when the profiles root and `$CLAUDE_CONFIG_DIR` are
+synthetic and disposable too.
 
 Before running it by hand, check both halves of the scope:
 
