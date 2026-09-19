@@ -24,7 +24,7 @@ uv run python scripts/forecast_log.py summary
 
 1. 运行 `summary`，读 `pending` 和 `recent_resolved`。`pending` 同时含未核验与证据不足的
    记录；`window_elapsed` 只说明窗口已过，不判输赢。没有历史时按当前证据预测，记录为空
-   不构成错误。
+   不构成错误。需要当时的原始读数时用 `findings` 列表回看。
 2. 按主 Skill 取得本轮本来要查的事件证据，核对它能否回答未决预测。明确只有个人额度的
    查询无需为台账另开一轮全局调查；缺证据的记录继续保留，下次有相关证据再核验。
 3. 对可核验的记录追加 `review`。核对**预测发出后首个同类型事件**，不能挑后面恰好命中
@@ -33,6 +33,37 @@ uv run python scripts/forecast_log.py summary
    对照回填的 `catalyst_actual`）、窗口是否过宽；结合当前
    产品规则判断旧结果是否仍可比。用一句话说明本次因此怎样调整窗口/信心/信号权重；
    不调整也写理由。一次失误不足以归纳固定规律，不能把本来不知道的信息写成当时应知。
+
+## findings：原始读数层
+
+`finding` 命令把每次实际抓取到的外部数据逐字落到同一数据目录的 `findings.jsonl`，
+是不可变的原始读数层：判断写进台账（record/review），判断用到的当时读数经
+`evidence_refs` 挂链回到这里——业界 trace/annotation 的分层做法，读数不随后来的结论改写。
+每次实际抓取外部数据的调用都追加一条：含只读公告线单查、账号查询、降频轮的跳过决策
+（读数即「这次看到了什么」）。
+
+```bash
+uv run python scripts/forecast_log.py finding --input /tmp/tibo-finding.json
+uv run python scripts/forecast_log.py findings              # 最近 20 条；--limit N 可调
+```
+
+| 字段 | 含义 |
+|---|---|
+| `invocation` | 必填；本次调用形态，常用 `bare` / `announcement` / `account` / `incident` / `monitor` / `loop` / `other`，接受任意非空串 |
+| `query` | 必填；本次触发问题的一句话概括 |
+| `endpoints` | 必填字符串数组（可为空）；实际请求过的 URL |
+| `readings` | 必填对象（可为空）；源名 → 逐字字段值，只抄读到的值，不改写不概括 |
+| `notes` | 可选字符串数组 |
+| `session_ref` | 可选；本 session transcript 的本机路径 |
+
+完全相同的输入重试返回原记录。`evidence_refs` 链接规则：先 `finding` 后 `record`/`review`
+——record/review 输入里的 `evidence_refs` 是 finding id 数组（完整 id，或能唯一解析的短
+id 前缀），每个引用必须已存在于 findings.jsonl，否则报错退出（防断链）；缺省不写该键，
+旧记录无此键照常解析。`summary` 为每个 forecast/review 显示 `evidence_refs_count`。
+
+每次成功追加后脚本尽力在数据目录做一次本地 git 快照（自动 `init`、目录 0700）；
+git 任何失败只在 stderr 打一行 note、绝不影响追加成功，也不构成备份承诺；`--no-git` 关闭。
+findings 同台账隐私契约：不放邮箱、token 或产品凭据；`readings` 只放逐字读数与公开 URL。
 
 ## 保存预测：record
 
@@ -53,6 +84,7 @@ uv run python scripts/forecast_log.py summary
 | `anchor_event_url` | 预测之前最近一轮同类型已确认事件的规范原帖 URL；未知用 `null` |
 | `catalyst_expected` | 可选；预测押注的催化类型：`milestone` / `outage_compensation` / `quality_release` / `none` / `other`，缺省 null |
 | `evidence_urls` | 支撑本次判断的非空 HTTPS 链接数组 |
+| `evidence_refs` | 可选；支撑本次判断的原始读数 finding id 数组，引用必须已存在（规则见 findings 节） |
 | `rationale` | 基线、当前信号与主要反证，含输入样本范围 |
 | `revision_trigger` | 哪些新消息或时间条件会使预测提前、推迟或失效 |
 | `feedback_applied` | 本地历史的命中/偏差如何影响本次判断；首次记录或不调整时写原因 |
@@ -82,6 +114,7 @@ uv run python scripts/forecast_log.py summary
 
 输入包含 `forecast_id`、`reason`、`lesson`。取不到证据时另加 `"unknown": true`，说明缺口；
 有事件证据时再提供 `kind`、`event_start`、`event_end`、`evidence_urls`，以及：
+核验用到的当时读数用 `evidence_refs` 挂链（规则见 findings 节）。
 
 - `catalyst_actual`：可选，回填事件实际的催化类型（枚举同上），与预测时的
   `catalyst_expected` 对照后，「哪个催化信号有效」才可机械统计。它与是否有事件证据

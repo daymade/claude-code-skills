@@ -32,9 +32,12 @@ description: >-
 
 - 每次调用先按[本地预测反馈](references/forecast-feedback.md)读取已有记录；查询获得相关事件
   证据后回填未决预测。只读记录为空时不创建文件；提出新预测时保存窗口、依据与本轮反馈。
+  实际抓取外部数据的调用先落 findings 记录，record/review 用 evidence_refs 挂链（schema 与
+  规则见该文档「findings：原始读数层」节）。
 - 裸调用（没带具体问题，只想知道现在什么情况）→ 组合执行：台账回看 → 公告线 + 故障线（§1）→
   本机落地状态（§2 脚本），按输出合同先给当前重置状态结论，再附下一窗口主判断（走预测路径）
-  与台账回填。**§2 之后必须再跑一次实时 banked 查询**（`scripts/query_usage.py`，读法与字段表见
+  与台账回填；公告线、故障线与本机扫描的每次实际抓取先落 findings 记录，回填时用
+  evidence_refs 挂链（见[预测反馈的 findings 节](references/forecast-feedback.md)）。**§2 之后必须再跑一次实时 banked 查询**（`scripts/query_usage.py`，读法与字段表见
   [账号 SOP](references/account-usage.md)）——§2 的 rollout 快照结构上没有备用重置字段，不跑就
   答不全「现在什么情况」这个最常被问的维度；只取 banked 一个数即可，本条其余部分仍只管重置状态。
   定时循环（如 `/loop`）重复触发时，若距上次检查间隔很短（<10 分钟）且上轮无改判信号，可只跑
