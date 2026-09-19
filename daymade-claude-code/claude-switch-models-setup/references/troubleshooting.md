@@ -224,10 +224,14 @@ converges nothing — a corrupt main reads as empty, so proceeding would strip
 keys from every profile. Exit code is 2 for `--check`/`--all`, and 0 for the
 argument-free SessionStart call, which warns and lets the session start.
 
-A profile whose file is valid JSON but the wrong shape (e.g. `"env": "oops"`)
-is reported as `[name] ERROR: ...` and skipped; convergence continues with the
-remaining profiles, because under "converge everything" one malformed profile
-would otherwise cancel the run for all of them.
+A profile whose **whole file** is valid JSON but the wrong shape (a list, string or
+number instead of an object) is reported as `[name] ERROR: ...` and skipped;
+convergence continues with the remaining profiles, because under "converge
+everything" one malformed profile would otherwise cancel the run for all of them.
+A single **field** of the wrong shape is handled differently: a non-object `env`
+(e.g. `"env": "oops"`) is treated as empty and rebuilt from main — the same
+semantic as a corrupt file — with the original bytes retained in
+`<file>.sync-backup`.
 
 **Classifying a NEW key (the tripwire):** when a future Claude Code release
 adds a key that differs between main and a profile, the sync prints one line
