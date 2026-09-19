@@ -34,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a shell profile sets these variables and `unset` inside a script does not
   reliably reach a child process.
 
-- **claude-switch-models-setup** (`daymade-claude-code` v3.41.0 → v3.42.0): the
+- **claude-switch-models-setup** (`daymade-claude-code` v3.42.0 → v3.43.0): the
   fixture suite's hermeticity tripwire could not see a leak that only touched
   `.claude.json`. `real_profile_fingerprint()` recorded each real profile's
   `settings.json` hook-entry and env-key counts and nothing else, and `.claude.json`
