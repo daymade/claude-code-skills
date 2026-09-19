@@ -54,6 +54,21 @@ For non-Chinese audio:
 python3 scripts/asr_transcribe.py /path/to/audio.mp3 --language en
 ```
 
+Per-word timestamps need no flag — `--json` always carries `segments`:
+
+```json
+"segments": [{"text": "Understand ", "start_ms": 228, "end_ms": 1108}, ...]
+```
+
+One entry per word, monotonic. A few words share their predecessor's timestamp (the server
+flushes in blocks), which is fine for locating a moment but not for forced alignment.
+
+To use an older model:
+
+```bash
+python3 scripts/asr_transcribe.py /path/to/audio.mp3 --model stepaudio-2.5-asr
+```
+
 The script handles base64 encoding, the nested `{audio: {data, input: {transcription, format}}}` body, SSE parsing, and the misleading-endpoint pitfall. Prefer it over hand-rolled HTTP calls unless integrating into a larger pipeline.
 
 ## Decision table
@@ -64,10 +79,55 @@ The script handles base64 encoding, the nested `{audio: {data, input: {transcrip
 | Long audio (5-30 min) | Same script — 32K context handles it in a single call, no chunking needed |
 | Audio > 30 min | Split with ffmpeg before sending; the API rejects oversized payloads |
 | Need usage/billing data | Add `--json` to capture `usage.input_tokens` / `usage.total_tokens` from `transcript.text.done` |
+| Need to know when each word was said | `--json`, read `segments`. On by default |
+| **Need speaker labels (who said what)** | `python3 scripts/asr_file.py <public-url>` — a different, async endpoint. **Takes a URL, not a local file**: base64 and StepFun's own file store are both rejected, so hosting the audio somewhere fetchable is a decision for whoever runs it |
+| `--model stepaudio-2-asr-pro` returns `internal error` | That model is not usable on `/v1/audio/asr/sse` (measured 2026-09-18); use the default or `stepaudio-2.5-asr` |
 | Highly repetitive content (same phrase 5+ times, > 90s) | Cross-validate with `step-asr-1.1` — see repetition hallucination in `references/known_issues.md` (2.5-era issue, unverified on v3) |
 | Hit `model stepaudio-3-asr-max not supported` | Wrong endpoint. Switch from `/v1/audio/transcriptions` to `/v1/audio/asr/sse` |
 | Hit silent 4xx auth failure | Verify your key is "Normal" not "Plan" — Plan keys cannot call audio endpoints |
 | Need to write raw HTTP (no Python) | Read `references/api_reference.md` for exact JSON body and SSE event shapes |
+
+## Speaker labels — `scripts/asr_file.py`
+
+`stepaudio-3-asr-max` on `/v1/audio/asr/sse` has no speaker capability at all (14 candidate
+request fields measured inert). Diarization lives on the async file endpoint:
+
+```bash
+python3 scripts/asr_file.py https://example.com/talk.mp3
+# [   6.61-   8.43] speaker_0: Hello. Hello. Oh,
+# [   8.21-  10.11] speaker_1: hello! I didn't know you were there.
+```
+
+Verified end-to-end 2026-09-18 on a two-speaker sample: correct turn boundaries, per-word
+timestamps inside each utterance, up to 10 speakers per task. Uses `stepaudio-2.5-asr` —
+v3 is not served on this endpoint.
+
+The hard constraint: **it fetches a URL and nothing else.** Base64 is rejected and so is
+StepFun's own `stepfile://` file store, so there is no way to feed it a local file without
+first putting that file somewhere publicly fetchable. Treat that as the caller's decision.
+`references/known_issues.md` has the three dead ends and the retry/redirect behaviour.
+
+## Parameters are free — never omit one silently
+
+Sending more request parameters costs nothing: billing is per audio-hour. So the default is
+**send everything useful**, and every field we do *not* send has to carry a written reason in
+`REQUEST_PARAMS` at the top of `scripts/asr_transcribe.py`.
+
+```bash
+python3 scripts/check_params.py            # diff official field table vs REQUEST_PARAMS
+python3 scripts/check_params.py --selftest # calibrate the check before trusting it
+```
+
+Two guards, one per direction:
+
+- **Request side** — `check_params.py` fetches the official field table and fails if it lists
+  a field `REQUEST_PARAMS` does not mention. `--selftest` calibrates both ways: the real
+  manifest must pass (no false alarms), and a manifest with `enable_timestamp` removed must
+  be caught (the actual historical gap — per-word timestamps were missing for months because
+  only the *response* field table was ever read).
+- **Response side** — the parser reports `unhandled_response_fields` for anything the server
+  sends that it does not consume, because that is what the timestamp gap looked like from
+  this side: `start_time`/`end_time` arrived on every delta and were thrown away.
 
 ## Supported audio formats
 
@@ -79,7 +139,7 @@ The script auto-detects from extension; pass `--format` to override:
 | `.wav` | `wav` | Lossless |
 | `.ogg` | `ogg` | OGG container |
 | `.opus` | `ogg` | Opus codec in OGG container — pass through unchanged |
-| `.pcm` | `pcm` | Raw PCM — also requires `format.rate`, `format.channel`, `format.bits` (see API reference) |
+| `.pcm` | `pcm` | Raw PCM — also pass `--rate`, `--bits`, `--channel` (and `--codec`) |
 
 For mp4/m4a/webm/etc., transcode to one of the above first via ffmpeg. Production pipelines often pre-transcode everything to OGG/Opus 16kHz mono to minimize base64 payload size.
 

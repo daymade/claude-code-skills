@@ -2,7 +2,7 @@
 
 > **版本框定**：本文件多数条目为 2.5 时代（2026-04）实测证据；2026-09 起新增的 v3/两代条目自带日期标注。当前默认模型是 `stepaudio-3-asr-max`（2026-09-16 起）；这些条目多数与模型版本无关（端点形状 / key 类型 / SSE 行为），但与 censorship、幻觉等模型行为相关的条目在 v3 上未经回归实测。
 
-> **v3 能力缺口（2026-09-17 官方文档核对 + 实测）**：`stepaudio-3-asr-max` 响应只有句段级 `start_time`/`end_time`，无逐词时间戳（[官方 SSE API 参考](https://stepfun.mintlify.app/zh/api-reference/audio/asr-sse)无 word 级字段）。`hotwords` 参数虽在该 API 参考中对 v3 列出（无版本限定），但实测两个同音陷阱（「某人名」「某机构名」）带与不带结果逐字相同——按「接受但不生效」对待。依赖逐词时间戳或热词纠名的集成留在 `stepaudio-2.5-asr`，或先自行实测。
+> **v3 能力缺口（2026-09-17 核对，时间戳一条已于 2026-09-18 撤回）**：~~`stepaudio-3-asr-max` 响应只有句段级 `start_time`/`end_time`，无逐词时间戳~~——**此断言错误**。实测 `stepaudio-3-asr-max` 与 `stepaudio-2.5-asr` 都逐词返回毫秒时间戳，见下方「逐词时间戳要显式开」。失误不在文档缺字段——`enable_timestamp` 一直写在官方**请求**字段表里，而只读了**响应**字段表（那里确实没有 word 级字段）。`hotwords` 参数虽在该 API 参考中对 v3 列出（无版本限定），但实测两个同音陷阱（「某人名」「某机构名」）带与不带结果逐字相同——按「接受但不生效」对待（此条未在 2026-09-18 复测）。
 
 
 Collected from end-to-end testing 2026-04-23. These are things that burned real time to discover; they are not in the official docs.
@@ -103,3 +103,77 @@ The bundled script falls back to concatenating delta chunks if the `done` event 
 ## Long-audio timeout behavior
 
 The default `urllib`/`requests` timeout is too short for 17+ minute audio. The bundled script uses `timeout=1200` (20 minutes). If you write your own client, set the timeout to at least 2× expected wall clock time (RTF ~100× means 17 min audio takes ~10s wall clock, but TCP retries and network jitter can stretch this).
+
+## 逐词时间戳要显式开，否则字段在、值恒为 0
+
+**Symptom:** SSE 的每个 `transcript.text.delta` 都带 `start_time`/`end_time` 字段，看起来「已支持」，但值全是 0。
+
+**Cause:** 请求体没发 `enable_timestamp: true`。服务端此时仍然返回这两个字段，只是不填值。
+**只判字段存不存在会得出「支持」或「不支持」两种相反的错误结论**——必须比对数值。
+
+**Fix:** 请求体加 `"enable_timestamp": true`。脚本已默认发送，无需开关——
+参数不额外计费，没有关闭的理由。`scripts/check_params.py` 拿官方字段表对账，
+防止下一个字段被同样漏掉。
+
+同一段 30 秒英文音频，2026-09-18 实测：
+
+| 模型 | `enable_timestamp` | 段数 | 非零时间戳 | 覆盖 |
+|---|---|---|---|---|
+| `stepaudio-3-asr-max` | 发 | 61 | 55/61 | 228→29920ms |
+| `stepaudio-3-asr-max` | 不发 | 73 | 0/73 | 全 0 |
+| `stepaudio-2.5-asr` | 发 | 59 | 57/59 | 388→29920ms |
+
+发与不发的分词结果也不同（61 vs 73 段），纯文本输出不受影响。
+
+**粒度**：一个 delta 一个词，单调不回退。但少量词与前一个词共用同一时刻
+（v3 6/61，2.5 2/59）——服务端按块 flush，块内多个词共享块尾时刻。
+用于定位「这句话在第几秒」足够；用于逐词强制对齐不够，那种精度仍需 whisper word timestamps。
+
+**`stepaudio-2-asr-pro` 在该端点整体不可用**：官方请求字段表把它列为支持的 model，
+但 2026-09-18 实测恒返回 `status=200: internal error`，与时间戳无关。
+
+## 说话人识别在另一个端点（已跑通），音频必须公网 URL
+
+**这个 SSE 端点没有说话人能力**，两个方向的证据：官方请求字段表无任何 speaker 字段；
+14 个候选字段名（`enable_speaker_diarization` / `enable_diarization` / `enable_speaker` /
+`speaker_diarization` / `diarization` / `enable_spk` / `enable_speaker_label` / `speaker_label` /
+`enable_multi_speaker` / `speaker_info` / `enable_speaker_info` / `num_speakers` / `speaker_num` /
+`max_speaker_num`）在双人音频上逐一实测，响应与基线零差异。
+
+**判据先标定过再用**：这个端点对未知字段**静默接受**（`enable_zzz_definitely_not_a_field`
+照样 200），所以「没报错」零信息量，只有响应变化算数；而只比字段名同样不行——
+`enable_timestamp` 不改字段名只改值。最终判据＝字段名＋值形态＋时间戳非零数＋文本，
+同请求两次跑出零差异（假阳性 0），且能抓到 `enable_timestamp`（召回有效）。
+
+**有说话人能力的是异步文件端点**：
+
+| | `/v1/audio/asr/sse`（本 skill） | `/v1/audio/asr/file/submit` + `/file/query` |
+|---|---|---|
+| 音频入参 | `audio.data`（base64） | `audio.url`，公网可访问、<100MB |
+| 说话人 | 无 | `enable_speaker_info` → 每个 utterance 带 `speaker.id`（`spk_1`…），单任务上限 10 人；需同时 `show_utterances=true` |
+| 分句/分词 | 无 | `show_utterances` |
+| 双声道分轨 | 无 | `enable_channel_split`（需 `audio.channel=2`） |
+| 模型 | `stepaudio-3-asr-max` | `stepaudio-2.5-asr` / `step-asr-1.1`（v3 不在此端点） |
+| 脚本 | `scripts/asr_transcribe.py` | `scripts/asr_file.py` |
+
+**已端到端验证**（2026-09-18，pyannote 双人教程样本 30s）：8 个 utterance，
+`speaker_0` ×4 / `speaker_1` ×4，切分与真实轮次一致，每句带逐词时间戳。
+
+三个文档没写、会直接坑到人的事实：
+
+1. **说话人 id 是 `speaker_0` / `speaker_1`，不是文档写的 `spk_1`。**
+2. **`audio_download` 失败经常是抖动，必须重试。** 同一个 URL 实测连失败两次、
+   第三次成功。一次失败就断定 URL 不可用是错的；真正不可用的 URL 是 3/3 全败
+   （下面两条都复测过三次）。
+3. **不跟随跳转。** `https://github.com/<o>/<r>/raw/<b>/<f>` 3/3 失败，
+   换成 `https://raw.githubusercontent.com/<o>/<r>/<b>/<f>` 即成功。
+
+**base64 与 StepFun 自家文件存储都走不通**，2026-09-18 实测，不要再试：
+`audio.data` → `FAILED / audio_download / invalid audio url`；
+`https://api.stepfun.com/v1/files/<id>/content`（先传到 StepFun files，`purpose=storage`）→ 3/3 `failed to download audio`；
+官方文档明确 `files/{id}/content` 只对 `purpose=file-extract` 的文件返回**解析后的纯文本**，本就不可能当音频源。
+`stepfile://<id>` → `invalid audio url`。`stepfile://` 是 StepFun 引用已上传文件的正式约定，
+但只在 Chat API 的 `video_url` / `image_url` 生效，ASR 文件端点不认。
+
+**结论：StepFun 没有能产出公网音频直链的上传位。** 用这个端点就必须自备一个
+公网可取的地址（例如自有对象存储的签名临时链接）。那是对外动作，先问用户。

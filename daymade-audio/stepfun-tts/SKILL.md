@@ -41,6 +41,7 @@ If the user hasn't set a key, ask them to paste it (don't guess / don't use a pl
 ## Starting points
 
 - **Synthesize a single line**: Run `python3 scripts/tts_generate.py --text "你好" --out /tmp/hello.mp3 --instruction "温暖的希望感"`. For fine-grained control read the "Contextual TTS" section below.
+- **From code**: this script is the endpoint's wrapper in `llm-registry` — `llmreg.wrapper_for("stepfun-tts").tts_generate.synthesize(api_key=…, text=…, model=…, extra={…})`. `extra` is merged into the request body as-is; with `{"timestamp": True, "return_url": True}` the server answers a JSON envelope (`{"data": {"url", "subtitles"}}`) that comes back under `json` instead of `audio_bytes` (verified 2026-09-19). Parameters are not billed — send what you need. Direct `/v1/audio/speech` calls elsewhere are blocked by the `llm-entry-guard` hook.
 - **A full migration** from `step-tts-2` → Contextual TTS: read `references/migration_from_v2.md` end-to-end before touching code. It has the `INSTRUCTION_MAP`, the SKIP_CENSORED list pattern, and the output-directory-strategy for non-destructive A/B (written for 2.5; the migration mechanics are identical on v3).
 
 ## Contextual TTS — beyond emotion labels

@@ -23,7 +23,8 @@ Authorization: Bearer <STEPFUN_API_KEY>
       "transcription": {
         "language": "zh",
         "model": "stepaudio-3-asr-max",
-        "enable_itn": true
+        "enable_itn": true,
+        "enable_timestamp": true
       },
       "format": {
         "type": "mp3"
@@ -39,6 +40,7 @@ Authorization: Bearer <STEPFUN_API_KEY>
 | `audio.input.transcription.language` | yes | string | `zh` or `en`. Dialects and Japanese are not officially supported |
 | `audio.input.transcription.model` | yes | string | `stepaudio-3-asr-max` (current) or `stepaudio-2.5-asr` / `stepaudio-2-asr-pro` (still served) |
 | `audio.input.transcription.enable_itn` | no | bool | Inverse text normalization (数字→words). Default true |
+| `audio.input.transcription.enable_timestamp` | no | bool | Default false. **Omitting it does not omit the timestamp fields** — each `transcript.text.delta` still carries `start_time`/`end_time`, but every value is 0. Send `true` to get real milliseconds (measured 2026-09-18). Documented all along — the gap was that only the *response* field table was read |
 | `audio.input.format.type` | yes | string | `mp3` / `wav` / `ogg` / `pcm` |
 | `audio.input.format.rate` | pcm only | int | Sample rate (required for raw PCM) |
 | `audio.input.format.channel` | pcm only | int | Channel count (required for raw PCM) |
@@ -58,7 +60,7 @@ data: {"type":"transcript.text.done","meta":{...},"text":"你好，我是蕾格�
 
 | Event type | Meaning | How to handle |
 |---|---|---|
-| `transcript.text.delta` | Incremental piece of the transcription | Concatenate for progressive UI; optional if you only need final text |
+| `transcript.text.delta` (carries `delta`, plus `start_time`/`end_time` in ms — real values only with `enable_timestamp: true`) | Incremental piece of the transcription | Concatenate for progressive UI; optional if you only need final text |
 | `transcript.text.done` | Final, full transcription + usage | Take `text` as the authoritative result. Also contains `usage` for billing/telemetry |
 | `error` | Server-side error mid-stream | Abort and propagate `message` to the caller |
 
@@ -104,3 +106,29 @@ Legacy `step-asr-1.1` is the fallback when the current model hits the repetition
 - Long audio ASR (17 min) has succeeded with `timeout=1200` in the bundled script
 - ~400ms sleep between sequential requests avoids 429s in batch processing
 - Single TCP connection per request — SSE stream is closed after `transcript.text.done`
+
+## Speaker diarization lives on a different endpoint
+
+`/v1/audio/asr/sse` has no speaker capability. `POST /v1/audio/asr/file/submit` +
+`POST /v1/audio/asr/file/query` (async) does:
+
+```json
+{"audio":   {"format":"mp3","channel":1,"url":"https://public.example.com/a.mp3"},
+ "request": {"model_name":"stepaudio-2.5-asr","show_utterances":true,"enable_speaker_info":true}}
+```
+
+| Field | Notes |
+|---|---|
+| `audio.url` | Publicly fetchable, <100MB. **Base64 is not accepted** — see `known_issues.md` for the three routes that fail |
+| `request.model_name` | `stepaudio-2.5-asr` / `step-asr-1.1` (not `stepaudio-3-asr-max`) |
+| `request.show_utterances` | Sentence + word segmentation with ms timestamps; required for speaker info |
+| `request.enable_speaker_info` | Adds `speaker.id` per utterance, max 10 per task. **Measured format is `speaker_0`/`speaker_1`; the docs' `spk_1` is wrong** |
+| `request.enable_channel_split` | Per-channel results; needs `audio.channel=2` |
+
+`submit` returns `{task_id}`; poll `query` until it stops returning `{"status":"RUNNING"}`.
+Failures come back as `{"status":"FAILED","error":{"stage":"audio_download","message":...}}`.
+
+`audio_download` is frequently transient — the same URL failed twice then succeeded on the
+third submit (2026-09-18). Retry before blaming the URL; a genuinely unreachable one fails
+every attempt. Redirects are not followed (`github.com/.../raw/...` fails 3/3,
+`raw.githubusercontent.com/...` succeeds). `scripts/asr_file.py` wraps all of this.
