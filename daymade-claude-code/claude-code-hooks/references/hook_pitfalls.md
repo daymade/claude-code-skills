@@ -119,10 +119,13 @@ Every entry here is a bug that shipped. When a hook misbehaves, match the
 - **Cause:** hooks are registered per-profile in each profile's `settings.json`.
   A hook file present in `~/.claude/hooks/` does nothing unless the *active*
   profile calls it.
-- **Fix:** register in the main profile, then **converge all profiles** (this
-  setup: `sync-profile-settings.py --all`, owned by `claude-switch-models-setup`).
-  Add the guard's name to the SessionStart health check's registration grep so
-  drift is visible.
+- **Fix:** register in the main profile; there is no separate convergence step.
+  This setup registers `sync-profile-settings.py` (owned by
+  `claude-switch-models-setup`) as a SessionStart hook **without arguments**, so
+  the next profile to start a session converges every profile at once —
+  `--all` is only for propagating an edit immediately instead of at the next
+  session start. Add the guard's name to the SessionStart health check's
+  registration grep so drift is visible.
 
 ---
 

@@ -368,9 +368,13 @@ skeleton: Pattern C in [references/hook_patterns.md](references/hook_patterns.md
   every profile was converged. Register in the **main** profile's settings
   (`~/.claude/settings.json` in this setup; the Registration section of
   [references/hook_patterns.md](references/hook_patterns.md) has the exact jsonc
-  shape) — PreToolUse → matcher `Bash` → your hook — then converge the rest (this setup
-  uses `sync-profile-settings.py --all`, owned by the `claude-switch-models-setup`
-  skill). A SessionStart health check greps each profile for the Tier-0 guards to
+  shape) — PreToolUse → matcher `Bash` → your hook — and nothing further: in this
+  setup the converger is registered as a SessionStart hook **without arguments**
+  (`sync-profile-settings.py`, owned by the `claude-switch-models-setup` skill),
+  so the next profile to start a session carries the registration into every
+  profile. `--all` is the human mode — run it once by hand when you edited
+  settings and want the change live now instead of at the next session start.
+  A SessionStart health check greps each profile for the Tier-0 guards to
   catch drift. Settings edits are picked up by the CLI's file watcher (official
   hooks docs), so registration is live without a restart — confirm by watching
   the guard fire on a safe probe, or at next session's health-check line.
