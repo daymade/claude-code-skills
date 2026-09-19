@@ -69,6 +69,43 @@ stash exception as an absolute prohibition: if the current contract permits it, 
 writer may use its exact absolute-repository and explicit-file form, such as
 `git -C <absolute-repo> stash push [options] -- <exact-file>...`. An unscoped stash remains invalid.
 
+**Finding the actual writer beats guessing a session by name.** A name-based guess gets a false
+"not me" from the wrong session while the real writer keeps appending, and the shared file keeps
+changing under you either way. Get process evidence first:
+
+```bash
+lsof -- <path>                        # or: fuser <path> — PID(s) currently holding the file open
+ps -o pid=,ppid=,command= -p <pid>    # this pid + its ppid; rerun on the ppid to climb
+```
+
+A PID found this way still needs walking: follow `ps`'s parent chain past any short-lived shell or
+write call to the process that actually owns the session, then reach that owner through whatever
+session-addressing mechanism the current host provides — never guess an address from a directory,
+branch, or task label. A fast writer that opens, writes, and closes per line can leave no open
+handle even while the file keeps growing; watch size or `mtime` still advancing before concluding
+no one is writing. But the two probes share no empty shape, so read them apart. `lsof` exits 1
+with empty stdout both when nothing holds the file and when the path is wrong — only stderr
+separates them, and a `status error on <path>: No such file or directory` means the path itself is
+wrong (fix the path first; a nonexistent path has no size or `mtime` to watch and was never a
+writer check at all). `fuser`'s shape is the opposite trap: it exits 0 whether or not anyone holds the file, so its
+exit code cannot answer the writer question the way `lsof`'s exit 1 does. It also splits its
+answer across streams differently by platform — on macOS the PID goes to stdout while the `path: `
+echo goes to stderr, whereas Linux prints `path: <pids>` together on stdout — so "the output is
+empty" is not a portable criterion and the two probes must not share one. Decide a writer by
+whether a PID is present: on macOS that is a non-empty `$(fuser <path>)` (stdout carries the PID,
+and nothing when no one holds it); on Linux it is a PID after the colon. Never read the `path: `
+echo as a writer — under a `2>&1` capture it lands on stdout and reads as output when there is
+none, putting the false positive on the dangerous side. Like `lsof`, a wrong path is not "no
+writer": a non-zero exit or a `does not exist` on stderr means the path itself is wrong — fix the
+path before reading it for a writer. No process found and the
+file has stopped moving: report the gap, do not mutate, and stay read-only rather than inventing a
+session to ask — the same stop-the-write-path default as above.
+
+This shared-file writer probe is one of the Skill's three `lsof` uses — the others are SKILL.md's
+retirement occupancy check and `references/merge_verification.md` § Independent clone retirement's
+`lsof +D <absolute-clone>` — and all three keep the same read-only, stop-on-any-genuine-writer
+rule; change the criterion in one, change it in the others.
+
 ## Exact-SHA handoff and scoped completion
 
 A branch name is a routing label, not a frozen deliverable. The writer can add another commit after

@@ -131,6 +131,9 @@ report-only until the user expands the authorized targets.
    and never `stash -u`ed is invisible to those formats — the copy on disk is the only copy, so
    preserving it means literally copying the file out. Backing up "the repository" and believing
    untracked work came along is how a clean-looking backup silently omits the only thing at risk.
+   When the backup is a branch pushed into an already-existing repository rather than this one's
+   own remote, verify shared history before the push (Mode B Step 2) — a similar name proves
+   nothing.
 5. **Verify "merged" by CONTENT, never by commit count — and know that most content checks are
    also unsound.** After a squash-merge, `main..branch` shows the branch's original commits as
    "unmerged" even though their content is on main — often 100+ phantom commits. But swapping
@@ -253,6 +256,22 @@ branch **and** a pushed remote branch **and** a `git format-patch` file — so a
 single `git gc` can't take it. Details + why triple-backup: **[references/recovery_playbook.md](references/recovery_playbook.md)**
 § Triple-backup a critical commit.
 
+**Before pushing that preservation branch into an already-existing repository, verify shared
+history first — a similar name is not evidence of the right repository.** Fetch the candidate
+repository's default branch (`git fetch <candidate-url> <default-branch>`) and run
+`git merge-base <that-default-branch> <ref>`; a local
+`merge-base` exiting 1, or the hosting service's own compare view reporting no common ancestor,
+means the two share no history and the target is a different project. Push the branch back to this
+work's own remote first; if none exists, create a new repository; if neither applies or the correct
+home is unclear, ask the user — but never push anyway because the name matched. Keep the merge-base
+check as the test whenever the right home is not obvious: only a repository that already shares
+this work's history can host the branch without being a different project. Real incident: a
+deployment source's backup branch was pushed to an unrelated private repository chosen by name
+resemblance alone. If a push already landed and a
+later readback finds no common ancestor, treat the branch as misplaced: move its content to the
+correct home, then delete it from the wrong one, rather than leaving it there as "already backed
+up somewhere."
+
 **Untracked files need a different tool — plain copying (rule 4).** Put `<backup>` outside the
 target repository and every checkout being retired. Everything above moves *git
 objects*; a file git was never told about is not one. Preserve those explicitly, and keep the
@@ -327,7 +346,8 @@ The load-bearing few:
   index. Writer ownership comes from the repository's task/coordination contract, not a guessed
   file list. If ownership is unclear or another writer is active, do not mutate the checkout.
   (§ Shared checkout and concurrent sessions: one writer — also governs the two "parallel session"
-  bullets below.)
+  bullets below, and now also covers finding an unidentified writer by process evidence rather
+  than a guessed name.)
 - **Commit before switching and push WIP early.** Prefer a remote-backed commit over stash
   juggling, but preserve a higher-authority narrow stash exception; never use an unscoped stash
   to make a dirty checkout look ready.
@@ -590,6 +610,10 @@ and final branch-count gates that a single-branch retirement does not need.
   old-path absence + new-path presence; permanent deletion is a separate explicit decision. Full
   READ-DO sequence and `--shared` boundary:
   **[references/merge_verification.md](references/merge_verification.md)** § Independent clone retirement.
+  This retirement occupancy check is the second of the Skill's three `lsof` uses — the shared-file
+  writer probe in `references/prevention_practices.md` and `references/merge_verification.md`'s
+  clone-occupancy probe share the same read-only, stop-on-any-genuine-writer rule; change the
+  criterion in one, change it in the others.
 
 **Step 4 — after the delete, re-check by content, not by filename.** When a cleanup (or a batch of
 squash-merges) is already done and the question becomes "did any of it drop work?", the naming-based
