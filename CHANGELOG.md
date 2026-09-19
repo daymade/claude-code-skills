@@ -65,7 +65,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `$CLAUDE_CONFIG_DIR` with `CLAUDE_PROFILES_ROOT` pointed elsewhere, the same
   union mechanism as the incident — must move the fingerprint and leave a backup,
   and harness-style churn of keys the converger never touches must move neither.
-  Removing either signal reddens exactly its own assertion. 144 → 156 assertions.
+  Removing either signal reddens exactly its own assertion. 144 → 158 assertions.
+  Two of those pin the one property nothing else guarded: the fingerprint compares
+  **raw** values and scrubbing happens only when the text is rendered. Move
+  `_scrub` into `_converger_writable` and two dicts differing only in a secret
+  collapse onto one `<redacted>`, the fingerprints compare equal, and signal 1 goes
+  blind to a secret-only write — while every assertion that checks "plaintext is
+  absent from the printed output" stays green. Both properties would fail silently
+  together; that mutation reddens exactly these two and nothing else.
   Replayed against a copy of the real profiles tree reached through a symlinked
   `HOME`, the suite is green on 14 real profiles including 28 pre-existing
   `.sync-backup` files; a behavior-key write injected *while* it runs reddens both
