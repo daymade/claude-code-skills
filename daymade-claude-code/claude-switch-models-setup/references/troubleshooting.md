@@ -222,7 +222,10 @@ Corrupt files on either layer: a corrupt profile `settings.json` or
 are retained in `<file>.sync-backup`); a corrupt MAIN file aborts the run and
 converges nothing — a corrupt main reads as empty, so proceeding would strip
 keys from every profile. Exit code is 2 for `--check`/`--all`, and 0 for the
-argument-free SessionStart call, which warns and lets the session start.
+argument-free SessionStart call, which warns and lets the session start. A
+profile the run could not process — the wrong-shape case in the next paragraph —
+splits the same way, so an audit that skipped a profile says so instead of
+reporting a clean run.
 
 A profile whose **whole file** is valid JSON but the wrong shape (a list, string or
 number instead of an object) is reported as `[name] ERROR: ...` and skipped;
