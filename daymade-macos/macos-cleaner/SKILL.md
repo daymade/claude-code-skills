@@ -114,6 +114,8 @@ Mole's analyzer scans a fixed set that includes the home directory, application 
 
 For an explicitly approved duplicate-file investigation, read the “Optional duplicate files” section in `references/cleanup_targets.md`. It is read-only and never uses an automatic-delete option.
 
+**A large data folder is not a cache — proposing its deletion needs an evidence chain, not a size ranking.** When discovery surfaces a big project-asset / media / dataset directory (not a cache, not an app remnant), do NOT put it in the action set on size alone: read `references/proving-redundancy-before-deletion.md` and climb its ladder (file-level duplication → creation-origin → reference check → session-history tool-call census → .DS_Store manual-usage trace → the project's own decision records) before proposing anything. The deliverable is the evidence table; the unprovable row (purely manual usage) goes to the user, never gets papered over.
+
 When discovery is fanned out to sub-agents, each returns candidates and measurements only — the classification, the acceptance, and the proposal happen in the session that runs the Phase 2 entry gate. A sub-agent's inventory is input to the classification table, never the plan.
 
 ### Docker and OrbStack
@@ -241,6 +243,7 @@ Load only the branch relevant to the current task:
 - `references/apple_content_caching.md` — Apple Content Caching diagnosis, unit interpretation, supported remote controls, confirmation plan, and post-cleanup verification.
 - `references/chromium_code_sign_clones.md` — Chrome/Chromium/Edge code-sign-clone semantics, nominal-versus-physical reporting, exact inactive-target manifests, cleanup verification, and recurrence prevention.
 - `references/cleanup_targets.md` — cache, log, application, developer, large-file, and Time Machine target semantics.
+- `references/proving-redundancy-before-deletion.md` — the evidence ladder for large data folders (duplication → creation-origin → references → session-history census → .DS_Store → project decision records). Load BEFORE proposing deletion of any big project-asset / media / dataset directory; a size ranking is not evidence.
 - `references/docker_analysis.md` — per-object Docker and OrbStack analysis, database-volume safeguards, and refill root-cause diagnosis.
 - `references/mole_integration.md` — TTY workflow for interactive Mole analysis and preview.
 - `references/report_templates.md` — long-form general and Docker report templates.
