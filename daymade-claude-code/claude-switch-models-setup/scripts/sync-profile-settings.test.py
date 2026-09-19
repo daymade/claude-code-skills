@@ -376,17 +376,46 @@ def real_profile_fingerprint(root: Path | None = None):
     return fp
 
 
+_SECRETISH = ("KEY", "SECRET", "TOKEN", "PASSWORD", "PASSWD", "CREDENTIAL", "AUTH")
+
+
+def _scrub(value, _depth: int = 0):
+    """Redact secret-looking leaves before a fingerprint value reaches output.
+
+    The tripwire's failure detail prints the before/after of the converger-writable
+    subset, and `mcpServers` — which is in that subset — carries per-server `env`
+    with real API keys in it. A red tripwire would therefore print a live credential
+    into the terminal and into any CI log that captured the run. Redacting on the
+    way OUT is the half that matters: the fingerprint itself stays byte-exact, so
+    two different values still compare unequal and the assertion still fires.
+    """
+    if _depth > 6:
+        return "<deep>"
+    if isinstance(value, dict):
+        out = {}
+        for k, v in value.items():
+            if any(s in str(k).upper() for s in _SECRETISH):
+                out[k] = "<redacted>"
+            else:
+                out[k] = _scrub(v, _depth + 1)
+        return out
+    if isinstance(value, (list, tuple)):
+        return [_scrub(v, _depth + 1) for v in value]
+    return value
+
+
 def diff_signals(before, after) -> list:
     """Name which signal moved, so a red tripwire says what it caught.
 
     A bare `before != after` sends the reader to diff two nested structures by
     hand; this is the difference between "tripwire fired" and "the .claude.json
-    behavior subset of one profile changed from X to Y".
+    behavior subset of one profile changed from X to Y". Values are scrubbed:
+    this text goes to a terminal and possibly a CI log.
     """
     if before == after:
         return []
     if not isinstance(before, dict) or not isinstance(after, dict):
-        return [f"fingerprint shape changed: {before!r} -> {after!r}"]
+        return [f"fingerprint shape changed: {_scrub(before)!r} -> {_scrub(after)!r}"]
     out = []
     for name in sorted(set(before) | set(after)):
         b, a = before.get(name, "<profile absent>"), after.get(name, "<profile absent>")
@@ -396,9 +425,9 @@ def diff_signals(before, after) -> list:
             for signal in sorted(set(b) | set(a)):
                 bv, av = b.get(signal, "<absent>"), a.get(signal, "<absent>")
                 if bv != av:
-                    out.append(f"  profile {name} / {signal}: {bv!r} -> {av!r}")
+                    out.append(f"  profile {name} / {signal}: {_scrub(bv)!r} -> {_scrub(av)!r}")
         else:
-            out.append(f"  profile {name}: {b!r} -> {a!r}")
+            out.append(f"  profile {name}: {_scrub(b)!r} -> {_scrub(a)!r}")
     return out
 
 
@@ -805,6 +834,22 @@ try:
           "fake-live" in _fp_broken
           and _fp_broken["fake-live"]["settings.json"][0] == "<invalid-json>",
           f"{_fp_broken!r}")
+
+    # The red tripwire's detail text goes to a terminal and possibly a CI log, and
+    # mcpServers is inside the compared subset carrying real API keys in its `env`.
+    # Calibrated against a shape that mirrors that: scrubbing on the way OUT leaves
+    # the fingerprint byte-exact, so the assertion still fires, but the printed value
+    # must not contain the secret.
+    _secret_before = {"x": {".claude.json": (("mcpServers", {"srv": {"env": {"API_KEY": "s3cr3t", "SAFE": "ok"}}}),)}}
+    _secret_after = {"x": {".claude.json": (("mcpServers", {"srv": {"env": {"API_KEY": "CHANGED", "SAFE": "ok"}}}),)}}
+    _rendered = "\n".join(diff_signals(_secret_before, _secret_after))
+    check("calibration: a red tripwire still names the signal that moved",
+          "mcpServers" in _rendered, _rendered)
+    check("calibration: a red tripwire does not print the secret values",
+          "s3cr3t" not in _rendered and "CHANGED" not in _rendered
+          and "<redacted>" in _rendered, _rendered)
+    check("calibration: it keeps the non-secret value so the diff is still readable",
+          "SAFE" in _rendered and "'ok'" in _rendered, _rendered)
 finally:
     shutil.rmtree(_cal, ignore_errors=True)
 
