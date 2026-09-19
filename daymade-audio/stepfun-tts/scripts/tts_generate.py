@@ -74,16 +74,21 @@ def synthesize(
     volume: float = 1.0,
     response_format: str = "mp3",
     timeout: int = 300,
+    model: str = MODEL,
+    extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
-    Call /v1/audio/speech with stepaudio-2.5-tts.
+    Call /v1/audio/speech (default model stepaudio-2.5-tts).
 
-    Returns {ok, audio_bytes?, status, err?, censored?}.
-    censored=True signals a censorship_block which callers should handle individually
-    rather than aborting a batch.
+    Returns {ok, status, audio_bytes? | json?, err?, censored?}.
+    `extra` is merged into the request body as-is — e.g. {"timestamp": True, "return_url": True,
+    "sample_rate": 24000} makes the server answer with a JSON envelope ({"data": {"url",
+    "subtitles"}}) instead of audio bytes; that envelope comes back under `json`. Parameters are
+    not billed, so callers never have to strip them. censored=True signals a censorship_block
+    which callers should handle individually rather than aborting a batch.
     """
     body: dict[str, Any] = {
-        "model": MODEL,
+        "model": model,
         "input": text,
         "voice": voice,
         "response_format": response_format,
@@ -91,10 +96,12 @@ def synthesize(
         "volume": volume,
     }
     if instruction:
-        _limit = 500 if MODEL.startswith("stepaudio-3") else 200
+        _limit = 500 if model.startswith("stepaudio-3") else 200
         if len(instruction) > _limit:
-            return {"ok": False, "status": 0, "err": f"instruction too long: {len(instruction)} > {_limit} chars (model={MODEL})"}
+            return {"ok": False, "status": 0, "err": f"instruction too long: {len(instruction)} > {_limit} chars (model={model})"}
         body["instruction"] = instruction
+    body.update(extra or {})
+    wants_json = bool((extra or {}).get("return_url") or (extra or {}).get("timestamp"))
 
     req = urllib.request.Request(
         API_URL,
@@ -107,7 +114,15 @@ def synthesize(
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return {"ok": True, "status": resp.status, "audio_bytes": resp.read()}
+            payload = resp.read()
+            ctype = (resp.headers.get("Content-Type") or "").lower()
+            if wants_json or "json" in ctype:
+                try:
+                    return {"ok": True, "status": resp.status, "json": json.loads(payload.decode("utf-8"))}
+                except (ValueError, UnicodeDecodeError) as exc:
+                    return {"ok": False, "status": resp.status,
+                            "err": f"expected a JSON envelope (content-type={ctype!r}): {exc}"}
+            return {"ok": True, "status": resp.status, "audio_bytes": payload}
     except urllib.error.HTTPError as e:
         raw = e.read().decode(errors="replace")
         # Detect censorship_block so caller can decide whether to skip
