@@ -328,6 +328,27 @@ class ForecastLogTests(unittest.TestCase):
                                    capture_output=True, text=True, check=True).stdout
             self.assertEqual(count.strip(), "1")
 
+    def test_git_snapshot_commits_only_the_journal_when_index_holds_foreign_staged_files(self):
+        # --state-dir can point into an existing git repo; the snapshot commit is
+        # pathspec-limited so other sessions' staged entries never ride along.
+        env = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.invalid",
+               "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.invalid"}
+        with mock.patch.dict(os.environ, env):
+            self.record()
+            foreign = self.path.parent / "unrelated.txt"
+            foreign.write_text("another session's staged work")
+            for argv in (["init"], ["add", "unrelated.txt"]):
+                subprocess.run(["git", "-C", str(self.path.parent), *argv],
+                               capture_output=True, check=True)
+            log.snapshot(self.path.parent, self.path.name, "forecast")
+            committed = subprocess.run(
+                ["git", "-C", str(self.path.parent), "show", "--name-only", "--format="],
+                capture_output=True, text=True, check=True).stdout.split()
+            self.assertEqual(committed, [self.path.name])
+            staged = subprocess.run(["git", "-C", str(self.path.parent), "status", "--porcelain"],
+                                    capture_output=True, text=True, check=True).stdout
+            self.assertIn("A  unrelated.txt", staged)  # foreign entry: still staged, untouched
+
     def test_git_snapshot_failure_prints_note_and_never_blocks_the_append(self):
         self.record()
         before = self.path.read_bytes()

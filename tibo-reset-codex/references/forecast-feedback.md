@@ -59,7 +59,9 @@ uv run python scripts/forecast_log.py findings              # 最近 20 条；--
 完全相同的输入重试返回原记录。`evidence_refs` 链接规则：先 `finding` 后 `record`/`review`
 ——record/review 输入里的 `evidence_refs` 是 finding id 数组（完整 id，或能唯一解析的短
 id 前缀），每个引用必须已存在于 findings.jsonl，否则报错退出（防断链）；缺省不写该键，
-旧记录无此键照常解析。`summary` 为每个 forecast/review 显示 `evidence_refs_count`。
+旧记录无此键照常解析。重试同一条 record/review 时 `evidence_refs` 需与首次一致：缺省
+（不写键）与显式 `[]` 是两个不同状态，幂等匹配按字面比较，不一致会新建记录而非返回原记录。
+`summary` 为每个 forecast/review 显示 `evidence_refs_count`。
 
 每次成功追加后脚本尽力在数据目录做一次本地 git 快照（自动 `init`、目录 0700）；
 git 任何失败只在 stderr 打一行 note、绝不影响追加成功，也不构成备份承诺；`--no-git` 关闭。

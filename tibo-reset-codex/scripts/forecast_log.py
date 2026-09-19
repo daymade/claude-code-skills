@@ -341,7 +341,9 @@ def snapshot(state_dir, filename, record_type, enabled=True):
         if not run("status", "--porcelain", "--", filename).stdout.strip():
             return  # Nothing new to preserve; a clean snapshot needs no commit.
         run("add", "--", filename)
-        run("commit", "-m", f"tibo-reset-codex: append {record_type}")
+        # Pathspec-limited commit: when --state-dir points into an existing git
+        # repo, other sessions' staged entries must not ride along.
+        run("commit", "-m", f"tibo-reset-codex: append {record_type}", "--", filename)
     except (OSError, subprocess.SubprocessError) as error:
         detail = str(error).splitlines()[0] if str(error) else type(error).__name__
         print(json.dumps({"note": f"git snapshot skipped: {detail}"}, ensure_ascii=False),
