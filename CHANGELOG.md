@@ -16,14 +16,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   prune follow symlinks out of the cache into managed Python trees; #10153 means
   "unreachable" is cache-graph reachability, not venv liveness). The check must
   name the *installed version*, because both defects are invisible in the tool's
-  help text and in the size of the cache. New safety rule 11 requires isolating
-  the mechanism behind a `df` gap — clone/reflink sharing, local APFS snapshots,
-  purgeable space, double-counted paths, concurrent writers — before promising
-  physical release from a deletion; an undemonstrated mechanism must be reported
-  as `unknown` rather than named. That rule came from naming APFS clonefile as
-  the cause of a 109.4 GiB nominal / 11.2 GiB reclaimed gap and then measuring
-  `cp` on the same machine to find it allocates and releases in full, with zero
-  local snapshots: the mechanism was wrong, and the gap is still unexplained.
+  help text and in the size of the cache. New safety rule 11 requires naming the
+  mechanism behind a `df` gap — and getting it from the *verbatim creating
+  command*, because the copy verb alone decides the space semantics. It ships a
+  four-row table (`cp` / `cp -c` clonefile / `ln` hard link / local APFS
+  snapshot) distinguished by what `du` reports and what deletion releases, all
+  measured. Two traps it exists to kill: clonefile and hard link are opposite on
+  `du` but identical on deletion (both release ≈0), so a reclaim measurement
+  cannot tell them apart while `du` can; and **calibrating the wrong copy verb
+  proves nothing**. A 109.4 GiB nominal / 11.2 GiB reclaimed gap was twice
+  attributed to the wrong mechanism before the creating command surfaced it:
+  `cp -cR` from `3b0b97ce` line 1861 (2026-06-11) — clonefile, which matches the
+  books exactly (full nominal per path, ≈0 reclaim on copy deletion, 11.2 GiB
+  being only the copy's own writes). The earlier "clonefile was ruled out"
+  conclusion rested on a bare-`cp` probe, a different verb, and was wrong; the
+  probe must use the creating command's own flags. Where no command can be
+  found, the gap stays `unknown` rather than getting the most plausible name.
   `docker_analysis.md` adds the missing second half of its own independent-
   verification rule — that rule covered object eligibility but not the reclaim
   number, so a summed `UNIQUE SIZE` total now needs recomputing from a second

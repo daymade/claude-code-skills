@@ -43,7 +43,18 @@ User-provided scope exclusions override every generic scan suggestion. Do not in
 8. **Preserve valuable state.** Never target user documents, credentials, SSH material, active databases, application configuration, or running-service state merely to increase the reported savings. Read `references/safety_rules.md` before any file deletion.
 9. **Execution follows the user's authorization.** If the user asks only for analysis or wants to run commands personally, hand off the commands. If the user asks the agent to fix the machine and explicitly confirms the scoped plan, execute the exact approved commands and verify them. Unattended recurring deletion logic needs separate approval before it is written or enabled.
 10. **Fail fast.** An unexpected non-zero command, a mismatched postcondition, an unexpected target, or a changed dependency stops the cleanup. Interpret documented probe statuses such as `lsof` exit 1 with empty output before deciding they are failures. Report the partial state; do not improvise a fallback.
-11. **Before promising physical release from any deletion, isolate the mechanism that would produce it.** A `df` gap between nominal `du` total and actual reclaim means one of several candidate mechanisms is at work (clone/reflink sharing, local APFS snapshots, purgeable or placeholder space, double-counted paths, concurrent writers on the same volume). Each is cheap to test in isolation *before* the irreversible step, and none of them is testable after it. Calibrate the mechanism first, then predict the release, then delete — in that order. When no mechanism can be demonstrated, report the release as `unknown` rather than naming the most plausible one; a gap with an unverified mechanism attached is a defect in the report, not a finding.
+11. **Before promising physical release from any deletion, name the mechanism — and get it from the creating command, not from a guess.** A `df` gap between a nominal `du` total and actual reclaim means one candidate mechanism is at work, and **the strongest evidence is the verbatim command that created the folder**, because the copy verb alone decides the space semantics. Find it in session history before theorizing; a folder-name or size-based inference is not a mechanism. Only if no command can be found does the gap stay `unknown` — do not substitute the most plausible-sounding mechanism for one you can demonstrate.
+
+    The mechanisms, distinguished by what `du` reports and what deletion releases (all four measured on 2026-09-19, 1 GiB source, drift-controlled):
+
+    | Created by | `du` nominal | Deleting the copy releases | Fingerprint |
+    |---|---|---|---|
+    | `cp` (bare) / `cp -a` | full, counted per path | full | independent inodes, independent extents |
+    | **`cp -c` / `cp -cR`** (clonefile) | **full, counted per path** | **≈0** | **different inode, `nlink=1`, shared extent** |
+    | `ln` / `cp -l` (hard link) | **counted once** — sibling reads `0` | **≈0** | **same inode, `nlink=2`** |
+    | local APFS snapshot | full | ≈0 until snapshots are thinned | `tmutil listlocalsnapshots /` |
+
+    Two traps this table exists to kill. **The clonefile and hard-link rows are opposite on `du` but identical on deletion** — both release ≈0, so "deleting it freed nothing" cannot tell them apart, while `du` can: a hard-linked sibling counts once (or as `0`), a clonefile copy counts full. And **calibrating the wrong copy verb proves nothing**: a 98 GiB gap was twice attributed to the wrong mechanism because the probe used bare `cp` when the folder had been built with `cp -cR`. Before any deletion, run the probe with the *same flags as the creating command*. Clonefile is worth flagging as the common case — macOS `cp` defaults to it for `-c`, and directories copied for a delivery/kit routinely carry it.
 
 ## Phase contract
 
