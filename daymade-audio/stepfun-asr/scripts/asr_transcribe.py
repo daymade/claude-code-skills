@@ -127,7 +127,10 @@ def transcribe(
 ) -> dict[str, Any]:
     """
     Returns {ok, text?, usage?, elapsed, deltas_count, segments?,
-             unhandled_response_fields?, err?, censored?}.
+             unhandled_response_fields?, err?, errors, censored?}.
+    `errors` is always present: the raw SSE `error`-event payloads seen on
+    this call (dicts), or an empty list if none fired — even when `ok` is
+    True, since `ok` only turns False when there was no text at all.
     Parses the SSE stream; takes the text from transcript.text.done.
     """
     audio_b64 = base64.b64encode(audio_path.read_bytes()).decode("ascii")
@@ -168,14 +171,14 @@ def transcribe(
     except urllib.error.HTTPError as e:
         err = e.read().decode(errors="replace")[:500]
         censored = "censorship" in err.lower() or "blocked" in err.lower()
-        return {"ok": False, "status": e.code, "err": err, "elapsed": time.time() - t0, "censored": censored}
+        return {"ok": False, "status": e.code, "err": err, "errors": [], "elapsed": time.time() - t0, "censored": censored}
 
     elapsed = time.time() - t0
     text = ""
     usage: dict[str, Any] | None = None
     deltas = 0
     segments: list[dict[str, Any]] = []
-    errors: list[str] = []
+    errors: list[dict[str, Any]] = []
     unhandled: dict[str, set[str]] = {}
     for line in raw.splitlines():
         if not line.startswith("data:"):
@@ -205,11 +208,14 @@ def transcribe(
             text = ev.get("text", "")
             usage = ev.get("usage")
         elif t == "error":
-            errors.append(ev.get("message", ""))
+            # 原始 payload 整个留着，不只留 message——调用方可能需要按
+            # type/meta 判断具体是哪一类 error，不止是拼一句人类可读文案。
+            errors.append(ev)
 
     if not text and errors:
-        return {"ok": False, "status": 200, "err": "; ".join(errors), "elapsed": elapsed}
-    out = {"ok": True, "text": text, "usage": usage, "elapsed": elapsed, "deltas_count": deltas}
+        msg = "; ".join(e.get("message", "") for e in errors)
+        return {"ok": False, "status": 200, "err": msg, "errors": errors, "elapsed": elapsed}
+    out = {"ok": True, "text": text, "usage": usage, "elapsed": elapsed, "deltas_count": deltas, "errors": errors}
     if segments:
         out["segments"] = segments
     if unhandled:

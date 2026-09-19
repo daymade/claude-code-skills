@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **stepfun-asr** (`daymade-audio` v1.40.0 → v1.41.0): `transcribe()` now always
+  returns an `errors` list of the raw SSE `error`-event payloads (empty when none
+  fired), including on the success path, where any error event used to be silently
+  discarded once transcript text came back non-empty — found reviewing a stricter
+  external consumer that treats any error event as a failure and had no way to see
+  one the wrapper had already swallowed. `ok`'s own logic is unchanged (`False`
+  only when there is no text at all); callers wanting that stricter old behavior
+  now check `errors` themselves. `SKILL.md`'s design invariants document the new
+  field.
+
 - **macos-cleaner** (`daymade-macos` v1.3.1 → v1.3.2): three rules closing gaps
   a 2026-09-19 session hit in the skill's own text. Safety rule 5 now requires a
   known-issue check before the first supported-control command runs — it
