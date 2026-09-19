@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **claude-switch-models-setup** (`daymade-claude-code` v3.40.0 → v3.41.0): a
+- **claude-switch-models-setup** (`daymade-claude-code` v3.41.0 → v3.42.0): a
   fatal warning against running the profile converger with a synthetic
   `CLAUDE_MAIN_CONFIG_DIR`. Scope is the union of `~/.claude-profiles/*` and
   `$CLAUDE_CONFIG_DIR`, so a synthetic main **on its own** — with the profiles
