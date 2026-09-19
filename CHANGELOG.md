@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tibo-reset-codex** (`tibo-reset-codex` v1.13.0 → v1.13.1): collects an uncommitted SKILL.md
+  revision left behind by an overnight session (owner exited, diff verified complete and applied
+  verbatim on top of #609). Content: scan/banked queries must not be chained with `&&` (a
+  scan_rollouts exit 1 silently drops the banked leg), loop-context bare commands need a
+  `cd <skill dir> &&` prefix to pass the same-cmd-resend-guard, Tibo sleep-window polling
+  reduction with an official-window escalation exception, a coverage self-audit for long-running
+  loops, and the codexrunway `status.json` prediction feed (filter on `kind=='reset_completed'`,
+  not `status`).
 - **git-safety-net** (`git-safety-net` v1.18.0 → v1.19.0): two rules from today's incidents. Mode
   B Step 2 (and the triple-backup pointer in rule 4) now requires a `git merge-base` check — or the
   hosting service's own compare view — before pushing a preservation branch into an
