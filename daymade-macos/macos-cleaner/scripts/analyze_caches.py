@@ -3,14 +3,19 @@
 Analyze macOS cache directories and categorize them by size and safety.
 
 Usage:
-    python3 analyze_caches.py [--user-only] [--min-size SIZE]
+    python3 analyze_caches.py [--user-only] [--min-size SIZE] [--include-dev]
 
 Options:
     --user-only    Only scan user caches (~/Library/Caches), skip system caches
     --min-size     Minimum size in MB to report (default: 10)
+    --include-dev  Also scan XDG/tool-owned developer caches (~/.cache/uv, ~/.npm,
+                   ...) — the largest caches on a dev machine live OUTSIDE
+                   ~/Library/Caches, so without this flag the report under-reports them
+                   ~4x. Combine with --user-only for the standard user-scope report.
 """
 
 import os
+import re
 import sys
 import subprocess
 import argparse
@@ -91,6 +96,19 @@ def categorize_safety(name):
     """
     name_lower = name.lower()
 
+    # Preserve-by-default developer caches (references/cleanup_targets.md's
+    # high-value table): technically rebuildable, but the rebuild/redownload cost
+    # is high (model weights, browser binaries, package content addressed for
+    # constrained networks). These stay OUT of any action set until the user
+    # accepts the restoration cost — so they must never carry the 'rebuildable'
+    # label the generic patterns below would give them.
+    preserve_patterns = [
+        'uv', 'npm', 'huggingface', 'modelscope',  # tool/package/model caches
+        'playwright', 'puppeteer',                 # browser binaries for automation
+    ]
+    if any(pattern in name_lower for pattern in preserve_patterns):
+        return ('keep', 'Preserve-by-default (cleanup_targets.md) — high rebuild cost')
+
     # Rebuildable caches; still require an impact decision before deletion
     safe_patterns = [
         'chrome', 'firefox', 'safari', 'edge',  # Browsers
@@ -114,6 +132,133 @@ def categorize_safety(name):
     return ('check', 'Unknown application, verify before deleting')
 
 
+def resolve_dev_cache_paths():
+    """
+    Resolve developer-cache paths from each tool's OWN configuration, per
+    cleanup_targets.md's "the tool/application configuration is the path
+    authority" rule — never from hardcoded guesses.
+
+    Returns:
+        List of (label, path_or_None, unresolved_reason_or_None). A None path with
+        a reason means the tool config could not be resolved here (e.g. the tool
+        binary is absent) — surfaced explicitly, never silently dropped, so the
+        reader can tell "path not found" from "below threshold".
+    """
+    home = os.path.expanduser('~')
+
+    def tool_cli(*argv):
+        """Run a tool's path-resolving subcommand; return plain stdout or None.
+
+        Strips ANSI escape sequences: some tools colorize their output when the
+        environment forces color (FORCE_COLOR / CLICOLOR_FORCE, common under
+        launchd/cron or other shells), and `.strip()` does not remove escape
+        codes — a colored path then fails every os.path check that follows
+        (verified 2026-09-19: `uv cache dir` under FORCE_COLOR=1 returns
+        '\\x1b[36m~/.cache/uv\\x1b[39m', making isdir() False and
+        silently dropping the largest dev cache from the report).
+        """
+        try:
+            r = subprocess.run(list(argv), capture_output=True, text=True, timeout=15)
+            plain = re.sub(r'\x1b\[[0-9;]*m', '', r.stdout)
+            if r.returncode == 0 and plain.strip():
+                return plain.strip()
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        return None
+
+    xdg_cache = os.environ.get('XDG_CACHE_HOME') or os.path.join(home, '.cache')
+
+    specs = []
+
+    # uv: `uv cache dir` honors --cache-dir / UV_CACHE_DIR / uv config (the authority).
+    uv_path = tool_cli('uv', 'cache', 'dir')
+    if uv_path is None:
+        uv_path = os.environ.get('UV_CACHE_DIR') or os.path.join(xdg_cache, 'uv')
+        specs.append(('.cache/uv', uv_path,
+                      'resolved from UV_CACHE_DIR/XDG default — `uv` not on PATH to confirm'))
+    else:
+        specs.append(('.cache/uv (uv cache dir)', uv_path, None))
+
+    # npm: `npm config get cache` is the authority; fall back to ~/.npm.
+    npm_path = tool_cli('npm', 'config', 'get', 'cache')
+    if npm_path is None:
+        npm_path = os.path.join(home, '.npm')
+        specs.append(('.npm', npm_path,
+                      'resolved from ~/.npm default — `npm` not on PATH to confirm'))
+    else:
+        specs.append(('.npm (npm config get cache)', npm_path, None))
+
+    # Hugging Face: HF_HOME / HF_HUB_CACHE per its env-var contract; fall back default.
+    hf = os.environ.get('HF_HUB_CACHE') or (
+        os.path.join(os.environ['HF_HOME'], 'hub') if os.environ.get('HF_HOME') else None
+    ) or os.path.join(xdg_cache, 'huggingface')
+    specs.append(('.cache/huggingface', hf, None))
+
+    # Playwright: PLAYWRIGHT_BROWSERS_PATH is the authority when set; the default
+    # lives UNDER ~/Library/Caches (already covered by the user-cache scan), so it is
+    # only added here when the env var points elsewhere (avoids the double-count).
+    pw = os.environ.get('PLAYWRIGHT_BROWSERS_PATH')
+    if pw:
+        specs.append(('playwright (PLAYWRIGHT_BROWSERS_PATH)', pw, None))
+
+    # Remaining fixed-layout tool caches (no env-var authority; default location only).
+    for label, rel in [
+        ('.cache/modelscope', os.path.join(xdg_cache, 'modelscope')),
+        ('.cache/go-build', os.path.join(xdg_cache, 'go-build')),
+        ('.cache/puppeteer', os.path.join(xdg_cache, 'puppeteer')),
+        ('.cache/pypoetry', os.path.join(xdg_cache, 'pypoetry')),
+        ('.bun/install/cache', os.path.join(home, '.bun/install/cache')),
+        ('.cargo/registry', os.path.join(home, '.cargo/registry')),
+    ]:
+        specs.append((label, rel, None))
+
+    return specs
+
+
+def analyze_xdg_dev_caches(min_size_bytes):
+    """
+    Analyze XDG / tool-owned developer caches that live OUTSIDE ~/Library/Caches.
+
+    These are the largest caches on a dev machine and ~/Library/Caches misses them
+    entirely (verified 2026-09-19: ~/.cache/uv held 92 GiB and ~/.npm 18 GiB while
+    ~/Library/Caches totaled 24.5 G — a 4x under-report if only the latter is scanned).
+
+    Returns:
+        (results, unresolved) where results is a list of (label, path, size_bytes)
+        and unresolved is a list of (label, path, reason) for paths that exist but
+        could not be confirmed against the tool's live config.
+    """
+    user_cache_root = os.path.expanduser('~/Library/Caches')
+    specs = resolve_dev_cache_paths()
+
+    results = []
+    unresolved = []
+    seen = set()
+    for label, path, reason in specs:
+        canon = os.path.realpath(path)
+        # Skip paths already inside the ~/Library/Caches user-scan (double-count guard):
+        # ms-playwright/pnpm default locations live there and are reported by the
+        # user-cache section; re-adding them here would inflate the combined total.
+        if canon == user_cache_root or canon.startswith(user_cache_root + os.sep):
+            continue
+        if canon in seen:
+            continue
+        seen.add(canon)
+        # Surface a resolved-but-nonexistent path explicitly: the tool's config points
+        # here, so an empty/absent directory is a real finding, not "not found".
+        if not os.path.isdir(path):
+            unresolved.append((label, path,
+                               reason or 'resolved from tool config but path does not exist'))
+            continue
+        size = get_dir_size(path)
+        if size >= min_size_bytes:
+            results.append((label, path, size))
+        if reason:
+            unresolved.append((label, path, reason))
+    results.sort(key=lambda x: x[2], reverse=True)
+    return results, unresolved
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Analyze macOS cache directories'
@@ -122,6 +267,12 @@ def main():
         '--user-only',
         action='store_true',
         help='Only scan user caches (skip system caches)'
+    )
+    parser.add_argument(
+        '--include-dev',
+        action='store_true',
+        help='Also scan XDG/tool-owned developer caches '
+             '(~/.cache/uv, ~/.npm, ...) — outside ~/Library/Caches'
     )
     parser.add_argument(
         '--min-size',
@@ -169,6 +320,45 @@ def main():
             )
             total_user += log_size
 
+    # Developer caches outside ~/Library/Caches. Pass --include-dev to scan them:
+    # without it the report misses the largest items on a dev machine (~4x under-report),
+    # so the summary below always prints that reminder when the flag is absent.
+    # --user-only controls the SYSTEM cache section only; it does not affect this.
+    if args.include_dev:
+        print(f"\n\n⚙️  Developer caches (XDG / tool-owned, outside ~/Library/Caches):")
+        print("-" * 50)
+        dev_caches, dev_unresolved = analyze_xdg_dev_caches(min_size_bytes)
+        total_dev = 0
+
+        if dev_caches:
+            print(f"{'Cache':<44} {'Size':<12} {'Decision'}")
+            print("-" * 84)
+            for name, path, size in dev_caches:
+                safety, reason = categorize_safety(name)
+                safety_icon = {'rebuildable': '🟡', 'check': '🟡', 'keep': '🔴'}[safety]
+                print(f"{name:<44} {format_size(size):<12} {safety_icon} {safety}")
+                total_dev += size
+            print("-" * 84)
+            print(f"{'Total (disjoint from user caches above)':<44} {format_size(total_dev):<12}")
+            print(
+                "\n   Paths resolved from each tool's own config (uv cache dir, "
+                "npm config get cache, HF_HOME/HF_HUB_CACHE, PLAYWRIGHT_BROWSERS_PATH)."
+            )
+            print(
+                "   🔴 keep = preserve-by-default per references/cleanup_targets.md "
+                "(rebuildable does NOT mean proposable)."
+            )
+        else:
+            print("No developer caches above minimum size found.")
+
+        if dev_unresolved:
+            print("\n   ⚠️  Paths needing attention (not counted in the total above):")
+            print("      resolved from tool config but absent, or tool binary not on PATH")
+            print("      to confirm — this distinguishes 'no cache' from 'below threshold':")
+            for label, path, reason in dev_unresolved:
+                print(f"      {label} -> {path}")
+                print(f"        ({reason})")
+
     # System caches (if not --user-only)
     if not args.user_only:
         print(f"\n\n📂 System Caches: /Library/Caches")
@@ -205,6 +395,13 @@ def main():
         )
 
     print("These are inventory allocations, not approved or guaranteed physical savings.")
+    if not args.include_dev:
+        print(
+            "Note: ~/Library/Caches + ~/Library/Logs only. Developer caches "
+            "(~/.cache/uv, ~/.npm, ...) live OUTSIDE this scope and are usually the "
+            "largest items on a dev machine — re-run with --include-dev before "
+            "concluding the cache total."
+        )
 
     print("\n💡 Next Steps:")
     print("   1. Review the list above")

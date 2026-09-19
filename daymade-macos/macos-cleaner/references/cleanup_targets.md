@@ -69,6 +69,8 @@ brew cleanup --prune=all # Aggressive cleanup (removes all cached downloads)
 npm cache clean --force
 ```
 
+Under the Phase 2 entry gate this command is category-wide and unsanctioned in a plan's action set — it wipes the preserve-by-default `_cacache` wholesale, the same reasoning that bars `uv cache prune`. It stays available as a user-directed action or an unlock option with the redownload cost stated, never as a skill-proposed action-set entry. The narrow `_npx` target below is the skill-sanctioned form.
+
 #### pip Cache
 
 **Location**: `~/Library/Caches/pip` (macOS)
@@ -158,7 +160,7 @@ After confirming no active investigation needs the logs, move exact named files/
 
 ### High-value developer caches: preserve by default
 
-These were explicit decision points in the original skill and remain reachable for any named-cache request. A cache can be rebuildable and still be valuable. Measure the exact live path and ask whether its rebuild/redownload cost is acceptable before proposing removal.
+These were explicit decision points in the original skill and remain reachable for any named-cache request. A cache can be rebuildable and still be valuable. Measure the exact live path and ask whether its rebuild/redownload cost is acceptable before proposing removal — but an acceptable cost is not by itself sufficient: under the Phase 2 entry gate, these targets enter an action set only on verified never-used evidence or an explicit user direction naming the target.
 
 | Target | Value retained | Real deletion impact | Default |
 |---|---|---|---|
@@ -190,6 +192,15 @@ Do not reopen a broad Mole scan for a named developer cache. Resolve one exact p
 | ModelScope cache | Active service/project cache configuration | `~/.cache/modelscope` only as a candidate | Prefer the installed ModelScope cache-management command after verifying its current help. Without one, keep internal subsets; whole inactive cache Trash needs explicit redownload approval. |
 | JetBrains caches | **Help → Diagnostic Tools → Special Files and Folders** or `idea.system.path` | `~/Library/Caches/JetBrains/<product><version>` | Quit the IDE; prefer its cache invalidation UI. An exact cache for an uninstalled/retired product version may go to Trash. Never target config/plugins/local history by assuming every JetBrains directory is cache. |
 | Stopped Docker container | `docker inspect <exact-name-or-id>` plus `docker ps -a` | None | Use `references/docker_analysis.md`; stopped status alone never authorizes removal. |
+
+#### `uv cache prune` is not sanctioned here — a hard exclusion (verified 2026-09-19)
+
+`uv cache prune` may never appear in a plan's action set. Two verified reasons:
+
+- **"Unreachable" is cache-graph reachability, not venv liveness.** `uv cache prune` does not track which environments use which objects (astral-sh/uv#10153, maintainer), so "the cache holds 586 environments but only 28 project venvs exist" is not evidence that the rest are dead.
+- **Pre-0.12.x builds follow symlinks out of the cache during prune** (astral-sh/uv#19542; fixed in 0.12.x by PR #19543). Measured on a machine running uv 0.11.21: `environments-v2` held 1918 symlinks, 1775 of them pointing at managed Python install trees under `~/.local/share/uv/python/`, and prune's removal is directory-level — it can delete the interpreter trees of live venvs.
+
+The upgrade-then-prune path is verified to work (2026-09-19: upgrading 0.11.21 → 0.12.17 and pruning reclaimed 50.9 GiB, cache 92.2 → 41.3 GiB, with sampled venvs still importing and the managed Python tree intact). A user who explicitly directs that command may run it in Phase 3 — but a version fix addresses only the symlink bug, not the reachability semantics, so this stays a directed action, never a skill proposal. Do not cite the 50.9 GiB figure as a reason to propose it: size is not evidence, and the Phase 2 entry gate's lead rule would otherwise structurally reward exactly that. Sanctioned alternative: `uv cache clean <exact-package>`.
 
 For an ordinary resolved `<exact-cache-path>`, use path-accounted blocks and an
 in-use check. APFS code-sign clones use their dedicated analyzer/reference
