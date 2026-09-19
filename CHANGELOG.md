@@ -65,7 +65,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `$CLAUDE_CONFIG_DIR` with `CLAUDE_PROFILES_ROOT` pointed elsewhere, the same
   union mechanism as the incident — must move the fingerprint and leave a backup,
   and harness-style churn of keys the converger never touches must move neither.
-  Removing either signal reddens exactly its own assertion. 144 → 153 assertions.
+  Removing either signal reddens exactly its own assertion. 144 → 156 assertions.
+  Replayed against a copy of the real profiles tree reached through a symlinked
+  `HOME`, the suite is green on 14 real profiles including 28 pre-existing
+  `.sync-backup` files; a behavior-key write injected *while* it runs reddens both
+  signals and names the profile and signal. That replay also caught the failure
+  detail printing live API keys — `mcpServers` is inside the compared subset and
+  carries them in its `env` — so values under a secret-looking key are now
+  redacted on the way to output, without touching the comparison itself.
 
 - **claude-switch-models-setup** (`daymade-claude-code` v3.39.0 → v3.40.0): the
   profile converger's **default mode now converges every profile**, closing a
