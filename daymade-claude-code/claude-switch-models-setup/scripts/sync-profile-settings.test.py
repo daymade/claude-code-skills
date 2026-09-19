@@ -7,6 +7,8 @@ real ~/.claude or ~/.claude-profiles. Exit 0 = all green.
 
   python3 scripts/sync-profile-settings.test.py
 """
+from __future__ import annotations
+
 import importlib.util
 import json
 import os
@@ -279,36 +281,162 @@ def run_cli(args, env):
                           capture_output=True, text=True, env=env)
 
 
-def real_profile_fingerprint():
-    """Read-only snapshot of every real profile's hook entry count and env keys.
+ABSENT = "<absent>"
 
-    Returns None when there is no real profiles root (a contributor's machine),
-    so the guard below degrades to a no-op instead of inventing a baseline.
+
+def _converger_writable(data) -> tuple:
+    """The .claude.json subset the converger may write, value-or-ABSENT per key.
+
+    Deliberately NOT the whole file. The harness rewrites `.claude.json`
+    continuously for a live session — measured 2026-09-19 during a fixture run:
+    exactly the two profiles with an open session changed, and no non-live
+    profile did — so a byte or key-count comparison would redden every run on any
+    machine that has a session open, which is how a tripwire gets trained into
+    noise. Comparing only what the converger is allowed to write needs no oracle
+    for "is this profile live", which has no reliable machine-readable signal.
+
+    ABSENT rather than "only the keys that are present": a synthetic main
+    carrying a key the real profile lacks ADDS it, and an absent-vs-present map
+    catches that where a present-only map would miss it.
     """
-    root = Path.home() / ".claude-profiles"
+    if not isinstance(data, dict):
+        return ("<not-an-object>",)
+    keys = sorted(sps.BEHAVIOR_KEYS | sps.MERGE_KEYS)
+    return tuple((k, data.get(k, ABSENT)) for k in keys)
+
+
+def converger_artifact_census(root: Path | None = None) -> tuple:
+    """Every `*.sync-backup` and `.sync-*.json` under root, with sizes.
+
+    `write_json_atomic()` copies the target to `<file>.sync-backup` and stages
+    through a `.sync-*.json` temp file in the same directory. Nothing else in
+    the harness names files either way, so their presence is a converger
+    fingerprint that survives on EITHER config layer — including a write that
+    only touches `.claude.json` behavior keys and leaves `settings.json`
+    untouched, which is the case the profile fingerprint below cannot see.
+
+    Size, not mtime: the backup is made with `shutil.copy2`, which preserves the
+    source's mtime, so an old timestamp does not mean "no write happened".
+    """
+    root = Path(root) if root is not None else Path.home() / ".claude-profiles"
+    if not root.is_dir():
+        return ()
+    out = []
+    for p in sorted(root.rglob("*")):
+        if p.name.endswith(sps.BACKUP_SUFFIX) or (
+            p.name.startswith(".sync-") and p.name.endswith(".json")
+        ):
+            try:
+                out.append((str(p.relative_to(root)), p.stat().st_size))
+            except OSError:
+                out.append((str(p.relative_to(root)), -1))
+    return tuple(out)
+
+
+def real_profile_fingerprint(root: Path | None = None):
+    """Read-only snapshot of what a converger write would change in each profile.
+
+    `root` is overridable so the calibration below can point this at a synthetic
+    tree; it defaults to the real profiles root, which is what the tripwire uses.
+
+    Returns None when there is no profiles root (a contributor's machine), so
+    the guard degrades to a no-op instead of inventing a baseline.
+    """
+    root = Path(root) if root is not None else Path.home() / ".claude-profiles"
     if not root.is_dir():
         return None
     fp = {}
     for d in sorted(p for p in root.iterdir() if p.is_dir()):
+        entry = {}
         s = d / "settings.json"
-        if not s.exists():
-            continue
-        try:
-            data = json.loads(s.read_text())
-        except json.JSONDecodeError:
-            continue
-        hooks = data.get("hooks", {})
-        env = data.get("env", {})
-        fp[d.name] = (
-            sum(len(v) for v in hooks.values()) if isinstance(hooks, dict) else -1,
-            len(env) if isinstance(env, dict) else -1,
-        )
+        if s.exists():
+            try:
+                data = json.loads(s.read_text())
+            except json.JSONDecodeError as exc:
+                # Recorded, NOT skipped. The previous version did `continue`
+                # here, which dropped a genuinely damaged profile out of the
+                # baseline — so the tripwire passed on exactly the damage it
+                # exists to catch, in the fail-open direction.
+                entry["settings.json"] = ("<invalid-json>", str(exc)[:80])
+            else:
+                hooks = data.get("hooks", {}) if isinstance(data, dict) else None
+                env = data.get("env", {}) if isinstance(data, dict) else None
+                entry["settings.json"] = (
+                    sum(len(v) for v in hooks.values()) if isinstance(hooks, dict) else -1,
+                    len(env) if isinstance(env, dict) else -1,
+                )
+        cj = d / ".claude.json"
+        if cj.exists():
+            try:
+                cdata = json.loads(cj.read_text())
+            except json.JSONDecodeError as exc:
+                entry[".claude.json"] = ("<invalid-json>", str(exc)[:80])
+            else:
+                entry[".claude.json"] = _converger_writable(cdata)
+        if entry:
+            fp[d.name] = entry
     return fp
+
+
+_SECRETISH = ("KEY", "SECRET", "TOKEN", "PASSWORD", "PASSWD", "CREDENTIAL", "AUTH")
+
+
+def _scrub(value, _depth: int = 0):
+    """Redact secret-looking leaves before a fingerprint value reaches output.
+
+    The tripwire's failure detail prints the before/after of the converger-writable
+    subset, and `mcpServers` — which is in that subset — carries per-server `env`
+    with real API keys in it. A red tripwire would therefore print a live credential
+    into the terminal and into any CI log that captured the run. Redacting on the
+    way OUT is the half that matters: the fingerprint itself stays byte-exact, so
+    two different values still compare unequal and the assertion still fires.
+    """
+    if _depth > 6:
+        return "<deep>"
+    if isinstance(value, dict):
+        out = {}
+        for k, v in value.items():
+            if any(s in str(k).upper() for s in _SECRETISH):
+                out[k] = "<redacted>"
+            else:
+                out[k] = _scrub(v, _depth + 1)
+        return out
+    if isinstance(value, (list, tuple)):
+        return [_scrub(v, _depth + 1) for v in value]
+    return value
+
+
+def diff_signals(before, after) -> list:
+    """Name which signal moved, so a red tripwire says what it caught.
+
+    A bare `before != after` sends the reader to diff two nested structures by
+    hand; this is the difference between "tripwire fired" and "the .claude.json
+    behavior subset of one profile changed from X to Y". Values are scrubbed:
+    this text goes to a terminal and possibly a CI log.
+    """
+    if before == after:
+        return []
+    if not isinstance(before, dict) or not isinstance(after, dict):
+        return [f"fingerprint shape changed: {_scrub(before)!r} -> {_scrub(after)!r}"]
+    out = []
+    for name in sorted(set(before) | set(after)):
+        b, a = before.get(name, "<profile absent>"), after.get(name, "<profile absent>")
+        if b == a:
+            continue
+        if isinstance(b, dict) and isinstance(a, dict):
+            for signal in sorted(set(b) | set(a)):
+                bv, av = b.get(signal, "<absent>"), a.get(signal, "<absent>")
+                if bv != av:
+                    out.append(f"  profile {name} / {signal}: {_scrub(bv)!r} -> {_scrub(av)!r}")
+        else:
+            out.append(f"  profile {name}: {_scrub(b)!r} -> {_scrub(a)!r}")
+    return out
 
 
 # Snapshot BEFORE any subprocess runs, so the tripwire at the end can prove
 # these tests touched no real profile.
 REAL_BEFORE = real_profile_fingerprint()
+ARTIFACTS_BEFORE = converger_artifact_census()
 
 r1, e1 = cli_tree()
 r = run_cli(["--check", "--all"], e1)
@@ -613,19 +741,167 @@ check("mcpNeedsAuthNoticed classified as state",
       sps.is_state_key("mcpNeedsAuthNoticed")
       and "mcpNeedsAuthNoticed" not in sps.BEHAVIOR_KEYS)
 
+print("== tripwire calibration: it must fire on an injected leak, and stay quiet on harness noise ==")
+# A tripwire nobody has seen go red is a green square, not a proof. Both sides:
+#
+# FALSE NEGATIVE — inject a converger write into a synthetic tree and require the
+# tripwire to go red AND name which signal caught it. This reproduces the
+# 2026-09-19 incident's mechanism without touching a real profile: the fake
+# profile is reached through $CLAUDE_CONFIG_DIR (which `_profile_dirs_to_converge`
+# unions in) while CLAUDE_PROFILES_ROOT points elsewhere, and the synthetic
+# main's settings.json layer is empty — the shape that left the previous
+# settings.json-only fingerprint blind while the real profile's .claude.json
+# behavior keys were rewritten.
+#
+# FALSE POSITIVE — a harness-style write to .claude.json must NOT fire it. The
+# live harness rewrites a profile's .claude.json continuously while a session is
+# open, so if state-key churn tripped the tripwire it would redden every run on
+# any machine with a session open and get trained into noise.
+
+_cal = Path(tempfile.mkdtemp(prefix="tripwire-cal-"))
+try:
+    _watch = _cal / "watch"
+    _fake = _watch / "fake-live"
+    _fake.mkdir(parents=True)
+    # No-op for the settings layer: the synthetic main's settings.json is empty,
+    # so nothing about hooks/env can move and the old signal stays flat.
+    (_fake / "settings.json").write_text(json.dumps({"hooks": {}, "env": {}}))
+    (_fake / ".claude.json").write_text(json.dumps({"someSessionState": 1}))
+
+    _main = _cal / "maincfg"
+    _main.mkdir()
+    (_main / "settings.json").write_text(json.dumps({}))
+    (_cal / "maincfg.json").write_text(json.dumps({"workflowSizeGuideline": "small"}))
+    _other = _cal / "other-profiles"
+    _other.mkdir()
+    (_cal / "home").mkdir()
+
+    # Scrubbed from zero — never dict(os.environ). A leaked CLAUDE_CONFIG_DIR is
+    # the whole failure mode this suite encodes, and the calibration must not be
+    # the one place it gets reintroduced.
+    _cal_env = {
+        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        "HOME": str(_cal / "home"),
+        "CLAUDE_MAIN_CONFIG_DIR": str(_main),
+        "CLAUDE_PROFILES_ROOT": str(_other),
+        "CLAUDE_CONFIG_DIR": str(_fake),
+    }
+
+    _fp_before = real_profile_fingerprint(_watch)
+    _art_before = converger_artifact_census(_watch)
+    subprocess.run([sys.executable, str(MODULE)], capture_output=True, text=True,
+                   env=_cal_env, check=False)
+    _fp_leaked = real_profile_fingerprint(_watch)
+    _art_leaked = converger_artifact_census(_watch)
+
+    _moved = diff_signals(_fp_before, _fp_leaked)
+    check("calibration: an injected converger write moves the profile fingerprint",
+          _fp_before != _fp_leaked, f"before={_fp_before!r} after={_fp_leaked!r}")
+    check("calibration: it caught the .claude.json side, which settings.json alone missed",
+          any(".claude.json" in m for m in _moved), f"moved signals: {_moved}")
+    check("calibration: settings.json stayed flat (this is the blind spot it closes)",
+          _fp_before["fake-live"]["settings.json"] == _fp_leaked["fake-live"]["settings.json"],
+          f"{_fp_before['fake-live']['settings.json']!r} -> {_fp_leaked['fake-live']['settings.json']!r}")
+    check("calibration: the write named itself in the diff output",
+          "workflowSizeGuideline" in "\n".join(_moved), f"moved signals: {_moved}")
+    check("calibration: an injected converger write leaves a .sync-backup",
+          _art_before != _art_leaked and any(
+              n.endswith(sps.BACKUP_SUFFIX) for n, _ in _art_leaked),
+          f"before={_art_before} after={_art_leaked}")
+
+    # FALSE POSITIVE side: churn the keys the converger never touches. Merged
+    # into the file rather than replacing it — overwriting would also drop the
+    # behavior key the converger just wrote, and the disappearance of a
+    # converger-writable key is real signal, not harness noise. (Found by this
+    # calibration: the first draft replaced the file and the tripwire correctly
+    # went red on it.)
+    (_fake / ".claude.json").write_text(json.dumps({
+        **json.loads((_fake / ".claude.json").read_text()),
+        "someSessionState": 2, "numStartups": 99, "tipsHistory": {"a": 1},
+        "brandNewHarnessKey": True,
+    }))
+    _fp_noise = real_profile_fingerprint(_watch)
+    _art_noise = converger_artifact_census(_watch)
+    check("calibration: harness-style .claude.json churn does NOT move the fingerprint",
+          _fp_noise == _fp_leaked,
+          f"leaked={_fp_leaked!r} after noise={_fp_noise!r}")
+    check("calibration: harness-style churn creates no converger artifact",
+          _art_noise == _art_leaked, f"{_art_leaked} -> {_art_noise}")
+
+    # And the fail-open this also closes: a damaged file must be RECORDED, so a
+    # profile broken by a leak cannot quietly drop out of the baseline.
+    (_fake / "settings.json").write_text("{corrupt")
+    _fp_broken = real_profile_fingerprint(_watch)
+    check("calibration: a profile with unparseable settings.json stays in the fingerprint",
+          "fake-live" in _fp_broken
+          and _fp_broken["fake-live"]["settings.json"][0] == "<invalid-json>",
+          f"{_fp_broken!r}")
+
+    # The red tripwire's detail text goes to a terminal and possibly a CI log, and
+    # mcpServers is inside the compared subset carrying real API keys in its `env`.
+    # Calibrated against a shape that mirrors that: scrubbing on the way OUT leaves
+    # the fingerprint byte-exact, so the assertion still fires, but the printed value
+    # must not contain the secret.
+    _secret_before = {"x": {".claude.json": (("mcpServers", {"srv": {"env": {"API_KEY": "s3cr3t", "SAFE": "ok"}}}),)}}
+    _secret_after = {"x": {".claude.json": (("mcpServers", {"srv": {"env": {"API_KEY": "CHANGED", "SAFE": "ok"}}}),)}}
+    _rendered = "\n".join(diff_signals(_secret_before, _secret_after))
+    check("calibration: a red tripwire still names the signal that moved",
+          "mcpServers" in _rendered, _rendered)
+    check("calibration: a red tripwire does not print the secret values",
+          "s3cr3t" not in _rendered and "CHANGED" not in _rendered
+          and "<redacted>" in _rendered, _rendered)
+    check("calibration: it keeps the non-secret value so the diff is still readable",
+          "SAFE" in _rendered and "'ok'" in _rendered, _rendered)
+
+    # The property nothing else pins: the FINGERPRINT compares raw values and
+    # scrubbing happens only when the text is rendered. Move `_scrub` into
+    # `_converger_writable` and two dicts differing only in a secret collapse onto
+    # one `<redacted>`, the fingerprints compare equal, and signal 1 goes blind to a
+    # secret-only write — while every scrub assertion above stays green, because
+    # they only check that plaintext is absent from what gets printed. Both
+    # properties would fail silently together, so they are pinned separately.
+    _secret_a = {"mcpServers": {"srv": {"env": {"API_KEY": "aaa-secret", "SAFE": "ok"}}},
+                 "workflowSizeGuideline": "small"}
+    _secret_b = {"mcpServers": {"srv": {"env": {"API_KEY": "bbb-secret", "SAFE": "ok"}}},
+                 "workflowSizeGuideline": "small"}
+    check("calibration: the fingerprint compares RAW values — a secret-only change still moves it",
+          _converger_writable(_secret_a) != _converger_writable(_secret_b),
+          f"a={_converger_writable(_secret_a)!r}\nb={_converger_writable(_secret_b)!r}")
+    _rendered2 = "\n".join(diff_signals(
+        {"x": {".claude.json": _converger_writable(_secret_a)}},
+        {"x": {".claude.json": _converger_writable(_secret_b)}}))
+    check("calibration: that same secret-only change renders without the plaintext",
+          "aaa-secret" not in _rendered2 and "bbb-secret" not in _rendered2
+          and "<redacted>" in _rendered2, _rendered2)
+finally:
+    shutil.rmtree(_cal, ignore_errors=True)
+
 print("== the suite touched no real profile (hermeticity tripwire) ==")
 # The failure this encodes: an earlier revision built its subprocess env from
 # dict(os.environ), so the harness's CLAUDE_CONFIG_DIR reached the run and
 # `_profile_dirs_to_converge()` converged the LIVE profile from a synthetic
 # main — its `hooks` became `{"Stop": []}` and every guard in it was gone.
 # A scrubbed env prevents it; this check proves it did.
+#
+# Two signals, because they see different damage. The profile fingerprint sees
+# settings.json's hooks/env and the .claude.json behavior subset — but a leak
+# whose synthetic main has an empty settings.json layer leaves settings.json
+# untouched, and the harness's own writes to a live .claude.json mean the whole
+# file cannot be compared. The artifact census closes that gap: `.sync-backup`
+# and `.sync-*.json` are made by write_json_atomic() and by nothing else, so a
+# write on either layer leaves one behind.
 REAL_AFTER = real_profile_fingerprint()
+ARTIFACTS_AFTER = converger_artifact_census()
 if REAL_BEFORE is None:
     check("no real profiles root here — tripwire not applicable (skipped)", True)
 else:
+    _signals = diff_signals(REAL_BEFORE, REAL_AFTER)
     check("no real profile changed across the whole suite",
           REAL_BEFORE == REAL_AFTER,
-          f"before={REAL_BEFORE} after={REAL_AFTER}")
+          ("\n" + "\n".join(_signals)) if _signals else f"before={REAL_BEFORE} after={REAL_AFTER}")
+    check("the converger left no .sync-backup or .sync-*.json in any real profile",
+          ARTIFACTS_BEFORE == ARTIFACTS_AFTER,
+          f"before={ARTIFACTS_BEFORE} after={ARTIFACTS_AFTER}")
 
 print()
 if FAILURES:
