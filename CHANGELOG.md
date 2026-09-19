@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **claude-switch-models-setup** (`daymade-claude-code` v3.39.0 → v3.40.0): the
+  profile converger's **default mode now converges every profile**, closing a
+  gap that had been invisible for as long as it existed. Scope used to mean "the
+  profile this session happens to live in" for the argument-free SessionStart
+  call, and nothing ran `--all` on a schedule — so a hook added to the default
+  profile only reached the profiles that had started a session since. Measured
+  2026-09-19 on a 14-profile machine: one guard hook was registered on 4
+  profiles, two more on 6, and two more scripts on 5 each. **No output anywhere
+  named the gap**, because a converged profile prints nothing and a session
+  start never audits the profiles it did not visit. Now every invocation —
+  argument-free, `--all`, or `--check` — covers all of `~/.claude-profiles/*`
+  plus `$CLAUDE_CONFIG_DIR`, and the next profile to start a session carries the
+  backlog for every profile that has not. Making that default safe needed two
+  decouplings, both of which used to be derived from `interactive = bool(args)`:
+  **scope is no longer a flag** (so a future scope flag cannot silently widen or
+  narrow what a session-start run touches), and **strictness is no longer a flag
+  count** — `--all`, a human asking for wider coverage, used to also switch on
+  "exit 2 on a corrupt main file", which is exactly why "just add `--all` to the
+  hook command" is not the fix: it would turn a corrupt main file into a blocked
+  session. Mode is now resolved from the exact flag set through a total table
+  (argument-free / `--all` / `--check` / `--check --all`), each row declaring its
+  own write-vs-audit and lenient-vs-strict fields, and an unlisted combination is
+  refused rather than falling through. Exit codes: the argument-free run returns
+  0 unconditionally — including when a main file is corrupt, where it warns,
+  converges nothing and returns 0 (a corrupt main reads as empty, so converging
+  would strip keys from every profile); `--check` returns 1 on drift and 2 on a
+  corrupt main; `--all` returns 2 on a corrupt main or a profile it could not
+  read. Convergence still prints one line only per profile it actually changed
+  and nothing when converged, so drift is visible in session-start output
+  instead of hiding. A missing `~/.claude-profiles` is now an empty set rather
+  than an exception on every session start.
+
+  Widening scope from one profile to all of them also made two previously
+  unreachable failure modes reachable, and both are closed rather than merely
+  documented. One malformed profile used to be able to abort the run for every
+  other one — a profile whose `env` is valid JSON but not an object raised
+  `TypeError` inside `sync_profile` — so a failure is now reported per profile
+  and convergence continues with the rest. And `$CLAUDE_CONFIG_DIR` is unioned
+  into the scope only when the directory already carries a `settings.json` or
+  `.claude.json`: without that membership test an unset variable resolves to
+  the cwd, and the settings layer then fabricates a `settings.json` in
+  whatever directory the session started in, reporting it as converged forever
+  after. Fixture suite extended to 136 assertions, covering the new
+  scope (one argument-free run converges a multi-profile fixture), the two
+  corrupt-main sides across all three invocation forms, mode-table totality,
+  silence-when-converged, the unset/non-profile `$CLAUDE_CONFIG_DIR` side, a
+  malformed profile not cancelling its neighbours, and a hermeticity tripwire:
+  the suite builds its subprocess env from a scrubbed base instead of
+  `dict(os.environ)`, because an inherited `CLAUDE_CONFIG_DIR` reaches a live
+  profile through the out-of-root union — a synthetic main then converges that
+  profile's real `hooks` down to nothing, and every guard registered in it goes
+  with them.
 - **stepfun-asr** (`daymade-audio` v1.40.0 → v1.41.0): `transcribe()` now always
   returns an `errors` list of the raw SSE `error`-event payloads (empty when none
   fired), including on the success path, where any error event used to be silently
