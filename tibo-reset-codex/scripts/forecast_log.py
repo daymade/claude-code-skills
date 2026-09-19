@@ -12,6 +12,7 @@ import fcntl
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 import uuid
 
@@ -56,14 +57,51 @@ def evidence(data):
     return values
 
 
-def read_rows(stream):
+def evidence_refs(data, findings_path):
+    """Resolve evidence_refs to existing finding ids; an absent key adds nothing.
+
+    A verdict must link to the raw readings it was actually made from, so every
+    reference is checked against findings.jsonl up front — a dangling link would
+    rot into an unfalsifiable claim. The full id is canonical; a prefix is
+    accepted only when it resolves to exactly one finding.
+    """
+    refs = data.get("evidence_refs")
+    if refs is None:
+        return {}
+    if not isinstance(refs, list) or any(
+            not isinstance(r, str) or not r.strip() for r in refs):
+        raise ValueError("evidence_refs must be a list of finding id strings")
+    if not findings_path.exists():
+        if refs:
+            raise ValueError("evidence_refs given but the findings journal does not exist")
+        return {"evidence_refs": []}
+    with findings_path.open(encoding="utf-8") as stream:
+        fcntl.flock(stream, fcntl.LOCK_SH)
+        rows = read_rows(stream, kinds=("finding",))
+    resolved = []
+    for ref in refs:
+        exact = [row["id"] for row in rows if row["id"] == ref]
+        if exact:
+            resolved.append(ref)
+            continue
+        prefixes = [row["id"] for row in rows if row["id"].startswith(ref)]
+        if len(prefixes) == 1:
+            resolved.append(prefixes[0])
+        elif len(prefixes) > 1:
+            raise ValueError(f"evidence_refs {ref!r} matches multiple findings; use the full id")
+        else:
+            raise ValueError(f"evidence_refs {ref!r} matches no finding")
+    return {"evidence_refs": resolved}
+
+
+def read_rows(stream, kinds=("forecast", "review")):
     rows = []
     for number, line in enumerate(stream, 1):
         try:
             if not line.endswith("\n"):
                 raise ValueError()
             row = json.loads(line)
-            if not isinstance(row, dict) or row.get("record_type") not in ("forecast", "review"):
+            if not isinstance(row, dict) or row.get("record_type") not in kinds:
                 raise ValueError()
             if row.get("schema_version") != 1 or not row.get("id"):
                 raise ValueError()
@@ -74,13 +112,13 @@ def read_rows(stream):
 
 
 @contextmanager
-def locked_journal(path):
+def locked_journal(path, kinds=("forecast", "review")):
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_APPEND, 0o600)
     with os.fdopen(fd, "a+", encoding="utf-8") as stream:
         fcntl.flock(stream, fcntl.LOCK_EX)
         stream.seek(0)
-        yield stream, read_rows(stream)
+        yield stream, read_rows(stream, kinds)
 
 
 def make_forecast(data):
@@ -137,14 +175,74 @@ def make_review(data, forecasts, now):
     return result
 
 
+def make_finding(data):
+    body = {"invocation": required_text(data, "invocation"),
+            "query": required_text(data, "query"),
+            "endpoints": data.get("endpoints"), "readings": data.get("readings")}
+    if not isinstance(body["endpoints"], list) or any(
+            not isinstance(url, str) or not url.strip() for url in body["endpoints"]):
+        raise ValueError("endpoints must be a list of strings (possibly empty)")
+    if not isinstance(body["readings"], dict):
+        raise ValueError("readings must be an object mapping source names to verbatim values")
+    notes = data.get("notes")
+    if notes is not None:
+        if not isinstance(notes, list) or any(
+                not isinstance(n, str) or not n.strip() for n in notes):
+            raise ValueError("notes must be a list of strings")
+        body["notes"] = notes
+    if data.get("session_ref") is not None:
+        body["session_ref"] = required_text(data, "session_ref")
+    return body
+
+
+def append_finding(path, data, now=None):
+    """Append one raw-reading finding; an identical retry returns the original row.
+
+    Findings are the immutable raw-readings layer: verdicts live in the forecast
+    journal and point back here through evidence_refs, so a reading is never
+    edited to match a later conclusion.
+    """
+    if not isinstance(data, dict):
+        raise ValueError("input must be a JSON object")
+    now = now or datetime.now(timezone.utc)
+    body = make_finding(data)
+    with locked_journal(path, kinds=("finding",)) as (stream, rows):
+        for old in rows:
+            if all(old.get(k) == v for k, v in body.items()):
+                return old
+        row = {"schema_version": 1, "id": str(uuid.uuid4()), "record_type": "finding",
+               "recorded_at": now.isoformat(), **body}
+        stream.write(json.dumps(row, ensure_ascii=False, allow_nan=False) + "\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+        return row
+
+
+def list_findings(path, limit=20):
+    """Compact newest-first view for looking back at what was actually read."""
+    if not path.exists():
+        return []
+    with path.open(encoding="utf-8") as stream:
+        fcntl.flock(stream, fcntl.LOCK_SH)
+        rows = read_rows(stream, kinds=("finding",))
+    recent = rows[-limit:] if limit > 0 else []
+    listed = [{"id": row["id"][:8], "recorded_at": row["recorded_at"],
+               "invocation": row["invocation"], "query": row["query"][:80],
+               "endpoints": len(row["endpoints"])} for row in recent]
+    return listed[::-1]
+
+
 def append_record(path, command, data, now=None):
     if not isinstance(data, dict):
         raise ValueError("input must be a JSON object")
     now = now or datetime.now(timezone.utc)
     with locked_journal(path) as (stream, rows):
         forecasts = {r["id"]: r for r in rows if r["record_type"] == "forecast"}
+        # Resolved before the idempotency check so a retry that names the same
+        # findings matches the original record instead of silently dropping them.
+        refs = evidence_refs(data, path.parent / "findings.jsonl")
         if command == "record":
-            body = make_forecast(data)
+            body = {**make_forecast(data), **refs}
             for old in forecasts.values():
                 if all(old.get(k) == v for k, v in body.items()):
                     return old  # Retrying an identical request preserves the issued forecast.
@@ -156,7 +254,7 @@ def append_record(path, command, data, now=None):
             body["revision_of"] = same_cycle[0]["id"] if same_cycle else None
             record_type = "forecast"
         else:
-            body = make_review(data, forecasts, now)
+            body = {**make_review(data, forecasts, now), **refs}
             previous = [r for r in rows if r["record_type"] == "review" and
                         r["forecast_id"] == body["forecast_id"]]
             if previous and all(previous[-1].get(k) == v for k, v in body.items()):
@@ -188,7 +286,12 @@ def summarize(path, kind=None, now=None):
     for forecast in forecasts:
         review = latest.get(forecast["id"])
         outcome = review["outcome"] if review else "unreviewed"
-        item = {**forecast, "latest_review": review,
+        shown_review = None
+        if review is not None:
+            shown_review = {**review,
+                            "evidence_refs_count": len(review.get("evidence_refs", []))}
+        item = {**forecast, "latest_review": shown_review,
+                "evidence_refs_count": len(forecast.get("evidence_refs", [])),
                 "window_elapsed": now > instant(forecast["window_end"]),
                 "window_hours": (instant(forecast["window_end"]) -
                                  instant(forecast["window_start"])).total_seconds() / 3600}
@@ -216,23 +319,67 @@ def summarize(path, kind=None, now=None):
                     "Review evidence is supplied by the caller, not independently verified here."}
 
 
+def snapshot(state_dir, filename, record_type, enabled=True):
+    """Best-effort local git snapshot of an appended journal; never blocks.
+
+    The journals are the only durable record of past readings, so a local
+    commit per append makes silent truncation or rewriting detectable. Any
+    git failure prints one note on stderr and leaves the append itself
+    untouched; this is integrity wiring, not a backup promise.
+    """
+    if not enabled:
+        return
+
+    def run(*argv):
+        return subprocess.run(["git", "-C", str(state_dir), *argv], capture_output=True,
+                              text=True, timeout=15, check=True)
+
+    try:
+        if not (state_dir / ".git").exists():
+            os.chmod(state_dir, 0o700)
+            run("init")
+        if not run("status", "--porcelain", "--", filename).stdout.strip():
+            return  # Nothing new to preserve; a clean snapshot needs no commit.
+        run("add", "--", filename)
+        # Pathspec-limited commit: when --state-dir points into an existing git
+        # repo, other sessions' staged entries must not ride along.
+        run("commit", "-m", f"tibo-reset-codex: append {record_type}", "--", filename)
+    except (OSError, subprocess.SubprocessError) as error:
+        detail = str(error).splitlines()[0] if str(error) else type(error).__name__
+        print(json.dumps({"note": f"git snapshot skipped: {detail}"}, ensure_ascii=False),
+              file=sys.stderr)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     root = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state")
     parser.add_argument("--state-dir", type=Path, default=root / "tibo-reset-codex")
+    parser.add_argument("--no-git", action="store_true",
+                        help="skip the best-effort local git snapshot of the journals")
     sub = parser.add_subparsers(dest="command", required=True)
     summary = sub.add_parser("summary", help="Read pending forecasts, outcomes and lessons")
     summary.add_argument("--kind", choices=KINDS)
-    for command in ("record", "review"):
+    for command in ("record", "review", "finding"):
         p = sub.add_parser(command)
         p.add_argument("--input", type=Path, required=True, help="UTF-8 JSON object file")
+    listing = sub.add_parser("findings", help="List recent raw data findings")
+    listing.add_argument("--limit", type=int, default=20)
     args = parser.parse_args()
-    path = args.state_dir.expanduser() / "forecasts.jsonl"
+    state = args.state_dir.expanduser()
+    path = state / "forecasts.jsonl"
     try:
         if args.command == "summary":
             result = summarize(path, args.kind)
+        elif args.command == "findings":
+            result = list_findings(state / "findings.jsonl", max(args.limit, 0))
+        elif args.command == "finding":
+            target = state / "findings.jsonl"
+            result = append_finding(target, json.loads(args.input.read_text(encoding="utf-8")))
+            snapshot(state, target.name, "finding", enabled=not args.no_git)
         else:
             result = append_record(path, args.command, json.loads(args.input.read_text(encoding="utf-8")))
+            snapshot(state, path.name, "forecast" if args.command == "record" else "review",
+                     enabled=not args.no_git)
         print(json.dumps(result, ensure_ascii=False, indent=2))
     except (OSError, ValueError, KeyError, TypeError) as error:
         print(json.dumps({"status": "error", "error": str(error)}, ensure_ascii=False))
