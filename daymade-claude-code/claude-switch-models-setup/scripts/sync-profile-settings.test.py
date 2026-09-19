@@ -7,6 +7,8 @@ real ~/.claude or ~/.claude-profiles. Exit 0 = all green.
 
   python3 scripts/sync-profile-settings.test.py
 """
+from __future__ import annotations
+
 import importlib.util
 import json
 import os
