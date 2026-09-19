@@ -466,6 +466,17 @@ tmutil deletelocalsnapshots <snapshot_date>
 - `~/Movies`
 - `~/Music`
 
+### Agent Session History (user's absolute ruling, 2026-09-19)
+
+- `~/workspace/claude-dotfiles/projects/` — local Claude/Codex session
+  transcripts and per-project session data. The user ruled this **absolutely
+  off-limits** after it appeared once in a "large items" candidate list. It can
+  be many tens of GB (one project directory held 15 GB) and it looks like
+  reclaimable session cruft by every size heuristic — it is not. Never propose,
+  never include in a candidate list, never "helpfully" clean it. If the user
+  ever wants it trimmed, that is their instruction with their scope, not a
+  cleanup proposal.
+
 ### System Files
 
 - `/System`

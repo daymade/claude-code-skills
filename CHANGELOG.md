@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-cleaner** (`daymade-macos` v1.2.0 → v1.3.0): new reference
+  `proving-redundancy-before-deletion.md` — the evidence ladder for large data
+  folders, built from a 2026-09-19 session that proposed deleting a 109 GB
+  project-asset folder from a folder name and a file comparison and was
+  correctly challenged on how "never used" could be proven. The ladder:
+  file-level duplication (name+size+mtime) → creation-origin (the verbatim
+  command that built the candidate from the canonical copy) → reference check
+  (bounded text-only grep; mdfind is fuzzy, verify at authority) → session-
+  history tool-call census (`analyze_sessions.py search --codex`, classifying
+  read/write/audit — 300 sessions, zero reads settled the case) → .DS_Store
+  newest-mtime as the manual-usage trace (Finder browsing leaves these; the
+  newest one dates the last human open) → the project's own decision records.
+  Core reframe: "never used" is unprovable (noatime, traceless Finder), but
+  "never used as a data source" is census-able — the evidence table keeps the
+  unprovable row open for the user. SKILL.md routes large data folders here
+  before any size-ranked proposal; `cleanup_targets.md`'s never-delete list
+  gains agent session history (`~/workspace/claude-dotfiles/projects/`,
+  absolute user ruling) plus the candidate-classification discipline
+  (deletable-with-evidence / user-decision / preserve — a flat "large items"
+  list is what invited the wrong deletion in the first place).
+- **claude-code-hooks** (`daymade-claude-code` v3.38.0 → v3.39.0): new rule 10 —
+  a guard that blocks legitimate work needs a consent channel, and the consent
+  signal must come from a hook that sees the prompt. A PreToolUse guard sees
+  command text, never the conversation, so "the user just authorized this" is
+  unobservable to it: the pattern is necessarily two hooks (UserPromptSubmit
+  granter writes a TTL'd path-scoped consent file; the guard reads it before
+  blocking). Verified 2026-09-19 against the home-scan-guard instance
+  (`home-scan-consent-granter.sh` + consent check): Claude Code has no built-in
+  session-scoped authorization (#3389 is an open feature request), the
+  permission allowlist is static config, and the UI's session-approve cannot
+  interact with hook blocks. The rule carries the constraints that keep the
+  channel from becoming a bypass — TTL, path scope, the highest-blast-radius
+  rule stays hard-blocked, the agent never hand-writes the consent file,
+  ambiguous phrases do not grant, revocation by phrase — plus the registration
+  snapshot semantics (script edits live, registration changes wait for next
+  session) and the two-sided selftest calibration each hook needs.
 - **tibo-reset-codex** (`tibo-reset-codex` v1.13.1 → v1.13.2): forecast-feedback.md now describes
   what forecast_log.py actually does since the findings layer shipped — the script works locally
   only but takes a best-effort local git snapshot per append (the "reads and writes local JSONL
