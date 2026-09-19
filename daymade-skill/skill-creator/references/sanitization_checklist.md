@@ -70,6 +70,8 @@ grep -rn '[一-龥]' skill-folder/
 grep -rniE "ultrathink|internal-only|confidential" skill-folder/
 ```
 
+> **Pattern-based detectors match the SHAPE, not the value — a replacement that keeps the shape is not sanitized (2026-09-19).** Rewriting a real home path to a placeholder username like `example` reads as "placeholder now" to the eye, but the repo's gitleaks rule is `/Users/[a-zA-Z][a-zA-Z0-9_-]+/` — **any username matches, including `example`**; CI's secret scan stayed red until every path became `~/`-relative. The grep on line 64 above flags the same shape, so it would have caught this — the failure was trusting the eye over the scanner. **Rule: after replacing, re-run the real detector or verify against its actual pattern in the config; never judge sanitization by whether the value "looks like a placeholder."** (Corollary: absolute user paths in a public skill should become `~/`-relative — the relative form is both correct and detector-proof. And a meta-lesson from writing this very block: **the detector cannot tell a quoted instance from a leaked one** — the first draft of this paragraph quoted both literals and the repo's own commit guard blocked the commit; that is why the rule quotes the regex, never an instance.)
+
 ## Categories to Sanitize
 
 ### 1. Product and Project Names

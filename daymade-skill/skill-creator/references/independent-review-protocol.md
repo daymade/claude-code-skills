@@ -177,6 +177,17 @@ defects can remain recorded without blocking release. If the user says to stop r
 ship now, open no new axes; finish the already-declared release gate and report any unresolved
 in-scope BLOCKER/MAJOR rather than hiding it. This boundary limits scope, not honesty.
 
+## The convergence protocol — decide the stop BEFORE the first round
+
+An adversarial reviewer's hole-finding rate does not decay on its own. In a real five-round hardening of a mechanical gate checker, rounds 2/3/4 each produced roughly 13 blocking findings. **The count is not the convergence signal; the shape is.** Round 1 found "the gate has no mechanical enforcement at all" (the core promise); round 4 found "swap two table columns and the fabricated quote is never checked" (a parser edge a real executing agent is unlikely to write). When findings degrade from core-promise violations to parser edges, the loop has converged — further rounds buy diminishing and increasingly contrived returns, while the author's time and the user's patience pay full price each round.
+
+Before the first round, state the endgame rule in the plan and in the reviewer prompts' terminal-condition field:
+
+1. **The stop rule, declared in advance.** E.g. "if a core-promise-class hole recurs, one bounded fix round follows, then ship regardless; everything else is recorded as accepted recurrence." An open-ended "iterate until clean" is unfalsifiable: any finite prefix of rounds can be extended by "one more", so the criterion must be declared before the first round or it will never be met. (The user's own governance rule — third recurrence of a class gets either a mechanical detector or an explicit "prose has no fix, accept recurrence" record — is the same shape.)
+2. **Probe corpus conversion after every fix round.** That round's adversarial probes become the regression corpus: attack probes assert the post-fix exit, controls assert the compliant shape still passes. Copy them into the bundle (sanitized — and sanitize to the detector's *pattern*, not to a different literal) so `unittest discover` re-runs the whole bidirectional calibration in one command. A probe that lives only in `/tmp` between rounds is a calibration that can evaporate — one session's corpus was wiped by the system between rounds and only survived because the previous round had already copied it into the bundle.
+3. **"0 new blocking" is a valid and valuable conclusion — say so in the reviewer prompt.** A reviewer that feels obliged to manufacture findings is worse than one that reports a clean pass; the finding that matters is the reproducible one. Pair it with the honest boundary: name the construction directions it tried and why it believes they are covered.
+4. **The recorded residual is the sanctioned exit, not a failure.** What the checker structurally cannot decide — whether a quoted "user direction" was really the user's words, whether claimed never-used evidence is true — goes into the review artifact's honest-limits section with a human-spot-check note. Shipping with a recorded residual beats an unbounded review loop; the record is what makes the residual auditable instead of forgotten.
+
 ## The corpus case
 
 When a skill is built by distilling a large source corpus (docs, transcripts, prior research),
