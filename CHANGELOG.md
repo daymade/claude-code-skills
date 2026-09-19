@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **git-safety-net** (`git-safety-net` v1.18.0 → v1.19.0): two rules from today's incidents. Mode
+  B Step 2 (and the triple-backup pointer in rule 4) now requires a `git merge-base` check — or the
+  hosting service's own compare view — before pushing a preservation branch into an
+  already-existing repository; no common ancestor means the target is a different project however
+  similar its name, and today a deployment source's backup branch had landed in an unrelated
+  private repo on exactly that basis. `references/prevention_practices.md`'s shared-checkout
+  section gains a process-evidence method for finding an unidentified writer of a shared file —
+  `lsof`/`fuser` for the PID holding it open, then `ps`'s parent chain up to the owning process —
+  instead of guessing a session by name and getting a false "not me" from the wrong one.
+
 - **stepfun-asr / stepfun-tts / asr-transcribe-to-text** (`daymade-audio` v1.39.10 → v1.40.0): StepFun ASR now sends `enable_timestamp` (the field comes back either way, but its values are all 0 unless you ask — the earlier "v3 has no word timestamps" claim is retracted), sends every request parameter by default with `check_params.py` diffing the official field table in both directions, and gains `asr_file.py` for speaker diarization on the async file endpoint (public URL only; ids are `speaker_0`, not the documented `spk_1`). `asr-transcribe-to-text` routes that official diarization as a second independent speaker track. `stepfun-tts`'s `synthesize()` takes `model=` and `extra=` and returns the server's JSON envelope (`timestamp` + `return_url` → `{"data": {"url", "subtitles"}}`) under `json`, so callers that need per-character timing stop hand-rolling `/v1/audio/speech`; it is the wrapper `llmreg.wrapper_for("stepfun-tts")` resolves to.
 - **llm-eval-harness** (v1.4.1 → v1.4.2): the three probes declare their deliberately tiny budgets with `# max-tokens-intentional: <reason>` so the `llm-entry-guard` hook (max_tokens floor 16000 for reasoning models) passes them on purpose instead of by accident.
 - **prior-work-retrieval** (`daymade-claude-code` v3.36.2 → v3.37.0): new Search routing row for work that targets a remote box or a foreign checkout (a deploy directory, an upstream fork) — check that repository's own `docs/`, `Makefile`, and deploy README first; they sit outside every manifest carrier this Skill searches, so record them as manual coverage and never reconstruct a build/deploy command the box already documents. A 2026-09-18 build was rebuilt from scratch for an hour while the box's `docs/BUILD.md` and `Makefile` held the exact command the whole time.

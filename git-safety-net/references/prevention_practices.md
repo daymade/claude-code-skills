@@ -69,6 +69,23 @@ stash exception as an absolute prohibition: if the current contract permits it, 
 writer may use its exact absolute-repository and explicit-file form, such as
 `git -C <absolute-repo> stash push [options] -- <exact-file>...`. An unscoped stash remains invalid.
 
+**Finding the actual writer beats guessing a session by name.** A name-based guess gets a false
+"not me" from the wrong session while the real writer keeps appending, and the shared file keeps
+changing under you either way. Get process evidence first:
+
+```bash
+lsof -- <path>                        # or: fuser <path> — PID(s) currently holding the file open
+ps -o pid=,ppid=,command= -p <pid>    # walk the parent chain up to the owning process
+```
+
+A PID found this way still needs walking: follow `ps`'s parent chain past any short-lived shell or
+write call to the process that actually owns the session, then reach that owner through whatever
+session-addressing mechanism the current host provides — never guess an address from a directory,
+branch, or task label. A fast writer that opens, writes, and closes per line can leave no open
+handle even while the file keeps growing; when `lsof`/`fuser` come back empty, confirm by watching
+size or `mtime` still advancing before concluding no one is writing. No process found and the file
+has stopped moving: report the gap rather than inventing a session to ask.
+
 ## Exact-SHA handoff and scoped completion
 
 A branch name is a routing label, not a frozen deliverable. The writer can add another commit after
