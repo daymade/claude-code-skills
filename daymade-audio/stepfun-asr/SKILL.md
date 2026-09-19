@@ -162,7 +162,7 @@ More edge cases in `references/known_issues.md`.
 
 1. **Always pass through SSE** — don't try to buffer the response with a non-streaming client. The model emits `transcript.text.delta` for long audio; `transcript.text.done` carries the authoritative full text and `usage`. Reject the SSE format entirely and you'll get nothing.
 2. **Take final text from `transcript.text.done.text`** — concatenated deltas can drift on edge cases. Deltas are for progressive UI; the `done` event is the source of truth.
-3. **Handle `error` events in the stream** — don't treat the SSE stream as if only success events arrive. A blocked-content event mid-stream returns `type: error` with no `done` event.
+3. **Handle `error` events in the stream** — don't treat the SSE stream as if only success events arrive. A blocked-content event mid-stream returns `type: error` with no `done` event. `transcribe()`'s return dict always carries an `errors` list of the raw error-event payloads (empty if none fired), even when `ok` is `True`, so a caller wanting the old strict semantics (any error event ⇒ failure) must check `errors` itself.
 4. **Fail-fast on missing API key** — never default to a placeholder or empty string. The script does this; preserve the behavior in any wrapper.
 
 ## When to read references
