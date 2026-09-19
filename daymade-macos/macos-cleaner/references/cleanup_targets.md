@@ -202,6 +202,8 @@ Do not reopen a broad Mole scan for a named developer cache. Resolve one exact p
 
 The upgrade-then-prune path is verified to work (2026-09-19: upgrading 0.11.21 → 0.12.17 and pruning reclaimed 50.9 GiB, cache 92.2 → 41.3 GiB, with sampled venvs still importing and the managed Python tree intact). A user who explicitly directs that command may run it in Phase 3 — but a version fix addresses only the symlink bug, not the reachability semantics, so this stays a directed action, never a skill proposal. Do not cite the 50.9 GiB figure as a reason to propose it: size is not evidence, and the Phase 2 entry gate's lead rule would otherwise structurally reward exactly that. Sanctioned alternative: `uv cache clean <exact-package>`.
 
+This entry is the worked example for safety rule 5's known-issue check. What made it decisive was searching the command's defect history **before** running it — the session that found #19542 this way was one search away from pruning a machine whose 1775 cache symlinks pointed at the interpreter trees of live venvs, and it had no independent way to notice the damage afterward. Note the shape of both defects: neither is visible from the tool's own help text or from the size of the cache, and both are specific to a *version* of the command, which is why the check must name the installed version rather than the command. Apply the same check to every supported control in this table before it enters a plan — including the ones already recommended here.
+
 For an ordinary resolved `<exact-cache-path>`, use path-accounted blocks and an
 in-use check. APFS code-sign clones use their dedicated analyzer/reference
 instead because shared extents and multi-child activity need separate handling:

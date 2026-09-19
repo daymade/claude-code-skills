@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-cleaner** (`daymade-macos` v1.3.1 → v1.3.2): three rules closing gaps
+  a 2026-09-19 session hit in the skill's own text. Safety rule 5 now requires a
+  known-issue check before the first supported-control command runs — it
+  previously recommended an application's own cache-management command with no
+  defect precondition, which is what a session followed straight into `uv cache
+  prune`, saved only by searching its history first (#19542 makes pre-0.12.x
+  prune follow symlinks out of the cache into managed Python trees; #10153 means
+  "unreachable" is cache-graph reachability, not venv liveness). The check must
+  name the *installed version*, because both defects are invisible in the tool's
+  help text and in the size of the cache. New safety rule 11 requires isolating
+  the mechanism behind a `df` gap — clone/reflink sharing, local APFS snapshots,
+  purgeable space, double-counted paths, concurrent writers — before promising
+  physical release from a deletion; an undemonstrated mechanism must be reported
+  as `unknown` rather than named. That rule came from naming APFS clonefile as
+  the cause of a 109.4 GiB nominal / 11.2 GiB reclaimed gap and then measuring
+  `cp` on the same machine to find it allocates and releases in full, with zero
+  local snapshots: the mechanism was wrong, and the gap is still unexplained.
+  `docker_analysis.md` adds the missing second half of its own independent-
+  verification rule — that rule covered object eligibility but not the reclaim
+  number, so a summed `UNIQUE SIZE` total now needs recomputing from a second
+  direction before it enters a plan. An independent sweep of a "6 dangling
+  images, all deletable" set returned 6.38 GiB net with 2 images still
+  container-referenced.
+
 - **macos-cleaner** (`daymade-macos` v1.3.0 → v1.3.1): `proving-redundancy-before-deletion.md`
   gains rung 0 — target identity. Before any evidence is collected, `df
   <candidate-path>` must show the local data volume, not a network mount. A
