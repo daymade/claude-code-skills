@@ -278,6 +278,33 @@ but re-verification is cheap if a future Claude Code release changes write
 semantics: write a marker into an active profile's `.claude.json`, keep
 using the session, check the marker an hour later.
 
+## A real profile's guard hooks vanished and its `env` has unfamiliar keys
+
+Symptom: a profile stops firing its PreToolUse guards, and its `settings.json`
+has `env` keys that belong to no provider. The file often shrank sharply.
+
+Cause: the converger ran with a synthetic `CLAUDE_MAIN_CONFIG_DIR` while
+`CLAUDE_PROFILES_ROOT` or `$CLAUDE_CONFIG_DIR` still reached the real profile.
+Scope is the union of those two, so the real profile converged toward the fake
+main — `hooks` replaced wholesale by the fake main's object, `env` merged
+per-key so the fake main's keys were added. Nothing in the output says this
+happened.
+
+Fix: restore from that profile's own backup, then verify byte-for-byte.
+
+```bash
+cp -p <profile>/settings.json.sync-backup <profile>/settings.json
+```
+
+Check size, JSON validity, top-level key count, `hooks` length, unexpected `env`
+keys, and sandbox signatures such as `/bin/true`. Do not judge by the backup's
+mtime: it is written with `shutil.copy2`, which preserves the source mtime, so
+an old timestamp does not prove nothing was written.
+
+Then scan the remaining profiles — scope is all of them, so one run can hit
+several — and correct the invocation before running the script again (see "Never
+run the converger against a synthetic main" in `SKILL.md`).
+
 ## Installation audit reports missing or unselected Skills
 
 Run the inventory from the marketplace checkout root:

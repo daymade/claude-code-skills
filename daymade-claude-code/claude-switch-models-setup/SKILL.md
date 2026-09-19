@@ -47,6 +47,49 @@ The result: you can open one terminal with Kimi, another with DeepSeek, another 
 - **Credentials ride in that same file, so anything scripting a profile has to pass `--settings` as well.** `CLAUDE_CONFIG_DIR=<profile> claude -p ...` on its own answers `Not logged in · Please run /login`, because the token lives in the provider file and nothing else loads it. The message names login; the cause is the missing flag.
 - The converger has no single-profile mode: every invocation covers all of `~/.claude-profiles/*` plus `$CLAUDE_CONFIG_DIR`, and no flag narrows that. To converge one profile on demand, point `CLAUDE_PROFILES_ROOT` at a directory holding only it, or run `--check` and read the per-profile lines. The default profile's own files are the source and are never written.
 
+### ⚠️ Never run the converger against a synthetic main
+
+Scope is every profile — all of `~/.claude-profiles/*` plus `$CLAUDE_CONFIG_DIR`
+— and the source of truth is `CLAUDE_MAIN_CONFIG_DIR`. Point that at a throwaway
+directory while `CLAUDE_PROFILES_ROOT` or `$CLAUDE_CONFIG_DIR` still reaches a
+**real** profile, and the run converges that real profile toward the synthetic
+main: its whole `hooks` object is replaced by whatever the fake main holds, and
+its `env` gains the fake main's keys. **Every guard registered in that profile
+stops firing, and the run reports nothing unusual.** A synthetic main is safe
+only when the profiles root and `$CLAUDE_CONFIG_DIR` are synthetic and
+disposable too.
+
+Before running it by hand, check what you would actually touch:
+
+```bash
+echo "$CLAUDE_CONFIG_DIR"
+```
+
+If that names a real profile, do not run the script. Test fixtures must build
+the subprocess environment from a scrubbed base instead of inheriting the live
+one — a shell profile sets these variables, and `unset` inside a script does not
+reliably reach a child process:
+
+```bash
+env -u CLAUDE_CONFIG_DIR -u CLAUDE_MAIN_CONFIG_DIR -u CLAUDE_PROFILES_ROOT …
+```
+
+Decide whether a run wrote anything mechanically, not by eye. Record the target
+profile's `settings.json` size before the run and compare after. `.sync-backup`
+is written with `shutil.copy2`, which preserves the source mtime, so **an old
+backup timestamp does not prove nothing was written** — compare size and bytes.
+
+If a real profile did get written, restore from that profile's own backup and
+verify byte-for-byte:
+
+```bash
+cp -p <profile>/settings.json.sync-backup <profile>/settings.json
+```
+
+Check size, JSON validity, top-level key count, `hooks` length, unexpected `env`
+keys, and sandbox signatures such as `/bin/true`. Then scan the other profiles:
+scope is all of them, so one run can hit several.
+
 ## One-Click Setup Workflow
 
 When the user says something like "set up Claude Code profiles" or "I want to use Kimi and DeepSeek in different windows":
