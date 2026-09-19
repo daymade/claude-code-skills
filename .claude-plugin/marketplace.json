@@ -306,7 +306,7 @@
       "description": "Audio processing suite covering the full speech pipeline: ASR transcription (Qwen3, StepFun) with batch-mode guards against music-only repetition-loop hallucinations, speaker diarization and CAM++ voiceprint identification for multi-speaker recordings, transcript error correction, structured meeting minutes generation, and TTS voice synthesis (StepFun). Install once for the complete audio workflow.",
       "source": "./daymade-audio",
       "strict": false,
-      "version": "1.39.10",
+      "version": "1.40.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -560,7 +560,7 @@
       "description": "Test/evaluate any LLM behind an OpenAI- or Anthropic-compatible endpoint: availability (max_tokens-aware), request fidelity (does system prompt/tools/history REACH the model, or does the gateway silently drop it), speed (TTFT+tok/s), concurrency (before a workshop), Anthropic protocol compliance, quality regression, vendor bug reports, deployment gates, resident canaries. Use BEFORE hand-rolling a curl loop (it skips the N=10 sampling, Connection:close, and env-var key handling this bakes in). Use when someone tests/benchmarks/测评/压测 a model/endpoint, onboards a provider, decides whether to switch or temporarily fail over to an alternate channel (outage/quota), writes a supported-models list, debugs \"model ignores system prompt\", or verifies a tok/s claim. NOT for TTS/voice-clone supplier eval (audio side has its own skill). Triggers on \"benchmark this model\", \"测一下这个模型/渠道/API\", \"接入新模型先测一下\", \"system prompt 不生效\", \"这个渠道能不能用/稳不稳\", \"临时切换过去顶一阵子\" — even without \"eval\", even wrapped in business narrative.",
       "source": "./llm-eval-harness",
       "strict": false,
-      "version": "1.4.1",
+      "version": "1.4.2",
       "category": "developer-tools",
       "keywords": [
         "llm",
