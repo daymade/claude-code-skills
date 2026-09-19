@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-cleaner** (`daymade-macos` v1.3.0 → v1.3.1): `proving-redundancy-before-deletion.md`
+  gains rung 0 — target identity. Before any evidence is collected, `df
+  <candidate-path>` must show the local data volume, not a network mount. A
+  2026-09-19 disk-accounting session walked `du` without `-x` into
+  `/Volumes/homes` — an SMB-mounted QNAP NAS — and surfaced 837 GB of remote
+  content as a candidate "big item" on the local disk; it was neither local nor
+  one item, and the 270 GB accounting gap that motivated the walk was
+  manufactured by the measurement itself. Two rules this rung enforces: paths
+  under `/Volumes/` are suspect until df'd, and `du` in disk-accounting
+  contexts always carries `-x`. A candidate that has not been df'd does not
+  enter the evidence table.
+
 - **macos-cleaner** (`daymade-macos` v1.2.0 → v1.3.0): new reference
   `proving-redundancy-before-deletion.md` — the evidence ladder for large data
   folders, built from a 2026-09-19 session that proposed deleting a 109 GB

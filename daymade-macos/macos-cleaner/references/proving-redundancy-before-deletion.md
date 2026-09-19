@@ -27,6 +27,22 @@ ladder climbs from provable to bounded:
 
 ## The ladder (each rung is a command, not an impression)
 
+### 0. Target identity — the candidate is local disk, and you have df'd it
+
+Before anything else: `df <candidate-path>` — the Filesystem column must show
+the local data volume (`/dev/disk…`), **not a network mount** (`//host/share`,
+`nfs`, `afp`). A 2026-09-19 disk-accounting session walked `du` **without `-x`**
+into `/Volumes/homes` — an SMB-mounted NAS — and surfaced 837 GB of remote NAS
+content as a candidate "big item" on the local disk. It was neither local nor
+one item: it was other people's data on other people's disks, and the whole
+"270 GB accounting gap" that motivated the walk was manufactured by the
+measurement itself.
+
+Two rules this rung enforces: any path under `/Volumes/` is suspect until df'd,
+and in disk-accounting contexts `du` always carries `-x`. **A candidate that
+has not been df'd does not enter the evidence table** — no exceptions for
+"the size was just measured."
+
 ### 1. File-level duplication — prove the content exists elsewhere
 
 Compare the candidate against the suspected canonical copy: file **name + size +
