@@ -74,6 +74,16 @@ log show --predicate 'process == "launchd"' --last 15m | grep <label>
 | `WorkingDirectory` | Pin cwd if the script uses relative paths |
 | `UserName`/`GroupName` | (LaunchDaemon only) run as a non-root user |
 
+## TCC / permissions under launchd (the `uv` Full-Disk-Access trap)
+
+LaunchAgent 的 job 在用户 GUI 会话里跑，能 `open` app、读用户 TCC 授权——但**无签名可执行文件是个例外**，`uv run` 是最高频的踩坑点。
+
+- **症状**：LaunchAgent 反复弹「`python3.x` would like to access data from other apps」（Full Disk Access / `kTCCServiceSystemPolicyAllFiles`），点“允许”也没用、每个周期又弹。同一个脚本在交互式终端跑却不弹。
+- **为什么**：发起方是 `uv` 二进制本身，不是它挑的 python、不是脚本、不是会话类型（`LimitLoadToSessionType`/`asuser` 都改不了）。launchd 起的 `uv` 是根进程，**没有带 FDA 的父进程可继承**；交互式跑不弹是因为终端（Ghostty/Terminal）本身有 FDA、`uv` 作为子进程继承了它。
+- **修复**：给 `uv` 二进制（绝对路径，如 `~/.local/bin/uv`）授 Full Disk Access——**不是 python**（python 版本随 uv 漂移）。一次覆盖所有 `uv run` 的 LaunchAgent。授权按二进制路径记，uv 升级换路径后会失效、需重授。
+- **判定**：`log show --predicate 'subsystem=="com.apple.TCC"'` 的 `from Sub:{...}` 是发起方；`sudo sqlite3 '/Library/Application Support/com.apple.TCC/TCC.db' "select client,auth_value from access where service='kTCCServiceSystemPolicyAllFiles';"` 看授权态（SIP 保护该库只读，授权只能走 GUI）。弹窗显示的名字是当前解释器、会漂移，别拿它当授权对象。
+- 完整诊断流程见 `capture-screen/references/permission-triage-template.md` 的 Full Disk Access 专项。
+
 ## launchctl command reference
 
 | Intent | Command |
