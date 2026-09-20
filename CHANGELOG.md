@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **claude-code-hooks** (`daymade-claude-code` v3.44.0 → v3.45.0): a new pitfall
+  entry (#44) on confirmation dialogs that reuse a stale trigger's
+  evidence-gathering logic — when the hook's only evidence is state read
+  *before* the command runs, and the new trigger is a single command that both
+  creates and consumes that state, the dialog opens with nothing in it and a
+  human's click stops being a decision. Fix: escalate only on paths where the
+  dialog can name the target, the command, and the objects at stake, and block
+  mechanically (with a restructuring hint, never a silent bypass) everywhere
+  else; fold whitespace in every model-authored string a dialog displays, since
+  an embedded newline renders as indistinguishable extra gate lines. SKILL.md
+  rule 4 gained a matching sub-bullet pointing at the new entry. Anchor:
+  2026-09-20, a commit-scope gate's first fifteen hours in production sent 38
+  dialogs to a human, 36 of them listing zero files. Both READMEs' blurb for
+  this Skill also drops the derived pitfall-count word ("Nine" / "九类"),
+  which had already gone stale before this change, rather than update it to
+  a new number.
+
 - **marketplace-dev** (`daymade-claude-code` v3.43.0 → v3.44.0): a new "Adding a
   member skill to an existing suite" subsection under Phase 2, because that is the
   most common marketplace edit and the one that fails across the most CI rounds.

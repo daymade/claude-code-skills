@@ -3485,7 +3485,7 @@ completion drive 随时能盖过它；hook 才是一堵墙。
 **核心能力：**
 - 五套可直接运行的模式骨架（PreToolUse 拦截、带人工确认放行闸的 PreToolUse、SessionStart 健康检查、PostToolUse 上下文注入、对模型自己输出做反应的 Stop hook），外加 token 级命令匹配的 shlex 位置遍历器
 - 四条用真实事故换来的铁律：shlex 而非 awk 拆分（绝不误杀健康命令）、注册前必须 `bash -n` + 真实 JSON 端到端测试、SSOT + symlink 防止重装后静默失效、按 profile 逐个收敛注册 + 人工确认放行闸
-- 九类已归档的失败模式（症状→根因→修法），包括 UserPromptSubmit 与 Stop 选错事件这类范畴性错误（只有 Stop 能看到模型自己写的内容），以及嵌入的 `python3 -c` 代码块里一个字面引号/反引号（哪怕藏在注释里）会怎样悄悄把逻辑改坏
+- 已归档的失败模式（症状→根因→修法），包括 UserPromptSubmit 与 Stop 选错事件这类范畴性错误（只有 Stop 能看到模型自己写的内容），以及嵌入的 `python3 -c` 代码块里一个字面引号/反引号（哪怕藏在注释里）会怎样悄悄把逻辑改坏
 - 自带端到端测试脚手架（`scripts/test_hook.sh`）
 
 **使用示例：**
