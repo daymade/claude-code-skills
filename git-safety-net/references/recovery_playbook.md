@@ -163,6 +163,21 @@ git fsck --dangling                  # dangling commits/blobs/trees not reachabl
 Inspect candidates with `git show <sha>`. Dangling *blobs* can be a single lost file:
 `git show <blob-sha> > recovered_file`.
 
+**One more place to check before declaring a deleted branch gone: the hosting platform, not
+just this local clone.** If the branch had an open or merged pull request, GitHub keeps that
+PR's head addressable at `refs/pull/<N>/head` even after the source branch itself is deleted
+(verified on a real repository: `refs/pull/<N>/head` still resolved to the original head SHA
+after the branch was deleted). Check read-only first, then fetch and recover:
+
+```bash
+git ls-remote origin "refs/pull/<N>/head"                  # read-only: does it still resolve?
+git fetch origin "refs/pull/<N>/head"
+git branch restored/pr-<N> FETCH_HEAD
+```
+
+Other hosting platforms expose this under different ref names — check what the platform
+actually serves before assuming this exact path works there too.
+
 ## Preserve: pin authorized danglers so gc can never take them
 
 Dangling commits are recoverable **only until gc runs**. For a specific inspected commit that is

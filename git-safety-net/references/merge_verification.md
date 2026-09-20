@@ -110,6 +110,118 @@ base later edited the same lines, the trial merge no longer reproduces the base 
 the script says NEEDS REVIEW rather than MERGED. That over-reporting is the correct trade — you
 look, confirm the lines are redundant, and delete; you never lose work to a confident wrong "yes."
 
+## The historical-merge-commit rung — proving containment when base moved past a landed change
+
+The sound content check above answers "is the branch contained in base *right now*". That is
+usually the right question — but it has one blind spot: once base has changed **the same lines
+again** after a squash-merge landed the branch, a fresh trial merge of the branch into the
+*current* base conflicts instead of reproducing base's tree, even though the branch's content
+genuinely landed. An edit elsewhere — another file, or other lines of the same file — does not
+trigger this; the trial merge still proves containment. The blind spot is routine wherever many
+branches touch one shared line: a version field the next release bumps again, a changelog block
+every change prepends to. The squash-merge illusion and this one look alike (a real squash-merged
+branch reading as something other than cleanly MERGED) but need different fixes: the squash
+illusion is fixed by checking content instead of commit count (above); this one is fixed by
+checking content **at the right point in time**.
+
+"Landed once" and "still there now" are different questions, and the trial merge against the
+current base can only ever answer the second one. When it cannot prove containment, do not fall
+straight to the unsound hints below (`git cherry`, a blob search) — first ask whether a *sound*
+answer to the *first* question is available: does a hosting platform's record say this branch's
+content was already merged, and if so, at which commit?
+
+**The check**, implemented by `scripts/git_verify_branch_merged.sh --merge-commit <sha>` for one
+branch and by `scripts/git_classify_refs.sh --base <sha> --pr-map <json>` for a whole batch:
+
+1. Require the candidate merge commit `M` to be an ancestor of base. Refuse otherwise — an `M`
+   that never reached base at all cannot be used as a "landed at" baseline; it could be from a
+   line of history that was reverted, or one that never merged into this base to begin with.
+2. Trial-merge the branch into `M` (not into base). If the result reproduces `M`'s own tree
+   exactly, the branch's content was fully present at that historical merge — sound, for the same
+   reason the base trial merge is sound: it is Git's own merge, so anything the branch still adds
+   on top of `M` would change the result and fail the equality.
+
+**The boundary, and why it must be stated in every verdict this rung produces:** this proves
+containment **at that merge commit**, never that the **current** base still has it. Base may have
+reverted, overwritten, or otherwise dropped the content since `M`. If the next action depends on
+whether base has it *right now*, this rung is not sufficient by itself — the current-base trial
+merge is still the authority for that question, and a NEEDS-REVIEW verdict from it, alongside a
+LANDED-AT-MERGE verdict from this rung, is not automatically a contradiction — but it is not
+automatically a loss either. Which one it is depends on the *shape* of the current-base
+NEEDS-REVIEW result: a conflict is routine (base moved the same lines forward again); a clean
+merge that would still change base is the actual fingerprint of lost content. See
+"Landed, then lost" (below) for how to read that shape before concluding anything.
+
+**Where `M` comes from:** this rung never queries a hosting platform itself — both scripts stay
+offline. The caller supplies `M` after independently confirming, through the hosting platform's
+own API/CLI, that the branch's tip equals a specific pull request's recorded head and that pull
+request's state is `MERGED`; `M` is that pull request's own merge-commit SHA. Most hosting
+platforms keep a merged pull request's head ref addressable long after its source branch is
+deleted, which is why this rung stays usable even once the original branch is long gone — `M`
+itself, once it is an ancestor of base, never becomes unreachable from local history either.
+If the branch itself needs recovering — not just verifying — rather than only its merge-commit
+SHA, `recovery_playbook.md`'s Ladder step 4 has the concrete `refs/pull/<N>/head` commands.
+
+## Landed, then lost — investigating content that provably merged but is missing from the current base
+
+**Identify the signal first: one pair of verdicts covers both a routine case and a loss, and only
+the *shape* of the current-base result tells them apart.** A branch whose merge is independently
+confirmed (its tip equals the PR's recorded head, and the PR's state is `MERGED`) reports LANDED
+with `--merge-commit <that PR's merge commit>` but NEEDS REVIEW against the *current* base. Read
+how the current-base trial merge failed:
+
+- **It conflicts** — base went on to change the same lines (the next version bump, a rewritten
+  entry). Nothing is missing; this is the routine case the historical-merge-commit rung exists for.
+- **It merges cleanly but would change base** — the branch's lines can be re-applied without
+  conflict, which means base no longer has them and put nothing else in their place. Something on
+  base's own history, after the merge commit, wrote the content back out. This is the fingerprint
+  of a **candidate regression**, not of unmerged work.
+
+Treating the second shape as "still unmerged" and re-landing the branch risks silently reverting
+whatever base did afterward (the same double-apply hazard SKILL.md's troubleshooting section
+already warns about for a mis-timed rescue); the right response is to find and understand the
+regression, not to re-ship.
+
+**Two ways to find it, in order of how targeted the loss is:**
+
+1. **Walk base's own history for the regression, first-parent, comparing one tracked value per
+   commit.** Useful whenever the lost content is (or is summarized by) an orderable or
+   presence/absence field in a shared manifest — a version number, a counter, an entry that should
+   only ever be added to:
+   ```bash
+   git log --first-parent --reverse --format='%H' <base> -- <path-to-manifest>
+   ```
+   Walk that commit list and, at each one, read the tracked field's value
+   (`git show <commit>:<path-to-manifest>`); a commit where the value goes *down*, or a
+   previously-present entry disappears, instead of holding or advancing, is the regression point —
+   the commit that did the reverting, and worth reading in full (`git show <commit>`) for *why*.
+2. **Diff the merge commit's own copy of the shared file against the current base, line by line:**
+   ```bash
+   git diff <merge-commit> <base> -- <path>
+   ```
+   Read the `-` lines (present at merge time, absent from base now) as candidate losses, then run
+   each one through this document's existing Supersession triage ladder (rungs 1-4, above) before
+   concluding anything is actually lost — a line that a *later, intentional* change legitimately
+   replaced is not a regression, it is ordinary iteration, and the ladder is what tells the two
+   apart.
+
+**One boundary that keeps this from becoming a noisy repo-wide hunt:** a generic "were any
+recently-added lines deleted anywhere in base's history" sweep is not useful at repository scale —
+ordinary development constantly deletes lines it just added (refactors, typo fixes, superseded
+drafts), so an unscoped version of this check would flag most of a healthy history. It only becomes
+decidable evidence once narrowed two ways: to **one specific file** already known to be shared
+across the branches/PRs in question, and **excluding commits that are themselves ordinary PR
+merges** — a PR merge legitimately adding or removing lines in that file is the normal mechanism,
+not a loss, and counting it as one would flag every healthy merge alongside the real regression.
+
+**Cause and prevention, each in one line:** the common cause is a shared checkout that sat for a
+long time on an already-merged branch, from which someone later builds a "restore" or "sync back"
+commit out of that stale working copy — silently reintroducing the pre-merge state as new,
+seemingly ordinary commits on base. The prevention is to confirm a shared checkout's *branch and
+HEAD* are current (`git branch --show-current`, `git log -1`) before trusting its working copy as a
+commit source, not merely that its `git status` is clean — a clean-but-stale checkout looks
+identical to a current one until you check which commit it is actually sitting on.
+
 ## Manual-only investigation hints (do NOT auto-decide on these)
 
 These help a **human** investigate a NEEDS-REVIEW branch, but must never drive an automated
@@ -217,6 +329,32 @@ the inventory reveals. `--verify-current` mechanically decides only whether exac
 unchanged; it grants no ownership. Unique-behavior and supersession judgments still require the
 content evidence below and have no automatic enforcement.
 
+**When another writer is active and exclusive ownership cannot be obtained, the "stay read-only"
+rule above is about the SHARED checkout — it does not blanket-forbid every action everywhere, and
+this paragraph narrows it without weakening it.** Split what "another writer is active" actually
+threatens. Mutating the shared checkout's `HEAD`, index, or working tree stays fully off-limits
+regardless of technique, because nothing can guarantee a concurrent `switch`/`add`/`commit` in that
+same checkout does not race yours — this part of the rule is unchanged. A separate class of action
+carries its own compare-and-swap guard and needs no shared-checkout ownership at all, because it
+runs from your OWN independent worktree or clone and only succeeds if the state it names has not
+moved since you read it:
+
+- exporting a bundle from your own worktree (touches nothing shared);
+- deleting a remote branch with an expected-tip guard —
+  `git push --force-with-lease=<ref>:<expected-sha> origin --delete <branch>` — which refuses
+  instead of racing when the remote tip is not the SHA you expected;
+- opening a pull request from a linked worktree or your own clone (never touches the shared
+  checkout's files);
+- a hosted merge that names an expected-head-SHA precondition, which refuses rather than merging
+  the wrong tip.
+
+None of these authorize touching the shared checkout, and the CAS guard on each one is only as
+good as how fresh the state it compares against is: re-read the current ref/tip **immediately**
+before every one of these actions, not from an earlier snapshot — `--force-with-lease` protects
+against a mover between your read and your push only when the SHA you pass came from your most
+recent read, and an expected-head-SHA merge precondition is worthless if the "expected" value
+itself is already stale.
+
 ### 1. Freeze the outcome and the first ref snapshot
 
 Before interpreting the inventory, partition objects as follows:
@@ -264,6 +402,17 @@ After a squash merge, do not compare commit SHAs: GitHub creates a new base-bran
 base did not otherwise move, equal tree IDs prove byte-identical landing. If it did move, compare
 the owned path set or re-run the trial merge so unrelated base work does not manufacture a failure.
 GitHub-side duplicate/superseded PR handling belongs to the `github-ops` skill.
+
+**For a convergence PR specifically — one whose whole job is absorbing several old branches'
+content into a single keeper commit — prefer a merge commit over a squash for landing it.** A
+squash replaces every absorbed branch's own commits with one new-SHA commit, breaking ordinary
+ancestry for each of them (the effect this document's opening section describes at branch scale, now
+multiplied across every branch the convergence absorbed). A real merge commit keeps each absorbed
+branch's original commits as ancestors of base: the hosting platform can then auto-detect and mark
+each absorbed branch's own pull request (if it had one) as merged, and plain `git branch -d` — no
+content check, no `-D`, no supersession ladder — succeeds for every one of them by ordinary
+ancestry. The squash-vs-merge choice for the convergence PR's own content is unaffected; this is
+specifically about *how the absorption itself lands*.
 
 ### 3. Preserve refs and dirty WIP through different channels
 

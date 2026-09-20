@@ -114,6 +114,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   runner's own design record (ADR 1751) rather than stated from memory, and each
   entry gives the workaround that was verified on the fleet.
 
+- **git-safety-net** (v1.19.0 → v1.20.0): six additions distilled from a real multi-session
+  repository convergence. `scripts/git_hosted_vs_cached.sh` compares `git ls-remote --heads` against this checkout's cached `refs/remotes/<remote>/*` in
+  four categories (same / different-SHA / hosted-only / cached-only); a failed `ls-remote` exits
+  with a distinct code (3) and never presents the cache as hosted truth. `git_verify_branch_merged.sh`
+  gains `--no-fetch`, `--base REF`, and `--merge-commit SHA` (positional `<branch> [base]`
+  behavior is unchanged): the new rung proves a branch's content was fully present at a
+  historical merge commit when base later changes the SAME LINES again after a squash-merge
+  landed it (an edit to another file, or to other lines, leaves the current-base trial merge
+  sound on its own, so the rung is never reached there), while explicitly not claiming the
+  current base still has it. The verdict now also names the SHAPE of the
+  current-base failure it could not clear: a conflict (base moved the same lines forward again)
+  is the routine case; a clean merge that would still change base is a candidate regression,
+  called out distinctly and pointed at the new "landed, then lost" doc section.
+  `scripts/git_classify_refs.sh` runs that same ladder across every local/remote-tracking branch
+  against one frozen base in a single offline pass, carrying the same current-base shape
+  (`current-base=conflict` / `current-base=clean-changes:<n>`) in its `--pr-map`-upgraded rows,
+  with `--all-namespaces` reporting tags/stash/backup refs separately.
+  `scripts/git_align_checkout.sh` previews or materializes a checkout's content up to a target
+  commit without a throwaway snapshot branch and without moving HEAD, overwriting a path only
+  once its current content is proven reproducible from target's own history or a backup
+  manifest's sha256 — content lands before HEAD ever needs to move, so a bystander commit in
+  between lands on the checkout's old branch, never silently on the target's.
+  `references/merge_verification.md` gains the historical-merge-commit rung's own section, a
+  "landed, then lost" investigation guide for content that provably merged but is missing from
+  the current base — including which of the two current-base failure shapes actually signals a
+  loss, since a conflict alone is routine and only the clean-but-changes shape is the fingerprint
+  — a convergence-PR merge-vs-squash recommendation (a merge commit keeps absorbed branches'
+  ancestry so `git branch -d` and hosting-platform auto-merge-detection both keep working), and a
+  CAS-guarded-actions clarification for when another writer is active and exclusive ownership
+  cannot be obtained (bundle export, `--force-with-lease`, PR-open from a linked worktree, and an
+  expected-head-SHA merge precondition remain safe from your own worktree; the shared checkout's
+  HEAD/index/working tree stay off-limits either way). `references/recovery_playbook.md` gains
+  the `refs/pull/<N>/head` recovery route for a branch whose PR is gone from local reflog/fsck
+  but was hosted on GitHub. Two small corrections: `git branch -d` judges "merged" relative to
+  the checkout's current HEAD, not the base you have in mind, so a stale checkout can refuse a
+  branch that really is an ancestor of the intended base; and a version/lockfile bump collision
+  between parallel branches merges without a Git conflict and reads as valid to a checker run
+  before the first branch landed, so the check must re-run against the refreshed base, not just
+  once at PR-open time.
+
 - **claude-code-hooks** (`daymade-claude-code` v3.44.0 → v3.45.0): a new pitfall
   entry (#44) on confirmation dialogs that reuse a stale trigger's
   evidence-gathering logic — when the hook's only evidence is state read
@@ -483,7 +523,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   writer-discovery block now reads the two probes apart, the lineage gate's way out is reordered to
   "this work's own remote → new repository → ask the user," and the block ends read-only like the
   rest of the section.
-
 
 - **tibo-reset-codex** (`tibo-reset-codex` v1.12.0 → v1.13.0): the forecast ledger gains a raw-readings layer. A new `finding` command appends verbatim external readings (invocation shape, triggering query, endpoints hit, source-keyed readings) to `findings.jsonl` in the same state directory, and `record`/`review` accept `evidence_refs` — finding ids (full, or a uniquely-resolving prefix) that must already exist or the append fails, so a verdict carries links to the readings it was actually made from instead of a memory of them. `findings --limit N` lists recent readings compactly, and `summary` shows an `evidence_refs_count` per forecast/review. Rows without the new key parse unchanged. Every successful append now also takes a best-effort local git snapshot of the journal (auto-init, 0700 directory, one commit per append); any git failure prints a single stderr note and never blocks or reverts the append, and `--no-git` turns the snapshot off — integrity wiring, not a backup promise.
 - **stepfun-asr / stepfun-tts / asr-transcribe-to-text** (`daymade-audio` v1.39.10 → v1.40.0): StepFun ASR now sends `enable_timestamp` (the field comes back either way, but its values are all 0 unless you ask — the earlier "v3 has no word timestamps" claim is retracted), sends every request parameter by default with `check_params.py` diffing the official field table in both directions, and gains `asr_file.py` for speaker diarization on the async file endpoint (public URL only; ids are `speaker_0`, not the documented `spk_1`). `asr-transcribe-to-text` routes that official diarization as a second independent speaker track. `stepfun-tts`'s `synthesize()` takes `model=` and `extra=` and returns the server's JSON envelope (`timestamp` + `return_url` → `{"data": {"url", "subtitles"}}`) under `json`, so callers that need per-character timing stop hand-rolling `/v1/audio/speech`; it is the wrapper `llmreg.wrapper_for("stepfun-tts")` resolves to.

@@ -591,6 +591,16 @@ git fetch origin --quiet
 git show origin/main:<manifest>     # what version is main ALREADY at? bump to strictly higher
 ```
 
+**Why a version-bump checker can pass on both branches and still let this collision through:**
+once the first branch merges, the second branch's diff against the base it *originally* branched
+from still looks like a valid strictly-greater bump — its checker run is comparing against a base
+that predates the first branch's merge. Git itself does not flag the eventual merge as a conflict
+either: both branches wrote the identical new value, so the merge trivially resolves to that same
+value with no conflict marker anywhere. The collision only becomes visible to a check that compares
+against the *current* base — run **after** the first branch has landed — so a checker result cached
+from before that point is not evidence the second branch is still safe to merge. Re-run the version
+check against the refreshed base every time a branch resyncs onto it, not just once at PR-open time.
+
 If a collision already merged, fix it by bumping again above the collided value and re-releasing.
 
 ## Commit-scope hygiene (don't sweep unrelated staged work)
