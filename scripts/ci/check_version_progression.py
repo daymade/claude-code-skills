@@ -411,7 +411,10 @@ def main() -> int:
                     "index manifest is HEAD's copy and this run cannot see your "
                     "working changes.\n"
                     "       Stage the manifest and re-run, or compare the commit "
-                    "directly with --candidate HEAD.",
+                    "directly with --candidate HEAD.\n"
+                    "       Rule: ~/.claude/references/evidence-discipline.md §八 — "
+                    "a reading's unit and meaning come from the flag combination and "
+                    "the tool's behaviour, not from convention.",
                     file=sys.stderr,
                 )
                 return 2
