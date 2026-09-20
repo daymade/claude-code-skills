@@ -175,7 +175,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gated checklist for choosing between technologies (library, framework, storage,
   data format, model, build-vs-buy, architecture). Distilled from a multi-corpus
   search of the user's own tech-decision patterns across 12,000+ AI sessions and
-  1,000+ meeting transcripts. Three load-bearing design decisions: (1) filters
+  the user's archived meeting transcripts. Three load-bearing design decisions: (1) filters
   not sorters — the criteria kill violators, survivors are decided by
   business-result anchoring, never by ranking; (2) `unknown` is not `pass` — a
   candidate carrying an unverified axis does not enter the survivor set;
