@@ -195,6 +195,11 @@ dangling commit it will enumerate; it is a whole-set helper, not the default. Wh
 `git stash list`, so they protect the authorized objects without turning branch/stash lists into
 noise, and you can delete them once their content is verified safe elsewhere.
 
+Bundling that same commit needs a ref too — `git bundle create` refuses a bare SHA with
+`fatal: Refusing to create empty bundle` even though the commit exists (measured). Bundle the
+`refs/dangling-backup/<sha>` ref just pinned above by name; a commit with no ref at all needs one
+created first (`git update-ref refs/backup/<name> <sha>`) before it can be bundled.
+
 ## Triple-backup a critical commit
 
 For a specific commit you must not lose (e.g. real unpushed work found by the at-risk check), one

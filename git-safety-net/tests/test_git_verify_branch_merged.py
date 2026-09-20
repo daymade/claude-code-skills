@@ -155,6 +155,57 @@ class VerifyBranchMergedTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertIn("UNMERGED / NEEDS REVIEW", result.stdout)
 
+    def test_large_conflict_output_does_not_crash_with_sigpipe(self) -> None:
+        """A conflict big enough to overflow a pipe buffer must not crash the script.
+
+        `test_conflicting_branch_reports_review_instead_of_aborting` above covers a
+        single-file conflict, whose `git merge-tree` output is a handful of lines — far
+        short of a pipe buffer. This fixture reproduces a failure actually measured on a
+        real branch pair: hundreds of conflicting files make `git merge-tree
+        --write-tree`'s output large enough (real case: 869 lines / 248KB) that piping it
+        through `head -1` lets `head` close its read end as soon as it has one line,
+        before `printf` finishes writing the rest — `printf` gets SIGPIPE, and the
+        unguarded assignment exits the script with 141 under `set -e`, before any verdict
+        is printed.
+        """
+        self.seed_base()
+        self.in_repo("switch", "-qc", "ours")
+        file_count = 450
+        for i in range(file_count):
+            self.write(f"files/f{i}.txt", f"ours version of file {i}, padding padding padding\n")
+        self.commit("ours edits every file")
+        self.in_repo("switch", "-q", "main")
+        for i in range(file_count):
+            self.write(f"files/f{i}.txt", f"main version of file {i}, padding padding padding\n")
+        self.commit("main edits every file too")
+        self.in_repo("push", "-q", "origin", "main")
+
+        # Self-check: confirm the fixture still produces output bigger than a pipe
+        # buffer, so a future git version that shrinks the conflict-report format can't
+        # make this test silently stop exercising the SIGPIPE path.
+        raw = subprocess.run(
+            ["git", "-C", str(self.repo), "merge-tree", "--write-tree", "origin/main", "ours"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertGreater(
+            len(raw.stdout) + len(raw.stderr),
+            65536,
+            "fixture's merge-tree output no longer exceeds a pipe buffer; "
+            "raise file_count so this test still reproduces the SIGPIPE case",
+        )
+
+        result = self.run_script("ours", "origin/main")
+        self.assertNotEqual(
+            result.returncode,
+            141,
+            "script crashed with SIGPIPE (141) instead of reporting a verdict: "
+            + result.stdout
+            + result.stderr,
+        )
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("UNMERGED / NEEDS REVIEW", result.stdout)
+
     def test_branch_deleting_a_file_the_base_keeps_is_unmerged(self) -> None:
         """Proves the verdict is a real merge, not an "are the additions present?" scan.
 

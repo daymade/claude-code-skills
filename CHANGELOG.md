@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **git-safety-net** (v1.20.0 → v1.20.1): fix a SIGPIPE crash in
+  `git_verify_branch_merged.sh`, plus three reference-doc additions from a
+  separate worktree-convergence session. Both of the script's
+  `printf '%s\n' "$VAR" | head -1` extractions let `head` close its read end
+  as soon as it has one line, before `printf` finishes writing the rest of a
+  large conflict report; `printf` then gets SIGPIPE, and the unguarded
+  assignment exits the script 141 under `set -e`, before any verdict prints
+  (measured: a real repository's conflicting-branch pair produced 869 lines
+  / 248KB). Both sites are now parameter expansion (`${VAR%%$'\n'*}`), which
+  never forks a second process, so there is nothing to receive SIGPIPE. A new
+  regression test reproduces the crash with a 450-file conflict fixture
+  against the current-base site: exit 141 on the old code, `UNMERGED / NEEDS
+  REVIEW` on the fix. Mutation-verified: reverting that site alone turns the
+  new test red with exactly "141 == 141" and leaves the other 107 tests
+  unchanged; reverting the identical fix on the `--merge-commit` rung leaves
+  the full 108-test suite green, because no existing fixture drives that
+  rung's own conflict output past a pipe buffer — a real, now-documented
+  coverage gap, not assumed safety. `merge_verification.md`'s worktree-
+  retirement step now requires a full count/size inventory of ignored files
+  before removal, not a spot-check of the paths that look sensitive or
+  important — a real retirement pass that named 22 paths missed that the
+  actual `!!` set was 8092 entries and ~200MB, including 13 build-output
+  directories that existed only in that worktree, and `git worktree remove`
+  does not stop for ignored files; it deletes them with the directory
+  (verified). The same file's "where M comes from" section now checks a
+  GitHub PR's merge state by number
+  (`gh pr view <number> --json headRefOid,state,mergeCommit`), not
+  `gh pr list --head <branch>`, which produced a transient empty result for
+  a branch whose PR was already MERGED (checked again by number moments
+  later, it showed MERGED). `recovery_playbook.md` notes that
+  `git bundle create` refuses a bare SHA with "Refusing to create empty
+  bundle" even though the commit exists (verified) — it needs a ref, such as
+  the `refs/dangling-backup/<sha>` ref the same section already creates for
+  that commit.
+
 - **tech-selection** (`daymade-claude-code` v3.50.0 → v3.51.0): three corrections to
   claims the skill could not back. Agent orchestration now states a single-agent
   default and frames the four questions as the gate that licenses delegation
