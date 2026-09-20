@@ -5,7 +5,9 @@ description: >-
   This skill should be used when users request a research report, literature review, market or industry analysis,
   competitive landscape, policy or technical brief. Triggers: "帮我调研一下", "深度研究", "综述报告", "深入分析",
   "research this topic", "write a report on", "survey the literature on", "competitive analysis of",
-  "技术选型分析", "竞品研究", "政策分析", "行业报告".
+  "竞品研究", "政策分析", "行业报告". Produces a report; it does not choose a
+  technology. A request that asks which option to adopt, whether to build or
+  reuse, or for a decision among candidates belongs to tech-selection.
 ---
 
 # Deep Research

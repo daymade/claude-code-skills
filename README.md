@@ -241,6 +241,7 @@ This suite bundles the skills that extend Claude Code itself — cross-project p
 /daymade-claude-code:lark-cli-router
 /daymade-claude-code:claude-code-ping-start-5h-quota
 /daymade-claude-code:agent-web-search-setup
+/daymade-claude-code:tech-selection
 ```
 
 Installed names render as `daymade-claude-code:<skill>` under a single shared namespace. These skills are bundle-only — install the suite to get all members.
@@ -3715,6 +3716,41 @@ the agent; it is not itself a search engine.
 give this agent internet access — web search does nothing
 ```
 
+### **tech-selection** - Gated Checklist for Choosing Technologies
+
+> **Install**: `claude plugin install daymade-claude-code@daymade-skills`
+> (suite-only — invoked as `daymade-claude-code:tech-selection`)
+
+A checklist for choosing between technologies — library, framework, storage,
+data format, model, build-vs-buy, architecture. Runs before committing, not
+after. The criteria are **filters, not sorters**: they kill candidates that
+violate a principle, and survivors are decided by business-result anchoring,
+never by ranking. When two or more candidates survive, the output is candidates
++ trade-offs + a recommendation, never a single pick.
+
+**Key features:**
+- Triggers on scenario sentences (用哪个 / 选什么框架 / 要不要自建 / 先看看有没有现成的) and characteristic negations (别闭门造车 / 不要过度工程), not the literal term 技术选型 which the user's own corpus almost never contains
+- `unknown` is not `pass` — a candidate carrying an unverified axis does not enter the survivor set
+- Two stops that return to the user: multi-candidate human tradeoff (≥2 survivors) and unverified completion claim
+- Prior-art inventory as step 1 — internal/paid assets → external solutions → build from scratch (last resort); recommending build without recorded reasons from layers 1–2 is flagged as 闭门造车
+- Probe-based evidence only — READMEs, vendor pages, and source-code claims are downgraded; the only admissible evidence is behavior you ran and observed
+- Self-defense slot ("why this isn't garbage") that must be independently checkable, not self-certified
+- Delegation contract with domain ownership table, three-part autonomy threshold, and 5 resolved scope boundaries
+- Agent orchestration by task shape (four-question framework), not a fixed default
+- 13 core decision axes + 13 scoped criteria + 16 rejection patterns, each with a mechanical test rather than an attitude
+- 4 references: decision-axes, scoped-criteria, rejection-modes, delegation-contract
+
+**Example usage:**
+```text
+用哪个框架？React 还是 Vue？
+这个爬虫用 requests 还是 playwright
+数据存哪里？SQLite 还是 Postgres？
+要不要自建，还是用现成的？
+别闭门造车，先看看有没有现成的
+which library should we use for this?
+build or buy — evaluate the options
+```
+
 ### **codex-1m-context-window-setup** - Model-Aware Long Context for Codex
 
 > **Install**: `claude plugin install daymade-codex@daymade-skills`
@@ -3821,6 +3857,9 @@ Combine **doc-to-markdown** for document conversion and **mermaid-tools** for di
 
 ### For Research & Analysis
 Use **deep-research** to produce format-controlled research reports with evidence tables and citations. Combine with **fact-checker** to validate claims or with **twitter-reader** for social-source collection.
+
+### For Technology Decisions
+Use **tech-selection** when choosing between technologies — library, framework, storage, data format, model, build-vs-buy, or architecture. It runs a gated checklist that filters candidates by business-result anchoring, prior-art inventory, and probe-based evidence, then returns candidates + trade-offs + a recommendation when multiple survive. Combine with **deep-research** when the landscape itself needs research before a decision can be made.
 
 ### For Competitive Intelligence
 Use **competitors-analysis** to discover, persist, update, and analyze competitor repositories with evidence-based source citations. Combine with **deep-research** when the landscape also needs broader market, pricing, or narrative research.
@@ -3999,6 +4038,7 @@ Each skill includes:
 - **codex-1m-context-window-setup**: See `daymade-codex/codex-1m-context-window-setup/SKILL.md` for the doctor/apply/verify workflow and `daymade-codex/codex-1m-context-window-setup/references/context_window_contract.md` for model-cap, usable-window, and compaction semantics
 - **docs-cleaner**: See `daymade-docs/docs-cleaner/SKILL.md` for consolidation workflows
 - **deep-research**: See `deep-research/references/research_report_template.md` for report structure and `deep-research/references/source_quality_rubric.md` for source triage
+- **tech-selection**: See `daymade-claude-code/tech-selection/references/decision-axes.md` for the 13 core filter criteria, `daymade-claude-code/tech-selection/references/scoped-criteria.md` for scoped supplementary criteria, `daymade-claude-code/tech-selection/references/rejection-modes.md` for rejection patterns and anti-patterns, and `daymade-claude-code/tech-selection/references/delegation-contract.md` for domain ownership and the autonomy threshold
 - **pdf-creator**: See `daymade-docs/pdf-creator/SKILL.md` for PDF conversion and font setup
 - **claude-md-progressive-disclosurer**: See `daymade-claude-code/claude-md-progressive-disclosurer/SKILL.md` for CLAUDE.md optimization workflow
 - **skills-search**: See `daymade-skill/skills-search/SKILL.md` for CCPM CLI commands and registry operations

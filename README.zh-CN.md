@@ -238,6 +238,7 @@ claude plugin install daymade-claude-code@daymade-skills
 /daymade-claude-code:lark-cli-router
 /daymade-claude-code:claude-code-ping-start-5h-quota
 /daymade-claude-code:agent-web-search-setup
+/daymade-claude-code:tech-selection
 ```
 
 安装后调用统一显示为 `daymade-claude-code:<skill>`，共享同一命名空间。这些技能仅作为套件发布——安装套件即可获得全部技能。
@@ -3691,6 +3692,39 @@ lark-cli 提示 user 身份缺少 scope
 给这个 agent 加上联网搜索能力
 ```
 
+### **tech-selection** - 技术选型闸门清单
+
+> **安装**：`claude plugin install daymade-claude-code@daymade-skills`
+>（仅作为套件成员发布，调用方式 `daymade-claude-code:tech-selection`）
+
+一套在承诺之前（而非事后）跑的技术选型清单，覆盖库、框架、存储、数据格式、
+模型、自建 vs 采购、架构选择。判据是**过滤器不是排序器**——杀掉违反原则的候选，
+幸存者由业务结果锚定决定，绝不靠打分排名。当两个及以上候选幸存时，输出是
+候选 + 取舍 + 一个推荐，不是单选。
+
+**核心功能：**
+- 触发建在场景句（用哪个 / 选什么框架 / 要不要自建 / 先看看有没有现成的）与特征性否定句（别闭门造车 / 不要过度工程）上，不依赖「技术选型」这个字面词——用户自己的语料里几乎不出现这个词
+- `unknown` 不是 `pass`——带未验证轴的候选不进入幸存集合
+- 两次停下来交还用户：多候选人为取舍（≥2 幸存）与声称完成但未验证
+- Prior-art 盘点是第一步——内部/付费资产 → 外部方案 → 自建（最后手段）；推荐落在自建层而一、二层无记录理由即判闭门造车
+- 仅接受探针取证——README、厂商页面、源码声明一律降级；唯一可接受证据是你跑了并观察到的行为
+- 「为什么这不是垃圾」自辩位必须可独立核对，不能自证
+- 委派契约含域归属表、三段式自主阈值与 5 处已裁定边界
+- Agent 编排按任务形状（四问框架），不设固定默认值
+- 13 条核心决策轴 + 13 条范围限定判据 + 16 条拒绝模式，每条配机械测试而非态度
+- 4 个 references：decision-axes、scoped-criteria、rejection-modes、delegation-contract
+
+**使用示例：**
+```text
+用哪个框架？React 还是 Vue？
+这个爬虫用 requests 还是 playwright
+数据存哪里？SQLite 还是 Postgres？
+要不要自建，还是用现成的？
+别闭门造车，先看看有没有现成的
+which library should we use for this?
+build or buy — evaluate the options
+```
+
 ### **codex-1m-context-window-setup** - 为 Codex 设置模型感知的长上下文
 
 > **安装**：`claude plugin install daymade-codex@daymade-skills`
@@ -3791,6 +3825,9 @@ review 后修复/落地时，使用 **github-review-pr**。
 
 ### 调研与分析
 使用 **deep-research** 生成格式可控的调研报告，包含证据表与引用。与 **fact-checker** 结合用于验证关键结论，或与 **twitter-reader** 结合收集社媒资料。
+
+### 技术决策
+选择技术方案时（库、框架、存储、数据格式、模型、自建 vs 采购、架构）使用 **tech-selection**。它跑一道闸门清单——按业务结果锚定、prior-art 盘点与探针取证过滤候选，多候选幸存时输出候选 + 取舍 + 推荐，不是单选。需要先对格局做调研再决策时，结合 **deep-research**。
 
 ### 竞争情报
 使用 **competitors-analysis** 发现、持久化、更新并分析竞品仓库，仓库结论必须带源码引用。需要更宽的市场、定价或叙事研究时，再结合 **deep-research**。
@@ -3967,6 +4004,7 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 - **codex-1m-context-window-setup**：参见 `daymade-codex/codex-1m-context-window-setup/SKILL.md` 了解 doctor/apply/verify 工作流，参见 `daymade-codex/codex-1m-context-window-setup/references/context_window_contract.md` 了解模型上限、可用窗口和压缩语义
 - **docs-cleaner**：参见 `daymade-docs/docs-cleaner/SKILL.md` 了解整合工作流
 - **deep-research**：参见 `deep-research/references/research_report_template.md` 了解报告结构，并参见 `deep-research/references/source_quality_rubric.md` 了解来源分级标准
+- **tech-selection**：参见 `daymade-claude-code/tech-selection/references/decision-axes.md` 了解 13 条核心过滤轴，`daymade-claude-code/tech-selection/references/scoped-criteria.md` 了解范围限定补充判据，`daymade-claude-code/tech-selection/references/rejection-modes.md` 了解拒绝模式与反模式，以及 `daymade-claude-code/tech-selection/references/delegation-contract.md` 了解域归属与自主阈值
 - **pdf-creator**：参见 `daymade-docs/pdf-creator/SKILL.md` 了解 PDF 转换与字体设置
 - **claude-md-progressive-disclosurer**：参见 `daymade-claude-code/claude-md-progressive-disclosurer/SKILL.md` 了解 CLAUDE.md 优化工作流
 - **skills-search**：参见 `daymade-skill/skills-search/SKILL.md` 了解 CCPM CLI 命令和注册表操作
