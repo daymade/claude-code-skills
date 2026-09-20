@@ -97,6 +97,8 @@ if [ -z "$skills" ]; then
     echo "FAIL: skill files are edited but not committed, so this run examined $examined committed file(s) and cannot validate them:" >&2
     echo "$uncommitted_skills" | sed 's/^/         /' >&2
     echo "       Commit them and re-run. (An uncommitted change outside any skill is fine and stays green.)" >&2
+    echo "       Rule: ~/.claude/references/evidence-discipline.md §四 — a newly written" >&2
+    echo "       checker's first green run is not evidence of anything; name what it examined." >&2
     exit 1
   fi
   echo "OK: this change touches no skill directory"
