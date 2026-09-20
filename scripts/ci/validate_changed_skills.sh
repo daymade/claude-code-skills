@@ -67,11 +67,38 @@ if [ -z "$skills" ]; then
   # skills, this printed "OK: this change touches no skill directory". Read as a pass, it
   # certifies work the run never examined.
   #
-  # Deliberately NOT a failure: on CI, and for any genuinely skill-free commit, zero touched
-  # skills is the correct and common answer — failing there would kill healthy input and
-  # teach people to skip the check. Naming the scope is enough to make the vacuous case
-  # visible without arming a gate that misfires.
+  # Deliberately NOT a failure for "zero touched skills" alone: on CI, and for any
+  # genuinely skill-free commit, zero is the correct and common answer — failing there
+  # would kill healthy input and teach people to skip the check.
+  #
+  # WHY the 2026-09-21 addition IS a failure: the note above named the vacuous case but
+  # left it exit 0, and on 2026-09-20 that green was read as a verdict — a run that
+  # examined 0 files was reported as "OK: 3 touched skill(s) validated" after the commit,
+  # and before the commit as a bare "OK" while three SKILL.md files sat uncommitted.
+  # So: fail only when the change touches a skill directory AND that edit is still
+  # uncommitted — the one state where this OK certifies nothing. A genuinely skill-free
+  # commit stays green, as does an uncommitted edit outside any skill.
+  #
+  # Reuses the same "walk up to the directory owning a SKILL.md" walk as above rather
+  # than matching path fragments: a first attempt used a grep for `scripts/`, which
+  # matched this very checker (it lives in scripts/ci/) and failed on a clean tree —
+  # the same "my instrument matched my own text" defect twice in one session.
   examined="$(git diff --name-only "$MERGE_BASE"...HEAD | wc -l | tr -d ' ')"
+  uncommitted_skills="$(
+    git status --porcelain | awk '{print $NF}' | while IFS= read -r path; do
+      dir="$(dirname "$path")"
+      while [ "$dir" != "." ] && [ "$dir" != "/" ]; do
+        [ -f "$dir/SKILL.md" ] && { echo "$dir"; break; }
+        dir="$(dirname "$dir")"
+      done
+    done | sort -u
+  )"
+  if [ -n "$uncommitted_skills" ]; then
+    echo "FAIL: skill files are edited but not committed, so this run examined $examined committed file(s) and cannot validate them:" >&2
+    echo "$uncommitted_skills" | sed 's/^/         /' >&2
+    echo "       Commit them and re-run. (An uncommitted change outside any skill is fine and stays green.)" >&2
+    exit 1
+  fi
   echo "OK: this change touches no skill directory"
   echo "    scope: the committed diff $MERGE_BASE...HEAD ($examined file(s) examined)"
   uncommitted="$(git status --porcelain | wc -l | tr -d ' ')"
