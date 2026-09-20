@@ -206,6 +206,22 @@ for each outcome term and report the per-label hit counts (`message` /
 The census does not change the conclusion; it closes the "re-derive the query
 syntax" path by showing where the terms do live.
 
+**Results at low confidence are not zero results.** When a carrier reports
+`result_count > 0` alongside `terms_passed: false`, expand those ranked results
+before writing the receipt. `terms_passed: false` says only that the query words
+did not appear in their literal form inside the top-K; it does not say the results
+are irrelevant, and under hybrid or BM25 ranking the leading hit is often exactly
+the synonym you were looking for. Write the receipt only after reading them.
+
+That requirement is about what the receipt must be able to show. A
+`no_reuse_reason` has to point at named results and say why each one does not
+solve this task — "I read these three and they cover a different system" is a
+reason; "no record of the user discussing this" is not, when the carrier returned
+twelve hits nobody opened. Pair this with the zero-candidate clause above: that
+one governs a carrier that returned nothing, this one governs a carrier that
+returned something you have not yet earned the right to dismiss. Both directions
+have to close, or an unopened batch silently becomes an absence claim.
+
 The completed receipt preserves `business_outcome` and `outcome_terms`; `check`
 rejects legacy or hand-built receipts that omit either field. Receipt freshness
 is bound to the definitions of **required** carriers. Editing an optional carrier
@@ -304,6 +320,7 @@ path remain possible so the agent can repair the gate without bypassing it.
 |---|---|
 | Known exact string, symbol, path | Filesystem carrier (`rg`) |
 | Meaning remembered, wording changed | Declared semantic adapter (gbrain, or Claude-history hybrid recall — that index covers Claude sessions only) |
+| Meaning remembered, platform may be Codex | Claude hybrid recall does not cover Codex; use `read-codex-history`'s external FTS5 index (literal-match only, with a CJK tokenizer caveat — read its constraints before trusting a zero) |
 | Exact prior Claude tool/thinking/file-history evidence | `read-claude-code-history search` |
 | Prior conversation evidence whose platform is unknown, plural, or not Claude | `local-conversation-history`; each provider is a separate store, so a Claude-only answer cannot support "we never discussed it" |
 | Meeting decision or speaker claim | Project transcript carrier; open raw speaker turn |

@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **read-codex-history** (`daymade-claude-code` v3.46.0 → v3.47.0): adds a
+  cross-provider content-recall route through the external FTS5 index at
+  `~/.claude-flow-viewer/search.sqlite` (~2M chunks, 8,365 Codex sessions),
+  with eight measured constraints. The one that decides whether this path can
+  be trusted: **the `unicode61` tokenizer makes a contiguous CJK run a single
+  token**, so a Chinese phrase matches only when it aligns with a whole run.
+  Measured — `闭门造车` returns 10 rows against 790 substring occurrences;
+  `技术选型` 10 against 163; ASCII terms are unaffected. The decisive proof
+  that a single character is not its own token: `闭` returns 2 rows while
+  `闭门` returns 17, and an independent `闭` could not be the smaller set.
+  Searching a longer run recovers most of the gap (`不要闭门造车` → 314), but a
+  short Chinese phrase can silently miss ~94% of real occurrences — and the
+  shape of that miss is indistinguishable from "we never discussed it". Two
+  corrections to prior assumptions, both measured: the standard
+  `NEAR(A B, k)` form parses (only `NEAR/n` slash syntax raises), and a full
+  scan of the ~9GB table completes in 26s rather than hanging.
+- **prior-work-retrieval** (same suite): two routing and receipt gaps closed.
+  (1) A `result_count > 0` with `terms_passed: false` no longer permits a
+  no-reuse conclusion until the ranked results are opened — `terms_passed:
+  false` means the query terms did not appear literally in the top-K, not that
+  the results are irrelevant; the existing zero-candidate clause governs true
+  zeros and this one governs low-confidence hits, so both directions are
+  covered. (2) The search-routing table gains a Codex row: the Claude hybrid
+  index does not cover Codex, so a wording-drift question whose platform may
+  be Codex routes to read-codex-history's FTS5 path (literal-match, with the
+  CJK caveat).
+- **local-conversation-history** (same suite): the router's ranked-recall row
+  now names the Codex FTS5 path and states that it complements rather than
+  replaces the Claude hybrid index; and the invariants section gains the rule
+  that decides whether a corpus search was even aimed correctly — **ask first
+  whether the term is the topic's name or the way the person speaks**. A
+  person's corpus is searched by the latter (imperatives, negations, scenario
+  sentences); a zero from searching the topic's name is not evidence of
+  absence. Measured on this machine: 「技术选型」 is nearly absent from the
+  corpus it names, while the discussion it names lives under imperative and
+  negative phrasing.
 - **claude-code-hooks** (`daymade-claude-code` v3.45.0 → v3.46.0): pitfall #30's
   Fix 4 drops its "unverified … confirm before relying on it" hedge on
   team-mode deliveries and replaces it with two sources read directly. A

@@ -57,7 +57,7 @@ section exists to prevent.
 |---|---|---|
 | **Inventory** — "what have I been working on", "list my recent chats", session titles/dates/IDs | `read-claude-code-history`, its bundled inventory | `--source all`, or `--source kimi` for Kimi alone |
 | **Content search** — "did we ever discuss X", find the conversation containing a quote, file, or tool result | `read-claude-code-history`, its bundled full-event search | add `--codex` and `--kimi` to the Claude search; each is a separate store the Claude registry never covers |
-| **Ranked recall** — the same question when the wording may have drifted, or the sweep has no session ID, date, or project to bound it | `read-claude-code-history`, its optional hybrid recall index | The index states which providers it holds; read the coverage line it prints instead of assuming it spans all three |
+| **Ranked recall** — the same question when the wording may have drifted, or the sweep has no session ID, date, or project to bound it | `read-claude-code-history`, its optional hybrid recall index | The index states which providers it holds; read the coverage line it prints instead of assuming it spans all three. When the platform may also have been Codex, the Claude hybrid index does not cover that store — add `read-codex-history`'s `claude-flow-viewer` full-text path. That path matches literally only, so a genuine paraphrase still needs the Claude-side hybrid: the two are complementary, not substitutes |
 
 Both readers ship the same inventory command and its `--source` already defaults
 to `all` — but each reader's own task table pins it to that reader's provider
@@ -116,6 +116,15 @@ the explanation's topic clues do not convert the request into a content search.
 - **Zero results are not absence.** Ranked recall and a bounded search both
   return nothing for wording that exists under different words. Widen, or say
   what was searched — do not convert an empty result into "it never happened".
+- **Ask whether a word is the topic's name or the way you talk about it.** A
+  search for `技术选型` over a corpus where the user actually said 用哪个 and
+  不要闭门造车 returns almost nothing — measured: 10 hits against 163 real
+  occurrences, because a Chinese phrase only matches on a token boundary. When
+  searching one person's corpus, search the way they speak: imperatives,
+  negations, and concrete scene sentences, not the label a design document would
+  give the topic. A zero hit on a topic name cannot support an absence claim;
+  widen to the phrasing that person would have used first, and say which forms
+  you tried.
 - **A zero has three causes and only one of them is "no history".** The other
   two are a home that was never found and a scope that excluded everything, and
   none of the three looks different in an empty table. This bites Kimi hardest:
