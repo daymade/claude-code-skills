@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **marketplace-dev** (`daymade-claude-code` v3.48.0 → v3.49.0): the Phase 2 note on
+  `check_version_progression.py` now names the argument form and the merge-time trap,
+  because both were hit in one afternoon on this repo. Pass `--base <ref>
+  --candidate HEAD`; `--candidate-index` reads the manifest blob out of the git index
+  and diffs staged paths only, so with nothing staged it re-verifies HEAD and reports
+  "no regression" about work it never saw. The CI gate resolves its base to
+  `origin/$BASE_REF` at run time and re-runs only when the head moves, so a PR whose
+  base branch has since advanced keeps the green it earned against the older base
+  while its version number may already be a regression — re-run against the current
+  `origin/main` immediately before merging.
+
 - **read-codex-history** (`daymade-claude-code` v3.46.0 → v3.47.0): adds a
   cross-provider content-recall route through the external FTS5 index at
   `~/.claude-flow-viewer/search.sqlite` (~2M chunks, 8,365 Codex sessions),

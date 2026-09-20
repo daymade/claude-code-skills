@@ -235,7 +235,18 @@ detector, not by eye.
 The `post_edit_sync_check` hook only catches "SKILL.md edited but plugin version not
 bumped". Items 2–4 have no hook — run `check_version_progression.py` and
 `check_doc_skill_lists.py` locally before pushing rather than discovering them across
-CI rounds.
+CI rounds. Pass `--base <base-ref> --candidate HEAD`. The script also accepts
+`--candidate-index`, which reads the manifest blob out of the **git index** and diffs
+staged paths only; with nothing staged that blob is HEAD's copy, so it re-verifies the
+commit you already have and reports "no regression" about work it never saw. The green
+is real about the index and silent about your edit.
+
+The version gate in CI re-runs only when the PR head moves, and it resolves its base to
+`origin/$BASE_REF` at run time. A PR whose base branch has since advanced therefore
+keeps the green it earned against the older base, while its version number can already
+be a regression against the current one. Re-run the gate against the *current*
+`origin/main` immediately before merging, not only before pushing, and rebase if it
+fails.
 
 ## Phase 3: Validate
 
