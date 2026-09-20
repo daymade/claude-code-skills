@@ -417,6 +417,13 @@ skeleton: Pattern C in [references/hook_patterns.md](references/hook_patterns.md
     Whatever model-authored text the dialog shows (command, paths) gets
     whitespace-folded first. Symptom, fix and the recorder-stub calibration:
     [references/hook_pitfalls.md](references/hook_pitfalls.md) #44.
+  - ⚠️ **The remedy you print instead has to be executable — prove it by running it.**
+    Where the hook blocks mechanically, the `stderr` instruction is the whole product of
+    that interception, and a string folded for display (above) is not one the model can
+    paste back. Test each printed remedy the only way that counts: assemble the exact
+    bytes, run them, drive the same event through the hook again, assert it now passes.
+    That some *other* parser decodes the string is not evidence — the checkpoint is the
+    gate's own tokenizer. [references/hook_pitfalls.md](references/hook_pitfalls.md) #45.
   - The docs also carry an in-UI channel — PreToolUse `hookSpecificOutput`
     `permissionDecision: "ask"`, which prompts through Claude Code's own interface.
     It is worth knowing about, but **unverified here under `bypassPermissions` /

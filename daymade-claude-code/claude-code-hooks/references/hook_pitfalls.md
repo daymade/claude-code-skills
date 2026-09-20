@@ -2307,3 +2307,156 @@ this list and describe defects you reach by asking a different question):
   repair then found the newly added repository line unfolded — a directory name with
   embedded newlines forged three gate-looking lines — while the suite stood at
   154/154, because every content assertion was a substring match.
+
+---
+
+## 45. The remedy a gate prints is its whole product on that path — and it has to survive the gate's *own* parser
+
+- **Symptom:** a blocking hook intercepts, `stderr` says "do X, then retry", the model
+  does exactly X, and the next attempt is blocked on identical grounds. Repeat until a
+  human interrupts. Nothing errors: the exit code is 2 every time, the audit file has
+  every row, the suite is green. From inside the session it reads as a model that will
+  not comply. The instruction was never executable.
+- **Cause:** what the hook writes to `stderr` **is** the interception — that text is
+  the entire yield of blocking, exactly as #44's dialog body is the entire yield of
+  escalating to a human. Two ways it comes out unexecutable, and neither is visible to
+  an exit-code row:
+  - **The string was built for a reader, not for a paste buffer.** A list rendered for
+    display is lossy by construction (#12), and #44 *requires* that loss on any
+    model-authored text: fold whitespace to single spaces, replace control characters,
+    so the text cannot forge gate-looking lines. Feed one of those folded paths back
+    into `git add -- <path>` and it is a different pathspec — either git rejects it, or,
+    where the bookkeeping is driven by the command text, a claim gets recorded for a
+    path that does not exist. The real file stays unclaimed and the next commit is
+    blocked the same way. Names containing `[ ] ? *` never clear at all if the
+    recording side drops glob-looking candidates, and framework conventions put exactly
+    those in ordinary source trees (`app/[id]/page.tsx`).
+  - **The self-check was run against the wrong parser.** The natural repair — print a
+    pasteable shell literal, then decode it back and compare with the original bytes —
+    is worth only as much as the decoder you compare against. Decoding by **bash**
+    rules proves bash can read it. But the command the model pastes is read by the
+    **gate's** tokenizer, and those are not the same language. Measured on Python's
+    `shlex`: `$'a\tb'` (bash ANSI-C quoting) tokenizes to the literal `$a\tb` — the `$`
+    kept, the escape never decoded — and `'Foo$Bar.class'` comes back with its `$`
+    intact, straight into the "drop any candidate containing `$`" cargo filter that
+    #15 prescribes. So a JVM inner-class file pastes fine under bash, really does get
+    staged, and is still never recorded: the same loop, now carrying a self-check that
+    certifies it. **The error is one line — the self-check measured the wrong frame of
+    reference. It asked whether bash could decode the string; the checkpoint the string
+    has to clear is the gate's own parser.**
+- **Fix — the only test for a printed remedy is to run it and re-run the gate.**
+  Assemble the exact bytes the hook emitted into the exact command, execute it, drive
+  the same event through the hook again, and assert it now **passes**. "It looks right"
+  is not evidence, and "a different parser decodes it" is not evidence either — that is
+  the second defect above, stated in its own defence. This is #14 applied to the one
+  message a blocking hook exists to produce.
+- **One string cannot hold both jobs.** Sanitizing for display and instructing the
+  model are different purposes, and a lossy string serves the second badly. Emit, per
+  item, a form that is safe to show *and* safe to paste: single-quoted when the path
+  carries no control characters (spaces survive verbatim inside the quotes), and the
+  escaped `$'…'` form when it does, so no raw control byte reaches `stderr`. Choosing
+  per item is what lets both requirements hold at once.
+- **Some inputs have no executable remedy — label those and give a route that does
+  work.** Where a name cannot clear the gate's tokenizer at all, say so on that line
+  and print a different way forward. Do not widen a fail-closed parser to accommodate a
+  handful of pathological names: the surface you open is permanent, the population it
+  serves is not.
+- **Then falsify the label.** A "cannot be pasted" annotation that never fires is the
+  same dead probe as a suite that cannot go red (#46) — in the failing version it did
+  not trigger on any of ten test names, and that silence was the bug's only visible
+  symptom. Assert it appears on a fixture that should carry it, and mutate the
+  self-check back to the wrong frame of reference to confirm that row dies.
+- **Real case (2026-09-20, a private hooks repository):** a commit-scope gate listed
+  unclaimed files and told the model to claim them with `git add -- <paths>`. Across
+  four review rounds by a reviewer holding no shared context, the display-string paste
+  surfaced first, as a BLOCKER; the repair introduced the bash-frame self-check; a
+  later round found that repair still
+  looping on `$`-bearing and control-character names — a second BLOCKER. Neither the
+  author nor the orchestrator caught either one. Every exit-code row stayed green
+  throughout, and the annotation the first repair added never fired once.
+
+---
+
+## 46. A green suite says nothing until every assertion has a mutation that kills it — a dead probe reads exactly like a pass
+
+- **Symptom:** the suite is green, rows keep getting added, and the defect those rows
+  were written for ships anyway. The tell appears only when you go looking: break the
+  implementation on purpose and **nothing turns red**. There is one correct reading of
+  that, and it is not "my mutation must be wrong". The nastier variant does not even
+  give you that tell: the rows go red exactly when you break the code — red about a
+  branch production never executes.
+- **Cause — the assertion never reached the condition it claims to test. Five shapes,
+  all of which print the same green:**
+  1. **The fixture failed to build, and the failure was swallowed.** A setup step
+     errored (`git worktree add` against a repository with no commits), the assertion
+     never ran once, and the harness reported the row as passed.
+  2. **The fixture built and its precondition still did not hold.** A file was
+     rewritten with byte-identical content, so nothing staged, so the staged set never
+     spanned two areas, so the cross-area exemption under test was never entered. The
+     `exit 0` the row asserted was real and had nothing to do with the exemption; two
+     assertions were vacuously true. Note what this shape defeats: a "fail loudly if
+     the fixture cannot be built" guard does not catch it, because the fixture built.
+  3. **Two fixes stacked, and the later one makes the earlier one's row vacuous.** A
+     case covering symlink claims showed zero red under its mutation because a
+     different fix — directory expansion — intercepted the input first. It went red
+     only after the fixture was rebuilt so the gap under test was the *one* unsatisfied
+     condition on that path.
+  4. **The rig's own plumbing puts the mutation out of reach.** The calibration script
+     sourced the library under test from a hard-coded path, so every assertion that
+     called a library function directly kept running against the unmutated copy, no
+     matter which copy the rest of the run pointed at.
+  5. **A probe omits an argument production always passes, so it has been exercising
+     the fallback branch all along.** A library function gained a parameter — the
+     repository top level, the frame of reference deciding whether a path can be
+     claimed. The **production** call site passed it correctly from the first commit,
+     and an upstream default filled it in when empty, so no end-to-end input could
+     produce the missing case. What omitted it were the **test's own two probes**:
+     every call they made took the "argument absent → fall back to a different frame of
+     reference" branch. Those probes were green, and their mutations *did* go red — red
+     about the fallback's behaviour, on a path production never reaches. The suite was
+     measuring code the product does not run. **The check:** temporarily make the
+     missing-argument branch `raise`; every probe that still runs is one that is not on
+     the production path. It was not found by reading the code — it surfaced when
+     someone asked, as an afterthought, to audit *every* call site of the new
+     parameter, at which point production was right and the tests were not. A companion
+     finding from that same audit shows how little "the probe happened to agree" is
+     worth: the old implementation looked correct when handed a non-existent path, and
+     measurement showed that was `os.path.relpath(ap, "")` meeting
+     `os.path.abspath("") == os.getcwd()` — run the identical call from another working
+     directory and the answer changes.
+- **Diagnostic, in one line: all rows green and zero rows red under mutation means the
+  assertion is dead.** Suspect the fixture's precondition first and the mutation last —
+  shapes 2–4 all present as "I must have mutated the wrong function". **Shape 5 is
+  invisible to that diagnostic**, because its rows do die on cue, so it needs the
+  separate habit: when a function gains a parameter, do not stop at "does the
+  production call site pass it?" — ask "do the **test** call sites pass it?". Omitting
+  an argument in a test rarely turns a row red. It quietly relocates the row onto
+  another branch.
+- **Fix — the invariant is one kill per assertion, not one mutation per assertion.**
+  Every row needs some deliberate breakage that reddens it. A single mutation usually
+  reddens a group of rows, which is fine *provided* you name the rows it should kill
+  before running it and confirm those are the rows that died; "something went red" is
+  not that, and it is how a mutation gets credited to a row it never touched. Row
+  counts and pass rates are not evidence of anything; the only evidence that a suite is
+  load-bearing is a record of which deliberate breakage each row detects. #14 tells you to mutate at all; this entry is
+  about why the mutation comes back empty — or comes back red about code the product
+  never runs — and what each of those means.
+- **How this differs from rule 9 (corpus replay).** Rule 9 measures the **detector**:
+  its instrument is a corpus of real commands nobody wrote for the test, and its output
+  is a false-positive rate — how much legitimate work this guard will block. This entry
+  measures the **suite**: its instrument is a deliberately broken implementation, and
+  its output is per-assertion sensitivity — whether a row can fail at all. The two are
+  orthogonal and neither substitutes for the other; rule 9's own record makes the point,
+  since the 26-row suite it describes had five pieces of hook logic that could be
+  deleted with every row still green. Run both — the replay says what the guard does to
+  real inputs today, the mutation pass says whether the suite will notice tomorrow's
+  regression.
+- **Real case (2026-09-20, a private hooks repository):** two separate lines of work on
+  one commit-scope gate — a parallel session and an implementation sub-agent — hit the
+  first four shapes in a single evening. Its calibration shipped with every assertion
+  carrying a mutation that kills it. Note the shape of that pairing, because it is not
+  one-to-one: each mutation has the specific set of rows it is *supposed* to redden,
+  and what was verified is that those rows are the ones that died. Three of those
+  mutations exist only because writing them exposed an assertion that could not die.
+  Shape 5 came out of the same gate a day later, and only because someone asked for a
+  call-site audit that no plan contained.
