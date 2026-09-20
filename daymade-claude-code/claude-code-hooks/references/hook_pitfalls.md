@@ -1290,9 +1290,10 @@ this list and describe defects you reach by asking a different question):
   documents `UserPromptSubmit`'s stdin JSON as `session_id`, `transcript_path`,
   `cwd`, `permission_mode`, `hook_event_name`, `prompt_id`, and `prompt` —
   no `origin`, no `source`, nothing that tells the hook *why* this invocation
-  happened. A hook trusting `.prompt` at face value cannot structurally tell
-  "the user asked for this" from "a notification's own text satisfied my
-  regex" — from inside the hook, they are the same shape.
+  happened. A hook that keyword-scans `.prompt` without looking at how it
+  *begins* cannot tell "the user asked for this" from "a notification's own
+  text satisfied my regex". No field marks the difference; the one in-band
+  signal is the wrapper tag `.prompt` opens with (Fix 4).
 
 - **Why the existing framing undersells the risk.** "UserPromptSubmit only
   sees user input" reads as reassurance — *whatever* fires it, at least it's
@@ -1335,18 +1336,45 @@ this list and describe defects you reach by asking a different question):
      `.prompt` for its keyword match — the added step is one extra field check
      against the transcript's *last* record before acting on a match, not a
      new event type or a different hook.
-  4. **Don't assume this is limited to task-notifications.** Anything that can
-     inject a `type:"user"` record with a non-`"human"` `origin` — a
-     Stop-hook's own `additionalContext` re-surfacing, or (unverified from a
-     non-team-mode session; confirm before relying on it) a team-mode
-     teammate delivery — is the same shape from a `UserPromptSubmit` hook's
-     point of view. #20 already catches teammate deliveries, but by a
-     different mechanism (text-prefix matching on the wrapper string, not
-     `origin.kind`) — if a hook is exposed to both task-notifications and team
-     mode, check which signal a teammate delivery actually carries rather than
-     assuming either fix alone covers both. Match the symptom (fired with no
-     nearby human message in the transcript), not the specific trigger
-     (task-notification here, something else next time).
+  4. **Team-mode deliveries fire the hook too — and the hook does not receive
+     what the transcript stores.** Anything that can inject a `type:"user"`
+     record with a non-`"human"` `origin` — a Stop-hook's own
+     `additionalContext` re-surfacing, a teammate or cross-session delivery —
+     is the same shape from a `UserPromptSubmit` hook's point of view. Two
+     sources, both read directly, not inferred:
+     - **The hook's own stdin.** A production `UserPromptSubmit` hook (a
+       private hooks repo, not shipped here) logs the first 120 characters of
+       `.prompt` each time its keyword trigger matches. In six weeks of that
+       log (2026-08-05 → 2026-09-20), `.prompt` *began with the bare wrapper
+       tag* 68 times: `<task-notification` 30, `<agent-message` 29,
+       `<cross-session-message` 9. Seven more entries (`<teammate-message` 4,
+       `<agent-message` 3), all within 99 seconds on 2026-08-05, began with
+       the sentence `Another Claude session sent a message:` and only then
+       the tag. That rendering never recurs in the log, and neither does
+       `<teammate-message`.
+     - **The transcript** (one team-mode session, 2026-09-20).
+       `<agent-message from="…">` and `<cross-session-message from="…">` land
+       as `type:"user"` records with `origin: {"kind": "peer"}`,
+       `promptSource: "system"`; `<teammate-message …>` records carry neither
+       key. None is `"human"`, so Fix 1 excludes all three. The 28
+       `hook_success`/`UserPromptSubmit` attachments that followed an
+       `<agent-message>` record were each written 0.05–0.23 s after it and at
+       least 269 s from any human input.
+
+     The two disagree on the detail that decides how to match. The transcript
+     stores every one of these deliveries behind `Another Claude session sent
+     a message:`; that same day the hook's `.prompt` opened with the bare
+     `<agent-message` tag 9 times out of 9. #20's wrapper forms describe the
+     transcript — anchored on `.prompt`, that sentence would have missed all
+     68 bare-tag entries. So a hook that only needs "is this a delivery?" can
+     skip the transcript, and Fix 2's async-write lag with it: look for the
+     wrapper tag in `.prompt`. In every logged delivery the tag sat at the
+     very start or directly after that one sentence, which leaves a choice:
+     match it as a substring when acting on machine text is the costlier
+     error (a human who quotes the tag gets skipped), or anchor it at the
+     start, with the sentence optional, when skipping a human is. Match the
+     symptom (fired with no nearby human message in the transcript), not the
+     specific trigger (task-notification here, something else next time).
 
 ---
 
