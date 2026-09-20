@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **claude-code-hooks** (`daymade-claude-code` v3.49.0 → v3.50.0): two pitfalls from a
+  commit-scope gate that took four review rounds — by a reviewer holding no shared
+  context — to get right.
+  **#45 — a blocking hook's `stderr` remedy is the whole product of that interception,
+  and it has to survive the gate's own parser.** Two ways it ships unexecutable while
+  every exit-code row stays green: the file list was folded for display — which #44
+  *requires*, as an injection defence — so the pasted pathspec no longer names the file
+  and the model loops; and the repair's self-check decoded its printed literal by
+  **bash** rules when the string's real checkpoint is the gate's tokenizer. Measured on
+  Python's `shlex`: `$'a\tb'` tokenizes to the literal `$a\tb` (escape never decoded)
+  and `'Foo$Bar.class'` keeps its `$`, dropping straight into the cargo filter #15
+  prescribes — so a JVM inner-class file stages for real under bash and is still never
+  recorded. The only test for a printed remedy is to assemble it, run it, re-drive the
+  event and assert the gate now passes. SKILL.md rule 4 gains a short pointer beside
+  the #44 sub-bullet. **#46 — a mutation pass that comes back empty means the assertion
+  is dead, not that the mutation was wrong.** Five shapes that all print the same green
+  (setup failure swallowed; fixture built but its precondition never held; a later fix
+  making an earlier fix's row vacuous; the rig sourcing the unmutated copy; and a probe
+  that omits an argument production always passes, so it has been exercising the
+  fallback branch all along). The fifth is the one that defeats the entry's own
+  diagnostic — its rows *do* go red under mutation, red about a branch production never
+  reaches — so it gets a check of its own: make the missing-argument branch `raise`,
+  and every probe that still runs is off the production path. When a function gains a
+  parameter, audit the **test** call sites, not just the production one. Plus the
+  boundary against rule 9 — rule 9 measures the *detector*'s false-positive rate
+  against a corpus nobody wrote for the test, #46 measures whether a *row* can fail at
+  all. Neither substitutes for the other.
+
 - **marketplace-dev** (`daymade-claude-code` v3.48.0 → v3.49.0): the Phase 2 note on
   `check_version_progression.py` now names the argument form and the merge-time trap,
   because both were hit in one afternoon on this repo. Pass `--base <ref>
