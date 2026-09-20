@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **self-hosted-runner-mechanisms** (`github-ops` v1.5.0 → v1.6.0): a new
+  "Self-Hosted Runner Mechanisms" section in `references/workflow_operations.md`,
+  recording three platform facts that break runner job hooks and background
+  processes on a real macOS + Windows fleet: job hooks receive the default env
+  vars only, so `GITHUB_RUNNER_NAME` and `GITHUB_TOKEN` arrive empty (read
+  `agentName` from the runner root's `.runner`, or have an `if: always()` step
+  write the token into `$RUNNER_TEMP`) and neither hook has any timeout setting,
+  a Windows runner tears down everything the job-started hook spawned through
+  the per-job Job Object once the hook returns while macOS `nohup ... &`
+  survives (Windows has no `nohup` equivalent — take the snapshot in the
+  job-completed hook instead), and four Windows traps (WSL-launcher
+  `shell: bash`, PATH-less `CreateProcess`,
+  `$ErrorActionPreference='Stop'` exiting a sampling loop after one transient
+  error, PowerShell string-concatenated JSON). The env-var rule is cited to the
+  runner's own design record (ADR 1751) rather than stated from memory, and each
+  entry gives the workaround that was verified on the fleet.
+
 - **claude-code-hooks** (`daymade-claude-code` v3.44.0 → v3.45.0): a new pitfall
   entry (#44) on confirmation dialogs that reuse a stale trigger's
   evidence-gathering logic — when the hook's only evidence is state read
