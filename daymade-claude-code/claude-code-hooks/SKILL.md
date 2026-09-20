@@ -105,7 +105,9 @@ The loop may be created entirely by an agent repeatedly applying a prose rule.
   right reason to route such a rule to Stop). That guarantee, however, does
   not extend to proving the `.prompt` field always originated from a
   keystroke: a background task-notification's own report text can populate
-  it too, with nothing in the stdin JSON marking the difference — #30. A rule like "the model must not invent a shorthand name
+  it too, and so can a teammate's or another session's message — no field in
+  the stdin JSON marks the difference, only the wrapper tag the text opens
+  with — #30. A rule like "the model must not invent a shorthand name
   for something it hasn't verified" belongs on Stop; put it on
   `UserPromptSubmit` instead and it will (a) never once catch what it was
   built for, since that text never flows through that event, and (b)

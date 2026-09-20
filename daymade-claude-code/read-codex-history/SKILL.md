@@ -47,6 +47,7 @@ interpreting fork snapshots, compaction, event streams, or end reasons.
 | Locate one exact rollout by internal identity | `scripts/analyze_sessions.py locate-codex <ID>` |
 | Reconstruct one Session and its declared parent snapshots | `scripts/read_codex_session.py --session <ID>` |
 | Search full rollout events by keyword | `scripts/analyze_sessions.py search --codex-only` |
+| Content remembered but whose wording drifted, with no session ID, date, or project to bound it | The external `claude-flow-viewer` full-text index — **Cross-provider content recall** below |
 | Continue after evidence is complete | Stop reading and invoke `daymade-claude-code:continue-codex-work` |
 
 The requested output wins over the motivation. “Show my recent original inputs”
@@ -152,6 +153,38 @@ Start with exact ID, project, date, or known asset names. Broad scans have a sto
 and must fail visibly rather than present partial results as complete. The exact-ID
 locator is seconds cheaper than a corpus scan.
 
+### Cross-provider content recall (external full-text index)
+
+`scripts/analyze_sessions.py search` remains the authoritative bounded scan of Codex
+rollouts. A separate local index at `~/.claude-flow-viewer/search.sqlite` answers the
+different question — "we discussed something once and I no longer remember how it was
+worded" — in about a second across Codex, Claude, and CherryStudio sessions. Use it to
+find a session, then verify that session with the readers above. It is a discovery
+layer that returns leads, never evidence: a hit names a session you still have to open.
+
+```bash
+sqlite3 ~/.claude-flow-viewer/search.sqlite "
+SELECT s.source, s.session_id, s.project_encoded, substr(c.text, 1, 600)
+FROM search_chunks_fts fts
+JOIN search_chunks c ON c.rowid = fts.rowid
+JOIN indexed_sessions s ON s.session_id = c.session_id
+  AND s.source = c.source AND s.project_encoded = c.project_encoded
+WHERE fts.search_chunks_fts MATCH '\"keyword-one\" OR \"keyword-two\"'
+  AND c.kind IN ('prompt','ai-text')
+LIMIT 15;"
+```
+
+Constraints measured against this index, each of which changes what a zero means:
+
+- **Read the freshness boundary first.** `sqlite3 ~/.claude-flow-viewer/search.sqlite "SELECT * FROM search_meta;"` prints `last_indexed_at`; sessions newer than that timestamp are not in the index at all, so a query cannot see them. Report that bound alongside any coverage claim.
+- **Match through `search_chunks_fts`, never `search_chunks` directly.** A direct query is an unindexed full scan of the ~9GB table — measured 26s against 0.03s for the indexed path.
+- **It is full-text, not vector.** `search_embeddings` holds 0 rows; the sqlite-vec shard tables exist but were never populated. So this path recovers only what literally occurred in the corpus, never a paraphrase or a synonym. For a paraphrase use the hybrid recall index in `read-claude-code-history`.
+- **FTS5 syntax on this build.** Combine quoted phrases with explicit `OR`. An unquoted multi-term query is *implicit AND* — measured: `term-a term-b` returned 0 rows where `"term-a" OR "term-b"` returned 10,327. `NEAR/n` slash syntax raises a syntax error; the standard two-operand `NEAR(A B, k)` form parses without error (it returned 0 rows on one tested query — that was a real no-co-occurrence result, not a syntax failure, so do not read the 0 as "NEAR is broken").
+- **The `unicode61` tokenizer makes a contiguous CJK run one token**, so a Chinese phrase matches only when it aligns with a whole run. Measured on `技术选型`: phrase query 10 rows against 163 substring occurrences; on `闭门造车`: 10 against 790. The decisive proof that a single character is not its own token: `闭` returns 2 rows while `闭门` returns 17 — if `闭` tokenized independently it could not be the smaller set. A longer run in the same family queries far better (`不要闭门造车` → 314 rows against 790), so for Chinese search the longest contiguous run you can guess, and note that a short phrase can silently miss ~94% of real occurrences. ASCII and punctuation-delimited terms do not have this problem (`technology-selection` matched 35 against 34). Never read a zero-row or low-row Chinese query as absence — a miss here is indistinguishable in shape from "we never discussed it", which is the exact failure this path exists to prevent.
+- **Filter `c.kind` to get the user's own words.** `prompt` is the user's input and `ai-text` the assistant's; `thinking`, `tool-call`, and `tool-result` are also indexed, so an unfiltered query mostly reads tool output back to you.
+- **Check `s.source` before attributing a hit.** The index spans three providers, so a hit found here is not by itself a Codex finding.
+- **Exclude the current session.** The current session records this very question and the command that searches for it, so it matches almost any query about itself.
+
 ## Identity and lineage gate
 
 Before making any behavior claim about a named Session:
@@ -191,6 +224,7 @@ negative result.
 - Do not load multi-megabyte rollouts directly into context; use the bundled reader.
 - Do not infer Session state or ownership from process names, cwd, or writer-lock absence.
 - Keep raw history local unless the user explicitly asks to share it.
+- Do not read a zero-row hit from the `claude-flow-viewer` index as "the conversation never happened": it cannot see a paraphrase, cannot see sessions past `last_indexed_at`, and finds a Chinese phrase only when it aligns with a whole token run. Confirm an absence claim with the bounded rollout search or the hybrid recall index in `read-claude-code-history`, and say which one you ran.
 
 ## Router and legacy compatibility
 

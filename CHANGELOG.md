@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **read-codex-history** (`daymade-claude-code` v3.46.0 → v3.47.0): adds a
+  cross-provider content-recall route through the external FTS5 index at
+  `~/.claude-flow-viewer/search.sqlite` (~2M chunks, 8,365 Codex sessions),
+  with eight measured constraints. The one that decides whether this path can
+  be trusted: **the `unicode61` tokenizer makes a contiguous CJK run a single
+  token**, so a Chinese phrase matches only when it aligns with a whole run.
+  Measured — `闭门造车` returns 10 rows against 790 substring occurrences;
+  `技术选型` 10 against 163; ASCII terms are unaffected. The decisive proof
+  that a single character is not its own token: `闭` returns 2 rows while
+  `闭门` returns 17, and an independent `闭` could not be the smaller set.
+  Searching a longer run recovers most of the gap (`不要闭门造车` → 314), but a
+  short Chinese phrase can silently miss ~94% of real occurrences — and the
+  shape of that miss is indistinguishable from "we never discussed it". Two
+  corrections to prior assumptions, both measured: the standard
+  `NEAR(A B, k)` form parses (only `NEAR/n` slash syntax raises), and a full
+  scan of the ~9GB table completes in 26s rather than hanging.
+- **prior-work-retrieval** (same suite): two routing and receipt gaps closed.
+  (1) A `result_count > 0` with `terms_passed: false` no longer permits a
+  no-reuse conclusion until the ranked results are opened — `terms_passed:
+  false` means the query terms did not appear literally in the top-K, not that
+  the results are irrelevant; the existing zero-candidate clause governs true
+  zeros and this one governs low-confidence hits, so both directions are
+  covered. (2) The search-routing table gains a Codex row: the Claude hybrid
+  index does not cover Codex, so a wording-drift question whose platform may
+  be Codex routes to read-codex-history's FTS5 path (literal-match, with the
+  CJK caveat).
+- **local-conversation-history** (same suite): the router's ranked-recall row
+  now names the Codex FTS5 path and states that it complements rather than
+  replaces the Claude hybrid index; and the invariants section gains the rule
+  that decides whether a corpus search was even aimed correctly — **ask first
+  whether the term is the topic's name or the way the person speaks**. A
+  person's corpus is searched by the latter (imperatives, negations, scenario
+  sentences); a zero from searching the topic's name is not evidence of
+  absence. Measured on this machine: 「技术选型」 is nearly absent from the
+  corpus it names, while the discussion it names lives under imperative and
+  negative phrasing.
+- **claude-code-hooks** (`daymade-claude-code` v3.45.0 → v3.46.0): pitfall #30's
+  Fix 4 drops its "unverified … confirm before relying on it" hedge on
+  team-mode deliveries and replaces it with two sources read directly. A
+  production hook's six-week log of `.prompt` prefixes shows the hook firing
+  on `<task-notification`, `<agent-message` and `<cross-session-message`
+  deliveries with the bare wrapper tag first. A team-mode transcript stores
+  the same deliveries as `origin.kind: "peer"` (or with no `origin` at all)
+  behind an `Another Claude session sent a message:` sentence that the hook
+  did not receive that day. Spelled out as a consequence: #20's wrapper
+  forms describe the transcript, not `.prompt`; a hook can detect a delivery
+  from `.prompt` alone, and the entry says when to substring-match the tag
+  and when to anchor it. The Cause paragraph's "cannot structurally tell" and
+  the matching SKILL.md sentence are narrowed to agree: no field marks the
+  difference, the wrapper tag does.
+
+- **self-hosted-runner-mechanisms** (`github-ops` v1.5.0 → v1.6.0): a new
+  "Self-Hosted Runner Mechanisms" section in `references/workflow_operations.md`,
+  recording three platform facts that break runner job hooks and background
+  processes on a real macOS + Windows fleet: job hooks receive the default env
+  vars only, so `GITHUB_RUNNER_NAME` and `GITHUB_TOKEN` arrive empty (read
+  `agentName` from the runner root's `.runner`, or have an `if: always()` step
+  write the token into `$RUNNER_TEMP`) and neither hook has any timeout setting,
+  a Windows runner tears down everything the job-started hook spawned through
+  the per-job Job Object once the hook returns while macOS `nohup ... &`
+  survives (Windows has no `nohup` equivalent — take the snapshot in the
+  job-completed hook instead), and four Windows traps (WSL-launcher
+  `shell: bash`, PATH-less `CreateProcess`,
+  `$ErrorActionPreference='Stop'` exiting a sampling loop after one transient
+  error, PowerShell string-concatenated JSON). The env-var rule is cited to the
+  runner's own design record (ADR 1751) rather than stated from memory, and each
+  entry gives the workaround that was verified on the fleet.
+
 - **git-safety-net** (v1.19.0 → v1.20.0): six additions distilled from a real multi-session
   repository convergence. `scripts/git_hosted_vs_cached.sh` compares `git ls-remote --heads` against this checkout's cached `refs/remotes/<remote>/*` in
   four categories (same / different-SHA / hosted-only / cached-only); a failed `ls-remote` exits
@@ -63,6 +131,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   this Skill also drops the derived pitfall-count word ("Nine" / "九类"),
   which had already gone stale before this change, rather than update it to
   a new number.
+
+- **tech-selection** (`daymade-claude-code` v3.47.0 → v3.48.0): new Skill — a
+  gated checklist for choosing between technologies (library, framework, storage,
+  data format, model, build-vs-buy, architecture). Distilled from a multi-corpus
+  search of the user's own tech-decision patterns across 12,000+ AI sessions and
+  1,000+ meeting transcripts. Three load-bearing design decisions: (1) filters
+  not sorters — the criteria kill violators, survivors are decided by
+  business-result anchoring, never by ranking; (2) `unknown` is not `pass` — a
+  candidate carrying an unverified axis does not enter the survivor set;
+  (3) the protocol ends by returning candidates + trade-offs + a recommendation,
+  never a single pick. Trigger design deliberately avoids the literal term
+  技术选型, which the user's own corpus almost never contains — triggers fire on
+  scenario sentences (用哪个 / 要不要自建 / 先看看有没有现成的) and characteristic
+  negations (别闭门造车 / 不要过度工程). Four references: decision-axes (13 core
+  criteria with mechanical tests), scoped-criteria (13 narrower criteria with
+  scope labels), rejection-modes (16 patterns + anti-patterns deduplicated),
+  delegation-contract (domain ownership + autonomy threshold + 5 resolved scope
+  boundaries).
+
+- **deep-research** (`deep-research` v2.5.0 → v2.6.0): remove the misplaced
+  技术选型分析 trigger from the description and add an explicit boundary — this
+  skill produces a report, it does not choose a technology. Requests asking which
+  option to adopt or whether to build or reuse belong to `tech-selection`.
+  Without the boundary, the two skills randomly split the same trigger.
 
 - **marketplace-dev** (`daymade-claude-code` v3.43.0 → v3.44.0): a new "Adding a
   member skill to an existing suite" subsection under Phase 2, because that is the
@@ -392,7 +484,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   writer-discovery block now reads the two probes apart, the lineage gate's way out is reordered to
   "this work's own remote → new repository → ask the user," and the block ends read-only like the
   rest of the section.
-
 
 - **tibo-reset-codex** (`tibo-reset-codex` v1.12.0 → v1.13.0): the forecast ledger gains a raw-readings layer. A new `finding` command appends verbatim external readings (invocation shape, triggering query, endpoints hit, source-keyed readings) to `findings.jsonl` in the same state directory, and `record`/`review` accept `evidence_refs` — finding ids (full, or a uniquely-resolving prefix) that must already exist or the append fails, so a verdict carries links to the readings it was actually made from instead of a memory of them. `findings --limit N` lists recent readings compactly, and `summary` shows an `evidence_refs_count` per forecast/review. Rows without the new key parse unchanged. Every successful append now also takes a best-effort local git snapshot of the journal (auto-init, 0700 directory, one commit per append); any git failure prints a single stderr note and never blocks or reverts the append, and `--no-git` turns the snapshot off — integrity wiring, not a backup promise.
 - **stepfun-asr / stepfun-tts / asr-transcribe-to-text** (`daymade-audio` v1.39.10 → v1.40.0): StepFun ASR now sends `enable_timestamp` (the field comes back either way, but its values are all 0 unless you ask — the earlier "v3 has no word timestamps" claim is retracted), sends every request parameter by default with `check_params.py` diffing the official field table in both directions, and gains `asr_file.py` for speaker diarization on the async file endpoint (public URL only; ids are `speaker_0`, not the documented `spk_1`). `asr-transcribe-to-text` routes that official diarization as a second independent speaker track. `stepfun-tts`'s `synthesize()` takes `model=` and `extra=` and returns the server's JSON envelope (`timestamp` + `return_url` → `{"data": {"url", "subtitles"}}`) under `json`, so callers that need per-character timing stop hand-rolling `/v1/audio/speech`; it is the wrapper `llmreg.wrapper_for("stepfun-tts")` resolves to.
