@@ -513,7 +513,9 @@
         "worktree",
         "claude-code",
         "clone-discovery",
-        "untracked-backup"
+        "untracked-backup",
+        "stale-remote-cache",
+        "checkout-alignment"
       ]
     },
     {

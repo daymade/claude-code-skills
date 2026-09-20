@@ -251,8 +251,13 @@ class ClassifyRefsTests(unittest.TestCase):
 
     @unittest.skipUnless(HAS_WRITE_TREE, "git merge-tree --write-tree needs git >= 2.38")
     def test_pr_map_stale_head_oid_does_not_upgrade(self) -> None:
-        """A PR record whose headRefOid no longer matches the ref's CURRENT tip must be
-        ignored, not treated as if it still described this branch."""
+        """End to end: a branch that moved past its PR record does not come out LANDED.
+
+        Two independent guards would each stop this one: the headRefOid equality check,
+        and the trial merge into the merge commit (which the branch's newer commits make
+        fail). This test proves the OUTCOME, not either guard on its own — removing the
+        oid check alone still leaves this case classified correctly. For a fixture where
+        only the oid check can say no, see the test below it."""
         self.seed_base()
         self.in_repo("switch", "-qc", "feat")
         self.write("f.txt", "feature\n")
@@ -282,6 +287,76 @@ class ClassifyRefsTests(unittest.TestCase):
         result = self.run_script("--base", base, "--pr-map", str(pr_map))
         row = self.row_for(result.stdout, "refs/heads/feat")
         self.assertNotEqual(row[0], "LANDED-AT-MERGE", result.stdout)
+
+    @unittest.skipUnless(HAS_WRITE_TREE, "git merge-tree --write-tree needs git >= 2.38")
+    def test_stale_head_oid_is_refused_even_when_the_content_check_would_pass(self) -> None:
+        """Isolates what the headRefOid equality check alone is for.
+
+        Here the branch's CURRENT tip really is contained in the merge commit, so the
+        trial merge into it reproduces that commit's tree and would happily upgrade the
+        row. Only the oid check can still say no — and it should, because the PR record
+        describes an older commit. A record that stopped tracking this branch is not
+        evidence about where this branch is now, however the content happens to line up."""
+        self.seed_base()
+        self.in_repo("switch", "-qc", "feat")
+        self.write("f.txt", "feature\n")
+        self.commit("feature work")
+        recorded_tip = self.rev("feat")
+        self.write("g.txt", "more work\n")
+        self.commit("more work after the PR record was written")
+        real_tip = self.rev("feat")
+        self.assertNotEqual(recorded_tip, real_tip)
+
+        # Squash so the merge commit carries feat's ENTIRE content (both commits) while
+        # feat stays off base's ancestry — that is what makes the content check pass.
+        self.in_repo("switch", "-q", "main")
+        self.in_repo("merge", "-q", "--squash", "feat")
+        self.commit("squash the whole branch")
+        merge_commit = self.rev("main")
+        # Base then edits the same file, so the trial merge against base itself cannot
+        # clear the branch and the pr-map rung is the only thing left that could upgrade it.
+        self.write("f.txt", "base moved on\n")
+        self.commit("base edits the same file afterwards")
+        base = self.rev("main")
+
+        pr_map = self.root / "pr-map.json"
+        pr_map.write_text(
+            json.dumps(
+                [
+                    {
+                        "number": 9,
+                        "state": "MERGED",
+                        "headRefName": "feat",
+                        "headRefOid": recorded_tip,
+                        "mergeCommit": {"oid": merge_commit},
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+        result = self.run_script("--base", base, "--pr-map", str(pr_map))
+        row = self.row_for(result.stdout, "refs/heads/feat")
+        self.assertNotEqual(row[0], "LANDED-AT-MERGE", result.stdout)
+
+        # The same record with the CURRENT tip does upgrade — proving the fixture really
+        # does clear the content check, so the refusal above came from the oid check.
+        pr_map.write_text(
+            json.dumps(
+                [
+                    {
+                        "number": 9,
+                        "state": "MERGED",
+                        "headRefName": "feat",
+                        "headRefOid": real_tip,
+                        "mergeCommit": {"oid": merge_commit},
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+        result = self.run_script("--base", base, "--pr-map", str(pr_map))
+        row = self.row_for(result.stdout, "refs/heads/feat")
+        self.assertEqual(row[0], "LANDED-AT-MERGE", result.stdout)
 
     # ---- --all-namespaces ----------------------------------------------------
 
