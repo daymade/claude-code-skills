@@ -2363,13 +2363,14 @@ this list and describe defects you reach by asking a different question):
   serves is not.
 - **Then falsify the label.** A "cannot be pasted" annotation that never fires is the
   same dead probe as a suite that cannot go red (#46) — in the failing version it did
-  not trigger on any of eleven test names, and that silence was the bug's only visible
+  not trigger on any of ten test names, and that silence was the bug's only visible
   symptom. Assert it appears on a fixture that should carry it, and mutate the
   self-check back to the wrong frame of reference to confirm that row dies.
 - **Real case (2026-09-20, a private hooks repository):** a commit-scope gate listed
   unclaimed files and told the model to claim them with `git add -- <paths>`. Across
-  four independent reviews the display-string paste surfaced first, as a BLOCKER; the
-  repair introduced the bash-frame self-check; a later review found that repair still
+  four review rounds by a reviewer holding no shared context, the display-string paste
+  surfaced first, as a BLOCKER; the repair introduced the bash-frame self-check; a
+  later round found that repair still
   looping on `$`-bearing and control-character names — a second BLOCKER. Neither the
   author nor the orchestrator caught either one. Every exit-code row stayed green
   throughout, and the annotation the first repair added never fired once.
@@ -2431,10 +2432,13 @@ this list and describe defects you reach by asking a different question):
   production call site pass it?" — ask "do the **test** call sites pass it?". Omitting
   an argument in a test rarely turns a row red. It quietly relocates the row onto
   another branch.
-- **Fix:** one minimal mutation per assertion, applied one at a time, and confirm *that*
-  row dies — not merely that something died. Row counts and pass rates are not evidence
-  of anything; the only evidence that a suite is load-bearing is a record of which
-  deliberate breakage each row detects. #14 tells you to mutate at all; this entry is
+- **Fix — the invariant is one kill per assertion, not one mutation per assertion.**
+  Every row needs some deliberate breakage that reddens it. A single mutation usually
+  reddens a group of rows, which is fine *provided* you name the rows it should kill
+  before running it and confirm those are the rows that died; "something went red" is
+  not that, and it is how a mutation gets credited to a row it never touched. Row
+  counts and pass rates are not evidence of anything; the only evidence that a suite is
+  load-bearing is a record of which deliberate breakage each row detects. #14 tells you to mutate at all; this entry is
   about why the mutation comes back empty — or comes back red about code the product
   never runs — and what each of those means.
 - **How this differs from rule 9 (corpus replay).** Rule 9 measures the **detector**:
@@ -2447,9 +2451,12 @@ this list and describe defects you reach by asking a different question):
   deleted with every row still green. Run both — the replay says what the guard does to
   real inputs today, the mutation pass says whether the suite will notice tomorrow's
   regression.
-- **Real case (2026-09-20, a private hooks repository):** three unrelated sessions
-  working on one commit-scope gate hit the first four shapes in a single evening. The
-  shipped calibration ended at 19 mutations, one per assertion — three of them exist
-  only because writing them exposed an assertion that could not die. Shape 5 came out
-  of the same gate a day later, and only because someone asked for a call-site audit
-  that no plan contained.
+- **Real case (2026-09-20, a private hooks repository):** two separate lines of work on
+  one commit-scope gate — a parallel session and an implementation sub-agent — hit the
+  first four shapes in a single evening. Its calibration shipped with every assertion
+  carrying a mutation that kills it. Note the shape of that pairing, because it is not
+  one-to-one: each mutation has the specific set of rows it is *supposed* to redden,
+  and what was verified is that those rows are the ones that died. Three of those
+  mutations exist only because writing them exposed an assertion that could not die.
+  Shape 5 came out of the same gate a day later, and only because someone asked for a
+  call-site audit that no plan contained.

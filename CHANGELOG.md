@@ -8,7 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **claude-code-hooks** (`daymade-claude-code` v3.49.0 → v3.50.0): two pitfalls from a
-  commit-scope gate that took four independent reviews to get right.
+  commit-scope gate that took four review rounds — by a reviewer holding no shared
+  context — to get right.
   **#45 — a blocking hook's `stderr` remedy is the whole product of that interception,
   and it has to survive the gate's own parser.** Two ways it ships unexecutable while
   every exit-code row stays green: the file list was folded for display — which #44
