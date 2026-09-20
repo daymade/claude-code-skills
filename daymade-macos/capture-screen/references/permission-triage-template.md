@@ -39,16 +39,13 @@ open "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone
 - 在设置面板点击 `+` 手工添加目标 `.app`
 - 变更后退出并重启应用，重新测试
 
-## Full Disk Access 专项：`uv run` 在 launchd 下必弹
+## 超出录屏/麦克风的权限问题
 
-触发形态：后台定时任务（LaunchAgent）反复弹「`python3.x` would like to access data from other apps」，用户点“允许”也没用、隔几分钟又弹。
-
-- **根因**：发起方是 `uv` 二进制本身（`from Sub:{.../bin/uv}`），不是它挑的 python、不是脚本、不是会话类型。launchd 起的 `uv` 是根进程，没有带 FDA 的父进程可继承；交互式终端跑不弹，是因为终端（Ghostty/Terminal）本身有 FDA、`uv` 作为子进程继承了。
-- **授权对象 = `uv` 这个二进制**（如 `~/.local/bin/uv`），**不是 python**。python 版本会随 uv 漂移（3.11/3.12/3.14），授权 python 是错的方向。
-- **一次覆盖全部**：给 uv 授 FDA，同时解决所有 `uv run` 的 LaunchAgent（它们的根都是 uv）。
-- **授权后复验**：GUI 里若 uv 不在列表，点 `+` 手工添加 uv 的绝对路径；再用上面的 sqlite 命令确认 `auth_value=2`。
-- **会复发**：授权按二进制绝对路径记录。uv 升级换路径（或从 `~/.local/bin/uv` 换成 homebrew 版）后授权失效、弹窗回来，届时重新添加新路径即可。
-- **排查陷阱警告**：`fs_usage` 在某些机器产 0 字节（环境限制）、log 时间窗采样不到短命进程——**"抓不到 / 0 命中"是仪器问题，不是结论**。要定位"哪个操作触发 FDA"，用进程内 `sys.addaudithook` 记 `open` 事件、对齐 tccd 时间戳，才是可靠仪器。
+本模板只覆盖 capture-screen 自己需要的 Screen Recording / 麦克风。Full Disk Access、
+Automation、辅助功能，以及「弹窗一直弹 / 授权对象是谁」的通用诊断，一律走
+`daymade-macos:macos-permissions` skill（它有完整的 TCC service 目录、schema、auth_value
+语义、`uv`-in-launchd 的 FDA 陷阱，和「弹窗显示名 ≠ 发起方、先查 TCC.db 的 `from Sub`」这条
+第一诊断铁律）。
 
 ## 验收标准（用户侧）
 

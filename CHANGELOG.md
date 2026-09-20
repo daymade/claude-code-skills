@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-permissions** (`daymade-macos` v1.4.0 → v1.5.0): new Skill for
+  diagnosing macOS TCC permission dialogs, opened after a `python3.11`
+  "would like to access data from other apps" (Full Disk Access) prompt kept
+  firing. Its first rule is that **the dialog's displayed name is not the
+  requester**: unsigned executables (uv-managed python, CLI tools) carry
+  `identifier=-` in TCC and are attributed to a responsible parent, while the
+  dialog title shows the interpreter name it currently calls (`python3.11` /
+  `python3.14`), which drifts with version — so the name you are asked to grant
+  can mislead. The Skill routes the two independent sources of truth (the
+  `from Sub:` path in `com.apple.TCC` logs for who is asking, the TCC.db
+  `auth_value` for what is granted), carries the full kTCCService catalogue and
+  auth semantics, and records the uv-in-launchd FDA trap: a launchd-spawned uv
+  has no FDA-bearing parent to inherit from, so it prompts where interactive
+  runs do not (the terminal holds FDA and uv inherits it); granting FDA to the
+  uv binary is the fix and it recurs whenever the binary path changes.
+  `capture-screen` and `macos-watchdog` now point their FDA sections here
+  instead of duplicating it.
+
+- **competitors-analysis** (`competitors-analysis` v1.2.0 → v1.3.0): a hard
+  Stop Gate at the top of the Skill, because it runs as `context: fork` and
+  cannot ask the user anything. When the caller passes no explicit product /
+  market target for THIS invocation, it now stops and reports instead of
+  fabricating one — a plausible task the fork generated itself is still
+  fabricated, not the user's. It also forbids picking a target by listing
+  `$COMPETITORS_BASE`, and the disk-reuse clause only adopts a product
+  directory the caller named this invocation. Anchor: 2026-09-20 a no-arg fork
+  invented an "A2A market" task and ratified it by reusing the on-disk
+  `agent-communication` directory for 1h23m.
+
+- **skill-creator** (`daymade-skill` v1.42.2 → v1.43.0): a rule after the
+  Inline-vs-Fork decision table — a fork skill that requires a target MUST
+  hard-stop when the caller gives none, and the gate must test task provenance,
+  not argument-string presence, because "ask if missing" is inert inside a
+  `context: fork`. Anchor: the same 2026-09-20 incident above; a red-team pass
+  confirmed the fork inherited no context and fabricated its task at ~14s, so
+  the fix targets task origin rather than context-clearing.
+
 - **claude-switch-models-setup** (`daymade-claude-code` v3.41.0 → v3.42.0): a
   fatal warning against running the profile converger with a synthetic
   `CLAUDE_MAIN_CONFIG_DIR`. Scope is the union of `~/.claude-profiles/*` and

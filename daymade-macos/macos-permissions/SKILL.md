@@ -1,0 +1,87 @@
+---
+name: macos-permissions
+description: >-
+  Diagnose and fix macOS TCC permission dialogs and silent denials — Screen Recording,
+  Microphone, Camera, Accessibility, Automation (Apple Events), Full Disk Access, Files &
+  Folders, and the "X would like to access data from other apps" prompt. Use whenever an app
+  or background job is blocked by a macOS privacy permission, a permission dialog reappears
+  after clicking Allow, a LaunchAgent/`uv run` job keeps prompting, System Settings shows a
+  bare version number or wrong name, a granted permission silently stops working after an
+  update, or you need to find WHO is really requesting a permission. Covers reading TCC.db as
+  the ground-truth source, attribution (display name ≠ responsible process), per-binary-path
+  grants, the `uv`-in-launchd Full-Disk-Access trap, `tccutil reset`, and SIP limits.
+  中文触发：权限弹窗、授权、TCC、完全磁盘访问、Full Disk Access、录屏/麦克风/摄像头/辅助功能/自动化权限被拒、访问其他应用的数据、弹窗一直弹、授权了没用、升级后失效、System Settings 里显示版本号。
+---
+
+# macOS Permissions (TCC)
+
+macOS gates per-app, per-resource access through **TCC** (Transparency, Consent, Control).
+Every Allow/Deny ever made lives in `TCC.db` and silently controls what a process can do.
+The diagnostic pain is almost never "the permission is off" — it is **one of four traps**, each
+with a different fix:
+
+| Trap | Symptom | Fix lives in |
+|---|---|---|
+| **Wrong subject granted** | Dialog names `python3.11`/`2.1.232`/`node`; you granted that but it still prompts | [The attribution trap](#the-attribution-trap) below |
+| **Grant doesn't survive** | Worked, then a binary/uv/CLI update → prompt returns | `references/uv-fda-trap.md` |
+| **Silent denial** | Feature "unavailable", no dialog, grant looks ON | `references/tcc-mechanics.md` § auth_value |
+| **Can't read TCC.db** | `Permission denied` reading the DB; need FDA to diagnose FDA | `references/tcc-mechanics.md` § SIP |
+
+## The attribution trap (the #1 reason diagnosis goes in circles)
+
+**The name in the dialog is NOT who to grant.** macOS attributes a request to the *responsible*
+process in the process tree, but displays the name of the *accessing* executable — and for an
+unsigned binary with no bundle (uv-managed python, per-version CLI, node helpers) that display
+name is just the last path component, which changes with every version. Granting the displayed
+name is the mistake that costs the most rounds.
+
+**Before touching System Settings, get ground truth from two independent sources:**
+
+```bash
+# 1. Who is actually requesting — the responsible process in the attribution chain
+/usr/bin/log show --last 30m --predicate 'subsystem == "com.apple.TCC"' --info --debug \
+  | grep -E 'from Sub:|responsible=|accessing=' | tail -20
+
+# 2. The grant's current state (auth_value: 0=deny, 1=unknown, 2=allow)
+sudo -n sqlite3 '/Library/Application Support/com.apple.TCC/TCC.db' \
+  "select service, client, auth_value from access where service='kTCCServiceSystemPolicyAllFiles' and client like '%<name>%';"
+```
+
+Grant the process `from Sub:` names (the real requester), not the dialog title. Reading TCC.db
+needs your terminal to already have Full Disk Access — that bootstrap is in
+`references/tcc-mechanics.md`.
+
+## Decision tree
+
+| The situation is… | Go to |
+|---|---|
+| Dialog reappears after clicking Allow; or a LaunchAgent / `uv run` job prompts every few minutes | `references/uv-fda-trap.md` (authorize `uv` itself, not python) |
+| Need the full kTCCService catalog, schema, auth_value/auth_reason semantics, `tccutil` | `references/tcc-mechanics.md` |
+| Reading TCC.db gives "Permission denied" | `references/tcc-mechanics.md` § SIP and the FDA bootstrap |
+| A granted permission silently stopped working after an update | `references/tcc-mechanics.md` § common failure modes (toggle off/on, or `tccutil reset <Service> <bundle-id>`) |
+| Grant won't stick for Automation / Apple Events | `references/tcc-mechanics.md` — BOTH controller AND target need the grant |
+
+## Core rules (each from a real incident)
+
+- **Dialog name ≠ responsible process.** `from Sub:` in the TCC log is the requester; the title
+  is the accessing binary's basename and it drifts with versions. Grant by the real path.
+  (2026-09-19: a `uv` FDA dialog showed `python3.11`; authorizing python, changing session type,
+  and pinning the version all failed because the requester was `~/.local/bin/uv`.)
+- **Grants are keyed to the exact binary path, not identity.** An unsigned executable (uv-managed
+  python, per-version CLI, node helper) is a *new* app to TCC every time its path changes. This is
+  why "worked yesterday, prompts today" after any update. Same root cause as Claude Code issues
+  #74234 / #84948 / #86706.
+- **"0 hits / can't catch it" is an instrument problem, not a conclusion.** `fs_usage` can emit 0
+  bytes on some machines; short-lived processes fall between log time windows; an empty grep file
+  looks identical to a real zero. To pin *which operation* triggers a prompt, use in-process
+  `sys.addaudithook` to log `open` events aligned to the tccd timestamp — not `fs_usage`.
+- **SIP protects the system TCC.db read-only.** You cannot `INSERT`/`UPDATE` a grant from the
+  command line — authorization must go through the GUI. `auth_value` is readable, writable is not.
+- **After granting, restart the requesting process.** Grants are read at launch; a running process
+  keeps its old (denied) state until relaunched.
+
+## Scope
+
+This skill owns **permission diagnosis and repair**. It does not own: building an app's
+permission-onboarding UX (that is `macos-app-developer`), launchd job design (`macos-watchdog`),
+or disk cleanup (`macos-cleaner`) — those link here when they hit a TCC wall.

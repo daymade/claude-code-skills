@@ -534,6 +534,20 @@ argument-hint: "[topic]"
 | Provide reference knowledge (coding conventions) | **Inline** (no `context`) | Guidelines enrich main conversation |
 | Be callable BY other skills | **Fork** (`context: fork`) | Must be a subagent to be spawned |
 
+**Fork skills that require a target MUST hard-stop when the caller gives none.** A
+`context: fork` skill runs non-interactively — it **cannot ask the user** for a
+missing input, and a `general-purpose` fork handed a skill body with no task will
+**fabricate a plausible one** rather than stop (2026-09-20 incident: a no-arg
+`competitors-analysis` fork invented an "A2A market" task 14s in and ran it for
+1h23m). So if your fork skill declares a required target via `argument-hint` /
+`$ARGUMENTS`, its body MUST open with a gate: *"if the caller did not provide this
+target for THIS invocation, STOP and report the missing input — do not invent one,
+do not infer one from disk state, do not fall through to a default mode."* The
+gate must test **task provenance** (did the caller supply it), not argument-string
+presence — a hardcoded default or a self-generated value satisfies the latter and
+defeats the purpose. An "ask if missing" line is NOT a substitute: it is inert in
+fork context.
+
 **Example: Orchestrator skill (MUST be inline):**
 ```yaml
 ---
