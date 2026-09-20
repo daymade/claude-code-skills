@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **marketplace-dev** (`daymade-claude-code` v3.43.0 → v3.44.0): a new "Adding a
+  member skill to an existing suite" subsection under Phase 2, because that is the
+  most common marketplace edit and the one that fails across the most CI rounds.
+  Adding a member (not a new standalone plugin) moves four things together: the
+  suite's `skills` array, a strict `metadata.version` bump (a new member changes the
+  layout signature, which `check_version_progression.py` rejects without one even
+  when the plugin `version` was already bumped), a `### **name**` detail section in
+  both `README.md` and `README.zh-CN.md` (`check_doc_skill_lists.py` is a required
+  check), and the suite's invocation list in both READMEs. It also names the PII
+  guard's absolute-path rule and notes that `post_edit_sync_check` only catches the
+  plugin-version bump — items 2–4 have no hook, so run the two validators locally
+  before pushing. Anchor: 2026-09-20 adding macos-permissions to daymade-macos took
+  three CI rounds to converge on these four.
+
 - **macos-permissions** (`daymade-macos` v1.4.0 → v1.5.0): new Skill for
   diagnosing macOS TCC permission dialogs, opened after a `python3.11`
   "would like to access data from other apps" (Full Disk Access) prompt kept
