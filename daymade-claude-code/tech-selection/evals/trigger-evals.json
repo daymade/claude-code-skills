@@ -1,0 +1,16 @@
+[
+  {"query": "我们要不要自己造一个向量检索模块，还是用现成的框架？先看看有没有现成的，别闭门造车。", "should_trigger": true},
+  {"query": "这个配置存哪里比较好，JSON 文件还是 SQLite？", "should_trigger": true},
+  {"query": "我打算把用户事件直接写进 Postgres 一张宽表，这是最佳实践吗？帮我 review 这个设计。", "should_trigger": true},
+  {"query": "向量数据库用 pgvector 还是 Qdrant？我们数据量不大但想留余量。", "should_trigger": true},
+  {"query": "摘要任务用哪个模型？本地小模型还是调 API，帮我们选一下。", "should_trigger": true},
+  {"query": "别重复造轮子——我们要不要自建一个 CRON 调度器，还是用现成的？", "should_trigger": true},
+  {"query": "should we build or buy a feature-flag service? review this architecture decision", "should_trigger": true},
+  {"query": "把文档里「技术选型」这四个字统一改成「方案对比」。", "should_trigger": false},
+  {"query": "SQLite 写入报 database is locked，帮我看下这个 bug 怎么修", "should_trigger": false},
+  {"query": "帮我调研 2026 年主流向量数据库的市场格局，写一份研究报告", "should_trigger": false},
+  {"query": "对比一下 AWS、GCP、Azure 的 GPU 实例价格，按性价比排个序", "should_trigger": false},
+  {"query": "按这个设计文档把 SQLite 换成 Postgres，代码都写好了，帮我实现", "should_trigger": false},
+  {"query": "读一下 tech-selection 的 SKILL.md，帮我 review 它的 Step 4 Gate 写得好不好", "should_trigger": false},
+  {"query": "tech-selection 这个 skill 的 description 触发率是多少？帮我设计个 trigger eval", "should_trigger": false}
+]

@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tech-selection** (`daymade-claude-code` v3.50.0 → v3.51.0): three corrections to
+  claims the skill could not back. Agent orchestration now states a single-agent
+  default and frames the four questions as the gate that licenses delegation
+  (explicit request, or genuinely independent parallel work current rules allow),
+  rather than as a counter-default; Q4 regains the exclusion list the source rules
+  carry — implementation work, exclusive resources (browser, Computer Use,
+  single-writer checkout) and private-context judgment never enter the fan-out pool
+  — and drops an "anti-pattern" line that existed nowhere in the rules. The
+  Boundary Quick Reference gains a sixth row settling default-vs-gate as two
+  layers, and records that in tech selection the user has asked for agent-team
+  discussion and against picking a direction unilaterally, which is what Stop 1
+  encodes. The rejection-modes reference now cites 28 entries (16 patterns + 18
+  anti-patterns, deduplicated) instead of "16", because 16 was a self-declared
+  subtotal no published text could reconstruct. Adds `evals/` — 14 trigger samples
+  (7 positive / 7 negative) with the two corrections this machine's runner needs,
+  the measured baseline, and the three facts the score hides.
+
+- **read-codex-history** (`daymade-claude-code` v3.50.0 → v3.51.0): the FTS5 syntax
+  note stated the implicit-AND behaviour as a measurement (`term-a term-b` returned
+  0 rows where the explicit `OR` returned 10,327) but wrote it with placeholder
+  terms, so the row count could not be reproduced by anyone reading it. Replaced
+  with the mechanism and the correct query form.
+
 - **claude-code-hooks** (`daymade-claude-code` v3.49.0 → v3.50.0): two pitfalls from a
   commit-scope gate that took four review rounds — by a reviewer holding no shared
   context — to get right.
