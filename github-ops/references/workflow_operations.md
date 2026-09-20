@@ -429,6 +429,52 @@ gh api repos/{owner}/{repo}/actions/runs/{run_id}/jobs | \
 4. **Log retention** - Configure appropriate retention policies
 5. **Dependency updates** - Automate with Dependabot
 
+## Self-Hosted Runner Mechanisms (job hooks & background tasks)
+
+Hard facts that bite any task running a **job hook** (`ACTIONS_RUNNER_HOOK_JOB_STARTED` /
+`ACTIONS_RUNNER_HOOK_JOB_COMPLETED`) or a **background process** on a self-hosted runner.
+All verified on a real macOS + Windows fleet (2026-09-20). These are GitHub platform
+behaviors, not fleet-specific config — read this before writing any runner hook / sampler /
+long-lived process.
+
+1. **Job hooks receive the default environment variables only — step-scoped ones are not
+   injected.** So `GITHUB_RUNNER_NAME` and `GITHUB_TOKEN` are **empty** in the
+   job-started/job-completed hook process. The design record says it outright: hooks "will
+   have access to the standard default environment variables", and variables that are "step
+   specific like `GITHUB_ACTION`" "will not be set" (`actions/runner`
+   [ADR 1751](https://github.com/actions/runner/blob/main/docs/adrs/1751-runner-job-hooks.md)).
+   Workarounds, both verified on a fleet: read the runner name from the runner-root `.runner`
+   file's `agentName` (cross-platform reliable), and pass a token by writing it to
+   `$RUNNER_TEMP/<file>` from an `if: always()` step at the end of the job (it runs after all
+   steps, before the Complete runner hook), deleting it after reading. **There is also no
+   timeout setting for either hook** — a hook that waits forever holds the job's *Set up
+   runner* / *Complete runner* step with it, so bound your own work with a watchdog timer and
+   per-call timeouts (source: [Running scripts before or after a
+   job](https://docs.github.com/actions/hosting-your-own-runners/running-scripts-before-or-after-a-job)).
+
+2. **Windows runners reap background processes via a per-job Job Object.** A background process
+   started with `Start-Process` from the job-started hook belongs to the runner's per-job Job
+   Object; when the hook returns, the runner tears that Job down and kills the child (observed:
+   sampler wrote 1 line then stopped, with an empty log — i.e. killed, not crashed). macOS
+   `nohup ... &` detaches from the process group and survives (a sampler ran the full build,
+   ~141 samples). Windows has **no nohup equivalent**: `CREATE_BREAKAWAY_FROM_JOB` via P/Invoke
+   is unreliable (struct marshalling gave err=123), and `schtasks` doesn't run tasks under a
+   headless SSH session. Reliable pattern: put anything that only needs to run *at job end*
+   (e.g. a resource snapshot) inside the collector itself (the job-completed hook runs reliably,
+   unaffected by the Job Object) rather than depending on a background process surviving the
+   whole build.
+
+3. **Windows platform traps.** ① `shell: bash` on a Windows runner resolves to the WSL launcher
+   `C:\WINDOWS\system32\bash.EXE`, which eats Windows backslash paths ("No such file") — always
+   use `shell: pwsh`, and for cross-platform steps use a `node -e` one-liner or split by
+   `runner.os`. ② `CreateProcess` (with `lpApplicationName=null`) does **not** search PATH — a
+   bare `powershell.exe` gives err=123 (ERROR_INVALID_NAME); pass a full path (`$PSHOME`). ③
+   PowerShell `$ErrorActionPreference='Stop'` turns the first transient error (e.g. a
+   `Get-Counter` hiccup) into a terminating error that exits a sampling loop after ~1 iteration —
+   use `Continue` + a per-tick try/catch. ④ Building JSON by string-concatenating in PowerShell
+   is a quoting minefield (`-replace '"',''''` is a parse error) — construct records with
+   `ConvertTo-Json`.
+
 ## Purging Public Run History
 
 Deleting workflow runs does NOT remove every publicly visible trace. The anonymous-visible surfaces of a repository are: releases, tags, `actions/runs`, `deployments`, `actions/artifacts`, pull requests (closed PRs and their commit history are permanent), branches, and attestations.
