@@ -324,7 +324,15 @@ base lacks reads UNMERGED. It is **safety-biased**: anything it can't prove cont
 for review, because a false "merged" loses work while a false "unmerged" only costs a look
 (**[references/merge_verification.md](references/merge_verification.md)**
 § Why safety-biased). Why the trial merge is sound rather than a
-heuristic, and why `--find-object`/blob comparison is not: § The sound content check. For a whole
+heuristic, and why `--find-object`/blob comparison is not: § The sound content check. When base has
+changed the SAME lines again since a squash-merge (not just any later edit — an unrelated file or
+unrelated lines still leave the current-base trial merge sound) and it now conflicts instead of
+reproducing base's tree, `--merge-commit <sha>` proves containment at that historical merge commit
+instead — a different, narrower question than "does base have it *now*" (§ The
+historical-merge-commit rung). For a whole
+repo of branches against one frozen base, `scripts/git_classify_refs.sh --base <sha> [--pr-map
+<json>]` runs this same ladder — including the merge-commit rung, via `--pr-map` — in one offline
+pass instead of one invocation per branch. For a whole
 repo of branches, the read-only fan-out pattern — one agent per batch, each told to *falsify*
 "everything is merged," every finding independently re-checked — is
 § Adversarial multi-agent verification, with the constraints those agents must be given in
@@ -513,7 +521,8 @@ and targeted exports instead:
 1. **Fresh authority plus trial merge** — refresh the base and exact branch tip, then run
    `scripts/git_verify_branch_merged.sh`. An ancestor/content-contained verdict is deletion-grade
    evidence. If it returns NEEDS REVIEW, continue down this ladder; do not convert uncertainty to
-   MERGED with a weaker heuristic.
+   MERGED with a weaker heuristic. For many leftovers against one frozen base,
+   `scripts/git_classify_refs.sh` runs this exact rung across every branch in one offline pass.
 2. **`git cherry <base> <branch>` is a hint, not a verdict.** A `-` proves that one patch-id is
    upstream; a `+` does not prove missing work because squash merges deliberately create a new
    patch-id. Never rescue or delete a whole branch from this output alone.
@@ -592,8 +601,13 @@ and final branch-count gates that a single-branch retirement does not need.
   the squash replaced the branch's commits with one new-SHA commit, so ancestry is broken even
   though every line landed. That is not license to reach for `-D` reflexively — it means fall back
   to Step 1's *content* check (`git cherry`, superset diff) and only `-D` once that proves
-  containment. Delete remote branches only after re-verifying the exact remote and repository
-  visibility/ownership.
+  containment. **`-d` also judges "merged" relative to the checkout's CURRENT `HEAD` (or the
+  branch's configured upstream), not relative to the base you have in mind** — a checkout sitting
+  on a stale branch makes `-d` refuse a branch that genuinely is an ancestor of the intended base,
+  which reads exactly like the squash case above but has a different fix: don't reach for `-D`,
+  confirm ancestry directly against the intended base with
+  `git merge-base --is-ancestor <tip> <base>` and switch/target correctly instead. Delete remote
+  branches only after re-verifying the exact remote and repository visibility/ownership.
 - **Independent clones need ref-complete preparation before retirement.** A clean worktree says
   nothing about clone-only refs, reflog history, ignored bytes, stashes, hooks/config, or an
   `objects/info/alternates` dependency created by `git clone --shared`. Run
@@ -656,9 +670,12 @@ never tell a user to run bare `git_verify_branch_merged.sh` unless `command -v` 
 | Script | Does | Mutates? |
 |---|---|---|
 | `scripts/git_find_all_checkouts.sh [root ...]` | Find every checkout of this repo on the machine — including independent clones invisible to `git worktree list` — and flag uncommitted/untracked/unpushed work, remote-cache age, and borrowed alternates object stores | Nothing (read-only, no fetch) |
+| `scripts/git_hosted_vs_cached.sh [remote]` | Ask the hosting service directly (`git ls-remote --heads`) and diff it against this checkout's cached `refs/remotes/<remote>/*`: same / different-SHA / hosted-only / cached-only (prune candidate). A failed `ls-remote` exits 3 and never presents the cache as hosted truth | Nothing (read-only, no fetch — the one authoritative query is `ls-remote`, not `fetch`) |
 | `scripts/git_loss_audit.sh [remote]` | Refresh one remote, then report every worktree, local ref/tag, stash, and dangler; no exclusions, so the whole evidence surface must be in scope | Remote-tracking refs only |
 | `scripts/git_preserve_danglers.sh [--patch-dir DIR]` | Pin every dangling commit to `refs/dangling-backup/`, optional patches; whole-set only | Adds refs only (never deletes/gc) |
-| `scripts/git_verify_branch_merged.sh <branch> [base]` | Refresh remotes, then give a content-level MERGED/UNMERGED verdict | Remote-tracking refs only |
+| `scripts/git_verify_branch_merged.sh <branch> [base] [--no-fetch] [--base REF] [--merge-commit SHA]` | Give a content-level MERGED/UNMERGED verdict for one branch. `--merge-commit` adds a rung that proves containment at a historical merge commit when base later changed the same lines and the CURRENT base can no longer prove it; the verdict also names the current-base shape (conflict = routine, clean-but-changes = regression candidate). `--no-fetch`/`--base` support offline and flag-driven batch use | Remote-tracking refs only (skipped entirely with `--no-fetch`) |
+| `scripts/git_classify_refs.sh --base SHA [--pr-map JSON] [--all-namespaces]` | Batch version of the above: classify every local/remote-tracking branch against one frozen base in a single offline pass (ancestor / content-contained / needs-review, with file-count-changed); `--pr-map` overlays the `--merge-commit` rung from a hosting platform's PR export | Nothing (read-only, no fetch — pin the base with `git rev-parse` first) |
+| `scripts/git_align_checkout.sh --preview --target SHA` / `--apply --target SHA --source-worktree PATH --backup-manifest FILE` | Preview or materialize a checkout's content up to a target commit without a throwaway snapshot branch and without moving HEAD; `--apply` only overwrites a path once its current content is proven reproducible (target's own history, or a manifest sha256) | `--preview`: nothing. `--apply`: working-tree files only for paths it proves safe — never the real index, never HEAD, never a delete |
 | `scripts/git_export_before_drop.sh [export options]` | Export stashes plus selected branches or every current ref into verified bundles | Writes backup files only (never drops/deletes) |
 | `scripts/git_export_before_drop.sh --verify-current BUNDLE` | Fail if any bundled ref moved or disappeared since export | Nothing (read-only) |
 | `scripts/git_prepare_clone_retirement.sh --clone PATH --survivor PATH --out DIR` | Refuse hidden/unhandled clone state, then freeze every ref tip, symbolic-ref target, reflog identity, and scoped config/hooks/info metadata into a self-contained recovery set; after freezing an absent no-clobber destination and process occupancy, `--verify-current DIR` is the final probe and the move must be the next operation | Writes only the new external backup directory; disables lazy fetch/fsmonitor and refuses tracked content filters; never moves/deletes or changes refs |
