@@ -162,6 +162,14 @@ itself, once it is an ancestor of base, never becomes unreachable from local his
 If the branch itself needs recovering — not just verifying — rather than only its merge-commit
 SHA, `recovery_playbook.md`'s Ladder step 4 has the concrete `refs/pull/<N>/head` commands.
 
+On GitHub, do that confirmation by PR number, not by branch name: `gh pr list --head <branch>` has
+returned an empty result for a branch whose pull request was already `MERGED` — checked again by
+number moments later, it showed `MERGED` (measured), and a branch-deletion decision built on the
+empty result would have been wrong. Use `gh pr view <number> --json headRefOid,state,mergeCommit`,
+or the REST equivalent `gh api repos/<owner>/<repo>/pulls/<number>`, for the check. When the PR
+number itself is not yet known, REST search still beats `pr list`:
+`gh api "repos/<owner>/<repo>/pulls?state=all&head=<owner>:<branch>"`.
+
 ## Landed, then lost — investigating content that provably merged but is missing from the current base
 
 **Identify the signal first: one pair of verdicts covers both a routine case and a loss, and only
@@ -663,15 +671,26 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
    empty. Do not substitute the primary checkout's status.
 3. **Inventory ignored physical files separately:** run
    `git -C <worktree-path> status --porcelain=v1 --ignored --untracked-files=all` and inspect every
-   `!!` path. A normal clean status and `git worktree remove` both ignore this layer, while
-   bundle/archive/format-patch cannot reach it. Freeze the complete ignored inventory before
-   removal: expand ignored directories to leaf entries and record every relative path and entry
-   type, including items classified as disposable. For every regular leaf, record
+   `!!` path. A normal clean status ignores this layer. So does `git worktree remove` itself —
+   measured: it does not stop for an ignored file or warn about it, it deletes the file along with
+   the directory. Bundle/archive/format-patch cannot reach this layer either. Freeze the complete
+   ignored inventory before removal: expand ignored directories to leaf entries and record every
+   relative path and entry type, including items classified as disposable. Judge that inventory by
+   its total entry count and total byte size, not by naming only the paths that look sensitive or
+   important. Real case: a retirement pass that named 22 paths (a few credentials and plan files)
+   missed that the actual `!!` set was 8092 entries and roughly 200MB, including 13 build-output
+   directories that existed only in that worktree. For every regular leaf, record
    `git hash-object --no-filters -- <path>`; for every symlink, record its `readlink` output. Stop on
-   an unsupported special-file type. Explicitly classify reproducible caches/build outputs as
-   disposable; copy any user-authored or uncertain item outside the worktree first, preserving its
-   relative path under the backup. Run the same hash/readlink check on each source and backup copy
-   and require equality. Use `git check-ignore -v <path>` when the ignore rule itself is unclear.
+   an unsupported special-file type. An entry is disposable on one of two grounds only: the primary
+   checkout has the same relative path with byte-identical content (the same `git hash-object`
+   output), or a named tool rebuilds it from tracked inputs alone (dependency caches, bytecode,
+   virtualenvs, provider plugins). "Looks like build output" is not a ground — that is what those
+   13 directories looked like, and each held a per-build environment file that nothing outside the
+   worktree could regenerate. Copy everything else — different content, no matching path in the
+   primary checkout, or otherwise user-authored or uncertain — outside the worktree first with `cp -p`,
+   preserving its relative path under the backup; hash, never read or print, a path that may hold a
+   credential. Run the same hash/readlink check on each source and backup copy and require equality.
+   Use `git check-ignore -v <path>` when the ignore rule itself is unclear.
 4. **Record the exact identity:** copy `git -C <worktree-path> rev-parse HEAD` and
    `git -C <worktree-path> branch --show-current`. An empty branch means detached HEAD, not "no
    work". Confirm the recorded HEAD resolves as a commit; when a branch is present, require that

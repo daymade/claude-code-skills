@@ -181,7 +181,15 @@ if MERGE_OUTPUT="$(git merge-tree --write-tree "$BASE" "$BRANCH_REF" 2>&1)"; the
 else
   MT_RC=$?
 fi
-MERGED_TREE="$(printf '%s\n' "$MERGE_OUTPUT" | head -1)"
+# First line only, without a pipe: a real conflict can make $MERGE_OUTPUT far larger than the
+# pipe buffer (measured: 869 lines / 248KB on one repository's conflicting-branch pair). Piping
+# it through `head -1` lets `head` close its read end as soon as it has that line, and the
+# `printf` on the write end then gets SIGPIPE on its next write of the remaining buffered output
+# — bash reports that as exit 141. This assignment has no enclosing `if`, so under `set -e` that
+# 141 terminates the script before it can print the conservative NEEDS REVIEW verdict, turning a
+# routine conflict into a silent crash. Parameter expansion never forks a second process, so there
+# is no pipe and nothing to receive SIGPIPE.
+MERGED_TREE="${MERGE_OUTPUT%%$'\n'*}"
 if [ "$MT_RC" -ge 128 ]; then
   # `git merge-tree --write-tree` needs git >= 2.38. Older git can't prove containment, so stay
   # safe: fall through to UNMERGED / NEEDS REVIEW rather than guess "merged".
@@ -222,7 +230,8 @@ if [ -n "$MERGE_COMMIT" ]; then
   else
     MC_RC=$?
   fi
-  MC_MERGED_TREE="$(printf '%s\n' "$MC_OUTPUT" | head -1)"
+  # Same SIGPIPE hazard as $MERGED_TREE above, and the same fix: no pipe, no early-closing reader.
+  MC_MERGED_TREE="${MC_OUTPUT%%$'\n'*}"
   if [ "$MC_RC" -eq 0 ] && [ "$MC_MERGED_TREE" = "$MC_TREE" ]; then
     echo "  ✓ LANDED AT MERGE ${MERGE_COMMIT:0:12} — a trial merge of '$BRANCH_REF' into that merge"
     echo "    commit changes nothing: the branch's content was fully present there. The CURRENT"
