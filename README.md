@@ -3498,7 +3498,7 @@ the completion drive can override; a hook is a wall.
 **Key features:**
 - Five runnable pattern skeletons — PreToolUse block, human-confirmation release gate, SessionStart health check, PostToolUse context injection, and a Stop hook that reacts to the model's own output — plus the shlex command-position walker for token-level command matching
 - Four hard-won rules: shlex over awk-splitting so a healthy command is never false-blocked, `bash -n` + real-JSON end-to-end testing before registering, SSOT + symlink so a reinstall can't silently disarm a guard, and per-profile registration convergence with human-confirmation release gates
-- Nine cataloged failure modes with symptom → cause → fix, including the UserPromptSubmit-vs-Stop category mistake (only Stop can see what the model itself wrote) and a literal quote/backtick inside a Python comment silently corrupting an embedded `python3 -c` block
+- Cataloged failure modes with symptom → cause → fix, including the UserPromptSubmit-vs-Stop category mistake (only Stop can see what the model itself wrote) and a literal quote/backtick inside a Python comment silently corrupting an embedded `python3 -c` block
 - Bundled end-to-end test harness (`scripts/test_hook.sh`)
 
 **Example usage:**

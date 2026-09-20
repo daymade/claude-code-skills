@@ -19,7 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an embedded newline renders as indistinguishable extra gate lines. SKILL.md
   rule 4 gained a matching sub-bullet pointing at the new entry. Anchor:
   2026-09-20, a commit-scope gate's first fifteen hours in production sent 38
-  dialogs to a human, 36 of them listing zero files.
+  dialogs to a human, 36 of them listing zero files. Both READMEs' blurb for
+  this Skill also drops the derived pitfall-count word ("Nine" / "九类"),
+  which had already gone stale before this change, rather than update it to
+  a new number.
 
 - **marketplace-dev** (`daymade-claude-code` v3.43.0 → v3.44.0): a new "Adding a
   member skill to an existing suite" subsection under Phase 2, because that is the
