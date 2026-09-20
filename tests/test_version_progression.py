@@ -182,6 +182,45 @@ class VersionProgressionTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("layout changed without a strict", result.stderr)
 
+    def test_index_mode_with_nothing_staged_is_not_a_verdict(self) -> None:
+        # 2026-09-20, twice in one afternoon: `--candidate-index` run with an empty
+        # index reads HEAD's manifest back and reports "no regression" about the
+        # working tree it never looked at. The form is correct before a commit; the
+        # state where it cannot answer the question is exactly "nothing is staged".
+        skill = self.repo / "daymade-audio/transcript-fixer/SKILL.md"
+        skill.write_text(skill.read_text() + "unstaged\n", encoding="utf-8")
+        result = run(
+            self.repo,
+            sys.executable,
+            str(CHECKER),
+            "--repo",
+            str(self.repo),
+            "--base",
+            self.base,
+            "--candidate-index",
+            check=False,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("nothing is staged", result.stderr)
+
+    def test_candidate_head_is_unaffected_by_the_staged_guard(self) -> None:
+        # The guard must not bleed into the form CI uses.
+        skill = self.repo / "daymade-audio/transcript-fixer/SKILL.md"
+        skill.write_text(skill.read_text() + "unstaged\n", encoding="utf-8")
+        result = run(
+            self.repo,
+            sys.executable,
+            str(CHECKER),
+            "--repo",
+            str(self.repo),
+            "--base",
+            self.base,
+            "--candidate",
+            "HEAD",
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0)
+
     def test_index_mode_reads_staged_tree_only(self) -> None:
         skill = self.repo / "daymade-audio/transcript-fixer/SKILL.md"
         skill.write_text(skill.read_text() + "staged\n", encoding="utf-8")

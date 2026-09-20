@@ -391,6 +391,30 @@ def main() -> int:
 
     try:
         repo = Path(git(args.repo, "rev-parse", "--show-toplevel").strip())
+        if args.candidate_index:
+            # WHY(2026-09-21): `--candidate-index` reads the manifest blob out of the
+            # git index. With nothing staged that blob is HEAD's copy, so this form
+            # re-verifies the commit you already hold and reports "no regression"
+            # about work it never saw — the green is true about the index and silent
+            # about your edit. Measured twice on 2026-09-20 in one afternoon, in a
+            # repo whose CI runs the correct `--candidate HEAD` form: the local run
+            # went green while the staged tree carried a version that would have
+            # regressed main.
+            #
+            # Not a blanket ban on the form — it is the right one before a commit.
+            # It is banned only in the state where it cannot answer the question
+            # being asked of it, which is exactly "nothing is staged yet".
+            staged = git(repo, "diff", "--cached", "--name-only").strip()
+            if not staged:
+                print(
+                    "FAIL: --candidate-index was given but nothing is staged, so the "
+                    "index manifest is HEAD's copy and this run cannot see your "
+                    "working changes.\n"
+                    "       Stage the manifest and re-run, or compare the commit "
+                    "directly with --candidate HEAD.",
+                    file=sys.stderr,
+                )
+                return 2
         failures = check(repo, args.base, None if args.candidate_index else args.candidate)
     except CheckError as exc:
         print(f"FAIL: version progression could not be evaluated: {exc}", file=sys.stderr)
