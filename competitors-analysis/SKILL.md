@@ -27,10 +27,33 @@ skill has two layers:
 This skill intentionally subsumes lightweight "competitor scan" workflows. A scan
 is useful for the landscape table, but it is not enough for technical conclusions.
 
+## Stop Gate — required input (read this first)
+
+This skill runs as `context: fork` and **cannot ask the user anything**. The
+"ask if missing" pattern below therefore does not apply to you. Enforce this hard
+gate as your very first action:
+
+**If the caller did not pass an explicit product/market target for THIS invocation,
+STOP immediately.** Report back: "competitors-analysis needs an explicit
+product-name or market; none was provided, and as a background fork I cannot ask —
+aborting rather than inventing a target." Then exit.
+
+Do **not**:
+- invent or infer a target — a plausible task you generated yourself is still
+  fabricated, not the user's;
+- run `ls` on `$COMPETITORS_BASE` to pick an existing product directory as your
+  target;
+- fall through to Discover mode to fill the gap.
+
+A target counts as "provided" only if it came from the caller's request/arguments
+this invocation — not from a directory name on disk, not from your own reasoning.
+
 ## Entry Router
 
 If the user's request is missing the product/market or target customer segment,
-ask for that context before synthesizing positioning or opportunity claims. Known
+ask for that context before synthesizing positioning or opportunity claims (in
+`context: fork` you cannot ask — the Stop Gate above already handled the
+missing-target case; if you reached here, a target was provided). Known
 competitors are optional; if absent, use Discover mode.
 
 Use the user's wording to choose the path:
@@ -61,8 +84,12 @@ $COMPETITORS_BASE/
 ```
 
 Use `owner-repo` for GitHub repositories so forks and similarly named projects do
-not collide. If the user's machine already has a product directory, use it as the
-source of truth and do not re-clone elsewhere.
+not collide. If the caller named a product directory **this invocation** and it
+already exists on disk, use it as the source of truth and do not re-clone
+elsewhere. Never adopt an existing product directory the caller did not name this
+invocation — that is exactly how a target-less fork silently picks up an unrelated
+project (2026-09-20 incident: a no-arg fork fabricated an "A2A market" task and
+ratified it by reusing the on-disk `agent-communication` dir for 1h23m).
 
 ## Preflight
 
