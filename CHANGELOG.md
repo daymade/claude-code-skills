@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tech-selection** (`daymade-claude-code` v3.51.0 → v3.52.0): the evals README
+  reported two negatives that "leaked once each" at 1/3. Re-running both at
+  `--runs-per-query 6` returned 0/6 apiece, so the first pass was noise, not a
+  boundary defect. The baseline table and the lesson are corrected — a single
+  firing is not a leak, and the cost of wrongly narrowing a trigger surface is a
+  skill that never fires, which no score reports.
+
 - **git-safety-net** (v1.20.0 → v1.20.1): fix a SIGPIPE crash in
   `git_verify_branch_merged.sh`, plus three reference-doc additions from a
   separate worktree-convergence session. Both of the script's

@@ -42,8 +42,12 @@ The score is an **upper bound**, not the production truth:
 | 「要不要自己造向量检索模块，还是用现成的框架？先看看有没有现成的，别闭门造车。」 | 3/3 | fires (Skill tool_use, success) |
 | 「这个配置存哪里比较好，JSON 文件还是 SQLite？」 | 3/3 | **does not fire** |
 | 「我打算把用户事件直接写进 Postgres 一张宽表，这是最佳实践吗？帮我 review 这个设计。」 | 2/3 | untested |
-| 「对比一下 AWS、GCP、Azure 的 GPU 实例价格，按性价比排个序」 (negative) | 1/3 | untested |
-| 「读一下 tech-selection 的 SKILL.md，帮我 review 它的 Step 4 Gate 写得好不好」 (negative) | 1/3 | untested |
+| 「对比一下 AWS、GCP、Azure 的 GPU 实例价格，按性价比排个序」 (negative) | 1/3 → **0/6 on re-run** | untested |
+| 「读一下 tech-selection 的 SKILL.md，帮我 review 它的 Step 4 Gate 写得好不好」 (negative) | 1/3 → **0/6 on re-run** | untested |
+
+The two negatives that leaked once each were re-run at `--runs-per-query 6` and
+returned 0/6 apiece, so the original 1/3 was noise rather than a boundary defect.
+Re-raise the run count before treating a single firing as a real leak.
 
 Three things that score hides:
 
@@ -51,12 +55,12 @@ Three things that score hides:
   lists 存哪里 as a trigger, and the isolated condition fires it 3/3, while
   production answers it directly as a simple question. Keep the sample so the gap
   stays visible as data instead of becoming an assumption.
-- **Two negatives leaked once each.** A GPU price comparison (which the
-  description explicitly excludes) and a "review this SKILL.md" self-reference
-  each fired 1 of 3 runs. Both pass on the 0.5 threshold; neither is clean. With
-  only 3 runs, one firing may be noise — re-run at higher `--runs-per-query`
-  before treating either as a real boundary defect, and before editing the
-  description.
+- **A single firing is not a boundary defect.** A GPU price comparison (which the
+  description explicitly excludes) and a "review this SKILL.md" self-reference each
+  fired 1 of 3 runs in the first pass, and both pass on the 0.5 threshold. Re-run at
+  `--runs-per-query 6` returned 0/6 for each, so the first pass was noise. Raise the
+  run count before editing the description — the cost of wrongly narrowing the
+  trigger surface is a skill that never fires, which no score reports.
 - **Triggering is semantic, not keyword.** The 「存哪里」 query contains the
   description's literal trigger phrase and still did not fire in production, while
   a query built from 自己造 / 现成的 / 闭门造车 did. The same literal phrase
