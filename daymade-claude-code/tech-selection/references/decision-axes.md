@@ -25,6 +25,13 @@ An axis never ranks. It returns `pass` / `fail` (named failure mode) / `unknown`
 - **Single-scenario** — one scenario only. Use as a scoped branch; never let it raise the global standard.
 - **Teaching-scenario** — said while teaching or coaching someone else. He was instructing, not selecting for himself. Cannot be treated as his own selection constant.
 
+All 13 axes in this file are decision spines and work as default gates. The
+Class dimension (A common sense / B preference / C paranoid) is applied in
+`references/scoped-criteria.md`, not here — that file decides which of the
+narrower criteria may serve as default gates by class, and which must be
+output as "declared preference + needs confirmation." Do not apply a class
+label to these 13; doing so demotes a cross-scenario spine to a branch.
+
 Criteria are written as imperatives with decidable steps. "Keep it simple" and
 "industry best practice" are not criteria — they are the shape this file refuses.
 

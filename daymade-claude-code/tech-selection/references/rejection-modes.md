@@ -43,7 +43,7 @@ of; designing from nothing while skipping on-site observation is the opposite
 face of the same error. Both directions must be re-judged from first
 principles: 「你不能把我们已经有的东西当做对照基线……你应该从第一性原理思考」.
 
-> 自检：你的候选清单里出现「现有实现」这一项了吗？出现了 → 你把它当基线了——它只能是一个待证伪的候选。
+> 自检：你的候选清单里有没有「保持现状」这一项？如果这个决策的真实答案空间包含"don't change anything"，它必须在清单里——作为一个待证伪的候选，而不是默认基线。反过来：如果某候选**只**因为"它就是我们已经有的东西"被留下，把它标为 fail（justified only by incumbency）。上下两句都要查，删掉任一边都会让"该留"或"该换"其中一个选项消失。
 
 ### 3 · 量化代理当理由 — Countable proxies as reasons
 

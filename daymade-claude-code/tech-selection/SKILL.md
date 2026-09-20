@@ -23,9 +23,9 @@ argument-hint: "<decision to make>"
 
 A checklist for choosing between technologies, not a scoring rubric. The core
 insight: these criteria are **filters, not sorters** — they kill candidates that
-violate a principle, and the survivors are decided by business-result anchoring,
-not by ranking. When two or more candidates survive, the correct output is
-candidates + trade-offs + a recommendation, never a single pick.
+violate a principle. Which candidate to adopt is not the agent's decision: when
+two or more candidates survive, return candidates + trade-offs + a recommendation
+to the user. Never a single pick.
 
 Two outcomes end the protocol early:
 1. **Multi-candidate human tradeoff** — ≥2 survivors after filtering. Stop and return.
@@ -42,19 +42,29 @@ Two outcomes end the protocol early:
 
 ## Execution Protocol
 
+**Lightweight path.** A choice is reversible, local, under 10 minutes, and has no external contract → run Steps 0, 1, and 3 only, record the business result and the prior-art layer, and proceed. Skip Steps 2, 4, 5, 6, and 7. Choosing a JSON library inside a bug fix is this path; choosing the project's storage engine is not. When unsure which path applies, take the full protocol.
+
 ### Step 0 · Frame
 
 Write two things before comparing any candidate:
 1. The **named business result** this choice serves.
 2. The **named failure mode** — what observable phenomenon would prove the choice wrong.
 
-> Checkpoint: Cannot write a business result → this is an execution task, not a selection task. Exit skill. Business result written as "tests pass" or "pipeline complete" → that's a proxy metric. Rewrite.
+Derive the business result from context, not from the request text. A bare "which DB" carries no result on its face — read the project's decision log, the user's recent corrections, and what this choice unblocks downstream. If no context exists to derive from, say so explicitly rather than fabricating one.
+
+> Checkpoint: Cannot derive a business result from any available context → this is an execution task, not a selection task. Exit skill. Business result written as "tests pass" or "pipeline complete" → that's a proxy metric. Rewrite.
 
 ### Step 1 · Inventory Prior Art
 
 Fixed order: internal/paid assets → external world-class + community solutions → build from scratch (last resort). Tag each candidate with which layer it came from.
 
+Where to look for layer 1: existing credentials and paid-service capability catalogues, installed skills, the current repository's existing pipelines, and the project's decision log. Do not limit layer 1 to `grep` in the current repo — that returns zero hits for paid services and skills, and a zero from a narrow search is not absence.
+
+Layer 2 has a minimum coverage requirement: use a search tool to enumerate what exists, not memory alone. "Searched, found 2" is not coverage — name the search queries run, or state explicitly that no search tool was available and this is a memory-only inventory.
+
 > Checkpoint: If the final recommendation falls to layer 3 (build) with no recorded reason from layers 1–2 → flag as 闭门造车. Zero hits from layer 1 must distinguish "searched by structural token" from "searched by remembered name" — the latter's zero hit does not mean absence.
+
+**User-named candidates.** When the user names a specific option ("use Redis or Postgres?", "should we add a vector store?"), that option enters the candidate set like any other — it is subject to the same axes and the same three-value verdict. It is neither exempt from filtering (a named candidate is not a requirement) nor disposable (killing a user-named candidate requires naming the axis and the failure mode, exactly like any other). If the user named exactly two options, they are the minimum candidate set; add any layer-1 or layer-2 candidates the inventory surfaced, and say so.
 
 ### Step 2 · Probe for Evidence
 
@@ -66,12 +76,14 @@ The only admissible evidence is behavior you ran and observed. READMEs, vendor p
 
 Read `references/decision-axes.md`. For each candidate, give a three-value verdict per axis: `pass` / `fail` (name the failure mode) / `unknown` (needs probe).
 
+A `fail` on a core axis kills the candidate. A `fail` on a C-class criterion from `references/scoped-criteria.md` **does not kill** — record it as a "declared preference against" note on that candidate and continue. Only core-axis failures remove a candidate from the survivor set.
+
 > Checkpoint: `unknown` is not `pass`. A candidate carrying `unknown` **does not enter** the Step 4 survivor set. Do not output a "winner" from this step.
 
 ### Step 4 · Triage Survivors — The Core Gate
 
-- **0 survivors**: Report which axis killed which candidate. Determine whether the axis was wrong or the candidate set was incomplete. Do not lower a gate to make the process finish.
-- **1 survivor**: May declare, but must carry the Step 5 self-defense.
+- **0 survivors**: Report which axis killed which candidate, and whether the axis was wrong or the candidate set was incomplete. If candidates died from `unknown` rather than `fail`, the honest output is: each candidate, the probe it stalled on, and what input the user could supply to unblock it. Do not fabricate a verdict to escape the zero.
+- **1 survivor**: May declare only if all three autonomy conditions hold: long-term maintainable, industry best practice, 100% confidence. If any is missing → treat as ≥2 survivors and stop. Must also carry the Step 5 self-defense.
 - **≥2 survivors**: **STOP.** Return candidates + trade-offs + one recommendation. Do not single-pick. Do not silently drop rejected candidates.
 
 > Checkpoint: Can the output name which candidate was demoted and by which axis? If not, the gate was hollowed out.
@@ -84,7 +96,7 @@ Any conclusion produced by this skill carries a "why this isn't garbage" paragra
 
 ### Step 6 · Saturate Irreversible Surfaces
 
-Scan for surfaces that cannot be patched after release: telemetry/events, field and export formats, external contracts, irreversible external actions. If any exist → saturate from v0.
+Scan for surfaces that cannot be patched after release: telemetry/events, field and export formats, external contracts, irreversible external actions. If any exist → saturate from v0. This axis is single-scenario evidence — apply it when the choice produces a released artifact, not to internal or revertible changes, and never use it to raise the standard on work that has no irreversible surface.
 
 > Checkpoint: Explicitly list irreversible surfaces, or explicitly write "none." Silence = not checked. Revertible local changes do not trigger this step.
 
@@ -93,6 +105,28 @@ Scan for surfaces that cannot be patched after release: telemetry/events, field 
 Distinguish "I verified" from "I claim." Every done statement is followed by what was actually executed and observed.
 
 > Checkpoint: Go to the second stop — artifacts claiming done but unverified stop here.
+
+## Output Shape
+
+Every run of this skill produces all six fields below, in this order. Omitting
+a field is a protocol failure — the checkpoints audit the output against these
+fields.
+
+1. **Business result + failure mode** (Step 0) — the two lines.
+2. **Candidate table** (Steps 1–3) — each candidate with its layer tag, its
+   per-axis verdict (`pass`/`fail`/`unknown`), and the probe name behind each
+   `pass`. A candidate carrying `unknown` is marked, not hidden.
+3. **Survivor demotion record** (Step 4) — for each demoted candidate, which
+   axis killed it and the named failure mode. If no candidate was demoted, say
+   "no candidate eliminated" and list the axes that passed everything.
+4. **Decision branch** (Step 4) — declare exactly one of:
+   - `≥2 survivors → STOP` with candidates + trade-offs + one recommendation
+   - `1 survivor, autonomy met` with the Step 5 self-defense
+   - `0 survivors` with the diagnosis (axis wrong vs candidate set incomplete)
+5. **Self-defense** (Step 5) — each sentence traces to a probe or an axis
+   verdict. Write only for branch 2; branches 1 and 3 defer to the user.
+6. **Irreversible surface list** (Step 6) — the surfaces found, or the word
+   "none." Never omit.
 
 ## Two Stops That Return to the User
 
@@ -123,7 +157,7 @@ Agent count is determined by task shape, not a fixed default. Ask:
 3. **Need an unbiased third party (evaluator/reviewer)?** Yes → must spawn (even if fast).
 4. **Truly parallel (independent streams)?** Yes → must spawn. Otherwise doing it yourself is faster.
 
-Concurrency ceiling: 8–10. Exceeding it risks quota truncation of the entire batch.
+Concurrency ceiling: 8–10 (measured, not theoretical). Exceeding it risks quota truncation of the entire batch.
 
 ## References
 
@@ -141,5 +175,5 @@ Concurrency ceiling: 8–10. Exceeding it risks quota truncation of the entire b
 | 禁绕过 vs fallback | Bypass = replacing the main path (fix scenario). Fallback = supplementary path (runtime channel). Different scenarios. |
 | 不看 README vs 官方文档优先 | READMEs = vendor marketing/capability claims. Official API docs/source code = authoritative. Different information sources. |
 | 预算定档 vs 资源无限 | Budget sets execution tier (which model runs). It never decides whether to do it. Different axes. |
-| 不主动压缩 vs 宿主自动压缩 | Skill governs "don't compress during selection." Host auto-compaction is separate. Different actors. |
+| 不主动压缩 vs 宿主自动压缩 | During Steps 0–6, do not drop source material to save context — the candidate table and probe records stay complete. Host auto-compaction is outside this skill's control and is not a reason to pre-emptively thin the output. Different actors. |
 | 饱和上报 vs 拒绝过度工程 | Saturation applies to irreversible telemetry (events, export formats, external contracts), not feature surface. Different surfaces. |
