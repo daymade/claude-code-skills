@@ -2381,8 +2381,10 @@ this list and describe defects you reach by asking a different question):
 - **Symptom:** the suite is green, rows keep getting added, and the defect those rows
   were written for ships anyway. The tell appears only when you go looking: break the
   implementation on purpose and **nothing turns red**. There is one correct reading of
-  that, and it is not "my mutation must be wrong".
-- **Cause — the assertion never reached the condition it claims to test. Four shapes,
+  that, and it is not "my mutation must be wrong". The nastier variant does not even
+  give you that tell: the rows go red exactly when you break the code — red about a
+  branch production never executes.
+- **Cause — the assertion never reached the condition it claims to test. Five shapes,
   all of which print the same green:**
   1. **The fixture failed to build, and the failure was swallowed.** A setup step
      errored (`git worktree add` against a repository with no commits), the assertion
@@ -2402,14 +2404,39 @@ this list and describe defects you reach by asking a different question):
      sourced the library under test from a hard-coded path, so every assertion that
      called a library function directly kept running against the unmutated copy, no
      matter which copy the rest of the run pointed at.
+  5. **A probe omits an argument production always passes, so it has been exercising
+     the fallback branch all along.** A library function gained a parameter — the
+     repository top level, the frame of reference deciding whether a path can be
+     claimed. The **production** call site passed it correctly from the first commit,
+     and an upstream default filled it in when empty, so no end-to-end input could
+     produce the missing case. What omitted it were the **test's own two probes**:
+     every call they made took the "argument absent → fall back to a different frame of
+     reference" branch. Those probes were green, and their mutations *did* go red — red
+     about the fallback's behaviour, on a path production never reaches. The suite was
+     measuring code the product does not run. **The check:** temporarily make the
+     missing-argument branch `raise`; every probe that still runs is one that is not on
+     the production path. It was not found by reading the code — it surfaced when
+     someone asked, as an afterthought, to audit *every* call site of the new
+     parameter, at which point production was right and the tests were not. A companion
+     finding from that same audit shows how little "the probe happened to agree" is
+     worth: the old implementation looked correct when handed a non-existent path, and
+     measurement showed that was `os.path.relpath(ap, "")` meeting
+     `os.path.abspath("") == os.getcwd()` — run the identical call from another working
+     directory and the answer changes.
 - **Diagnostic, in one line: all rows green and zero rows red under mutation means the
   assertion is dead.** Suspect the fixture's precondition first and the mutation last —
-  shapes 2–4 all present as "I must have mutated the wrong function".
+  shapes 2–4 all present as "I must have mutated the wrong function". **Shape 5 is
+  invisible to that diagnostic**, because its rows do die on cue, so it needs the
+  separate habit: when a function gains a parameter, do not stop at "does the
+  production call site pass it?" — ask "do the **test** call sites pass it?". Omitting
+  an argument in a test rarely turns a row red. It quietly relocates the row onto
+  another branch.
 - **Fix:** one minimal mutation per assertion, applied one at a time, and confirm *that*
   row dies — not merely that something died. Row counts and pass rates are not evidence
   of anything; the only evidence that a suite is load-bearing is a record of which
   deliberate breakage each row detects. #14 tells you to mutate at all; this entry is
-  about why the mutation comes back empty, and what that silence means.
+  about why the mutation comes back empty — or comes back red about code the product
+  never runs — and what each of those means.
 - **How this differs from rule 9 (corpus replay).** Rule 9 measures the **detector**:
   its instrument is a corpus of real commands nobody wrote for the test, and its output
   is a false-positive rate — how much legitimate work this guard will block. This entry
@@ -2421,6 +2448,8 @@ this list and describe defects you reach by asking a different question):
   real inputs today, the mutation pass says whether the suite will notice tomorrow's
   regression.
 - **Real case (2026-09-20, a private hooks repository):** three unrelated sessions
-  working on one commit-scope gate hit all four shapes in a single evening. The shipped
-  calibration ended at 19 mutations, one per assertion — three of them exist only
-  because writing them exposed an assertion that could not die.
+  working on one commit-scope gate hit the first four shapes in a single evening. The
+  shipped calibration ended at 19 mutations, one per assertion — three of them exist
+  only because writing them exposed an assertion that could not die. Shape 5 came out
+  of the same gate a day later, and only because someone asked for a call-site audit
+  that no plan contained.
