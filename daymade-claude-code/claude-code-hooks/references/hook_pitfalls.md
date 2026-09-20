@@ -2215,7 +2215,7 @@ this list and describe defects you reach by asking a different question):
   exit-code row in the suite is green.
 - **Cause:** the gate was given a new trigger, and the new trigger reused the dialog
   body built for the old one. That body's only source of content is state the hook
-  reads **before the command runs** — a PreToolUse hook sees the staged set, the
+  reads **before the command runs** — a `PreToolUse` hook sees the staged set, the
   working tree, the target as they are *now*. Under the old trigger that state was
   non-empty by definition (the gate fired *because* it had found several things).
   Under the new one — "this single command both creates the state and consumes it",
@@ -2230,19 +2230,20 @@ this list and describe defects you reach by asking a different question):
 - **Fix — escalate only where the dialog can carry a decision; elsewhere block
   mechanically.** For each path that reaches the confirm channel, ask what the dialog
   will contain *on that path*. If the hook cannot name the target, the command and
-  the objects at stake, do not ask a human: exit 2 yourself, and make stderr say
+  the objects at stake, do not ask a human: `exit 2` yourself, and make `stderr` say
   three things — this is a mechanical block and **nobody was asked or refused**; do
   not retry unchanged; and the restructured shape that makes the state observable
   (split the creating step and the consuming step into separate tool calls, so the
-  next PreToolUse event sees the real state and the ordinary rule can judge it —
+  next `PreToolUse` event sees the real state and the ordinary rule can judge it —
   passing silently when it is fine, raising an informed dialog when it is not). Say
   outright that the restructuring is the prescribed remedy and not a bypass, or a
   model trained on "a refusal is a hard NO" will stop instead of fixing the command.
-  Give that path its own audit tag: it is neither a human decision nor a "dialog
-  shown, nobody answered".
+  In the guard's audit file — where it logs every prompt and bypass — give that
+  path a label of its own: it is neither a human decision nor a "dialog shown,
+  nobody answered", and lumping it in with either hides how often the gate blocks.
 - **On the paths that keep the dialog, put the decision in it:** which repository or
   target the hook actually read — labelled as *what the hook read*, not as "the
-  target", because a path parsed from command text can resolve somewhere else (#10,
+  target", because a path parsed from command text can resolve somewhere else (#28,
   #33) and the human clicks on that sentence; the command text; the object list; and
   an "Allow means…" line that is true on this path (an "every file listed above"
   promise is false when the command will add more after the click).
@@ -2257,7 +2258,7 @@ this list and describe defects you reach by asking a different question):
   binary handed a split multibyte sequence may refuse to render at all, and a gate
   whose dialog never appears has only a "no" channel left.
 - **Calibration — exit codes cannot see any of this (#14).** Point the dialog binary
-  at a recorder stub that writes its argv to a file, drive every trigger path, and
+  at a recorder stub that writes its `argv` to a file, drive every trigger path, and
   **read what a human would have seen**. Then pin it. The no-content path asserts the
   recorder was **never invoked** — a stub that merely fails is indistinguishable, by
   exit code, from a channel that was never called — and an informed path asserts the
