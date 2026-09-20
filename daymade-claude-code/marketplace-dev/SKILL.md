@@ -210,6 +210,33 @@ When adding a new plugin to an existing marketplace.json:
 6. **Audit `metadata` for invalid fields** — `metadata.homepage` is a common
    mistake (not in spec, silently ignored). Remove if found.
 
+### Adding a member skill to an existing suite
+
+The most common edit, and the one that fails across the most CI rounds. Adding a
+member (not a new standalone plugin) moves four things together:
+
+1. **The suite's `skills` array** in marketplace.json lists the new member
+   (`./skill-name`). `check_marketplace.py` fails when a member dir with a SKILL.md
+   exists on disk but is absent from the array.
+2. **`metadata.version`** strictly increases. A new member changes the suite's
+   *layout signature* (source + skills); `check_version_progression.py` rejects any
+   layout change without a metadata bump above base — rule 5 above (bump the plugin
+   `version`) is necessary but not sufficient here.
+3. **`README.md` and `README.zh-CN.md`** each gain a `### **skill-name**` detail
+   section. `check_doc_skill_lists.py` is a required check that extracts every
+   `### **name**` heading from both READMEs and fails if a marketplace skill is
+   missing (and flags the reverse as GHOST).
+4. **The suite's invocation list** (`/suite:skill-name`) in both READMEs.
+
+Every new file must also avoid absolute user paths (`/Users/<name>/…`) — the PII
+guard blocks the push. Write `~/`-relative and verify by re-running the real
+detector, not by eye.
+
+The `post_edit_sync_check` hook only catches "SKILL.md edited but plugin version not
+bumped". Items 2–4 have no hook — run `check_version_progression.py` and
+`check_doc_skill_lists.py` locally before pushing rather than discovering them across
+CI rounds.
+
 ## Phase 3: Validate
 
 ### Step 1: One-shot pre-flight check
