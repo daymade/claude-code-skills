@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator**: Verification depth router 的 Tier 1 排除条件新增一条——新增或实质改写 `references/` 内容不适用 Tier 1（即使 SKILL.md diff 只有一行）：它改变运行时加载面（执行 agent 被要求打开什么、何时打开），而这正是确定性门禁看不见的轴（quick_validate 查 references 可达、不查指针被遵守）。起点为 Tier 2，且 Tier 3 触发句命中时升 Tier 3。Tier 2 证据定义为输出级判据（新内容是否塑造了输出——字面「文件被打开」是本 skill 自己禁止的 literal-tool-path 断言），reference-load ledger 装机时其读取记录是机械佐证而非判据本身。缘起：2026-09-20 一次真实失败（SKILL.md 全文在上下文、案例库 16 份零打开、五轮排查逐一自推翻）+ 三轴独立审阅收敛到同一缺口。审阅：fresh-context 审阅首版发现两处缺陷（Tier 3 无 carve-out 冲突、「whose named example」指向文档中不存在的例子且判据与 intent-not-path 纪律冲突），已按其指认重修；回归门 1 candidate preserved_or_moved + verify 通过。
+
 - **tech-selection** (`daymade-claude-code` v3.51.0 → v3.52.0): the evals README
   reported two negatives that "leaked once each" at 1/3. Re-running both at
   `--runs-per-query 6` returned 0/6 apiece, so the first pass was noise, not a
