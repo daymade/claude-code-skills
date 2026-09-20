@@ -2203,3 +2203,78 @@ this list and describe defects you reach by asking a different question):
   A sweep that silently drops 5 of 58 is indistinguishable from one that covers
   everything, unless you compare the two counts. Same instrument discipline as
   rule 9's "a replay returning zero blocks makes the harness a suspect".
+
+---
+
+## 44. A confirmation dialog can only be as informed as the hook that raises it — an empty one trains rubber-stamping
+
+- **Symptom:** a human gate that used to be useful starts interrupting constantly,
+  and the person answering it says they have nothing to decide from. The audit log
+  agrees: approvals land within a few seconds, declines are about as frequent as
+  approvals, and the dialog body — if you capture it — lists no objects at all. Every
+  exit-code row in the suite is green.
+- **Cause:** the gate was given a new trigger, and the new trigger reused the dialog
+  body built for the old one. That body's only source of content is state the hook
+  reads **before the command runs** — a PreToolUse hook sees the staged set, the
+  working tree, the target as they are *now*. Under the old trigger that state was
+  non-empty by definition (the gate fired *because* it had found several things).
+  Under the new one — "this single command both creates the state and consumes it",
+  e.g. a staging step and a commit chained in one call — the pre-command state is
+  empty by construction, so the dialog is too. The hook escalated to a human on
+  exactly the path where it had nothing to show them. A person cannot out-know the
+  hook from inside its own dialog: they see strictly less than it does, often not
+  even the command or which repository. What comes back is not a decision. It is a
+  reflexive Allow — the rubber-stamp habit that costs more than a miss — or a Decline,
+  which the hook then reports to the model as "a human said no, stop and ask why"
+  when no human judged anything.
+- **Fix — escalate only where the dialog can carry a decision; elsewhere block
+  mechanically.** For each path that reaches the confirm channel, ask what the dialog
+  will contain *on that path*. If the hook cannot name the target, the command and
+  the objects at stake, do not ask a human: exit 2 yourself, and make stderr say
+  three things — this is a mechanical block and **nobody was asked or refused**; do
+  not retry unchanged; and the restructured shape that makes the state observable
+  (split the creating step and the consuming step into separate tool calls, so the
+  next PreToolUse event sees the real state and the ordinary rule can judge it —
+  passing silently when it is fine, raising an informed dialog when it is not). Say
+  outright that the restructuring is the prescribed remedy and not a bypass, or a
+  model trained on "a refusal is a hard NO" will stop instead of fixing the command.
+  Give that path its own audit tag: it is neither a human decision nor a "dialog
+  shown, nobody answered".
+- **On the paths that keep the dialog, put the decision in it:** which repository or
+  target the hook actually read — labelled as *what the hook read*, not as "the
+  target", because a path parsed from command text can resolve somewhere else (#10,
+  #33) and the human clicks on that sentence; the command text; the object list; and
+  an "Allow means…" line that is true on this path (an "every file listed above"
+  promise is false when the command will add more after the click).
+- **Everything model-authored that the dialog displays is an injection surface.** The
+  command text and any path inside it are written by the model. Fold all whitespace
+  to single spaces **before** display — otherwise a directory name or argument
+  containing a newline starts fresh lines that are typographically indistinguishable
+  from the gate's own output ("repository: /safe/place", "only one area, fine to
+  allow"). Run every model-authored string through one shared helper: two hand-rolled
+  copies is how one string gets folded and the other does not. Truncate by
+  characters, not bytes, and state how much was cut; strip invalid UTF-8 — a dialog
+  binary handed a split multibyte sequence may refuse to render at all, and a gate
+  whose dialog never appears has only a "no" channel left.
+- **Calibration — exit codes cannot see any of this (#14).** Point the dialog binary
+  at a recorder stub that writes its argv to a file, drive every trigger path, and
+  **read what a human would have seen**. Then pin it. The no-content path asserts the
+  recorder was **never invoked** — a stub that merely fails is indistinguishable, by
+  exit code, from a channel that was never called — and an informed path asserts the
+  recorder *was* invoked, so the probe is known to be alive. Informed paths assert
+  target, command and objects by **line-anchored** match rather than substring: a
+  forged line contains the same substring, which is exactly how a fold-less version
+  sails through a green suite. Mutate each property (restore the dialog on the empty
+  path, drop the context lines, remove each fold) and confirm its own rows die.
+- **Real case:** a cross-area commit gate gained a "staging and commit chained in one
+  call ⇒ scope unknown ⇒ confirm" rule. Its calibration was thorough on the axis it
+  measured — recall and false positives over a six-figure command corpus, with a
+  mutation-tested "every exit 2 carries a reason" row — and said nothing about dialog
+  content. In the first fifteen hours 38 dialogs reached a person, **36 of them
+  listing zero files**, most approvals landing within a few seconds. The repair
+  changed no predicate: empty pre-command state now blocks with the split-calls
+  remedy and never opens a dialog; the remaining dialogs gained the read-repository
+  line, the command and a truthful Allow sentence. An independent review of that
+  repair then found the newly added repository line unfolded — a directory name with
+  embedded newlines forged three gate-looking lines — while the suite stood at
+  154/154, because every content assertion was a substring match.

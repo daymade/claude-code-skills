@@ -405,6 +405,16 @@ skeleton: Pattern C in [references/hook_patterns.md](references/hook_patterns.md
     **does not block the tool call** — so an unanswered dialog does not become a
     "no", it becomes an allow. Bound your wait well under the timeout and make
     no-answer resolve to block *yourself*, before the harness resolves it for you.
+  - ⚠️ **A human gate is only worth raising where its dialog can carry the decision.**
+    The person sees what the hook puts in the box and nothing else — so on a path
+    where the hook's own evidence is empty (it reads state *before* the command runs,
+    and this command creates that state), the dialog is empty too, and what comes
+    back is a reflexive click, not a judgement. On those paths block mechanically and
+    tell the model how to restructure the command so the state becomes observable;
+    keep the dialog for paths that can name the target, the command and the objects.
+    Whatever model-authored text the dialog shows (command, paths) gets
+    whitespace-folded first. Symptom, fix and the recorder-stub calibration:
+    [references/hook_pitfalls.md](references/hook_pitfalls.md) #44.
   - The docs also carry an in-UI channel — PreToolUse `hookSpecificOutput`
     `permissionDecision: "ask"`, which prompts through Claude Code's own interface.
     It is worth knowing about, but **unverified here under `bypassPermissions` /
