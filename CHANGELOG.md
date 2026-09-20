@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **claude-code-hooks** (`daymade-claude-code` v3.45.0 → v3.46.0): pitfall #30's
+  Fix 4 drops its "unverified … confirm before relying on it" hedge on
+  team-mode deliveries and replaces it with two sources read directly. A
+  production hook's six-week log of `.prompt` prefixes shows the hook firing
+  on `<task-notification`, `<agent-message` and `<cross-session-message`
+  deliveries with the bare wrapper tag first. A team-mode transcript stores
+  the same deliveries as `origin.kind: "peer"` (or with no `origin` at all)
+  behind an `Another Claude session sent a message:` sentence that the hook
+  did not receive that day. Spelled out as a consequence: #20's wrapper
+  forms describe the transcript, not `.prompt`; a hook can detect a delivery
+  from `.prompt` alone, and the entry says when to substring-match the tag
+  and when to anchor it. The Cause paragraph's "cannot structurally tell" and
+  the matching SKILL.md sentence are narrowed to agree: no field marks the
+  difference, the wrapper tag does.
+
 - **self-hosted-runner-mechanisms** (`github-ops` v1.5.0 → v1.6.0): a new
   "Self-Hosted Runner Mechanisms" section in `references/workflow_operations.md`,
   recording three platform facts that break runner job hooks and background
