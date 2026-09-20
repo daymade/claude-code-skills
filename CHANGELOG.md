@@ -92,6 +92,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   which had already gone stale before this change, rather than update it to
   a new number.
 
+- **tech-selection** (`daymade-claude-code` v3.47.0 → v3.48.0): new Skill — a
+  gated checklist for choosing between technologies (library, framework, storage,
+  data format, model, build-vs-buy, architecture). Distilled from a multi-corpus
+  search of the user's own tech-decision patterns across 12,000+ AI sessions and
+  1,000+ meeting transcripts. Three load-bearing design decisions: (1) filters
+  not sorters — the criteria kill violators, survivors are decided by
+  business-result anchoring, never by ranking; (2) `unknown` is not `pass` — a
+  candidate carrying an unverified axis does not enter the survivor set;
+  (3) the protocol ends by returning candidates + trade-offs + a recommendation,
+  never a single pick. Trigger design deliberately avoids the literal term
+  技术选型, which the user's own corpus almost never contains — triggers fire on
+  scenario sentences (用哪个 / 要不要自建 / 先看看有没有现成的) and characteristic
+  negations (别闭门造车 / 不要过度工程). Four references: decision-axes (13 core
+  criteria with mechanical tests), scoped-criteria (13 narrower criteria with
+  scope labels), rejection-modes (16 patterns + anti-patterns deduplicated),
+  delegation-contract (domain ownership + autonomy threshold + 5 resolved scope
+  boundaries).
+
+- **deep-research** (`deep-research` v2.5.0 → v2.6.0): remove the misplaced
+  技术选型分析 trigger from the description and add an explicit boundary — this
+  skill produces a report, it does not choose a technology. Requests asking which
+  option to adopt or whether to build or reuse belong to `tech-selection`.
+  Without the boundary, the two skills randomly split the same trigger.
+
 - **marketplace-dev** (`daymade-claude-code` v3.43.0 → v3.44.0): a new "Adding a
   member skill to an existing suite" subsection under Phase 2, because that is the
   most common marketplace edit and the one that fails across the most CI rounds.
