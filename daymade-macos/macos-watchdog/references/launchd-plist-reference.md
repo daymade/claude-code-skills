@@ -30,6 +30,7 @@ Label convention: reverse-DNS (`com.example.thermal-watch`). The label is the jo
 
 - `ProgramArguments` element 0: absolute path to the executable (or `/bin/bash` + script path as element 1). PATH inheritance is not available — Homebrew binaries need their absolute path or an explicit `EnvironmentVariables/PATH`.
 - Scripts need a shebang AND the execute bit; a missing `+x` fails silently (see Logging).
+- ⚠️ **`plutil -replace ProgramArguments.0 -string X` does not replace index 0 — it APPENDS an element.** Measured: an existing `[daemon.sh]` became `[recorder.sh, daemon.sh]`, silently turning the original script into an *argument* of the new one (it kept working only because the wrapper ignored its args). To repoint a job, rewrite the whole array with `python3` + `plistlib` (or `plutil -remove` then `-insert`), then read it back with `plutil -p` before reloading.
 
 ### KeepAlive (respawn policy) — usually NOT what a periodic watchdog wants
 

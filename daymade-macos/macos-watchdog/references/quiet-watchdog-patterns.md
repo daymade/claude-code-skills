@@ -9,6 +9,7 @@ Design patterns for the four contract clauses in SKILL.md, each with the sanitiz
 - Pattern 4: Never resurrect a user-quit app
 - Pattern 5: Health checks certify only the plane they probe
 - Pattern 6: Batch loops throttle by default
+- Pattern 7: A green success log is not a health signal
 
 ## Pattern 1: Premise-state self-check
 
@@ -57,3 +58,9 @@ sr_open() {  # name yours after the target
 **Pattern.** Any watchdog that spawns work in a loop (replays, fuzzing, batch scans, batch API calls) takes batch-size / interval / concurrency caps as first-class parameters with conservative defaults. Ask when writing the loop: "how many new processes/requests/files per second × how long will this run?"
 
 **War story.** A perfectly correct hook-replay test ran with no throttle: fork 1,041/sec for 7 minutes, die temperature 83.1 °C, and a system policy daemon became the day's top CPU consumer from the fallout. The test logic was right; to the machine, an unthrottled loop and a fork bomb are the same thing. The inverse diagnostic habit too: when a machine runs hot, ask "is some test/batch running unthrottled?" before hunting runaway processes.
+
+## Pattern 7: A green success log is not a health signal
+
+**Pattern.** A job that prints its success line *only after every step succeeded* (the `set -e` shape) leaves no trace at all on a failed pass. So the freshness of its success log says nothing about the last pass — only that *some* pass succeeded recently. The health judgement has to come from the failure path: does an err.log / failure-state file / last-exit status exist, and does anything read it? `launchctl list` gives only the **last** exit code and a run count, never an exit-code history — that history lives in the log.
+
+**War story.** A 300-second marketplace-sync daemon showed five simultaneous green signals — 4204 lines of `source-sync verified` at that moment, out.log mtime one minute old, `LastExitStatus=0`, plist on disk, job registered in `launchctl print` — while `source-sync.err.log` held 137 tracebacks from five distinct root causes. The failing passes wrote nothing whatsoever, so every freshness signal stayed green. What exposed it was counting the tracebacks, not reading the success log. (The log keeps growing on its 300-second beat, so read that count as a snapshot, not a constant.)

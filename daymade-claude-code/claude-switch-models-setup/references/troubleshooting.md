@@ -466,6 +466,53 @@ against a checkout parked on another session's branch). A daemon still printing
 that traceback runs a pinned copy older than the fix; advance the pin as the
 previous section describes.
 
+## Source sync aborts with `duplicate source skill name`
+
+A pass that dies here never prints its "verified" line, so `source-sync.out.log`
+reads as frozen rather than failed — the failure only ever lands in
+`source-sync.err.log`:
+
+```
+ValueError: duplicate source skill name 'read-wechat-messages':
+  .../claude-code-skills-pro/read-wechat-messages (read-wechat-messages@daymade-skills-pro)
+  and .../cemakanshan-skills/read-wechat-messages (read-wechat-messages@cmks-skills)
+```
+
+Two marketplaces are declaring the same skill name at the same time. The guard is
+deliberate — it refuses to pick a winner — so the fix is to end the overlap, not to
+loosen it. The usual cause is **migrating a skill between repos**, and it is a window
+rather than a steady state: adding to the target `main` and removing from the source
+`main` are two separate commits, and every pass in between aborts. Measured twice:
+
+| skill | added to cmks main | removed from -pro main | window |
+|---|---|---|---|
+| `read-wechat-messages` | 09-16 20:21 (`7e424e8`) | 09-16 20:40 (`77542a72`) | 19 min |
+| `llm-registry` | 09-21 14:09 (`2c8fe00`) | 09-21 15:00 (`06e543b4`) | 51 min |
+
+The two measured incidents were main-to-main: all four commits above are ancestors
+of `main`. Confirm your own pair the same way. A feature branch is not the cause of
+*these two*, but it can still be the cause of yours: the syncer registers skills from
+each checkout's **working tree**, so a checkout forked before the removal still exposes
+the name — and a local branch that added the name does the same. The scanned-branch
+WARN lines in this log are a different mode (previous section), not evidence either way:
+
+```bash
+git -C <checkout> merge-base --is-ancestor <sha> main && echo "on main"
+```
+
+**The order that avoids the window: delete from the source repo and push first, then
+add to the target.** While the window is open nothing is left half-synced — the guard
+runs before the lock and before any write, so an aborted pass changes nothing at all.
+What stops updating during the window: `~/.agents/skills` (Codex side),
+`installed_plugins.json` and `known_marketplaces.json`. `~/.claude/skills` is
+unaffected unless the manifest sets `claude_active_marketplaces`.
+
+**To close a window that is already open:** read the two paths out of the traceback,
+remove the skill from the source repo and push, then run `git -C <that checkout> pull
+--ff-only`. The syncer reads the **working tree** of each local checkout, so pushing
+alone leaves the next pass still seeing the duplicate and the window never closes.
+Confirm closure with a fresh `source-sync verified` line in `source-sync.out.log`.
+
 ## Several profiles launched at once fail with sync tracebacks
 
 This should not happen on current scripts: `sync-local-skill-sources.py` and `claude-plugins-sync.py` share a cross-process lock before writing marketplace JSON, installed plugin metadata, or cache symlinks.
