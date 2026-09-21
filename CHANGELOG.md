@@ -12,6 +12,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **marketplace-dev** (`daymade-claude-code` v3.54.0 → v3.54.1): 交付前清单补一项连 hook 和 checker 都不查的——**CHANGELOG 条目**。`check_version_progression.py` 只裁决新增箭头行的终点是否等于 candidate 版本、`check_changelog_structure.py` 只查标题唯一性，两者都不要求条目存在，所以「bump 了版本但漏了 changelog」会全绿合入（2026-09-21 实证：一个带 bump 的 PR 四个 checker 全绿、CI 四个 check 全 pass，缺条目由独立 agent 审阅才抓到）。约定原文在 `marketplace-health-check/SKILL.md:90`，但该 skill 被 `marketplace-dev/SKILL.md:33` 显式排除在定向改动之外，而 skill 文档 PR 走的正是定向改动这条路——闸门恰好不在路上。同节另补三个 checker 的 base 参数对照表，并写明 `exit 2` 是 argparse 用法错误、仓库根本没被判定，与 checker 判定仓库坏是两件事。
 
+- **openclaw** (v1.1.0 → v1.2.0): four corrections, each paid for by a wrong turn
+  while following the previous entry. **`extraDirs` needs the canonical path, not
+  the typed one** — macOS preserves on-disk casing while `fs.realpathSync` keeps
+  the input casing and `fs.realpathSync.native` returns the canonical form;
+  OpenClaw resolves the configured root with the former and the candidate skill
+  with the latter, so a typed-casing root compared against a canonical candidate
+  fails as `resolved path escapes skill root` and the skill is silently skipped
+  even though the config change applied. Resolve first and paste what
+  `realpathSync.native` prints; neither `git rev-parse --show-toplevel` nor
+  `os.path.realpath` reports the canonical form on this platform. **A plugin can
+  load cleanly and still be dead** — `plugins doctor` passing says nothing about
+  the provider behind it: mem9 passed every plugin check while every call failed
+  on a provider-side tenant/embedding schema mismatch that no plugin setting can
+  reach, and `doctor`'s Memory search note degrades from "plugin disabled" to
+  "provider does not support protected private transcript recall" as the plugin
+  layer is repaired. **`plugins enable` has a second gate** — `plugins.allow` is
+  separate from `entries.<id>.enabled`, and since it is an array a `config patch`
+  replaces it, so the existing entries must be repeated. **An agent's own report
+  of a tool call is not evidence** — `openclaw agent --json` returned
+  `toolSummary: { calls: 1, tools: ["memory_store"], failures: 0 }` while the
+  gateway log recorded the provider rejecting that store, and the agent then
+  "confirmed" the value by reading it back out of the same conversation. A round
+  trip inside one session proves the session, not the backend.
 - **git-safety-net** (v1.20.2 → v1.20.3): route the branch-deletion probe rule to where the
   deletion actually happens. Troubleshooting already carried a measured rule — a bare
   `git ls-remote <remote> <branch>` cannot distinguish "the ref is gone" from "the remote was
