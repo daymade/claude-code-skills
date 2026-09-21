@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **openclaw** (v1.2.0 → v1.2.1): three precision fixes to the previous entry, each
+  taken verbatim from the independent review's own measured evidence rather than
+  newly asserted. The `doctor` Memory search note's first form names the **Active
+  Memory** plugin specifically and only appears while
+  `memory.search.rememberAcrossConversations` is on — the earlier paraphrase called
+  it "the memory plugin", which reads as if the note were about the provider already
+  in use. The `extraDirs` casing failure is now placed at the right stage: discovery
+  lists the skill (both sides use plain `realpathSync` there) and the refusal happens
+  when the file is opened under its root, so "discovery worked but the skill never
+  loaded" is the observable shape. The allowlist error has two renderings — the CLI
+  prints `Plugin "<id>" could not be enabled (blocked by allowlist).` with a capital
+  and a period, the managed path carries it lowercased without one — so the reference
+  now tells readers to grep `blocked by allowlist` instead of either exact form.
 - **claude-switch-models-setup** (`daymade-claude-code` v3.54.1 → v3.54.2): references 补两处诊断缺口。① `local-source-sync-architecture.md` 新增 Optional failure recorder 一节：`scripts/sync-daemon-recorder.sh` 包住 daemon 入口，把「失败轮一个字都不写」变成 `source-sync.failures.log` 里一行（时间+退出码+**本轮新增**的最后一条 stderr；本轮一条都没写则明确记 `(no new stderr this pass)`，不拿 `err.log` 尾部的历史残留下结论——它是 append-only 的，直接 `tail -n 1` 会让一次静默失败继承上一次的 traceback。连续相同失败折叠、1MB 轮换、原退出码继续抛给 launchd）；同节写明**成功侧的新鲜 `verified` 行只证明有轮次成功、不证明每轮成功**，健康判据在失败路径，而 `launchctl` 只给最后一次退出码，所以间歇失败在两次失败之间读起来是健康的。② `troubleshooting.md` 新增症状节：Codex 侧同步全绿、`~/.claude/skills` 却毫无变化时，判据是 dry-run 输出里**一条 `Claude skill …` 都没有**——那说明 `manage_claude` 为 false（manifest 缺 `claude_active_marketplaces` 或它是空数组），该根整体没被接管；修法是把自有 marketplace 名写进那个键，并先用 `--claude-skills` 指向镜像根做零写入预演。另把 recorder 与其自包含双向标定测试从本机 `~/.config` 迁进 `scripts/`（此前 health-check 一直报「在跑但不在任何 git 仓」），`TARGET` 改为解析运行位置而非本文件同级目录。
 
 

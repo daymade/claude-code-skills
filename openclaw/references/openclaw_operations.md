@@ -116,9 +116,12 @@ changing what the plugin could reach.
 
 ### `plugins enable` can be blocked by the allowlist
 
-Enabling a plugin that is installed and valid may still fail with
-`plugin "<id>" could not be enabled (blocked by allowlist)`. `plugins.allow` is
-a separate gate from `plugins.entries.<id>.enabled`, and it is an array, so
+Enabling a plugin that is installed and valid may still fail with a message about
+the allowlist. Two renderings of it exist: the CLI prints
+`Plugin "<id>" could not be enabled (blocked by allowlist).`, while the managed
+error path carries the same text lowercased and without the period — grep for
+`blocked by allowlist` rather than either exact form. `plugins.allow` is a
+separate gate from `plugins.entries.<id>.enabled`, and it is an array, so
 `config patch` replaces it rather than merging — include the existing entries:
 
 ```bash
@@ -250,10 +253,12 @@ fs.realpathSync.native('~/workspace/repo') // -> ~/Workspace/repo  (canonical)
 
 OpenClaw resolves the configured root with `realpathSync` and the candidate
 skill path with `realpathSync.native`, so a root written with the typed casing
-compared against a canonical candidate never matches. The failure reads
-`resolved path escapes skill root` and the skill is skipped — after the config
-change appears to have been applied. Resolve the directory first and paste what
-`realpathSync.native` returns:
+compared against a canonical candidate never matches. Discovery still lists the
+skill — both sides use plain `realpathSync` there — and the failure surfaces
+later, when the skill file is opened under its root: the diagnostic reads
+`resolved path escapes skill root` and the skill is skipped, after the config
+change already appears to have been applied. Resolve the directory first and
+paste what `realpathSync.native` returns:
 
 ```bash
 node -e "console.log(require('fs').realpathSync.native('/path/to/skills'))"
@@ -287,10 +292,12 @@ nothing in OpenClaw can change it. Both remedies the error names are
 provider-side, and recreating a tenant schema can destroy stored memories — not
 a repair to make unilaterally.
 
-`openclaw doctor`'s Memory search note degrades in the same direction: it first
-reports the memory plugin disabled, then, once the plugin is enabled, reports
-that the provider does not support protected private transcript recall. Read the
-note as a symptom of the provider, not of the plugin.
+`openclaw doctor`'s Memory search note degrades in the same direction. Its first
+form names the **Active Memory** plugin as disabled, and it only appears while
+`memory.search.rememberAcrossConversations` is on; once that plugin is enabled
+and the provider still cannot serve protected private transcript recall, the note
+switches to saying so. Read the note as a symptom of the provider, not of
+whichever plugin it happens to name.
 
 ## Verification ladder
 
