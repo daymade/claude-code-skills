@@ -205,6 +205,8 @@ When adding a new plugin to an existing marketplace.json:
 3. **Set new plugin `version` to `"1.0.0"`** — it's new to the marketplace.
 4. **Bump existing plugin `version`** when its SKILL.md content changes.
    Claude Code uses version to detect updates — same version = skip update.
+   Pair the bump with a CHANGELOG entry in the same commit; nothing checks it
+   for you, and the Pre-flight Checklist is the only place it appears.
 5. **Bump existing plugin `version`** when its `source` or `skills` changes.
    The installed cache path and component resolution changed even if SKILL.md did not.
 6. **Audit `metadata` for invalid fields** — `metadata.homepage` is a common
@@ -232,29 +234,38 @@ Every new file must also avoid absolute user paths (`/Users/<name>/…`) — the
 guard blocks the push. Write `~/`-relative and verify by re-running the real
 detector, not by eye.
 
-A fourth item has neither a hook nor a checker: the **CHANGELOG entry**.
-`check_version_progression.py` only validates that a newly added arrow line's
-destination equals the candidate version, and `check_changelog_structure.py` only
-asserts heading uniqueness — neither requires an entry to *exist*. A PR that bumps the
+One further item has neither a hook nor a checker: the **CHANGELOG entry**.
+`check_version_progression.py` only checks arrows whose *destination* matches what
+the candidate ships, and the assertion it then makes is on the **from** end (a rebase
+past another release moves it) — a wrong destination is silently skipped.
+`check_changelog_structure.py` asserts that `## [Unreleased]` appears exactly once and
+is the first `##` heading. Neither requires an entry to *exist*. A PR that bumps the
 version and skips the changelog is therefore green everywhere and merges. The rule is
 stated in `marketplace-health-check/SKILL.md:90` ("flag it, don't merge without it"),
-but that skill is deliberately excluded from targeted edits (`marketplace-dev/SKILL.md:33`),
-which is exactly the path a skill-doc PR takes — so on this path nothing asks for it.
+but the doc-PR path never routes there (`marketplace-dev/SKILL.md:30`), and the
+broad-health-check route is itself scoped to "only when the user requested a broad
+health check … not a prerequisite for a targeted suite migration"
+(`marketplace-dev/SKILL.md:33`) — so on this path nothing asks for it.
 Confirm the entry yourself, in the same commit as the bump.
 
 The three checkers also take their base differently, and a usage error is not a verdict:
 
-| command | base argument | exit 2 means |
+| command | base argument | a usage error gives |
 |---|---|---|
-| `check_version_progression.py` | `--base <ref> --candidate HEAD` | argparse usage error — the repo was never judged |
-| `validate_changed_skills.sh` | positional `<base-ref>` (defaults to `origin/main`) | same |
+| `check_version_progression.py` | `--base <ref> --candidate HEAD` (see below) | **exit 2** — argparse, a refused `--candidate-index` with nothing staged, or an unreadable base/manifest |
+| `validate_changed_skills.sh` | positional `<base-ref>` (defaults to `origin/main`) | **exit 1**, printing `base ref '<x>' is unknown here` |
 | `check_marketplace.py` | none | n/a |
 
-Read exit 2 as "my invocation was wrong", never as "the checker found a problem": a usage
-error leaves the repo unjudged, which is the same state as not having run it at all.
+So the code that means "my invocation was wrong" is **per-script**: exit 2 for
+`check_version_progression.py`, exit 1 for `validate_changed_skills.sh`. In both cases
+the repo was never judged — the same state as not having run it at all. Do not read
+either code as "the checker found a problem": for these two scripts a usage error and a
+real finding share one exit code, which is exactly why the printed message, not the
+number, is what you read.
 
 The `post_edit_sync_check` hook only catches "SKILL.md edited but plugin version not
-bumped". Items 2–4 have no hook — run `check_version_progression.py` and
+bumped". Items 2–4 have no hook, and the CHANGELOG entry has neither a hook nor a
+checker — run `check_version_progression.py` and
 `check_doc_skill_lists.py` locally before pushing rather than discovering them across
 CI rounds. Pass `--base <base-ref> --candidate HEAD`. The script also accepts
 `--candidate-index`, which reads the manifest blob out of the **git index** and diffs
@@ -388,6 +399,9 @@ For each plugin entry:
 - [ ] Suite plugins list `skills` paths relative to `source`
 - [ ] `strict` is `false` (no plugin.json in repo)
 - [ ] `name` is kebab-case, unique across all entries
+- [ ] CHANGELOG entry added for every bumped plugin, with the arrow's from/to
+      matching that bump — **no hook and no CI check requires this**, so it is the
+      item most often skipped
 
 ### Final validation
 
