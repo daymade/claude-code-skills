@@ -88,6 +88,49 @@ n=$(lines "$D/source-sync.failures.log")
 grep -q "PREMATURE-EXIT" "$D/source-sync.failures.log" && grep -q "FAILED exit=1" "$D/source-sync.failures.log" \
   && ok "the two kinds stay distinguishable" || bad "the two kinds blurred together"
 
+echo "== case 9: 历史残留不得冒充本次失败原因（假阳性方向）=="
+# A silent failure must not inherit the previous pass's traceback. err.log is
+# launchd's append-only stderr, so a naive tail -n 1 blames whatever failed last
+# time — measured 2026-09-21: exit 1 with zero stderr recorded the previous
+# run's "duplicate source skill name" line.
+D=$(fresh_log)
+mkdir -p "$D"
+printf 'Traceback (most recent call last):\nValueError: an OLD failure from a previous pass\n' \
+  > "$D/source-sync.err.log"
+printf '#!/bin/bash\nexit 1\n' > "$D/silent.sh"; chmod +x "$D/silent.sh"
+SYNC_LOG_DIR="$D" SYNC_TARGET="$D/silent.sh" bash "$REC" >/dev/null 2>&1
+if grep -q "no new stderr this pass" "$D/source-sync.failures.log"; then
+  ok "silent failure 不继承历史 traceback"
+else
+  bad "silent failure 继承了历史 reason: $(cat "$D/source-sync.failures.log")"
+fi
+if grep -q "an OLD failure" "$D/source-sync.failures.log"; then
+  bad "把上一次的失败原因写进了本轮"
+else
+  ok "上一次的失败原因未被写入"
+fi
+
+echo "== case 10: 本次有新 stderr 时必须归因本次（假阴性方向）=="
+D=$(fresh_log)
+mkdir -p "$D"
+printf 'ValueError: an OLD failure from a previous pass\n' > "$D/source-sync.err.log"
+# The fixture appends to ERR_LOG itself: err.log is filled by launchd's
+# StandardErrorPath redirection, which does not exist in this harness. Construct
+# that external premise explicitly instead of assuming >&2 reaches the file.
+printf '#!/bin/bash\necho "ValueError: THIS pass is the real cause" >> "$SYNC_LOG_DIR/source-sync.err.log"\nexit 1\n' \
+  > "$D/loud.sh"; chmod +x "$D/loud.sh"
+SYNC_LOG_DIR="$D" SYNC_TARGET="$D/loud.sh" bash "$REC" >/dev/null 2>&1
+if grep -q "THIS pass is the real cause" "$D/source-sync.failures.log"; then
+  ok "reason 取自本次新增的 stderr"
+else
+  bad "reason 未取到本次 stderr: $(cat "$D/source-sync.failures.log")"
+fi
+if grep -q "an OLD failure" "$D/source-sync.failures.log"; then
+  bad "reason 是历史残留而非本次"
+else
+  ok "历史残留未被误用"
+fi
+
 echo
 echo "RESULT: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] || exit 1

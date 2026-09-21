@@ -69,12 +69,23 @@ if [ ! -e "$TARGET" ]; then
     exit 75          # EX_TEMPFAIL: launchd keeps scheduling, we do not lie
 fi
 
+# err.log is launchd's append-only StandardErrorPath: it holds every earlier
+# failure too. Snapshot its length so the reason below can only ever be a line
+# THIS pass wrote — otherwise a silent failure inherits the previous one's
+# traceback and the log blames the wrong cause.
+err_before=0
+[ -f "$ERR_LOG" ] && err_before="$(wc -l < "$ERR_LOG" 2>/dev/null | tr -d ' ')"
+err_before="${err_before:-0}"
+
 "$TARGET"
 rc=$?
 
 if [ "$rc" -ne 0 ]; then
-    reason="(no stderr captured)"
-    if [ -f "$ERR_LOG" ]; then
+    err_after=0
+    [ -f "$ERR_LOG" ] && err_after="$(wc -l < "$ERR_LOG" 2>/dev/null | tr -d ' ')"
+    err_after="${err_after:-0}"
+    reason="(no new stderr this pass)"
+    if [ "$err_after" -gt "$err_before" ]; then
         last="$(tail -n 1 "$ERR_LOG" 2>/dev/null)"
         [ -n "$last" ] && reason="$last"
     fi
