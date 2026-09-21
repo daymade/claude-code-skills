@@ -143,6 +143,25 @@ class EntryChangedAndRestored(RuntimeError):
     """A classified entry changed, but the concurrent winner was put back."""
 
 
+class UnreadableMarketplaceManifest(RuntimeError):
+    """A marketplace manifest exists but could not be opened or parsed.
+
+    Not "no manifest": the repo declares a managed marketplace whose identity is
+    momentarily invisible. Returning the no-manifest answer here is how a repo
+    vanished from discovery and surfaced as a validation error naming the wrong
+    cause.
+    """
+
+
+class InvalidMarketplaceManifest(RuntimeError):
+    """A marketplace manifest parses, but declares no usable marketplace name.
+
+    Distinct from UnreadableMarketplaceManifest: the file was read whole, so it
+    is malformed in the checkout itself rather than momentarily unavailable —
+    retrying will not help, and the repair is in that checkout.
+    """
+
+
 def log(msg: str) -> None:
     if not QUIET:
         print(msg)
@@ -763,16 +782,89 @@ def write_json(path: Path, data: object, apply: bool) -> None:
 
 
 def marketplace_name(repo: Path) -> str | None:
+    """Name the marketplace a repo declares, or None when it has no manifest.
+
+    None means only "no .claude-plugin/marketplace.json here" — the state
+    discovery must stay silent for, because infer_repos() walks it past every
+    parent directory of its own script path. A manifest that exists but cannot
+    be read, and one that reads whole without a usable name, both raise: folding
+    either into the same None is how a repo disappeared from discovery and the
+    later hard check reported "not discovered" against the wrong cause.
+    """
     manifest = repo / ".claude-plugin" / "marketplace.json"
-    if not manifest.is_file():
+    # Not is_file(): a dangling symlink and a manifest that is itself a directory
+    # both make is_file() answer False — the "no manifest" answer — so the repo
+    # would vanish from discovery silently and the misleading "not discovered"
+    # error stays reachable. Whether the path exists at all is what separates the
+    # two states, and os.lstat is asked directly because os.path.lexists() would
+    # swallow EACCES into that same False (see below).
+    try:
+        os.lstat(manifest)
+    except (FileNotFoundError, NotADirectoryError):
+        # Genuinely not there: no .claude-plugin, or .claude-plugin is a plain
+        # file. This is the one state that stays silent.
         return None
+    except OSError as exc:
+        # EACCES and friends: the path may well exist and could not be looked at.
+        # Path.is_file() raises here; os.path.lexists() would answer False, which
+        # is the "no manifest" answer, and the repo would silently disappear from
+        # discovery — the exact door this function stops leaving open.
+        raise UnreadableMarketplaceManifest(
+            f"{Path(os.path.abspath(manifest))}: could not be checked "
+            f"({type(exc).__name__}: {exc}). A manifest that cannot be looked at "
+            "is not the same as a manifest that is absent, so it is not skipped "
+            "silently. Check that checkout's ownership and permissions, then run "
+            "the sync again."
+        ) from exc
+    where = Path(os.path.abspath(manifest))
     try:
         data = load_json(manifest)
-    except (OSError, json.JSONDecodeError):
-        return None
-    if isinstance(data, dict) and isinstance(data.get("name"), str):
-        return data["name"]
-    return None
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        # UnicodeDecodeError is a ValueError, not an OSError or JSONDecodeError,
+        # so it escaped the first cut of this handler and propagated with no
+        # manifest path at all — the worst message shape of any case here. It is
+        # also the realistic one for a torn write of a manifest full of CJK text:
+        # truncating mid-multibyte-character fails to decode before json parses.
+        raise UnreadableMarketplaceManifest(
+            f"{where}: marketplace manifest exists but could not be read "
+            f"({type(exc).__name__}: {exc}). A manifest that exists does not make "
+            "this a repo without one, so it cannot be skipped silently. A read that "
+            "fails only because a writer is mid-flight clears on its own, so one "
+            "retry after that writer finishes is worth doing. If it stays "
+            "unreadable the file is corrupt in that checkout and has to be repaired "
+            "there. A concurrent writer rewriting the file in place is a common "
+            "cause, and in a shared checkout a git branch switch is one of those: "
+            "measured on a 160 KB CJK manifest, a concurrent reader saw torn reads "
+            "and momentary FileNotFoundError while a switch was in flight, because "
+            "git unlinks and rewrites rather than swapping atomically. That names a "
+            "class of writer, not the cause of this particular read — no writer is "
+            "established by the read having failed."
+        ) from exc
+    if not isinstance(data, dict):
+        raise InvalidMarketplaceManifest(
+            f"{where}: marketplace manifest parses as {type(data).__name__}, not a "
+            "JSON object declaring a marketplace name. The file itself is malformed "
+            "in that checkout and retrying will not help: restore it from git there "
+            "and run the sync again."
+        )
+    market = data.get("name")
+    if not isinstance(market, str) or not market:
+        # Same "usable name" judgement load_marketplace() applies: an empty name
+        # is as unusable as a missing one, and "" is not in LOCAL_MARKETPLACE_NAMES,
+        # so returning it would send add_repo() down the silent-skip path again.
+        if "name" not in data:
+            declared = "the name key is absent"
+        elif not isinstance(market, str):
+            declared = f"name is a {type(market).__name__}"
+        else:
+            declared = "name is an empty string"
+        raise InvalidMarketplaceManifest(
+            f"{where}: marketplace manifest declares no usable name ({declared}). "
+            "The file itself is malformed in that checkout and retrying will not "
+            "help: it must declare a non-empty string name; restore or repair it "
+            "there and run the sync again."
+        )
+    return market
 
 
 def add_repo(repos: list[Path], candidate: Path) -> None:
@@ -911,7 +1003,15 @@ def resolve_marketplace_source_path(candidate: Path, repo: Path, context: str) -
 def load_marketplace(repo: Path) -> MarketplaceSource:
     repo = repo.resolve(strict=True)
     manifest = repo / ".claude-plugin" / "marketplace.json"
-    data = load_json(manifest)
+    try:
+        data = load_json(manifest)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        # Same three-way catch marketplace_name() uses, so an explicitly
+        # requested --repo reports the manifest it could not read by path
+        # instead of letting a UnicodeDecodeError through unnamed.
+        raise ValueError(
+            f"{manifest}: could not be read ({type(exc).__name__}: {exc})"
+        ) from exc
     if not isinstance(data, dict):
         raise ValueError(f"{manifest}: root must be an object")
     market = data.get("name")
