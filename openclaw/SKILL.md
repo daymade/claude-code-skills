@@ -1,10 +1,13 @@
 ---
 name: openclaw
 description: >-
-  Manage OpenClaw (龙虾) instance configurations. Use whenever the user wants
-  to audit, diff, copy, add-model, list, or switch models in an openclaw.json
-  file, or when they mention lobsters, 虾, 甲虾, 乙虾, DeepSeek patch,
-  default model, model aliases, or OpenClaw config validation.
+  Manage OpenClaw (龙虾) instance configurations, gateway health, and plugin
+  lifecycle. Use whenever the user wants to audit, diff, copy, add-model, list,
+  or switch models in an openclaw.json file; when a lobster's gateway is down or
+  parked; when a plugin fails to register or stops working after an upgrade; or
+  when they ask whether an OpenClaw install is out of date.
+  Also triggers on: lobsters, 虾, 甲虾, 乙虾, DeepSeek patch, default model,
+  model aliases, OpenClaw config validation.
 argument-hint: '[audit|diff|copy|add-model|list|switch] [options]'
 ---
 
@@ -216,6 +219,8 @@ python3 scripts/cli.py diff 甲虾 乙虾
 ## References
 
 - `references/openclaw_architecture.md` — config schema and terminology
+- `references/openclaw_operations.md` — gateway health, plugin lifecycle,
+  upgrade diagnosis, and the verification ladder for claiming a repair worked
 - `references/deepseek_patch_sop.md` — DeepSeek patch SOP (sanitized)
 - `references/deepseek_model.json` — canonical DeepSeek model definition loaded
   by `add-model`
