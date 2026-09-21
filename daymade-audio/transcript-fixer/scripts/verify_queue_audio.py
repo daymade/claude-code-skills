@@ -26,7 +26,7 @@
   - 双窗矛盾/空 → 保留 pending，不换方法重复（两窗不一致本身是信号）
 依赖：ffmpeg/ffprobe；识别引擎脚本（stdout 出文本）。
 """
-import argparse, json, os, re, subprocess, sys
+import argparse, datetime, json, os, re, subprocess, sys
 
 TS_RE = re.compile(r'^(\S+) (\d{2}):(\d{2}):(\d{2})\.(\d{3})\s*$')
 SKILL_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -131,6 +131,39 @@ def main():
     with open(out, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=1)
     print(f"\n{len(results)} items -> {out}")
+
+    # Write the verdict back into the queue's evidence column — but ONLY when
+    # the audio supports the suggestion. The name-convergence gate treats a
+    # 音证 citation as an authority, so attaching one the audio does not
+    # support would launder an unsupported write through the gate. When the
+    # engines do not return the suggestion, nothing is attached: the operator
+    # reads results.json and decides with a different authority (or keeps the
+    # original).
+    attached, unsupported = [], []
+    for r in results:
+        sug = (r.get("suggested") or "").strip()
+        if not sug:
+            continue
+        norm = lambda s: re.sub(r"\s+", "", s or "")
+        if any(sug in norm(r.get(k) or "") for k in ("tight", "medium")):
+            text = (f"音证 {datetime.date.today().isoformat()}：token≈{r['token_wav_time']}s，"
+                    f"tight 窗识别「{(r.get('tight') or '')[:80]}」"
+                    f"/ medium 窗「{(r.get('medium') or '')[:80]}」含建议词「{sug[:40]}」"
+                    f"（verify_queue_audio 双引擎回写）")
+            cp = subprocess.run(
+                ["uv", "run", FIX, "--attach-authority", str(r["id"]),
+                 "--authority-text", text, "--by", "verify_queue_audio", "--json"],
+                capture_output=True, text=True, cwd=SKILL_DIR)
+            if cp.returncode == 0:
+                attached.append(r["id"])
+            else:
+                print(f"⚠ attach {r['id']} failed: {cp.stderr[:200]}", file=sys.stderr)
+        else:
+            unsupported.append(r["id"])
+    if attached:
+        print(f"音证已回写 evidence（作为后续裁决的权威源）: {attached}")
+    if unsupported:
+        print(f"音证不含建议词、未回写权威（请读 results.json 自行裁决）: {unsupported}")
 
 
 if __name__ == "__main__":

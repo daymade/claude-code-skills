@@ -533,9 +533,36 @@ def create_argument_parser() -> argparse.ArgumentParser:
              "displayName+nickName 双读 / 用户裁决 / 音证)"
     )
     parser.add_argument(
+        "--authority",
+        dest="review_authority",
+        help="Authority source for THIS verdict, appended to the item's "
+             "evidence before the name-convergence guard reads it (roster 行 / "
+             "群 displayName+nickName 双读 / 用户裁决 / 音证). Distinct from "
+             "--note: --note is your reason, --authority is the citable source "
+             "that lets a person-name write pass the gate. Must be an authority "
+             "you HAVE — 「需名册确认」这类未取得的引用不算。"
+    )
+    parser.add_argument(
         "--by",
         dest="review_by",
         help="Reviewer name recorded with the verdict"
+    )
+    parser.add_argument(
+        "--attach-authority",
+        metavar="ID",
+        type=int,
+        dest="attach_authority",
+        help="Append an authority citation to an item's evidence WITHOUT "
+             "recording a verdict (requires --authority-text). Use after an "
+             "audio check or other out-of-band verification: the citation "
+             "then lets a later --resolve-review accepted/overridden pass the "
+             "name-convergence gate."
+    )
+    parser.add_argument(
+        "--authority-text",
+        dest="authority_text",
+        help="Citation text for --attach-authority (what was verified, by "
+             "which means, when)"
     )
 
     return parser

@@ -59,6 +59,118 @@ _AUTHORITY_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Naming an authority class is not the same as HAVING it. 「需名册确认」
+# 「需听该段音频」「待用户裁定」 cite the class while saying it was never
+# obtained — 2026-09-20 audit of the live queue: 46 gated rows passed branch
+# (d), a majority of them on exactly this shape (#746「需名册/音频确认
+# canonical」, #950「需听该段音频」, #945「需耳核/用户裁定」).
+#
+# The criterion has to answer "what counts as unobtained", not "how short is the
+# gap". The first version measured a fixed 6-character window in front of each
+# authority noun; that width was arbitrary, and the hole it left defeated the
+# gate's whole reason to exist: 「需要先去听完整的那一段音频再判断」 (marker 11
+# characters away) and 「pending roster confirmation」 (English — no Chinese
+# marker at all) both passed, i.e. the 2026-09-16 majority-spelling shape
+# survived the fix whenever the connector got a little longer or changed
+# language. Measured on the incident pair with an all-False lookup:
+#
+#   需名册确认                      -> refused  (correct)
+#   需先与用户当面确认群昵称          -> PASSED   (9 chars away)
+#   需要先去听完整的那一段音频再判断   -> PASSED   (11 chars away)
+#   pending roster confirmation     -> PASSED   (English, no marker)
+#   TBD 群昵称 double-read          -> PASSED   (English, no marker)
+#   待用户裁定 roster 行 ### 王晓明   -> refused  (false refusal: that roster
+#                                       citation WAS obtained)
+#
+# So: split the evidence into clauses on sentence punctuation, and inside a
+# clause a need-marker governs the noun phrase it is attached to. The governed
+# phrase ends at the clause end, or at the first whitespace that CLOSES an
+# authority noun — once 「用户裁定」 or 「roster」 has been cited in full, a
+# whitespace-separated segment after it is a fresh citation the marker does not
+# reach (that is what keeps 「待用户裁定 roster 行 ### 王晓明」 obtained). A
+# marker that FOLLOWS a noun governs it too (「名册需确认」), so the question is
+# "is any authority noun ungoverned", not "how far away is the marker".
+#
+# The remaining hole is the mirror image of that boundary rule: when the marker
+# comes AFTER the noun and nothing but a citation-closing whitespace sits
+# between them, the boundary severed the pair and the noun was left ungoverned:
+#
+#   roster 需确认              -> PASSED   (should be refused)
+#   dashboard 听音待核         -> PASSED   (should be refused)
+#   群昵称 TBD                 -> PASSED   (should be refused)
+#
+# while the same shape in Chinese (「名册需确认」, no whitespace inside the noun)
+# was refused correctly. So a marker that the boundary rule leaves reaching NO
+# noun governs every noun in the clause. It could not be the plainer "each
+# marker governs the nearest noun on either side": 「用户裁定：需先听音频确认」
+# has 需 three characters from 音频 but five from 用户裁定, and nearest-only
+# would leave 用户裁定 ungoverned and let that pending ruling pass — the
+# colon is not a boundary, and the marker governs both sides across it. The
+# fallback only ever turns a pass into a refusal, never the reverse.
+
+# Sentence punctuation ends a claim. So does a comma: 「疑此人，需名册确认」 is
+# one pending citation, and 「需名册确认，roster 行 ### 王晓明」 carries an
+# obtained one beside it — the module's standing rule is that any single
+# unobstructed citation is enough. A colon deliberately does NOT end a claim:
+# 「用户裁定：需先听音频确认」 is still pending.
+_CLAUSE_END_RE = re.compile(r"[。！？!?；;\n\r，,]+")
+
+# A need-marker: the authority class is named but declared not-yet-obtained.
+# Chinese markers are usually prefixes on the noun (需名册 / 待用户裁定 / 未有音证),
+# English ones are words that take the citation as their object
+# (pending roster confirmation / TBD / awaiting). A marker can also FOLLOW the
+# noun, with or without a citation-closing whitespace in between (「名册需确认」
+# / 「roster 需确认」); which of those it governs is decided in
+# _ungoverned_authority_starts, not by the pattern here.
+_UNOBTAINED_MARKER_RE = re.compile(
+    r"[需待未尚等要请盼]"
+    r"|\bpending\b"
+    r"|\btbd\b"
+    r"|\bto be confirmed\b"
+    r"|\bawaiting\b"
+    r"|\bunconfirmed\b"
+    r"|\bneeds?\s+(?:roster|audio|confirmation|名册|音频|确认|核对)",
+    re.IGNORECASE,
+)
+
+
+def _ungoverned_authority_starts(clause: str) -> set[int]:
+    """Start offsets of the authority nouns in ``clause`` no need-marker governs.
+
+    Empty set means every authority noun in the clause is declared
+    unobtained, or the clause names none."""
+    nouns = list(_AUTHORITY_RE.finditer(clause))
+    if not nouns:
+        return set()
+    markers = list(_UNOBTAINED_MARKER_RE.finditer(clause))
+    if not markers:
+        return {m.start() for m in nouns}
+    # A whitespace that closes an authority noun terminates the governed noun
+    # phrase: the citation is complete, so what follows is a new one.
+    boundaries = {
+        m.end() for m in nouns
+        if m.end() < len(clause) and clause[m.end()].isspace()
+    }
+    governed: set[int] = set()
+    for mk in markers:
+        reachable = set()
+        for noun in nouns:
+            lo, hi = sorted((mk.start(), noun.start()))
+            if not any(lo < b < hi for b in boundaries):
+                reachable.add(noun.start())
+        if not reachable:
+            # The marker reaches NO noun: every one is cut off from it by a
+            # citation-closing boundary, which in practice means the marker sits
+            # right after the noun with only whitespace between (「roster 需确认」
+            # 「群昵称 TBD」 「dashboard 听音待核」). Reading that whitespace as the
+            # start of a fresh citation is exactly the hole that let those three
+            # through — the string names one authority and declares it
+            # not-yet-obtained. A marker that governs nothing governs them all;
+            # this can only add refusals, never let one pass.
+            reachable = {noun.start() for noun in nouns}
+        governed |= reachable
+    return {m.start() for m in nouns} - governed
+
 
 @dataclass
 class NameLookup:
@@ -113,8 +225,30 @@ def is_person_name_shape(from_text: str, to_text: str) -> bool:
 def evidence_names_authority(evidence: Optional[str]) -> bool:
     """True when the evidence string names an authority source class (branch
     d): roster line / 名册 / group displayName / 群昵称 / 用户…裁决 / 音证 /
-    音频 / StepFun / dashboard."""
-    return bool(evidence) and bool(_AUTHORITY_RE.search(evidence))
+    音频 / StepFun / dashboard.
+
+    A citation that is itself marked as not-yet-obtained (「需名册确认」
+    「pending roster confirmation」) does NOT count — see
+    _UNOBTAINED_MARKER_RE. Any single unobstructed citation in the string is
+    enough; a string whose every citation is unobtained is not an authority.
+
+    The evidence is split into clauses on sentence punctuation, and the check
+    runs per clause: one clause that carries an authority noun no need-marker
+    governs is enough to pass, even when another clause is entirely pending
+    (「等名册查完再裁；people roster 行 ### 汪晓明」).
+
+    Inside a clause a marker governs the nouns it is attached to; a whitespace
+    that closes an authority noun starts a fresh citation the marker does not
+    reach, and a marker that reaches no noun at all governs every noun in the
+    clause (so 「roster 需确认」 is refused while 「待用户裁定 roster 行 ### 王晓明」
+    passes). The full rule and its measured failure modes are documented above
+    ``_UNOBTAINED_MARKER_RE``."""
+    if not evidence:
+        return False
+    for clause in _CLAUSE_END_RE.split(evidence):
+        if _ungoverned_authority_starts(clause):
+            return True
+    return False
 
 
 def guard(
@@ -163,8 +297,10 @@ def guard(
             "target_unknown",
             f"拒绝收敛 {from_text!r} → {to_text!r}：人名族内不一致或名册查无，"
             f"禁止按多数派收敛（{to_text!r} 在词典/名册/context rules/review queue 全库查无）。"
-            f"先 --enqueue-review kind:entity，或在 evidence/--note 命名权威源"
-            f"（roster 行 / 群 displayName+nickName 双读 / 用户裁决 / 音证）",
+            f"先 --enqueue-review kind:entity，或在 evidence 命名权威源"
+            f"（roster 行 / 群 displayName+nickName 双读 / 用户裁决 / 音证）；"
+            f"已入队的行用 --resolve-review <id> --decision <...> --authority <权威源> "
+            f"补录权威（注意：权威源必须是已经取得的——「需名册确认」这类未取得的引用不算）。",
         )
 
     # (d) The evidence names an authority source, or the target is claimed

@@ -67,6 +67,7 @@ from cli import (
     cmd_enqueue_review,
     cmd_list_review,
     cmd_show_review,
+    cmd_attach_authority,
     cmd_reanchor_review,
     cmd_resolve_review,
     cmd_scan_traps,
@@ -91,6 +92,24 @@ def main() -> None:
             "Stage 1 default); remove it from your command.",
             file=sys.stderr,
         )
+
+    # --attach-authority and --resolve-review are two different operations
+    # (append a citation vs record a verdict). Written on one command line they
+    # are the most natural way to say "verified it, now settle it", but the
+    # dispatch below ordered attach_authority first, so exactly that command
+    # ran the append, printed ✅, exited 0 — and never recorded the verdict.
+    # The caller was told it had succeeded while the row sat pending. Refuse
+    # instead of silently picking one: run the two commands in sequence.
+    if (getattr(args, "attach_authority", None) is not None
+            and args.resolve_review is not None):
+        print(
+            "Error: --attach-authority and --resolve-review cannot be combined — "
+            "one appends a citation, the other records a verdict, and combining "
+            "them ran only the append while reporting success. Run "
+            "--attach-authority first, then --resolve-review.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
 
     # Dispatch commands
     if args.init:
@@ -164,6 +183,8 @@ def main() -> None:
         cmd_show_review(args)
     elif args.reanchor_review:
         cmd_reanchor_review(args)
+    elif getattr(args, "attach_authority", None) is not None:
+        cmd_attach_authority(args)
     elif args.resolve_review is not None:
         cmd_resolve_review(args)
     elif getattr(args, "scan_traps", False):
