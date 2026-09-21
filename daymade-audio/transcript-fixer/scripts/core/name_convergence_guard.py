@@ -59,6 +59,15 @@ _AUTHORITY_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Naming an authority class is not the same as HAVING it. 「需名册确认」
+# 「需听该段音频」「待用户裁定」 cite the class while saying it was never
+# obtained — 2026-09-20 audit of the live queue: 46 gated rows passed branch
+# (d), a majority of them on exactly this shape (#746「需名册/音频确认
+# canonical」, #950「需听该段音频」, #945「需耳核/用户裁定」). The lookbehind
+# window covers the connectors between the need-marker and the noun
+# (需/待/未/尚/等/要/请/盼 + up to 6 chars of 「听该段」-style filler).
+_UNOBTAINED_PREFIX_RE = re.compile(r"(?:需|待|未|尚|等|要|请|盼)[^。；;，,\n]{0,6}$")
+
 
 @dataclass
 class NameLookup:
@@ -113,8 +122,18 @@ def is_person_name_shape(from_text: str, to_text: str) -> bool:
 def evidence_names_authority(evidence: Optional[str]) -> bool:
     """True when the evidence string names an authority source class (branch
     d): roster line / 名册 / group displayName / 群昵称 / 用户…裁决 / 音证 /
-    音频 / StepFun / dashboard."""
-    return bool(evidence) and bool(_AUTHORITY_RE.search(evidence))
+    音频 / StepFun / dashboard.
+
+    A citation that is itself marked as not-yet-obtained (「需名册确认」
+    「待用户裁定」) does NOT count — see _UNOBTAINED_PREFIX_RE. Any single
+    unobstructed citation in the string is enough; a string whose every
+    citation is unobtained is not an authority."""
+    if not evidence:
+        return False
+    for m in _AUTHORITY_RE.finditer(evidence):
+        if not _UNOBTAINED_PREFIX_RE.search(evidence[: m.start()]):
+            return True
+    return False
 
 
 def guard(
@@ -163,8 +182,10 @@ def guard(
             "target_unknown",
             f"拒绝收敛 {from_text!r} → {to_text!r}：人名族内不一致或名册查无，"
             f"禁止按多数派收敛（{to_text!r} 在词典/名册/context rules/review queue 全库查无）。"
-            f"先 --enqueue-review kind:entity，或在 evidence/--note 命名权威源"
-            f"（roster 行 / 群 displayName+nickName 双读 / 用户裁决 / 音证）",
+            f"先 --enqueue-review kind:entity，或在 evidence 命名权威源"
+            f"（roster 行 / 群 displayName+nickName 双读 / 用户裁决 / 音证）；"
+            f"已入队的行用 --resolve-review <id> --decision <...> --authority <权威源> "
+            f"补录权威（注意：权威源必须是已经取得的——「需名册确认」这类未取得的引用不算）。",
         )
 
     # (d) The evidence names an authority source, or the target is claimed

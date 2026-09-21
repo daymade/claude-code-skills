@@ -37,7 +37,7 @@ uv run scripts/fix_transcription.py --list-review --review-file /absolute/canoni
 uv run scripts/fix_transcription.py --show-review 12         # full evidence + action pack
 # Decide (agent path — humans use the dashboard)
 uv run scripts/fix_transcription.py --resolve-review 12 --decision accepted --by reviewer
-uv run scripts/fix_transcription.py --resolve-review 12 --decision overridden --override-to "正确词" --note "<evidence>"
+uv run scripts/fix_transcription.py --resolve-review 12 --decision overridden --override-to "正确词" --authority "用户 2026-09-20 裁定：以群 displayName 为准" --note "<你的理由>"
 uv run scripts/fix_transcription.py --resolve-review 12 --decision kept_original   # transcript was right
 uv run scripts/fix_transcription.py --resolve-review 12 --decision reopen          # undo (reverts applied edits)
 ```

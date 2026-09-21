@@ -1000,3 +1000,64 @@ class TestLedgerFrontmatterIsNotRewritten:
         (entry,) = result["apply_log"]
         assert entry["ok"] and entry["skipped"]
         assert ledger_transcript.read_text(encoding="utf-8") == before
+
+
+class TestLedgerSafeRevertAndReanchor:
+    """asr_note 台账行故意引用旧形（"修正含：<旧形>→<正确形>"）。reopen 的回退
+    与 reanchor 的重定位都必须在台账屏蔽后工作——2026-09-20 #2241：reopen 的
+    全文计数回退把台账里唯一幸存的新形改回旧形，asr_note 一度变成「旧词→旧词」；
+    #1107：reanchor 把行重锚到 asr_note 自己那一行。"""
+
+    BODY = "正文里说的是旧词的事情。\n"
+
+    def _doc(self, ledger="", body=None):
+        return ("---\n" + ledger + "---\n\n" + (body or self.BODY))
+
+    def test_reopen_revert_skips_ledger_only_survivor(self, queue, tmp_path):
+        # 新形只活在台账里（正文从没落改）时，reopen 不许动台账、还原正文。
+        p = tmp_path / "ledgered.md"
+        p.write_text(self._doc(
+            ledger='asr_note: "2026-09-20 修正含：旧词->新词"\n'), encoding="utf-8")
+        ids = queue.enqueue([_item(p, original="旧词", suggested="新词", actions=[
+            {"type": "file_edit", "path": str(p), "old": "旧词", "new": "新词"},
+        ])])["added"]
+        queue.resolve(ids[0], "accepted")
+        # 手工把正文也改掉，再撤回正文那处，让台账成为唯一幸存
+        p.write_text(self._doc(
+            ledger='asr_note: "2026-09-20 修正含：旧词->新词"\n',
+            body="正文里说的是新词的事情。\n"), encoding="utf-8")
+        result = queue.resolve(ids[0], "reopen", note="误裁回退")
+        text = p.read_text(encoding="utf-8")
+        assert "旧词->新词" in text, "台账行被 revert 误伤"
+        assert "正文里说的是旧词的事情。" in text, "正文应当被还原"
+        assert any(e["ok"] for e in result["revert_log"]), "正文那一处应当成功还原"
+
+    def test_reopen_revert_refuses_when_only_ledger_has_it(self, queue, tmp_path):
+        # 极端形状：新形全文只出现在台账行——什么都不写，并说明原因。
+        p = tmp_path / "ledgered.md"
+        before = self._doc(ledger='asr_note: "2026-09-20 修正含：旧词->新词"\n')
+        p.write_text(before, encoding="utf-8")
+        ids = queue.enqueue([_item(p, original="旧词", suggested="新词", actions=[
+            {"type": "file_edit", "path": str(p), "old": "旧词", "new": "新词"},
+        ])])["added"]
+        queue.resolve(ids[0], "accepted")
+        p.write_text(before, encoding="utf-8")  # 正文从未落改
+        result = queue.resolve(ids[0], "reopen", note="误裁回退")
+        text = p.read_text(encoding="utf-8")
+        assert text == before, "文件必须一字不动"
+        assert any("ledger" in (e.get("msg") or "") for e in result["revert_log"])
+
+    def test_reanchor_ignores_ledger_occurrence(self, queue, tmp_path):
+        # 旧形从正文消失、只在台账行幸存时，reanchor 必须报「不在文件里」，
+        # 而不是把行重锚到 asr_note 自己那一行（2026-09-20 #1107 形状）。
+        p = tmp_path / "ledgered.md"
+        p.write_text(self._doc(
+            ledger='asr_note: "2026-09-20 修正含：旧词->新词"\n'), encoding="utf-8")
+        ids = queue.enqueue([_item(p, line=6, original="旧词",
+                                   suggested="新词")])["added"]
+        # 入队后正文那处被删掉，台账仍引用旧词
+        p.write_text(self._doc(
+            ledger='asr_note: "2026-09-20 修正含：旧词->新词"\n',
+            body="正文说的是别的事情。\n"), encoding="utf-8")
+        with pytest.raises(ReviewQueueError, match="no longer in"):
+            queue.reanchor(ids[0])

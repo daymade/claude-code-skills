@@ -2751,6 +2751,34 @@ def cmd_show_review(args: argparse.Namespace) -> None:
             print(f"{'apply_log':>16}: {json.dumps(item.apply_log, ensure_ascii=False, indent=2)}")
 
 
+def cmd_attach_authority(args: argparse.Namespace) -> None:
+    """Append an authority citation to an item's evidence — no verdict recorded.
+
+    The channel for verification that happened AFTER enqueue (an audio check,
+    a ruling given in review): the name-convergence guard reads evidence, and
+    evidence used to be write-once, so late knowledge could never pass the
+    gate. Appending is audited; it never replaces the enqueuing agent's record.
+    """
+    from core.review_queue import ReviewQueueError
+
+    text = (getattr(args, "authority_text", None) or "").strip()
+    if not text:
+        _queue_cmd_error(args, "missing_authority_text",
+                         "--attach-authority requires --authority-text")
+    queue = _get_review_queue()
+    try:
+        evidence = queue.attach_evidence(
+            args.attach_authority, text, by=getattr(args, "review_by", None))
+    except ReviewQueueError as e:
+        _queue_cmd_error(args, "review_queue_error", str(e))
+        return
+    if getattr(args, "json_output", False):
+        _emit_json({"id": args.attach_authority, "evidence": evidence})
+        return
+    print(f"✅ #{args.attach_authority} evidence 追加权威源（未记录裁决）")
+    print(f"   {text}")
+
+
 def cmd_resolve_review(args: argparse.Namespace) -> None:
     """Record a verdict for a review item and execute its action pack."""
     from core.review_queue import ReAnchorNeeded, ReviewQueueError
@@ -2774,11 +2802,24 @@ def cmd_resolve_review(args: argparse.Namespace) -> None:
         to_text = item.suggested_text if decision == "accepted" else (
             getattr(args, "review_override_to", None) or ""
         ).strip()
+        # An authority named AT VERDICT TIME (audio check since enqueue, a
+        # user ruling in review) has to reach the guard: the evidence column
+        # was write-once at enqueue, which deadlocked every row whose target
+        # is claimed nowhere and whose authority arrived later (2026-09-20:
+        # 67 live rows). --authority appends to evidence first, audited, so
+        # the gate judges the combined record. --note deliberately does NOT
+        # feed the gate: a reason is not a citable source.
+        evidence = item.evidence
+        authority = (getattr(args, "review_authority", None) or "").strip()
+        if authority:
+            evidence = queue.attach_evidence(
+                args.resolve_review, authority,
+                by=getattr(args, "review_by", None))
         # Empty target means the call is malformed; resolve() below raises its
         # own specific error for that, so the guard only judges real targets.
         if to_text:
             _name_convergence_refusal(
-                args, item.original_text, to_text, item.evidence, item.kind,
+                args, item.original_text, to_text, evidence, item.kind,
             )
 
     try:

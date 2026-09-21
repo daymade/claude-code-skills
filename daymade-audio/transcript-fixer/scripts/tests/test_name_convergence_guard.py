@@ -18,6 +18,7 @@ from cli.commands import (  # noqa: E402
     _get_review_queue,
     _get_service,
     cmd_add_correction,
+    cmd_attach_authority,
     cmd_resolve_review,
 )
 from core.name_convergence_guard import (  # noqa: E402
@@ -355,3 +356,95 @@ class TestResolveNameConvergenceGuard:
             review_note="original was right as spoken",
         ))
         assert _get_review_queue().get(item_id).status == "kept_original"
+
+
+class TestUnobtainedAuthorityIsNotAuthority:
+    """「需名册确认」「需听该段音频」引用了权威源类别却说它尚未取得——
+    2026-09-20 队列审计：46 条 gated 行靠这个形状过了 branch (d)，其中一多半
+    本该被拒（#746/#950/#945）。命名一个权威类 ≠ 拥有它。"""
+
+    @pytest.mark.parametrize("text", [
+        "需名册/音频确认 canonical",
+        "需听该段音频",
+        "待用户裁定",
+        "未有音证",
+        "等用户拍板后再改",
+        "需查 roster 后再裁",
+        "尚待名册确认",
+        "要听音确认",
+    ])
+    def test_unobtained_citations_are_not_authority(self, text):
+        assert evidence_names_authority(text) is False, f"误放行: {text!r}"
+
+    @pytest.mark.parametrize("text", [
+        "roster: 王晓明=东吴HK销售",
+        "用户裁决 2026-09-20 以群 displayName 为准",
+        "people roster 行 ### 汪晓明",
+        "音证：clip 00:12:33 双引擎均识别为 X",
+        "等名册查完再裁；people roster 行 ### 汪晓明",  # 前句未取得、后句已取得
+    ])
+    def test_obtained_citations_still_pass(self, text):
+        assert evidence_names_authority(text) is True, f"误拦截: {text!r}"
+
+    def test_gate_rejects_unobtained_authority_end_to_end(self, isolated_config, capsys):
+        # 同一对 incident-shaped 词：evidence 说「需名册确认」时闸门必须拒。
+        item_id = _enqueue_pending("乙琳", "一琳", kind="entity",
+                                   evidence="疑此人，需名册确认 canonical")
+        with pytest.raises(SystemExit) as exc:
+            cmd_resolve_review(_args(
+                resolve_review=item_id, review_decision="overridden",
+                review_override_to="乙林",
+            ))
+        assert exc.value.code == 2
+        assert _get_review_queue().get(item_id).status == "pending"
+
+
+class TestResolveAuthorityChannel:
+    """--authority：裁决时才取得的权威（音频核验、审阅中的用户裁定）必须能
+    进 guard。evidence 列曾是入队时一次性写入，导致 67 条活行死锁——
+    reopen 后仍是 pending，唯一能让目标变 claimed 的 --add 又被 pending-conflict
+    拦住（2026-09-20 实证）。--authority 追加进 evidence（带审计）后再过闸。"""
+
+    def test_authority_flag_unblocks_gate_and_lands(self, isolated_config):
+        item_id = _enqueue_pending("王晓琳", "汪晓明", kind="entity",
+                                   evidence="同段互证")
+        # 无 --authority：被 target_unknown 拒，行保持 pending
+        with pytest.raises(SystemExit) as exc:
+            cmd_resolve_review(_args(
+                resolve_review=item_id, review_decision="accepted",
+                review_note="多数派都这么写",
+            ))
+        assert exc.value.code == 2
+        assert _get_review_queue().get(item_id).status == "pending"
+        # 带 --authority：用户裁定是合法权威源，写入放行
+        cmd_resolve_review(_args(
+            resolve_review=item_id, review_decision="accepted",
+            review_authority="用户 2026-09-21 裁定：以群 displayName 为准",
+            review_note="多数派都这么写",
+        ))
+        item = _get_review_queue().get(item_id)
+        assert item.status == "accepted"
+        assert "用户 2026-09-21 裁定" in (item.evidence or "")
+
+    def test_note_alone_does_not_feed_the_gate(self, isolated_config, capsys):
+        # --note 是理由不是权威源：把权威字样写进 note 不该放行（文档曾承诺
+        # --note 可以，代码从未实现——那个承诺是这次修复要消灭的不一致）。
+        item_id = _enqueue_pending("王晓琳", "汪晓明", kind="entity", evidence="同段互证")
+        with pytest.raises(SystemExit) as exc:
+            cmd_resolve_review(_args(
+                resolve_review=item_id, review_decision="accepted",
+                review_note="用户裁决：就是这个",
+            ))
+        assert exc.value.code == 2
+
+    def test_attach_authority_command_appends_without_verdict(self, isolated_config):
+        item_id = _enqueue_pending("王晓琳", "汪晓明", kind="entity", evidence="同段互证")
+        cmd_attach_authority(_args(
+            attach_authority=item_id,
+            authority_text="音证 2026-09-21：tight 窗双引擎含建议词",
+            review_by="verify_queue_audio",
+        ))
+        item = _get_review_queue().get(item_id)
+        assert item.status == "pending"          # 没有顺手录裁决
+        assert "音证 2026-09-21" in item.evidence
+        assert "同段互证" in item.evidence        # 追加，不覆盖

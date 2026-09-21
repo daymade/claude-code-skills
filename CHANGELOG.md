@@ -24,6 +24,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   （PyYAML 含）静默取最后值并丢较早 ledger。2026-09-20 批量收口往 8 份 transcript 追加第二 `asr_note`，
   `sync-feishu-minutes` audit archive-scan reject（exit 2、coverage unknown）阻塞 date sweep，直至合并回单键。
 
+- **transcript-fixer** (`daymade-audio` v1.41.1 → v1.41.2): 裁决链五个缺陷——①人名收敛闸门
+  只认「已取得的权威」，但 evidence 写「**需**读名册」「**待**用户确认」这类未取得的权威也能放行
+  （正则会命中「名册」二字），2026-09-16 那起多数派收敛到查无此名的拼法的事故形状因此能穿过闸门；
+  修法是 `_UNOBTAINED_PREFIX_RE` 反向排除 + `evidence_names_authority` 改 finditer 逐匹配。
+  ②裁决时才取得的权威（用户当场拍板、群昵称双读）没有通道进 evidence 列；新增
+  `--authority` / `--attach-authority`，裁决时挂载并进 audit log。③`_revert_applied` 的行级还原
+  会把同一原文在台账/frontmatter/asr_note 里的其它出现一起删掉；改调 `_revert_one_body_occurrence`。
+  ④reanchor 匹配前不屏蔽候选文件，会自我漂移；改为先屏蔽。⑤`verify_queue_audio.py` 双引擎片段
+  识别无条件挂「音证」权威，识别文本不含建议词时也挂；改为仅含建议词时才挂。测试 20 新用例
+  （危险侧全拒、健康侧全放、缺失 evidence 键是独立一侧），`scripts/tests` 全量 137 passed。
+
 - **git-safety-net** (v1.20.1 → v1.20.2): `references/prevention_practices.md` gains
   "A whole-file gate cannot tell 'my bump is too low' from 'my branch is behind'". A
   version gate that compares the whole shared manifest's current state against the base

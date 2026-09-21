@@ -67,6 +67,7 @@ from cli import (
     cmd_enqueue_review,
     cmd_list_review,
     cmd_show_review,
+    cmd_attach_authority,
     cmd_reanchor_review,
     cmd_resolve_review,
     cmd_scan_traps,
@@ -164,6 +165,8 @@ def main() -> None:
         cmd_show_review(args)
     elif args.reanchor_review:
         cmd_reanchor_review(args)
+    elif getattr(args, "attach_authority", None) is not None:
+        cmd_attach_authority(args)
     elif args.resolve_review is not None:
         cmd_resolve_review(args)
     elif getattr(args, "scan_traps", False):

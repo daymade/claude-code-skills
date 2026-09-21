@@ -399,9 +399,15 @@ class ReviewQueue:
                     f"pass --reanchor-to <one of: "
                     + ", ".join(str(h[0]) for h in hits[:5]) + ">")
 
-        lines = content.splitlines()
-        matches = [i + 1 for i, ln in enumerate(lines) if item.original_text in ln]
+        # Ledger-masked FIRST: an `asr_note` line quotes old forms on purpose
+        # ("修正含：<旧形>→<正确形>"), so an unmasked search re-points the row
+        # at the ledger itself — 2026-09-20 #1107 re-anchored onto the asr_note
+        # line and the next accept edited the audit trail. The mask preserves
+        # line count, so line numbers below stay valid.
         masked, _ = _mask_ledger_spans(content)
+        masked_lines = masked.splitlines()
+        lines = content.splitlines()
+        matches = [i + 1 for i, ln in enumerate(masked_lines) if item.original_text in ln]
         verdict = self._already_applied_verdict(
             masked, item.original_text, item.suggested_text or "",
             item.context_snippet, item.line_number)
@@ -510,6 +516,42 @@ class ReviewQueue:
         return {"id": item_id, "file_path": str(path), "line_number": line_no,
                 "context_snippet": new_context, "file_repointed": repointed}
 
+    def attach_evidence(self, item_id: int, text: str,
+                        by: Optional[str] = None) -> str:
+        """Append an authority citation to an item's evidence, audited.
+
+        The name-convergence guard reads the evidence column, and until this
+        existed that column was write-once at enqueue: a verdict reached with
+        later knowledge (an audio check, a user ruling in review) had no way
+        to name its authority, and the gate refused the write — 2026-09-20,
+        67 live rows sat in exactly that deadlock (reopen/re-resolve keeps the
+        row pending; the only channel that could claim the target, --add, is
+        itself blocked by the pending-conflict guard). The citation is
+        APPENDED (never replaces what the enqueuing agent recorded) and every
+        append is an audit_log row, so "who claimed what, when" stays
+        answerable."""
+        text = (text or "").strip()
+        if not text:
+            raise ReviewQueueError("attach_evidence: empty citation")
+        stamp = _utcnow()
+        who = by or "unknown"
+        line = f"[authority {stamp} by {who}] {text}"
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT evidence FROM review_items WHERE id = ?", (item_id,)
+            ).fetchone()
+            if row is None:
+                raise ReviewQueueError(f"review item {item_id} not found")
+            old = row[0] or ""
+            new = f"{old}\n{line}" if old else line
+            conn.execute(
+                "UPDATE review_items SET evidence = ? WHERE id = ?", (new, item_id)
+            )
+            self._audit(conn, "review_evidence_attach", item_id, by,
+                        {"appended": line})
+            conn.commit()
+        return new
+
     @staticmethod
     def _find_original_elsewhere(original: str, gone_path: Path,
                                  search_roots: list[str]) -> list[tuple[Path, int]]:
@@ -540,11 +582,16 @@ class ReviewQueue:
                     continue
                 try:
                     with open(rp, encoding="utf-8", errors="replace") as f:
-                        for i, ln in enumerate(f, 1):
-                            if original in ln:
-                                hits.append((rp, i))
-                                seen_files.add(rp)
-                                break
+                        raw = f.read()
+                    # The correction ledger quotes old forms on purpose; a file
+                    # whose only trace of `original` is its own asr_note is not
+                    # where the utterance lives (2026-09-20 #1107 shape).
+                    masked, _ = _mask_ledger_spans(raw)
+                    for i, ln in enumerate(masked.splitlines(), 1):
+                        if original in ln:
+                            hits.append((rp, i))
+                            seen_files.add(rp)
+                            break
                 except OSError:
                     continue
         return hits
@@ -836,15 +883,13 @@ class ReviewQueue:
                 old_text = action["old"]
                 try:
                     content = self._read_file(path)
-                    if content.count(new_text) == 1:
-                        self._write_file(path, content.replace(new_text, old_text, 1))
-                        revert_log.append({"action": action, "ok": True, "msg": "reverted"})
+                    reverted, msg = _revert_one_body_occurrence(
+                        content, new_text, old_text)
+                    if reverted is None:
+                        revert_log.append({"action": action, "ok": False, "msg": msg})
                     else:
-                        revert_log.append({
-                            "action": action, "ok": False,
-                            "msg": f"not reverted: replacement text appears "
-                                   f"{content.count(new_text)} times (need exactly 1) — revert manually",
-                        })
+                        self._write_file(path, reverted)
+                        revert_log.append({"action": action, "ok": True, "msg": "reverted"})
                 except (OSError, ReAnchorNeeded) as e:
                     revert_log.append({"action": action, "ok": False, "msg": f"not reverted: {e}"})
             elif atype == "append_note":
@@ -1365,3 +1410,53 @@ class ReviewQueue:
                VALUES (?, 'review_item', ?, ?, ?, 1)""",
             (action, entity_id, user, json.dumps(details, ensure_ascii=False)),
         )
+
+
+def _ledger_line_flags(content: str) -> list[bool]:
+    """One flag per line: True when the line is part of the correction ledger
+    (inside the leading YAML frontmatter block, or an `asr_note:` line anywhere).
+    Those lines quote old forms deliberately ("修正含：<旧形>→<正确形>"), so
+    they are never legitimate targets for a revert or a re-anchor — editing
+    one rewrites the audit trail (2026-09-20 #2241: a reopen revert turned
+    「旧词→新词」 into 「旧词→旧词」 because the new form survived
+    only in the ledger line)."""
+    lines = content.split("\n")
+    flags = [ln.startswith("asr_note:") for ln in lines]
+    if lines and lines[0].lstrip("﻿").strip() == "---":
+        for i in range(1, len(lines)):
+            if lines[i].strip() == "---":
+                break
+            flags[i] = True
+    return flags
+
+
+def _revert_one_body_occurrence(
+    content: str, new_text: str, old_text: str
+) -> tuple[Optional[str], str]:
+    """Reverse one file_edit, body lines only. Returns (new_content, msg);
+    new_content is None when nothing was written.
+
+    The ledger is excluded on both sides of the count: a new form that
+    survives ONLY in an asr_note line is a ledger citation, not an un-reverted
+    edit — reverting it would corrupt the audit trail (#2241, 2026-09-20)."""
+    if not new_text:
+        return None, "not reverted: empty replacement text"
+    lines = content.split("\n")
+    ledger = _ledger_line_flags(content)
+    hits = [i for i, ln in enumerate(lines) if not ledger[i] and new_text in ln]
+    if len(hits) == 1:
+        i = hits[0]
+        lines[i] = lines[i].replace(new_text, old_text, 1)
+        return "\n".join(lines), "reverted"
+    if not hits:
+        if new_text in content:
+            return None, (
+                "not reverted: the replacement text survives only in the "
+                "asr_note ledger, which quotes old forms on purpose — leave "
+                "the ledger alone and revert the body by hand if needed"
+            )
+        return None, "not reverted: replacement text no longer present in the file"
+    return None, (
+        f"not reverted: replacement text appears on {len(hits)} body lines "
+        f"(need exactly 1) — revert manually"
+    )
