@@ -90,6 +90,23 @@ _AUTHORITY_RE = re.compile(
 # reach (that is what keeps 「待用户裁定 roster 行 ### 王晓明」 obtained). A
 # marker that FOLLOWS a noun governs it too (「名册需确认」), so the question is
 # "is any authority noun ungoverned", not "how far away is the marker".
+#
+# The remaining hole is the mirror image of that boundary rule: when the marker
+# comes AFTER the noun and nothing but a citation-closing whitespace sits
+# between them, the boundary severed the pair and the noun was left ungoverned:
+#
+#   roster 需确认              -> PASSED   (should be refused)
+#   dashboard 听音待核         -> PASSED   (should be refused)
+#   群昵称 TBD                 -> PASSED   (should be refused)
+#
+# while the same shape in Chinese (「名册需确认」, no whitespace inside the noun)
+# was refused correctly. So a marker that the boundary rule leaves reaching NO
+# noun governs every noun in the clause. It could not be the plainer "each
+# marker governs the nearest noun on either side": 「用户裁定：需先听音频确认」
+# has 需 three characters from 音频 but five from 用户裁定, and nearest-only
+# would leave 用户裁定 ungoverned and let that pending ruling pass — the
+# colon is not a boundary, and the marker governs both sides across it. The
+# fallback only ever turns a pass into a refusal, never the reverse.
 
 # Sentence punctuation ends a claim. So does a comma: 「疑此人，需名册确认」 is
 # one pending citation, and 「需名册确认，roster 行 ### 王晓明」 carries an
@@ -99,9 +116,12 @@ _AUTHORITY_RE = re.compile(
 _CLAUSE_END_RE = re.compile(r"[。！？!?；;\n\r，,]+")
 
 # A need-marker: the authority class is named but declared not-yet-obtained.
-# Chinese markers are prefixes on the noun (需名册 / 待用户裁定 / 未有音证);
+# Chinese markers are usually prefixes on the noun (需名册 / 待用户裁定 / 未有音证),
 # English ones are words that take the citation as their object
-# (pending roster confirmation / TBD / awaiting).
+# (pending roster confirmation / TBD / awaiting). A marker can also FOLLOW the
+# noun, with or without a citation-closing whitespace in between (「名册需确认」
+# / 「roster 需确认」); which of those it governs is decided in
+# _ungoverned_authority_starts, not by the pattern here.
 _UNOBTAINED_MARKER_RE = re.compile(
     r"[需待未尚等要请盼]"
     r"|\bpending\b"
@@ -133,10 +153,22 @@ def _ungoverned_authority_starts(clause: str) -> set[int]:
     }
     governed: set[int] = set()
     for mk in markers:
+        reachable = set()
         for noun in nouns:
             lo, hi = sorted((mk.start(), noun.start()))
             if not any(lo < b < hi for b in boundaries):
-                governed.add(noun.start())
+                reachable.add(noun.start())
+        if not reachable:
+            # The marker reaches NO noun: every one is cut off from it by a
+            # citation-closing boundary, which in practice means the marker sits
+            # right after the noun with only whitespace between (「roster 需确认」
+            # 「群昵称 TBD」 「dashboard 听音待核」). Reading that whitespace as the
+            # start of a fresh citation is exactly the hole that let those three
+            # through — the string names one authority and declares it
+            # not-yet-obtained. A marker that governs nothing governs them all;
+            # this can only add refusals, never let one pass.
+            reachable = {noun.start() for noun in nouns}
+        governed |= reachable
     return {m.start() for m in nouns} - governed
 
 
@@ -203,7 +235,14 @@ def evidence_names_authority(evidence: Optional[str]) -> bool:
     The evidence is split into clauses on sentence punctuation, and the check
     runs per clause: one clause that carries an authority noun no need-marker
     governs is enough to pass, even when another clause is entirely pending
-    (「等名册查完再裁；people roster 行 ### 汪晓明」)."""
+    (「等名册查完再裁；people roster 行 ### 汪晓明」).
+
+    Inside a clause a marker governs the nouns it is attached to; a whitespace
+    that closes an authority noun starts a fresh citation the marker does not
+    reach, and a marker that reaches no noun at all governs every noun in the
+    clause (so 「roster 需确认」 is refused while 「待用户裁定 roster 行 ### 王晓明」
+    passes). The full rule and its measured failure modes are documented above
+    ``_UNOBTAINED_MARKER_RE``."""
     if not evidence:
         return False
     for clause in _CLAUSE_END_RE.split(evidence):

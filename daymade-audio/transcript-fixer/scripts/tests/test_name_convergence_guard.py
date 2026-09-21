@@ -463,6 +463,110 @@ class TestUnobtainedWindowIsNotACharacterCount:
         assert evidence_names_authority("用户裁定：需先听音频确认") is False
 
 
+class TestMarkerGovernsNounAcrossCitationBoundary:
+    """残余漏管：marker 出现在权威名词**后面**、中间只隔着一个「引用完结空白」时，
+    边界规则把两者切断，名词没人管 → 放行。
+
+    b37e0c93（本轮修复前）用 22 个对抗输入攻出的 3 个漏管全是这个形状：
+
+        roster 需确认        -> E=True  (放行，错)
+        dashboard 听音待核   -> E=True  (放行，错)
+        群昵称 TBD           -> E=True  (放行，错)
+
+    而同形中文「名册需确认」（名词内部无空白）一直拒得对。修法：边界规则让某个
+    marker 一个名词都够不着时（名词全在它身后、只隔着完结空白），它管住全部名词。
+
+    这个补丁只会把放行变成拒绝、不会反过来，所以健康侧（下面 OBTAINED）在修复
+    前后都必须是 True——它们钉的是「别顺手误拦已取得的引用」。真正的「修复前
+    失败」用例是 FALSE_PASSES 里标 ★ 的那些。
+    """
+
+    # 危险侧：命名了权威源类别，同时声明它尚未取得。★ = 修复前实测放行。
+    FALSE_PASSES = [
+        "roster 需确认",                  # ★ 本轮 3 个漏管之一
+        "dashboard 听音待核",             # ★
+        "群昵称 TBD",                     # ★
+        "未取得名册",
+        "needs roster confirmation",
+        "awaiting the roster line",
+        "名册 displayName 需确认",         # ★ 两个名词被同一个尾部 marker 切断
+        "displayName 待核",               # ★
+        "StepFun 待确认",                 # ★
+        "roster TBD",                     # ★ 英文名词 + 英文尾部 marker
+        "群昵称 pending",                 # ★ 中文名词 + 英文尾部 marker
+        "dashboard 需再听一遍",            # ★ 名词 + 尾部 marker + 长连接词
+        "音证 待补",                      # ★
+        "音频 需确认",                    # ★
+        "需名册确认；roster TBD",          # ★ 两个子句各自未取得
+        "群昵称双读 roster 需确认",        # ★ 无标点，整句按 fail-closed 读作未取得
+        "请确认名册",
+        "盼名册确认",
+        "尚无名册",
+        "等名册",
+        "to be confirmed: roster",
+        "unconfirmed roster entry",
+    ]
+
+    # 健康侧：至少一条无阻碍的已取得引用，必须继续放行。
+    OBTAINED = [
+        "roster 行 ### 王晓明",
+        "群 displayName+nickName 双读",
+        "用户 2026-09-21 裁定",
+        "音证 2026-09-21",
+        "dashboard 听音",
+        "待用户裁定 roster 行 ### 王晓明",
+        "需确认；名册",
+        "需确认，名册",
+        "用户裁定；roster 行 ### 王晓明",
+        "音证",
+        "需先听音频再定，音证 2026-09-21",
+        "需先听音频再定。音证 2026-09-21",
+        "roster",
+        "等名册查完再裁；people roster 行 ### 汪晓明",
+        "群昵称双读，roster 需确认",           # 逗号分句，前句已取得
+        "名册 displayName 需确认，roster 行 ### 王晓明",
+        "roster 需名册确认",                    # marker 夹在两个名词之间
+        "音证 2026-09-21：需先听音频再定",      # 冒号不分句：音证已取得
+        "已取得 roster 行 ### 王晓明；需名册确认",
+        "名册需确认，people roster 行 ### 汪晓明",
+    ]
+
+    @pytest.mark.parametrize("evidence", FALSE_PASSES)
+    def test_marker_behind_a_boundary_still_refuses(self, evidence):
+        assert evidence_names_authority(evidence) is False, f"误放行: {evidence!r}"
+
+    @pytest.mark.parametrize("evidence", OBTAINED)
+    def test_obtained_citations_survive_the_fallback(self, evidence):
+        assert evidence_names_authority(evidence) is True, f"误拦截: {evidence!r}"
+
+    @pytest.mark.parametrize("evidence,want_refusal", [
+        (e, True) for e in FALSE_PASSES
+    ] + [
+        (e, False) for e in OBTAINED
+    ])
+    def test_incident_pair_end_to_end_matches_the_criterion(self, evidence, want_refusal):
+        # 事故原配 + lookup 全 False：判据说拒就必须 GuardRejection，说放就必须 None。
+        r = guard("乙琳", "乙林", evidence, "entity", lookup_fn=lambda t: _lookup())
+        if want_refusal:
+            assert isinstance(r, GuardRejection), f"放行了: {evidence!r}"
+            assert r.code == "target_unknown"
+        else:
+            assert r is None, f"误拦截: {evidence!r}"
+
+    @pytest.mark.parametrize("evidence", ["roster 需确认", "dashboard 听音待核", "群昵称 TBD"])
+    def test_gate_refuses_the_three_residual_leaks_end_to_end(
+        self, evidence, isolated_config, capsys
+    ):
+        # CLI 级：同一条 incident-shaped 行，被拒且什么都不写
+        item_id = _enqueue_pending("乙琳", "乙林", kind="entity", evidence=evidence)
+        with pytest.raises(SystemExit) as exc:
+            cmd_resolve_review(_args(
+                resolve_review=item_id, review_decision="accepted",
+            ))
+        assert exc.value.code == 2, f"放行了: {evidence!r}"
+        assert _get_review_queue().get(item_id).status == "pending"
+
+
 class TestResolveAuthorityChannel:
     """--authority：裁决时才取得的权威（音频核验、审阅中的用户裁定）必须能
     进 guard。evidence 列曾是入队时一次性写入，导致 67 条活行死锁——

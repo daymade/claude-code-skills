@@ -31,11 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--authority` / `--attach-authority`，裁决时挂载并进 audit log。③`_revert_applied` 的行级还原
   会把同一原文在台账/frontmatter/asr_note 里的其它出现一起删掉；改调 `_revert_one_body_occurrence`。
   ④reanchor 匹配前不屏蔽候选文件，会自我漂移；改为先屏蔽。⑤`verify_queue_audio.py` 双引擎片段
-  识别无条件挂「音证」权威，识别文本不含建议词时也挂；改为仅含建议词时才挂。测试 20 新用例
-  （危险侧全拒、健康侧全放、缺失 evidence 键是独立一侧），`test_name_convergence_guard.py` 与
-  `test_review_queue.py` 两文件合计 137 passed——这个数只覆盖这两个文件，不是全量套件；全量
-  `scripts/tests` 是 805 passed / 15 failed，15 个失败全在 `test_error_recovery.py`，在 origin/main
-  上逐条相同，与本条无关。
+  识别无条件挂「音证」权威，识别文本不含建议词时也挂；改为仅含建议词时才挂。
 
   独立审阅判定「有阻塞项」后同版本追加四处修正（首版修完，闸门仍能被穿过）：**① 未取得判据从
   「名词前 6 字内有无 marker」改成「什么算未取得」**——evidence 按句读切成子句，need-marker 管住
@@ -53,8 +49,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **② 的两个 flag 写在同一条命令里时被静默吞掉一个**：分派顺序让 `--attach-authority` 抢先执行，
   打印 ✅、exit 0，而裁决从未记录；现在两者同现即 exit 2 且不写任何东西。另外 `--authority` 原本
   先落库再过闸，一次**被拒**的裁决也会在 evidence 列和 audit log 里永久留下「权威已挂载」而审计行
-  本身看不出对应裁决被拒；改为校验先于副作用。追加 26 个用例钉住这四处，每个都能在修正前失败、
-  修正后通过。
+  本身看不出对应裁决被拒；改为校验先于副作用。
+
+  **① 的判据还留着同一形状的漏管**：marker 出现在权威名词**后面**、中间只隔着一个「引用完结
+  空白」时，边界规则把两者切断，名词没人管——`roster 需确认`、`dashboard 听音待核`、`群昵称 TBD`
+  在 `b37e0c93` 上实测全部放行（同形中文「名册需确认」因为名词内无空白一直拒得对）。补法：边界
+  规则让某个 marker 一个名词都够不着时，它管住全部名词；这个补丁只会把放行变成拒绝、不会反过来，
+  所以健康侧一条都不会被它带坏。没有采用更直白的「每个 marker 管住离它最近的名词」——`用户裁定：
+  需先听音频确认` 里 `需` 离 `音频` 3 字、离 `用户裁定` 5 字，最近规则会留下没人管的 `用户裁定`
+  而让整句未取得放行，而冒号不是引用完结边界。
+
+  用例进程一句话：首版 20 例（危险侧全拒、健康侧全放、缺失 evidence 键是独立一侧），独立审阅后
+  追加 26 例钉住那四处，本轮判据修正再追加 87 例（22 危险侧 + 20 健康侧 + 42 端到端 + 3 CLI 级），
+  每个新增危险侧用例都能在修正前失败、修正后通过。版本内最终实测：`test_name_convergence_guard.py`
+  与 `test_review_queue.py` 两文件合计 250 passed——这个数只覆盖这两个文件，不是全量套件；全量
+  `scripts/tests` 是 892 passed / 15 failed，15 个失败全在 `test_error_recovery.py`，在 origin/main
+  上逐条相同，与本条无关。
 
 - **git-safety-net** (v1.20.1 → v1.20.2): `references/prevention_practices.md` gains
   "A whole-file gate cannot tell 'my bump is too low' from 'my branch is behind'". A
