@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **git-safety-net** (v1.20.2 → v1.20.3): route the branch-deletion probe rule to where the
+  deletion actually happens. Troubleshooting already carried a measured rule — a bare
+  `git ls-remote <remote> <branch>` cannot distinguish "the ref is gone" from "the remote was
+  unreachable" (both print nothing), so the probe must be `--exit-code` with a fully-qualified ref
+  (0 present / 2 absent / 128 probe failed, where 128 means the fate is unknown and nothing may be
+  retired). That rule had **no inbound reference anywhere in the skill**, and the two places that
+  most need it both contradicted or omitted it: Mode B's scoped-evidence block demonstrated the bare
+  form, and Mode E's deletion step said only to re-verify remote and ownership *before* deleting,
+  with no readback after. Mode B's snippet now shows the `--exit-code` form with the reason inline;
+  Mode E gains a readback bullet covering both directions of the trap, including that a repository
+  which deletes branches on merge makes a later `push --delete` exit 1 with `remote ref does not
+  exist` — the desired end state reported as an error. No new rule: the criterion was already
+  measured and unchanged, this makes it reachable from the modes that need it.
+
 - **tech-selection** (`daymade-claude-code` v3.52.0 → v3.53.0): agent orchestration no
   longer asserts a single-agent default. The ruling was that a standing instruction
   inside one task outranks any general delegation rule, so the section now states the
