@@ -150,11 +150,15 @@ Any artifact that claims done but has not been probed by the user stops here. "T
 
 ## Agent Orchestration — Four Questions
 
-Default is one agent doing the work itself. Delegation is licensed only by an
-explicit user request or genuinely independent parallel work that current rules
-allow; the four questions below are the gate that tests for those conditions, not
-a second default. Run them before any spawn, and again whenever the work is
-re-planned.
+Agent count is not preset here. Run the four questions from
+`daymade-agent-discipline` and let them decide.
+
+**In tech selection the answer is already fixed by a standing instruction for this
+task: agent-team discussion is mandatory, and picking a direction unilaterally is
+forbidden.** That instruction outranks any general delegation rule, and Stop 1 is
+where it is enforced — when two or more candidates survive, return candidates +
+trade-offs + a recommendation, never a single pick. It is scoped to this task, not a
+preference about how all work is delegated.
 
 1. **Estimated time?** < 10 min → do it yourself. > 30 min → spawn *candidate* only; duration alone never licenses a spawn. 10–30 min → check other dimensions.
 2. **Need main-session context (user preferences, multi-round feedback, nuanced decisions)?** Yes → do it yourself. No → spawn *candidate*, not automatic.
@@ -181,4 +185,4 @@ Concurrency ceiling: 8–10 (measured, not theoretical). Exceeding it risks quot
 | 预算定档 vs 资源无限 | Budget sets execution tier (which model runs). It never decides whether to do it. Different axes. |
 | 不主动压缩 vs 宿主自动压缩 | During Steps 0–6, do not drop source material to save context — the candidate table and probe records stay complete. Host auto-compaction is outside this skill's control and is not a reason to pre-emptively thin the output. Different actors. |
 | 饱和上报 vs 拒绝过度工程 | Saturation applies to irreversible telemetry (events, export formats, external contracts), not feature surface. Different surfaces. |
-| 默认单 agent vs 四问定 agent 数 | Default is one agent; the four questions are the gate that tests whether delegation is licensed (explicit request or truly independent parallel), not a counter-default. Different layers — the global contract states the default, the questions are the gate. In tech selection specifically the user has asked for agent-team discussion and against picking a direction unilaterally, which is what Stop 1 encodes. |
+| 单次任务强制要求 vs 通用委派判据 | In tech selection, agent-team discussion is mandatory and picking a direction unilaterally is forbidden. That instruction is scoped to this task and outranks any general delegation rule — the four questions fill the gaps it leaves, they do not override it. Stop 1 is where it is enforced. |

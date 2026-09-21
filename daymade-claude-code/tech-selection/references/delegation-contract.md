@@ -5,7 +5,8 @@ description: >-
   user, split by knowledge domain rather than difficulty), the three-part
   autonomy threshold, the requirement-vs-method split line, the six resolved
   scope boundaries that look like contradictions but are not, and the four
-  agent-orchestration questions gated by a single-agent default. Read at Step 4
+  agent-orchestration questions — overridden in this skill by a standing
+  instruction to use an agent team. Read at Step 4
   (survivor triage), before Stop 1, and before escalating any question to the
   user.
 ---
@@ -100,18 +101,22 @@ surfaces:
 | 预算定档 vs 资源无限 | Budget sets the execution tier (which model runs); it never decides whether to do the work. Different axes — cost answers "how," not "whether," and is never a rejection reason on the user's own projects. |
 | 不主动压缩 vs 宿主自动压缩 | 不主动压缩 is a discipline this selection process imposes on itself; host auto-compaction is the runtime acting on its own. Different actors — a self-imposed rule and an external event must not be conflated in either direction. |
 | 饱和上报 vs 拒绝过度工程 | Saturation applies to irreversible observation surfaces (events, field and export formats, external contracts); the anti-overengineering ban applies to feature surface. Different surfaces — saturating telemetry is not adding features. |
-| 默认单 agent vs 四问定 agent 数 | Default is one agent; the four questions are the gate that tests whether delegation is licensed (explicit request or truly independent parallel), not a counter-default. Different layers — the global contract states the default, the questions are the gate. In tech selection specifically the user has asked for agent-team discussion and against picking a direction unilaterally, which is what Stop 1 encodes. |
+| 单次任务强制要求 vs 通用委派判据 | In tech selection, agent-team discussion is mandatory and picking a direction unilaterally is forbidden. That instruction is scoped to this task and outranks any general delegation rule — the four questions fill the gaps it leaves, they do not override it. Stop 1 is where it is enforced. |
 
 ## Agent Orchestration — Four Questions
 
-Default is one agent doing the work itself. Delegation is licensed only by an
-explicit user request or genuinely independent parallel work that current rules
-allow; the four questions below are the gate that tests for those conditions, not
-a second default. Run them before any spawn, and again whenever the work is
-re-planned.
+Agent count is not preset here. Run the four questions from
+`daymade-agent-discipline` and let them decide.
+
+**In tech selection the answer is already fixed by a standing instruction for this
+task: agent-team discussion is mandatory, and picking a direction unilaterally is
+forbidden.** That instruction outranks any general delegation rule, and Stop 1 is
+where it is enforced — when two or more candidates survive, return candidates +
+trade-offs + a recommendation, never a single pick. It is scoped to this task, not a
+preference about how all work is delegated.
 
 1. **How long will it take?** < 10 min → do it yourself. > 30 min → spawn
-   *candidate* only; duration alone never licenses a spawn. 10–30 min → weigh the
+   *candidate*; duration alone never licenses a spawn. 10–30 min → weigh the
    remaining three questions.
 2. **Does it need main-conversation context** (user preferences, multi-round
    feedback, nuanced decisions)? Yes → do it yourself. No → spawn *candidate*,
