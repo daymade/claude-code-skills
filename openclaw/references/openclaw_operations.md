@@ -114,6 +114,20 @@ capabilities, hooks, or a new `kind` is. Observed 2026-09-21: mem9 0.3.3 →
 legacy `tenantID` config key, so the upgrade fixed register failures without
 changing what the plugin could reach.
 
+### `plugins enable` can be blocked by the allowlist
+
+Enabling a plugin that is installed and valid may still fail with
+`plugin "<id>" could not be enabled (blocked by allowlist)`. `plugins.allow` is
+a separate gate from `plugins.entries.<id>.enabled`, and it is an array, so
+`config patch` replaces it rather than merging — include the existing entries:
+
+```bash
+openclaw config patch --stdin <<'JSON'
+{ "plugins": { "allow": ["existing-a", "existing-b", "new-plugin"] } }
+JSON
+openclaw plugins enable new-plugin
+```
+
 ## Hook permission model
 
 Non-bundled plugins must be granted conversation access explicitly. Two
@@ -222,6 +236,62 @@ also makes the skill loadable, but it desynchronises that skill from whatever
 maintains the link — a copy is the last resort, taken only when no root can be
 granted.
 
+### `extraDirs` needs the canonical path, not the typed one
+
+macOS filesystems are case-insensitive but preserve the on-disk casing, and the
+two Node resolution calls disagree about which form they return. Measured on a
+box whose home really contains `Workspace` (capital W) while everyone types
+`workspace`:
+
+```js
+fs.realpathSync('~/workspace/repo')        // -> ~/workspace/repo  (input casing kept)
+fs.realpathSync.native('~/workspace/repo') // -> ~/Workspace/repo  (canonical)
+```
+
+OpenClaw resolves the configured root with `realpathSync` and the candidate
+skill path with `realpathSync.native`, so a root written with the typed casing
+compared against a canonical candidate never matches. The failure reads
+`resolved path escapes skill root` and the skill is skipped — after the config
+change appears to have been applied. Resolve the directory first and paste what
+`realpathSync.native` returns:
+
+```bash
+node -e "console.log(require('fs').realpathSync.native('/path/to/skills'))"
+```
+
+Note that `git rev-parse --show-toplevel` and `python3 -c 'os.path.realpath'`
+both report the typed casing on this platform, so neither is evidence of the
+canonical form. `.agents/skills` failures for skills that are also present under
+an `extraDirs` root are harmless — the same content loads from the extra root.
+
+## A working plugin can still have a dead backend
+
+The strongest signal in this reference is `plugins doctor` reporting checks
+passed, and that is exactly where one failure hides: plugin loading is healthy
+while the provider behind it rejects every call.
+
+Observed 2026-09-21 on mem9 0.4.15 with permissions granted and hooks unblocked.
+`plugins doctor` passed, `gateway status` was active, `Memory` showed
+`enabled (plugin mem9)` — and every call failed with:
+
+```
+[mem9] before_prompt_build failed: Mem9HttpError: tenant schema incompatible
+with embedding mode: sessions.embedding is a regular vector column, but
+MNEMO_EMBED_AUTO_MODEL is enabled; disable Auto Embed or migrate/recreate this
+tenant schema
+```
+
+That setting lives on the provider side. The plugin's `configSchema` carries no
+embedding key and the bundle contains no `MNEMO_EMBED_AUTO_MODEL` reference, so
+nothing in OpenClaw can change it. Both remedies the error names are
+provider-side, and recreating a tenant schema can destroy stored memories — not
+a repair to make unilaterally.
+
+`openclaw doctor`'s Memory search note degrades in the same direction: it first
+reports the memory plugin disabled, then, once the plugin is enabled, reports
+that the provider does not support protected private transcript recall. Read the
+note as a symptom of the provider, not of the plugin.
+
 ## Verification ladder
 
 Ordered strongest to weakest, for claiming an OpenClaw repair worked:
@@ -238,6 +308,14 @@ Ordered strongest to weakest, for claiming an OpenClaw repair worked:
 
 Steps 3 and 4 stay green while step 1 fails. A claim that something is fixed
 needs step 1, not steps 3 or 4.
+
+**An agent's own report of a tool call is not evidence.** `openclaw agent
+--json` returns a `toolSummary` shaped like `{ "calls": 1, "tools":
+["memory_store"], "failures": 0 }`. Observed 2026-09-21, that block claimed a
+successful store while the gateway log recorded the provider rejecting it, and
+the agent then "confirmed" the stored value by reading it back out of the
+conversation context. A round trip through one session proves the session, not
+the backend. Verify against the log, or against a fresh session.
 
 What this ladder does not cover: whether a memory plugin actually stores and
 recalls. That needs one real agent turn, and writing test data into a memory
