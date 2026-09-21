@@ -131,6 +131,29 @@ else
   ok "历史残留未被误用"
 fi
 
+echo "== case 11: 本轮新 stderr 不带尾换行也必须归因本轮 =="
+# wc -l 数的是换行符。本轮追加一段没有尾换行的 stderr 时 err_after == err_before,
+# 会被判成"本轮没写任何 stderr",真实原因整个丢掉——一个旧实现没有、修 snapshot
+# 时新引入的信息损失(独立审阅 2026-09-21 指出,本部署不可达但无 case 覆盖)。
+# 判据用字节数,所以下面这个 fixture 必须被归因。
+D=$(fresh_log)
+mkdir -p "$D"
+printf 'ValueError: an OLD failure from a previous pass\n' > "$D/source-sync.err.log"
+# printf 不加 \n:这一轮的最后一行就是没有换行结尾的。
+printf '#!/bin/bash\nprintf "ValueError: THIS pass has no trailing newline" >> "$SYNC_LOG_DIR/source-sync.err.log"\nexit 1\n' \
+  > "$D/notrailing.sh"; chmod +x "$D/notrailing.sh"
+SYNC_LOG_DIR="$D" SYNC_TARGET="$D/notrailing.sh" bash "$REC" >/dev/null 2>&1
+if grep -q "THIS pass has no trailing newline" "$D/source-sync.failures.log"; then
+  ok "无尾换行的本轮 stderr 仍被归因"
+else
+  bad "无尾换行的本轮 stderr 被丢弃: $(cat "$D/source-sync.failures.log")"
+fi
+if grep -q "an OLD failure" "$D/source-sync.failures.log"; then
+  bad "reason 是历史残留而非本次"
+else
+  ok "历史残留未被误用"
+fi
+
 echo
 echo "RESULT: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] || exit 1

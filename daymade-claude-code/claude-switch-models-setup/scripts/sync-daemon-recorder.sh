@@ -9,8 +9,10 @@
 # 5 minutes for an hour with no signal anywhere.
 #
 # What this does — and only this: on a non-zero exit, append ONE line
-# (timestamp + exit code + last stderr line) to source-sync.failures.log, then
-# re-raise the original exit code so launchd still records the failure.
+# (timestamp + exit code + the last stderr line THIS pass wrote, or an explicit
+# "(no new stderr this pass)" marker when it wrote none) to
+# source-sync.failures.log, then re-raise the original exit code so launchd still
+# records the failure.
 #
 # Deliberately absent, per the quiet-watchdog contract (macos-watchdog skill):
 #   * no notification      — a log line is a ticket, not a page
@@ -73,8 +75,11 @@ fi
 # failure too. Snapshot its length so the reason below can only ever be a line
 # THIS pass wrote — otherwise a silent failure inherits the previous one's
 # traceback and the log blames the wrong cause.
+# Byte count, not line count: `wc -l` counts newline characters, so a stderr write
+# without a trailing newline reads as "no new stderr" and the real reason is thrown
+# away. Bytes are monotonic whatever the last line looks like.
 err_before=0
-[ -f "$ERR_LOG" ] && err_before="$(wc -l < "$ERR_LOG" 2>/dev/null | tr -d ' ')"
+[ -f "$ERR_LOG" ] && err_before="$(wc -c < "$ERR_LOG" 2>/dev/null | tr -d ' ')"
 err_before="${err_before:-0}"
 
 "$TARGET"
@@ -82,7 +87,7 @@ rc=$?
 
 if [ "$rc" -ne 0 ]; then
     err_after=0
-    [ -f "$ERR_LOG" ] && err_after="$(wc -l < "$ERR_LOG" 2>/dev/null | tr -d ' ')"
+    [ -f "$ERR_LOG" ] && err_after="$(wc -c < "$ERR_LOG" 2>/dev/null | tr -d ' ')"
     err_after="${err_after:-0}"
     reason="(no new stderr this pass)"
     if [ "$err_after" -gt "$err_before" ]; then

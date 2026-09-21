@@ -236,8 +236,12 @@ so a failing pass writes nothing to `source-sync.out.log` at all — the success
 stay fresh forever while passes keep failing. The wrapper appends one line (timestamp,
 exit code, last stderr line) to `source-sync.failures.log` on a non-zero exit, collapses
 consecutive identical failures, rotates at 1 MB, and re-raises the original exit code so
-launchd still records it. It adds no notification and no remediation, which is why it is
-not installed by default.
+launchd still records it. That reason is scoped to the current pass by a byte-count
+snapshot taken before the run: `err.log` is append-only, so a bare `tail -n 1` would
+blame whatever failed last time, and a silent pass would inherit a stranger's traceback.
+When this pass wrote no stderr at all the line says `(no new stderr this pass)` instead
+of guessing. It adds no notification and no remediation, which is why it is not installed
+by default.
 
 Install it by pointing the plist's `ProgramArguments` at the wrapper instead of the
 daemon entry, then `bootout` + `bootstrap`; remove it by repointing back.
