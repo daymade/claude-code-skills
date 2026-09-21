@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **claude-switch-models-setup** (`daymade-claude-code` v3.54.1 → v3.54.2): references 补两处诊断缺口。① `local-source-sync-architecture.md` 新增 Optional failure recorder 一节：`scripts/sync-daemon-recorder.sh` 包住 daemon 入口，把「失败轮一个字都不写」变成 `source-sync.failures.log` 里一行（时间+退出码+最后一条 stderr，连续相同失败折叠、1MB 轮换、原退出码继续抛给 launchd）；同节写明**成功侧的新鲜 `verified` 行只证明有轮次成功、不证明每轮成功**，健康判据在失败路径，而 `launchctl` 只给最后一次退出码，所以间歇失败在两次失败之间读起来是健康的。② `troubleshooting.md` 新增症状节：Codex 侧同步全绿、`~/.claude/skills` 却毫无变化时，判据是 dry-run 输出里**一条 `Claude skill …` 都没有**——那说明 `manage_claude` 为 false（manifest 缺 `claude_active_marketplaces` 或它是空数组），该根整体没被接管；修法是把自有 marketplace 名写进那个键，并先用 `--claude-skills` 指向镜像根做零写入预演。另把 recorder 与其 17 例标定测试从本机 `~/.config` 迁进 `scripts/`（此前 health-check 一直报「在跑但不在任何 git 仓」），`TARGET` 改为解析运行位置而非本文件同级目录。
+
+
 - **marketplace-dev** (`daymade-claude-code` v3.54.0 → v3.54.1): 交付前清单补一项连 hook 和 checker 都不查的——**CHANGELOG 条目**。`check_version_progression.py` 只裁决新增箭头行的终点是否等于 candidate 版本、`check_changelog_structure.py` 只查标题唯一性，两者都不要求条目存在，所以「bump 了版本但漏了 changelog」会全绿合入（2026-09-21 实证：一个带 bump 的 PR 四个 checker 全绿、CI 四个 check 全 pass，缺条目由独立 agent 审阅才抓到）。约定原文在 `marketplace-health-check/SKILL.md:90`，但该 skill 被 `marketplace-dev/SKILL.md:33` 显式排除在定向改动之外，而 skill 文档 PR 走的正是定向改动这条路——闸门恰好不在路上。同节另补三个 checker 的 base 参数对照表，并写明 `exit 2` 是 argparse 用法错误、仓库根本没被判定，与 checker 判定仓库坏是两件事。
 
 - **git-safety-net** (v1.20.2 → v1.20.3): route the branch-deletion probe rule to where the

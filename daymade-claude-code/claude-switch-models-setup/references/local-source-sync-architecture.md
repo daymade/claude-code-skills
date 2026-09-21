@@ -228,6 +228,26 @@ tail -50 ~/Library/Logs/claude-switch-models-setup/source-sync.err.log
 tail -50 ~/Library/Logs/claude-switch-models-setup/source-sync.out.log
 ```
 
+### Optional failure recorder
+
+`scripts/sync-daemon-recorder.sh` wraps the daemon entry so a **failed** pass leaves a
+trace. The upstream runner prints its `verified` line only after every step succeeds,
+so a failing pass writes nothing to `source-sync.out.log` at all — the success log can
+stay fresh forever while passes keep failing. The wrapper appends one line (timestamp,
+exit code, last stderr line) to `source-sync.failures.log` on a non-zero exit, collapses
+consecutive identical failures, rotates at 1 MB, and re-raises the original exit code so
+launchd still records it. It adds no notification and no remediation, which is why it is
+not installed by default.
+
+Install it by pointing the plist's `ProgramArguments` at the wrapper instead of the
+daemon entry, then `bootout` + `bootstrap`; remove it by repointing back.
+
+**Liveness.** A fresh `verified` line proves that *some* pass succeeded, never that
+*every* pass did. The health signal is the failure path — `source-sync.failures.log`
+with the wrapper, `source-sync.err.log` without it — not the success log's freshness.
+`launchctl` reports only the last exit code, so an intermittently failing job reads as
+healthy between failures.
+
 Uninstall:
 
 ```bash
