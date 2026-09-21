@@ -467,6 +467,375 @@ class ActiveManifestTests(unittest.TestCase):
                 sync.load_marketplace(repo)
 
 
+class MarketplaceManifestStateTests(unittest.TestCase):
+    """A present-but-unusable manifest must fail loudly; only "no manifest" is silent.
+
+    marketplace_name() used to answer None for all three states, so a repo whose
+    manifest was momentarily unreadable dropped out of discovery and the later
+    hard check reported "marketplace activation fields name repos not
+    discovered" — an error pointing at the wrong cause. The production trigger
+    is a shared checkout rewriting .claude-plugin/marketplace.json while the
+    sync daemon (that file is one of its WatchPaths) reads it mid-write.
+    """
+
+    def _manifest_repo(self, root: Path, body: str, marketplace: str) -> Path:
+        repo = root / f"repo-{marketplace}"
+        (repo / ".claude-plugin").mkdir(parents=True)
+        (repo / ".claude-plugin" / "marketplace.json").write_text(body, encoding="utf-8")
+        return repo
+
+    # Manifest present, but open/json.load fails. Retrying is the right answer here.
+    UNREADABLE_BODIES = {
+        "truncated-json": '{"name": "daymade-skills", "plugins": [',
+        "empty-file": "",
+        "trailing-garbage": '{"name": "daymade-skills", "plugins": []} extra',
+    }
+
+    # Manifest reads whole, but declares no usable name. Retrying is NOT the answer.
+    INVALID_BODIES = {
+        "no-name": '{"plugins": []}',
+        "name-not-a-string": '{"name": 42, "plugins": []}',
+        "root-not-an-object": '["daymade-skills"]',
+        "name-empty-string": '{"name": "", "plugins": []}',
+    }
+
+    def test_missing_manifest_stays_silent(self) -> None:
+        """The one state discovery must keep skipping silently: infer_repos() calls
+        this for every ancestor of its own script path, plus hardcoded bases that
+        do not exist."""
+        with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
+            repo = Path(raw) / "repo"
+            repo.mkdir()
+            self.assertIsNone(sync.marketplace_name(repo))
+
+            repos: list[Path] = []
+            sync.add_repo(repos, repo)
+            self.assertEqual(repos, [])
+
+    def test_valid_manifest_returns_its_name(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
+            repo = self._manifest_repo(
+                Path(raw), json.dumps({"name": "daymade-skills", "plugins": []}), "daymade-skills"
+            )
+            self.assertEqual(sync.marketplace_name(repo), "daymade-skills")
+
+            repos: list[Path] = []
+            sync.add_repo(repos, repo)
+            self.assertEqual(repos, [repo.resolve()])
+
+    def test_unmanaged_marketplace_name_is_skipped_without_raising(self) -> None:
+        """A valid manifest naming a marketplace this syncer does not manage is a
+        normal answer, not a defect — and it must not stop the others."""
+        with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
+            root = Path(raw)
+            foreign = self._manifest_repo(
+                root,
+                json.dumps({"name": "someone-elses-marketplace", "plugins": []}),
+                "foreign",
+            )
+            managed = self._manifest_repo(
+                root, json.dumps({"name": "cmks-skills", "plugins": []}), "managed"
+            )
+            self.assertEqual(sync.marketplace_name(foreign), "someone-elses-marketplace")
+
+            repos: list[Path] = []
+            sync.add_repo(repos, foreign)
+            self.assertEqual(repos, [])
+            sync.add_repo(repos, managed)
+            self.assertEqual(repos, [managed.resolve()])
+
+    def test_unreadable_manifest_fails_instead_of_disappearing(self) -> None:
+        for label, body in self.UNREADABLE_BODIES.items():
+            with self.subTest(body=label):
+                with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
+                    repo = self._manifest_repo(Path(raw), body, "daymade-skills")
+                    manifest = repo / ".claude-plugin" / "marketplace.json"
+                    with self.assertRaises(sync.UnreadableMarketplaceManifest) as raised:
+                        sync.marketplace_name(repo)
+                    message = str(raised.exception)
+                    self.assertIn(str(manifest), message)
+                    # The underlying error travels with the report.
+                    self.assertIn("JSONDecodeError", message)
+                    # The remediation for this state: a mid-flight writer clears
+                    # on its own, so ONE retry is what the reader should do.
+                    self.assertIn("retry", message.lower())
+
+    def test_unreadable_for_reasons_other_than_bad_json(self) -> None:
+        """UnicodeDecodeError is a ValueError, not an OSError or JSONDecodeError,
+        so the first cut of the handler let it through unnamed — and it is the
+        realistic torn-read shape for a manifest full of CJK text, where cutting
+        mid-multibyte-character fails to decode before json ever parses."""
+
+        def non_utf8(repo: Path) -> None:
+            (repo / ".claude-plugin" / "marketplace.json").write_bytes(
+                b'\xff\xfe{"name": "daymade-skills"}'
+            )
+
+        def torn_mid_multibyte(repo: Path) -> None:
+            # [:11] lands inside 日's three-byte UTF-8 sequence (e6 97 a5), which
+            # is the whole point: the decode fails before json ever parses. An
+            # earlier cut of this fixture used [:8] — a pure-ASCII prefix that
+            # only reaches JSONDecodeError, so the case it names was not the case
+            # it made. Verify the offset, don't trust the label.
+            body = '{"name": "日"'.encode("utf-8")
+            assert body[:11] == b'{"name": "\xe6', "no longer cut mid-multibyte"
+            (repo / ".claude-plugin" / "marketplace.json").write_bytes(body[:11])
+
+        def dangling_symlink(repo: Path) -> None:
+            os.symlink(
+                "/nonexistent-target",
+                repo / ".claude-plugin" / "marketplace.json",
+            )
+
+        def manifest_is_a_directory(repo: Path) -> None:
+            (repo / ".claude-plugin" / "marketplace.json").mkdir()
+
+        cases = {
+            "non-utf8-bytes": non_utf8,
+            "torn-mid-multibyte": torn_mid_multibyte,
+            "dangling-symlink": dangling_symlink,
+            "manifest-is-a-directory": manifest_is_a_directory,
+        }
+        for label, setup in cases.items():
+            with self.subTest(case=label):
+                with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
+                    repo = Path(raw) / "repo"
+                    (repo / ".claude-plugin").mkdir(parents=True)
+                    setup(repo)
+                    manifest = repo / ".claude-plugin" / "marketplace.json"
+                    with self.assertRaises(sync.UnreadableMarketplaceManifest) as raised:
+                        sync.marketplace_name(repo)
+                    # The whole point: the reader is told WHICH manifest, instead
+                    # of getting a bare UnicodeDecodeError/IsADirectoryError with
+                    # no path, or the repo silently vanishing.
+                    self.assertIn(str(manifest), str(raised.exception))
+
+    def test_message_names_a_class_of_writer_without_ruling_one_out(self) -> None:
+        """Two earlier cuts of this message each asserted more than a failed read
+        establishes, and both were wrong in opposite directions:
+
+        1. "the usual cause is a shared checkout being rewritten by git right now"
+           — asserted a specific cause that was never established;
+        2. "git swaps a whole file into place, so it cannot leave a torn read"
+           — asserted a class of writer is impossible. Measured on a 160 KB CJK
+           manifest, a concurrent reader saw 43 torn reads and 232 momentary
+           FileNotFoundError while branch switches were in flight, because git
+           unlinks and rewrites in place rather than swapping atomically.
+
+        So this guards phrases, not the discipline itself — say so honestly, because
+        a phrase blocklist is not a proof that every wrong story goes red. What it
+        does catch: the two historical wrong stories above, a claim that a specific
+        writer IS the cause, and dropping the retry advice. What it cannot catch:
+        some new over-claim phrased in words none of these match. If you widen the
+        claim this test backs, widen the blocklist with it."""
+        with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
+            repo = self._manifest_repo(
+                Path(raw), '{"name": "daymade-skills", ', "daymade-skills"
+            )
+            with self.assertRaises(sync.UnreadableMarketplaceManifest) as raised:
+                sync.marketplace_name(repo)
+            message = str(raised.exception)
+            lowered = message.lower()
+            # The honest framing is present...
+            self.assertIn("mid-flight", message)
+            self.assertIn("retry", lowered)
+            # ...and no over-claim slips through these phrases.
+            for absolute in (
+                "cannot leave a torn read",
+                "swap a whole file into place",
+                "rewritten by git right now",
+                "cannot be the writer",
+                "is the cause",
+                "ruled out",
+                "caused this failure",
+            ):
+                self.assertNotIn(absolute, lowered)
+
+    def test_load_marketplace_reports_an_undecodable_manifest_by_path(self) -> None:
+        """load_marketplace() got the same three-way catch as marketplace_name(),
+        so an explicitly requested --repo names the manifest it could not read.
+        Without this test the catch can be dropped and nothing notices — the
+        UnicodeDecodeError escapes unnamed again, which is exactly the shape
+        marketplace_name() was fixed for."""
+        with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
+            repo = Path(raw) / "repo"
+            (repo / ".claude-plugin").mkdir(parents=True)
+            manifest = repo / ".claude-plugin" / "marketplace.json"
+            manifest.write_bytes(b'\xff\xfe{"name": "daymade-skills", "plugins": []}')
+            with self.assertRaises(ValueError) as raised:
+                sync.load_marketplace(repo)
+            message = str(raised.exception)
+            self.assertIn(str(manifest), message)
+            self.assertIn("UnicodeDecodeError", message)
+
+    def test_an_unsearchable_plugin_dir_is_not_read_as_absent(self) -> None:
+        """EACCES on .claude-plugin must not answer the "no manifest" question.
+
+        Path.is_file() raises here. os.path.lexists() would answer False — which
+        is the absent answer — and the repo would silently vanish from discovery,
+        reopening the exact door this change closes. So lstat is asked directly
+        and a permission error is reported as "exists but could not be checked".
+        """
+        if os.geteuid() == 0:
+            self.skipTest("chmod does not restrict root, so EACCES cannot be staged")
+        with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
+            repo = Path(raw) / "repo"
+            (repo / ".claude-plugin").mkdir(parents=True)
+            manifest = repo / ".claude-plugin" / "marketplace.json"
+            manifest.write_text('{"name": "daymade-skills", "plugins": []}')
+            os.chmod(repo / ".claude-plugin", 0o000)
+            try:
+                with self.assertRaises(sync.UnreadableMarketplaceManifest) as raised:
+                    sync.marketplace_name(repo)
+                self.assertIn(str(manifest), str(raised.exception))
+            finally:
+                os.chmod(repo / ".claude-plugin", 0o755)
+
+    def test_manifest_path_that_does_not_exist_is_still_silent(self) -> None:
+        """A .claude-plugin that is a plain file means the manifest path genuinely
+        does not exist, so "no manifest" is the true answer — not a broken one.
+        Raising here would turn a weird-but-harmless layout into a hard failure."""
+        with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
+            repo = Path(raw) / "repo"
+            repo.mkdir()
+            (repo / ".claude-plugin").write_text("not a directory")
+            self.assertIsNone(sync.marketplace_name(repo))
+
+            repos: list[Path] = []
+            sync.add_repo(repos, repo)
+            self.assertEqual(repos, [])
+
+    def test_invalid_manifest_fails_with_a_different_message(self) -> None:
+        for label, body in self.INVALID_BODIES.items():
+            with self.subTest(body=label):
+                with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
+                    repo = self._manifest_repo(Path(raw), body, "daymade-skills")
+                    manifest = repo / ".claude-plugin" / "marketplace.json"
+                    with self.assertRaises(sync.InvalidMarketplaceManifest) as raised:
+                        sync.marketplace_name(repo)
+                    message = str(raised.exception)
+                    self.assertIn(str(manifest), message)
+                    # A whole-file read: the remedy is repair in that checkout, not a retry.
+                    self.assertIn("retrying will not help", message)
+                    self.assertNotIn("could not be read", message)
+
+    def test_the_two_failure_states_are_told_apart(self) -> None:
+        """Both raise, but they name different causes and different repairs — a reader
+        must be able to tell which one they have from the message alone."""
+        with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
+            root = Path(raw)
+            unreadable_repo = self._manifest_repo(
+                root, '{"name": "daymade-skills", ', "daymade-skills"
+            )
+            invalid_repo = self._manifest_repo(
+                root, '{"plugins": []}', "daymade-skills-pro"
+            )
+            with self.assertRaises(sync.UnreadableMarketplaceManifest) as unreadable:
+                sync.marketplace_name(unreadable_repo)
+            with self.assertRaises(sync.InvalidMarketplaceManifest) as invalid:
+                sync.marketplace_name(invalid_repo)
+
+            self.assertNotIsInstance(unreadable.exception, sync.InvalidMarketplaceManifest)
+            self.assertNotEqual(str(unreadable.exception), str(invalid.exception))
+
+    def test_absent_key_and_empty_name_are_told_apart(self) -> None:
+        """Two different authors' mistakes with the same unusable result: a reader
+        must see whether the key was never written or was written empty. This is
+        the same judgement load_marketplace() applies, which rejected "" all along —
+        returning "" here re-opened the silent-skip path, since "" is not in
+        LOCAL_MARKETPLACE_NAMES."""
+        with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
+            root = Path(raw)
+            absent = self._manifest_repo(root, '{"plugins": []}', "daymade-skills")
+            empty = self._manifest_repo(
+                root, '{"name": "", "plugins": []}', "daymade-skills-pro"
+            )
+            with self.assertRaises(sync.InvalidMarketplaceManifest) as absent_error:
+                sync.marketplace_name(absent)
+            with self.assertRaises(sync.InvalidMarketplaceManifest) as empty_error:
+                sync.marketplace_name(empty)
+
+            self.assertIn("the name key is absent", str(absent_error.exception))
+            self.assertIn("name is an empty string", str(empty_error.exception))
+            self.assertNotEqual(str(absent_error.exception), str(empty_error.exception))
+
+    def test_discovery_reports_the_manifest_it_could_not_read(self) -> None:
+        """Through the real discovery path (add_repo), the manifest error must reach
+        the caller instead of the repo vanishing and a later check guessing why."""
+        with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
+            root = Path(raw)
+            repo = self._manifest_repo(
+                root, '{"name": "daymade-skills", "plugins": [', "daymade-skills"
+            )
+            (root / "claude").mkdir()
+            env = {"DAYMADE_SKILL_SOURCE_REPOS": str(repo)}
+            with mock.patch.object(sync, "HOME", root / "home"):
+                with mock.patch.dict(os.environ, env):
+                    with self.assertRaises(sync.UnreadableMarketplaceManifest) as raised:
+                        sync.infer_repos(root / "elsewhere" / "sync.py", root / "claude")
+            self.assertIn(
+                str(repo / ".claude-plugin" / "marketplace.json"), str(raised.exception)
+            )
+
+    def test_empty_name_no_longer_disappears_from_discovery(self) -> None:
+        """The regression itself: add_repo() used to receive "" (never in
+        LOCAL_MARKETPLACE_NAMES) and return silently, so the repo vanished and the
+        later hard check blamed the wrong cause. Through the real discovery path it
+        must now name the manifest."""
+        with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
+            root = Path(raw)
+            repo = self._manifest_repo(root, '{"name": "", "plugins": []}', "daymade-skills")
+            (root / "claude").mkdir()
+            env = {"DAYMADE_SKILL_SOURCE_REPOS": str(repo)}
+            with mock.patch.object(sync, "HOME", root / "home"):
+                with mock.patch.dict(os.environ, env):
+                    with self.assertRaises(sync.InvalidMarketplaceManifest) as raised:
+                        sync.infer_repos(root / "elsewhere" / "sync.py", root / "claude")
+            message = str(raised.exception)
+            self.assertIn(
+                str(repo / ".claude-plugin" / "marketplace.json"), message
+            )
+            self.assertIn("empty string", message)
+            self.assertNotIn("not discovered", message)
+
+    def test_ancestor_walk_stays_silent_past_manifestless_parents(self) -> None:
+        """infer_repos() walks every parent of its own script path; those reads must
+        keep returning None so a normal checkout still discovers its repos."""
+        with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
+            root = Path(raw)
+            deep = root / "a" / "b" / "c" / "scripts"
+            deep.mkdir(parents=True)
+            managed = self._manifest_repo(
+                root, json.dumps({"name": "cmks-skills", "plugins": []}), "managed"
+            )
+            (root / "claude").mkdir()
+            env = {"DAYMADE_SKILL_SOURCE_REPOS": str(managed)}
+            with mock.patch.object(sync, "HOME", root / "home"):
+                with mock.patch.dict(os.environ, env):
+                    repos = sync.infer_repos(deep / "sync.py", root / "claude")
+            self.assertEqual(repos, [managed.resolve()])
+
+    def test_ancestor_walk_reports_an_unreadable_parent_manifest(self) -> None:
+        """Running from a source checkout whose own manifest is mid-rewrite is the
+        production shape: the walk finds one manifest and must not swallow it."""
+        with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
+            root = Path(raw)
+            checkout = root / "checkout"
+            deep = checkout / "daymade-claude-code" / "claude-switch-models-setup" / "scripts"
+            deep.mkdir(parents=True)
+            (checkout / ".claude-plugin").mkdir()
+            (checkout / ".claude-plugin" / "marketplace.json").write_text(
+                '{"name": "daymade-skills", "plugins": [', encoding="utf-8"
+            )
+            (root / "claude").mkdir()
+            with mock.patch.object(sync, "HOME", root / "home"):
+                with self.assertRaises(sync.UnreadableMarketplaceManifest) as raised:
+                    sync.infer_repos(deep / "sync.py", root / "claude")
+            self.assertIn(
+                str(checkout / ".claude-plugin" / "marketplace.json"), str(raised.exception)
+            )
+
+
 class UserRootMigrationTests(unittest.TestCase):
     def _skill(self, root: Path, name: str) -> sync.SkillSource:
         source = root / name
