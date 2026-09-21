@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **marketplace-dev** (`daymade-claude-code` v3.54.0 → v3.54.1): 交付前清单补一项连 hook 和 checker 都不查的——**CHANGELOG 条目**。`check_version_progression.py` 只裁决新增箭头行的终点是否等于 candidate 版本、`check_changelog_structure.py` 只查标题唯一性，两者都不要求条目存在，所以「bump 了版本但漏了 changelog」会全绿合入（2026-09-21 实证：一个带 bump 的 PR 四个 checker 全绿、CI 四个 check 全 pass，缺条目由独立 agent 审阅才抓到）。约定原文在 `marketplace-health-check/SKILL.md:90`，但该 skill 被 `marketplace-dev/SKILL.md:33` 显式排除在定向改动之外，而 skill 文档 PR 走的正是定向改动这条路——闸门恰好不在路上。同节另补三个 checker 的 base 参数对照表，并写明 `exit 2` 是 argparse 用法错误、仓库根本没被判定，与 checker 判定仓库坏是两件事。
+
 - **git-safety-net** (v1.20.2 → v1.20.3): route the branch-deletion probe rule to where the
   deletion actually happens. Troubleshooting already carried a measured rule — a bare
   `git ls-remote <remote> <branch>` cannot distinguish "the ref is gone" from "the remote was
