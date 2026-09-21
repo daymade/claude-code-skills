@@ -490,9 +490,11 @@ rather than a steady state: adding to the target `main` and removing from the so
 | `llm-registry` | 09-21 14:09 (`2c8fe00`) | 09-21 15:00 (`06e543b4`) | 51 min |
 
 The two measured incidents were main-to-main: all four commits above are ancestors
-of `main`. Confirm your own pair the same way — a checkout sitting on a feature
-branch is *not* the cause, even though the scanned-branch WARN lines appear in the
-same log:
+of `main`. Confirm your own pair the same way. A feature branch is not the cause of
+*these two*, but it can still be the cause of yours: the syncer registers skills from
+each checkout's **working tree**, so a checkout forked before the removal still exposes
+the name — and a local branch that added the name does the same. The scanned-branch
+WARN lines in this log are a different mode (previous section), not evidence either way:
 
 ```bash
 git -C <checkout> merge-base --is-ancestor <sha> main && echo "on main"
