@@ -19,6 +19,7 @@ ceremony; adopt the ones whose failure mode you're exposed to.
 - Audit every authorized worktree before retirement
 - Snapshot before any history rewrite
 - Version / lockfile collisions between parallel branches
+- A whole-file gate cannot tell "my bump is too low" from "my branch is behind"
 - Commit-scope hygiene (don't sweep unrelated staged work)
 - Set a wider reflog safety window once
 
@@ -602,6 +603,36 @@ from before that point is not evidence the second branch is still safe to merge.
 check against the refreshed base every time a branch resyncs onto it, not just once at PR-open time.
 
 If a collision already merged, fix it by bumping again above the collided value and re-releasing.
+
+## A whole-file gate cannot tell "my bump is too low" from "my branch is behind"
+
+**Failure mode:** the gate above compares *the whole shared file's current state* against the base,
+not this branch's diff. So every entry someone else bumped on the base since you branched becomes a
+finding against you — your copy of the file still holds the older values, and from the base's point
+of view that reads as a rollback. Worse, the message such a gate prints is usually worded for the
+*other* cause it was built to catch: a stale-checkout whole-file write that really did undo someone
+else's work. Both causes produce the same red, and only one of them is about your change.
+
+Measured on a real repository: a branch that had simply not resynced failed with 8 findings across 4
+packages, half of them phrased `version rolled back from '1.12.0' to '1.11.1' since origin/main —
+restore the newer version (a whole-file write from a stale baseline is the usual cause)`. Nothing had
+been rolled back. A normal three-way merge would not have regressed any of those values.
+
+**Recovery:** resync the branch; do not rebuild it. Merging the base carries its newer values in
+with it, and the same gate passes on the next run — verified on that same branch, which went from 8
+findings to a clean exit with a conflict-free merge and no edits:
+
+```bash
+git fetch origin --quiet
+git merge origin/main          # the merge commit brings the base's newer values along
+<re-run the gate>              # it now reads a state that includes them
+```
+
+**The reflex to avoid:** exporting a patch and recreating the branch in a clean checkout. It does
+not address the cause — the new branch is behind too unless you branch from a freshly fetched base —
+and it strands the original worktree with no PR pointing at it, which reads as abandoned junk to
+whoever audits worktrees later. If you have already done it, retire that worktree through Mode E
+rather than leaving it to be guessed at.
 
 ## Commit-scope hygiene (don't sweep unrelated staged work)
 

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **git-safety-net** (v1.20.1 → v1.20.2): `references/prevention_practices.md` gains
+  "A whole-file gate cannot tell 'my bump is too low' from 'my branch is behind'". A
+  version gate that compares the whole shared manifest's current state against the base
+  — rather than this branch's diff — reports every entry someone else bumped since you
+  branched as a rollback against you, and typically phrases it for the *other* cause it
+  was built to catch (a stale-checkout whole-file write that really did undo work).
+  Measured: a branch that had simply not resynced produced 8 findings across 4 packages,
+  half of them worded as rollbacks; nothing had been rolled back, and a three-way merge
+  would not have regressed any of those values. Recovery is to merge the base into the
+  branch (verified: same branch, conflict-free merge, no edits, gate went from 8 findings
+  to a clean exit), not to export a patch and rebuild the branch elsewhere — that does
+  not address the cause and strands the original worktree with no PR pointing at it,
+  which later reads as abandoned junk during a worktree audit.
+
 - **daymade-codex** (v1.2.0 → v1.2.1): `interaction-design-board` now treats the
   behavior inventory as a deliverable when the decision replaces a screen that already
   ships. Step 1 asks for a numbered inventory of the current screen's user-visible
