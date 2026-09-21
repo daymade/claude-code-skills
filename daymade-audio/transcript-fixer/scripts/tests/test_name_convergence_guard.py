@@ -399,6 +399,70 @@ class TestUnobtainedAuthorityIsNotAuthority:
         assert _get_review_queue().get(item_id).status == "pending"
 
 
+class TestUnobtainedWindowIsNotACharacterCount:
+    """判据必须是「什么算未取得」，不能是「离得多近算未取得」。
+
+    第一版用 `(?:需|待|未|尚|等|要|请|盼)[^。；;，,\\n]{0,6}$` 在权威名词**前面
+    6 字**里找 need-marker——那个宽度是任意的，留下的是这道闸门立命要关的那类
+    事故本身：2026-09-16 多数派收敛形状只要换个长点的连接词、或换成英文就原样
+    穿过。下面每一条都在 incident 原配（乙琳→乙林 + lookup 全 False）上实测过
+    放行，即闸门对同一起事故形状失效。"""
+
+    # 假放行：每条都命名了权威源类别，同时声明它尚未取得。
+    FALSE_PASSES = [
+        "需先与用户当面确认群昵称",              # 需 与 群昵称 隔 9 字
+        "需要先去听完整的那一段音频再判断",        # 隔 11 字
+        "需再向群里的群主本人确认群昵称后再定",
+        "pending roster confirmation",           # 英文，一个中文 marker 都没有
+        "TBD 群昵称 double-read",                # 同上
+        "需向该段音频的录音人核对音频后判定",
+    ]
+
+    @pytest.mark.parametrize("evidence", FALSE_PASSES)
+    def test_long_connector_still_counts_as_unobtained(self, evidence):
+        # 判据本身
+        assert evidence_names_authority(evidence) is False, f"误放行: {evidence!r}"
+
+    @pytest.mark.parametrize("evidence", FALSE_PASSES)
+    def test_gate_refuses_every_false_pass_end_to_end(self, evidence, isolated_config, capsys):
+        # 端到端：同样的 incident 原配，必须拒、且什么都不写
+        item_id = _enqueue_pending("乙琳", "乙林", kind="entity", evidence=evidence)
+        with pytest.raises(SystemExit) as exc:
+            cmd_resolve_review(_args(
+                resolve_review=item_id, review_decision="accepted",
+            ))
+        assert exc.value.code == 2, f"放行了: {evidence!r}"
+        assert _get_review_queue().get(item_id).status == "pending"
+
+    def test_already_obtained_roster_citation_next_to_a_pending_one_passes(self):
+        # 反向假拒（fail-closed 方向，不危险但白拦合法写入）：前半句说「待用户
+        # 裁定」，后半句是**已取得**的 roster ### 引用。模块的既有原则是「任何
+        # 一条无阻碍的引用就够」，所以这条必须放——一个只数字数的判据会把整个
+        # 子句都算成未取得。
+        assert evidence_names_authority("待用户裁定 roster 行 ### 王晓明") is True
+
+    def test_short_chinese_unobtained_still_refused(self):
+        # 修好窗口后，最短的中文未取得形状不能反被放过
+        assert evidence_names_authority("需名册确认") is False
+
+    def test_obtained_authority_still_passes(self):
+        assert evidence_names_authority("roster 行 ### 王晓明") is True
+
+    def test_marker_after_the_noun_governs_it_too(self):
+        # 「名册需确认」的 marker 在名词**后面**——旧实现只看名词前面的文本，
+        # 这种形状整个漏掉。
+        assert evidence_names_authority("名册需确认") is False
+
+    def test_pending_clause_then_obtained_clause_still_passes(self):
+        # 子句边界是句读，不是空格：前一句未取得、后一句已取得 = 放行
+        assert evidence_names_authority(
+            "需名册确认，people roster 行 ### 汪晓明") is True
+
+    def test_colon_does_not_end_a_pending_claim(self):
+        # 冒号不是子句边界：「用户裁定：需先听音频确认」整体仍是未取得
+        assert evidence_names_authority("用户裁定：需先听音频确认") is False
+
+
 class TestResolveAuthorityChannel:
     """--authority：裁决时才取得的权威（音频核验、审阅中的用户裁定）必须能
     进 guard。evidence 列曾是入队时一次性写入，导致 67 条活行死锁——
@@ -448,3 +512,118 @@ class TestResolveAuthorityChannel:
         assert item.status == "pending"          # 没有顺手录裁决
         assert "音证 2026-09-21" in item.evidence
         assert "同段互证" in item.evidence        # 追加，不覆盖
+
+
+class TestResolveRejectsAttachAuthorityCombination:
+    """`--attach-authority` 与 `--resolve-review` 写在同一条命令里，曾是最自然的
+    「核验完了，顺手裁掉」写法，却得到 exit 0 而裁决从未记录：分派把
+    attach_authority 排在 resolve_review **之前**，于是只跑了追加、打印 ✅、
+    status 仍是 pending。实测（PR head 61ee8781）：
+
+        ✅ #1 evidence 追加权威源（未记录裁决）   exit=0
+        --- status after: pending
+
+    「成功了但什么都没裁」比报错更难发现，所以两个 flag 同现必须拒绝，而不是
+    静默选一个。"""
+
+    def test_both_flags_refused_and_nothing_written(
+        self, isolated_config, monkeypatch, capsys
+    ):
+        import fix_transcription
+
+        item_id = _enqueue_pending("王晓琳", "汪晓明", kind="entity", evidence="同段互证")
+        monkeypatch.setattr(sys, "argv", [
+            "fix_transcription.py",
+            "--attach-authority", str(item_id),
+            "--authority-text", "音证：tight 窗含建议词",
+            "--resolve-review", str(item_id),
+            "--decision", "accepted",
+            "--by", "probe",
+        ])
+        with pytest.raises(SystemExit) as exc:
+            fix_transcription.main()
+        assert exc.value.code == 2
+        err = capsys.readouterr().err
+        assert "--attach-authority" in err and "--resolve-review" in err
+        after = _get_review_queue().get(item_id)
+        assert after.status == "pending", "裁决不许被顺带记录"
+        assert after.evidence == "同段互证", "连 authority 追加都不该发生"
+
+    def test_each_flag_alone_still_works(self, isolated_config, monkeypatch, capsys):
+        # 拆成两条命令是文档给的修法，必须真的能跑通
+        import fix_transcription
+
+        item_id = _enqueue_pending("王晓琳", "汪晓明", kind="entity", evidence="同段互证")
+        monkeypatch.setattr(sys, "argv", [
+            "fix_transcription.py",
+            "--attach-authority", str(item_id),
+            "--authority-text", "用户 2026-09-21 裁定：以群 displayName 为准",
+            "--by", "probe",
+        ])
+        fix_transcription.main()
+        assert "用户 2026-09-21 裁定" in _get_review_queue().get(item_id).evidence
+        monkeypatch.setattr(sys, "argv", [
+            "fix_transcription.py",
+            "--resolve-review", str(item_id),
+            "--decision", "accepted",
+            "--by", "probe",
+        ])
+        fix_transcription.main()
+        assert _get_review_queue().get(item_id).status == "accepted"
+
+
+class TestRefusedVerdictLeavesNoSideEffects:
+    """闸门拒绝必须**先于**副作用。
+
+    曾经的顺序是「先 `attach_evidence` 再做 name-convergence 校验」，于是一次
+    **被拒**的裁决也在 evidence 列永久留下「权威已挂载」，并多一条
+    `review_evidence_attach` 审计行——而审计行本身看不出对应的裁决被拒了。
+    不构成放行洞，但审计记录从此说谎。"""
+
+    def _audit_actions(self, item_id: int) -> list[str]:
+        import sqlite3
+        from utils.config import get_config
+        conn = sqlite3.connect(get_config().database.path)
+        try:
+            return [r[0] for r in conn.execute(
+                "SELECT action FROM audit_log WHERE entity_id = ? ORDER BY id",
+                (item_id,),
+            )]
+        finally:
+            conn.close()
+
+    def test_refused_authority_writes_neither_evidence_nor_audit(
+        self, isolated_config, capsys
+    ):
+        item_id = _enqueue_pending("王晓琳", "汪晓明", kind="entity", evidence="疑此人")
+        assert self._audit_actions(item_id) == ["review_enqueue"]
+        with pytest.raises(SystemExit) as exc:
+            cmd_resolve_review(_args(
+                resolve_review=item_id, review_decision="accepted",
+                review_authority="需名册确认", review_by="probe",
+            ))
+        assert exc.value.code == 2
+        after = _get_review_queue().get(item_id)
+        assert after.status == "pending"
+        assert after.evidence == "疑此人", "evidence 列必须一字节不动"
+        assert "[authority" not in (after.evidence or "")
+        assert self._audit_actions(item_id) == ["review_enqueue"], \
+            "不许留下一条看不出裁决被拒的 review_evidence_attach"
+
+    def test_obtained_authority_still_lands_when_the_gate_passes(
+        self, isolated_config
+    ):
+        # 调整顺序不能把 --authority 这个通道一起修坏：闸门放行时追加照旧发生，
+        # 且带审计。
+        item_id = _enqueue_pending("王晓琳", "汪晓明", kind="entity", evidence="同段互证")
+        cmd_resolve_review(_args(
+            resolve_review=item_id, review_decision="accepted",
+            review_authority="用户 2026-09-21 裁定：以群 displayName 为准",
+            review_by="probe",
+        ))
+        item = _get_review_queue().get(item_id)
+        assert item.status == "accepted"
+        assert "用户 2026-09-21 裁定" in item.evidence
+        assert self._audit_actions(item_id) == [
+            "review_enqueue", "review_evidence_attach", "review_resolve",
+        ]

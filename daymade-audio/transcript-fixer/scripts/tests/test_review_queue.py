@@ -1061,3 +1061,119 @@ class TestLedgerSafeRevertAndReanchor:
             body="正文说的是别的事情。\n"), encoding="utf-8")
         with pytest.raises(ReviewQueueError, match="no longer in"):
             queue.reanchor(ids[0])
+
+
+class TestRevertCountsOccurrencesNotLines:
+    """同行双现：hits 数的是**行**，`replace(..., 1)` 只换该行**第一处**。
+
+    同一行出现两次新词时，`len(hits) == 1` 让 reopen 返回 `{"ok": True,
+    "msg": "reverted"}`，而文件里还剩一处未撤回——reopen 是 undo 路径，调用方
+    （含 `_reopen` 里 `(N/M reverted)` 的并发回滚文案）据此认为改动已撤销。
+    更糟的是被换掉的往往是**另一处**：accept 落在第二处，撤回改的是第一处，
+    于是一处本来正确的文本被改写、已接受的改动却留在文件里。origin/main 在
+    这个形状上是**拒绝**的（`appears 3 times (need exactly 1)`），所以这是
+    本次 PR 引入的能力退化，不是修了个老 bug。
+
+    形状里同时带 asr_note 台账：台账行本身也含新形，行级计数必须把它排除在
+    hits 外、又必须看清命中行内的次数——两个维度都要数。"""
+
+    BODY = "新词在先，旧词在后。\n"
+
+    def _doc(self, ledger="", body=None):
+        return ("---\n" + ledger + "---\n\n" + (body or self.BODY))
+
+    def _prepare(self, queue, p):
+        p.write_text(self._doc(
+            ledger='asr_note: "2026-09-20 修正含：旧词->新词"\n'), encoding="utf-8")
+        ids = queue.enqueue([_item(p, line=5, original="旧词", suggested="新词",
+                                   context="旧词在后。", actions=[
+            {"type": "file_edit", "path": str(p), "old": "旧词", "new": "新词"},
+        ])])["added"]
+        queue.resolve(ids[0], "accepted")
+        assert p.read_text(encoding="utf-8") == self._doc(
+            ledger='asr_note: "2026-09-20 修正含：旧词->新词"\n',
+            body="新词在先，新词在后。\n")
+        return ids[0]
+
+    def test_same_line_twice_refused_and_nothing_written(self, queue, tmp_path):
+        p = tmp_path / "twice.md"
+        item_id = self._prepare(queue, p)
+        before = p.read_text(encoding="utf-8")
+        result = queue.resolve(item_id, "reopen", note="误裁回退")
+        (entry,) = result["revert_log"]
+        assert entry["ok"] is False, "一行两次出现不许报 reverted"
+        assert "2 times on line 5" in entry["msg"]
+        assert "need exactly 1" in entry["msg"]
+        assert p.read_text(encoding="utf-8") == before, "一个字节都不能动"
+
+    def test_single_occurrence_still_reverts(self, queue, tmp_path):
+        # 收窄判据不能把正常的单处还原一起拦掉
+        p = tmp_path / "once.md"
+        p.write_text(self._doc(
+            ledger='asr_note: "2026-09-20 修正含：旧词->新词"\n',
+            body="正文里说的是旧词的事情。\n"), encoding="utf-8")
+        ids = queue.enqueue([_item(p, line=5, original="旧词", suggested="新词",
+                                   context="正文里说的是旧词的事情。", actions=[
+            {"type": "file_edit", "path": str(p), "old": "旧词", "new": "新词"},
+        ])])["added"]
+        queue.resolve(ids[0], "accepted")
+        assert "正文里说的是新词的事情。" in p.read_text(encoding="utf-8")
+        result = queue.resolve(ids[0], "reopen", note="误裁回退")
+        (entry,) = result["revert_log"]
+        assert entry["ok"] is True
+        assert p.read_text(encoding="utf-8") == self._doc(
+            ledger='asr_note: "2026-09-20 修正含：旧词->新词"\n',
+            body="正文里说的是旧词的事情。\n")
+
+
+class TestRevertLedgerIsTheAsrNoteKeyNotTheWholeFrontmatter:
+    """`_ledger_line_flags` 曾把**整个 frontmatter 块**标成台账。
+
+    后果是「写得进、撤不回」：accept 路径的台账定义是
+    `dictionary_processor._mask_ledger_spans`，它只屏蔽 `asr_note:` 的值，
+    于是 `title: 旧词相关会议` 能被 accept 改成 `新词相关会议`，reopen 却因整块
+    被标成台账而拒绝还原——并且返回的理由是 "the replacement text survives
+    only in the asr_note ledger"，把操作者引向一个根本不存在的排查方向。
+    函数自己的 docstring 写的也是「or an `asr_note:` line anywhere」，作者本意
+    从来不是「整个 frontmatter 都是台账」。"""
+
+    def _doc(self, title="旧词相关会议", body="正文说的是别的事情。\n"):
+        return (f"---\ntitle: {title}\n"
+                'asr_note: "2026-09-20 修正含：别的->新词"\n'
+                f"---\n\n{body}")
+
+    def test_non_ledger_frontmatter_key_reverted_on_reopen(self, queue, tmp_path):
+        p = tmp_path / "fm.md"
+        before = self._doc()
+        p.write_text(before, encoding="utf-8")
+        ids = queue.enqueue([_item(p, line=2, original="旧词", suggested="新词",
+                                   context="title: 旧词相关会议", actions=[
+            {"type": "file_edit", "path": str(p), "old": "旧词", "new": "新词"},
+        ])])["added"]
+        accepted = queue.resolve(ids[0], "accepted")
+        assert accepted["item"]["status"] == "accepted"
+        assert "title: 新词相关会议" in p.read_text(encoding="utf-8"), \
+            "accept 能改非台账 frontmatter 键——这是这个缺陷的另一半"
+        result = queue.resolve(ids[0], "reopen", note="误裁回退")
+        (entry,) = result["revert_log"]
+        assert entry["ok"] is True, "reopen 必须能还原它写进过的键"
+        assert p.read_text(encoding="utf-8") == before
+
+    def test_asr_note_line_still_protected_from_revert(self, queue, tmp_path):
+        # 收窄台账定义不能把 asr_note 的保护一起收窄：新形只活在台账里时，
+        # reopen 仍必须一字不动，并且报出真实原因。
+        p = tmp_path / "ledger-only.md"
+        before = self._doc()
+        p.write_text(before, encoding="utf-8")
+        ids = queue.enqueue([_item(p, line=6, original="旧词", suggested="新词",
+                                   actions=[
+            {"type": "file_edit", "path": str(p), "old": "旧词", "new": "新词"},
+        ])])["added"]
+        queue.resolve(ids[0], "accepted")
+        p.write_text(before, encoding="utf-8")   # 正文从未落改
+        result = queue.resolve(ids[0], "reopen", note="误裁回退")
+        assert p.read_text(encoding="utf-8") == before, "文件必须一字不动"
+        (entry,) = result["revert_log"]
+        assert entry["ok"] is False
+        assert "asr_note ledger" in entry["msg"]
+        assert "title" not in entry["msg"], "不许把操作者引向无关的 frontmatter 键"

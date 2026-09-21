@@ -137,6 +137,12 @@ def _utcnow() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
+# A frontmatter `key:` line. Deliberately unindented, matching
+# `dictionary_processor._mask_ledger_spans`: an indented key is part of a
+# multi-line YAML value, which neither the masker nor this parser reads.
+_FRONTMATTER_KEY_RE = re.compile(r"^([A-Za-z_][\w-]*):")
+
+
 def is_temp_path(path: str | Path) -> bool:
     """True when the path lives under the OS temp dir — a caller pipeline's
     staging copy. Queue items must not anchor to files that vanish."""
@@ -1414,19 +1420,31 @@ class ReviewQueue:
 
 def _ledger_line_flags(content: str) -> list[bool]:
     """One flag per line: True when the line is part of the correction ledger
-    (inside the leading YAML frontmatter block, or an `asr_note:` line anywhere).
-    Those lines quote old forms deliberately ("修正含：<旧形>→<正确形>"), so
-    they are never legitimate targets for a revert or a re-anchor — editing
-    one rewrites the audit trail (2026-09-20 #2241: a reopen revert turned
-    「旧词→新词」 into 「旧词→旧词」 because the new form survived
-    only in the ledger line)."""
+    (an `asr_note:` key inside the leading YAML frontmatter block, or an
+    `asr_note:` line anywhere). Those lines quote old forms deliberately
+    ("修正含：<旧形>→<正确形>"), so they are never legitimate targets for a
+    revert or a re-anchor — editing one rewrites the audit trail (2026-09-20
+    #2241: a reopen revert turned 「旧词→新词」 into 「旧词→旧词」 because the new
+    form survived only in the ledger line).
+
+    Only the `asr_note:` KEY is a ledger. An earlier version flagged the whole
+    frontmatter block, which made every other frontmatter key un-revertible
+    while the accept path could still edit it (`title: 旧词 → 新词` accepted
+    fine, then reopen refused with "survives only in the asr_note ledger" — a
+    verdict that pointed the operator at the wrong place entirely). The accept
+    path's own notion of the ledger is `dictionary_processor._mask_ledger_spans`,
+    and it masks exactly `asr_note:` values; the two sides now agree. Writing
+    into a frontmatter key that is not a ledger and not being able to take it
+    back is the defect, and widening the revert refusal would only have widened
+    the asymmetry."""
     lines = content.split("\n")
     flags = [ln.startswith("asr_note:") for ln in lines]
     if lines and lines[0].lstrip("﻿").strip() == "---":
         for i in range(1, len(lines)):
             if lines[i].strip() == "---":
                 break
-            flags[i] = True
+            m = _FRONTMATTER_KEY_RE.match(lines[i])
+            flags[i] = bool(m) and m.group(1) == "asr_note"
     return flags
 
 
@@ -1438,7 +1456,16 @@ def _revert_one_body_occurrence(
 
     The ledger is excluded on both sides of the count: a new form that
     survives ONLY in an asr_note line is a ledger citation, not an un-reverted
-    edit — reverting it would corrupt the audit trail (#2241, 2026-09-20)."""
+    edit — reverting it would corrupt the audit trail (#2241, 2026-09-20).
+
+    The count has to be exact in BOTH dimensions. Counting lines alone let a
+    line carrying the replacement text twice through as "reverted": the accept
+    had landed on the second occurrence, `replace(..., 1)` undid the FIRST one,
+    and the caller was told the edit was undone while the transcript still
+    carried it — plus one pre-existing occurrence silently rewritten to the old
+    form. origin/main refused this shape outright ("appears 3 times (need
+    exactly 1)"); the line-level rewrite lost that, so the in-line count is
+    checked too."""
     if not new_text:
         return None, "not reverted: empty replacement text"
     lines = content.split("\n")
@@ -1446,17 +1473,28 @@ def _revert_one_body_occurrence(
     hits = [i for i, ln in enumerate(lines) if not ledger[i] and new_text in ln]
     if len(hits) == 1:
         i = hits[0]
+        on_line = lines[i].count(new_text)
+        if on_line != 1:
+            return None, (
+                f"not reverted: replacement text appears {on_line} times on "
+                f"line {i + 1} (need exactly 1) — revert manually"
+            )
         lines[i] = lines[i].replace(new_text, old_text, 1)
         return "\n".join(lines), "reverted"
     if not hits:
-        if new_text in content:
+        if any(new_text in ln for ln, is_ledger in zip(lines, ledger) if is_ledger):
             return None, (
                 "not reverted: the replacement text survives only in the "
                 "asr_note ledger, which quotes old forms on purpose — leave "
                 "the ledger alone and revert the body by hand if needed"
             )
+        if new_text in content:
+            return None, (
+                "not reverted: replacement text is present in the file but on "
+                "no single line (it spans a line break) — revert manually"
+            )
         return None, "not reverted: replacement text no longer present in the file"
     return None, (
-        f"not reverted: replacement text appears on {len(hits)} body lines "
+        f"not reverted: replacement text appears on {len(hits)} non-ledger lines "
         f"(need exactly 1) — revert manually"
     )

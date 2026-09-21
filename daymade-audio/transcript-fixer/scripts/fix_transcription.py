@@ -93,6 +93,24 @@ def main() -> None:
             file=sys.stderr,
         )
 
+    # --attach-authority and --resolve-review are two different operations
+    # (append a citation vs record a verdict). Written on one command line they
+    # are the most natural way to say "verified it, now settle it", but the
+    # dispatch below ordered attach_authority first, so exactly that command
+    # ran the append, printed ✅, exited 0 — and never recorded the verdict.
+    # The caller was told it had succeeded while the row sat pending. Refuse
+    # instead of silently picking one: run the two commands in sequence.
+    if (getattr(args, "attach_authority", None) is not None
+            and args.resolve_review is not None):
+        print(
+            "Error: --attach-authority and --resolve-review cannot be combined — "
+            "one appends a citation, the other records a verdict, and combining "
+            "them ran only the append while reporting success. Run "
+            "--attach-authority first, then --resolve-review.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
     # Dispatch commands
     if args.init:
         cmd_init(args)

@@ -17,6 +17,7 @@ import shutil
 import sys
 import tempfile
 from pathlib import Path
+from typing import Optional
 
 from core import (
     CorrectionRepository,
@@ -2556,6 +2557,17 @@ def _name_convergence_refusal(args, from_text: str, to_text: str,
     return None
 
 
+def _combined_evidence(evidence: Optional[str], authority: str) -> Optional[str]:
+    """What the guard should see: the stored evidence plus this verdict's
+    --authority citation, joined the way ``attach_evidence`` would have joined
+    them. Pure — it does not touch the database, so the guard can judge the
+    combined record before anything is persisted."""
+    authority = (authority or "").strip()
+    if not authority:
+        return evidence
+    return f"{evidence}\n{authority}" if evidence else authority
+
+
 def _emit_json(payload) -> None:
     print(json.dumps(payload, ensure_ascii=False))
 
@@ -2806,21 +2818,28 @@ def cmd_resolve_review(args: argparse.Namespace) -> None:
         # user ruling in review) has to reach the guard: the evidence column
         # was write-once at enqueue, which deadlocked every row whose target
         # is claimed nowhere and whose authority arrived later (2026-09-20:
-        # 67 live rows). --authority appends to evidence first, audited, so
-        # the gate judges the combined record. --note deliberately does NOT
-        # feed the gate: a reason is not a citable source.
-        evidence = item.evidence
+        # 67 live rows). --note deliberately does NOT feed the gate: a reason
+        # is not a citable source.
+        #
+        # The authority is handed to the guard BEFORE it is persisted. It used
+        # to be appended to the evidence column first, so a REFUSED verdict
+        # still left 「权威已挂载」 in evidence plus a review_evidence_attach
+        # audit row that nothing contradicts — a permanently misleading record
+        # of an authority that never got anything past the gate. Fail-closed
+        # means the refusal leaves no side effects, so the append now happens
+        # only after the guard has said the write may proceed.
         authority = (getattr(args, "review_authority", None) or "").strip()
-        if authority:
-            evidence = queue.attach_evidence(
-                args.resolve_review, authority,
-                by=getattr(args, "review_by", None))
         # Empty target means the call is malformed; resolve() below raises its
         # own specific error for that, so the guard only judges real targets.
         if to_text:
             _name_convergence_refusal(
-                args, item.original_text, to_text, evidence, item.kind,
+                args, item.original_text, to_text,
+                _combined_evidence(item.evidence, authority), item.kind,
             )
+        if authority:
+            queue.attach_evidence(
+                args.resolve_review, authority,
+                by=getattr(args, "review_by", None))
 
     try:
         result = queue.resolve(
