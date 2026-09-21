@@ -232,6 +232,27 @@ Every new file must also avoid absolute user paths (`/Users/<name>/…`) — the
 guard blocks the push. Write `~/`-relative and verify by re-running the real
 detector, not by eye.
 
+A fourth item has neither a hook nor a checker: the **CHANGELOG entry**.
+`check_version_progression.py` only validates that a newly added arrow line's
+destination equals the candidate version, and `check_changelog_structure.py` only
+asserts heading uniqueness — neither requires an entry to *exist*. A PR that bumps the
+version and skips the changelog is therefore green everywhere and merges. The rule is
+stated in `marketplace-health-check/SKILL.md:90` ("flag it, don't merge without it"),
+but that skill is deliberately excluded from targeted edits (`marketplace-dev/SKILL.md:33`),
+which is exactly the path a skill-doc PR takes — so on this path nothing asks for it.
+Confirm the entry yourself, in the same commit as the bump.
+
+The three checkers also take their base differently, and a usage error is not a verdict:
+
+| command | base argument | exit 2 means |
+|---|---|---|
+| `check_version_progression.py` | `--base <ref> --candidate HEAD` | argparse usage error — the repo was never judged |
+| `validate_changed_skills.sh` | positional `<base-ref>` (defaults to `origin/main`) | same |
+| `check_marketplace.py` | none | n/a |
+
+Read exit 2 as "my invocation was wrong", never as "the checker found a problem": a usage
+error leaves the repo unjudged, which is the same state as not having run it at all.
+
 The `post_edit_sync_check` hook only catches "SKILL.md edited but plugin version not
 bumped". Items 2–4 have no hook — run `check_version_progression.py` and
 `check_doc_skill_lists.py` locally before pushing rather than discovering them across
