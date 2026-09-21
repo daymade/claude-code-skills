@@ -1072,7 +1072,7 @@
       "description": "Manage OpenClaw (龙虾 / lobster) instance configurations, gateway health, and plugin lifecycle — audit, diff, copy, add-model, list, and switch models across openclaw.json files; diagnose a parked or down gateway, plugin register failures, and hooks blocked after an upgrade; confirm whether an install is out of date. Use when juggling multiple OpenClaw / Claude Code wrapper instances, applying DeepSeek model patches, managing default models and aliases, or validating config.",
       "source": "./openclaw",
       "strict": false,
-      "version": "1.2.0",
+      "version": "1.2.1",
       "category": "claude-code",
       "keywords": [
         "openclaw",
