@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **git-safety-net** (v1.20.2 → v1.20.3): route the branch-deletion probe rule to where the
+  deletion actually happens. Troubleshooting already carried a measured rule — a bare
+  `git ls-remote <remote> <branch>` cannot distinguish "the ref is gone" from "the remote was
+  unreachable" (both print nothing), so the probe must be `--exit-code` with a fully-qualified ref
+  (0 present / 2 absent / 128 probe failed, where 128 means the fate is unknown and nothing may be
+  retired). That rule had **no inbound reference anywhere in the skill**, and the two places that
+  most need it both contradicted or omitted it: Mode B's scoped-evidence block demonstrated the bare
+  form, and Mode E's deletion step said only to re-verify remote and ownership *before* deleting,
+  with no readback after. Mode B's snippet now shows the `--exit-code` form with the reason inline;
+  Mode E gains a readback bullet covering both directions of the trap, including that a repository
+  which deletes branches on merge makes a later `push --delete` exit 1 with `remote ref does not
+  exist` — the desired end state reported as an error. No new rule: the criterion was already
+  measured and unchanged, this makes it reachable from the modes that need it.
+
 - **macos-watchdog** (`daymade-macos` v1.5.0 → v1.6.0): 排障表新增一行——out.log 全绿不等于健康，失败轮可能什么都不写（`set -e` + 仅成功才打印 verified），于是最后成功时间戳永远新鲜；健康判据换成失败路径有没有出口。实测战例（五个绿信号对 err.log 里 137 条 traceback）与 `launchctl list` 只给最后一次退出码、不给退出码历史这一边界，进 `references/quiet-watchdog-patterns.md` Pattern 7。`references/launchd-plist-reference.md` 另记一条陷阱：`plutil -replace ProgramArguments.0 -string X` 是**追加**元素而非替换索引 0（实测把原脚本变成新脚本的参数），正解是用 plistlib 重写整个数组后 `plutil -p` 读回。
 
 - **claude-switch-models-setup** (`daymade-claude-code` v3.53.0 → v3.54.0): troubleshooting 新增 `## Source sync aborts with duplicate source skill name` 一节。根因是两个 main 在 19–51 分钟窗口内同时声明同名 skill（skill 跨仓迁移）；两次实测事故与功能分支无关（四个 commit 均为 main 祖先），但 syncer 读每个 checkout 的工作树，fork 自删除 commit 之前的本地分支仍会暴露该名，所以不能反过来断言"分支永远不是成因"。含两次实测窗口表、`merge-base --is-ancestor` 取证命令、先删后加的正确顺序，以及收尾一个已开窗口时必须 `git -C <checkout> pull --ff-only`——只 push 不足以让窗口关闭。

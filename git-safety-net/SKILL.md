@@ -224,8 +224,14 @@ evidence:
 git status --porcelain=v1 --untracked-files=all
 git rev-parse HEAD
 git log --oneline HEAD --not --remotes
-git ls-remote <remote> <authorized-remote-ref>
+git ls-remote --exit-code <remote> refs/heads/<branch>   # 0 present · 2 absent · 128 probe failed
 ```
+
+Both the `--exit-code` and the fully-qualified `refs/heads/` prefix are load-bearing here, not
+style: a bare `git ls-remote <remote> <branch>` reports an unreachable remote and an absent ref
+*identically* (each prints nothing), and a bare branch name also matches a same-named tag. The trap
+is measured in both directions under **Troubleshooting** § "A 'did that branch get deleted?' probe
+says it still exists".
 
 For the full audit, expected output is every worktree with branch/detached state and cleanliness,
 plus counts of
@@ -608,6 +614,17 @@ and final branch-count gates that a single-branch retirement does not need.
   confirm ancestry directly against the intended base with
   `git merge-base --is-ancestor <tip> <base>` and switch/target correctly instead. Delete remote
   branches only after re-verifying the exact remote and repository visibility/ownership.
+- **After deleting a remote branch, read the result back through an exit code, not through output.**
+  Two shapes mislead here, in opposite directions. A repository configured to delete branches on
+  merge already removed it at merge time, so a later `git push <remote> --delete <branch>` exits
+  **1** with `remote ref does not exist` — the end state you wanted, reported as an error. And the
+  obvious readback is the one that breaks: `git ls-remote <remote> <branch>` printing nothing is not
+  proof the branch is gone, because an unreachable remote prints nothing either. Use
+  `git ls-remote --exit-code <remote> refs/heads/<branch>` and read the code — 0 present, 2 absent,
+  128 the probe itself failed, where 128 means the branch's fate is *unknown* and nothing may be
+  retired on that reading. Both traps are measured in both directions under **Troubleshooting** §
+  "A 'did that branch get deleted?' probe says it still exists", which also covers why the ref must
+  be fully qualified.
 - **Independent clones need ref-complete preparation before retirement.** A clean worktree says
   nothing about clone-only refs, reflog history, ignored bytes, stashes, hooks/config, or an
   `objects/info/alternates` dependency created by `git clone --shared`. Run
