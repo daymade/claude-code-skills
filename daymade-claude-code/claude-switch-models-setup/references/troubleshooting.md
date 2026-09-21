@@ -425,6 +425,35 @@ Inspect the dry-run between those commands. Follow the source architecture's
 collision and recovery rules; legacy entries are not automatically retired.
 Restart affected existing sessions after repairing metadata discovery.
 
+## Claude-side skills never update while Codex-side sync looks perfectly healthy
+
+`source-sync.out.log` keeps printing its success line, nothing warns, and
+`launchctl` reports a zero last-exit status — yet `~/.claude/skills` gains nothing
+and stale entries never get pruned.
+
+The tell is in a dry run: with the Claude root managed, every source skill gets a
+decision line (`Claude skill <name>: …`). **No such lines at all** means the whole
+Claude-root block was skipped, which happens when the activation manifest has no
+`claude_active_marketplaces` key or holds an empty array — `manage_claude` is then
+false and that root is not reconciled at all. Codex-side activation is unaffected,
+which is why every other signal stays green:
+
+```bash
+sync-local-skill-sources.py --active-skills-manifest <manifest> \
+  --claude-skills <mirror-of-~/.claude/skills>          # dry run, writes nothing
+```
+
+Fix it by naming the owned marketplaces in that manifest. The semantics — which
+marketplaces, what a direct link means versus a plugin-provided one, and what is
+never replaced — are defined in
+[local-source-sync-architecture.md](local-source-sync-architecture.md#host-specific-user-skill-activation).
+
+Before applying, point `--claude-skills` at a **mirror** of the real root so the dry
+run reports what it would create and what it would prune without touching anything.
+Links that resolve outside the discovered marketplaces are never pruned, so a
+foreign or hand-made link survives; links into a managed repo that the new
+selection no longer covers are moved to `.source-sync-backups/` rather than deleted.
+
 ## Source sync warns that an active skill name is registered by no checkout
 
 `csk` prints this at launch, and the daemon writes it to `source-sync.err.log`:
