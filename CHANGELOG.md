@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`delegation-contract.md` frontmatter, its orchestration section, and both Boundary
   tables), because a stale mirror would have kept arguing the opposite.
 
+- **transcript-fixer** (`daymade-audio` v1.41.0 → v1.41.1): `references/native_ai_full_workflow.md`
+  asr_note 契约补第三条 load-bearing constraint——任何往 frontmatter 写 `asr_note` 的流程先 grep
+  已存在 `^asr_note:` 键并合并，绝不盲追加第二行。重复键是 YAML 非法：strict 解析器 reject、permissive
+  （PyYAML 含）静默取最后值并丢较早 ledger。2026-09-20 批量收口往 8 份 transcript 追加第二 `asr_note`，
+  `sync-feishu-minutes` audit archive-scan reject（exit 2、coverage unknown）阻塞 date sweep，直至合并回单键。
+
 - **git-safety-net** (v1.20.1 → v1.20.2): `references/prevention_practices.md` gains
   "A whole-file gate cannot tell 'my bump is too low' from 'my branch is behind'". A
   version gate that compares the whole shared manifest's current state against the base
