@@ -206,7 +206,7 @@ When adding a new plugin to an existing marketplace.json:
 4. **Bump existing plugin `version`** when its SKILL.md content changes.
    Claude Code uses version to detect updates — same version = skip update.
    Pair the bump with a CHANGELOG entry in the same commit; nothing checks it
-   for you, and the Pre-flight Checklist is the only place it appears.
+   for you, and the Pre-flight Checklist is the only checklist item that asks for it.
 5. **Bump existing plugin `version`** when its `source` or `skills` changes.
    The installed cache path and component resolution changed even if SKILL.md did not.
 6. **Audit `metadata` for invalid fields** — `metadata.homepage` is a common
@@ -259,9 +259,9 @@ The three checkers also take their base differently, and a usage error is not a 
 So the code that means "my invocation was wrong" is **per-script**: exit 2 for
 `check_version_progression.py`, exit 1 for `validate_changed_skills.sh`. In both cases
 the repo was never judged — the same state as not having run it at all. Do not read
-either code as "the checker found a problem": for these two scripts a usage error and a
-real finding share one exit code, which is exactly why the printed message, not the
-number, is what you read.
+either code as "the checker found a problem": across the pair, exit 1 is a *usage error*
+in `validate_changed_skills.sh` but a *real finding* in `check_version_progression.py`
+— which is exactly why the printed message, not the number, is what you read.
 
 The `post_edit_sync_check` hook only catches "SKILL.md edited but plugin version not
 bumped". Items 2–4 have no hook, and the CHANGELOG entry has neither a hook nor a
