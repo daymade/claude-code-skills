@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tech-selection** (`daymade-claude-code` v3.52.0 → v3.53.0): agent orchestration no
+  longer asserts a single-agent default. The ruling was that a standing instruction
+  inside one task outranks any general delegation rule, so the section now states the
+  tech-selection instruction in mandatory terms — agent-team discussion is required,
+  picking a direction unilaterally is forbidden, Stop 1 is where it is enforced — and
+  scopes it to this task rather than presenting it as a preference about how all work
+  is delegated. The four questions remain, but as the filler for what the instruction
+  leaves open, not as an override of it. Same correction in all three mirrors
+  (`delegation-contract.md` frontmatter, its orchestration section, and both Boundary
+  tables), because a stale mirror would have kept arguing the opposite.
+
 - **git-safety-net** (v1.20.1 → v1.20.2): `references/prevention_practices.md` gains
   "A whole-file gate cannot tell 'my bump is too low' from 'my branch is behind'". A
   version gate that compares the whole shared manifest's current state against the base
