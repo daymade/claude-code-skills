@@ -25,6 +25,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **claude-switch-models-setup** (`daymade-claude-code` v3.53.0 → v3.54.0): troubleshooting 新增 `## Source sync aborts with duplicate source skill name` 一节。根因是两个 main 在 19–51 分钟窗口内同时声明同名 skill（skill 跨仓迁移）；两次实测事故与功能分支无关（四个 commit 均为 main 祖先），但 syncer 读每个 checkout 的工作树，fork 自删除 commit 之前的本地分支仍会暴露该名，所以不能反过来断言"分支永远不是成因"。含两次实测窗口表、`merge-base --is-ancestor` 取证命令、先删后加的正确顺序，以及收尾一个已开窗口时必须 `git -C <checkout> pull --ff-only`——只 push 不足以让窗口关闭。
 
+- **openclaw** (v1.0.0 → v1.1.0): the skill managed `openclaw.json` only; gateway
+  health and plugin lifecycle had no home. Adds
+  `references/openclaw_operations.md`, distilled from a 2026-09-21 session on a
+  node whose gateway was parked and whose memory plugin was broken. It carries
+  the three-source version check (and why `npm view` alone can lag a GitHub
+  release), the repair order where `doctor --fix` migrates but does not restart,
+  the failure mode where `gateway status` stays green while plugin hooks are
+  blocked, the `plugins install` path that `plugins update` cannot reach, the
+  `openclaw.plugin.json` capability diff to run before accepting
+  `--accept-capabilities`, the `allowConversationAccess` /
+  `allowPromptInjection` switches, `doctor --fix` side effects including a legacy
+  `HEARTBEAT.md` becoming an active cron no cron client can disable, the
+  `skills.load.allowSymlinkTargets` fix for symlinked skill roots, and a
+  verification ladder for claiming a repair worked. SKILL.md and the marketplace
+  entry now also trigger on gateway down/parked, plugin register failure, and
+  out-of-date-install questions.
 - **tech-selection** (`daymade-claude-code` v3.52.0 → v3.53.0): agent orchestration no
   longer asserts a single-agent default. The ruling was that a standing instruction
   inside one task outranks any general delegation rule, so the section now states the
