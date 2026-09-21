@@ -86,7 +86,7 @@ Gate every such action: check the target process is alive before invoking its sc
 | "It reports healthy through a real outage" | Health check certifies only the path it probes — one green probe ≠ all planes healthy (add the second plane's probe) |
 | "bootout didn't stick / it came back" | `unload` used instead of `bootout`, or `RunAtLoad` + plist still in place |
 | Silent no-runs | `StandardErrorPath` missing → failures invisible; then `log show --predicate 'process == "launchd"' --last 15m` |
-| "log mtime is fresh" but the job is actually failing | out.log all-green is **not** health — a failed pass may write nothing (`set -e` + prints-verified-only-on-success), so the last-success timestamp stays fresh forever. Judge the **failure** path (err.log / `LastExitStatus` history), not success-side freshness. Measured: 4000+ "verified" lines, mtime one minute old, `LastExitStatus=0`, plist present, process registered — five green signals over 21 tracebacks in err.log |
+| "log mtime is fresh" but the job is actually failing | out.log all-green is **not** health — a failed pass may write nothing (`set -e` + prints-verified-only-on-success), so the last-success timestamp stays fresh forever. Judge the **failure** path (err.log / last-exit status), not success-side freshness (Pattern 7) |
 | Works interactively, fails under launchd | TCC/FDA on the wrong interpreter; PATH assumptions in `ProgramArguments` |
 
 Details and the sanitized war stories behind each clause: `references/quiet-watchdog-patterns.md`.
