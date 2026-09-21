@@ -65,6 +65,12 @@ For an existing product, inspect its rendered page and implementation before
 writing the contract. Do not replace unknown facts with plausible sample data. Mark
 unknowns as unknown or omit them if they are not needed for the interaction choice.
 
+When the decision replaces a screen that already ships, enumerate its current
+user-visible behaviors as a numbered inventory during that inspection: every action,
+state, deep link, keyboard path, empty state, and copy affordance. Candidates are free
+to defer or drop any of them — the inventory exists so that a dropped behavior is a
+stated trade-off rather than an unnoticed regression.
+
 Read `references/interaction-design-method.md` before proposing the candidate
 architectures. It contains the hierarchy, progressive-disclosure, comparison, and
 accessibility rules that decide whether a direction is legitimate.
@@ -193,6 +199,14 @@ Then—and only then—implement in the product. Preserve the current design sys
 real data contracts. Use the project's frontend implementation and visual-QA skills,
 then verify the same representative task in the real browser. Pixel resemblance is
 insufficient; the approved state transitions and information order must survive.
+
+If you built a behavior inventory in step 1, the implementation is not delivered until
+every line of it carries a disposition: kept, changed to what, or dropped and why. Put
+that table where reviewers of the change will read it, not only in the session
+workspace. The removals are the load-bearing rows — a behavior nobody can account for
+is a regression that was never filed, and the author is the last person able to notice
+it. Expect the count of intentional removals to be wrong on the first pass; recheck it
+against the inventory before calling the change complete.
 
 If the project has a design SSOT, write the approved interaction decision there as
 part of implementation. Keep session feedback and prototype files as evidence; do
