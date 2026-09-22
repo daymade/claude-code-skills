@@ -42,6 +42,7 @@ interpreting fork snapshots, compaction, event streams, or end reasons.
 | User wants | Use |
 |---|---|
 | Recent Codex sessions, titles, IDs, or positive writer-lock evidence | `scripts/list_local_history.py --source codex` |
+| Find the Session containing a pasted quote, with a known project, date, or title clue | **Locate a quoted exchange** below: inventory candidates, then verify the original messages |
 | Exact recent user inputs from newest to oldest, grouped by Session | `scripts/list_codex_user_inputs.py` |
 | Whole-conversation original-input counts and quotations, including inherited history | `scripts/reconcile_codex_inputs.py --session <ID>` |
 | Locate one exact rollout by internal identity | `scripts/analyze_sessions.py locate-codex <ID>` |
@@ -79,6 +80,41 @@ SQLite, Node, `jq`, or recursive grep.
 Writer-lock output is positive-only: a held lock proves that exact advisory lock
 was held during the snapshot. It does not identify the process or prove liveness;
 an unmarked row does not prove the Session stopped.
+
+### Locate a quoted exchange
+
+For “which Session was this?” with a project, date, or title clue, use the existing
+inventory first. Select the strongest candidate by title and scope; a title match
+is only a lead. Do not begin with a full-corpus scan or a cross-provider index when
+these clues already bound discovery.
+
+```text
+<skill-dir>/scripts/list_local_history.py \
+  --source codex --cwd <workspace> --include-archived \
+  --from-date <YYYY-MM-DD> --to-date <YYYY-MM-DD> --limit 20
+<skill-dir>/scripts/read_codex_session.py --session <CANDIDATE_ID> --full
+```
+
+Omit unknown date bounds; replace `--cwd` with `--all-projects` when the workspace
+is unknown. A date describes when the quoted exchange happened, not when the
+Session was created. Inventory checks the created/updated interval for overlap,
+so an older Session resumed that day remains a candidate. Never restrict rollout
+directories to that day's creation folder. An asset's date is not a message date.
+
+Exclude the current Session from candidate selection. Require the reader's
+verified identity and the quoted text in the original speaker's timeline entry
+(for a pasted assistant reply, `ASSISTANT` with a record coordinate). A user
+quoting that reply, a tool result, or a compacted summary alone does not prove
+where it was originally said. For a large briefing, use the private-file path
+below and inspect the matching entry with its role and record heading; a Session
+lookup does not require reading unrelated history or continuing the old task.
+
+Stop once the quote and identity are verified; return the ID and source coordinate.
+If a candidate misses, try the remaining plausible candidates. A truncated listing,
+missing timestamps, an unavailable inventory, or no matching candidate is not
+absence: expand the inventory limit/scope or use **Bounded full-event search**
+with the supplied clues and current-Session exclusion. If no useful clue exists,
+use the existing search/recall routes directly.
 
 ### Exact original inputs
 

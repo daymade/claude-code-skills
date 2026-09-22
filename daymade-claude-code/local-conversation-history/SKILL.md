@@ -65,7 +65,15 @@ to `all` — but each reader's own task table pins it to that reader's provider
 Search is the mirror image: it is Claude-only unless the other two stores are
 added explicitly.
 
-**Order the last two rows rather than picking one.** A cross-provider content
+**Use supplied clues before broad discovery.** For a pasted quote with a known
+project, date, or title, let the owning reader's inventory narrow candidates, then
+verify their original messages. For Codex, follow **Locate a quoted exchange** in
+`read-codex-history`. Inventory alone never establishes a content match; if its
+candidates miss or its scope is incomplete, widen through the content-search row.
+Keep the current Session excluded. A request for only an ID stops at verified
+message evidence; it does not require reconstructing every unrelated conversation.
+
+**Without useful bounding clues, order the last two rows rather than picking one.** A cross-provider content
 search is the expensive shape: it reads every event of every store, so the cost
 scales with the whole corpus rather than with the question. When an index exists
 and covers the providers in scope, recall answers in about a second and returns
@@ -92,7 +100,7 @@ parsed. This skill names which providers are in scope and nothing else.
 | The user's requested result | Route |
 |---|---|
 | A list of conversations: titles, dates, session IDs | The inventory row under **Provider scope**, or the matching reader when one platform is named |
-| The conversation where a topic, quote, file, or tool result appeared — "find that old chat", "did we ever discuss X" | The **search** row under **Provider scope**, never an inventory. Listing titles is not searching content, and a title match is not evidence the content exists |
+| The conversation where a topic, quote, file, or tool result appeared — "find that old chat", "did we ever discuss X" | The **search** row under **Provider scope**; use supplied clues to narrow candidates first. Listing titles alone is not searching content, and a title match is not evidence the content exists |
 | Their own raw inputs in chronological order, verbatim | The matching reader's verbatim-input path. Preserve duplicates and session boundaries; duplicates are part of the ledger, not noise |
 | Picking work back up from an identified session | The matching continuation skill, after a read |
 
