@@ -23,7 +23,7 @@ uv run <skill-path>/scripts/fix-claude-export.py <export.txt> --stats
 # Custom output
 uv run <skill-path>/scripts/fix-claude-export.py <export.txt> -o fixed.txt
 
-# Validate the result (53 automated checks)
+# Validate the result (per-check PASS/FAIL with evidence; all must pass)
 uv run <skill-path>/scripts/validate-claude-export-fix.py <export.txt> fixed.txt
 ```
 
