@@ -626,6 +626,16 @@ class ClaudeSessionEvidenceTests(unittest.TestCase):
         self.assertEqual(tail.last_user_text, "finish it")
         self.assertEqual(len(MODULE.parse_session_structure(session_file)["messages"]), len(records))
 
+    def test_local_runtime_marker_is_not_an_explicit_interrupt(self):
+        session_file = self._session_file(
+            [
+                {"type": "assistant", "sessionId": "session-marker", "message": {"role": "assistant", "content": "done"}},
+                {"type": "user", "sessionId": "session-marker", "message": {"role": "user", "content": "<local-command-stdout>[Request interrupted by user]</local-command-stdout>"}},
+            ]
+        )
+        self.assertEqual(MODULE.parse_session_structure(session_file)["end_reason"], "completed")
+        self.assertEqual(ANALYZE.classify_session_tail(session_file).kind, ANALYZE.TAIL_DONE)
+
     def test_local_command_list_text_blocks_and_mixed_user_blocks(self):
         local = (
             "<command-name>/codex:transfer</command-name>\n"
@@ -649,6 +659,27 @@ class ClaudeSessionEvidenceTests(unittest.TestCase):
         )
         self.assertEqual(MODULE.parse_session_structure(mixed_file)["end_reason"], "abandoned")
         self.assertIn("please continue", ANALYZE.classify_session_tail(mixed_file).last_user_text)
+
+    def test_local_output_blocks_never_swallow_human_text_between_them(self):
+        content = [
+            {"type": "text", "text": "<local-command-stdout>output</local-command-stdout>"},
+            {"type": "text", "text": "please continue my work"},
+            {"type": "text", "text": "<local-command-stderr>error</local-command-stderr>"},
+        ]
+        self.assertFalse(MODULE.is_local_command_record(content))
+        self.assertFalse(MODULE.is_local_command_record(
+            "<local-command-stdout>output</local-command-stdout>"
+            "please continue my work"
+            "<local-command-stderr>error</local-command-stderr>"
+        ))
+        session_file = self._session_file(
+            [
+                {"type": "assistant", "sessionId": "session-between", "message": {"role": "assistant", "content": "done"}},
+                {"type": "user", "sessionId": "session-between", "message": {"role": "user", "content": content}},
+            ]
+        )
+        self.assertEqual(MODULE.parse_session_structure(session_file)["end_reason"], "abandoned")
+        self.assertIn("please continue my work", ANALYZE.classify_session_tail(session_file).last_user_text)
 
     def test_copy_local_command_envelope_does_not_replace_completed_tail(self):
         local = (

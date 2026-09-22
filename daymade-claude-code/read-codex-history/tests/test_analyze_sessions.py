@@ -103,6 +103,34 @@ class SessionAnalyzerTests(unittest.TestCase):
             env={**os.environ, "HOME": str(self.user_home)},
         )
 
+    def test_local_runtime_marker_and_mixed_text_blocks_do_not_fake_tail_state(self) -> None:
+        module = _load_analyze_module()
+        session_file = self.root / "local-runtime.jsonl"
+        write_jsonl(
+            session_file,
+            [
+                {"type": "assistant", "sessionId": "local", "message": {"role": "assistant", "content": "done"}},
+                {"type": "user", "sessionId": "local", "message": {"role": "user", "content": "<local-command-stdout>[Request interrupted by user]</local-command-stdout>"}},
+            ],
+        )
+        self.assertEqual(module.classify_session_tail(session_file).kind, module.TAIL_DONE)
+
+        mixed_file = self.root / "mixed-runtime.jsonl"
+        write_jsonl(
+            mixed_file,
+            [
+                {"type": "assistant", "sessionId": "mixed", "message": {"role": "assistant", "content": "done"}},
+                {"type": "user", "sessionId": "mixed", "message": {"role": "user", "content": [
+                    {"type": "text", "text": "<local-command-stdout>output</local-command-stdout>"},
+                    {"type": "text", "text": "please continue"},
+                    {"type": "text", "text": "<local-command-stderr>error</local-command-stderr>"},
+                ]}},
+            ],
+        )
+        tail = module.classify_session_tail(mixed_file)
+        self.assertEqual(tail.kind, module.TAIL_DONE)
+        self.assertIn("please continue", tail.last_user_text)
+
     def seed_structured_events(self) -> tuple[str, str]:
         active_id = "11111111-1111-4111-8111-111111111111"
         archive_id = "22222222-2222-4222-8222-222222222222"

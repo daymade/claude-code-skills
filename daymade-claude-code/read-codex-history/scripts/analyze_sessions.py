@@ -196,7 +196,11 @@ def classify_session_tail(path: Path) -> SessionTail:
 
         if record_type == "user" and not record.get("isMeta"):
             is_local_runtime = is_local_command_record(content)
-            if isinstance(content, str) and _INTERRUPTED_MARKER in content:
+            if (
+                not is_local_runtime
+                and isinstance(content, str)
+                and _INTERRUPTED_MARKER in content
+            ):
                 tail_is_interrupt = True
                 continue
             if not is_local_runtime:

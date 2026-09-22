@@ -53,7 +53,9 @@ LOCAL_COMMAND_ENVELOPE_NAME_RE = re.compile(
     re.IGNORECASE,
 )
 LOCAL_COMMAND_ENVELOPE_RE = re.compile(
-    r"^\s*<local-command-(?:caveat|stdout|stderr)>.*</local-command-(?:caveat|stdout|stderr)>\s*$",
+    r"^\s*<local-command-(caveat|stdout|stderr)>"
+    r"(?:(?!</?local-command-(?:caveat|stdout|stderr)>).)*"
+    r"</local-command-\1>\s*$",
     re.DOTALL,
 )
 
@@ -73,24 +75,24 @@ def is_local_command_record(value: object) -> bool:
     is not enough.  Only the runtime's own local output tags and the observed
     local commands are ignorable for terminal-state purposes.
     """
+    def is_local_text(text: str) -> bool:
+        return bool(
+            LOCAL_COMMAND_ENVELOPE_RE.fullmatch(text)
+            or LOCAL_COMMAND_ENVELOPE_NAME_RE.fullmatch(text)
+        )
+
     if isinstance(value, str):
-        text = value
-    elif isinstance(value, list):
-        # A local envelope can arrive as text blocks.  Any other block, or a
-        # second real text, leaves the record human-visible rather than hiding
-        # a mixed command/user turn.
-        if not value or not all(
-            isinstance(block, dict) and block.get("type") == "text"
-            and isinstance(block.get("text"), str)
-            for block in value
-        ):
-            return False
-        text = "\n".join(block["text"] for block in value)
-    else:
+        return is_local_text(value)
+    if not isinstance(value, list) or not value:
         return False
-    return bool(
-        LOCAL_COMMAND_ENVELOPE_RE.fullmatch(text)
-        or LOCAL_COMMAND_ENVELOPE_NAME_RE.fullmatch(text)
+    # Do not concatenate blocks: a local stdout block can sit next to actual
+    # human prose. Every block must independently prove it is local runtime.
+    return all(
+        isinstance(block, dict)
+        and block.get("type") == "text"
+        and isinstance(block.get("text"), str)
+        and is_local_text(block["text"])
+        for block in value
     )
 
 
