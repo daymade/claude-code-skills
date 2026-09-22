@@ -318,6 +318,22 @@ repository **from the canonical primary main checkout** with
 stale feature worktree select its own stale dispatcher. CI and the GitHub main
 ruleset independently require the same release checks on every PR.
 
+**Push through the remote name, never a bare URL.** The guard resolves the
+remote from its argument (`process.argv[3]`) and then fetches
+`<remote> refs/heads/main:refs/remotes/<remote>/main` to judge the push against
+current main. Handed a bare URL it therefore builds the refspec
+`refs/remotes/https://github.com/…/main` and dies with
+`fatal: invalid refspec` followed by `could not refresh current main` — which
+reads like a network failure and is not (five retries against it change
+nothing). From a linked worktree, push over HTTPS with a token without editing
+repository config by overriding per invocation:
+
+```
+git -C <worktree> \
+  -c remote.origin.url=<https-url> -c remote.origin.pushurl=<https-url> \
+  push origin HEAD:refs/heads/<branch>
+```
+
 1. **Never commit directly to local `main`.** All work starts on a feature
    branch (`git checkout -b <topic>`), ships via PR, and lands by squash merge.
 2. **After every merge, run the post-merge ritual:** `git checkout main && git pull --ff-only`.
@@ -336,6 +352,19 @@ ruleset independently require the same release checks on every PR.
    uncommitted changes: `git fetch origin main:main` (updates the ref
    directly, no checkout needed), then retry `git checkout main`. Only fall
    through to the divergence procedure below if the diff is non-empty.
+
+4. **Treat `pull --ff-only` as a whole transaction, not a per-file one.** It
+   refuses when *any* file it would update carries local modifications — and
+   that file may belong to another session and be untouched by your branch.
+   One peer's uncommitted file therefore blocks the update of every other file
+   in the same pull, which is how a shared checkout stays behind `origin/main`
+   while every signal you checked still looks fine. Before assuming
+   divergence, list what the pull would touch and check each path:
+   `git diff --name-only main origin/main`, then
+   `git status --porcelain=v1 -- <that-path>`. When the blocking file is not
+   yours and is still being written, leave it alone and report the baseline
+   SHA, who was asked, and that the ff is still outstanding — do not stash,
+   `checkout --`, or `restore` it.
 
 If local `main` has already diverged: do not `reset --hard` until every stray
 commit is proven superseded — mechanical test: cherry-pick them onto
