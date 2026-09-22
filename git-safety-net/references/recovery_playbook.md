@@ -32,14 +32,19 @@ plan around. Measured 2026-09-22 on a scratch repo: after deleting a checked-out
 `git gc --prune=now` still kept the tip (HEAD's reflog was a reachability root), and only
 `git reflog expire --expire-unreachable=now --all` followed by `gc --prune=now` took it.
 **So "gc has not taken it yet" is not a safety signal — the object is one expire away.**
-**Criterion: before `-D`, run `git cat-file -e "<sha>^{commit}"` to confirm the object exists, and
-preserve it per the steps below.** Read that probe's exit code with its stderr: 0 means the object is
-there, but **non-zero is not proof it is absent** — 128 also covers a mistyped SHA and a path that
-traverses a tracked symlink, and Git distinguishes them only in the stderr text (calibrated in
-[../SKILL.md](../SKILL.md) § Troubleshooting). Nor are a successful probe plus a completed preserve
-deletion authority: worktree-removal authority does not authorize branch deletion
-([merge_verification.md](merge_verification.md) § Worktree retirement) — `-D` still needs the verified
-backup and explicit authorization.
+**Criterion: before `-D`, capture the tip with `git rev-parse <branch>` and run
+`git cat-file -e "<sha>^{commit}"`; 0 means the object is in the local store, and that is the case worth
+preserving.** Non-zero is genuinely ambiguous *for this form*, so do not read it as a verdict either
+way: its stderr is always `fatal: Not a valid object name <whatever-you-typed>^{commit}`, so a
+mistyped SHA and an object `gc` already collected print the same words (measured 2026-09-22). What
+settles it in practice — if the SHA came straight from `git rev-parse` moments ago, non-zero means the
+local object is already gone and the only copies left are whatever you pinned or pushed earlier.
+**Which is why the pin/push below happens *before* the delete, not after reading this probe.** (The
+`… -e <branch>:<path>` form has the richer stderr — it distinguishes a missing path from a bad branch
+— but it answers a different question; see [../SKILL.md](../SKILL.md) § Troubleshooting.) Nor are a
+successful probe plus a completed preserve deletion authority: worktree-removal authority does not
+authorize branch deletion ([merge_verification.md](merge_verification.md) § Worktree retirement) —
+`-D` still needs the verified backup and explicit authorization.
 
 ## The authoritative "is anything at risk" check
 
