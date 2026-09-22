@@ -574,6 +574,35 @@ def _expand_activation(activation: dict[str, Any], args: argparse.Namespace) -> 
                                and member["plugin_id"] == candidate.get("plugin_id")
                                for candidate in candidates[name])):
                 raise AuditInputError(f"selected source is not a registered candidate: {name}")
+        # A registered candidate is not necessarily the policy-selected winner.
+        # Reuse the owner's selection logic, including exact candidate-set checks.
+        owner = sys.modules["_skill_audit_source_owner"]
+        try:
+            sources = []
+            for market, members in markets.items():
+                skills = {}
+                for name, member in members.items():
+                    plugin_id = member.get("plugin_id")
+                    if (not isinstance(plugin_id, str)
+                            or plugin_id.count("@") != 1
+                            or plugin_id.rpartition("@")[2] != market
+                            or not NAME_PATTERN.fullmatch(plugin_id.partition("@")[0])):
+                        raise ValueError(f"invalid registered plugin identity for {market}/{name}")
+                    skills[name] = owner.SkillSource(
+                        name=name, source_dir=Path(member["source_dir"]), plugin_id=plugin_id,
+                    )
+                sources.append(owner.MarketplaceSource(
+                    name=market, repo=Path(activation["path"]).parent,
+                    plugins={}, skills=skills,
+                ))
+            resolved = owner.merge_source_skills(sources, activation["source_preferences"])
+        except (ValueError, AttributeError, TypeError) as exc:
+            raise AuditInputError(f"invalid source selection: {exc}") from exc
+        for name, member in selected.items():
+            chosen = resolved[name]
+            if (member["plugin_id"] != chosen.plugin_id
+                    or Path(member["source_dir"]) != chosen.source_dir):
+                raise AuditInputError(f"selected source disagrees with activation policy: {name}")
     else:
         selected = {}
         for name, members in candidates.items():

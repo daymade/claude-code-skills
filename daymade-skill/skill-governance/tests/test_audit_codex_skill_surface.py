@@ -643,6 +643,31 @@ class CodexSkillSurfaceAuditTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, report)
         self.assertEqual(report["findings"]["active_missing_links"], ["actual-name"])
 
+    def test_frozen_wrong_selected_and_matching_link_are_invalid(self):
+        prompt, options, _, agents, alternate, inventory = self.selected_case()
+        result, report = self.run_audit(prompt, *options)
+        self.assertEqual(result.returncode, 0, report)
+        inventory["selected_skills"]["actual-name"] = inventory["marketplaces"]["cmks-skills"]["actual-name"]
+        (self.root / "sources.json").write_text(json.dumps(inventory))
+        (agents / "actual-name").unlink()
+        (agents / "actual-name").symlink_to(alternate.parent)
+        prompt = self.write_prompt([("actual-name", "Alternate.", agents / "actual-name/SKILL.md")])
+        result, report = self.run_audit(prompt, *options)
+        self.assertEqual(result.returncode, 2, report)
+        self.assertEqual(report["status"], "invalid")
+        self.assertIn("disagrees with activation policy", report["error"])
+
+    def test_frozen_preferences_require_exact_registered_candidates(self):
+        prompt, options, _, _, _, inventory = self.selected_case()
+        del inventory["marketplaces"]["cmks-skills"]
+        (self.root / "sources.json").write_text(json.dumps(inventory))
+        manifest = json.loads(self.manifest.read_text())
+        manifest["active_marketplaces"] = ["daymade-skills"]
+        self.manifest.write_text(json.dumps(manifest))
+        result, report = self.run_audit(prompt, *options)
+        self.assertEqual(result.returncode, 2, report)
+        self.assertIn("candidate mismatch", report["error"])
+
     def test_v3_invalid_inventory_cannot_be_clean(self):
         prompt, options, _, _, _, inventory = self.selected_case()
         cases = [
