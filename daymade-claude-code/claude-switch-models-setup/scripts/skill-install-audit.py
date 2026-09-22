@@ -178,16 +178,14 @@ def load_enabled():
 def load_codex():
     resolver = source_sync()
     policy = resolver.load_skill_activation_policy(CODEX_MANIFEST)
-    manifest = set(policy.active_names)
     sources = registered_sources()
     found = {source.name for source in sources}
     unknown = set(policy.active_marketplaces) - found
     if unknown:
         raise ValueError(f"active marketplaces have no source: {', '.join(sorted(unknown))}")
-    for source in sources:
-        if source.name in policy.active_marketplaces:
-            manifest.update(source.skills)
-    registered = resolver.merge_source_skills(sources)
+    registered = resolver.merge_source_skills(sources, policy.source_preferences)
+    active, unresolved = resolver.resolve_activation(policy, registered, sources)
+    manifest = (set(active) | set(unresolved)) - set(policy.exclude_skills)
     pool = set()
     if AGENTS_SKILLS.is_dir():
         for entry in AGENTS_SKILLS.iterdir():

@@ -206,6 +206,9 @@ That reference owns the activation-manifest contract, host-specific selection,
 legacy compatibility, and repair workflow. An approved whole-marketplace policy
 includes newly registered members; a source checkout or registration alone does
 not establish that policy. Do not hand-create user Skill links.
+For intentional same-name source variants, use the owner's explicit source-selection
+contract; retain every candidate and reject undeclared collisions. Audit tools must
+consume the owner's selected inventory rather than choose a source independently.
 
 When delivery includes local availability, finish the source owner's dry-run/apply
 and the [newly registered Skill gate](daymade-skill/skill-governance/references/skill-surface-governance.md#14-verify-a-newly-registered-skill).

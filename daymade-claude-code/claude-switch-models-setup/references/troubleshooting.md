@@ -437,28 +437,34 @@ Restart affected existing sessions after repairing metadata discovery.
 `launchctl` reports a zero last-exit status — yet `~/.claude/skills` gains nothing
 and stale entries never get pruned.
 
-The tell is in a dry run: with the Claude root managed, every source skill gets a
-decision line (`Claude skill <name>: …`). **No such lines at all** means the whole
-Claude-root block was skipped, which happens when the activation manifest has no
-`claude_active_marketplaces` key or holds an empty array — `manage_claude` is then
-false and that root is not reconciled at all. Codex-side activation is unaffected,
-which is why every other signal stays green:
+Inspect `claude_active_marketplaces` in the actual activation manifest and check
+whether the invocation uses `--skip-claude-skills`. The Claude root is managed only
+when that list selects a discovered marketplace and the skip flag is absent.
+Missing selected marketplaces fail validation. Missing `Claude skill ...` lines
+do not establish that the root was skipped: already-correct direct entries can
+be quiet, while plugin-provided or disabled entries emit decision lines.
+
+Run against the actual root; the default is read-only:
 
 ```bash
 sync-local-skill-sources.py --active-skills-manifest <manifest> \
-  --claude-skills <mirror-of-~/.claude/skills>          # dry run, writes nothing
+  --claude-skills ~/.claude/skills
+sync-local-skill-sources.py --active-skills-manifest <manifest> \
+  --print-source-inventory
 ```
 
-Fix it by naming the owned marketplaces in that manifest. The semantics — which
-marketplaces, what a direct link means versus a plugin-provided one, and what is
-never replaced — are defined in
+Use `marketplaces` to check registered membership and `selected_skills` to check
+resolved identities. Inventory does not prove that a plugin is enabled or a
+personal link exists; inspect those against the dry-run and current root.
+If activation is missing, name only the intended owned marketplaces in the manifest.
+The selection and plugin-state rules are defined in
 [local-source-sync-architecture.md](local-source-sync-architecture.md#host-specific-user-skill-activation).
 
-Before applying, point `--claude-skills` at a **mirror** of the real root so the dry
-run reports what it would create and what it would prune without touching anything.
-Links that resolve outside the discovered marketplaces are never pruned, so a
-foreign or hand-made link survives; links into a managed repo that the new
-selection no longer covers are moved to `.source-sync-backups/` rather than deleted.
+Do not blindly copy the root with `cp -a` for this check: relocating relative
+symlinks changes what they resolve to. Prefer the actual-root dry-run; a mirror
+must preserve each link's resolved target. Foreign links and real user-owned
+bundles remain outside automatic retirement. Eligible stale managed links are
+moved to `.source-sync-backups/` during an approved apply, not deleted.
 
 ## Source sync warns that an active skill name is registered by no checkout
 
@@ -513,11 +519,18 @@ ValueError: duplicate source skill name 'read-wechat-messages':
   and .../cemakanshan-skills/read-wechat-messages (read-wechat-messages@cmks-skills)
 ```
 
-Two marketplaces are declaring the same skill name at the same time. The guard is
-deliberate — it refuses to pick a winner — so the fix is to end the overlap, not to
-loosen it. The usual cause is **migrating a skill between repos**, and it is a window
-rather than a steady state: adding to the target `main` and removing from the source
-`main` are two separate commits, and every pass in between aborts. Measured twice:
+Two marketplaces declare the same frontmatter name. First distinguish an
+intentional pair of different bundles from an unfinished ownership transfer.
+For intentional variants, retain both bundles and declare a host-specific
+`source_preferences` rule under activation schema 3; see
+[Explicit source preferences](local-source-sync-architecture.md#explicit-source-preferences).
+A `candidate mismatch` means the declared identities and observed registrations
+no longer match. Inspect both before changing policy; never choose by discovery
+order or delete content to silence this error.
+
+For an explicitly approved ownership transfer, adding to the target and removing
+from the source are separate commits, so both registrations may coexist temporarily.
+Two past transfers illustrate that window:
 
 | skill | added to cmks main | removed from -pro main | window |
 |---|---|---|---|
@@ -535,16 +548,16 @@ WARN lines in this log are a different mode (previous section), not evidence eit
 git -C <checkout> merge-base --is-ancestor <sha> main && echo "on main"
 ```
 
-**The order that avoids the window: delete from the source repo and push first, then
-add to the target.** While the window is open nothing is left half-synced — the guard
+For an approved transfer, follow its content-preservation and retirement plan;
+this error alone does not authorize source removal. While the window is open
+nothing is left half-synced — the guard
 runs before the lock and before any write, so an aborted pass changes nothing at all.
 What stops updating during the window: `~/.agents/skills` (Codex side),
 `installed_plugins.json` and `known_marketplaces.json`. `~/.claude/skills` is
 unaffected unless the manifest sets `claude_active_marketplaces`.
 
-**To close a window that is already open:** read the two paths out of the traceback,
-remove the skill from the source repo and push, then run `git -C <that checkout> pull
---ff-only`. The syncer reads the **working tree** of each local checkout, so pushing
+**To close an approved transfer window:** finish the authorized source retirement,
+then update the affected clean checkout with `git -C <that checkout> pull --ff-only`. The syncer reads the **working tree** of each local checkout, so pushing
 alone leaves the next pass still seeing the duplicate and the window never closes.
 Confirm closure with a fresh `source-sync verified` line in `source-sync.out.log`.
 

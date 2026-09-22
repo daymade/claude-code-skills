@@ -38,7 +38,7 @@ import shutil
 import stat
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 
@@ -49,7 +49,7 @@ DEFAULT_AGENTS_SKILLS = HOME / ".agents" / "skills"
 DEFAULT_ACTIVE_SKILLS_MANIFEST = (
     HOME / ".config" / "claude-switch-models-setup" / "codex-active-skills.json"
 )
-ACTIVE_SKILLS_SCHEMA_VERSION = 2
+ACTIVE_SKILLS_SCHEMA_VERSION = 3
 SKILL_NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 LOCAL_MARKETPLACE_NAMES = ("daymade-skills", "daymade-skills-pro", "cmks-skills")
 SYNC_LOCK_NAME = ".daymade-skill-sync.lock"
@@ -96,6 +96,7 @@ class SkillActivationPolicy:
     claude_active_marketplaces: tuple[str, ...] = ()
     include_skills: tuple[str, ...] = ()
     exclude_skills: tuple[str, ...] = ()
+    source_preferences: dict[str, dict] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -689,6 +690,43 @@ def _load_skill_name_array(
     return tuple(names)
 
 
+def validate_source_preferences(raw: object) -> dict[str, dict]:
+    """Validate exact per-name exceptions; no implicit ordering or fallback."""
+    if not isinstance(raw, dict):
+        raise ValueError("source_preferences must be an object")
+    preferences = {}
+    for name, rule in raw.items():
+        if not isinstance(name, str):
+            raise ValueError("source_preferences keys must be skill names")
+        validate_skill_name(name, "source_preferences")
+        if not isinstance(rule, dict) or set(rule) != {"prefer", "over"}:
+            raise ValueError(f"source_preferences[{name!r}] requires exactly prefer and over")
+        over = rule["over"]
+        if not isinstance(over, list) or not over:
+            raise ValueError(f"source_preferences[{name!r}].over must be a non-empty array")
+        identities = [rule["prefer"], *over]
+        for identity in identities:
+            if not isinstance(identity, str) or identity.count("@") != 1:
+                raise ValueError(f"source_preferences[{name!r}]: invalid qualified plugin identity {identity!r}")
+            plugin, market = identity.split("@")
+            validate_skill_name(plugin, f"source_preferences[{name!r}]: plugin")
+            if market not in LOCAL_MARKETPLACE_NAMES:
+                raise ValueError(f"source_preferences[{name!r}]: unknown managed marketplace {market!r}")
+        if len(set(identities)) != len(identities):
+            raise ValueError(f"source_preferences[{name!r}]: duplicate plugin identity")
+        preferences[name] = {"prefer": rule["prefer"], "over": sorted(over)}
+    return preferences
+
+
+def _unique_policy_keys(pairs: list[tuple[str, object]]) -> dict:
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"activation manifest: duplicate JSON key {key!r}")
+        result[key] = value
+    return result
+
+
 def load_skill_activation_policy(path: Path) -> SkillActivationPolicy:
     """Read active user Skills and the bounded legacy compatibility subset."""
     if not path.is_file():
@@ -696,20 +734,25 @@ def load_skill_activation_policy(path: Path) -> SkillActivationPolicy:
             f"active-skill manifest is missing: {path}. "
             "Create it from assets/templates/codex-active-skills.json before syncing."
         )
-    data = load_json(path)
+    with path.open(encoding="utf-8") as fh:
+        data = json.load(fh, object_pairs_hook=_unique_policy_keys)
     if not isinstance(data, dict):
         raise ValueError(f"{path}: root must be an object")
-    # Accept v1 and v2 manifests. v1 predates include_skills/exclude_skills;
-    # those keys simply read as empty on a v1 file. Reading v1 must keep
-    # working after the v2 reader lands in the plugin cache — the live
-    # manifest is migrated to schema_version 2 as the LAST rollout step, so
-    # every intermediate state (v2 reader + v1 manifest) is production.
-    # The reverse combination (v2 manifest + v1 reader) still fails fast on
-    # the old reader, which is why the reader ships first.
-    if data.get("schema_version") not in (1, ACTIVE_SKILLS_SCHEMA_VERSION):
-        raise ValueError(
-            f"{path}: schema_version must be 1 or {ACTIVE_SKILLS_SCHEMA_VERSION}"
-        )
+    # Deploy the reader before upgrading policy: older readers reject v3 rather
+    # than silently ignoring a source choice. Existing v1/v2 policies still work.
+    version = data.get("schema_version")
+    if type(version) is not int or version not in (1, 2, ACTIVE_SKILLS_SCHEMA_VERSION):
+        raise ValueError(f"{path}: schema_version must be 1, 2 or {ACTIVE_SKILLS_SCHEMA_VERSION}")
+    if version < 3 and "source_preferences" in data:
+        raise ValueError(f"{path}: source_preferences requires schema_version 3")
+    if version == 3:
+        allowed = {"schema_version", "active_skills", "legacy_codex_compat_skills",
+                   "active_marketplaces", "claude_active_marketplaces", "include_skills",
+                   "exclude_skills", "source_preferences"}
+        unknown = sorted(set(data) - allowed)
+        if unknown:
+            raise ValueError(f"{path}: unknown activation fields: {', '.join(unknown)}")
+    preferences = validate_source_preferences(data.get("source_preferences", {}))
     active_names = _load_skill_name_array(
         data,
         path,
@@ -762,6 +805,7 @@ def load_skill_activation_policy(path: Path) -> SkillActivationPolicy:
         claude_active_marketplaces=claude_marketplaces,
         include_skills=include_names,
         exclude_skills=exclude_names,
+        source_preferences=preferences,
     )
 
 
@@ -1104,20 +1148,44 @@ def load_marketplace(repo: Path) -> MarketplaceSource:
     return MarketplaceSource(market, repo, plugins, skills)
 
 
-def merge_source_skills(sources: list[MarketplaceSource]) -> dict[str, SkillSource]:
-    """Merge marketplace skills without silently choosing between duplicate names."""
-    merged: dict[str, SkillSource] = {}
+def merge_source_skills(
+    sources: list[MarketplaceSource],
+    source_preferences: dict[str, dict] | None = None,
+) -> dict[str, SkillSource]:
+    """Resolve source identities once, allowing only exact declared collisions.
+
+    A preference must account for the complete candidate set and its preferred
+    plugin must register that Skill. Missing/extra candidates fail, even for cold
+    names. Multiple checkouts of one marketplace remain ambiguous and fail.
+    """
+    preferences = validate_source_preferences(
+        {} if source_preferences is None else source_preferences
+    )
+    candidates: dict[str, dict[str, SkillSource]] = {}
+    marketplaces: set[str] = set()
     for source in sources:
+        if source.name in marketplaces:
+            raise ValueError(f"duplicate marketplace identity: {source.name}")
+        marketplaces.add(source.name)
         for name, skill in source.skills.items():
-            previous = merged.get(name)
-            if previous is None:
-                merged[name] = skill
-                continue
+            candidates.setdefault(name, {})[skill.plugin_id] = skill
+    for name, rule in preferences.items():
+        actual = set(candidates.get(name, {}))
+        expected = {rule["prefer"], *rule["over"]}
+        if actual != expected:
             raise ValueError(
-                "duplicate source skill name "
-                f"{name!r}: {previous.source_dir} ({previous.plugin_id}) and "
-                f"{skill.source_dir} ({skill.plugin_id})"
+                f"source_preferences[{name!r}]: candidate mismatch; "
+                f"missing: {sorted(expected - actual)}; unexpected: {sorted(actual - expected)}"
             )
+    merged = {}
+    for name, choices in candidates.items():
+        if name in preferences:
+            merged[name] = choices[preferences[name]["prefer"]]
+        elif len(choices) == 1:
+            merged[name] = next(iter(choices.values()))
+        else:
+            details = ", ".join(f"{s.source_dir} ({s.plugin_id})" for s in choices.values())
+            raise ValueError(f"duplicate source skill name {name!r}: {details}")
     return merged
 
 
@@ -2054,17 +2122,27 @@ def main(argv: list[str]) -> int:
 
     repos = [repo.expanduser().resolve() for repo in args.repo] if args.repo else infer_repos(Path(__file__), args.claude_dir)
     sources = [load_marketplace(repo) for repo in repos]
-    if args.print_source_inventory:
-        merge_source_skills(sources)  # Preserve duplicate-identity validation.
-        print(json.dumps({"schema_version": 1, "marketplaces": {
-            src.name: {name: {"source_dir": str(skill.source_dir), "plugin_id": skill.plugin_id}
-                       for name, skill in src.skills.items()} for src in sources
-        }}, sort_keys=True))
-        return 0
     if args.print_watch_paths:
         print(args.active_skills_manifest.expanduser())
         for src in sources:
             print(src.repo / ".claude-plugin" / "marketplace.json")
+        return 0
+    manifest = args.active_skills_manifest.expanduser().resolve()
+    policy = load_skill_activation_policy(manifest)
+    skills = merge_source_skills(sources, policy.source_preferences)
+    if args.print_source_inventory:
+        print(json.dumps({
+            "schema_version": 2,
+            "marketplaces": {
+                src.name: {name: {"source_dir": str(skill.source_dir), "plugin_id": skill.plugin_id}
+                           for name, skill in src.skills.items()} for src in sources
+            },
+            "selected_skills": {
+                name: {"source_dir": str(skill.source_dir), "plugin_id": skill.plugin_id}
+                for name, skill in skills.items()
+            },
+            "source_preferences": policy.source_preferences,
+        }, sort_keys=True))
         return 0
     if args.skip_agents and not args.skip_codex:
         raise ValueError(
@@ -2078,9 +2156,6 @@ def main(argv: list[str]) -> int:
             agents_root,
             codex_root,
         )
-    manifest = args.active_skills_manifest.expanduser().resolve()
-    policy = load_skill_activation_policy(manifest)
-    skills = merge_source_skills(sources)
     discovered_marketplaces = {src.name for src in sources}
     undiscovered = sorted(
         (set(policy.active_marketplaces) | set(policy.claude_active_marketplaces)) - discovered_marketplaces
@@ -2107,9 +2182,12 @@ def main(argv: list[str]) -> int:
         report_unresolved_active_names(legacy_unresolved, sources, manifest)
     source_roots = [src.repo for src in sources]
     claude_sources = [src for src in sources if src.name in policy.claude_active_marketplaces]
-    claude_candidates = freeze_selected_skill_sources({
-        name: skill for src in claude_sources for name, skill in src.skills.items()
-    })
+    claude_names = {name for src in claude_sources for name in src.skills}
+    claude_candidates = freeze_selected_skill_sources({name: skills[name] for name in claude_names})
+    claude_source_roots = list(dict.fromkeys(
+        [src.repo for src in claude_sources]
+        + [skill.repo_root for skill in claude_candidates.values() if skill.repo_root is not None]
+    ))
     claude_root = absolute_without_symlink_resolution(args.claude_skills or args.claude_dir / "skills")
     manage_claude = bool(claude_sources) and not args.skip_claude_skills
     claude_expectation = None
@@ -2144,6 +2222,8 @@ def main(argv: list[str]) -> int:
     log(f"mode: {'APPLY' if args.apply else 'DRY-RUN'}")
     for src in sources:
         log(f"source {src.name}: {src.repo} ({len(src.plugins)} plugins, {len(src.skills)} skills)")
+    for name, rule in sorted(policy.source_preferences.items()):
+        log(f"source preference {name}: {rule['prefer']} over {', '.join(rule['over'])}")
     skipped = (
         f"; {len(unresolved_names)} unresolved name(s) skipped" if unresolved_names else ""
     )
@@ -2222,7 +2302,7 @@ def main(argv: list[str]) -> int:
                         raise RuntimeError(f"Claude personal skill root unavailable: {claude_root}")
                 else:
                     claude_pinned = None
-                sync_skill_root(claude_root, claude_skills, [src.repo for src in claude_sources],
+                sync_skill_root(claude_root, claude_skills, claude_source_roots,
                                 stamp, args.apply, create_missing=True, pinned_root=claude_pinned)
                 if args.apply:
                     verify_selected_skill_links(claude_root, claude_skills, pinned_root=claude_pinned)

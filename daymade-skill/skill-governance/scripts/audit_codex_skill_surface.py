@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import collections
 import json
+import importlib.util
 import os
 from pathlib import Path
 import queue
@@ -476,47 +477,58 @@ def _read_disabled_paths(config_path: Path, explicitly_requested: bool) -> list[
     return disabled
 
 
-def _read_activation_manifest(path: Path, explicitly_requested: bool) -> dict[str, Any] | None:
+def _source_resolver_path(args: argparse.Namespace) -> Path:
+    return args.source_sync_script or (
+        Path.home() / ".config/claude-switch-models-setup/sync-local-skill-sources.py"
+    )
+
+
+def _read_activation_manifest(
+    path: Path, explicitly_requested: bool, resolver_path: Path,
+) -> dict[str, Any] | None:
     if not path.exists() and not explicitly_requested:
         return None
     data = _load_json(path, "activation manifest")
-    if not isinstance(data, dict) or data.get("schema_version") != 1:
-        raise AuditInputError(f"{path}: expected activation schema_version 1")
-    names = data.get("active_skills")
-    if not isinstance(names, list) or any(
-        not isinstance(name, str) or not name.strip() for name in names
-    ):
-        raise AuditInputError(f"{path}: active_skills must be an array of non-empty names")
-    invalid_names = [name for name in names if not NAME_PATTERN.fullmatch(name)]
-    if invalid_names:
-        raise AuditInputError(
-            f"{path}: active_skills contains invalid Skill name(s): {invalid_names}"
-        )
-    if len(names) != len(set(names)):
-        raise AuditInputError(f"{path}: active_skills contains duplicates")
-    markets = data.get("active_marketplaces", [])
-    if (not isinstance(markets, list)
-            or any(not isinstance(n, str) or not NAME_PATTERN.fullmatch(n) for n in markets)
-            or len(set(markets)) != len(markets)):
-        raise AuditInputError(f"{path}: active_marketplaces must contain unique marketplace names")
-    return {"path": str(path), "active_names": names, "active_marketplaces": markets}
+    if not isinstance(data, dict) or type(data.get("schema_version")) is not int:
+        raise AuditInputError(f"{path}: activation schema_version must be an integer")
+    # The source owner validates versions, fields, names and conflicts. Import
+    # only its pure reader; never call main(), dry-run or synchronization.
+    try:
+        spec = importlib.util.spec_from_file_location("_skill_audit_source_owner", resolver_path)
+        if spec is None or spec.loader is None:
+            raise ValueError("cannot load source owner")
+        owner = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = owner
+        exec(compile(resolver_path.read_text(encoding="utf-8"), str(resolver_path), "exec"), owner.__dict__)
+        policy = owner.load_skill_activation_policy(path)
+        names = set(policy.active_names) | set(policy.include_skills) | set(policy.legacy_codex_compat_names)
+        return {
+            "path": str(path), "schema_version": data["schema_version"],
+            "resolver_path": str(resolver_path),
+            "active_names": sorted(names),
+            "active_marketplaces": list(policy.active_marketplaces),
+            "exclude_skills": list(policy.exclude_skills),
+            "source_preferences": getattr(policy, "source_preferences", {}),
+        }
+    except (OSError, ValueError, AttributeError, ImportError, SyntaxError) as exc:
+        raise AuditInputError(f"invalid activation policy via {resolver_path}: {exc}") from exc
 
 
 def _expand_activation(activation: dict[str, Any], args: argparse.Namespace) -> None:
     """Use the source owner's inventory; never infer membership from installed links."""
-    if not activation["active_marketplaces"]:
+    if not activation["active_marketplaces"] and activation["schema_version"] < 3 and not args.source_inventory_json:
+        activation["active_names"] = sorted(set(activation["active_names"]) - set(activation["exclude_skills"]))
         return
     if args.source_inventory_json:
         payload = _load_json(args.source_inventory_json, "source inventory")
     else:
-        script = args.source_sync_script or (
-            Path.home() / ".config/claude-switch-models-setup/sync-local-skill-sources.py"
-        )
+        script = _source_resolver_path(args)
         if not script.is_file():
             raise AuditInputError("source sync resolver missing; specify --source-sync-script")
         try:
             result = subprocess.run(
-                [sys.executable, str(script), "--print-source-inventory"],
+                [sys.executable, str(script), "--print-source-inventory",
+                 "--active-skills-manifest", activation["path"]],
                 capture_output=True, text=True, timeout=60, check=False,
             )
             if result.returncode:
@@ -524,30 +536,59 @@ def _expand_activation(activation: dict[str, Any], args: argparse.Namespace) -> 
             payload = json.loads(result.stdout)
         except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError) as exc:
             raise AuditInputError(f"invalid source inventory: {exc}") from exc
-    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
-        raise AuditInputError("source inventory must use schema_version 1")
+    if (not isinstance(payload, dict)
+            or type(payload.get("schema_version")) is not int
+            or payload["schema_version"] not in (1, 2)):
+        raise AuditInputError("source inventory must use schema_version 1 or 2")
+    if activation["schema_version"] >= 3 and payload["schema_version"] != 2:
+        raise AuditInputError("activation schema 3 requires selected source inventory schema 2")
     markets = payload.get("marketplaces")
     if not isinstance(markets, dict):
         raise AuditInputError("source inventory has no marketplace mapping")
     names = set(activation["active_names"])
-    expected_sources = {}
-    for market in activation["active_marketplaces"]:
-        members = markets.get(market)
+    candidates: dict[str, list[dict[str, Any]]] = {}
+    for market, members in markets.items():
         if not isinstance(members, dict):
-            raise AuditInputError(f"active marketplace absent from source inventory: {market}")
+            raise AuditInputError(f"invalid marketplace inventory: {market}")
         for name, member in members.items():
             if not NAME_PATTERN.fullmatch(name) or not isinstance(member, dict):
                 raise AuditInputError(f"invalid registered skill in {market}")
             source = member.get("source_dir")
             if not isinstance(source, str) or not Path(source).is_absolute():
                 raise AuditInputError(f"invalid source path for {market}/{name}")
-            if name in expected_sources:
+            candidates.setdefault(name, []).append(member)
+    for market in activation["active_marketplaces"]:
+        if market not in markets:
+            raise AuditInputError(f"active marketplace absent from source inventory: {market}")
+        names.update(markets[market])
+    if payload["schema_version"] == 2:
+        selected = payload.get("selected_skills")
+        if not isinstance(selected, dict) or set(selected) != set(candidates):
+            raise AuditInputError("selected source inventory must cover every registered identity")
+        if payload.get("source_preferences") != activation["source_preferences"]:
+            raise AuditInputError("source inventory preferences do not match the activation manifest")
+        for name, member in selected.items():
+            if (not isinstance(member, dict)
+                    or not isinstance(member.get("plugin_id"), str)
+                    or not any(member.get("source_dir") == candidate.get("source_dir")
+                               and member["plugin_id"] == candidate.get("plugin_id")
+                               for candidate in candidates[name])):
+                raise AuditInputError(f"selected source is not a registered candidate: {name}")
+    else:
+        selected = {}
+        for name, members in candidates.items():
+            if len(members) != 1:
                 raise AuditInputError(f"duplicate source identity: {name}")
-            skill_path = Path(source) / "SKILL.md"
-            if not skill_path.is_file():
-                raise AuditInputError(f"registered source missing: {skill_path}")
-            expected_sources[name] = str(skill_path.resolve())
-            names.add(name)
+            selected[name] = members[0]
+    names.difference_update(activation["exclude_skills"])
+    expected_sources = {}
+    for name in names:
+        if name not in selected:
+            raise AuditInputError(f"active name absent from source inventory: {name}")
+        skill_path = Path(selected[name]["source_dir"]) / "SKILL.md"
+        if not skill_path.is_file():
+            raise AuditInputError(f"registered source missing: {skill_path}")
+        expected_sources[name] = str(skill_path.resolve())
     activation["active_names"] = sorted(names)
     activation["expected_sources"] = expected_sources
 
@@ -605,6 +646,7 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
     activation = _read_activation_manifest(
         args.activation_manifest.expanduser().absolute(),
         args.activation_manifest_explicit,
+        _source_resolver_path(args),
     )
     if activation:
         _expand_activation(activation, args)
@@ -801,7 +843,7 @@ def _parser() -> argparse.ArgumentParser:
         help="Managed source activation policy; omitted automatically when the default is absent",
     )
     parser.add_argument("--agents-root", type=Path, default=DEFAULT_AGENTS_ROOT)
-    parser.add_argument("--source-sync-script", type=Path, help="Managed source resolver providing --print-source-inventory")
+    parser.add_argument("--source-sync-script", type=Path, help="Source owner exposing load_skill_activation_policy and --print-source-inventory")
     parser.add_argument("--source-inventory-json", type=Path, help="Use a frozen source inventory instead of running the resolver")
     parser.add_argument("--required-only", action="store_true", help="Gate only explicitly required names; keep all other findings in the report")
     parser.add_argument(

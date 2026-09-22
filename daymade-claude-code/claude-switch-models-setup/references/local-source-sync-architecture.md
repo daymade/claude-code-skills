@@ -49,7 +49,7 @@ global prompt. The sync scripts exist for topology repair, not day-to-day editin
 
 | Component | Role |
 |---|---|
-| `sync-local-skill-sources.py` | Idempotent repair primitive. Finds local source repos, rejects duplicate source names, validates the activation manifest, points Claude marketplaces/caches at source, reconciles the Codex set in `~/.agents/skills` and eligible Claude personal links in `~/.claude/skills`, then creates/confirms the explicit legacy compatibility subset and reports other managed legacy links without deleting them. |
+| `sync-local-skill-sources.py` | Idempotent repair primitive. Finds local source repos, resolves explicitly qualified source preferences and rejects undeclared duplicate names, validates the activation manifest, points Claude marketplaces/caches at source, reconciles the Codex set in `~/.agents/skills` and eligible Claude personal links in `~/.claude/skills`, then creates/confirms the explicit legacy compatibility subset and reports other managed legacy links without deleting them. |
 | `sync-local-skill-sources-daemon.sh` | macOS LaunchAgent runner. Installs or removes the watcher and runs one locked sync pass. |
 | `claude-plugins-sync.py` | Per-profile Claude Code sync. Builds profile-local `known_marketplaces.json`, shares installed plugin state, and mirrors `enabledPlugins`. |
 | `claude-profiles.sh` | Shell integration. Runs local source sync on profile init/launch before profile plugin sync. |
@@ -110,8 +110,9 @@ Rules:
   forked before a skill was merged does not register that skill, so the syncer
   skips and warns instead of linking it. The warning is about branch state, not
   manifest correctness.
-- Missing manifest, unsupported schema, duplicates, or two source bundles
-  declaring the same name abort before any affected root is changed.
+- Missing manifest, unsupported schema, invalid source preferences, or an
+  undeclared duplicate name abort before any affected root is changed. See
+  “Explicit source preferences” below for intentionally distinct same-name bundles.
 - An active name that no discovered checkout registers does not abort. It is
   reported on stderr with each checkout's current branch and skipped for that
   pass; the remaining names still converge, and the skipped one is linked on the
@@ -176,10 +177,13 @@ Rules:
   states are reported. A scoped install conflict fails. User-owned directories
   and foreign links are not replaced. A pre-existing direct Skill remains
   independent of a disabled plugin with the same source.
-- `--print-source-inventory` returns validated registered frontmatter identities,
-  source directories, and plugin identities as JSON without changing either host.
-  Catalog auditors consume this inventory to expand active marketplaces instead
-  of inferring expected membership from links that happen to exist.
+- `--print-source-inventory --active-skills-manifest <manifest>` returns inventory
+  schema 2 without changing either host. `marketplaces[marketplace][skill]` retains
+  every registered candidate; `selected_skills[skill]` holds the resolved source.
+  Both entry types contain `plugin_id` and absolute `source_dir`. The output also
+  includes normalized `source_preferences`. Selected sources include cold Skills;
+  auditors expand activation names separately, then look up their expected paths
+  in `selected_skills`, never by overwriting entries while traversing marketplaces.
 - The background daemon executes a **pinned plugin copy**, installed into its own
   `CLAUDE_CONFIG_DIR` under `~/.local/share/`, not the live checkout. That isolation is
   deliberate: editing a source repo must not change what an already-running daemon does.
@@ -204,6 +208,38 @@ Rules:
 publishes it with a no-overwrite hard link only when no manifest exists. A
 concurrent writer wins and is preserved; setup never overwrites the user's
 current selection.
+
+### Explicit source preferences
+
+Use activation schema 3 when two deliberately different bundles register the
+same frontmatter name. Add `source_preferences[skill]` with exactly two fields:
+`prefer` is the selected `plugin@marketplace` identity; `over` is a non-empty
+array of the other permitted identities. Take identities from the registered
+marketplace manifests, including the owning suite name for suite members.
+
+The resolver requires the observed candidate set to equal `prefer` plus `over`.
+A missing preferred source, stale alternative, unexpected third candidate,
+unknown marketplace, duplicate identity or JSON key, malformed rule, or unknown
+schema-3 field fails before writes. A preference does not excuse two checkouts
+of the same marketplace or duplicate names inside one marketplace. Names without
+a preference retain the duplicate-source error. There is no fallback winner.
+
+Activation still selects names. The canonical resolver chooses their source for
+Codex, legacy compatibility and Claude personal links, even when the name was
+activated through another marketplace. Claude plugin enable/disable and scope
+checks still apply to the chosen plugin. Preferences do not change plugin installs,
+enablement or source content; all candidate bundles remain in inventory.
+
+Consumers call `merge_source_skills(sources, policy.source_preferences)` after
+`load_skill_activation_policy(path)`. It returns one `SkillSource` per registered
+name without modifying the input inventory. `skill-install-audit.py` uses this
+same resolver to verify links. Dry-run progress reports each explicit choice;
+structured inventory records the choice even with `--quiet`.
+
+Deploy the new reader before changing a machine's manifest to schema 3. The new
+reader continues accepting schema 1/2 without preferences; older readers reject
+schema 3 instead of silently ignoring the choice. This is host-local policy:
+never put a maintainer's source choices in the empty installation template.
 
 ### Third-party cold inventory
 

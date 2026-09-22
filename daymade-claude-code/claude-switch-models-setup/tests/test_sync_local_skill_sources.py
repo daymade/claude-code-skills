@@ -26,6 +26,193 @@ sys.modules[SPEC.name] = sync
 SPEC.loader.exec_module(sync)
 
 
+class SourcePreferenceTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name).resolve()
+        patch = mock.patch.object(sync, "LOCAL_MARKETPLACE_NAMES", ("market-a", "market-b", "market-c"))
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.repos = []
+        for market in ("market-a", "market-b"):
+            repo = self.root / market
+            (repo / ".claude-plugin").mkdir(parents=True)
+            (repo / "bundle/member").mkdir(parents=True)
+            (repo / "bundle/member/SKILL.md").write_text(
+                f"---\nname: shared\ndescription: example\n---\n{market} content\n")
+            (repo / ".claude-plugin/marketplace.json").write_text(json.dumps({
+                "name": market, "plugins": [{"name": "suite", "source": "./bundle",
+                "version": "1.0.0", "skills": ["./member"]}]}))
+            self.repos.append(repo)
+        self.sources = [sync.load_marketplace(repo) for repo in self.repos]
+        self.preferences = {"shared": {"prefer": "suite@market-a", "over": ["suite@market-b"]}}
+        self.manifest = self.root / "policy.json"
+        self.policy = {"schema_version": 3, "active_skills": ["shared"],
+                       "active_marketplaces": ["market-b"], "claude_active_marketplaces": ["market-b"],
+                       "legacy_codex_compat_skills": ["shared"], "source_preferences": self.preferences}
+        self.write_policy()
+
+    def write_policy(self):
+        self.manifest.write_text(json.dumps(self.policy))
+
+    def args(self):
+        return ["--repo", str(self.repos[0]), "--repo", str(self.repos[1]),
+                "--active-skills-manifest", str(self.manifest),
+                "--claude-dir", str(self.root / "claude"),
+                "--agents-skills", str(self.root / "agents/skills"),
+                "--codex-skills", str(self.root / "legacy/skills"),
+                "--skip-claude-cache", "--skip-marketplace-source"]
+
+    def test_explicit_choice_is_order_independent_and_preserves_bundles(self):
+        before = [dict(source.skills) for source in self.sources]
+        for sources in (self.sources, self.sources[::-1]):
+            selected = sync.merge_source_skills(sources, self.preferences)
+            self.assertIs(selected["shared"], self.sources[0].skills["shared"])
+        self.assertEqual(before, [source.skills for source in self.sources])
+        for repo in self.repos:
+            self.assertIn(repo.name, (repo / "bundle/member/SKILL.md").read_text())
+
+    def test_choice_can_select_second_source_and_normalizes_all_alternatives(self):
+        third = sync.MarketplaceSource("market-c", self.root / "third", {}, {
+            "shared": sync.SkillSource("shared", self.root / "third/shared", "suite@market-c")})
+        prefs = {"shared": {"prefer": "suite@market-b", "over": ["suite@market-c", "suite@market-a"]}}
+        for sources in (self.sources + [third], [third] + self.sources[::-1]):
+            selected = sync.merge_source_skills(sources, prefs)
+            self.assertIs(selected["shared"], self.sources[1].skills["shared"])
+        self.assertEqual(["suite@market-a", "suite@market-c"],
+                         sync.validate_source_preferences(prefs)["shared"]["over"])
+        self.assertEqual(["suite@market-c", "suite@market-a"], prefs["shared"]["over"])
+
+    def test_no_preference_still_rejects_duplicates(self):
+        for prefs in (None, {}):
+            with self.assertRaisesRegex(ValueError, "duplicate source skill name"):
+                sync.merge_source_skills(self.sources, prefs)
+
+    def test_incomplete_or_stale_candidate_sets_fail(self):
+        third = sync.MarketplaceSource("market-c", self.root / "third", {}, {
+            "shared": sync.SkillSource("shared", self.root / "third/shared", "suite@market-c")})
+        for sources in ([], self.sources[:1], self.sources[1:], self.sources + [third]):
+            with self.subTest(markets=[s.name for s in sources]):
+                with self.assertRaisesRegex(ValueError, "candidate mismatch"):
+                    sync.merge_source_skills(sources, self.preferences)
+        with self.assertRaisesRegex(ValueError, "candidate mismatch"):
+            sync.merge_source_skills(self.sources, {"wrong-name": self.preferences["shared"]})
+        with self.assertRaisesRegex(ValueError, "candidate mismatch"):
+            sync.merge_source_skills(self.sources, {"shared": {
+                "prefer": "other-suite@market-a", "over": ["suite@market-b"]}})
+
+    def test_duplicate_marketplace_cannot_be_hidden_by_choice(self):
+        duplicate = sync.MarketplaceSource("market-a", self.root / "another-checkout", {}, {})
+        with self.assertRaisesRegex(ValueError, "duplicate marketplace identity"):
+            sync.merge_source_skills(self.sources + [duplicate], self.preferences)
+
+    def test_malformed_preference_fields_are_rejected(self):
+        invalid = [None, [], "", {"shared": None}, {"shared": {}},
+                   {"shared": {"prefer": "suite@market-a"}},
+                   {"shared": {"over": ["suite@market-b"]}},
+                   {"shared": {"prefer": "suite@market-a", "over": []}},
+                   {"shared": {"prefer": "suite@market-a", "over": None}},
+                   {"shared": {"prefer": "suite@market-a", "over": "suite@market-b"}},
+                   {"shared": {"prefer": "suite@market-a", "over": ["suite@market-a"]}},
+                   {"shared": {"prefer": "suite@market-a", "over": ["suite@market-b"] * 2}},
+                   {"shared": {"prefer": "suite@market-a", "over": ["suite@market-b"], "extra": True}},
+                   {"invalid/name": self.preferences["shared"]}]
+        for identity in (None, True, "", "suite", "suite@unknown", "suite@@market-a", " suite@market-a", "suite@market-a "):
+            invalid.append({"shared": {"prefer": identity, "over": ["suite@market-b"]}})
+            invalid.append({"shared": {"prefer": "suite@market-a", "over": [identity]}})
+        for raw in invalid:
+            with self.subTest(raw=raw):
+                self.policy["source_preferences"] = raw
+                self.write_policy()
+                with self.assertRaises(ValueError):
+                    sync.load_skill_activation_policy(self.manifest)
+
+    def test_schema_compatibility_and_typo_validation(self):
+        for version in (1, 2, 3):
+            self.policy = {"schema_version": version, "active_skills": []}
+            self.write_policy()
+            self.assertEqual({}, sync.load_skill_activation_policy(self.manifest).source_preferences)
+            if version < 3:
+                self.policy["source_preferences"] = self.preferences
+                self.write_policy()
+                with self.assertRaisesRegex(ValueError, "requires schema_version 3"):
+                    sync.load_skill_activation_policy(self.manifest)
+        for version in (True, 3.0, "3", None, 4):
+            self.policy = {"schema_version": version, "active_skills": []}
+            self.write_policy()
+            with self.assertRaises(ValueError):
+                sync.load_skill_activation_policy(self.manifest)
+        self.policy = {"schema_version": 3, "active_skills": [], "source_preference": {}}
+        self.write_policy()
+        with self.assertRaisesRegex(ValueError, "unknown activation fields"):
+            sync.load_skill_activation_policy(self.manifest)
+
+    def test_duplicate_json_keys_cannot_overwrite_choice(self):
+        cases = ['{"schema_version":3,"active_skills":[],"source_preferences":{},"source_preferences":{}}',
+                 '{"schema_version":3,"active_skills":[],"source_preferences":{"shared":{"prefer":"suite@market-a","prefer":"suite@market-b","over":["suite@market-b"]}}}']
+        for raw in cases:
+            self.manifest.write_text(raw)
+            with self.assertRaisesRegex(ValueError, "duplicate JSON key"):
+                sync.load_skill_activation_policy(self.manifest)
+
+    def test_apply_in_temporary_roots_uses_same_choice_in_all_hosts(self):
+        # A marketplace opts in names; preference selects their source for both hosts.
+        (self.root / "claude").mkdir()
+        with mock.patch.object(sync, "infer_repos", side_effect=AssertionError("unexpected real discovery")):
+            self.assertEqual(0, sync.main(self.args() + ["--apply"]))
+            self.assertEqual(0, sync.main(self.args() + ["--apply"]))
+        expected = self.repos[0] / "bundle/member"
+        for root in ("claude/skills", "agents/skills", "legacy/skills"):
+            self.assertEqual(expected, (self.root / root / "shared").resolve())
+        for repo in self.repos:
+            self.assertTrue((repo / "bundle/member/SKILL.md").is_file())
+
+    def test_disabled_preferred_plugin_does_not_fall_back_to_other_source(self):
+        (self.root / "claude").mkdir()
+        (self.root / "claude/settings.json").write_text(json.dumps({
+            "enabledPlugins": {"suite@market-a": False, "suite@market-b": True}}))
+        self.assertEqual(0, sync.main(self.args() + ["--apply"]))
+        self.assertFalse((self.root / "claude/skills/shared").exists())
+        self.assertEqual(self.repos[0] / "bundle/member", (self.root / "agents/skills/shared").resolve())
+
+    def test_bad_policy_aborts_before_roots_or_lock_or_cache_writes(self):
+        self.policy["source_preferences"]["shared"]["prefer"] = "absent@market-a"
+        self.write_policy()
+        with mock.patch.object(sync, "sync_lock", side_effect=AssertionError("entered write phase")):
+            with self.assertRaisesRegex(ValueError, "candidate mismatch"):
+                sync.main(self.args() + ["--apply"])
+        for root in ("claude", "agents", "legacy"):
+            self.assertFalse((self.root / root).exists())
+
+    def test_inventory_retains_all_candidates_and_exposes_canonical_choice(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            self.assertEqual(0, sync.main(self.args() + ["--print-source-inventory"]))
+        payload = json.loads(output.getvalue())
+        self.assertEqual(2, payload["schema_version"])
+        self.assertEqual(self.preferences, payload["source_preferences"])
+        self.assertEqual({"source_dir": str(self.repos[0] / "bundle/member"),
+                          "plugin_id": "suite@market-a"}, payload["selected_skills"]["shared"])
+        self.assertEqual({"market-a", "market-b"}, set(payload["marketplaces"]))
+        self.assertEqual("suite@market-b", payload["marketplaces"]["market-b"]["shared"]["plugin_id"])
+        self.assertFalse((self.root / "claude").exists())
+        self.policy["source_preferences"] = {}
+        self.write_policy()
+        with self.assertRaisesRegex(ValueError, "duplicate source skill name"):
+            sync.main(self.args() + ["--print-source-inventory"])
+
+    def test_cold_duplicate_is_validated_without_being_activated(self):
+        self.policy.update(active_skills=[], active_marketplaces=[], claude_active_marketplaces=[],
+                           legacy_codex_compat_skills=[])
+        self.write_policy()
+        policy = sync.load_skill_activation_policy(self.manifest)
+        selected = sync.merge_source_skills(self.sources, policy.source_preferences)
+        self.assertEqual((frozenset(), ()), sync.resolve_activation(policy, selected, self.sources))
+        self.assertEqual(0, sync.main(self.args()))
+        self.assertFalse((self.root / "agents").exists())
+
+
 class ActiveManifestTests(unittest.TestCase):
     def test_cmks_marketplace_is_managed_and_discovered_from_common_workspace(self) -> None:
         with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
@@ -2623,10 +2810,10 @@ class ClaudeActivationTests(unittest.TestCase):
     def test_source_inventory_is_read_only_and_retains_registered_identity(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
-            repo, _ = self._marketplace(root)
+            repo, manifest = self._marketplace(root)
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
-                self.assertEqual(sync.main(["--repo", str(repo), "--print-source-inventory"]), 0)
+                self.assertEqual(sync.main(["--repo", str(repo), "--active-skills-manifest", str(manifest), "--print-source-inventory"]), 0)
             self.assertIn("selected", json.loads(output.getvalue())["marketplaces"]["daymade-skills"])
             self.assertFalse((root / "claude").exists())
 

@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **claude-switch-models-setup** (`daymade-claude-code` 3.56.1): Deploy the source-sync failure recorder and its calibration script as managed links without enabling the wrapper. Preserve existing ordinary copies by refusing to overwrite them, and include their migration in the pinned-runtime update procedure.
+- **claude-switch-models-setup** (`daymade-claude-code` v3.56.0 → v3.57.0): Add explicit, strictly qualified source preferences for intentional same-name variants. Undeclared collisions still fail; both source bundles remain intact, and Codex, Claude personal links and installation audits share one resolver. Deploy the source-sync failure recorder and its calibration script as managed links without enabling the wrapper. Refuse to overwrite ordinary copies and document their preservation and migration during pinned-runtime updates.
+- **skill-governance** (`daymade-skill` v1.44.1 → v1.45.0): Read supported activation schemas through the source owner's parser and consume its selected source inventory. Malformed policy or unavailable inventory remains invalid evidence instead of a clean or fabricated catalog result.
 
 - **local-conversation-history / read-codex-history** (`daymade-claude-code` v3.55.2 → v3.56.0): Locate quoted conversations through scoped session candidates before scanning full histories. Verify the original message and session identity, retain fallback search for missed candidates, and distinguish message dates from session creation dates.
 
