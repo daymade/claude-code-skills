@@ -265,7 +265,11 @@ of guessing. It adds no notification and no remediation, which is why it is not 
 by default.
 
 Install it by pointing the plist's `ProgramArguments` at the wrapper instead of the
-daemon entry, then `bootout` + `bootstrap`; remove it by repointing back.
+daemon entry, then `bootout` + `bootstrap`. `--install` does not overwrite an entry
+that points elsewhere: it keeps the wrapper (and its arguments) and says so on stderr,
+so installing the daemon after the recorder is in place does not detach it. Remove the
+recorder the same way either route does — `--uninstall`, then `--install` — which
+repoints the job back at the daemon entry.
 
 **Liveness.** A fresh `verified` line proves that *some* pass succeeded, never that
 *every* pass did. The health signal is the failure path — `source-sync.failures.log`
