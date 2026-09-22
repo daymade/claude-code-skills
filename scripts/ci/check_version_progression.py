@@ -217,12 +217,62 @@ def owner_for_path(path: str, plugins: dict[str, Plugin]) -> str | None:
 
 
 CHANGELOG_PATH = "CHANGELOG.md"
-# `- **skill** (`plugin` v1.2.3 → v1.3.0): ...` — only the plugin-qualified form,
-# because a bare `(v1.2.3 → v1.3.0)` names a Skill's own version, which the
-# marketplace manifest does not carry and this check cannot adjudicate.
+# An entry names its release in one of five shapes, all in live use:
+#
+#   qualified   - **skill-creator** (`daymade-skill` v1.44.0 -> v1.44.1): ...
+#   unquoted    - **transcript-fixer** (daymade-audio v1.39.6 -> v1.39.7): ...
+#   bare        - **openclaw** (v1.2.0 -> v1.2.1): ...
+#   unwrapped   - **twitter-reader** v1.2.0 -> v1.3.0: ...
+#   shared      - **De-identified ...** (`daymade-audio` v1.39.7 -> v1.39.8,
+#                 `daymade-claude-code` v3.35.0 -> v3.35.1): ...
+#
+# The two directions need different precision, so they read the line
+# differently rather than sharing one parser.
+#
+# FORWARD judges an arrow's endpoints, so it must know whose they are: it
+# matches only the shapes that bind a name to both versions.  The bare one is
+# included because it is the majority -- a plugin shipping one Skill of its own
+# name writes it -- and reading only the parenthesised shape left every bare
+# entry's FROM unvalidated.
 CHANGELOG_BUMP = re.compile(
-    r"\(`([a-z0-9-]+)`\s+v(\d+\.\d+\.\d+)\s*(?:→|->)\s*v(\d+\.\d+\.\d+)\)"
+    r"\(`?([a-z0-9-]+)`?\s+v(\d+\.\d+\.\d+)\s*(?:→|->)\s*v(\d+\.\d+\.\d+)[,)]"
 )
+CHANGELOG_BUMP_BARE = re.compile(
+    r"\*\*([a-z0-9-]+)\*\*\s*\(?v(\d+\.\d+\.\d+)\s*(?:→|->)\s*v(\d+\.\d+\.\d+)"
+)
+# BACKWARD only asks whether a release was written down, which needs no
+# attribution -- so it parses no shape at all.  Enumerating shapes was tried
+# and abandoned: each of the five above was found only by the false positives
+# the previous one missed, at 53%, then 40%, then 9% of real releases.
+CHANGELOG_VERSION_TOKEN = re.compile(r"(?<![.\d])v?(\d+\.\d+\.\d+)(?![.\d])")
+
+
+def changelog_arrows(line: str) -> list[tuple[str, str, str]]:
+    """Every (name, from, to) this line claims, in either attributed shape.
+
+    A name here is only a candidate: the caller keeps the ones this change
+    actually released.  That single test is also what stops a Skill's own
+    version from being read as a plugin's -- the bolded name in the bare shape
+    is usually a Skill, and the manifest carries no Skill versions to
+    adjudicate it against.
+    """
+    return CHANGELOG_BUMP.findall(line) + CHANGELOG_BUMP_BARE.findall(line)
+
+
+def documents_release(line: str, plugin: str, shipped: str) -> bool:
+    """Whether this line reads as the entry for `plugin` shipping `shipped`.
+
+    Naming the version is the requirement; an arrow is not. Entries predating
+    the arrow convention name the shipped version alone (`- **plugin** 3.30.1:
+    ...`, ``(`daymade-docs` v1.15.0)``), and a gate that demanded an arrow
+    would reject a shape this repository used for its first hundred releases.
+    Erring permissive is deliberate: a miss costs one undocumented release,
+    which is today's behaviour, while a false block costs a contributor a
+    rewrite of an entry that was already correct.
+    """
+    if plugin not in line:
+        return False
+    return shipped in CHANGELOG_VERSION_TOKEN.findall(line)
 
 
 def load_changelog_text(repo: Path, spec: str | None) -> str:
@@ -239,14 +289,32 @@ def check_changelog_versions(
     base_plugins: dict,
     candidate_plugins: dict,
 ) -> list[str]:
-    """Verify that version arrows ADDED by this change name the real endpoints.
+    """Check both directions between a release and its CHANGELOG entry.
 
-    A `vX → vY` line is a claim about two facts that live in the manifest: X is
-    what the base ships, Y is what this change ships. Writing it by hand means
-    re-deriving both, and a rebase can move X after the line was written. Only
-    added lines are examined — historical entries were written against a base
-    that is no longer current, and re-judging them against today's manifest
-    would fail every one of them.
+    A plugin release and its entry are one fact written in two places, so both
+    directions can drift and each needs its own check:
+
+    FORWARD -- an arrow this change ADDS must name the real endpoints. `vX → vY`
+    claims X is what the base ships and Y is what this change ships; writing it
+    by hand means re-deriving both, and a rebase can move X afterwards.
+
+    BACKWARD -- a plugin this change BUMPS must be written down. Without
+    this, a release with no entry is invisible: the forward check adjudicates
+    arrows that exist and cannot see one that was never written. Measured on
+    2026-09-22: `daymade-codex` shipped 1.2.3 on main while the newest arrow in
+    CHANGELOG.md ended at 1.2.2, and every check passed.
+
+    Both are scoped to plugins whose version actually changed HERE. For a
+    plugin this change does not bump, an added arrow is documenting history --
+    a prose edit, or an entry written after the fact for a release that already
+    landed -- and today's base version says nothing about its FROM. Judging it
+    anyway makes the omission the backward check finds unfixable: the entry it
+    demands is rejected the moment someone writes it. Measured on the same day:
+    adding the missing 1.2.3 entry against a base already shipping 1.2.3 failed
+    with "claims FROM v1.2.2 but base ships 1.2.3". Only added lines are
+    examined -- historical entries were written against a base that is no
+    longer current, and re-judging them against today's manifest would fail
+    every one of them.
     """
     try:
         base_text = load_changelog_text(repo, base)
@@ -261,11 +329,22 @@ def check_changelog_versions(
     added = [ln for ln in candidate_text.splitlines()
              if ln.strip() and ln not in base_lines]
 
+    # The one predicate both directions are scoped to.  A plugin missing from
+    # either side is a create/delete, which no arrow can describe.
+    bumped = {
+        name
+        for name, plugin in candidate_plugins.items()
+        if name in base_plugins and base_plugins[name].version != plugin.version
+    }
+
     failures: list[str] = []
     for line in added:
-        for plugin, claimed_from, claimed_to in CHANGELOG_BUMP.findall(line):
-            if plugin not in candidate_plugins or plugin not in base_plugins:
-                continue  # not defined on both sides; nothing to adjudicate
+        for plugin, claimed_from, claimed_to in changelog_arrows(line):
+            if plugin not in bumped:
+                # Not a plugin at all, not defined on both sides, or not
+                # released here -- in every case there is no claim about this
+                # change's endpoints for the arrow to get wrong.
+                continue
             actual_to = ".".join(str(n) for n in candidate_plugins[plugin].version)
             if claimed_to != actual_to:
                 # The arrow does not end at what this tree ships, so it is not
@@ -284,6 +363,19 @@ def check_changelog_versions(
                     f"release moves this; re-read the manifest instead of "
                     f"hand-writing the arrow)"
                 )
+
+    for plugin in sorted(bumped):
+        shipped = ".".join(str(n) for n in candidate_plugins[plugin].version)
+        if any(documents_release(line, plugin, shipped) for line in added):
+            continue
+        was = ".".join(str(n) for n in base_plugins[plugin].version)
+        failures.append(
+            f"{plugin!r} bumps v{was} -> v{shipped} with no CHANGELOG entry: "
+            f"no line this change adds names {plugin!r} together with "
+            f"v{shipped}. Add one, e.g. `- **<skill>** (`{plugin}` v{was} "
+            f"\u2192 v{shipped}): ...` -- the punctuation and the arrow are "
+            f"free, naming the plugin and the shipped version is not"
+        )
     return failures
 
 
