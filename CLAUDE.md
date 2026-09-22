@@ -206,6 +206,9 @@ That reference owns the activation-manifest contract, host-specific selection,
 legacy compatibility, and repair workflow. An approved whole-marketplace policy
 includes newly registered members; a source checkout or registration alone does
 not establish that policy. Do not hand-create user Skill links.
+For intentional same-name source variants, use the owner's explicit source-selection
+contract; retain every candidate and reject undeclared collisions. Audit tools must
+consume the owner's selected inventory rather than choose a source independently.
 
 When delivery includes local availability, finish the source owner's dry-run/apply
 and the [newly registered Skill gate](daymade-skill/skill-governance/references/skill-surface-governance.md#14-verify-a-newly-registered-skill).
@@ -214,6 +217,8 @@ that may already omit the new Skill. Keep installation/catalog evidence separate
 from actual task results. A daemon using a pinned plugin copy also needs the
 [pin-update workflow](daymade-claude-code/claude-switch-models-setup/references/troubleshooting.md#advance-the-pin).
 Do not treat a merged source change as proof that this runtime advanced.
+For recorder deployment, follow that workflow's ordinary-copy migration and
+link readback; retaining a LaunchAgent wrapper does not update its files.
 
 The syncer's managed marketplace identities, conventional checkout candidates,
 and generated watch paths are owned by `sync-local-skill-sources.py`; derive them

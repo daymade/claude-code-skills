@@ -113,6 +113,15 @@ python3 scripts/audit_codex_skill_surface.py \
 `--max-visible N` is an optional user policy ceiling, not a built-in quality
 score. Use `--prompt-json FILE` for a frozen test fixture.
 
+Read activation manifests through the source owner’s `load_skill_activation_policy`
+parser, selected by `--source-sync-script` or its installed default. Keep schema
+and field validation with that owner; do not downgrade a manifest to fit the
+audit. Missing or incompatible owner code is invalid evidence (exit 2).
+Pass the same manifest to the owner’s read-only inventory command. For schema 3,
+require inventory schema 2 and use its `selected_skills` identities; do not
+resolve `source_preferences` again in the audit. Retain schema 1 inventory
+support for older policies, rejecting ambiguous duplicate identities.
+
 The audit asks Codex's own app-server `skills/list` endpoint for the complete,
 unshortened metadata parsed from disk, then matches each prompt locator to that
 inventory by canonical target while retaining its lexical discovery path for

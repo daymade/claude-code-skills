@@ -19,7 +19,19 @@ readonly PROFILE_HELPERS=(
     sync-local-skill-sources.py
     sync-local-skill-sources-daemon.sh
     sync-profile-settings.py
+    sync-daemon-recorder.sh
+    sync-daemon-recorder.test.sh
 )
+
+# Older installations may contain locally edited recorder copies. Preserve them
+# before migrating to managed links; preflight both files before changing any link.
+for f in sync-daemon-recorder.sh sync-daemon-recorder.test.sh; do
+    existing="$CONFIG_DIR/$f"
+    if [ -e "$existing" ] && [ ! -L "$existing" ]; then
+        echo "Refusing to overwrite recorder copy: $existing. Compare and move it aside before rerunning setup." >&2
+        exit 1
+    fi
+done
 
 mkdir -p "$CONFIG_DIR"
 mkdir -p "$CLAUDE_SETTINGS_DIR"

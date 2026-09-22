@@ -28,10 +28,58 @@ DEPLOYED_SCRIPTS = (
     "sync-local-skill-sources.py",
     "sync-local-skill-sources-daemon.sh",
     "sync-profile-settings.py",
+    "sync-daemon-recorder.sh",
+    "sync-daemon-recorder.test.sh",
 )
 
 
 class SetupTests(unittest.TestCase):
+    def test_recorder_links_follow_installer_update_without_activating_job(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="recorder_setup_") as raw:
+            root = Path(raw)
+            first, _ = self._copied_skill(root)
+            second = root / "updated-skill"
+            shutil.copytree(first, second)
+            home = root / "home"
+            config = home / ".config" / "claude-switch-models-setup"
+            config.mkdir(parents=True)
+            policy = config / "codex-active-skills.json"
+            policy.write_text('{"active_skills":["keep-selection"]}\n')
+            for source in (first, second):
+                result = subprocess.run(
+                    ["bash", str(source / "scripts/setup.sh")],
+                    env={**os.environ, "HOME": str(home)},
+                    capture_output=True, text=True,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                for name in ("sync-daemon-recorder.sh", "sync-daemon-recorder.test.sh"):
+                    self.assertTrue((config / name).is_symlink())
+                    self.assertEqual((config / name).resolve(), (source / "scripts" / name).resolve())
+                self.assertEqual(policy.read_text(), '{"active_skills":["keep-selection"]}\n')
+                self.assertFalse((home / "Library/LaunchAgents").exists())
+                self.assertFalse((home / "Library/Logs").exists())
+
+    def test_recorder_copies_are_preserved_before_any_helper_is_relinked(self) -> None:
+        for name in ("sync-daemon-recorder.sh", "sync-daemon-recorder.test.sh"):
+            with self.subTest(name=name), tempfile.TemporaryDirectory(prefix="recorder_copy_") as raw:
+                root = Path(raw)
+                _, scripts = self._copied_skill(root)
+                home = root / "home"
+                config = home / ".config" / "claude-switch-models-setup"
+                config.mkdir(parents=True)
+                copy = config / name
+                copy.write_text("local recorder edits\n")
+                result = subprocess.run(
+                    ["bash", str(scripts / "setup.sh")],
+                    env={**os.environ, "HOME": str(home)},
+                    capture_output=True, text=True,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Refusing to overwrite recorder copy", result.stderr)
+                self.assertEqual(copy.read_text(), "local recorder edits\n")
+                self.assertFalse(copy.is_symlink())
+                self.assertFalse((config / "claude-profiles.sh").exists())
+
     def _copied_skill(self, root: Path) -> tuple[Path, Path]:
         copied_skill = root / "skill"
         shutil.copytree(SKILL_ROOT, copied_skill)

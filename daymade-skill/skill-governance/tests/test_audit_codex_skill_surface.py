@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -142,6 +143,8 @@ class CodexSkillSurfaceAuditTests(unittest.TestCase):
         args = [
             sys.executable,
             str(SCRIPT),
+            "--source-sync-script",
+            os.environ.get("SKILL_AUDIT_TEST_SOURCE_OWNER", str(SCRIPT.parents[3] / "daymade-claude-code/claude-switch-models-setup/scripts/sync-local-skill-sources.py")),
             "--prompt-json",
             str(prompt),
             "--skills-json",
@@ -178,6 +181,73 @@ class CodexSkillSurfaceAuditTests(unittest.TestCase):
                 f"stdout={completed.stdout!r} stderr={completed.stderr!r}; {exc}"
             )
         return completed, payload
+
+    def test_v1_v2_selectors_and_exclusion_precedence(self):
+        alpha = self.write_skill("alpha", "alpha", "Alpha.")
+        beta = self.write_skill("beta", "beta", "Beta.")
+        prompt = self.write_prompt([("alpha", "Alpha.", alpha), ("beta", "Beta.", beta)])
+        for version in (1, 2):
+            with self.subTest(version=version):
+                self.manifest.write_text(json.dumps({
+                    "schema_version": version, "active_skills": ["excluded"],
+                    "include_skills": ["alpha"], "legacy_codex_compat_skills": ["beta"],
+                    "exclude_skills": ["excluded"],
+                }))
+                result, report = self.run_audit(prompt)
+                self.assertEqual(result.returncode, 0, report)
+                self.assertEqual(report["activation_manifest"]["active_names"], ["alpha", "beta"])
+
+    def test_missing_v2_include_is_not_false_clean(self):
+        alpha = self.write_skill("alpha", "alpha", "Alpha.")
+        prompt = self.write_prompt([("alpha", "Alpha.", alpha)])
+        self.manifest.write_text(json.dumps({
+            "schema_version": 2, "active_skills": [], "include_skills": ["missing"],
+        }))
+        result, report = self.run_audit(prompt)
+        self.assertEqual(result.returncode, 1, report)
+        self.assertEqual(report["findings"]["active_missing_links"], ["missing"])
+
+    def test_invalid_activation_never_reports_clean(self):
+        alpha = self.write_skill("alpha", "alpha", "Alpha.")
+        prompt = self.write_prompt([("alpha", "Alpha.", alpha)])
+        cases = [
+            {"schema_version": 999}, {"schema_version": True},
+            {"schema_version": "2"}, {"active_skills": None},
+            {"include_skills": None}, {"exclude_skills": "alpha"},
+            {"include_skills": ["alpha", "alpha"]},
+            {"include_skills": ["alpha"], "exclude_skills": ["alpha"]},
+            {"active_marketplaces": ["unknown-market"]},
+            {"legacy_codex_compat_skills": [" bad "]},
+            {"claude_active_marketplaces": None},
+        ]
+        for delta in cases:
+            with self.subTest(delta=delta):
+                data = {"schema_version": 2, "active_skills": []}
+                data.update(delta)
+                self.manifest.write_text(json.dumps(data))
+                result, report = self.run_audit(prompt)
+                self.assertEqual(result.returncode, 2, report)
+                self.assertEqual(report["status"], "invalid")
+        self.manifest.write_text('{')
+        result, report = self.run_audit(prompt)
+        self.assertEqual(result.returncode, 2, report)
+
+    def test_unknown_fields_follow_source_owner_contract(self):
+        alpha = self.write_skill("alpha", "alpha", "Alpha.")
+        prompt = self.write_prompt([("alpha", "Alpha.", alpha)])
+        self.manifest.write_text(json.dumps({
+            "schema_version": 2, "active_skills": ["alpha"],
+            "unrecognized_test_field": {"opaque": True},
+        }))
+        result, report = self.run_audit(prompt)
+        self.assertEqual(result.returncode, 0, report)
+        self.assertEqual(report["activation_manifest"]["active_names"], ["alpha"])
+
+    def test_missing_source_owner_is_invalid(self):
+        alpha = self.write_skill("alpha", "alpha", "Alpha.")
+        prompt = self.write_prompt([("alpha", "Alpha.", alpha)])
+        result, report = self.run_audit(prompt, "--source-sync-script", str(self.root / "absent.py"))
+        self.assertEqual(result.returncode, 2, report)
 
     def test_clean_surface_accepts_namespaced_display_name(self) -> None:
         first = self.write_skill("alpha", "alpha", "Runs alpha workflows.")
@@ -505,11 +575,11 @@ class CodexSkillSurfaceAuditTests(unittest.TestCase):
         if link:
             (agents / "actual-name").symlink_to(source.parent)
         self.manifest.write_text(json.dumps({
-            "schema_version": 1, "active_skills": [], "active_marketplaces": ["example-market"],
+            "schema_version": 1, "active_skills": [], "active_marketplaces": ["daymade-skills"],
         }))
         source_inventory = self.root / "sources.json"
         source_inventory.write_text(json.dumps({"schema_version": 1, "marketplaces": {
-            "example-market": {"actual-name": {"source_dir": str(source.parent)}},
+            "daymade-skills": {"actual-name": {"source_dir": str(source.parent)}},
         }}))
         prompt = self.write_prompt(
             [("control", "Control.", self.control)] + (
@@ -541,6 +611,95 @@ class CodexSkillSurfaceAuditTests(unittest.TestCase):
         result, report = self.run_audit(prompt, *options)
         self.assertEqual(result.returncode, 1, report)
         self.assertEqual(report["findings"]["active_missing_visible"], ["actual-name"])
+
+    def selected_case(self):
+        prompt, options, source, agents = self.market_case()
+        alternate = self.write_skill("alternate", "actual-name", "Alternate.")
+        preferred = "actual-name@daymade-skills"
+        other = "actual-name@cmks-skills"
+        preferences = {"actual-name": {"prefer": preferred, "over": [other]}}
+        self.manifest.write_text(json.dumps({
+            "schema_version": 3, "active_skills": [],
+            "active_marketplaces": ["daymade-skills", "cmks-skills"],
+            "source_preferences": preferences,
+        }))
+        member = {"source_dir": str(source.parent), "plugin_id": preferred}
+        inventory = {"schema_version": 2, "source_preferences": preferences,
+            "marketplaces": {"daymade-skills": {"actual-name": member},
+                "cmks-skills": {"actual-name": {"source_dir": str(alternate.parent), "plugin_id": other}}},
+            "selected_skills": {"actual-name": member}}
+        (self.root / "sources.json").write_text(json.dumps(inventory))
+        return prompt, options, source, agents, alternate, inventory
+
+    def test_v3_reuses_selected_identity_and_rejects_wrong_link(self):
+        prompt, options, source, agents, alternate, _ = self.selected_case()
+        result, report = self.run_audit(prompt, *options)
+        self.assertEqual(result.returncode, 0, report)
+        self.assertEqual(report["activation_manifest"]["expected_sources"], {"actual-name": str(source.resolve())})
+        (agents / "actual-name").unlink()
+        (agents / "actual-name").symlink_to(alternate.parent)
+        prompt = self.write_prompt([("actual-name", "Alternate.", agents / "actual-name/SKILL.md")])
+        result, report = self.run_audit(prompt, *options)
+        self.assertEqual(result.returncode, 1, report)
+        self.assertEqual(report["findings"]["active_missing_links"], ["actual-name"])
+
+    def test_frozen_wrong_selected_and_matching_link_are_invalid(self):
+        prompt, options, _, agents, alternate, inventory = self.selected_case()
+        result, report = self.run_audit(prompt, *options)
+        self.assertEqual(result.returncode, 0, report)
+        inventory["selected_skills"]["actual-name"] = inventory["marketplaces"]["cmks-skills"]["actual-name"]
+        (self.root / "sources.json").write_text(json.dumps(inventory))
+        (agents / "actual-name").unlink()
+        (agents / "actual-name").symlink_to(alternate.parent)
+        prompt = self.write_prompt([("actual-name", "Alternate.", agents / "actual-name/SKILL.md")])
+        result, report = self.run_audit(prompt, *options)
+        self.assertEqual(result.returncode, 2, report)
+        self.assertEqual(report["status"], "invalid")
+        self.assertIn("disagrees with activation policy", report["error"])
+
+    def test_frozen_preferences_require_exact_registered_candidates(self):
+        prompt, options, _, _, _, inventory = self.selected_case()
+        del inventory["marketplaces"]["cmks-skills"]
+        (self.root / "sources.json").write_text(json.dumps(inventory))
+        manifest = json.loads(self.manifest.read_text())
+        manifest["active_marketplaces"] = ["daymade-skills"]
+        self.manifest.write_text(json.dumps(manifest))
+        result, report = self.run_audit(prompt, *options)
+        self.assertEqual(result.returncode, 2, report)
+        self.assertIn("candidate mismatch", report["error"])
+
+    def test_v3_invalid_inventory_cannot_be_clean(self):
+        prompt, options, _, _, _, inventory = self.selected_case()
+        cases = [
+            {"schema_version": 1}, {"schema_version": 999},
+            {"selected_skills": None}, {"selected_skills": {}},
+            {"source_preferences": {}},
+            {"selected_skills": {"actual-name": {"source_dir": "/unregistered", "plugin_id": "x@daymade-skills"}}},
+        ]
+        for delta in cases:
+            with self.subTest(delta=delta):
+                (self.root / "sources.json").write_text(json.dumps({**inventory, **delta}))
+                result, report = self.run_audit(prompt, *options)
+                self.assertEqual(result.returncode, 2, report)
+
+    def test_v3_unknown_fields_follow_owner_rejection(self):
+        prompt, options, _, _, _, _ = self.selected_case()
+        manifest = json.loads(self.manifest.read_text())
+        manifest["unknown_field"] = True
+        self.manifest.write_text(json.dumps(manifest))
+        result, report = self.run_audit(prompt, *options)
+        self.assertEqual(result.returncode, 2, report)
+        self.assertIn("unknown activation fields", report["error"])
+
+    def test_v2_exclusion_removes_marketplace_member(self):
+        prompt, options, _, _ = self.market_case(visible=False, link=False)
+        manifest = json.loads(self.manifest.read_text())
+        manifest.update(schema_version=2, exclude_skills=["actual-name"])
+        self.manifest.write_text(json.dumps(manifest))
+        result, report = self.run_audit(prompt, *options)
+        self.assertEqual(result.returncode, 0, report)
+        self.assertEqual(report["activation_manifest"]["active_names"], [])
+        self.assertEqual(report["activation_manifest"]["expected_sources"], {})
 
     def test_missing_active_market_fails_instead_of_empty_success(self):
         prompt, options, _, _ = self.market_case()

@@ -15,6 +15,67 @@ sys.modules[SPEC.name] = audit
 SPEC.loader.exec_module(audit)
 
 
+class SourcePreferenceAuditTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name).resolve()
+        self.pool = self.root / "skills"
+        self.pool.mkdir()
+        self.manifest = self.root / "policy.json"
+        self.repos = []
+        for market in ("market-a", "market-b"):
+            repo = self.root / market
+            (repo / ".claude-plugin").mkdir(parents=True)
+            (repo / "bundle").mkdir()
+            (repo / "bundle/SKILL.md").write_text("---\nname: shared\ndescription: example\n---\n")
+            (repo / ".claude-plugin/marketplace.json").write_text(json.dumps({
+                "name": market, "plugins": [{"name": "plugin", "version": "1.0.0", "source": "./bundle"}]}))
+            self.repos.append(repo)
+        self.policy = {"schema_version": 3, "active_skills": [], "active_marketplaces": ["market-b"],
+                       "source_preferences": {"shared": {"prefer": "plugin@market-a", "over": ["plugin@market-b"]}}}
+        self.write_policy()
+        for target, key, value in (
+            (audit, "AGENTS_SKILLS", self.pool), (audit, "CODEX_MANIFEST", self.manifest),
+            (audit, "REGISTRY_REPOS", [(r.name, r) for r in self.repos]),
+            (audit.source_sync(), "LOCAL_MARKETPLACE_NAMES", ("market-a", "market-b")),
+        ):
+            patch = mock.patch.object(target, key, value)
+            patch.start()
+            self.addCleanup(patch.stop)
+
+    def write_policy(self):
+        self.manifest.write_text(json.dumps(self.policy))
+
+    def test_selected_source_is_verified_instead_of_last_marketplace(self):
+        (self.pool / "shared").symlink_to(self.repos[0] / "bundle")
+        self.assertEqual(({"shared"}, {"shared"}), audit.load_codex())
+        with mock.patch.object(audit, "REGISTRY_REPOS", list(reversed(audit.REGISTRY_REPOS))):
+            self.assertEqual(({"shared"}, {"shared"}), audit.load_codex())
+
+    def test_nonpreferred_same_name_link_cannot_satisfy_policy(self):
+        (self.pool / "shared").symlink_to(self.repos[1] / "bundle")
+        self.assertEqual(({"shared"}, set()), audit.load_codex())
+
+    def test_include_exclude_and_unresolved_follow_owner_policy(self):
+        self.policy.update(active_marketplaces=[], include_skills=["shared", "unregistered"])
+        self.write_policy()
+        self.assertEqual(({"shared", "unregistered"}, set()), audit.load_codex())
+        self.policy.update(active_marketplaces=["market-b"], include_skills=[], exclude_skills=["shared"])
+        self.write_policy()
+        self.assertEqual((set(), set()), audit.load_codex())
+
+    def test_undeclared_duplicate_and_stale_preference_fail(self):
+        self.policy["source_preferences"] = {}
+        self.write_policy()
+        with self.assertRaisesRegex(ValueError, "duplicate source skill name"):
+            audit.load_codex()
+        self.policy["source_preferences"] = {"shared": {"prefer": "missing@market-a", "over": ["plugin@market-b"]}}
+        self.write_policy()
+        with self.assertRaisesRegex(ValueError, "candidate mismatch"):
+            audit.load_codex()
+
+
 class InstallAuditTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
