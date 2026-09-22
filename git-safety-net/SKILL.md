@@ -614,6 +614,24 @@ and final branch-count gates that a single-branch retirement does not need.
   confirm ancestry directly against the intended base with
   `git merge-base --is-ancestor <tip> <base>` and switch/target correctly instead. Delete remote
   branches only after re-verifying the exact remote and repository visibility/ownership.
+- **Before `-D`, check one thing neither containment nor ancestry covers: no open PR may have this
+  branch as head.** A branch with zero unique content can still be an open PR's head, and deleting
+  it takes that PR's head with it — `refs/pull/<N>/head` usually still serves the objects, but that
+  is recovery by luck, not by design (the ladder is in
+  [references/recovery_playbook.md](references/recovery_playbook.md) § Ladder step 4). On
+  GitHub, confirm **by PR number, not by branch name**: `gh pr list --head <branch>` has returned an
+  empty result for a branch whose pull request already existed, and "a branch-deletion decision built
+  on the empty result would have been wrong" (measured — the record lives in
+  [references/merge_verification.md](references/merge_verification.md) § Landed, then lost). Use
+  `gh pr view <number> --json headRefOid,state,mergeCommit`, or the REST equivalent
+  `gh api repos/<owner>/<repo>/pulls/<number>`; when the number is not yet known, REST search still
+  beats `pr list`:
+  `gh api "repos/<owner>/<repo>/pulls?state=all&head=<owner>:<branch>"`. On a non-GitHub remote, use
+  the platform's own PR lookup — a branch-name grep is not a substitute. Do it **immediately before**
+  the delete, never from an inventory taken earlier: refs move, and "a PR opened after your inventory"
+  is exactly the case this catches. Measured 2026-09-22 — a peer relayed "that branch maps to a closed
+  PR, safe to delete" into a dispatch prompt, and the executing agent's own pre-delete recheck found
+  it was the head of a *newly opened* PR.
 - **After deleting a remote branch, read the result back through an exit code, not through output.**
   Two shapes mislead here, in opposite directions. A repository configured to delete branches on
   merge already removed it at merge time, so a later `git push <remote> --delete <branch>` exits
