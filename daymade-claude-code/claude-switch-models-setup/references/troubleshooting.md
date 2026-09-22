@@ -402,6 +402,12 @@ layouts as a version repair.
    links to the new version. Use absolute targets and replace the link itself; do
    not run the checkout installer over a pinned layout or overwrite a real local
    file.
+   Also inspect `sync-daemon-recorder.sh` and `sync-daemon-recorder.test.sh`:
+   older installations may have ordinary copies, which symlink enumeration misses.
+   Compare each with the installed version, preserve each copy at a unique backup
+   path, then link to the corresponding file in the recorded plugin installation.
+   Re-read both targets and compare their bytes with that installed version.
+   Deploying these files does not require enabling or rerunning source sync.
 4. Reinstall the LaunchAgent from the updated deployed entry:
 
    ```bash

@@ -214,6 +214,8 @@ that may already omit the new Skill. Keep installation/catalog evidence separate
 from actual task results. A daemon using a pinned plugin copy also needs the
 [pin-update workflow](daymade-claude-code/claude-switch-models-setup/references/troubleshooting.md#advance-the-pin).
 Do not treat a merged source change as proof that this runtime advanced.
+For recorder deployment, follow that workflow's ordinary-copy migration and
+link readback; retaining a LaunchAgent wrapper does not update its files.
 
 The syncer's managed marketplace identities, conventional checkout candidates,
 and generated watch paths are owned by `sync-local-skill-sources.py`; derive them

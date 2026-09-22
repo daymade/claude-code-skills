@@ -261,8 +261,10 @@ launchd still records it. That reason is scoped to the current pass by a byte-co
 snapshot taken before the run: `err.log` is append-only, so a bare `tail -n 1` would
 blame whatever failed last time, and a silent pass would inherit a stranger's traceback.
 When this pass wrote no stderr at all the line says `(no new stderr this pass)` instead
-of guessing. It adds no notification and no remediation, which is why it is not installed
-by default.
+of guessing. It adds no notification and no remediation. `setup.sh` deploys the
+recorder and its calibration script as links; it does not activate the wrapper.
+Existing ordinary files are refused so local edits can be compared and preserved
+before conversion to links.
 
 Install it by pointing the plist's `ProgramArguments` at the wrapper instead of the
 daemon entry, then `bootout` + `bootstrap`. `--install` does not overwrite an entry

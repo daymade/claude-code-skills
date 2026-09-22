@@ -118,6 +118,10 @@ When the user says something like "set up Claude Code profiles" or "I want to us
    here. No `chmod` step is needed: the deployment is by symlink, and the source
    files retain their committed modes.
 
+   Recorder files are deployed without enabling the optional wrapper. Existing
+   ordinary recorder copies must be compared and preserved before setup replaces
+   them with links; pinned deployments follow the “advance the pin” procedure.
+
    **Why symlinks and not `cp`:** `~/.config/…` is what actually runs — the
    LaunchAgent and `claude-profile` invoke scripts by that path — while this
    repo holds their source. Copies drift, and nothing about a deployed copy
