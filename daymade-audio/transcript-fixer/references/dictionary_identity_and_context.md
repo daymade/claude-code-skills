@@ -139,6 +139,31 @@ that Stage 1 does not expose. If either expected source is unavailable or the
 sources disagree, leave the token unchanged and enqueue it or ask once. Never
 use the most frequent spelling in the transcript as identity evidence.
 
+**A high-frequency token that reads as an ordinary word: form of address or ASR
+error?** Frequency cannot answer this — it is equally consistent with a nickname
+everyone really uses and with one systematic misrecognition. Settle it with a
+*co-occurrence* test instead of a count:
+
+- **Real form of address** — the token appears in the same channel as the
+  person's own handle or display name, and that person answers under it. A
+  WeChat group-archive line shaped `@<displayName> <nickname>` followed by the
+  same account replying to the same thing is the double-read; a file title that
+  binds the two (`和<full name>聊….md`, opening with the nickname) corroborates.
+  Treatment: **no body edit, no dictionary rule** — record it once in the
+  project's alias ledger so the next run does not reopen it, and close any queue
+  row `kept_original` with the co-occurrence citation in `--authority` (see
+  `SKILL.md` step 10).
+- **ASR error** — the token appears only where the person is meant, and no
+  channel ever binds it to their handle. Treatment: roster variant or domain
+  rule, per the rest of this file.
+
+Real case 2026-09-22: a two-character job title occurred 5269 times across the
+corpus and no other person in the roster shared the surname. Neither number was
+the evidence — the `@displayName`/nickname co-occurrence was, and the resulting
+disposition (keep, no rule) was the *opposite* of what a "frequent = established"
+reading would have produced. One case: treat the shape as what to look for, not
+as a proven general rule.
+
 When the disagreement is about **canonical direction** — one source lists
 spelling A as the canonical form with B as the variant, the other lists the
 reverse — you have found a defect in the records, not just in this transcript.

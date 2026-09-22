@@ -119,6 +119,20 @@ Use vocabulary and stakes as the primary tier signals; use length only as a tieb
    - High-stakes multi-recording: a sampled clip settles only that anchored item. If the user asked for a higher-quality or complete transcript and the baseline audio is available, load **`/daymade-audio:asr-transcribe-to-text`** and run its full-file transcription path across the complete clearest/canonical recording before claiming whole-transcript coverage; otherwise report `sampled cross-check only — incomplete`. Prefer a recognizer different from the producer of the canonical body. If only the same recognizer is available, the run proves complete-source coverage but is not independent cross-recognizer corroboration; state that boundary.
 9. **Enqueue every unresolved item; escalate selectively.** First apply [evidence selection and escalation](references/native_ai_full_workflow.md#evidence-selection-and-escalation), then follow `Review queue safety` below and [review_queue_dashboard.md](references/review_queue_dashboard.md). Open only this file when human review is needed. Detection and enqueueing are not correction: for a higher-quality/final claim, every queue row anchored to this exact file must leave `pending`. For human review, start the dashboard with `uv run scripts/review-dashboard/server.py --file "<absolute-canonical-file>"`; add `--item <id>` to land on one fork. If a human is unavailable, keep the artifact explicitly labeled `draft / unresolved — incomplete` and enumerate the rows; do not ship the raw suspect text under a completed quality claim.
 10. **Read back the human state, then finalize.** When the human says they marked the dashboard, do not rerun ASR or ask the same questions again. First run `uv run scripts/fix_transcription.py --list-review --review-file "<absolute-canonical-file>" --review-status all --json`, apply any resulting file state, and require `stats.pending_total == 0` for that exact path; zero pending rows is required before the high-quality/final claim. Then diff the file actually edited, run numeric consistency when numbers matter, rerun plain Stage 1, re-grep known corrections, and confirm every change traces to a triage decision. Global queue counts cannot close or reopen this file's quality claim. Last, run `--close-sidecars --input "<absolute-canonical-file>"`: it re-reads every `*_changes.md`/`*_needs_review.md` entry against the file and the queue, refuses while an entry still reads as the original without a verdict or any row is pending, and removes the sidecars only when everything is closed (see `Finalization`).
+    **Authority for a person-name verdict travels in `--authority`, never in `--note`.**
+    `--note` is your reason; `--authority` is the citable source appended to the item's
+    `evidence` **before the name-convergence guard reads it** (roster 行 / group
+    displayName+nickName double-read / 用户裁决 / 音证). A person-name
+    `accepted`/`overridden` written without it is refused; a `kept_original` resting on
+    such a source leaves the guard nothing to read and leaves `evidence` still asserting
+    the enqueue-time doubt. Real case 2026-09-22: two queue rows for one nickname were
+    settled with the citation in `--note`, so `--show-review` read `evidence` =
+    "待用户确认" beside `decision_note` = resolved — one item carrying both "unresolved"
+    and "settled" state. Repair with `--attach-authority ID --authority-text TEXT`, which
+    appends and never rewrites. The two commands cannot share one line:
+    `--attach-authority` and `--resolve-review` together are refused, because the natural
+    one-liner "verified it, now settle it" ran only the append, printed ✅, exited 0 —
+    and never recorded the verdict while telling the caller it had.
 11. **Compound the learning in the same turn.** Route each stable pattern to its correct home; do not leave confirmed fixes only in chat. Native-pass edits never reach Stage 1's correction history, so harvest them mechanically right after the final diff:
 
     ~~~bash
