@@ -12,20 +12,25 @@ import time
 from pathlib import Path
 from typing import Optional
 
-# Codex CLI detection paths (in priority order)
-CODEX_PATHS = [
-    "/Applications/Codex.app/Contents/Resources/codex",
-    "/usr/local/bin/codex",
-    "/opt/homebrew/bin/codex",
-    os.path.expanduser("~/.npm-global/bin/codex"),
-]
+# Codex CLI detection order: explicit override > PATH > ChatGPT.app bundle.
+# PATH first: whatever `codex` resolves to on this process's PATH is the build the
+# surrounding environment actually runs, and npm global installs (including under
+# nvm) live there. The app-bundled copy is a fallback only — its version tracks the
+# Desktop app and can diverge from the npm build.
+CODEX_APP_BUNDLE = "/Applications/ChatGPT.app/Contents/Resources/codex"
 
 
 def find_codex_binary() -> Optional[str]:
-    """Find the Codex CLI binary."""
-    for path in CODEX_PATHS:
-        if os.path.isfile(path) and os.access(path, os.X_OK):
-            return path
+    """Find the Codex CLI binary. Returns None if nothing executable is found."""
+    override = os.environ.get("CODEX_BIN")
+    if override:
+        # Explicitly asked for one binary: honour it or fail loudly. Silently falling
+        # through to a different build makes whatever we measured unattributable.
+        if os.path.isfile(override) and os.access(override, os.X_OK):
+            return override
+        print(json.dumps({"error": "CODEX_BIN not executable", "path": override}),
+              file=sys.stderr)
+        return None
 
     # Fallback: which codex
     try:
@@ -36,9 +41,14 @@ def find_codex_binary() -> Optional[str]:
             timeout=5,
         )
         if result.returncode == 0 and result.stdout.strip():
-            return result.stdout.strip()
+            resolved = result.stdout.strip()
+            if os.access(resolved, os.X_OK):
+                return resolved
     except Exception:
         pass
+
+    if os.path.isfile(CODEX_APP_BUNDLE) and os.access(CODEX_APP_BUNDLE, os.X_OK):
+        return CODEX_APP_BUNDLE
 
     return None
 
@@ -214,12 +224,24 @@ def main():
 
     command = sys.argv[1]
 
-    # Find codex binary
+    # Find codex binary.
+    # A bad CODEX_BIN must fail here with the precise cause on stdout, not fall through
+    # to the generic "not found" branch below: that branch lists every search step, and
+    # listing PATH / app-bundle steps that never ran would send debugging towards
+    # "not installed" when the real cause is a bad override value.
+    override = os.environ.get("CODEX_BIN")
+    if override and not (os.path.isfile(override) and os.access(override, os.X_OK)):
+        print(json.dumps({"error": "CODEX_BIN not executable", "path": override}))
+        sys.exit(1)
+
     codex_path = find_codex_binary()
     if not codex_path:
         print(json.dumps({
             "error": "Codex CLI not found",
-            "searched_paths": CODEX_PATHS,
+            "searched_paths": [
+                "which codex (PATH)",
+                CODEX_APP_BUNDLE,
+            ],
         }))
         sys.exit(1)
 
