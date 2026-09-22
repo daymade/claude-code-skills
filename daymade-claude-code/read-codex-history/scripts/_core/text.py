@@ -46,6 +46,16 @@ ATTACHMENT_IMAGE_RE = re.compile(
 )
 FILE_SUFFIX_RE = re.compile(r"\.[A-Za-z0-9]{1,16}$")
 SLASH_COMMAND_RE = re.compile(r"^/[A-Za-z0-9_:-]+(?:[ \t].*)?$")
+LOCAL_COMMAND_ENVELOPE_NAME_RE = re.compile(
+    r"^\s*<command-name>\s*(/model|/codex:transfer|/copy)\s*</command-name>"
+    r"\s*<command-message>\s*(model|codex:transfer|copy)\s*</command-message>"
+    r"\s*<command-args>[^<]*</command-args>\s*$",
+    re.IGNORECASE,
+)
+LOCAL_COMMAND_ENVELOPE_RE = re.compile(
+    r"^\s*<local-command-(?:caveat|stdout|stderr)>.*</local-command-(?:caveat|stdout|stderr)>\s*$",
+    re.DOTALL,
+)
 
 
 @dataclass(frozen=True)
@@ -54,6 +64,34 @@ class SearchSegment:
 
     source: str
     text: str
+
+
+def is_local_command_record(value: object) -> bool:
+    """Whether a user-role record is Claude's local-command runtime noise.
+
+    Command envelopes also represent user-invoked Skills, so the wrapper alone
+    is not enough.  Only the runtime's own local output tags and the observed
+    local commands are ignorable for terminal-state purposes.
+    """
+    if isinstance(value, str):
+        text = value
+    elif isinstance(value, list):
+        # A local envelope can arrive as text blocks.  Any other block, or a
+        # second real text, leaves the record human-visible rather than hiding
+        # a mixed command/user turn.
+        if not value or not all(
+            isinstance(block, dict) and block.get("type") == "text"
+            and isinstance(block.get("text"), str)
+            for block in value
+        ):
+            return False
+        text = "\n".join(block["text"] for block in value)
+    else:
+        return False
+    return bool(
+        LOCAL_COMMAND_ENVELOPE_RE.fullmatch(text)
+        or LOCAL_COMMAND_ENVELOPE_NAME_RE.fullmatch(text)
+    )
 
 
 def looks_like_attachment_prefix(value: str) -> bool:

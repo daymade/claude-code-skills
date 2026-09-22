@@ -116,6 +116,10 @@ def parse_claude_session(
         timestamp_source=(
             "session-record-minmax" if summary.timestamp_count else "unknown"
         ),
+        original_cwd=summary.original_cwd or None,
+        original_cwd_line=summary.original_cwd_line,
+        last_runtime_cwd=summary.last_runtime_cwd or None,
+        last_runtime_cwd_line=summary.last_runtime_cwd_line,
         source_kind=source.kind,
         source_labels=[source.display_label],
     )
@@ -234,6 +238,16 @@ def display_project(value: str) -> str:
     if len(parts) <= 3:
         return normalized
     return "…/" + "/".join(parts[-3:])
+
+
+def display_cwd_provenance(item: Conversation) -> str:
+    """Show persisted start and final runtime locations without choosing one."""
+    original = item.original_cwd
+    last = item.last_runtime_cwd
+    original_display = display_project(original or "")
+    if not last or last == original:
+        return original_display
+    return f"{original_display} → {display_project(last)}"
 
 
 def probe_codex_writer_locks(
@@ -492,7 +506,7 @@ def render_provider_markdown(
             f"`{item.session_id}`",
         ]
         if include_project:
-            row.append(f"`{markdown_escape(display_project(item.cwd))}`")
+            row.append(f"`{markdown_escape(display_cwd_provenance(item))}`")
         if result.provider == "claude":
             row.append(markdown_escape(conversation_source(item)))
         row.append(conversation_flags(item, language, writer_locks))

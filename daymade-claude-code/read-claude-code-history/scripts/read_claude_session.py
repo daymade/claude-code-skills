@@ -49,6 +49,7 @@ PROJECTS_DIR = CLAUDE_DIR / "projects"  # default home only; discovery below spa
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _core.homes import discover_claude_homes  # noqa: E402
 from _core.claude import scan_claude_session  # noqa: E402
+from _core.text import is_local_command_record  # noqa: E402
 from _core.sources import (  # noqa: E402
     HistorySourceConfigError,
     discover_claude_sources,
@@ -584,7 +585,16 @@ def parse_session_structure(session_file: Path) -> Dict:
             # (same semantics as analyze_sessions.classify_session_tail — a
             # mid-session Ctrl+C the conversation continued past is not a
             # tail interruption).
+            # Local command runtime records arrive as user messages after a
+            # completed reply. They are transport output, not a new human
+            # turn, so they cannot turn a completed session into abandoned.
+            is_local_runtime = role == "user" and is_local_command_record(content)
             if role in ("user", "assistant"):
+                # Chronology is evidence, including runtime records.  Only
+                # terminal-state bookkeeping ignores proven local output.
+                messages.append(obj)
+                if is_local_runtime:
+                    continue
                 if (
                     role == "user"
                     and isinstance(content, str)
@@ -594,7 +604,6 @@ def parse_session_structure(session_file: Path) -> Dict:
                 else:
                     tail_is_interrupt = False
                 last_message_role = role
-                messages.append(obj)
 
     unresolved_tool_calls = {
         tool_id: info
@@ -1067,6 +1076,16 @@ def build_briefing(
     sections.append("**Chronology coverage**: every physical JSONL record")
     if parsed["error_count"] > 0:
         sections.append(f"**API errors**: {parsed['error_count']}")
+    cwd_provenance = parsed.get("cwd_provenance")
+    if cwd_provenance:
+        original = cwd_provenance.get("original_cwd") or "(unknown)"
+        last = cwd_provenance.get("last_runtime_cwd") or "(unknown)"
+        original_line = cwd_provenance.get("original_cwd_line") or "unknown"
+        last_line = cwd_provenance.get("last_runtime_cwd_line") or "unknown"
+        sections.append(
+            f"**Original cwd**: `{original}` (line {original_line}); "
+            f"**last runtime cwd**: `{last}` (line {last_line})"
+        )
 
     # Session memory (newer CC versions generate this automatically)
     session_mem = get_session_memory(session_file)
@@ -1389,11 +1408,18 @@ def main():
     parsed["selected_session_id"] = session_id
     parsed["source_labels"] = source_labels
     parsed["copy_paths"] = copy_paths
+    cwd_summary = scan_claude_session(session_file)
+    parsed["cwd_provenance"] = {
+        "original_cwd": cwd_summary.original_cwd or None,
+        "original_cwd_line": cwd_summary.original_cwd_line,
+        "last_runtime_cwd": cwd_summary.last_runtime_cwd or None,
+        "last_runtime_cwd_line": cwd_summary.last_runtime_cwd_line,
+    }
     if global_exact_session:
         # The caller may be standing in an unrelated repository. Bind the
         # workspace-state readback to the selected Session's own recorded cwd;
         # an explicit --project remains the caller's intentional scope.
-        selected_cwd = scan_claude_session(session_file).cwd
+        selected_cwd = cwd_summary.cwd
         if selected_cwd:
             project_path = os.path.abspath(selected_cwd)
     briefing = build_briefing(

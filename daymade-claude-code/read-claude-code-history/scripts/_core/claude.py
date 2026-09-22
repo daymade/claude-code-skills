@@ -8,13 +8,17 @@ from pathlib import Path
 from typing import Optional
 
 from .parse import TimestampRange
-from .text import extract_text, first_meaningful_title, iter_jsonl
+from .text import extract_text, first_meaningful_title
 
 
 @dataclass(frozen=True)
 class ClaudeSessionSummary:
     session_id: str
     cwd: str
+    original_cwd: str
+    original_cwd_line: Optional[int]
+    last_runtime_cwd: str
+    last_runtime_cwd_line: Optional[int]
     title: str
     created_at: Optional[float]
     updated_at: Optional[float]
@@ -78,17 +82,43 @@ def scan_claude_session(path: Path, max_title_chars: int = 120) -> ClaudeSession
     found across the JSONL records themselves.
     """
     session_id = path.stem
-    cwd = ""
+    original_cwd = ""
+    original_cwd_line: Optional[int] = None
+    last_runtime_cwd = ""
+    last_runtime_cwd_line: Optional[int] = None
     prompt_candidates: list[str] = []
     title: Optional[str] = None
     timestamps = TimestampRange()
 
-    for record in iter_jsonl(path):
+    # Keep the physical JSONL line for cwd provenance.  ``iter_jsonl`` is
+    # intentionally tolerant and returns records only, so its iterator ordinal
+    # would be false evidence after blank or malformed lines.
+    def numbered_records():
+        try:
+            with path.open("r", encoding="utf-8", errors="replace") as handle:
+                for line_number, raw_line in enumerate(handle, start=1):
+                    if not raw_line.strip():
+                        continue
+                    try:
+                        record = json.loads(raw_line)
+                    except (json.JSONDecodeError, TypeError):
+                        continue
+                    if isinstance(record, dict):
+                        yield line_number, record
+        except (OSError, UnicodeError):
+            return
+
+    for line_number, record in numbered_records():
         timestamps.observe(record.get("timestamp"))
         if isinstance(record.get("sessionId"), str) and record["sessionId"]:
             session_id = record["sessionId"]
-        if not cwd and isinstance(record.get("cwd"), str):
-            cwd = record["cwd"]
+        runtime_cwd = record.get("cwd")
+        if isinstance(runtime_cwd, str) and runtime_cwd.strip():
+            if not original_cwd:
+                original_cwd = runtime_cwd
+                original_cwd_line = line_number
+            last_runtime_cwd = runtime_cwd
+            last_runtime_cwd_line = line_number
         if title is not None:
             continue
         if record.get("type") != "user" or record.get("isMeta") is True:
@@ -113,7 +143,13 @@ def scan_claude_session(path: Path, max_title_chars: int = 120) -> ClaudeSession
         title = f"(untitled: {session_id})"
     return ClaudeSessionSummary(
         session_id=session_id,
-        cwd=cwd,
+        # ``cwd`` is the legacy original-cwd field; keeping it preserves
+        # inventory filters until callers intentionally choose another policy.
+        cwd=original_cwd,
+        original_cwd=original_cwd,
+        original_cwd_line=original_cwd_line,
+        last_runtime_cwd=last_runtime_cwd,
+        last_runtime_cwd_line=last_runtime_cwd_line,
         title=title,
         created_at=timestamps.earliest,
         updated_at=timestamps.latest,

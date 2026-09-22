@@ -595,6 +595,113 @@ class ClaudeSessionEvidenceTests(unittest.TestCase):
         self.assertEqual(set(parsed["unresolved_tool_calls"]), {"toolu_9"})
         self.assertEqual(parsed["end_reason"], "interrupted")
 
+    def test_local_command_runtime_records_do_not_replace_completed_tail(self):
+        records = [
+            {
+                "type": "user", "sessionId": "session-local",
+                "message": {"role": "user", "content": "finish it"},
+            },
+            {
+                "type": "assistant", "sessionId": "session-local",
+                "message": {"role": "assistant", "content": [{"type": "text", "text": "done"}]},
+            },
+            {
+                "type": "user", "sessionId": "session-local",
+                "message": {"role": "user", "content": "<local-command-caveat>Caveat</local-command-caveat>"},
+            },
+            {
+                "type": "user", "sessionId": "session-local",
+                "message": {"role": "user", "content": "<command-name>/model</command-name>\n<command-message>model</command-message>\n<command-args></command-args>"},
+            },
+            {
+                "type": "user", "sessionId": "session-local",
+                "message": {"role": "user", "content": "<local-command-stdout>Set model</local-command-stdout>"},
+            },
+        ]
+        session_file = self._session_file(records)
+
+        self.assertEqual(MODULE.parse_session_structure(session_file)["end_reason"], "completed")
+        tail = ANALYZE.classify_session_tail(session_file)
+        self.assertEqual(tail.kind, ANALYZE.TAIL_DONE)
+        self.assertEqual(tail.last_user_text, "finish it")
+        self.assertEqual(len(MODULE.parse_session_structure(session_file)["messages"]), len(records))
+
+    def test_local_command_list_text_blocks_and_mixed_user_blocks(self):
+        local = (
+            "<command-name>/codex:transfer</command-name>\n"
+            "<command-message>codex:transfer</command-message>\n"
+            "<command-args></command-args>"
+        )
+        local_list_file = self._session_file(
+            [
+                {"type": "assistant", "sessionId": "session-list", "message": {"role": "assistant", "content": "done"}},
+                {"type": "user", "sessionId": "session-list", "message": {"role": "user", "content": [{"type": "text", "text": local}]}},
+            ]
+        )
+        self.assertEqual(MODULE.parse_session_structure(local_list_file)["end_reason"], "completed")
+        self.assertEqual(ANALYZE.classify_session_tail(local_list_file).last_user_text, "")
+
+        mixed_file = self._session_file(
+            [
+                {"type": "assistant", "sessionId": "session-mixed", "message": {"role": "assistant", "content": "done"}},
+                {"type": "user", "sessionId": "session-mixed", "message": {"role": "user", "content": [{"type": "text", "text": local}, {"type": "text", "text": "please continue"}]}},
+            ]
+        )
+        self.assertEqual(MODULE.parse_session_structure(mixed_file)["end_reason"], "abandoned")
+        self.assertIn("please continue", ANALYZE.classify_session_tail(mixed_file).last_user_text)
+
+    def test_copy_local_command_envelope_does_not_replace_completed_tail(self):
+        local = (
+            "<command-name>/copy</command-name>\n"
+            "<command-message>copy</command-message>\n"
+            "<command-args></command-args>"
+        )
+        session_file = self._session_file(
+            [
+                {"type": "assistant", "sessionId": "session-copy", "message": {"role": "assistant", "content": "done"}},
+                {"type": "user", "sessionId": "session-copy", "message": {"role": "user", "content": local}},
+            ]
+        )
+        self.assertEqual(MODULE.parse_session_structure(session_file)["end_reason"], "completed")
+        self.assertEqual(ANALYZE.classify_session_tail(session_file).last_user_text, "")
+
+    def test_skill_envelope_and_plain_model_discussion_remain_user_turns(self):
+        for text in (
+            "<command-name>/skill-creator</command-name>",
+            "Should we change /model before the release?",
+        ):
+            with self.subTest(text=text):
+                session_file = self._session_file(
+                    [
+                        {"type": "assistant", "sessionId": "session-human", "message": {"role": "assistant", "content": "done"}},
+                        {"type": "user", "sessionId": "session-human", "message": {"role": "user", "content": text}},
+                    ]
+                )
+                self.assertEqual(MODULE.parse_session_structure(session_file)["end_reason"], "abandoned")
+                self.assertEqual(ANALYZE.classify_session_tail(session_file).kind, ANALYZE.TAIL_DONE)
+
+    def test_exact_briefing_shows_original_and_last_runtime_cwd_with_lines(self):
+        session_file = self._session_file(
+            [
+                {"type": "user", "sessionId": "session-cwd", "cwd": "/tmp/original", "message": {"role": "user", "content": "start"}},
+                {"type": "assistant", "sessionId": "session-cwd", "cwd": "/tmp/last", "message": {"role": "assistant", "content": "done"}},
+            ]
+        )
+        summary = MODULE.scan_claude_session(session_file)
+        self.assertEqual(summary.cwd, "/tmp/original")
+        self.assertEqual(summary.last_runtime_cwd, "/tmp/last")
+        self.assertEqual((summary.original_cwd_line, summary.last_runtime_cwd_line), (1, 2))
+        parsed = MODULE.parse_session_structure(session_file)
+        parsed["cwd_provenance"] = {
+            "original_cwd": summary.original_cwd,
+            "original_cwd_line": summary.original_cwd_line,
+            "last_runtime_cwd": summary.last_runtime_cwd,
+            "last_runtime_cwd_line": summary.last_runtime_cwd_line,
+        }
+        briefing = MODULE.build_briefing(None, parsed, "/tmp/original", session_file.parent, session_file)
+        self.assertIn("Original cwd**: `/tmp/original` (line 1)", briefing)
+        self.assertIn("last runtime cwd**: `/tmp/last` (line 2)", briefing)
+
     def test_pending_set_matches_classify_session_tail(self):
         # Fork guard: parse_session_structure and classify_session_tail resolve
         # tool_use/tool_result in two independent implementations; the same
