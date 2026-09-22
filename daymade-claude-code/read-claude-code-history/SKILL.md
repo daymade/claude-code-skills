@@ -112,6 +112,10 @@ Session identities, a missing record-level Session identity, malformed JSONL, or
 unreadable bytes. With an exact Session ID and no `--project`, it searches every
 project across the discovered active homes and registered archives; an explicit
 `--project` remains a strict scope. A filename alone never proves Session identity.
+Its cwd receipt reports the first valid persisted cwd and the last valid runtime
+cwd, each with its physical JSONL line. The legacy `cwd` field and workspace
+filter retain the first-valid value; the receipt does not choose either path as
+the universal recovery target.
 
 ### Full-event keyword search
 

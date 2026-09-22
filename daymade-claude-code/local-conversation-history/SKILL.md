@@ -40,11 +40,13 @@ on, and whether the user wants **evidence** (what was said/done) or
 Resumption always follows a read. The continuation skills require a verified
 read receipt; routing straight to them without one is a defect, not a shortcut.
 
-**When the platform is not stated** — a bare session ID, "pick up where we left
-off" — do not guess it. Identify it first: try the Claude Code exact-session
-lookup in `read-claude-code-history`, then the Codex rollout locator in
-`read-codex-history`. Only a lookup that returns a verified identity decides
-which continuation skill runs; a plausible-looking ID prefix does not.
+**When the platform is not stated**, separate an exact identity from a memory
+of content. With a complete session ID, first use the Claude Code exact-session
+lookup, then the Codex exact rollout locator if Claude does not verify it. The
+verified original record decides the provider and continuation skill; an ID
+prefix does not. With only a title, date, quote, or remembered topic, use the
+inventory or content-search route below and verify the original messages before
+assigning a provider.
 
 ## Provider scope — the job only this entry point routes
 
@@ -73,13 +75,12 @@ candidates miss or its scope is incomplete, widen through the content-search row
 Keep the current Session excluded. A request for only an ID stops at verified
 message evidence; it does not require reconstructing every unrelated conversation.
 
-For this single-ID lookup when the provider is unknown, first probe the Codex
-reader's inventory with `--source codex`: it uses state-DB metadata when available.
-This is a discovery order, not an assumption that the conversation was Codex;
-only verified original messages establish that. If no candidate verifies, widen
-to the other providers through the content-search row. Do not start this probe
-with `--source all`: its Claude inventory reads session bodies before applying
-date and output limits. Complete cross-provider inventories, exhaustive searches,
+For a complete unknown-provider ID, follow the exact Claude-then-Codex order
+above; do not substitute a broad inventory. For a remembered title or content
+without an exact ID, start with the bounded inventory or content-search row
+using the supplied date/project clues. Do not start an unbounded probe with
+`--source all`: its Claude inventory reads session bodies before applying date
+and output limits. Complete cross-provider inventories, exhaustive searches,
 and absence claims still require their full requested coverage.
 
 **Without useful bounding clues, order the last two rows rather than picking one.** A cross-provider content

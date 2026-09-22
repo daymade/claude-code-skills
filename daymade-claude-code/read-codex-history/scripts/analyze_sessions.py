@@ -66,6 +66,7 @@ from _core.text import (  # noqa: E402
     files_possibly_matching,
     is_automated_title,
     is_claude_agent_prompt_record,
+    is_local_command_record,
     iter_jsonl,
     keywords_are_raw_byte_safe,
     searchable_segments,
@@ -194,12 +195,19 @@ def classify_session_tail(path: Path) -> SessionTail:
         content = message.get("content") if isinstance(message, dict) else None
 
         if record_type == "user" and not record.get("isMeta"):
-            if isinstance(content, str) and _INTERRUPTED_MARKER in content:
+            is_local_runtime = is_local_command_record(content)
+            if (
+                not is_local_runtime
+                and isinstance(content, str)
+                and _INTERRUPTED_MARKER in content
+            ):
                 tail_is_interrupt = True
                 continue
-            tail_is_interrupt = False
+            if not is_local_runtime:
+                tail_is_interrupt = False
             if isinstance(content, str):
-                last_user_text = content
+                if not is_local_runtime:
+                    last_user_text = content
             elif isinstance(content, list):
                 is_tool_result_only = bool(content) and all(
                     isinstance(block, dict) and block.get("type") == "tool_result"
@@ -212,7 +220,7 @@ def classify_session_tail(path: Path) -> SessionTail:
                         tool_use_id = block.get("tool_use_id")
                         if tool_use_id is not None:
                             all_resolved_tool_use_ids.add(tool_use_id)
-                if not is_tool_result_only:
+                if not is_local_runtime and not is_tool_result_only:
                     text = extract_text(content)
                     if text:
                         last_user_text = text

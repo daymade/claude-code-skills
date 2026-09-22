@@ -525,6 +525,100 @@ class ClaudeSessionEvidenceTests(unittest.TestCase):
             self.assertLess(briefing.index("回答一"), briefing.index("纠正二"))
             self.assertIn("Unanswered retained request", briefing)
 
+    def test_briefing_labels_local_runtime_and_unanswered_human_at_output_level(self):
+        def briefing_for(records: list[dict]) -> str:
+            session_file = self._session_file(records)
+            parsed = MODULE.parse_session_structure(session_file)
+            return MODULE.build_briefing(
+                {"sessionId": "presentation"}, parsed, "/tmp", session_file.parent,
+                session_file, full=True,
+            )
+
+        local = briefing_for([
+            {"type": "assistant", "sessionId": "presentation", "message": {"role": "assistant", "content": "done"}},
+            {"type": "user", "sessionId": "presentation", "message": {"role": "user", "content": "<local-command-stdout>[Request interrupted by user]</local-command-stdout>"}},
+        ])
+        self.assertIn("LOCAL RUNTIME (output)", local)
+        self.assertNotIn("USER (interrupt marker)", local)
+        self.assertNotIn("Unanswered retained request", local)
+
+        mixed = briefing_for([
+            {"type": "assistant", "sessionId": "presentation", "message": {"role": "assistant", "content": "done"}},
+            {"type": "user", "sessionId": "presentation", "message": {"role": "user", "content": [
+                {"type": "text", "text": "<local-command-stdout>output</local-command-stdout>"},
+                {"type": "text", "text": "REAL USER: please continue"},
+                {"type": "text", "text": "<local-command-stderr>error</local-command-stderr>"},
+            ]}},
+        ])
+        self.assertIn("REAL USER: please continue", mixed)
+        self.assertIn("Unanswered retained request**: the evidence ends on record 1", mixed)
+
+        interrupted = briefing_for([
+            {"type": "assistant", "sessionId": "presentation", "message": {"role": "assistant", "content": "work started"}},
+            {"type": "user", "sessionId": "presentation", "message": {"role": "user", "content": "[Request interrupted by user]"}},
+        ])
+        self.assertIn("USER (interrupt marker)", interrupted)
+        self.assertNotIn("LOCAL RUNTIME (output)", interrupted)
+        self.assertNotIn("Unanswered retained request", interrupted)
+
+    def test_exact_reader_cli_presentation_distinguishes_local_mixed_and_interrupt(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            project = root / "project"
+            home = root / "home"
+            sessions = home / ".claude" / "projects" / str(project).replace("/", "-")
+            sessions.mkdir(parents=True)
+
+            cases = {
+                "local": [
+                    {"type": "assistant", "sessionId": "local", "message": {"role": "assistant", "content": "done"}},
+                    {"type": "user", "sessionId": "local", "message": {"role": "user", "content": "<local-command-stdout>[Request interrupted by user]</local-command-stdout>"}},
+                ],
+                "mixed": [
+                    {"type": "assistant", "sessionId": "mixed", "message": {"role": "assistant", "content": "done"}},
+                    {"type": "user", "sessionId": "mixed", "message": {"role": "user", "content": [
+                        {"type": "text", "text": "<local-command-stdout>output</local-command-stdout>"},
+                        {"type": "text", "text": "REAL USER: continue"},
+                        {"type": "text", "text": "<local-command-stderr>error</local-command-stderr>"},
+                    ]}},
+                ],
+                "interrupt": [
+                    {"type": "assistant", "sessionId": "interrupt", "message": {"role": "assistant", "content": "done"}},
+                    {"type": "user", "sessionId": "interrupt", "message": {"role": "user", "content": "[Request interrupted by user]"}},
+                ],
+                "user-then-local": [
+                    {"type": "assistant", "sessionId": "user-then-local", "message": {"role": "assistant", "content": "done"}},
+                    {"type": "user", "sessionId": "user-then-local", "message": {"role": "user", "content": "REAL USER: continue"}},
+                    {"type": "user", "sessionId": "user-then-local", "message": {"role": "user", "content": "<local-command-stdout>output</local-command-stdout>"}},
+                ],
+            }
+            for session_id, records in cases.items():
+                (sessions / f"{session_id}.jsonl").write_text(
+                    "".join(json.dumps(record) + "\n" for record in records), encoding="utf-8"
+                )
+
+            def render(session_id: str) -> str:
+                completed = subprocess.run(
+                    [sys.executable, str(SCRIPT), "--project", str(project), "--session", session_id],
+                    text=True, encoding="utf-8", capture_output=True, check=True,
+                    env={**os.environ, "HOME": str(home)},
+                )
+                return completed.stdout
+
+            local = render("local")
+            self.assertIn("LOCAL RUNTIME (output)", local)
+            self.assertNotIn("USER (interrupt marker)", local)
+            self.assertNotIn("Unanswered retained request", local)
+            mixed = render("mixed")
+            self.assertIn("REAL USER: continue", mixed)
+            self.assertIn("Unanswered retained request**: the evidence ends on record 1", mixed)
+            interrupted = render("interrupt")
+            self.assertIn("USER (interrupt marker)", interrupted)
+            self.assertNotIn("Unanswered retained request", interrupted)
+            user_then_local = render("user-then-local")
+            self.assertIn("### Record 2 · LOCAL RUNTIME (output)", user_then_local)
+            self.assertIn("Unanswered retained request**: the evidence ends on record 1", user_then_local)
+
     def test_reversed_tool_result_before_use_is_not_interrupted(self):
         # A tool_result can be written to the file before the tool_use it
         # answers ("Tool Use / Tool Result Ordering",
@@ -594,6 +688,144 @@ class ClaudeSessionEvidenceTests(unittest.TestCase):
 
         self.assertEqual(set(parsed["unresolved_tool_calls"]), {"toolu_9"})
         self.assertEqual(parsed["end_reason"], "interrupted")
+
+    def test_local_command_runtime_records_do_not_replace_completed_tail(self):
+        records = [
+            {
+                "type": "user", "sessionId": "session-local",
+                "message": {"role": "user", "content": "finish it"},
+            },
+            {
+                "type": "assistant", "sessionId": "session-local",
+                "message": {"role": "assistant", "content": [{"type": "text", "text": "done"}]},
+            },
+            {
+                "type": "user", "sessionId": "session-local",
+                "message": {"role": "user", "content": "<local-command-caveat>Caveat</local-command-caveat>"},
+            },
+            {
+                "type": "user", "sessionId": "session-local",
+                "message": {"role": "user", "content": "<command-name>/model</command-name>\n<command-message>model</command-message>\n<command-args></command-args>"},
+            },
+            {
+                "type": "user", "sessionId": "session-local",
+                "message": {"role": "user", "content": "<local-command-stdout>Set model</local-command-stdout>"},
+            },
+        ]
+        session_file = self._session_file(records)
+
+        self.assertEqual(MODULE.parse_session_structure(session_file)["end_reason"], "completed")
+        tail = ANALYZE.classify_session_tail(session_file)
+        self.assertEqual(tail.kind, ANALYZE.TAIL_DONE)
+        self.assertEqual(tail.last_user_text, "finish it")
+        self.assertEqual(len(MODULE.parse_session_structure(session_file)["messages"]), len(records))
+
+    def test_local_runtime_marker_is_not_an_explicit_interrupt(self):
+        session_file = self._session_file(
+            [
+                {"type": "assistant", "sessionId": "session-marker", "message": {"role": "assistant", "content": "done"}},
+                {"type": "user", "sessionId": "session-marker", "message": {"role": "user", "content": "<local-command-stdout>[Request interrupted by user]</local-command-stdout>"}},
+            ]
+        )
+        self.assertEqual(MODULE.parse_session_structure(session_file)["end_reason"], "completed")
+        self.assertEqual(ANALYZE.classify_session_tail(session_file).kind, ANALYZE.TAIL_DONE)
+
+    def test_local_command_list_text_blocks_and_mixed_user_blocks(self):
+        local = (
+            "<command-name>/codex:transfer</command-name>\n"
+            "<command-message>codex:transfer</command-message>\n"
+            "<command-args></command-args>"
+        )
+        local_list_file = self._session_file(
+            [
+                {"type": "assistant", "sessionId": "session-list", "message": {"role": "assistant", "content": "done"}},
+                {"type": "user", "sessionId": "session-list", "message": {"role": "user", "content": [{"type": "text", "text": local}]}},
+            ]
+        )
+        self.assertEqual(MODULE.parse_session_structure(local_list_file)["end_reason"], "completed")
+        self.assertEqual(ANALYZE.classify_session_tail(local_list_file).last_user_text, "")
+
+        mixed_file = self._session_file(
+            [
+                {"type": "assistant", "sessionId": "session-mixed", "message": {"role": "assistant", "content": "done"}},
+                {"type": "user", "sessionId": "session-mixed", "message": {"role": "user", "content": [{"type": "text", "text": local}, {"type": "text", "text": "please continue"}]}},
+            ]
+        )
+        self.assertEqual(MODULE.parse_session_structure(mixed_file)["end_reason"], "abandoned")
+        self.assertIn("please continue", ANALYZE.classify_session_tail(mixed_file).last_user_text)
+
+    def test_local_output_blocks_never_swallow_human_text_between_them(self):
+        content = [
+            {"type": "text", "text": "<local-command-stdout>output</local-command-stdout>"},
+            {"type": "text", "text": "please continue my work"},
+            {"type": "text", "text": "<local-command-stderr>error</local-command-stderr>"},
+        ]
+        self.assertFalse(MODULE.is_local_command_record(content))
+        self.assertFalse(MODULE.is_local_command_record(
+            "<local-command-stdout>output</local-command-stdout>"
+            "please continue my work"
+            "<local-command-stderr>error</local-command-stderr>"
+        ))
+        session_file = self._session_file(
+            [
+                {"type": "assistant", "sessionId": "session-between", "message": {"role": "assistant", "content": "done"}},
+                {"type": "user", "sessionId": "session-between", "message": {"role": "user", "content": content}},
+            ]
+        )
+        self.assertEqual(MODULE.parse_session_structure(session_file)["end_reason"], "abandoned")
+        self.assertIn("please continue my work", ANALYZE.classify_session_tail(session_file).last_user_text)
+
+    def test_copy_local_command_envelope_does_not_replace_completed_tail(self):
+        local = (
+            "<command-name>/copy</command-name>\n"
+            "<command-message>copy</command-message>\n"
+            "<command-args></command-args>"
+        )
+        session_file = self._session_file(
+            [
+                {"type": "assistant", "sessionId": "session-copy", "message": {"role": "assistant", "content": "done"}},
+                {"type": "user", "sessionId": "session-copy", "message": {"role": "user", "content": local}},
+            ]
+        )
+        self.assertEqual(MODULE.parse_session_structure(session_file)["end_reason"], "completed")
+        self.assertEqual(ANALYZE.classify_session_tail(session_file).last_user_text, "")
+
+    def test_skill_envelope_and_plain_model_discussion_remain_user_turns(self):
+        for text in (
+            "<command-name>/skill-creator</command-name>",
+            "Should we change /model before the release?",
+        ):
+            with self.subTest(text=text):
+                session_file = self._session_file(
+                    [
+                        {"type": "assistant", "sessionId": "session-human", "message": {"role": "assistant", "content": "done"}},
+                        {"type": "user", "sessionId": "session-human", "message": {"role": "user", "content": text}},
+                    ]
+                )
+                self.assertEqual(MODULE.parse_session_structure(session_file)["end_reason"], "abandoned")
+                self.assertEqual(ANALYZE.classify_session_tail(session_file).kind, ANALYZE.TAIL_DONE)
+
+    def test_exact_briefing_shows_original_and_last_runtime_cwd_with_lines(self):
+        session_file = self._session_file(
+            [
+                {"type": "user", "sessionId": "session-cwd", "cwd": "/tmp/original", "message": {"role": "user", "content": "start"}},
+                {"type": "assistant", "sessionId": "session-cwd", "cwd": "/tmp/last", "message": {"role": "assistant", "content": "done"}},
+            ]
+        )
+        summary = MODULE.scan_claude_session(session_file)
+        self.assertEqual(summary.cwd, "/tmp/original")
+        self.assertEqual(summary.last_runtime_cwd, "/tmp/last")
+        self.assertEqual((summary.original_cwd_line, summary.last_runtime_cwd_line), (1, 2))
+        parsed = MODULE.parse_session_structure(session_file)
+        parsed["cwd_provenance"] = {
+            "original_cwd": summary.original_cwd,
+            "original_cwd_line": summary.original_cwd_line,
+            "last_runtime_cwd": summary.last_runtime_cwd,
+            "last_runtime_cwd_line": summary.last_runtime_cwd_line,
+        }
+        briefing = MODULE.build_briefing(None, parsed, "/tmp/original", session_file.parent, session_file)
+        self.assertIn("Original cwd**: `/tmp/original` (line 1)", briefing)
+        self.assertIn("last runtime cwd**: `/tmp/last` (line 2)", briefing)
 
     def test_pending_set_matches_classify_session_tail(self):
         # Fork guard: parse_session_structure and classify_session_tail resolve
