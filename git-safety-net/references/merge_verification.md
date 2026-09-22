@@ -244,8 +244,42 @@ These help a **human** investigate a NEEDS-REVIEW branch, but must never drive a
   one new patch-id, so cherry shows the originals as `+` even though their content is merged.
 - Superset tells (base file is larger and contains the branch's distinctive symbols) — a hint the
   base evolved past the branch, to be **confirmed by eye**, not trusted blindly.
+- Patch-id set comparison — for each of the branch's unique commits compute
+  `git show <sha> | git patch-id --stable`, then look for that id among the base's
+  (`git log --format=%H -<N> <base> | while read h; do git show "$h" | git patch-id --stable; done | sort -u`).
+  Measured 2026-09-22 in scratch repos, one-commit and two-commit branches, five landing shapes:
 
-When a hint and the trial merge disagree, trust the trial merge; it is the sound one.
+  | landing shape | `git cherry <base> <branch>` | this comparison |
+  |---|---|---|
+  | one-commit squash | `-` | MATCH |
+  | two-commit squash | `+ +` | both miss |
+  | merge, no squash | *(empty — head is an ancestor)* | *(no unique commits to test)* |
+  | cherry-pick | `-` | MATCH |
+  | rebase onto base | *(empty — ancestor)* | *(no unique commits to test)* |
+
+  **It has no discriminating power beyond `git cherry`: in all five shapes the two agree, and no shape
+  was found where they disagree.** Its only real difference is granularity — a per-commit MATCH/miss
+  list instead of an aggregate `+`/`-`. What matters most is the row nobody wants: **a two-commit
+  squash makes both instruments miss**, because the squash emits one new patch whose id equals neither
+  original. That is GitHub's default PR merge, so this is the shape you are usually asking about, and a
+  miss there is *not* evidence of "not contained". Escalate instead of concluding — containment is
+  established by § The historical-merge-commit rung above
+  (`git_verify_branch_merged.sh --merge-commit`), which states that claim explicitly. Know its two
+  preconditions before relying on it: the merge commit `M` must be obtained independently from the
+  hosting API (nothing in this skill can derive it), and the rung proves containment **at `M`** — it
+  does not prove the content is still in today's base if the base moved again after `M`.
+  **Unsound for auto-decisions:** it sees only the window you scan, so a squash older than `-<N>`
+  reads as unmerged; the window includes merge commits, whose patch-id is a *combined* diff matching
+  no single parent's patch (a trivial merge produces no patch-id line at all); and "contained" says
+  nothing about *which* version of the content survived.
+
+When a hint and the trial merge disagree, trust the trial merge; it is the sound one. **What no hint
+in this list can do is *establish* containment.** `git cherry` and the patch-id comparison both go
+blind on a two-commit squash — the default PR merge, and exactly the shape you are usually asking
+about — so a hint's "contained" is never the last word, and its "miss" is a signal to escalate rather
+than a verdict. Escalate to § The historical-merge-commit rung above
+(`git_verify_branch_merged.sh --merge-commit`), the one that states a containment claim — subject to
+its two preconditions, spelled out there.
 
 ## Supersession triage — "is this leftover a live WIP or a superseded draft?" (Mode E's method)
 
