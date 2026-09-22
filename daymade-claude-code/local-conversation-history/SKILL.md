@@ -73,6 +73,15 @@ candidates miss or its scope is incomplete, widen through the content-search row
 Keep the current Session excluded. A request for only an ID stops at verified
 message evidence; it does not require reconstructing every unrelated conversation.
 
+For this single-ID lookup when the provider is unknown, first probe the Codex
+reader's inventory with `--source codex`: it uses state-DB metadata when available.
+This is a discovery order, not an assumption that the conversation was Codex;
+only verified original messages establish that. If no candidate verifies, widen
+to the other providers through the content-search row. Do not start this probe
+with `--source all`: its Claude inventory reads session bodies before applying
+date and output limits. Complete cross-provider inventories, exhaustive searches,
+and absence claims still require their full requested coverage.
+
 **Without useful bounding clues, order the last two rows rather than picking one.** A cross-provider content
 search is the expensive shape: it reads every event of every store, so the cost
 scales with the whole corpus rather than with the question. When an index exists
