@@ -25,6 +25,8 @@ Design patterns for the four contract clauses in SKILL.md, each with the sanitiz
 
 **Calibration.** Measure your system's self-recovery window first (run a passive sampler for a few hours — count how long bad phases actually last), then set N so N×interval comfortably exceeds the window. N=2 at 5-min interval for a ≤3-min window.
 
+**Breadth is a second calibration, not a corollary of N.** When the trigger aggregates several independent sources into one verdict, the cross-source agreement fraction needs its own calibration pass — it is not automatically right just because N was calibrated. War story: a 9-source collection-health gate defaulted to requiring all 9 sources failing (the intuitive "obviously broken" bar); the real incident it existed to catch held steady at 6/9 failing on every check, so the all-or-nothing gate silently read "healthy" through the entire episode. Recalibrating against that same real incident data (not a hypothetical) to a ≥60%-of-sources-failing threshold caught it; three synthetic fixtures at 0%, 11%, and 100% failing then confirmed the new threshold still tolerated one lone flaky source without alerting.
+
 ## Pattern 3: Escalating auto-cooldown
 
 **Pattern.** When the full remediation ladder fails, record an exhausted round and stand down for an escalating tier (e.g. 30 min → 2 h → 6 h). During cool-down: no probes, no remediation, no notifications, entry logged. On expiry: one retry round. Success clears the counter; failure advances the tier.

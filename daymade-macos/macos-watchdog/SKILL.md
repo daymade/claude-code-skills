@@ -36,6 +36,8 @@ The script's first act on every run: verify the state that justifies its existen
 
 Detection stays honest on every cycle, but the *disruptive action* defers until the failure persists across N consecutive cycles (patient mode). Rationale: oscillating chains self-recover in minutes; a force-reconnect on a self-limiting blip is net-harmful. Measure your system's real self-recovery window before choosing N (one chain's 94-min observatory run showed ≤3 min self-recovery → N=2 cycles at 5-min interval).
 
+When the trigger aggregates several independent sources into one verdict (not a single health check), the cross-source agreement fraction is a *second, separate* parameter from N — don't default to "all sources must agree." An all-or-nothing gate produces a false negative on exactly the correlated-but-partial incident the watchdog exists to catch, because real failures rarely take every source down at once (real case: a 9-source collection-health gate required 9/9 failing and missed a live incident sitting at 6/9; recalibrating against the actual incident data to a ≥60%-of-sources threshold caught it while three-fixture testing at 0%/11%/100% confirmed it still tolerated a single-source blip). Calibrate breadth (what fraction must agree) against real historical failure data the same way you calibrate depth (N) — a threshold picked from what "sounds strict enough" is a guess, not a calibration.
+
 Escalation ladder (cheap → disruptive): refresh state → restart connection → remote repair. Each rung verifies before climbing.
 
 ### 3. Escalating auto-cooldown — an unfixable environment means silence
