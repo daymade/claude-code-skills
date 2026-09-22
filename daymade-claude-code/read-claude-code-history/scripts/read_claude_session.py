@@ -674,6 +674,8 @@ def extract_user_text(messages: List[Dict], limit: int = 5) -> List[str]:
         if msg.get("role") != "user":
             continue
         content = msg.get("content", "")
+        if is_local_command_record(content):
+            continue
         if isinstance(content, str) and content.strip():
             if _is_noise_user_text(content):
                 continue
@@ -779,8 +781,15 @@ def extract_turn_timeline(messages: List[Dict]) -> List[Dict]:
         role = msg.get("role")
         if role not in ("user", "assistant"):
             continue
+        is_local_runtime = role == "user" and is_local_command_record(
+            msg.get("content", "")
+        )
         for kind, text in _turn_kinds(msg_obj):
-            if kind == "user" and "[Request interrupted by user" in text:
+            if is_local_runtime:
+                # Keep the exact runtime payload and record coordinate, but do
+                # not attribute it to a person or reinterpret its contents.
+                kind = "local_runtime"
+            elif kind == "user" and "[Request interrupted by user" in text:
                 # Harness-written esc marker, not human prose — labeled apart
                 # from the user's own words (and deliberately NOT in
                 # NOISE_USER_PATTERNS: verbatim export keeps it, end-state
@@ -834,14 +843,25 @@ def _append_timeline(sections: List[str], messages: List[Dict], full: bool) -> N
                 role = "ASSISTANT (thinking)"
             elif turn.get("kind") == "interrupt_marker":
                 role = "USER (interrupt marker)"
+            elif turn.get("kind") == "local_runtime":
+                role = "LOCAL RUNTIME (output)"
             queued = " · queued human input" if turn["queued"] else ""
             sections.append(f"### Record {turn['ordinal']} · {role}{queued}\n")
             limit = 1000 if role == "USER" else 1600
             sections.append(_clip(turn["text"], limit, full) + "\n")
-    if timeline[-1]["role"] == "user":
+    # Local runtime records are chronology, not requests.  Find the last real
+    # human turn and only call it unanswered when no later assistant prose was
+    # retained; a local envelope after it cannot erase that state.
+    last_human_index = max(
+        (index for index, turn in enumerate(timeline) if turn.get("kind") == "user"),
+        default=None,
+    )
+    if last_human_index is not None and not any(
+        turn["role"] == "assistant" for turn in timeline[last_human_index + 1 :]
+    ):
         sections.append(
             f"> **Unanswered retained request**: the evidence ends on record "
-            f"{timeline[-1]['ordinal']}.\n"
+            f"{timeline[last_human_index]['ordinal']}.\n"
         )
 
 

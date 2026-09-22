@@ -525,6 +525,100 @@ class ClaudeSessionEvidenceTests(unittest.TestCase):
             self.assertLess(briefing.index("回答一"), briefing.index("纠正二"))
             self.assertIn("Unanswered retained request", briefing)
 
+    def test_briefing_labels_local_runtime_and_unanswered_human_at_output_level(self):
+        def briefing_for(records: list[dict]) -> str:
+            session_file = self._session_file(records)
+            parsed = MODULE.parse_session_structure(session_file)
+            return MODULE.build_briefing(
+                {"sessionId": "presentation"}, parsed, "/tmp", session_file.parent,
+                session_file, full=True,
+            )
+
+        local = briefing_for([
+            {"type": "assistant", "sessionId": "presentation", "message": {"role": "assistant", "content": "done"}},
+            {"type": "user", "sessionId": "presentation", "message": {"role": "user", "content": "<local-command-stdout>[Request interrupted by user]</local-command-stdout>"}},
+        ])
+        self.assertIn("LOCAL RUNTIME (output)", local)
+        self.assertNotIn("USER (interrupt marker)", local)
+        self.assertNotIn("Unanswered retained request", local)
+
+        mixed = briefing_for([
+            {"type": "assistant", "sessionId": "presentation", "message": {"role": "assistant", "content": "done"}},
+            {"type": "user", "sessionId": "presentation", "message": {"role": "user", "content": [
+                {"type": "text", "text": "<local-command-stdout>output</local-command-stdout>"},
+                {"type": "text", "text": "REAL USER: please continue"},
+                {"type": "text", "text": "<local-command-stderr>error</local-command-stderr>"},
+            ]}},
+        ])
+        self.assertIn("REAL USER: please continue", mixed)
+        self.assertIn("Unanswered retained request**: the evidence ends on record 1", mixed)
+
+        interrupted = briefing_for([
+            {"type": "assistant", "sessionId": "presentation", "message": {"role": "assistant", "content": "work started"}},
+            {"type": "user", "sessionId": "presentation", "message": {"role": "user", "content": "[Request interrupted by user]"}},
+        ])
+        self.assertIn("USER (interrupt marker)", interrupted)
+        self.assertNotIn("LOCAL RUNTIME (output)", interrupted)
+        self.assertNotIn("Unanswered retained request", interrupted)
+
+    def test_exact_reader_cli_presentation_distinguishes_local_mixed_and_interrupt(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            project = root / "project"
+            home = root / "home"
+            sessions = home / ".claude" / "projects" / str(project).replace("/", "-")
+            sessions.mkdir(parents=True)
+
+            cases = {
+                "local": [
+                    {"type": "assistant", "sessionId": "local", "message": {"role": "assistant", "content": "done"}},
+                    {"type": "user", "sessionId": "local", "message": {"role": "user", "content": "<local-command-stdout>[Request interrupted by user]</local-command-stdout>"}},
+                ],
+                "mixed": [
+                    {"type": "assistant", "sessionId": "mixed", "message": {"role": "assistant", "content": "done"}},
+                    {"type": "user", "sessionId": "mixed", "message": {"role": "user", "content": [
+                        {"type": "text", "text": "<local-command-stdout>output</local-command-stdout>"},
+                        {"type": "text", "text": "REAL USER: continue"},
+                        {"type": "text", "text": "<local-command-stderr>error</local-command-stderr>"},
+                    ]}},
+                ],
+                "interrupt": [
+                    {"type": "assistant", "sessionId": "interrupt", "message": {"role": "assistant", "content": "done"}},
+                    {"type": "user", "sessionId": "interrupt", "message": {"role": "user", "content": "[Request interrupted by user]"}},
+                ],
+                "user-then-local": [
+                    {"type": "assistant", "sessionId": "user-then-local", "message": {"role": "assistant", "content": "done"}},
+                    {"type": "user", "sessionId": "user-then-local", "message": {"role": "user", "content": "REAL USER: continue"}},
+                    {"type": "user", "sessionId": "user-then-local", "message": {"role": "user", "content": "<local-command-stdout>output</local-command-stdout>"}},
+                ],
+            }
+            for session_id, records in cases.items():
+                (sessions / f"{session_id}.jsonl").write_text(
+                    "".join(json.dumps(record) + "\n" for record in records), encoding="utf-8"
+                )
+
+            def render(session_id: str) -> str:
+                completed = subprocess.run(
+                    [sys.executable, str(SCRIPT), "--project", str(project), "--session", session_id],
+                    text=True, encoding="utf-8", capture_output=True, check=True,
+                    env={**os.environ, "HOME": str(home)},
+                )
+                return completed.stdout
+
+            local = render("local")
+            self.assertIn("LOCAL RUNTIME (output)", local)
+            self.assertNotIn("USER (interrupt marker)", local)
+            self.assertNotIn("Unanswered retained request", local)
+            mixed = render("mixed")
+            self.assertIn("REAL USER: continue", mixed)
+            self.assertIn("Unanswered retained request**: the evidence ends on record 1", mixed)
+            interrupted = render("interrupt")
+            self.assertIn("USER (interrupt marker)", interrupted)
+            self.assertNotIn("Unanswered retained request", interrupted)
+            user_then_local = render("user-then-local")
+            self.assertIn("### Record 2 · LOCAL RUNTIME (output)", user_then_local)
+            self.assertIn("Unanswered retained request**: the evidence ends on record 1", user_then_local)
+
     def test_reversed_tool_result_before_use_is_not_interrupted(self):
         # A tool_result can be written to the file before the tool_use it
         # answers ("Tool Use / Tool Result Ordering",
