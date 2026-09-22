@@ -622,7 +622,8 @@ and final branch-count gates that a single-branch retirement does not need.
   GitHub, confirm **by PR number, not by branch name**: `gh pr list --head <branch>` has returned an
   empty result for a branch whose pull request already existed, and "a branch-deletion decision built
   on the empty result would have been wrong" (measured — the record lives in
-  [references/merge_verification.md](references/merge_verification.md) § Landed, then lost). Use
+  [references/merge_verification.md](references/merge_verification.md) § The historical-merge-commit
+  rung, under "On GitHub, do that confirmation by PR number"). Use
   `gh pr view <number> --json headRefOid,state,mergeCommit`, or the REST equivalent
   `gh api repos/<owner>/<repo>/pulls/<number>`; when the number is not yet known, REST search still
   beats `pr list`:
