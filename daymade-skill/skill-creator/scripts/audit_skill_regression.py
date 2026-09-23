@@ -621,12 +621,15 @@ def _frontmatter_description(content: str) -> tuple[str, int] | None:
         if not line.startswith("description:"):
             continue
         value = line.partition(":")[2].strip()
-        if value in {">", ">-", "|", "|-"}:
+        if re.fullmatch(r"[>|][-+]?[0-9]?", value):
             parts: list[str] = []
             for continuation in lines[index + 1:end]:
-                if not continuation.startswith((" ", "\t")):
+                # A blank line is part of a block scalar; only a non-indented
+                # line ends it.
+                if continuation.strip() and not continuation.startswith((" ", "\t")):
                     break
-                parts.append(continuation.strip())
+                if continuation.strip():
+                    parts.append(continuation.strip())
             return " ".join(parts), index + 1
         return value.strip('"\''), index + 1
     return None
@@ -637,17 +640,31 @@ def _description_units(content: str, rel: Path, scope: str) -> list[tuple[str, O
     if not parsed:
         return []
     description, line = parsed
-    clauses: list[str] = []
+    segments: list[str] = []
     for sentence in re.split(r"(?<=[.;。；])\s+", description):
         sentence = sentence.strip()
         if len(sentence) > 220:
-            clauses.extend(part.strip() for part in re.split(r",\s+", sentence) if part.strip())
+            segments.extend(part.strip() for part in re.split(r",\s+", sentence) if part.strip())
         elif sentence:
-            clauses.append(sentence)
+            segments.append(sentence)
+    # Short segments (a trigger phrase in a comma list, a two-word sentence) are
+    # merged into a neighbour instead of dropped: every piece of the old
+    # description must land in some unit, or removing it is never surfaced.
+    clauses: list[str] = []
+    pending = ""
+    for segment in segments:
+        pending = f"{pending}, {segment}" if pending else segment
+        if len(normalize_text(pending)) >= 18:
+            clauses.append(pending)
+            pending = ""
+    if pending:
+        if clauses:
+            clauses[-1] = f"{clauses[-1]} {pending}"
+        else:
+            clauses.append(pending)
     return [
         ("description_clause", Occurrence(str(rel), line, clause, scope))
         for clause in clauses
-        if len(normalize_text(clause)) >= 18
     ]
 
 

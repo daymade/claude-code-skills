@@ -44,6 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **skill-creator** (`daymade-skill` v1.47.0 → v1.48.0): `audit_skill_regression` no longer loses parts of an old description. Short trigger phrases in a long comma list ("选哪个", "which library") and short sentences fell under the minimum clause length and were silently dropped, and a `|-`/`>-` description stopped at its first blank line. Both now reach the review, so removing them from a description is surfaced. Checked against all 149 current descriptions over 420 characters: every word now lands in some candidate (was 148).
+
 - **tibo-reset-codex** (`tibo-reset-codex` v1.13.2 → v1.13.3): Preserve the approved sleep-window
   polling reduction while closing its signal-loss exception. Normal rounds now read Tibo's main-post
   timeline independently of Radar, so an unindexed standalone post can still become a signal; reduced
