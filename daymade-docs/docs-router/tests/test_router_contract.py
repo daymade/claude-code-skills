@@ -70,14 +70,16 @@ class DocsRouterContractTest(unittest.TestCase):
         header = frontmatter(ROUTER)
         self.assertNotIn("../ppt-creator/SKILL.md", body)
         self.assertIn("that variable is absent, as in Codex", body)
-        self.assertIn("Do not invoke `docs-cleaner` on every code", body)
+        self.assertIn("After an authorized code", body)
+        self.assertIn("even if the user did not mention docs", body)
+        self.assertIn("A read-only investigation does not acquire write authorization", body)
         self.assertIn("only when it is installed", body)
         self.assertIn("no automatic current PPT builder", body)
         for hot_signal in (
             "translated HTML with figures",
             "complex investment-bank xlsm parsing",
             "unsigned digital documents to signed-looking",
-            "explicit documentation impact",
+            "post-change documentation checks",
         ):
             self.assertIn(hot_signal, header)
         for boundary in (
@@ -110,7 +112,7 @@ class DocsRouterContractTest(unittest.TestCase):
             "excel-automation": "investment-bank `.xlsm` model",
             "photo-to-scanned-pdf": "photos of paper pages",
             "read-docx-review": "tracked changes",
-            "docs-cleaner": "consolidate redundant docs",
+            "docs-cleaner": "authorized code, script, config",
         }
         self.assertEqual(set(rows), set(expected))
         for name, phrase in expected.items():

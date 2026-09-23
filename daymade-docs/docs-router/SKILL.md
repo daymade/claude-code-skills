@@ -1,14 +1,16 @@
 ---
 name: docs-router
 description: >-
-  Route Daymade document work to the bundled specialist: DOCX/PDF/PPTX or parsed
-  Word to Markdown, Markdown to PDF, existing Word/WPS to PDF, Word creation,
+  Route Daymade document work and post-change documentation checks to the bundled
+  specialist: DOCX/PDF/PPTX or parsed Word to Markdown, Markdown to PDF,
+  existing Word/WPS to PDF, Word creation,
   PDF to readable or translated HTML with figures, Mermaid diagrams to PNG,
   formatted Excel reports or complex investment-bank xlsm parsing, macOS Excel
   control, photos to scanned PDF, unsigned digital documents to signed-looking
-  scans, DOCX comments/track-changes extraction, or explicit documentation impact
-  checks and cleanup. Load the selected specialist's full SKILL.md from its
-  current source path before acting. Use deck-creator for new presentations only
+  scans, DOCX comments/track-changes extraction, or documentation impact checks
+  after code/config/deployment changes and explicit cleanup. Load the selected
+  specialist's full SKILL.md from its current source path before acting. Use
+  deck-creator for new presentations only
   when installed; otherwise this suite has no automatic current PPT builder.
   daymade-docs:ppt-creator remains manual-only. Do not claim general PDF,
   spreadsheet, or presentation tasks.
@@ -45,7 +47,7 @@ original `/daymade-docs:<leaf>` command manually.
 | Create a professionally formatted Excel workbook, parse a complex investment-bank `.xlsm` model, or control Excel on macOS | `../excel-automation/SKILL.md` |
 | Turn photos of paper pages into a scanned PDF, replace pages in a scan, or make an unsigned digital document look hand-signed and scanned | `../photo-to-scanned-pdf/SKILL.md` |
 | Extract Word/WPS DOCX comments or tracked changes into a review ledger | `../read-docx-review/SKILL.md` |
-| Explicitly check documentation impact after a change or consolidate redundant docs | `../docs-cleaner/SKILL.md` |
+| Check documentation impact after an authorized code, script, config, environment, path, deployment, auth, test, or procedure change; or consolidate redundant docs | `../docs-cleaner/SKILL.md` |
 
 Decide by the **input and requested output**, not a shared word such as “PDF”
 or “document.” For example, Markdown → PDF selects `pdf-creator`; an existing
@@ -63,7 +65,10 @@ with their owning skills or normal workflow. If the result is unclear, inspect
 the actual file/task or ask for the missing input or output; do not guess a
 Daymade child from an extension alone.
 
-Do not invoke `docs-cleaner` on every code, config, or deployment change merely
-because the child once advertised implicit post-change governance. This router
-selects it for explicit documentation impact or cleanup work; its manual command
-still exposes its full original workflow.
+After an authorized code, script, config, environment, path, deployment, auth,
+test, or procedure change, select `docs-cleaner` for a scoped documentation
+impact check even if the user did not mention docs. Read its full instructions
+at that stage; do not replace the primary task's specialist or scan unrelated
+documentation. Explicit documentation impact and cleanup requests also route
+there. A read-only investigation does not acquire write authorization through
+this router.
