@@ -1,6 +1,11 @@
 ---
 name: developing-ios-apps
-description: Develops iOS/macOS apps with XcodeGen, SwiftUI, and SPM, including Apple Developer signing, notarization, and CI/CD pipelines. Use when building iOS/macOS apps, fixing Xcode build failures, deploying to real devices, or configuring CI/CD signing. Triggers on XcodeGen project.yml, SPM dependency issues, code signing errors (Error -25294, keychain mismatch, adhoc fallback, EMFILE, notarization credential conflict), "Library not loaded @rpath", Electron @electron/osx-sign / @electron/notarize, notarytool, or certificate/provisioning problems.
+description: >-
+  Builds and ships iOS/macOS apps with XcodeGen, SwiftUI and SPM: Xcode build fixes, device
+  deployment, Apple Developer signing/notarization, CI/CD pipelines. Use for XcodeGen project.yml
+  setup, "Library not loaded @rpath" crashes, code-signing errors (Error -25294, adhoc fallback), or
+  Electron notarization failures. Not for TCC permission dialogs (use macos-permissions) or disk
+  cleanup (use macos-cleaner).
 ---
 
 # iOS App Development

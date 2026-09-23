@@ -1,16 +1,11 @@
 ---
 name: marketplace-dev
 description: >-
-  Creates and maintains Claude Code plugin marketplaces, consolidates standalone
-  skills into a new or existing suite, and moves skills between suites. Converts any
-  Claude Code skills repository into an official plugin marketplace, generates
-  spec-conforming .claude-plugin/marketplace.json, validates with `claude plugin
-  validate`, tests real installation and cache boundaries, and PRs the upstream repo,
-  encoding hard-won schema/version/description anti-patterns. Use when the user
-  mentions marketplace, plugin support, one-click install, marketplace.json, plugin
-  distribution, auto-update, suite-only migration, "put these skills in a suite",
-  "move this skill into daymade-*", or wants a skills repo installable via `claude
-  plugin install`.
+  Builds and maintains Claude Code plugin marketplaces: converts a skills repo to spec-valid
+  marketplace.json, adds/updates plugin entries, and migrates skills into or between suites. Use for
+  marketplace.json, plugin distribution, one-click install, or "put these skills in a suite". Not
+  for repo health audits (use marketplace-health-check) or cache reconciliation (use
+  skill-governance).
 argument-hint: "[repo-path]"
 ---
 

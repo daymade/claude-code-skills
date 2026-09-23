@@ -1,6 +1,11 @@
 ---
 name: stepfun-tts
-description: Generate Chinese / Japanese speech with StepFun's Contextual TTS — default `stepaudio-2.5-tts` (blind-judged better on neutral/emotive preset voices), `stepaudio-3-tts` for whisper & inline-prosody cases (where it won the same blind test). Replaces step-tts-2's `voice_label` with natural-language `instruction` (200 chars on 2.5, 500 on v3) plus inline `()` parentheses for句内 prosody. Use when the user wants emotional / prosody control over voice synthesis (whisper, pause, stress, mood pivot mid-sentence), batch-generates game / app voice lines, migrates from `step-tts-2` or `stepaudio-2.5-tts` (the `voice_label → instruction` breaking change), or needs cloned voices (复刻音色：克隆合成禁用 v3——克隆丢失，走 stepaudio-2.5-tts/step-tts-2). Triggers on 阶跃 TTS, StepAudio 合成, stepaudio-3-tts, stepaudio-2.5-tts, 语音合成, 配音, 文本转语音, TTS 升级, 迁移 step-tts-2. For transcription with the sibling stepaudio-3-asr-max model, use the stepfun-asr skill instead.
+description: >-
+  Generates Chinese/Japanese speech with StepFun's Contextual TTS — default stepaudio-2.5-tts,
+  stepaudio-3-tts for whisper/inline-() prosody. Replaces step-tts-2's voice_label with
+  natural-language instruction. Use for emotional/prosody-controlled synthesis, batch voice lines,
+  migrating from step-tts-2, or cloned voices (2.5/step-tts-2, not v3). Triggers on 阶跃 TTS, 语音合成,
+  配音. Not for transcription (use stepfun-asr).
 ---
 
 # StepFun Contextual TTS (default stepaudio-2.5-tts)

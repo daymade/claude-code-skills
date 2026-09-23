@@ -1,14 +1,11 @@
 ---
 name: competitors-analysis
 description: >-
-  Discover, clone, update, and analyze competitor repositories with evidence-based
-  competitive intelligence. Use when tracking competitors, reviewing competitor
-  source code, adding a competitor repository, comparing product capabilities,
-  building a competitor landscape, checking whether competitor code changed, or
-  when the user says "竞品分析", "竞品", "competitor scan", "latest competitor code",
-  "analyze competitor", or "compare with X". Repository-backed findings must come
-  from local cloned code with file:line citations; market-landscape claims must
-  cite their source and volatility.
+  Clones and audits competitor repositories into evidence-based intelligence with file:line
+  citations. Use to track competitors, add a competitor repo, review competitor code, compare
+  capabilities, build a competitor landscape, or check for code updates: 竞品分析 / 竞品 / competitor scan
+  / analyze competitor / compare with X / latest competitor code. Not for market research without
+  code (use deep-research).
 context: fork
 agent: general-purpose
 argument-hint: "[product-name] [competitor-url-or-search-query]"

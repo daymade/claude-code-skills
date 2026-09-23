@@ -1,16 +1,11 @@
 ---
 name: interaction-design-board
 description: >-
-  Generate several genuinely different, runnable HTML interaction prototypes for
-  one product surface, combine them in an interactive Design Board, collect
-  structured selection/remix feedback, and only then hand the approved behavior
-  to production implementation. Use when a user asks for multiple clickable UI
-  versions, interaction alternatives, progressive-disclosure options, a Design
-  Board, HTML prototypes, test-time scaling for product design, or says the visual
-  styling is acceptable but the hierarchy, workflow, layout, or interaction still
-  feels unprofessional. Prefer this over static image exploration when the decision
-  depends on what happens after clicking, expanding, selecting, filtering, or moving
-  through states.
+  Generates several distinct, clickable HTML interaction prototypes for one product surface into a
+  Design Board and collects selection/remix feedback before implementation. Use for multiple UI
+  versions, interaction alternatives, progressive-disclosure options, or when styling is fine but
+  hierarchy/workflow/interaction feels off. Not for static visual-style calibration (use
+  design-style-picker) or a settled CSS tweak.
 ---
 
 # Interaction Design Board

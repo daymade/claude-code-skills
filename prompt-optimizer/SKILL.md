@@ -1,6 +1,10 @@
 ---
 name: prompt-optimizer
-description: Transform vague prompts into precise, well-structured specifications using EARS (Easy Approach to Requirements Syntax) methodology. This skill should be used when users provide loose requirements, ambiguous feature descriptions, or need to enhance prompts for AI-generated code, products, or documents. Triggers include requests to "optimize my prompt", "improve this requirement", "make this more specific", or when raw requirements lack detail and structure.
+description: >-
+  Transforms vague prompts or feature requests into precise, testable specifications using EARS
+  (Easy Approach to Requirements Syntax) grounded in relevant domain theories (GTD, BJ Fogg,
+  Gestalt). Use when requirements lack triggers or measurable outcomes, or the user asks to
+  "optimize my prompt" / "improve this requirement" / "make this more specific".
 ---
 
 # Prompt Optimizer

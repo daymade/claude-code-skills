@@ -1,18 +1,11 @@
 ---
 name: claude-migrate-memory-to-doc
 description: >-
-  Migrates Claude Code personal memory (the per-project memory/ directory) into
-  tool-agnostic reference docs, so other AI CLIs that auto-load AGENTS.md (Codex
-  primarily; the content architecture transfers to Cursor and others) working in
-  the same directory can read the same user profile, collaboration preferences,
-  and methodology instead of being blind to them. Use this whenever the user says
-  things like "migrate my memory", "my memory is locked to Claude Code", "make
-  Codex/Cursor read my profile", "memory should live in docs not one tool", or
-  reports that a second AI tool doesn't know who they are; also use it when memory
-  has grown bloated with content that should be shared across tools or projects.
-  Covers diagnosis, the references/ + CLAUDE.md-inline + AGENTS.md-symlink
-  architecture, multi-agent review, empirical codex verification, and memory
-  cleanup. Inline only — it orchestrates review subagents and runs codex.
+  Migrates Claude Code personal memory (the per-project memory/ directory) into tool-agnostic
+  reference docs so other AI CLIs that auto-load AGENTS.md (Codex primarily) can read the same user
+  profile and preferences. Use when the user says "migrate my memory", "my memory is locked to
+  Claude Code", "make Codex/Cursor read my profile", or reports memory has grown bloated with
+  content that should be shared across tools.
 ---
 
 # Migrate Claude Code Memory to Tool-Agnostic Docs

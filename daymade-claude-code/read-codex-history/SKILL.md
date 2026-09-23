@@ -2,10 +2,9 @@
 name: read-codex-history
 description: >-
   Reads, searches and exports local OpenAI Codex history without continuing work: session inventory,
-  timelines, verbatim user input, indexed content search, and rollout identity/fork lineage. Use
-  when the user asks what they told Codex, wants a Session ID, original context, or evidence of what
-  a Codex run did. Not for Claude Code (use read-claude-code-history); with no platform named, start
-  at local-conversation-history.
+  timelines, verbatim user input, indexed search, and rollout identity/fork lineage. Use when the
+  user asks what they told Codex, wants a Session ID, or evidence of what a run did. Not for Claude
+  Code (use read-claude-code-history); with no platform named, start at local-conversation-history.
 argument-hint: "[session-id | keywords | workspace-path]"
 ---
 

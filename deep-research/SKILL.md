@@ -1,13 +1,10 @@
 ---
 name: deep-research
 description: >-
-  Generate format-controlled research reports with evidence tracking, citations, source governance, and multi-pass synthesis.
-  This skill should be used when users request a research report, literature review, market or industry analysis,
-  competitive landscape, policy or technical brief. Triggers: "帮我调研一下", "深度研究", "综述报告", "深入分析",
-  "research this topic", "write a report on", "survey the literature on", "competitive analysis of",
-  "竞品研究", "政策分析", "行业报告". Produces a report; it does not choose a
-  technology. A request that asks which option to adopt, whether to build or
-  reuse, or for a decision among candidates belongs to tech-selection.
+  Generates evidence-tracked research reports with citations, source governance, and multi-pass
+  synthesis. Use for a research report, literature review, market/industry analysis, or competitive
+  landscape: 帮我调研一下 / 深度研究 / 综述报告 / research this topic / write a report on. Not for choosing
+  between options (use tech-selection) or code-based competitor analysis (use competitors-analysis).
 ---
 
 # Deep Research

@@ -1,16 +1,11 @@
 ---
 name: excalidraw-use
 description: >-
-  Place existing images onto an Excalidraw whiteboard, turn a slide deck into
-  clean per-slide images first, and inspect what is inside a .excalidraw file.
-  Use whenever someone mentions Excalidraw, a whiteboard or canvas, a
-  .excalidraw file, 白板 or 画板 — especially "put these screenshots on my
-  board", "add my old workshop images to the canvas", "space them out so I
-  don't have to adjust spacing by hand", "turn these slides into images I can
-  draw on", or "what's in this scene file". Also use when a talk or workshop
-  is delivered by hand-drawing over screenshots on a shared canvas, or when
-  someone needs a pick tray of many images to choose from. Not for generating
-  a diagram from a text description — that is a different job.
+  Places existing images onto an Excalidraw whiteboard, turns a slide deck into clean per-slide
+  images, and inspects a .excalidraw file. Use whenever someone mentions Excalidraw, a
+  whiteboard/canvas, .excalidraw, 白板 or 画板 — e.g. "put these screenshots on my board" — or a
+  workshop delivered by hand-drawing over screenshots on a shared canvas. Not for generating a
+  diagram from a text description.
 ---
 
 # Excalidraw: images onto a board

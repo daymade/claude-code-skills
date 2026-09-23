@@ -1,15 +1,11 @@
 ---
 name: terraform-skill
 description: >-
-  Diagnoses and designs safe Terraform releases, provisioners, multi-environment
-  isolation, and fresh-host bootstrap. Use when writing or reviewing plan/apply
-  wrappers, null_resource, remote-exec, local-exec, file provisioners, cloud-init,
-  Docker Compose or Caddy deployment; when staging and production configuration may
-  differ; when an IaC rollout can mutate a shared gateway; or when debugging drift,
-  saved-plan, provenance, TLS, Restarting/unhealthy containers, DNS duplication,
-  snapshot contamination, and post-apply failures. It emphasizes exact reviewed
-  artifacts, pre-mutation validation, explicit production authorization, and
-  independent live readback.
+  Diagnoses and designs safe Terraform releases, provisioners (remote-exec/local-exec/file,
+  cloud-init, Compose, Caddy), multi-environment isolation, and fresh-host bootstrap. Use when
+  writing or reviewing plan/apply wrappers or provisioners; when staging/production config may
+  differ; when a rollout can mutate a shared gateway; or debugging drift, TLS, container restarts,
+  DNS duplication, or snapshot contamination.
 ---
 
 # Terraform Release and Provisioner Safety

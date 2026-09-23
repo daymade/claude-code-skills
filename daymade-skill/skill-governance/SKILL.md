@@ -1,15 +1,11 @@
 ---
 name: skill-governance
 description: >-
-  Govern the real Claude Code and Codex Skill surface without losing cold
-  capability. Use when users ask how many Skills are loaded, why the catalog is
-  huge or descriptions are truncated, want only routers visible while
-  gstack/Lark/IMA/UiPath stay on disk, or need to reconcile
-  source/install/cache drift, `.agents/skills`/`.claude/skills`/legacy
-  `.codex/skills`, loose or duplicate Skills, discovery policy, marketplace
-  sources, suite migrations, superseded plugins, or old cache versions. Verifies
-  the fresh host catalog and router resources; filesystem counts or completed
-  cleanup are not success.
+  Governs the Claude Code/Codex Skill surface: reconciles source/install/catalog-visibility drift
+  without losing cold capability. Use when users ask how many Skills load, why the catalog is
+  truncated, want routers visible while other bundles stay cold, or need duplicate/superseded-Skill
+  or old-cache cleanup. Not for building a marketplace manifest (use marketplace-dev) or repo audits
+  (use marketplace-health-check).
 ---
 
 # Skill Governance

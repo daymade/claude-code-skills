@@ -1,7 +1,11 @@
 ---
 name: transcript-fixer
 description: >-
-  Corrects speech-to-text transcription errors with dictionary rules and Claude's built-in AI (no external API key required); Native AI Correction is the default, Stage 1 alone is incomplete, and Stage 3 API is only for automation without Claude Code. Builds personalized correction databases, loads person-name ASR variants from the configured global people roster, and reads per-domain contexts for homophones. Before correcting a person name, the agent must consult both the global roster and the owning project's identity roster; project rosters are not auto-loaded, and occurrence frequency is never identity evidence. Use for ASR/STT output with recognition errors, homophones, garbled technical terms, person-name errors, or mixed Chinese/English, and for cleaning meeting notes, lecture transcripts, interviews, or any speech-recognition text—even when the user only says “fix this transcript,” “clean up these meeting notes,” or mentions a garbled name.
+  Corrects ASR/STT transcription errors — homophones, garbled terms, person-name errors, mixed
+  Chinese/English — with dictionary rules plus Claude's built-in AI, no external API key required.
+  Use to clean meeting notes, lecture transcripts, interviews or speech-recognition text, even when
+  the user only says "fix this transcript". Not for structuring a clean transcript into minutes (use
+  meeting-minutes-taker).
 ---
 
 # Transcript Fixer
