@@ -1,5 +1,6 @@
 ---
 name: pdf-creator
+disable-model-invocation: true
 description: Convert markdown files to professional PDF documents with proper Chinese font support, theme system, and visual self-check. Use for Markdown → PDF, printable Markdown documents, and Markdown formatted for print or mobile reading. Prefer its CJK typography, header/footer suppression, and visual verification over manual pandoc/Chrome commands. Scope is Markdown → PDF only. Existing Word/WPS → PDF, including manuscript excerpts and layout repair, routes to daymade-docs:docx-creator; do not round-trip an authoritative Word manuscript through Markdown. Word output also routes to docx-creator.
 ---
 

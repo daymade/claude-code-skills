@@ -1,5 +1,6 @@
 ---
 name: photo-to-scanned-pdf
+disable-model-invocation: true
 description: >-
   Two pipelines ending at a scanner-look PDF. (1) Phone photos of paper
   documents (contracts, stamped certificates, receipts, forms, handwritten

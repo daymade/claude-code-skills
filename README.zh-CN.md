@@ -162,6 +162,7 @@ claude plugin install daymade-docs@daymade-skills
 这个套件会在同一个命名空间下暴露相关技能：
 
 ```text
+/daymade-docs:docs-router
 /daymade-docs:doc-to-markdown
 /daymade-docs:mermaid-tools
 /daymade-docs:pdf-creator
@@ -172,6 +173,8 @@ claude plugin install daymade-docs@daymade-skills
 ```
 
 这些技能以套件形式整体发布，不再提供单独的单技能插件。所有文档技能都在 `daymade-docs/` 下，随套件一起安装。
+自动选择由 `docs-router` 负责；各专业技能的原有命令仍可手动调用。
+`ppt-creator` 仅供手动兼容调用，新建演示文稿使用 `deck-creator`。
 
 **Apple 平台套件**（为 macOS/iOS 开发与运维提供统一命名空间）：
 ```bash
@@ -416,6 +419,16 @@ CC-Switch 支持以下中国 AI 服务提供商：
 **🎬 实时演示**
 
 ![GitHub 操作演示](./demos/github-ops/create-pr.gif)
+
+---
+
+### **docs-router** - Daymade 文档路由
+
+> **安装**：`claude plugin install daymade-docs@daymade-skills`（套件成员，调用方式 `daymade-docs:docs-router`）
+
+按输入和交付格式选择套件内的专业技能，读取该技能的完整说明及当前任务所需参考资料。
+覆盖文档转换、Word/PDF 制作、Mermaid 图片、macOS Excel 自动化、扫描件、DOCX 审阅提取和文档整理。
+专业技能的原命令保留手动调用；新建演示文稿使用 `deck-creator`，`ppt-creator` 仅供手动兼容调用。
 
 ---
 

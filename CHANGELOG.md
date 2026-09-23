@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **daymade-docs** (v1.16.1 → v1.17.0): Add `docs-router` as the suite's automatic document-work entry. It selects a bundled specialist by input and requested output, then reads that specialist's full `SKILL.md` and task-required references from the current plugin source. Routes cover document-to-Markdown, Markdown-to-PDF, existing Word-to-PDF, DOCX creation and review, PDF-to-HTML, Mermaid PNGs, macOS Excel automation, scanned PDFs, and documentation cleanup.
+
+### Changed
+
+- **daymade-docs**: Make the nine active specialists manual-only for direct skill invocation while preserving their bodies and `/daymade-docs:<leaf>` commands. `ppt-creator` remains manual-only; new presentation creation routes to `deck-creator`. This changes discovery and routing, not the specialists' capabilities.
+
 ### Fixed
 
 - **tibo-reset-codex** (`tibo-reset-codex` v1.13.2 → v1.13.3): Preserve the approved sleep-window
