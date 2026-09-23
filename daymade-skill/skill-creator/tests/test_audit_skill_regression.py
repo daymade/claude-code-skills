@@ -1355,3 +1355,59 @@ def test_archive_rejects_source_change_after_initial_validation(tmp_path, monkey
         audit.archive_baseline_snapshot(before, output)
     assert not output.exists()
     assert not list(tmp_path.glob(".snapshot.zip.*.tmp"))
+
+
+def test_short_trigger_phrases_in_a_long_description_become_candidates(tmp_path):
+    # A long "Use when" sentence is split on commas; its short trigger phrases
+    # used to fall under the minimum clause length and vanish from the review,
+    # so dropping them from the description was never surfaced.
+    phrases = ["用哪个", "选哪个", "存哪里", "which library", "build or buy", "review this design"]
+    long_sentence = (
+        "Use when choosing a technical direction even if the user never says it, "
+        + ", ".join(phrases)
+        + ", or when the agent itself picks a library, a storage engine or a data format for the project."
+    )
+    assert len(long_sentence) > 220
+    before = _make_skill(tmp_path / "before", "Body.", description=long_sentence)
+    after = _make_skill(tmp_path / "after", "Body.", description="Chooses a technology.")
+
+    report = build_report(before, after)
+    joined = " ".join(
+        c["text"] for c in report["candidates"] if c["kind"] == "description_clause"
+    )
+    for phrase in phrases:
+        assert phrase in joined, phrase
+
+
+def test_short_trailing_description_sentence_is_not_dropped(tmp_path):
+    before = _make_skill(
+        tmp_path / "before",
+        "Body.",
+        description="Chooses a technology through gated filters and business anchors. Runs daily.",
+    )
+    after = _make_skill(tmp_path / "after", "Body.", description="Chooses a technology.")
+
+    report = build_report(before, after)
+    joined = " ".join(c["text"] for c in report["candidates"])
+    assert "Runs daily." in joined
+
+
+def test_block_description_with_blank_line_is_read_to_the_end(tmp_path):
+    before = tmp_path / "before"
+    before.mkdir()
+    (before / "SKILL.md").write_text(
+        "---\n"
+        "name: fixture-skill\n"
+        "description: |-\n"
+        "  Runs the sector research workflow end to end.\n"
+        "\n"
+        "  Trigger when the user asks for the top ten names in a sector today.\n"
+        "argument-hint: x\n"
+        "---\n\n# Fixture\n\nBody.\n",
+        encoding="utf-8",
+    )
+    after = _make_skill(tmp_path / "after", "Body.", description="Runs sector research.")
+
+    report = build_report(before, after)
+    joined = " ".join(c["text"] for c in report["candidates"])
+    assert "top ten names in a sector" in joined
