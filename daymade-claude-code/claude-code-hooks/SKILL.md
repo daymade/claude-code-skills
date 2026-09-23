@@ -1,21 +1,10 @@
 ---
 name: claude-code-hooks
 description: >-
-  How to write, test, register, and debug Claude Code hooks — PreToolUse /
-  PostToolUse / SessionStart / Stop Bash guards that enforce a rule the model
-  would otherwise talk itself past. Use whenever the user wants to create a
-  hook, block/intercept a tool call, turn a repeatedly-violated rule into a
-  hard gate, add a guard rail, debug a hook that misfires or "poisons the
-  session", register a hook across profiles, or mentions hooks /
-  PreToolUse / Stop hook / 拦截 / 守卫 / 钩子 / 拦下. Bakes in the hard-won
-  pitfalls: UserPromptSubmit only ever sees user input, never Claude's own
-  text — a rule about Claude's own output belongs on Stop instead;
-  token-level shlex matching (never awk splitting); bash -n + real-JSON
-  end-to-end testing BEFORE registering (a corrupted PreToolUse hook poisons
-  every Bash call); SSOT + symlink so a ~/.claude reinstall can't lose it;
-  multi-profile convergence; and human-confirmation release gates. Reach for
-  this even for "make it stop doing X" — a durable stop is a hook, not a
-  reminder.
+  Writes, tests, registers and debugs Claude Code hooks (PreToolUse, PostToolUse, SessionStart,
+  Stop) that turn a rule the model keeps breaking into a hard gate. Use when the user wants to block
+  or intercept a tool call, add a guard rail, fix a misfiring hook, or says 拦截 / 守卫 / 钩子 — including
+  "make it stop doing X".
 ---
 
 # Claude Code Hooks
