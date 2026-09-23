@@ -1,7 +1,11 @@
 ---
 name: peer-message
 description: >-
-  Bridge local Claude Code and Codex sessions only when the current host's native communication tools do not cover the target. Use for cross-product messages, hooks/scripts posting to sessions, fallback reply lookup and delivery verification, or diagnosing Held peer messages. Also use its coordination guidance when shared-work ownership or an inbound peer assertion needs verification. For ordinary parent/subagent, teammate, or independent-session communication, first discover and use available native tools; do not load this skill merely to send a native message. When the target sits on another machine entirely, route through the network preview: paired contacts over an operator-provided relay answering from explicitly shared, read-only documents (peer-message:v1 invitations). Never bypass a denied or Held message with another transport. Not for spawning agents, moving full history, or granting user approval. Triggers: 跨产品通信、原生工具未覆盖的会话、脚本回帖、peer 送达排查、共享在制品归属核实、跨机器配对问答。
+  Bridges Claude Code and Codex sessions when native tools can't reach the target. Use for 跨产品通信 /
+  脚本回帖 / 送达排查: cross-product messages, hooks or scripts posting to a session, verifying delivery
+  (Held messages included), shared-work ownership, or an inbound peer assertion, or for
+  cross-machine pairing. Not for ordinary same-product or parent/subagent messaging (use native
+  tools), spawning agents, or moving full history.
 ---
 
 # peer-message — 原生通信未覆盖时的补缺（本机 + 跨机器预览）
