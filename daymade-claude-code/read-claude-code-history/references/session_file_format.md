@@ -732,8 +732,8 @@ Notes:
 - Project filtering uses `session_meta.payload.cwd` with a recursive workspace
   match — a rollout belongs to the project whose path is, or is a parent of,
   that cwd.
-- `analyze_sessions.py search --codex` implements exactly this table; prefer
-  it over hand-rolled grep so mirrors and duplicates stay handled.
+- The retired raw `analyze_sessions.py search --codex` implemented this table.
+  Use indexed discovery and an exact rollout reader instead of hand-rolled grep.
 - Codex support is search-only. `recover_content.py` requires Claude's Write or
   file-history records and fails fast on a Codex rollout instead of returning
   an empty success.

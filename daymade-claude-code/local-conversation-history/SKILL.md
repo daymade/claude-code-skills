@@ -45,61 +45,49 @@ section exists to prevent.
 
 | Cross-provider need | Route to | Name this scope |
 |---|---|---|
-| **Inventory** — "what have I been working on", "list my recent chats", session titles/dates/IDs | `read-claude-code-history`, its bundled inventory | `--source all`, or `--source kimi` for Kimi alone |
-| **Content search** — "did we ever discuss X", find the conversation containing a quote, file, or tool result | `read-claude-code-history`, its bundled full-event search | add `--codex` and `--kimi` to the Claude search; each is a separate store the Claude registry never covers |
-| **Ranked recall** — the same question when the wording may have drifted, or the sweep has no session ID, date, or project to bound it | `read-claude-code-history`, its optional hybrid recall index | The index states which providers it holds; read the coverage line it prints instead of assuming it spans all three. When the platform may also have been Codex, the Claude hybrid index does not cover that store — add `read-codex-history`'s `claude-flow-viewer` full-text path. That path matches literally only, so a genuine paraphrase still needs the Claude-side hybrid: the two are complementary, not substitutes |
+| **Inventory** — "what have I been working on", "list my recent chats", session titles/dates/IDs | Indexed metadata where available, then exact-session readers | Do not use `list_local_history.py --source all`: its date and output limits are applied after Claude session bodies are read. Report a gap if no indexed inventory exists. |
+| **Content search** — "did we ever discuss X", find a quote, file, or tool result | `read-claude-code-history`, its indexed recall, then exact-session reader | Select the relevant indexed providers; inspect index coverage and freshness. Open only candidate sessions. |
+| **Ranked recall** — wording may have drifted | `read-claude-code-history`, its hybrid recall index | The index states which providers it holds; do not infer coverage for an unindexed provider. |
 
-Both readers ship the same inventory command and its `--source` already defaults
-to `all` — but each reader's own task table pins it to that reader's provider
-(`--source claude`, `--source codex`), so the default never fires on its own.
-Search is the mirror image: it is Claude-only unless the other two stores are
-added explicitly.
+Indexed recall accepts explicit Claude, Codex, and Kimi provider filters.
 
 **Use supplied clues before broad discovery.** For a pasted quote with a known
-project, date, or title, let the owning reader's inventory narrow candidates, then
+project, date, or title, use indexed metadata to narrow candidates, then
 verify their original messages. For Codex, follow **Locate a quoted exchange** in
 `read-codex-history`. Inventory alone never establishes a content match; if its
-candidates miss or its scope is incomplete, widen through the content-search row.
+candidates miss or its scope is incomplete, report the gap and refine the indexed query.
 Keep the current Session excluded. A request for only an ID stops at verified
 message evidence; it does not require reconstructing every unrelated conversation.
 
 For this single-ID lookup when the provider is unknown, first probe the Codex
-reader's inventory with `--source codex`: it uses state-DB metadata when available.
+reader's exact-ID locator backed by state-DB metadata when available.
 This is a discovery order, not an assumption that the conversation was Codex;
 only verified original messages establish that. If no candidate verifies, widen
-to the other providers through the content-search row. Do not start this probe
+to the other providers through indexed recall. Do not start this probe
 with `--source all`: its Claude inventory reads session bodies before applying
-date and output limits. Complete cross-provider inventories, exhaustive searches,
-and absence claims still require their full requested coverage.
+date and output limits. Do not promise exhaustive search or absence when an
+index or exact-session read cannot cover the requested records.
 
-**Without useful bounding clues, order the last two rows rather than picking one.** A cross-provider content
-search is the expensive shape: it reads every event of every store, so the cost
-scales with the whole corpus rather than with the question. When an index exists
-and covers the providers in scope, recall answers in about a second and returns
-leads — sessions, dates, projects — that turn the exhaustive scan into a bounded
-one. Run it first, then scan only what the index does not hold. Skip straight to
-search when the request needs an exhaustive guarantee, because ranked recall
-returns top-K candidates and can never support an absence claim.
-
-The index is optional. On a machine that never built one, recall exits non-zero
-saying the index does not exist — that is a routing signal, not a failure to
-report: fall back to the search row and say the sweep ran unindexed.
+**Search history through the index or an exact known session.** A raw sweep of
+every conversation is prohibited, including when an output limit or scan timeout
+is set. The current raw-search date flags filter after files are read, so they
+do not make that command bounded. If the index is missing, stale, or lacks a
+provider, report that coverage gap; do not fall back to a corpus scan. Ranked
+top-K results cannot support an absence claim.
 
 **Kimi CLI has no other entry anywhere** — no dedicated skill exists for either
 axis, so both routes above land in `read-claude-code-history`, which documents
 its own Kimi home resolution.
 
-Let the executor own every flag beyond provider scope: `--all-projects`,
-`--recursive`, date bounds, `--include-archived`, `--include-subagents`,
-`--include-automated`, output format, and every detail of how each store is
-parsed. This skill names which providers are in scope and nothing else.
+Let the executor own exact-session lookup, indexed provider filters, coverage,
+and output format. This skill names which providers are in scope.
 
 ## Intent decides the route — the word "history" does not
 
 | The user's requested result | Route |
 |---|---|
-| A list of conversations: titles, dates, session IDs | The inventory row under **Provider scope**, or the matching reader when one platform is named |
-| The conversation where a topic, quote, file, or tool result appeared — "find that old chat", "did we ever discuss X" | The **search** row under **Provider scope**; use supplied clues to narrow candidates first. Listing titles alone is not searching content, and a title match is not evidence the content exists |
+| A list of conversations: titles, dates, session IDs | The indexed inventory row under **Provider scope**; if unavailable, state the gap |
+| The conversation where a topic, quote, file, or tool result appeared — "find that old chat", "did we ever discuss X" | The **indexed content search** row under **Provider scope**; use supplied clues to narrow candidates first. Listing titles alone is not evidence the content exists |
 | Their own raw inputs in chronological order, verbatim | The matching reader's verbatim-input path. Preserve duplicates and session boundaries; duplicates are part of the ledger, not noise |
 | Picking work back up from an identified session | The matching continuation skill, after a read |
 
@@ -109,20 +97,15 @@ the explanation's topic clues do not convert the request into a content search.
 
 ## Invariants that survive routing
 
-- **Completeness.** A Claude inventory's source set is indivisible: the
-  auto-discovered active homes (`~/.claude`, profile homes, the current
-  `CLAUDE_CONFIG_DIR`) **plus** every archive registered in
-  `~/.claude/history-sources.json`. Never call a conversation absent unless the
-  output shows the registered archives were covered. An unavailable required
-  archive is a configuration error, not permission to return a partial answer.
-  `--claude-home` is a diagnostic override and can never back a completeness
-  claim.
+- **Coverage.** Read the index's provider and source scope plus its freshness
+  frontier. An archive or provider outside that scope is unknown. A missing
+  required source cannot support an absence claim.
 - **Self-match.** The current session records the user's question and this
   agent's own commands, so it matches almost any query about itself. Exclude the
   current session ID before treating a hit as historical evidence.
-- **Zero results are not absence.** Ranked recall and a bounded search both
-  return nothing for wording that exists under different words. Widen, or say
-  what was searched — do not convert an empty result into "it never happened".
+- **Zero results are not absence.** Ranked recall can miss different wording
+  and unindexed records. State coverage; do not convert an empty result into
+  "it never happened".
 - **Ask whether a word is the topic's name or the way you talk about it.** A
   search for `技术选型` over a corpus where the user actually said 用哪个 and
   不要闭门造车 returns almost nothing — measured: 10 hits against 163 real

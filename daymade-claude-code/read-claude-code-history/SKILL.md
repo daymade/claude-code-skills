@@ -19,15 +19,15 @@ hand the verified evidence to `daymade-claude-code:continue-claude-code-work`.
 
 | User wants | Use |
 |---|---|
-| Recent Claude Code sessions, titles, dates, or IDs | `scripts/list_local_history.py --source claude` |
+| Recent Claude Code sessions, titles, dates, or IDs | Indexed metadata only; the bundled `list_local_history.py` currently reads all candidate bodies before date/limit filtering, so do not use it for a broad inventory |
 | One known Session reconstructed as a chronological evidence briefing | `scripts/read_claude_session.py --session <ID>` |
 | The user's recent words, including human queued prompts | `scripts/extract_user_messages.py` |
-| A conversation, quote, file, tool result, or action by keyword | `scripts/analyze_sessions.py search` |
+| A conversation or quote by keyword | `scripts/history_index.py recall --mode bm25`, then the exact-session reader |
 | Prior work whose wording may have changed | `scripts/history_index.py recall` after checking index status |
-| A broad keyword sweep with no known Session ID, date, or project | `scripts/history_index.py recall` first for leads, then `analyze_sessions.py search` scoped by what it returns |
+| A topic with no known Session ID | `scripts/history_index.py status`, then `recall`; state index coverage and freshness |
 | How sessions in a time window ended | `scripts/analyze_sessions.py triage` |
 | A deleted/overwritten file preserved in Claude file-history records | `scripts/recover_content.py` |
-| Kimi CLI sessions — this Skill owns the only live Kimi surface | inventory (scopes to Kimi): `scripts/list_local_history.py --source kimi --all-projects`; full-text (**widens** a Claude search, never scopes to Kimi): `scripts/analyze_sessions.py search --kimi` — see **Kimi CLI** below before trusting either result |
+| Kimi CLI sessions | `history_index.py recall --provider kimi`, then read the named session's `wire.jsonl`; see **Kimi CLI** below |
 | Continue a verified Claude session | Stop reading and invoke `daymade-claude-code:continue-claude-code-work` |
 
 ## 找「我们之前做的那个 X」（产物类目标）的三个判据
@@ -62,7 +62,7 @@ interpreting schemas, authorship, sidechains, attachment records, compaction, or
 file-history snapshots. Read
 [references/hybrid_history_recall.md](references/hybrid_history_recall.md) before
 building or repairing the optional BM25/vector index. Read
-[references/workflow_examples.md](references/workflow_examples.md) for exact search,
+[references/workflow_examples.md](references/workflow_examples.md) for indexed discovery,
 triage, and recovery examples. Read
 [references/claude_session_format.md](references/claude_session_format.md) when you
 need the layout rather than the message schema — where sessions live on disk, how
@@ -75,16 +75,16 @@ than truncated.
 Resolve every script relative to this SKILL.md; do not search the machine for a
 same-named helper or recreate a JSONL parser inline.
 
-### Recent inventory
+### Indexed discovery
 
 ```text
-<skill-dir>/scripts/list_local_history.py \
-  --source claude --cwd <workspace> --limit 20 --language zh
+<skill-dir>/scripts/history_index.py status
+<skill-dir>/scripts/history_index.py recall '<topic>' --provider claude --mode bm25
 ```
 
-Expected output: a Claude section with explicit source diagnostics, Session ID,
-internal time range, project, title, and archive/subagent markers. Use
-`--all-projects` when the workspace is unknown.
+Expected output: candidate Session IDs and index coverage. This is topic
+discovery, not a complete recent-session inventory. If a complete list is
+needed, report that the current bundled inventory would scan raw bodies.
 
 ### Exact Session evidence
 
@@ -107,26 +107,19 @@ unreadable bytes. With an exact Session ID and no `--project`, it searches every
 project across the discovered active homes and registered archives; an explicit
 `--project` remains a strict scope. A filename alone never proves Session identity.
 
-### Full-event keyword search
-
-Codex searches include native `event_msg/item_completed` command output as
-`tool_result:CommandExecution`. Stream output takes precedence over duplicate
-aggregate/formatted views. Matching item/call ID plus exact text deduplicates
-repeated results; equal output from different command IDs remains separate.
-User/assistant event mirrors continue to be excluded. Wrappers with unrelated
-IDs cannot be assumed to be mirrors merely because their text overlaps.
+### Indexed content search
 
 ```text
-<skill-dir>/scripts/analyze_sessions.py search \
-  --all-projects --exclude-session <CURRENT_ID> \
-  --from-date <YYYY-MM-DD> --to-date <YYYY-MM-DD> \
-  '<keyword-1>' '<keyword-2>'
+<skill-dir>/scripts/history_index.py status
+<skill-dir>/scripts/history_index.py recall '<keyword>' \
+  --mode bm25 --provider claude --exclude-session <CURRENT_ID>
 ```
 
-Search user/assistant messages, thinking, tool inputs/results, compact summaries,
-attachments, queues, and file snapshots. Exclude the current Session because the
-query itself is otherwise a guaranteed self-match. Agent prompts are excluded by
-default; add `--include-agent-prompts` only when the user explicitly wants them.
+Inspect the index's provider coverage and last indexed time. Open only matching
+Session IDs with the exact-session reader to verify original records. Indexed
+recall returns ranked prose candidates, not a census of thinking, tool results,
+attachments, or unindexed records. The raw `analyze_sessions.py search` entry
+is disabled for live stores: its date flags filter after reading the files.
 
 ### Human-input export
 
@@ -157,12 +150,8 @@ Every answer must state:
    or any scope that was not searched.
 
 “Not found” means “not found in the stated coverage,” never “never happened.”
-Report it only with the label census attached: run the same term(s) through the
-full-label search and state how many hits each source label carried
-(`message`, `thinking`, `tool_input:<name>`, `tool_result`, `attachment`,
-`summary`) — a user/assistant-text-only search cannot support the sentence.
-If the census shows the term living under labels you excluded, the answer is
-“found under X”, not “not found”.
+Indexed recall omits some record types. State that limit and the index frontier;
+do not present zero ranked hits as a complete label census.
 Do not call a compact summary verbatim history; it is a continuation aid and must
 be checked against raw records and the current workspace for load-bearing claims.
 
@@ -175,11 +164,9 @@ Before writing any negative or absolute claim ("never said," "never appears,"
    disprove human authorship. Classifying hits by `type:user vs assistant` while
    skipping `attachment` is exactly how a real mid-turn human command gets
    reported as never having been said.
-2. **The cheap next step before "unrecoverable."** If the gap could close with a
-   tool this Skill already documents — `analyze_sessions.py search
-   --all-projects`, `history_index.py recall`, or re-reading a file you already
-   have but only partially inspected — run it before writing "Gaps." A boundary
-   you have not tested is not evidence of a boundary.
+2. **The cheap next step before "unrecoverable."** Use indexed recall or re-read
+   an already identified Session if that can close the gap. A boundary you have
+   not tested is not evidence of a boundary.
 3. **A contradicting firsthand account reopens the question; it does not lose to
    your reading.** If the user states they did something and your evidence says
    otherwise, treat the conflict as a signal to redo (1) and (2), not as a
@@ -194,11 +181,9 @@ remainder before any conclusion that depends on it.
 - Keep ordinary read modes read-only.
 - Do not run `claude --resume` or `claude --continue`.
 - Do not use file mtime as conversation chronology.
-- Do not run an unbounded whole-history scan when an exact Session ID, date window,
-  project, or existing hybrid index can answer the question. A multi-provider sweep
-  is the expensive case, not the exempt one: run `recall` for the providers the
-  index covers, then scan only what it does not. Check `recall`'s `coverage` line
-  before treating any of it as complete.
+- Do not run a raw whole-history scan. Use the index, or first select an exact
+  Session. A date filter applied after reading every file does not bound work.
+  If index coverage is incomplete, report the gap instead of scanning it.
 - Do not share raw history outside the local machine without explicit user approval;
   it can contain credentials and private business context.
 - Do not report a search as complete after a timeout or malformed source.
@@ -235,9 +220,9 @@ Skill's identity or evidence contract. New Codex requests route to
 `daymade-claude-code:read-codex-history`.
 
 **Kimi CLI is a live surface of this Skill, not a legacy one.** It has no reader
-of its own, so the two commands in the task table above are the only way to reach
-it; a Kimi question answered from Claude data alone produces a false "never
-happened". Home resolution order is `--kimi-home` > `KIMI_HOME` > `~/.kimi-code`.
+of its own. Use indexed recall for discovery, then inspect the named session's
+wire records. A Kimi question answered from Claude data alone produces a false
+"never happened". Home resolution order is `--kimi-home` > `KIMI_HOME` > `~/.kimi-code`.
 
 **When that default home does not exist, the store is not missing — it is
 somewhere else, and the tools say so.** The Kimi desktop client bundles the CLI
@@ -280,31 +265,13 @@ prefix — title generation, vault maintenance, and skill summarization are mach
 chatter, not history, and on a real store they outnumbered the genuine
 conversations.
 
-**Three ways a correct Kimi command still returns a confidently wrong answer.**
-Each was reproduced on a real store; none of them fails loudly, so check for them
-before reporting a Kimi result:
-
-- **The inventory scopes to the current directory by default.** A Kimi session's
-  project is its own workspace, which is almost never the directory you are
-  running from, so the bare command returns `0 conversations` on a correct home —
-  **with no diagnostic line**, because the home was found and nothing errored.
-  Add `--all-projects` for any question that is not explicitly about the current
-  repository. This zero is the one most likely to be reported as "you have no
-  Kimi conversations."
-- **`--kimi` widens a Claude search; it does not scope one.** Unlike
-  `--source kimi`, which selects Kimi alone, `--kimi` means *also* search Kimi:
-  the run still sweeps every Claude source, and the Kimi verdict lands at the end
-  of output that can run to tens of thousands of lines. There is no Kimi-only
-  search mode. Read the Kimi section specifically, and never report the run's
-  headline match count as a Kimi figure.
-- **The search path has no automated-session filter.** The inventory excludes
-  internal agent runs by default and reports the count; search does not, so
-  `ctitle-` / `dvlt-` / `sklsum-` hits appear inline with real conversations and
-  must be filtered by session-id prefix by hand.
+**Kimi coverage check.** Confirm that
+  `history_index.py status` includes Kimi and read its freshness boundary.
+  An unindexed or newer Kimi session remains unknown to recall.
 
 **Reading one located Kimi session has no bundled command.** `read_claude_session.py`
 resolves Claude session files only and exits non-zero on a Kimi session ID. The Kimi
-surface is inventory plus keyword search; to show a conversation's contents, read the
+surface is inventory plus indexed recall; to show a conversation's contents, read the
 session's `agents/<agent>/wire.jsonl` directly and interpret it with the record types
 above. Say that this is a direct file read rather than presenting it as the same
 verified reconstruction the Claude reader produces.

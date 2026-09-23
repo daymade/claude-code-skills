@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
 """Versioned hybrid recall index for Claude Code conversation history.
 
-This is deliberately separate from ``analyze_sessions.py search``:
-
-* ``search`` is an exhaustive literal scan over every supported event field and
-  can support a scoped absence claim.
-* ``recall`` is a ranked BM25/vector aid for wording drift. It returns top-K
-  candidates and must never be used to prove that something does not exist.
+``recall`` returns ranked BM25/vector candidates and cannot prove absence.
+The former raw ``analyze_sessions.py search`` command is disabled for live
+conversation stores because it reads files before applying date filters.
 
 The index is user-owned mutable state under ``~/.claude-history-index`` (or
 ``CLAUDE_HISTORY_INDEX_HOME``), not part of the installed skill bundle.
@@ -2505,8 +2502,8 @@ def recall(
             raise IndexError(
                 f"This index does not cover provider(s): {', '.join(unknown)}. "
                 f"Indexed providers: {', '.join(indexed_providers)}. "
-                "Re-run index with the matching --codex/--kimi flag, or use "
-                "analyze_sessions.py search for an exhaustive scan."
+                "Re-run index with the matching --codex/--kimi flag. "
+                "Do not fall back to an unindexed corpus scan."
             )
         placeholders = ",".join("?" for _ in providers)
         filters.append(f"sessions.provider IN ({placeholders})")
