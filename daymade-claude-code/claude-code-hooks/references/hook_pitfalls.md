@@ -181,6 +181,8 @@ Every entry here is a bug that shipped. When a hook misbehaves, match the
   | tr -d ' ') || STAGED='?'`. Put it inside (`… | wc -l || echo '?'`) and `wc`
   still prints `0` when git fails, yielding the malformed two-line value `0\n?`.
   (2026-07-21 in git-commit-headcheck.)
+  `grep -c` produces the same kind of two-line value with no pipe at all; #47
+  covers it and what it does to arithmetic.
 - **Alternative shape — keep `-e` and trap the contract:** `set -euo pipefail` +
   `trap 'exit 0' ERR` converts every failure to exit 0 while `-e` keeps guarding
   the plumbing (git-commit-headcheck's production form; the choice between this
@@ -1256,6 +1258,29 @@ this list and describe defects you reach by asking a different question):
      guidance on stderr when you run the hook by hand is not proof the harness
      will block — stderr shows on allow too. The decision channel is the exit
      code; test the channel, not the ink.
+
+- **Sibling form: a top-level `trap 'exit 0' EXIT` does the same to
+  `--selftest`.** Some always-exit-0 hooks enforce the contract with a trap on
+  EXIT at the top of the file instead of the ERR trap in SKILL.md's "-e or
+  trap" bullet. An EXIT trap that runs `exit 0` replaces whatever status the
+  script was about to exit with, so a failing `--selftest` that ends in
+  `exit 1` exits 0 (measured on bash 3.2.57 and 5.3.15). The selftest still
+  prints its failures, but the health check reads only the status, so the hook
+  can never be reported broken. The ERR trap is not immune either: placed above
+  the dispatch, it turns any unexpected failing command inside `--selftest`
+  into a silent exit 0, with or without `-e` (also measured on both versions),
+  so a selftest whose own plumbing broke reports a pass.
+  - **Fix:** install the trap, EXIT or ERR, after the subcommand dispatch, on
+    the main path only, or clear it with `trap - EXIT` / `trap - ERR` as the
+    first line of the selftest branch. Build-order step 4 already asks you to
+    break the detector on purpose and confirm `--selftest` exits non-zero; that
+    calibration catches the EXIT-trap form on its first run.
+  - **Real case (2026-09-23, a private hooks repository):** an advisory hook
+    had shipped the day before with the EXIT trap at the top of the file, and
+    a mutant whose detector fired on every input printed `FAILED` eleven times
+    and exited 0. Sweeping the same repository afterwards found the ERR form in
+    two more hooks; a mutant that put a failing command at the top of each
+    selftest exited 0 in both.
 
 ---
 
@@ -2460,3 +2485,53 @@ this list and describe defects you reach by asking a different question):
   mutations exist only because writing them exposed an assertion that could not die.
   Shape 5 came out of the same gate a day later, and only because someone asked for a
   call-site audit that no plan contained.
+
+---
+
+## 47. A `$(( ))` error in a subcommand branch skips the branch's own `exit` — the hook runs its main path instead, and under `</dev/null` that reads as success
+
+- **Symptom:** a reporting subcommand (`--fire-rate` and the like) prints
+  `syntax error in expression` (bash 5 words it `arithmetic syntax error`),
+  then behaves differently depending on stdin: left open, it hangs; closed,
+  it exits 0 without printing its report. Only
+  some inputs do it, typically a log with no firing rows. The same fall-through
+  in a `--selftest` branch is worse, because it reports a pass. The health check
+  in build-order step 4 runs each selftest as
+  `bash "$h" "$mode" >/dev/null 2>&1 </dev/null`, so the main path reads an
+  empty stdin and, like most hook main paths, exits 0 on empty input, while the
+  error message is discarded with the rest of the output (reproduced on a
+  fixture).
+- **Cause:** a syntax error inside `$(( ))` is not a failed command. Bash
+  prints the error, discards the whole top-level command that contains the
+  expansion, and continues with the next one. When the branch is
+  `if [ "${1:-}" = --fire-rate ]; then …; exit 0; fi`, the whole `if` is
+  discarded, its `exit 0` included, and the next top-level command is the
+  hook's main path, which reads stdin. Measured on bash 3.2.57 (macOS
+  `/bin/bash`) and 5.3.15, with identical results: the plain script,
+  `set -e`, `set -euo pipefail`, `trap 'exit 0' ERR`, and moving the body into
+  a function all fall through to the main path; `set -o posix` exits 1 at the
+  error; `let` treats the same expression as an ordinary failed command and
+  stays inside the branch. So neither `-e` nor the ERR trap from SKILL.md's
+  "-e or trap" bullet sees this.
+
+  A common way for a hook to build the bad expression is a count with a fallback:
+  on zero matches `grep -c` prints `0` **and** exits 1, so
+  `n=$(grep -c FIRED "$LOG" || echo 0)` holds `0\n0` (#8's `wc -l || echo '?'`
+  shape again), and the first `$(( n * 100 / total ))` is the syntax error.
+- **Fix:**
+  1. Don't build the two-line value. Put the fallback outside the substitution,
+     as #8 already says: `n=$(grep -c FIRED "$LOG" 2>/dev/null) || n=0`. Zero
+     matches and a missing file both end as `0`, under `set -euo pipefail` too.
+  2. Keep a subcommand's failure inside the subcommand. Run the body in a
+     subshell and exit with its status:
+     `if [ "${1:-}" = --fire-rate ]; then ( … ); exit $?; fi`. Measured: the
+     error ends the subshell with status 1, and the main path never runs.
+  3. Test each subcommand on the input that makes a count zero (an empty log, a
+     log with no firing rows) with stdin closed, and assert on what it prints,
+     not on its status. Exit 0 is exactly what the fall-through produces.
+- **Real case (2026-09-23, a private hooks repository):** two advisory hooks
+  shipped `--fire-rate` with the `|| echo 0` count. On a log with no firing
+  rows, one hung when run with stdin open; the other had been noted as
+  "crashes, yet exits 0" and stayed unexplained until the fall-through was
+  reproduced. Searching the same repository for the pattern turned up two more
+  files, where the malformed value only garbled a failure message.
