@@ -23,8 +23,14 @@ Two denylists define the identity boundary — these are NEVER synced:
    CAN work there", not "smear Anthropic-only flags everywhere".
 
 Merge rule: every key present in main's settings.json overwrites the
-profile's, except denylisted ones; `env` is merged per-key with the env
-denylist applied. Profile-only TOP-LEVEL keys (absent from main) are
+profile's, except denylisted ones; `env` converges both ways for non-identity
+keys — main's keys overwrite the profile's, and a non-identity key main no
+longer carries is DELETED from the profile. Identity keys are exempt: main
+never carries them, so their absence from main is not evidence of deletion.
+Deletion propagation landed 2026-09-24 — before it, `env` was additive-only,
+so three tokens removed from main's env survived in all 15 profile files and
+had to be cleared by hand (sync's own merge would never converge them).
+Profile-only TOP-LEVEL keys (absent from main) are
 PRESERVED — sync is additive at the top level and never deletes them;
 --check lists them so drift stays visible. Nested collections inside a
 key main also has (permissions.allow, enabledPlugins, ...) are NOT
@@ -411,32 +417,50 @@ def main_files_corrupt() -> list:
 
 
 def sync_profile(profile_dir: Path, write: bool):
-    """Returns (changed_keys, profile_only_keys, nested_overwritten).
+    """Returns (changed_keys, profile_only_keys, nested_overwritten, env_removed).
 
     nested_overwritten maps a top-level key to the profile-only nested
     entries the overwrite drops (dict keys or list elements) — the
     convergence is intentional, but it must be VISIBLE, not silent.
+
+    env_removed lists the profile's non-identity env keys deleted because
+    main no longer carries them. Before deletion propagation (2026-09-24)
+    the env merge was additive-only, so a token removed from main's env
+    survived in every profile forever.
     """
     target = profile_dir / "settings.json"
     main = load(MAIN_DIR / "settings.json")
     prof = load(target)
     changed = {}
     nested_lost = {}
+    # env convergence runs whether or not main carries an `env` key at all:
+    # inside the `for k in main.items()` loop below, a main that dropped
+    # `env` entirely could never propagate that deletion either.
+    main_env = main.get("env")
+    filtered = merge_env(main_env) if isinstance(main_env, dict) else {}
+    # A profile whose `env` is valid JSON but not an object must not raise
+    # here: `{**"oops", **filtered}` is a TypeError, and under "converge
+    # every profile" one malformed file used to abort the whole run. Treat a
+    # non-dict as empty and let main's env replace it — the same
+    # rebuild-from-main semantic as a corrupt file.
+    raw_env = prof.get("env")
+    cur_env = raw_env if isinstance(raw_env, dict) else {}
+    merged = {**cur_env, **filtered}
+    # Deletion propagation. Identity keys are the profile's provider self:
+    # main never carries them, so their absence from `filtered` is not
+    # evidence of deletion — deleting them would strip provider routing
+    # (ANTHROPIC_BASE_URL) or an isolation flag (ENABLE_TOOL_SEARCH=false)
+    # from every third-party profile on the next session start.
+    env_removed = sorted(
+        k for k in cur_env
+        if k not in filtered and not _env_key_is_identity(k)
+    )
+    for rk in env_removed:
+        del merged[rk]
+    if merged != cur_env:
+        changed["env"] = merged
     for k, v in main.items():
-        if k in DENYLIST:
-            continue
-        if k == "env" and isinstance(v, dict):
-            filtered = merge_env(v)
-            # A profile whose `env` is valid JSON but not an object must not
-            # raise here: `{**"oops", **filtered}` is a TypeError, and under
-            # "converge every profile" one malformed file used to abort the
-            # whole run. Treat a non-dict as empty and let main's env replace
-            # it — the same rebuild-from-main semantic as a corrupt file.
-            cur_env = prof.get("env")
-            if not isinstance(cur_env, dict):
-                cur_env = {}
-            if filtered and cur_env != {**cur_env, **filtered}:
-                changed[k] = {**cur_env, **filtered}
+        if k in DENYLIST or k == "env":
             continue
         if prof.get(k) != v:
             changed[k] = v
@@ -446,7 +470,7 @@ def sync_profile(profile_dir: Path, write: bool):
     extra = sorted(set(prof) - set(main))
     if changed and write:
         write_json_atomic(target, {**prof, **changed})
-    return sorted(changed), extra, nested_lost
+    return sorted(changed), extra, nested_lost, env_removed
 
 
 def sync_claude_json(profile_dir: Path, write: bool):
@@ -566,7 +590,7 @@ def _converge_one(profile_dir: Path, write: bool) -> bool:
         if file_corrupt(profile_dir / layer):
             print(f"[{profile_dir.name}] WARNING: {layer} is corrupt — "
                   "rebuilding from main (original retained in .sync-backup)")
-    changed, extra, nested_lost = sync_profile(profile_dir, write=write)
+    changed, extra, nested_lost, env_removed = sync_profile(profile_dir, write=write)
     if changed:
         drifted = True
         verb = "drift" if not write else "synced"
@@ -579,6 +603,10 @@ def _converge_one(profile_dir: Path, write: bool) -> bool:
         else:
             print(f"[{profile_dir.name}] note: {k} overwrite dropped {len(items)} "
                   "profile-only nested entr(y/ies) (rerun --check to list them)")
+    if env_removed:
+        verb = "would remove" if not write else "removed"
+        print(f"[{profile_dir.name}] env {verb} residue key(s) main no longer carries: "
+              f"{', '.join(env_removed)}")
     if extra and not write:
         print(f"[{profile_dir.name}] profile-only keys (preserved): {', '.join(extra)}")
     cj_changed, gray = sync_claude_json(profile_dir, write=write)

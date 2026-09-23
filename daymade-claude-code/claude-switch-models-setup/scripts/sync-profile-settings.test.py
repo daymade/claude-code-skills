@@ -139,7 +139,7 @@ for k in sps.BEHAVIOR_KEYS:
 for k in ("someFutureBehaviorFlag", "anotherNewToggle"):
     check(f"unknown falls gray (not state): {k}", not sps.is_state_key(k))
 
-print("== settings.json layer regression (DENYLIST + env merge unchanged) ==")
+print("== settings.json layer: env merge + deletion propagation + identity exemption ==")
 main_s = {"model": "opus[1m]", "hooks": {"Stop": []},
           "env": {"A": "1", "ENABLE_TOOL_SEARCH": "true", "ANTHROPIC_MODEL": "x"}}
 prof_s = {"model": "k3[1m]", "env": {"B": "2", "ENABLE_TOOL_SEARCH": "false"}}
@@ -150,14 +150,68 @@ sps.MAIN_DIR.mkdir()
 pdir = root / "profiles" / "kimi"
 pdir.mkdir(parents=True)
 (pdir / "settings.json").write_text(json.dumps(prof_s))
-changed, extra, nested = sps.sync_profile(pdir, write=True)
+changed, extra, nested, removed = sps.sync_profile(pdir, write=True)
 outs = json.loads((pdir / "settings.json").read_text())
 check("model identity preserved", outs["model"] == "k3[1m]")
 check("hooks converged", outs["hooks"] == {"Stop": []})
 check("env main wins", outs["env"]["A"] == "1")
 check("env identity key NOT synced (ENABLE_TOOL_SEARCH)", outs["env"]["ENABLE_TOOL_SEARCH"] == "false")
 check("env identity key NOT synced (ANTHROPIC_MODEL)", "ANTHROPIC_MODEL" not in outs["env"])
-check("env profile-only preserved", outs["env"]["B"] == "2")
+check("env profile-only non-identity residue REMOVED", "B" not in outs["env"], outs["env"])
+check("removal reported", removed == ["B"], removed)
+check("env listed among changed keys", "env" in changed, changed)
+
+print("== env deletion propagation: residue removed, identity exempt, both main-env shapes ==")
+# Deletion propagation is the 2026-09-24 fix this suite pins: under the old
+# additive-only merge, three tokens removed from main's env survived in all
+# 15 profile files and had to be cleared by hand. Both sides of each
+# boundary below: residue IS removed vs identity keys are NOT; main carries
+# an env key vs main carries none at all.
+root_r = Path(tempfile.mkdtemp(prefix="sync-test-del-"))
+sps.MAIN_DIR = root_r / "main"
+sps.MAIN_DIR.mkdir()
+(sps.MAIN_DIR / "settings.json").write_text(json.dumps({"env": {"KEEP": "1"}}))
+pr = root_r / "profiles" / "glm"
+pr.mkdir(parents=True)
+(pr / "settings.json").write_text(json.dumps({"env": {"KEEP": "1", "GONE": "2"}}))
+c_r, _, _, rem_r = sps.sync_profile(pr, write=True)
+out_r = json.loads((pr / "settings.json").read_text())
+check("residue key deleted", "GONE" not in out_r["env"], out_r["env"])
+check("key main still carries survives", out_r["env"] == {"KEEP": "1"}, out_r["env"])
+check("residue reported", rem_r == ["GONE"], rem_r)
+check("second run reports nothing (idempotent)", sps.sync_profile(pr, write=True)[3] == [])
+
+# Empty main env is its own side from a missing key: identity keys must
+# survive even when main carries nothing.
+(sps.MAIN_DIR / "settings.json").write_text(json.dumps({"env": {}}))
+(pr / "settings.json").write_text(json.dumps({
+    "env": {"RESIDUE": "1", "ENABLE_TOOL_SEARCH": "false",
+            "ANTHROPIC_BASE_URL": "http://profile.example"}}))
+c_i, _, _, rem_i = sps.sync_profile(pr, write=True)
+out_i = json.loads((pr / "settings.json").read_text())
+check("non-identity residue deleted with empty main env", "RESIDUE" not in out_i["env"], out_i["env"])
+check("identity ENABLE_TOOL_SEARCH survives empty main env",
+      out_i["env"].get("ENABLE_TOOL_SEARCH") == "false", out_i["env"])
+check("identity ANTHROPIC_BASE_URL survives empty main env",
+      out_i["env"].get("ANTHROPIC_BASE_URL") == "http://profile.example", out_i["env"])
+check("removed lists exactly the non-identity key", rem_i == ["RESIDUE"], rem_i)
+
+# A main with NO env key at all must propagate the same deletion — the
+# branch used to live inside `for k in main.items()`, which never ran.
+(sps.MAIN_DIR / "settings.json").write_text(json.dumps({"theme": "dark"}))
+(pr / "settings.json").write_text(json.dumps({
+    "env": {"RESIDUE": "1", "ENABLE_TOOL_SEARCH": "false"}, "theme": "dark"}))
+c_n, _, _, rem_n = sps.sync_profile(pr, write=True)
+out_n = json.loads((pr / "settings.json").read_text())
+check("main without env key: residue still deleted", "RESIDUE" not in out_n["env"], out_n["env"])
+check("main without env key: identity key survives", out_n["env"] == {"ENABLE_TOOL_SEARCH": "false"}, out_n["env"])
+
+# --check reports the removal and writes nothing.
+(pr / "settings.json").write_text(json.dumps({"env": {"RESIDUE": "1"}}))
+c_ck, _, _, rem_ck = sps.sync_profile(pr, write=False)
+out_ck = json.loads((pr / "settings.json").read_text())
+check("check mode reports would-remove", rem_ck == ["RESIDUE"], rem_ck)
+check("check mode writes nothing", out_ck["env"] == {"RESIDUE": "1"}, out_ck["env"])
 
 print("== top-level DENYLIST: advisorModel is provider identity ==")
 root_d = Path(tempfile.mkdtemp(prefix="sync-test-deny-"))
@@ -167,7 +221,7 @@ sps.MAIN_DIR.mkdir()
 pd2 = root_d / "profiles" / "kimi"
 pd2.mkdir(parents=True)
 (pd2 / "settings.json").write_text(json.dumps({"model": "k3", "advisorModel": "fable-old"}))
-changed_d, _, _ = sps.sync_profile(pd2, write=True)
+changed_d, _, _, _ = sps.sync_profile(pd2, write=True)
 outd = json.loads((pd2 / "settings.json").read_text())
 check("advisorModel NOT synced (identity)", outd["advisorModel"] == "fable-old")
 check("advisorModel not in changed", "advisorModel" not in changed_d)
@@ -185,7 +239,7 @@ pd3.mkdir(parents=True)
     "permissions": {"allow": ["Bash(wc:*)", "Bash(myGlmOnlyRule:*)"]},
     "enabledPlugins": {"plug-a@m": True, "glm-only-plugin@m": True},
 }))
-changed_n, extra_n, nested_n = sps.sync_profile(pd3, write=True)
+changed_n, extra_n, nested_n, _ = sps.sync_profile(pd3, write=True)
 outn = json.loads((pd3 / "settings.json").read_text())
 check("nested overwrite HAPPENS (convergence intent)",
       outn["permissions"]["allow"] == ["Bash(wc:*)"])
