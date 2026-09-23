@@ -176,7 +176,7 @@ This suite exposes related skills under one namespace, including:
 
 These skills ship as a bundle — there are no separate single-skill plugins. All documentation skills live under `daymade-docs/` and install together from the suite.
 The router handles automatic selection. The specialist commands remain available for manual use;
-`ppt-creator` is manual-only, while new presentation creation uses `deck-creator`.
+`ppt-creator` is manual-only. New presentation creation uses `deck-creator` when installed.
 
 **Apple Platform Suite** (shared namespace for macOS and iOS development/operations):
 ```bash
@@ -412,7 +412,7 @@ Selects the bundled specialist for document conversion, Word and PDF production,
 Mermaid images, macOS Excel automation, scanned PDFs, DOCX review extraction, or
 documentation cleanup. It reads the selected specialist's full instructions and
 required references. Specialist slash commands remain available for manual use.
-New presentation creation uses `deck-creator`; `ppt-creator` is manual-only.
+New presentation creation uses `deck-creator` when installed; `ppt-creator` is manual-only.
 
 ---
 

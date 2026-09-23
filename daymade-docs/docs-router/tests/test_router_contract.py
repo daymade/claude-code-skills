@@ -2,6 +2,7 @@
 
 import json
 import re
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -24,7 +25,7 @@ class DocsRouterContractTest(unittest.TestCase):
         table = body.split("| Requested result | Read this exact file |", 1)[1].split(
             "\n\n", 1
         )[0]
-        names = re.findall(r"\$\{CLAUDE_PLUGIN_ROOT\}/([^/]+)/SKILL\.md", table)
+        names = re.findall(r"\.\./([^/]+)/SKILL\.md", table)
         active = {
             path.parent.name
             for path in SUITE.glob("*/SKILL.md")
@@ -34,7 +35,20 @@ class DocsRouterContractTest(unittest.TestCase):
         self.assertEqual(set(names), active)
         self.assertEqual(len(names), 9)
         for name in names:
-            self.assertTrue((SUITE / name / "SKILL.md").is_file())
+            selected = (ROUTER.resolve().parent / ".." / name / "SKILL.md").resolve(
+                strict=True
+            )
+            self.assertEqual(selected, (SUITE / name / "SKILL.md").resolve())
+
+    def test_canonical_router_path_survives_a_symlinked_entry(self):
+        with tempfile.TemporaryDirectory() as temp:
+            link = Path(temp) / "SKILL.md"
+            link.symlink_to(ROUTER)
+            router = link.resolve(strict=True)
+            self.assertEqual(router, ROUTER.resolve())
+            self.assertEqual(router.parent.name, "docs-router")
+            selected = (router.parent / "../docx-creator/SKILL.md").resolve(strict=True)
+            self.assertEqual(selected, (SUITE / "docx-creator/SKILL.md").resolve())
 
     def test_manifest_keeps_all_manual_commands_and_the_router(self):
         manifest = json.loads((REPO / ".claude-plugin/marketplace.json").read_text())
@@ -53,9 +67,21 @@ class DocsRouterContractTest(unittest.TestCase):
 
     def test_neighbors_and_unknown_tasks_have_explicit_exits(self):
         body = ROUTER.read_text(encoding="utf-8")
-        self.assertNotIn("${CLAUDE_PLUGIN_ROOT}/ppt-creator/SKILL.md", body)
+        header = frontmatter(ROUTER)
+        self.assertNotIn("../ppt-creator/SKILL.md", body)
+        self.assertIn("that variable is absent, as in Codex", body)
+        self.assertIn("Do not invoke `docs-cleaner` on every code", body)
+        self.assertIn("only when it is installed", body)
+        self.assertIn("no automatic current PPT builder", body)
+        for hot_signal in (
+            "translated HTML with figures",
+            "complex investment-bank xlsm parsing",
+            "unsigned digital documents to signed-looking",
+            "explicit documentation impact",
+        ):
+            self.assertIn(hot_signal, header)
         for boundary in (
-            "new presentation creation to `deck-creator`",
+            "new presentation creation only when it is installed",
             "General PDF reading/editing",
             "ordinary spreadsheet analysis",
             "other tasks without a matching row",
@@ -71,7 +97,7 @@ class DocsRouterContractTest(unittest.TestCase):
         rows = {
             name: description
             for description, name in re.findall(
-                r"\| ([^\n|]+) \| `\$\{CLAUDE_PLUGIN_ROOT\}/([^/]+)/SKILL\.md` \|",
+                r"\| ([^\n|]+) \| `\.\./([^/]+)/SKILL\.md` \|",
                 table,
             )
         }
@@ -81,7 +107,7 @@ class DocsRouterContractTest(unittest.TestCase):
             "docx-creator": "existing Word/WPS manuscript",
             "pdf-to-html": "PDF into a self-contained",
             "mermaid-tools": "Mermaid as PNG",
-            "excel-automation": "control Excel on macOS",
+            "excel-automation": "investment-bank `.xlsm` model",
             "photo-to-scanned-pdf": "photos of paper pages",
             "read-docx-review": "tracked changes",
             "docs-cleaner": "consolidate redundant docs",
@@ -89,6 +115,9 @@ class DocsRouterContractTest(unittest.TestCase):
         self.assertEqual(set(rows), set(expected))
         for name, phrase in expected.items():
             self.assertIn(phrase, rows[name], name)
+        self.assertIn("translating it while keeping figures and charts", rows["pdf-to-html"])
+        self.assertIn("unsigned digital document", rows["photo-to-scanned-pdf"])
+        self.assertIn("control Excel on macOS", rows["excel-automation"])
 
 
 if __name__ == "__main__":

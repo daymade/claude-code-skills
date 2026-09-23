@@ -206,7 +206,7 @@
     },
     {
       "name": "daymade-docs",
-      "description": "Route Daymade document work to the bundled specialist: DOCX/PDF/PPTX to Markdown, Markdown to PDF, existing Word/WPS to PDF, Word creation, PDF to readable HTML, Mermaid PNGs, macOS Excel automation, photo-to-scanned PDF, DOCX review extraction, or documentation cleanup. Load the selected specialist's full SKILL.md from this plugin before acting. New presentation creation belongs to deck-creator; daymade-docs:ppt-creator remains available only by explicit manual invocation. Do not claim general PDF, spreadsheet, or presentation tasks.",
+      "description": "Route Daymade document work to the bundled specialist: DOCX/PDF/PPTX or parsed Word to Markdown, Markdown to PDF, existing Word/WPS to PDF, Word creation, PDF to readable or translated HTML with figures, Mermaid diagrams to PNG, formatted Excel reports or complex investment-bank xlsm parsing, macOS Excel control, photos to scanned PDF, unsigned digital documents to signed-looking scans, DOCX comments/track-changes extraction, or explicit documentation impact checks and cleanup. Load the selected specialist's full SKILL.md from its current source path before acting. Use deck-creator for new presentations only when installed; otherwise this suite has no automatic current PPT builder. daymade-docs:ppt-creator remains manual-only. Do not claim general PDF, spreadsheet, or presentation tasks.",
       "source": "./daymade-docs",
       "strict": false,
       "version": "1.17.0",
