@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **tech-selection** (`daymade-claude-code` v3.58.0 → v3.59.0): The description now requires invoking
+  `favorites-search` on the user's own curated favorites before any external research, so the prior-art gate
+  starts from sources the user already vetted. Wording elsewhere is compressed to stay within the
+  1024-character frontmatter limit; every trigger phrase is kept.
+
 - **tunnel-doctor** (`tunnel-doctor` v1.12.8 → v1.13.0): The description now opens with a mandatory trigger —
   use this skill first for any tunnel / proxy-path connectivity failure before ad-hoc probes — and adds Chinese
   trigger phrases (网络故障 / 连不上 / 代理或隧道下超时 / Tailscale 不通). Existing symptom triggers are kept with

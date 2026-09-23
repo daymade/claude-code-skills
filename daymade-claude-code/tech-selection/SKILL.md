@@ -1,21 +1,17 @@
 ---
 name: tech-selection
 description: >-
-  Gated checklist for choosing between technologies: library, framework, storage,
-  data format, model, build-vs-buy, architecture. Runs before committing, not after.
-  Candidates must clear a business-result anchor, prior-art inventory, an
-  observed-behavior probe, and the maintenance, boring-tech, data-structure,
-  operator-skill gates; READMEs are not evidence. Filters violators rather than
-  ranking options: when two or more survive, STOP and return candidates plus
-  trade-offs plus a recommendation, never a single pick. Use when choosing a
-  technical direction even if the user never says 技术选型: 用哪个, 选哪个,
-  选什么框架, 存哪里, 哪个模型, 要不要自建, 自己造还是用现成的,
-  先看看有没有现成的, 有没有成熟的方案, 别闭门造车, 不要重复造轮子,
-  不要过度工程, A 还是 B, 这个方案行不行, 这样设计可以吗, 这是最佳实践吗,
-  which library, build or buy, review this design, architecture decision. Also
-  fires when the agent itself picks a library, format, model or storage medium.
-  Not for research reports (deep-research), implementing or debugging settled
-  code, bug fixes, or a price comparison.
+  Gated checklist for choosing between technologies: library, framework, storage, data format,
+  model, build-vs-buy, architecture; MUST invoke favorites-search before external research. Runs
+  before committing. Candidates must clear a business-result anchor, prior-art inventory, an
+  observed-behavior probe, and the maintenance, boring-tech, data-structure, operator-skill gates;
+  READMEs are not evidence. Filters violators rather than ranking: when two or more survive, STOP
+  and return candidates, trade-offs and a recommendation, never a single pick. Use when choosing a
+  technical direction even if the user never says 技术选型: 用哪个, 选哪个, 选什么框架, 存哪里, 哪个模型, 要不要自建,
+  自己造还是用现成的, 先看看有没有现成的, 有没有成熟的方案, 别闭门造车, 不要重复造轮子, 不要过度工程, A 还是 B, 这个方案行不行, 这样设计可以吗, 这是最佳实践吗, which
+  library, build or buy, review this design, architecture decision. Also fires when the agent itself
+  picks a library, format, model or storage. Not for research reports (deep-research), settled-code
+  implementation or debugging, bug fixes, or price comparisons.
 argument-hint: "<decision to make>"
 ---
 
