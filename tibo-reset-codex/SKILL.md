@@ -40,7 +40,7 @@ description: >-
   已知结果来代替诊断，也不要再次核对用户已明确说不用查的 banked reset。用户同时明确要求
   当前账户状态，或当前读数会改变这次诊断时，才并行走账号 SOP；这一分流不阻止明确的实时查询。
 - 裸调用（没带具体问题，只想知道现在什么情况）→ 组合执行：台账回看 → 公告线（Radar 索引 +
-  独立的 Tibo 主帖时间线）+ 故障线（§1）→
+  独立的 Tibo 主帖时间线 + 有界 reply 发现，按 §1 三腿）+ 故障线（§1）→
   本机落地状态（§2 脚本），按输出合同先给当前重置状态结论，再附下一窗口主判断（走预测路径）
   与台账回填；公告线、故障线与本机扫描的每次实际抓取先落 findings 记录，回填时用
   evidence_refs 挂链（见[预测反馈的 findings 节](references/forecast-feedback.md)）。**§2 之后必须再跑一次实时 banked 查询**（`scripts/query_usage.py`，读法与字段表见
@@ -113,7 +113,7 @@ description: >-
 
 ## 查证工作流
 
-### 1. 公告路径：Radar 索引与 Tibo 主帖是两条覆盖腿
+### 1. 公告路径：Radar、Tibo 主帖与 reply 是三条覆盖腿
 
 **正常轮次必须实际尝试三条腿：Radar、Tibo 主帖时间线、下文的有界 reply 发现。** Radar 可能
 完全没有索引一条新的独立主帖；主帖时间线也不含 replies，所以前两条都无新仍不能跳过 reply
@@ -175,7 +175,7 @@ fxtwitter 响应里的 `replying_to`（被回复人）+ `replying_to_status`（�
 
 ```bash
 curl -sS --max-time 20 "https://api.fxtwitter.com/<user>/status/<status-id>" \
-  | python3 -c "import json,sys; t=json.load(sys.stdin)['tweet']; print(t['created_at']); print('reply_to:', t.get('replying_to'), t.get('replying_to_status') or ''); print(t['text'])"
+  | python3 -c "import json,sys; t=json.load(sys.stdin)['tweet']; q=t.get('quote'); print(t['created_at']); print('reply_to:', t.get('replying_to'), t.get('replying_to_status') or ''); print('quote:', json.dumps(None if not q else {'id':q.get('id'),'url':q.get('url'),'text':q.get('text')}, ensure_ascii=False)); print(t['text'])"
 ```
 
 备胎与死路（同日实测）：
@@ -198,14 +198,17 @@ curl -sS --max-time 20 "https://api.fxtwitter.com/<user>/status/<status-id>" \
      页面已越过起点，或出现明确的加载停止 / 资源上限 / 网站失败。网页滚过时间边界只表示观察
      到该处，**不证明区间穷尽**；不得据此写 covered。
   3. 发现会改变安排的承诺、时间、类型或范围线索后即可停止继续翻旧内容，把它形成候选并补证。
-     对每个重要候选，用上面的 fxtwitter 单帖命令读取正文、`replying_to_status` 和 quote；存在
-     parent 时再用同一命令读取 parent。缺任一承重节点，相应判断保持 unknown。
+     对每个重要候选，用上面的 fxtwitter 单帖命令读取正文、`replying_to_status` 及 `quote` 的
+     id / URL / 正文。存在 parent 时再用同一命令读取 parent；存在 quote 且其内容承重时，再按
+     quote URL 读取原帖。`quote: null` 是健康的无引用形态，不是未核；只有实际存在的承重节点
+     取不到时，相应判断才保持 unknown。
   4. finding 记录 `window_start/window_end`、观察到的 status IDs、最旧可见 UTC 与停止原因：
      `boundary_observed` / `loading_stopped` / `resource_stop` / `site_failed` / `not_logged_in`。
      没有登录态或网站失败即 `unknown`；到边界但只有网页滚动证据即 `partial`，阴性结果只能写
      「本轮观察到的回复中无相关线索」。
-- 每轮按对象写回复覆盖：`covered(candidate_chain:<id>)` 只用于一个已知候选的正文、parent 与 quote
-  已完整核验，或某个接口提供了真实穷尽信号且记录了明确范围；`partial(<window>)` 用于有界网页
+- 每轮按对象写回复覆盖：`covered(candidate_chain:<id>)` 只用于一个已知候选的正文及其实际存在的
+  parent / quote 承重节点已完整核验，或某个接口提供了真实穷尽信号且记录了明确范围；
+  `partial(<window>)` 用于有界网页
   观察；`uncovered` 表示本轮只有结构上不含 replies 的主帖/镜像入口；`unknown` 表示 reply 通道
   失败或不可用。后三种都不能宣布该时段没有回复或全局无新信号。主帖入口始终只算 main-post
   coverage，不因它返回零条或返回完整正文而升级 reply coverage。

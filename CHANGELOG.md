@@ -16,7 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   full-text adjudication before `official_window=null` can keep the reduced path; future commitments,
   decision-changing time/type/scope, and due unresolved promises escalate to follow-up. Reply and parent
   discovery now has an executable bounded `with_replies` route with a fixed UTC start, observed post IDs,
-  candidate-chain verification, explicit stop reasons, and `partial`/`unknown` negative exits. `covered` is
+  candidate-chain verification (including explicit quote id/URL/text output, with `null` as a healthy no-quote
+  result), explicit stop reasons, and `partial`/`unknown` negative exits. `covered` is
   reserved for a complete named candidate chain or a genuinely exhaustive interface, so a main-post miss,
   CLI search 404, or scrolling past a time boundary can no longer be presented as proof that no reply exists.
   Requests about a known missed result route to historical
