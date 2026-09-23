@@ -2,10 +2,10 @@
 name: tech-selection
 description: >-
   Gated checklist for choosing between technologies: library, framework, storage, data format,
-  model, build-vs-buy, architecture; MUST invoke favorites-search before external research. Runs
-  before committing. Candidates must clear a business-result anchor, prior-art inventory, an
-  observed-behavior probe, and the maintenance, boring-tech, data-structure, operator-skill gates;
-  READMEs are not evidence. Filters violators rather than ranking: when two or more survive, STOP
+  model, build-vs-buy, architecture; if favorites-search is installed, MUST run it before external
+  research. Runs before committing. Candidates must clear a business-result anchor, prior-art
+  inventory, an observed-behavior probe, and the maintenance, boring-tech, data-structure,
+  operator-skill gates; READMEs are not evidence. Filters, not ranks: when two or more survive, STOP
   and return candidates, trade-offs and a recommendation, never a single pick. Use when choosing a
   technical direction even if the user never says 技术选型: 用哪个, 选哪个, 选什么框架, 存哪里, 哪个模型, 要不要自建,
   自己造还是用现成的, 先看看有没有现成的, 有没有成熟的方案, 别闭门造车, 不要重复造轮子, 不要过度工程, A 还是 B, 这个方案行不行, 这样设计可以吗, 这是最佳实践吗, which
@@ -54,7 +54,7 @@ Derive the business result from context, not from the request text. A bare "whic
 
 Fixed order: internal/paid assets → external world-class + community solutions → build from scratch (last resort). Tag each candidate with which layer it came from.
 
-Where to look for layer 1: existing credentials and paid-service capability catalogues, installed skills, the current repository's existing pipelines, and the project's decision log. Do not limit layer 1 to `grep` in the current repo — that returns zero hits for paid services and skills, and a zero from a narrow search is not absence.
+Where to look for layer 1: existing credentials and paid-service capability catalogues, installed skills, the current repository's existing pipelines, the project's decision log, and the user's own curated favorites (run `favorites-search` first when it is installed). Do not limit layer 1 to `grep` in the current repo — that returns zero hits for paid services and skills, and a zero from a narrow search is not absence.
 
 Layer 2 has a minimum coverage requirement: use a search tool to enumerate what exists, not memory alone. "Searched, found 2" is not coverage — name the search queries run, or state explicitly that no search tool was available and this is a memory-only inventory.
 

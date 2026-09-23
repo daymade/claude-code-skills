@@ -9,9 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **tech-selection** (`daymade-claude-code` v3.58.0 → v3.59.0): The description now requires invoking
-  `favorites-search` on the user's own curated favorites before any external research, so the prior-art gate
-  starts from sources the user already vetted. Wording elsewhere is compressed to stay within the
+- **tech-selection** (`daymade-claude-code` v3.58.0 → v3.59.0): When a `favorites-search` skill is installed, the
+  description now requires running it on the user's own curated favorites before external research, and Step 1
+  lists those favorites as a layer-1 source, so the prior-art gate starts from sources the user already vetted. Wording elsewhere is compressed to stay within the
   1024-character frontmatter limit; every trigger phrase is kept.
 
 - **tunnel-doctor** (`tunnel-doctor` v1.12.8 → v1.13.0): The description now opens with a mandatory trigger —
