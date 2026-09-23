@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **skill-creator** (`daymade-skill` v1.50.0 → v1.51.0): The description rule now requires the first ~160 characters to stand on their own (what the skill does and its main trigger). Measured in `codex debug prompt-input` with 260 skills installed: Codex cuts 254 of them at 164–168 characters, so later trigger phrases and "Not for" redirects are invisible there.
+
 - **daymade-docs**: Make the nine active specialists manual-only for direct skill invocation while preserving their bodies and `/daymade-docs:<leaf>` commands. `ppt-creator` remains manual-only; new presentation creation routes to `deck-creator` when installed, while public users without it keep explicit compatibility access to `ppt-creator`. The router preserves `docs-cleaner`'s post-change documentation check after authorized code/config/deployment work, even when docs were not mentioned, and also handles explicit cleanup. This changes discovery without retiring the post-change workflow.
 
 - **skill-creator** (`daymade-skill` v1.49.0 → v1.50.0): When rewriting a description, a placeholder such as "its named contacts" no longer counts as a home for the literal names, product names or error strings users type. Found when a rewrite collapsed a client's contact list into a placeholder that can no longer trigger.
