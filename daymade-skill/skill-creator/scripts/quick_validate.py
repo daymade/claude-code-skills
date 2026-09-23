@@ -422,6 +422,10 @@ def validate_skill(skill_path, audience=None):
         # Check description length (max 1024 characters per spec)
         if len(description) > 1024:
             return False, f"Description is too long ({len(description)} characters). Maximum is 1024 characters."
+        if len(description) > 420:
+            print(f"{chr(9992)}  WARNING: description is {len(description)} characters. Aim for 200-300; "
+                  "up to about 420 only when the skill must route between siblings. Every description "
+                  "shares one listing budget with all installed skills.")
 
     # Validate skill-internal path references exist
     # NOTE: Only checks relative paths within the skill bundle (scripts/, references/, assets/).

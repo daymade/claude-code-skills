@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **skill-creator** (`daymade-skill` v1.45.0 → v1.46.0): Replaces the description-writing rule. The old rule
+  treated the 1024-character spec limit as a budget to fill; the new one treats the description as a routing
+  key sharing one listing budget with every installed skill: aim for 200–300 characters (about 420 for
+  routers), shape `<what it does>. Use when <situations>. Not for <sibling>`, move operational rules to the
+  body. `quick_validate` now warns above 420 characters. The trigger-rate optimizer is no longer a default step;
+  descriptions are tuned from real sessions where the skill missed or misfired.
+
 - **tech-selection** (`daymade-claude-code` v3.58.0 → v3.59.0): When a `favorites-search` skill is installed, the
   description now requires running it on the user's own curated favorites before external research, and Step 1
   lists those favorites as a layer-1 source, so the prior-art gate starts from sources the user already vetted. Wording elsewhere is compressed to stay within the
