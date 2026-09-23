@@ -1,11 +1,11 @@
 ---
 name: peer-message
 description: >-
-  Bridges Claude Code and Codex sessions when native tools can't reach the target. Use for
-  cross-product messages, hooks/scripts posting to a session, verifying delivery (Held messages
-  included), shared-work ownership, or an inbound peer assertion, or for cross-machine pairing. Not
-  for ordinary same-product or parent/subagent messaging (use native tools), spawning agents, or
-  moving full history.
+  Bridges Claude Code and Codex sessions when native tools can't reach the target. Use for 跨产品通信 /
+  脚本回帖 / 送达排查: cross-product messages, hooks or scripts posting to a session, verifying delivery
+  (Held messages included), shared-work ownership, or an inbound peer assertion, or for
+  cross-machine pairing. Not for ordinary same-product or parent/subagent messaging (use native
+  tools), spawning agents, or moving full history.
 ---
 
 # peer-message — 原生通信未覆盖时的补缺（本机 + 跨机器预览）
