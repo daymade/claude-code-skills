@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **tunnel-doctor** (`tunnel-doctor` v1.12.8 → v1.13.0): The description now opens with a mandatory trigger —
+  use this skill first for any network or connectivity failure before improvising probes — and adds Chinese
+  trigger phrases (网络故障 / 连不上 / 超时 / 代理或 Tailscale 不通). Every existing symptom trigger is kept;
+  wording is compressed so the description stays within the 1024-character frontmatter limit.
+
 ### Fixed
 
 - **tibo-reset-codex** (`tibo-reset-codex` v1.13.2 → v1.13.3): Preserve the approved sleep-window
