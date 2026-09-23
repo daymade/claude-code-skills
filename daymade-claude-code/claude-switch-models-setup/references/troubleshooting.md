@@ -287,10 +287,13 @@ Cause: the converger ran with a synthetic `CLAUDE_MAIN_CONFIG_DIR` while
 `CLAUDE_PROFILES_ROOT` or `$CLAUDE_CONFIG_DIR` still reached the real profile.
 Scope is the union of those two, so the real profile converged toward the fake
 main — `hooks` replaced wholesale by the fake main's object, `env` merged
-per-key so the fake main's keys were added. The run does name `hooks` among the
-keys it synced and, when the overwrite drops profile-only entries, reports how
-many, but nothing in it says guards stopped firing — it reads as the converger
-doing its job.
+per-key so the fake main's keys were added. Since v3.60.1 the env damage is
+two-sided: the fake main's keys are still added, and every non-identity env
+key the real profile had that the fake main lacks is now DELETED — including
+credential keys a skill relies on. Identity keys (`ANTHROPIC_*`,
+`ENABLE_TOOL_SEARCH`, `DISABLE_*`) survive. The run does name `hooks` among the
+keys it synced and reports the removed env keys per profile, but nothing in it
+says guards stopped firing — it reads as the converger doing its job.
 
 Fix: restore from that profile's own backup, then verify byte-for-byte.
 
