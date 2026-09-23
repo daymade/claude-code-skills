@@ -3,8 +3,9 @@ name: git-safety-net
 description: >-
   Audits, preserves and recovers local Git state before cleanup: unpushed or wrong-branch commits,
   dirty worktrees, duplicate clones, stashes, dangling commits, squash-merge uncertainty. Use when
-  the user fears lost work, wants to recover a commit, asks whether a branch, worktree or clone is
-  safe to delete, or wants one clean main (误删分支 / 还有没有丢的东西). Not for GitHub PR operations.
+  the user fears lost work, wants to recover a commit, asks if a branch is actually merged, asks
+  whether a branch, worktree or clone is safe to delete, or wants one clean main (误删分支 / 还有没有丢的东西).
+  Not for GitHub PR operations.
 ---
 
 # Git Safety Net
