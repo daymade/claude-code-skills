@@ -65,6 +65,31 @@ class DocsRouterContractTest(unittest.TestCase):
             self.assertIn("disable-model-invocation: true", frontmatter(path))
             self.assertIn(f"name: {path.parent.name}", frontmatter(path))
 
+    def test_codex_visible_prefix_covers_document_routes(self):
+        header = frontmatter(ROUTER)
+        description = " ".join(
+            line.strip()
+            for line in header.splitlines()[header.splitlines().index("description: >-") + 1 :]
+            if line.startswith("  ")
+        )
+        manifest = json.loads((REPO / ".claude-plugin/marketplace.json").read_text())
+        plugin = next(item for item in manifest["plugins"] if item["name"] == "daymade-docs")
+        self.assertEqual(plugin["description"], description)
+        self.assertLessEqual(len(description), 420)
+        visible = description[:160]
+        for signal in (
+            "Word/PDF/PPTX→Markdown",
+            "MD/Word→PDF",
+            "create Word",
+            "PDF HTML/translate",
+            "Excel/xlsm/macOS",
+            "photo/signed scans",
+            "Mermaid",
+            "DOCX review",
+            "post-change docs",
+        ):
+            self.assertIn(signal, visible)
+
     def test_neighbors_and_unknown_tasks_have_explicit_exits(self):
         body = ROUTER.read_text(encoding="utf-8")
         header = frontmatter(ROUTER)
@@ -75,13 +100,7 @@ class DocsRouterContractTest(unittest.TestCase):
         self.assertIn("A read-only investigation does not acquire write authorization", body)
         self.assertIn("only when it is installed", body)
         self.assertIn("no automatic current PPT builder", body)
-        for hot_signal in (
-            "translated HTML with figures",
-            "complex investment-bank xlsm parsing",
-            "unsigned digital documents to signed-looking",
-            "post-change documentation checks",
-        ):
-            self.assertIn(hot_signal, header)
+        self.assertIn("Routes docs:", header)
         for boundary in (
             "new presentation creation only when it is installed",
             "General PDF reading/editing",

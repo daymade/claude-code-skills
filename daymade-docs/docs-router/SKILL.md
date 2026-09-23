@@ -1,19 +1,11 @@
 ---
 name: docs-router
 description: >-
-  Route Daymade document work and post-change documentation checks to the bundled
-  specialist: DOCX/PDF/PPTX or parsed Word to Markdown, Markdown to PDF,
-  existing Word/WPS to PDF, Word creation,
-  PDF to readable or translated HTML with figures, Mermaid diagrams to PNG,
-  formatted Excel reports or complex investment-bank xlsm parsing, macOS Excel
-  control, photos to scanned PDF, unsigned digital documents to signed-looking
-  scans, DOCX comments/track-changes extraction, or documentation impact checks
-  after code/config/deployment changes and explicit cleanup. Load the selected
-  specialist's full SKILL.md from its current source path before acting. Use
-  deck-creator for new presentations only
-  when installed; otherwise this suite has no automatic current PPT builder.
-  daymade-docs:ppt-creator remains manual-only. Do not claim general PDF,
-  spreadsheet, or presentation tasks.
+  Routes docs: Word/PDF/PPTX→Markdown; MD/Word→PDF; create Word; PDF
+  HTML/translate; Excel/xlsm/macOS; photo/signed scans; Mermaid; DOCX review;
+  post-change docs. Reads one bundled Daymade specialist. New slide decks use
+  deck-creator when installed; generic PDF reading/editing and spreadsheet
+  analysis stay with their own Skills. Retired ppt-creator stays manual-only.
 ---
 
 # Daymade document router
