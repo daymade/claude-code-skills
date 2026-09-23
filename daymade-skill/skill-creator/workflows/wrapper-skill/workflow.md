@@ -195,7 +195,7 @@ verified usage increment.
 Open `patterns.md` and copy the SKILL.md template. Fill in:
 
 - `name` (from Step 1)
-- `description` — a dense, trigger-heavy description including tool name, related keywords, and "when to use" signals extracted from Step 2a and 2c. The description should be *pushy* per skill-creator's guidance: err on the side of triggering slightly too often.
+- `description` — a short routing key per skill-creator's description rule (SKILL.md, frontmatter section): what the wrapper does, when to use it (the tool name plus the one or two error strings users most often paste, from Step 2c), and the nearest sibling it is not. Aim for 200–300 characters; the full error-string list belongs in the body.
 - Routing table referring to the scripts and references you're about to fill
 - A "What this skill refuses to do" section that pins down the wrapper contract (see `architecture_contract.md`).
 

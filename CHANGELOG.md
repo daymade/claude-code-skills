@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **skill-creator** (`daymade-skill` v1.45.0 → v1.46.0): Replaces the description-writing rule. The old rule
+  treated the 1024-character spec limit as a budget to fill; the new one treats the description as a routing
+  key sharing one listing budget with every installed skill: aim for 200–300 characters (about 420 for
+  routers), shape `<what it does>. Use when <situations>. Not for <sibling>`, move operational rules to the
+  body. `quick_validate` now warns above 420 characters. The trigger-rate optimizer is no longer a default step;
+  descriptions are tuned from real sessions where the skill missed or misfired.
+
 - **macos-watchdog** (`daymade-macos` v1.6.1 → v1.7.0): Check the delivered macOS notification's
   app label in Notification Center. `osascript` can appear as Script Editor; when that label is generic,
   put the watcher or monitored service in the title so the reader can identify its log.
