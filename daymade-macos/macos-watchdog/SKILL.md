@@ -1,7 +1,11 @@
 ---
 name: macos-watchdog
 description: >-
-  Design, deploy, and discipline macOS launchd watchdogs — LaunchAgents/LaunchDaemons that detect a recurring problem and auto-remediate it. Use whenever creating or editing a persistent background monitor / daemon / agent on macOS, writing a launchd plist, scheduling a self-healing script, or when a watchdog has become a disturbance itself: re-launching apps the user quit, firing repeated notifications, re-running its full repair ladder every few minutes on an unfixable network, or hammering the system (crash loops, fork storms, runaway restarts). Also use for stop/disable semantics (bootout vs bootstrap vs disable vs unload), adding cooldown / backoff / notification throttling to a self-healer, binding a monitor's lifecycle to its premise state, or auditing existing LaunchAgents. 中文触发：launchd 守护进程、常驻任务、开机自启、后台监控、定时自愈脚本。 Covers KeepAlive/ThrottleInterval/domains/logging, premise self-checks, auto-cooldown, alert layering, batch throttling.
+  Designs and audits macOS launchd watchdogs. Use for LaunchAgent/LaunchDaemon setup,
+  plist changes, scheduled self-healing, repeated notifications, apps reopening after
+  quit, crash or repair loops hammering the Mac, or a watchdog alert shown as Script Editor.
+  Covers stop/disable/restart, cooldown/backoff, notification throttling and alert
+  decisions. 中文：launchd 守护进程、常驻任务、开机自启、后台监控、定时自愈、通知来源排查。
 ---
 
 # macOS Watchdog
@@ -20,6 +24,7 @@ The governing principle, learned the expensive way: **a watchdog's lifecycle is 
 | plist key details (KeepAlive forms, domains, logging, resource limits) | `references/launchd-plist-reference.md` |
 | Cooldown/backoff/notification-throttle patterns + sanitized war stories | `references/quiet-watchdog-patterns.md` |
 | SRE alert layering (page vs ticket, fatigue numbers) | `references/alert-discipline.md` |
+| A watchdog alert appears under Script Editor or its sender is unclear | `references/alert-discipline.md` § Message content; inspect the delivered card |
 
 ## The quiet-watchdog contract (the four clauses)
 
