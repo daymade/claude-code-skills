@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **macos-watchdog** (`daymade-macos` v1.7.0 → v1.8.0): Shorten the discovery description
+  while preserving watchdog setup, repair, and stop triggers; add Script Editor notification
+  attribution as a trigger and route it to the delivered-card check in `alert-discipline.md`.
+
 - **skill-creator** (`daymade-skill` v1.46.0 → v1.47.0): Rewriting an existing description now goes through the existing-skill regression gate, and each removed clause gets a home by type: a when-to-use situation must stay in the description or be listed as a dropped secondary phrasing; a Not-for exclusion or operational rule must land in the description or the body and is never dropped. Blind audits of two real rewrites showed body-only checks miss lost triggers. The Tier 3 row no longer classifies such a rewrite as trigger optimization.
 
 - **tunnel-doctor** (`tunnel-doctor` v1.13.0 → v1.14.0): 1019 → 355 characters; description rewritten by skill-creator's new rule as a short routing key; operational rules it used to carry already live in the SKILL.md body.
