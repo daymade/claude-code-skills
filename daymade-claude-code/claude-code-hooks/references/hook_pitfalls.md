@@ -1212,6 +1212,58 @@ this list and describe defects you reach by asking a different question):
   touch this round, even after you wrote down exactly why the touched one
   didn't need another pass? → it tracks file *kind*, not the specific diff,
   and nothing in it reads prose (#31).
+- Does the guard **block a dangerous command alone but allow it once unrelated
+  text is combined with it** — four comment lines in front, say? → two parallel
+  arrays, the text and its quote mask, drifting out of alignment (#32).
+- Does the guard **block the typed form but allow the same argv** reached
+  through brace expansion, ANSI-C quoting, or `${IFS:0:1}`? → a shlex-based
+  guard judging the text you typed, not the argv bash builds (#33).
+- Is a PostToolUse hook **silent exactly on the calls whose command failed**,
+  while every other Bash call triggers it? → failures route to
+  `PostToolUseFailure`, which was never registered (#34).
+- Does an existence probe's `|| echo` fallback **never fire**, so an empty
+  result could mean "found nothing" or "died upstream"? → `||` binds to the
+  last pipeline segment, and `head`/`tail`/`wc`/`cat` exit 0 on empty input
+  (#35). With `grep` last, it does fire, but identically in both cases.
+- Is an agent's **review-and-fix cycle expanding without end**, each round
+  justified on its own? → a self-applied review rule with no loop key, failure
+  axis, or cycle budget; no hook is needed for this one (#36).
+- Does a review-loop guard **stay silent through the exact repeat it exists to
+  catch** — three review dispatches on one artifact, back to back? → its
+  keyword whitelist misses the wording real prompts use (#37).
+- Is a registered, executable, syntax-clean injecting hook **producing no
+  output, session after session, with no error**? → it reads the prompt from
+  an environment variable the host never sets (#38).
+- Does a hook fail with **"No such file or directory" for a script that
+  exists** and runs fine by hand from the repo root? → a relative path in the
+  project's `.claude/settings.json`, resolved against the session's cwd (#39).
+- Does an injected message **come out with a passage missing**, stderr showing
+  `command not found` and the exit code still 0? → an unquoted heredoc running
+  the prose's markdown backticks as commands (#40).
+- Does a "re-run when this file changes" scheduler **run its expensive check
+  once and never again**? → `stat` without `-L` reading the symlink's mtime,
+  not the file it points to (#41).
+- Does a `--selftest` **pass by its SSOT path but fail from the health check**,
+  every session? → a sibling lookup from `dirname "${BASH_SOURCE[0]}"`, which
+  is the symlink's directory (#42).
+- Does an auditor over the registered hooks **skip some as unreadable while
+  they are live and firing**? → it expands `~` but not a literal `$HOME`
+  spelling (#43).
+- Is a human confirmation gate **firing constantly, approved within seconds,
+  with a dialog that lists nothing to decide**? → the dialog is built from
+  pre-command state, empty by construction on the new trigger path (#44).
+- Does the model **follow a block's printed remedy exactly and get blocked
+  again** on the same grounds, round after round? → a remedy sanitized for
+  display, or self-checked with a different parser than the gate's own (#45).
+- Is a suite **green and growing while the defect it covers ships anyway**,
+  with a deliberate break turning nothing red, or a row red for the wrong
+  reason? → assertions that never reach the condition they claim to test
+  (#46).
+- Does `--fire-rate` or a similar subcommand **print
+  `syntax error in expression`, then hang or exit 0 without its report**, on
+  some inputs only? → a `$(( ))` error discarding the whole branch, `exit`
+  included, so the main path runs (#47). In a `--selftest` branch the same
+  fall-through reports a pass.
 
 ## 29. A trailing `exit 0` swallows the exit-code decision — the message prints, the state writes, the guard never blocks
 
