@@ -1,19 +1,10 @@
 ---
 name: git-safety-net
 description: >-
-  Audits, preserves, recovers, and safely retires local Git state: unpushed or
-  wrong-branch commits, dirty or detached worktrees, forgotten duplicate clones of the
-  same repo, untracked work no bundle can back up, orphaned stashes, dangling commits,
-  stale branches, and squash/rebase merge uncertainty. Use when the user fears work was
-  lost; asks to recover a commit or branch; asks whether a worktree, clone, or scratch
-  directory can be deleted; wants everything converged onto one main branch; or
-  needs proof that cleanup will not drop work. Use it even after an audit reported clean
-  — the usual gap is scope: every in-repo command is blind to a second clone elsewhere
-  on disk. Triggers on "did I lose work", "is everything merged", "is anything else
-  lost", "safe to delete this clone", "clean up old branches/stashes", "only keep one
-  main branch", "git reflog", "dangling commits", "分支灾难", "误删分支/commit",
-  "worktree 能删吗", "还有没有丢的东西", "只保留一个主分支".
-  Covers local-Git forensics, not GitHub PR/API operations or routine sync.
+  Audits, preserves and recovers local Git state before cleanup: unpushed or wrong-branch commits,
+  dirty worktrees, duplicate clones, stashes, dangling commits, squash-merge uncertainty. Use when
+  the user fears lost work, wants to recover a commit, asks whether a branch, worktree or clone is
+  safe to delete, or wants one clean main (误删分支 / 还有没有丢的东西). Not for GitHub PR operations.
 ---
 
 # Git Safety Net

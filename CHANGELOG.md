@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **tunnel-doctor** (`tunnel-doctor` v1.13.0 → v1.14.0): 1019 → 355 characters; description rewritten by skill-creator's new rule as a short routing key; operational rules it used to carry already live in the SKILL.md body.
+
+- **tech-selection, claude-code-hooks, local-conversation-history, read-claude-code-history** (`daymade-claude-code` v3.59.0 → v3.60.0): 810–1011 → 315–420 characters; description rewritten by skill-creator's new rule as a short routing key; operational rules it used to carry already live in the SKILL.md body.
+
+- **asr-transcribe-to-text** (`daymade-audio` v1.41.3 → v1.42.0): 972 → 345 characters; description rewritten by skill-creator's new rule as a short routing key; operational rules it used to carry already live in the SKILL.md body.
+
+- **pdf-creator** (`daymade-docs` v1.16.1 → v1.17.0): 594 → 244 characters; description rewritten by skill-creator's new rule as a short routing key; operational rules it used to carry already live in the SKILL.md body.
+
+- **git-safety-net** (`git-safety-net` v1.20.5 → v1.21.0): 1018 → 379 characters; description rewritten by skill-creator's new rule as a short routing key; operational rules it used to carry already live in the SKILL.md body.
+
 - **skill-creator** (`daymade-skill` v1.45.0 → v1.46.0): Replaces the description-writing rule. The old rule
   treated the 1024-character spec limit as a budget to fill; the new one treats the description as a routing
   key sharing one listing budget with every installed skill: aim for 200–300 characters (about 420 for

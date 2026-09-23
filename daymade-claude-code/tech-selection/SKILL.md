@@ -1,17 +1,11 @@
 ---
 name: tech-selection
 description: >-
-  Gated checklist for choosing between technologies: library, framework, storage, data format,
-  model, build-vs-buy, architecture; if favorites-search is installed, MUST run it before external
-  research. Runs before committing. Candidates must clear a business-result anchor, prior-art
-  inventory, an observed-behavior probe, and the maintenance, boring-tech, data-structure,
-  operator-skill gates; READMEs are not evidence. Filters, not ranks: when two or more survive, STOP
-  and return candidates, trade-offs and a recommendation, never a single pick. Use when choosing a
-  technical direction even if the user never says 技术选型: 用哪个, 选哪个, 选什么框架, 存哪里, 哪个模型, 要不要自建,
-  自己造还是用现成的, 先看看有没有现成的, 有没有成熟的方案, 别闭门造车, 不要重复造轮子, 不要过度工程, A 还是 B, 这个方案行不行, 这样设计可以吗, 这是最佳实践吗, which
-  library, build or buy, review this design, architecture decision. Also fires when the agent itself
-  picks a library, format, model or storage. Not for research reports (deep-research), settled-code
-  implementation or debugging, bug fixes, or price comparisons.
+  Gated checklist for choosing a technology: library, framework, storage, data format, model,
+  build-vs-buy, architecture; if favorites-search is installed, MUST run it before external
+  research. Filters out options that fail its gates and returns surviving candidates with
+  trade-offs, not a single pick. Use for 用哪个 / 选什么框架 / 要不要自建 / A 还是 B, or when the agent itself
+  picks one. Not for research reports (use deep-research).
 argument-hint: "<decision to make>"
 ---
 
@@ -29,6 +23,7 @@ Two outcomes end the protocol early:
 
 ## Not This
 
+- Not for research reports (use deep-research), debugging or bug fixes in already-settled code, or price comparisons between vendors — none of these is choosing a technology.
 - Not an interview framework — the user delegates implementation, not direction. Don't ask "which do you prefer" when you can probe and decide.
 - Not a scoring rubric — no weighted scores, no "winner" ranking. Filters, then business anchor.
 - Not self-certifying — the "why this isn't garbage" defense is written by this skill but must be independently checkable, not self-approved.

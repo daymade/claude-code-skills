@@ -1,20 +1,10 @@
 ---
 name: local-conversation-history
 description: >-
-  Entry point for local AI conversation history across providers. Routes a
-  request to the one skill that owns it, by platform (Claude Code, OpenAI Codex,
-  Kimi CLI) and action (read evidence vs continue interrupted work), and owns the
-  one job none of them own alone: a single inventory spanning all three
-  providers. Use when the provider is unknown or plural ("our history", "what
-  have I been working on", "which chats did I have"), when the user wants Kimi
-  CLI history at all, when it is unclear whether they need evidence or
-  resumption, or when they ask for this skill by name. Vague recall that names
-  no platform ("we discussed this once, when was it?") belongs here rather than
-  to a single-provider reader, because a Claude-only answer to an unscoped
-  question cannot support an absence claim. When the platform and the action are
-  both already clear, load that executor skill directly instead — except Kimi
-  CLI, which has no reader or continuation skill of its own and always routes
-  through here.
+  Entry point for local AI conversation history across Claude Code, Codex and Kimi CLI: routes each
+  request to the reader or continuation skill that owns it and keeps the cross-provider inventory.
+  Use when the platform is unknown or plural ("what was I working on", "we discussed this once") and
+  for any Kimi CLI history. When platform and action are already clear, load that skill directly.
 argument-hint: "[keywords | session-id | workspace-path]"
 ---
 
