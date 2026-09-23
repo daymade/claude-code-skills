@@ -1,18 +1,10 @@
 ---
 name: daymade-sector-research
-description: |-
-  A股行业投研工作流：全板块 Top N 涨幅标的计算、公告窗口检索（周/月）、市场情绪证据分级判断，并以 Agent Team 并行执行 + fresh-context 对抗验证。
-
-  触发场景（命中任一即读本 skill）：
-  - 「XX 行业 Top N / Top 10 标的」（如「医药行业今天的 Top 10 标的」）
-  - 「这些标的最近一周 / 一个月发过哪些公告」
-  - 「判断 XX 行业 / 板块现在的市场情绪怎么样」
-  - 「用 Agent Team / 多 agent 做行业投研」或要求对行业研究结论做对抗性验证
-  - 需要「基于证据、基于数据」的板块级研究交付（成分股 → 行情 → 公告 → 情绪 → 验证 → 报告）
-
-  核心能力：东财 push2 成分股 → 新浪实时快照涨幅排序（scripts/top_n_pipeline.py）；巨潮 cninfo + 东财公告双源交叉，沪深+北交所统一通道（scripts/ann_query.py）；情绪证据 L1（一手行情）/L2（带时间戳媒体）/L3（未核实标题）分级；Agent Team 并行编排与验证纪律。全程国内公开数据源，无付费依赖；Gangtise 官方 skill 为可选增强（需积分，缺失时走公开源 pivot）。
-
-  最高纪律（用户原话）：没有十足把握的事，宁可标注不确定，不可给错误答案。
+description: >-
+  A-share sector research: computes board-wide Top N gainers, cross-checks week/month announcement
+  windows across two sources, and grades market-sentiment evidence (L1–L3), via parallel Agent Team
+  execution with fresh-context adversarial verification. Use for 「XX 行业 Top N/Top 10 标的」,
+  「这些标的最近一周/一个月发过哪些公告」, 「判断 XX 行业/板块现在的市场情绪」, or 「用 Agent Team 做行业投研」/对抗验证行业研究结论。
 ---
 
 # A股行业投研 Skill

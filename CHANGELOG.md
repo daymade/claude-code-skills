@@ -9,11 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **daymade-docs** (v1.17.0 → v1.18.0): Add `docs-router` as the suite's automatic document-work entry. It selects a bundled specialist by input and requested output, resolves the active router's canonical source path to find sibling skills on Claude Code or Codex, then reads the selected full `SKILL.md` and task-required references. Routes cover document-to-Markdown, Markdown-to-PDF, existing Word-to-PDF, DOCX creation and review, PDF-to-HTML including translation with figures, Mermaid PNGs, complex Excel models and macOS automation, photos or unsigned digital documents to scanned PDFs, post-change documentation impact checks, and explicit cleanup.
+- **daymade-docs** (v1.18.0 → v1.19.0): Add `docs-router` as the suite's automatic document-work entry. It selects a bundled specialist by input and requested output, resolves the active router's canonical source path to find sibling skills on Claude Code or Codex, then reads the selected full `SKILL.md` and task-required references. Routes cover document-to-Markdown, Markdown-to-PDF, existing Word-to-PDF, DOCX creation and review, PDF-to-HTML including translation with figures, Mermaid PNGs, complex Excel models and macOS automation, photos or unsigned digital documents to scanned PDFs, post-change documentation impact checks, and explicit cleanup.
 
 ### Changed
 
 - **daymade-docs**: Make the nine active specialists manual-only for direct skill invocation while preserving their bodies and `/daymade-docs:<leaf>` commands. `ppt-creator` remains manual-only; new presentation creation routes to `deck-creator` when installed, while public users without it keep explicit compatibility access to `ppt-creator`. The router preserves `docs-cleaner`'s post-change documentation check after authorized code/config/deployment work, even when docs were not mentioned, and also handles explicit cleanup. This changes discovery without retiring the post-change workflow.
+
+- **skill-creator** (`daymade-skill` v1.49.0 → v1.50.0): When rewriting a description, a placeholder such as "its named contacts" no longer counts as a home for the literal names, product names or error strings users type. Found when a rewrite collapsed a client's contact list into a placeholder that can no longer trigger.
+
+- **read-codex-history** (`daymade-claude-code` v3.62.0 → v3.63.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **docx-creator** (`daymade-docs` v1.17.0 → v1.18.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **daymade-sector-research** (`daymade-financial` v1.2.1 → v1.3.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **debugging-network-issues** (`debugging-network-issues` v1.9.0 → v1.10.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **peer-message** (`peer-message` v1.13.0 → v1.14.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **twitter-reader** (`twitter-reader` v1.3.0 → v1.4.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
 
 - **skill-creator** (`daymade-skill` v1.48.0 → v1.49.0): The description Length rule now says what to do when keeping every distinct job pushes past 420 characters: compress first (one phrasing per situation, a shorter what-it-does clause, no transport or implementation details), and go over only when a distinct job would otherwise be lost.
 
