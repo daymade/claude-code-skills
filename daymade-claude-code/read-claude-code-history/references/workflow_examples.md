@@ -1,15 +1,17 @@
 # Workflow Examples
 
-Detailed workflow examples for common session history recovery scenarios.
+Use `history_index.py status` to check provider coverage and freshness, then
+`history_index.py recall '<term>' --mode bm25 --provider claude` to find
+candidate Session IDs. Open only those exact sessions. The old raw search
+command is disabled for live stores; its date flags did not bound file reads.
 
 ## Recover Files Deleted in Cleanup
 
 **Scenario**: Files were deleted during code review, need to recover specific components.
 
 ```bash
-# 1. Find sessions mentioning the deleted files
-python3 scripts/analyze_sessions.py search /path/to/project \
-    DeletedComponent ModelScreen RemovedFeature
+# 1. Find candidate sessions in the index, then inspect their exact records
+python3 scripts/history_index.py recall 'DeletedComponent' --mode bm25 --provider claude
 
 # 2. Copy the exact Path printed for the most relevant active/archive session
 python3 scripts/recover_content.py <printed-session-path> \
@@ -31,10 +33,8 @@ are excluded because their requested content was not confirmed written.
 original files are gone.
 
 ```bash
-# 1. The project is uncertain, so every positional after --all-projects is a keyword
-python3 scripts/analyze_sessions.py search --all-projects \
-    artifact-a.html artifact-b.html \
-    --exclude-session <current-session-id>
+# 1. Find candidate sessions through the index
+python3 scripts/history_index.py recall 'artifact-a.html' --mode bm25 --provider claude
 
 # 2. Recover exact captured checkpoints from the best matching session
 python3 scripts/recover_content.py <printed-session-path> \
@@ -53,7 +53,7 @@ checkpoint the final file. `--write-only` is an explicit lower-fidelity choice,
 not an automatic fallback. If the report says `Later state: recorded deleted`,
 the bytes are the last available pre-deletion checkpoint, not the current state.
 
-Codex rollout hits can be found with `--codex`, but they cannot be passed to
+Codex rollout hits can be found with indexed `--provider codex`, but they cannot be passed to
 `recover_content.py`: Codex search and Claude file recovery are separate
 capabilities.
 
@@ -62,9 +62,8 @@ capabilities.
 **Scenario**: Understand how a file changed over multiple sessions.
 
 ```bash
-# 1. Find sessions that modified the file
-python3 scripts/analyze_sessions.py search /path/to/project \
-    "componentName.jsx"
+# 1. Find candidate sessions that mention the file
+python3 scripts/history_index.py recall 'componentName.jsx' --mode bm25 --provider claude
 
 # 2. Analyze each session's file operations
 for session in session1.jsonl session2.jsonl session3.jsonl; do
@@ -87,10 +86,8 @@ find ./v1/ -name "componentName.jsx" -exec diff {} ./v2/{} \;
 **Scenario**: Remember implementing a feature but can't find which session.
 
 ```bash
-# Search for distinctive keywords from that implementation
-python3 scripts/analyze_sessions.py search /path/to/project \
-    "useModelStatus" "downloadProgress" "ModelScope" \
-    --from-date 2026-03-01 --to-date 2026-04-30
+# Search the index for a distinctive term
+python3 scripts/history_index.py recall 'useModelStatus' --mode bm25 --provider claude
 
 # Review top match
 python3 scripts/analyze_sessions.py stats <top-result-session.jsonl>
@@ -101,9 +98,8 @@ python3 scripts/analyze_sessions.py stats <top-result-session.jsonl>
 **Scenario**: Recover files containing a keyword from all matching sessions.
 
 ```bash
-# Find relevant sessions
-sessions=$(python3 scripts/analyze_sessions.py search /path/to/project \
-    keyword | grep "Path:" | awk '{print $2}')
+# First review indexed candidates and select exact Session paths
+sessions='session1.jsonl session2.jsonl'
 
 # Recover from each session
 for session in $sessions; do
@@ -112,10 +108,8 @@ for session in $sessions; do
 done
 ```
 
-The default `list` and `search` commands cover active homes plus registered
-archives. Do not add `--main-only` or `--home` to these workflows unless the
-task is explicitly to diagnose one store. A required missing archive stops the
-search instead of silently returning a partial result.
+The index may omit recent or unindexed archives. Check `status` and state its
+frontier; do not turn zero recall hits into an absence claim.
 
 ## Verify a Topic Across a Migrated History
 
@@ -123,21 +117,19 @@ search instead of silently returning a partial result.
 only in a registered archive.
 
 ```bash
-python3 scripts/analyze_sessions.py search /path/to/project \
-    "distinctive topic" "library-name" \
-    --from-date 2026-03-01 --to-date 2026-04-30
+python3 scripts/history_index.py status
+python3 scripts/history_index.py recall 'distinctive topic' --mode bm25 --provider claude
 ```
 
-Verify three fields before reporting absence: the `Searched ... source(s)` line
-includes the expected `archive:<label>`, the command did not emit a source
-configuration error, and the date window was applied to internal matching-record
-timestamps. File mtime is not evidence.
+Check whether the index includes the archive and its last indexed time. An
+incomplete index cannot support an absence claim. File mtime is not evidence
+of conversation chronology.
 
 ## Custom Extraction from Raw JSONL
 
-For extraction needs not covered by bundled scripts, first use the analyzer to
-locate the exact active/archive session. A one-file custom extractor is not a
-replacement for whole-history source discovery:
+For extraction needs not covered by bundled scripts, first locate a candidate
+through the index and verify its exact Session identity. A one-file custom
+extractor stays confined to that Session:
 
 ```python
 import json
