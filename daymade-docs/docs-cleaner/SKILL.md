@@ -1,5 +1,6 @@
 ---
 name: docs-cleaner
+disable-model-invocation: true
 description: >-
   Consolidates redundant documentation while preserving all valuable content; keeps a doc
   set truthful after things change. Modes: (1) POST-CHANGE GOVERNANCE — when code,

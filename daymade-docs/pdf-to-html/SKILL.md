@@ -1,5 +1,6 @@
 ---
 name: pdf-to-html
+disable-model-invocation: true
 description: Converts a PDF into one self-contained, readable HTML file that preserves images, tables, charts and reading order — optionally translating it into another language while keeping every figure. Uses structured extraction (PyMuPDF), font-size-driven layout, compressed base64-inlined images (a single portable file), and mandatory headless-Chrome visual verification. Use whenever someone wants to READ a PDF as a web page or clean document, turn a PDF into HTML, or translate a PDF into another language while keeping its images/tables/charts intact — e.g. "PDF 转 HTML", "把这个 PDF 转成中文网页版", "make this report readable", "translate this PDF but don't lose the charts", "I just want to read this PDF on my phone". Distinct from doc-to-markdown (plain Markdown text) and pdf-creator (Markdown→PDF) — this one produces a styled, image-faithful HTML reading experience.
 ---
 

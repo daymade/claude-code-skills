@@ -164,6 +164,7 @@ claude plugin install daymade-docs@daymade-skills
 This suite exposes related skills under one namespace, including:
 
 ```text
+/daymade-docs:docs-router
 /daymade-docs:doc-to-markdown
 /daymade-docs:mermaid-tools
 /daymade-docs:pdf-creator
@@ -174,6 +175,8 @@ This suite exposes related skills under one namespace, including:
 ```
 
 These skills ship as a bundle — there are no separate single-skill plugins. All documentation skills live under `daymade-docs/` and install together from the suite.
+The router handles automatic selection. The specialist commands remain available for manual use;
+`ppt-creator` is manual-only. New presentation creation uses `deck-creator` when installed.
 
 **Apple Platform Suite** (shared namespace for macOS and iOS development/operations):
 ```bash
@@ -398,6 +401,18 @@ independent state verification.
 **🎬 Live Demo**
 
 ![GitHub Ops Demo](./demos/github-ops/create-pr.gif)
+
+---
+
+### **docs-router** - Daymade Document Routing
+
+> **Install**: `claude plugin install daymade-docs@daymade-skills` (suite-only — invoked as `daymade-docs:docs-router`)
+
+Selects the bundled specialist for document conversion, Word and PDF production,
+Mermaid images, macOS Excel automation, scanned PDFs, DOCX review extraction, or
+documentation cleanup. It reads the selected specialist's full instructions and
+required references. Specialist slash commands remain available for manual use.
+New presentation creation uses `deck-creator` when installed; `ppt-creator` is manual-only.
 
 ---
 
