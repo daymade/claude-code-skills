@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **read-codex-history** (`daymade-claude-code` v3.62.0 → v3.63.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **docx-creator** (`daymade-docs` v1.17.0 → v1.18.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **daymade-sector-research** (`daymade-financial` v1.2.1 → v1.3.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **debugging-network-issues** (`debugging-network-issues` v1.9.0 → v1.10.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **peer-message** (`peer-message` v1.13.0 → v1.14.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **twitter-reader** (`twitter-reader` v1.3.0 → v1.4.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
 - **skill-creator** (`daymade-skill` v1.48.0 → v1.49.0): The description Length rule now says what to do when keeping every distinct job pushes past 420 characters: compress first (one phrasing per situation, a shorter what-it-does clause, no transport or implementation details), and go over only when a distinct job would otherwise be lost.
 
 - **read-claude-code-history, tech-selection** (`daymade-claude-code` v3.61.0 → v3.62.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
