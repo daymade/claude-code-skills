@@ -30,6 +30,8 @@ Rate pattern for repeated identical failures (from the published dynamic rate-li
 - State is read live when composing the message, never frozen at watchdog-authoring time (see `quiet-watchdog-patterns.md` Pattern 1 — a fixed "still broken" template kept lying for 2h after the system healed).
 - Include the environment fingerprint that lets a human correlate later: for network watchdogs, gateway + local IP (SSIDs are unreadable on modern macOS); for thermal ones, the top process at that moment.
 - End with the one action the human can take, or say explicitly "no action needed — auto-retry at HH:MM."
+- For local `osascript` notifications, inspect a delivered card in Notification Center on the target Mac. Distinct watchdogs can appear under `Script Editor`; an `osascript` exit code does not establish the user-visible app name.
+- When the displayed app name is generic, put the watcher or monitored service in the notification title so the reader can identify its log without opening the card.
 
 ## Anti-patterns
 
