@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **skill-creator** (`daymade-skill` v1.48.0 → v1.49.0): The description Length rule now says what to do when keeping every distinct job pushes past 420 characters: compress first (one phrasing per situation, a shorter what-it-does clause, no transport or implementation details), and go over only when a distinct job would otherwise be lost.
+
+- **read-claude-code-history, tech-selection** (`daymade-claude-code` v3.60.1 → v3.61.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **git-safety-net** (`git-safety-net` v1.21.0 → v1.22.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **tunnel-doctor** (`tunnel-doctor` v1.14.0 → v1.15.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
 - **claude-switch-models-setup** (`daymade-claude-code` v3.60.0 → v3.60.1): The profile settings converger now propagates env deletions: a non-identity env key removed from main is deleted from every profile and reported, instead of surviving forever under the old additive-only merge. Identity keys (provider routing, Anthropic-native isolation) are exempt — main never carries them, so their absence is not deletion evidence. Deletion also propagates when main drops the `env` key entirely, which the old loop-shaped code could never do.
 
 - **macos-watchdog** (`daymade-macos` v1.7.0 → v1.8.0): Shorten the discovery description

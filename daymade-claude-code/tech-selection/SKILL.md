@@ -1,11 +1,11 @@
 ---
 name: tech-selection
 description: >-
-  Gated checklist for choosing a technology: library, framework, storage, data format, model,
-  build-vs-buy, architecture; if favorites-search is installed, MUST run it before external
-  research. Filters out options that fail its gates and returns surviving candidates with
-  trade-offs, not a single pick. Use for 用哪个 / 选什么框架 / 要不要自建 / A 还是 B, or when the agent itself
-  picks one. Not for research reports (use deep-research).
+  Gated checklist for choosing a technology (library, framework, storage, data format, model,
+  build-vs-buy, architecture) or reviewing a proposed one. If favorites-search is installed, MUST
+  run it before external research. Returns surviving candidates with trade-offs, not a single pick.
+  Use for 用哪个 / 选什么框架 / 要不要自建 / A 还是 B / 这个方案行不行, and before the agent commits to one. Not for
+  research reports (use deep-research).
 argument-hint: "<decision to make>"
 ---
 

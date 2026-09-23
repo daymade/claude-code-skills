@@ -1,10 +1,11 @@
 ---
 name: tunnel-doctor
 description: >-
-  MUST be used first for tunnel / proxy-path connectivity failures (网络故障 / 连不上 / 代理或隧道下超时).
-  Diagnoses Tailscale, proxy, TUN, DNS and SSH-tunnel problems on macOS and Windows/WSL, e.g.
-  Tailscale ping works but SSH fails, curl works but the browser gets 503, Git or Docker fails
-  behind the proxy. Not for application-layer bugs (use debugging-network-issues).
+  MUST be used first for tunnel / proxy-path connectivity failures or slow throughput (网络故障 / 连不上 /
+  代理或隧道下超时). Diagnoses Tailscale, proxy, TUN, DNS and SSH-tunnel problems on macOS and Windows/WSL,
+  e.g. Tailscale ping works but SSH fails, curl works but browser gets 503, Git/Docker fails behind
+  the proxy, or downloads crawl despite a reachable proxy. Not for application-layer bugs (use
+  debugging-network-issues).
 allowed-tools: Read, Grep, Edit, Bash
 ---
 

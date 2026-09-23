@@ -465,7 +465,7 @@ Based on the user interview, fill in these components:
 
   Shape: `<what it does, one clause>. Use when <2–4 concrete situations or phrasings users actually type>. Not for <nearest sibling case> (use <sibling>).` Put the key use case first and write in third person.
 
-  - **Length**: aim for 200–300 characters. Up to about 420 is fine when the skill must route between siblings or is itself a router; `quick_validate` warns above 420.
+  - **Length**: aim for 200–300 characters. Up to about 420 is fine when the skill must route between siblings or is itself a router; `quick_validate` warns above 420. When keeping every distinct job pushes past that, compress before accepting it: one phrasing per situation, a shorter what-it-does clause, no transport or implementation details ("over Tailscale", "via qmd"). Go over only if a distinct job would otherwise be lost, and say why in the PR.
   - **Hidden trigger moment**: if the moment to use the skill is not visible in the user's words (for example "before choosing any library"), open with one short `MUST be used before …` clause.
   - **Keep**: redirects to the nearest one or two sibling skills; a non-obvious secondary job, in one clause; one short "even when …" clause if it corrects a known misjudgment (e.g. "even when it looks like a one-line ffmpeg job"); two to four phrasings users really type, in their language (Chinese included).
   - **Move to the body**: operational rules ("CRITICAL: fetch media by path"), pitfalls, methodology, failure history, internal mechanisms, file or reference routing, version notes.
