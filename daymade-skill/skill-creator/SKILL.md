@@ -474,7 +474,7 @@ Based on the user interview, fill in these components:
     - **Not for** (an exclusion or sibling redirect): the new description or the body. Never dropped.
     - **Operational rule, pitfall or routing**: the body, on a SKILL.md line about that same situation. A reference reached only through a row about a different situation is not a home. Never dropped.
 
-    Same meaning in shorter or broader words is a home ("architecture" in a list of decision types covers "architecture decision"). A shared word with a different meaning is not ("inside a bug fix" does not preserve "Not for bug fixes").
+    Same meaning in shorter or broader words is a home ("architecture" in a list of decision types covers "architecture decision"). A shared word with a different meaning is not ("inside a bug fix" does not preserve "Not for bug fixes"). Nor is a placeholder for words users literally type — people's names, product names, error strings: "its named contacts" does not preserve the names themselves.
   - **Drop**: exhaustive keyword lists, synonyms the model can infer, and "use it even when none of these words appear".
   - **Write sibling skills together**: descriptions in one family must agree on which skill owns what.
   - **Tune from real use, not up front**: when a real session shows the skill missing or misfiring, fix the description from that prompt. Do not run trigger-rate optimization on a fresh skill; you do not yet know how people will phrase it.

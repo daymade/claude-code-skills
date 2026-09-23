@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **skill-creator** (`daymade-skill` v1.49.0 → v1.50.0): When rewriting a description, a placeholder such as "its named contacts" no longer counts as a home for the literal names, product names or error strings users type. Found when a rewrite collapsed a client's contact list into a placeholder that can no longer trigger.
+
 - **skill-creator** (`daymade-skill` v1.48.0 → v1.49.0): The description Length rule now says what to do when keeping every distinct job pushes past 420 characters: compress first (one phrasing per situation, a shorter what-it-does clause, no transport or implementation details), and go over only when a distinct job would otherwise be lost.
 
 - **read-claude-code-history, tech-selection** (`daymade-claude-code` v3.61.0 → v3.62.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
