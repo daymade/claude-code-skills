@@ -1,5 +1,6 @@
 ---
 name: pdf-creator
+disable-model-invocation: true
 description: >-
   Converts Markdown to print-ready PDF with proper Chinese typography, themes and a visual
   self-check. Use for Markdown → PDF, including documents formatted for printing or mobile reading.

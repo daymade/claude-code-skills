@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **daymade-docs** (v1.18.0 → v1.19.0): Add `docs-router` as the suite's automatic document-work entry. It selects a bundled specialist by input and requested output, resolves the active router's canonical source path to find sibling skills on Claude Code or Codex, then reads the selected full `SKILL.md` and task-required references. Routes cover document-to-Markdown, Markdown-to-PDF, existing Word-to-PDF, DOCX creation and review, PDF-to-HTML including translation with figures, Mermaid PNGs, complex Excel models and macOS automation, photos or unsigned digital documents to scanned PDFs, post-change documentation impact checks, and explicit cleanup.
+
 ### Changed
+
+- **daymade-docs**: Make the nine active specialists manual-only for direct skill invocation while preserving their bodies and `/daymade-docs:<leaf>` commands. `ppt-creator` remains manual-only; new presentation creation routes to `deck-creator` when installed, while public users without it keep explicit compatibility access to `ppt-creator`. The router preserves `docs-cleaner`'s post-change documentation check after authorized code/config/deployment work, even when docs were not mentioned, and also handles explicit cleanup. This changes discovery without retiring the post-change workflow.
 
 - **skill-creator** (`daymade-skill` v1.49.0 → v1.50.0): When rewriting a description, a placeholder such as "its named contacts" no longer counts as a home for the literal names, product names or error strings users type. Found when a rewrite collapsed a client's contact list into a placeholder that can no longer trigger.
 

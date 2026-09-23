@@ -1,5 +1,6 @@
 ---
 name: mermaid-tools
+disable-model-invocation: true
 description: Extracts Mermaid diagrams from markdown files and generates high-quality PNG images using bundled scripts. Activates when working with Mermaid diagrams, converting diagrams to PNG, extracting diagrams from markdown, or processing markdown files with embedded Mermaid code.
 ---
 

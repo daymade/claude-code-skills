@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Professional Claude Code and Codex skills marketplace — production-ready skills spanning GitHub and git operations (including current-base contributor PR review), document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, local inter-agent messaging, Claude Code operations, technology selection and build-vs-buy decisions, and model-aware Codex workstation setup. Suite plugins bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
-    "version": "3.14.0"
+    "version": "3.15.0"
   },
   "plugins": [
     {
@@ -206,10 +206,10 @@
     },
     {
       "name": "daymade-docs",
-      "description": "Documentation suite plugin that exposes document conversion, Mermaid diagram generation, PDF/PPT/DOCX creation, Excel workbook creation/parsing/control, and documentation cleanup, and docx review-comment/track-changes extraction skills under one shared namespace",
+      "description": "Route Daymade document work and post-change documentation checks to the bundled specialist: DOCX/PDF/PPTX or parsed Word to Markdown, Markdown to PDF, existing Word/WPS to PDF, Word creation, PDF to readable or translated HTML with figures, Mermaid diagrams to PNG, formatted Excel reports or complex investment-bank xlsm parsing, macOS Excel control, photos to scanned PDF, unsigned digital documents to signed-looking scans, DOCX comments/track-changes extraction, or documentation impact checks after code/config/deployment changes and explicit cleanup. Load the selected specialist's full SKILL.md from its current source path before acting. Use deck-creator for new presentations only when installed; otherwise this suite has no automatic current PPT builder. daymade-docs:ppt-creator remains manual-only. Do not claim general PDF, spreadsheet, or presentation tasks.",
       "source": "./daymade-docs",
       "strict": false,
-      "version": "1.18.0",
+      "version": "1.19.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -231,6 +231,7 @@
         "review"
       ],
       "skills": [
+        "./docs-router",
         "./doc-to-markdown",
         "./mermaid-tools",
         "./pdf-creator",

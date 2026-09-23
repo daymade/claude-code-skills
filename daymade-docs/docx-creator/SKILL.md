@@ -1,5 +1,6 @@
 ---
 name: docx-creator
+disable-model-invocation: true
 description: >-
   Produces Word (.docx) and exports existing Word/WPS manuscripts to PDF, preserving revisions,
   tables and images, especially Chinese formal documents via a verified OpenXML generator with
