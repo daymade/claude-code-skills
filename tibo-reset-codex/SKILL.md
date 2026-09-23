@@ -34,7 +34,13 @@ description: >-
   证据后回填未决预测。只读记录为空时不创建文件；提出新预测时保存窗口、依据与本轮反馈。
   实际抓取外部数据的调用先落 findings 记录，record/review 用 evidence_refs 挂链（schema 与
   规则见该文档「findings：原始读数层」节）。
-- 裸调用（没带具体问题，只想知道现在什么情况）→ 组合执行：台账回看 → 公告线 + 故障线（§1）→
+- 用户已经知道结果，追问「为什么漏了 / 哪一环没覆盖 / 下次怎么避免」→ 切到**历史证据链
+  诊断**：按当时可得的索引、原帖全文、reply / quote / parent 覆盖、解析结果与 findings 逐层
+  定位；没有当轮原始记录时保留「获取 / 解析 / 提炼 / 记录哪一步丢失 = unknown」。不要重复查询
+  已知结果来代替诊断，也不要再次核对用户已明确说不用查的 banked reset。用户同时明确要求
+  当前账户状态，或当前读数会改变这次诊断时，才并行走账号 SOP；这一分流不阻止明确的实时查询。
+- 裸调用（没带具体问题，只想知道现在什么情况）→ 组合执行：台账回看 → 公告线（Radar 索引 +
+  独立的 Tibo 主帖时间线 + 有界 reply 发现，按 §1 三腿）+ 故障线（§1）→
   本机落地状态（§2 脚本），按输出合同先给当前重置状态结论，再附下一窗口主判断（走预测路径）
   与台账回填；公告线、故障线与本机扫描的每次实际抓取先落 findings 记录，回填时用
   evidence_refs 挂链（见[预测反馈的 findings 节](references/forecast-feedback.md)）。**§2 之后必须再跑一次实时 banked 查询**（`scripts/query_usage.py`，读法与字段表见
@@ -49,16 +55,21 @@ description: >-
   短间隔内不会漏事件；间隔正常或上轮出现过新信号时仍跑全套。
   **按时段降频**（与按间隔那条正交，两者叠加）：Tibo 睡眠时段（太平洋 1AM–8AM = 北京 16–23）
   只跑公告线一个请求确认无新官宣，跳过 incidents/banked/本机扫描全套——官宣型重置从不落在他
-  睡眠时段（历史模式，见「Tibo 的时间写法」节），补偿型不依赖他的作息。**例外**：降频轮里只要
-  Radar 冒出带 `official_window`（明确时间点）的预告，立即升级回全套并密集盯到窗口过去。代价
-  要说清：睡眠时段万一发生无官宣的静默重置，会延迟到活跃时段才发现——静默重置也是人触发的，
-  历史模式支持睡眠时段不会发生，按可接受处理。（2026-09-18 用户拍板，当晚已跑多轮稳定。）
+  睡眠时段（历史模式，见「Tibo 的时间写法」节），补偿型不依赖他的作息。**降频不能省掉新条目
+  的全文判读**：Radar 成功返回比上次已裁决更新的索引项时，先按 §1 读取原帖全文，再决定是否
+  继续降频；`official_window=null` 不能提前结束。**升级例外**包括：`official_window` 明确给窗；
+  正文出现未来承诺；正文中的时间、类型或范围会改变安排；或台账里已有未决承诺到达跟进条件。
+  命中任一项就升级回全套，并按承诺的改判条件跟进；都未命中才保留单请求降频。代价要说清：
+  睡眠时段万一发生无官宣的静默重置，会延迟到活跃时段才发现——静默重置也是人触发的，历史
+  模式支持睡眠时段不会发生，按可接受处理。（2026-09-18 用户拍板保留正常降频分支。）
   **长跑循环的覆盖度自审**：连续多轮全绿会诱导越跑越窄——把「这几条腿没报警」误当成「覆盖
   完整」。事件检测和预测是两件事，固定的检查腿只保证「不漏新重置」，不保证「下一次预测有
   独立视角」。固定节奏之外，周期性问一次「我覆盖了哪些判断维度、漏了哪一类信号」；用户问
   「有没有漏信号 / 别人怎么预测」时，就是在要这次自审，走静默重置路径同款取证、别用「全套
   已跑」搪塞。
   点名额度/余额本身的问法整条走账号 SOP，本条只管重置状态。
+- 本 Skill 改善的是**每次调用或宿主已安排循环时**的读取、判定和记录；它本身没有后台调度、
+  主动通知或 ACK 机制。没有另行部署并实测这些运行层，就不能声称已保证持续发现、送达或确认已阅。
 - 用户问「我们几个账号 / 都用完了吗 / 还有两个满额 / 还有几次 Full reset」→ 先读
   [逐账号额度查询与网页登录恢复](references/account-usage.md)。
 - 用户问「Tibo 说了什么」或明确只要官宣 → 查**公告路径**。
@@ -102,9 +113,27 @@ description: >-
 
 ## 查证工作流
 
-### 1. 公告路径：Radar 是索引，不是产品状态
+### 1. 公告路径：Radar、Tibo 主帖与 reply 是三条覆盖腿
 
-用 Tibo Radar JSON API 找最新公开公告（2026-08-26 实测 200）：
+**正常轮次必须实际尝试三条腿：Radar、Tibo 主帖时间线、下文的有界 reply 发现。** Radar 可能
+完全没有索引一条新的独立主帖；主帖时间线也不含 replies，所以前两条都无新仍不能跳过 reply
+发现。宿主没有可用的已登录 X 通道时，reply 腿的执行结果是 `unknown`，不是静默省略。按时段
+降频的已批准例外仍按入口分流执行：降频轮只查 Radar 时，把 `main_posts` 与 `replies` 都记为
+`uncovered`，不能把结果写成全量无新。
+
+本机已登录且 `twitter-cli` 可用时，主帖入口使用下面的只读命令（v0.8.5，2026-09-23 实测；
+帮助与 JSON 输出均核对过）：
+
+```bash
+twitter user-posts thsottiaux -n 50 --json
+```
+
+把返回项按 `createdAtISO` / `id` 与上次 finding 的主帖游标比较；新主帖逐条读完整 `text`，并保留
+`quotedTweet` 关系。若两轮间发帖量超过当前窗口、最旧返回项仍晚于上次游标，扩大 `-n`（最多
+200）补齐，不把截断窗口记成 covered。`user-posts` 只列主帖，不能认证 replies。没有该 CLI 的
+宿主使用已有可用的 Web/X 原站通道；这些通道也不可用时写 `main_posts=unknown`，不能伪造完全覆盖。
+
+Radar 继续作为结构化索引腿。用 Tibo Radar JSON API 找最新公开公告（2026-08-26 实测 200）：
 
 ```bash
 curl -s -m 15 "https://codex-reset.com/api/timeline" | python3 -c "
@@ -119,6 +148,11 @@ for e in json.load(sys.stdin)['events'][:5]:
 新条目在前。关键字段：`announced_at`（UTC ISO）、`summary`（可能截断）、`url`（原帖）、
 `official_window`、`reset_verification_status`。`type` 是内部小写值：`reset` = 广域
 重置公告、`credits` = banked/额度包、`boost`/`promo` = 消耗规则类。
+
+**Radar 成功取得新索引项后，必须先读该项原帖全文，再判它是否包含未来承诺或会改变安排的
+时间、类型、范围。** 摘要、`type`、`official_window` 与核验标签只用于定位和交叉检查；任何一个
+为空都不能短路全文读取。全文判读结果与未决字段写入 finding / forecast；只有全文也无承诺、
+台账也没有到期未决承诺时，才能把这一轮记为「已覆盖范围内无新决策信号」。
 
 **摘要截断也会藏住预告**：2026-09-08 实测最新条目的 `summary` 只截到开头玩笑，
 `official_window=null`、`announcement_state=none`、核验标签为 pending；
@@ -141,7 +175,7 @@ fxtwitter 响应里的 `replying_to`（被回复人）+ `replying_to_status`（�
 
 ```bash
 curl -sS --max-time 20 "https://api.fxtwitter.com/<user>/status/<status-id>" \
-  | python3 -c "import json,sys; t=json.load(sys.stdin)['tweet']; print(t['created_at']); print('reply_to:', t.get('replying_to'), t.get('replying_to_status') or ''); print(t['text'])"
+  | python3 -c "import json,sys; t=json.load(sys.stdin)['tweet']; q=t.get('quote'); print(t['created_at']); print('reply_to:', t.get('replying_to'), t.get('replying_to_status') or ''); print('quote:', json.dumps(None if not q else {'id':q.get('id'),'url':q.get('url'),'text':q.get('text')}, ensure_ascii=False)); print(t['text'])"
 ```
 
 备胎与死路（同日实测）：
@@ -153,10 +187,31 @@ curl -sS --max-time 20 "https://api.fxtwitter.com/<user>/status/<status-id>" \
 - ~~Jina Reader~~ **可用但间歇，不作主通道依赖**：匿名访问 x.com 会因他人滥用被**间歇性全局
   封禁**（403，2026-08-30 实测：封禁数小时后解除，解除后匿名仍能拿到帖子正文；错误信息点名
   触发滥用的第三方账号）；本仓 jina key 已 402 余额尽。fxtwitter 优先，Jina 只作它的备用。
-- fxtwitter 不返回回复**内容**（`replies` 字段只是数值计数）；帖子下的 Tibo 澄清需要 WebSearch
-  找转录源补充。但它返回 `replying_to`（被回复人 handle）与 `replying_to_status`（被回复帖
-  id）——**足够判断「这条是不是回复、回复给谁」**，这正是上面 `type` 误标消歧的唯一字段；
-  被回复帖本身再用同一条命令取一次即可。
+- fxtwitter 不返回回复**内容**（`replies` 字段只是数值计数）。它返回的 `replying_to`
+  （被回复人 handle）与 `replying_to_status`（被回复帖 id）足够判断一条已知帖子是否为回复，
+  被回复帖本身再用同一条命令取一次；但它**不能枚举主帖下有哪些回复**。主帖零命中、主帖时间线
+  无新项，或某个 CLI search 返回 404，都不能写成「没有回复」。
+- **有界 reply 发现路径**（2026-09-23 已登录 X 原站实测能看到一条主帖入口遗漏的旧回复）：
+  1. 先固定起点：上次**可靠** reply 检查的 UTC；没有就用本任务窗口或当前未决承诺的起点。
+     打开 `https://x.com/thsottiaux/with_replies`，记录本轮 URL、起点与开始时间。
+  2. 只记录页面实际显示、作者为 Tibo 的条目：逐条保存 status ID 和 UTC，连续向旧滚动，直到
+     页面已越过起点，或出现明确的加载停止 / 资源上限 / 网站失败。网页滚过时间边界只表示观察
+     到该处，**不证明区间穷尽**；不得据此写 covered。
+  3. 发现会改变安排的承诺、时间、类型或范围线索后即可停止继续翻旧内容，把它形成候选并补证。
+     对每个重要候选，用上面的 fxtwitter 单帖命令读取正文、`replying_to_status` 及 `quote` 的
+     id / URL / 正文。存在 parent 时再用同一命令读取 parent；存在 quote 且其内容承重时，再按
+     quote URL 读取原帖。`quote: null` 是健康的无引用形态，不是未核；只有实际存在的承重节点
+     取不到时，相应判断才保持 unknown。
+  4. finding 记录 `window_start/window_end`、观察到的 status IDs、最旧可见 UTC 与停止原因：
+     `boundary_observed` / `loading_stopped` / `resource_stop` / `site_failed` / `not_logged_in`。
+     没有登录态或网站失败即 `unknown`；到边界但只有网页滚动证据即 `partial`，阴性结果只能写
+     「本轮观察到的回复中无相关线索」。
+- 每轮按对象写回复覆盖：`covered(candidate_chain:<id>)` 只用于一个已知候选的正文及其实际存在的
+  parent / quote 承重节点已完整核验，或某个接口提供了真实穷尽信号且记录了明确范围；
+  `partial(<window>)` 用于有界网页
+  观察；`uncovered` 表示本轮只有结构上不含 replies 的主帖/镜像入口；`unknown` 表示 reply 通道
+  失败或不可用。后三种都不能宣布该时段没有回复或全局无新信号。主帖入口始终只算 main-post
+  coverage，不因它返回零条或返回完整正文而升级 reply coverage。
 - **落地确认帖的回复链要读；tracker 的条目数不等于事件数**（2026-09-10 实测）：09-08
   「All reset for everyone」官宣帖下，Tibo 回复「You forgot the part where I reset usage
   twice in the middle」——正式落地之前当天已中途全局重置两次，这个口径只存在于回复里。

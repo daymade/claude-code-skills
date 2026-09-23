@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **tibo-reset-codex** (`tibo-reset-codex` v1.13.2 → v1.13.3): Preserve the approved sleep-window
+  polling reduction while closing its signal-loss exception. Normal rounds now read Tibo's main-post
+  timeline independently of Radar, so an unindexed standalone post can still become a signal; reduced
+  rounds record that omitted leg as uncovered. A newly indexed announcement now requires
+  full-text adjudication before `official_window=null` can keep the reduced path; future commitments,
+  decision-changing time/type/scope, and due unresolved promises escalate to follow-up. Reply and parent
+  discovery now has an executable bounded `with_replies` route with a fixed UTC start, observed post IDs,
+  candidate-chain verification (including explicit quote id/URL/text output, with `null` as a healthy no-quote
+  result), explicit stop reasons, and `partial`/`unknown` negative exits. `covered` is
+  reserved for a complete named candidate chain or a genuinely exhaustive interface, so a main-post miss,
+  CLI search 404, or scrolling past a time boundary can no longer be presented as proof that no reply exists.
+  Requests about a known missed result route to historical
+  evidence-chain diagnosis instead of repeating current-state polling, and the Skill states that unattended
+  scheduling, delivery, and ACK remain outside this single-run fix.
+
 - **ppt-creator** (`daymade-docs` v1.16.0 → v1.16.1): Keep the retired skill available only by explicit invocation.
 
 - **claude-code-hooks** (`daymade-claude-code` v3.57.0 → v3.58.0): Add pitfall #47: a syntax error inside `$(( ))` makes bash discard the whole top-level command, so a subcommand branch skips its own `exit` and runs the hook's main path; under the health check's `</dev/null` a `--selftest` that hits it reports a pass. #29 gains a sibling form: an `exit 0` trap installed above the `--selftest` dispatch swallows the selftest's failures (EXIT: every `exit 1`; ERR: any failing command). #8 points to the `grep -c` variant of the two-line fallback value. The by-shape router, which stopped at #31, now also routes to #32–#47.
