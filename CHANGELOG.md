@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   body. `quick_validate` now warns above 420 characters. The trigger-rate optimizer is no longer a default step;
   descriptions are tuned from real sessions where the skill missed or misfired.
 
+- **macos-watchdog** (`daymade-macos` v1.6.1 → v1.7.0): Check the delivered macOS notification's
+  app label in Notification Center. `osascript` can appear as Script Editor; when that label is generic,
+  put the watcher or monitored service in the title so the reader can identify its log.
+
 - **tech-selection** (`daymade-claude-code` v3.58.0 → v3.59.0): When a `favorites-search` skill is installed, the
   description now requires running it on the user's own curated favorites before external research, and Step 1
   lists those favorites as a layer-1 source, so the prior-art gate starts from sources the user already vetted. Wording elsewhere is compressed to stay within the
