@@ -1,18 +1,11 @@
 ---
 name: claude-switch-models-setup
 description: >-
-  Set up and maintain multiple isolated Claude Code CLI profiles so students and
-  power users can run different LLM providers (Kimi K3, Kimi K2.7 highspeed,
-  MiniMax M3, MiniMax M2.7, GLM, DeepSeek, StepFun, Anthropic) in separate
-  terminal windows at the same time.
-  Use this skill whenever the user asks about multi-provider Claude setup,
-  multiple Claude Code windows, switching models or the csk/csd/csg aliases,
-  CLAUDE_CONFIG_DIR, the ~/.claude-profiles directory, or running
-  Kimi/MiniMax/GLM/DeepSeek/StepFun alongside Anthropic. It also owns profile-drift
-  troubleshooting — a third-party profile missing skills/hooks/plugins the default
-  profile has, claude-profiles-doctor reporting a real directory where a symlink
-  belongs, or settings not converging — and per-provider context-window
-  configuration (the [1m] marker or explicit CLAUDE_CODE_MAX_CONTEXT_TOKENS).
+  Sets up and maintains isolated Claude Code CLI profiles to run Kimi, MiniMax, DeepSeek, GLM,
+  StepFun or Anthropic in separate terminal windows. Use for multi-provider setup, switching models,
+  csk/csd/csg aliases, CLAUDE_CONFIG_DIR, or ~/.claude-profiles. Owns profile-drift troubleshooting
+  (missing skills/hooks, symlink drift, settings drift) and context-window setup ([1m] marker vs
+  CLAUDE_CODE_MAX_CONTEXT_TOKENS).
 ---
 
 # Claude Code Profiles and Local Skill Activation

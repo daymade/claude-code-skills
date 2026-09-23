@@ -1,16 +1,11 @@
 ---
 name: macos-permissions
 description: >-
-  Diagnose and fix macOS TCC permission dialogs and silent denials — Screen Recording,
-  Microphone, Camera, Accessibility, Automation (Apple Events), Full Disk Access, Files &
-  Folders, and the "X would like to access data from other apps" prompt. Use whenever an app
-  or background job is blocked by a macOS privacy permission, a permission dialog reappears
-  after clicking Allow, a LaunchAgent/`uv run` job keeps prompting, System Settings shows a
-  bare version number or wrong name, a granted permission silently stops working after an
-  update, or you need to find WHO is really requesting a permission. Covers reading TCC.db as
-  the ground-truth source, attribution (display name ≠ responsible process), per-binary-path
-  grants, the `uv`-in-launchd Full-Disk-Access trap, `tccutil reset`, and SIP limits.
-  中文触发：权限弹窗、授权、TCC、完全磁盘访问、Full Disk Access、录屏/麦克风/摄像头/辅助功能/自动化权限被拒、访问其他应用的数据、弹窗一直弹、授权了没用、升级后失效、System Settings 里显示版本号。
+  Diagnoses macOS TCC permission dialogs and silent denials: Screen Recording, Microphone, Camera,
+  Accessibility, Automation, Full Disk Access. Use when a dialog reappears after Allow, a
+  LaunchAgent/`uv run` job keeps prompting, a grant breaks after an update, or to find who is really
+  requesting it (权限弹窗 / 授权了没用 / 完全磁盘访问). Not for launchd design (use macos-watchdog) or app
+  permission UX (use developing-ios-apps).
 ---
 
 # macOS Permissions (TCC)

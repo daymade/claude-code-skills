@@ -1,19 +1,11 @@
 ---
 name: read-claude-web-conversation
 description: >-
-  Read or export the COMPLETE transcript of a Claude.ai web conversation — both
-  private claude.ai/chat/... and public claude.ai/share/... links — by calling
-  Claude.ai's internal API from inside the user's logged-in Chrome, and download its
-  FILES too (uploads, deliverables). Use whenever the user pastes a claude.ai
-  conversation or share link and asks to read, summarize, export, archive, or extract
-  it — "read this Claude conversation", "导出这个网页版对话", "把这个对话拉到本地". Every naive
-  approach fails SILENTLY: curl/WebFetch hit a Cloudflare challenge; get_page_text
-  sees only the last message; the default API rendering collapses tool calls into
-  placeholders (~5% of it); a share payload uses block shapes a /chat/-only renderer
-  drops without error. Works even when the claude-in-chrome extension cannot pair
-  (different account), via CDP or a macOS AppleScript fallback. Scope: ONLINE
-  claude.ai. For LOCAL Claude Code sessions use read-claude-code-history; for
-  an exported .txt/.json file use claude-export-txt-better.
+  Reads or exports the COMPLETE transcript of a Claude.ai web conversation — private /chat/... and
+  public /share/... links — via Claude.ai's internal API in the user's logged-in Chrome, plus its
+  files. Use when the user pastes a claude.ai link and asks to read, summarize, export, archive, or
+  extract it — "读这个对话", "导出网页版对话", "拉到本地". Local sessions: read-claude-code-history; exported files:
+  claude-export-txt-better.
 ---
 
 # Read Claude.ai Web Conversation

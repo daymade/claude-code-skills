@@ -1,14 +1,11 @@
 ---
 name: ima-copilot
-description: >
-  Installs, troubleshoots, and personalizes the official Tencent IMA skill (a wrapper
-  layer that orchestrates upstream ima-skill, not a replacement). Use when the user
-  mentions IMA, 腾讯 IMA, ima.qq.com, ima-skill, installing or configuring ima-skill,
-  IMA API key / credentials, searching across IMA knowledge bases, 知识库搜索, 笔记搜索,
-  fan-out search with preferred KBs / priority boosting, or wants to diagnose, repair, or
-  personalize an ima-skill install. Also trigger on the missing-YAML-frontmatter bug in
-  ima-skill submodule SKILL.md files and errors like "Skipped loading skill(s) due to
-  invalid SKILL.md".
+description: >-
+  Installs, diagnoses, repairs, and personalizes the official Tencent IMA skill (a wrapper around
+  upstream ima-skill, not a replacement), including fan-out search across IMA knowledge bases with
+  priority boosting. Use when the user mentions IMA / 腾讯 IMA / ima-skill, needs IMA API key setup,
+  知识库搜索 / 笔记搜索, or hits "Skipped loading skill(s) due to invalid SKILL.md" (ima-skill's
+  missing-YAML-frontmatter bug).
 ---
 
 # IMA Copilot

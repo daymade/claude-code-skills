@@ -1,6 +1,10 @@
 ---
 name: stepfun-asr
-description: Transcribe audio with StepFun's stepaudio-3-asr-max — an SSE endpoint (NOT /v1/audio/transcriptions), single call handles long audio with no client-side chunking. Use when transcribing Chinese / English audio with StepFun, when long-form recordings (5-30 min) need to land in one request, when migrating from step-asr / step-asr-1.1 / stepaudio-2.5-asr, or when hitting the misleading `model stepaudio-3-asr-max not supported` error (which actually means wrong endpoint). Triggers on 阶跃 ASR, StepFun ASR, stepaudio-3-asr-max, stepaudio-2.5-asr, 转录, 语音识别, 长音频转写, 语音转文字. For TTS with the sibling stepaudio-3-tts model, use the stepfun-tts skill instead.
+description: >-
+  Transcribes Chinese/English audio with StepFun's stepaudio-3-asr-max via its SSE endpoint (not
+  /v1/audio/transcriptions) — one call handles long-form audio with no chunking. Use when migrating
+  from step-asr/stepaudio-2.5-asr, or hitting the misleading "model not supported" error (actually
+  wrong endpoint). Triggers on 阶跃 ASR, 语音识别. Not for TTS with the sibling model (use stepfun-tts).
 ---
 
 # StepFun stepaudio-3-asr-max

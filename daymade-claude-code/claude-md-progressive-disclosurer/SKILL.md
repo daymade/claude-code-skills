@@ -1,12 +1,10 @@
 ---
 name: claude-md-progressive-disclosurer
 description: >-
-  Optimize, slim, or restructure CLAUDE.md/AGENTS.md with progressive disclosure and zero
-  information loss. Use when the user explicitly asks to audit, 精简, 瘦身, 重构, split, or
-  diagnose adherence problems in instruction files. Profiles the whole resident startup surface,
-  allocates rules among prose, path rules, Skills, hooks, and references, then moves low-frequency
-  sections verbatim with content-integrity checks. Also use when an active task starts moving or
-  compressing instruction sections. Not for generic task drift unless instruction files are in scope.
+  Optimizes, slims, or restructures CLAUDE.md/AGENTS.md with progressive disclosure and zero
+  information loss. Use when the user explicitly asks to audit, 精简, 瘦身, 重构, split, or diagnose
+  adherence problems in instruction files, or when an active task starts moving/compressing
+  instruction sections. Not for generic task drift unless instruction files are in scope.
 ---
 
 # CLAUDE.md 渐进式披露优化器

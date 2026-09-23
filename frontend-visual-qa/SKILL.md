@@ -1,16 +1,11 @@
 ---
 name: frontend-visual-qa
 description: >-
-  Audits already-rendered web, landing-page, HTML deck/slide, browser tool/game,
-  dashboard/admin, design-system, and desktop UIs using real-browser or
-  native-app journeys, inspected screenshots, DOM geometry, responsive or
-  projection viewports, and a bundled Playwright sweep. Use after UI
-  implementation to find typography, wrapping, overlap, overflow, responsive,
-  route, overlay, map, transient-state, data-visualization, browser-output,
-  file-dialog, PDF/print, or Electron-shell defects, or to compare a rendered
-  artifact with a visual reference. Do not use for greenfield UI design,
-  extracting a design system from screenshots, general QA-program setup, or
-  nonvisual code debugging.
+  Audits already-rendered UI — web app, deck/slide, dashboard, design-system, or Electron/native app
+  — via real-browser/native-app journeys and a Playwright sweep. Use after UI implementation to find
+  typography, overflow, responsive, routing, data-viz, browser-output, or native-shell defects, or
+  to compare a render against a reference. Not for greenfield UI design (use ui-designer) or
+  QA-program setup (use qa-expert).
 ---
 
 # Frontend Visual QA
@@ -45,8 +40,10 @@ map, export, and native-shell checks.
 Use adjacent skills by stage:
 
 - Use ui-designer, frontend-design, or another design skill to derive or create
-  a visual direction.
-- Use this skill to test the already-rendered result.
+  a visual direction, or to extract a design system from reference screenshots —
+  this skill audits an already-rendered artifact, it does not derive one.
+- Use this skill to test the already-rendered result, not to debug nonvisual
+  code (logic, data, or backend correctness) that produced no visible defect.
 - Use qa-expert for a full test strategy, defect program, and release metrics.
 - Use both this skill and qa-expert only when rendered visual evidence is one
   part of a broader QA gate.

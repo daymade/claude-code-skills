@@ -1,6 +1,10 @@
 ---
 name: teams-channel-post-writer
-description: Creates educational Teams channel posts for internal knowledge sharing about Claude Code features, tools, and best practices. Applies when writing posts, announcements, or documentation to teach colleagues effective Claude Code usage, announce new features, share productivity tips, or document lessons learned. Provides templates, writing guidelines, and structured approaches emphasizing concrete examples, underlying principles, and connections to best practices like context engineering. Activates for content involving Teams posts, channel announcements, feature documentation, or tip sharing.
+description: >-
+  Writes educational Teams channel posts about Claude Code features and best practices, using
+  templates emphasizing concrete examples and underlying principles (e.g. context engineering). Use
+  when writing a Teams post or announcement to teach colleagues Claude Code usage, announce a
+  feature, share a tip, or document a lesson learned.
 ---
 
 # Teams Channel Post Writer

@@ -1,15 +1,10 @@
 ---
 name: macos-cleaner
 description: >-
-  Diagnoses and safely reclaims macOS disk space. Use when a Mac is low on
-  storage, reports “Caching needs more space,” shows large Apple Content
-  Caching or AssetCacheManagerUtil usage, or needs analysis of caches, logs,
-  application remnants, large or duplicate files, Docker or OrbStack,
-  Chromium code-sign clones, Homebrew, npm, pip, Xcode, and other developer
-  storage. Routes known suspects to targeted read-only diagnosis before broad
-  scans, distinguishes nominal path accounting from physical release, requires
-  an impact-and-recovery plan plus explicit confirmation before state changes,
-  and verifies disk space and co-resident services afterward.
+  Diagnoses and safely reclaims macOS disk space: caches, logs, app remnants, large/duplicate files,
+  Docker/OrbStack, Chromium code-sign clones, developer caches. Use when a Mac is low on storage,
+  shows “Caching needs more space”, or before deleting anything to avoid data loss. Not for
+  Windows/Linux or permission issues (use macos-permissions).
 ---
 
 # macOS Cleaner

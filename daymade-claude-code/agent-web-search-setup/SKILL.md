@@ -1,18 +1,11 @@
 ---
 name: agent-web-search-setup
 description: >-
-  Sets up working web search on an agent whose model backend cannot run it.
-  Resellers and relays that proxy Claude or Codex to another cloud (Vertex AI,
-  Bedrock, or an OpenAI-compatible layer) do not execute the server-side
-  web_search and web_fetch tools, so those return empty instead of failing and
-  the model reports that recent things do not exist. Use this skill whenever
-  searches come back with nothing, a model insists a shipped product was never
-  released, web search appears to do nothing at all, someone wants to give an
-  agent internet access, or the person is on a third-party base URL, a relay, or
-  a 中转站. It works out which built-in tools are actually dead, removes them so
-  the model stops reaching for them, installs a replacement the model can really
-  call, and proves it with a live query. It configures the agent; it is not
-  itself a search engine.
+  Fixes web search on an agent whose model backend can't run it: a relay/reseller proxying Claude or
+  Codex returns empty instead of failing. Use when web search returns nothing, a model insists a
+  shipped product doesn't exist, someone wants to give an agent internet access, or the user is on a
+  third-party base URL, relay, or 中转站. Diagnoses which built-in tools are dead, removes them, and
+  installs a working replacement.
 ---
 
 # Agent Web Search Setup
@@ -20,6 +13,9 @@ description: >-
 A model backend that cannot search is not the same as a model that searched and
 found nothing, but from inside the conversation the two look identical. This
 skill turns the first into the second, on whichever agent is in front of you.
+It configures the agent's tools; it is not itself a search engine, so nothing
+here answers a query directly — the proof of done is the agent's own session
+calling a real tool.
 
 ## What actually breaks
 

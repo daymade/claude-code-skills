@@ -13,6 +13,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **auto-repo-setup** (`auto-repo-setup` v2.0.0 → v2.1.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **bilibili-source** (`bilibili-source` v1.2.0 → v1.3.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **cli-demo-generator** (`cli-demo-generator` v1.0.1 → v1.1.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **competitors-analysis** (`competitors-analysis` v1.3.0 → v1.4.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **meeting-minutes-taker, stepfun-asr, stepfun-tts, transcript-fixer** (`daymade-audio` v1.42.0 → v1.43.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **agent-web-search-setup, claude-export-txt-better, claude-md-progressive-disclosurer, claude-migrate-memory-to-doc, claude-switch-models-setup, continue-claude-code-work, continue-codex-work, lark-cli-router, marketplace-dev, prior-work-retrieval, read-claude-web-conversation, read-codex-history, statusline-generator, terminal-screenshot** (`daymade-claude-code` v3.63.0 → v3.64.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **codex-1m-context-window-setup, interaction-design-board, local-codex** (`daymade-codex` v1.2.3 → v1.3.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **benchmark-due-diligence, bigdata-skill, financial-data-collector** (`daymade-financial` v1.3.0 → v1.4.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **developing-ios-apps, macos-cleaner, macos-permissions** (`daymade-macos` v1.8.0 → v1.9.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **skill-governance** (`daymade-skill` v1.51.0 → v1.52.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **deep-research** (`deep-research` v2.6.0 → v2.7.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **excalidraw-use** (`excalidraw-use` v1.0.2 → v1.1.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **feishu-doc-scraper** (`feishu-doc-scraper` v1.5.2 → v1.6.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **frontend-visual-qa** (`frontend-visual-qa` v1.13.0 → v1.14.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **github-contributor** (`github-contributor` v1.2.0 → v1.3.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **github-ops** (`github-ops` v1.6.0 → v1.7.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **github-review-pr** (`github-review-pr` v1.3.0 → v1.4.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **github-sensitive-data-cleanup** (`github-sensitive-data-cleanup` v1.2.0 → v1.3.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **ima-copilot** (`ima-copilot` v1.0.1 → v1.1.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **kimi-use** (`kimi-use` v1.2.0 → v1.3.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **llm-eval-harness** (`llm-eval-harness` v1.4.2 → v1.5.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **llm-wiki-setup** (`llm-wiki-setup` v1.1.1 → v1.2.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **marketplace-health-check** (`marketplace-health-check` v1.0.1 → v1.1.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **meme-creator** (`meme-creator` v1.0.0 → v1.1.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **openclaw-model-switch** (`openclaw-model-switch` v1.1.0 → v1.2.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **openclaw** (`openclaw` v1.2.1 → v1.3.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **prompt-optimizer** (`prompt-optimizer` v1.1.0 → v1.2.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **qa-expert** (`qa-expert` v1.0.0 → v1.1.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **teams-channel-post-writer** (`teams-channel-post-writer` v1.0.0 → v1.1.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **terraform-skill** (`terraform-skill` v1.2.0 → v1.3.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **windows-remote-desktop-connection-doctor** (`windows-remote-desktop-connection-doctor` v1.1.0 → v1.2.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
 - **docs-router** (`daymade-docs` v1.19.0 → v1.20.0): Its first 160 description characters now name the document routes and post-change checks that Codex can see. The nine specialist instructions and manual commands are unchanged.
 
 - **skill-creator** (`daymade-skill` v1.50.0 → v1.51.0): The description rule now requires the first ~160 characters to stand on their own (what the skill does and its main trigger). Measured in `codex debug prompt-input` with 260 skills installed: Codex cuts 254 of them at 164–168 characters, so later trigger phrases and "Not for" redirects are invisible there.

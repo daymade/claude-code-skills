@@ -1,18 +1,11 @@
 ---
 name: terminal-screenshot
-description: >
-  Render a terminal CLI program's colored output to a PNG so Claude can actually
-  SEE the real visual result — color contrast, alignment, background blocks,
-  highlighting — instead of only reading plain text and raw ANSI escape codes.
-  Use this whenever verifying or debugging how a CLI tool looks in the terminal:
-  delta git diff colors, bat syntax highlighting, starship prompt, eza/ls colors,
-  git diff, ripgrep matches, or any ANSI-colored output. ALWAYS use it right after
-  changing any CLI color config (delta / bat / themes / lazygit pager) to visually
-  confirm the result rather than guessing from hex values — reading a hex code is
-  not the same as seeing the rendered contrast on the real terminal background.
-  Trigger phrases: 看终端效果, 终端截图, 验证配色, 配色对比, 终端真实效果,
-  terminal screenshot, render terminal output, ANSI to image, "does this color
-  look right", "is the contrast enough", delta/bat color verification.
+description: >-
+  MUST be used right after changing any CLI color config (delta/bat/themes/lazygit pager) — renders
+  the terminal's colored output to a PNG so Claude can actually SEE contrast, alignment, and
+  highlighting instead of raw ANSI codes. Use for delta git diff colors, bat syntax highlighting,
+  starship prompt, eza/ls colors, or ripgrep matches. Trigger phrases: 看终端效果, 终端截图, 验证配色, terminal
+  screenshot.
 ---
 
 # Terminal Screenshot
