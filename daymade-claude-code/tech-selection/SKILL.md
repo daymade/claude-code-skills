@@ -5,7 +5,7 @@ description: >-
   build-vs-buy, architecture; if favorites-search is installed, MUST run it before external
   research. Filters out options that fail its gates and returns surviving candidates with
   trade-offs, not a single pick. Use for 用哪个 / 选什么框架 / 要不要自建 / A 还是 B, or when the agent itself
-  picks one. Not for research reports.
+  picks one. Not for research reports (use deep-research).
 argument-hint: "<decision to make>"
 ---
 
@@ -23,6 +23,7 @@ Two outcomes end the protocol early:
 
 ## Not This
 
+- Not for research reports (use deep-research), debugging or bug fixes in already-settled code, or price comparisons between vendors — none of these is choosing a technology.
 - Not an interview framework — the user delegates implementation, not direction. Don't ask "which do you prefer" when you can probe and decide.
 - Not a scoring rubric — no weighted scores, no "winner" ranking. Filters, then business anchor.
 - Not self-certifying — the "why this isn't garbage" defense is written by this skill but must be independently checkable, not self-approved.

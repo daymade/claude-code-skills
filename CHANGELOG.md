@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **tunnel-doctor** (`tunnel-doctor` v1.13.0 → v1.14.0): 1019 → 355 characters; description rewritten by skill-creator's new rule as a short routing key; operational rules it used to carry already live in the SKILL.md body.
 
-- **tech-selection, claude-code-hooks, local-conversation-history, read-claude-code-history** (`daymade-claude-code` v3.59.0 → v3.60.0): 810–1011 → 315–414 characters; description rewritten by skill-creator's new rule as a short routing key; operational rules it used to carry already live in the SKILL.md body.
+- **tech-selection, claude-code-hooks, local-conversation-history, read-claude-code-history** (`daymade-claude-code` v3.59.0 → v3.60.0): 810–1011 → 315–420 characters; description rewritten by skill-creator's new rule as a short routing key; operational rules it used to carry already live in the SKILL.md body.
 
 - **asr-transcribe-to-text** (`daymade-audio` v1.41.3 → v1.42.0): 972 → 345 characters; description rewritten by skill-creator's new rule as a short routing key; operational rules it used to carry already live in the SKILL.md body.
 
