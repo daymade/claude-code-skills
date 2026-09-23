@@ -15,8 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rounds record that omitted leg as uncovered. A newly indexed announcement now requires
   full-text adjudication before `official_window=null` can keep the reduced path; future commitments,
   decision-changing time/type/scope, and due unresolved promises escalate to follow-up. Reply and parent
-  coverage is reported as `covered` / `uncovered` / `unknown`, so a main-post miss or CLI search 404 can no
-  longer be presented as proof that no reply exists. Requests about a known missed result route to historical
+  discovery now has an executable bounded `with_replies` route with a fixed UTC start, observed post IDs,
+  candidate-chain verification, explicit stop reasons, and `partial`/`unknown` negative exits. `covered` is
+  reserved for a complete named candidate chain or a genuinely exhaustive interface, so a main-post miss,
+  CLI search 404, or scrolling past a time boundary can no longer be presented as proof that no reply exists.
+  Requests about a known missed result route to historical
   evidence-chain diagnosis instead of repeating current-state polling, and the Skill states that unattended
   scheduling, delivery, and ACK remain outside this single-run fix.
 

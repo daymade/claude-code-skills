@@ -115,10 +115,11 @@ description: >-
 
 ### 1. 公告路径：Radar 索引与 Tibo 主帖是两条覆盖腿
 
-**正常轮次必须同时查 Radar 与 Tibo 主帖时间线。** Radar 可能完全没有索引一条新的独立主帖；
-因此「Radar 无新」不能结束公告路径。主帖时间线也不含 replies，两条腿各自只能证明自己的覆盖面。
-按时段降频的已批准例外仍按入口分流执行：降频轮只查 Radar 时，把主帖覆盖记为 `uncovered`，
-不能把结果写成全量无新。
+**正常轮次必须实际尝试三条腿：Radar、Tibo 主帖时间线、下文的有界 reply 发现。** Radar 可能
+完全没有索引一条新的独立主帖；主帖时间线也不含 replies，所以前两条都无新仍不能跳过 reply
+发现。宿主没有可用的已登录 X 通道时，reply 腿的执行结果是 `unknown`，不是静默省略。按时段
+降频的已批准例外仍按入口分流执行：降频轮只查 Radar 时，把 `main_posts` 与 `replies` 都记为
+`uncovered`，不能把结果写成全量无新。
 
 本机已登录且 `twitter-cli` 可用时，主帖入口使用下面的只读命令（v0.8.5，2026-09-23 实测；
 帮助与 JSON 输出均核对过）：
@@ -189,13 +190,25 @@ curl -sS --max-time 20 "https://api.fxtwitter.com/<user>/status/<status-id>" \
 - fxtwitter 不返回回复**内容**（`replies` 字段只是数值计数）。它返回的 `replying_to`
   （被回复人 handle）与 `replying_to_status`（被回复帖 id）足够判断一条已知帖子是否为回复，
   被回复帖本身再用同一条命令取一次；但它**不能枚举主帖下有哪些回复**。主帖零命中、主帖时间线
-  无新项，或某个 CLI search 返回 404，都不能写成「没有回复」。可用时，用已登录 X 原站的
-  `with_replies` 或其他既有可读通道补查目标时段，并读取候选回复的 parent / quote；原站或通道
-  只能找到正控、无法证明区间穷尽时，按实际覆盖范围报告。
-- 每轮把回复链覆盖写成三态：`covered` = 指定时段/候选链已由能读 replies 的通道实际检查；
-  `uncovered` = 本轮只用了结构上不含 replies 的主帖/镜像入口；`unknown` = 能覆盖 replies 的通道
-  本轮失败或不可用。后两种都只能说「回复覆盖未完成」，不能宣布无新信号；已知回复缺 parent 时，
-  对依赖上下文的类型、时间或范围判断同样保持 unknown。
+  无新项，或某个 CLI search 返回 404，都不能写成「没有回复」。
+- **有界 reply 发现路径**（2026-09-23 已登录 X 原站实测能看到一条主帖入口遗漏的旧回复）：
+  1. 先固定起点：上次**可靠** reply 检查的 UTC；没有就用本任务窗口或当前未决承诺的起点。
+     打开 `https://x.com/thsottiaux/with_replies`，记录本轮 URL、起点与开始时间。
+  2. 只记录页面实际显示、作者为 Tibo 的条目：逐条保存 status ID 和 UTC，连续向旧滚动，直到
+     页面已越过起点，或出现明确的加载停止 / 资源上限 / 网站失败。网页滚过时间边界只表示观察
+     到该处，**不证明区间穷尽**；不得据此写 covered。
+  3. 发现会改变安排的承诺、时间、类型或范围线索后即可停止继续翻旧内容，把它形成候选并补证。
+     对每个重要候选，用上面的 fxtwitter 单帖命令读取正文、`replying_to_status` 和 quote；存在
+     parent 时再用同一命令读取 parent。缺任一承重节点，相应判断保持 unknown。
+  4. finding 记录 `window_start/window_end`、观察到的 status IDs、最旧可见 UTC 与停止原因：
+     `boundary_observed` / `loading_stopped` / `resource_stop` / `site_failed` / `not_logged_in`。
+     没有登录态或网站失败即 `unknown`；到边界但只有网页滚动证据即 `partial`，阴性结果只能写
+     「本轮观察到的回复中无相关线索」。
+- 每轮按对象写回复覆盖：`covered(candidate_chain:<id>)` 只用于一个已知候选的正文、parent 与 quote
+  已完整核验，或某个接口提供了真实穷尽信号且记录了明确范围；`partial(<window>)` 用于有界网页
+  观察；`uncovered` 表示本轮只有结构上不含 replies 的主帖/镜像入口；`unknown` 表示 reply 通道
+  失败或不可用。后三种都不能宣布该时段没有回复或全局无新信号。主帖入口始终只算 main-post
+  coverage，不因它返回零条或返回完整正文而升级 reply coverage。
 - **落地确认帖的回复链要读；tracker 的条目数不等于事件数**（2026-09-10 实测）：09-08
   「All reset for everyone」官宣帖下，Tibo 回复「You forgot the part where I reset usage
   twice in the middle」——正式落地之前当天已中途全局重置两次，这个口径只存在于回复里。
