@@ -2,26 +2,24 @@
 """
 Analyze Claude Code session files to find relevant sessions and statistics.
 
-This script helps locate sessions containing specific keywords, analyze
-session activity, and generate reports about session content.
+This script lists and analyzes sessions. Its raw keyword search remains
+available only for isolated test fixtures; live discovery uses the index.
 
 By default, history is searched across every active Claude config home plus
 every long-term archive registered in ~/.claude/history-sources.json. Searching
 only ~/.claude or only the current active tree can silently miss a real session.
 Conversation dates come from internal JSONL records, never file mtime.
 
-Three opt-in widenings exist because "not found" is the expensive answer:
---all-projects sweeps every project when the project is a guess, --codex
-also searches Codex rollout history (~/.codex), and --kimi also searches
-Kimi CLI sessions (~/.kimi-code) — different stores that the Claude registry
-never covers.
+Exact-session lookup and indexed recall avoid reading the whole corpus.
 """
 
 import hashlib
 import json
 import os
+import pwd
 import re
 import sys
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -2152,6 +2150,22 @@ def _codex_home_for(args) -> Path:
     return Path.home() / ".codex"
 
 
+def _fixture_raw_search_allowed(args, sources: List[HistorySource]) -> bool:
+    """Permit isolated test fixtures, never the live conversation stores."""
+    real_home = Path(pwd.getpwuid(os.getuid()).pw_dir).resolve()
+    if Path.home().resolve() == real_home:
+        return False
+    roots = [source.home for source in sources]
+    if args.codex:
+        roots.append(_codex_home_for(args))
+    if args.kimi:
+        roots.append(_kimi_home_for(args))
+    temp_root = Path(tempfile.gettempdir()).resolve()
+    return bool(roots) and all(
+        root.resolve().is_relative_to(temp_root) for root in roots
+    )
+
+
 def _kimi_home_for(args) -> Path:
     return resolve_kimi_home(getattr(args, "kimi_home", None))
 
@@ -2439,7 +2453,9 @@ def main():
     )
 
     # Search command
-    search_parser = subparsers.add_parser("search", help="Search sessions for keywords")
+    search_parser = subparsers.add_parser(
+        "search", help="Raw keyword search for isolated test fixtures only"
+    )
     search_parser.add_argument(
         "search_terms",
         nargs="+",
@@ -2452,8 +2468,7 @@ def main():
     search_parser.add_argument(
         "--all-projects",
         action="store_true",
-        help="Sweep every project across all sources — the default move when "
-        "you do not know which project the conversation happened in.",
+        help="Fixture-only: include every project in the isolated test corpus.",
     )
     search_parser.add_argument(
         "--exclude-session",
@@ -2480,9 +2495,7 @@ def main():
         type=float,
         default=DEFAULT_CODEX_SCAN_BUDGET_SECONDS,
         metavar="SECONDS",
-        help="Stop a broad Codex rollout scan after SECONDS (default: 300). "
-        "Use 0 only to explicitly accept an unbounded scan; partial results "
-        "are never reported as complete.",
+        help="Fixture-only Codex scan time cap (default: 300 seconds).",
     )
     search_parser.add_argument(
         "--kimi",
@@ -2755,6 +2768,13 @@ def main():
         _validate_project_scope(args, parser)
         from_timestamp, to_timestamp = _parse_date_window(args, parser)
         analyzer = _analyzer_or_exit(args)
+        if not _fixture_raw_search_allowed(args, analyzer.sources):
+            parser.error(
+                "raw history search is disabled for live sources: use "
+                "history_index.py recall, then read an exact session. "
+                "Date flags currently filter after reading files and do not "
+                "make this command bounded."
+            )
         source_summary = _source_summary(analyzer.sources)
         (
             sessions,

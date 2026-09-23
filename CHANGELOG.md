@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Local conversation history** (`daymade-claude-code` v3.60.2 → v3.61.0): Live `analyze_sessions.py search` now fails before reading conversation files. History discovery uses indexed recall and exact-session verification; the Skills report index coverage gaps instead of falling back to a raw corpus sweep. Isolated fixture search remains available for parser regression tests.
+
 - **claude-switch-models-setup** (`daymade-claude-code` v3.60.0 → v3.60.1): The profile settings converger now propagates env deletions: a non-identity env key removed from main is deleted from every profile and reported, instead of surviving forever under the old additive-only merge. Identity keys (provider routing, Anthropic-native isolation) are exempt — main never carries them, so their absence is not deletion evidence. Deletion also propagates when main drops the `env` key entirely, which the old loop-shaped code could never do.
 
 - **claude-switch-models-setup** (`daymade-claude-code` v3.60.1 → v3.60.2): Docs now match the v3.60.1 deletion-propagation behavior: SKILL.md describes the two-way env convergence (non-identity residue keys are deleted and reported; identity keys exempt), and troubleshooting.md's synthetic-main incident notes the damage is two-sided — a fake main now also deletes every non-identity env key the real profile carries, including credential keys.

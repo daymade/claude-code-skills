@@ -28,7 +28,7 @@
     {
       "id": 5,
       "prompt": "只在 Codex 的所有 rollout 里搜‘attachment-b.pdf’，不要把 Claude Code 的命中混进来；当前 Session 自匹配要排除。",
-      "expected_output": "Runs analyze_sessions.py search --codex-only --all-projects with --exclude-session and a bounded scan; every match is a Codex rollout and incomplete input cannot become a complete-looking zero result.",
+      "expected_output": "Uses indexed Codex recall with current Session excluded, checks coverage and freshness, verifies candidate rollouts by internal ID, and reports any unindexed attachment or tool-result gap without a raw corpus scan.",
       "files": []
     },
     {

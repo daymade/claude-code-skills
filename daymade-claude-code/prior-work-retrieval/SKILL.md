@@ -198,13 +198,10 @@ uv run --no-project python scripts/prior_work.py complete \
 
 If none qualify, use `--no-reuse-reason` with the verified mismatch. “No hits”
 is not a reason; it is a retrieval observation and may require widening terms or
-resolving a failed carrier. And a zero-candidate required carrier cannot be
-reported as "none exists" by paraphrase either: attach the label census — run
-`analyze_sessions.py search --all-projects --exclude-session <CURRENT_ID> '<term>'`
-for each outcome term and report the per-label hit counts (`message` /
-`thinking` / `tool_input:<name>` / `tool_result` / `attachment` / `summary`).
-The census does not change the conclusion; it closes the "re-derive the query
-syntax" path by showing where the terms do live.
+resolving a failed carrier. A zero-candidate required carrier cannot be
+reported as "none exists" by paraphrase either. Check index provider coverage
+and freshness, refine indexed terms, and report the remaining gap. Do not run
+an unindexed whole-history label census.
 
 **Results at low confidence are not zero results.** When a carrier reports
 `result_count > 0` alongside `terms_passed: false`, expand those ranked results
