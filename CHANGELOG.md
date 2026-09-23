@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **ppt-creator** (`daymade-docs` v1.16.0 → v1.16.1): Keep the retired skill available only by explicit invocation.
+
 - **claude-code-hooks** (`daymade-claude-code` v3.57.0 → v3.58.0): Add pitfall #47: a syntax error inside `$(( ))` makes bash discard the whole top-level command, so a subcommand branch skips its own `exit` and runs the hook's main path; under the health check's `</dev/null` a `--selftest` that hits it reports a pass. #29 gains a sibling form: an `exit 0` trap installed above the `--selftest` dispatch swallows the selftest's failures (EXIT: every `exit 1`; ERR: any failing command). #8 points to the `grep -c` variant of the two-line fallback value. The by-shape router, which stopped at #31, now also routes to #32–#47.
 
 - **claude-switch-models-setup** (`daymade-claude-code` v3.56.0 → v3.57.0): Add explicit, strictly qualified source preferences for intentional same-name variants. Undeclared collisions still fail; both source bundles remain intact, and Codex, Claude personal links and installation audits share one resolver. Deploy the source-sync failure recorder and its calibration script as managed links without enabling the wrapper. Refuse to overwrite ordinary copies and document their preservation and migration during pinned-runtime updates.
