@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **slides-creator** (`slides-creator` v2.0.0 → v2.1.0): description now opens with what it was and where to go instead (deck-creator), so the first ~160 characters Codex shows are usable; deprecation notice unchanged in substance.
+
 - **auto-repo-setup** (`auto-repo-setup` v2.0.0 → v2.1.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
 
 - **bilibili-source** (`bilibili-source` v1.2.0 → v1.3.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
