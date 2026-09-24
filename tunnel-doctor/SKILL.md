@@ -953,6 +953,8 @@ nft list ruleset 2>/dev/null | head -60
 - **The clean host fails too, and its egress IP matches yours** → the destination is refusing you; your tunnel was never the problem.
 - **The clean host succeeds** → the blocker really is local, and you now also have a working path (`ssh -J <clean-host> <destination>` relays TCP while your key stays on your own machine).
 
+The second vantage point doesn't have to be a second host — **a second network counts too** (phone hotspot, a different WiFi). 2026-09-24: a cafe WiFi black-holed JMS's subscription domain *and* main site *and* all nodes (every TCP connect timed out for 2h), a picture indistinguishable from "the provider is GFW-blocked" — every self-heal level failed because each heal action rode the same venue egress. Switching WiFi restored everything with zero config change. A venue change is a two-minute experiment; run it before concluding "the provider is down/blocked" from single-venue probes.
+
 **Confirm a local blocker** by asking the proxy to relay explicitly instead of letting the TUN intercept:
 
 ```bash
