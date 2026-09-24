@@ -17,7 +17,7 @@ SPECS = {
         },
         "hot": {"devils-advocate", "benchmark-due-diligence"},
         "prefix": ("Bigdata/RavenPack", "US fundamentals/yfinance", "A-share",
-                   "sector Top N/announcements", "pharma daily/医药日报",
+                   "sector Top N/公告", "pharma/医药板块/日报/飞书",
                    "Gangtise/岗底斯"),
     },
     "daymade-claude-code": {
@@ -36,8 +36,8 @@ SPECS = {
             "read-claude-web-conversation", "claude-md-progressive-disclosurer",
         },
         "prefix": ("plugin/Skill repair", "marketplace", "statusline",
-                   "model profiles/source sync", "usage/quota reset ping",
-                   "memory→docs", ".txt export repair"),
+                   "model profiles/source sync", "1M/[1m] context",
+                   "usage/quota reset ping", "memory→docs", ".txt repair"),
     },
 }
 
@@ -105,6 +105,18 @@ class MixedSuiteRouterContractTest(unittest.TestCase):
                 )
                 for signal in spec["prefix"]:
                     self.assertIn(signal, description[:160], (suite_name, signal))
+
+    def test_colloquial_pharma_and_early_compaction_keep_their_routes(self):
+        finance = (REPO / "daymade-financial/financial-router/SKILL.md").read_text()
+        operations = (
+            REPO / "daymade-claude-code/claude-code-ops-router/SKILL.md"
+        ).read_text()
+        self.assertRegex(finance, r"医药板块[^\n]*\| `\.\./pharma-daily-report/SKILL\.md`")
+        self.assertRegex(
+            operations,
+            r"early compaction[^\n]*CLAUDE_CODE_MAX_CONTEXT_TOKENS[^\n]*"
+            r"\| `\.\./claude-switch-models-setup/SKILL\.md`",
+        )
 
 
 if __name__ == "__main__":

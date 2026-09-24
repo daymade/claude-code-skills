@@ -488,7 +488,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 > **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:claude-code-ops-router`）
 
-按任务读取一个专用 Skill：插件和 Skill 故障、marketplace、状态栏、模型 Profile 与源码同步、用量和额度定时器、memory 迁移、导出 `.txt` 修复。原有专用斜杠命令仍可手动调用。
+按任务读取一个专用 Skill：插件和 Skill 故障、marketplace、状态栏、模型 Profile 与源码同步、1M 上下文提前压缩、用量和额度定时器、memory 迁移、导出 `.txt` 修复。原有专用斜杠命令仍可手动调用。
 
 ---
 
@@ -2605,7 +2605,7 @@ claude plugin install feishu-doc-scraper@daymade-skills
 
 > **安装**：`claude plugin install daymade-financial@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-financial:financial-router`）
 
-按任务读取 Bigdata/RavenPack、美股免费基本面、A 股消息、行业 Top N 与公告、医药日报或 Gangtise 安装诊断的专用 Skill。通用论证审查保持直接入口，专用斜杠命令仍可手动调用。
+按任务读取 Bigdata/RavenPack、美股免费基本面、A 股消息、行业 Top N 与公告、医药板块快照或日报、Gangtise 安装诊断的专用 Skill。通用论证审查保持直接入口，专用斜杠命令仍可手动调用。
 
 ---
 
