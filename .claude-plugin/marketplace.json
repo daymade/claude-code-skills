@@ -5,8 +5,8 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code and Codex skills marketplace — production-ready skills spanning GitHub and git operations (including current-base contributor PR review), document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, local inter-agent messaging, Claude Code operations, technology selection and build-vs-buy decisions, and model-aware Codex workstation setup. Suite plugins bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
-    "version": "3.17.0"
+    "description": "Professional Claude Code and Codex skills marketplace — production-ready skills spanning GitHub and git operations (including current-base contributor PR review), document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, evidence-backed HTML reports and data-visualization judgment, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, local inter-agent messaging, Claude Code operations, technology selection and build-vs-buy decisions, and model-aware Codex workstation setup. Suite plugins bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
+    "version": "3.18.0"
   },
   "plugins": [
     {
@@ -1219,6 +1219,64 @@
         "sticker",
         "avatar",
         "logo"
+      ]
+    },
+    {
+      "name": "data-visualization-discipline",
+      "description": "数据可视化的判断层 SSOT——画任何图表、dashboard、看板之前先加载它，不是画完之后。管\"该不该这么画\"：这张图想让读者得出什么结论、用均值还是中位数、能不能聚合、堆叠还是折线、能不能上双轴、配色与颜色数量、同一实体跨图是否同色同位、表格该留几列。介质无关：HTML 报告页、React/Vue dashboard、PPT 原生图表、matplotlib/plotly/ECharts/D3、渲染成 PNG 的图，一律适用。Use when 动手画图之前，或评审既有图表（\"这几张图有什么问题\"、\"图例为什么不一致\"）。Not for 报告页的排版/组件/交互（用 report-with-html:report-with-html）或 PPT 原生图表的实现与渲染陷阱（用 deck-creator:deck-creator）。",
+      "source": "./data-visualization-discipline",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "documentation",
+      "keywords": [
+        "数据可视化",
+        "图表",
+        "chart",
+        "dashboard",
+        "看板",
+        "可视化纪律",
+        "图型选择",
+        "统计量",
+        "中位数",
+        "堆叠图",
+        "双轴",
+        "配色",
+        "图例",
+        "Cleveland",
+        "Tufte",
+        "Bertin",
+        "data visualization",
+        "chart critique",
+        "图表评审"
+      ]
+    },
+    {
+      "name": "report-with-html",
+      "description": "Produces the reader-facing HTML artifact — report, dashboard, architecture view, data browser, or review workbench — evidence-backed, browser-verified. Use when the deliverable IS a visual HTML report, or the user asks for an HTML/web presentation. Load data-visualization-discipline for chart judgment. Not for chat status or Markdown prose unless asked to become a report; not for PowerPoint (deck-creator Route C).",
+      "source": "./report-with-html",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "documentation",
+      "keywords": [
+        "HTML报告",
+        "可视化报告",
+        "一页纸",
+        "数据报告",
+        "半年报",
+        "系统可视化",
+        "差距地图",
+        "架构可视化",
+        "用户旅程",
+        "决策看板",
+        "事故时间线",
+        "对比看板",
+        "dashboard",
+        "html",
+        "html one-pager",
+        "数据浏览器",
+        "归档浏览器",
+        "审核工作台",
+        "review workbench"
       ]
     }
   ]

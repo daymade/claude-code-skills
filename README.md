@@ -3884,6 +3884,38 @@ Glue logos, avatars, or stickers onto moving objects in a video clip so they fol
 
 ---
 
+### **data-visualization-discipline** - Judgment Layer for Charts and Dashboards
+
+> **Install**: `claude plugin install data-visualization-discipline@daymade-skills`
+
+Decides whether a chart should exist and how it should be drawn before any code is written: the one conclusion each chart must support, mean vs. median, whether segments may be aggregated, stacked vs. line, dual axes, color count and cross-chart color identity, and how many columns a table keeps. Medium-agnostic — HTML reports, React/Vue dashboards, native PowerPoint charts, matplotlib/plotly/ECharts/D3.
+
+**Key features:**
+- Five stages (intent → data validity → form → encoding → delivery): the first four end with a handoff check, the fifth is the delivery gate
+- A nine-item delivery gate, including a masked-render self-test and painted-span proportion checks
+- Reviews existing charts ("what is wrong with these charts", "why do the legends disagree")
+
+- [`data-visualization-discipline`](./data-visualization-discipline/SKILL.md) — full instructions. Pairs with `report-with-html`, which owns the report page itself.
+
+---
+
+### **report-with-html** - Evidence-Backed HTML Reports
+
+> **Install**: `claude plugin install report-with-html@daymade-skills`
+
+Produces the reader-facing HTML artifact — report, dashboard, architecture or journey view, data browser, or review workbench — built around the reader's question, with every number traceable and the page verified in a real browser before delivery.
+
+**Key features:**
+- Skeleton chosen by the reader's question (how it works / what to decide / why it happened / which is better / inspect a collection)
+- Decision-card contract, reusable interaction components, and a warm-paper starter template
+- Delivery gate script with a masked (text-free) render, segment cropping for full-page review, and a zero-context independent reader review
+
+- [`report-with-html`](./report-with-html/SKILL.md) — full instructions. Load `data-visualization-discipline` for chart judgment.
+
+**Requirements**: Google Chrome or Chromium; `uv`; Python 3.10+.
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
