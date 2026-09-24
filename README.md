@@ -3456,7 +3456,9 @@ blind to them.
 - Two-layer architecture: `references/` + CLAUDE.md-inline + AGENTS.md-symlink, designed around
   what each tool actually auto-loads (plain-text pointers are on-demand in both tools)
 - Full workflow: diagnosis, multi-agent review, empirical `codex` verification, and memory cleanup
-- Leaves memory as a thin handoff cache instead of the SSOT
+- Two goals: end tool lock-in, where memory stays as a thin handoff cache; or retire a project's
+  auto memory, where every entry moves to a document, the project switch goes off, and a control
+  probe confirms memory no longer loads
 - Runs inline, orchestrating review subagents and invoking `codex` directly
 
 **Example usage:**
@@ -3465,6 +3467,7 @@ blind to them.
 migrate my memory — Codex doesn't know who I am
 my memory is locked to Claude Code, make it tool-agnostic
 memory has grown bloated with content that should live in docs
+turn off auto memory for this project and move everything into docs
 ```
 
 ---
