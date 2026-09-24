@@ -25,7 +25,8 @@ uv run python scripts/forecast_log.py summary
 
 ## 每次调用先回看
 
-1. 运行 `summary`，先读 `due_for_followup`（窗口已过期或 24h 内将关闭、且尚无定论的
+1. 运行 `summary`，先读 `due_for_followup`（窗口已过期或 24h 内将关闭——阈值即脚本常量
+   `CLOSING_SOON_HOURS`——且尚无定论的
    pending，带完整 id 可直接喂 review），再读 `pending` 和 `recent_resolved`。`pending`
    同时含未核验与证据不足的记录；`window_elapsed` 只说明窗口已过，不判输赢。没有历史时
    按当前证据预测，记录为空不构成错误。需要当时的原始读数时读数据目录的 `findings.jsonl`
