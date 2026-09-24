@@ -66,8 +66,12 @@ class ForecastLogTests(unittest.TestCase):
         self.assertEqual(log.latest_monitor_handoff(self.findings_path)["notes"], first["notes"])
         second = log.append_finding(self.findings_path, {"invocation": "monitor", "query": "follow up",
                     "endpoints": [], "readings": {}, "notes": ["旧承诺已由原帖证实；继续查兑现"]},
-                    self.now + timedelta(minutes=5))
+                    self.now - timedelta(minutes=5))
         self.assertEqual(log.latest_monitor_handoff(self.findings_path)["id"], second["id"])
+        third = log.append_finding(self.findings_path, {"invocation": "monitor", "query": "same clock",
+                    "endpoints": [], "readings": {}, "notes": ["同时刻写入的新问题"]},
+                    self.now - timedelta(minutes=5))
+        self.assertEqual(log.latest_monitor_handoff(self.findings_path)["id"], third["id"])
 
     def test_records_original_forecast_feedback_and_private_permissions(self):
         row = self.record()

@@ -244,8 +244,7 @@ def latest_monitor_handoff(path):
     with path.open(encoding="utf-8") as stream:
         fcntl.flock(stream, fcntl.LOCK_SH)
         rows = read_rows(stream, kinds=("finding",))
-    monitors = (row for row in rows if row.get("invocation") == "monitor")
-    return max(monitors, key=lambda row: (instant(row["recorded_at"]), row["id"]), default=None)
+    return next((row for row in reversed(rows) if row.get("invocation") == "monitor"), None)
 
 
 def append_record(path, command, data, now=None):
