@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **macos-permissions, macos-watchdog, capture-screen** (`daymade-macos` v1.10.0 → v1.11.0): Align Full Disk Access guidance with the tested background reader and its installer. The repair route now checks existing grants before opening System Settings, uses exact TCC client paths, and validates a protected read. LaunchAgent and README guidance point to that route instead of treating the displayed interpreter or a manual grant as universal.
+
 - **macos-permissions** (`daymade-macos` v1.9.1 → v1.10.0): Route background Full Disk Access failures through requester identification, verified reuse of an existing grant when the owning installer supports it, and a real background readback. New grants use System Settings; the GUI path remains unverified in the documented case.
 
 - **tibo-reset-codex** (`tibo-reset-codex` v1.14.5 → v1.14.6): Clarify that the hosted branch is a read-only research **task** with application-owned state, even when its workspace sandbox permits network access and temporary files to read explicitly authorized private sources. The normal direct-call ledger path remains unchanged.

@@ -82,9 +82,9 @@ explicitly blocked, unshipped, or pending. Test advisory liveness across later
 fully-due windows, and leave current thresholds in the owning implementation
 rather than copying them into this file.
 
-Synchronous Claude Code/Codex lifecycle hooks and background services
-(LaunchAgents included) must call a fixed direct interpreter **owned by the
-installer that writes it**. Do not register a Python entry point through a
+Python entry points registered as synchronous Claude Code/Codex lifecycle hooks or
+background services (LaunchAgents included) must call a fixed direct interpreter
+**owned by the installer that writes it**. Do not register a Python entry point through a
 package manager, generic interpreter dispatcher, or `.py` shebang lookup: a
 shared environment/cache lock can stall every prompt or tool boundary, and a
 bare `python3` resolves under launchd's minimal PATH to the Developer Tools
@@ -95,7 +95,11 @@ Own the literal path, the way `SYSTEM_GIT` is owned. Explicit maintenance,
 retrieval, validation, and test commands may still use their declared `uv`
 project; the runtime boundary is the rule. The concrete prior-work wrapper and
 profile-converger registration live in their respective Skills rather than
-being copied here.
+being copied here. For a LaunchAgent blocked by TCC, route to
+[`macos-permissions`](daymade-macos/macos-permissions/SKILL.md) to identify the
+permission subject and verify a protected read in the real background job.
+An owning installer may support an already authorized launcher; that does not
+make a package-manager dispatcher the default for Python hooks.
 
 Treat `daymade-skill/skill-creator` as a locked uv project. Run its bundled Python tools from that directory with `uv run --frozen`; the project-local `.venv` is isolated from caller projects while uv's shared cache supplies the pinned packages. Do not reintroduce per-call `--with` overlays for dependencies already in its `pyproject.toml`.
 

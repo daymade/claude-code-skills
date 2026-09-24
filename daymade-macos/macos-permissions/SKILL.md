@@ -11,9 +11,8 @@ description: >-
 # macOS Permissions (TCC)
 
 macOS gates per-app, per-resource access through **TCC** (Transparency, Consent, Control).
-Every Allow/Deny ever made lives in `TCC.db` and silently controls what a process can do.
-The diagnostic pain is almost never "the permission is off" — it is **one of four traps**, each
-with a different fix:
+TCC records permission decisions in its databases and controls what a process can do.
+Several common traps need different fixes:
 
 | Trap | Symptom | Fix lives in |
 |---|---|---|
@@ -22,36 +21,36 @@ with a different fix:
 | **Silent denial** | Feature "unavailable", no dialog, grant looks ON | `references/tcc-mechanics.md` § auth_value |
 | **Can't read TCC.db** | `Permission denied` reading the DB; need FDA to diagnose FDA | `references/tcc-mechanics.md` § SIP |
 
-## The attribution trap (the #1 reason diagnosis goes in circles)
+## The attribution trap
 
-**The name in the dialog is NOT who to grant.** macOS attributes a request to the *responsible*
+**The name in the dialog does not prove who to grant.** macOS attributes a request to the *responsible*
 process in the process tree, but displays the name of the *accessing* executable — and for an
 unsigned binary with no bundle (uv-managed python, per-version CLI, node helpers) that display
 name is just the last path component, which changes with every version. Granting the displayed
 name is the mistake that costs the most rounds.
 
-**Before touching System Settings, get ground truth from two independent sources:**
+**Before touching System Settings, inspect the request and any readable grant state:**
 
 ```bash
 # 1. Who is actually requesting — the responsible process in the attribution chain
 /usr/bin/log show --last 30m --predicate 'subsystem == "com.apple.TCC"' --info --debug \
   | grep -E 'from Sub:|responsible=|accessing=' | tail -20
 
-# 2. The grant's current state (auth_value: 0=deny, 1=unknown, 2=allow)
+# 2. Grant candidates, if this terminal can read the system database
 sudo -n sqlite3 '/Library/Application Support/com.apple.TCC/TCC.db' \
   "select service, client, auth_value from access where service='kTCCServiceSystemPolicyAllFiles' and client like '%<name>%';"
 ```
 
-Grant the process `from Sub:` names (the real requester), not the dialog title. Reading TCC.db
-needs your terminal to already have Full Disk Access — that bootstrap is in
-`references/tcc-mechanics.md`.
+Use `from Sub:` to identify a candidate requester, then verify its exact path and a real
+protected read before choosing what to authorize. An unreadable TCC.db leaves grant state
+unknown; its FDA bootstrap is in `references/tcc-mechanics.md`.
 
 ## Decision tree
 
 | The situation is… | Go to |
 |---|---|
-| Dialog reappears after clicking Allow; or a LaunchAgent / `uv run` job prompts every few minutes | `references/uv-fda-trap.md` (authorize `uv` itself, not python) |
 | User asks to complete Full Disk Access repair automatically, or a background job needs protected files | `references/automated-full-disk-access.md` (reuse a verified existing grant first; otherwise drive System Settings and read back) |
+| Dialog reappears after clicking Allow; or a LaunchAgent / `uv run` job prompts every few minutes | `references/uv-fda-trap.md` (identify the requester; follow the automated repair route before adding a grant) |
 | Need the full kTCCService catalog, schema, auth_value/auth_reason semantics, `tccutil` | `references/tcc-mechanics.md` |
 | Reading TCC.db gives "Permission denied" | `references/tcc-mechanics.md` § SIP and the FDA bootstrap |
 | A granted permission silently stopped working after an update | `references/tcc-mechanics.md` § common failure modes (toggle off/on, or `tccutil reset <Service> <bundle-id>`) |

@@ -2026,27 +2026,15 @@ claude plugin install daymade-macos@daymade-skills
 
 📚 **文档**：参见 [capture-screen/SKILL.md](./daymade-macos/capture-screen/SKILL.md)。
 
-### **macos-permissions** - 诊断 macOS TCC 权限弹窗
+### **macos-permissions** - 诊断并修复 macOS 隐私权限
 
 > **安装**：`claude plugin install daymade-macos@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-macos:macos-permissions`）
 
-诊断 macOS 隐私弹窗（屏幕录制、完全磁盘访问、自动化等）为何反复弹出或授权给了错误对象。核心规则：**弹窗显示的名字 ≠ 发起方**——先读 TCC 日志的 `from Sub:` 归因确定真正在请求的进程，再读 TCC.db 的 `auth_value` 确认当前授权状态，然后才决定该给谁授权。
-
-**适用场景：**
-- 权限弹窗（"想要访问其他 App 的数据"、屏幕录制、麦克风）点了允许后仍反复出现
-- 需要授权的 App 不在系统设置里，或列表中的名字与预期进程不符
-- 后台/launchd 任务触发权限弹窗，而同一命令交互运行时却不触发
-- 无签名 CLI 工具（uv 托管的 python、自定义二进制）在 launchd 下撞权限墙
-
-**核心能力：**
-- 决策树区分「发起方」（TCC 日志 `from Sub:`）与「显示名」（无签名、按路径归因的二进制会随版本漂移）
-- 完整 `kTCCService` 目录、`auth_value`/`auth_reason` 语义与 `tccutil` 速查
-- uv-in-launchd 完全磁盘访问陷阱：作为无带 FDA 父进程可继承的 root 进程运行；给 uv 二进制授权即可，路径变更会复发
-- 确认「哪个二进制在请求权限」的仪器纪律（优先日志归因，规避 `fs_usage`/`pgrep` 的假阴性）
+用于排查反复弹出的 TCC 权限提示、静默拒绝，以及后台任务无法读取受保护文件的问题。Skill 会定位实际请求权限的进程，检查现有授权能否复用，并通过真实后台读取验收；诊断和完全磁盘访问权限的修复步骤以 Skill 正文为准。
 
 📚 **文档**：参见 [macos-permissions/SKILL.md](./daymade-macos/macos-permissions/SKILL.md)。
 
-**要求**：macOS（Swift + AppleScript + `screencapture`）。
+**要求**：macOS。读取 TCC.db 时，执行读取的进程还需具备完全磁盘访问权限。
 
 ---
 

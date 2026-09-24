@@ -2,7 +2,7 @@
 
 The general-purpose reference behind `../SKILL.md`. Load when you need the full service catalog,
 the database schema, grant-value semantics, `tccutil`, or the SIP/Full-Disk-Access bootstrap.
-This is mechanism; `uv-fda-trap.md` is the highest-frequency applied case.
+This is mechanism; `uv-fda-trap.md` records an applied case.
 
 ## What TCC is
 
@@ -82,9 +82,9 @@ the grant keys on a path that changes with versions; `0` (bundle ID) means it su
 - `2` = user denied at prompt
 - `3` = user consent (granted at a prompt)
 - `4` = system set
-- `5` = **service policy** — the deny was *structural*, not a user choice. This is the launchd /
-  no-GUI-session / unsigned-binary case: granting does not fix it, only changing who/what requests
-  does (see `uv-fda-trap.md`).
+- `5` = **service policy** — the decision came from a policy, not a user choice. Identify the
+  effective requester and launch context before choosing a repair; the observed `uv`
+  LaunchAgent worked after an FDA grant to `uv` (see `uv-fda-trap.md`).
 - `6` = MDM policy — forced by a configuration profile, not user-revocable without removing it.
 
 ## auth_value semantics
@@ -165,8 +165,8 @@ Access for the reading process. Grant FDA to your terminal first, then it can re
   Hardened-Runtime binary missing the `com.apple.security.automation.apple-events` entitlement
   blocks Apple Events from its whole child tree — a code-signing issue, not a TCC grant.
 - **Terminal can't read TCC.db**: the terminal lacks FDA — see the bootstrap above.
-- **A prompt that reappears every run / every update**: the grant is keyed to a path that changes.
-  See `uv-fda-trap.md` for the launchd + unsigned-binary case (most common on this machine).
+- **A prompt that reappears every run / every update**: the grant may be keyed to a path that changed.
+  See `uv-fda-trap.md` for the observed launchd + unsigned-binary case.
 - **An uninstalled app still appears in Privacy & Security**: the TCC entry persists after removal.
   Click `-` in the System Settings list, or `tccutil reset` on its bundle ID.
 - **`tccutil reset` doesn't reprompt**: reset sets Unknown but the app must re-request; quit and

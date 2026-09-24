@@ -1,6 +1,6 @@
 # Automate a Full Disk Access repair
 
-The success condition is the **named background job reading the protected data in its real launch context**. A toggled switch, HTTP 200, an interactive run, or a healthy process by itself does not prove that result. This route covers an explicitly authorized local machine and job; it does not require a second declaration that the user owns an account already identified as theirs.
+The success condition is the **named background job reading the protected data in its real launch context**. A toggled switch, HTTP 200, an interactive run, or a healthy process by itself does not prove that result.
 
 ## 1. Bind the exact job and permission subject
 
@@ -10,7 +10,7 @@ Read the job's plist or installer, executable paths, process tree, and one prote
 
 Before opening System Settings, check whether the job's actual launcher already has Full Disk Access. On one Mac, `~/.local/bin/uv` had `kTCCServiceSystemPolicyAllFiles auth_value=2`; a Go reader launched as its direct child under a user LaunchAgent then read the account database. This is **one observed machine and one reader**, not a macOS-wide promise that any FDA-bearing app can launch any child.
 
-In the verified Mac WeChat reader case, the `mac-launchagent.py` installer in the owning code repository has an optional `--uv-launcher <absolute uv path>` mode. Read that repository's current README and `--help`; use its installer and rollback instead of inventing a second wrapper in this Skill. It has **one fixed LaunchAgent label**: `--base` selects the health-check address, not a second instance or a new listening port. Stop a manually running listener before installation. When replacing a loaded LaunchAgent, the installer saves its prior binary and plist, restarts it on failure, and checks that it becomes ready. A successful install checks the exact `uv` LaunchAgent process, its direct `chatlog` child, the listener, and database readiness. Then run the installed reading Skill against that service to read the expected account and one known message; verify a real media item separately if media is in scope. If the existing grant or the actual protected read fails, use step 3.
+In the verified Mac WeChat reader case, the owning repository's `mac-launchagent.py` installer supports an optional `--uv-launcher` mode. Read that repository's current README, installer and `--help`, then use its installation and rollback path. Do not invent a second instance by changing `--base`: the current installer has one fixed LaunchAgent label and uses `--base` for its health check. Stop a manually running listener before installation. Run the installed reading Skill against the background service to read the expected account and one known message; verify a real media item separately if media is in scope. If the existing grant or the actual protected read fails, use step 3.
 
 Stop after the background read works. Adding another FDA entry would not improve that result.
 
