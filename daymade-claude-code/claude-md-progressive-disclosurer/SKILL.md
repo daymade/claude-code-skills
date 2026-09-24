@@ -4,8 +4,9 @@ description: >-
   Optimizes or restructures CLAUDE.md/AGENTS.md with progressive disclosure and zero
   information loss. Use when the user asks to optimize, audit, 精简/瘦身/重构, or split instruction
   files, asks for their best practices (最佳实践), sees Memory files taking a large share of
-  /context, reports rules being ignored, or a task starts moving instruction sections. Not for
-  generic task drift; not for moving memory entries into docs (use claude-code-ops-router).
+  /context, reports rules in instruction files being ignored, or a task starts moving
+  instruction sections. Not for generic task drift unless instruction files are in scope; not
+  for moving memory entries into docs (use claude-code-ops-router).
 ---
 
 # CLAUDE.md 渐进式披露优化器
