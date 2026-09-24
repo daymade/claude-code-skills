@@ -22,6 +22,11 @@ CONFIDENCES = ("low", "medium", "high")
 # Catalyst labels make "which signal actually preceded the event" machine-checkable
 # across reviews instead of buried in free-text rationale.
 CATALYSTS = ("milestone", "outage_compensation", "quality_release", "none", "other")
+# A pending forecast whose window is this close to closing needs its discriminator
+# readied now: verifying only after the window has long closed stretches the
+# observed interval past the window edge and forfeits a would-be hit (measured
+# 2026-09-24: a banked forecast checked 26h late could only be scored unknown).
+CLOSING_SOON_HOURS = 24
 
 
 def optional_catalyst(data, key):
@@ -311,8 +316,28 @@ def summarize(path, kind=None, now=None):
     # 不是读到一条已被 revision_of 取代的旧论据。显式按发出时间排，与 resolved 的
     # 「最新核验优先」对齐；同刻追加时保持文件顺序（stable sort）。
     pending.sort(key=lambda item: instant(item["recorded_at"]))
+    # Surface which pending windows need a verification pass right now, so a bare
+    # invocation sees them before reading any rationale text. Overdue entries come
+    # first, most overdue first; closing_soon entries follow, soonest first.
+    due = []
+    for item in pending:
+        end = instant(item["window_end"])
+        outcome = item["latest_review"]["outcome"] if item["latest_review"] else "unreviewed"
+        if now > end:
+            due.append({"id": item["id"], "kind": item["kind"],
+                        "window_end": item["window_end"], "urgency": "overdue",
+                        "hours_overdue": round((now - end).total_seconds() / 3600, 1),
+                        "latest_outcome": outcome})
+        elif (end - now).total_seconds() <= CLOSING_SOON_HOURS * 3600:
+            due.append({"id": item["id"], "kind": item["kind"],
+                        "window_end": item["window_end"], "urgency": "closing_soon",
+                        "hours_until_close": round((end - now).total_seconds() / 3600, 1),
+                        "latest_outcome": outcome})
+    due.sort(key=lambda d: (-(d["urgency"] == "overdue"),
+                            -d.get("hours_overdue", 0), d.get("hours_until_close", 0)))
     return {"journal": str(path), "checked_at": now.isoformat(),
             "forecast_count": len(forecasts), "cycle_counts": counts,
+            "due_for_followup": due,
             "pending": pending, "recent_resolved": resolved[-10:],
             "note": "Counts use first forecasts per anchor/type, not calibrated probabilities. "
                     "Elapsed windows and missing announcements alone do not prove a miss. "
