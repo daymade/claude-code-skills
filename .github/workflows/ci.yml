@@ -38,6 +38,9 @@ jobs:
       - name: Marketplace manifest resolves
         run: python3 scripts/ci/check_marketplace.py
 
+      - name: Shared conversation core matches bundled readers
+        run: python3 daymade-claude-code/sync_core.py check
+
       # Skills ship scripts users execute directly, usually mid-incident.
       - name: Shell scripts parse
         run: scripts/ci/check_shell_syntax.sh

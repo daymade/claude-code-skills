@@ -824,168 +824,23 @@ with path.open("r+b") as handle:
         )
         self.assertEqual(titles[attachment_tail_session_id], "总结文件")
 
-    def test_codex_raw_rollout_fallback_skips_bad_json(self) -> None:
+    def test_codex_missing_index_never_reads_rollouts_without_flag(self) -> None:
         session_id = "ffffffff-ffff-4fff-8fff-ffffffffffff"
-        rollout = (
-            self.codex_home
-            / "sessions"
-            / "2026"
-            / "01"
-            / "15"
-            / f"rollout-2026-01-15T10-00-00-{session_id}.jsonl"
-        )
         write_jsonl(
-            rollout,
-            [
-                "not-json",
-                {
-                    "timestamp": "2026-01-15T10:00:00Z",
-                    "type": "session_meta",
-                    "payload": {
-                        "id": session_id,
-                        "cwd": str(self.workspace),
-                        "timestamp": "2026-01-15T10:00:00Z",
-                        "source": "cli",
-                    },
-                },
-                {
-                    "timestamp": "2026-01-15T12:30:00Z",
-                    "type": "response_item",
-                    "payload": {
-                        "type": "message",
-                        "role": "user",
-                        "content": [
-                            {"type": "input_text", "text": "Fallback conversation"}
-                        ],
-                    },
-                },
-            ],
+            self.codex_home / "sessions" / f"rollout-{session_id}.jsonl",
+            [{"type": "session_meta", "payload": {"id": session_id, "cwd": str(self.workspace)}}],
         )
-        # Migration/copy time must not become conversation time.
-        os.utime(rollout, (1, 1))
-        archived_session_id = "abababab-abab-4bab-8bab-abababababab"
-        write_jsonl(
-            self.codex_home
-            / "archived_sessions"
-            / f"rollout-{archived_session_id}.jsonl",
-            [
-                {
-                    "type": "session_meta",
-                    "payload": {
-                        "id": archived_session_id,
-                        "cwd": str(self.workspace),
-                        "timestamp": "2026-01-14T10:00:00Z",
-                        "source": "cli",
-                    },
-                },
-                {
-                    "type": "event_msg",
-                    "payload": {
-                        "type": "user_message",
-                        "message": "Archived rollout conversation",
-                    },
-                },
-            ],
+        completed = subprocess.run(
+            [sys.executable, str(SCRIPT), "--cwd", str(self.workspace),
+             "--source", "codex", "--codex-home", str(self.codex_home),
+             "--format", "json"],
+            text=True, capture_output=True,
         )
-        completed = self.run_cli(
-            "--cwd",
-            str(self.workspace),
-            "--source",
-            "codex",
-            "--codex-home",
-            str(self.codex_home),
-            "--format",
-            "json",
-        )
-        payload = json.loads(completed.stdout)["providers"]["codex"]
-        self.assertEqual(payload["backend"], "rollout-jsonl")
-        self.assertEqual(payload["total"], 1)
-        self.assertEqual(payload["excluded"]["archived"], 1)
-        conversation = payload["conversations"][0]
-        self.assertEqual(conversation["title"], "Fallback conversation")
-        self.assertEqual(conversation["timestamp_source"], "rollout-record-minmax")
-        self.assertEqual(
-            datetime.fromisoformat(conversation["created_at"]).timestamp(),
-            datetime.fromisoformat("2026-01-15T10:00:00+00:00").timestamp(),
-        )
-        self.assertEqual(
-            datetime.fromisoformat(conversation["updated_at"]).timestamp(),
-            datetime.fromisoformat("2026-01-15T12:30:00+00:00").timestamp(),
-        )
+        self.assertEqual(completed.returncode, 2)
+        self.assertEqual(completed.stdout, "")
+        self.assertIn("inventory unavailable", completed.stderr)
 
-    def test_codex_raw_fallback_prefers_latest_live_copy_over_stale_archive(self) -> None:
-        session_id = "dededede-dede-4ded-8ded-dededededede"
-        live = (
-            self.codex_home
-            / "sessions"
-            / "2026"
-            / "08"
-            / "27"
-            / f"rollout-2026-08-27T10-00-00-{session_id}.jsonl"
-        )
-        write_jsonl(
-            live,
-            [
-                {
-                    "timestamp": "2026-08-27T10:00:00Z",
-                    "type": "session_meta",
-                    "payload": {"id": session_id, "cwd": str(self.workspace)},
-                },
-                {
-                    "timestamp": "2026-08-27T11:00:00Z",
-                    "type": "event_msg",
-                    "payload": {
-                        "type": "user_message",
-                        "message": "LIVE-LATEST-CORRECTION",
-                    },
-                },
-            ],
-        )
-        archive = (
-            self.codex_home
-            / "archived_sessions"
-            / f"rollout-2026-08-27T09-00-00-{session_id}.jsonl"
-        )
-        write_jsonl(
-            archive,
-            [
-                {
-                    "timestamp": "2026-08-27T09:00:00Z",
-                    "type": "session_meta",
-                    "payload": {"id": session_id, "cwd": str(self.workspace)},
-                },
-                {
-                    "timestamp": "2026-08-27T09:30:00Z",
-                    "type": "event_msg",
-                    "payload": {
-                        "type": "user_message",
-                        "message": "ARCHIVE-STALE-SNAPSHOT",
-                    },
-                },
-            ],
-        )
-
-        completed = self.run_cli(
-            "--cwd",
-            str(self.workspace),
-            "--source",
-            "codex",
-            "--codex-home",
-            str(self.codex_home),
-            "--include-archived",
-            "--format",
-            "json",
-        )
-        conversations = json.loads(completed.stdout)["providers"]["codex"][
-            "conversations"
-        ]
-
-        self.assertEqual(len(conversations), 1)
-        self.assertEqual(conversations[0]["title"], "LIVE-LATEST-CORRECTION")
-        self.assertEqual(conversations[0]["path"], str(live))
-        self.assertFalse(conversations[0]["archived"])
-
-    def test_codex_unknown_database_schema_reports_visible_fallback(self) -> None:
+    def test_codex_unknown_database_schema_reports_unavailable(self) -> None:
         self.codex_home.mkdir(parents=True)
         connection = sqlite3.connect(self.codex_home / "state_5.sqlite")
         try:
@@ -1015,21 +870,15 @@ with path.open("r+b") as handle:
                 },
             ],
         )
-        completed = self.run_cli(
-            "--cwd",
-            str(self.workspace),
-            "--source",
-            "codex",
-            "--codex-home",
-            str(self.codex_home),
-            "--format",
-            "json",
+        completed = subprocess.run(
+            [sys.executable, str(SCRIPT), "--cwd", str(self.workspace),
+             "--source", "codex", "--codex-home", str(self.codex_home),
+             "--format", "json"],
+            text=True, capture_output=True,
         )
-        provider = json.loads(completed.stdout)["providers"]["codex"]
-        self.assertEqual(provider["total"], 1)
-        self.assertTrue(
-            any("No compatible Codex state database" in item for item in provider["warnings"])
-        )
+        self.assertEqual(completed.returncode, 2)
+        self.assertEqual(completed.stdout, "")
+        self.assertIn("No compatible Codex state database", completed.stderr)
 
     def test_codex_index_only_reads_state_database(self) -> None:
         self.seed_codex_database()
@@ -1041,7 +890,7 @@ with path.open("r+b") as handle:
         self.assertTrue(provider["backend"].startswith("sqlite:"))
         self.assertIn("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", [item["session_id"] for item in provider["conversations"]])
 
-    def test_codex_index_only_rejects_raw_fallback_and_other_sources(self) -> None:
+    def test_codex_index_only_rejects_missing_index_and_other_sources(self) -> None:
         session_id = "99999999-9999-4999-8999-999999999999"
         write_jsonl(
             self.codex_home / "sessions" / f"rollout-{session_id}.jsonl",
@@ -1051,7 +900,7 @@ with path.open("r+b") as handle:
         missing = subprocess.run(command, text=True, capture_output=True)
         self.assertEqual(missing.returncode, 2)
         self.assertEqual(missing.stdout, "")
-        self.assertIn("raw rollout fallback disabled", missing.stderr)
+        self.assertIn("inventory unavailable", missing.stderr)
         connection = sqlite3.connect(self.codex_home / "state_5.sqlite")
         try:
             connection.execute("CREATE TABLE threads (id TEXT PRIMARY KEY)")
@@ -1061,12 +910,30 @@ with path.open("r+b") as handle:
         incompatible_schema = subprocess.run(command, text=True, capture_output=True)
         self.assertEqual(incompatible_schema.returncode, 2)
         self.assertEqual(incompatible_schema.stdout, "")
-        self.assertIn("raw rollout fallback disabled", incompatible_schema.stderr)
+        self.assertIn("inventory unavailable", incompatible_schema.stderr)
         incompatible = subprocess.run(command[:3] + ["all", *command[4:]], text=True, capture_output=True)
         self.assertEqual(incompatible.returncode, 2)
         self.assertIn("--index-only requires --source codex", incompatible.stderr)
         empty_source = subprocess.run(command[:3] + ["", *command[4:]], text=True, capture_output=True)
         self.assertEqual(empty_source.returncode, 2)
+
+    def test_codex_index_query_error_does_not_scan_rollouts(self) -> None:
+        self.seed_codex_database()
+        spec = importlib.util.spec_from_file_location(f"codex_index_error_{id(self)}", SCRIPT)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        from _core import codex as core
+
+        args = module.argparse.Namespace(
+            all_projects=True, cwd=None, recursive=False, include_archived=True,
+            include_subagents=True, include_automated=True, max_title_chars=120,
+        )
+        with mock.patch.object(core, "collect_codex_from_database", side_effect=sqlite3.OperationalError("query failed")):
+            result = core.collect_codex(args, self.codex_home)
+        self.assertEqual(result.backend, "index-unavailable")
+        self.assertEqual(result.conversations, [])
+        self.assertTrue(any("query failed" in warning for warning in result.warnings))
 
     def test_windows_path_normalization_without_user_directory(self) -> None:
         rows = [
@@ -1151,43 +1018,6 @@ with path.open("r+b") as handle:
         )
         self.assertIn("未知", markdown_result.stdout)
         self.assertNotIn("1970-", markdown_result.stdout)
-
-    def test_rollout_without_authoritative_or_uuid_id_is_skipped(self) -> None:
-        write_jsonl(
-            self.codex_home / "sessions" / "rollout-no-id.jsonl",
-            [
-                {
-                    "type": "session_meta",
-                    "payload": {
-                        "cwd": str(self.workspace),
-                        "timestamp": "2026-01-17T10:00:00Z",
-                        "source": "cli",
-                    },
-                },
-                {
-                    "type": "event_msg",
-                    "payload": {
-                        "type": "user_message",
-                        "message": "Must not receive a guessed ID",
-                    },
-                },
-            ],
-        )
-        completed = self.run_cli(
-            "--cwd",
-            str(self.workspace),
-            "--source",
-            "codex",
-            "--codex-home",
-            str(self.codex_home),
-            "--format",
-            "json",
-        )
-        provider = json.loads(completed.stdout)["providers"]["codex"]
-        self.assertEqual(provider["total"], 0)
-        self.assertTrue(
-            any("without a session ID" in item for item in provider["warnings"])
-        )
 
     def test_registered_archive_uses_internal_range_and_deduplicates(self) -> None:
         user_home = self.root / "user-home"

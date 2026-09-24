@@ -20,7 +20,7 @@ to `daymade-claude-code:continue-codex-work`.
 |---|---|---|
 | `<codex-home>/history.jsonl` | What the user submitted, keyed by Session ID and internal epoch timestamp | Exact recent user-input tables |
 | `state_*.sqlite` | Inventory metadata such as cwd, title, update time, and rollout path | Fast listing and candidate discovery |
-| `sessions/**/rollout-*.jsonl` and `archived_sessions/**` | Full user/assistant/tool/compaction/fork event stream | Session evidence, lineage, behavior audit, and keyword search |
+| `sessions/**/rollout-*.jsonl` and `archived_sessions/**` | Full user/assistant/tool/compaction/fork event stream | Exact-session evidence and keyword verification after indexed or physical preselection |
 
 Do not substitute one surface for another. A prompt-ledger row proves what was
 submitted, not what the Agent answered. A state DB path is only a candidate until

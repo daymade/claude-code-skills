@@ -1,10 +1,8 @@
 """Shared Codex conversation provider for the local-history skills.
 
-Reading Codex history is subtle: recent builds keep a `state_*.sqlite` index whose
-schema drifts between versions, and older ones only leave raw `rollout-*.jsonl`
-files. This module encapsulates both backends (with the sqlite path degrading to a
-raw-rollout scan when the schema is incompatible or a query fails) so that every
-skill sees one `collect_codex(args, home) -> ProviderResult` entry point.
+Codex inventory reads `state_*.sqlite` metadata and fails closed when that index
+is missing or unreadable. Exact-session helpers can inspect a named rollout;
+inventory never discovers or parses rollout trees as a fallback.
 
 It lives in the shared core (SSOT: `daymade-claude-code/_conversation_core/`,
 bundled into each skill's `scripts/_core/` by `sync_core.py`) so `list_local_history`
@@ -26,7 +24,7 @@ from urllib.parse import quote
 
 from .model import CodexDatabase, Conversation, ProviderResult
 from .parse import TimestampRange, parse_timestamp, workspace_matches
-from .text import extract_text, first_meaningful_title, is_automated_title, iter_jsonl
+from .text import first_meaningful_title, is_automated_title, iter_jsonl
 
 CODEX_REQUIRED_COLUMNS = {"id", "cwd", "updated_at", "source", "archived"}
 SESSION_ID_RE = re.compile(
@@ -90,10 +88,6 @@ def discover_codex_database(home: Path, warnings: list[str]) -> Optional[CodexDa
         except (OSError, sqlite3.Error, ValueError) as error:
             warnings.append(f"Ignoring incompatible Codex database {path}: {error}")
     if not compatible:
-        if candidates:
-            warnings.append(
-                "No compatible Codex state database; scanning raw rollout JSONL instead."
-            )
         return None
     return max(
         compatible,
@@ -227,19 +221,6 @@ def collect_codex_from_database(
         connection.close()
 
 
-def load_codex_session_index(home: Path, max_chars: int) -> dict[str, str]:
-    titles: dict[str, str] = {}
-    path = home / "session_index.jsonl"
-    if not path.is_file():
-        return titles
-    for record in iter_jsonl(path):
-        session_id = record.get("id")
-        title = first_meaningful_title((record.get("thread_name"),), max_chars)
-        if isinstance(session_id, str) and title:
-            titles[session_id] = title
-    return titles
-
-
 def codex_meta_from_rollout(
     path: Path, *, strict: bool = False
 ) -> Optional[dict[str, Any]]:
@@ -260,40 +241,8 @@ def codex_session_id(meta: dict[str, Any], path: Path) -> Optional[str]:
     return match.group(0) if match else None
 
 
-def codex_prompt_from_rollout(path: Path, max_chars: int) -> Optional[str]:
-    short_candidate: Optional[str] = None
-    for record in iter_jsonl(path, bounded=True):
-        candidate = ""
-        if record.get("type") == "response_item":
-            payload = record.get("payload")
-            if (
-                isinstance(payload, dict)
-                and payload.get("type") == "message"
-                and payload.get("role") == "user"
-            ):
-                candidate = extract_text(payload.get("content"))
-        elif record.get("type") == "event_msg":
-            payload = record.get("payload")
-            if isinstance(payload, dict) and payload.get("type") == "user_message":
-                candidate = str(payload.get("message") or "")
-        if not candidate:
-            continue
-        title = first_meaningful_title((candidate,), max_chars)
-        if not title:
-            continue
-        if len(title) >= 4:
-            return title
-        short_candidate = short_candidate or title
-    return short_candidate
-
-
 def codex_rollout_time_range(path: Path) -> TimestampRange:
-    """Compute exact internal bounds for a Codex rollout.
-
-    Current rollouts timestamp every top-level event. Older/minimal fixtures may
-    carry only ``session_meta.payload.timestamp``, so observe both. File mtime is
-    deliberately excluded because copying or migrating a rollout rewrites it.
-    """
+    """Compute internal time bounds for one explicitly selected rollout."""
     timestamps = TimestampRange()
     for record in iter_jsonl(path):
         timestamps.observe(record.get("timestamp"))
@@ -304,97 +253,25 @@ def codex_rollout_time_range(path: Path) -> TimestampRange:
     return timestamps
 
 
-def collect_codex_from_rollouts(
-    args: argparse.Namespace, home: Path, result: ProviderResult
-) -> None:
-    titles = load_codex_session_index(home, args.max_title_chars)
-    files: list[tuple[Path, bool]] = []
-    sessions_dir = home / "sessions"
-    if sessions_dir.is_dir():
-        files.extend((path, False) for path in sessions_dir.rglob("rollout-*.jsonl"))
-    archived_dir = home / "archived_sessions"
-    if archived_dir.is_dir():
-        files.extend((path, True) for path in archived_dir.rglob("rollout-*.jsonl"))
-    if not files:
-        result.warnings.append(f"No Codex rollout files found under {home}")
-        return
-    for path, archived in files:
-        meta = codex_meta_from_rollout(path)
-        if meta is None:
-            result.warnings.append(f"Skipping rollout without session_meta: {path}")
-            continue
-        session_id = codex_session_id(meta, path)
-        if session_id is None:
-            result.warnings.append(f"Skipping rollout without a session ID: {path}")
-            continue
-        cwd = str(meta.get("cwd") or "")
-        if not args.all_projects and not workspace_matches(cwd, args.cwd, args.recursive):
-            continue
-        if archived and not args.include_archived:
-            result.excluded_archived += 1
-            continue
-        subagent = nested_key_exists(meta.get("source"), "subagent")
-        if subagent and not args.include_subagents:
-            result.excluded_subagents += 1
-            continue
-        title = titles.get(session_id)
-        if not title:
-            title = codex_prompt_from_rollout(path, args.max_title_chars)
-        title = title or f"(untitled: {session_id})"
-        if is_automated_title(title) and not args.include_automated:
-            result.excluded_automated += 1
-            continue
-        timestamps = codex_rollout_time_range(path)
-        result.conversations.append(
-            Conversation(
-                provider="codex",
-                session_id=session_id,
-                title=title,
-                cwd=cwd,
-                updated_at=timestamps.latest,
-                created_at=timestamps.earliest,
-                archived=archived,
-                kind="subagent" if subagent else "main",
-                path=str(path),
-                metadata_source="rollout-jsonl",
-                timestamp_source=(
-                    "rollout-record-minmax" if timestamps.count else "unknown"
-                ),
-            )
-        )
-
-
 def collect_codex(args: argparse.Namespace, home: Path) -> ProviderResult:
-    result = ProviderResult(provider="codex", backend="none", home=str(home))
+    result = ProviderResult(provider="codex", backend="index-unavailable", home=str(home))
     if not home.is_dir():
         result.warnings.append(f"Codex home directory not found: {home}")
         return result
     database = discover_codex_database(home, result.warnings)
-    if database is not None:
-        relative = os.path.relpath(database.path, home).replace(os.sep, "/")
-        result.backend = f"sqlite:{relative}"
-        try:
-            collect_codex_from_database(args, home, database, result)
-        except sqlite3.Error as error:
-            result.warnings.append(
-                f"Codex database query failed ({error}); scanning raw rollout JSONL instead."
-            )
-            result.backend = "rollout-jsonl"
-            result.conversations.clear()
-            result.excluded_subagents = 0
-            result.excluded_archived = 0
-            result.excluded_automated = 0
-            collect_codex_from_rollouts(args, home, result)
-    else:
-        result.backend = "rollout-jsonl"
-        collect_codex_from_rollouts(args, home, result)
-    # Live and archived directories can hold different snapshots of the same
-    # Session. The old dict-comprehension was traversal-order last-wins: because
-    # archives are appended after live files, an older archive silently replaced
-    # a live copy containing the user's latest correction. Inventory still needs
-    # one row per Session, so choose by internal rollout time and prefer live on a
-    # tie. Completeness-sensitive exact reading separately compares every physical
-    # copy and fails closed when they are divergent rather than append-only.
+    if database is None:
+        result.warnings.append("No compatible Codex state database; inventory unavailable")
+        return result
+    relative = os.path.relpath(database.path, home).replace(os.sep, "/")
+    result.backend = f"sqlite:{relative}"
+    try:
+        collect_codex_from_database(args, home, database, result)
+    except sqlite3.Error as error:
+        result.backend = "index-unavailable"
+        result.conversations.clear()
+        result.warnings.append(f"Codex index query failed ({error}); inventory unavailable")
+        return result
+    # Preserve one inventory row per Session if a future state schema yields duplicates.
     deduplicated: dict[str, Conversation] = {}
     for item in result.conversations:
         existing = deduplicated.get(item.session_id)
