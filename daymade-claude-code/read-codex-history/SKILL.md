@@ -37,7 +37,7 @@ interpreting fork snapshots, compaction, event streams, or end reasons.
 
 | User wants | Use |
 |---|---|
-| Recent Codex sessions, titles, IDs, or positive writer-lock evidence | `scripts/list_local_history.py --source codex` only when its backend is state-DB metadata; stop if it falls back to parsing rollouts |
+| Recent Codex sessions, titles, IDs, or positive writer-lock evidence | `scripts/list_local_history.py --source codex --index-only`; an unavailable index leaves inventory unknown |
 | Find the Session containing a pasted quote, with a known project, date, or title clue | **Locate a quoted exchange** below: inventory candidates, then verify the original messages |
 | Exact recent user inputs from newest to oldest, grouped by Session | `scripts/list_codex_user_inputs.py` |
 | Whole-conversation original-input counts and quotations, including inherited history | `scripts/reconcile_codex_inputs.py --session <ID>` |
@@ -70,7 +70,7 @@ SQLite, Node, `jq`, or recursive grep.
 
 ```text
 <skill-dir>/scripts/list_local_history.py \
-  --source codex --cwd <workspace> --limit 20 --language zh
+  --source codex --index-only --cwd <workspace> --limit 20 --language zh
 ```
 
 Writer-lock output is positive-only: a held lock proves that exact advisory lock
@@ -86,7 +86,7 @@ these clues already bound discovery.
 
 ```text
 <skill-dir>/scripts/list_local_history.py \
-  --source codex --cwd <workspace> --include-archived \
+  --source codex --index-only --cwd <workspace> --include-archived \
   --from-date <YYYY-MM-DD> --to-date <YYYY-MM-DD> --limit 20
 <skill-dir>/scripts/read_codex_session.py --session <CANDIDATE_ID> --full
 ```

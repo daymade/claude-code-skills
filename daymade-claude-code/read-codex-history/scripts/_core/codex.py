@@ -366,7 +366,10 @@ def collect_codex_from_rollouts(
 
 def collect_codex(args: argparse.Namespace, home: Path) -> ProviderResult:
     result = ProviderResult(provider="codex", backend="none", home=str(home))
+    index_only = getattr(args, "index_only", False)
     if not home.is_dir():
+        if index_only:
+            result.backend = "index-unavailable"
         result.warnings.append(f"Codex home directory not found: {home}")
         return result
     database = discover_codex_database(home, result.warnings)
@@ -376,6 +379,11 @@ def collect_codex(args: argparse.Namespace, home: Path) -> ProviderResult:
         try:
             collect_codex_from_database(args, home, database, result)
         except sqlite3.Error as error:
+            if index_only:
+                result.backend = "index-unavailable"
+                result.conversations.clear()
+                result.warnings.append(f"Codex index query failed ({error}); raw rollout fallback disabled")
+                return result
             result.warnings.append(
                 f"Codex database query failed ({error}); scanning raw rollout JSONL instead."
             )
@@ -386,6 +394,10 @@ def collect_codex(args: argparse.Namespace, home: Path) -> ProviderResult:
             result.excluded_automated = 0
             collect_codex_from_rollouts(args, home, result)
     else:
+        if index_only:
+            result.backend = "index-unavailable"
+            result.warnings.append("No compatible Codex state database; raw rollout fallback disabled")
+            return result
         result.backend = "rollout-jsonl"
         collect_codex_from_rollouts(args, home, result)
     # Live and archived directories can hold different snapshots of the same

@@ -1031,6 +1031,43 @@ with path.open("r+b") as handle:
             any("No compatible Codex state database" in item for item in provider["warnings"])
         )
 
+    def test_codex_index_only_reads_state_database(self) -> None:
+        self.seed_codex_database()
+        completed = self.run_cli(
+            "--source", "codex", "--index-only", "--codex-home", str(self.codex_home),
+            "--cwd", str(self.workspace), "--format", "json",
+        )
+        provider = json.loads(completed.stdout)["providers"]["codex"]
+        self.assertTrue(provider["backend"].startswith("sqlite:"))
+        self.assertIn("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", [item["session_id"] for item in provider["conversations"]])
+
+    def test_codex_index_only_rejects_raw_fallback_and_other_sources(self) -> None:
+        session_id = "99999999-9999-4999-8999-999999999999"
+        write_jsonl(
+            self.codex_home / "sessions" / f"rollout-{session_id}.jsonl",
+            [{"type": "session_meta", "payload": {"id": session_id, "cwd": str(self.workspace)}}],
+        )
+        command = [sys.executable, str(SCRIPT), "--source", "codex", "--index-only", "--codex-home", str(self.codex_home), "--cwd", str(self.workspace)]
+        missing = subprocess.run(command, text=True, capture_output=True)
+        self.assertEqual(missing.returncode, 2)
+        self.assertEqual(missing.stdout, "")
+        self.assertIn("raw rollout fallback disabled", missing.stderr)
+        connection = sqlite3.connect(self.codex_home / "state_5.sqlite")
+        try:
+            connection.execute("CREATE TABLE threads (id TEXT PRIMARY KEY)")
+            connection.commit()
+        finally:
+            connection.close()
+        incompatible_schema = subprocess.run(command, text=True, capture_output=True)
+        self.assertEqual(incompatible_schema.returncode, 2)
+        self.assertEqual(incompatible_schema.stdout, "")
+        self.assertIn("raw rollout fallback disabled", incompatible_schema.stderr)
+        incompatible = subprocess.run(command[:3] + ["all", *command[4:]], text=True, capture_output=True)
+        self.assertEqual(incompatible.returncode, 2)
+        self.assertIn("--index-only requires --source codex", incompatible.stderr)
+        empty_source = subprocess.run(command[:3] + ["", *command[4:]], text=True, capture_output=True)
+        self.assertEqual(empty_source.returncode, 2)
+
     def test_windows_path_normalization_without_user_directory(self) -> None:
         rows = [
             (
