@@ -26,6 +26,8 @@ that TCC is why.
 Both are SQLite. Both are protected — the reading process itself needs Full Disk Access (see SIP
 below). To grant FDA to your terminal: System Settings → Privacy & Security → Full Disk Access →
 `+` → add `/Applications/Utilities/Terminal.app` (or Ghostty/iTerm) → restart the terminal.
+For a Full Disk Access check, use the **system** database; the tested Mac's `uv` grant was there.
+The user-database examples below do not establish FDA state.
 
 ## Service catalog
 
@@ -99,11 +101,11 @@ the grant keys on a path that changes with versions; `0` (bundle ID) means it su
 ## Reading TCC.db
 
 ```bash
-# Everything this user has allowed
+# Allowed entries in the per-user database
 sqlite3 "$HOME/Library/Application Support/com.apple.TCC/TCC.db" \
   "SELECT service, client, datetime(last_modified,'unixepoch') FROM access WHERE auth_value = 2"
 
-# The diagnostic gold mine — everything DENIED
+# Denied entries in the per-user database
 sqlite3 "$HOME/Library/Application Support/com.apple.TCC/TCC.db" \
   "SELECT service, client, datetime(last_modified,'unixepoch') FROM access WHERE auth_value = 0"
 
@@ -111,12 +113,13 @@ sqlite3 "$HOME/Library/Application Support/com.apple.TCC/TCC.db" \
 sqlite3 "$HOME/Library/Application Support/com.apple.TCC/TCC.db" \
   "SELECT service, auth_value FROM access WHERE client = 'com.example.app'"
 
-# Is a specific binary granted a specific service? (the pre-fix check)
-sqlite3 "$HOME/Library/Application Support/com.apple.TCC/TCC.db" \
-  "SELECT auth_value FROM access WHERE service='kTCCServiceSystemPolicyAllFiles' AND client='/path/to/bin';"
+# Full Disk Access for an exact binary path (replace the path with the real TCC client)
+sudo -n sqlite3 '/Library/Application Support/com.apple.TCC/TCC.db' \
+  "SELECT client, auth_value FROM access WHERE service='kTCCServiceSystemPolicyAllFiles' AND client='/absolute/path/to/bin';"
 ```
 
-The system DB (system-wide grants) needs `sudo`; both need the reader to hold FDA.
+The system DB needs `sudo`; both databases need the reading process to hold FDA. If the query
+cannot read the database, grant state is unknown and the job's protected read remains decisive.
 
 ## Resetting grants — `tccutil`
 
