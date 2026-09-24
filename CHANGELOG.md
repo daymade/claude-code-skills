@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **tibo-reset-codex** (`tibo-reset-codex` v1.14.3 → v1.14.4): Add a read-only `forecast_log.py handoff` command that returns the latest complete monitor finding, including unresolved questions and source coverage. Monitoring rounds now read that handoff directly instead of manually scanning raw JSONL; `null` stays unknown, and the due-forecast summary remains the first check.
+
 - **read-codex-history** (`daymade-claude-code` v3.67.0 → v3.68.0): Add `--index-only` to Codex inventory. Missing or unreadable state metadata now returns an explicit unavailable result before any rollout fallback; the Skill and storage reference use this guarded route.
 
 - **tibo-reset-codex** (`tibo-reset-codex` v1.14.2 → v1.14.3): Sync SKILL.md to the new summary contract — the monitoring round's first step and the sleep-window escalation note now read `due_for_followup` instead of hunting due promises through pending rationale text; the closing-soon threshold is defined once via the script constant and referenced, not re-copied.
