@@ -3884,6 +3884,21 @@ Glue logos, avatars, or stickers onto moving objects in a video clip so they fol
 
 ---
 
+### **data-visualization-discipline** - Judgment Layer for Charts and Dashboards
+
+> **Install**: `claude plugin install data-visualization-discipline@daymade-skills`
+
+Decides whether a chart should exist and how it should be drawn before any code is written: the one conclusion each chart must support, mean vs. median, whether segments may be aggregated, stacked vs. line, dual axes, color count and cross-chart color identity, and how many columns a table keeps. Medium-agnostic — HTML reports, React/Vue dashboards, native PowerPoint charts, matplotlib/plotly/ECharts/D3.
+
+**Key features:**
+- Five stages (intent → data validity → form → encoding → delivery gate), each with a handoff check
+- A nine-item delivery gate, including a masked-render self-test and painted-span proportion checks
+- Reviews existing charts ("what is wrong with these charts", "why do the legends disagree")
+
+- [`data-visualization-discipline`](./data-visualization-discipline/SKILL.md) — full instructions. Pairs with `report-with-html`, which owns the report page itself.
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
