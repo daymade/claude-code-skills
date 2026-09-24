@@ -62,14 +62,14 @@ contract, interaction contracts, and browser verification.
 - Warm-paper starter implementation:
   `assets/report-template.html`
 
-**Read all four of these before authoring** — the principles, the patterns file, the closest
+**Read these before authoring** — the principles, the patterns file, the closest
 approved example, and `data-visualization-discipline`. The rest are activated by what the
 artifact actually contains.
 
-Do not let "read only what's activated" decide the four above. That filter operates over needs
+Do not let "read only what's activated" decide the required sources above. That filter operates over needs
 you already know you have, so it is structurally unable to surface *a step you don't know
 exists* — and it hands the skip a legitimate-sounding rationale, which is worse than forgetting.
-The four are precisely the files that tell you which steps exist.
+These are the sources that tell you which steps exist.
 
 ## Product contract
 
@@ -200,9 +200,14 @@ Every interaction must work without a pointer:
    places immediately before a delivery that shipped eight prose sections and one geometry.
    A judgment step whose only referee is its author gets **comprehended instead of executed**.
    These two attributes are what let a script see whether the step happened.
-4. **Author.** Start from `assets/report-template.html` or an approved example. Use
-   actual shelf components. If the page embeds mutable source documents, follow the
-   long-lived-report reference and keep generated and authored regions separate.
+4. **Author.** If a calling Skill supplies a user-approved local report form that still
+   fits this report's output contract, use that form as the starting point. Otherwise
+   start from `assets/report-template.html` or an approved example. The calling Skill
+   owns template approval and storage; this Skill owns report generation and visual QA.
+   Keep customer facts and conclusions tied to current evidence, and do not copy the
+   caller's template into this Skill's update-owned `assets/`. Use actual shelf
+   components. If the page embeds mutable source documents, follow the long-lived-report
+   reference and keep generated and authored regions separate.
 5. **Run the delivery gate — it produces the artifacts the judgment steps otherwise skip.**
 
    ```bash
@@ -210,10 +215,8 @@ Every interaction must work without a pointer:
    #   → renders page.png AND page--masked.png (all text transparent — the squint test,
    #     headless; see the script header for the technique's provenance)
    #   → scans for ≥120 CSS px whitespace voids (visualization-patterns.md 版面填充纪律)
-   #   → writes page.html.gate.md: the nine delivery gates + the stage-1 questions
-   #     (`STAGE1` in delivery_gate.py — currently six, one conditional; the exact list
-   #     lives there, not duplicated here, because a copied count is what drifts), every
-   #     slot empty
+   #   → writes page.html.gate.md: the delivery gates + the stage-1 questions
+   #     (`STAGE1` in delivery_gate.py owns the exact list), every slot empty
    # Read the masked PNG segment by segment, fill every slot, then:
    uv run <skill-dir>/scripts/delivery_gate.py check page.html   # exit 1 until it passes
    ```
