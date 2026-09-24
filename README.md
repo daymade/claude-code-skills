@@ -306,6 +306,7 @@ claude plugin install repomix-safe-mixer@daymade-skills
 # Full audio suite (ASR + transcript correction + meeting minutes + TTS)
 claude plugin install daymade-audio@daymade-skills
 
+
 # Video comparison and quality analysis
 claude plugin install video-comparer@daymade-skills
 
@@ -1651,6 +1652,14 @@ python3 scripts/enable_all_plugins.py daymade-skills
 📚 **Documentation**: See [claude-skills-troubleshooting/SKILL.md](./daymade-claude-code/claude-skills-troubleshooting/SKILL.md) for complete troubleshooting workflow and architecture guidance.
 
 **Requirements**: None (uses Claude Code built-in Python)
+
+---
+
+### **audio-router** - StepFun Speech and Meeting-Minutes Routing
+
+> **Install**: `claude plugin install daymade-audio@daymade-skills` (suite-only — invoked as `daymade-audio:audio-router`)
+
+Selects the installed StepFun ASR, StepFun TTS, or transcript-to-minutes specialist and reads its full instructions at use time. Their original slash commands remain available manually. General audio transcription and transcript correction retain direct automatic entries.
 
 ---
 

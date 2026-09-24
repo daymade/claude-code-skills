@@ -1,5 +1,6 @@
 ---
 name: meeting-minutes-taker
+disable-model-invocation: true
 description: >-
   Transforms raw meeting transcripts into structured, evidence-based meeting minutes — merges
   multiple versions without losing content, reviews existing minutes against the transcript for

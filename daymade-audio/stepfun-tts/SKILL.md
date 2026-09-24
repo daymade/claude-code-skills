@@ -1,5 +1,6 @@
 ---
 name: stepfun-tts
+disable-model-invocation: true
 description: >-
   Generates Chinese/Japanese speech with StepFun's Contextual TTS — default stepaudio-2.5-tts,
   stepaudio-3-tts for whisper/inline-() prosody. Replaces step-tts-2's voice_label with
