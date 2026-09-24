@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **macos-permissions** (`daymade-macos` v1.9.1 → v1.10.0): Route background Full Disk Access failures through requester identification, verified reuse of an existing grant when the owning installer supports it, and a real background readback. New grants use System Settings; the GUI path remains unverified in the documented case.
+
 - **tibo-reset-codex** (`tibo-reset-codex` v1.14.5 → v1.14.6): Clarify that the hosted branch is a read-only research **task** with application-owned state, even when its workspace sandbox permits network access and temporary files to read explicitly authorized private sources. The normal direct-call ledger path remains unchanged.
 
 - **tibo-reset-codex** (`tibo-reset-codex` v1.14.4 → v1.14.5): Define a read-only, application-owned research mode for an Agent host that supplies the prior report, unresolved state, corrections and exact source authorization. The Skill keeps its Tibo evidence and reset-type decisions, returns leads and next checks in the host artifact, and does not write or silently read the standalone local ledger in that mode. Ordinary direct invocations retain the existing local findings/forecast workflow.
