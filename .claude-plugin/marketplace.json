@@ -33,7 +33,7 @@
       "description": "Drives the Kimi desktop app (Kimi.app) via computer-use to query its built-in data plugins — 天眼查、同花顺 iFinD、SEC、IMF and more — through the user's own logged-in session, no API keys needed. Use for \"用 Kimi 查\" / \"操作 Kimi 客户端\" / \"Kimi 插件\", or fetching company, financial, academic, or legal records with no dedicated API. Not for kimi.com browser automation (use kimi-webbridge) or direct iFinD API access.",
       "source": "./kimi-use",
       "strict": false,
-      "version": "1.3.0",
+      "version": "1.3.1",
       "category": "developer-tools",
       "keywords": [
         "kimi",
@@ -285,7 +285,7 @@
       "description": "Apple-platform development and operations suite bundling programmatic macOS window capture, iOS/macOS app development with XcodeGen and SwiftUI, safe disk-space diagnosis and cleanup, and disciplined launchd watchdog design under one shared namespace. Install once for the complete macOS and iOS toolkit.",
       "source": "./daymade-macos",
       "strict": false,
-      "version": "1.9.0",
+      "version": "1.9.1",
       "category": "suite",
       "keywords": [
         "suite",
