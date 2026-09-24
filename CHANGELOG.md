@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **tibo-reset-codex** (`tibo-reset-codex` v1.14.5 → v1.14.6): Clarify that the hosted branch is a read-only research **task** with application-owned state, even when its workspace sandbox permits network access and temporary files to read explicitly authorized private sources. The normal direct-call ledger path remains unchanged.
+
 - **tibo-reset-codex** (`tibo-reset-codex` v1.14.4 → v1.14.5): Define a read-only, application-owned research mode for an Agent host that supplies the prior report, unresolved state, corrections and exact source authorization. The Skill keeps its Tibo evidence and reset-type decisions, returns leads and next checks in the host artifact, and does not write or silently read the standalone local ledger in that mode. Ordinary direct invocations retain the existing local findings/forecast workflow.
 
 - **tibo-reset-codex** (`tibo-reset-codex` v1.14.3 → v1.14.4): Add a read-only `forecast_log.py handoff` command that returns the latest complete monitor finding, including unresolved questions and source coverage. Monitoring rounds now read that handoff directly instead of manually scanning raw JSONL; `null` stays unknown, and the due-forecast summary remains the first check.
