@@ -71,7 +71,7 @@ Gate every such action: check the target process is alive before invoking its sc
 3. **Load/reload**: `launchctl bootstrap gui/$(id -u) <plist>`; after editing a plist, `bootout` then `bootstrap` again — launchd's active state must match disk. Force one run with `launchctl kickstart -k gui/$(id -u)/<label>`.
 4. **Logs**: `StandardOutPath`/`StandardErrorPath` are non-negotiable (without them failures vanish), plus in-script log rotation (cap ~1 MB).
 5. **Idempotency guard**: re-running your deploy must not double-install. `scripts/new-launchagent.sh <label> <script> <interval>` is the idempotent wrapper (bootout-if-loaded → write plist → bootstrap → verify `launchctl list`).
-6. **TCC / Full Disk Access**: a LaunchAgent reading another app's Group Container or protected dirs needs FDA granted to the *actual interpreter* — Xcode's python3 stub fails where your real python3 works. Verify with the exact binary from `ProgramArguments`, not the one your shell resolves.
+6. **TCC / Full Disk Access**: a LaunchAgent reading protected files needs a working grant for its effective permission subject. Use `macos-permissions` to inspect TCC attribution and verify a protected read from the actual job; the shell's interpreter path alone does not decide this.
 7. **Batch throttling by default**: any watchdog loop that spawns work (replays, fuzz, batch scans, parallel API calls) needs an explicit rate cap as a default parameter, not a later optimization. To the machine, an unthrottled loop and a runaway process are indistinguishable (real case: an unthrottled test replay forked 1,041 processes/sec for 7 minutes and pushed the die to 83 °C).
 
 ## Stop semantics (the deprecated trap)

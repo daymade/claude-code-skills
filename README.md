@@ -2012,27 +2012,15 @@ claude plugin install daymade-macos@daymade-skills
 
 📚 **Documentation**: See [capture-screen/SKILL.md](./daymade-macos/capture-screen/SKILL.md).
 
-### **macos-permissions** - Diagnose macOS TCC Permission Dialogs
+### **macos-permissions** - Diagnose and Repair macOS Privacy Permissions
 
 > **Install**: `claude plugin install daymade-macos@daymade-skills` (suite-only — invoked as `daymade-macos:macos-permissions`)
 
-Diagnose why a macOS privacy dialog (Screen Recording, Full Disk Access, Automation, …) keeps firing or grants the wrong subject. The core rule: **the dialog's displayed name is not the requester** — read the TCC `from Sub:` attribution to find who is actually asking, and the TCC.db `auth_value` for what is currently granted, before deciding what to authorize.
-
-**When to use:**
-- A permission prompt ("would like to access data from other apps", screen recording, microphone) keeps reappearing after clicking Allow
-- The app you need to authorize is not in System Settings, or the listed name does not match the process you expected
-- A background/launchd job triggers a permission dialog that the same command does not trigger interactively
-- Unsigned CLI tools (uv-managed python, custom binaries) hit permission walls under launchd
-
-**Key features:**
-- Decision tree that separates the *requester* (TCC log `from Sub:`) from the *displayed name* (which drifts for unsigned, path-keyed binaries)
-- Full `kTCCService` catalogue, `auth_value`/`auth_reason` semantics, and `tccutil` shorthand
-- The uv-in-launchd Full-Disk-Access trap: root process with no FDA-bearing parent to inherit from; grant FDA to the uv binary, and it recurs on path change
-- Instrument discipline for confirming which binary requests a permission (log attribution over `fs_usage`/`pgrep` false negatives)
+Use for repeated TCC prompts, silent denials, and background jobs that cannot read protected files. It identifies the actual requester, checks for a usable existing grant, and verifies the repair through the real job. The Skill contains the diagnostic and Full Disk Access repair procedure.
 
 📚 **Documentation**: See [macos-permissions/SKILL.md](./daymade-macos/macos-permissions/SKILL.md).
 
-**Requirements**: macOS (Swift + AppleScript + `screencapture`).
+**Requirements**: macOS. Reading TCC.db also requires Full Disk Access for the process doing the read.
 
 ---
 
@@ -3567,7 +3555,7 @@ watchdogs and their incident history.
 
 **Key features:**
 - The quiet-watchdog contract — premise-state self-check (a monitor's lifecycle binds to its premise), patient mode (defer disruption, not detection), escalating auto-cooldown, and never-resurrect-what-the-user-quit
-- Deploy mechanics that bite — gui vs system domain, StandardOut/ErrorPath, TCC/FDA on the actual interpreter, and stop semantics (`unload` is deprecated and gets resurrected by `RunAtLoad` — bootout/bootstrap/disable only)
+- Deploy mechanics that bite — gui vs system domain, StandardOut/ErrorPath, TCC/FDA attribution through `macos-permissions`, and stop semantics (`unload` is deprecated and gets resurrected by `RunAtLoad` — bootout/bootstrap/disable only)
 - Batch-loop throttling by default and SRE alert layering (page vs ticket, fatigue numbers)
 - Bundles `watchdog-cooldown.sh` (source-able escalating cooldown + manual pause state machine), `new-launchagent.sh` (idempotent installer with validation), and an annotated plist template
 
