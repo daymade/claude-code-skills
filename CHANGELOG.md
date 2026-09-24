@@ -191,6 +191,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **CI**: restore the two report-with-html checks that did not survive its moves between repositories — `Delivery gates match data-viz SSOT` (`scripts/sync_delivery_gates.py --check` plus its tests, so an edit to data-visualization-discipline's nine gates cannot ship without regenerating `report-with-html/assets/delivery-gates.json`) and `Report renderer reaps its process group` (`test_reconcile_content_diff.py` under `-W error::ResourceWarning`).
+
 - **daymade-skill** (v1.53.0 → v1.53.1): Direct user-approved customer-report templates to a stable local data directory outside Skill source and plugin caches, so package updates do not own the approved form.
 
 - **daymade-macos** (v1.9.0 → v1.9.1): `macos-permissions` no longer sends public readers to an app-development skill that is not in this repository; permission-onboarding UX is marked out of scope.
