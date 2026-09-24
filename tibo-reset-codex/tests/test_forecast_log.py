@@ -57,6 +57,18 @@ class ForecastLogTests(unittest.TestCase):
         self.assertEqual(log.summarize(self.path)["forecast_count"], 0)
         self.assertFalse(self.path.parent.exists())
 
+    def test_monitor_handoff_keeps_open_questions_and_ignores_later_account_reading(self):
+        self.assertIsNone(log.latest_monitor_handoff(self.findings_path))
+        first = self.finding(invocation="monitor", notes=["9/16 reply 的承诺尚未确认；下轮查原帖"],
+                             readings={}, endpoints=[])
+        self.finding(invocation="account", notes=["banked=0"])
+        self.assertEqual(log.latest_monitor_handoff(self.findings_path)["id"], first["id"])
+        self.assertEqual(log.latest_monitor_handoff(self.findings_path)["notes"], first["notes"])
+        second = log.append_finding(self.findings_path, {"invocation": "monitor", "query": "follow up",
+                    "endpoints": [], "readings": {}, "notes": ["旧承诺已由原帖证实；继续查兑现"]},
+                    self.now + timedelta(minutes=5))
+        self.assertEqual(log.latest_monitor_handoff(self.findings_path)["id"], second["id"])
+
     def test_records_original_forecast_feedback_and_private_permissions(self):
         row = self.record()
         self.assertEqual(row["window_start"], "2026-10-12T00:00:00+00:00")

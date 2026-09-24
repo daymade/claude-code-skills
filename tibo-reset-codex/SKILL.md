@@ -122,9 +122,10 @@ description: >-
 
 1. **接上上轮的问题。** 读 `forecast_log.py summary`，先看 `due_for_followup`（窗口已过期或
    即将关闭、尚无定论的预测——到期跟进项从这里第一眼读，不用翻 rationale；closing_soon 的
-   阈值定义见 forecast-feedback.md），再从同一
-   state-dir 的 `findings.jsonl` 读取最新一条 `invocation=monitor` 原始行；`findings` 子命令
-   的紧凑列表不显示 `notes`，不能用它代替交接正文。
+   阈值定义见 forecast-feedback.md），再从同一 state-dir 运行 `forecast_log.py handoff`
+   读取最新一条 `invocation=monitor` 的完整原始行；`findings` 子命令的紧凑列表不显示
+   `notes`，不能用它代替交接正文。`handoff` 返回 `null` 表示尚无监测交接，不能推断此前
+   没有值得追的线索。
    其中的 `notes` 记录上轮尚未解决的具体问题、候选来源、下一次复查条件和用户反馈。上轮
    没有记录就从当前问题与现有预测的 `revision_trigger` 建立这些项，不把空台账说成已覆盖。
    本轮即使只做降频查询，也要在新 finding 的 `notes` 里结转未决项或写明已由哪条证据关闭，

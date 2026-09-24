@@ -237,6 +237,17 @@ def list_findings(path, limit=20):
     return listed[::-1]
 
 
+def latest_monitor_handoff(path):
+    """Read the complete latest monitor handoff without exposing every raw reading."""
+    if not path.exists():
+        return None
+    with path.open(encoding="utf-8") as stream:
+        fcntl.flock(stream, fcntl.LOCK_SH)
+        rows = read_rows(stream, kinds=("finding",))
+    monitors = (row for row in rows if row.get("invocation") == "monitor")
+    return max(monitors, key=lambda row: (instant(row["recorded_at"]), row["id"]), default=None)
+
+
 def append_record(path, command, data, now=None):
     if not isinstance(data, dict):
         raise ValueError("input must be a JSON object")
@@ -389,6 +400,7 @@ def main():
         p.add_argument("--input", type=Path, required=True, help="UTF-8 JSON object file")
     listing = sub.add_parser("findings", help="List recent raw data findings")
     listing.add_argument("--limit", type=int, default=20)
+    sub.add_parser("handoff", help="Read the complete latest monitor handoff")
     args = parser.parse_args()
     state = args.state_dir.expanduser()
     path = state / "forecasts.jsonl"
@@ -397,6 +409,8 @@ def main():
             result = summarize(path, args.kind)
         elif args.command == "findings":
             result = list_findings(state / "findings.jsonl", max(args.limit, 0))
+        elif args.command == "handoff":
+            result = latest_monitor_handoff(state / "findings.jsonl")
         elif args.command == "finding":
             target = state / "findings.jsonl"
             result = append_finding(target, json.loads(args.input.read_text(encoding="utf-8")))
