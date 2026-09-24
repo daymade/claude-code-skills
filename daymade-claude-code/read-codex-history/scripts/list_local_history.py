@@ -606,7 +606,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--index-only",
         action="store_true",
-        help="Require Codex state-DB metadata; fail instead of reading raw rollouts",
+        help="Declare the guarded Codex state-DB inventory route",
     )
     parser.add_argument(
         "--limit",
@@ -868,7 +868,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         )
     if args.source in {"all", "codex"}:
         codex_result = collect_codex(args, codex_home)
-        if args.index_only and codex_result.backend == "index-unavailable":
+        if args.source == "codex" and codex_result.backend == "index-unavailable":
             for warning in codex_result.warnings:
                 print(f"Codex inventory unavailable: {warning}", file=sys.stderr)
             return 2

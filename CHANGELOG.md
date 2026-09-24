@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- **read-codex-history** (`daymade-claude-code` v3.69.0 → v4.0.0): Codex inventory no longer falls back to scanning rollout trees when the state database is missing or unreadable. The shared core and both bundled copies now fail closed; exact-session reading remains available.
+
 ### Added
 
 - **tunnel-doctor** (`tunnel-doctor` v1.15.0 → v1.15.1): Step 2K now counts a venue change (phone hotspot, different WiFi) as a second vantage point — a 2026-09-24 cafe-WiFi blackout of an entire proxy provider's domains and nodes was indistinguishable from a provider block, and switching networks fixed it with zero config change.

@@ -824,96 +824,23 @@ with path.open("r+b") as handle:
         )
         self.assertEqual(titles[attachment_tail_session_id], "总结文件")
 
-    def test_codex_raw_rollout_fallback_skips_bad_json(self) -> None:
+    def test_codex_missing_index_never_reads_rollouts_without_flag(self) -> None:
         session_id = "ffffffff-ffff-4fff-8fff-ffffffffffff"
-        rollout = (
-            self.codex_home
-            / "sessions"
-            / "2026"
-            / "01"
-            / "15"
-            / f"rollout-2026-01-15T10-00-00-{session_id}.jsonl"
-        )
         write_jsonl(
-            rollout,
-            [
-                "not-json",
-                {
-                    "timestamp": "2026-01-15T10:00:00Z",
-                    "type": "session_meta",
-                    "payload": {
-                        "id": session_id,
-                        "cwd": str(self.workspace),
-                        "timestamp": "2026-01-15T10:00:00Z",
-                        "source": "cli",
-                    },
-                },
-                {
-                    "timestamp": "2026-01-15T12:30:00Z",
-                    "type": "response_item",
-                    "payload": {
-                        "type": "message",
-                        "role": "user",
-                        "content": [
-                            {"type": "input_text", "text": "Fallback conversation"}
-                        ],
-                    },
-                },
-            ],
+            self.codex_home / "sessions" / f"rollout-{session_id}.jsonl",
+            [{"type": "session_meta", "payload": {"id": session_id, "cwd": str(self.workspace)}}],
         )
-        # Migration/copy time must not become conversation time.
-        os.utime(rollout, (1, 1))
-        archived_session_id = "abababab-abab-4bab-8bab-abababababab"
-        write_jsonl(
-            self.codex_home
-            / "archived_sessions"
-            / f"rollout-{archived_session_id}.jsonl",
-            [
-                {
-                    "type": "session_meta",
-                    "payload": {
-                        "id": archived_session_id,
-                        "cwd": str(self.workspace),
-                        "timestamp": "2026-01-14T10:00:00Z",
-                        "source": "cli",
-                    },
-                },
-                {
-                    "type": "event_msg",
-                    "payload": {
-                        "type": "user_message",
-                        "message": "Archived rollout conversation",
-                    },
-                },
-            ],
+        completed = subprocess.run(
+            [sys.executable, str(SCRIPT), "--cwd", str(self.workspace),
+             "--source", "codex", "--codex-home", str(self.codex_home),
+             "--format", "json"],
+            text=True, capture_output=True,
         )
-        completed = self.run_cli(
-            "--cwd",
-            str(self.workspace),
-            "--source",
-            "codex",
-            "--codex-home",
-            str(self.codex_home),
-            "--format",
-            "json",
-        )
-        payload = json.loads(completed.stdout)["providers"]["codex"]
-        self.assertEqual(payload["backend"], "rollout-jsonl")
-        self.assertEqual(payload["total"], 1)
-        self.assertEqual(payload["excluded"]["archived"], 1)
-        conversation = payload["conversations"][0]
-        self.assertEqual(conversation["title"], "Fallback conversation")
-        self.assertEqual(conversation["timestamp_source"], "rollout-record-minmax")
-        self.assertEqual(
-            datetime.fromisoformat(conversation["created_at"]).timestamp(),
-            datetime.fromisoformat("2026-01-15T10:00:00+00:00").timestamp(),
-        )
-        self.assertEqual(
-            datetime.fromisoformat(conversation["updated_at"]).timestamp(),
-            datetime.fromisoformat("2026-01-15T12:30:00+00:00").timestamp(),
-        )
+        self.assertEqual(completed.returncode, 2)
+        self.assertEqual(completed.stdout, "")
+        self.assertIn("inventory unavailable", completed.stderr)
 
-    def test_codex_unknown_database_schema_reports_visible_fallback(self) -> None:
+    def test_codex_unknown_database_schema_reports_unavailable(self) -> None:
         self.codex_home.mkdir(parents=True)
         connection = sqlite3.connect(self.codex_home / "state_5.sqlite")
         try:
@@ -943,21 +870,15 @@ with path.open("r+b") as handle:
                 },
             ],
         )
-        completed = self.run_cli(
-            "--cwd",
-            str(self.workspace),
-            "--source",
-            "codex",
-            "--codex-home",
-            str(self.codex_home),
-            "--format",
-            "json",
+        completed = subprocess.run(
+            [sys.executable, str(SCRIPT), "--cwd", str(self.workspace),
+             "--source", "codex", "--codex-home", str(self.codex_home),
+             "--format", "json"],
+            text=True, capture_output=True,
         )
-        provider = json.loads(completed.stdout)["providers"]["codex"]
-        self.assertEqual(provider["total"], 1)
-        self.assertTrue(
-            any("No compatible Codex state database" in item for item in provider["warnings"])
-        )
+        self.assertEqual(completed.returncode, 2)
+        self.assertEqual(completed.stdout, "")
+        self.assertIn("No compatible Codex state database", completed.stderr)
 
     def test_windows_path_normalization_without_user_directory(self) -> None:
         rows = [
@@ -1042,43 +963,6 @@ with path.open("r+b") as handle:
         )
         self.assertIn("未知", markdown_result.stdout)
         self.assertNotIn("1970-", markdown_result.stdout)
-
-    def test_rollout_without_authoritative_or_uuid_id_is_skipped(self) -> None:
-        write_jsonl(
-            self.codex_home / "sessions" / "rollout-no-id.jsonl",
-            [
-                {
-                    "type": "session_meta",
-                    "payload": {
-                        "cwd": str(self.workspace),
-                        "timestamp": "2026-01-17T10:00:00Z",
-                        "source": "cli",
-                    },
-                },
-                {
-                    "type": "event_msg",
-                    "payload": {
-                        "type": "user_message",
-                        "message": "Must not receive a guessed ID",
-                    },
-                },
-            ],
-        )
-        completed = self.run_cli(
-            "--cwd",
-            str(self.workspace),
-            "--source",
-            "codex",
-            "--codex-home",
-            str(self.codex_home),
-            "--format",
-            "json",
-        )
-        provider = json.loads(completed.stdout)["providers"]["codex"]
-        self.assertEqual(provider["total"], 0)
-        self.assertTrue(
-            any("without a session ID" in item for item in provider["warnings"])
-        )
 
     def test_registered_archive_uses_internal_range_and_deduplicates(self) -> None:
         user_home = self.root / "user-home"

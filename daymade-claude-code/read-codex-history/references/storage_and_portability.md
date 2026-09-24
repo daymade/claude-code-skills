@@ -82,8 +82,9 @@ missing archive (`required: false`) produces a warning and is skipped. Passing
 3. Query SQLite read-only and introspect columns before selecting them. This
    tolerates additive schema changes and avoids relying on a stale sidebar
    window or incomplete JSONL index.
-4. With `--source codex --index-only`, fail with exit 2 when no compatible
-   database exists or its query fails. Do not open rollout files to fill the gap.
+4. For Codex-only inventory, fail with exit 2 when no compatible database
+   exists or its query fails. The Skill passes `--index-only` so the PreToolUse
+   guard can verify this route before execution.
 5. For every Codex row admitted by the workspace/date/archive filters, inspect the standard
    `thread-writer-locks/` directory under the resolved Codex home. Coordinate
    with `.coordination.lock`, then non-blockingly test each exact per-thread
@@ -96,10 +97,9 @@ When compatible databases have the same greatest internal thread update, the
 numeric `state_<generation>.sqlite` suffix breaks the tie. Database-file mtime
 is not chronological evidence and is not consulted.
 
-The selected backend is printed in a successful report. The unflagged legacy
-CLI path still has a raw-rollout fallback; it is not a permitted broad inventory
-route and is blocked by the history PreToolUse hook. Kimi CLI state/wire parsing
-continues to compute internal record bounds without using file mtime.
+The selected state database is printed in a successful report. Missing or
+unreadable index metadata stays unavailable; Codex inventory never opens
+rollout trees to fill that gap.
 
 ### Codex verbatim user-input ledger
 
@@ -229,7 +229,7 @@ vendors will never change their private local formats.
 - Codex rollouts begin with a `session_meta` event carrying an ID, cwd, source,
   and creation timestamp. User text appears later in message response items.
 - Codex rollout top-level events carry timestamps; physical order is not a
-  chronology contract, so raw fallback computes a true internal min/max range.
+  chronology contract for exact-session reading.
 - Current Codex state databases expose thread title, cwd, archive state, source,
   timestamps, and rollout path, with newer schemas adding fields rather than
   replacing the core columns.

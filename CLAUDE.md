@@ -158,6 +158,9 @@ the delivered artifact. Detailed retrieval mechanics remain in
 Codex inventory must use the index-only command in
 `daymade-claude-code/read-codex-history/SKILL.md`. If its state database is
 unavailable, report an unknown inventory; do not substitute a raw rollout scan.
+Edit shared reader code in `daymade-claude-code/_conversation_core/`, then run
+`python3 daymade-claude-code/sync_core.py sync` and `check` before shipping;
+bundled `scripts/_core/` copies are generated projections.
 
 ### Local Agent Messaging
 
