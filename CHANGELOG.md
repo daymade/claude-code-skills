@@ -191,6 +191,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **report-with-html** (v1.0.0 → v1.0.1): `reconcile_content_diff.py` no longer waits for Chrome to exit after `--dump-dom`. Chrome can print the complete DOM and then never exit (reproduced on Chrome 153 / macOS even for a minimal page), so every extraction timed out twice and the tool gave no verdict; it now takes the dump once it is complete and still reaps the whole process group. The regression suite (`tests/report-with-html/`) is repaired — browser probes use the same completion rule, the regen fixtures fill the template's TODO config block, and the narrow-viewport probe asserts the 500 px width headless Chrome actually honours — and now runs in CI.
+
 - **CI**: restore the two report-with-html checks that did not survive its moves between repositories — `Delivery gates match data-viz SSOT` (`scripts/sync_delivery_gates.py --check` plus its tests, so an edit to data-visualization-discipline's nine gates cannot ship without regenerating `report-with-html/assets/delivery-gates.json`) and `Report renderer reaps its process group` (`test_reconcile_content_diff.py` under `-W error::ResourceWarning`).
 
 - **daymade-skill** (v1.53.0 → v1.53.1): Direct user-approved customer-report templates to a stable local data directory outside Skill source and plugin caches, so package updates do not own the approved form.

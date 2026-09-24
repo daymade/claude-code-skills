@@ -1255,7 +1255,7 @@
       "description": "Produces the reader-facing HTML artifact — report, dashboard, architecture view, data browser, or review workbench — evidence-backed, browser-verified. Use when the deliverable IS a visual HTML report, or the user asks for an HTML/web presentation. Load data-visualization-discipline for chart judgment. Not for chat status or Markdown prose unless asked to become a report; not for PowerPoint (deck-creator Route C).",
       "source": "./report-with-html",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.0.1",
       "category": "documentation",
       "keywords": [
         "HTML报告",

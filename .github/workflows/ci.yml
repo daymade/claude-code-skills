@@ -200,6 +200,16 @@ jobs:
         if: ${{ !cancelled() }}
         run: python3 -W error::ResourceWarning -m unittest report-with-html/scripts/test_reconcile_content_diff.py
 
+      # Needs a real browser (the runner image ships Google Chrome), so it is not in the
+      # stdlib-only registry. It drives render_report.sh, the reconciler and the shelf
+      # components headless; a Chrome that hangs after --dump-dom is part of what it covers.
+      - name: report-with-html regression suite
+        if: ${{ !cancelled() }}
+        run: |
+          export CHROME_BIN="$(command -v google-chrome)"
+          "$CHROME_BIN" --version
+          python3 -m unittest tests/report-with-html/test_regressions.py
+
   secrets:
     name: Secret scan
     runs-on: ubuntu-latest
