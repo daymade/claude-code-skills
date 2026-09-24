@@ -86,7 +86,7 @@ The short version:
 
 - **Team rules / standards / SOPs** → project `CLAUDE.md` or `docs/` (version-controlled, team-visible).
 - **Cross-tool user profile / collaboration preferences / methodology / personal affairs** → `~/.claude/references/user/` (tool-agnostic). **This is the bucket that migrates.**
-- **Temporary handoff snapshots / external system pointers** → **stay in memory**. This is memory's legitimate purpose; do not migrate them.
+- **Temporary handoff snapshots / external system pointers** → **stay in memory**. This is memory's legitimate purpose; do not migrate them. (Goal B: these go to documents instead, see `references/retire_auto_memory.md` §4.)
 
 Before calling any entry "not covered anywhere", search every place that could own it: global and project instruction files, `~/.claude/references/`, **every skill source repository (public and private)**, project docs and handover packs, and hook or script headers. Name all of these roots in any sub-agent prompt — an agent searches only the roots it is told about. Calibrate each search command on a string you know exists before trusting a zero.
 
@@ -129,7 +129,7 @@ For the memory files that did NOT migrate, do one of three things (decision deta
 
 - **Clean** — expired (past-dated handoffs) or stale (derived counts that should be computed, not stored) → archive.
 - **Thin** — a handoff that restated a SSOT living elsewhere → cut the duplication, keep only the pointer + the volatile state (e.g. "instance X still billing, shut it down").
-- **Keep** — legitimate handoff / already a clean pointer → leave it.
+- **Keep** — legitimate handoff / already a clean pointer → leave it. (Not in Goal B: everything is archived.)
 
 Update the memory index (e.g. `MEMORY.md`) to drop migrated entries and add one migration pointer.
 

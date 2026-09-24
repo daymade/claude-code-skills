@@ -89,5 +89,19 @@ class MigrateVerbatimTest(unittest.TestCase):
         self.assertFalse(self.target.exists())
 
 
+    def test_mixed_fence_markers_do_not_close_the_fence(self):
+        body = "Rule.\n\n```bash\necho hi\n~~~\n## still code\n~~~\n```\n\n## After\n"
+        (self.mem / "feedback_example.md").write_text(body, encoding="utf-8")
+        self.assertEqual(self.run_script().returncode, 0)
+        text = self.target.read_text(encoding="utf-8")
+        self.assertIn("\n## still code\n", text)
+        self.assertIn("\n##### After\n", text)
+
+    def test_file_without_frontmatter_is_copied_whole(self):
+        (self.mem / "feedback_example.md").write_text("Plain rule.\n", encoding="utf-8")
+        self.assertEqual(self.run_script().returncode, 0)
+        self.assertIn("Plain rule.", self.target.read_text(encoding="utf-8"))
+
+
 if __name__ == "__main__":
     unittest.main()

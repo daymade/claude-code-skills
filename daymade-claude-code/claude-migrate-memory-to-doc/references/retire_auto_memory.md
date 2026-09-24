@@ -66,13 +66,16 @@ Destinations for the content Goal A would have left in memory:
 
 For entries with real names or other identifying detail, follow the user's existing rulings
 on where such content may live. Do not reopen a ruling because the destination looks
-different this time.
+different this time. With no ruling, the dated archive in §9 is private and local, so it
+satisfies Phase 1's "stay in private memory"; do not move such entries into shared documents.
 
 ## 5. Migrate verbatim, then check every line landed
 
 `scripts/migrate_verbatim.py` appends each memory body to its owning document under a dated
-section, strips the frontmatter, demotes headings so they nest, skips items already
-migrated, and fails if any line of the body is missing afterwards. Moving is not the moment
+section, strips the frontmatter, demotes headings outside code fences so they nest, skips
+items already migrated, and fails if any line of the rendered body is missing afterwards.
+That check proves the write, not the heading transform: after the run, read the diff of any
+entry whose code blocks contain `#` lines. Moving is not the moment
 to edit: condensing while migrating is how qualifiers disappear.
 
 ## 6. Repoint pointers, but only the ones that send readers somewhere
@@ -110,9 +113,13 @@ Q='Answer one line: does your context contain an auto memory MEMORY.md index lis
 (cd <memory-enabled-project> && claude -p --model sonnet "$Q")   # expect YES and a real file name
 ```
 
-A NO without the YES proves nothing: a probe that cannot see memory anywhere answers NO too.
+A NO without the YES proves nothing: a probe that cannot see memory anywhere answers NO too. If no
+other project has memory on, create a scratch directory with one memory file under its
+`~/.claude/projects/<slug>/memory/` for the YES run, then remove it.
 
 ## 9. Archive everything, with an index
+
+Phase 6's **Keep** does not apply here: every file leaves `memory/`.
 
 Move every file out of `memory/`, including `MEMORY.md` and earlier `.archived-*` files, to
 a dated sibling directory outside it (`~/.claude/projects/<slug>/.memory-archive-<date>/`).
