@@ -1,0 +1,105 @@
+<!-- ══════════════════════════════════════════════════════════════════
+     lightbox-gallery · 图片蒙层画廊（交互组件货架 · 认可组件）
+     ══════════════════════════════════════════════════════════════════
+     契约（2026-07-20 定，来源=素材拍摄手册排版决策页）：
+       · img.zoom 统一进入正常 Tab 顺序；点击或按 Enter / Space → 原地浮层放大
+       · ← / → 切换同组上一张/下一张（循环）；侧边 ‹ › 按钮供鼠标
+       · 显式关闭钮 / ESC / 点背景 / 点图片本身 → 关闭并把焦点还给触发图
+       · 右上计数 n / N；底部说明取 data-cap，缺省用 alt，窄屏长词可换行
+       · 分组：data-gallery="组名"（可选；不写=全页一组）；单图组自动隐藏箭头与计数
+       · 关闭后停留原位——「内容来到读者处，不是读者跳到内容处」（引用即内嵌铁律）
+     使用：
+       1) 可放大的 <img> 加 class="zoom"（可选 data-gallery / data-cap）
+       2) 把本文件 BEGIN…END 之间的整块原样拷进页面 </body> 之前。零依赖。
+     禁改动键位与关闭行为——那是已校准的交互契约；皮（遮罩色/按钮样式）可按 register 微调。
+     ══════════════════════════════════════════════════════════════════ -->
+<!-- BEGIN lightbox-gallery -->
+<style>
+dialog.lbg{border:none;padding:0;background:rgba(20,16,12,.93);width:100vw;height:100vh;max-width:100vw;max-height:100vh;box-sizing:border-box}
+dialog.lbg::backdrop{background:rgba(20,16,12,.93)}
+dialog.lbg figure{margin:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:34px 72px;box-sizing:border-box}
+dialog.lbg figure img{max-width:100%;max-height:calc(100vh - 110px);object-fit:contain;cursor:zoom-out;display:block}
+dialog.lbg figcaption{color:rgba(255,255,255,.78);font-size:13px;line-height:1.5;text-align:center;max-width:min(820px,100%);min-width:0;overflow-wrap:anywhere}
+img.zoom{cursor:zoom-in}
+img.zoom:focus-visible{outline:3px solid #A62B1F;outline-offset:4px}
+dialog.lbg .lbg-count{position:fixed;top:18px;right:72px;color:rgba(255,255,255,.85);font-size:13px;font-variant-numeric:tabular-nums;font-family:"SF Mono",Menlo,monospace}
+dialog.lbg .lbg-close,dialog.lbg .lbg-prev,dialog.lbg .lbg-next{position:fixed;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.35);background:rgba(0,0,0,.35);color:rgba(255,255,255,.9);font-size:22px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+dialog.lbg .lbg-close{top:8px;right:12px;font-size:24px}
+dialog.lbg .lbg-prev,dialog.lbg .lbg-next{top:50%;transform:translateY(-50%)}
+dialog.lbg .lbg-prev{left:16px}
+dialog.lbg .lbg-next{right:16px}
+dialog.lbg .lbg-close:hover,dialog.lbg .lbg-prev:hover,dialog.lbg .lbg-next:hover{background:rgba(0,0,0,.6)}
+dialog.lbg .lbg-close:focus-visible,dialog.lbg .lbg-prev:focus-visible,dialog.lbg .lbg-next:focus-visible{outline:3px solid #fff;outline-offset:3px}
+dialog.lbg.lbg-single .lbg-prev,dialog.lbg.lbg-single .lbg-next,dialog.lbg.lbg-single .lbg-count{display:none}
+@media(max-width:640px){
+  dialog.lbg figure{padding:64px 12px 52px}
+  dialog.lbg figure img{max-height:calc(100vh - 140px)}
+  dialog.lbg .lbg-prev,dialog.lbg .lbg-next{width:38px;height:38px;top:auto;bottom:8px;transform:none}
+  dialog.lbg .lbg-prev{left:calc(50% - 48px)}
+  dialog.lbg .lbg-next{right:calc(50% - 48px)}
+}
+</style>
+<script>
+(() => {
+  const imgs = [...document.querySelectorAll('img.zoom')];
+  if (!imgs.length) return;
+  const dlg = document.createElement('dialog');
+  dlg.id = 'rwh-lightbox';
+  dlg.className = 'lbg';
+  dlg.setAttribute('aria-label', '图片预览');
+  dlg.innerHTML = '<button class="lbg-close" type="button" aria-label="关闭图片预览">×</button>'
+    + '<figure><img alt=""><figcaption></figcaption></figure>'
+    + '<div class="lbg-count"></div>'
+    + '<button class="lbg-prev" type="button" aria-label="上一张">‹</button>'
+    + '<button class="lbg-next" type="button" aria-label="下一张">›</button>';
+  document.body.appendChild(dlg);
+  const im = dlg.querySelector('figure img');
+  const cap = dlg.querySelector('figcaption');
+  const cnt = dlg.querySelector('.lbg-count');
+  const closeButton = dlg.querySelector('.lbg-close');
+  let group = [], idx = 0, opener = null;
+  const show = i => {
+    idx = (i + group.length) % group.length;
+    const s = group[idx];
+    im.src = s.src;
+    im.alt = s.alt || '';
+    cap.textContent = s.dataset.cap || s.alt || '';
+    cnt.textContent = (idx + 1) + ' / ' + group.length;
+  };
+  const openFrom = s => {
+    const g = s.dataset.gallery || '';
+    group = imgs.filter(x => (x.dataset.gallery || '') === g);
+    dlg.classList.toggle('lbg-single', group.length < 2);
+    opener = s;
+    show(group.indexOf(s));
+    dlg.showModal();
+    closeButton.focus();
+  };
+  imgs.forEach(s => {
+    s.tabIndex = 0;
+    s.setAttribute('role', 'button');
+    s.setAttribute('aria-haspopup', 'dialog');
+    s.setAttribute('aria-controls', dlg.id);
+    s.setAttribute('aria-label', (s.alt || '图片') + '，打开预览');
+    s.addEventListener('click', () => openFrom(s));
+    s.addEventListener('keydown', e => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();
+      openFrom(s);
+    });
+  });
+  closeButton.addEventListener('click', () => dlg.close());
+  dlg.querySelector('.lbg-prev').addEventListener('click', e => { e.stopPropagation(); show(idx - 1); });
+  dlg.querySelector('.lbg-next').addEventListener('click', e => { e.stopPropagation(); show(idx + 1); });
+  im.addEventListener('click', e => { e.stopPropagation(); dlg.close(); });
+  dlg.addEventListener('click', e => { if (e.target === dlg || e.target === dlg.querySelector('figure')) dlg.close(); });
+  dlg.addEventListener('keydown', e => {
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); show(idx - 1); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); show(idx + 1); }
+  });
+  dlg.addEventListener('close', () => {
+    if (opener && opener.isConnected) opener.focus();
+  });
+})();
+</script>
+<!-- END lightbox-gallery -->

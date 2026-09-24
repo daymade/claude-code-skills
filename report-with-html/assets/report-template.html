@@ -1,0 +1,227 @@
+<!doctype html>
+<!-- report-with-html · 起手实例（一个 register：暖纸编辑体 / sophisticated 汇报——混剪架构汇报都用它）。不是通用皮，别照抄到每张报告。
+     :root 是 REGISTER 层 = 皮（颜色/字体/是否印章），按当前报告的 register 调——正式决策书/技术架构/
+     高管摘要/对外提案 各不同（为当前 register 找真实参考读、抽原则、实例化，见 references/design-principles.md）。
+     下面的组件结构（pill/band/价值栈/timeline/number strip/masthead 节奏）是通用的，复用；皮换掉。
+     组件选型见 references/visualization-patterns.md。 -->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>标题 · 副题</title>
+<style>
+  /* ===== REGISTER 层 · 皮 —— 按当前报告的 register 调，别当通用皮照抄 =====
+     下面这组值是「暖纸编辑体 / sophisticated 汇报」register 的实例（暖纸+宋体+朱红+印章=庄重感；
+     在决策书与架构汇报里都认可这套）。数据卡/轻解释页换更干净的无衬线；高管摘要放大数字弱化装饰；
+     对外提案换品牌色。为当前 register 找真实参考读、抽原则、实例化。 */
+  :root{
+    --paper:#FBF9F4; --paper-2:#F4EFE4; --card:#FFFFFF;
+    --ink:#211D17; --ink-2:#5B5349; --ink-3:#8A8073;
+    --line:#E7DFCF; --line-2:#D8CDB6;
+    --red:#A62B1F; --red-bg:#FBEDEA;        /* 朱红印泥 · 主 accent，克制点缀 */
+    --gold:#8A6D3B; --gold-bg:#F6EFDF;      /* 瓶颈/未验 · 琥珀 */
+    --green:#3F6B4A; --green-bg:#E9F0E9;    /* 已通/验证过 · 绿 */
+    --blue:#33566E; --blue-bg:#E7EEF2;      /* 借鉴/供给 · 蓝 */
+    --serif:"Songti SC","STSong","Source Han Serif SC","Noto Serif CJK SC",Georgia,serif;
+    --sans:"PingFang SC","Hiragino Sans GB","Source Han Sans SC","Noto Sans CJK SC",sans-serif;
+    --mono:"SF Mono","JetBrains Mono","Menlo",ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.6;
+    background-image:radial-gradient(circle at 7% 3%,rgba(166,43,31,.02),transparent 40%),radial-gradient(circle at 93% 97%,rgba(138,109,59,.025),transparent 42%);}
+  .wrap{max-width:1240px;margin:0 auto;padding:40px 26px 90px;}
+  .num{font-family:var(--mono);font-variant-numeric:tabular-nums;}
+
+  /* masthead：kicker + 宋体 h1 + 右上印章 */
+  .mast{border-bottom:2px solid var(--ink);padding-bottom:20px;margin-bottom:16px;position:relative;}
+  .kicker{font-size:11.5px;letter-spacing:.32em;text-transform:uppercase;color:var(--red);font-weight:700;margin-bottom:10px;}
+  h1{font-family:var(--serif);font-size:40px;line-height:1.12;font-weight:700;}
+  .mast .sub{font-family:var(--serif);font-style:italic;color:var(--ink-2);font-size:16px;margin-top:8px;}
+  .seal{position:absolute;top:-2px;right:0;width:84px;height:84px;border:2.5px solid var(--red);border-radius:50%;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--red);font-family:var(--serif);
+    font-weight:700;transform:rotate(-8deg);opacity:.92;box-shadow:inset 0 0 0 3px rgba(166,43,31,.1);}
+  .seal b{font-size:19px;} .seal span{font-size:9px;letter-spacing:.1em;}
+
+  /* number strip：hero 数（mono tabular-nums），.hot=朱红 */
+  .strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);
+    border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:22px 0 44px;}
+  .strip .cell{background:var(--card);padding:15px 18px;}
+  .strip .v{font-family:var(--mono);font-size:26px;font-weight:600;color:var(--ink);line-height:1;} .strip .v.hot{color:var(--red);}
+  .strip .v small{font-size:12px;color:var(--ink-3);font-weight:400;} .strip .k{font-size:11.5px;color:var(--ink-2);margin-top:8px;line-height:1.4;}
+
+  /* 编号章节：序号(宋体圈) + 宋体 h2 + lead */
+  section{margin:0 0 46px;}
+  .h2{display:flex;align-items:baseline;gap:12px;margin-bottom:6px;}
+  .h2 .no{font-family:var(--serif);font-size:14px;color:var(--red);font-weight:700;border:1.5px solid var(--red);
+    border-radius:50%;width:28px;height:28px;min-width:28px;display:inline-flex;align-items:center;justify-content:center;}
+  .h2 h2{font-family:var(--serif);font-size:22px;font-weight:700;}
+  .lead{color:var(--ink-2);font-size:14px;margin:2px 0 18px 40px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:22px 24px;box-shadow:0 1px 2px rgba(33,29,23,.03);}
+  .note{font-size:12px;color:var(--ink-3);margin-top:14px;line-height:1.6;} .hl{color:var(--red);font-weight:600;}
+  .badges{font-size:10px;font-weight:700;color:#fff;padding:1px 8px;border-radius:9px;}
+  .b-ok{background:var(--green);} .b-slow{background:var(--gold);} .b-gap{background:var(--red);}
+  .legend{display:flex;gap:15px;font-size:11.5px;color:var(--ink-2);margin-top:15px;align-items:center;flex-wrap:wrap;}
+
+  /* 组件 A · 价值流 pill+badge（用户旅程/流水线，状态徽标浮在上沿） */
+  .zones{display:grid;grid-template-columns:112px 1fr;gap:12px 0;}
+  .zlab{font-family:var(--serif);font-size:13px;font-weight:700;writing-mode:vertical-rl;text-align:center;border-radius:8px;padding:8px 6px;display:flex;align-items:center;justify-content:center;letter-spacing:2px;}
+  .zlab.sup{background:var(--blue-bg);color:var(--blue);} .zlab.mid{background:var(--paper-2);color:var(--ink-2);} .zlab.con{background:var(--gold-bg);color:var(--gold);}
+  .flow{display:flex;align-items:stretch;gap:0;}
+  .pill{flex:1;min-width:130px;border-radius:11px;padding:15px 12px 13px;text-align:center;position:relative;border:1px solid var(--line-2);background:var(--card);}
+  .pill .bdg{position:absolute;top:-10px;left:50%;transform:translateX(-50%);font-size:10.5px;font-weight:700;padding:2px 10px;border-radius:11px;white-space:nowrap;color:#fff;}
+  .pill .t{font-family:var(--serif);font-size:16px;font-weight:700;} .pill .s{font-size:11px;color:var(--ink-3);margin-top:5px;line-height:1.4;} .pill .who{font-size:10.5px;color:var(--blue);margin-top:6px;font-weight:600;}
+  .pill.ok{background:var(--green-bg);border-color:#C4D6C4;} .pill.slow{background:var(--gold-bg);border-color:#E0CFA0;} .pill.gap{background:var(--red-bg);border-color:#E2B9B0;}
+  .pill.actor{background:var(--blue-bg);border-color:#BFD2DE;} .pill.actor .t{font-size:15px;} .pill.asset{background:#fff;border:2px solid var(--red);} .pill.asset .t{color:var(--red);}
+  .arr{display:flex;align-items:center;color:var(--line-2);font-size:19px;padding:0 6px;}
+  .loops{margin-top:18px;border-top:1px dashed var(--line-2);padding-top:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+  .loop{font-size:12px;color:var(--ink-2);line-height:1.5;padding-left:16px;position:relative;} .loop::before{content:"↺";position:absolute;left:0;top:0;font-weight:700;}
+  .loop.g::before{color:var(--green);} .loop.o::before{color:var(--gold);} .loop.r::before{color:var(--red);} .loop b{color:var(--ink);}
+
+  /* 组件 B · 分层架构 band（同一系统的多个视图叠层，左标签+右盒行） */
+  .layer{display:grid;grid-template-columns:116px 1fr;border:1px solid var(--line-2);border-radius:11px;margin-bottom:10px;overflow:hidden;background:var(--card);}
+  .ll{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:12px 8px;gap:3px;}
+  .ll .lt{font-family:var(--serif);font-size:15px;font-weight:700;} .ll .ls{font-size:10px;color:var(--ink-3);line-height:1.3;}
+  .layer.prod .ll{background:var(--gold-bg);color:var(--gold);} .layer.tech .ll{background:var(--paper-2);color:var(--ink-2);} .layer.data .ll{background:var(--green-bg);color:var(--green);}
+  .lc{padding:13px 15px;display:flex;align-items:stretch;gap:8px;flex-wrap:wrap;}
+  .box{flex:1;min-width:135px;border:1px solid var(--line-2);border-radius:9px;padding:11px 13px;background:var(--paper);position:relative;}
+  .box .bt{font-family:var(--serif);font-size:13.5px;font-weight:700;} .box .bd{font-size:10.5px;color:var(--ink-3);margin-top:4px;line-height:1.4;} .box .bd code{font-family:var(--mono);font-size:9.5px;background:var(--card);padding:1px 5px;border-radius:4px;}
+  .box .bdg{position:absolute;top:-9px;right:9px;font-size:9.5px;font-weight:700;color:#fff;padding:1px 8px;border-radius:9px;}
+  .box.ok{background:var(--green-bg);border-color:#C4D6C4;} .box.slow{background:var(--gold-bg);border-color:#E0CFA0;} .box.gap{background:var(--red-bg);border-color:#E2B9B0;} .box.bridge{border:2px dashed var(--red);background:var(--red-bg);flex:0 0 200px;} .box.bridge .bt{color:var(--red);}
+  .arrb{display:flex;align-items:center;color:var(--line-2);font-size:15px;}
+
+  /* 组件 C · 角色头像 chip（人物/责任，头像圈+动作+锚点标签） */
+  .roles{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+  .role{display:flex;gap:12px;background:var(--paper-2);border-radius:9px;padding:13px 15px;align-items:flex-start;}
+  .ava{width:42px;height:42px;min-width:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:18px;font-weight:700;color:#fff;}
+  .role .ri .rn{font-family:var(--serif);font-size:14.5px;font-weight:700;} .role .ri .ra{font-size:11.5px;color:var(--ink-2);margin:2px 0 5px;line-height:1.4;}
+  .role .ri .rt{display:inline-block;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:10px;line-height:1.3;}
+
+  /* 组件 D · 价值栈（对比！上层薄=核心独有/下层宽=commodity，每层标"对方在这层怎样"，揭示价值集中在哪） */
+  .vlayer{border-radius:11px;padding:15px 18px;} .vlayer .vh{display:flex;align-items:baseline;gap:9px;margin-bottom:12px;flex-wrap:wrap;}
+  .vlayer .vh .ic{font-size:16px;line-height:1;} .vlayer .vh .tt{font-family:var(--serif);font-size:16.5px;font-weight:700;} .vlayer .vh .tg{font-size:11px;font-weight:600;margin-left:auto;}
+  .vmoat{background:var(--green-bg);border:2px solid var(--green);} .vmoat .tt{color:var(--green);} .vbase{background:var(--paper-2);border:1px solid var(--line-2);} .vbase .tt{color:var(--ink-2);}
+  .vchips{display:flex;flex-wrap:wrap;gap:9px;} .vchip{background:var(--card);border:1px solid var(--line-2);border-radius:8px;padding:9px 12px;flex:1;min-width:158px;} .vmoat .vchip{border-color:#C4D6C4;}
+  .vchip .cn{font-family:var(--serif);font-weight:700;font-size:12.5px;line-height:1.3;} .vchip .cs{font-size:10px;color:var(--ink-3);margin-top:3px;line-height:1.35;} .vchip .st{font-size:9px;font-weight:700;padding:0 6px;border-radius:8px;margin-left:4px;white-space:nowrap;}
+  .vcomp{font-size:12px;line-height:1.5;padding:9px 14px;border-radius:8px;} .vcomp.top{background:rgba(166,43,31,.06);color:var(--red);margin-bottom:9px;} .vcomp.bot{background:rgba(51,86,110,.06);color:var(--blue);margin-top:9px;} .vcomp b{font-weight:700;}
+  .vmid{text-align:center;font-family:var(--serif);font-size:13px;color:var(--red);font-weight:700;padding:8px 0;}
+
+  /* 组件 E · 飞轮/路线 timeline（出路/演进，节点圈 now=绿 goal=红） */
+  .tl{position:relative;padding:6px 2px 0;} .tl-line{position:absolute;left:2%;right:2%;top:13px;height:2px;background:var(--line-2);}
+  .tl-nodes{display:flex;justify-content:space-between;position:relative;gap:6px;} .tl-node{text-align:center;flex:1;}
+  .tl-dot{width:15px;height:15px;border-radius:50%;background:var(--card);border:3px solid var(--line-2);margin:0 auto 12px;position:relative;z-index:2;}
+  .tl-node.now .tl-dot{border-color:var(--green);} .tl-node.goal .tl-dot{border-color:var(--red);}
+  .tl-what{font-family:var(--serif);font-size:13px;color:var(--ink);font-weight:700;} .tl-node.now .tl-what{color:var(--green);} .tl-node.goal .tl-what{color:var(--red);} .tl-desc{font-size:11px;color:var(--ink-3);margin-top:4px;line-height:1.4;}
+
+  footer{margin-top:50px;padding-top:22px;border-top:1px solid var(--line-2);font-size:12px;color:var(--ink-3);line-height:1.7;} footer b{color:var(--ink-2);}
+  :focus-visible{outline:3px solid var(--gold);outline-offset:3px;}
+  @media(max-width:700px){
+    .wrap{padding:24px 16px 56px;}
+    h1{font-size:clamp(29px,9vw,40px);padding-right:0;}
+    .seal{position:static;margin:0 0 16px auto;}
+    .strip{grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:34px;}
+    .zones,.layer{grid-template-columns:1fr;}
+    .zlab{writing-mode:horizontal-tb;letter-spacing:.08em;}
+    .flow,.lc{overflow-x:auto;padding:12px 2px;scrollbar-gutter:stable;}
+    .flow>*{flex:0 0 min(76vw,230px);}
+    .flow>.arr,.lc>.arrb{flex:0 0 auto;}
+    .loops,.roles{grid-template-columns:1fr;}
+    .lead{margin-left:0;}
+    .tl{overflow-x:auto;padding-bottom:8px;}
+    .tl-nodes{min-width:540px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="mast">
+    <div class="seal"><span>v1</span><b>月·日</b><span>年</span></div>
+    <div class="kicker">上下文 · 领域 · 一句定位</div>
+    <h1>标题 · XX 全景</h1>
+    <p class="sub">副题：本页覆盖的几块，破折号分隔</p>
+  </header>
+
+  <!-- number strip：3-5 个 hero 数，.hot 标红最要紧的诚实数字 -->
+  <div class="strip">
+    <div class="cell"><div class="v hot num">—<small> 单位</small></div><div class="k">替换为最要紧且已核验的事实（红）</div></div>
+    <div class="cell"><div class="v num">—<small> 单位</small></div><div class="k">替换为已核验的中性事实</div></div>
+    <div class="cell"><div class="v num">—<small> 单位</small></div><div class="k">替换为已核验的中性事实</div></div>
+  </div>
+
+  <!-- ① 价值流：pill+badge，zones=供给/中台/消费，loops=反馈回路 -->
+  <section>
+    <div class="h2"><span class="no">一</span><h2>价值流 · 用户旅程</h2></div>
+    <p class="lead">一句 lead：这个流程/旅程是什么，被什么切分。徽标 = 状态注解。</p>
+    <div class="card">
+      <div class="zones">
+        <div class="zlab sup">供给端</div>
+        <div class="flow" role="region" aria-label="供给端价值流" tabindex="0" data-horizontal-scroll><div class="pill actor"><div class="t">角色A</div><div class="s">动作</div></div></div>
+        <div class="zlab mid">中台</div>
+        <div class="flow" role="region" aria-label="中台价值流，窄屏可横向滚动" tabindex="0" data-horizontal-scroll>
+          <div class="pill gap"><span class="bdg b-gap">最大缺口</span><div class="t">环节</div><div class="s">技术/事实</div><div class="who">负责人</div></div>
+          <div class="arr">▸</div>
+          <div class="pill asset"><div class="t">核心资产</div><div class="s">量</div></div>
+          <div class="arr">▸</div>
+          <div class="pill slow"><span class="bdg b-slow">瓶颈</span><div class="t">环节</div><div class="s">事实</div></div>
+        </div>
+      </div>
+      <div class="loops">
+        <div class="loop g"><b>回路一</b><br>描述</div>
+        <div class="loop o"><b>回路二</b><br>描述</div>
+        <div class="loop r"><b>回路三</b><br>描述</div>
+      </div>
+      <div class="legend"><span><span class="badges b-ok">已通</span>能用</span><span><span class="badges b-slow">瓶颈</span>代码在·未验</span><span><span class="badges b-gap">最大缺口</span>地基</span></div>
+    </div>
+  </section>
+
+  <!-- ② 分层架构：同一系统的多个视图叠层 -->
+  <section>
+    <div class="h2"><span class="no">二</span><h2>分层架构 · 同一系统的多个视图</h2></div>
+    <p class="lead">一句 lead：把上方旅程当顶层，往下拆产品/技术/数据。</p>
+    <div class="layer prod"><div class="ll"><div class="lt">产品面</div><div class="ls">谁用什么</div></div><div class="lc" role="region" aria-label="产品面模块" tabindex="0" data-horizontal-scroll><div class="box"><div class="bt">模块</div><div class="bd">用户 · <code>形态</code></div></div></div></div>
+    <div class="layer tech"><div class="ll"><div class="lt">技术模块</div><div class="ls">谁调谁</div></div><div class="lc" role="region" aria-label="技术模块关系，窄屏可横向滚动" tabindex="0" data-horizontal-scroll><div class="box gap"><span class="bdg b-gap">最大缺口</span><div class="bt">模块名</div><div class="bd">作用</div></div><div class="arrb">▸</div><div class="box ok"><span class="bdg b-ok">已通</span><div class="bt">模块名</div><div class="bd">作用</div></div></div></div>
+    <div class="layer data"><div class="ll"><div class="lt">数据域</div><div class="ls">键·桥</div></div><div class="lc" role="region" aria-label="数据域关系，窄屏可横向滚动" tabindex="0" data-horizontal-scroll><div class="box"><div class="bt">域A</div><div class="bd">键=<code>key</code></div></div><div class="arrb">▸</div><div class="box bridge"><span class="bdg b-gap">桥</span><div class="bt">跨域桥</div><div class="bd"><code>join_key</code></div></div><div class="arrb">▸</div><div class="box"><div class="bt">域B</div><div class="bd">键=<code>key</code></div></div></div></div>
+  </section>
+
+  <!-- ③ 角色头像 -->
+  <section>
+    <div class="h2"><span class="no">三</span><h2>角色 · 谁做什么 · 锚点</h2></div>
+    <div class="roles">
+      <div class="role"><div class="ava" style="background:var(--green)">甲</div><div class="ri"><div class="rn">角色甲</div><div class="ra">动作</div><span class="rt" style="background:var(--green-bg);color:var(--green)">激励锚点</span></div></div>
+      <div class="role"><div class="ava" style="background:var(--red)">乙</div><div class="ri"><div class="rn">角色乙</div><div class="ra">动作</div><span class="rt" style="background:var(--red-bg);color:var(--red)">激励锚点</span></div></div>
+    </div>
+  </section>
+
+  <!-- ④ 价值栈：对比类内容用这个！揭示"价值/防御力集中在哪一层" -->
+  <section>
+    <div class="h2"><span class="no">四</span><h2>对比 · 外围借来 vs 核心独有</h2></div>
+    <p class="lead">一句 lead：对比要揭示的洞察（哪层是壁垒）。</p>
+    <div class="card">
+      <div class="vcomp top">对方在这一层 = <b>空/弱</b>：具体怎么绕过/缺失</div>
+      <div class="vlayer vmoat"><div class="vh"><span class="ic">🏰</span><span class="tt">核心层 · 独有</span><span class="tg" style="color:var(--green)">定价权·抄不来</span></div>
+        <div class="vchips"><div class="vchip"><div class="cn">能力A<span class="st" style="background:var(--green-bg);color:var(--green)">已运行</span></div><div class="cs">证据</div></div><div class="vchip"><div class="cn">能力B</div><div class="cs">证据</div></div></div></div>
+      <div class="vmid">▲ 价值/防御力集中在这一薄层</div>
+      <div class="vlayer vbase"><div class="vh"><span class="ic">🧱</span><span class="tt">基建层 · 借来的成熟件</span><span class="tg" style="color:var(--ink-3)">谁都能拼·可平替</span></div>
+        <div class="vchips"><div class="vchip"><div class="cn">组件A</div><div class="cs">来源</div></div><div class="vchip"><div class="cn">组件B</div><div class="cs">来源</div></div></div></div>
+      <div class="vcomp bot">对方在这一层 = <b>同样借鉴</b>/可平替 —— 不构成壁垒</div>
+      <p class="note">对比揭示：<span class="hl">一句话点破洞察</span>。</p>
+    </div>
+  </section>
+
+  <!-- ⑤ 飞轮/路线 -->
+  <section>
+    <div class="h2"><span class="no">五</span><h2>出路 · 路线飞轮</h2></div>
+    <div class="card"><div class="tl" role="region" aria-label="路线时间轴，窄屏可横向滚动" tabindex="0" data-horizontal-scroll><div class="tl-line"></div><div class="tl-nodes">
+      <div class="tl-node"><div class="tl-dot"></div><div class="tl-what">起点</div><div class="tl-desc">说明</div></div>
+      <div class="tl-node now"><div class="tl-dot"></div><div class="tl-what">进行中</div><div class="tl-desc">说明</div></div>
+      <div class="tl-node goal"><div class="tl-dot"></div><div class="tl-what">目标</div><div class="tl-desc">说明</div></div>
+    </div></div></div>
+  </section>
+
+  <footer>
+    <p><b>数据来源</b>：逐项 SSOT 指针（哪块来自哪个文档/§）。就绪度等汇总只在生成或验收时现算，不持久化。</p>
+    <p>本页骨架 = <b>架构/旅程/结构关系</b>；徽标 = 实现进度标注，不喧宾夺主。事实性 takeaway 只写页面证据能够直接支持的内容。</p>
+  </footer>
+</div>
+</body>
+</html>

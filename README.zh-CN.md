@@ -3866,6 +3866,23 @@ build or buy — evaluate the options
 
 ---
 
+### **report-with-html** - 有证据支撑的 HTML 报告
+
+> **安装**：`claude plugin install report-with-html@daymade-skills`
+
+产出面向读者的 HTML 制品——报告、看板、架构或旅程视图、数据浏览器、审阅工作台。页面骨架跟着读者的问题走，每个数字可追溯，交付前在真实浏览器里验证。
+
+**核心特性：**
+- 按读者的问题选骨架（怎么运作 / 要定什么 / 为什么发生 / 哪个更好 / 翻看一批数据）
+- 决策卡契约、可复用的交互组件、暖纸起手模板
+- 交付闸脚本：遮字渲染、整页分段截图、零上下文的独立读者审阅
+
+- [`report-with-html`](./report-with-html/SKILL.md)——完整说明。画图的判断交给 `data-visualization-discipline`。
+
+**运行要求**：Google Chrome 或 Chromium；`uv`；Python 3.10+。
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
