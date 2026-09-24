@@ -1,0 +1,395 @@
+<!-- ══════════════════════════════════════════════════════════════════
+     citation-drawer · 嵌入源文档 + 条款引用抽屉（交互组件货架 · 认可组件）
+     ══════════════════════════════════════════════════════════════════
+     解决什么：引用密集的审阅页要「每句话都能核到原文」——把源文档全文烤进
+     页面（file:// 下浏览器不能 fetch 本地文件），正文出现「第 N 条」自动变成
+     可点引用，点开侧滑抽屉定位并高亮那一条。
+
+     契约（2026-07 认可，行为禁改）：
+       · 正文「第 N 条」→ 自动 linkify 成原生 button.cite（鼠标/键盘都可触发）
+       · 点正文里的引用 → 右侧抽屉侧滑打开、定位并高亮该条、可上下滚看前后文
+       · 点已在全文 tab 里读到的引用 → 就地滚动高亮，不弹抽屉（读者已在原文处）
+       · ESC / 点遮罩 / 点关闭钮 → 关闭抽屉并把焦点还给触发引用
+       · 抽屉打开时背景 inert、Tab 焦点留在抽屉；关闭后恢复背景
+       · 顶部多 tab 支持点击、←/→、Home/End；抽屉头显示「文件名 · 文档名」
+       · 抽屉克隆全文时 remap 全部 id / IDREF，不能与源 pane 制造重复 id
+       · tab 只在唯一 #s9 内初始化；DOM 契约不成立就显示错误，不污染外部同名 class
+       · 定位用 getBoundingClientRect 差值，不用 offsetTop（后者相对 positioned
+         祖先会偏到错误条款——这是踩出来的，别改回去）
+       · linkify 排除 a/button/code/.cite/标题 等宿主，防已是链接的引用被二次包裹
+       · 引用带子号（「第 8.3 条」）时优先定位子条锚点；只有母节锚点时**如实降级**——
+         状态栏说「没有单独锚点，已定位到第 N 条开头」，不谎报「已定位并高亮该条」
+       · 指向外部法条/外部文件的编号由生成器标 `.nocite`，linkify 跳过它；不跳的话
+         它会被链到本文档的同号条款
+       · 抽屉克隆全文时清掉页面残留的 .hl-clause，保证「高亮＝我刚点的那条」
+
+     依赖（不是零依赖——和 lightbox 不同，这两条必须满足）：
+       1) CSS 变量（token 层，报告页通常已有）：--card --paper-2 --line --line-2
+          --red --red-bg --green --green-bg --gold --gold-bg --ink --ink-2 --ink-3
+          --mono --sans --serif --blue-bg
+       2) DOM 结构契约——由内容生成器产出（见 assets/regen-docs-template.py）：
+          · 唯一 <section id="s9">，内含唯一 .docwrap > .dnav / .dbody；两者的直属
+            .dtab[data-i] / .dpane[data-i] 非空、唯一、一一对应；tab 带 .dt-t 标题
+            + .dt-s 副标题，pane 带 .dsrc 文件名 + <article class="doc">
+          · 每份文档的条标题打锚点：<h2 id="d{文档序号}-c{条号}">第 N 条…
+          · 页面其它 section 正文里出现纯文本「第 N 条」→ 会被 linkify
+       组件自己从 DOM 读文档名/文件名（.dt-t / .dsrc），无需注入任何数据数组。
+
+     ⚠️ 换引用记号＝改两个文件：本组件里名为 `RE` 的那条正则（搜 `var RE=`）只负责把正文
+       记号变成可点引用；给标题打锚点的是 assets/regen-docs-template.py 里的对偶正则。
+       源文档不是「第 N 条」体裁（§7 / 「7. 标题」/ Article N）时两处必须同时改，否则
+       静态检查全绿而交互全死：锚点在、id 唯一、标签平衡，组件却在正文里匹配不到任何
+       记号，控制台无报错。判据只有一个——在浏览器里点一处引用，看抽屉有没有定位。
+
+     可选：在 <body> 标 data-cite-default-doc="N"，指定正文（s9 之外）里「第 N 条」
+       默认跳哪份文档；缺省第一份（index 0）。
+
+     使用：
+       1) 让内容生成器产出满足上面 DOM 契约的 #s9（光拷本组件、页面没有 dpane 和
+          锚点，linkify 会找不到目标、一片死链——这是它比 lightbox 多的一步）
+       2) 把本文件 BEGIN…END 之间整块原样拷进页面 </body> 之前
+     禁改动键位/关闭/定位行为——那是已校准的交互契约；皮（颜色/尺寸/.doc 排版）
+     可按 register 微调。
+     ══════════════════════════════════════════════════════════════════ -->
+<!-- BEGIN citation-drawer -->
+<style>
+  /* ── 源文档展示壳（多 tab 全文） ── */
+  .docwrap{display:grid;grid-template-columns:270px 1fr;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--card);}
+  .dnav{background:var(--paper-2);border-right:1px solid var(--line);padding:10px;display:flex;flex-direction:column;gap:5px;}
+  .dtab{text-align:left;background:transparent;border:1px solid transparent;border-radius:6px;padding:9px 10px;cursor:pointer;font-family:var(--sans);display:block;width:100%;transition:.12s;}
+  .dtab:hover{background:#fff;border-color:var(--line);}
+  .dtab:focus-visible,.cite:focus-visible,.dwx:focus-visible{outline:2px solid var(--red);outline-offset:2px;border-radius:4px;}
+  .dtab.active{background:#fff;border-color:var(--red);box-shadow:0 1px 3px rgba(166,43,31,.10);}
+  .dtab .dt-t{display:block;min-width:0;font-size:13px;font-weight:600;color:var(--ink);line-height:1.4;overflow-wrap:anywhere;}
+  .dtab.active .dt-t{color:var(--red);}
+  .dtab .dt-s{display:block;font-size:11px;color:var(--ink-3);margin-top:2px;line-height:1.45;}
+  .dk{display:inline-block;font-style:normal;font-size:10px;padding:1px 5px;border-radius:3px;margin-right:5px;vertical-align:1px;font-weight:700;}
+  .dk-sign{background:var(--red-bg);color:var(--red);}
+  .dk-read{background:var(--green-bg);color:var(--green);}
+  .dk-int{background:var(--gold-bg);color:var(--gold);}
+  .dpane{display:none;padding:26px 34px 34px;max-height:78vh;overflow-y:auto;position:relative;scrollbar-width:thin;scrollbar-color:var(--line-2) transparent;}
+  .dpane::-webkit-scrollbar,.dwbody::-webkit-scrollbar{width:9px;}
+  .dpane::-webkit-scrollbar-thumb,.dwbody::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:5px;border:2px solid var(--card);}
+  .dpane::-webkit-scrollbar-thumb:hover,.dwbody::-webkit-scrollbar-thumb:hover{background:var(--ink-3);}
+  .dpane::-webkit-scrollbar-track,.dwbody::-webkit-scrollbar-track{background:transparent;}
+  .dpane.active{display:block;}
+  .dsrc{font-family:var(--mono);font-size:11px;color:var(--ink-3);border-bottom:1px dashed var(--line);padding-bottom:8px;margin-bottom:18px;}
+  .dwarn{background:var(--gold-bg);border-left:3px solid var(--gold);padding:10px 14px;border-radius:0 5px 5px 0;font-size:12.5px;line-height:1.7;color:var(--ink-2);margin-bottom:16px;}
+  /* .doc 正文排版（默认皮，可按 register 覆盖） */
+  .doc{font-family:var(--serif);font-size:14.5px;line-height:1.85;color:var(--ink);}
+  .doc h1{font-size:21px;margin:0 0 6px;letter-spacing:.02em;border-bottom:2px solid var(--ink);padding-bottom:9px;}
+  .doc h2{font-size:15.5px;margin:26px 0 9px;color:var(--red);border:0;padding:0;}
+  .doc h3{font-size:14px;margin:18px 0 7px;color:var(--gold);}
+  .doc p{margin:0 0 11px;}
+  .doc ul,.doc ol{margin:0 0 12px;padding-left:22px;}
+  .doc li{margin-bottom:5px;}
+  .doc strong{color:var(--red);font-weight:700;}
+  .doc hr{border:0;border-top:1px solid var(--line);margin:22px 0;}
+  .doc table{width:100%;border-collapse:collapse;margin:12px 0 16px;font-family:var(--sans);font-size:12.5px;}
+  .doc th{background:var(--paper-2);text-align:left;padding:7px 10px;border:1px solid var(--line);font-weight:600;}
+  .doc td{padding:7px 10px;border:1px solid var(--line);vertical-align:top;}
+  .doc code{font-family:var(--mono);font-size:12px;background:var(--paper-2);padding:1px 5px;border-radius:3px;}
+  /* ── 条款引用 + 抽屉 ── */
+  .cite{appearance:none;background:transparent;border:0;border-bottom:1px dashed var(--red);padding:0;color:var(--red);cursor:pointer;font:inherit;line-height:inherit;font-weight:600;white-space:nowrap;border-radius:2px;}
+  .cite:hover{background:var(--red-bg);border-bottom-style:solid;}
+  .cite::after{content:"⧉";font-size:9px;vertical-align:3px;margin-left:2px;opacity:.65;}
+  #dwmask{position:fixed;inset:0;background:rgba(33,29,23,.34);opacity:0;pointer-events:none;transition:opacity .18s;z-index:90;}
+  #dwmask.on{opacity:1;pointer-events:auto;}
+  #drawer{position:fixed;top:0;right:0;height:100vh;width:min(760px,56vw);background:var(--card);border-left:1px solid var(--line-2);
+          box-shadow:-8px 0 32px rgba(33,29,23,.13);transform:translateX(102%);transition:transform .22s cubic-bezier(.4,0,.2,1);z-index:91;display:flex;flex-direction:column;}
+  #drawer.on{transform:translateX(0);}
+  #drawer[inert]{pointer-events:none;}
+  .dwhead{padding:15px 22px;border-bottom:1px solid var(--line);background:var(--paper-2);display:flex;align-items:center;gap:12px;flex-shrink:0;}
+  .dwhead .t{font-size:14px;font-weight:700;color:var(--ink);flex:1;line-height:1.4;}
+  .dwhead .f{font-family:var(--mono);font-size:11px;color:var(--ink-3);display:block;font-weight:400;margin-top:2px;}
+  .dwx{background:transparent;border:1px solid var(--line-2);border-radius:5px;width:30px;height:30px;cursor:pointer;font-size:17px;color:var(--ink-2);line-height:1;flex-shrink:0;}
+  .dwx:hover{background:var(--red-bg);color:var(--red);border-color:var(--red);}
+  .dwbody{overflow-y:auto;padding:24px 30px 40px;flex:1;position:relative;scrollbar-width:thin;scrollbar-color:var(--line-2) transparent;}
+  .dwjump{padding:8px 22px;background:var(--blue-bg);border-bottom:1px solid var(--line);font-size:11.5px;color:var(--ink-2);flex-shrink:0;}
+  .citation-drawer-error{margin:12px;padding:10px 12px;border:2px solid var(--red);background:var(--red-bg);color:var(--red);font:600 13px/1.5 var(--sans);}
+  @keyframes hlfade{0%,55%{background:#FDF0C8;box-shadow:0 0 0 6px #FDF0C8;}100%{background:transparent;box-shadow:none;}}
+  .hl-clause{animation:hlfade 2.6s ease-out;border-radius:3px;}
+  @media(max-width:860px){
+    .docwrap{grid-template-columns:1fr;}
+    .dnav{min-width:0;flex-direction:row;flex-wrap:wrap;border-right:0;border-bottom:1px solid var(--line);gap:6px;}
+    .dtab{width:auto;max-width:100%;flex:1 1 auto;min-width:150px;border-color:var(--line);background:#fff;display:flex;align-items:center;gap:2px;}
+    .dtab .dt-s{display:none;}
+    .dtab .dt-t{white-space:normal;}
+    .dpane{padding:20px;max-height:none;}
+    #drawer{width:100vw;}
+  }
+  @media(prefers-reduced-motion:reduce){
+    #drawer{transition:none;}
+    #dwmask{transition:none;}
+    .hl-clause{animation:none;background:#FDF0C8;box-shadow:0 0 0 6px #FDF0C8;}
+    .dtab{transition:none;}
+  }
+</style>
+<div id="dwmask" aria-hidden="true"></div>
+<aside id="drawer" role="dialog" aria-modal="true" aria-labelledby="dwtitle" aria-hidden="true" inert>
+  <div class="dwhead"><div class="t" id="dwtitle">条款原文<span class="f" id="dwfile"></span></div><button type="button" class="dwx" id="dwclose" aria-label="关闭条款原文" title="关闭 (Esc)">×</button></div>
+  <div class="dwjump" id="dwjump"></div>
+  <div class="dwbody" id="dwbody"></div>
+</aside>
+<script>
+  // 源文档 tab 切换
+  (function(){
+    function fail(message, roots){
+      console.error('[citation-drawer] '+message);
+      document.documentElement.setAttribute('data-citation-drawer-error',message);
+      if(!document.getElementById('citation-drawer-error')){
+        var alert=document.createElement('p');
+        alert.id='citation-drawer-error'; alert.className='citation-drawer-error';
+        alert.setAttribute('role','alert');
+        alert.textContent='引用组件初始化失败：'+message;
+        (roots[0]||document.body).prepend(alert);
+      }
+    }
+    var roots=Array.prototype.slice.call(document.querySelectorAll('#s9'));
+    if(roots.length!==1){ fail('页面必须且只能有一个 #s9，实际为 '+roots.length+' 个。',roots); return; }
+    var root=roots[0];
+    var wraps=Array.prototype.slice.call(root.querySelectorAll(':scope > .docwrap'));
+    var navs=Array.prototype.slice.call(root.querySelectorAll(':scope > .docwrap > .dnav'));
+    var bodies=Array.prototype.slice.call(root.querySelectorAll(':scope > .docwrap > .dbody'));
+    if(wraps.length!==1||navs.length!==1||bodies.length!==1){ fail('#s9 必须有唯一 .docwrap，且其直属一个 .dnav 与 .dbody。',roots); return; }
+    var tablist=navs[0], paneContainer=bodies[0];
+    var tabs=Array.prototype.slice.call(tablist.children).filter(function(item){ return item.classList.contains('dtab'); });
+    var panes=Array.prototype.slice.call(paneContainer.children).filter(function(item){ return item.classList.contains('dpane'); });
+    var tabKeys=tabs.map(function(tab){ return tab.getAttribute('data-i'); });
+    var paneKeys=panes.map(function(pane){ return pane.getAttribute('data-i'); });
+    var uniqueTabs=new Set(tabKeys), uniquePanes=new Set(paneKeys);
+    var validKeys=tabs.length>0
+      && tabs.length===panes.length
+      && tabKeys.every(function(key){ return key!==null&&key!==''&&paneKeys.indexOf(key)>=0; })
+      && paneKeys.every(function(key){ return key!==null&&key!==''&&tabKeys.indexOf(key)>=0; })
+      && uniqueTabs.size===tabs.length
+      && uniquePanes.size===panes.length;
+    if(!validKeys){ fail('.dtab/.dpane 的 data-i 必须非空、唯一且一一对应。',roots); return; }
+    tablist.setAttribute('role','tablist');
+    if(!tablist.getAttribute('aria-label')) tablist.setAttribute('aria-label','源文档');
+
+    function activate(tab, moveFocus){
+      var k=tab.getAttribute('data-i');
+      tabs.forEach(function(item){
+        var active=item===tab;
+        item.classList.toggle('active',active);
+        item.setAttribute('aria-selected',active?'true':'false');
+        item.tabIndex=active?0:-1;
+      });
+      panes.forEach(function(pane){
+        var active=pane.getAttribute('data-i')===k;
+        pane.classList.toggle('active',active);
+        pane.setAttribute('aria-hidden',active?'false':'true');
+        if(active) pane.scrollTop=0;
+      });
+      if(moveFocus) tab.focus();
+    }
+
+    tabs.forEach(function(tab,index){
+      var k=tab.getAttribute('data-i');
+      tab.type='button';
+      tab.id=tab.id||('doc-tab-'+k);
+      tab.setAttribute('role','tab');
+      tab.setAttribute('aria-controls','doc-panel-'+k);
+      var pane=panes.find(function(item){ return item.getAttribute('data-i')===k; });
+      pane.id=pane.id||('doc-panel-'+k);
+      tab.setAttribute('aria-controls',pane.id);
+      pane.setAttribute('role','tabpanel');
+      pane.setAttribute('aria-labelledby',tab.id);
+      tab.addEventListener('click',function(){ activate(tab,false); });
+      tab.addEventListener('keydown',function(event){
+        var next=index;
+        if(event.key==='ArrowRight'||event.key==='ArrowDown') next=(index+1)%tabs.length;
+        else if(event.key==='ArrowLeft'||event.key==='ArrowUp') next=(index-1+tabs.length)%tabs.length;
+        else if(event.key==='Home') next=0;
+        else if(event.key==='End') next=tabs.length-1;
+        else return;
+        event.preventDefault();
+        activate(tabs[next],true);
+      });
+    });
+    var initial=tabs.find(function(tab){ return tab.classList.contains('active'); })||tabs[0];
+    activate(initial,false);
+  })();
+
+  // 条款引用 → 抽屉预览（文档名/文件名从 DOM 自读，无需注入数据数组）
+  (function(){
+    var roots=Array.prototype.slice.call(document.querySelectorAll('#s9'));
+    if(roots.length!==1||document.documentElement.hasAttribute('data-citation-drawer-error')) return;
+    var sourceRoot=roots[0];
+    var mask=document.getElementById('dwmask'), dw=document.getElementById('drawer');
+    var body=document.getElementById('dwbody'), title=document.getElementById('dwtitle');
+    var fileEl=document.getElementById('dwfile'), jump=document.getElementById('dwjump');
+    var closeButton=document.getElementById('dwclose');
+    var opener=null, inerted=[];
+    if(!dw) return;
+
+    function setBackgroundInert(on){
+      if(on){
+        inerted=[];
+        Array.prototype.forEach.call(document.body.children,function(element){
+          if(element===mask||element===dw||element.tagName==='SCRIPT'||element.tagName==='STYLE') return;
+          if(!element.inert){ element.inert=true; inerted.push(element); }
+        });
+      }else{
+        inerted.forEach(function(element){ if(element.isConnected) element.inert=false; });
+        inerted=[];
+      }
+    }
+
+    function paneOf(i){ var ps=sourceRoot.querySelectorAll(':scope > .docwrap > .dbody > .dpane'); for(var k=0;k<ps.length;k++){ if(ps[k].getAttribute('data-i')===String(i)) return ps[k]; } return null; }
+    // 从 DOM 读某文档的「文件名 · 文档名」——tab 的 .dt-t 是文档名，pane 的 .dsrc 是文件名
+    function docMeta(i){
+      var tab=null, candidates=sourceRoot.querySelectorAll(':scope > .docwrap > .dnav > .dtab'), pane=paneOf(i);
+      for(var k=0;k<candidates.length;k++){ if(candidates[k].getAttribute('data-i')===String(i)){ tab=candidates[k]; break; } }
+      var nameEl=tab?tab.querySelector('.dt-t'):null, srcEl=pane?pane.querySelector('.dsrc'):null;
+      return { name: nameEl?nameEl.textContent.trim():'', file: srcEl?srcEl.textContent.trim():'' };
+    }
+
+    function highlight(root,cid){
+      var el=root.querySelector('[id="'+cid+'"]');
+      if(!el){ root.scrollTop=0; return false; }
+      el.classList.remove('hl-clause'); void el.offsetWidth; el.classList.add('hl-clause');
+      // 用 rect 差值算滚动位移：offsetTop 相对的是最近 positioned 祖先，不是滚动容器，会偏
+      var delta=el.getBoundingClientRect().top-root.getBoundingClientRect().top;
+      root.scrollTop=root.scrollTop+delta-16;
+      return true;
+    }
+
+    function open(di,cn,sub,trigger){
+      var pane=paneOf(di); if(!pane) return;
+      var art=pane.querySelector('.doc'); if(!art) return;
+      var meta=docMeta(di);
+      var wasOpen=dw.classList.contains('on');
+      if(!wasOpen) opener=trigger||document.activeElement;
+      var copy=art.cloneNode(true), idMap={};
+      var copyElements=[copy].concat(Array.prototype.slice.call(copy.querySelectorAll('*')));
+      copyElements.filter(function(element){ return element.id; }).forEach(function(element){
+        var sourceId=element.id, candidate='dwcopy-'+sourceId, suffix=1;
+        while(document.getElementById(candidate)||Object.values(idMap).indexOf(candidate)>=0){
+          candidate='dwcopy-'+sourceId+'-'+suffix; suffix+=1;
+        }
+        idMap[sourceId]=candidate;
+        element.setAttribute('data-source-id',sourceId);
+        element.id=candidate;
+      });
+      copyElements.forEach(function(element){
+        ['aria-labelledby','aria-describedby','aria-controls','aria-owns','headers'].forEach(function(attribute){
+          if(!element.hasAttribute(attribute)) return;
+          var remapped=element.getAttribute(attribute).split(/\s+/).map(function(id){ return idMap[id]||id; });
+          element.setAttribute(attribute,remapped.join(' '));
+        });
+        if(element.hasAttribute('for')&&idMap[element.getAttribute('for')]){
+          element.setAttribute('for',idMap[element.getAttribute('for')]);
+        }
+        var href=element.getAttribute('href');
+        if(href&&href.charAt(0)==='#'&&idMap[href.slice(1)]) element.setAttribute('href','#'+idMap[href.slice(1)]);
+      });
+      // 清掉从页面克隆进来的残留高亮：页内点过引用会在原文留 .hl-clause，不清的话
+      // 抽屉里会同时出现两块高亮，「高亮＝我刚点的那条」这个语义就坏了；
+      // prefers-reduced-motion 下 .hl-clause 是常驻底色，每点一次就多积一块。
+      copy.querySelectorAll('.hl-clause').forEach(function(el){ el.classList.remove('hl-clause'); });
+      body.replaceChildren(copy);
+      var label=cn?('第 '+cn+(sub?('.'+sub):'')+' 条'):'全文';
+      title.firstChild.nodeValue=label;
+      fileEl.textContent=meta.file+'　·　'+meta.name;
+      // exact=false 表示「带了子号但只落到母节开头」——这一定要说出来，否则读者以为
+      // 眼前就是他点的那一条，而真正的子条可能在一屏多以下。旧版对子条也照报「已定位
+      // 并高亮该条」，那个分支永远不会失败，因为母节锚点总是存在。
+      var ok=true, exact=true;
+      if(cn){
+        var base='d'+di+'-c'+cn;
+        if(sub&&highlight(body,idMap[base+'-'+sub]||(base+'-'+sub))){ ok=true; exact=true; }
+        else { exact=!sub; ok=highlight(body,idMap[base]||base); }
+      } else { body.scrollTop=0; }
+      jump.innerHTML = !ok
+        ? '⚠️ 未在该文件中找到 '+label+'，已打开全文 · <b>Esc</b> 关闭'
+        : exact
+          ? '已定位并高亮 '+label+' · 可上下滚动看前后文 · <b>Esc</b> 关闭'
+          : '⚠️ '+label+' 没有单独锚点，已定位到第 '+cn+' 条开头，请往下找 · <b>Esc</b> 关闭';
+      if(!wasOpen) setBackgroundInert(true);
+      mask.classList.add('on'); mask.setAttribute('aria-hidden','false');
+      dw.removeAttribute('inert'); dw.classList.add('on'); dw.setAttribute('aria-hidden','false');
+      closeButton.focus();
+    }
+    function close(){
+      if(!dw.classList.contains('on')) return;
+      mask.classList.remove('on'); mask.setAttribute('aria-hidden','true');
+      dw.classList.remove('on'); dw.setAttribute('aria-hidden','true'); dw.setAttribute('inert','');
+      setBackgroundInert(false);
+      if(opener&&opener.isConnected) opener.focus();
+    }
+    mask.addEventListener('click',close);
+    closeButton.addEventListener('click',close);
+    document.addEventListener('keydown',function(e){
+      if(!dw.classList.contains('on')) return;
+      if(e.key==='Escape'){ e.preventDefault(); close(); return; }
+      if(e.key!=='Tab') return;
+      var focusable=Array.prototype.slice.call(dw.querySelectorAll(
+        'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+      )).filter(function(element){ return !element.hidden&&!element.closest('[hidden],[inert]'); });
+      if(!focusable.length){ e.preventDefault(); dw.focus(); return; }
+      var first=focusable[0], last=focusable[focusable.length-1];
+      if(e.shiftKey&&document.activeElement===first){ e.preventDefault(); last.focus(); }
+      else if(!e.shiftKey&&document.activeElement===last){ e.preventDefault(); first.focus(); }
+    });
+
+    // 把正文里的「第 N 条」变成可点引用
+    // 子号必须捕获并保留：引用密集的审阅页里近半是子条（「第 8.3 条」），只定位到母节
+    // 会把读者扔在目标上方一屏多，而状态栏还会照报「已定位并高亮该条」——错得看不出来。
+    // 生成器（regen-docs-template.py）配套给子条打 c{N}-{M} 锚点。
+    var RE=/第\s?(\d{1,2})(?:\.(\d+)([a-z]?))?\s?条/g;
+    function linkify(scope, defaultDoc){
+      var walker=document.createTreeWalker(scope,NodeFilter.SHOW_TEXT,{acceptNode:function(n){
+        if(!n.nodeValue||n.nodeValue.indexOf('条')<0) return NodeFilter.FILTER_REJECT;
+        var p=n.parentNode;
+        // .nocite = 指向外部法条／外部文件的引用（生成器负责标注）。不排除的话它会被
+        // 链到本文档的同号条款——踩过一个自我演示的例子：正文写着「这是架构 SSOT §3.1
+        // （不是本协议的 §3.1）」，而这两个 §3.1 都被做成链接、点下去正好落到本协议 §3.1。
+        if(!p||p.closest('a,button,code,.cite,.nocite,.dwhead,.dwjump,h1,h2')) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      }});
+      var nodes=[],n; while(n=walker.nextNode()) nodes.push(n);
+      nodes.forEach(function(node){
+        var txt=node.nodeValue; RE.lastIndex=0; if(!RE.test(txt)) return; RE.lastIndex=0;
+        var frag=document.createDocumentFragment(), last=0, m;
+        while((m=RE.exec(txt))!==null){
+          if(m.index>last) frag.appendChild(document.createTextNode(txt.slice(last,m.index)));
+          var a=document.createElement('button');
+          a.type='button';
+          a.className='cite'; a.setAttribute('data-doc',defaultDoc); a.setAttribute('data-c',m[1]);
+          if(m[2]) a.setAttribute('data-sub',m[2]+(m[3]||''));
+          a.title='点开看原文'; a.setAttribute('aria-label',m[0]+'，打开原文');
+          a.textContent=m[0];
+          frag.appendChild(a); last=m.index+m[0].length;
+        }
+        if(last<txt.length) frag.appendChild(document.createTextNode(txt.slice(last)));
+        node.parentNode.replaceChild(frag,node);
+      });
+    }
+    // 正文（s9 之外）「第 N 条」默认指向哪份文档：读 body 的 data-cite-default-doc；
+    // 缺省取第一个「含条款锚点」的文档——自动跳过没有编号条款的说明/一页纸类文档
+    function firstDocWithClauses(){
+      var ps=sourceRoot.querySelectorAll(':scope > .docwrap > .dbody > .dpane');
+      for(var k=0;k<ps.length;k++){ if(ps[k].querySelector('[id*="-c"]')) return ps[k].getAttribute('data-i'); }
+      return '0';
+    }
+    var defAttr=document.body.getAttribute('data-cite-default-doc');
+    var DEFAULT_DOC=(defAttr!==null && defAttr!=='')?defAttr:firstDocWithClauses();
+    document.querySelectorAll('section').forEach(function(sec){ if(sec.id!=='s9') linkify(sec,DEFAULT_DOC); });
+    // 每份文档正文内的交叉引用：指向它自己
+    sourceRoot.querySelectorAll(':scope > .docwrap > .dbody > .dpane').forEach(function(pane){ linkify(pane, pane.getAttribute('data-i')); });
+
+    document.addEventListener('click',function(e){
+      var c=e.target.closest ? e.target.closest('.cite') : null; if(!c) return;
+      e.preventDefault();
+      var di=c.getAttribute('data-doc'), cn=c.getAttribute('data-c'), sub=c.getAttribute('data-sub');
+      var host=c.closest('#s9 .dpane');
+      if(host && !c.closest('#drawer')){        // 已在全文里读 → 就地滚动，不弹抽屉
+        var hbase='d'+host.getAttribute('data-i')+'-c'+cn;
+        if(!(sub&&highlight(host,hbase+'-'+sub))) highlight(host,hbase);
+      } else { open(di,cn,sub,c); }
+    });
+  })();
+</script>
+<!-- END citation-drawer -->
