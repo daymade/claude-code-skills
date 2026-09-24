@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **tunnel-doctor** (`tunnel-doctor` v1.15.0 → v1.15.1): Step 2K now counts a venue change (phone hotspot, different WiFi) as a second vantage point — a 2026-09-24 cafe-WiFi blackout of an entire proxy provider's domains and nodes was indistinguishable from a provider block, and switching networks fixed it with zero config change.
+- **claude-migrate-memory-to-doc** (`daymade-claude-code` v3.68.0 → v3.69.0): Add a second goal, retiring a project's auto memory entirely, with its own reference (per-project switch, shared-directory coordination, inventory across every skill repo, one disposition per file, verbatim migration, pointer repointing, a control probe that proves memory stopped loading, and an archive index). `scripts/migrate_verbatim.py` appends memory bodies to their owning documents and checks every line landed; its tests are registered. Three new failure cases. `claude-code-ops-router` now routes requests to turn auto memory off.
 
 - **daymade-skill** (v1.52.0 → v1.53.0): Route decision-useful outcome reports from `skill-creator` and newly created Skills through `report-with-html`. A recurring customer-report Skill saves its own reusable template only after the user reviews a real report and approves that form; concise replies and the existing eval viewer remain the default where they already fit.
 

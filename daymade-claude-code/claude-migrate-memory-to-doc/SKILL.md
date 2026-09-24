@@ -6,7 +6,8 @@ description: >-
   reference docs so other AI CLIs that auto-load AGENTS.md (Codex primarily) can read the same user
   profile and preferences. Use when the user says "migrate my memory", "my memory is locked to
   Claude Code", "make Codex/Cursor read my profile", or reports memory has grown bloated with
-  content that should be shared across tools.
+  content that should be shared across tools. Also use it to retire a project's auto memory
+  entirely (turn it off, move everything into documents, archive the directory).
 ---
 
 # Migrate Claude Code Memory to Tool-Agnostic Docs
@@ -18,6 +19,15 @@ Claude Code's personal memory lives in `~/.claude/projects/<project-slug>/memory
 This skill moves the **cross-tool-shareable** content out of memory into a tool-agnostic location, and leaves memory as a thin handoff cache. The real problem it solves is **tool lock-in**, not "messy memory".
 
 This skill runs **inline** (never `context: fork`): it spawns parallel review subagents and runs `codex` via Bash — a forked subagent could do neither.
+
+## First: which goal?
+
+| Goal | The user wants | Path |
+|---|---|---|
+| **A — end tool lock-in** | other AI tools to read the same profile and preferences; memory stays as a thin handoff cache | the Workflow below, all phases |
+| **B — retire auto memory** | a project to stop using auto memory, with documents owning everything it held | **[references/retire_auto_memory.md](references/retire_auto_memory.md)**; from the Workflow below use Phase 1's scope table and Phase 6's archive rules, and do Phases 2 and 5 only if the user also wants Codex to read the result |
+
+Goal B has no "stays in memory" bucket: handoff state, external pointers and pending rulings need a document home, the memory directory ends empty, and the project switch is turned off and proven with a control probe. When the request does not say which goal, ask.
 
 ## The core insight — read this before touching anything
 
@@ -77,6 +87,8 @@ The short version:
 - **Team rules / standards / SOPs** → project `CLAUDE.md` or `docs/` (version-controlled, team-visible).
 - **Cross-tool user profile / collaboration preferences / methodology / personal affairs** → `~/.claude/references/user/` (tool-agnostic). **This is the bucket that migrates.**
 - **Temporary handoff snapshots / external system pointers** → **stay in memory**. This is memory's legitimate purpose; do not migrate them.
+
+Before calling any entry "not covered anywhere", search every place that could own it: global and project instruction files, `~/.claude/references/`, **every skill source repository (public and private)**, project docs and handover packs, and hook or script headers. Name all of these roots in any sub-agent prompt — an agent searches only the roots it is told about. Calibrate each search command on a string you know exists before trusting a zero.
 
 Do NOT migrate everything. Over-migrating handoff state into long-lived docs is its own mistake. **But do look at the whole directory** — not just `feedback_*.md` — because project SOPs and operational war-stories often sit in `project_*.md` or `architecture_*.md` files and belong in the repo's docs.
 
@@ -142,6 +154,8 @@ Update the memory index (e.g. `MEMORY.md`) to drop migrated entries and add one 
 - **Don't migrate real-name identity maps or PII into project docs.** Project docs are version-controlled and shared. If a memory file maps `user3 → <a coworker's real name>`, keep it in private memory (thinned to a pointer if the SSOT lives elsewhere) — do not move it to `docs/`.
 - **Don't overwrite an existing doc with a memory duplicate without diffing first.** Many memory files are *partial* duplicates of docs (e.g., `architecture_v2_decision.md` vs `docs/decisions/2026-02-21-v2-architecture.md`). Migrate only the **unique** details; append them to the existing doc rather than replacing it.
 - **Don't forget to repoint links in project docs, not just memory.** `CLAUDE.md` and handoff docs often cite memory files by basename. Grep them before archiving.
+- **Don't accept a sub-agent's "no home found" without knowing which roots it searched.** Three inventory agents that were never told about the private skill repo sent two already-documented entries back as "needs migration".
+- **Don't turn auto memory off globally to retire one project's memory.** The global switch silently stops every other project's memory from loading; use the project's `.claude/settings.local.json`.
 
 ## Failure cases (the full war-stories)
 
