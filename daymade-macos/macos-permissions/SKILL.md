@@ -78,5 +78,5 @@ needs your terminal to already have Full Disk Access — that bootstrap is in
 ## Scope
 
 This skill owns **permission diagnosis and repair**. It does not own: building an app's
-permission-onboarding UX (that is `macos-app-developer`), launchd job design (`macos-watchdog`),
+permission-onboarding UX (app-development work, out of scope here), launchd job design (`macos-watchdog`),
 or disk cleanup (`macos-cleaner`) — those link here when they hit a TCC wall.

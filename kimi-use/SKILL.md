@@ -30,7 +30,7 @@ Kimi 桌面客户端（Kimi.app，`com.moonshot.kimichat`）自带一个插件�
 | 企业工商数据，且本机有专用 CLI（如 qcc） | 专用 CLI 为权威源；Kimi 天眼查插件当**对照通道** |
 | 有 iFinD 自己的账号凭据 | 直连 API 类工具（本机若装有 iFinD API skill/客户端）——结构化、无 GUI 开销 |
 | **A 股券商研报** | 先走**东方财富研报公开 JSON API**（`reportapi.eastmoney.com`，免费免代理、无 GUI 开销；参数与实测见 `references/plugin-capabilities.md`）；Kimi 侧恒生聚源当**第二通道取并集**——两条实测互不包含 |
-| 驱动浏览器里的 kimi.com 网页版 | `kimi-webbridge` skill（本地 daemon，不走 GUI） |
+| 驱动浏览器里的 kimi.com 网页版 | `kimi-webbridge` skill（Kimi Browser Extension 的 skill，不在本仓；本地 daemon，不走 GUI） |
 | **无凭据 / 只有插件形态的数据源 / 一次要横跨多个源** | **本 skill** |
 
 路由表管的是「默认该走哪条」；用户当面指定「就用 Kimi 查」时不挡路——Kimi 是取数通道、专用 CLI 是复核通道，两个角色不冲突。
