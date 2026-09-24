@@ -62,7 +62,9 @@ description: >-
   正文出现未来承诺；正文中的时间、类型或范围会改变安排；或台账里已有未决承诺到达跟进条件。
   命中任一项就升级回全套，并按承诺的改判条件跟进；都未命中才保留单请求降频。代价要说清：
   睡眠时段万一发生无官宣的静默重置，会延迟到活跃时段才发现——静默重置也是人触发的，历史
-  模式支持睡眠时段不会发生，按可接受处理。（2026-09-18 用户拍板保留正常降频分支。）
+  模式支持睡眠时段不会发生，按可接受处理。（2026-09-18 用户拍板保留正常降频分支；2026-09-24
+首次实战：睡眠时段裸调用因 Tuesday 承诺跟进到期升级全套，跟进条件要在台账 pending 的
+rationale 里主动找，summary 不会替你拼出「承诺已到期」。）
   **正常轮与覆盖自审**：固定检查腿是当前已知来源的起点，不是完整信源表，更不保证「不漏
   新重置」。每轮按下文的线索决策处理新证据、未决问题与反馈；连续无新信号也要在下一次
   正常轮检查是否出现了值得追查的来源、上下文或反证。用户问「有没有漏信号 / 别人怎么预测」
@@ -212,10 +214,11 @@ weekly limits for everyone on a Claude Max plan」，Claude 官方学重置传�
 fxtwitter 响应里的 `replying_to`（被回复人）+ `replying_to_status`（被回复帖 id）就是为
 这一步准备的字段。
 
-`url` 已在上面命令的输出里（2026-08-31 起直接打印，免去二次查询），拿到后优先读原帖。X 帖正文的制胜通道是 **fxtwitter 公开镜像 API**（2026-08-30 实测：
+`url` 已在上面命令的输出里（2026-08-31 起直接打印，免去二次查询），拿到后优先读原帖。twitter-cli 不可用（未登录/未装）时，X 帖正文的制胜通道才是 **fxtwitter 公开镜像 API**（2026-08-30 实测：
 免登录、直连即可、返回完整 JSON；**完整正文在 `tweet.text` 字段——不是 `full_text`**，该键
 不存在、照抄会 KeyError；note_tweet 长文全文也给，8-29 官宣长文实测 2324 字符完整拿到、以
-自然结尾收束）：
+自然结尾收束；2026-09-24 实测它可整段不可用（12 连败），而已登录 twitter-cli 的
+`user-posts --json` 本身就带完整正文——通道排位按能力排，别按文档惯性先打 fxtwitter）：
 
 ```bash
 curl -sS --max-time 20 "https://api.fxtwitter.com/<user>/status/<status-id>" \
@@ -235,6 +238,10 @@ curl -sS --max-time 20 "https://api.fxtwitter.com/<user>/status/<status-id>" \
   （被回复人 handle）与 `replying_to_status`（被回复帖 id）足够判断一条已知帖子是否为回复，
   被回复帖本身再用同一条命令取一次；但它**不能枚举主帖下有哪些回复**。主帖零命中、主帖时间线
   无新项，或某个 CLI search 返回 404，都不能写成「没有回复」。
+- 已知候选帖（官宣帖、落地帖）的回复链核验有更便宜的路：`twitter tweet <id> --json` 一次返回
+  主帖＋replies（作者字段是 `data[].author.screenName`——不是 `userName`，2026-09-24 实测
+  50 items，据此确认承诺帖下 Tibo 本人零回复）。它只给「这一条帖下的回复」；「他最近回过谁」
+  的发现性扫描仍走下面的网页滚动法。`twitter search`（含 `from:` 查询）实测 HTTP 404，搜索路线不可用。
 - **有界 reply 发现路径**（2026-09-23 已登录 X 原站实测能看到一条主帖入口遗漏的旧回复）：
   1. 先固定起点：上次**可靠** reply 检查的 UTC；没有就用本任务窗口或当前未决承诺的起点。
      打开 `https://x.com/thsottiaux/with_replies`，记录本轮 URL、起点与开始时间。
@@ -642,6 +649,10 @@ Codex 的时刻**——下「至今没有重置」之前先看最新快照有多
 两次 full reset，确认前一日官宣的 full banked reset 已全部到账）。引用这类相对倒计时时
 折算成绝对时刻并标注折算时刻（读数时刻 + 已流逝时间），别把「21 小时之后」原样抄给用户。
 
+**序列尾部的身份绑定技巧**：`query_usage.py` 返回的 `reset_at` 与扫描输出的最新锚点对拍，
+一致即可把无身份混合序列的尾部绑到当前 CLI 账号（2026-09-24 实测：API 09-30 11:31 UTC 与扫描
+最新锚点同刻）。它只绑尾部，解不了历史区段。
+
 ```bash
 # 重建本机周额度曲线 + 多账号回跳检查（上述陷阱已全部内置；2026-09-12 与内联版同窗口逐行对拍一致）
 uv run python scripts/scan_rollouts.py --days 7
@@ -687,7 +698,9 @@ uv run python scripts/scan_rollouts.py --days 7
 
 ### 5. 通道失败时
 
-Radar API 挂 → fxtwitter 读原帖（§1 的命令）→ syndication 官方端点（截断 276 字符，只够核对元数据）→
+Radar API 挂 → twitter-cli（已登录时：`user-posts` 拿主帖时间线与完整正文、`tweet <id> --json`
+拿已知帖回复链；2026-09-24 实测 Radar 连续 4 次空响应、fxtwitter 12 连败当天，它单独撑起公告与
+reply 两腿）→ fxtwitter 读原帖（§1 的命令）→ syndication 官方端点（截断 276 字符，只够核对元数据）→
 codexlimitwatch 单源（标注同源镜像）+ LunarWerx（仅 Tibo 信号解读交叉验证，非独立观测第二源）→
 WebSearch `thsottiaux reset`
 找转录。用户报告产品已变化时，公告通道全空仍要走静默重置路径；全部产品/社区
@@ -703,7 +716,9 @@ WebSearch `thsottiaux reset`
 **「他还没发新帖」这个否定断言有明确的尽头。** fxtwitter 只有 `/status/<id>` 端点，
 **没有 user timeline**（`api.fxtwitter.com/<user>` 只返回 profile，不含推文列表），无法直接
 遍历他的最新推文。所以「无新官宣」只能靠聚合器（同族）+ WebSearch 交叉得到，本质是「这些
-通道里没有」，不是「他没发」——按这个强度措辞，并补一句「不等于后端没动作」。
+通道里没有」，不是「他没发」——按这个强度措辞，并补一句「不等于后端没动作」。twitter-cli
+已登录时此界后移：`user-posts` 直接遍历主帖时间线，「本覆盖窗口内主帖无新」可实指；replies
+不在此内，不能顺带宣布。
 
 ## Tibo 的时间写法是糙的（解读规则）
 

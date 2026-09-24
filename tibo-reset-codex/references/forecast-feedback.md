@@ -27,9 +27,13 @@ uv run python scripts/forecast_log.py summary
 
 1. 运行 `summary`，读 `pending` 和 `recent_resolved`。`pending` 同时含未核验与证据不足的
    记录；`window_elapsed` 只说明窗口已过，不判输赢。没有历史时按当前证据预测，记录为空
-   不构成错误。需要当时的原始读数时用 `findings` 列表回看。
+   不构成错误。需要当时的原始读数时读数据目录的 `findings.jsonl` 原始行——`findings` 命令
+   只返回摘要（id/invocation/query/endpoints 数），不含 `readings` 与 `notes`（2026-09-24 实测）。
 2. 按主 Skill 取得本轮本来要查的事件证据，核对它能否回答未决预测。明确只有个人额度的
    查询无需为台账另开一轮全局调查；缺证据的记录继续保留，下次有相关证据再核验。
+   窗口刚过期的未决预测趁观测区间未漂移立即核验：每拖一轮，区间宽一轮（2026-09-24 实测：
+   banked 预测过期 26h 后才查，0→1 只能夹到跨边界区间，本可判 hit 变 unknown；banked 的
+   判别器是 query_usage 的计数变化，不是落地确认帖）。
 3. 对可核验的记录追加 `review`。核对**预测发出后首个同类型事件**，不能挑后面恰好命中
    窗口的那次；不能用备用重置兑现全局重置预测，也不能用个人额度回满证明全局发生。
 4. 读最新结果再预测。关注是否持续偏早/偏晚、哪个催化信号有效（预测的 `catalyst_expected`
@@ -131,6 +135,9 @@ uv run python scripts/forecast_log.py summary
 
 - `time_basis`：`occurrence` 表示明确发生时刻（起止相同）；`observed_interval` 表示已核实的
   发生区间；`confirmation_only` 表示只有完成帖时间，不能把它冒充发生时间。
+- 预测发出前的最后读数（如发出前 7 分钟的 banked=0）不能作 `event_start`——脚本会以
+  「event interval must follow forecast issuance」拒绝；取发出后一刻，先验读数写进 `reason`
+  （2026-09-24 实测）。
 - `first_event_verified`：只有证据足以确认是发出预测后首个同类型事件才填 `true`。
   来源覆盖不足或存在更早事件疑点时填 `false`，在 `reason` 说明，不为得到分数硬填。
 
