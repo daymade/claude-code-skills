@@ -270,6 +270,42 @@ class ReconcileOuterTimeoutTests(OwnedProcessGroupTests):
                 self.assert_group_stopped(int(record["root"]))
             self.assertIsNone(self.independent.poll())
 
+    def dump_then_hang(self, pidfile: Path, dump: str) -> list[str]:
+        # Headless Chrome shape: print the whole dump, keep a child, never exit.
+        script = (
+            "import subprocess, sys, time\n"
+            "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])\n"
+            f"open({str(pidfile)!r}, 'w').write(str(child.pid))\n"
+            f"print({dump!r}, flush=True)\n"
+            "time.sleep(30)\n"
+        )
+        return [sys.executable, "-c", script]
+
+    def test_complete_output_returns_without_waiting_for_exit_and_reaps_group(self):
+        with tempfile.TemporaryDirectory() as directory:
+            pidfile = Path(directory) / "child.pid"
+            started = time.monotonic()
+            result = MODULE.run_in_own_process_group(
+                self.dump_then_hang(pidfile, "<html><body><p>已导出</p></body></html>"),
+                timeout=10,
+                output_complete=MODULE.dump_dom_complete,
+            )
+            self.assertLess(time.monotonic() - started, 5)
+            self.assertEqual(0, result.returncode)
+            self.assertIn("已导出", result.stdout)
+            self.assert_stopped(self.child_pid(pidfile))
+
+    def test_incomplete_output_still_times_out_and_reaps_group(self):
+        with tempfile.TemporaryDirectory() as directory:
+            pidfile = Path(directory) / "child.pid"
+            with self.assertRaises(subprocess.TimeoutExpired):
+                MODULE.run_in_own_process_group(
+                    self.dump_then_hang(pidfile, "<html><body><p>半截"),
+                    timeout=0.5,
+                    output_complete=MODULE.dump_dom_complete,
+                )
+            self.assert_stopped(self.child_pid(pidfile))
+
     def test_nonzero_preserves_returncode_and_reaps_lingering_child(self):
         with tempfile.TemporaryDirectory() as directory:
             pidfile = Path(directory) / "child.pid"

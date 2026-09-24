@@ -538,9 +538,8 @@ never as a pass.
    Two outputs to read correctly rather than wave through. The reconciler prints **how many
    fragments it actually compared**; a near-zero count means "nothing was comparable", not
    "nothing was lost" — its extractor samples CJK-initial runs, so a non-Chinese page yields
-   almost none. And if it times out on the same input across repeated runs, that is a known
-   hang on certain pages rather than a flake: record the item as **not reconciled**, never
-   as passed. The generator's `--check` has its own blind spot it now guards against —
+   almost none. And if it times out — Chrome produced no complete DOM within its limit —
+   record the item as **not reconciled**, never as passed. The generator's `--check` has its own blind spot it now guards against —
    it is a self-consistency comparison, so zero clause anchors would appear identically on
    both sides; it therefore asserts the anchor count separately and exits non-zero at zero.
 4. **Review completion** — open the step 9 review file, quote one of the reviewer's own

@@ -31,7 +31,10 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 from pathlib import Path
+from typing import Callable
 
 # 中文起头、后续允许夹带数字/字母/常用标点的片段
 CJK_RUN = re.compile(
@@ -277,11 +280,73 @@ def inject_harvester(text: str) -> str:
     return HARVEST_SCRIPT + text
 
 
-def run_in_own_process_group(command: list[str], timeout: float) -> subprocess.CompletedProcess[str]:
-    """Run one command and always reap the process group created for it."""
+def dump_dom_complete(stdout: str) -> bool:
+    """``--dump-dom`` writes the serialized document in one piece ending in </html>."""
+    return stdout.rstrip().endswith("</html>")
+
+
+def _communicate_until(
+    process: subprocess.Popen,
+    command: list[str],
+    timeout: float,
+    output_complete: Callable[[str], bool],
+) -> subprocess.CompletedProcess[str]:
+    """Return as soon as stdout satisfies ``output_complete`` or the process exits.
+
+    Headless Chrome prints the whole ``--dump-dom`` serialization at once, but on
+    some builds (reproduced on Chrome 153, macOS) it then never exits — so waiting
+    for exit turns every extraction into a timeout even though the dump is complete.
+    """
+    chunks: dict[str, list[bytes]] = {"stdout": [], "stderr": []}
+
+    def drain(name: str, pipe) -> None:
+        # The caller's cleanup closes these pipes once the result is taken; a read
+        # that loses that race has nothing left worth keeping.
+        try:
+            for block in iter(lambda: os.read(pipe.fileno(), 65536), b""):
+                chunks[name].append(block)
+        except (OSError, ValueError):
+            pass
+
+    readers = [
+        threading.Thread(target=drain, args=(name, pipe), daemon=True)
+        for name, pipe in (("stdout", process.stdout), ("stderr", process.stderr))
+    ]
+    for reader in readers:
+        reader.start()
+    deadline = time.monotonic() + timeout
+    while True:
+        text = b"".join(chunks["stdout"]).decode("utf-8", errors="replace")
+        if output_complete(text):
+            return subprocess.CompletedProcess(command, 0, text, b"".join(chunks["stderr"]).decode("utf-8", errors="replace"))
+        if process.poll() is not None:
+            for reader in readers:
+                reader.join(timeout=OWNED_PROCESS_CLEANUP_SECONDS)
+            return subprocess.CompletedProcess(
+                command,
+                process.returncode,
+                b"".join(chunks["stdout"]).decode("utf-8", errors="replace"),
+                b"".join(chunks["stderr"]).decode("utf-8", errors="replace"),
+            )
+        if time.monotonic() >= deadline:
+            raise subprocess.TimeoutExpired(command, timeout)
+        time.sleep(0.05)
+
+
+def run_in_own_process_group(
+    command: list[str],
+    timeout: float,
+    *,
+    output_complete: Callable[[str], bool] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    """Run one command and always reap the process group created for it.
+
+    With ``output_complete``, a process that has written its complete result but
+    does not exit counts as finished (return code 0); the group is still reaped.
+    """
     process = subprocess.Popen(
         command,
-        text=True,
+        text=output_complete is None,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         start_new_session=True,
@@ -290,6 +355,8 @@ def run_in_own_process_group(command: list[str], timeout: float) -> subprocess.C
     # identifier immediately; TimeoutExpired does not expose it.
     process_group = process.pid
     try:
+        if output_complete is not None:
+            return _communicate_until(process, command, timeout, output_complete)
         stdout, stderr = process.communicate(timeout=timeout)
         return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
     finally:
@@ -343,10 +410,10 @@ def visible_text(path_text: str) -> str:
         ) as handle:
             handle.write(inject_harvester(source))
             temp_path = Path(handle.name)
-        # Chrome headless 偶发挂起（实测 2026-08-03 约 1/12，与页面大小无关，非确定性
-        # 失败）——所以只对「超时」这一种失败重试，其余（Chrome 找不到、参数错、退出码
-        # 非零）一次即报，不用重试掩盖真问题。不重试的话这道闸门会偶尔无故变红，而偶尔
-        # 变红的闸门会训练出反射性绕过，比没有闸门更糟。
+        # Chrome 常在 --dump-dom 输出完整之后不退出（Chrome 153 / macOS 实测对最简页面也
+        # 复现），所以以「输出完整」而不是「进程退出」为完成信号。仍会超时的只剩输出
+        # 本身没出来的情形，只对这一种失败重试，其余（Chrome 找不到、参数错、退出码
+        # 非零）一次即报，不用重试掩盖真问题。
         attempts = CHROME_ATTEMPTS
         for attempt in range(1, attempts + 1):
             with tempfile.TemporaryDirectory(prefix="rwh-reconcile-profile-") as profile:
@@ -367,6 +434,7 @@ def visible_text(path_text: str) -> str:
                             temp_path.as_uri(),
                         ],
                         timeout=CHROME_TIMEOUT_SECONDS,
+                        output_complete=dump_dom_complete,
                     )
                     break
                 except subprocess.TimeoutExpired:
@@ -378,13 +446,8 @@ def visible_text(path_text: str) -> str:
                         continue
                     print(
                         f"❌ Chrome 提取可见文本连续 {attempts} 次超时: {path}\n"
-                        "   两种成因，别混为一谈：\n"
-                        "   · 偶发挂起——再跑一次通常就过。\n"
-                        "   · 该输入稳定挂——同一文件连续多轮都超时，就不是偶发。已知有这类\n"
-                        "     输入存在（2026-08-04 实测：数个纯英文测试页 5 次尝试 100% 超时，\n"
-                        "     而同量级中文页 100% 通过；根因未定位，不是进程残留、不是页面大小、\n"
-                        "     不是 DOCTYPE 缺失，这三项都已排除）。撞上这种输入时，本工具给不出\n"
-                        "     结论——**当作「没有对账」处理，不要当作「没有丢失」**。",
+                        f"   {CHROME_TIMEOUT_SECONDS} 秒内 Chrome 没有输出完整的 DOM。本工具给不出结论——\n"
+                        "   **当作「没有对账」处理，不要当作「没有丢失」**。",
                         file=sys.stderr,
                     )
                     sys.exit(2)

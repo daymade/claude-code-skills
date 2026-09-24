@@ -392,6 +392,31 @@ class ReconcileContentTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
+# The template ships TODO sentinels and refuses to run until its config block is filled
+# in; these tests exercise the generator itself, so they fill it the way a user would.
+REGEN_FIXTURE_DOCS = [
+    ("a.md", "甲文档", "签", "甲副标题"),
+    ("b.md", "乙文档", "内", "乙副标题"),
+]
+
+
+def configure_regen_template(source: str) -> str:
+    replacements = [
+        ('HERE / "TODO-源文档目录名"', 'HERE / "signed-docs"'),
+        ('HERE / "TODO-目标页面.html"', 'HERE / "incentive-overview.html"'),
+        (
+            '    ("TODO-第一份.md", "TODO · 显示标题", "内", "TODO 副标题：这份是什么、给谁"),\n',
+            "".join(f"    {entry!r},\n" for entry in REGEN_FIXTURE_DOCS),
+        ),
+        ("⚠️ TODO：写清这份文件为什么不能外发", "⚠️ 夹具：内部文件不外发"),
+        ('BADGE_LEGEND = "TODO：逐个说明徽章含义', 'BADGE_LEGEND = "夹具图例：逐个说明徽章含义'),
+    ]
+    for old, new in replacements:
+        assert source.count(old) == 1, old
+        source = source.replace(old, new)
+    return source
+
+
 class RegenTemplateTests(unittest.TestCase):
     @staticmethod
     def prepare(root: Path, board_html: str) -> tuple[Path, dict[str, str]]:
@@ -399,7 +424,7 @@ class RegenTemplateTests(unittest.TestCase):
         component = root / "citation-drawer.html"
         board = root / "incentive-overview.html"
         docs = root / "signed-docs"
-        script.write_text(REGEN.read_text(encoding="utf-8"), encoding="utf-8")
+        script.write_text(configure_regen_template(REGEN.read_text(encoding="utf-8")), encoding="utf-8")
         component.write_text(
             (COMPONENTS / "citation-drawer.html").read_text(encoding="utf-8"),
             encoding="utf-8",
@@ -407,12 +432,7 @@ class RegenTemplateTests(unittest.TestCase):
         board.write_text(board_html, encoding="utf-8")
         docs.mkdir()
 
-        names = re.findall(
-            r'^\s+\("([^"]+\.md)"',
-            REGEN.read_text(encoding="utf-8"),
-            flags=re.MULTILINE,
-        )
-        for index, name in enumerate(names):
+        for index, name in enumerate(name for name, *_ in REGEN_FIXTURE_DOCS):
             (docs / name).write_text(f"# {name}\n\n## 第 1 条\n\n源内容 {index}\n", encoding="utf-8")
 
         (root / "markdown.py").write_text(
@@ -603,7 +623,9 @@ class ComponentBrowserTests(unittest.TestCase):
             page = root / f"{name}.html"
             profile = root / "profile"
             page.write_text(html, encoding="utf-8")
-            result = run(
+            # Chrome can print a complete --dump-dom and then never exit; take the
+            # dump when it is whole and let the runner reap the process group.
+            result = RECONCILE_MODULE.run_in_own_process_group(
                 [
                     chrome,
                     "--headless",
@@ -614,7 +636,9 @@ class ComponentBrowserTests(unittest.TestCase):
                     "--virtual-time-budget=1000",
                     "--dump-dom",
                     page.as_uri(),
-                ]
+                ],
+                timeout=60,
+                output_complete=RECONCILE_MODULE.dump_dom_complete,
             )
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             match = re.search(r"<title>RWH_RESULT:(\{.*?\})</title>", result.stdout)
@@ -754,7 +778,10 @@ window.addEventListener('load', () => {{
         state = self.browser_probe("sticky-nav", html)
         self.assertTrue(all(state.values()), state)
 
-    def test_report_template_is_complete_and_does_not_overflow_mobile_viewport(self) -> None:
+    def test_report_template_is_complete_and_does_not_overflow_narrow_viewport(self) -> None:
+        # Headless --window-size clamps width to about 500 CSS px and the exact figure
+        # varies by platform, so assert "narrow" rather than a pixel; phone widths need
+        # device emulation.
         html = REPORT_TEMPLATE.read_text(encoding="utf-8")
         probe = """
 <script>
@@ -762,8 +789,9 @@ window.addEventListener('load', () => {
   document.title = 'RWH_RESULT:' + JSON.stringify({
     language: document.documentElement.lang === 'zh-CN',
     viewportMeta: !!document.querySelector('meta[name="viewport"]'),
-    requestedViewport: window.innerWidth === 390
-      && document.documentElement.clientWidth === 390,
+    viewport: `${window.innerWidth}x${document.documentElement.clientWidth}`,
+    narrowViewport: window.innerWidth <= 500
+      && document.documentElement.clientWidth <= window.innerWidth,
     honestPlaceholders: [...document.querySelectorAll('.strip .v')].every((element) =>
       element.firstChild.textContent.trim() === '—'
     ),
@@ -779,7 +807,7 @@ window.addEventListener('load', () => {
 </script>
 </body>"""
         html = html.replace("</body>", probe, 1)
-        state = self.browser_probe("report-template-mobile", html, window_size="390,844")
+        state = self.browser_probe("report-template-narrow", html, window_size="500,844")
         self.assertTrue(all(state.values()), state)
 
 
