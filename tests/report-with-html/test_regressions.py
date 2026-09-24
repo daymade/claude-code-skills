@@ -779,8 +779,9 @@ window.addEventListener('load', () => {{
         self.assertTrue(all(state.values()), state)
 
     def test_report_template_is_complete_and_does_not_overflow_narrow_viewport(self) -> None:
-        # Headless --window-size clamps width to about 500 CSS px, so 500 is the narrowest
-        # width this probe can honestly assert; phone widths need device emulation.
+        # Headless --window-size clamps width to about 500 CSS px and the exact figure
+        # varies by platform, so assert "narrow" rather than a pixel; phone widths need
+        # device emulation.
         html = REPORT_TEMPLATE.read_text(encoding="utf-8")
         probe = """
 <script>
@@ -788,8 +789,9 @@ window.addEventListener('load', () => {
   document.title = 'RWH_RESULT:' + JSON.stringify({
     language: document.documentElement.lang === 'zh-CN',
     viewportMeta: !!document.querySelector('meta[name="viewport"]'),
-    requestedViewport: window.innerWidth === 500
-      && document.documentElement.clientWidth === 500,
+    viewport: `${window.innerWidth}x${document.documentElement.clientWidth}`,
+    narrowViewport: window.innerWidth <= 500
+      && document.documentElement.clientWidth <= window.innerWidth,
     honestPlaceholders: [...document.querySelectorAll('.strip .v')].every((element) =>
       element.firstChild.textContent.trim() === '—'
     ),
