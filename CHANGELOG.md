@@ -168,6 +168,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **daymade-skill** (v1.53.0 → v1.53.1): Direct user-approved customer-report templates to a stable local data directory outside Skill source and plugin caches, so package updates do not own the approved form.
+
 - **daymade-macos** (v1.9.0 → v1.9.1): `macos-permissions` no longer sends public readers to an app-development skill that is not in this repository; permission-onboarding UX is marked out of scope.
 
 - **kimi-use** (v1.3.0 → v1.3.1): The routing table notes that `kimi-webbridge` belongs to the Kimi Browser Extension and is not part of this repository.
