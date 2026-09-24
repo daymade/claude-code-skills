@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **tibo-reset-codex** (`tibo-reset-codex` v1.13.3 → v1.14.0): Make each invoked monitoring round carry unresolved questions forward, judge new and newly discovered older posts by their effect on the user's decision, follow relevant source leads including the identified WeChat group and its image or voice messages, and keep global, banked, both, and unknown recommendations distinct. The existing forecast ledger stores the handoff; no standalone monitor or scheduler is added.
+
 - **claude-md-progressive-disclosurer** (`daymade-claude-code` v3.66.0 → v3.67.0): Description now also routes requests to optimize instruction files, questions about CLAUDE.md/AGENTS.md best practices, and /context reports of large Memory files; it points memory-to-docs migration to `claude-code-ops-router`. Step 2.0 lists auto memory's `MEMORY.md` as a loaded surface, with its official load limit and switches, and treats it as a conflict source.
 
 - **claude-md-progressive-disclosurer** (`daymade-claude-code` v3.65.1 → v3.66.0): Extend the evidence table with the 2026 factorial study of file structure (arXiv 2605.10039), IFScale, Chroma Context Rot, Anthropic's guidance on emphatic wording, and practitioner guides, each with what it does not support; add a refresh rule so best-practice questions start from the table instead of a new search; treat stacked emphasis as priority inflation.
