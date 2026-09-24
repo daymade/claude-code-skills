@@ -150,6 +150,12 @@ comparison are owned by that Skill; a receipt about a locator is not proof of
 the delivered artifact. Detailed retrieval mechanics remain in
 `daymade-claude-code/prior-work-retrieval/SKILL.md`.
 
+### Local Conversation History Boundary
+
+Codex inventory must use the index-only command in
+`daymade-claude-code/read-codex-history/SKILL.md`. If its state database is
+unavailable, report an unknown inventory; do not substitute a raw rollout scan.
+
 ### Local Agent Messaging
 
 For both Claude Code and Codex, use current native discovery, messaging, replies,

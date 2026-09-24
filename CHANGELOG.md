@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **read-codex-history** (`daymade-claude-code` v3.67.0 → v3.68.0): Add `--index-only` to Codex inventory. Missing or unreadable state metadata now returns an explicit unavailable result before any rollout fallback; the Skill and storage reference use this guarded route.
+
 - **tibo-reset-codex** (`tibo-reset-codex` v1.13.3 → v1.14.0): Make each invoked monitoring round carry unresolved questions forward, judge new and newly discovered older posts by their effect on the user's decision, follow relevant source leads including the identified WeChat group and its image or voice messages, and keep global, banked, both, and unknown recommendations distinct. The existing forecast ledger stores the handoff; no standalone monitor or scheduler is added.
 
 - **claude-md-progressive-disclosurer** (`daymade-claude-code` v3.66.0 → v3.67.0): Description now also routes requests to optimize instruction files, questions about CLAUDE.md/AGENTS.md best practices, and /context reports of large Memory files; it points memory-to-docs migration to `claude-code-ops-router`. Step 2.0 lists auto memory's `MEMORY.md` as a loaded surface, with its official load limit and switches, and treats it as a conflict source.

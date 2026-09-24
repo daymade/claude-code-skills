@@ -604,6 +604,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--source", choices=("all", "claude", "codex", "kimi"), default="all"
     )
     parser.add_argument(
+        "--index-only",
+        action="store_true",
+        help="Require Codex state-DB metadata; fail instead of reading raw rollouts",
+    )
+    parser.add_argument(
         "--limit",
         type=int,
         default=10,
@@ -790,6 +795,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     configure_utf8_streams()
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.index_only and args.source != "codex":
+        parser.error("--index-only requires --source codex")
     if args.limit < 1:
         parser.error("--limit must be at least 1")
     if args.max_title_chars < 20:
@@ -860,9 +867,12 @@ def main(argv: Optional[list[str]] = None) -> int:
             apply_date_filter(claude_result, from_timestamp, to_timestamp)
         )
     if args.source in {"all", "codex"}:
-        codex_result = apply_date_filter(
-            collect_codex(args, codex_home), from_timestamp, to_timestamp
-        )
+        codex_result = collect_codex(args, codex_home)
+        if args.index_only and codex_result.backend == "index-unavailable":
+            for warning in codex_result.warnings:
+                print(f"Codex inventory unavailable: {warning}", file=sys.stderr)
+            return 2
+        codex_result = apply_date_filter(codex_result, from_timestamp, to_timestamp)
         args.codex_writer_lock_observation = probe_codex_writer_locks(
             codex_home,
             codex_result.conversations,

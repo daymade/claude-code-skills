@@ -1,6 +1,6 @@
 # Storage and portability reference
 
-Read this reference only when the default inventory reports an unsupported,
+Read this reference only when the index-only inventory reports an unsupported,
 missing, or ambiguous local store.
 
 ## Contents
@@ -82,13 +82,9 @@ missing archive (`required: false`) produces a warning and is skipped. Passing
 3. Query SQLite read-only and introspect columns before selecting them. This
    tolerates additive schema changes and avoids relying on a stale sidebar
    window or incomplete JSONL index.
-4. If no compatible database exists, scan `sessions/**/rollout-*.jsonl` and,
-   when requested, `archived_sessions/`. Use `session_index.jsonl` only as a
-   title aid, never as the sole existence check.
-5. For raw rollouts, stream the complete JSONL and compute minimum/maximum from
-   internal top-level event timestamps plus `session_meta.payload.timestamp`.
-   A rollout without either is unknown-time; file mtime is never substituted.
-6. For every Codex row admitted by the workspace/date/archive filters, inspect the standard
+4. With `--source codex --index-only`, fail with exit 2 when no compatible
+   database exists or its query fails. Do not open rollout files to fill the gap.
+5. For every Codex row admitted by the workspace/date/archive filters, inspect the standard
    `thread-writer-locks/` directory under the resolved Codex home. Coordinate
    with `.coordination.lock`, then non-blockingly test each exact per-thread
    lock. Mark only locks held by a process; do not claim the process is Codex,
@@ -100,11 +96,10 @@ When compatible databases have the same greatest internal thread update, the
 numeric `state_<generation>.sqlite` suffix breaks the tie. Database-file mtime
 is not chronological evidence and is not consulted.
 
-The selected backend is printed in the report. A database problem is reported
-before raw-rollout recovery is attempted, so the alternate path is visible
-rather than a silent fallback.
-Codex raw-rollout fallback and Kimi CLI state/wire parsing continue to compute
-internal record bounds without using file mtime.
+The selected backend is printed in a successful report. The unflagged legacy
+CLI path still has a raw-rollout fallback; it is not a permitted broad inventory
+route and is blocked by the history PreToolUse hook. Kimi CLI state/wire parsing
+continues to compute internal record bounds without using file mtime.
 
 ### Codex verbatim user-input ledger
 
