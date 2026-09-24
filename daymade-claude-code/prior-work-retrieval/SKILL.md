@@ -317,10 +317,10 @@ path remain possible so the agent can repair the gate without bypassing it.
 
 | Need | Route |
 |---|---|
-| Known exact string, symbol, path | Filesystem carrier (`rg`) |
-| Meaning remembered, wording changed | Declared semantic adapter (gbrain, or Claude-history hybrid recall — that index covers Claude sessions only) |
-| Meaning remembered, platform may be Codex | Claude hybrid recall does not cover Codex; use `read-codex-history`'s external FTS5 index (literal-match only, with a CJK tokenizer caveat — read its constraints before trusting a zero) |
-| Exact prior Claude tool/thinking/file-history evidence | `read-claude-code-history search` |
+| Known exact string, symbol, path in project code/docs | Filesystem carrier (`rg`), confined to that project; do not recursively grep conversation stores |
+| Meaning remembered, wording changed | Declared semantic adapter (gbrain or indexed history recall), with provider scope and freshness checked first |
+| Meaning remembered, platform may be Codex | `history_index.py recall --provider codex` when the index covers Codex; otherwise report the gap |
+| Exact prior Claude tool/thinking/file-history evidence | Indexed candidate discovery, then the exact-session reader; if no candidate can be selected without a raw corpus scan, report unknown |
 | Prior conversation evidence whose platform is unknown, plural, or not Claude | `local-conversation-history`; each provider is a separate store, so a Claude-only answer cannot support "we never discussed it" |
 | Meeting decision or speaker claim | Project transcript carrier; open raw speaker turn |
 | Archived WeChat text/voice transcription | Declared WeChat archive carrier |
