@@ -1,10 +1,12 @@
 ---
 name: claude-md-progressive-disclosurer
 description: >-
-  Optimizes, slims, or restructures CLAUDE.md/AGENTS.md with progressive disclosure and zero
-  information loss. Use when the user explicitly asks to audit, 精简, 瘦身, 重构, split, or diagnose
-  adherence problems in instruction files, or when an active task starts moving/compressing
-  instruction sections. Not for generic task drift unless instruction files are in scope.
+  Optimizes or restructures CLAUDE.md/AGENTS.md with progressive disclosure and zero
+  information loss. Use when the user asks to optimize, audit, 精简/瘦身/重构, or split instruction
+  files, asks for their best practices (最佳实践), sees Memory files taking a large share of
+  /context, reports rules in instruction files being ignored, or a task starts moving
+  instruction sections. Not for generic task drift unless instruction files are in scope; not
+  for moving memory entries into docs (use claude-code-ops-router).
 ---
 
 # CLAUDE.md 渐进式披露优化器
@@ -142,6 +144,8 @@ Skills 描述常驻正文按需、以及 **Claude Code 的动态工具选择（�
    ```
 
    同时读各条 developer message 的开头，区分全局指令、项目指令、Skill catalog、hook/plugin 注入；**单量 CLAUDE.md 会漏掉常驻 Skill 描述和 hook 文字**。
+
+   Claude 的 `/context` 把 auto memory 的 `MEMORY.md` 与 CLAUDE.md 一并计入 Memory files。官方 memory 文档写明它每次会话加载前 200 行或 25KB（先到为准），开关是设置项 `autoMemoryEnabled` 或环境变量 `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`。它由模型自己写入，常与用户写的指令重复或矛盾（例如用户规定经验落文档，auto memory 却仍开着），按冲突处理。把 memory 条目迁进文档是另一个 Skill 的职责，经 `claude-code-ops-router` 路由到 `claude-migrate-memory-to-doc`；本 Skill 只负责把它列为加载面和冲突来源。
 2. **分节字节表**：按 heading 统计 bytes/lines；父节包含子节，只在同层比较，不能相加当总量。体积用于定位，不直接决定改动顺序；优先级仍由当前失败、错误代价、任务相关性与可验证收益决定。
 3. **行长分布**：>1KB 的巨型行是「规则+战例焊死在一个 bullet」的签名（实战：4.4% 的行承载 35.6% 的字节）
 4. **载入语义与上限**：逐宿主实测，禁把历史版本的默认值当当前不变量。当前 Codex 的 `project_doc_max_bytes` 是**项目层级文档的累计预算**；全局用户指令可走另一条加载路径，不能拿该值推断它是否截断。先查 `~/.codex/config.toml`，再以同 cwd 的 `codex debug prompt-input` 实际字节为裁决。历史上确有 96 KiB 配置配合旧加载行为导致 164KB 文件尾部 41% 不可见的事故，但它只证明「必须实测」，不证明今天仍按 32 KiB 或同一路径截断。确认真截断后，在当前授权内选择能恢复所需内容可见的最小修复；修改预算、重组文件、增加监控是不同动作，不自动捆绑。
