@@ -1,11 +1,11 @@
 ---
 name: macos-permissions
 description: >-
-  Diagnoses macOS TCC permission dialogs and silent denials: Screen Recording, Microphone, Camera,
-  Accessibility, Automation, Full Disk Access. Use when a dialog reappears after Allow, a
-  LaunchAgent/`uv run` job keeps prompting, a grant breaks after an update, or to find who is really
-  requesting it (权限弹窗 / 授权了没用 / 完全磁盘访问). Not for launchd design (use macos-watchdog) or app
-  permission UX (use developing-ios-apps).
+  Diagnoses and repairs macOS TCC dialogs and silent denials: Full Disk Access, Screen Recording,
+  Microphone, Camera, Accessibility, Automation. Use for recurring prompts, LaunchAgent/uv jobs
+  that fail only in background, broken grants, or automating Full Disk Access (权限弹窗 / 授权了没用 /
+  完全磁盘访问). Checks requester and grants first. Not for launchd design
+  (macos-watchdog) or app permission UX (developing-ios-apps).
 ---
 
 # macOS Permissions (TCC)
@@ -51,6 +51,7 @@ needs your terminal to already have Full Disk Access — that bootstrap is in
 | The situation is… | Go to |
 |---|---|
 | Dialog reappears after clicking Allow; or a LaunchAgent / `uv run` job prompts every few minutes | `references/uv-fda-trap.md` (authorize `uv` itself, not python) |
+| User asks to complete Full Disk Access repair automatically, or a background job needs protected files | `references/automated-full-disk-access.md` (reuse a verified existing grant first; otherwise drive System Settings and read back) |
 | Need the full kTCCService catalog, schema, auth_value/auth_reason semantics, `tccutil` | `references/tcc-mechanics.md` |
 | Reading TCC.db gives "Permission denied" | `references/tcc-mechanics.md` § SIP and the FDA bootstrap |
 | A granted permission silently stopped working after an update | `references/tcc-mechanics.md` § common failure modes (toggle off/on, or `tccutil reset <Service> <bundle-id>`) |
