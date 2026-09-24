@@ -14,8 +14,11 @@ skill-name/
 ├── SKILL.md (required)          # YAML frontmatter + Markdown instructions
 ├── scripts/ (optional)          # Executable code (Python/Bash)
 ├── references/ (optional)       # Documentation loaded as needed
-└── assets/ (optional)           # Templates and resources
+└── assets/ (optional)           # Update-owned templates and resources
 ```
+
+For user-approved customer report forms, follow the
+[skill-creator report-template contract](../daymade-skill/skill-creator/SKILL.md#show-the-result-not-just-the-work).
 
 **Loading mechanism** ([official Skill lifecycle](https://code.claude.com/docs/en/skills)):
 1. **Metadata**: Advertised under the host's discovery policy and catalog budget; not every installed description is guaranteed to reach a fresh prompt
