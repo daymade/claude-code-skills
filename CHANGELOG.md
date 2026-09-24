@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **daymade-claude-code** (v3.64.0 → v3.65.0): Add `claude-code-ops-router` for eight setup and maintenance specialists. Their full instructions and manual commands remain installed; conversation history, continuation, hooks, prior-work retrieval, and other distinct automatic entries stay direct.
 
-- **daymade-financial** (v1.4.0 → v1.5.0): Add `financial-router` for six data, report, and Gangtise setup specialists. Their full instructions and manual commands remain installed; `devils-advocate` and `benchmark-due-diligence` stay directly discoverable for non-financial work.
+- **daymade-financial** (v1.4.0 → v1.5.0): Add `financial-router` for five data, sector-research, and Gangtise setup specialists. Their full instructions and manual commands remain installed; `devils-advocate`, `benchmark-due-diligence`, and the Feishu-sending `pharma-daily-report` stay directly discoverable.
 
 - **daymade-docs** (v1.18.0 → v1.19.0): Add `docs-router` as the suite's automatic document-work entry. It selects a bundled specialist by input and requested output, resolves the active router's canonical source path to find sibling skills on Claude Code or Codex, then reads the selected full `SKILL.md` and task-required references. Routes cover document-to-Markdown, Markdown-to-PDF, existing Word-to-PDF, DOCX creation and review, PDF-to-HTML including translation with figures, Mermaid PNGs, complex Excel models and macOS automation, photos or unsigned digital documents to scanned PDFs, post-change documentation impact checks, and explicit cleanup.
 

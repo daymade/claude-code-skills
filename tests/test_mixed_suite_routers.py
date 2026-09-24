@@ -13,12 +13,11 @@ SPECS = {
         "router": "financial-router",
         "cold": {
             "ashare-news-fetcher", "bigdata-skill", "financial-data-collector",
-            "daymade-sector-research", "pharma-daily-report", "gangtise-copilot",
+            "daymade-sector-research", "gangtise-copilot",
         },
-        "hot": {"devils-advocate", "benchmark-due-diligence"},
+        "hot": {"devils-advocate", "benchmark-due-diligence", "pharma-daily-report"},
         "prefix": ("Bigdata/RavenPack", "US fundamentals/yfinance", "A-share",
-                   "sector Top N/公告", "pharma/医药板块/日报/飞书",
-                   "Gangtise/岗底斯"),
+                   "sector Top N/公告", "Gangtise/岗底斯"),
     },
     "daymade-claude-code": {
         "router": "claude-code-ops-router",
@@ -106,12 +105,13 @@ class MixedSuiteRouterContractTest(unittest.TestCase):
                 for signal in spec["prefix"]:
                     self.assertIn(signal, description[:160], (suite_name, signal))
 
-    def test_colloquial_pharma_and_early_compaction_keep_their_routes(self):
+    def test_pharma_stays_direct_and_early_compaction_has_a_route(self):
         finance = (REPO / "daymade-financial/financial-router/SKILL.md").read_text()
         operations = (
             REPO / "daymade-claude-code/claude-code-ops-router/SKILL.md"
         ).read_text()
-        self.assertRegex(finance, r"医药板块[^\n]*\| `\.\./pharma-daily-report/SKILL\.md`")
+        self.assertNotIn("../pharma-daily-report/SKILL.md", finance)
+        self.assertIn("analysis-only question", finance)
         self.assertRegex(
             operations,
             r"early compaction[^\n]*CLAUDE_CODE_MAX_CONTEXT_TOKENS[^\n]*"

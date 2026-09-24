@@ -1,10 +1,10 @@
 ---
 name: financial-router
 description: >-
-  Routes finance: Bigdata/RavenPack, US fundamentals/yfinance, A-share news,
-  sector Top N/公告, pharma/医药板块/日报/飞书, Gangtise/岗底斯 setup. Reads one bundled
-  specialist. General investment analysis and
-  adversarial argument review keep their own entries.
+  Routes finance: Bigdata/RavenPack, US fundamentals/yfinance, A-share
+  news/policy, sector Top N/公告, Gangtise/岗底斯 setup. Reads one bundled
+  specialist. Pharma reporting and general argument review keep their own
+  direct entries.
 ---
 
 # Financial data router
@@ -32,7 +32,6 @@ their files directly. Claude users can still invoke the original
 | Install or diagnose the Gangtise official Skill suite, configure its credentials, or repair Gangtise authentication | `../gangtise-copilot/SKILL.md` |
 | Collect A-share company news, policy announcements, or stock-forum sentiment as sourced data | `../ashare-news-fetcher/SKILL.md` |
 | Produce an A-share sector's board-wide Top N gainers, recent announcements, and evidence-graded market-sentiment report | `../daymade-sector-research/SKILL.md` |
-| Produce an A-share pharmaceutical daily report, analyze today's 医药板块 snapshot, or send the pharma data to Feishu when authorized | `../pharma-daily-report/SKILL.md` |
 
 Decide from the requested output and named provider. A sector Top N plus
 announcement analysis selects `daymade-sector-research`; a news/policy feed
@@ -43,7 +42,8 @@ Bigdata, yfinance, or Gangtise. Use the installed market-research owner and
 ask for a source preference only when it changes the result and none is given.
 
 `devils-advocate` and `benchmark-due-diligence` are general reasoning
-workflows, so they retain their direct automatic entries and are not routed
-through this finance-only table. Selecting a child does not authorize a paid
-API call, credential change, or delivery of a pharma report; follow the
-selected child's gates and the user's authorization.
+workflows, so they retain their direct automatic entries. `pharma-daily-report`
+also stays direct: its current pipeline requires a Feishu target and sends the
+report, so this router must not direct an analysis-only question into it.
+Selecting a child does not authorize a paid API call or credential change;
+follow the selected child's gates and the user's authorization.

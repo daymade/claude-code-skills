@@ -1,6 +1,5 @@
 ---
 name: pharma-daily-report
-disable-model-invocation: true
 description: >
   生成 A 股医药行业日报：从新浪财经抓取 20 只核心医药股实时行情，分析 7 大细分赛道排名、涨跌榜 TOP 3、资金流向，然后通过飞书发送富文本日报。
   覆盖恒瑞医药、百济神州、智飞生物、药明康德、迈瑞医疗、片仔癀、云南白药等 20 只核心标的。

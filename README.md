@@ -2633,7 +2633,7 @@ claude plugin install feishu-doc-scraper@daymade-skills
 
 > **Install**: `claude plugin install daymade-financial@daymade-skills` (suite-only — invoked as `daymade-financial:financial-router`)
 
-Routes Bigdata/RavenPack, free US company fundamentals, A-share news, sector Top N and announcements, pharmaceutical-sector snapshots and daily reporting, and Gangtise setup to one bundled specialist. General argument review keeps its direct Skills; all specialist slash commands remain available for manual use.
+Routes Bigdata/RavenPack, free US company fundamentals, A-share news, sector Top N and announcements, and Gangtise setup to one bundled specialist. Pharmaceutical reporting and general argument review keep their direct Skills; all specialist slash commands remain available for manual use.
 
 ---
 
