@@ -1,5 +1,6 @@
 ---
 name: claude-migrate-memory-to-doc
+disable-model-invocation: true
 description: >-
   Migrates Claude Code personal memory (the per-project memory/ directory) into tool-agnostic
   reference docs so other AI CLIs that auto-load AGENTS.md (Codex primarily) can read the same user

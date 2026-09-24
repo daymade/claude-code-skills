@@ -1,5 +1,6 @@
 ---
 name: gangtise-copilot
+disable-model-invocation: true
 description: Gangtise (岗底斯投研) OpenAPI skill suite installer and diagnostic tool. One-click install 19 official skills (data, research, utility), configure accessKey/secretAccessKey, run health diagnostics. Trigger when user mentions Gangtise, 岗底斯, any gangtise-* skill, credential setup, or reports errors like 'token is invalid' / '接口地址错误'.
 ---
 

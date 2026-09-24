@@ -221,6 +221,7 @@ claude plugin install daymade-claude-code@daymade-skills
 一次安装即可获得扩展 Claude Code 本体的全部 power-user 技能——跨代码、项目文档、Skill/SOP、会议、微信归档与对话历史的已有工作检索；跨 Claude Code/Codex 的快速本地对话发现；会话恢复；CLAUDE.md 调优；随 lark-cli 版本同步的飞书路由；故障诊断；statusline 配置；导出修复；marketplace 开发与 suite 收敛；终端截图渲染；用量分析；以及多 Provider 模型切换：
 
 ```text
+/daymade-claude-code:claude-code-ops-router
 /daymade-claude-code:local-conversation-history
 /daymade-claude-code:read-claude-code-history
 /daymade-claude-code:read-codex-history
@@ -229,7 +230,7 @@ claude plugin install daymade-claude-code@daymade-skills
 /daymade-claude-code:claude-skills-troubleshooting
 /daymade-claude-code:claude-md-progressive-disclosurer
 /daymade-claude-code:statusline-generator
-/daymade-claude-code:claude-export-txt-better
+/daymade-claude-code:fixing-claude-export-conversations
 /daymade-claude-code:marketplace-dev
 /daymade-claude-code:terminal-screenshot
 /daymade-claude-code:claude-usage-analyst
@@ -254,6 +255,7 @@ claude plugin install daymade-financial@daymade-skills
 一次安装即可获得完整的金融数据与投研技能——Bigdata.com（RavenPack）结构化财务与情绪数据、美股基本面数据（yfinance）、Gangtise（岗底斯）OpenAPI 投研套件安装与编排、A 股消息面与政策聚合、A 股医药板块日报、投资论点的结构化「魔鬼代言人」压力测试，以及对成功样板宣传水分与可复制性的对抗尽调：
 
 ```text
+/daymade-financial:financial-router
 /daymade-financial:bigdata-skill
 /daymade-financial:financial-data-collector
 /daymade-financial:gangtise-copilot
@@ -479,6 +481,14 @@ CC-Switch 支持以下中国 AI 服务提供商：
 **🎬 实时演示**
 
 ![Mermaid 工具演示](./demos/mermaid-tools/extract-diagrams.gif)
+
+---
+
+### **claude-code-ops-router** - Claude Code 配置与运维路由
+
+> **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:claude-code-ops-router`）
+
+按任务读取一个专用 Skill：插件和 Skill 故障、marketplace、状态栏、模型 Profile 与源码同步、用量和额度定时器、memory 迁移、导出 `.txt` 修复。原有专用斜杠命令仍可手动调用。
 
 ---
 
@@ -2146,7 +2156,7 @@ claude plugin install ima-copilot@daymade-skills
 
 ### **claude-export-txt-better** - 修复 Claude Code 导出文件的断行
 
-> **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:claude-export-txt-better`）
+> **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:fixing-claude-export-conversations`）
 
 重建 Claude Code 导出的 `.txt` 对话文件中被硬换行切坏的表格、段落、路径和工具调用输出。附带 53 项自动校验套件（文件无关，能捕捉 over-/under-merge 回归）。
 
@@ -2588,6 +2598,14 @@ claude plugin install feishu-doc-scraper@daymade-skills
 ```
 
 **要求**：已认证到目标租户的 `lark-cli` 二进制（npm `@larksuite/cli`）、`jq`。兜底路径需要浏览器自动化环境；docx 路径需要 `python-docx` 和一个 docx→md 转换器（内置的 doc-to-markdown 技能或 pandoc）。
+
+---
+
+### **financial-router** - 金融数据路由
+
+> **安装**：`claude plugin install daymade-financial@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-financial:financial-router`）
+
+按任务读取 Bigdata/RavenPack、美股免费基本面、A 股消息、行业 Top N 与公告、医药日报或 Gangtise 安装诊断的专用 Skill。通用论证审查保持直接入口，专用斜杠命令仍可手动调用。
 
 ---
 

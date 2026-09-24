@@ -1,5 +1,6 @@
 ---
 name: daymade-sector-research
+disable-model-invocation: true
 description: >-
   A-share sector research: computes board-wide Top N gainers, cross-checks week/month announcement
   windows across two sources, and grades market-sentiment evidence (L1–L3), via parallel Agent Team

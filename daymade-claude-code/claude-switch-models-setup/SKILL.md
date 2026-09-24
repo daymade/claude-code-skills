@@ -1,5 +1,6 @@
 ---
 name: claude-switch-models-setup
+disable-model-invocation: true
 description: >-
   Sets up and maintains isolated Claude Code CLI profiles to run Kimi, MiniMax, DeepSeek, GLM,
   StepFun or Anthropic in separate terminal windows. Use for multi-provider setup, switching models,

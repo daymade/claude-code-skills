@@ -1,5 +1,6 @@
 ---
 name: financial-data-collector
+disable-model-invocation: true
 description: >-
   Collects real financial data for any US publicly traded company from free public sources
   (yfinance) and outputs structured JSON for downstream skills (DCF modeling, comps analysis,

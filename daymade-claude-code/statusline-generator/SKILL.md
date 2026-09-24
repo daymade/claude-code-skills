@@ -1,5 +1,6 @@
 ---
 name: statusline-generator
+disable-model-invocation: true
 description: >-
   Installs, configures, customizes, or troubleshoots the Claude Code statusline (cwd, model, token
   counts). Use when the user wants to set up or change the statusline, switch minimal vs full

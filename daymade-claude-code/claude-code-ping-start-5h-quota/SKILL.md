@@ -1,5 +1,6 @@
 ---
 name: claude-code-ping-start-5h-quota
+disable-model-invocation: true
 description: >-
   睡前/离开前额度耗尽时，设置一次性本机定时器，在 Claude 订阅额度重置后自动发一条极简
   claude -p 消息，立刻开启新的 5 小时用量窗口——用户睡醒时新窗口已跑掉大半，等于白赚一个

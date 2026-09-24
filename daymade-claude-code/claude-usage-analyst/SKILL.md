@@ -1,5 +1,6 @@
 ---
 name: claude-usage-analyst
+disable-model-invocation: true
 description: Analyze Claude Code and Claude Desktop Code token usage, cost, quota burn, model mix, cache read/write, and 5-hour block consumption using ccusage evidence. Use when the user asks why Claude quota was exhausted, whether a model such as fable/opus/sonnet is unusually expensive, how many tokens were spent today or historically, or needs a human-friendly explanation of local Claude Code CLI/Desktop usage.
 ---
 

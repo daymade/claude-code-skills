@@ -1,5 +1,6 @@
 ---
 name: fixing-claude-export-conversations
+disable-model-invocation: true
 description: >-
   Fixes broken line wrapping in Claude Code exported .txt conversation files — rebuilds tables,
   paragraphs, paths and tool calls hard-wrapped at a fixed width. Use for an export
