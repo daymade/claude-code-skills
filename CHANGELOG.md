@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **daymade-audio** (v1.43.0 → v1.44.0): Add `audio-router` for StepFun ASR/TTS and minutes from existing transcripts. Those three specialist instructions and manual commands stay installed; general transcription and transcript correction remain directly discoverable.
+
 - **daymade-claude-code** (v3.64.0 → v3.65.0): Add `claude-code-ops-router` for eight setup and maintenance specialists. Their full instructions and manual commands remain installed; conversation history, continuation, hooks, prior-work retrieval, and other distinct automatic entries stay direct.
 
 - **daymade-financial** (v1.4.0 → v1.5.0): Add `financial-router` for five data, sector-research, and Gangtise setup specialists. Their full instructions and manual commands remain installed; `devils-advocate`, `benchmark-due-diligence`, and the Feishu-sending `pharma-daily-report` stay directly discoverable.

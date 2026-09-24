@@ -1,5 +1,6 @@
 ---
 name: stepfun-asr
+disable-model-invocation: true
 description: >-
   Transcribes Chinese/English audio with StepFun's stepaudio-3-asr-max via its SSE endpoint (not
   /v1/audio/transcriptions) — one call handles long-form audio with no chunking. Use when migrating

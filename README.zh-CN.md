@@ -303,6 +303,7 @@ claude plugin install repomix-safe-mixer@daymade-skills
 # 完整语音套件（ASR + 转录校正 + 会议纪要 + TTS）
 claude plugin install daymade-audio@daymade-skills
 
+
 # 视频比较和质量分析
 claude plugin install video-comparer@daymade-skills
 
@@ -1665,6 +1666,14 @@ python3 scripts/enable_all_plugins.py daymade-skills
 📚 **文档**：参见 [claude-skills-troubleshooting/SKILL.md](./daymade-claude-code/claude-skills-troubleshooting/SKILL.md) 了解完整的故障排除工作流程和架构指导。
 
 **要求**：无（使用 Claude Code 内置 Python）
+
+---
+
+### **audio-router** - 阶跃语音与会议纪要路由
+
+> **安装**：`claude plugin install daymade-audio@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-audio:audio-router`）
+
+按任务读取 StepFun ASR、StepFun TTS 或现成转录稿转会议纪要的完整专用说明。原斜杠命令仍可手动调用；通用音视频转录和转录纠错保持自动直达。
 
 ---
 
