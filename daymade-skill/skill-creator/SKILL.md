@@ -20,6 +20,7 @@ At a high level, the process of creating a skill goes like this:
 - Write a draft of the skill
 - Validate with the smallest evidence that can falsify the changed behavior; treat the full paired eval pipeline as separately authorized work, not an automatic consequence of a tier label
 - Help the user evaluate qualitative or quantitative results when the selected tier produces them
+- Present the finished outcome in a form the user can inspect; use a visual report only when it makes evidence, comparisons, or decisions clearer than a concise reply
 - Rewrite the skill based on feedback from the user's evaluation of the results (and also if there are any glaring flaws that become apparent from the quantitative benchmarks)
 - Repeat until you're satisfied
 - Escalate the verification tier only when the current evidence cannot resolve the changed behavior
@@ -100,6 +101,14 @@ If the hook is already installed (`scripts/setup_supersede_hook.sh status` shows
 The same machinery is available for skills the user creates: when their skill deliberately overlaps an installed one, generate them a kit with `scripts/generate_supersede_kit.py` — see "Coexistence & Precedence" under Prior Art Research and [references/skill-precedence-and-coexistence.md](references/skill-precedence-and-coexistence.md).
 
 ## Communicating with the user
+
+### Show the result, not just the work
+
+At delivery, ask whether the user needs to compare outcomes, inspect several artifacts or evidence items, or choose among unresolved options. If a visual report would make that result easier to understand or judge, load `report-with-html` and let it own the page structure, template, evidence presentation, and browser verification. Load `data-visualization-discipline` through that Skill when the report needs a chart. A single small edit or status update needs only a concise reply; the paired-eval viewer below already owns review of individual eval outputs and feedback, so do not duplicate it with another report.
+
+When creating or improving another skill, apply the same decision to **that skill's normal user-facing result**. If visual reporting is a recurring part of its job, add a conditional handoff to `report-with-html` at the end of its runtime workflow and declare that dependency. If the reporting Skill is unavailable, say the requested visual deliverable is unavailable; do not silently invent a substitute template or claim a report was produced. Do not make every invocation generate HTML, and do not substitute a polished page for a verified result.
+
+**Let a real report earn its template.** For a new Skill that will repeatedly generate customer-specific reports, first run it on a real authorized case and use `report-with-html` to produce and browser-verify the actual report. Show that report to the user. Once they can inspect its content, layout, and interactions, ask separately whether this report's reusable form should become that Skill's default template. Their approval of the report's facts is not approval of its future template. If they approve the form, extract its reusable structure, visual treatment, and interactions into **that Skill's** `assets/` and link the asset from its runtime instructions; remove the first customer's data, names, evidence, and conclusions. If they reject or have not answered, revise the report or leave it as a one-off; do not promote a template. Future runs fill the approved form with each customer's verified data and still use `report-with-html` for report generation and visual QA. Do not freeze customer-specific claims or reuse an old report as if it were current evidence.
 
 The skill creator is liable to be used by people across a wide range of familiarity with coding jargon. If you haven't heard (and how could you, it's only very recently that it started), there's a trend now where the power of Claude is inspiring plumbers to open up their terminals, parents and grandparents to google "how to install npm". On the other hand, the bulk of users are probably fairly computer-literate.
 
@@ -1326,6 +1335,7 @@ Analyze each example by:
 1. Considering how to execute on the example from scratch
 2. Determining the appropriate level of freedom for Claude
 3. Identifying what scripts, references, and assets would be helpful when executing these workflows repeatedly
+4. Deciding how a user will inspect the result: a concise reply, an existing domain artifact or viewer, or a conditional handoff to `report-with-html` when a visual report would clarify evidence, comparisons, or decisions. For recurring customer reports, plan a first real report and a **post-review template decision**; do not pre-create a generic template or copy the report Skill's rules.
 
 **Match specificity to task risk:**
 - **High freedom (text instructions)**: Multiple valid approaches exist
@@ -1895,6 +1905,7 @@ Repeating one more time the core loop here for emphasis:
 - Repeat until you and the user are satisfied
 - Run and clear the existing-skill regression review; eval-only survival does not count
 - Package the final skill and return it to the user.
+- Apply the outcome-presentation decision: show verified change and remaining choices in chat, or open a visual report when that helps the user inspect the result.
 
 Please add the selected verification tier and its default evidence to your TodoList, if you have one. Add "Create evals JSON and run `eval-viewer/generate_review.py` so human can review test cases" only after the generic paired pipeline is explicitly authorized.
 

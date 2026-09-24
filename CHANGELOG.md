@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **daymade-skill** (v1.52.0 → v1.53.0): Route decision-useful outcome reports from `skill-creator` and newly created Skills through `report-with-html`. A recurring customer-report Skill saves its own reusable template only after the user reviews a real report and approves that form; concise replies and the existing eval viewer remain the default where they already fit.
+
 - **daymade-audio** (v1.43.0 → v1.44.0): Add `audio-router` for StepFun ASR/TTS and minutes from existing transcripts. Those three specialist instructions and manual commands stay installed; general transcription and transcript correction remain directly discoverable.
 
 - **daymade-claude-code** (v3.64.0 → v3.65.0): Add `claude-code-ops-router` for eight setup and maintenance specialists. Their full instructions and manual commands remain installed; conversation history, continuation, hooks, prior-work retrieval, and other distinct automatic entries stay direct.
