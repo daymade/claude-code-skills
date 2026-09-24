@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **claude-md-progressive-disclosurer** (`daymade-claude-code` v3.65.1 → v3.66.0): Extend the evidence table with the 2026 factorial study of file structure (arXiv 2605.10039), IFScale, Chroma Context Rot, Anthropic's guidance on emphatic wording, and practitioner guides, each with what it does not support; add a refresh rule so best-practice questions start from the table instead of a new search; treat stacked emphasis as priority inflation.
+
 - **prior-work-retrieval** (`daymade-claude-code` v3.65.0 → v3.65.1): Route conversation evidence through provider-scoped indexed recall and exact-session verification; restrict project `rg` to code/docs and report uncovered history instead of suggesting raw corpus search.
 
 - **frontend-visual-qa** (`frontend-visual-qa` v1.14.0 → v1.15.0): Check image-present, image-absent, failed-load, and long-text rows together when media is optional in a repeated list or table; compare the actual media slot and text bounds before calling the layout consistent.
