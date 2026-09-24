@@ -3851,6 +3851,21 @@ build or buy — evaluate the options
 
 ---
 
+### **data-visualization-discipline** - 图表与看板的判断层
+
+> **安装**：`claude plugin install data-visualization-discipline@daymade-skills`
+
+动手画图之前先定这张图该不该存在、该怎么画：每张图要让读者得出的那一个结论、用均值还是中位数、分段能否聚合、堆叠还是折线、能不能上双轴、几个颜色、同一实体跨图是否同色、表格留几列。介质无关——HTML 报告、React/Vue 看板、PPT 原生图表、matplotlib/plotly/ECharts/D3 一律适用。
+
+**核心特性：**
+- 五个阶段（意图 → 数据 → 选形 → 编码 → 交付闸），每段都有交接检查
+- 九条交付闸，含遮字渲染自测与可见条长的比例量测
+- 可评审既有图表（"这几张图有什么问题"、"图例为什么不一致"）
+
+- [`data-visualization-discipline`](./data-visualization-discipline/SKILL.md)——完整说明。与 `report-with-html` 成对使用，后者负责报告页本身。
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
