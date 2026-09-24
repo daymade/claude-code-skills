@@ -25,10 +25,12 @@ uv run python scripts/forecast_log.py summary
 
 ## 每次调用先回看
 
-1. 运行 `summary`，读 `pending` 和 `recent_resolved`。`pending` 同时含未核验与证据不足的
-   记录；`window_elapsed` 只说明窗口已过，不判输赢。没有历史时按当前证据预测，记录为空
-   不构成错误。需要当时的原始读数时读数据目录的 `findings.jsonl` 原始行——`findings` 命令
-   只返回摘要（id/invocation/query/endpoints 数），不含 `readings` 与 `notes`（2026-09-24 实测）。
+1. 运行 `summary`，先读 `due_for_followup`（窗口已过期或 24h 内将关闭、且尚无定论的
+   pending，带完整 id 可直接喂 review），再读 `pending` 和 `recent_resolved`。`pending`
+   同时含未核验与证据不足的记录；`window_elapsed` 只说明窗口已过，不判输赢。没有历史时
+   按当前证据预测，记录为空不构成错误。需要当时的原始读数时读数据目录的 `findings.jsonl`
+   原始行——`findings` 命令只返回摘要（id/invocation/query/endpoints 数），不含
+   `readings` 与 `notes`（2026-09-24 实测）。
 2. 按主 Skill 取得本轮本来要查的事件证据，核对它能否回答未决预测。明确只有个人额度的
    查询无需为台账另开一轮全局调查；缺证据的记录继续保留，下次有相关证据再核验。
    窗口刚过期的未决预测趁观测区间未漂移立即核验：每拖一轮，区间宽一轮（2026-09-24 实测：

@@ -384,6 +384,42 @@ class ForecastLogTests(unittest.TestCase):
             self.assertEqual(self.path.read_bytes(), bad)
             self.path.write_text(original)
 
+    def test_due_for_followup_flags_overdue_pending_with_elapsed_hours(self):
+        """过期未定论的预测必须第一眼可见，不用从 rationale 里人工拼。
+
+        2026-09-24 实战：一条窗口已过 26h 的 banked 预测靠人工读 pending 文本才
+        被发现，到账观测区间已跨边界，本可判 hit 拖成 unknown。summary 要把
+        「窗口已过、尚无定论」机械地单列出来。
+        """
+        row = self.record()  # window 2026-10-12T00:00Z → 2026-10-14T00:00Z
+        summary = log.summarize(self.path, now=self.now + timedelta(days=5, hours=6))
+        self.assertEqual(len(summary["due_for_followup"]), 1)
+        entry = summary["due_for_followup"][0]
+        self.assertEqual(entry["id"], row["id"])
+        self.assertEqual(entry["urgency"], "overdue")
+        self.assertEqual(entry["hours_overdue"], 30.0)
+        self.assertEqual(entry["latest_outcome"], "unreviewed")
+
+    def test_due_for_followup_flags_windows_closing_within_24h(self):
+        row = self.record()
+        # 距窗口关闭 30h：不进（阈值 24h）。
+        early = log.summarize(self.path, now=self.now + timedelta(days=2, hours=18))
+        self.assertEqual(early["due_for_followup"], [])
+        # 距窗口关闭 6h：closing_soon，剩余时长正确。
+        soon = log.summarize(self.path, now=self.now + timedelta(days=3, hours=18))
+        self.assertEqual(len(soon["due_for_followup"]), 1)
+        entry = soon["due_for_followup"][0]
+        self.assertEqual(entry["urgency"], "closing_soon")
+        self.assertEqual(entry["hours_until_close"], 6.0)
+        self.assertEqual(entry["id"], row["id"])
+
+    def test_due_for_followup_excludes_resolved_and_empty_journals(self):
+        self.assertEqual(log.summarize(self.path, now=self.now)["due_for_followup"], [])
+        row = self.record()
+        self.review(row["id"])  # resolves to hit
+        summary = log.summarize(self.path, now=self.now + timedelta(days=9))
+        self.assertEqual(summary["due_for_followup"], [])
+
 
 if __name__ == "__main__":
     unittest.main()
