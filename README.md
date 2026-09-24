@@ -224,6 +224,7 @@ claude plugin install daymade-claude-code@daymade-skills
 This suite bundles the skills that extend Claude Code itself — cross-project prior-work retrieval across code, docs, Skills, meetings, WeChat archives, and conversation history; fast local conversation discovery across Claude Code and Codex; session recovery; CLAUDE.md tuning; version-synced Lark CLI routing; troubleshooting; statusline configuration; export repair; marketplace development and suite consolidation; terminal screenshot rendering; usage analysis; and multi-provider model switching:
 
 ```text
+/daymade-claude-code:claude-code-ops-router
 /daymade-claude-code:local-conversation-history
 /daymade-claude-code:read-claude-code-history
 /daymade-claude-code:read-codex-history
@@ -232,7 +233,7 @@ This suite bundles the skills that extend Claude Code itself — cross-project p
 /daymade-claude-code:claude-skills-troubleshooting
 /daymade-claude-code:claude-md-progressive-disclosurer
 /daymade-claude-code:statusline-generator
-/daymade-claude-code:claude-export-txt-better
+/daymade-claude-code:fixing-claude-export-conversations
 /daymade-claude-code:marketplace-dev
 /daymade-claude-code:terminal-screenshot
 /daymade-claude-code:claude-usage-analyst
@@ -257,6 +258,7 @@ claude plugin install daymade-financial@daymade-skills
 This suite bundles the skills that fetch and analyze financial data — Bigdata.com (RavenPack) structured financials and sentiment, US equity fundamentals via yfinance, Gangtise (岗底斯) OpenAPI research suite orchestration, A-share news and policy aggregation, A-share pharmaceutical sector daily reporting, structured devil's-advocate pressure-testing of investment theses, and adversarial due diligence on inflated benchmark claims:
 
 ```text
+/daymade-financial:financial-router
 /daymade-financial:bigdata-skill
 /daymade-financial:financial-data-collector
 /daymade-financial:gangtise-copilot
@@ -463,6 +465,14 @@ Extracts Mermaid diagrams from markdown and generates high-quality PNG images.
 **🎬 Live Demo**
 
 ![Mermaid Tools Demo](./demos/mermaid-tools/extract-diagrams.gif)
+
+---
+
+### **claude-code-ops-router** - Claude Code Setup Router
+
+> **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:claude-code-ops-router`)
+
+Routes plugin and Skill repair, marketplace work, statusline, model profiles and source sync, 1M context-window repair, usage and quota timers, memory migration, and exported `.txt` repair to one bundled specialist. The selected Skill's full instructions are read at use time; its original slash command remains available for manual use.
 
 ---
 
@@ -2133,7 +2143,7 @@ claude plugin install ima-copilot@daymade-skills
 
 ### **claude-export-txt-better** - Fix Claude Code Export Formatting
 
-> **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:claude-export-txt-better`)
+> **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:fixing-claude-export-conversations`)
 
 Reconstruct broken line wrapping in Claude Code exported `.txt` conversation files. Rebuilds tables, paragraphs, paths, and tool calls that were hard-wrapped at fixed column widths, and ships with an automated 53-check validation suite (file-agnostic, catches over- and under-merging regressions).
 
@@ -2616,6 +2626,14 @@ claude plugin install feishu-doc-scraper@daymade-skills
 ```
 
 **Requirements**: `lark-cli` binary (npm `@larksuite/cli`) authenticated to the target tenant; `jq`. Fallback path needs a browser-automation surface; the docx path needs `python-docx` and a docx→md converter (the bundled doc-to-markdown skill or pandoc).
+
+---
+
+### **financial-router** - Financial Data Routing
+
+> **Install**: `claude plugin install daymade-financial@daymade-skills` (suite-only — invoked as `daymade-financial:financial-router`)
+
+Routes Bigdata/RavenPack, free US company fundamentals, A-share news, sector Top N and announcements, and Gangtise setup to one bundled specialist. Pharmaceutical reporting and general argument review keep their direct Skills; all specialist slash commands remain available for manual use.
 
 ---
 

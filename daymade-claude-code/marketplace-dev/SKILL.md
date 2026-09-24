@@ -1,5 +1,6 @@
 ---
 name: marketplace-dev
+disable-model-invocation: true
 description: >-
   Builds and maintains Claude Code plugin marketplaces: converts a skills repo to spec-valid
   marketplace.json, adds/updates plugin entries, and migrates skills into or between suites. Use for

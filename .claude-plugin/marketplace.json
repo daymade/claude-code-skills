@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Professional Claude Code and Codex skills marketplace — production-ready skills spanning GitHub and git operations (including current-base contributor PR review), document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, local inter-agent messaging, Claude Code operations, technology selection and build-vs-buy decisions, and model-aware Codex workstation setup. Suite plugins bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
-    "version": "3.15.0"
+    "version": "3.16.0"
   },
   "plugins": [
     {
@@ -126,7 +126,7 @@
       "description": "Claude Code operations suite that bundles cross-project prior-work retrieval across code, docs, Skills, meetings, WeChat archives, and conversation history; provider-separated Claude Code and Codex history readers; identity- and lineage-gated continuation workflows; plugin/skill troubleshooting; CLAUDE.md progressive disclosure optimization; version-synced Lark CLI routing; statusline configuration; exported .txt repair; full claude.ai conversation extraction with tool-call rendering and file download; plugin marketplace development and suite consolidation; writing/testing/debugging Claude Code hooks; multi-provider profile isolation; personal-memory migration into tool-agnostic AGENTS.md reference docs; one-shot local timers that ping Claude right after subscription quota reset to start a fresh 5-hour usage window; working web search installed on an agent whose relayed model backend cannot execute the built-in one; and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
       "source": "./daymade-claude-code",
       "strict": false,
-      "version": "3.64.0",
+      "version": "3.65.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -151,6 +151,7 @@
         "memory-migration"
       ],
       "skills": [
+        "./claude-code-ops-router",
         "./local-conversation-history",
         "./read-claude-code-history",
         "./read-codex-history",
@@ -249,7 +250,7 @@
       "description": "Financial data and investment-research suite covering the full China A-share and global equity data pipeline: Bigdata.com (RavenPack) structured financials and news sentiment, US equity fundamentals via yfinance, Gangtise (岗底斯) OpenAPI research suite installation and orchestration, A-share news and policy aggregation, A-share pharmaceutical sector daily reporting, structured devil's-advocate pressure-testing of investment theses, and adversarial due diligence on inflated benchmark claims with replicability mapping. Install once for the complete financial research workflow.",
       "source": "./daymade-financial",
       "strict": false,
-      "version": "1.4.0",
+      "version": "1.5.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -268,6 +269,7 @@
         "due-diligence"
       ],
       "skills": [
+        "./financial-router",
         "./bigdata-skill",
         "./financial-data-collector",
         "./gangtise-copilot",

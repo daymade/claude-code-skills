@@ -1,5 +1,6 @@
 ---
 name: bigdata-skill
+disable-model-invocation: true
 description: >-
   Pulls Bigdata.com (RavenPack) financial and news data via the official bigdata-client SDK and
   /v1/* REST endpoints — structured financials, prices, analyst estimates, entity-sentiment series,
