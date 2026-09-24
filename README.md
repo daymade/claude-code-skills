@@ -3891,7 +3891,7 @@ Glue logos, avatars, or stickers onto moving objects in a video clip so they fol
 Decides whether a chart should exist and how it should be drawn before any code is written: the one conclusion each chart must support, mean vs. median, whether segments may be aggregated, stacked vs. line, dual axes, color count and cross-chart color identity, and how many columns a table keeps. Medium-agnostic — HTML reports, React/Vue dashboards, native PowerPoint charts, matplotlib/plotly/ECharts/D3.
 
 **Key features:**
-- Five stages (intent → data validity → form → encoding → delivery gate), each with a handoff check
+- Five stages (intent → data validity → form → encoding → delivery): the first four end with a handoff check, the fifth is the delivery gate
 - A nine-item delivery gate, including a masked-render self-test and painted-span proportion checks
 - Reviews existing charts ("what is wrong with these charts", "why do the legends disagree")
 
