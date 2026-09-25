@@ -69,6 +69,9 @@ def load_study(directory):
             raise ValueError(f"duplicate lane_id {lane['lane_id']}")
         if lane["task_id"] not in questions:
             raise ValueError(f"lane {lane['lane_id']} references unknown question {lane['task_id']}")
+        for key in ("control_surface", "route_skill"):
+            if key in lane and (not isinstance(lane[key], str) or not lane[key].strip()):
+                raise ValueError(f"lane {lane['lane_id']} has invalid {key}")
         lanes[lane["lane_id"]] = lane
     return study, lanes
 
@@ -189,6 +192,69 @@ def cmd_status(directory):
         print(f"{lane['lane_id']}\t{lane['provider']}\t{lane['mode']}\t{current.get(lane['lane_id'], 'planned')}")
 
 
+def cmd_plan(directory, max_parallel):
+    if max_parallel < 1:
+        raise ValueError("max_parallel must be positive")
+    study, lanes = load_study(directory)
+    events, current, origins = load_events(directory, lanes)
+    latest = {event["lane_id"]: event for event in events}
+    active = []
+    collected = []
+    held = []
+    surface_cards = {}
+    for lane in lanes.values():
+        state = current.get(lane["lane_id"], "planned")
+        card = {
+            "lane_id": lane["lane_id"],
+            "provider": lane["provider"],
+            "mode": lane["mode"],
+            "task_id": lane["task_id"],
+            "control_surface": lane.get("control_surface", lane["provider"]),
+            "route_skill": lane.get("route_skill"),
+            "state": state,
+        }
+        if state in {"planned", "prepared"}:
+            card["prompt"] = lane["prompt"]
+            surface_cards.setdefault(card["control_surface"], []).append(card)
+        elif state in {"submitted", "running"}:
+            card["origin"] = origins[lane["lane_id"]]
+            active.append(card)
+            surface_cards.setdefault(card["control_surface"], []).append(card)
+        elif state == "collected":
+            card["origin"] = origins[lane["lane_id"]]
+            card["artifact"] = latest[lane["lane_id"]]["artifact"]["path"]
+            collected.append(card)
+        else:
+            card["note"] = latest[lane["lane_id"]]["note"]
+            if lane["lane_id"] in origins:
+                card["last_known_origin"] = origins[lane["lane_id"]]
+            held.append(card)
+
+    # Active and new lanes sharing a surface must stay in one owner packet.
+    # A resumed coordinator must reconcile the current UI owner before handoff.
+    surface_queues = [
+        {
+            "control_surface": surface,
+            "lanes": cards,
+            "owner_reconciliation_required": any(
+                card["state"] in {"submitted", "running"} for card in cards
+            ),
+        }
+        for surface, cards in surface_cards.items()
+    ]
+    groups = [surface_queues[i:i + max_parallel] for i in range(0, len(surface_queues), max_parallel)]
+    print(json.dumps({
+        "study_id": study["study_id"],
+        "business_outcome": study["business_outcome"],
+        "as_of": study["as_of"],
+        "max_parallel": max_parallel,
+        "parallel_groups": groups,
+        "active_query_existing_origin": active,
+        "collected": collected,
+        "held_no_auto_retry": held,
+    }, ensure_ascii=False, indent=2))
+
+
 def cmd_record(directory, args):
     _, lanes = load_study(directory)
     events, current, origins = load_events(directory, lanes)
@@ -243,6 +309,9 @@ def main():
     subs = parser.add_subparsers(dest="command", required=True)
     for name in ("validate", "status"):
         subs.add_parser(name).add_argument("study_dir", type=Path)
+    plan = subs.add_parser("plan", help="derive parallel dispatch cards; makes no provider calls")
+    plan.add_argument("study_dir", type=Path)
+    plan.add_argument("--max-parallel", type=int, default=3)
     record = subs.add_parser("record")
     record.add_argument("study_dir", type=Path)
     record.add_argument("lane_id")
@@ -260,6 +329,8 @@ def main():
             cmd_validate(directory)
         elif args.command == "status":
             cmd_status(directory)
+        elif args.command == "plan":
+            cmd_plan(directory, args.max_parallel)
         else:
             cmd_record(directory, args)
     except (ValueError, OSError, json.JSONDecodeError) as exc:

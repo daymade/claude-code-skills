@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **deep-research** (`deep-research` v2.8.0 → v2.9.0): Add a coordinator for parallel provider × mode research, composing existing Skills and agents rather than embedding vendor adapters. Its read-only planner assigns one owner per control surface, keeps active tasks in the same owner queue, and synthesizes by original evidence rather than model agreement. It makes no provider calls or purchases.
+
 - **deep-research** (`deep-research` v2.7.0 → v2.8.0): Add a local multi-provider run contract and CLI that separates provider modes, records original tasks and artifacts, and rejects missing origins, changed run identities, and modified exports. The existing citation registry still owns factual verification.
 
 - **tunnel-doctor** (`tunnel-doctor` v1.15.0 → v1.15.1): Step 2K now counts a venue change (phone hotspot, different WiFi) as a second vantage point — a 2026-09-24 cafe-WiFi blackout of an entire proxy provider's domains and nodes was indistinguishable from a provider block, and switching networks fixed it with zero config change.
