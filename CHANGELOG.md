@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **macos-permissions** (`daymade-macos` v1.11.1 → v1.12.0): Document two end-to-end macOS Full Disk Access GUI routes verified with real LaunchAgents: enabling an existing denied entry and adding a new executable through the file picker. Both require a system TCC readback and protected background read; hidden-path picker submission remains unverified on this host.
+
 - **macos-permissions** (`daymade-macos` v1.11.0 → v1.11.1): Correct the Full Disk Access SQL example to read the system TCC database. User-database examples no longer appear to prove an FDA grant.
 
 - **macos-permissions, macos-watchdog, capture-screen** (`daymade-macos` v1.10.0 → v1.11.0): Align Full Disk Access guidance with the tested background reader and its installer. The repair route now checks existing grants before opening System Settings, uses exact TCC client paths, and validates a protected read. LaunchAgent and README guidance point to that route instead of treating the displayed interpreter or a manual grant as universal.

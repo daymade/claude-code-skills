@@ -45,11 +45,10 @@ requester and any existing grant, then test the protected read under the real La
 In this observed case, `uv` was the responsible requester. Reusing its existing FDA grant
 worked for the Mac WeChat reader; that result does not establish inheritance for every job.
 
-If no usable grant exists, add the **absolute `uv` path from the job's actual
-`ProgramArguments`** in System Settings → Privacy & Security → Full Disk Access. The file
-picker's Go to Folder action (`Cmd+Shift+G`) can select a binary outside `/Applications`.
-Verify the exact client path using the query in [`tcc-mechanics.md`](tcc-mechanics.md), then
-restart the job and repeat its protected read. TCC stores the absolute path, not a literal `~`.
+If no usable grant exists, use that GUI route for the **absolute `uv` path from the job's actual
+`ProgramArguments`**. Verify that exact client in the system TCC database using
+[`tcc-mechanics.md`](tcc-mechanics.md), then restart the job and
+repeat its protected read. TCC stores the absolute path, not a literal `~`.
 
 ## It recurs
 
