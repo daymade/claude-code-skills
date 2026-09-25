@@ -93,6 +93,9 @@ def artifact_path(directory, artifact):
     path = (directory / rel).resolve()
     if not path.is_relative_to(directory.resolve()):
         raise ValueError("artifact.path escapes study directory")
+    parts = path.relative_to(directory.resolve()).parts
+    if not parts or parts[0] != "sources":
+        raise ValueError("provider artifact must be under sources/")
     return path
 
 
@@ -104,7 +107,7 @@ def sha256(path):
     return digest.hexdigest()
 
 
-def check_event(directory, event, lanes, previous, previous_origin=None):
+def check_event(directory, event, lanes, previous, previous_origin=None, prior_events=()):
     if not isinstance(event, dict):
         raise ValueError("event must be an object")
     lane_id = event.get("lane_id")
@@ -119,6 +122,10 @@ def check_event(directory, event, lanes, previous, previous_origin=None):
     before = previous.get(lane_id)
     if state not in NEXT[before]:
         raise ValueError(f"invalid transition for {lane_id}: {before} -> {state}")
+    if state in {"deferred", "failed_unknown"} and not event["note"].strip():
+        raise ValueError(f"{state} requires a reason in note")
+    if before in {"deferred", "failed_unknown"} and state == "submitted" and not event["note"].strip():
+        raise ValueError("retry submission requires recovery evidence in note")
     if before is None and state == "collected" and event.get("imported") is not True:
         raise ValueError("first collected event requires imported=true for historical capture")
     if state in {"submitted", "running", "collected"}:
@@ -126,9 +133,16 @@ def check_event(directory, event, lanes, previous, previous_origin=None):
         if before in {"submitted", "running", "collected"} and state in {"running", "collected"}:
             if event["origin"] != previous_origin:
                 raise ValueError(f"origin changed mid-run for {lane_id}")
+        for prior in prior_events:
+            if (prior.get("origin") == event["origin"] and prior["lane_id"] != lane_id
+                    and lanes[prior["lane_id"]]["provider"] == lanes[lane_id]["provider"]):
+                raise ValueError(f"origin already assigned to lane {prior['lane_id']}")
     if state == "collected":
         artifact = event.get("artifact")
         path = artifact_path(directory, artifact)
+        for prior in prior_events:
+            if prior["state"] == "collected" and artifact_path(directory, prior["artifact"]) == path:
+                raise ValueError(f"artifact already collected for lane {prior['lane_id']}")
         if not path.is_file() or path.stat().st_size == 0:
             raise ValueError(f"missing or empty artifact {path}")
         claimed = artifact.get("sha256")
@@ -152,7 +166,7 @@ def load_events(directory, lanes):
                 raise ValueError(f"run-events.jsonl:{number}: blank line")
             try:
                 event = json.loads(line)
-                check_event(directory, event, lanes, current, origins.get(event.get("lane_id")))
+                check_event(directory, event, lanes, current, origins.get(event.get("lane_id")), events)
             except (ValueError, TypeError, OSError) as exc:
                 raise ValueError(f"run-events.jsonl:{number}: {exc}") from exc
             events.append(event)
@@ -177,7 +191,7 @@ def cmd_status(directory):
 
 def cmd_record(directory, args):
     _, lanes = load_study(directory)
-    _, current, origins = load_events(directory, lanes)
+    events, current, origins = load_events(directory, lanes)
     origin = None
     if args.origin_url and args.origin_task_id:
         raise ValueError("choose one origin")
@@ -206,15 +220,15 @@ def cmd_record(directory, args):
             "sha256": sha256(path),
             "captured_at": args.captured_at or datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat(timespec="seconds"),
         }
-    check_event(directory, event, lanes, current, origins.get(args.lane_id))
+    check_event(directory, event, lanes, current, origins.get(args.lane_id), events)
     ledger = directory / "run-events.jsonl"
     # Single append keeps earlier events intact; caller should not edit the ledger by hand.
     fd = os.open(ledger, os.O_RDWR | os.O_CREAT | os.O_APPEND, 0o600)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX)
         # Independent agents can finish at once; recheck the transition under the ledger lock.
-        _, current, origins = load_events(directory, lanes)
-        check_event(directory, event, lanes, current, origins.get(args.lane_id))
+        events, current, origins = load_events(directory, lanes)
+        check_event(directory, event, lanes, current, origins.get(args.lane_id), events)
         payload = (json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n").encode()
         while payload:
             payload = payload[os.write(fd, payload):]

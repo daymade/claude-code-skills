@@ -20,7 +20,10 @@ class ProviderRunsTest(unittest.TestCase):
             "as_of": "2026-09-25",
             "business_outcome": "A user acts on a valuable finding",
             "decision_questions": [{"id": "Q1", "question": "Does it change a decision?"}],
-            "lanes": [{"lane_id": "vendor-deep", "provider": "vendor", "mode": "deep-research", "task_id": "Q1", "prompt": "Find evidence"}],
+            "lanes": [
+                {"lane_id": "vendor-deep", "provider": "vendor", "mode": "deep-research", "task_id": "Q1", "prompt": "Find evidence"},
+                {"lane_id": "vendor-tools", "provider": "vendor", "mode": "work-tools", "task_id": "Q1", "prompt": "Query tools"},
+            ],
         }), encoding="utf-8")
         self.report = self.study / "sources" / "report.md"
         self.report.write_text("Provider report, not yet verified.\n", encoding="utf-8")
@@ -63,6 +66,39 @@ class ProviderRunsTest(unittest.TestCase):
         self.assertEqual(changed.returncode, 2)
         self.assertIn("origin changed mid-run", changed.stderr)
         self.assertEqual(len((self.study / "run-events.jsonl").read_text().splitlines()), 2)
+
+    def test_same_provider_origin_and_artifact_cannot_fill_two_modes(self):
+        self.assertEqual(self.cli("record", self.study, "vendor-deep", "collected", "--imported", "--origin-task-id", "same-task", "--file", self.report).returncode, 0)
+        second = self.study / "sources" / "other.md"
+        second.write_text("Another file from the same task.\n", encoding="utf-8")
+        duplicate_origin = self.cli("record", self.study, "vendor-tools", "collected", "--imported", "--origin-task-id", "same-task", "--file", second)
+        self.assertEqual(duplicate_origin.returncode, 2)
+        self.assertIn("origin already assigned", duplicate_origin.stderr)
+        duplicate_artifact = self.cli("record", self.study, "vendor-tools", "collected", "--imported", "--origin-task-id", "other-task", "--file", self.report)
+        self.assertEqual(duplicate_artifact.returncode, 2)
+        self.assertIn("artifact already collected", duplicate_artifact.stderr)
+        self.assertEqual(len((self.study / "run-events.jsonl").read_text().splitlines()), 1)
+
+    def test_metadata_and_repeated_file_are_not_provider_exports(self):
+        metadata = self.cli("record", self.study, "vendor-deep", "collected", "--imported", "--origin-task-id", "task-1", "--file", self.study / "study.json")
+        self.assertEqual(metadata.returncode, 2)
+        self.assertIn("under sources/", metadata.stderr)
+        self.assertEqual(self.cli("record", self.study, "vendor-deep", "collected", "--imported", "--origin-task-id", "task-1", "--file", self.report).returncode, 0)
+        repeated = self.cli("record", self.study, "vendor-deep", "collected", "--origin-task-id", "task-1", "--file", self.report)
+        self.assertEqual(repeated.returncode, 2)
+        self.assertIn("artifact already collected", repeated.stderr)
+
+    def test_uncertain_task_and_retry_require_reasons(self):
+        self.assertEqual(self.cli("record", self.study, "vendor-deep", "prepared").returncode, 0)
+        self.assertEqual(self.cli("record", self.study, "vendor-deep", "submitted", "--origin-task-id", "task-1").returncode, 0)
+        blank_failure = self.cli("record", self.study, "vendor-deep", "failed_unknown")
+        self.assertEqual(blank_failure.returncode, 2)
+        self.assertIn("requires a reason", blank_failure.stderr)
+        self.assertEqual(self.cli("record", self.study, "vendor-deep", "failed_unknown", "--note", "Create response uncertain; existing task checked").returncode, 0)
+        blank_retry = self.cli("record", self.study, "vendor-deep", "submitted", "--origin-task-id", "task-2")
+        self.assertEqual(blank_retry.returncode, 2)
+        self.assertIn("recovery evidence", blank_retry.stderr)
+        self.assertEqual(self.cli("record", self.study, "vendor-deep", "submitted", "--origin-task-id", "task-2", "--note", "Existing task queried and confirmed absent").returncode, 0)
 
 
 if __name__ == "__main__":
