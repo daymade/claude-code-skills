@@ -1,16 +1,24 @@
 ---
 name: kimi-use
 description: >-
-  Drives the Kimi desktop app (Kimi.app) via computer-use to query its built-in data plugins —
-  天眼查、同花顺 iFinD、SEC、IMF and more — through the user's own logged-in session, no API keys needed. Use
-  for "用 Kimi 查" / "操作 Kimi 客户端" / "Kimi 插件", or fetching company, financial, academic, or legal
-  records with no dedicated API. Not for kimi.com browser automation (use kimi-webbridge) or direct
-  iFinD API access.
+  Drives Kimi.app via computer-use for two separate jobs: Work/Agent data-plugin queries
+  (天眼查、同花顺 iFinD、SEC、IMF etc.) and Chat's built-in 深度研究 report. Use for "用 Kimi 查" /
+  "操作 Kimi 客户端" / "Kimi 插件" / "Kimi 深度研究". Not for kimi.com browser automation
+  (use kimi-webbridge) or direct iFinD API access.
 ---
 
-# kimi-use — 把 Kimi 桌面客户端当零凭据数据源网关
+# kimi-use — Kimi 桌面客户端的插件取数与 Chat 深度研究
 
-## 这个通道是什么
+## 先按交付物选模式
+
+| 要得到什么 | 客户端入口 | 结果判据 |
+|---|---|---|
+| 指定插件的字段、原始记录或接口能力 | **Work/Agent + K3 极致思考**，下文「插件取数循环」 | 实际调用插件的轨迹、带来源字段与独立权威源复核 |
+| 独立的长篇研究报告 | **Chat → 深度研究 + K3 极致**，见 `references/driving-kimi-app.md`「Chat 深度研究」 | 任务完成后的原始报告及附件、来源和承重断言复核 |
+
+一次 Chat 深度研究实测产出了 Markdown 与图表 ZIP；**这不是 Work/Agent 插件取数成功的证据**。若同一任务要求两种结果，分别派发、保留各自原件和模式标签，不把报告当成插件接口回执。
+
+## 插件取数通道是什么
 
 Kimi 桌面客户端（Kimi.app，`com.moonshot.kimichat`）自带一个插件生态：天眼查、同花顺 iFinD、财新数据、标普全球市场财智、恒生聚源、SEC、IMF、世界银行、学术数据库、法律数据库等。这些插件跑在**用户自己的登录态**上——不需要额外 API key，不需要爬虫，权限来自用户账号已有的订阅。
 
@@ -31,6 +39,7 @@ Kimi 桌面客户端（Kimi.app，`com.moonshot.kimichat`）自带一个插件�
 | 有 iFinD 自己的账号凭据 | 直连 API 类工具（本机若装有 iFinD API skill/客户端）——结构化、无 GUI 开销 |
 | **A 股券商研报** | 先走**东方财富研报公开 JSON API**（`reportapi.eastmoney.com`，免费免代理、无 GUI 开销；参数与实测见 `references/plugin-capabilities.md`）；Kimi 侧恒生聚源当**第二通道取并集**——两条实测互不包含 |
 | 驱动浏览器里的 kimi.com 网页版 | `kimi-webbridge` skill（Kimi Browser Extension 的 skill，不在本仓；本地 daemon，不走 GUI） |
+| Kimi 客户端生成独立深度研究报告 | 本 skill 的 **Chat 深度研究**分支；不沿用插件探针的模式限制 |
 | **无凭据 / 只有插件形态的数据源 / 一次要横跨多个源** | **本 skill** |
 
 路由表管的是「默认该走哪条」；用户当面指定「就用 Kimi 查」时不挡路——Kimi 是取数通道、专用 CLI 是复核通道，两个角色不冲突。
@@ -45,16 +54,16 @@ Kimi 桌面客户端（Kimi.app，`com.moonshot.kimichat`）自带一个插件�
 - **Codex**：先检查当前可用的 computer-use 工具。旧 computer 插件用 `element_index`；当前 CUA 用 app 的 AX 状态与 `paste`。按实际加载到的接口选择对应分支并在发送前读回全文；只有可用接口都不存在或不可用时才报告环境阻塞。
 - 确认 Kimi.app 已安装（`/Applications/Kimi.app`）。**登录态此刻确认不了**——看屏幕的能力要第 1 步授权之后才有；打开后首屏停在登录页 = 没登录，停下来交给用户扫码。
 
-## 核心循环
+## 插件取数循环（仅 Work/Agent）
 
 逐步操作细节（工具签名、坐标系、多显示器、产物路径）全部在 `references/driving-kimi-app.md`，这里是骨架：
 
 1. **请求访问并打开** Kimi.app（Claude Code 先 `request_access` 拿授权）。⚠️ **授权是同机排他锁**：同一时刻只有一个 session 持有，并行 session 会被拒；工具集没有释放接口——被拒先用 `list_granted_applications` 自查持锁者，等对方结束或请它代跑，别误判成「工具坏了」。
-2. **锁定模式与模型：Work/Agent 模式 + K3 极致思考，任何时候都不用 Chat 模式（用户明令，2026-08-18）。** 两条都是实测钉死的：①Chat 模式有调不到插件的记录（点名 iFind 仍退回普通聊天复述公司简介）；②**K2.6 快速模型没有完整金融插件面**——用户同日对照实测：K2.6 声称「不可调用」的三个已装插件，在 K3 极致下同查询两个可调且返回接口细节；K2.6 自报的可用数据源枚举本身就不全。Kimi 客户端的模型选择器切到「K3 极致」（输入框附近）。Work 模式会挂载一个项目目录（界面上显示挂载项目名）——先确认挂载点，任务产生的文件记得收走归位。发出查询后**确认真调了插件**（工具轨迹可见 / 字段带来源标签 / 自报插件名），没调就重发；跑偏过的会话不要继续用。
+2. **插件取数锁定 Work/Agent 模式 + K3 极致思考；不要用 Chat 的插件否定证词。** 2026-08-18 用户针对插件取数要求不用 Chat：①Chat 模式有调不到插件的记录（点名 iFind 仍退回普通聊天复述公司简介）；②**K2.6 快速模型没有完整金融插件面**——用户同日对照实测：K2.6 声称「不可调用」的三个已装插件，在 K3 极致下同查询两个可调且返回接口细节；K2.6 自报的可用数据源枚举本身就不全。该限制不适用于上表的 Chat 深度研究。发送前在模型选择器读回「K3 极致」；当前两步选择法见 `references/driving-kimi-app.md`。Work 新建任务可在「选择项目」中选「不使用文件夹」；这样仍可能在 Kimi 自有任务目录产出文件，只有希望直接写进指定位置时才选隔离目录。先确认实际选项；若选了目录，任务产生的文件要收走归位。发出查询后**确认真调了插件**（工具轨迹可见 / 字段带来源标签 / 自报插件名），没调就重发；跑偏过的会话不要继续用。
 3. **打开「插件 → 已安装」页读权威列表**（分类页是全量目录、含未安装项，两者别混）。选定本次查询要点名的插件。
 4. **设计查询**（模式库在 `references/query-and-verification.md`）：点名插件 + 诚实条款（「查不到就明说，不要用训练知识补」）+ 逐字段标来源 + 实体锚定（公司全称/股票代码）+ 时间口径。某插件/数据类型**首次使用**时，先发一个在它声明覆盖面内的探针查询确认真的可调。⚠️ 判读探针结果时分清「能力」与「承载它的东西」：**会话里没出现该插件的 MCP 工具、或网关回 503，都不等于插件不可调用**（实测两者各踩过一次，重试/换 helper 脚本后都取到了数）。
 5. **发出后轮询等待**——任务彻底跑完再取，半截结果不入库。
-6. **提取产物**：结果面板的「复制」按钮 → `pbpaste` 拿全文 Markdown；或收 Kimi 生成到磁盘上的文件（它写在挂载工作目录根部或自己的沙盒里，不一定是你想要的位置——用完要归位）。
+6. **提取产物**：结果面板的「复制」按钮 → `pbpaste` 拿全文 Markdown；无论选没选文件夹，都从该任务的实际目录核对本地文件并按目标位置归档，操作见 `references/driving-kimi-app.md`。
 7. **落盘前过权威源复核**（见下方陷阱 2/3/4/6）：错有三层机制——屏幕转录抄错专名、Kimi 源头搞错数值、以及**两条通道一致地落在同一个不是你要的口径上**——所以**承重的专名与承重的数值都要用独立通道复核，且复核要连口径一起核**；Kimi 跑的间隙正好并行拉官方源（公告原文、交易所文件）。
 8. **落盘时标三样**：数据源、口径（时点/报告期）、获取日期。改过的值保留「原始 + 校正」两层，不静默覆盖。
 
@@ -71,6 +80,6 @@ Kimi 桌面客户端（Kimi.app，`com.moonshot.kimichat`）自带一个插件�
 
 ## References
 
-- `references/driving-kimi-app.md` — Claude Code MCP、Codex 旧 computer 插件与当前 CUA 的驱动流、授权与模式安全、产物提取路径
+- `references/driving-kimi-app.md` — Claude Code MCP、Codex 旧 computer 插件与当前 CUA 的驱动流；Work 插件取数与 Chat 深度研究的模式、安全和产物提取
 - `references/plugin-capabilities.md` — 插件清单快照、已实测的能力边界（带日期与证据级别）、券商研报的两条通道及其互不包含
 - `references/query-and-verification.md` — 查询 prompt 模式库 + 数据核验纪律（含战例）

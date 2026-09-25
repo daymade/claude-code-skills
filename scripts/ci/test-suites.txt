@@ -51,6 +51,7 @@
 
 python-unittest  git-safety-net/tests
 python-unittest  tests
+python-unittest  deep-research/tests
 python-unittest  auto-repo-setup/tests
 python-unittest  llm-wiki-setup/tests
 python-unittest  daymade-claude-code/read-codex-history/tests

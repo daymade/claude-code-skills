@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **deep-research** (`deep-research` v2.7.0 → v2.8.0): Add a local multi-provider run contract and CLI that separates provider modes, records original tasks and artifacts, and rejects missing origins, changed run identities, and modified exports. The existing citation registry still owns factual verification.
+
 - **tunnel-doctor** (`tunnel-doctor` v1.15.0 → v1.15.1): Step 2K now counts a venue change (phone hotspot, different WiFi) as a second vantage point — a 2026-09-24 cafe-WiFi blackout of an entire proxy provider's domains and nodes was indistinguishable from a provider block, and switching networks fixed it with zero config change.
 - **claude-migrate-memory-to-doc** (`daymade-claude-code` v3.68.0 → v3.69.0): Add a second goal, retiring a project's auto memory entirely, with its own reference (per-project switch, shared-directory coordination, inventory across every skill repo, one disposition per file, verbatim migration, pointer repointing, a control probe that proves memory stopped loading, and an archive index). `scripts/migrate_verbatim.py` appends memory bodies to their owning documents and checks every line landed; its tests are registered. Three new failure cases. `claude-code-ops-router` now routes requests to turn auto memory off.
 
@@ -31,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **daymade-docs** (v1.18.0 → v1.19.0): Add `docs-router` as the suite's automatic document-work entry. It selects a bundled specialist by input and requested output, resolves the active router's canonical source path to find sibling skills on Claude Code or Codex, then reads the selected full `SKILL.md` and task-required references. Routes cover document-to-Markdown, Markdown-to-PDF, existing Word-to-PDF, DOCX creation and review, PDF-to-HTML including translation with figures, Mermaid PNGs, complex Excel models and macOS automation, photos or unsigned digital documents to scanned PDFs, post-change documentation impact checks, and explicit cleanup.
 
 ### Changed
+
+- **kimi-use** (`kimi-use` v1.3.2 → v1.4.0): Distinguish Work/Agent plugin queries from Chat Deep Research, document the verified K3 and export routes, and retrieve Work outputs from Kimi's own task folder when no project folder is mounted.
 
 - **kimi-use** (`kimi-use` v1.3.1 → v1.3.2): Route Codex to the currently available CUA or legacy computer plugin. The CUA path pastes Chinese text into Kimi's rich editor and reads back the full prompt and enabled send button before sending.
 

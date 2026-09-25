@@ -1,9 +1,9 @@
 ---
 name: deep-research
 description: >-
-  Generates evidence-tracked research reports with citations, source governance, and multi-pass
-  synthesis. Use for a research report, literature review, market/industry analysis, or competitive
-  landscape: 帮我调研一下 / 深度研究 / 综述报告 / research this topic / write a report on. Not for choosing
+  Generates evidence-tracked research reports with citations, source governance, multi-provider
+  run collection, and multi-pass synthesis. Use for a research report, literature review,
+  market/industry analysis, or competitive landscape: 帮我调研一下 / 深度研究 / 综述报告 / research this topic / write a report on. Not for choosing
   between options (use tech-selection) or code-based competitor analysis (use competitors-analysis).
 ---
 
@@ -133,6 +133,14 @@ Enterprise Research Progress:
 ```
 
 ## P1: Research Task Board
+
+When the same business question is dispatched to several AI research products or modes, use the
+portable [provider-run contract](references/provider-run-contract.md). Keep one study question map,
+assign a distinct `lane_id` to each provider × mode, and record the exact task sent and the original
+returned artifact. A provider's report is an input to P3, not an independently verified source.
+Do not infer that a normal chat used a product's Deep Research feature from model name or report
+length; record the mode from the actual UI or API route. The contract's CLI only records and
+validates local files; dispatch through the selected provider's own Skill and authorization rules.
 
 Decompose the assignment into decision questions. Create tasks only where separate evidence routes or expertise make the work clearer.
 
