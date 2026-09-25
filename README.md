@@ -1700,9 +1700,9 @@ claude plugin install daymade-audio@daymade-skills
 
 ---
 
-### **deep-research** - Research Report Generator
+### **deep-research** - Research Reports and Provider Runs
 
-Generate format-controlled research reports with evidence tracking and citations.
+Generate format-controlled research reports with evidence tracking and citations. When several AI products or modes investigate one decision, keep their original prompts and exports in a local provider-run ledger before synthesis.
 
 **When to use:**
 - Need a structured research report, literature review, or market/industry analysis
@@ -1715,6 +1715,7 @@ Generate format-controlled research reports with evidence tracking and citations
 - Evidence table with source quality rubric
 - Multi-pass complete drafting with UNION merge
 - Citation verification and conflict handling
+- Local provider × mode task and artifact ledger with provenance and hash checks
 - Ready-to-use report template and formatting rules
 
 **Example usage:**
@@ -3610,18 +3611,19 @@ adversarial verification. All public, no-login data sources.
 判断医药板块现在的市场情绪
 ```
 
-### **kimi-use** - Query Kimi Desktop Data Plugins
+### **kimi-use** - Kimi Desktop Plugins and Deep Research
 
 Drive the logged-in Kimi desktop app through computer-use to query its built-in
 company, financial, market, academic, and legal data plugins without separate
 API keys. Results stay source-labeled and must be independently checked before
-they become load-bearing data.
+they become load-bearing data. Its separate Chat Deep Research route exports a full report and attachments.
 
 **Key features:**
 - Routes requests to installed Kimi plugins such as 天眼查, 同花顺 iFinD, SEC, IMF, and academic/legal databases
 - Covers both Claude Code computer-use and Codex computer control
 - Provides query patterns that require explicit sources and honest unknowns
 - Guards against truncated lists, OCR/name errors, and financial-data scope mismatches
+- Separates Work/Agent plugin calls from Chat Deep Research and preserves the original report export
 
 **Example usage:**
 ```text
