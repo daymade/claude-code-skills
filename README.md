@@ -1702,7 +1702,7 @@ claude plugin install daymade-audio@daymade-skills
 
 ### **deep-research** - Research Reports and Provider Runs
 
-Generate format-controlled research reports with evidence tracking and citations. When several AI products or modes investigate one decision, keep their original prompts and exports in a local provider-run ledger before synthesis.
+Generate format-controlled research reports with evidence tracking and citations. When several AI products or modes investigate one decision, coordinate their existing Skills and agents in parallel, preserve original outputs, and synthesize against the underlying sources and business question.
 
 **When to use:**
 - Need a structured research report, literature review, or market/industry analysis
@@ -1716,6 +1716,7 @@ Generate format-controlled research reports with evidence tracking and citations
 - Multi-pass complete drafting with UNION merge
 - Citation verification and conflict handling
 - Local provider × mode task and artifact ledger with provenance and hash checks
+- Read-only parallel dispatch board that separates shared app control, active tasks, completed reports and held routes; actual provider calls follow their own Skills and authorization rules
 - Ready-to-use report template and formatting rules
 
 **Example usage:**

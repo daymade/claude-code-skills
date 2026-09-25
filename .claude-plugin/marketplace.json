@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Professional Claude Code and Codex skills marketplace — production-ready skills spanning GitHub and git operations (including current-base contributor PR review), document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, evidence-backed HTML reports and data-visualization judgment, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, local inter-agent messaging, Claude Code operations, technology selection and build-vs-buy decisions, and model-aware Codex workstation setup. Suite plugins bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
-    "version": "3.18.0"
+    "version": "3.19.0"
   },
   "plugins": [
     {
@@ -358,10 +358,10 @@
     },
     {
       "name": "deep-research",
-      "description": "Generate evidence-tracked research reports with citations, original-source verification, and evidence-family tracking. Supports distinct provider and mode runs with original-artifact collection; select research depth by the decision question and separate first-party context from external corroboration.",
+      "description": "Generate evidence-tracked research reports with citations, original-source verification, and evidence-family tracking. Coordinates provider-specific Skills and agents across parallel modes, collects original artifacts, and synthesizes by decision; select research depth by the question and separate first-party context from external corroboration.",
       "source": "./deep-research",
       "strict": false,
-      "version": "2.8.0",
+      "version": "2.9.0",
       "category": "documentation",
       "keywords": [
         "research",

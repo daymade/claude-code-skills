@@ -1,10 +1,10 @@
 ---
 name: deep-research
 description: >-
-  Generates evidence-tracked research reports with citations, source governance, multi-provider
-  run collection, and multi-pass synthesis. Use for a research report, literature review,
-  market/industry analysis, or competitive landscape: 帮我调研一下 / 深度研究 / 综述报告 / research this topic / write a report on. Not for choosing
-  between options (use tech-selection) or code-based competitor analysis (use competitors-analysis).
+  Creates evidence-tracked research reports and parallel AI-provider/mode studies with original
+  outputs and source-level synthesis. Use for 帮我调研一下 / 深度研究 / 综述报告 / write a report, research reports, literature
+  reviews, market/industry analysis, competitive landscapes, or multi-route ChatGPT/Kimi/UniFuncs research. For choosing
+  technology use tech-selection; for competitor code analysis use competitors-analysis.
 ---
 
 # Deep Research
@@ -44,10 +44,12 @@ Determine the research mode before starting:
 |-----------|---------|
 | **Topic Mode** | Enterprise Research (company/corporation) OR General Research (industry/policy/tech) |
 | **Depth Mode** | Standard (multiple decision questions or contested evidence) OR Lightweight (one bounded question with a small evidence surface) |
+| **Provider Mode** | Single route OR parallel provider × mode lanes when the user requests them or independent routes can materially test the decision |
 
 - **Enterprise Research Mode**: Question-led company research with optional analysis frameworks selected only when they help answer the decision
 - **General Research Mode**: Standard P0-P7 research pipeline with source governance
 - **Depth Selection**: Choose from the number and consequence of unresolved questions, not prompt length, task count, or a target word count
+- **Provider Selection**: Extra model reports are useful only when they add a distinct evidence route, structured tool access, or a meaningful challenge. Check each provider's availability, privacy boundary and paid authorization; never run every route by default.
 
 ## Source Governance (V6)
 
@@ -134,13 +136,21 @@ Enterprise Research Progress:
 
 ## P1: Research Task Board
 
-When the same business question is dispatched to several AI research products or modes, use the
-portable [provider-run contract](references/provider-run-contract.md). Keep one study question map,
-assign a distinct `lane_id` to each provider × mode, and record the exact task sent and the original
-returned artifact. A provider's report is an input to P3, not an independently verified source.
-Do not infer that a normal chat used a product's Deep Research feature from model name or report
-length; record the mode from the actual UI or API route. The contract's CLI only records and
-validates local files; dispatch through the selected provider's own Skill and authorization rules.
+When the same business question is assigned to several AI research products or modes, act as a
+coordinator that composes the available provider, browser/app, retrieval and verification Skills
+with independent agents. Do not implement provider calls inside this Skill or assume a fixed vendor
+roster. Use the portable [provider-run contract](references/provider-run-contract.md) and load
+[parallel-provider-ops.md](references/parallel-provider-ops.md) **before fan-out**. Keep one study
+question map and a distinct `lane_id` per provider × mode. Run the local
+[provider_runs.py](scripts/provider_runs.py) `plan` command to derive
+parallel surface queues, assign one owner per control surface, and serialize that owner's UI actions.
+Submit long asynchronous jobs early and collect each original result under its own lane;
+resume active tasks by their existing origin instead of starting duplicate paid work. Resolve and
+read each lane's current executor Skill before actual dispatch, following its authorization rules;
+the local planner makes no provider calls. A provider's report is an input to P3, not an independently verified source. Do not
+infer that normal chat used native Deep Research from model name or report length; verify the actual
+UI or API route. Synthesize by underlying original source and decision value, never by a vote of
+model reports.
 
 Decompose the assignment into decision questions. Create tasks only where separate evidence routes or expertise make the work clearer.
 
