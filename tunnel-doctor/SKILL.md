@@ -192,9 +192,11 @@ python3 scripts/quick_diagnose.py --host <target-host> --url http://<target-host
 ```
 
 Interpretation:
-- `direct=PASS` + `forced_proxy=FAIL` = host must bypass proxy (`skip-proxy` + `NO_PROXY`).
+- `direct=PASS` + `ambient=FAIL` + `forced_proxy=FAIL` supports investigating the shell proxy path. `direct=PASS` + `system_proxy=FAIL` is a warning until the affected browser or system client fails too; only then consider a host-specific bypass.
+- `forced_proxy` uses the target URL's proxy environment (`https_proxy` for HTTPS, `http_proxy` for HTTP, then `all_proxy`); a failed forced probe alone is not a reason to change a working ambient path.
+- `direct=FAIL` does not support a bypass recommendation. A non-`000` HTTP response (including 403) proves a response arrived, not that the application accepted the request.
 - `strict_tls=FAIL` + `direct=PASS` = path is reachable; trust issue only (install/trust local CA).
-- `host in scutil exceptions: no` = browser/system clients still likely proxied.
+- `host in scutil exceptions: no` is context, not a fault by itself. The script's `direct` probe bypasses curl proxies but may still traverse a system TUN; it does not prove an independent physical path.
 
 ### Step 2A: Fix HTTP Proxy Environment Variables
 

@@ -70,3 +70,4 @@ python-unittest  feishu-doc-scraper/tests
 python-unittest  peer-message/tests
 node-test        peer-message/tests
 python-unittest  setup-notifications-via-wecom/tests
+python-unittest  tunnel-doctor/tests

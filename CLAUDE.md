@@ -449,6 +449,7 @@ If it fires, fix the issue — do NOT use `--no-verify` to bypass.
 - Move detailed documentation to `references/` files
 - Avoid duplication between SKILL.md and references
 - Keep `tunnel-doctor` environment-neutral: it may teach discovery and presence checks, but exact private node labels, billing identities, endpoints, credentials, and current chain state remain in the owning private configuration/Skill and must not be copied into this public repository.
+- Kimi desktop input and tunnel diagnostics follow the current host-specific procedures in `kimi-use/references/driving-kimi-app.md` and `tunnel-doctor/SKILL.md`; a proxy bypass recommendation requires compared path evidence.
 - Scripts must be executable with proper shebangs
 - All bundled resources must be referenced in SKILL.md
 

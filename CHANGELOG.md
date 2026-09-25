@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **kimi-use** (`kimi-use` v1.3.1 → v1.3.2): Route Codex to the currently available CUA or legacy computer plugin. The CUA path pastes Chinese text into Kimi's rich editor and reads back the full prompt and enabled send button before sending.
+
 - **macos-permissions** (`daymade-macos` v1.12.0 → v1.12.1): Route LaunchAgent Full Disk Access repair from `CLAUDE.md` to the canonical SOP, and remove transient UI tool status and a derived route count from that SOP.
 
 - **macos-permissions** (`daymade-macos` v1.11.1 → v1.12.0): Document two end-to-end macOS Full Disk Access GUI routes verified with real LaunchAgents: enabling an existing denied entry and adding a new executable through the file picker. Both require a system TCC readback and protected background read; hidden-path picker submission remains unverified on this host.
@@ -200,6 +202,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   compressed wording so the description stays within the 1024-character frontmatter limit.
 
 ### Fixed
+
+- **tunnel-doctor** (`tunnel-doctor` v1.15.1 → v1.15.2): The quick diagnostic compares scheme-specific shell and system-proxy paths before suggesting a host bypass. A failed forced system-proxy probe alone now calls for checking the affected client; the deterministic regression suite is registered in CI.
 
 - **report-with-html** (v1.0.0 → v1.0.1): `reconcile_content_diff.py` no longer waits for Chrome to exit after `--dump-dom`. Chrome can print the complete DOM and then never exit (reproduced on Chrome 153 / macOS even for a minimal page), so every extraction timed out twice and the tool gave no verdict; it now takes the dump once it is complete and still reaps the whole process group. The regression suite (`tests/report-with-html/`) is repaired — browser probes use the same completion rule, the regen fixtures fill the template's TODO config block, and the narrow-viewport probe asserts the 500 px width headless Chrome actually honours — and now runs in CI.
 

@@ -14,7 +14,7 @@ description: >-
 
 Kimi 桌面客户端（Kimi.app，`com.moonshot.kimichat`）自带一个插件生态：天眼查、同花顺 iFinD、财新数据、标普全球市场财智、恒生聚源、SEC、IMF、世界银行、学术数据库、法律数据库等。这些插件跑在**用户自己的登录态**上——不需要额外 API key，不需要爬虫，权限来自用户账号已有的订阅。
 
-用 computer-use 驱动这个客户端的 GUI，agent 就把这一整排数据源变成了自己的取数通道。实测跑通完整取数的会话：2026-08-18（Claude Code computer-use MCP，含当日一轮四条能力探针）、2026-06-29 与 2026-07-02（Codex computer 插件）。
+用 computer-use 驱动这个客户端的 GUI，agent 就把这一整排数据源变成了自己的取数通道。具体工具和输入方式以当前宿主加载的 API 为准，见 `references/driving-kimi-app.md`。
 
 这个通道有两个不显而易见、且都付出过真实代价的性质，决定了本 skill 一半讲驱动、一半讲核验：
 
@@ -39,10 +39,10 @@ Kimi 桌面客户端（Kimi.app，`com.moonshot.kimichat`）自带一个插件�
 
 ## Step 0：驱动器检查（30 秒，不可省）
 
-两种宿主环境的驱动机制不同，详见 `references/driving-kimi-app.md`：
+不同宿主和版本的驱动机制见 `references/driving-kimi-app.md`：
 
 - **Claude Code**：computer-use 的 MCP 工具是 **deferred tools**——先 `ToolSearch` 搜 "computer-use" 把它们加载出来，它们才出现在工具列表里。**没搜就断言「这个环境没有 computer use」是事实错误**；fallback 到 `osascript` / `screencapture` 不算 computer use，不要这么替代。⚠️ **可用性跟随当前 provider**（2026-08-18 实测钉死）：切到 Kimi(k3) provider 的会话段，harness 会**显式移除** computer-use 与 claude-in-chrome（`mcp_instructions_delta removedNames` 记录在案）；同一会话切回 Anthropic provider 段，工具重新注入、实测 57 次真实调用全部跑在 Anthropic 模型下。所以 ToolSearch 搜不到时先查当前 provider——k3 段结构性没有，要开车就换 Anthropic 段的会话或换 Codex。**搜索无果且 provider 无误 = 这个环境没配 computer-use：停下来报告用户、由用户决定配置**，别降级冒充、也别当作已经查过了。
-- **Codex**：computer 插件提供无障碍树（AX-tree）工具——`list_apps` / `get_app_state` / `set_value` / `click` / `type_text` / `press_key`，靠 `element_index` 定位元素，**不需要截图坐标**。这些工具不在 = 同样停下报告用户。
+- **Codex**：先检查当前可用的 computer-use 工具。旧 computer 插件用 `element_index`；当前 CUA 用 app 的 AX 状态与 `paste`。按实际加载到的接口选择对应分支并在发送前读回全文；只有可用接口都不存在或不可用时才报告环境阻塞。
 - 确认 Kimi.app 已安装（`/Applications/Kimi.app`）。**登录态此刻确认不了**——看屏幕的能力要第 1 步授权之后才有；打开后首屏停在登录页 = 没登录，停下来交给用户扫码。
 
 ## 核心循环
@@ -71,6 +71,6 @@ Kimi 桌面客户端（Kimi.app，`com.moonshot.kimichat`）自带一个插件�
 
 ## References
 
-- `references/driving-kimi-app.md` — 两种宿主的逐步驱动流（Claude Code MCP / Codex 插件）、授权与模式安全、产物提取路径
+- `references/driving-kimi-app.md` — Claude Code MCP、Codex 旧 computer 插件与当前 CUA 的驱动流、授权与模式安全、产物提取路径
 - `references/plugin-capabilities.md` — 插件清单快照、已实测的能力边界（带日期与证据级别）、券商研报的两条通道及其互不包含
 - `references/query-and-verification.md` — 查询 prompt 模式库 + 数据核验纪律（含战例）
