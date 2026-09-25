@@ -18,9 +18,9 @@ Stop after the background read works. Adding another FDA entry would not improve
 
 Apple's [Privacy & Security guide](https://support.apple.com/en-mk/guide/mac-help/mchl211c911f/mac) describes Full Disk Access as a System Settings list: use Add, select the app, then Open. `open 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles'` opened the correct pane on the tested Mac. Use an available native Computer Use tool to inspect the current window before clicking, and target the exact executable path found in step 1. If the pane requests Touch ID or a password, continue only with the user's available system-authentication method; never echo or save a supplied password in a file or report.
 
-On the tested Mac, `mcp__cua_repl` transport was closed; `mcp__kimi_cu` could inspect and click System Settings and its native file picker. Reobserve after every click. A tool's `ok:true` alone does not prove the UI changed, and a reported typing error does not prove a secure field stayed empty. When background input misses a password field, foreground System Settings, focus that field and use an available permitted native input channel; System Events keystrokes reached the focused field in this test. Inspect masked input before submitting, then read the grant and run the job.
+Reobserve after every UI action. A tool's `ok:true` alone does not prove the UI changed, and a reported typing error does not prove a secure field stayed empty. If background input misses a password field, foreground System Settings and focus the secure field before using a permitted native input channel. Inspect masked input before submitting, then read the grant and run the job.
 
-Two GUI routes completed with a dedicated, non-sensitive probe reading a TCC-protected file **as a user LaunchAgent** on macOS 26.6.2:
+The following GUI routes completed with a dedicated, non-sensitive probe reading a TCC-protected file **as a user LaunchAgent** on macOS 26.6.2:
 
 | Starting state | GUI action | Independent result |
 |---|---|---|
