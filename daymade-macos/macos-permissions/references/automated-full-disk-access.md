@@ -18,6 +18,15 @@ Stop after the background read works. Adding another FDA entry would not improve
 
 Apple's [Privacy & Security guide](https://support.apple.com/en-mk/guide/mac-help/mchl211c911f/mac) describes Full Disk Access as a System Settings list: use Add, select the app, then Open. `open 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles'` opened the correct pane on the tested Mac. Use an available native Computer Use tool to inspect the current window before clicking, and target the exact executable path found in step 1. If the pane requests Touch ID or a password, continue only with the user's available system-authentication method; never echo or save a supplied password in a file or report.
 
-The **GUI completion path was not validated end to end in the 2026-09-25 case**: the native file chooser lost focus and System Settings later exposed no Accessibility window. A tool's `ok:true` did not mean a secure field received input. If the computer-use transport closes, try another available native UI channel once; if the same picker or window failure recurs, change route or report the exact remaining interaction. Do not keep replaying clicks, edit `TCC.db`, or claim that opening the pane granted permission.
+On the tested Mac, `mcp__cua_repl` transport was closed; `mcp__kimi_cu` could inspect and click System Settings and its native file picker. Reobserve after every click. A tool's `ok:true` alone does not prove the UI changed, and a reported typing error does not prove a secure field stayed empty. When background input misses a password field, foreground System Settings, focus that field and use an available permitted native input channel; System Events keystrokes reached the focused field in this test. Inspect masked input before submitting, then read the grant and run the job.
+
+Two GUI routes completed with a dedicated, non-sensitive probe reading a TCC-protected file **as a user LaunchAgent** on macOS 26.6.2:
+
+| Starting state | GUI action | Independent result |
+|---|---|---|
+| An exact executable already appears in the FDA list with its switch off | Select its row, switch it on, and complete macOS authentication | The probe's system TCC row changed from `auth_value=0` to `2`; the same LaunchAgent changed from `Operation not permitted` / exit 13 to a protected read / exit 0. |
+| No row exists for the exact executable | Add → select the executable in a sidebar-reachable folder → Open | A new system TCC row appeared with `auth_value=2`; a separate LaunchAgent read the protected file and exited 0. |
+
+The file-picker test selected the **actual probe executable** from Downloads. Copying a different job's binary there would grant the copy's path, not its original path. For a hidden executable, Go to Folder opened and accepted the full path, but the local desktop-input guard blocked the final Return; that path was **not** validated. Do not switch tools to evade a blocked input. Use the owning installer's already-authorized launcher if it works, or report the exact remaining picker interaction.
 
 After any new grant, restart the requesting process. Read back the exact system TCC entry when available, then run the protected read through the actual LaunchAgent and the user's normal client. Only the latter proves the job works; if the database is unreadable, the live read still decides the result.
