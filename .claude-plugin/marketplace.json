@@ -33,7 +33,7 @@
       "description": "Drives the Kimi desktop app (Kimi.app) via computer-use to query its built-in data plugins — 天眼查、同花顺 iFinD、SEC、IMF and more — through the user's own logged-in session, no API keys needed. Use for \"用 Kimi 查\" / \"操作 Kimi 客户端\" / \"Kimi 插件\", or fetching company, financial, academic, or legal records with no dedicated API. Not for kimi.com browser automation (use kimi-webbridge) or direct iFinD API access.",
       "source": "./kimi-use",
       "strict": false,
-      "version": "1.3.1",
+      "version": "1.3.2",
       "category": "developer-tools",
       "keywords": [
         "kimi",
@@ -784,7 +784,7 @@
       "description": "MUST be used first for tunnel / proxy-path connectivity failures or slow throughput (网络故障 / 连不上 / 代理或隧道下超时). Diagnoses Tailscale, proxy, TUN, DNS and SSH-tunnel problems on macOS and Windows/WSL, e.g. Tailscale ping works but SSH fails, curl works but browser gets 503, Git/Docker fails behind the proxy, or downloads crawl despite a reachable proxy. Not for application-layer bugs (use debugging-network-issues).",
       "source": "./tunnel-doctor",
       "strict": false,
-      "version": "1.15.1",
+      "version": "1.15.2",
       "category": "developer-tools",
       "keywords": [
         "tailscale",
