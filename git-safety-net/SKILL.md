@@ -811,6 +811,15 @@ the helpers authorizes `checkout`, `reset`, `push`, `stash drop`, `branch -d`, o
 - **`refs/dangling-backup/*` refs are cluttering things later** — once you've confirmed (Mode C)
   their content is on a remote, delete them with `git for-each-ref --format='%(refname)'
   refs/dangling-backup/ | xargs -n1 git update-ref -d`. Only after you've verified.
+- **Your branch diverged from its upstream, but the unique local commits look familiar** — run
+  `git cherry <upstream> <branch>`. All `-` lines means every local-only commit is patch-identical
+  to one already upstream (`git cherry` compares patch-ids, so the SHAs need not match). The
+  typical cause: you committed on a branch whose remote-tracking ref was stale, and the same change
+  was later re-made and pushed. When every line is `-`, fast-forward the branch to the upstream —
+  the duplicate objects stay recoverable in the object store. Any `+` line is real local-only work;
+  treat it as an ordinary divergence instead (and remember the Step 1 caution cuts the other way:
+  after a squash merge a `+` does not prove missing work, so read `git cherry` as a hint, not a
+  verdict — all-`-` is the only reading that licenses the fast-forward).
 
 ## Next step
 
