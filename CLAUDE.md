@@ -206,6 +206,9 @@ for query parameters, supported response fields and exit behavior. An unfulfille
 reset promise or a question about missing execution signals enters the Skill's
 [monitoring route](tibo-reset-codex/SKILL.md#监测轮从信息到可行动信号) and
 [output contract](tibo-reset-codex/SKILL.md#输出合同先给结论再交代边界).
+Before using a third-party date or Yes/No as a reset signal, check its source-post
+chronology and whether the monitor completed a plausible-time check; the Skill
+owns the detailed procedure.
 [Next-reset forecast](tibo-reset-codex/references/next-reset-forecast.md) owns
 date judgments; [forecast feedback](tibo-reset-codex/references/forecast-feedback.md)
 owns recording, review and withdrawal, with
