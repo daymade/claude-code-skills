@@ -119,7 +119,9 @@ uv run python scripts/forecast_log.py summary
 ## 撤回没有依据的预测：withdraw
 
 预测的时间前提被证伪或发现原本缺少依据时，追加撤回记录，不把 `confidence` 改低后继续保留
-同一个无依据窗口，也不编一个替代日期。撤回只改预测的有效状态，不删除最初判断或修改原始读数。
+同一个无依据窗口，也不编一个替代日期。撤回写入同一 state-dir 的 `withdrawals.jsonl`；
+`forecasts.jsonl` 保持原有 forecast/review 格式，让仍使用旧版脚本的会话继续读账。撤回只改
+新版摘要中的有效状态，不删除最初判断或修改原始读数。
 
 ```bash
 uv run python scripts/forecast_log.py withdraw --input /tmp/tibo-withdrawal.json
@@ -131,6 +133,8 @@ uv run python scripts/forecast_log.py summary
 `review`，已有 `hit` / `early` / `late` 核验的预测也不能用撤回来掩盖结果。`summary` 将它从
 `pending` 和 `due_for_followup` 移到 `recent_withdrawn`，但 `forecast_count` 仍包含原预测；
 若它是同锚点的首份预测，`cycle_counts` 明列 `withdrawn`，不把撤回算作命中或未知。
+若旧版会话在撤回后仍写入有分数的 `review`，新版 `summary.withdrawal_conflicts` 明列两条
+记录的 ID 与结果，需先核对再引用该轮分数；不能从任一客户端的单侧摘要直接定案。
 下一轮从 `summary` 及 `handoff` 读回后才说“已撤回”；交接文字不能代替台账状态。
 
 ## 回填证据：review

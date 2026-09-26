@@ -24,6 +24,7 @@ class ForecastLogTests(unittest.TestCase):
         self.addCleanup(self.folder.cleanup)
         self.path = Path(self.folder.name) / "private" / "forecasts.jsonl"
         self.findings_path = Path(self.folder.name) / "private" / "findings.jsonl"
+        self.withdrawals_path = Path(self.folder.name) / "private" / "withdrawals.jsonl"
         self.now = datetime(2026, 10, 10, tzinfo=timezone.utc)
         self.forecast = {
             "kind": "global_reset", "confidence": "low",
@@ -181,7 +182,9 @@ class ForecastLogTests(unittest.TestCase):
         withdrawal = self.withdraw(issued["id"], evidence_refs=[found["id"][:8]])
         self.assertEqual(withdrawal["record_type"], "withdrawal")
         self.assertEqual(withdrawal["evidence_refs"], [found["id"]])
-        self.assertTrue(self.path.read_bytes().startswith(before))
+        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(self.withdrawals_path.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(len(self.withdrawals_path.read_text().splitlines()), 1)
         result = log.summarize(self.path, now=self.now + timedelta(days=10))
         self.assertEqual(result["forecast_count"], 1)
         self.assertEqual(result["pending"], [])
@@ -206,7 +209,8 @@ class ForecastLogTests(unittest.TestCase):
         self.assertEqual(self.withdraw(issued["id"])["id"], first["id"])
         with self.assertRaisesRegex(ValueError, "forecast already withdrawn"):
             self.withdraw(issued["id"], reason="Different correction")
-        self.assertEqual(len(self.path.read_text().splitlines()), 2)
+        self.assertEqual(len(self.path.read_text().splitlines()), 1)
+        self.assertEqual(len(self.withdrawals_path.read_text().splitlines()), 1)
 
         resolved = self.record(rationale="A distinct issued forecast.")
         self.review(resolved["id"])
@@ -223,6 +227,23 @@ class ForecastLogTests(unittest.TestCase):
         result = log.summarize(self.path)
         self.assertEqual(result["pending"], [])
         self.assertEqual(result["recent_withdrawn"][0]["latest_review"]["outcome"], "unknown")
+
+    def test_scored_review_from_legacy_writer_after_withdrawal_is_surfaced(self):
+        issued = self.record()
+        withdrawn = self.withdraw(issued["id"])
+        legacy_review = {"schema_version": 1, "id": "legacy-review", "record_type": "review",
+                         "recorded_at": (self.now + timedelta(hours=2)).isoformat(),
+                         "forecast_id": issued["id"], "outcome": "hit",
+                         "reason": "A legacy client wrote this after withdrawal.",
+                         "lesson": "Reconcile before scoring."}
+        with self.path.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(legacy_review) + "\n")
+        result = log.summarize(self.path)
+        self.assertEqual(result["withdrawal_conflicts"], [{
+            "forecast_id": issued["id"], "withdrawal_id": withdrawn["id"],
+            "review_id": "legacy-review", "review_outcome": "hit"}])
+        self.assertEqual(result["pending"], [])
+        self.assertEqual(result["recent_withdrawn"][0]["latest_review"]["outcome"], "hit")
 
     def test_cli_withdrawal_changes_summary_state(self):
         script = Path(__file__).resolve().parents[1] / "scripts" / "forecast_log.py"
