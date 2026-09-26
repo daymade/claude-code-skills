@@ -67,6 +67,60 @@ class ProviderRunsTest(unittest.TestCase):
         self.assertIn("origin changed mid-run", changed.stderr)
         self.assertEqual(len((self.study / "run-events.jsonl").read_text().splitlines()), 2)
 
+    def test_persistent_session_alias_keeps_submission_identity_and_drives_resume(self):
+        proof = self.study / "sources" / "same-session.json"
+        proof.write_text('{"submitted":"https://example.org/chat/provisional",'
+                         '"persistent":"https://example.org/chat/persistent"}', encoding="utf-8")
+        original = "https://example.org/chat/provisional"
+        persistent = "https://example.org/chat/persistent"
+        self.assertEqual(self.cli("record", self.study, "vendor-deep", "prepared").returncode, 0)
+        self.assertEqual(self.cli("record", self.study, "vendor-deep", "submitted",
+                                  "--origin-url", original).returncode, 0)
+        missing_proof = self.cli("record", self.study, "vendor-deep", "running",
+                                 "--origin-url", original, "--alias-url", persistent,
+                                 "--note", "Observed same UI task redirect")
+        self.assertEqual(missing_proof.returncode, 2)
+        self.assertEqual(self.cli("record", self.study, "vendor-deep", "running",
+                                  "--origin-url", original, "--alias-url", persistent,
+                                  "--alias-proof", proof,
+                                  "--note", "Observed same UI task redirect").returncode, 0)
+        active = json.loads(self.cli("plan", self.study).stdout)["active_query_existing_origin"][0]
+        self.assertEqual(active["origin"], {"session_url": original})
+        self.assertEqual(active["resume_origin"], {"session_url": persistent})
+        self.assertEqual(self.cli("record", self.study, "vendor-tools", "prepared").returncode, 0)
+        collision = self.cli("record", self.study, "vendor-tools", "submitted",
+                             "--origin-url", persistent)
+        self.assertEqual(collision.returncode, 2)
+        self.assertIn("already assigned", collision.stderr)
+        self.assertEqual(self.cli("record", self.study, "vendor-deep", "collected",
+                                  "--origin-url", original, "--file", self.report).returncode, 0)
+        collected = json.loads(self.cli("plan", self.study).stdout)["collected"][0]
+        self.assertEqual(collected["resume_origin"], {"session_url": persistent})
+        self.assertEqual(self.cli("validate", self.study).returncode, 0)
+        proof.write_text("altered", encoding="utf-8")
+        invalid = self.cli("validate", self.study)
+        self.assertEqual(invalid.returncode, 2)
+        self.assertIn("alias receipt missing or changed", invalid.stderr)
+
+    def test_alias_from_failed_attempt_does_not_redirect_a_new_retry(self):
+        proof = self.study / "sources" / "same-session.json"
+        proof.write_text("observed redirect", encoding="utf-8")
+        old = "https://example.org/chat/old"
+        self.assertEqual(self.cli("record", self.study, "vendor-deep", "prepared").returncode, 0)
+        self.assertEqual(self.cli("record", self.study, "vendor-deep", "submitted",
+                                  "--origin-url", old).returncode, 0)
+        self.assertEqual(self.cli("record", self.study, "vendor-deep", "running",
+                                  "--origin-url", old, "--alias-url", "https://example.org/chat/old-permanent",
+                                  "--alias-proof", proof, "--note", "Same task redirected").returncode, 0)
+        self.assertEqual(self.cli("record", self.study, "vendor-deep", "failed_unknown",
+                                  "--note", "Old task result cannot be established").returncode, 0)
+        new = "https://example.org/chat/new"
+        self.assertEqual(self.cli("record", self.study, "vendor-deep", "submitted",
+                                  "--origin-url", new, "--note", "Old task confirmed absent before retry").returncode, 0)
+        active = json.loads(self.cli("plan", self.study).stdout)["active_query_existing_origin"][0]
+        self.assertEqual(active["origin"], {"session_url": new})
+        self.assertEqual(active["resume_origin"], {"session_url": new})
+
     def test_same_provider_origin_and_artifact_cannot_fill_two_modes(self):
         self.assertEqual(self.cli("record", self.study, "vendor-deep", "collected", "--imported", "--origin-task-id", "same-task", "--file", self.report).returncode, 0)
         second = self.study / "sources" / "other.md"

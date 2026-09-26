@@ -14,6 +14,7 @@ import shutil
 import sys
 import tempfile
 from datetime import datetime, timezone
+from html.parser import HTMLParser
 from pathlib import Path
 
 import provider_runs
@@ -24,6 +25,33 @@ CLAIM_STATES = {"supported", "contested", "unknown"}
 URL_RE = re.compile(r"https?://[^\s<>\]\[\"'()，、。；]+")
 CLAIM_RE = re.compile(r"\[(C[0-9]+)\]")
 TEXT_SUFFIXES = {".md", ".txt", ".html", ".htm", ".json", ".jsonl"}
+DISCOVERABLE_SOURCE_STATES = {"approved", "legacy_unverified_for_reuse"}
+
+
+class AnchorLinks(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.urls = set()
+        self.visible_text = []
+        self.hidden_depth = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in {"script", "style"}:
+            self.hidden_depth += 1
+            return
+        if tag != "a":
+            return
+        url = dict(attrs).get("href", "")
+        if url.startswith(("https://", "http://")):
+            self.urls.add(normalize_url(url))
+
+    def handle_data(self, data):
+        if self.hidden_depth == 0:
+            self.visible_text.append(data)
+
+    def handle_endtag(self, tag):
+        if tag in {"script", "style"} and self.hidden_depth:
+            self.hidden_depth -= 1
 
 
 def now():
@@ -89,24 +117,39 @@ def urls_in_text(text):
     return {normalize_url(match.group(0).rstrip(").,;")) for match in URL_RE.finditer(text)}
 
 
+def row_sha256(row):
+    encoded = json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def catalog_rows(catalog):
-    rows = read_jsonl(catalog)
-    seen = set()
-    for row in rows:
+    latest = {}
+    order = []
+    for row in read_jsonl(catalog):
         study_id = row.get("study_id")
-        if not study_id or study_id in seen or not row.get("path"):
-            raise ValueError(f"{catalog}: duplicate or invalid catalog study")
-        seen.add(study_id)
-    return rows
+        if not study_id or not row.get("path"):
+            raise ValueError(f"{catalog}: invalid catalog study")
+        previous = latest.get(study_id)
+        if previous is None:
+            if row.get("revision", 1) != 1 or row.get("supersedes_sha256"):
+                raise ValueError(f"{catalog}: first catalog revision must be 1")
+            order.append(study_id)
+        elif (row["path"] != previous["path"]
+              or row.get("revision") != previous.get("revision", 1) + 1
+              or row.get("supersedes_sha256") != row_sha256(previous)):
+            raise ValueError(f"{catalog}: invalid catalog revision for {study_id}")
+        latest[study_id] = row
+    return [latest[study_id] for study_id in order]
 
 
-def find_prior(catalog, query):
+def find_prior(catalog, query, include_leads=False):
     terms = [part.casefold() for part in query.split() if part]
     if not terms:
         raise ValueError("prior query must contain a specific entity or subject")
     matches = []
     for row in catalog_rows(catalog):
-        source_index = row.get("source_index", [])
+        source_index = [source for source in row.get("source_index", [])
+                        if include_leads or source.get("status") in DISCOVERABLE_SOURCE_STATES]
         claim_index = row.get("claim_index", [])
         study_text = " ".join([row.get("study_id", ""), row.get("business_outcome", ""),
                                *row.get("terms", []),
@@ -255,7 +298,14 @@ def provider_links(directory, events):
             continue
         path = provider_runs.artifact_path(directory, event["artifact"])
         if path.suffix.lower() in TEXT_SUFFIXES:
-            for url in urls_in_text(path.read_text(encoding="utf-8", errors="replace")):
+            contents = path.read_text(encoding="utf-8", errors="replace")
+            if path.suffix.lower() in {".html", ".htm"}:
+                parser = AnchorLinks()
+                parser.feed(contents)
+                urls = parser.urls | urls_in_text(" ".join(parser.visible_text))
+            else:
+                urls = urls_in_text(contents)
+            for url in urls:
                 links.setdefault(url, set()).add(event["lane_id"])
     return links
 
@@ -417,24 +467,31 @@ def cmd_register(args):
     catalog = args.catalog.resolve()
     rows = catalog_rows(catalog)
     path = os.path.relpath(args.study.resolve(), catalog.parent)
-    if any(row["study_id"] == study["study_id"] for row in rows):
-        existing = next(row for row in rows if row["study_id"] == study["study_id"])
-        if existing["path"] != path:
-            raise ValueError("study ID already registered at another path")
-        print(f"already registered: {study['study_id']}")
-        return
-    append_jsonl(catalog, {
+    existing = next((row for row in rows if row["study_id"] == study["study_id"]), None)
+    if existing and existing["path"] != path:
+        raise ValueError("study ID already registered at another path")
+    terms = list(dict.fromkeys([*(existing.get("terms", []) if existing else []), *args.term]))
+    indexed = {
         "study_id": study["study_id"], "path": path, "as_of": study["as_of"],
         "business_outcome": study["business_outcome"],
-        "terms": args.term, "coverage": "finalized", "registered_at": now(),
+        "terms": terms, "coverage": "finalized",
         "source_index": [{"source_id": row["source_id"], "title": row["title"],
                           "url": row["url"], "status": row["status"]}
                          for row in sources.values()],
         "claim_index": [{"claim_id": row["claim_id"], "text": row["text"],
                          "status": row["status"]}
                         for row in claims.values()],
-    })
-    print(f"registered: {study['study_id']}")
+    }
+    if existing:
+        comparable = {key: existing.get(key) for key in indexed}
+        if comparable == indexed:
+            print(f"already registered: {study['study_id']}")
+            return
+        indexed["revision"] = existing.get("revision", 1) + 1
+        indexed["supersedes_sha256"] = row_sha256(existing)
+    indexed["registered_at"] = now()
+    append_jsonl(catalog, indexed)
+    print(f"registered: {study['study_id']} revision {indexed.get('revision', 1)}")
 
 
 def cmd_import_legacy(args):
@@ -480,7 +537,7 @@ def cmd_import_legacy(args):
 
 
 def cmd_search(args):
-    print(json.dumps(find_prior(args.catalog.resolve(), args.query), ensure_ascii=False, indent=2))
+    print(json.dumps(find_prior(args.catalog.resolve(), args.query, args.include_leads), ensure_ascii=False, indent=2))
 
 
 def main():
@@ -536,6 +593,7 @@ def main():
     search = commands.add_parser("search", help="search the explicit catalog")
     search.add_argument("--catalog", required=True, type=Path)
     search.add_argument("--query", required=True)
+    search.add_argument("--include-leads", action="store_true", help="include unverified and rejected source URLs")
     args = parser.parse_args()
     try:
         {"start": cmd_start, "decide": cmd_decide, "source": cmd_source,

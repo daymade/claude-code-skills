@@ -172,6 +172,30 @@ class ResearchAssetsTest(unittest.TestCase):
         self.assertEqual(lead_cited.returncode, 2)
         self.assertIn("report URLs lack approved", lead_cited.stderr)
 
+    def test_html_export_harvests_citation_anchors_without_ui_assets(self):
+        self.start()
+        original = self.root / "report.pdf"
+        original.write_bytes(b"%PDF-example-source")
+        self.assertEqual(self.source(file=original).returncode, 0)
+        self.collect("Official source already recorded")
+        html = self.study / "sources" / "rendered.html"
+        html.write_text('<link rel="icon" href="https://assets.example/favicon.ico">'
+                        '<svg xmlns="http://www.w3.org/2000/svg"></svg>'
+                        '<script>const image="https://assets.example/script.png";</script>'
+                        '<a href="https://example.org/lead">candidate citation</a>'
+                        '<p>Visible source: https://example.org/visible</p>', encoding="utf-8")
+        self.assertEqual(self.cli(RUNS, "record", self.study, "official", "collected",
+                                  "--origin-task-id", "local-source", "--file", html).returncode, 0)
+        harvested = self.cli(ASSETS, "harvest", self.study)
+        self.assertEqual(harvested.returncode, 0, harvested.stderr)
+        self.assertIn("harvested 2", harvested.stdout)
+        urls = [json.loads(line)["url"] for line in (self.study / "source-ledger.jsonl").read_text().splitlines()]
+        self.assertIn("https://example.org/lead", urls)
+        self.assertIn("https://example.org/visible", urls)
+        self.assertNotIn("https://assets.example/favicon.ico", urls)
+        self.assertNotIn("https://assets.example/script.png", urls)
+        self.assertNotIn("http://www.w3.org/2000/svg", urls)
+
     def test_existing_source_gains_provider_discovery_provenance(self):
         self.start()
         original = self.root / "report.pdf"
@@ -254,6 +278,52 @@ class ResearchAssetsTest(unittest.TestCase):
                          "--query", "Acme margin")
         self.assertEqual(found.returncode, 0, found.stderr)
         self.assertEqual(json.loads(found.stdout)[0]["study_id"], "acme-study")
+
+    def test_prior_search_excludes_unverified_leads_unless_requested(self):
+        self.catalog.write_text(json.dumps({
+            "study_id": "acme-study", "path": "acme", "terms": ["Acme"],
+            "business_outcome": "Review company filings",
+            "source_index": [
+                {"source_id": "a", "title": "Acme filing", "url": "https://example.org/filing", "status": "approved"},
+                {"source_id": "b", "title": "Noise favicon", "url": "https://assets.example/favicon", "status": "candidate"},
+            ], "claim_index": [],
+        }) + "\n", encoding="utf-8")
+        normal = self.cli(ASSETS, "search", "--catalog", self.catalog, "--query", "Acme favicon")
+        self.assertEqual(json.loads(normal.stdout), [])
+        leads = self.cli(ASSETS, "search", "--catalog", self.catalog,
+                         "--query", "Acme favicon", "--include-leads")
+        self.assertEqual(json.loads(leads.stdout)[0]["source_matches"][-1]["status"], "candidate")
+        approved = self.cli(ASSETS, "search", "--catalog", self.catalog, "--query", "Acme filing")
+        self.assertEqual(json.loads(approved.stdout)[0]["study_id"], "acme-study")
+
+    def test_catalog_refresh_appends_a_verifiable_revision(self):
+        self.start()
+        self.collect("https://example.org/report.pdf")
+        original = self.root / "report.pdf"
+        original.write_bytes(b"%PDF-example-source")
+        self.assertEqual(self.source(file=original).returncode, 0)
+        self.assertEqual(self.claim().returncode, 0)
+        report = self.study / "report.md"
+        report.write_text("[C1] https://example.org/report.pdf", encoding="utf-8")
+        register = ("register", self.study, "--catalog", self.catalog, "--report", report)
+        self.assertEqual(self.cli(ASSETS, *register, "--term", "fund").returncode, 0)
+        self.assertEqual(self.cli(ASSETS, *register).returncode, 0)
+        self.assertEqual(len(self.catalog.read_text().splitlines()), 1)
+        self.assertEqual(self.source(url="https://example.org/lead", status="candidate").returncode, 0)
+        refreshed = self.cli(ASSETS, *register)
+        self.assertEqual(refreshed.returncode, 0, refreshed.stderr)
+        self.assertIn("revision 2", refreshed.stdout)
+        rows = [json.loads(line) for line in self.catalog.read_text().splitlines()]
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[1]["revision"], 2)
+        self.assertEqual(rows[1]["terms"], ["fund"])
+        found = self.cli(ASSETS, "search", "--catalog", self.catalog, "--query", "fund")
+        self.assertEqual(len(json.loads(found.stdout)), 1)
+        rows[1]["supersedes_sha256"] = "0" * 64
+        self.catalog.write_text("\n".join(json.dumps(row) for row in rows) + "\n")
+        invalid = self.cli(ASSETS, "search", "--catalog", self.catalog, "--query", "fund")
+        self.assertEqual(invalid.returncode, 2)
+        self.assertIn("invalid catalog revision", invalid.stderr)
 
     def test_rejected_source_and_prior_match_need_reasons(self):
         self.start()
