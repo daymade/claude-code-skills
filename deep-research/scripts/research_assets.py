@@ -63,6 +63,14 @@ def read_json(path):
         return json.load(stream)
 
 
+def prior_catalog_path(directory, prior):
+    value = prior.get("catalog")
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("prior research catalog is missing")
+    recorded = Path(value)
+    return (recorded if recorded.is_absolute() else directory / recorded).resolve()
+
+
 def write_json(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as stream:
@@ -199,7 +207,7 @@ def cmd_start(args):
         shutil.rmtree(directory)
         raise
     receipt = {
-        "catalog": str(catalog),
+        "catalog": os.path.relpath(catalog, directory),
         "catalog_sha256": sha256(catalog) if catalog.exists() else None,
         "searched_at": now(),
         "query": args.query,
@@ -396,7 +404,7 @@ def check(directory, report):
     prior = read_json(directory / "prior-research.json")
     if not prior.get("query") or not prior.get("searched_at") or not prior.get("catalog"):
         raise ValueError("prior research query, time, and catalog are required")
-    if not Path(prior["catalog"]).is_file():
+    if not prior_catalog_path(directory, prior).is_file():
         raise ValueError("prior research catalog is missing")
     for row in prior.get("matches", []):
         if row.get("decision") not in {"reuse", "adapt", "reject"} or not row.get("reason"):
@@ -460,7 +468,7 @@ def cmd_check(args):
 def cmd_register(args):
     study, _, _ = check(args.study, args.report)
     prior = read_json(args.study.resolve() / "prior-research.json")
-    if Path(prior["catalog"]).resolve() != args.catalog.resolve():
+    if prior_catalog_path(args.study.resolve(), prior) != args.catalog.resolve():
         raise ValueError("registration catalog differs from the one searched at start")
     sources = latest_sources(args.study.resolve())
     claims = load_claims(args.study.resolve(), sources)
@@ -492,6 +500,30 @@ def cmd_register(args):
     indexed["registered_at"] = now()
     append_jsonl(catalog, indexed)
     print(f"registered: {study['study_id']} revision {indexed.get('revision', 1)}")
+
+
+def cmd_relink_catalog(args):
+    directory = args.study.resolve()
+    study, _ = provider_runs.load_study(directory)
+    prior_path = directory / "prior-research.json"
+    prior = read_json(prior_path)
+    catalog = args.catalog.resolve()
+    if not args.reason.strip() or not catalog.is_file():
+        raise ValueError("catalog relink needs an existing catalog and a reason")
+    registered = next((row for row in catalog_rows(catalog) if row["study_id"] == study["study_id"]), None)
+    if not registered or registered["path"] != os.path.relpath(directory, catalog.parent):
+        raise ValueError("target catalog does not register this exact study path")
+    old = prior.get("catalog")
+    relative = os.path.relpath(catalog, directory)
+    if old == relative:
+        print("catalog already portable")
+        return
+    prior["catalog"] = relative
+    prior["catalog_relinked_from"] = old
+    prior["catalog_relinked_at"] = now()
+    prior["catalog_relink_reason"] = args.reason
+    write_json(prior_path, prior)
+    print(f"relinked: {study['study_id']} -> {relative}")
 
 
 def cmd_import_legacy(args):
@@ -585,6 +617,10 @@ def main():
     register.add_argument("--catalog", required=True, type=Path)
     register.add_argument("--report", required=True, type=Path)
     register.add_argument("--term", action="append", default=[])
+    relink = commands.add_parser("relink-catalog", help="migrate an older absolute catalog path after checking the target study entry")
+    relink.add_argument("study", type=Path)
+    relink.add_argument("--catalog", required=True, type=Path)
+    relink.add_argument("--reason", required=True)
     legacy = commands.add_parser("import-legacy", help="index an older provider study with explicit partial coverage")
     legacy.add_argument("study", type=Path)
     legacy.add_argument("--catalog", required=True, type=Path)
@@ -599,6 +635,7 @@ def main():
         {"start": cmd_start, "decide": cmd_decide, "source": cmd_source,
          "claim": cmd_claim,
          "harvest": cmd_harvest, "check": cmd_check, "register": cmd_register,
+         "relink-catalog": cmd_relink_catalog,
          "import-legacy": cmd_import_legacy, "search": cmd_search}[args.command](args)
     except (ValueError, OSError, KeyError, TypeError) as exc:
         print(f"error: {exc}", file=sys.stderr)

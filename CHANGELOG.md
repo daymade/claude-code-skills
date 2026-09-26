@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **deep-research** (`deep-research` v2.10.1 → v2.11.0): Hand an exact user-named seed to each isolated provider and reject wrong-document findings during synthesis. Preserve the submitted session URL while recording an evidenced persistent URL for task resumption. Harvest visible HTML citations without browser assets, prefer verified sources in prior-study search, and append catalog revisions when a study gains sources or claims.
+- **deep-research** (`deep-research` v2.10.1 → v2.11.0): Hand an exact user-named seed to each isolated provider and reject wrong-document findings during synthesis. Preserve the submitted session URL while recording an evidenced persistent URL for task resumption. Harvest visible HTML citations without browser assets, prefer verified sources in prior-study search, and append catalog revisions when a study gains sources or claims. Store a portable catalog path in each new study and verify the exact study entry before relinking older absolute paths.
 
 - **kimi-use** (`kimi-use` v1.4.0 → v1.5.0): Check per-interface credits before an autonomous Work task; defer when unapproved charges cannot be gated. Preserve separate raw returns for each failed or retried call, and inspect complete exported data before repeating a query. Record the observed fund-data plugin coverage and its account-specific cost limit.
 

@@ -1,5 +1,6 @@
 import hashlib
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -324,6 +325,59 @@ class ResearchAssetsTest(unittest.TestCase):
         invalid = self.cli(ASSETS, "search", "--catalog", self.catalog, "--query", "fund")
         self.assertEqual(invalid.returncode, 2)
         self.assertIn("invalid catalog revision", invalid.stderr)
+
+    def test_new_study_catalog_survives_moving_project_tree(self):
+        self.start()
+        receipt = json.loads((self.study / "prior-research.json").read_text())
+        self.assertEqual(receipt["catalog"], "../research-catalog.jsonl")
+        self.collect("https://example.org/report.pdf")
+        original = self.root / "report.pdf"
+        original.write_bytes(b"%PDF-example-source")
+        self.assertEqual(self.source(file=original).returncode, 0)
+        self.assertEqual(self.claim().returncode, 0)
+        report = self.study / "report.md"
+        report.write_text("[C1] https://example.org/report.pdf", encoding="utf-8")
+        self.assertEqual(self.cli(ASSETS, "register", self.study, "--catalog", self.catalog,
+                                  "--report", report).returncode, 0)
+        moved = self.root / "moved"
+        moved.mkdir()
+        shutil.move(str(self.study), moved / "study")
+        shutil.move(str(self.catalog), moved / "research-catalog.jsonl")
+        moved_study = moved / "study"
+        moved_catalog = moved / "research-catalog.jsonl"
+        checked = self.cli(ASSETS, "check", moved_study, "--report", moved_study / "report.md")
+        self.assertEqual(checked.returncode, 0, checked.stderr)
+        self.assertEqual(self.cli(ASSETS, "register", moved_study, "--catalog", moved_catalog,
+                                  "--report", moved_study / "report.md").returncode, 0)
+
+    def test_old_absolute_catalog_path_requires_verified_relink(self):
+        self.start()
+        self.collect("https://example.org/report.pdf")
+        original = self.root / "report.pdf"
+        original.write_bytes(b"%PDF-example-source")
+        self.assertEqual(self.source(file=original).returncode, 0)
+        self.assertEqual(self.claim().returncode, 0)
+        report = self.study / "report.md"
+        report.write_text("[C1] https://example.org/report.pdf", encoding="utf-8")
+        self.assertEqual(self.cli(ASSETS, "register", self.study, "--catalog", self.catalog,
+                                  "--report", report).returncode, 0)
+        prior_path = self.study / "prior-research.json"
+        prior = json.loads(prior_path.read_text())
+        prior["catalog"] = str(self.root / "retired-checkout" / "research-catalog.jsonl")
+        prior_path.write_text(json.dumps(prior))
+        self.assertIn("catalog is missing", self.cli(ASSETS, "check", self.study,
+                                                   "--report", report).stderr)
+        wrong_catalog = self.root / "wrong.jsonl"
+        wrong_catalog.write_text(json.dumps({"study_id": "another", "path": "other"}) + "\n")
+        rejected = self.cli(ASSETS, "relink-catalog", self.study, "--catalog", wrong_catalog,
+                            "--reason", "moved the project checkout")
+        self.assertEqual(rejected.returncode, 2)
+        self.assertIn("does not register this exact study path", rejected.stderr)
+        relinked = self.cli(ASSETS, "relink-catalog", self.study, "--catalog", self.catalog,
+                            "--reason", "moved the project checkout")
+        self.assertEqual(relinked.returncode, 0, relinked.stderr)
+        self.assertEqual(self.cli(ASSETS, "check", self.study, "--report", report).returncode, 0)
+        self.assertEqual(json.loads(prior_path.read_text())["catalog"], "../research-catalog.jsonl")
 
     def test_rejected_source_and_prior_match_need_reasons(self):
         self.start()
