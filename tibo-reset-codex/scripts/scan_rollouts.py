@@ -2,18 +2,20 @@
 """Rebuild the local Codex weekly-quota curve from rollout snapshots (Python 3.10+, macOS/Linux).
 
 Scans <codex-home>/sessions/<Y>/<M>/<D>/rollout-*.jsonl for rate_limits snapshots and
-prints anchor back-jumps (step 1) followed by zeroing intervals (step 2). No network,
+prints anchor back-jumps (step 1), large zeroing intervals (step 2), and low-usage
+anchor advances (step 3). No network,
 no account credentials. Snapshots carry no account id: the shapes reported here are
 leads for the attribution checks documented in SKILL.md, never proof of account count.
 
 The four traps documented in SKILL.md are built in:
   trap 1  the weekly window is selected by window_minutes == 10080, not by slot name;
   trap 2  only limit_id == "codex" rows are used (decoy buckets read constant zero);
-  trap 3  resets_at drifts by seconds between snapshots, so resets are judged by a
-          used_percent drop > 20 points, never by anchor movement alone;
+  trap 3  resets_at drifts by seconds between snapshots. A drop > 20 points is
+          reported as a zeroing; a large anchor advance at low usage is only an
+          unattributed lead, never a reset verdict;
   trap 4  directory date != timestamp range (long sessions write past midnight into
           the previous day's directory), so scan days+2 directories, then clip by
-          timestamp.
+          timestamp on both sides of the requested window.
 """
 
 import argparse
@@ -29,6 +31,7 @@ WEEK_MINUTES = 10080
 DROP_THRESHOLD = 20.0
 BACKJUMP_MIN_SECONDS = 300
 CLEAN_ANCHOR_TOLERANCE_SECONDS = 600
+LOW_USAGE_ANCHOR_ADVANCE_MIN_SECONDS = 60
 
 
 def find_rl(node):
@@ -59,7 +62,8 @@ def collect_rows(sessions_root, days, now):
     rows = []
     scan = days + 2  # trap 4
     now_local = now.astimezone()
-    cutoff = now.astimezone(BJ) - timedelta(days=days)
+    now_bj = now.astimezone(BJ)
+    cutoff = now_bj - timedelta(days=days)
     for i in range(scan):
         day = (now_local - timedelta(days=i)).strftime("%Y/%m/%d")
         for path in glob.glob(str(sessions_root / day / "rollout-*.jsonl")):
@@ -81,7 +85,7 @@ def collect_rows(sessions_root, days, now):
                             continue
                         rows.append((ts, p["used_percent"], p["resets_at"],
                                      (rl.get("credits") or {}).get("balance")))
-    rows = [r for r in rows if parse_ts(r[0]) >= cutoff]  # trap 4: clip by timestamp
+    rows = [r for r in rows if cutoff <= parse_ts(r[0]) <= now_bj]  # trap 4
     rows.sort(key=lambda r: r[0])
     return rows, scan
 
@@ -119,6 +123,34 @@ def find_zeroings(rows):
     return zeroings
 
 
+def find_low_usage_anchor_advances(rows):
+    """Surface anchor advances after low-use snapshots hidden by the drop detector.
+
+    The next snapshot may be delayed until usage rises again. Mixed-account and
+    concurrent-session snapshots have no identity, so these shapes are leads
+    for account-level checks, not reset classifications.
+    """
+    advances = []
+    seen_anchors = set()
+    prev = None
+    for row in rows:
+        if prev is not None:
+            ts, used, resets_at, _ = row
+            advance = resets_at - prev[2]
+            if (0 <= prev[1] <= DROP_THRESHOLD and 0 <= used <= 100
+                    and advance >= LOW_USAGE_ANCHOR_ADVANCE_MIN_SECONDS):
+                anchor = anchor_text(resets_at)
+                anchor_minute = anchor.replace(second=0, microsecond=0)
+                if anchor_minute not in seen_anchors:
+                    advances.append({"prev_ts": prev[0], "prev_used": prev[1],
+                                     "ts": ts, "used": used,
+                                     "old_anchor": anchor_text(prev[2]),
+                                     "new_anchor": anchor})
+                    seen_anchors.add(anchor_minute)
+        prev = row
+    return advances
+
+
 def format_report(rows, scan, backjumps, zeroings):
     lines = [f"采样 {len(rows)} 行 | 最早 {parse_ts(rows[0][0]):%m-%d %H:%M}"
              f" | 扫了 {scan} 个日期目录", ""]
@@ -137,6 +169,17 @@ def format_report(rows, scan, backjumps, zeroings):
             f"归零区间 {parse_ts(z['prev_ts']):%m-%d %H:%M:%S} {z['prev_used']:.0f}% → "
             f"{parse_ts(z['ts']):%m-%d %H:%M:%S} {z['used']:.0f}%"
             f" | 新锚点 {z['anchor']:%m-%d %H:%M} {shape} | {peak}")
+    lines.append("")
+    advances = find_low_usage_anchor_advances(rows)
+    for a in advances:
+        lines.append(
+            f"低用量锚点前移 {parse_ts(a['prev_ts']):%m-%d %H:%M:%S} {a['prev_used']:.0f}% → "
+            f"{parse_ts(a['ts']):%m-%d %H:%M:%S} {a['used']:.0f}%"
+            f" | 锚点 {a['old_anchor']:%m-%d %H:%M} → {a['new_anchor']:%m-%d %H:%M}"
+            " | 原因未定：按账号核对自然周期、平台重置与切号")
+    lines.append(f"低用量锚点前移候选: {len(advances)}（按新锚点分钟去重，不能当重置次数）")
+    lines.append("覆盖边界：归零列表只收录已用量下降 >20 点；本候选也非穷尽，"
+                 "0 条不证明未重置。")
     last = rows[-1]
     lines.append("")
     lines.append(f"最新快照 {parse_ts(last[0]):%F %H:%M:%S} 北京 | 已用 {last[1]:.0f}%"
