@@ -87,6 +87,18 @@ def origin_key(origin):
     return key, value
 
 
+def resume_origin(events, lane_id, original):
+    """Keep the submitted identity while returning a verified later UI address."""
+    for event in reversed(events):
+        if event["lane_id"] != lane_id:
+            continue
+        if event.get("origin") == original and "origin_alias" in event:
+            return {"session_url": event["origin_alias"]["session_url"]}
+        if event["state"] == "submitted":
+            break
+    return original
+
+
 def artifact_path(directory, artifact):
     if not isinstance(artifact, dict):
         raise ValueError("artifact must be an object")
@@ -140,6 +152,34 @@ def check_event(directory, event, lanes, previous, previous_origin=None, prior_e
             if (prior.get("origin") == event["origin"] and prior["lane_id"] != lane_id
                     and lanes[prior["lane_id"]]["provider"] == lanes[lane_id]["provider"]):
                 raise ValueError(f"origin already assigned to lane {prior['lane_id']}")
+            if (event["origin"].get("session_url") is not None
+                    and prior["lane_id"] != lane_id
+                    and lanes[prior["lane_id"]]["provider"] == lanes[lane_id]["provider"]
+                    and event["origin"].get("session_url") == prior.get("origin_alias", {}).get("session_url")):
+                raise ValueError(f"origin already assigned to lane {prior['lane_id']}")
+    if "origin_alias" in event:
+        alias = event["origin_alias"]
+        if state not in {"running", "collected"} or not isinstance(alias, dict):
+            raise ValueError("origin alias requires a running or collected session")
+        if not event.get("origin", {}).get("session_url"):
+            raise ValueError("origin alias requires an original session URL")
+        if not event["note"].strip():
+            raise ValueError("origin alias requires same-task observation in note")
+        alias_url = alias.get("session_url")
+        origin_key({"session_url": alias_url})
+        if alias_url == event["origin"]["session_url"]:
+            raise ValueError("origin alias must differ from the submitted URL")
+        receipt = alias.get("receipt")
+        path = artifact_path(directory, receipt)
+        if not path.is_file() or path.stat().st_size == 0 or receipt.get("sha256") != sha256(path):
+            raise ValueError(f"origin alias receipt missing or changed: {path}")
+        timestamp(receipt.get("captured_at"))
+        for prior in prior_events:
+            if prior["lane_id"] == lane_id or lanes[prior["lane_id"]]["provider"] != lanes[lane_id]["provider"]:
+                continue
+            if (prior.get("origin", {}).get("session_url") == alias_url
+                    or prior.get("origin_alias", {}).get("session_url") == alias_url):
+                raise ValueError(f"origin alias already assigned to lane {prior['lane_id']}")
     if state == "collected":
         artifact = event.get("artifact")
         path = artifact_path(directory, artifact)
@@ -218,16 +258,19 @@ def cmd_plan(directory, max_parallel):
             surface_cards.setdefault(card["control_surface"], []).append(card)
         elif state in {"submitted", "running"}:
             card["origin"] = origins[lane["lane_id"]]
+            card["resume_origin"] = resume_origin(events, lane["lane_id"], card["origin"])
             active.append(card)
             surface_cards.setdefault(card["control_surface"], []).append(card)
         elif state == "collected":
             card["origin"] = origins[lane["lane_id"]]
+            card["resume_origin"] = resume_origin(events, lane["lane_id"], card["origin"])
             card["artifact"] = latest[lane["lane_id"]]["artifact"]["path"]
             collected.append(card)
         else:
             card["note"] = latest[lane["lane_id"]]["note"]
             if lane["lane_id"] in origins:
                 card["last_known_origin"] = origins[lane["lane_id"]]
+                card["resume_origin"] = resume_origin(events, lane["lane_id"], origins[lane["lane_id"]])
             held.append(card)
 
     # Active and new lanes sharing a surface must stay in one owner packet.
@@ -273,6 +316,21 @@ def cmd_record(directory, args):
     }
     if origin:
         event["origin"] = origin
+    if args.alias_url or args.alias_proof:
+        if not args.alias_url or not args.alias_proof:
+            raise ValueError("origin alias needs both --alias-url and --alias-proof")
+        proof = Path(args.alias_proof).resolve()
+        try:
+            rel = proof.relative_to(directory.resolve())
+        except ValueError as exc:
+            raise ValueError("alias proof must be inside study directory") from exc
+        event["origin_alias"] = {
+            "session_url": args.alias_url,
+            "receipt": {
+                "path": rel.as_posix(), "sha256": sha256(proof),
+                "captured_at": datetime.fromtimestamp(proof.stat().st_mtime, timezone.utc).isoformat(timespec="seconds"),
+            },
+        }
     if args.imported:
         event["imported"] = True
     if args.file:
@@ -318,6 +376,8 @@ def main():
     record.add_argument("state", choices=sorted(STATES))
     record.add_argument("--origin-url")
     record.add_argument("--origin-task-id")
+    record.add_argument("--alias-url", help="observed persistent URL for the same submitted session")
+    record.add_argument("--alias-proof", help="saved UI/API receipt under sources/ proving the same session")
     record.add_argument("--file")
     record.add_argument("--captured-at")
     record.add_argument("--imported", action="store_true")

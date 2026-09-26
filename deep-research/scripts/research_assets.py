@@ -14,6 +14,7 @@ import shutil
 import sys
 import tempfile
 from datetime import datetime, timezone
+from html.parser import HTMLParser
 from pathlib import Path
 
 import provider_runs
@@ -24,6 +25,33 @@ CLAIM_STATES = {"supported", "contested", "unknown"}
 URL_RE = re.compile(r"https?://[^\s<>\]\[\"'()，、。；]+")
 CLAIM_RE = re.compile(r"\[(C[0-9]+)\]")
 TEXT_SUFFIXES = {".md", ".txt", ".html", ".htm", ".json", ".jsonl"}
+DISCOVERABLE_SOURCE_STATES = {"approved", "legacy_unverified_for_reuse"}
+
+
+class AnchorLinks(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.urls = set()
+        self.visible_text = []
+        self.hidden_depth = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in {"script", "style"}:
+            self.hidden_depth += 1
+            return
+        if tag != "a":
+            return
+        url = dict(attrs).get("href", "")
+        if url.startswith(("https://", "http://")):
+            self.urls.add(normalize_url(url))
+
+    def handle_data(self, data):
+        if self.hidden_depth == 0:
+            self.visible_text.append(data)
+
+    def handle_endtag(self, tag):
+        if tag in {"script", "style"} and self.hidden_depth:
+            self.hidden_depth -= 1
 
 
 def now():
@@ -33,6 +61,14 @@ def now():
 def read_json(path):
     with path.open(encoding="utf-8") as stream:
         return json.load(stream)
+
+
+def prior_catalog_path(directory, prior):
+    value = prior.get("catalog")
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("prior research catalog is missing")
+    recorded = Path(value)
+    return (recorded if recorded.is_absolute() else directory / recorded).resolve()
 
 
 def write_json(path, value):
@@ -89,24 +125,53 @@ def urls_in_text(text):
     return {normalize_url(match.group(0).rstrip(").,;")) for match in URL_RE.finditer(text)}
 
 
+def row_sha256(row):
+    encoded = json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def catalog_has_start_snapshot(catalog, start_hash):
+    if not isinstance(start_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", start_hash):
+        return False
+    digest = hashlib.sha256()
+    if digest.hexdigest() == start_hash:
+        return catalog.stat().st_size == 0
+    with catalog.open("rb") as stream:
+        for line in stream:
+            digest.update(line)
+            if digest.hexdigest() == start_hash:
+                return True
+    return False
+
+
 def catalog_rows(catalog):
-    rows = read_jsonl(catalog)
-    seen = set()
-    for row in rows:
+    latest = {}
+    order = []
+    for row in read_jsonl(catalog):
         study_id = row.get("study_id")
-        if not study_id or study_id in seen or not row.get("path"):
-            raise ValueError(f"{catalog}: duplicate or invalid catalog study")
-        seen.add(study_id)
-    return rows
+        if not study_id or not row.get("path"):
+            raise ValueError(f"{catalog}: invalid catalog study")
+        previous = latest.get(study_id)
+        if previous is None:
+            if row.get("revision", 1) != 1 or row.get("supersedes_sha256"):
+                raise ValueError(f"{catalog}: first catalog revision must be 1")
+            order.append(study_id)
+        elif (row["path"] != previous["path"]
+              or row.get("revision") != previous.get("revision", 1) + 1
+              or row.get("supersedes_sha256") != row_sha256(previous)):
+            raise ValueError(f"{catalog}: invalid catalog revision for {study_id}")
+        latest[study_id] = row
+    return [latest[study_id] for study_id in order]
 
 
-def find_prior(catalog, query):
+def find_prior(catalog, query, include_leads=False):
     terms = [part.casefold() for part in query.split() if part]
     if not terms:
         raise ValueError("prior query must contain a specific entity or subject")
     matches = []
     for row in catalog_rows(catalog):
-        source_index = row.get("source_index", [])
+        source_index = [source for source in row.get("source_index", [])
+                        if include_leads or source.get("status") in DISCOVERABLE_SOURCE_STATES]
         claim_index = row.get("claim_index", [])
         study_text = " ".join([row.get("study_id", ""), row.get("business_outcome", ""),
                                *row.get("terms", []),
@@ -156,7 +221,7 @@ def cmd_start(args):
         shutil.rmtree(directory)
         raise
     receipt = {
-        "catalog": str(catalog),
+        "catalog": os.path.relpath(catalog, directory),
         "catalog_sha256": sha256(catalog) if catalog.exists() else None,
         "searched_at": now(),
         "query": args.query,
@@ -255,7 +320,14 @@ def provider_links(directory, events):
             continue
         path = provider_runs.artifact_path(directory, event["artifact"])
         if path.suffix.lower() in TEXT_SUFFIXES:
-            for url in urls_in_text(path.read_text(encoding="utf-8", errors="replace")):
+            contents = path.read_text(encoding="utf-8", errors="replace")
+            if path.suffix.lower() in {".html", ".htm"}:
+                parser = AnchorLinks()
+                parser.feed(contents)
+                urls = parser.urls | urls_in_text(" ".join(parser.visible_text))
+            else:
+                urls = urls_in_text(contents)
+            for url in urls:
                 links.setdefault(url, set()).add(event["lane_id"])
     return links
 
@@ -346,7 +418,7 @@ def check(directory, report):
     prior = read_json(directory / "prior-research.json")
     if not prior.get("query") or not prior.get("searched_at") or not prior.get("catalog"):
         raise ValueError("prior research query, time, and catalog are required")
-    if not Path(prior["catalog"]).is_file():
+    if not prior_catalog_path(directory, prior).is_file():
         raise ValueError("prior research catalog is missing")
     for row in prior.get("matches", []):
         if row.get("decision") not in {"reuse", "adapt", "reject"} or not row.get("reason"):
@@ -410,31 +482,95 @@ def cmd_check(args):
 def cmd_register(args):
     study, _, _ = check(args.study, args.report)
     prior = read_json(args.study.resolve() / "prior-research.json")
-    if Path(prior["catalog"]).resolve() != args.catalog.resolve():
+    if prior_catalog_path(args.study.resolve(), prior) != args.catalog.resolve():
         raise ValueError("registration catalog differs from the one searched at start")
     sources = latest_sources(args.study.resolve())
     claims = load_claims(args.study.resolve(), sources)
     catalog = args.catalog.resolve()
     rows = catalog_rows(catalog)
     path = os.path.relpath(args.study.resolve(), catalog.parent)
-    if any(row["study_id"] == study["study_id"] for row in rows):
-        existing = next(row for row in rows if row["study_id"] == study["study_id"])
-        if existing["path"] != path:
-            raise ValueError("study ID already registered at another path")
-        print(f"already registered: {study['study_id']}")
-        return
-    append_jsonl(catalog, {
+    existing = next((row for row in rows if row["study_id"] == study["study_id"]), None)
+    if existing and existing["path"] != path:
+        raise ValueError("study ID already registered at another path")
+    terms = list(dict.fromkeys([*(existing.get("terms", []) if existing else []), *args.term]))
+    indexed = {
         "study_id": study["study_id"], "path": path, "as_of": study["as_of"],
         "business_outcome": study["business_outcome"],
-        "terms": args.term, "coverage": "finalized", "registered_at": now(),
+        "terms": terms, "coverage": "finalized",
         "source_index": [{"source_id": row["source_id"], "title": row["title"],
                           "url": row["url"], "status": row["status"]}
                          for row in sources.values()],
         "claim_index": [{"claim_id": row["claim_id"], "text": row["text"],
                          "status": row["status"]}
                         for row in claims.values()],
-    })
-    print(f"registered: {study['study_id']}")
+    }
+    if existing:
+        comparable = {key: existing.get(key) for key in indexed}
+        if comparable == indexed:
+            print(f"already registered: {study['study_id']}")
+            return
+        indexed["revision"] = existing.get("revision", 1) + 1
+        indexed["supersedes_sha256"] = row_sha256(existing)
+    indexed["registered_at"] = now()
+    append_jsonl(catalog, indexed)
+    print(f"registered: {study['study_id']} revision {indexed.get('revision', 1)}")
+
+
+def cmd_relink_catalog(args):
+    directory = args.study.resolve()
+    study, _ = provider_runs.load_study(directory)
+    prior_path = directory / "prior-research.json"
+    prior = read_json(prior_path)
+    catalog = args.catalog.resolve()
+    if not args.reason.strip() or not catalog.is_file():
+        raise ValueError("catalog relink needs an existing catalog and a reason")
+    rows = catalog_rows(catalog)
+    registered = next((row for row in rows if row["study_id"] == study["study_id"]), None)
+    expected_path = os.path.relpath(directory, catalog.parent)
+    if registered and registered["path"] != expected_path:
+        raise ValueError("target catalog registers the study at a different path")
+    if registered:
+        if (registered.get("as_of") != study["as_of"]
+                or registered.get("business_outcome") != study["business_outcome"]):
+            raise ValueError("target catalog entry does not match the study")
+        sources = latest_sources(directory)
+        claims = load_claims(directory, sources)
+        source_rows = registered.get("source_index", [])
+        claim_rows = registered.get("claim_index", [])
+        if not source_rows or not claim_rows or any(
+            item.get("source_id") not in sources
+            or sources[item["source_id"]]["url"] != item.get("url") for item in source_rows
+        ) or any(
+            item.get("claim_id") not in claims
+            or claims[item["claim_id"]]["text"] != item.get("text") for item in claim_rows
+        ):
+            raise ValueError("target catalog entry does not match the study evidence")
+    if not catalog_has_start_snapshot(catalog, prior.get("catalog_sha256")):
+        # An empty catalog at start has no identifying prefix. A matching
+        # registered study is then the only available continuity evidence.
+        empty_start = prior.get("catalog_sha256") == hashlib.sha256(b"").hexdigest()
+        if not (empty_start and registered):
+            raise ValueError("target catalog does not preserve the searched catalog snapshot")
+    old = prior.get("catalog")
+    relative = os.path.relpath(catalog, directory)
+    if old == relative:
+        print("catalog already portable")
+        return
+    prior["catalog"] = relative
+    at = now()
+    history = prior.setdefault("catalog_relink_history", [])
+    if not isinstance(history, list):
+        raise ValueError("invalid catalog relink history")
+    if not history and prior.get("catalog_relinked_from"):
+        history.append({"from": prior["catalog_relinked_from"],
+                        "at": prior.get("catalog_relinked_at"),
+                        "reason": prior.get("catalog_relink_reason")})
+    history.append({"from": old, "to": relative, "at": at, "reason": args.reason})
+    prior["catalog_relinked_from"] = old
+    prior["catalog_relinked_at"] = at
+    prior["catalog_relink_reason"] = args.reason
+    write_json(prior_path, prior)
+    print(f"relinked: {study['study_id']} -> {relative}")
 
 
 def cmd_import_legacy(args):
@@ -480,7 +616,7 @@ def cmd_import_legacy(args):
 
 
 def cmd_search(args):
-    print(json.dumps(find_prior(args.catalog.resolve(), args.query), ensure_ascii=False, indent=2))
+    print(json.dumps(find_prior(args.catalog.resolve(), args.query, args.include_leads), ensure_ascii=False, indent=2))
 
 
 def main():
@@ -528,6 +664,10 @@ def main():
     register.add_argument("--catalog", required=True, type=Path)
     register.add_argument("--report", required=True, type=Path)
     register.add_argument("--term", action="append", default=[])
+    relink = commands.add_parser("relink-catalog", help="migrate an older absolute catalog path after checking the target study entry")
+    relink.add_argument("study", type=Path)
+    relink.add_argument("--catalog", required=True, type=Path)
+    relink.add_argument("--reason", required=True)
     legacy = commands.add_parser("import-legacy", help="index an older provider study with explicit partial coverage")
     legacy.add_argument("study", type=Path)
     legacy.add_argument("--catalog", required=True, type=Path)
@@ -536,11 +676,13 @@ def main():
     search = commands.add_parser("search", help="search the explicit catalog")
     search.add_argument("--catalog", required=True, type=Path)
     search.add_argument("--query", required=True)
+    search.add_argument("--include-leads", action="store_true", help="include unverified and rejected source URLs")
     args = parser.parse_args()
     try:
         {"start": cmd_start, "decide": cmd_decide, "source": cmd_source,
          "claim": cmd_claim,
          "harvest": cmd_harvest, "check": cmd_check, "register": cmd_register,
+         "relink-catalog": cmd_relink_catalog,
          "import-legacy": cmd_import_legacy, "search": cmd_search}[args.command](args)
     except (ValueError, OSError, KeyError, TypeError) as exc:
         print(f"error: {exc}", file=sys.stderr)

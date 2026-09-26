@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **deep-research** (`deep-research` v2.10.1 → v2.11.0): Hand an exact user-named seed to each isolated provider and reject wrong-document findings during synthesis. Preserve the submitted session URL while recording an evidenced persistent URL for task resumption. Harvest visible HTML citations without browser assets, prefer verified sources in prior-study search, and append catalog revisions when a study gains sources or claims. Store a portable catalog path in each new study and verify catalog continuity before relinking older absolute paths.
+
+- **kimi-use** (`kimi-use` v1.4.0 → v1.5.0): Check per-interface credits before an autonomous Work task; defer when unapproved charges cannot be gated. Preserve separate raw returns for each failed or retried call, and inspect complete exported data before repeating a query. Record the observed fund-data plugin coverage and its account-specific cost limit.
+
 - **deep-research** (`deep-research` v2.10.0 → v2.10.1): Check metered subtools before handing a research lane to an autonomous Work agent. An existing account does not authorize unbounded credit use; defer a lane when unapproved calls cannot be gated, and preserve actual usage in its raw task record.
 
 - **deep-research** (`deep-research` v2.9.0 → v2.10.0): Create a durable study for every research run, including direct-source and single-provider work. The new research-asset CLI records prior-study decisions, source originals and leads, source-bound claims, and a searchable project catalog; final checks reject missing study files, unrecorded report/provider URLs and broken source snapshots. Provider dispatch remains with the installed specialist Skills.
