@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **tibo-reset-codex** (`tibo-reset-codex` v1.14.6 → v1.15.0): Add an append-only `withdraw` command for forecasts whose dates lack evidence. Withdrawn forecasts remain visible in the journal but leave the pending and follow-up lists. The monitoring route now pursues an unverified reset promise through sources that can distinguish announcement, account arrival, and cause; a promise without a deadline no longer forces a dated prediction.
+
 - **deep-research** (`deep-research` v2.8.0 → v2.9.0): Add a coordinator for parallel provider × mode research, composing existing Skills and agents rather than embedding vendor adapters. Its read-only planner assigns one owner per control surface, keeps active tasks in the same owner queue, and synthesizes by original evidence rather than model agreement. It makes no provider calls or purchases.
 
 - **deep-research** (`deep-research` v2.7.0 → v2.8.0): Add a local multi-provider run contract and CLI that separates provider modes, records original tasks and artifacts, and rejects missing origins, changed run identities, and modified exports. The existing citation registry still owns factual verification.

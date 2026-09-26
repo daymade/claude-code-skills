@@ -180,6 +180,24 @@ def make_review(data, forecasts, now):
     return result
 
 
+def make_withdrawal(data, forecasts):
+    """Retire an unsupported forecast without erasing its issued record."""
+    fid = required_text(data, "forecast_id")
+    if fid not in forecasts:
+        raise ValueError("forecast_id not found")
+    return {"forecast_id": fid, "reason": required_text(data, "reason"),
+            "lesson": required_text(data, "lesson")}
+
+
+def read_withdrawals(path):
+    """Keep new withdrawal records outside legacy forecast/review journals."""
+    if not path.exists():
+        return []
+    with path.open(encoding="utf-8") as stream:
+        fcntl.flock(stream, fcntl.LOCK_SH)
+        return read_rows(stream, kinds=("withdrawal",))
+
+
 def make_finding(data):
     body = {"invocation": required_text(data, "invocation"),
             "query": required_text(data, "query"),
@@ -253,6 +271,8 @@ def append_record(path, command, data, now=None):
     now = now or datetime.now(timezone.utc)
     with locked_journal(path) as (stream, rows):
         forecasts = {r["id"]: r for r in rows if r["record_type"] == "forecast"}
+        withdrawals_path = path.parent / "withdrawals.jsonl"
+        withdrawals = {r["forecast_id"]: r for r in read_withdrawals(withdrawals_path)}
         # Resolved before the idempotency check so a retry that names the same
         # findings matches the original record instead of silently dropping them.
         refs = evidence_refs(data, path.parent / "findings.jsonl")
@@ -268,7 +288,9 @@ def append_record(path, command, data, now=None):
                           r["anchor_event_url"] == body["anchor_event_url"]]
             body["revision_of"] = same_cycle[0]["id"] if same_cycle else None
             record_type = "forecast"
-        else:
+        elif command == "review":
+            if data.get("forecast_id") in withdrawals:
+                raise ValueError("withdrawn forecast cannot be reviewed")
             body = {**make_review(data, forecasts, now), **refs}
             previous = [r for r in rows if r["record_type"] == "review" and
                         r["forecast_id"] == body["forecast_id"]]
@@ -276,6 +298,26 @@ def append_record(path, command, data, now=None):
                 return previous[-1]
             body["supersedes_review"] = previous[-1]["id"] if previous else None
             record_type = "review"
+        elif command == "withdraw":
+            body = {**make_withdrawal(data, forecasts), **refs}
+            previous = withdrawals.get(body["forecast_id"])
+            if previous:
+                if all(previous.get(k) == v for k, v in body.items()):
+                    return previous
+                raise ValueError("forecast already withdrawn")
+            if any(r["record_type"] == "review" and
+                   r["forecast_id"] == body["forecast_id"] and
+                   r["outcome"] != "unknown" for r in rows):
+                raise ValueError("resolved forecast cannot be withdrawn")
+            row = {"schema_version": 1, "id": str(uuid.uuid4()),
+                   "record_type": "withdrawal", "recorded_at": now.isoformat(), **body}
+            with locked_journal(withdrawals_path, kinds=("withdrawal",)) as (withdraw_stream, _):
+                withdraw_stream.write(json.dumps(row, ensure_ascii=False, allow_nan=False) + "\n")
+                withdraw_stream.flush()
+                os.fsync(withdraw_stream.fileno())
+            return row
+        else:
+            raise ValueError(f"unknown journal command: {command}")
         row = {"schema_version": 1, "id": str(uuid.uuid4()), "record_type": record_type,
                "recorded_at": now.isoformat(), **body}
         stream.write(json.dumps(row, ensure_ascii=False, allow_nan=False) + "\n")
@@ -288,19 +330,25 @@ def summarize(path, kind=None, now=None):
     now = now or datetime.now(timezone.utc)
     if not path.exists():
         rows = []
+        withdrawal_rows = read_withdrawals(path.parent / "withdrawals.jsonl")
     else:
         with path.open(encoding="utf-8") as stream:
             fcntl.flock(stream, fcntl.LOCK_SH)
             rows = read_rows(stream)
+            withdrawal_rows = read_withdrawals(path.parent / "withdrawals.jsonl")
     latest = {r["forecast_id"]: r for r in rows if r["record_type"] == "review"}
+    withdrawals = {r["forecast_id"]: r for r in withdrawal_rows}
     review_order = {r["forecast_id"]: i for i, r in enumerate(rows)
                     if r["record_type"] == "review"}
+    withdrawal_order = {r["forecast_id"]: i for i, r in enumerate(withdrawal_rows)}
     forecasts = [r for r in rows if r["record_type"] == "forecast" and
                  (kind is None or r["kind"] == kind)]
-    pending, resolved, counts = [], [], {}
+    pending, resolved, withdrawn, conflicts, counts = [], [], [], [], {}
     for forecast in forecasts:
         review = latest.get(forecast["id"])
-        outcome = review["outcome"] if review else "unreviewed"
+        withdrawal = withdrawals.get(forecast["id"])
+        outcome = ("withdrawn" if withdrawal else
+                   review["outcome"] if review else "unreviewed")
         shown_review = None
         if review is not None:
             shown_review = {**review,
@@ -308,18 +356,31 @@ def summarize(path, kind=None, now=None):
         item = {**forecast, "latest_review": shown_review,
                 "evidence_refs_count": len(forecast.get("evidence_refs", [])),
                 "window_elapsed": now > instant(forecast["window_end"]),
-                "window_hours": (instant(forecast["window_end"]) -
+                 "window_hours": (instant(forecast["window_end"]) -
                                  instant(forecast["window_start"])).total_seconds() / 3600}
-        if outcome in ("unreviewed", "unknown"):
+        if withdrawal:
+            item["latest_withdrawal"] = {**withdrawal,
+                                         "evidence_refs_count": len(withdrawal.get("evidence_refs", []))}
+            withdrawn.append(item)
+            for scored_review in rows:
+                if (scored_review["record_type"] == "review" and
+                        scored_review["forecast_id"] == forecast["id"] and
+                        scored_review["outcome"] != "unknown"):
+                    conflicts.append({"forecast_id": forecast["id"],
+                                      "withdrawal_id": withdrawal["id"],
+                                      "review_id": scored_review["id"],
+                                      "review_outcome": scored_review["outcome"]})
+        elif outcome in ("unreviewed", "unknown"):
             pending.append(item)
         else:
             resolved.append(item)
         # One original forecast per verified anchor/type; revisions remain visible below.
         if not forecast.get("revision_of") and forecast.get("anchor_event_url"):
             bucket = counts.setdefault(forecast["kind"], {k: 0 for k in
-                                       ("hit", "early", "late", "unknown", "unreviewed")})
+                                       ("hit", "early", "late", "unknown", "unreviewed", "withdrawn")})
             bucket[outcome] += 1
     resolved.sort(key=lambda item: review_order[item["id"]])
+    withdrawn.sort(key=lambda item: withdrawal_order[item["id"]])
     # pending 不能靠 JSONL 的追加顺序：它现在恰好等于「最新在后」，但那是隐式保证
     # ——任何按 id/kind 重写、合并或过滤台账的命令都会打乱它，而 summary 的读者
     # （含下个 session 的 agent）恰恰依赖「最后一条是当前有效预测」来读到最新核验，
@@ -349,8 +410,12 @@ def summarize(path, kind=None, now=None):
             "forecast_count": len(forecasts), "cycle_counts": counts,
             "due_for_followup": due,
             "pending": pending, "recent_resolved": resolved[-10:],
+            "recent_withdrawn": withdrawn[-10:],
+            "withdrawal_conflicts": conflicts,
             "note": "Counts use first forecasts per anchor/type, not calibrated probabilities. "
                     "Elapsed windows and missing announcements alone do not prove a miss. "
+                    "Withdrawals remain visible but leave pending follow-up. "
+                    "A scored review written after withdrawal requires reconciliation. "
                     "Review evidence is supplied by the caller, not independently verified here."}
 
 
@@ -394,7 +459,7 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
     summary = sub.add_parser("summary", help="Read pending forecasts, outcomes and lessons")
     summary.add_argument("--kind", choices=KINDS)
-    for command in ("record", "review", "finding"):
+    for command in ("record", "review", "withdraw", "finding"):
         p = sub.add_parser(command)
         p.add_argument("--input", type=Path, required=True, help="UTF-8 JSON object file")
     listing = sub.add_parser("findings", help="List recent raw data findings")
@@ -416,7 +481,9 @@ def main():
             snapshot(state, target.name, "finding", enabled=not args.no_git)
         else:
             result = append_record(path, args.command, json.loads(args.input.read_text(encoding="utf-8")))
-            snapshot(state, path.name, "forecast" if args.command == "record" else "review",
+            filename = "withdrawals.jsonl" if args.command == "withdraw" else path.name
+            snapshot(state, filename, {"record": "forecast", "review": "review",
+                                       "withdraw": "withdrawal"}[args.command],
                      enabled=not args.no_git)
         print(json.dumps(result, ensure_ascii=False, indent=2))
     except (OSError, ValueError, KeyError, TypeError) as error:
