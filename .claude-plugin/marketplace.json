@@ -33,7 +33,7 @@
       "description": "Drives Kimi.app via computer-use for Work/Agent data-plugin queries and Chat 深度研究 reports, using the user's logged-in session. Use for \"用 Kimi 查\" / \"操作 Kimi 客户端\" / \"Kimi 插件\" / \"Kimi 深度研究\". Not for kimi.com browser automation or direct iFinD API access.",
       "source": "./kimi-use",
       "strict": false,
-      "version": "1.5.0",
+      "version": "1.5.1",
       "category": "developer-tools",
       "keywords": [
         "kimi",
@@ -361,7 +361,7 @@
       "description": "Generate evidence-tracked research reports with reusable source and claim records, original-source verification, and evidence-family tracking. Coordinate provider-specific Skills across selected modes, retain original artifacts, and synthesize by decision; select depth and routes by the question.",
       "source": "./deep-research",
       "strict": false,
-      "version": "2.11.0",
+      "version": "2.11.1",
       "category": "documentation",
       "keywords": [
         "research",

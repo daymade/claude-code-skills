@@ -63,6 +63,12 @@ Use [skill-creator](daymade-skill/skill-creator/SKILL.md) before creating or
 changing a skill. It owns change classification, evidence selection, regression
 review, validation, initialization, and packaging.
 
+For Deep Research or Kimi financial-research changes, enter the owning
+[`deep-research`](deep-research/SKILL.md) or [`kimi-use`](kimi-use/SKILL.md) Skill.
+Their linked references own the run, source-archive, mode, and billing procedures;
+the bundled CLIs own executable argument and validation behavior. Keep this file
+as the route rather than a second copy of those procedures.
+
 For customer-approved report forms, follow
 [skill-creator's report-template contract](daymade-skill/skill-creator/SKILL.md#show-the-result-not-just-the-work).
 

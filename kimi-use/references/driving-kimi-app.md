@@ -2,18 +2,6 @@
 
 > 证据边界：Claude Code 侧实测于 2026-08-18（computer-use MCP）；Codex 旧 computer 插件实测于 2026-06-29 与 2026-07-02；Codex 当前 CUA 实测于 2026-09。均在 macOS。工具签名按实测记录原样给出；版本演进可能增删工具，**以你当前环境实际加载到的工具清单为准**。
 
-## Contents
-
-- Claude Code：computer-use MCP（截图 + 坐标）
-- Codex：computer 插件（AX 树 + element_index）
-- Codex：当前 CUA（`cua_repl`）富文本输入
-- Chat 深度研究：2026-09-25 实测入口、完成判据与 ZIP 原件
-- 授权：provider 前提（k3 段无此工具）与排他锁；插件取数的模式与模型限制
-- 等待与轮询（含客户端自身未就绪）
-- 提取产物（复制通道 / 落盘文件 / 沙盒位置）
-
----
-
 ## Claude Code：computer-use MCP（截图 + 坐标）
 
 **工具是 deferred 的，先加载：**
