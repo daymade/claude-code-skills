@@ -6,6 +6,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -46,6 +47,13 @@ class ForecastLogTests(unittest.TestCase):
                 "reason": "Synthetic evidence identifies the first matching event.",
                 "lesson": "Retain the multi-day window until more cycles are observed."}
         return log.append_record(self.path, "review", {**data, **changes}, self.now + timedelta(days=6))
+
+    def withdraw(self, fid, *, now=None, **changes):
+        data = {"forecast_id": fid,
+                "reason": "The issued date lacked evidence for its deadline.",
+                "lesson": "Keep the promise, but withdraw the unsupported date."}
+        return log.append_record(self.path, "withdraw", {**data, **changes},
+                                 now or self.now + timedelta(hours=1))
 
     def finding(self, **changes):
         data = {"invocation": "announcement", "query": "What did Tibo announce today?",
@@ -165,6 +173,82 @@ class ForecastLogTests(unittest.TestCase):
         hit = self.review(first["id"])
         self.assertEqual(self.review(first["id"])["id"], hit["id"])
         self.assertEqual(len(self.path.read_text().splitlines()), 2)
+
+    def test_withdrawal_is_append_only_and_leaves_followup_without_hiding_history(self):
+        found = self.finding()
+        issued = self.record()
+        before = self.path.read_bytes()
+        withdrawal = self.withdraw(issued["id"], evidence_refs=[found["id"][:8]])
+        self.assertEqual(withdrawal["record_type"], "withdrawal")
+        self.assertEqual(withdrawal["evidence_refs"], [found["id"]])
+        self.assertTrue(self.path.read_bytes().startswith(before))
+        result = log.summarize(self.path, now=self.now + timedelta(days=10))
+        self.assertEqual(result["forecast_count"], 1)
+        self.assertEqual(result["pending"], [])
+        self.assertEqual(result["due_for_followup"], [])
+        self.assertEqual(result["recent_withdrawn"][0]["id"], issued["id"])
+        self.assertEqual(result["recent_withdrawn"][0]["latest_withdrawal"]["id"],
+                         withdrawal["id"])
+        self.assertEqual(result["recent_withdrawn"][0]["latest_withdrawal"]["evidence_refs_count"], 1)
+        self.assertEqual(result["cycle_counts"]["global_reset"]["withdrawn"], 1)
+        with self.assertRaisesRegex(ValueError, "withdrawn forecast cannot be reviewed"):
+            self.review(issued["id"])
+
+    def test_withdrawal_rejects_invalid_targets_and_resolved_predictions(self):
+        with self.assertRaisesRegex(ValueError, "forecast_id not found"):
+            self.withdraw("absent")
+        issued = self.record()
+        for changes in ({"reason": ""}, {"lesson": "   "},
+                        {"evidence_refs": ["missing"]}):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                self.withdraw(issued["id"], **changes)
+        first = self.withdraw(issued["id"])
+        self.assertEqual(self.withdraw(issued["id"])["id"], first["id"])
+        with self.assertRaisesRegex(ValueError, "forecast already withdrawn"):
+            self.withdraw(issued["id"], reason="Different correction")
+        self.assertEqual(len(self.path.read_text().splitlines()), 2)
+
+        resolved = self.record(rationale="A distinct issued forecast.")
+        self.review(resolved["id"])
+        with self.assertRaisesRegex(ValueError, "resolved forecast cannot be withdrawn"):
+            self.withdraw(resolved["id"], now=self.now + timedelta(days=7))
+        self.review(resolved["id"], unknown=True)
+        with self.assertRaisesRegex(ValueError, "resolved forecast cannot be withdrawn"):
+            self.withdraw(resolved["id"], now=self.now + timedelta(days=8))
+
+    def test_unknown_review_can_be_withdrawn_but_scored_review_cannot(self):
+        issued = self.record()
+        self.review(issued["id"], unknown=True)
+        self.withdraw(issued["id"], now=self.now + timedelta(days=7))
+        result = log.summarize(self.path)
+        self.assertEqual(result["pending"], [])
+        self.assertEqual(result["recent_withdrawn"][0]["latest_review"]["outcome"], "unknown")
+
+    def test_cli_withdrawal_changes_summary_state(self):
+        script = Path(__file__).resolve().parents[1] / "scripts" / "forecast_log.py"
+        state = self.path.parent
+        start = datetime.now(timezone.utc) + timedelta(days=2)
+        payload = {**self.forecast, "window_start": start.isoformat(),
+                   "window_end": (start + timedelta(days=2)).isoformat()}
+        input_path = Path(self.folder.name) / "input.json"
+
+        def invoke(command, data=None):
+            if data is not None:
+                input_path.write_text(json.dumps(data), encoding="utf-8")
+            argv = [sys.executable, str(script), "--state-dir", str(state), "--no-git", command]
+            if data is not None:
+                argv.extend(("--input", str(input_path)))
+            return json.loads(subprocess.run(argv, capture_output=True, text=True,
+                                             check=True).stdout)
+
+        issued = invoke("record", payload)
+        withdrawn = invoke("withdraw", {"forecast_id": issued["id"],
+                                        "reason": "The timing premise was unsupported.",
+                                        "lesson": "Do not invent a deadline."})
+        summary = invoke("summary")
+        self.assertEqual(withdrawn["record_type"], "withdrawal")
+        self.assertEqual(summary["pending"], [])
+        self.assertEqual(summary["recent_withdrawn"][0]["id"], issued["id"])
 
     def test_delayed_exact_retry_returns_original_after_window_started(self):
         first = self.record()

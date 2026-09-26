@@ -27,7 +27,8 @@ uv run python scripts/forecast_log.py summary
 
 1. 运行 `summary`，先读 `due_for_followup`（窗口已过期或 24h 内将关闭——阈值即脚本常量
    `CLOSING_SOON_HOURS`——且尚无定论的
-   pending，带完整 id 可直接喂 review），再读 `pending` 和 `recent_resolved`。`pending`
+   pending，带完整 id 可直接喂 review），再读 `pending`、`recent_resolved` 和
+   `recent_withdrawn`。`pending`
    同时含未核验与证据不足的记录；`window_elapsed` 只说明窗口已过，不判输赢。没有历史时
    按当前证据预测，记录为空不构成错误。接续监测轮用 `handoff` 读取最新完整交接；
    需要其他轮次的原始读数时再读数据目录的 `findings.jsonl` 原始行。
@@ -110,11 +111,27 @@ uv run python scripts/forecast_log.py summary
 会自动标为 `revision_of`；必须沿用同一规范原帖 URL，不用不同镜像伪造不同轮次。
 完全相同的输入重试返回原记录。脚本记录真实写入时刻，不为以前的口头预测伪造精确发出时间。
 
-**`pending` 按 `recorded_at` 递增排序，`recent_resolved` 按最新核验排序，两者都不依赖台账的
-文件顺序**（2026-09-16 起为显式保证；此前 `pending` 只靠 JSONL 追加顺序，任何重写、合并或
-按 id 过滤台账的命令都会打乱它）。所以读 `pending` 时**最后一条就是当前有效预测**——它一定
-是同一锚点下的最新 `record`，`revision_of` 链上更早的论据不会因为台账被动过而浮到前面。
-倒序台账上已验证：`summary` 仍报出递增顺序。据此判断，**不要自己按文件位置挑记录**。
+**`pending` 按 `recorded_at` 递增排序，`recent_resolved` 与 `recent_withdrawn` 分别按最新核验、
+撤回时间排序，不依赖台账文件顺序。** `pending` 的最后一条只是最近发出且尚未核验或撤回的
+预测；若更新的同锚点预测已撤回，它可能是较早的旧判断。先读 `recent_withdrawn` 和监测交接，
+再决定是否沿用；不要单靠文件位置或 `pending[-1]` 宣称它当前有效。
+
+## 撤回没有依据的预测：withdraw
+
+预测的时间前提被证伪或发现原本缺少依据时，追加撤回记录，不把 `confidence` 改低后继续保留
+同一个无依据窗口，也不编一个替代日期。撤回只改预测的有效状态，不删除最初判断或修改原始读数。
+
+```bash
+uv run python scripts/forecast_log.py withdraw --input /tmp/tibo-withdrawal.json
+uv run python scripts/forecast_log.py summary
+```
+
+输入 JSON 必填 `forecast_id`、`reason`（具体撤回依据）、`lesson`（下一次怎样避免）；如有
+对应 findings，以 `evidence_refs` 挂链。完全相同的输入重试返回原记录；已撤回预测不能再
+`review`，已有 `hit` / `early` / `late` 核验的预测也不能用撤回来掩盖结果。`summary` 将它从
+`pending` 和 `due_for_followup` 移到 `recent_withdrawn`，但 `forecast_count` 仍包含原预测；
+若它是同锚点的首份预测，`cycle_counts` 明列 `withdrawn`，不把撤回算作命中或未知。
+下一轮从 `summary` 及 `handoff` 读回后才说“已撤回”；交接文字不能代替台账状态。
 
 ## 回填证据：review
 
@@ -155,6 +172,7 @@ uv run python scripts/forecast_log.py summary
 同一事件的多次预测都保留，但 `cycle_counts` 只按同类型同锚点的首份预测
 计数，未知锚点不进该计数。未决项单列；不要把所有调用次数当独立样本，也不要删去失败的
 首份预测、只展示后来改中的版本。结合 `window_hours` 看窗口宽度，不能靠无限放宽刷命中。
+撤回记录在 `recent_withdrawn` 单列，不与 `review` 的事件结果混算。
 
 将 `lesson` 用于下次 `feedback_applied`，完成「预测 → 事件核验 → 调整」闭环。没有已核实
 结果就诚实保持原先低信心，不宣称准确率提高。结构测试和离线回放只验证记录与判读行为；
