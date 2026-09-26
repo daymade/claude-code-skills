@@ -213,7 +213,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **tibo-reset-codex** (v1.16.0 → v1.16.1): Refresh the third-party prediction source's current field map and reject a scheduled time that precedes its cited announcement. The monitor example marks an uninitialized or untimed `No` as unknown and treats the mirror as a candidate pending upstream and time checks.
+- **tibo-reset-codex** (v1.16.0 → v1.16.1): Refresh the third-party prediction source's current field map and reject a scheduled time that precedes its cited announcement. The post classifier example marks an uninitialized or untimed `No` as unknown and treats the mirror as a candidate pending upstream and time checks; silent resets still require account evidence.
 
 - **tibo-reset-codex** (v1.15.0 → v1.15.1): Align repository entry points and forecast SOPs with conditional date forecasts and the separate withdrawal journal. Remove stale forecast status and copied or derived counts from the touched guidance; convert the monitoring sleep window using the target date's Pacific offset.
 
