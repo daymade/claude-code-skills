@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **tibo-reset-codex** (`tibo-reset-codex` v1.15.1 → v1.16.0): For an unfulfilled reset promise or a timing question, give a sourced event timeline after the current-state conclusion. Distinguish service recovery, the original future-tense promise, account readings, and any completion signal without treating the announcement time as arrival.
+
 - **kimi-use** (`kimi-use` v1.3.2 → v1.4.0): Distinguish Work/Agent plugin queries from Chat Deep Research, document the verified K3 and export routes, and retrieve Work outputs from Kimi's own task folder when no project folder is mounted.
 
 - **kimi-use** (`kimi-use` v1.3.1 → v1.3.2): Route Codex to the currently available CUA or legacy computer plugin. The CUA path pastes Chinese text into Kimi's rich editor and reads back the full prompt and enabled send button before sending.
