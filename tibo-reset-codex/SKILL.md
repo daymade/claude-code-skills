@@ -368,7 +368,7 @@ Codex/Work 名称筛选会漏掉它。每轮把下面这条和
 summary 一起跑：
 
 ```bash
-# 近期 incident + 完整正文（summary.json 看不到）。flag 命中两类：
+# 近期 incident + 完整正文（summary.json 看不到）。按补偿/额度语义标记：
 #   [补偿型] 名字含 Codex/Work
 #   [静默型] 名字或正文含 usage limit / unexpected reset / billed / quota（不依赖 Codex 命名）
 for i in 1 2 3; do
