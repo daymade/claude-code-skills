@@ -68,6 +68,11 @@ uv run python scripts/forecast_log.py handoff               # 最新完整监测
 | `notes` | 可选字符串数组 |
 | `session_ref` | 可选；本 session transcript 的本机路径 |
 
+账号查询的 `readings` 只存实际读到的非敏感字段；经当前认证身份核对的本地账号标签可写进
+`notes`，并说明标签对应哪一次查询。未核对时保留账号未知，不把多条「当前账号」读数自动接成
+同一账号的历史。用户纠正时先逐字记录原话；时间格式、被核对的账号与因果归因若未明说，
+放在 `notes` 标为推断，不改写成用户直接观测。
+
 完全相同的输入重试返回原记录。`evidence_refs` 链接规则：先 `finding` 后 `record`/`review`
 ——record/review 输入里的 `evidence_refs` 是 finding id 数组（完整 id，或能唯一解析的短
 id 前缀），每个引用必须已存在于 findings.jsonl，否则报错退出（防断链）；缺省不写该键，
@@ -155,10 +160,12 @@ uv run python scripts/forecast_log.py summary
 - `catalyst_actual`：可选，回填事件实际的催化类型（枚举同上），与预测时的
   `catalyst_expected` 对照后，「哪个催化信号有效」才可机械统计。它与是否有事件证据
   无关——`unknown: true` 的核验同样接受（代码先于 unknown 早退解析该字段）。
-- 本机 rollout 快照覆盖落地窗口时，用观测到的归零区间收窄 `event_start`/`event_end`，
-  不要把确认帖时刻当唯一上界——窗口收窄到日内量级时，这决定 hit 与 unknown 的差别
-  （2026-09-12 实测：两条官宣帖夹逼出 4.8h 宽区间，本机快照的 79%→0% 归零
-  （11:03→17:52 北京）可再收窄）。
+- 本机 rollout 快照覆盖落地窗口时，先按主 Skill §3 把归零前后读数绑定同一账号，并核对
+  该账号原先显示的自然重置时刻。只有证据支持这次跳变属于所复盘的事件，才能用归零区间
+  收窄 `event_start`/`event_end`；原因未定时保留 `unknown`，不能用它制造 `hit`。
+  `forecast_log.py` 只按输入时间与标志计分，不会替你核验事件归因。已归因的区间可以
+  比确认帖时刻给出更窄上界（2026-09-12 实测：两条官宣帖夹逼出 4.8h 宽区间，
+  本机快照的 79%→0% 归零（11:03→17:52 北京）可再收窄）。
 
 - `time_basis`：`occurrence` 表示明确发生时刻（起止相同）；`observed_interval` 表示已核实的
   发生区间；`confirmation_only` 表示只有完成帖时间，不能把它冒充发生时间。

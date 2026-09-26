@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **tibo-reset-codex** (`tibo-reset-codex` v1.16.2 → v1.17.0): Report low-usage anchor advances as unattributed leads when a second reset would fall below the scanner's 20-point drop threshold. Historical `--as-of` scans now exclude later snapshots. Account guidance keeps natural and additional resets as separate events and keeps current balance out of landing evidence until its cause is established. Its offline tests now run in CI.
+
 - **git-safety-net** (`git-safety-net` v1.22.0 → v1.22.1): Troubleshooting entry for the diverged-but-familiar branch: `git cherry <upstream> <branch>` returning all `-` means every local-only commit is patch-identical to one already upstream (typical cause: committing against a stale remote-tracking ref, after which the same change was re-made and pushed), so the branch can be fast-forwarded; any `+` remains an ordinary divergence.
 
 - **deep-research** (`deep-research` v2.10.1 → v2.11.0): Hand an exact user-named seed to each isolated provider and reject wrong-document findings during synthesis. Preserve the submitted session URL while recording an evidenced persistent URL for task resumption. Harvest visible HTML citations without browser assets, prefer verified sources in prior-study search, and append catalog revisions when a study gains sources or claims. Store a portable catalog path in each new study and verify catalog continuity before relinking older absolute paths.
