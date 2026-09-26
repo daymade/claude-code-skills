@@ -41,6 +41,8 @@ Before external retrieval, read [research-asset-contract.md](references/research
 
 During research, retain the unedited provider outputs, every opened original and every provider-surfaced source URL with status and provenance. Bind report claims to approved original sources; model reports only locate candidate evidence. Before calling a report complete, run `provider_runs.py validate`, `research_assets.py check`, and register the study for later discovery. An answer with citations but no study/source/claim record does not satisfy this Skill. The local scripts record and check files; they make no provider calls and do not authorize paid work.
 
+Before sending a Work/Agent task that may choose its own data plugins, inspect the relevant plugin catalog for per-call credits or charges. A signed-in account and a request to use a data source do not set an unlimited spend ceiling. If an autonomous task can invoke metered plugins without a per-call pause and this task has no explicit spend authorization for them, defer that lane or use a route where the exact calls can be approved first. Put the spending boundary in the provider prompt, then read the raw tool log after execution; if a charge occurs despite the boundary, record the observed usage and tell the user. Do not make another paid call to fill a coverage gap.
+
 ## Mode Selection
 
 Determine the research mode before starting:
