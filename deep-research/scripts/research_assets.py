@@ -130,6 +130,20 @@ def row_sha256(row):
     return hashlib.sha256(encoded).hexdigest()
 
 
+def catalog_has_start_snapshot(catalog, start_hash):
+    if not isinstance(start_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", start_hash):
+        return False
+    digest = hashlib.sha256()
+    if digest.hexdigest() == start_hash:
+        return catalog.stat().st_size == 0
+    with catalog.open("rb") as stream:
+        for line in stream:
+            digest.update(line)
+            if digest.hexdigest() == start_hash:
+                return True
+    return False
+
+
 def catalog_rows(catalog):
     latest = {}
     order = []
@@ -510,17 +524,50 @@ def cmd_relink_catalog(args):
     catalog = args.catalog.resolve()
     if not args.reason.strip() or not catalog.is_file():
         raise ValueError("catalog relink needs an existing catalog and a reason")
-    registered = next((row for row in catalog_rows(catalog) if row["study_id"] == study["study_id"]), None)
-    if not registered or registered["path"] != os.path.relpath(directory, catalog.parent):
-        raise ValueError("target catalog does not register this exact study path")
+    rows = catalog_rows(catalog)
+    registered = next((row for row in rows if row["study_id"] == study["study_id"]), None)
+    expected_path = os.path.relpath(directory, catalog.parent)
+    if registered and registered["path"] != expected_path:
+        raise ValueError("target catalog registers the study at a different path")
+    if registered:
+        if (registered.get("as_of") != study["as_of"]
+                or registered.get("business_outcome") != study["business_outcome"]):
+            raise ValueError("target catalog entry does not match the study")
+        sources = latest_sources(directory)
+        claims = load_claims(directory, sources)
+        source_rows = registered.get("source_index", [])
+        claim_rows = registered.get("claim_index", [])
+        if not source_rows or not claim_rows or any(
+            item.get("source_id") not in sources
+            or sources[item["source_id"]]["url"] != item.get("url") for item in source_rows
+        ) or any(
+            item.get("claim_id") not in claims
+            or claims[item["claim_id"]]["text"] != item.get("text") for item in claim_rows
+        ):
+            raise ValueError("target catalog entry does not match the study evidence")
+    if not catalog_has_start_snapshot(catalog, prior.get("catalog_sha256")):
+        # An empty catalog at start has no identifying prefix. A matching
+        # registered study is then the only available continuity evidence.
+        empty_start = prior.get("catalog_sha256") == hashlib.sha256(b"").hexdigest()
+        if not (empty_start and registered):
+            raise ValueError("target catalog does not preserve the searched catalog snapshot")
     old = prior.get("catalog")
     relative = os.path.relpath(catalog, directory)
     if old == relative:
         print("catalog already portable")
         return
     prior["catalog"] = relative
+    at = now()
+    history = prior.setdefault("catalog_relink_history", [])
+    if not isinstance(history, list):
+        raise ValueError("invalid catalog relink history")
+    if not history and prior.get("catalog_relinked_from"):
+        history.append({"from": prior["catalog_relinked_from"],
+                        "at": prior.get("catalog_relinked_at"),
+                        "reason": prior.get("catalog_relink_reason")})
+    history.append({"from": old, "to": relative, "at": at, "reason": args.reason})
     prior["catalog_relinked_from"] = old
-    prior["catalog_relinked_at"] = now()
+    prior["catalog_relinked_at"] = at
     prior["catalog_relink_reason"] = args.reason
     write_json(prior_path, prior)
     print(f"relinked: {study['study_id']} -> {relative}")

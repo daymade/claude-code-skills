@@ -372,11 +372,39 @@ class ResearchAssetsTest(unittest.TestCase):
         rejected = self.cli(ASSETS, "relink-catalog", self.study, "--catalog", wrong_catalog,
                             "--reason", "moved the project checkout")
         self.assertEqual(rejected.returncode, 2)
-        self.assertIn("does not register this exact study path", rejected.stderr)
+        self.assertIn("does not preserve the searched catalog snapshot", rejected.stderr)
+        unrelated = self.root / "unrelated.jsonl"
+        unrelated.write_text(json.dumps({"study_id": "filing-study", "path": "study",
+                                         "as_of": "2026-01-01",
+                                         "business_outcome": "Wrong unrelated study"}) + "\n")
+        rejected = self.cli(ASSETS, "relink-catalog", self.study, "--catalog", unrelated,
+                            "--reason", "moved the project checkout")
+        self.assertEqual(rejected.returncode, 2)
+        self.assertIn("entry does not match the study", rejected.stderr)
         relinked = self.cli(ASSETS, "relink-catalog", self.study, "--catalog", self.catalog,
                             "--reason", "moved the project checkout")
         self.assertEqual(relinked.returncode, 0, relinked.stderr)
         self.assertEqual(self.cli(ASSETS, "check", self.study, "--report", report).returncode, 0)
+        self.assertEqual(json.loads(prior_path.read_text())["catalog"], "../research-catalog.jsonl")
+        second = self.root / "second-catalog.jsonl"
+        shutil.copyfile(self.catalog, second)
+        self.assertEqual(self.cli(ASSETS, "relink-catalog", self.study, "--catalog", second,
+                                  "--reason", "renamed catalog").returncode, 0)
+        history = json.loads(prior_path.read_text())["catalog_relink_history"]
+        self.assertEqual(len(history), 2)
+        self.assertEqual(history[0]["from"], str(self.root / "retired-checkout" / "research-catalog.jsonl"))
+
+    def test_unregistered_study_can_relink_to_unchanged_catalog(self):
+        self.catalog.write_text(json.dumps({"study_id": "earlier-study", "path": "earlier-study",
+                                            "terms": ["unrelated"]}) + "\n")
+        self.start()
+        prior_path = self.study / "prior-research.json"
+        prior = json.loads(prior_path.read_text())
+        prior["catalog"] = str(self.root / "retired-checkout" / "research-catalog.jsonl")
+        prior_path.write_text(json.dumps(prior))
+        relinked = self.cli(ASSETS, "relink-catalog", self.study, "--catalog", self.catalog,
+                            "--reason", "moved unfinished study")
+        self.assertEqual(relinked.returncode, 0, relinked.stderr)
         self.assertEqual(json.loads(prior_path.read_text())["catalog"], "../research-catalog.jsonl")
 
     def test_rejected_source_and_prior_match_need_reasons(self):
