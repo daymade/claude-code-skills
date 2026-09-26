@@ -1,6 +1,6 @@
 # Multi-provider research runs
 
-Use this contract when one decision question is sent to more than one AI product or mode. It extends P1's task board and P3's citation registry; it does not replace either. Make one study directory under the owning project, with `study.json`, append-only `run-events.jsonl`, `sources/` for unedited provider exports, and a separate evidence registry and synthesis. Never put credentials or private source contents in the reusable Skill.
+Use this contract for every Deep Research study, including a single direct original-source route. It extends P1's task board and P3's citation registry; it does not replace either. Make one study directory under the owning project, with `study.json`, append-only `run-events.jsonl`, `sources/` for unedited provider exports, and a separate evidence registry and synthesis. [research-asset-contract.md](research-asset-contract.md) owns prior-study discovery, original-source records, claim binding and the final archival check. Never put credentials or private source contents in the reusable Skill.
 
 ## Task file: `study.json`
 
@@ -10,19 +10,18 @@ Use this contract when one decision question is sent to more than one AI product
   "study_id": "example-study-2026-09-25",
   "as_of": "2026-09-25",
   "business_outcome": "Find out whether timely evidence changes a user's decision and its result.",
+  "dispatch_context": "Seed: https://example.org/case; target: Example Co (EX01); window: 2026 H1.",
   "decision_questions": [{"id":"Q1","question":"Which decision could this evidence change?"}],
   "lanes": [
-    {"lane_id":"chatgpt-pro","provider":"chatgpt","mode":"pro-chat","task_id":"Q1","prompt":"Exact prompt sent or planned; redact secrets before third-party dispatch"},
-    {"lane_id":"chatgpt-deep","provider":"chatgpt","mode":"deep-research","task_id":"Q1","prompt":"Exact prompt sent or planned"},
-    {"lane_id":"kimi-tools","provider":"kimi","mode":"work-tools","task_id":"Q1","prompt":"Exact prompt sent or planned"},
-    {"lane_id":"kimi-deep","provider":"kimi","mode":"deep-research","task_id":"Q1","prompt":"Exact prompt sent or planned"},
-    {"lane_id":"gemini-deep","provider":"gemini","mode":"deep-research","task_id":"Q1","prompt":"Exact prompt planned"},
-    {"lane_id":"unifuncs-deep","provider":"unifuncs","mode":"deep-research","task_id":"Q1","prompt":"Exact prompt planned"}
+    {"lane_id":"chatgpt-pro","provider":"chatgpt","mode":"pro-chat","task_id":"Q1","prompt":"Seed: https://example.org/case; target: Example Co (EX01); window: 2026 H1. Assess the strongest counterevidence."},
+    {"lane_id":"chatgpt-deep","provider":"chatgpt","mode":"deep-research","task_id":"Q1","prompt":"Seed: https://example.org/case; target: Example Co (EX01); window: 2026 H1. Trace the original sources."}
   ]
 }
 ```
 
-`provider` identifies the product; `mode` identifies the product route actually used. Names are extensible strings, not synonyms: `pro-chat` does not imply `deep-research`, and Kimi's Work tools are distinct from Kimi Chat deep research. A lane may be planned without being dispatched. `task_id` links each prompt to a decision question or P1 subtask; prompts can vary to exploit a mode's strengths, but each must state the shared business question and requested evidence/unknowns. Record deliberate prompt differences in `study.json`, not only in chat history. Add a future lane by appending a lane object, without changing old events.
+`provider` identifies the product; `mode` identifies the product route actually used. Names are extensible strings, not synonyms: `pro-chat` does not imply `deep-research`, and Kimi's Work tools are distinct from Kimi Chat deep research. A lane may be planned without being dispatched. `task_id` links each prompt to a decision question or P1 subtask; prompts can vary to exploit a mode's strengths, but each must contain the exact `dispatch_context` and state the requested evidence/unknowns. `research_assets.py start` checks that containment before dispatch. Record deliberate prompt differences and any later corrective follow-up separately; never overwrite the initial exact prompt or provider response. Add a future lane by appending a lane object, without changing old events.
+
+For direct source retrieval, use a separate lane such as `provider: "direct", mode: "primary-source"`; its collected artifact is the investigator's source packet under `sources/`, while the original PDFs or pages are recorded separately in `source-ledger.jsonl`. Internal subagents split questions but do not become external provider modes. A user-requested mode stays visible in `study.json` even when deferred; omitting it is a different decision from declining to dispatch it.
 
 For parallel execution, a lane may also set `control_surface` (the UI or API client an agent would control) and `route_skill` (the current Skill to consult for that route). Both are optional nonempty strings. If `control_surface` is absent, the local planner uses the provider name, assigning two modes of one app to one surface owner. Distinct surfaces are a claim about actual UI isolation and must be checked before concurrent control. `route_skill` is a dispatch hint, not a hardcoded adapter: the coordinator resolves and reads the current installed Skill at execution time. An absent or stale `route_skill` requires fresh route selection, and its presence does not authorize a paid run.
 

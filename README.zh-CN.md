@@ -1716,7 +1716,7 @@ claude plugin install daymade-audio@daymade-skills
 
 ### **deep-research** - 深度调研报告生成器
 
-生成格式可控的调研报告，支持证据追踪与引用。
+生成可追溯的调研报告。每次研究都保存原始来源、断言与此前研究的关联；需要多渠道时，由现有供应商 Skill 分别执行并保留原件。
 
 **使用场景：**
 - 需要结构化调研报告、文献综述或行业/市场分析
@@ -1729,6 +1729,7 @@ claude plugin install daymade-audio@daymade-skills
 - 证据表与来源质量评级
 - 多轮完整草稿与 UNION 合并
 - 引用校验与冲突处理
+- 单路或多路研究都建立来源与断言记录，供下一次研究检索和复核
 - 即用型报告模板与格式规则
 
 **示例用法：**
@@ -1743,7 +1744,7 @@ claude plugin install deep-research@daymade-skills
 
 *即将推出*
 
-📚 **文档**：参见 [deep-research/SKILL.md](./deep-research/SKILL.md) 与 [deep-research/references/research_report_template.md](./deep-research/references/research_report_template.md) 了解工作流程与结构。
+📚 **文档**：参见 [deep-research/SKILL.md](./deep-research/SKILL.md)、[research-asset-contract.md](./deep-research/references/research-asset-contract.md) 与 [research_report_template.md](./deep-research/references/research_report_template.md)。
 
 **要求**：无
 

@@ -1702,7 +1702,7 @@ claude plugin install daymade-audio@daymade-skills
 
 ### **deep-research** - Research Reports and Provider Runs
 
-Generate format-controlled research reports with evidence tracking and citations. When several AI products or modes investigate one decision, coordinate their existing Skills and agents in parallel, preserve original outputs, and synthesize against the underlying sources and business question.
+Generate research reports from a durable study record: original sources, claim-level citations, rejected leads, and prior studies remain available for the next question. When several AI products or modes investigate one decision, coordinate their existing Skills and agents in parallel, preserve original outputs, and synthesize against the underlying sources and business question.
 
 **When to use:**
 - Need a structured research report, literature review, or market/industry analysis
@@ -1715,6 +1715,7 @@ Generate format-controlled research reports with evidence tracking and citations
 - Evidence table with source quality rubric
 - Multi-pass complete drafting with UNION merge
 - Citation verification and conflict handling
+- Project-local source and claim records for single-route and multi-route studies, with a searchable catalog for reuse
 - Local provider × mode task and artifact ledger with provenance and hash checks
 - Read-only parallel dispatch board that separates shared app control, active tasks, completed reports and held routes; actual provider calls follow their own Skills and authorization rules
 - Ready-to-use report template and formatting rules
@@ -1731,7 +1732,7 @@ claude plugin install deep-research@daymade-skills
 
 *Coming soon*
 
-📚 **Documentation**: See [deep-research/SKILL.md](./deep-research/SKILL.md) and [deep-research/references/research_report_template.md](./deep-research/references/research_report_template.md) for workflow and structure.
+📚 **Documentation**: See [deep-research/SKILL.md](./deep-research/SKILL.md), [research-asset-contract.md](./deep-research/references/research-asset-contract.md), and [research_report_template.md](./deep-research/references/research_report_template.md).
 
 **Requirements**: None
 

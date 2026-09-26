@@ -358,10 +358,10 @@
     },
     {
       "name": "deep-research",
-      "description": "Generate evidence-tracked research reports with citations, original-source verification, and evidence-family tracking. Coordinates provider-specific Skills and agents across parallel modes, collects original artifacts, and synthesizes by decision; select research depth by the question and separate first-party context from external corroboration.",
+      "description": "Generate evidence-tracked research reports with reusable source and claim records, original-source verification, and evidence-family tracking. Coordinate provider-specific Skills across selected modes, retain original artifacts, and synthesize by decision; select depth and routes by the question.",
       "source": "./deep-research",
       "strict": false,
-      "version": "2.9.0",
+      "version": "2.10.0",
       "category": "documentation",
       "keywords": [
         "research",
