@@ -1,10 +1,9 @@
 ---
 name: deep-research
 description: >-
-  Creates evidence-tracked research reports and parallel AI-provider/mode studies with original
-  outputs and source-level synthesis. Use for 帮我调研一下 / 深度研究 / 综述报告 / write a report, research reports, literature
-  reviews, market/industry analysis, competitive landscapes, or multi-route ChatGPT/Kimi/UniFuncs research. For choosing
-  technology use tech-selection; for competitor code analysis use competitors-analysis.
+  Creates reusable, source-traced research reports and coordinates provider/mode lanes with original
+  exports. Use for 深度研究, 调研报告, literature reviews, market or company research, and
+  ChatGPT/Kimi/UniFuncs research routes. Technology choice uses tech-selection; competitor code uses competitors-analysis.
 ---
 
 # Deep Research
@@ -36,6 +35,12 @@ Lead Agent (coordinator — minimizes raw search context)
 
 **Context discipline:** Keep raw search-result noise in task workspaces. Pass evidence packets to the lead agent, including locators and short source excerpts. Notes are routing aids, not authorities: the lead agent must open the original source for every load-bearing claim, conflicting claim, and exact figure/date/quotation used in the report.
 
+## Run and asset contract — every invocation
+
+Before external retrieval, read [research-asset-contract.md](references/research-asset-contract.md). Create or resume a durable project study **for single-route and multi-route research alike**. Search its explicit prior-study catalog, open relevant earlier originals and record reuse/adapt/reject decisions. Draft the decision questions and provider × actual-mode lanes in `study.json`. Write one exact `dispatch_context` with the user-supplied seed URL, named entities, and verified codes or other identifiers needed for the query. Include that string in **every** lane prompt; `research_assets.py start` rejects an omission. A model workspace may not see the user's link or local files just because the coordinator does. Then run `provider_runs.py plan`. Keep every user-requested mode in the plan; a route that adds no value, is unavailable or lacks paid authorization gets a reasoned `deferred` event. A report assembled from direct web search and internal subagents still needs a direct-source lane and the same archive.
+
+During research, retain the unedited provider outputs, every opened original and every provider-surfaced source URL with status and provenance. Bind report claims to approved original sources; model reports only locate candidate evidence. Before calling a report complete, run `provider_runs.py validate`, `research_assets.py check`, and register the study for later discovery. An answer with citations but no study/source/claim record does not satisfy this Skill. The local scripts record and check files; they make no provider calls and do not authorize paid work.
+
 ## Mode Selection
 
 Determine the research mode before starting:
@@ -44,12 +49,12 @@ Determine the research mode before starting:
 |-----------|---------|
 | **Topic Mode** | Enterprise Research (company/corporation) OR General Research (industry/policy/tech) |
 | **Depth Mode** | Standard (multiple decision questions or contested evidence) OR Lightweight (one bounded question with a small evidence surface) |
-| **Provider Mode** | Single route OR parallel provider × mode lanes when the user requests them or independent routes can materially test the decision |
+| **Provider Mode** | An explicit single-route or provider × mode plan. Preserve every user-requested or project-accepted mode as selected or reasonedly deferred; choose additional independent routes when they can materially test the decision |
 
 - **Enterprise Research Mode**: Question-led company research with optional analysis frameworks selected only when they help answer the decision
 - **General Research Mode**: Standard P0-P7 research pipeline with source governance
 - **Depth Selection**: Choose from the number and consequence of unresolved questions, not prompt length, task count, or a target word count
-- **Provider Selection**: Extra model reports are useful only when they add a distinct evidence route, structured tool access, or a meaningful challenge. Check each provider's availability, privacy boundary and paid authorization; never run every route by default.
+- **Provider Selection**: Read the user's established workflow when they say “our way” or invoke a named research routine. Extra model reports are useful when they add a distinct evidence route, structured tool access, or a meaningful challenge. Check each provider's availability, privacy boundary and paid authorization; do not silently reduce a requested mode set to a direct-source report. Never run every available route by default or hardcode a vendor roster.
 
 ## Source Governance (V6)
 
@@ -103,13 +108,15 @@ Check capabilities before starting:
 | Required evidence channel available | Required | Narrow scope or stop with the affected questions marked unknown |
 | Original-source retrieval available | Required for load-bearing claims | Do not promote summaries/snippets to final evidence |
 | Subagent dispatch | Preferred | Degrade to sequential |
-| Filesystem writable | Required | In-memory notes only |
+| Filesystem writable | Required for completion | In-memory notes may support partial investigation; report the archival gap and leave the study incomplete |
 
 Set policy variables:
 - `AS_OF`: Today's date (YYYY-MM-DD) - mandatory for timed topics
 - `MODE`: Standard (default) or Lightweight, justified by the question map
 - `SOURCE_TYPE_POLICY`: Enforce official/academic/secondary/journalism/community/other labels
 - `COUNTER_REVIEW_PLAN`: What evidence would overturn each provisional conclusion
+
+Before setting provider mode, run the [research asset](references/research-asset-contract.md) catalog search. An earlier model summary is a lead; reopen its source and check freshness before reuse.
 
 Report: `[P0 complete] Subagent: {yes/no}. Mode: {standard/lightweight}. AS_OF: {YYYY-MM-DD}.`
 
@@ -136,14 +143,14 @@ Enterprise Research Progress:
 
 ## P1: Research Task Board
 
-When the same business question is assigned to several AI research products or modes, act as a
-coordinator that composes the available provider, browser/app, retrieval and verification Skills
-with independent agents. Do not implement provider calls inside this Skill or assume a fixed vendor
-roster. Use the portable [provider-run contract](references/provider-run-contract.md) and load
-[parallel-provider-ops.md](references/parallel-provider-ops.md) **before fan-out**. Keep one study
-question map and a distinct `lane_id` per provider × mode. Run the local
-[provider_runs.py](scripts/provider_runs.py) `plan` command to derive
-parallel surface queues, assign one owner per control surface, and serialize that owner's UI actions.
+For every study, use the portable [provider-run contract](references/provider-run-contract.md):
+one question map, exact prompts, and a distinct `lane_id` per provider × actual mode, including a
+direct original-source route when used. Run [provider_runs.py](scripts/provider_runs.py) `plan`
+before dispatch. When two or more provider/mode lanes are selected, load
+[parallel-provider-ops.md](references/parallel-provider-ops.md) **before fan-out** and coordinate
+the available provider, browser/app, retrieval and verification Skills with independent agents.
+Assign one owner per control surface and serialize that owner's UI actions. Do not implement
+provider calls inside this Skill or assume a fixed vendor roster.
 Submit long asynchronous jobs early and collect each original result under its own lane;
 resume active tasks by their existing origin instead of starting duplicate paid work. Resolve and
 read each lane's current executor Skill before actual dispatch, following its authorization rules;
@@ -279,6 +286,8 @@ Plus appendices: Data Source Index, Glossary, Disclaimer.
 ## P3: Citation Registry + Source Governance
 
 Lead agent reads all task notes and builds unified registry.
+
+Append every opened source and provider-surfaced URL to the study's `source-ledger.jsonl`, including rejected and unavailable leads; store original bytes where available. Bind each decision-bearing claim and its exact locator to approved source IDs in `claims.jsonl`. See [research-asset-contract.md](references/research-asset-contract.md). The numbered report citation registry below remains the reader-facing mapping; it does not replace the durable source and claim records.
 
 ### Registry Process
 
@@ -482,6 +491,8 @@ Cross-check before finalization:
 
 Report: `[P7 complete] {N} spot-checks, {M} violations fixed.`
 
+Run the study's final asset check and catalog registration after P7. If a selected lane remains active or a source lacks a valid original/locator, report the study as incomplete or bounded rather than presenting a finished Deep Research run.
+
 ---
 
 ## Output Requirements
@@ -502,6 +513,7 @@ Report: `[P7 complete] {N} spot-checks, {M} violations fixed.`
 | [research_notes_format.md](references/research_notes_format.md) | P2: Subagent output format |
 | [report_template_v6.md](references/report_template_v6.md) | P5: Draft with confidence markers and counter-review |
 | [quality_gates.md](references/quality_gates.md) | All phases: Quality thresholds and anti-hallucination checks |
+| [research-asset-contract.md](references/research-asset-contract.md) | Every invocation: prior-study discovery, one-or-more-lane study, source/claim records, final check and registration |
 
 ### General Research References
 
