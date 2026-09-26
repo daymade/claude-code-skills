@@ -223,6 +223,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **deep-research** (`deep-research` v2.11.0 → v2.11.1) and **kimi-use** (`kimi-use` v1.5.0 → v1.5.1): Make catalog-migration commands directly executable, route maintainers to the owning research contracts, and remove hand-maintained headings and repeated cost totals from the touched Kimi references.
+
 - **tibo-reset-codex** (v1.16.1 → v1.16.2): Remove a count-based claim that missing the official fault feed loses half of reset signals; the source categories do not establish their frequency. The Skill keeps the incident-search step and distinguishes a post classifier from account evidence.
 
 - **tibo-reset-codex** (v1.16.0 → v1.16.1): Refresh the third-party prediction source's current field map and reject a scheduled time that precedes its cited announcement. The post classifier example marks an uninitialized or untimed `No` as unknown and treats the mirror as a candidate pending upstream and time checks; silent resets still require account evidence.

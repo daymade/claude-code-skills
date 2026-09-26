@@ -1,16 +1,8 @@
 # 插件清单与已实测的能力边界
 
-> **证据边界声明（knowledge-skill grounding）**：本页结论来自 2026-08-18 的实机操作（Claude Code computer-use 驱动 Kimi.app）与同日用户的对照实测（Kimi 客户端手工）。当日稍晚追加了一轮四条探针的复测，全程 Work/Agent 模式 × K3 极致（每条发送前放大截图核对过模式与模型），把万得 / iFinD / 恒生聚源三行的待定结论逐条闭合。插件目录随账号、订阅档位、客户端版本变化——**你自己的「已安装」页才是你的权威列表**，本页只是带日期的实测样本。
+> **证据边界声明（knowledge-skill grounding）**：本页记录带日期与模式的实机证据，包括 2026-08-18 的 Claude Code computer-use 操作、用户在 Kimi 客户端的对照实测，以及后续 Work/Agent × K3 极致取数。万得 / iFinD / 恒生聚源的早期待定结论已由正确模式下的复测收敛；各项证据的日期和范围逐行标明。插件目录随账号、订阅档位、客户端版本变化——**你自己的「已安装」页才是你的权威列表**，本页只是历史实测样本。
 >
 > ⚠️ **本页的「不可调用 / 未覆盖」等否定结论，只在「Work/Agent 模式 + K3 极致思考」下取得才可信。** 2026-08-18 用户对照实测：同一批已装插件，K2.6 快速模型声称「不可调用 / 不在可用数据源列表」，K3 极致下同查询三个里有两个可调且返回接口细节——**Chat 模式或快速模型下的否定证词一律无效**，因为它枚举的数据源列表本身就不全（K2.6 自称只有 yahoo_finance / arxiv / world_bank_open_data / tianyancha / scholar / ifind / imf / yuandian_law 八个，漏掉了实际可调的 sp_data 等其余插件）。注意方向是不对称的：Chat/K2.6 下拿到的**肯定**结果（真调了插件、返回了带来源的数据）依然有效——被限制信力的只有否定证词。
-
-## Contents
-
-- 已安装插件快照（2026-08-18）
-- 已实测的能力边界
-- 插件层专属的实测陷阱（同名假阳性 / 模式×模型证词 / 载体不等于能力）
-- 券商研报：两条通道，都不完备
-- 探针查询怎么设计
 
 ## 已安装插件快照（2026-08-18）
 
@@ -28,15 +20,15 @@
 
 证据级别：L1 = 实跑观察（权威源阶梯最高级）。「模式」列给出证据采集时 Kimi 客户端所处的模式 × 模型——这是结论能否被信任的前提。
 
-| 插件 | 结论（2026-08-18） | 依据与模式 |
+| 插件 | 结论 | 依据与模式 |
 |---|---|---|
 | **天眼查** | ✅ **可调用，返回结构化真数据**；但字段面有边界 | L1（Chat 模式取得，注意：这是 Chat 下罕见成功例）：工商股东名单/对外投资/法定代表人逐字段标来源。同日第二轮：「投后估值」字段返回**未披露**——股东/出资类有，估值类没有 |
 | **标普全球市场财智（sp_data）** | ✅ **可调用**；实测覆盖=美股上市公司 | L1（用户 K3 极致实测）：describe 成功，接口含公司信息、财务、一致预期、股东、高管、关键事件、交易记录（`sp_get_transactions_advisors`，含融资轮次与交易规模字段）。非上市公司（Figure AI）精确查返回 `EMPTY_DATA`——未覆盖，不是接口故障 |
 | **投资银行私募股权** | ⚠️ **可调，但本质是路由层** | L1（用户 K3 极致实测）：它没有独立数据源，是 40+ 技能的工作流套件；美股/ADR 查询路由到内置标普适配器（同一个 S&P Capital IQ 通道），覆盖边界与标普一致 |
-| **同花顺 iFinD** | ⚠️ **可调用；且确证无券商研报检索** | L1（Work+K3 复测）：经其自带 `ifind_tool.py describe` 读回数据源完整接口文档，**9 个 API 全部列出**（逐字见「券商研报」节），无一涉及研报；最接近的两个也已排除。2026-09-26 同模式另取得港股与 A 股日线 OHLC；显式 `adjust=none` 时，接口说明该参数覆盖默认复权设置。韩股代码查询返回 `EMPTY_DATA`，只证明该次接口/代码无返回，不外推所有韩股能力。 |
+| **同花顺 iFinD** | ⚠️ **可调用；且确证无券商研报检索** | L1（Work+K3 复测）：经其自带 `ifind_tool.py describe` 读回数据源完整接口文档，接口中无券商研报检索；相近接口的边界见「券商研报覆盖边界」。2026-09-26 同模式另取得港股与 A 股日线 OHLC；显式 `adjust=none` 时，接口说明该参数覆盖默认复权设置。韩股代码查询返回 `EMPTY_DATA`，只证明该次接口/代码无返回，不外推所有韩股能力。 |
 | **万得金融数据服务（Wind）** | ✅ **可调用，返回结构化真数据** | L1（Work+K3 复测）：自报调用链 `wind-allskill` 插件 → `wind-mcp-skill` CLI → agent-gw 网关 → Wind 数据源；自报后端 API `wind_get_stock_price_indicators`、`wind_get_stock_financial_index`；界面工具轨迹可见。诚实性合格（归母净利润按要求写「未返回」并说明接口固定列里只有「净利润」）。**推翻**原「已安装但不可调用」——那条出自 Chat 模式证词 |
 | **恒生聚源金融数据（Gildata）** | ✅ **可调用**；行情 / 财务报表 / **券商研报检索** 三项均实测返回 | L1（Work+K3 复测）：自报 `tool_name = FinQuery`，返回 A股实时行情全字段表、财务报表(利润表)全字段表、个股研报表（接口 `gildata_financial_research_report`）。2026-09-26 同模式另取得四只公募基金的净值、两期前十大持仓及上市公司公告的语义检索片段；片段**不是全量公告清单**。**推翻**原「不可调用」——那条唯一证词来自 K2.6。⚠️ 实测曾未暴露它的 MCP 工具，Kimi 改走插件自带 helper 脚本取到数——见陷阱 C。 |
-| **财新数据** | ✅ 基金基本信息接口可调用；该次接口按积分计费 | L1（2026-09-26 Work+K3）：`基金基本信息-通用` 返回基金基本资料和 `PERF_BASE` 等字段；目录标 `is_free=False, score=20`，四份成功响应各写 `Score cost: 20 pts`。这只是当时账号和接口的费用观察，调用前仍须查实时价格与授权。 |
+| **财新数据** | ✅ 基金基本信息接口可调用；该次接口按积分计费 | L1（2026-09-26 Work+K3）：`基金基本信息-通用` 返回基金基本资料和 `PERF_BASE` 等字段。费用样本与调用前置闸见 [查询与核验纪律](query-and-verification.md#计费与调用前置闸)。 |
 | **全球金融数据库** | ✅ 该次韩国股票历史价格查询有返回 | L1（2026-09-26 Work+K3）：`yahoo_finance` 历史价格接口返回带 KRW 币种与 UTC 时间戳的日线 CSV；该返回没有 `Adj Close` 或复权参数，不能据此宣布复权口径。 |
 | 恒生PTrade / 金融投资分析 / SEC / 世界银行 / IMF / 学术数据库 / 华宇元典法律 等上方未列出的其余插件 | **未逐个实测** | 用前在 Work+K3 下完成计费核验，再按数据类型做首次探针（见末节） |
 
@@ -65,10 +57,10 @@ K2.6 快速模型对三个已装插件给出「不在我的可用数据源列表
 
 处置一致：**先分清你观察到的是「能力」还是「承载能力的那个东西」**，后者缺席只够写「本轮没看到」，不够写「不可调用」。
 
-## 券商研报：两条通道，都不完备
+## 券商研报覆盖边界
 
 - **Kimi 侧：恒生聚源 ✅ 有**。接口 `gildata_financial_research_report`；实测贵州茅台 2026-07-18~08-18 返回 **17 条**个股研报，字段含 报告标题 / 撰写时间 / 发布时间 / 撰写机构 / 作者 / 证券简称 / 行业 / 原文正文片段。它自己声明的局限（诚实且重要）：**按 score 语义检索、返回研报片段、不保证穷尽区间内全部研报**。该 17 条经从原始返回独立重算复核，不是只信它的自报数。
-- **Kimi 侧：同花顺 iFinD ❌ 确证没有**。9 个 API 逐字为证：`ifind_get_stock_info` / `ifind_get_stock_business_segmentation` / `ifind_get_stock_financial_index` / `ifind_get_price` / `ifind_get_forecast` / `ifind_get_stock_announcement` / `ifind_get_financial_statements` / `ifind_get_holder_info` / `ifind_get_stock_realtime_price`。最接近的两个也已排除：`ifind_get_stock_announcement` 是**上市公司自己披露的公告**不是券商研报；`ifind_get_forecast` 只有盈利预测**数值**，没有标题/机构/分析师字段。
+- **Kimi 侧：同花顺 iFinD ❌ 确证没有**。接口清单逐字为证：`ifind_get_stock_info` / `ifind_get_stock_business_segmentation` / `ifind_get_stock_financial_index` / `ifind_get_price` / `ifind_get_forecast` / `ifind_get_stock_announcement` / `ifind_get_financial_statements` / `ifind_get_holder_info` / `ifind_get_stock_realtime_price`。相近接口也已排除：`ifind_get_stock_announcement` 是**上市公司自己披露的公告**不是券商研报；`ifind_get_forecast` 只有盈利预测**数值**，没有标题/机构/分析师字段。
 - **Kimi 之外先走这条**：东方财富的研报公开 JSON API `reportapi.eastmoney.com/report/list`——免费、免代理、无 GUI 开销，比走客户端便宜一个数量级。2026-08-18 实测：
   ```
   GET https://reportapi.eastmoney.com/report/list
