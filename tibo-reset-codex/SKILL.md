@@ -332,10 +332,8 @@ curl -sS --max-time 20 "https://api.fxtwitter.com/<user>/status/<status-id>" \
 须回原帖找完成措辞或用产品读数核验；按 `status=='completed'` 过滤不是事件判据。
 
 **Radar 索引不到官方故障线——这是公告路径的结构性盲区。** Radar 只索引 @thsottiaux，而
-ChatGPT/Codex 的故障由 **@ChatGPT** 账号和 **status.openai.com** 发布。Tibo 的重置惯例上有
-两个触发（里程碑庆祝、**故障补偿**），漏了故障线就漏掉一半的预测信号。2026-09-01 实测教训：
-@ChatGPT 在北京 9/1 02:30 发「ChatGPT Work isn't working right now」，只跑 Tibo 通道的那次
-回答完全没看到它，7 小时后才从第三方 tracker 的引用里发现。**每次回答前把故障线一起查。**
+ChatGPT/Codex 的故障由 **@ChatGPT** 账号和 **status.openai.com** 发布。重置也可能用于
+故障补偿；只查 Tibo 帖子会漏掉这条线索。**每次回答前把故障线一起查。**
 
 ```bash
 # 官方状态页（2026-09-01 实测 200，返回 Partial System Degradation + 未解决事故）
@@ -362,12 +360,11 @@ done
 不可用**，一次失败不构成「站点挂了」。
 
 **⚠️ `summary.json` 只看当前绿不绿，读不到历史故障——必须同时查 `incidents.json`。**
-只跑 summary 会漏掉两类事件，都落在「上一轮官宣后无新重置」窗口内，是「补偿型重置／静默重置」
-（Tibo 两个触发）的候选触发点：①「补偿型」= Codex/Work 故障（例 09-14 02:46 UTC「Elevated
-error rates for Codex and ChatGPT Work」）；②**「静默型」= 平台主动调查意外额度重置**（例
+只跑 summary 会漏掉已结束的补偿型 Codex/Work 故障（例 09-14 02:46 UTC「Elevated
+error rates for Codex and ChatGPT Work」）和**静默型额度异常调查**（例
 09-09 17:29「Investigating unexpected usage limit resets」，正文 "Some Codex users may be
-experiencing unexpected usage limit resets"）。**第②类比①更直接，且名字不含 Codex——只按
-Codex/Work 命名 flag 会漏掉它。** 只看当前状态页 = 放弃这两条预测信号。每轮把下面这条和
+experiencing unexpected usage limit resets"）。后者直接涉及额度，且名字不含 Codex；只按
+Codex/Work 名称筛选会漏掉它。每轮把下面这条和
 summary 一起跑：
 
 ```bash
@@ -400,7 +397,7 @@ done
 
 **③ 社区帖子分类器，纳入常规轮询。** 它跟踪 @thsottiaux 帖子，能提示 Radar 漏掉的帖子或
 不同解读；不能独立发现没有帖子、只有账户额度变化的静默重置。后者走 §3 的账户与社区实测。
-每轮和上面一起跑（两站同源，只作解读交叉不增独立计数；先核成功检查与时间，再读 Yes/No）：
+每轮和上面一起跑（上游与镜像同源，只作解读交叉不增独立计数；先核成功检查与时间，再读 Yes/No）：
 
 ```bash
 # 社区帖子分类器（提取候选与检查时刻，按下文判读）。http!=200 就跳过，不阻塞。
