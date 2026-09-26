@@ -3637,7 +3637,7 @@ they become load-bearing data. Its separate Chat Deep Research route exports a f
 
 > **Install**: `claude plugin install tibo-reset-codex@daymade-skills`
 
-查询重置公告，核实多个 Pro 账号的剩余额度与备用重置；预测下一轮时间，并在本地保存预测、核对结果，供后续判断调整。
+查询重置公告，核实多个 Pro 账号的剩余额度与备用重置；有时间依据时预测下一轮，记录预测、核验与撤回，供后续判断调整。
 
 [操作说明](tibo-reset-codex/SKILL.md)
 

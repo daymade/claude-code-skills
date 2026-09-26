@@ -211,6 +211,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **tibo-reset-codex** (v1.15.0 → v1.15.1): Align repository entry points and forecast SOPs with conditional date forecasts and the separate withdrawal journal. Remove stale forecast status and copied or derived counts from the touched guidance; convert the monitoring sleep window using the target date's Pacific offset.
+
 - **tunnel-doctor** (`tunnel-doctor` v1.15.1 → v1.15.2): The quick diagnostic compares scheme-specific shell and system-proxy paths before suggesting a host bypass. A failed forced system-proxy probe alone now calls for checking the affected client; the deterministic regression suite is registered in CI.
 
 - **report-with-html** (v1.0.0 → v1.0.1): `reconcile_content_diff.py` no longer waits for Chrome to exit after `--dump-dom`. Chrome can print the complete DOM and then never exit (reproduced on Chrome 153 / macOS even for a minimal page), so every extraction timed out twice and the tool gave no verdict; it now takes the dump once it is complete and still reaps the whole process group. The regression suite (`tests/report-with-html/`) is repaired — browser probes use the same completion rule, the regen fixtures fill the template's TODO config block, and the narrow-viewport probe asserts the 500 px width headless Chrome actually honours — and now runs in CI.

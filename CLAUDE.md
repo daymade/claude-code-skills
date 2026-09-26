@@ -202,8 +202,15 @@ For Codex reset announcements or account quota questions, enter
 [account usage SOP](tibo-reset-codex/references/account-usage.md) for authentication,
 per-account verification and browser restoration. Treat
 [query_usage.py](tibo-reset-codex/scripts/query_usage.py) as the executable authority
-for query parameters, supported response fields and exit behavior. Keep detailed
-commands and changing account state out of this file.
+for query parameters, supported response fields and exit behavior. An unfulfilled
+reset promise or a question about missing execution signals enters the Skill's
+[monitoring route](tibo-reset-codex/SKILL.md#监测轮从信息到可行动信号).
+[Next-reset forecast](tibo-reset-codex/references/next-reset-forecast.md) owns
+date judgments; [forecast feedback](tibo-reset-codex/references/forecast-feedback.md)
+owns recording, review and withdrawal, with
+[forecast_log.py](tibo-reset-codex/scripts/forecast_log.py) as the executable
+authority for CLI and local journal layout. Keep detailed commands and changing
+account or forecast state out of this file.
 
 ### WeCom Send Boundary
 
