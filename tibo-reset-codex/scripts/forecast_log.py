@@ -330,12 +330,13 @@ def summarize(path, kind=None, now=None):
     now = now or datetime.now(timezone.utc)
     if not path.exists():
         rows = []
+        withdrawal_rows = read_withdrawals(path.parent / "withdrawals.jsonl")
     else:
         with path.open(encoding="utf-8") as stream:
             fcntl.flock(stream, fcntl.LOCK_SH)
             rows = read_rows(stream)
+            withdrawal_rows = read_withdrawals(path.parent / "withdrawals.jsonl")
     latest = {r["forecast_id"]: r for r in rows if r["record_type"] == "review"}
-    withdrawal_rows = read_withdrawals(path.parent / "withdrawals.jsonl")
     withdrawals = {r["forecast_id"]: r for r in withdrawal_rows}
     review_order = {r["forecast_id"]: i for i, r in enumerate(rows)
                     if r["record_type"] == "review"}
@@ -361,12 +362,14 @@ def summarize(path, kind=None, now=None):
             item["latest_withdrawal"] = {**withdrawal,
                                          "evidence_refs_count": len(withdrawal.get("evidence_refs", []))}
             withdrawn.append(item)
-            if (review and review["outcome"] != "unknown" and
-                    instant(review["recorded_at"]) > instant(withdrawal["recorded_at"])):
-                conflicts.append({"forecast_id": forecast["id"],
-                                  "withdrawal_id": withdrawal["id"],
-                                  "review_id": review["id"],
-                                  "review_outcome": review["outcome"]})
+            for scored_review in rows:
+                if (scored_review["record_type"] == "review" and
+                        scored_review["forecast_id"] == forecast["id"] and
+                        scored_review["outcome"] != "unknown"):
+                    conflicts.append({"forecast_id": forecast["id"],
+                                      "withdrawal_id": withdrawal["id"],
+                                      "review_id": scored_review["id"],
+                                      "review_outcome": scored_review["outcome"]})
         elif outcome in ("unreviewed", "unknown"):
             pending.append(item)
         else:

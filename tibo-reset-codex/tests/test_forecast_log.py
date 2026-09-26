@@ -244,6 +244,22 @@ class ForecastLogTests(unittest.TestCase):
             "review_id": "legacy-review", "review_outcome": "hit"}])
         self.assertEqual(result["pending"], [])
         self.assertEqual(result["recent_withdrawn"][0]["latest_review"]["outcome"], "hit")
+        later_unknown = {**legacy_review, "id": "legacy-unknown", "outcome": "unknown",
+                         "recorded_at": (self.now + timedelta(hours=3)).isoformat()}
+        with self.path.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(later_unknown) + "\n")
+        result = log.summarize(self.path)
+        self.assertEqual(result["withdrawal_conflicts"], [{
+            "forecast_id": issued["id"], "withdrawal_id": withdrawn["id"],
+            "review_id": "legacy-review", "review_outcome": "hit"}])
+        self.assertEqual(result["recent_withdrawn"][0]["latest_review"]["outcome"], "unknown")
+        backdated_score = {**legacy_review, "id": "legacy-backdated", "outcome": "early",
+                           "recorded_at": (self.now - timedelta(hours=1)).isoformat()}
+        with self.path.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(backdated_score) + "\n")
+        result = log.summarize(self.path)
+        self.assertEqual([row["review_id"] for row in result["withdrawal_conflicts"]],
+                         ["legacy-review", "legacy-backdated"])
 
     def test_cli_withdrawal_changes_summary_state(self):
         script = Path(__file__).resolve().parents[1] / "scripts" / "forecast_log.py"

@@ -133,8 +133,10 @@ uv run python scripts/forecast_log.py summary
 `review`，已有 `hit` / `early` / `late` 核验的预测也不能用撤回来掩盖结果。`summary` 将它从
 `pending` 和 `due_for_followup` 移到 `recent_withdrawn`，但 `forecast_count` 仍包含原预测；
 若它是同锚点的首份预测，`cycle_counts` 明列 `withdrawn`，不把撤回算作命中或未知。
-若旧版会话在撤回后仍写入有分数的 `review`，新版 `summary.withdrawal_conflicts` 明列两条
-记录的 ID 与结果，需先核对再引用该轮分数；不能从任一客户端的单侧摘要直接定案。
+若旧版会话在撤回后仍写入有分数的 `review`，新版 `summary.withdrawal_conflicts` 列出
+每条冲突记录的 ID 与结果；即使后来又写入 `unknown` 或旧版请求早于撤回开始但晚于撤回落盘，
+冲突仍保留。撤回时新版会拒绝已有分数的预测，所以任何共存的有分数 `review` 都需要核对；
+不能从任一客户端的单侧摘要直接定案。
 下一轮从 `summary` 及 `handoff` 读回后才说“已撤回”；交接文字不能代替台账状态。
 
 ## 回填证据：review
