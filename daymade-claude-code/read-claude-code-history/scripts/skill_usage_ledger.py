@@ -60,7 +60,7 @@ from history_index import (  # noqa: E402
     index_home,
 )
 
-SCHEMA_VERSION = "2"
+SCHEMA_VERSION = "3"
 COUNTED_INITIATORS = ("user_command", "model_named", "model_auto")
 
 COMMAND_NAME_RE = re.compile(r"<command-name>/?([^<\s]+)</command-name>")
@@ -349,6 +349,26 @@ def _is_dev_read(prefix: str | None, name: str, cwd: str) -> bool:
     return full.startswith(cwd + "/")
 
 
+_REPO_ROOT_CACHE: dict[str, bool] = {}
+
+
+def _codex_identity(prefix: str | None, name: str) -> str:
+    """Qualify X with its parent directory when that parent is a namespace.
+
+    Codex discovers nested bundles (``skills/<suite>/<skill>/SKILL.md``), so two
+    Skills can share a leaf name. The parent qualifies the name unless it is a
+    plain skills root or the top of a checkout (a repo-level Skill).
+    """
+    if not prefix:
+        return name
+    parent = prefix.rstrip("/").rsplit("/", 1)[-1]
+    if not parent or parent in ("skills", "~", "."):
+        return name
+    if prefix not in _REPO_ROOT_CACHE:
+        _REPO_ROOT_CACHE[prefix] = (Path(prefix).expanduser() / ".git").exists()
+    return name if _REPO_ROOT_CACHE[prefix] else f"{parent}:{name}"
+
+
 def extract_codex(path: Path) -> Iterator[dict[str, Any]]:
     last_prompt = ""
     entrypoint = ""
@@ -397,7 +417,8 @@ def extract_codex(path: Path) -> Iterator[dict[str, Any]]:
         found = [(m.group(1), m.group(2)) for m in SKILL_PATH_RE.finditer(command)]
         if not found:
             continue
-        distinct = sorted({name for _, name in found})
+        identity = {name: _codex_identity(prefix, name) for prefix, name in found}
+        distinct = sorted(identity)
         dev = {name for prefix, name in found if _is_dev_read(prefix, name, cwd)}
         for name in distinct:
             if len(distinct) > 1:
@@ -409,7 +430,7 @@ def extract_codex(path: Path) -> Iterator[dict[str, Any]]:
             yield {
                 **base,
                 "key": f"read:{path.name}:{lineno}:{name}",
-                "skill": name,
+                "skill": identity[name],
                 "initiator": initiator,
             }
 
@@ -511,7 +532,14 @@ def report(
     since: float | None,
     settings_path: Path,
     only_override: str | None,
+    until: float | None = None,
+    exact: bool = False,
 ) -> list[dict[str, Any]]:
+    """Group by bare name (what ``skillOverrides`` keys on) unless ``exact``.
+
+    Every row lists the qualified identities it merged; more than one means
+    same-named Skills from different namespaces were counted together.
+    """
     if not db_path.exists():
         raise HistoryIndexError(f"No ledger at {db_path}; run 'index' first")
     connection = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
@@ -520,8 +548,11 @@ def report(
     if since:
         where.append("ts >= ?")
         params.append(since)
+    if until:
+        where.append("ts < ?")
+        params.append(until)
     rows = connection.execute(
-        f"SELECT bare, provider, initiator, ts, session_id, sidechain, entrypoint, outcome "
+        f"SELECT bare, lower(skill) AS skill, provider, initiator, ts, session_id, sidechain, entrypoint, outcome "
         f"FROM events WHERE {' AND '.join(where)}",
         params,
     ).fetchall()
@@ -534,12 +565,14 @@ def report(
         **{f"claude_{i}": 0 for i in COUNTED_INITIATORS},
         **{f"codex_{i}": 0 for i in COUNTED_INITIATORS},
         "sessions": set(), "last": None, "last_model": None, "headless": 0,
-        "blocked": 0, "last_blocked": None,
+        "blocked": 0, "last_blocked": None, "identities": set(),
     })
     for row in rows:
-        if wanted and row["bare"] not in wanted:
+        key = row["skill"] if exact else row["bare"]
+        if wanted and key not in wanted and row["bare"] not in wanted:
             continue
-        entry = table[row["bare"]]
+        entry = table[key]
+        entry["identities"].add(row["skill"])
         if row["outcome"] == "blocked":
             # Refused by the host: evidence the model wanted it, not a use.
             entry["blocked"] += 1
@@ -560,7 +593,8 @@ def report(
         user = entry["claude_user_command"] + entry["codex_user_command"]
         result.append({
             "skill": name,
-            "override": overrides.get(name, "on"),
+            "identities": sorted(entry["identities"]),
+            "override": overrides.get(name, "on") if ":" not in name else "plugin",
             "total": model + user,
             "user_command": user,
             "model_named": entry["claude_model_named"] + entry["codex_model_named"],
@@ -600,12 +634,13 @@ def status(db_path: Path) -> dict[str, Any]:
 
 
 def _print_table(rows: list[dict[str, Any]]) -> None:
-    columns = ["skill", "override", "total", "user_command", "model_named",
+    columns = ["skill", "identities", "override", "total", "user_command", "model_named",
                "model_auto", "claude", "codex", "sessions", "headless",
                "last_used", "last_model_use", "blocked", "last_blocked"]
     print("\t".join(columns))
     for row in rows:
-        print("\t".join(str(row[c]) for c in columns))
+        print("\t".join(",".join(row[c]) if isinstance(row[c], list) else str(row[c])
+                         for c in columns))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -625,7 +660,11 @@ def build_parser() -> argparse.ArgumentParser:
     rep.add_argument("--override", metavar="STATE",
                      help="Also include every skill whose skillOverrides value is STATE, "
                           "even with zero recorded use (e.g. user-invocable-only)")
-    rep.add_argument("--since", metavar="YYYY-MM-DD")
+    rep.add_argument("--since", metavar="YYYY-MM-DD", help="Include events on or after")
+    rep.add_argument("--until", metavar="YYYY-MM-DD",
+                     help="Include events before (e.g. the day a Skill was hidden)")
+    rep.add_argument("--exact", action="store_true",
+                     help="Group by qualified identity (namespace:name) instead of bare name")
     rep.add_argument("--settings", type=Path, default=Path.home() / ".claude" / "settings.json")
     rep.add_argument("--json", action="store_true")
     st = sub.add_parser("status", help="Ledger freshness and coverage")
@@ -646,11 +685,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(json.dumps(payload, ensure_ascii=False, indent=None if args.json else 2))
             return 0
         if args.command == "report":
-            since = (
-                datetime.strptime(args.since, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp()
-                if args.since else None
-            )
-            rows = report(db_path, names=args.names, since=since,
+            def day(value: str | None) -> float | None:
+                return (
+                    datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp()
+                    if value else None
+                )
+            rows = report(db_path, names=args.names, since=day(args.since),
+                          until=day(args.until), exact=args.exact,
                           settings_path=args.settings.expanduser(),
                           only_override=args.override)
             if args.json:

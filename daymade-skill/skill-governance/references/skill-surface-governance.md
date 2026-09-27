@@ -508,17 +508,21 @@ does anyone other than a typed slash command start it?
 
    ```bash
    python3 <read-claude-code-history>/scripts/skill_usage_ledger.py index
-   python3 <read-claude-code-history>/scripts/skill_usage_ledger.py report <names...> --since <date> --json
+   python3 <read-claude-code-history>/scripts/skill_usage_ledger.py report <names...> --since <date> --until <day-hidden> --json
    ```
 
    It covers every registered Claude home and archive plus Codex. Read its
-   `status` coverage limits before concluding anything from zero.
+   `status` coverage limits before concluding anything from zero. If a row's
+   `identities` holds more than one namespace, rerun with `--exact` and judge the
+   unqualified identity, which is the one the override governs. Qualified Codex
+   forms are usually the same Skill read from a worktree, snapshot or another
+   suite; count them only after opening their sessions (step 5).
 2. Separate router children first. A Skill whose visible router reads its
    `SKILL.md` stays cold whatever its count: the router is its model entry.
    Confirm the router itself is model-visible and actually names the child.
 3. Keep model-visible when any of these holds in the last 90 days:
    - Claude model-initiated use (`model_named` or `model_auto`) at least once
-     while the Skill was visible — count only the window before it was hidden;
+     while the Skill was visible — pass `--until` the day it was hidden;
    - Codex model-initiated use at least three times (Codex never sees Claude's
      overrides, so its window runs to today; `dev_read` and `bulk_read` are
      already excluded);

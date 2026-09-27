@@ -8,6 +8,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
@@ -205,6 +206,50 @@ class LedgerTest(unittest.TestCase):
             "AND initiator LIKE 'model%'").fetchall())
         connection.close()
         self.assertEqual(outcomes["iota-skill"], "blocked")
+
+    def test_same_leaf_name_in_two_namespaces_stays_distinguishable(self) -> None:
+        rollout = next((self.codex_home / "sessions").rglob("*.jsonl"))
+        with rollout.open("a", encoding="utf-8") as handle:
+            for i, cmd in enumerate(("cat /home/u/.agents/skills/suite/review/SKILL.md",
+                                     "cat /home/u/.agents/skills/review/SKILL.md")):
+                handle.write(json.dumps({"type": "response_item",
+                                         "timestamp": f"2026-09-02T00:01:0{i}Z",
+                                         "payload": {"type": "function_call", "name": "exec_command",
+                                                     "arguments": json.dumps({"cmd": cmd})}},
+                                        separators=(",", ":")) + "\n")
+        ledger.update(self.db, self.scope())
+        merged = ledger.report(self.db, names=["review"], since=None,
+                               settings_path=self.settings, only_override=None)
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(merged[0]["identities"], ["review", "suite:review"])
+        split = {r["skill"]: r for r in ledger.report(
+            self.db, names=["review"], since=None, settings_path=self.settings,
+            only_override=None, exact=True)}
+        self.assertEqual(set(split), {"review", "suite:review"})
+        self.assertEqual(split["suite:review"]["override"], "plugin")
+
+    def test_until_bounds_the_window(self) -> None:
+        ledger.update(self.db, self.scope())
+        cutoff = datetime(2026, 9, 1, 0, 3, tzinfo=timezone.utc).timestamp()
+        rows = {r["skill"] for r in ledger.report(
+            self.db, names=[], since=None, until=cutoff,
+            settings_path=self.settings, only_override=None)}
+        self.assertEqual(rows, {"alpha-skill", "beta-skill"})
+
+    def test_backup_copy_of_a_session_is_not_counted_twice(self) -> None:
+        archive = Path(self.tmp.name) / "archive"
+        copy = archive / "projects" / self.claude_file.parent.name / self.claude_file.name
+        copy.parent.mkdir(parents=True)
+        copy.write_bytes(self.claude_file.read_bytes())
+        ledger.update(self.db, self.scope())
+        single = len(self.events())
+        self.db.unlink()
+        scope = self.scope()
+        scope.sources.append(history_index.HistorySource("claude", "archive", "backup", archive))
+        result = ledger.update(self.db, scope)
+        self.assertEqual(result["sessions"], 2)
+        self.assertGreater(single, 0)
+        self.assertEqual(len(self.events()), single)
 
 
 if __name__ == "__main__":

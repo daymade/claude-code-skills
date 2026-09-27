@@ -150,7 +150,7 @@ files whose size or mtime changed. Reports read the ledger, never raw history.
 ```bash
 python3 scripts/skill_usage_ledger.py index            # --no-codex to skip Codex
 python3 scripts/skill_usage_ledger.py report --override user-invocable-only
-python3 scripts/skill_usage_ledger.py report <skill> [<skill> ...] --since 2026-06-01
+python3 scripts/skill_usage_ledger.py report <skill> [<skill> ...] --since 2026-06-01 --until 2026-09-24
 python3 scripts/skill_usage_ledger.py status           # freshness + what is not covered
 ```
 
@@ -160,6 +160,10 @@ model invoked X and the latest human prompt contained X's name), `model_auto`
 model call because X is not model-invocable — the model reached for it and
 could not use it; not counted as use), and the Skill's current `skillOverrides`
 value. `--override STATE` also lists Skills in that state with zero recorded use.
+Rows group by bare name, which is what `skillOverrides` keys on; `identities`
+lists the qualified forms merged into a row. More than one namespace there
+(`review`, `suite:review`) means same-named Skills were counted together — rerun
+with `--exact` to split them.
 
 Read these limits into every conclusion:
 
