@@ -7,11 +7,11 @@ anchor advances (step 3). No network,
 no account credentials. Snapshots carry no account id: the shapes reported here are
 leads for the attribution checks documented in SKILL.md, never proof of account count.
 
-The four traps documented in SKILL.md are built in:
+The traps documented in SKILL.md are built in:
   trap 1  the weekly window is selected by window_minutes == 10080, not by slot name;
   trap 2  only limit_id == "codex" rows are used (decoy buckets read constant zero);
   trap 3  resets_at drifts by seconds between snapshots. A drop > 20 points is
-          reported as a zeroing; a large anchor advance at low usage is only an
+          reported as a zeroing; an anchor advance after a low-use snapshot is an
           unattributed lead, never a reset verdict;
   trap 4  directory date != timestamp range (long sessions write past midnight into
           the previous day's directory), so scan days+2 directories, then clip by
@@ -118,7 +118,7 @@ def find_zeroings(rows):
                 < CLEAN_ANCHOR_TOLERANCE_SECONDS
             zeroings.append({"prev_ts": prev[0], "prev_used": prev[1],
                              "ts": row[0], "used": row[1], "anchor": anchor,
-                             "clean": clean, "full": prev[1] >= 99})
+                             "clean": clean})
         prev = row
     return zeroings
 
@@ -163,12 +163,11 @@ def format_report(rows, scan, backjumps, zeroings):
     lines.append(f"回跳次数: {len(backjumps)}  （形状检查不证明账号数量；命中项需核对身份与窗口配置）")
     lines.append("")
     for z in zeroings:
-        shape = "干净+7d" if z["clean"] else "锚点回拨"
-        peak = "打满触发" if z["full"] else "非打满(平台推送先验)"
+        shape = "干净+7d" if z["clean"] else "非干净+7d"
         lines.append(
             f"归零区间 {parse_ts(z['prev_ts']):%m-%d %H:%M:%S} {z['prev_used']:.0f}% → "
             f"{parse_ts(z['ts']):%m-%d %H:%M:%S} {z['used']:.0f}%"
-            f" | 新锚点 {z['anchor']:%m-%d %H:%M} {shape} | {peak}")
+            f" | 新锚点 {z['anchor']:%m-%d %H:%M} {shape}")
     lines.append("")
     advances = find_low_usage_anchor_advances(rows)
     for a in advances:

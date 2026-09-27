@@ -225,6 +225,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **tibo-reset-codex** (`tibo-reset-codex` v1.17.0 → v1.17.1): Label zeroings by observed anchor shape instead of calling every non-clean window a backjump, and remove full/underfull cause hints already implied by the displayed usage. Align the account, forecast, and repository routes with anonymous-snapshot attribution; remove derived historical counts from the touched guidance.
+
 - **deep-research** (`deep-research` v2.11.0 → v2.11.1) and **kimi-use** (`kimi-use` v1.5.0 → v1.5.1): Make catalog-migration commands directly executable, route maintainers to the owning research contracts, and remove hand-maintained headings and repeated cost totals from the touched Kimi references.
 
 - **tibo-reset-codex** (v1.16.1 → v1.16.2): Remove a count-based claim that missing the official fault feed loses half of reset signals; the source categories do not establish their frequency. The Skill keeps the incident-search step and distinguishes a post classifier from account evidence.

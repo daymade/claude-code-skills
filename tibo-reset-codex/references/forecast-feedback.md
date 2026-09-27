@@ -164,12 +164,11 @@ uv run python scripts/forecast_log.py summary
   该账号原先显示的自然重置时刻。只有证据支持这次跳变属于所复盘的事件，才能用归零区间
   收窄 `event_start`/`event_end`；原因未定时保留 `unknown`，不能用它制造 `hit`。
   `forecast_log.py` 只按输入时间与标志计分，不会替你核验事件归因。已归因的区间可以
-  比确认帖时刻给出更窄上界（2026-09-12 实测：两条官宣帖夹逼出 4.8h 宽区间，
-  本机快照的 79%→0% 归零（11:03→17:52 北京）可再收窄）。
+  比确认帖时刻给出更窄上界。
 
 - `time_basis`：`occurrence` 表示明确发生时刻（起止相同）；`observed_interval` 表示已核实的
   发生区间；`confirmation_only` 表示只有完成帖时间，不能把它冒充发生时间。
-- 预测发出前的最后读数（如发出前 7 分钟的 banked=0）不能作 `event_start`——脚本会以
+- 预测发出前的最后读数不能作 `event_start`——脚本会以
   「event interval must follow forecast issuance」拒绝；取发出后一刻，先验读数写进 `reason`
   （2026-09-24 实测）。
 - `first_event_verified`：只有证据足以确认是发出预测后首个同类型事件才填 `true`。
