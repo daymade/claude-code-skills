@@ -95,7 +95,6 @@ class ScanRolloutsTests(unittest.TestCase):
         zeroings = scan.find_zeroings(self.collect())
         self.assertEqual(len(zeroings), 1)
         self.assertTrue(zeroings[0]["clean"])
-        self.assertTrue(zeroings[0]["full"])
 
     def test_backjump_with_rising_used_is_flagged_as_lead(self):
         earlier = 1789700000
@@ -220,11 +219,28 @@ class ScanRolloutsTests(unittest.TestCase):
         rows = self.collect()
         report = scan.format_report(rows, 7, scan.find_backjumps(rows), scan.find_zeroings(rows))
         for marker in ("采样 2 行", "回跳次数: 0", "归零区间 09-11 22:59:00 98%",
-                       "干净+7d", "非打满(平台推送先验)", "最新快照",
+                       "干净+7d", "最新快照",
                        "banked：本数据源无此字段，改跑 query_usage.py"):
             self.assertIn(marker, report)
+        self.assertNotIn("打满触发", report)
+        self.assertNotIn("平台推送先验", report)
         # 旧字面量 banked=unknown 长得像「本次没查到」，必须不再出现
         self.assertNotIn("banked=unknown", report)
+
+    def test_nonclean_zeroing_with_forward_anchor_has_no_causal_label(self):
+        old_anchor = int(scan.parse_ts("2026-09-18T22:00:00+08:00").timestamp())
+        new_anchor = int(scan.parse_ts("2026-09-20T00:00:00+08:00").timestamp())
+        self.write_rollout("2026/09/11", "a", [
+            ("2026-09-11T22:59:00+08:00", rl(40.0, old_anchor)),
+            ("2026-09-11T23:00:00+08:00", rl(0.0, new_anchor)),
+        ])
+        rows = self.collect()
+        self.assertEqual(scan.find_backjumps(rows), [])
+        report = scan.format_report(rows, 7, [], scan.find_zeroings(rows))
+        self.assertIn("非干净+7d", report)
+        self.assertNotIn("锚点回拨", report)
+        self.assertNotIn("打满触发", report)
+        self.assertNotIn("平台推送先验", report)
 
 
 if __name__ == "__main__":

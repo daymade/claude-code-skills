@@ -206,9 +206,11 @@ Skill links.
 For Codex reset announcements or account quota questions, enter
 [tibo-reset-codex](tibo-reset-codex/SKILL.md). Follow its
 [account usage SOP](tibo-reset-codex/references/account-usage.md) for authentication,
-per-account verification and browser restoration. Treat
+per-account verification, adjacent-reset attribution and browser restoration. Treat
 [query_usage.py](tibo-reset-codex/scripts/query_usage.py) as the executable authority
-for query parameters, supported response fields and exit behavior. An unfulfilled
+for query parameters, supported response fields and exit behavior. For local
+snapshot reconstruction, [scan_rollouts.py](tibo-reset-codex/scripts/scan_rollouts.py)
+owns candidate output. An unfulfilled
 reset promise or a question about missing execution signals enters the Skill's
 [monitoring route](tibo-reset-codex/SKILL.md#监测轮从信息到可行动信号) and
 [output contract](tibo-reset-codex/SKILL.md#输出合同先给结论再交代边界).
