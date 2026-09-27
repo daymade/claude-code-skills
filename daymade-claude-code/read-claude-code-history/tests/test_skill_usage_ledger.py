@@ -106,7 +106,6 @@ def codex_session(cwd: Path) -> list[dict]:
         call("cat /a/one/SKILL.md /a/two/SKILL.md", "2026-09-02T00:00:07Z"),
         call("sed -n 1,80p kappa-skill/SKILL.md", "2026-09-02T00:00:09Z"),
         call(f"cat {cwd}/lambda-skill/SKILL.md", "2026-09-02T00:00:10Z"),
-        call(f"cat {cwd}/.agents/skills/mu-skill/SKILL.md", "2026-09-02T00:00:11Z"),
         item({"type": "custom_tool_call", "name": "apply_patch",
               "input": "*** Update File: /s/eta-skill/SKILL.md"}, "2026-09-02T00:00:08Z"),
     ]
@@ -167,7 +166,6 @@ class LedgerTest(unittest.TestCase):
             ("codex", "two", "bulk_read"),
             ("codex", "kappa-skill", "dev_read"),
             ("codex", "lambda-skill", "dev_read"),
-            ("codex", "mu-skill", "model_auto"),
         ])
 
     def test_unchanged_files_are_not_reparsed(self) -> None:
@@ -182,7 +180,7 @@ class LedgerTest(unittest.TestCase):
         third = ledger.update(self.db, self.scope())
         self.assertEqual((third["changed"], third["unchanged"]), (1, 1))
         self.assertIn(("claude", "theta-skill", "model_auto"), self.events())
-        self.assertEqual(len(self.events()), 14)
+        self.assertEqual(len(self.events()), 13)
 
     def test_report_joins_overrides_and_lists_unused_hidden_skills(self) -> None:
         ledger.update(self.db, self.scope())
@@ -196,7 +194,7 @@ class LedgerTest(unittest.TestCase):
         everything = {r["skill"] for r in ledger.report(
             self.db, names=[], since=None, settings_path=self.settings, only_override=None)}
         self.assertNotIn("one", everything, "bulk reads must not count as use")
-        self.assertEqual(len(everything), 8)
+        self.assertEqual(len(everything), 7)
         iota = ledger.report(self.db, names=["iota-skill"], since=None,
                              settings_path=self.settings, only_override=None)[0]
         self.assertEqual((iota["blocked"], iota["model_auto"], iota["total"]), (1, 0, 0))
@@ -207,26 +205,67 @@ class LedgerTest(unittest.TestCase):
         connection.close()
         self.assertEqual(outcomes["iota-skill"], "blocked")
 
-    def test_same_leaf_name_in_two_namespaces_stays_distinguishable(self) -> None:
+    def test_reads_resolve_to_installed_identity_or_count_as_development(self) -> None:
+        skills = self.codex_home / "skills"
+        for rel in ("suite/review", "review", ".system/imagegen"):
+            (skills / rel).mkdir(parents=True)
+            (skills / rel / "SKILL.md").write_text("---\nname: x\n---\n")
+        # an installed name reached through a symlink into a "source checkout"
+        source = Path(self.tmp.name) / "src" / "suite-src" / "linked"
+        source.mkdir(parents=True)
+        (source / "SKILL.md").write_text("---\nname: linked\n---\n")
+        (skills / "linked").symlink_to(source)
+        unpublished = Path(self.tmp.name) / "worktree" / "review"
+        unpublished.mkdir(parents=True)
+        (unpublished / "SKILL.md").write_text("---\nname: review\n---\n")
+        reads = [
+            f"cat {skills}/suite/review/SKILL.md",
+            f"cat {skills}/review/SKILL.md",
+            f"cat {skills}/.system/imagegen/SKILL.md",
+            f"cat {source}/SKILL.md",
+            f"cat {unpublished}/SKILL.md",
+            "cat /tmp/pr-snapshot/review/SKILL.md",
+            "cat /gone/home/.agents/skills/old-suite/review/SKILL.md",
+            "cat /gone/workspace/deleted-worktree/review/SKILL.md",
+        ]
         rollout = next((self.codex_home / "sessions").rglob("*.jsonl"))
         with rollout.open("a", encoding="utf-8") as handle:
-            for i, cmd in enumerate(("cat /home/u/.agents/skills/suite/review/SKILL.md",
-                                     "cat /home/u/.agents/skills/review/SKILL.md")):
+            for i, cmd in enumerate(reads):
                 handle.write(json.dumps({"type": "response_item",
                                          "timestamp": f"2026-09-02T00:01:0{i}Z",
                                          "payload": {"type": "function_call", "name": "exec_command",
                                                      "arguments": json.dumps({"cmd": cmd})}},
                                         separators=(",", ":")) + "\n")
-        ledger.update(self.db, self.scope())
+        original = ledger.TEMP_ROOTS
+        # the fixture lives under a temp dir; only /tmp/ stays a temp root here
+        ledger.TEMP_ROOTS = ("/tmp/",)
+        try:
+            ledger.update(self.db, self.scope())
+        finally:
+            ledger.TEMP_ROOTS = original
+        connection = sqlite3.connect(self.db)
+        got = connection.execute(
+            "SELECT skill, initiator FROM events WHERE ts >= strftime('%s','2026-09-02 00:01:00') "
+            "ORDER BY ts").fetchall()
+        connection.close()
+        self.assertEqual(got, [
+            ("suite:review", "model_auto"),
+            ("review", "model_auto"),
+            ("imagegen", "model_auto"),
+            ("linked", "model_auto"),
+            ("review", "dev_read"),
+            ("review", "dev_read"),
+            ("old-suite:review", "model_auto"),
+            ("review", "dev_read"),
+        ])
         merged = ledger.report(self.db, names=["review"], since=None,
                                settings_path=self.settings, only_override=None)
-        self.assertEqual(len(merged), 1)
-        self.assertEqual(merged[0]["identities"], ["review", "suite:review"])
+        self.assertEqual(merged[0]["identities"], ["old-suite:review", "review", "suite:review"])
         split = {r["skill"]: r for r in ledger.report(
             self.db, names=["review"], since=None, settings_path=self.settings,
             only_override=None, exact=True)}
-        self.assertEqual(set(split), {"review", "suite:review"})
-        self.assertEqual(split["suite:review"]["override"], "plugin")
+        self.assertEqual((split["review"]["model_auto"], split["suite:review"]["override"]),
+                         (1, "plugin"))
 
     def test_until_bounds_the_window(self) -> None:
         ledger.update(self.db, self.scope())

@@ -512,11 +512,12 @@ does anyone other than a typed slash command start it?
    ```
 
    It covers every registered Claude home and archive plus Codex. Read its
-   `status` coverage limits before concluding anything from zero. If a row's
-   `identities` holds more than one namespace, rerun with `--exact` and judge the
-   unqualified identity, which is the one the override governs. Qualified Codex
-   forms are usually the same Skill read from a worktree, snapshot or another
-   suite; count them only after opening their sessions (step 5).
+   `status` coverage limits before concluding anything from zero. Identities
+   are install names: a Codex read of an installed Skill's real file carries the
+   name it is installed under (`suite:skill` for a nested bundle), and reads of
+   worktrees, snapshots and temporary copies are already excluded. If a row's
+   `identities` holds more than one name, rerun with `--exact` and judge the row
+   for the entry the override governs — the bare name for a personal Skill.
 2. Separate router children first. A Skill whose visible router reads its
    `SKILL.md` stays cold whatever its count: the router is its model entry.
    Confirm the router itself is model-visible and actually names the child.
@@ -533,9 +534,13 @@ does anyone other than a typed slash command start it?
      does not count.
 4. Otherwise it may go user-invocable-only: all recorded starts are typed slash
    commands, or there is no recorded use in the covered stores.
-5. Before trusting a large count, open two or three of its sessions' working
-   directories: counts spread across real project directories are use; counts
-   concentrated in the Skill's own source checkout are development.
+5. Before trusting a count, look at where it came from: `sqlite3` the ledger's
+   `events` table for that Skill's `session_id` and `origin`. Counts spread over
+   many sessions are use. Counts packed into one or two sessions are often
+   someone building or reviewing the Skill through its installed path — open
+   one of those sessions before letting them decide. When a session still does
+   not say which, keep the Skill visible: a wrongly visible Skill costs one
+   catalog line, a wrongly hidden one makes every model call fail.
 6. Back up `settings.json`, apply, and prove one restored Skill with a real model
    `Skill` call in the current session (overrides apply without restart).
 

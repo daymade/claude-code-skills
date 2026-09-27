@@ -25,9 +25,11 @@ Initiators recorded:
 - ``model_auto`` — the model invoked X with no mention of X in that prompt.
 - ``bulk_read`` — Codex read several SKILL.md files in one command (audits,
   inventories). Recorded for completeness, excluded from usage totals.
-- ``dev_read`` — Codex read X's SKILL.md inside the checkout it was working in
-  (relative path, or under the session's working directory outside any install
-  root): developing X, not using it. Excluded from usage totals.
+- ``dev_read`` — Codex read X's SKILL.md from a relative path, a temporary
+  directory, or an existing file no installed Skill resolves to (a worktree,
+  snapshot or unpublished source): developing or reviewing X, not using it.
+  Excluded from usage totals. A read of an installed Skill's real file is use,
+  named by its install path (``suite:skill`` for a nested bundle).
 
 Known coverage limits, printed by ``status``: Claude subagent transcripts are not
 enumerated by the shared session discovery, so skills a subagent invoked are
@@ -38,6 +40,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sqlite3
 import sys
@@ -60,7 +63,7 @@ from history_index import (  # noqa: E402
     index_home,
 )
 
-SCHEMA_VERSION = "3"
+SCHEMA_VERSION = "5"
 COUNTED_INITIATORS = ("user_command", "model_named", "model_auto")
 
 COMMAND_NAME_RE = re.compile(r"<command-name>/?([^<\s]+)</command-name>")
@@ -68,10 +71,7 @@ CODEX_SKILL_RE = re.compile(r"<skill>\s*<name>([^<\s]+)</name>")
 SKILL_PATH_RE = re.compile(
     r"""(?:([^\s"'`\\;|&()<>]*)/)?(?<![A-Za-z0-9._-])([A-Za-z0-9._-]+)/SKILL\.md"""
 )
-INSTALL_ROOT_MARKS = (
-    "/.agents/skills/", "/.claude/skills/", "/.codex/skills/",
-    "/plugins/cache/", "/plugins/marketplaces/",
-)
+TEMP_ROOTS = ("/tmp/", "/private/tmp/", "/var/folders/", "/private/var/folders/")
 
 # Substrings that must be present for a line to matter. Everything else is
 # skipped before json.loads — that skip is what keeps a full build bounded.
@@ -108,7 +108,7 @@ def _connect(path: Path) -> sqlite3.Connection:
         CREATE TABLE IF NOT EXISTS events(
             event_key TEXT PRIMARY KEY, session_id TEXT, provider TEXT,
             ts REAL, skill TEXT, bare TEXT, initiator TEXT,
-            sidechain INTEGER, entrypoint TEXT, outcome TEXT);
+            sidechain INTEGER, entrypoint TEXT, outcome TEXT, origin TEXT);
         CREATE INDEX IF NOT EXISTS events_bare ON events(bare);
         CREATE INDEX IF NOT EXISTS events_session ON events(session_id);
         """
@@ -329,56 +329,89 @@ def _codex_user_texts(payload: dict[str, Any]) -> list[str]:
     ]
 
 
-def _is_dev_read(prefix: str | None, name: str, cwd: str) -> bool:
-    """A read of X/SKILL.md from inside the checkout the session works in.
+def installed_skills(roots: Sequence[Path]) -> dict[str, str]:
+    """Map the real path of every installed SKILL.md to its installed name.
 
-    Codex's skill catalog lists absolute paths, so following a skill reads an
-    absolute path — often inside a source repo, since installs are symlinks
-    into one. A relative path, or an absolute one under a non-home working
-    directory and outside every install root, is the session working on the
-    skill itself.
+    A nested bundle (``skills/<suite>/<skill>``) is named ``suite:skill``; a
+    dot-directory such as Codex's ``.system`` mount is not part of the name.
+    Installs are usually symlinks into a source checkout, so resolving them is
+    what lets a read of the checkout path count as use of the installed Skill.
     """
-    full = f"{name}/SKILL.md" if prefix is None else f"{prefix}/{name}/SKILL.md"
-    if not full.startswith(("/", "~")):
-        return True
-    if any(mark in full for mark in INSTALL_ROOT_MARKS):
-        return False
-    cwd = cwd.rstrip("/")
-    if not cwd or cwd == str(Path.home()):
-        return False
-    return full.startswith(cwd + "/")
+    table: dict[str, str] = {}
+    for root in roots:
+        root = root.expanduser()
+        if not root.is_dir():
+            continue
+        for depth in ("*/SKILL.md", "*/*/SKILL.md", "*/*/*/SKILL.md"):
+            for skill_md in root.glob(depth):
+                parts = [p for p in skill_md.parent.relative_to(root).parts
+                         if not p.startswith(".")]
+                if not parts:
+                    continue
+                try:
+                    real = os.path.realpath(skill_md)
+                except OSError:
+                    continue
+                table.setdefault(real, ":".join(parts))
+    return table
 
 
-_REPO_ROOT_CACHE: dict[str, bool] = {}
+def _name_from_install_path(path: str, name: str) -> str:
+    """Name a no-longer-installed Skill the way ``installed_skills`` would have."""
+    marker = path.rfind("/skills/")
+    if marker == -1:
+        return name
+    parts = [p for p in path[marker + len("/skills/"):].split("/")[:-1]
+             if p and not p.startswith(".")]
+    return ":".join(parts) or name
 
 
-def _codex_identity(prefix: str | None, name: str) -> str:
-    """Qualify X with its parent directory when that parent is a namespace.
+def _classify_read(prefix: str | None, name: str, installed: dict[str, str],
+                   cache: dict[str, tuple[str, str]]) -> tuple[str, str]:
+    """Return (kind, identity) for one ``.../X/SKILL.md`` a Codex command read.
 
-    Codex discovers nested bundles (``skills/<suite>/<skill>/SKILL.md``), so two
-    Skills can share a leaf name. The parent qualifies the name unless it is a
-    plain skills root or the top of a checkout (a repo-level Skill).
+    ``use``: the file is an installed Skill's real file. ``dev``: a relative
+    path, a temporary copy, or an existing file no install points to (a
+    worktree, snapshot or unpublished source). A file that no longer exists
+    counts as ``use`` only when its path lies under a ``skills/`` install
+    directory — the Skill may since have been renamed or removed — and is named
+    from its path below that directory; otherwise it was a checkout or worktree
+    that has since been deleted.
     """
-    if not prefix:
-        return name
-    parent = prefix.rstrip("/").rsplit("/", 1)[-1]
-    if not parent or parent in ("skills", "~", "."):
-        return name
-    if prefix not in _REPO_ROOT_CACHE:
-        _REPO_ROOT_CACHE[prefix] = (Path(prefix).expanduser() / ".git").exists()
-    return name if _REPO_ROOT_CACHE[prefix] else f"{parent}:{name}"
+    if prefix is None or not prefix.startswith(("/", "~")):
+        return "dev", name
+    full = f"{prefix}/{name}/SKILL.md"
+    if full in cache:
+        return cache[full]
+    expanded = os.path.expanduser(full)
+    try:
+        real = os.path.realpath(expanded)
+    except OSError:
+        real = expanded
+    if real in installed:
+        result = ("use", installed[real])
+    elif expanded.startswith(TEMP_ROOTS) or real.startswith(TEMP_ROOTS):
+        result = ("dev", name)
+    elif os.path.exists(real):
+        result = ("dev", name)
+    elif "/skills/" in expanded:
+        result = ("use", _name_from_install_path(expanded, name))
+    else:
+        result = ("dev", name)  # a deleted worktree or checkout, not an install
+    cache[full] = result
+    return result
 
 
-def extract_codex(path: Path) -> Iterator[dict[str, Any]]:
+def extract_codex(path: Path, installed: dict[str, str] | None = None) -> Iterator[dict[str, Any]]:
+    installed = installed or {}
+    cache: dict[str, tuple[str, str]] = {}
     last_prompt = ""
     entrypoint = ""
-    cwd = ""
     for lineno, line in enumerate(_iter_lines(path)):
         if lineno == 0 and '"session_meta"' in line:
             try:
                 meta = json.loads(line).get("payload") or {}
                 entrypoint = meta.get("originator") or ""
-                cwd = meta.get("cwd") or ""
             except ValueError:
                 pass
             continue
@@ -417,9 +450,11 @@ def extract_codex(path: Path) -> Iterator[dict[str, Any]]:
         found = [(m.group(1), m.group(2)) for m in SKILL_PATH_RE.finditer(command)]
         if not found:
             continue
-        identity = {name: _codex_identity(prefix, name) for prefix, name in found}
+        verdict = {name: _classify_read(prefix, name, installed, cache) for prefix, name in found}
+        identity = {name: verdict[name][1] for name in verdict}
+        origin = {name: (prefix or "") for prefix, name in found}
         distinct = sorted(identity)
-        dev = {name for prefix, name in found if _is_dev_read(prefix, name, cwd)}
+        dev = {name for name in verdict if verdict[name][0] == "dev"}
         for name in distinct:
             if len(distinct) > 1:
                 initiator = "bulk_read"
@@ -431,16 +466,17 @@ def extract_codex(path: Path) -> Iterator[dict[str, Any]]:
                 **base,
                 "key": f"read:{path.name}:{lineno}:{name}",
                 "skill": identity[name],
+                "origin": origin[name],
                 "initiator": initiator,
             }
 
 
-def _extract(ref: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _extract(ref: dict[str, Any], installed: dict[str, str]) -> dict[str, dict[str, Any]]:
     provider = ref.get("provider") or "claude"
     events: dict[str, dict[str, Any]] = {}
-    extractor = extract_codex if provider == "codex" else extract_claude
     for path in ref["copies"]:
-        for event in extractor(path):
+        found = extract_codex(path, installed) if provider == "codex" else extract_claude(path)
+        for event in found:
             events.setdefault(event["key"], event)
     return events
 
@@ -448,6 +484,11 @@ def _extract(ref: dict[str, Any]) -> dict[str, dict[str, Any]]:
 def update(db_path: Path, scope: Any) -> dict[str, Any]:
     connection = _connect(db_path)
     refs = _session_refs(scope)
+    install_roots = [Path.home() / ".agents" / "skills"] + [
+        source.home / "skills" for source in scope.sources
+        if source.provider in ("claude", "codex") and source.kind != "archive"
+    ]
+    installed = installed_skills(install_roots)
     for warning in scope.warnings:
         print(f"Warning: {warning}", file=sys.stderr)
     known = {
@@ -469,13 +510,14 @@ def update(db_path: Path, scope: Any) -> dict[str, Any]:
                 connection.execute("DELETE FROM events WHERE session_id=?", (session_id,))
             else:
                 added += 1
-            for key, event in _extract(ref).items():
+            for key, event in _extract(ref, installed).items():
                 connection.execute(
-                    "INSERT OR REPLACE INTO events VALUES(?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT OR REPLACE INTO events VALUES(?,?,?,?,?,?,?,?,?,?,?)",
                     (
                         f"{session_id}:{key}", session_id, provider, event["ts"],
                         event["skill"], bare_name(event["skill"]), event["initiator"],
                         event["sidechain"], event["entrypoint"], event["outcome"],
+                        event.get("origin", ""),
                     ),
                 )
                 events_written += 1
