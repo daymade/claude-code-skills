@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **read-claude-code-history** (`daymade-claude-code` v4.0.0 → v4.1.0): Add `skill_usage_ledger.py`, an incremental index of Skill invocations across every registered Claude home, backup archive and Codex. Each event records who started it: a typed slash command, the model after the user named the Skill, or the model unprompted. Claude calls refused because the Skill is not model-invocable are recorded as `blocked`; Codex reads made while developing a Skill, or several SKILL.md files at once, are kept apart from use. Unchanged session files are not re-read.
+
+- **skill-governance** (`daymade-skill` v1.53.1 → v1.54.0): Decide model-visible versus user-invocable-only per Skill from recorded use instead of descriptions or install location. The new procedure keeps router children cold, keeps Skills the model has started or that rules tell the model to use, and checks large counts against the working directories they came from.
+
 ### Breaking
 
 - **read-codex-history** (`daymade-claude-code` v3.69.0 → v4.0.0): Codex inventory no longer falls back to scanning rollout trees when the state database is missing or unreadable. The shared core and both bundled copies now fail closed; exact-session reading remains available.
