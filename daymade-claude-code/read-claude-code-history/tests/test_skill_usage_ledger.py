@@ -215,6 +215,14 @@ class LedgerTest(unittest.TestCase):
         source.mkdir(parents=True)
         (source / "SKILL.md").write_text("---\nname: linked\n---\n")
         (skills / "linked").symlink_to(source)
+        plugin_skill = (self.claude_home / "plugins" / "cache" / "market" / "suite-plugin"
+                        / "1.2.3" / "helper")
+        plugin_skill.mkdir(parents=True)
+        (plugin_skill / "SKILL.md").write_text("---\nname: helper\n---\n")
+        nested_plugin = (self.codex_home / "plugins" / "cache" / "market" / "other-plugin"
+                         / "local" / "skills" / "tool")
+        nested_plugin.mkdir(parents=True)
+        (nested_plugin / "SKILL.md").write_text("---\nname: tool\n---\n")
         unpublished = Path(self.tmp.name) / "worktree" / "review"
         unpublished.mkdir(parents=True)
         (unpublished / "SKILL.md").write_text("---\nname: review\n---\n")
@@ -227,12 +235,15 @@ class LedgerTest(unittest.TestCase):
             "cat /tmp/pr-snapshot/review/SKILL.md",
             "cat /gone/home/.agents/skills/old-suite/review/SKILL.md",
             "cat /gone/workspace/deleted-worktree/review/SKILL.md",
+            f"cat {plugin_skill}/SKILL.md",
+            f"cat {nested_plugin}/SKILL.md",
+            "cat /gone/home/.claude/plugins/marketplaces/old-market/suite/gone-tool/SKILL.md",
         ]
         rollout = next((self.codex_home / "sessions").rglob("*.jsonl"))
         with rollout.open("a", encoding="utf-8") as handle:
             for i, cmd in enumerate(reads):
                 handle.write(json.dumps({"type": "response_item",
-                                         "timestamp": f"2026-09-02T00:01:0{i}Z",
+                                         "timestamp": f"2026-09-02T00:01:{i:02d}Z",
                                          "payload": {"type": "function_call", "name": "exec_command",
                                                      "arguments": json.dumps({"cmd": cmd})}},
                                         separators=(",", ":")) + "\n")
@@ -257,6 +268,9 @@ class LedgerTest(unittest.TestCase):
             ("review", "dev_read"),
             ("old-suite:review", "model_auto"),
             ("review", "dev_read"),
+            ("suite-plugin:helper", "model_auto"),
+            ("other-plugin:tool", "model_auto"),
+            ("gone-tool", "model_auto"),
         ])
         merged = ledger.report(self.db, names=["review"], since=None,
                                settings_path=self.settings, only_override=None)

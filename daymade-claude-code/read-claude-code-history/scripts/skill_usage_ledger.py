@@ -71,6 +71,9 @@ CODEX_SKILL_RE = re.compile(r"<skill>\s*<name>([^<\s]+)</name>")
 SKILL_PATH_RE = re.compile(
     r"""(?:([^\s"'`\\;|&()<>]*)/)?(?<![A-Za-z0-9._-])([A-Za-z0-9._-]+)/SKILL\.md"""
 )
+# A deleted file under one of these was an install (since removed or
+# upgraded away), not a working copy.
+REMOVED_INSTALL_MARKS = ("/skills/", "/plugins/cache/", "/plugins/marketplaces/")
 TEMP_ROOTS = ("/tmp/", "/private/tmp/", "/var/folders/", "/private/var/folders/")
 
 # Substrings that must be present for a line to matter. Everything else is
@@ -329,11 +332,21 @@ def _codex_user_texts(payload: dict[str, Any]) -> list[str]:
     ]
 
 
-def installed_skills(roots: Sequence[Path]) -> dict[str, str]:
+def _add_installed(table: dict[str, str], skill_md: Path, name: str) -> None:
+    try:
+        real = os.path.realpath(skill_md)
+    except OSError:
+        return
+    table.setdefault(real, name)
+
+
+def installed_skills(roots: Sequence[Path], plugin_homes: Sequence[Path] = ()) -> dict[str, str]:
     """Map the real path of every installed SKILL.md to its installed name.
 
-    A nested bundle (``skills/<suite>/<skill>``) is named ``suite:skill``; a
-    dot-directory such as Codex's ``.system`` mount is not part of the name.
+    Personal roots: a nested bundle (``skills/<suite>/<skill>``) is named
+    ``suite:skill``; a dot-directory such as Codex's ``.system`` mount is not
+    part of the name. Plugin homes: ``plugins/cache/<market>/<plugin>/<version>/
+    [skills/]<skill>`` and marketplace checkouts are named ``plugin:skill``.
     Installs are usually symlinks into a source checkout, so resolving them is
     what lets a read of the checkout path count as use of the installed Skill.
     """
@@ -346,13 +359,22 @@ def installed_skills(roots: Sequence[Path]) -> dict[str, str]:
             for skill_md in root.glob(depth):
                 parts = [p for p in skill_md.parent.relative_to(root).parts
                          if not p.startswith(".")]
-                if not parts:
-                    continue
-                try:
-                    real = os.path.realpath(skill_md)
-                except OSError:
-                    continue
-                table.setdefault(real, ":".join(parts))
+                if parts:
+                    _add_installed(table, skill_md, ":".join(parts))
+    for home in plugin_homes:
+        cache = home.expanduser() / "plugins" / "cache"
+        for depth in ("*/*/*/*/SKILL.md", "*/*/*/skills/*/SKILL.md"):
+            for skill_md in cache.glob(depth) if cache.is_dir() else ():
+                parts = skill_md.parent.relative_to(cache).parts
+                _add_installed(table, skill_md, f"{parts[1]}:{parts[-1]}")
+        markets = home.expanduser() / "plugins" / "marketplaces"
+        for depth in ("*/*/SKILL.md", "*/*/*/SKILL.md", "*/*/*/*/SKILL.md", "*/*/*/*/*/SKILL.md"):
+            for skill_md in markets.glob(depth) if markets.is_dir() else ():
+                rest = [p for p in skill_md.parent.relative_to(markets).parts[1:]
+                        if p != "skills" and not p.startswith(".")]
+                if rest:
+                    name = rest[-1] if len(rest) == 1 else f"{rest[0]}:{rest[-1]}"
+                    _add_installed(table, skill_md, name)
     return table
 
 
@@ -373,10 +395,9 @@ def _classify_read(prefix: str | None, name: str, installed: dict[str, str],
     ``use``: the file is an installed Skill's real file. ``dev``: a relative
     path, a temporary copy, or an existing file no install points to (a
     worktree, snapshot or unpublished source). A file that no longer exists
-    counts as ``use`` only when its path lies under a ``skills/`` install
-    directory — the Skill may since have been renamed or removed — and is named
-    from its path below that directory; otherwise it was a checkout or worktree
-    that has since been deleted.
+    counts as ``use`` only when its path lies under a ``skills/`` directory or a
+    plugin cache or marketplace — the Skill may since have been renamed, upgraded
+    away or removed; otherwise it was a checkout or worktree since deleted.
     """
     if prefix is None or not prefix.startswith(("/", "~")):
         return "dev", name
@@ -394,7 +415,7 @@ def _classify_read(prefix: str | None, name: str, installed: dict[str, str],
         result = ("dev", name)
     elif os.path.exists(real):
         result = ("dev", name)
-    elif "/skills/" in expanded:
+    elif any(mark in expanded for mark in REMOVED_INSTALL_MARKS):
         result = ("use", _name_from_install_path(expanded, name))
     else:
         result = ("dev", name)  # a deleted worktree or checkout, not an install
@@ -488,7 +509,10 @@ def update(db_path: Path, scope: Any) -> dict[str, Any]:
         source.home / "skills" for source in scope.sources
         if source.provider in ("claude", "codex") and source.kind != "archive"
     ]
-    installed = installed_skills(install_roots)
+    installed = installed_skills(install_roots, plugin_homes=[
+        source.home for source in scope.sources
+        if source.provider in ("claude", "codex") and source.kind != "archive"
+    ])
     for warning in scope.warnings:
         print(f"Warning: {warning}", file=sys.stderr)
     known = {
