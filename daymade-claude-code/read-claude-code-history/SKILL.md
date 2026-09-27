@@ -27,6 +27,7 @@ hand the verified evidence to `daymade-claude-code:continue-claude-code-work`.
 | A topic with no known Session ID | `scripts/history_index.py status`, then `recall`; state index coverage and freshness |
 | How sessions in a time window ended | `scripts/analyze_sessions.py triage` |
 | A deleted/overwritten file preserved in Claude file-history records | `scripts/recover_content.py` |
+| How often each Skill ran and who started it (user command, model after the user named it, model unprompted), e.g. to decide model-visible vs user-invocable-only | `scripts/skill_usage_ledger.py index`, then `report` (Claude and Codex together); see **Skill usage ledger** below |
 | Kimi CLI sessions | `history_index.py recall --provider kimi`, then read the named session's `wire.jsonl`; see **Kimi CLI** below |
 | Continue a verified Claude session | Stop reading and invoke `daymade-claude-code:continue-claude-code-work` |
 
@@ -138,6 +139,44 @@ Recovery writes files, so keep it separate from ordinary reading. First run the
 recovery report against the exact Session file, review every proposed destination,
 then write only after the user asked to recover content. Never restore directly
 over the current project tree.
+
+### Skill usage ledger
+
+Answers "which Skills do we actually use, and who starts them". It is an
+incremental index (`~/.claude-history-index/skill-usage-v1.db`): the first
+`index` parses every Claude and Codex session once, later runs re-parse only
+files whose size or mtime changed. Reports read the ledger, never raw history.
+
+```bash
+python3 scripts/skill_usage_ledger.py index            # --no-codex to skip Codex
+python3 scripts/skill_usage_ledger.py report --override user-invocable-only
+python3 scripts/skill_usage_ledger.py report <skill> [<skill> ...] --since 2026-06-01 --until 2026-09-24
+python3 scripts/skill_usage_ledger.py status           # freshness + what is not covered
+```
+
+Columns: `user_command` (user typed `/X`, or Codex `$X`), `model_named` (the
+model invoked X and the latest human prompt contained X's name), `model_auto`
+(the model invoked X unprompted), `last_model_use`, `blocked` (Claude refused a
+model call because X is not model-invocable — the model reached for it and
+could not use it; not counted as use), and the Skill's current `skillOverrides`
+value. `--override STATE` also lists Skills in that state with zero recorded use.
+Rows group by bare name, which is what `skillOverrides` keys on; `identities`
+lists the qualified forms merged into a row. More than one namespace there
+(`review`, `suite:review`) means same-named Skills were counted together — rerun
+with `--exact` to split them.
+
+Read these limits into every conclusion:
+
+- A Skill that is user-invocable-only cannot be model-invoked, so its
+  `model_auto` count stops at the day it was hidden. Compare use before and after
+  that date, not the lifetime total.
+- Codex model use is inferred from the model reading one `.../X/SKILL.md`; a
+  session that edits or audits X's SKILL.md with plain shell reads looks the
+  same. Several SKILL.md files read by one command are recorded as `bulk_read`
+  and excluded.
+- Not covered: Skills invoked inside Claude subagents, Kimi CLI, and Codex
+  Skills followed from memory without a read. Zero recorded use means "not seen
+  in the covered stores", not "never used".
 
 ## Read-result contract
 

@@ -491,3 +491,59 @@ tools is not by itself an installation defect; it also does not prove automatic
 Skill invocation. An unavailable provider or unfinished model request leaves the
 behavior check unverified. Do not rerun a passing task or add a description-tuning
 workflow unless a new failure or changed requirement calls for it.
+
+## 15. Decide model-visible vs user-invocable-only from usage evidence
+
+Use before setting or removing `skillOverrides: "user-invocable-only"` (or
+`disable-model-invocation`) for one Skill or a batch. The description, the
+install location, and "it looks niche" are not evidence. What decides is how the
+Skill has been used and who started it.
+
+A user-invocable-only Skill leaves the model's catalog **and** refuses every
+model call, including a call made right after the user named the Skill in
+prose. Only the user typing `/name` still works. So the question per Skill is:
+does anyone other than a typed slash command start it?
+
+1. Build or refresh the usage ledger owned by `read-claude-code-history`:
+
+   ```bash
+   python3 <read-claude-code-history>/scripts/skill_usage_ledger.py index
+   python3 <read-claude-code-history>/scripts/skill_usage_ledger.py report <names...> --since <date> --until <day-hidden> --json
+   ```
+
+   It covers every registered Claude home and archive plus Codex. Read its
+   `status` coverage limits before concluding anything from zero. Identities
+   are install names: a Codex read of an installed Skill's real file carries the
+   name it is installed under (`suite:skill` for a nested bundle), and reads of
+   worktrees, snapshots and temporary copies are already excluded. If a row's
+   `identities` holds more than one name, rerun with `--exact` and judge the row
+   for the entry the override governs — the bare name for a personal Skill.
+2. Separate router children first. A Skill whose visible router reads its
+   `SKILL.md` stays cold whatever its count: the router is its model entry.
+   Confirm the router itself is model-visible and actually names the child.
+3. Keep model-visible when any of these holds in the last 90 days:
+   - Claude model-initiated use (`model_named` or `model_auto`) at least once
+     while the Skill was visible — pass `--until` the day it was hidden;
+   - Codex model-initiated use at least three times (Codex never sees Claude's
+     overrides, so its window runs to today; `dev_read` and `bulk_read` are
+     already excluded);
+   - any `blocked` call — the model reached for it after it was hidden;
+   - a global or project `CLAUDE.md`, hook injection text, or a visible Skill
+     tells the model to use it ("走 X" / "invoke X" / "X owns …"). A mention
+     that only points at a file path to read, or uses the code as a library,
+     does not count.
+4. Otherwise it may go user-invocable-only: all recorded starts are typed slash
+   commands, or there is no recorded use in the covered stores.
+5. Before trusting a count, look at where it came from: `sqlite3` the ledger's
+   `events` table for that Skill's `session_id` and `origin`. Counts spread over
+   many sessions are use. Counts packed into one or two sessions are often
+   someone building or reviewing the Skill through its installed path — open
+   one of those sessions before letting them decide. When a session still does
+   not say which, keep the Skill visible: a wrongly visible Skill costs one
+   catalog line, a wrongly hidden one makes every model call fail.
+6. Back up `settings.json`, apply, and prove one restored Skill with a real model
+   `Skill` call in the current session (overrides apply without restart).
+
+Record the thresholds, the per-Skill decision, and the backup path in the change
+report. Never hide a batch selected by install location, marketplace, or name
+pattern without running steps 1–5 on each member.

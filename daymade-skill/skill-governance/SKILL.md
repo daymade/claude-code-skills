@@ -72,6 +72,7 @@ completely before using that workflow.
 | Standalone plugins superseded by a suite | §7–8, then §11 |
 | Project `.claude/skills` vs `.agents/skills` drift | §9, then §11 |
 | Retire loose or duplicate Skill directories | §2–3, §10–11 |
+| Decide which Skills stay model-visible vs user-invocable-only | §15, then §11 |
 
 ## Fast read-only Codex audit
 
@@ -123,6 +124,8 @@ targets, identical copies, real drift, and invalid state.
   marketplace can uninstall its plugins.
 - Read every candidate's unique instructions, scripts, references, and assets
   before calling it redundant. Old or short does not mean valueless.
+- Decide model-visible vs user-invocable-only per Skill from usage evidence
+  (§15), never from its description or install location alone.
 - Keep cold third-party resources installed; hide only their exact discovery
   paths, then prove the router still resolves one representative capability.
 - Retire by recoverable move plus file/executable/hash manifest, never by
