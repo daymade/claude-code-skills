@@ -24,6 +24,7 @@ TRIGGER, keep the structure.
 6. [Pattern D — PostToolUse context injection](#pattern-d--posttooluse-context-injection)
 7. [Pattern E — Stop hook: react to Claude's own output](#pattern-e--stop-hook-react-to-claudes-own-output)
 8. [Registration](#registration)
+9. [Changing a shipped gate — prove a new allow branch opens no hole](#changing-a-shipped-gate--prove-a-new-allow-branch-opens-no-hole)
 
 ---
 
@@ -1104,3 +1105,46 @@ Add to an existing `matcher: "Bash"` entry's `hooks` array (don't create a secon
 Bash entry). Then **converge every profile** — a guard registered only in the
 main profile leaves the others unprotected. Editing settings.json programmatically
 with python (read → append if absent → write) is safer than hand-editing JSON.
+
+---
+
+## Changing a shipped gate — prove a new allow branch opens no hole
+
+SKILL.md rule 9's replay sizes a new detector's false blocks. Loosening a gate that
+already ships moves the risk the other way. That covers a new exemption, a "the
+target is clean, let it through" branch, or a parser failure that now allows
+instead of asking a human. The new branch can swallow a dangerous command that
+shares its shape, and no false-positive count will show it. Run three checks,
+each of which can go red:
+
+1. **Differential replay.** Feed the same real corpus (rule 9's harvest) to the old
+   and the new hook. List only the commands whose outcome moved: the exit code,
+   *and* whether the human-confirmation step was reached. A dialog and a mechanical
+   block both exit 2, so point the dialog binary at a stub that records the call and
+   then fails. That is Pattern B's forced-decline path plus a marker file; the stub
+   prints no approval, so it grants nothing. If the guard honors only a fixed
+   decline binary, read which path ran from its audit log instead. Every move must
+   have the shape the change meant to move; explain any other move before merging.
+   Zero moves on a change meant to move something makes the harness the suspect.
+2. **Composition rows.** A real corpus rarely holds the dangerous-plus-exempt
+   combination, so the replay cannot say whether the branch leaks. Build that
+   combination: for every existing must-block row, add a variant that also carries
+   the new branch's trigger (another segment in the same command, or the same
+   target with the branch's condition true), and assert it still blocks.
+3. **Mutants of the new branch.** First make the branch allow unconditionally:
+   every composition row must go red. Then remove each check the branch makes
+   before allowing, one at a time: each removal must redden at least one row. A
+   mutant that leaves every row green has found an input no row exercises
+   (pitfall #46).
+
+Measured 2026-09-28 on a git discard guard. Its parse-divergence path stopped
+asking a human and started allowing any command with no discard word in it. The
+replay over 4,801 real commands moved exactly the 12 known divergence commands.
+All 148 must-block rows still blocked with a divergent heredoc composed in, and the
+allow-everything mutant turned all 148 red. A second branch on the same guard lets
+`git show <ref>:<path> > <file>` through when the target has no uncommitted
+changes. One of its six per-check mutants dropped case-insensitive name resolution,
+and it left every row green: no row used a case-variant path. On a case-insensitive
+volume, `git status -- A.md` prints nothing while `a.md` is modified, so the branch
+would have read a dirty file as clean and let the overwrite through. The rows that
+kill that mutant were added before merge.

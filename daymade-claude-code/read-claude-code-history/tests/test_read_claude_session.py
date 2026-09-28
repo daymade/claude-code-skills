@@ -1040,5 +1040,162 @@ class ClaudeSessionEvidenceTests(unittest.TestCase):
         self.assertEqual(set(parsed["unresolved_tool_calls"]), {"toolu_cut"})
 
 
+class CommandSha256LookupTests(unittest.TestCase):
+    """--find-command-sha256 maps a hook audit row's cmd_sha256 back to the call."""
+
+    MAIN_COMMAND = "git status --short"
+    # Multi-line, non-ASCII, and a triple-backtick run the output fence must outgrow.
+    SUB_COMMAND = "python3 - <<'EOF'\nprint('改 ```x```')\nEOF"
+    OTHER_COMMAND = "ls -la"
+
+    @staticmethod
+    def _tool_call(session_id: str, uuid: str, command: str) -> dict:
+        return {
+            "type": "assistant",
+            "sessionId": session_id,
+            "uuid": uuid,
+            "timestamp": "2026-09-28T10:00:00Z",
+            "cwd": "/work/repo",
+            "message": {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "id": f"toolu_{uuid}",
+                        "name": "Bash",
+                        "input": {"command": command},
+                    }
+                ],
+            },
+        }
+
+    def _write(self, path: Path, records: list[dict]) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records),
+            encoding="utf-8",
+        )
+
+    def _home(self, root: Path, session_id: str, record_session_id: str) -> Path:
+        active_home = root / "active-home"
+        project_dir = active_home / "projects" / "-work-repo"
+        self._write(
+            project_dir / f"{session_id}.jsonl",
+            [
+                {
+                    "type": "user",
+                    "sessionId": record_session_id,
+                    "message": {"role": "user", "content": "run the checks"},
+                },
+                self._tool_call(record_session_id, "main1", self.MAIN_COMMAND),
+                self._tool_call(record_session_id, "main2", self.OTHER_COMMAND),
+            ],
+        )
+        # A hook event raised inside a subagent carries the parent Session ID,
+        # so its call is recorded only under <session>/subagents/.
+        self._write(
+            project_dir / session_id / "subagents" / "agent-a1b2.jsonl",
+            [self._tool_call(record_session_id, "sub1", self.SUB_COMMAND)],
+        )
+        return active_home
+
+    def _run(self, root: Path, active_home: Path, *args: str) -> subprocess.CompletedProcess:
+        env = os.environ.copy()
+        env["HOME"] = str(root / "home")
+        env["CLAUDE_CONFIG_DIR"] = str(active_home)
+        return subprocess.run(
+            [sys.executable, str(SCRIPT), *args],
+            cwd=root,
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            env=env,
+            check=False,
+        )
+
+    def test_subagent_call_is_found_with_full_command(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            home = self._home(root, "sess-hash", "sess-hash")
+            digest = MODULE.command_sha256(self.SUB_COMMAND)
+
+            result = self._run(
+                root, home, "--session", "sess-hash", "--find-command-sha256", digest.upper()
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("- **Matches**: 1", result.stdout)
+            self.assertIn("subagent `agent-a1b2`", result.stdout)
+            self.assertIn("````text\n" + self.SUB_COMMAND + "\n````", result.stdout)
+            self.assertIn("`toolu_sub1`", result.stdout)
+            self.assertNotIn(self.MAIN_COMMAND, result.stdout)
+
+    def test_main_transcript_call_is_found(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            home = self._home(root, "sess-hash", "sess-hash")
+            digest = MODULE.command_sha256(self.MAIN_COMMAND)
+
+            result = self._run(root, home, "--session", "sess-hash", "--find-command-sha256", digest)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("## Match 1 — main transcript", result.stdout)
+            self.assertIn("```text\n" + self.MAIN_COMMAND + "\n```", result.stdout)
+            self.assertIn("- **cwd**: `/work/repo`", result.stdout)
+
+    def test_unknown_digest_reports_what_was_examined_and_exits_1(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            home = self._home(root, "sess-hash", "sess-hash")
+            digest = MODULE.command_sha256("never ran")
+
+            result = self._run(root, home, "--session", "sess-hash", "--find-command-sha256", digest)
+
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertIn("- **Matches**: 0", result.stdout)
+            # A zero only means "absent" when the search actually saw every call.
+            self.assertIn(
+                "2 transcript file(s) (main + 1 subagent), 3 tool call(s)", result.stdout
+            )
+
+    def test_unparseable_line_is_reported_instead_of_hidden(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            home = self._home(root, "sess-hash", "sess-hash")
+            main = home / "projects" / "-work-repo" / "sess-hash.jsonl"
+            # A Session still being written can end in a partial record.
+            with main.open("a", encoding="utf-8") as handle:
+                handle.write('{"type": "assistant", "message": {"content": [{"type": "tool_u')
+            digest = MODULE.command_sha256("never ran")
+
+            result = self._run(root, home, "--session", "sess-hash", "--find-command-sha256", digest)
+
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertIn("- **Unparseable lines skipped**: 1", result.stdout)
+            self.assertIn("does not prove the call is absent", result.stdout)
+
+    def test_foreign_record_identity_fails_closed(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            home = self._home(root, "sess-hash", "some-other-session")
+            digest = MODULE.command_sha256(self.MAIN_COMMAND)
+
+            result = self._run(root, home, "--session", "sess-hash", "--find-command-sha256", digest)
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("identity mismatch", result.stderr)
+            self.assertNotIn(self.MAIN_COMMAND, result.stdout)
+
+    def test_malformed_digest_is_a_usage_error(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            home = self._home(root, "sess-hash", "sess-hash")
+
+            result = self._run(root, home, "--session", "sess-hash", "--find-command-sha256", "abc")
+
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("64-character hex", result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

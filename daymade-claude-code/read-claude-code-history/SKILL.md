@@ -21,6 +21,7 @@ hand the verified evidence to `daymade-claude-code:continue-claude-code-work`.
 |---|---|
 | Recent Claude Code sessions, titles, dates, or IDs | Indexed metadata only; the bundled `list_local_history.py` currently reads all candidate bodies before date/limit filtering, so do not use it for a broad inventory |
 | One known Session reconstructed as a chronological evidence briefing | `scripts/read_claude_session.py --session <ID>` |
+| The exact command behind a hook audit row that records a Session ID and a command SHA-256 instead of the text | `scripts/read_claude_session.py --session <ID> --find-command-sha256 <HEX>`; see **Command behind a hook audit row** below |
 | The user's recent words, including human queued prompts | `scripts/extract_user_messages.py` |
 | A conversation or quote by keyword | `scripts/history_index.py recall --mode bm25`, then the exact-session reader |
 | Prior work whose wording may have changed | `scripts/history_index.py recall` after checking index status |
@@ -107,6 +108,26 @@ Session identities, a missing record-level Session identity, malformed JSONL, or
 unreadable bytes. With an exact Session ID and no `--project`, it searches every
 project across the discovered active homes and registered archives; an explicit
 `--project` remains a strict scope. A filename alone never proves Session identity.
+
+### Command behind a hook audit row
+
+Hook audit logs often store `sid=<SESSION_ID> cmd_sha256=<HEX>` rather than the
+command text. Resolve a row to the tool call that produced it:
+
+```text
+<skill-dir>/scripts/read_claude_session.py --session <SESSION_ID> --find-command-sha256 <HEX>
+```
+
+Expected output: a `# Tool calls whose command has SHA-256 …` heading, the number
+of transcript files and tool calls examined, the match count, and for each match
+the file and line, timestamp, record uuid, tool name and id, cwd, and the full
+command in a fence. Exit 0 means at least one match, 1 no match, 2 a malformed
+digest or missing `--session`. The digest is SHA-256 over `tool_input.command`
+as UTF-8. A hook event raised inside a subagent carries the parent Session ID,
+so the lookup also searches `<SESSION_ID>/subagents/*.jsonl`; a main-transcript-only
+search misses those calls. Unlike the briefing, the lookup skips and counts
+unparseable lines so it still works on a Session that is being written; a zero
+with skipped lines does not prove the call is absent.
 
 ### Indexed content search
 

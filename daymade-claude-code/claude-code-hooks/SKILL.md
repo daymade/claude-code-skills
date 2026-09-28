@@ -1058,6 +1058,12 @@ accident, and its failure direction is a miss.
 Sizing, so this doesn't read as a research project: one harvest plus one loop, minutes of
 wall time.
 
+**Changing a gate that already ships**, above all adding an allow branch, fails in the
+other direction: the new branch can let a dangerous command through, and a false-positive
+count never shows that. Replay the corpus through the old and new versions, compose the new
+branch's trigger into every must-block row, and mutate the branch until those rows go red:
+[hook_patterns.md](references/hook_patterns.md#changing-a-shipped-gate--prove-a-new-allow-branch-opens-no-hole).
+
 ### 10. A guard that blocks legitimate work needs a **consent channel** — and the consent signal must come from a hook that sees the prompt
 
 A guard built to block a failure mode will eventually block a **legitimate,

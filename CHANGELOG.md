@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **read-claude-code-history** (`daymade-claude-code` v4.1.0 → v4.2.0): Add `read_claude_session.py --session <ID> --find-command-sha256 <HEX>`, which resolves a hook audit row keyed by Session ID and command SHA-256 to the full tool call: file and line, timestamp, record uuid, cwd and command text. It also searches the Session's subagent transcripts, because a hook event raised inside a subagent carries the parent Session ID. Unparseable lines are counted and reported rather than hidden.
+
+- **claude-code-hooks** (`daymade-claude-code` v4.1.0 → v4.2.0): Add a pattern for changing a gate that already ships, above all adding an allow branch. Replay the same corpus through the old and new versions and account for every moved decision. Compose the new branch's trigger into every must-block row, and mutate the branch until those rows go red.
+
 - **read-claude-code-history** (`daymade-claude-code` v4.0.0 → v4.1.0): Add `skill_usage_ledger.py`, an incremental index of Skill invocations across every registered Claude home, backup archive and Codex. Each event records who started it: a typed slash command, the model after the user named the Skill, or the model unprompted. Claude calls refused because the Skill is not model-invocable are recorded as `blocked`; Codex reads made while developing a Skill, or several SKILL.md files at once, are kept apart from use. Unchanged session files are not re-read.
 
 - **skill-governance** (`daymade-skill` v1.53.1 → v1.54.0): Decide model-visible versus user-invocable-only per Skill from recorded use instead of descriptions or install location. The new procedure keeps router children cold, keeps Skills the model has started or that rules tell the model to use, and checks large counts against the working directories they came from.
