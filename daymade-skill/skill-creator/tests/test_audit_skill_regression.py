@@ -777,6 +777,42 @@ def test_git_ref_baseline_is_resolved_and_verified_against_git_tree(tmp_path):
     assert any("offline recovery" in item["text"] for item in report["candidates"])
 
 
+def test_git_ref_baseline_matches_when_sibling_directories_share_a_prefix(tmp_path):
+    repo = tmp_path / "repo"
+    skill = _make_skill(repo / "skill", "- Keep offline recovery available.")
+    # "probes-r3" sorts before "probes/" as a string ("-" < "/"), but after it as a Path.
+    (skill / "references" / "probes").mkdir(parents=True)
+    (skill / "references" / "probes" / "p1.md").write_text("first\n", encoding="utf-8")
+    (skill / "references" / "probes-r3").mkdir(parents=True)
+    (skill / "references" / "probes-r3" / "r1.md").write_text("second\n", encoding="utf-8")
+    before = tmp_path / "before"
+    subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.email", "user@example.com"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.name", "Test User"], check=True)
+    subprocess.run(["git", "-C", str(repo), "add", "skill"], check=True)
+    tree = subprocess.run(
+        ["git", "-C", str(repo), "write-tree"], check=True, capture_output=True, text=True
+    ).stdout.strip()
+    commit = subprocess.run(
+        ["git", "-C", str(repo), "commit-tree", tree, "-m", "baseline"],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    subprocess.run(["git", "-C", str(repo), "symbolic-ref", "HEAD", "refs/heads/main"], check=True)
+    subprocess.run(["git", "-C", str(repo), "update-ref", "refs/heads/main", commit], check=True)
+    create_baseline_snapshot(skill, before)
+    (skill / "SKILL.md").write_text(
+        (skill / "SKILL.md").read_text(encoding="utf-8").replace(
+            "Keep offline recovery available", "Use the online workflow"
+        ),
+        encoding="utf-8",
+    )
+
+    report = build_report(before, skill, baseline_origin="git-ref:HEAD")
+
+    assert report["before"]["provenance"]["resolved_commit"] == commit
+    assert any("offline recovery" in item["text"] for item in report["candidates"])
+
+
 def test_git_ref_baseline_rejects_a_copy_made_after_editing(tmp_path):
     repo = tmp_path / "repo"
     skill = _make_skill(repo / "skill", "- Keep offline recovery available.")

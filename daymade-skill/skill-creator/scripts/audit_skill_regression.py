@@ -208,7 +208,10 @@ def _git_tree_hash(
         raise ValueError(f"Git baseline does not contain {prefix}SKILL.md")
 
     digest = hashlib.sha256()
-    for rel, mode, object_id in sorted(entries, key=lambda item: item[0].as_posix()):
+    # Same order as tree_hash(), which sorts Path objects (component by component).
+    # A plain string sort puts "a-b/y" before "a/x" ("-" < "/"), so any skill with
+    # sibling directories sharing a prefix would never match its own Git baseline.
+    for rel, mode, object_id in sorted(entries, key=lambda item: item[0]):
         content = _git_output(repo, "cat-file", "blob", object_id, text=False)
         assert isinstance(content, bytes)
         digest.update(rel.as_posix().encode("utf-8"))
