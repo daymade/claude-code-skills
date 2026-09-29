@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **transcript-fixer** (`daymade-audio` v1.44.0 → v1.44.1): `verify_queue_audio.py` now adds audio authority only when distinct successful clip windows agree on the proposed term and its following character, with no recognition of the original alternative. A one-window match, conflicting name boundary, or recognizer failure stays pending.
+- **transcript-fixer** (`daymade-audio` v1.44.0 → v1.44.1): `verify_queue_audio.py` now adds audio authority only when successful ASR outputs from different audio clips agree on the proposed term and its following character, with no recognition of the original alternative. A Chinese name embedded in a longer name, identical clip bytes, one-window match, or recognizer failure stays pending.
 
 ### Added
 

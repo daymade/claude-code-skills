@@ -21,12 +21,12 @@
 
 输出：<outdir>/results.json（每项：id/line/original/suggested/token_wav_time/tight/medium 识别文本）
 判读（裁决矩阵，详 references/advanced_correction_evidence.md §批量 pending 音频核验）：
-  - 双窗一致且与候选同 → accepted
+  - 双窗一致且与候选同 → 可附音证，待人工裁决 accepted
   - 双窗一致但与候选不同 → 按引擎输出 overridden（或 kept_original 若证明原词无误）
   - 双窗矛盾/空 → 保留 pending，不换方法重复（两窗不一致本身是信号）
 依赖：ffmpeg/ffprobe；识别引擎脚本（stdout 出文本）。
 """
-import argparse, datetime, json, os, re, subprocess, sys
+import argparse, datetime, hashlib, json, os, re, subprocess, sys
 
 TS_RE = re.compile(r'^(\S+) (\d{2}):(\d{2}):(\d{2})\.(\d{3})\s*$')
 SKILL_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -82,19 +82,27 @@ def list_pending(transcript, queue_ids):
 
 
 def both_windows_support_suggestion(result):
-    """Require the suggested span and its right boundary to agree in both cuts."""
+    """Require a delimited candidate with the same following context in both cuts."""
     normalize = lambda value: "".join(
         char for char in (value or "") if char.isalnum())
     suggestion = normalize(result.get("suggested"))
     original = normalize(result.get("original"))
-    if not suggestion or not original or suggestion == original \
+    if result.get("same_clip") or not suggestion or not original or suggestion == original \
             or result.get("tight_exit") or result.get("medium_exit"):
         return False
     boundaries = []
     for window in ("tight", "medium"):
-        recognized = normalize(result.get(window))
+        raw = result.get(window) or ""
+        recognized = normalize(raw)
         if original in recognized:
             return False
+        if all("\u3400" <= char <= "\u9fff" for char in suggestion):
+            raw_hits = list(re.finditer(re.escape(suggestion), raw))
+            if not raw_hits or any(
+                    match.end() < len(raw)
+                    and "\u3400" <= raw[match.end()] <= "\u9fff"
+                    for match in raw_hits):
+                return False
         matches = {
             recognized[pos + len(suggestion):pos + len(suggestion) + 1]
             for pos in range(len(recognized))
@@ -104,6 +112,15 @@ def both_windows_support_suggestion(result):
             return False
         boundaries.append(matches.pop())
     return boundaries[0] == boundaries[1]
+
+
+def same_clip_bytes(first, second):
+    if os.path.getsize(first) != os.path.getsize(second):
+        return False
+    def digest(path):
+        with open(path, "rb") as stream:
+            return hashlib.sha256(stream.read()).digest()
+    return digest(first) == digest(second)
 
 
 def main():
@@ -144,6 +161,18 @@ def main():
             subprocess.run(["ffmpeg", "-y", "-ss", f"{max(start, 0):.3f}", "-t", f"{dur:.0f}",
                             "-i", a.audio, "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", clip],
                            capture_output=True, check=True)
+        if same_clip_bytes(tight, med):
+            results.append({
+                "id": tid, "line": it["line_number"],
+                "original": it["original_text"],
+                "suggested": it.get("suggested_text") or "",
+                "token_wav_time": round(tok_t, 2),
+                "tight": "", "medium": "", "tight_exit": -1, "medium_exit": -1,
+                "err": "tight and medium clips have identical bytes; no independent audio evidence",
+                "same_clip": True,
+            })
+            print(f"done {tid}: identical clips, pending", flush=True)
+            continue
         r1 = subprocess.run(["python3", a.engine_script, tight], capture_output=True, text=True)
         r2 = subprocess.run(["python3", a.engine_script, med], capture_output=True, text=True)
         results.append({
@@ -152,6 +181,7 @@ def main():
             "token_wav_time": round(tok_t, 2),
             "tight": r1.stdout.strip()[:300], "medium": r2.stdout.strip()[:500],
             "tight_exit": r1.returncode, "medium_exit": r2.returncode,
+            "same_clip": False,
             "err": (r1.stderr + r2.stderr)[:200],
         })
         print(f"done {tid}: {it['original_text']}", flush=True)
@@ -161,8 +191,8 @@ def main():
         json.dump(results, f, ensure_ascii=False, indent=1)
     print(f"\n{len(results)} items -> {out}")
 
-    # Both differently sized cuts must agree on the suggestion's right boundary
-    # and omit the original alternative before it can serve as authority.
+    # Different clip bytes and an explicit CJK word boundary are required before
+    # agreeing recognizer text can serve as authority.
     # This never records a review verdict.
     attached, unsupported = [], []
     for r in results:
