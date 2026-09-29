@@ -1,0 +1,6 @@
+# Parallel branches add CHANGELOG entries at the same spot under
+# "## [Unreleased]"; union keeps both sides' lines instead of conflicting.
+# Local merges and rebases only, on branches that contain this file: GitHub's
+# mergeability check ignores it. See "CHANGELOG.md merges as a union" in
+# CLAUDE.md.
+CHANGELOG.md merge=union

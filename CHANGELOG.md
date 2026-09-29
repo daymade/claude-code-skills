@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **claude-code-hooks** (`daymade-claude-code` v4.3.2 → v4.4.0): `hook_pitfalls.md` gains #49 — a selftest scheduler that signs only the registered hook file never re-runs after edits to the logic, because most guards are a thin wrapper around a sibling classifier. The fix signs the hook together with the files it runs and imports (path-joined filenames on non-comment lines, same-directory imports; never bare mentions, which chain through prose until every hook depends on the whole directory), in one process for all hooks. The pitfall carries a reference implementation, checked against 72 real hooks; SKILL.md's tiered-selftest snippet now uses it.
+- **Repository**: `.gitattributes` merges `CHANGELOG.md` as a union, so a local merge or rebase keeps both sides' `[Unreleased]` entries instead of conflicting. GitHub's own mergeability check ignores the attribute; CLAUDE.md says how to resolve a PR that still shows CONFLICTING and what to check after a union merge.
+
 - **claude-code-hooks** (`daymade-claude-code` v4.3.1 → v4.3.2): `hook_pitfalls.md` gains #48 — a test suite that has not run since its dependencies changed is green by reputation. Run the suite at HEAD before editing what it covers, or a sibling change's fixture rot lands in your diff and reads as your regression. Real case: an LFS-dispatch rewrite in a pre-push hook spent two rounds on "my edit broke the suite" before an at-HEAD run showed the rows had been failing for eight days.
 
 ### Changed

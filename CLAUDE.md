@@ -531,6 +531,23 @@ tree adopted another session's staged `peer-message` 1.1.1→1.2.0 as its own
 baseline. Every status-shaped signal stayed green; a CHANGELOG anchor assertion
 was the only thing that caught it.)
 
+**CHANGELOG.md merges as a union** (`.gitattributes`). Parallel PRs add their
+entries at the same spot under `## [Unreleased]`, so two PRs open at the same
+time conflicted there. Merging `origin/main` into a branch locally, or rebasing
+onto it, now keeps both sides' lines without stopping. Two limits:
+
+- GitHub's mergeability check ignores the attribute, so a PR can still show
+  CONFLICTING until `origin/main` is merged into it locally.
+- Git reads the attribute from the branch you are on. A branch cut before
+  `.gitattributes` existed conflicts as before: commit the file onto it first
+  (`git checkout origin/main -- .gitattributes`, then commit), then merge.
+
+Read the merged section before you push. Union keeps lines, not structure:
+lines can come out duplicated or interleaved, a blank line can go missing, and
+across a release cut an entry can land under the new version heading instead of
+`[Unreleased]`. The CHANGELOG structure check still fails a duplicated
+`[Unreleased]` heading; it cannot see a misplaced entry.
+
 ## Available Skills
 
 Current plugin names, versions, sources, and suite membership are defined only
