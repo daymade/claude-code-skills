@@ -130,6 +130,44 @@ provisioner "remote-exec" {
 }
 ```
 
+### `Failed to save state` / `Failed to persist state to backend` after apply
+
+The apply ran and only the final backend upload failed (a timeout to the state bucket is typical).
+First confirm that in the apply log: every resource reports `Creation complete`,
+`Modifications complete` or `Destruction complete`, and the only errors are these two. Then every side effect already
+happened — provisioners ran, remote writes landed, containers were recreated — but the backend still
+holds the previous state, and Terraform wrote the new one to `errored.tfstate` in the directory it
+ran in (for a wrapper, its root module directory, not your shell's). Do not re-run apply: it would
+work from the stale state, which Terraform itself warns forks the state, and resources the failed
+run already created or replaced would be created or replaced again.
+
+Run the recovery from that directory, through the repository's wrapper when it passes `state`
+subcommands through (operating contract 1); otherwise in exactly the environment the wrapper sets
+up, so the same backend and credentials are used. Keep the pulled copies out of the repository:
+
+```bash
+terraform state pull > "${TMPDIR:-/tmp}/remote.json"
+jq '{file: input_filename, lineage, serial}' "${TMPDIR:-/tmp}/remote.json" errored.tfstate
+# expect: identical lineage, and the remote serial lower than errored.tfstate's
+terraform state push errored.tfstate
+terraform state pull | jq '{lineage, serial}'
+# expect: serial higher than the remote's before the push (it need not equal
+# errored.tfstate's; the backend may increment it). Then check the resources the
+# apply created or replaced: `terraform state show <address>` carries the IDs in the apply log.
+```
+
+`state push` refuses an unrelated lineage, a newer remote serial, and an equal serial with different
+content (observed on Terraform 1.5.7 with a local backend). A refusal means the remote no longer
+matches this `errored.tfstate` — another writer changed it, the file is left over from an older run,
+or you are pointed at a different workspace or backend: stop and reconcile. Never add `-force`; it overwrites whatever the
+remote holds. If the push fails on the same transport error as the apply, retry it later;
+`errored.tfstate` stays usable until the remote serial moves. After a successful push, move
+`errored.tfstate` out of the working directory (to scratch space) so it is not later read as live
+state; it and the pulled copies hold the full state, secrets included, so delete them once the
+read-back passes. Then read the wrapper's recipe and run by hand every step that follows its apply command —
+persisting the new setting, post-apply verification. The wrapper's failure exit hides that the
+remote change is already live.
+
 ### Container `Restarting` — database tables missing
 
 DB migrations not in provisioner. PostgreSQL `docker-entrypoint-initdb.d` only runs on empty data dir. Explicitly create DB + run migrations:
