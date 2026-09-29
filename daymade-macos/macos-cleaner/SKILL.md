@@ -22,6 +22,7 @@ Choose the narrowest path that can answer the request:
 | Docker build cache | Measure with `docker builder du`; this skill reports it but does not delete it because Docker exposes category-wide prune controls rather than per-record intent |
 | Chrome, ChromeDriver, Playwright, Codex Computer Use, Edge, or Chromium has large `*.code_sign_clone` directories | Read `references/chromium_code_sign_clones.md` completely; use the bundled analyzer to separate active, inactive, and unknown exact children and never equate `du` with physical release |
 | A named cache, directory, application, or service is already the suspect | Inspect that target first and read the matching semantics in `references/cleanup_targets.md`; do not start a home-directory or whole-disk scan |
+| The user asks what has been growing or filling the disk lately, free space fell between two readings, or an older scan export exists (GrandPerspective text export, saved `du` output) | Read `references/growth_attribution.md`; answer with a delta table whose rows name their writer, not a size ranking |
 | The source is genuinely unknown | Use the general analysis workflow below; Mole is optional, not the universal first step |
 
 User-provided scope exclusions override every generic scan suggestion. Do not inspect personal directories, credentials, databases, application state, or unrelated services when the user excludes them.
@@ -251,6 +252,7 @@ Load only the branch relevant to the current task:
 - `references/chromium_code_sign_clones.md` — Chrome/Chromium/Edge code-sign-clone semantics, nominal-versus-physical reporting, exact inactive-target manifests, cleanup verification, and recurrence prevention.
 - `references/cleanup_targets.md` — cache, log, application, developer, large-file, and Time Machine target semantics.
 - `references/proving-redundancy-before-deletion.md` — the evidence ladder for large data folders (duplication → creation-origin → references → session-history census → .DS_Store → project decision records). Load BEFORE proposing deletion of any big project-asset / media / dataset directory; a size ranking is not evidence.
+- `references/growth_attribution.md` — "what grew lately" questions: finding and calibrating a baseline export, the not-scanned trap, which file timestamp answers "arrived since", reconciling path-accounted deltas with `df` (swap, snapshots, short-lived copies), and naming the writer.
 - `references/docker_analysis.md` — per-object Docker and OrbStack analysis, database-volume safeguards, and refill root-cause diagnosis.
 - `references/mole_integration.md` — TTY workflow for interactive Mole analysis and preview.
 - `references/report_templates.md` — long-form general and Docker report templates.

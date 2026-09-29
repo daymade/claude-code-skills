@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **macos-cleaner** (`daymade-macos` v1.12.1 → v1.13.0): Route "what has been filling the disk lately" questions to a new `references/growth_attribution.md`; a size ranking does not answer them. It diffs a saved GrandPerspective text export or earlier `du` output against the current disk, after confirming on an unchanged directory that both sides measure size the same way. Directories missing from the baseline count as not scanned rather than new: in one observed case a naive diff reported 106 GiB of growth where 1.4 GiB had arrived. Each delta is confirmed with file timestamps. The attributed total is checked against the `df` change, counting swap, local snapshots and short-lived copies, and every row names the process or session that writes to it.
+
 - **read-claude-code-history** (`daymade-claude-code` v4.1.0 → v4.2.0): Add `read_claude_session.py --session <ID> --find-command-sha256 <HEX>`, which resolves a hook audit row keyed by Session ID and command SHA-256 to the full tool call: file and line, timestamp, record uuid, cwd and command text. It also searches the Session's subagent transcripts, because a hook event raised inside a subagent carries the parent Session ID. Unparseable lines are counted and reported rather than hidden.
 
 - **claude-code-hooks** (`daymade-claude-code` v4.1.0 → v4.2.0): Add a pattern for changing a gate that already ships, above all adding an allow branch. Replay the same corpus through the old and new versions and account for every moved decision. Compose the new branch's trigger into every must-block row, and mutate the branch until those rows go red.
