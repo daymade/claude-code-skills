@@ -148,6 +148,10 @@ validation behavior in
 [native_review.py](daymade-audio/transcript-fixer/scripts/native_review.py), and
 queue anchor behavior in
 [review_queue.py](daymade-audio/transcript-fixer/scripts/core/review_queue.py).
+For batch audio checks, use [verify_queue_audio.py](daymade-audio/transcript-fixer/scripts/verify_queue_audio.py)
+and its [adjudication guide](daymade-audio/transcript-fixer/references/advanced_correction_evidence.md):
+audio verification may add evidence but never resolves a review row or proves
+whole-transcript completion.
 When changing these paths, update their owning instructions together; keep
 review coverage, unresolved verdicts, and repository publication distinct.
 

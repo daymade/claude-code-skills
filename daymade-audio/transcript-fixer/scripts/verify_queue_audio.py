@@ -2,7 +2,7 @@
 # /// script
 # requires-python = ">=3.10"
 # ///
-"""verify_queue_audio.py — 批量 pending 音频交叉核验（双引擎片段识别）。
+"""verify_queue_audio.py — 批量 pending 音频交叉核验（第二引擎双窗口识别）。
 
 对某转写文件在 review queue 里的 pending 项，逐项从源音频剪 tight/medium
 双片段，送第二识别引擎（默认 StepFun）交叉识别，输出对照表供裁决。
@@ -16,15 +16,12 @@
     --audio /abs/path/source.wav \
     [--speed 1.3]            # 转写时间轴→音频轴倍速（加速上传的妙记=原始/加速比；反推法：源音频时长/妙记时长）
     [--queue-ids 1817,1818]  # 默认该文件全部 pending
-    [--engine-script /abs/stepfun-asr/scripts/asr_transcribe.py]
+    --engine-script /abs/stepfun-asr/scripts/asr_transcribe.py
     [--outdir /tmp/asr-verify]
 
-输出：<outdir>/results.json（每项：id/line/original/suggested/token_wav_time/tight/medium 识别文本）
-判读（裁决矩阵，详 references/advanced_correction_evidence.md §批量 pending 音频核验）：
-  - 双窗一致且与候选同 → 可附音证，待人工裁决 accepted
-  - 双窗一致但与候选不同 → 按引擎输出 overridden（或 kept_original 若证明原词无误）
-  - 双窗矛盾/空 → 保留 pending，不换方法重复（两窗不一致本身是信号）
-依赖：ffmpeg/ffprobe；识别引擎脚本（stdout 出文本）。
+输出：<outdir>/results.json；相同音频片段不调用 ASR，结果标记 same_clip。
+脚本只附加符合条件的音证，不写裁决；逐项裁决见 references/advanced_correction_evidence.md。
+依赖：ffmpeg；识别引擎脚本（音频路径作为位置参数，识别文本写 stdout）。
 """
 import argparse, datetime, hashlib, json, os, re, subprocess, sys
 
@@ -124,14 +121,14 @@ def same_clip_bytes(first, second):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="批量 pending 音频交叉核验（双引擎片段识别）")
+    ap = argparse.ArgumentParser(description="批量 pending 音频交叉核验（第二引擎双窗口识别）")
     ap.add_argument("--transcript", required=True)
     ap.add_argument("--audio", required=True)
     ap.add_argument("--speed", type=float, default=1.0,
                     help="转写时间轴→音频轴倍速（加速上传的妙记=源时长/妙记时长，如 1.3）")
     ap.add_argument("--queue-ids", default="", help="逗号分隔；默认该文件全部 pending")
     ap.add_argument("--engine-script", required=True,
-                    help="第二识别引擎脚本（stdin 音频路径，stdout 文本），如 stepfun-asr/scripts/asr_transcribe.py")
+                    help="第二识别引擎脚本（音频路径位置参数，stdout 文本），如 stepfun-asr/scripts/asr_transcribe.py")
     ap.add_argument("--outdir", default="/tmp/asr-verify")
     ap.add_argument("--tight", type=float, default=5.0, help="tight 窗 ±秒（默认 5）")
     ap.add_argument("--medium", type=float, default=20.0, help="medium 窗 ±秒（默认 20）")

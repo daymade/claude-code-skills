@@ -314,12 +314,9 @@ fits the topic.
 
 The single-token rung above scales to a backlog. A finished native pass often
 leaves a queue of pendings whose local ladder is already exhausted (entities,
-garbled terms, numbers). Handing that queue to the user wholesale is the
-failure this section exists to prevent (real case 2026-09-13: 38 pendings
-presented as "awaiting user verdict"; the user's ruling was "don't push work
-you can do yourself onto me" — 33 of the 38 were then settled mechanically in
-one batch, leaving 5 genuinely unresolved). The batch unit is *one transcript's
-own pending rows*, one source audio, one second recognizer. The tool is
+garbled terms, numbers). Check available audio before handing the entire queue
+to the user. The batch unit is *one transcript's own pending rows*, one source
+audio, one second recognizer. The tool is
 `scripts/verify_queue_audio.py`:
 
 ```bash
@@ -331,8 +328,11 @@ uv run scripts/verify_queue_audio.py \
 It parses speaker turns, maps each pending row to its turn, estimates the token
 offset by character position inside the turn, scales by `--speed`, cuts
 tight+medium windows, and writes `<outdir>/results.json` with both windows'
-recognized text per row. You then adjudicate every row — the script surfaces,
-it never decides.
+recognized text per row. If the rendered clips have identical bytes, it skips
+recognition for that row. A supported suggestion may gain an `音证` citation in
+the review queue; this is evidence, not a verdict or a transcript edit. The
+exact automatic-attachment gate lives in `verify_queue_audio.py`, with the
+operator-facing CLI contract in [script_parameters.md](script_parameters.md).
 
 **Know the timestamp-to-audio mapping before cutting anything.** `ffmpeg -ss`
 counts from the start of the media file; the transcript's clock may be
@@ -366,26 +366,25 @@ corroboration of a wrong guess.
 
 **Adjudication matrix** (per row, both windows in hand):
 
-- **Both windows agree, and agree with a candidate** (yours or the queue's
-  suggestion) → `accepted`. This is the strong case; the engine's own output
-  settles it.
-- **Both windows agree on a *different* form** → `overridden` to the engine's
-  form when it also makes sense, or `kept_original` when the agreement proves
-  the transcript was right all along (real case: `OPC` returned identically by
-  both engines — it is a real abbreviation, One Person Company; record it as
-  confirmed-correct so no future run re-opens it).
-- **Windows disagree, one window empty, or the audio is genuinely noisy**
-  (break-room chatter) → the row stays pending with both outputs recorded.
-  Disagreement between windows is itself the signal; do not pick the window
-  you like better, and do not escalate by switching to a *reasoning* pass —
-  that replaces the instrument with the guesswork this rung exists to remove.
+- **Both windows support the queue's suggestion** → inspect any attached
+  citation and its context. If the gate did not attach one, the row stays
+  pending. Resolve separately only when the reading is justified; an audio
+  citation never executes `accepted` by itself.
+- **Both windows return a different form** → compare it with the original
+  transcript and independent authorities. Use `overridden` only for a justified
+  replacement; use `kept_original` when the original was right. Do not treat
+  recognizer spelling as proof of a person's identity.
+- **Clips are identical, a window is empty, audio is genuinely noisy, or the windows
+  conflict at the disputed term or its boundary** → leave the row pending and inspect the saved result.
+  Do not select whichever reading fits a domain prior or substitute a reasoning
+  pass for acoustic evidence.
 - **The engine returns a plausible familiar form that contradicts your domain
-  prior** — trust the engine. Real case 2026-09-13: an operator "corrected"
+  prior** — test the prior against the acoustic result. Real case 2026-09-13: an operator "corrected"
   `京剧名段` into `金骏眉` because the lecturer runs a tea business; the
   second recognizer returned `京剧名段`/`西湖风景图` in both windows, and the
   tea reading was the fluent wrong guess. Domain plausibility is a hypothesis
-  to be tested, not evidence — a consistent second-engine reading outranks it
-  every time.
+  to be tested, not evidence; identity and exact spelling still need their
+  own authority.
 
 **Numbers are the exception, not the rule.** For money/score arithmetic inside
 a game or estimate, both windows frequently disagree with each other and with
@@ -393,12 +392,11 @@ the transcript (speakers misadd, engines mis-hear digits). A number row that
 stays contradictory after both windows stays pending — arithmetic truth is not
 recoverable from acoustics.
 
-**Cost and scope.** One batch costs one download plus two recognizer calls per
-row — run it on a transcript's *own* queue, not across files. It adjudicates
-queue rows only; it is not a completeness claim about the transcript (that
-stays with the full-file path above), and it never overrides the person-name
-gate: a name the engine spells differently still walks the roster ladder, and
-speaker identity is never settled from audio by an agent.
+**Scope.** Run the check on a transcript's *own* queue, not across files. It
+checks queue rows only; it is not a completeness claim about the transcript
+(that stays with the full-file path above), and it never overrides the
+person-name gate: a name the engine spells differently still walks the roster
+ladder, and speaker identity is never settled from audio by an agent.
 
 ### In-room artifacts are another independent engine (whiteboard and slide photos)
 
