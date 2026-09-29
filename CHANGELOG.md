@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **transcript-fixer** (`daymade-audio` v1.44.0 → v1.44.1): `verify_queue_audio.py` now adds audio authority only when successful ASR outputs from different audio clips agree on the proposed term and its following character, with no recognition of the original alternative. A Chinese name embedded in a longer name, identical clip bytes, one-window match, or recognizer failure stays pending.
+
 ### Added
 
 - **read-claude-code-history** (`daymade-claude-code` v4.1.0 → v4.2.0): Add `read_claude_session.py --session <ID> --find-command-sha256 <HEX>`, which resolves a hook audit row keyed by Session ID and command SHA-256 to the full tool call: file and line, timestamp, record uuid, cwd and command text. It also searches the Session's subagent transcripts, because a hook event raised inside a subagent carries the parent Session ID. Unparseable lines are counted and reported rather than hidden.
