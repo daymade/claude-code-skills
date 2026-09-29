@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **claude-code-hooks** (`daymade-claude-code` v4.3.1 → v4.3.2): `hook_pitfalls.md` gains #48 — a test suite that has not run since its dependencies changed is green by reputation. Run the suite at HEAD before editing what it covers, or a sibling change's fixture rot lands in your diff and reads as your regression. Real case: an LFS-dispatch rewrite in a pre-push hook spent two rounds on "my edit broke the suite" before an at-HEAD run showed the rows had been failing for eight days.
+
 ### Changed
 
 - **macos-cleaner** (`daymade-macos` v1.14.0 → v1.14.1): The Chromium code-sign-clone reference records a measured release: deleting 293 inactive Chrome clones, 606.5 GiB path-accounted, freed roughly 0.2–0.4 GiB, and clones of an unreferenced older version did not free a bundle's size either, so release stays `unknown` until the `df` readback. It also gives a named-pipe script for agents whose shell cannot hold `safe_delete.py`'s prompt open while the final analyzer check runs.
