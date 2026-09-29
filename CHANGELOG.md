@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **skill-creator** (`daymade-skill` v1.54.0 → v1.54.1): `audit_skill_regression.py` now orders files the same way when hashing a `git-ref:` baseline as when hashing the extracted copy. The Git side sorted paths as strings, so `probes-r3/` came before `probes/`, and any skill with sibling directories sharing a prefix failed with "before tree does not match" against an unedited baseline.
+- **transcript-fixer** (`daymade-audio` v1.44.1 → v1.44.2): Align batch-audio guidance and CLI help with the shipped evidence-only behavior. The operator guide now leaves identical clips, uncertain boundaries, and conflicting readings pending; the CLI documents a positional audio-path argument. Remove copied gate conditions from the parameter reference.
 
 - **transcript-fixer** (`daymade-audio` v1.44.0 → v1.44.1): `verify_queue_audio.py` now adds audio authority only when successful ASR outputs from different audio clips agree on the proposed term and its following character, with no recognition of the original alternative. A Chinese name embedded in a longer name, identical clip bytes, one-window match, or recognizer failure stays pending.
 
