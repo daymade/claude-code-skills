@@ -122,6 +122,15 @@ STALE_AGE_IDIOM = re.compile(r"(?:很久|太久|好久|老早|早就)\s*(?:以�
 IMPERATIVE_REMEMBER = re.compile(
     r"(?:记得|记住|保证|别忘了?|沉淀|记录)[^\n，,。；;]{0,12}成功(?:的)?经验"
 )
+# "no-reuse"/"no_reuse_reason" 是回执字段名与运维文本里的 ASCII token，
+# 不是检索请求。2026-09-29 实证：值守循环的 tick 文本带它（"no-reuse：
+# 值守零生产"），每个 tick 武装一次闸门。只带左词边界（"casino reuse"
+# 不命中）；右边界不能要——字段名是 no_reuse_reason，下划线是词字符。
+# ⚠️ 中文「可复用/可重用」曾在此列，同日独立审阅复现其代价后移除：
+# 定语形真召回（"有可复用的现成方案吗"、"哪里能找到可复用的实现"）会被
+# 整段剔除后漏武装。属性陈述与召回请求在中文里共形，分不开就不豁免——
+# 写值守/运维文本的人自己避开「复用」二字（这是已知残留，不是已修问题）。
+NO_REUSE_TOKEN = re.compile(r"\bno[-_ ]?reuse", re.IGNORECASE)
 # 「我们这个对话最开始是想要干什么来着」/「我们的主线任务是什么来着」ask what the
 # CURRENT session is about. The answer is the conversation already in front of the
 # executor: no carrier to search, no candidate to verify, and no artifact produced —
@@ -246,7 +255,7 @@ def classify_prompt(prompt: str, receipt_valid: bool = False) -> str:
         return "opt_out"
     scannable = CURRENT_SESSION_RECALL.sub(
         " ", STALE_AGE_IDIOM.sub(" ", IMPERATIVE_REMEMBER.sub(
-            " ", NEGATED_PRIOR_SIGNAL.sub(" ", text)))
+            " ", NO_REUSE_TOKEN.sub(" ", NEGATED_PRIOR_SIGNAL.sub(" ", text))))
     )
     if PRIOR_WORK_STRONG_SIGNAL.search(scannable):
         return "required_prior_signal"

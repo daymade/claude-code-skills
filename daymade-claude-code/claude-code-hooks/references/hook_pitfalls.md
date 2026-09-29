@@ -2852,3 +2852,87 @@ this list and describe defects you reach by asking a different question):
   turning `exec` into a child call passed the whole suite with the status swallowed,
   and the health check's stamp read printed a redirect error on every hook's first
   sight.
+
+## 52. `$var` glued to full-width punctuation is one long variable name in a UTF-8 locale — and the detector you print must name its engine
+
+- **Symptom:** under `set -u`, the script aborts with `<name><mojibake>: unbound
+  variable` on a line whose variable was provably set a few lines above. The
+  happy path never reaches that line, so the bug lives in exactly the
+  retry/failure branch the line was written for.
+- **Cause and fix:** in a UTF-8 locale, bash admits the high bytes of a
+  multibyte character into the variable name, so `$rc；` or `$rc（` parses as
+  one long unbound name. Measured matrix (2026-09-30, macOS `/bin/bash` 3.2
+  and Homebrew 5.3 × C / POSIX / en_US.UTF-8 / zh_CN.UTF-8 / unset): **UTF-8
+  glues on both builds; C/POSIX is clean on both**; the builds differ only
+  when the locale is unset entirely — 3.2 falls back to C (clean) while 5.3
+  falls back to the macOS default UTF-8 (glues), which is the launchd shape
+  (minimal env, no locale variables). So the safety boundary is the locale,
+  not the build: explicit C/POSIX protects every bash, and both
+  "the C locale is what glues" and "system bash is safe" are
+  plausible-sounding and false. Fix is engine-independent: brace every
+  expansion that is immediately followed by non-ASCII text — `${rc}`. ⚠️ The detector you ship with this rule must
+  name its engine: the byte-class regex `\$[A-Za-z_][A-Za-z0-9_]*[\x80-\xff]`
+  is correct only as a **byte** scan (Python `re` on `rb""` bytes, or
+  `rg '(?-u)' …`); under rg/ugrep's default Unicode-aware mode the same
+  pattern reads as codepoints U+0080–U+00FF and misses full-width punctuation
+  (U+FF08/U+FF1B) entirely — printing the bare regex with no engine note hands
+  the reader a false-clean instrument, the exact failure #53 describes.
+  Verify any detector on a known-bad sample before trusting its "clean".
+- **Real case (2026-09-30):** a nightly sync script gained a retry loop; both
+  new Chinese log lines carried the glue. It fired in the calibration harness
+  (which ran under Homebrew bash) and would have fired for every
+  `#!/usr/bin/env bash` hook — 104 of 119 checked scripts in one hooks
+  directory, versus 15 on `/bin/bash` 3.2. The script being edited was itself
+  on 3.2, so under launchd's unset locale it would not have hit the bug in
+  production — but the same script in any UTF-8 locale (an interactive
+  login shell, for instance) would have, because 3.2 glues there too. Both
+  statements matter: the bug was real and the harness caught it, and the
+  harness, not the production shebang, was the vulnerable layer. This entry
+  was itself wrong twice and caught by re-probe both times: the first draft
+  claimed the opposite causality ("the C locale glues") and shipped the
+  engine-less detector regex; the rewrite then claimed 3.2 was immune under
+  every locale, which a UTF-8 re-probe of `/bin/bash` contradicted.
+
+## 53. A validator that folds "the call failed" into "nothing found" manufactures false greens
+
+- **Symptom:** a review or check logs "no issues found" for input it never
+  actually examined. The failure appears only in a debug log; the run that died
+  and the run that was clean are byte-identical to anyone reading the outcome.
+- **Cause and fix:** `if not result:` folds `result is None` (the API/tool call
+  failed) and "result exists and is empty" (genuinely clean) into one branch.
+  Failure, empty, and unexamined are three states and must log as three:
+  `if result is None: log "review NOT completed — UNKNOWN"` before the clean
+  branch. Then make the failure visible where the user actually looks (a
+  system message / status line), because a failure that only writes a debug
+  log is a pass. If the check lives in a vendor file that marketplace refreshes
+  overwrite, land the patch with a marker comment plus an idempotent repatch
+  script plus a health-check assertion that re-applies it on refresh and only
+  pages a human when the repatch script's anchors no longer match (meaning
+  upstream changed the code under the patch).
+- **Real case (2026-09-29, a security-review plugin):** primary and fallback
+  models both died on proxy-cut TLS in two burst clusters; the fire was logged
+  "no vulnerabilities found" — one confirmed false green among the day's 170
+  reviews, and the same None-vs-clean fold existed in three branches across
+  two of its files. The repaired build's regression harness goes red on exactly
+  the failure-direction rows when run against the unpatched copy.
+
+## 54. A detector keyed on neighbour-line heuristics false-alerts on recovery — key on the subject's own terminal marker
+
+- **Symptom:** the health detector reports more failures than the subject
+  itself recorded — because its rule ("the previous non-noise line is a
+  terminal failure") stays true across a *successful* fallback: the
+  "falling back to <model>" line was itself on the detector's noise list, so
+  the recovery was invisible to it.
+- **Cause and fix:** neighbour-line heuristics cannot see events they filter
+  out. Prefer the marker the subject prints only when it truly failed — here,
+  the per-fire closing line `API call failed with status`, emitted iff the
+  fire's final call failed. Then calibrate the rewritten criterion against the
+  real log in both directions on the same day: the fallback-succeeded fire must
+  *not* alert, the genuinely-failed fire must.
+- **Real case (2026-09-29, same incident family as #53):** the old criterion
+  reported 2 silent failures for a day that had exactly 1; the marker-keyed
+  criterion reports 1, and after the #53 fail-loud patch the new UNKNOWN lines
+  became the counted signal — detector and patched subject agree. One blind
+  spot to name, not to hide: if the subject *dies before printing* its terminal
+  marker (crash mid-fire, not a handled API error), the detector stays silent —
+  the marker only covers failure paths the subject itself survives.
