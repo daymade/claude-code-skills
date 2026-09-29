@@ -105,6 +105,14 @@ hotspot. Explain the uncertainty before choosing a smaller candidate. A path
 that looks ten times larger may physically release less than a smaller cache;
 that is a measurement boundary, not a reason to omit the path from the report.
 
+Measured on Google Chrome 153/154 for macOS (2026-09-29): deleting 293
+inactive clones, 606.5 GiB path-accounted, raised `Available` by roughly
+0.2–0.4 GiB (other writers were active, so the delta is approximate). Fifteen of
+them were clones of an older Chrome version that no running process used, and
+even these did not release the size of one app bundle; the sharing mechanism
+was not established. Do not estimate release as "clones of an unreferenced
+version × bundle size": report `unknown` until the `df` readback.
+
 ## Plan an exact cleanup
 
 Before asking for approval, report:
@@ -168,6 +176,25 @@ prompt waiting. In another shell, repeat the analyzer command with the same
 `--write-manifest`. Enter `all` only if that final read-only check passes. If it
 fails, enter `none` or cancel; do not regenerate a different list inside the
 approved execution phase.
+
+An agent whose shell tool cannot hold a prompt open runs the same sequence in
+one script: the helper reads its answer from a named pipe, and the answer is
+written only after the final check (used for the 2026-09-29 cleanup above; the
+helper sizes every target before prompting, so allow several minutes):
+
+```bash
+mkfifo "$FIFO"
+( uv run scripts/safe_delete.py --batch "$MANIFEST" < "$FIFO" > "$OUT" 2>&1; echo "HELPER_RC=$?" >> "$OUT" ) &
+exec 3>"$FIFO"
+until grep -q "Your choice" "$OUT" || grep -q "HELPER_RC=" "$OUT"; do sleep 0.5; done
+if grep -q "Your choice" "$OUT" && uv run scripts/analyze_code_sign_clones.py --root "$ROOT" \
+     --exclude "$KEPT" --expect-candidate-sha "$APPROVED_SHA"; then
+  echo all >&3
+else
+  echo none >&3
+fi
+exec 3>&-; wait
+```
 
 This is a normal local-maintenance guard, not an adversarial deletion engine. It
 assumes no hostile same-user or privileged process is replacing clone paths or
