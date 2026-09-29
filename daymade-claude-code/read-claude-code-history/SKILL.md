@@ -22,6 +22,8 @@ hand the verified evidence to `daymade-claude-code:continue-claude-code-work`.
 | Recent Claude Code sessions, titles, dates, or IDs | Indexed metadata only; the bundled `list_local_history.py` currently reads all candidate bodies before date/limit filtering, so do not use it for a broad inventory |
 | One known Session reconstructed as a chronological evidence briefing | `scripts/read_claude_session.py --session <ID>` |
 | The exact command behind a hook audit row that records a Session ID and a command SHA-256 instead of the text | `scripts/read_claude_session.py --session <ID> --find-command-sha256 <HEX>`; see **Command behind a hook audit row** below |
+| Every Agent/Task tool_use in one Session, quoted verbatim (e.g. the exact prompt handed to an independent reviewer agent) | `scripts/read_claude_session.py --session <ID> --agent-prompts` (optionally `--agent-description-prefix TEXT`); a prompt dispatched twice is listed twice |
+| Which session launched a program in a known time window, across sessions | `scripts/analyze_sessions.py tool-calls --from <ISO> --to <ISO> --pattern <REGEX> [--tool NAME]`; candidates are selected by filesystem metadata before any body is read, then grouped by session; Codex rollouts are out of scope and the gap is stated in the output |
 | The user's recent words, including human queued prompts | `scripts/extract_user_messages.py` |
 | A conversation or quote by keyword | `scripts/history_index.py recall --mode bm25`, then the exact-session reader |
 | Prior work whose wording may have changed | `scripts/history_index.py recall` after checking index status |
