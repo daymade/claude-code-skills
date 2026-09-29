@@ -2728,3 +2728,127 @@ this list and describe defects you reach by asking a different question):
   stamps, keyed on the wrapper, stayed valid, so neither the probe nor the full
   battery ran on the new logic. Across that repository's 72 installed hooks, 19
   had logic outside the registered file.
+
+## 50. A gate that passes slowly raises no signal — and the host records the run time of only some of the hooks that succeed
+
+- **Symptom:** every session starts a minute late, or a push waits twenty minutes,
+  and nobody can say which hook is responsible. Block counts, bypass counts and
+  self-test results are all healthy, because the slow hook works and exits 0.
+- **Cause:** the two signals a guard normally has, "it blocked" and "it broke", say
+  nothing about cost. The host writes run times for many hooks, but no report reads
+  them unless you write one, and a PreToolUse hook that prints nothing may leave no
+  record at all (step 1).
+- **Fix:**
+  1. Read the run times the host already writes. Session transcripts are JSONL
+     files under the host's projects directory. A successful hook run is a record
+     `{"type": "attachment", "attachment": {"type": "hook_success", …}}`, and the
+     fields are inside `attachment`: `hookEvent`, `hookName`, `toolUseID`,
+     `command`, `exitCode`, `stdout`, `stderr`, `content`, `durationMs`. Blocked runs
+     (`hook_blocking_error`) and injected context (`hook_additional_context`) records
+     carry no duration. Group by event and by the script's file stem; for a binary
+     use its file name, and for a hook with no executable (a prompt) use the text.
+     Parse `command` with Python's `shlex.split` rather than `str.split` (a path
+     containing a space breaks the latter). Deduplicate forked or resumed
+     transcripts by `(toolUseID, command)`. Report count, median, p95 and max per
+     hook, and set the alert threshold from the observed distribution rather than a
+     guess: in one week's data most hooks had a median far below a second, and the
+     few worth reading were those with a median of 1 s or more, or a p95 of 5 s or
+     more.
+     **Not every run leaves a record.** Probe: count one hook's records in a
+     transcript and compare with the session's tool calls it matches. In one session
+     (682 Bash calls, 2026-09-30) each PreToolUse advisor of ours had between 2 and
+     29 records, every one with non-empty `stdout`, while PostToolUse, Stop and
+     SessionStart hooks had silent records as well (802 of 858 PostToolUse records
+     had empty `stdout`); one third-party PreToolUse binary was recorded on every
+     call. So for a PreToolUse hook a record count is a count of runs that
+     produced output, its median describes only those runs, and "zero records" does
+     not mean "never ran". To time a silent PreToolUse hook, have it log its own
+     duration (step 3).
+  2. Count output as well. A hook whose `stdout` is non-empty and not `{}` is doing
+     something a block count cannot see, usually injecting advisory context, so a
+     block-count report shows it as silent or dead. Read its JSON before calling it
+     advisory: a hook that exits 0 with `hookSpecificOutput.permissionDecision` set
+     to `deny`, or a top-level `decision` of `block`, does block. A tool that prints
+     `{}` on every call is not an advisor.
+  3. Guards that git runs, not the host, never appear in a transcript. Have the
+     guard append one line per run (time, name, seconds, exit code, repository) to a
+     state log, and read that log in the same report. Print one "still running" line
+     from inside the guard's long loop once a single run passes a threshold (60 s in
+     the case below), so no background process is needed. That threshold is one
+     run's seconds; the median and p95 lines in step 1 describe a hook's whole
+     distribution. Set them separately.
+  4. A health check that runs every hook's self-test at session start is a common
+     slow pass. Keep a stamp per hook, for example `<hash of the hook path>.pass`
+     holding the signature and the epoch seconds of the last pass. The signature is
+     the file's modification time and size, read through symlinks
+     (`stat -L -f '%m %z'` on BSD and macOS, `stat -L -c '%Y %s'` on GNU), so an edit
+     made through a symlink counts. Skip the self-test when the signature is
+     unchanged and the last pass is younger than a TTL, a day being a workable
+     default. A failure, a changed file, and a missing, corrupt or unreadable stamp
+     all still run the self-test, and a failed run writes no stamp. The signature
+     covers the hook file only: an edit to a helper it sources goes unseen until the
+     TTL expires, so include those files in the signature if the TTL is long.
+     Measure the change by alternating old and new on one machine: machine load
+     moves the number more than the code does.
+- **Real case (2026-09-29, one hooks repository):** adding per-hook timing to a
+  weekly hook report showed a SessionStart health check at a median of 65 s over 257
+  runs in a week. A trace (`bash -x` with `PS4='+T$SECONDS '`, then the largest gaps
+  between lines) put the time in about thirty hooks' self-tests, some 5 to 11 s
+  each. With the signature-and-TTL skip, four old runs alternated with four new ones
+  on one machine took 69 to 83 s before and 4 to 20 s after; the fastest new run
+  had warm stamps, and the first (16 s) ran the two full self-tests that had no
+  stamp yet. The 65 s median came from other times and load. In the same week, a
+  global pre-push check that took 22 to 29 minutes per new branch, and moved no
+  count in that report, was attributed by the commit that fixed it to a full tree
+  listing for every commit in the range. The first version of that report also
+  printed "0 runs in the window" for silent guards; the probe in step 1 showed the
+  wording was wrong, and the report now says "0 records" and states the coverage.
+
+## 51. Adding a run recorder to a guard: `exec` skips your trap, other sessions' fixtures fill the log, and a missing stamp leaks a redirect error
+
+- **Symptom:** the recorder never logs the runs of a hook that ends in `exec`; the
+  log on its first day is mostly rows nobody ran; a first run prints
+  `No such file or directory` on stderr although the code redirects that error; and
+  a new self-test row makes the whole self-test exit silently with status 2.
+- **Cause and fix**, in four parts (bash, and zsh for part 3):
+  1. `exec` replaces the process, so an EXIT trap is never reached. Replace
+     `exec child "$@"` with
+     `child_rc=0; child "$@" || child_rc=$?; exit "$child_rc"` and keep the EXIT
+     trap that records the run: it then fires once, with the child's status, for
+     this path and for every path that leaves before the child. Do not also call
+     the recorder before `exit`, or the run is logged twice. The child's refusal
+     must reach the caller unchanged, so this is a security edit, and a passing
+     suite does not show it: the usual fixtures make the guard's own checks refuse
+     before the child runs, and they pass with `exit 0` hard-coded. Test it with a
+     stub child that exits 7 and assert both the hook's status and the recorded
+     one. A mutation that swallowed the status survived until that test existed.
+  2. A fixture repository's git hooks fire the real global guards, so every
+     self-test and test suite, from every session, writes to a machine-wide log.
+     Asking each suite to redirect it holds until the next session forgets. Filter
+     in the writer instead: skip a repository whose top-level path
+     (`git rev-parse --show-toplevel`) starts with `/tmp/`, `/private/tmp/`,
+     `/var/folders/`, `/private/var/folders/` (macOS resolves the first and third to
+     the `/private` spellings) or `${TMPDIR%/}/`. Write the prefixes with the
+     trailing slash: `/tmp*` also matches a sibling such as `/tmpfoo`. Guard the
+     `TMPDIR` test with `[[ -n "${TMPDIR:-}" && … ]]`: with `TMPDIR` unset or empty
+     the pattern becomes `/*`, and every path counts as a fixture. Give the suites
+     that assert on the log an explicit opt-in variable, for example
+     `RECORD_TEMP=1`. Cleaning the log afterwards by name patterns never finishes,
+     because fixtures are named by whoever writes them.
+  3. In bash and zsh, `read -r a b < "$stamp" 2>/dev/null` applies the redirections
+     left to right, so the failing `<` prints its error before `2>/dev/null`
+     exists. Write `read -r a b 2>/dev/null < "$stamp" || true`, and assert that a
+     first run prints nothing to stderr.
+  4. In a self-test, `text=$(run_the_guard_on_a_blocked_input)` returns the guard's
+     status 2 and, under `set -e`, ends the script silently with that status, so the
+     health check reports the hook as dead. Add `|| true` inside the helper when the
+     output is what you want, and compare the new self-test's exit status with the
+     old version's before trusting a green run.
+- **Real case (2026-09-29, one hooks repository):** after per-run timing went into
+  three git guards (pre-commit, pre-push and one that blocks recursive backups), 507
+  of the log's first 552 lines came from the temporary repositories of tests, under
+  many naming schemes; two attempts to clean the log by name each dropped real rows
+  or kept fixture rows. The writer-side path filter ended it. In the same change,
+  turning `exec` into a child call passed the whole suite with the status swallowed,
+  and the health check's stamp read printed a redirect error on every hook's first
+  sight.
