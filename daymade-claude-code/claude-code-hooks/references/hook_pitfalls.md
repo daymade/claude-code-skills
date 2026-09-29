@@ -1264,6 +1264,9 @@ this list and describe defects you reach by asking a different question):
   some inputs only? → a `$(( ))` error discarding the whole branch, `exit`
   included, so the main path runs (#47). In a `--selftest` branch the same
   fall-through reports a pass.
+- Did a suite row **fail right after your edit, on machinery your edit never
+  touched**? → the suite may have been red for days before you arrived; run it
+  at HEAD first or you will debug someone else's rot as your regression (#48).
 
 ## 29. A trailing `exit 0` swallows the exit-code decision — the message prints, the state writes, the guard never blocks
 
@@ -2587,3 +2590,25 @@ this list and describe defects you reach by asking a different question):
   "crashes, yet exits 0" and stayed unexplained until the fall-through was
   reproduced. Searching the same repository for the pattern turned up two more
   files, where the malformed value only garbled a failure message.
+
+## 48. A suite that has not run since its dependencies changed is green by reputation — run it at HEAD before you edit, or someone else's rot lands in your diff
+
+- **Symptom:** you change file X, run its test suite, and a row fails. You start
+  debugging your own diff.
+- **Cause:** the row was already failing before you touched anything — a sibling
+  component the fixtures depend on changed days earlier and the suite had not been
+  run since. Your change's first suite run is the first run in that window, so the
+  pre-existing failure is attributed to you. Every round you spend "fixing your
+  regression" is wasted, and the real repair (fixture or environment) never happens.
+- **Fix:** before editing code a suite covers, run the suite once on the unmodified
+  tree and record which rows already fail — that baseline turns "did I break it?"
+  into a lookup. When a row fails both before and after, repair the fixture rot
+  first and label it separately in the commit; folding the repair silently into your
+  feature change makes the next bisect lie.
+- **Real case (2026-09-29):** rewriting the LFS-verification stage of a git pre-push
+  hook hit two consecutive "my edit broke the suite" rounds that were actually
+  fixture rot from a whole-tree-audit change eight days prior — the rows now
+  required a resolvable remote and `gitleaks` on PATH. Seeding local bare remotes
+  and shimming `gitleaks` (with `git-lfs` deliberately absent, which the rows' own
+  assertion needs) was the prerequisite for calibrating the rewrite at all. The
+  failure had been invisible because nothing runs the suite between edits.

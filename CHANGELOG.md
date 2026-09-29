@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **claude-code-hooks** (`daymade-claude-code` v4.3.1 → v4.3.2): `hook_pitfalls.md` gains #48 — a test suite that has not run since its dependencies changed is green by reputation. Run the suite at HEAD before editing what it covers, or a sibling change's fixture rot lands in your diff and reads as your regression. Real case: an LFS-dispatch rewrite in a pre-push hook spent two rounds on "my edit broke the suite" before an at-HEAD run showed the rows had been failing for eight days.
+
 ### Fixed
 
 - **report-with-html** (`report-with-html` v1.0.1 → v1.0.2): Every direct Chrome launch passes `--disable-features=MacAppCodeSignClone`. On macOS each launch copies the Chrome app into a temporary `code_sign_clone` directory, and a Chrome that gets killed leaves the copy behind. `reconcile_content_diff.py` passes `--user-data-dir`, with which Chrome 154 keeps running after printing the DOM of the pages it checks, so it ends Chrome itself, and every page it rendered left a copy (measured: two per run comparing one old and one new page, none after this change). `render_report.sh` no longer waits for Chrome without limit: it stops Chrome once the PNG is complete, sends SIGKILL if SIGTERM does not end it within 5 seconds, and fails after `CHROME_TIMEOUT` seconds (default 90).
