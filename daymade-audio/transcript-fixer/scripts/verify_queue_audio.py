@@ -81,6 +81,17 @@ def list_pending(transcript, queue_ids):
     return items
 
 
+def both_windows_support_suggestion(result):
+    """A single matching window cannot certify a disputed ASR suggestion."""
+    suggestion = re.sub(r"\s+", "", result.get("suggested") or "")
+    if not suggestion or result.get("tight_exit") or result.get("medium_exit"):
+        return False
+    return all(
+        suggestion in re.sub(r"\s+", "", result.get(window) or "")
+        for window in ("tight", "medium")
+    )
+
+
 def main():
     ap = argparse.ArgumentParser(description="批量 pending 音频交叉核验（双引擎片段识别）")
     ap.add_argument("--transcript", required=True)
@@ -96,7 +107,8 @@ def main():
     a = ap.parse_args()
 
     os.makedirs(a.outdir, exist_ok=True)
-    lines = open(a.transcript, encoding="utf-8").read().splitlines()
+    with open(a.transcript, encoding="utf-8") as transcript_file:
+        lines = transcript_file.read().splitlines()
     turns = parse_turns(lines)
     if not turns:
         sys.exit("no speaker turns parsed — 转写需含「说话人 HH:MM:SS.mmm」行")
@@ -123,6 +135,7 @@ def main():
             "original": it["original_text"], "suggested": it.get("suggested_text") or "",
             "token_wav_time": round(tok_t, 2),
             "tight": r1.stdout.strip()[:300], "medium": r2.stdout.strip()[:500],
+            "tight_exit": r1.returncode, "medium_exit": r2.returncode,
             "err": (r1.stderr + r2.stderr)[:200],
         })
         print(f"done {tid}: {it['original_text']}", flush=True)
@@ -132,24 +145,19 @@ def main():
         json.dump(results, f, ensure_ascii=False, indent=1)
     print(f"\n{len(results)} items -> {out}")
 
-    # Write the verdict back into the queue's evidence column — but ONLY when
-    # the audio supports the suggestion. The name-convergence gate treats a
-    # 音证 citation as an authority, so attaching one the audio does not
-    # support would launder an unsupported write through the gate. When the
-    # engines do not return the suggestion, nothing is attached: the operator
-    # reads results.json and decides with a different authority (or keeps the
-    # original).
+    # Attach acoustic evidence only when both independently cut windows return
+    # the suggestion. A one-window match is a disagreement, not authority for
+    # the name-convergence gate. This never records a review verdict.
     attached, unsupported = [], []
     for r in results:
         sug = (r.get("suggested") or "").strip()
         if not sug:
             continue
-        norm = lambda s: re.sub(r"\s+", "", s or "")
-        if any(sug in norm(r.get(k) or "") for k in ("tight", "medium")):
+        if both_windows_support_suggestion(r):
             text = (f"音证 {datetime.date.today().isoformat()}：token≈{r['token_wav_time']}s，"
                     f"tight 窗识别「{(r.get('tight') or '')[:80]}」"
-                    f"/ medium 窗「{(r.get('medium') or '')[:80]}」含建议词「{sug[:40]}」"
-                    f"（verify_queue_audio 双引擎回写）")
+                    f"/ medium 窗「{(r.get('medium') or '')[:80]}」均含建议词「{sug[:40]}」"
+                    f"（verify_queue_audio 双窗口回写）")
             cp = subprocess.run(
                 ["uv", "run", FIX, "--attach-authority", str(r["id"]),
                  "--authority-text", text, "--by", "verify_queue_audio", "--json"],
