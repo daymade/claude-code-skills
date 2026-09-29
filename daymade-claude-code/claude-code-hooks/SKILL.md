@@ -1198,11 +1198,21 @@ the consent file) must back up and restore any real consent file around itself.
      `shared-repo-head-drift` (21 cases / 17.8 s cold, collapsing SessionStart's
      health check to a probe of 9 assertions / 2.2 s): keep both halves in the hook
      as `--selftest` and `--selftest-full`, and let the health check pick — run the
-     full battery when the file has changed since the last full pass, otherwise the
-     probe. The cost then lands on the first session *after an edit*, which is
-     exactly when the full battery is worth paying for.
+     full battery when the hook's code has changed since the last full pass, otherwise
+     the probe. The cost then lands on the first session *after an edit*, which is
+     exactly when the full battery is worth paying for. **"The hook's code" is the
+     registered file plus what it runs and imports.** Most guards are a thin wrapper
+     around a classifier in a sibling `.py`, so a signature taken from the wrapper
+     alone stays valid through every edit to the logic, and the battery never runs
+     after exactly the changes it exists for (#49 — which also gives the dependency
+     rule and a one-process implementation).
      ```bash
-     sig=$(stat -L -f '%m %z' "$h" 2>/dev/null || true)   # -L or you stat the symlink — #41
+     # once, before the loop: #49's sign_hooks.py signs every hook and what it
+     # runs/imports in one process, symlinks resolved (#41)
+     python3 sign_hooks.py "$HOOK_DIR"/*.sh > "$SIGS"   # "<hook>\t<sig>" per line
+     # then, for each hook $h:
+     mode="--selftest"   # reset per hook, or a fresh hook inherits the last one's tier
+     sig=$(awk -F'\t' -v h="$h" '$1 == h { print $2 }' "$SIGS")
      stamp="$STAMPS/$(printf '%s' "$h" | shasum | cut -c1-16).full"
      [ -n "$sig" ] && [ "$(cat "$stamp" 2>/dev/null || true)" = "$sig" ] || mode="--selftest-full"
      bash "$h" "$mode" >/dev/null 2>&1 </dev/null || return 1   # </dev/null: an

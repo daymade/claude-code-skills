@@ -1267,6 +1267,9 @@ this list and describe defects you reach by asking a different question):
 - Did a suite row **fail right after your edit, on machinery your edit never
   touched**? → the suite may have been red for days before you arrived; run it
   at HEAD first or you will debug someone else's rot as your regression (#48).
+- Did you edit a guard's classifier and **the next health check stayed green
+  without re-running its full battery**? → the scheduler signs the registered
+  wrapper, not the sibling `.py` it runs or the modules that file imports (#49).
 
 ## 29. A trailing `exit 0` swallows the exit-code decision — the message prints, the state writes, the guard never blocks
 
@@ -2612,6 +2615,119 @@ this list and describe defects you reach by asking a different question):
   and shimming `gitleaks` (with `git-lfs` deliberately absent, which the rows' own
   assertion needs) was the prerequisite for calibrating the rewrite at all. The
   failure had been invisible because nothing runs the suite between edits.
+
+## 49. A selftest scheduler that signs only the registered hook file never re-runs after edits to the logic — sign what the hook runs and imports
+
+- **Symptom:** you edit a guard's classifier, the next session's health check
+  reports every hook healthy, and that guard's full battery does not run. Nothing
+  warns. If the scheduler also caches passes, not even the cheap probe re-runs
+  until its TTL expires.
+- **Cause:** the scheduler's signature is the `stat` of the registered file, and
+  for most guards that file is a thin wrapper: the decision lives in a sibling
+  `guard.py`, which may import a shared module, and the battery lives in a test
+  file beside it. Editing any of those leaves the wrapper untouched, so the stamp
+  stays valid. #41 fixed *which inode* gets read; this is *which files*.
+- **Fix:** sign the hook together with the files it executes and imports, found
+  by reading them, recursively and bounded:
+  1. In shell and JS files, on non-comment lines, a filename joined onto a path —
+     `"$HERE/guard.py"`, `"$(dirname "$0")/lib.sh"`, `"$HOME/…"`, an absolute path —
+     that exists next to the file, one directory up, or under `$HOME`, kept only
+     inside the hooks tree. The walk tries all three rather than parsing `..`;
+     trying one directory up is what resolves `"$DIR/../lib.sh"`.
+  2. In Python files, same-directory imports: `import a`, `import a, b`,
+     `from a import x`. Relative imports are not followed; a hook runs as a
+     script and cannot use them.
+  3. Nothing else. A comment naming a script, a bare script name in a message,
+     a `case` pattern listing script names: these are data. Following them
+     chains through prose. Measured on one hooks directory, a walk that followed
+     bare mentions signed one guard over 18 files, including other guards and
+     replay scripts. Once every hook depends on most of the directory, any edit
+     re-runs every full battery and the cache is gone.
+
+  The walk cannot tell a path-joined name inside a message or a data list from
+  one in a command, so it follows those too. That over-signs only the hook that
+  contains them: on the same directory, one hook of 72 (a fixture advisor that
+  lists other hooks' corpora) signed 21 files. The cost is extra full runs for
+  that hook, not the cache for every hook.
+
+  Resolve the hook's symlink before walking (#41), so dependencies are found
+  next to the target rather than the link (#42). Keep the failure direction: a
+  hook that is missing or cannot be read (`chmod 000`) gets an empty signature,
+  and the caller runs the full battery.
+
+  Sign every hook in **one** process before the scheduling loop. Shelling out per
+  hook (`realpath`, `grep`, `stat` and a hash for each file) cost 1.3 s at every
+  session start for 72 hooks; one Python pass took 0.14 s, less than the old
+  single-`stat` loop.
+  ```python
+  #!/usr/bin/env python3
+  """sign_hooks: print "<hook>\t<mtime:size,...> <n>" for each hook path given."""
+  import os, re, sys
+  HOME = os.path.expanduser("~")
+  PATH_TOKEN = re.compile(r"/[A-Za-z0-9_][A-Za-z0-9_.-]*(?:/[A-Za-z0-9_][A-Za-z0-9_.-]*)*"
+                          r"\.(?:sh|bash|py|js|mjs|cjs|ts|json|toml|ya?ml)")
+  IMPORT = re.compile(r"^[ \t]*(?:from[ \t]+([A-Za-z_]\w*)|import[ \t]+([A-Za-z_][\w \t.,]*))", re.M)
+
+  def deps(f):
+      d = os.path.dirname(f)
+      parent = os.path.dirname(d)
+      try:
+          text = open(f, encoding="utf-8", errors="replace").read()
+      except OSError:
+          return
+      if f.endswith(".py"):
+          for frm, imp in IMPORT.findall(text):
+              names = [frm] if frm else [n.split()[0].split(".")[0] for n in imp.split(",") if n.strip()]
+              for name in names:
+                  if os.path.isfile(os.path.join(d, name + ".py")):
+                      yield os.path.join(d, name + ".py")
+      elif f.endswith((".sh", ".bash", ".js", ".mjs", ".cjs", ".ts")):
+          for line in text.splitlines():
+              if line.lstrip().startswith("#"):
+                  continue
+              for tok in PATH_TOKEN.findall(line):
+                  for cand in (d + tok, parent + tok, tok, HOME + tok):
+                      if os.path.isfile(cand):
+                          if cand.startswith(parent + os.sep):  # stay inside the hooks tree
+                              yield cand
+                          break
+
+  for hook in sys.argv[1:]:
+      real = os.path.realpath(hook)
+      if not (os.path.isfile(real) and os.access(real, os.R_OK)):
+          print(f"{hook}\t")
+          continue
+      files, queue = [], [real]
+      while queue and len(files) < 40:
+          f = queue.pop(0)
+          if f not in files:
+              files.append(f)
+              queue.extend(deps(f))
+      stamps = []
+      for f in files:
+          try:
+              st = os.stat(f)
+              stamps.append(f"{int(st.st_mtime)}:{st.st_size}")
+          except OSError:
+              stamps.append("gone")
+      print(f"{hook}\t{','.join(stamps)} {len(files)}")
+  ```
+  Compare the signature as one string; its first field is a list, not an mtime.
+  Old stamps stop matching once, so the first session after the change runs every
+  battery.
+- **Regression cases** (each has to go red when its rule is mutated away): edit
+  the sibling `.py` and not the wrapper → the full battery runs; edit a module
+  that `.py` imports → it runs; edit a file named only in a comment, written in
+  the path-joined form the walk does follow on code lines → it does **not** run
+  (this is the case that catches a walk that stopped skipping comments); reach
+  the hook through a symlink and edit the target's sibling → it runs; delete a
+  dependency → it runs; `import a, b` and edit `b` → it runs; make the hook
+  unreadable → its signature is empty.
+- **Real case (2026-09-29, a private hooks repository):** a guard's classifier
+  and a newly extracted shared module were edited and pushed. The health check's
+  stamps, keyed on the wrapper, stayed valid, so neither the probe nor the full
+  battery ran on the new logic. Across that repository's 72 installed hooks, 19
+  had logic outside the registered file.
 
 ## 50. A gate that passes slowly raises no signal — and the host records the run time of only some of the hooks that succeed
 
