@@ -629,6 +629,9 @@ class ComponentBrowserTests(unittest.TestCase):
                 [
                     chrome,
                     "--headless",
+                    # Without this each run leaves a copy of the Chrome app bundle in
+                    # a code_sign_clone directory on macOS.
+                    "--disable-features=MacAppCodeSignClone",
                     "--disable-gpu",
                     "--no-sandbox",
                     f"--user-data-dir={profile}",

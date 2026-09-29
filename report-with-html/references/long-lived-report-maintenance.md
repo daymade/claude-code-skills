@@ -87,7 +87,7 @@
 
 - **head 与布局**：`<meta charset>`＋`<meta name="viewport" content="width=device-width, initial-scale=1">`＋**窄屏保护 CSS**。只加 viewport 不加保护会让手机端从"缩小的桌面页"变成"裁切的窄页"——更糟。保护的最小集：auto-fit 网格在窄屏锁列数上限；宽表格放在可聚焦的局部滚动区，别撑破页面。
 - **验证窄屏要先证实实际 viewport，再测量**：不要凭 `--window-size=390` 参数或截图宽度认定页面真的在 390 CSS px；先断言 `innerWidth` 与 `documentElement.clientWidth` 等于目标宽度，不成立就改用 DevTools 设备仿真。随后用 `scrollWidth vs clientWidth` 得溢出像素数，并遍历 `getBoundingClientRect().right > vw` 枚举越界元素（排除故意在画布外的关闭态抽屉/遮罩）。
-- **改了页内 JS 后做运行时 DOM 验证**：headless `--dump-dom` 后 grep 由 JS 构建的内容（手风琴条目、动态区块）——构建产物在＝脚本没被改坏；只做静态 grep 验不出"JS 字面量里一个引号把整段脚本弄死"。
+- **改了页内 JS 后做运行时 DOM 验证**：headless `--dump-dom` 后 grep 由 JS 构建的内容（手风琴条目、动态区块）——构建产物在＝脚本没被改坏；只做静态 grep 验不出"JS 字面量里一个引号把整段脚本弄死"。在 macOS 上直接调 Google Chrome 时加 `--disable-features=MacAppCodeSignClone`：每次启动都会在临时目录复制一份 Chrome 应用，Chrome 被杀掉时这份副本不会被删。带 `--user-data-dir` 时，Chrome 154 打印完 DOM 后可能一直不退出——以输出里出现 `</html>` 为准再结束它，`scripts/reconcile_content_diff.py` 的 `run_in_own_process_group` 就是这样做的。
 
 ## 8. 引用抽屉：已组件化（citation-drawer），下列是它的行为契约
 

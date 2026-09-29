@@ -5,13 +5,18 @@ Why this exists: text-correct is not render-correct. Fonts can fall back, tables
 can overflow, a translated heading can wrap badly — none of which show up unless
 you LOOK. After running this, Read each seg-*.png and check the layout.
 
-Two real gotchas this script handles for you:
+Three real gotchas this script handles for you:
   1. Chrome's headless screenshot caps height around 16384 physical px. A 2x shot
      of a long page silently truncates. So we first probe the real content height
      at 1x, then pick the largest device-scale-factor that keeps the full page
      under the cap (crisp when it fits, still complete when it doesn't).
   2. A full-page shot is one tall image; thumbnailed, the text is unreadable. So
      we slice into ~2600px-tall segments — each one is legible when Read.
+  3. Headless Chrome can write the screenshot and then never exit (Chrome 154 for macOS
+     does so when given --user-data-dir). The finished PNG is taken as the completion
+     signal, Chrome is stopped here, and the wait is bounded. The
+     MacAppCodeSignClone flag stops each launch from copying the Chrome app into a
+     code_sign_clone directory on macOS, which a stopped Chrome would leave behind.
 
 Usage:
   uv run --with Pillow --with numpy python verify_render.py out.html
@@ -19,9 +24,13 @@ Usage:
 """
 import os
 import sys
+import time
 import shutil
+import signal
 import argparse
 import subprocess
+import tempfile
+from pathlib import Path
 from PIL import Image
 import numpy as np
 
@@ -46,18 +55,78 @@ def find_chrome():
              "verification. Install Google Chrome, or pass a different verifier.")
 
 
+CHROME_TIMEOUT_SECONDS = 90
+PNG_IEND = b"\x00\x00\x00\x00IEND\xaeB`\x82"
+
+
+def png_complete(path):
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            if f.tell() < 20:
+                return False
+            f.seek(-12, os.SEEK_END)
+            return f.read() == PNG_IEND
+    except OSError:
+        return False
+
+
+def stop(proc):
+    """SIGTERM, then SIGKILL if Chrome is still running after 5 s. Chrome's helper
+    processes exit with the browser process."""
+    if proc.poll() is not None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+
+
+def _raise_exit(signum, _frame):
+    raise SystemExit(128 + signum)
+
+
 def shoot(chrome, html_path, out_png, width, height, scale):
-    subprocess.run([
-        chrome, "--headless", "--disable-gpu", "--no-sandbox", "--hide-scrollbars",
-        "--no-proxy-server",                      # local file:// must not route via a proxy
-        f"--force-device-scale-factor={scale}",
-        "--virtual-time-budget=10000",            # let base64 images + fonts settle
-        f"--window-size={width},{height}",
-        f"--screenshot={out_png}", f"file://{html_path}",
-    ], check=False, capture_output=True)
-    if not os.path.isfile(out_png):
-        sys.exit(f"error: Chrome produced no screenshot ({out_png}). "
-                 f"Check the HTML path and that Chrome runs headless on this machine.")
+    if os.path.exists(out_png):
+        os.remove(out_png)                        # a stale PNG would read as "done"
+    # A TERM/HUP aimed at this script alone still stops Chrome: the finally below runs.
+    # Only signals still at their default: under nohup SIGHUP is ignored and stays so.
+    caught = [s for s in (getattr(signal, "SIGTERM", None), getattr(signal, "SIGHUP", None))
+              if s and signal.getsignal(s) is signal.SIG_DFL]
+    previous = {s: signal.signal(s, _raise_exit) for s in caught}
+    timed_out = False
+    with tempfile.TemporaryFile() as chrome_err:
+        proc = subprocess.Popen([
+            chrome, "--headless", "--disable-gpu", "--no-sandbox", "--hide-scrollbars",
+            "--disable-features=MacAppCodeSignClone",  # no app-bundle copy per launch
+            "--no-proxy-server",                      # local file:// must not route via a proxy
+            f"--force-device-scale-factor={scale}",
+            "--virtual-time-budget=10000",            # let base64 images + fonts settle
+            f"--window-size={width},{height}",
+            f"--screenshot={out_png}", Path(html_path).resolve().as_uri(),
+        ], stdout=subprocess.DEVNULL, stderr=chrome_err)
+        deadline = time.monotonic() + CHROME_TIMEOUT_SECONDS
+        try:
+            while proc.poll() is None and not png_complete(out_png):
+                if time.monotonic() > deadline:
+                    timed_out = True
+                    break
+                time.sleep(0.2)
+        finally:
+            stop(proc)
+            for s, handler in previous.items():
+                signal.signal(s, handler)
+        if png_complete(out_png):
+            return
+        chrome_err.seek(0)
+        detail = chrome_err.read().decode("utf-8", "replace").strip()[-2000:]
+    reason = (f"within {CHROME_TIMEOUT_SECONDS}s" if timed_out
+              else f"before exiting (exit code {proc.returncode})")
+    sys.exit(f"error: Chrome wrote no complete screenshot ({out_png}) {reason}. Check the "
+             f"HTML path and that Chrome runs headless on this machine."
+             + (f"\nChrome stderr:\n{detail}" if detail else ""))
 
 
 def content_height(png):

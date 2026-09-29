@@ -10,7 +10,7 @@
  *
  * Usage with pandoc + Chrome (fallback):
  *   pandoc input.md -o /tmp/out.html --standalone -H <(cat this-file.css wrapped in <style>)
- *   chrome --headless --no-pdf-header-footer --print-to-pdf=out.pdf /tmp/out.html
+ *   chrome --headless --disable-features=MacAppCodeSignClone --no-pdf-header-footer --print-to-pdf=out.pdf /tmp/out.html
  */
 
 @page {

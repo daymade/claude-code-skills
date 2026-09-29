@@ -206,19 +206,22 @@ sharing; do not relabel it as a large physical cleanup.
 
 ## Prevent recurrence
 
-Trace the current launcher and executable before changing configuration. For
-automation that supports an explicit browser executable, prefer Chrome for
-Testing when it meets the user's compatibility needs: current Chromium source
-disables this auto-update-specific clone feature in Chrome for Testing because
-that build does not support auto-updates. Verify the configured executable and
-the next real process command line; a configuration edit alone is not proof.
+Trace the current launcher and executable before changing configuration. Many
+inactive clones created minutes apart usually mean a launcher that ends the
+browser by killing it: each killed launch leaves its own clone. Match clone
+creation times against the tools and agent sessions that were running then.
 
-If the workflow must use an installed auto-updating Chromium browser, fix the
-source by reusing the managed browser where appropriate and awaiting graceful
-browser shutdown so Chromium's cleanup helper can run. Do not kill a user's
-interactive browser, change their default browser, install another runtime, or
-enable unattended recurring deletion without a separate explicit plan and
-approval.
+Measured on Google Chrome 154 for macOS (2026-09-29):
+
+| Launch shape | Clone behavior | Fix |
+|---|---|---|
+| One-shot CLI: `--headless` with `--screenshot`, `--print-to-pdf`, or `--dump-dom` | Exits by itself in about a second and removes its clone. Given `--user-data-dir`, it can write the complete output and then never exit (every `--screenshot` and `--print-to-pdf` run measured did), and whatever ends it (SIGTERM, a process-group kill, SIGKILL) leaves that launch's clone behind | Add `--disable-features=MacAppCodeSignClone`; no clone is created, even when the process is killed. Where a run can hang, treat complete output as done (a PNG ending in its `IEND` chunk, a PDF ending in `%%EOF`, a DOM containing `</html>`), then stop Chrome, with a timeout |
+| Automation library that closes the browser (Playwright `browser.close()`) | Clone created at launch, removed on close | Reuse one managed browser across checks where appropriate, and let it close normally. Do not append the flag to these launches: the library passes its own `--disable-features` list first, and Chrome keeps only the last copy of the switch, so the library's list is dropped. A crashed or killed run still leaks one clone |
+| `chrome-headless-shell`, or Chrome for Testing | No clone | Prefer for automation when it meets the user's compatibility needs; current Chromium source disables this auto-update-specific feature in Chrome for Testing. Verify the next real process command line; a configuration edit alone is not proof |
+
+Do not kill a user's interactive browser, change their default browser, install
+another runtime, or enable unattended recurring deletion without a separate
+explicit plan and approval.
 
 ## Failure handling
 
@@ -234,7 +237,7 @@ approval.
 | A deletion fails after the batch starts | The helper stops after that first failure; verify the failing and completed paths before any retry |
 | Browser automation or privileged mount changes can continue during deletion | Stop; stabilize or reboot the owning environment before restarting diagnosis |
 | Delete helper reports tens of GiB but `df` moves little | Report nominal vs physical truth; do not claim the helper's number |
-| Clone count refills quickly | Diagnose the launcher and shutdown lifecycle before another cleanup |
+| Clone count refills quickly | Diagnose the launcher and shutdown lifecycle before another cleanup; one-shot headless Chrome runs that get killed are the first suspect (see Prevent recurrence) |
 
 ## Sources
 

@@ -422,6 +422,9 @@ def visible_text(path_text: str) -> str:
                         [
                             chrome,
                             "--headless",
+                            # 每次启动 Google Chrome 都会把整个 app 复制成一个 code_sign_clone，
+                            # 进程被本函数结束后不会回收（2026-09-29 实测三种结束方式都留下）。
+                            "--disable-features=MacAppCodeSignClone",
                             "--disable-gpu",
                             "--no-sandbox",
                             "--allow-file-access-from-files",
