@@ -82,14 +82,28 @@ def list_pending(transcript, queue_ids):
 
 
 def both_windows_support_suggestion(result):
-    """A single matching window cannot certify a disputed ASR suggestion."""
-    suggestion = re.sub(r"\s+", "", result.get("suggested") or "")
-    if not suggestion or result.get("tight_exit") or result.get("medium_exit"):
+    """Require the suggested span and its right boundary to agree in both cuts."""
+    normalize = lambda value: "".join(
+        char for char in (value or "") if char.isalnum())
+    suggestion = normalize(result.get("suggested"))
+    original = normalize(result.get("original"))
+    if not suggestion or not original or suggestion == original \
+            or result.get("tight_exit") or result.get("medium_exit"):
         return False
-    return all(
-        suggestion in re.sub(r"\s+", "", result.get(window) or "")
-        for window in ("tight", "medium")
-    )
+    boundaries = []
+    for window in ("tight", "medium"):
+        recognized = normalize(result.get(window))
+        if original in recognized:
+            return False
+        matches = {
+            recognized[pos + len(suggestion):pos + len(suggestion) + 1]
+            for pos in range(len(recognized))
+            if recognized.startswith(suggestion, pos)
+        }
+        if len(matches) != 1:
+            return False
+        boundaries.append(matches.pop())
+    return boundaries[0] == boundaries[1]
 
 
 def main():
@@ -105,6 +119,8 @@ def main():
     ap.add_argument("--tight", type=float, default=5.0, help="tight 窗 ±秒（默认 5）")
     ap.add_argument("--medium", type=float, default=20.0, help="medium 窗 ±秒（默认 20）")
     a = ap.parse_args()
+    if a.tight <= 0 or a.medium <= a.tight:
+        ap.error("--medium must be greater than positive --tight")
 
     os.makedirs(a.outdir, exist_ok=True)
     with open(a.transcript, encoding="utf-8") as transcript_file:
@@ -145,9 +161,9 @@ def main():
         json.dump(results, f, ensure_ascii=False, indent=1)
     print(f"\n{len(results)} items -> {out}")
 
-    # Attach acoustic evidence only when both independently cut windows return
-    # the suggestion. A one-window match is a disagreement, not authority for
-    # the name-convergence gate. This never records a review verdict.
+    # Both differently sized cuts must agree on the suggestion's right boundary
+    # and omit the original alternative before it can serve as authority.
+    # This never records a review verdict.
     attached, unsupported = [], []
     for r in results:
         sug = (r.get("suggested") or "").strip()
@@ -157,7 +173,7 @@ def main():
             text = (f"音证 {datetime.date.today().isoformat()}：token≈{r['token_wav_time']}s，"
                     f"tight 窗识别「{(r.get('tight') or '')[:80]}」"
                     f"/ medium 窗「{(r.get('medium') or '')[:80]}」均含建议词「{sug[:40]}」"
-                    f"（verify_queue_audio 双窗口回写）")
+                    f"（verify_queue_audio 双窗口及右边界一致）")
             cp = subprocess.run(
                 ["uv", "run", FIX, "--attach-authority", str(r["id"]),
                  "--authority-text", text, "--by", "verify_queue_audio", "--json"],
@@ -171,7 +187,7 @@ def main():
     if attached:
         print(f"音证已回写 evidence（作为后续裁决的权威源）: {attached}")
     if unsupported:
-        print(f"音证不含建议词、未回写权威（请读 results.json 自行裁决）: {unsupported}")
+        print(f"双窗口未一致支持建议词、未回写权威（请读 results.json 自行裁决）: {unsupported}")
 
 
 if __name__ == "__main__":

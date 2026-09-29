@@ -17,9 +17,18 @@ spec.loader.exec_module(verify_queue_audio)
 
 
 class WindowEvidenceTests(unittest.TestCase):
+    def test_identical_windows_are_rejected(self):
+        with patch.object(sys, "argv", [str(SCRIPT), "--transcript", "t",
+                                        "--audio", "a", "--engine-script", "e",
+                                        "--tight", "5", "--medium", "5"]):
+            with self.assertRaises(SystemExit) as stopped:
+                verify_queue_audio.main()
+        self.assertEqual(stopped.exception.code, 2)
+
     def test_only_two_successful_matching_windows_support_suggestion(self):
         base = {
-            "suggested": "李甲乙", "tight_exit": 0, "medium_exit": 0,
+            "suggested": "李甲乙", "original": "李甲丙",
+            "tight_exit": 0, "medium_exit": 0,
             "tight": "李甲乙的话", "medium": "刚才李甲乙的话",
         }
         self.assertTrue(verify_queue_audio.both_windows_support_suggestion(base))
@@ -29,6 +38,10 @@ class WindowEvidenceTests(unittest.TestCase):
             {"tight": ""},
             {"medium_exit": 1},
             {"suggested": ""},
+            {"original": ""},
+            {"medium": "李甲乙丙的话"},
+            {"medium": "李甲乙的话，李甲乙丙的话"},
+            {"medium": "李甲丙的话，李甲乙的话"},
         ):
             with self.subTest(changed=changed):
                 self.assertFalse(verify_queue_audio.both_windows_support_suggestion(
@@ -77,6 +90,10 @@ class WindowEvidenceTests(unittest.TestCase):
         result, calls = self._run_case("李甲丙这件事", "李甲乙这件事")
         self.assertEqual(result["tight"], "李甲丙这件事")
         self.assertEqual(result["medium"], "李甲乙这件事")
+        self.assertFalse(any(args[0] == "uv" for args in calls))
+
+    def test_name_boundary_disagreement_does_not_attach_authority(self):
+        _, calls = self._run_case("李甲乙说过", "李甲乙丙说过")
         self.assertFalse(any(args[0] == "uv" for args in calls))
 
     def test_two_matching_windows_attach_without_deciding(self):
