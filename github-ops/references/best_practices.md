@@ -230,6 +230,8 @@ gh config list
 Treat the default repository as convenience, not authority for a consequential write. Reconfirm
 the fully qualified target immediately before mutation.
 
+In a fork, a `gh` command with neither `--repo` nor a default repository resolves to the `upstream` remote, not `origin`: with both remotes set and no default, `gh repo view` named the upstream project (measured 2026-09-30). Pass `--repo OWNER/REPO` naming the fork on every call, or run `gh repo set-default OWNER/REPO` once per clone.
+
 Useful environment variables:
 
 - `GH_HOST`: selected GitHub host.
