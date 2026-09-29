@@ -300,6 +300,13 @@ assert on **state** (`dialog.open`, counter text, `src` changed — a dispatched
 click alone proves nothing, per trap 1) → encode the assertion results into
 `document.title` → dump and grep the marker-plus-brace.
 
+On macOS, pass `--disable-features=MacAppCodeSignClone` to a direct Chrome
+command: every launch copies the Chrome app into a temporary directory, and a
+Chrome that gets killed leaves the copy behind. Avoid `--user-data-dir` on a
+one-shot `--dump-dom`: with it, headless Chrome 154 can print the complete dump
+and then keep running. If a profile is unavoidable, read the output until it
+contains `</html>`, then stop Chrome, with a timeout.
+
 ## 11. A media stall may be the test server: Range support × moov position
 
 MP4s whose `moov` atom sits at the **tail** (common for phone recordings and

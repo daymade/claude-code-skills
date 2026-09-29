@@ -5,6 +5,7 @@
 #   render_report.sh diagram.d2  [out.png]                      # d2 关系图: d2→SVG→按真实尺寸→PNG
 # 依赖: Google Chrome(headless)。d2 模式另需 `brew install d2`。
 # CI/共享环境可显式传 CHROME_BIN=/absolute/path/to/managed-chrome；不可执行则直接失败。
+# 每次截图最多等 CHROME_TIMEOUT 秒（默认 90）写出完整 PNG，超时即失败。
 # d2 模式统一走 SVG→Chrome，复用同一份受控渲染与产物校验。
 set -euo pipefail
 
@@ -23,11 +24,16 @@ fi
 SHOT_TMP=""
 SHOT_TMP_DIR=""
 D2_TMP_DIR=""
+CHROME_PID=""
 cleanup() {
+  if [ -n "$CHROME_PID" ]; then
+    stop_chrome
+  fi
   if [ -n "$SHOT_TMP" ] && [ -f "$SHOT_TMP" ]; then
     rm -f -- "$SHOT_TMP"
   fi
   if [ -n "$SHOT_TMP_DIR" ] && [ -d "$SHOT_TMP_DIR" ]; then
+    rm -f -- "$SHOT_TMP_DIR/chrome.log"
     rmdir "$SHOT_TMP_DIR" 2>/dev/null || true
   fi
   if [ -n "$D2_TMP_DIR" ] && [ -d "$D2_TMP_DIR" ]; then
@@ -177,9 +183,63 @@ print(Path(sys.argv[1]).resolve(strict=True).as_uri())
 PY
 }
 
+# Headless Chrome can write the screenshot and then never exit (on Chrome 154 for macOS
+# it does so every time it is given --user-data-dir), so the wait is bounded and a
+# complete PNG counts as done. Every launch of the Google Chrome app on macOS also
+# copies the app bundle into a code_sign_clone directory; Chrome removes it on a normal
+# exit but not when it is killed, and --disable-features=MacAppCodeSignClone stops the
+# copy (measured 2026-09-29).
+CHROME_TIMEOUT="${CHROME_TIMEOUT:-90}"
+positive_integer "$CHROME_TIMEOUT" || { echo "❌ CHROME_TIMEOUT 必须是正整数秒: $CHROME_TIMEOUT"; exit 1; }
+
+stop_chrome() { # SIGTERM, then SIGKILL if Chrome is still there after 5 s
+  local i
+  [ -n "$CHROME_PID" ] || return 0
+  if kill -0 "$CHROME_PID" 2>/dev/null; then  # not yet exited and reaped
+    kill "$CHROME_PID" 2>/dev/null || true
+    for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25; do
+      kill -0 "$CHROME_PID" 2>/dev/null || break
+      sleep 0.2
+    done
+    if kill -0 "$CHROME_PID" 2>/dev/null; then
+      kill -9 "$CHROME_PID" 2>/dev/null || true
+    fi
+  fi
+  wait "$CHROME_PID" 2>/dev/null || true
+  CHROME_PID=""
+}
+
+run_chrome_screenshot() { # $1=png $2=log, rest = Chrome arguments ending with the page URL
+  local png="$1" log="$2" ticks=0 limit status
+  shift 2
+  limit=$((CHROME_TIMEOUT * 5))
+  # The page URL stays the last argument, as Chrome's usage puts it.
+  "$CHROME" --headless --disable-features=MacAppCodeSignClone \
+    --screenshot="$png" "$@" >"$log" 2>&1 &
+  CHROME_PID=$!
+  while kill -0 "$CHROME_PID" 2>/dev/null; do
+    if [ -s "$png" ] && tail -c 12 "$png" | LC_ALL=C grep -qa IEND \
+      && validate_png "$png" >/dev/null 2>&1; then
+      stop_chrome
+      return 0
+    fi
+    ticks=$((ticks + 1))
+    if [ "$ticks" -ge "$limit" ]; then
+      stop_chrome
+      echo "Chrome 在 ${CHROME_TIMEOUT}s 内没有写出完整截图" >>"$log"
+      return 124
+    fi
+    sleep 0.2
+  done
+  status=0
+  wait "$CHROME_PID" || status=$?
+  CHROME_PID=""
+  return "$status"
+}
+
 shot(){ # $1=file-url $2=out $3=w $4=h
   local file_url="$1" out="$2" width="$3" height="$4"
-  local out_dir out_base chrome_output
+  local out_dir out_base chrome_output chrome_log
 
   positive_integer "$width" || { echo "❌ width 必须是正整数: $width"; return 1; }
   positive_integer "$height" || { echo "❌ height 必须是正整数: $height"; return 1; }
@@ -198,16 +258,18 @@ shot(){ # $1=file-url $2=out $3=w $4=h
     return 1
   }
   SHOT_TMP="$SHOT_TMP_DIR/output.png"
+  chrome_log="$SHOT_TMP_DIR/chrome.log"
 
-  if ! chrome_output=$(
-    "$CHROME" --headless --disable-gpu --no-sandbox --hide-scrollbars \
-      --force-device-scale-factor=2 --window-size="$width,$height" \
-      --screenshot="$SHOT_TMP" "$file_url" 2>&1
-  ); then
+  if ! run_chrome_screenshot "$SHOT_TMP" "$chrome_log" \
+    --disable-gpu --no-sandbox --hide-scrollbars \
+    --force-device-scale-factor=2 --window-size="$width,$height" "$file_url"; then
+    chrome_output="$(cat "$chrome_log" 2>/dev/null || true)"
+    rm -f -- "$chrome_log"
     echo "❌ Chrome 渲染失败"
     [ -n "$chrome_output" ] && echo "$chrome_output"
     return 1
   fi
+  rm -f -- "$chrome_log"
 
   [ -s "$SHOT_TMP" ] || { echo "❌ Chrome 未生成截图"; return 1; }
   if ! validate_png "$SHOT_TMP"; then

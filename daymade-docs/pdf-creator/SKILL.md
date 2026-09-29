@@ -155,6 +155,7 @@ uv run --with pdfplumber --with pillow --with numpy \
 |---|---|---|
 | `pandoc -o out.html` | No CJK-aware CSS → boxes/blanks for Chinese | Injects CJK font stack + typography patch |
 | Chrome `--print-to-pdf` | Default header/footer appears (filename, date, URL, page numbers) | Passes `--no-pdf-header-footer` |
+| Chrome `--print-to-pdf` on macOS | Chrome can write the PDF and then never exit (Chrome 154 does so whenever it is given `--user-data-dir`), so the command hangs; a killed Chrome also leaves a copy of the Chrome app in a temporary directory | Stops Chrome once the PDF ends in `%%EOF`, gives up after a timeout, and passes `--disable-features=MacAppCodeSignClone` |
 | No post-render check | "Exit code 0" assumed success; rendering bugs hidden | Auto-generates per-page PNG previews + typography lint |
 | No theme system | One-size-fits-all; phone reading impossible | Three curated themes (default / warm-terra / mobile) |
 | `batch_convert.py` missing | Writing ad-hoc loops, inconsistent flags | Built-in batch mode with `--theme` support |
