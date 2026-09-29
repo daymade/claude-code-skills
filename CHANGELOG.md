@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **claude-code-hooks** (`daymade-claude-code` v4.3.2 → v4.3.3): `hook_pitfalls.md` gains #50 and #51. #50: a gate that works and is slow raises no block, bypass or self-test signal, and the host records a duration for only some hook runs (a PreToolUse hook that prints nothing may leave no record), so the entry gives the transcript fields, a probe for that coverage, and a stamp-and-TTL skip for a health check that runs every self-test. Measured: a session-start check went from 69–83 s to 4–20 s. #51: four traps when a guard starts recording its own run time: `exec` skips the EXIT trap, fixture repositories from every session flood a machine-wide log unless the writer filters by path, `read … < f 2>/dev/null` leaks its error, and a self-test row that runs a blocked input ends the script silently under `set -e`.
 - **claude-code-hooks** (`daymade-claude-code` v4.3.1 → v4.3.2): `hook_pitfalls.md` gains #48 — a test suite that has not run since its dependencies changed is green by reputation. Run the suite at HEAD before editing what it covers, or a sibling change's fixture rot lands in your diff and reads as your regression. Real case: an LFS-dispatch rewrite in a pre-push hook spent two rounds on "my edit broke the suite" before an at-HEAD run showed the rows had been failing for eight days.
 
 ### Changed
