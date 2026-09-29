@@ -99,8 +99,8 @@ def both_windows_support_suggestion(result):
         if all("\u3400" <= char <= "\u9fff" for char in suggestion):
             raw_hits = list(re.finditer(re.escape(suggestion), raw))
             if not raw_hits or any(
-                    match.end() < len(raw)
-                    and "\u3400" <= raw[match.end()] <= "\u9fff"
+                    raw[match.end():].lstrip()
+                    and "\u3400" <= raw[match.end():].lstrip()[0] <= "\u9fff"
                     for match in raw_hits):
                 return False
         matches = {

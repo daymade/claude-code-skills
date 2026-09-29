@@ -45,6 +45,8 @@ class WindowEvidenceTests(unittest.TestCase):
             {"medium": "李甲乙的话，李甲乙丙的话"},
             {"medium": "李甲丙的话，李甲乙的话"},
             {"tight": "李甲乙丙说过", "medium": "李甲乙丙说过"},
+            {"tight": "李甲乙 丙说过", "medium": "李甲乙 丙说过"},
+            {"tight": "李甲乙\n丙说过", "medium": "李甲乙\n丙说过"},
         ):
             with self.subTest(changed=changed):
                 self.assertFalse(verify_queue_audio.both_windows_support_suggestion(
