@@ -699,7 +699,12 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
    first/primary checkout; select only the exact linked path the user intends to retire. A Git
    worktree lock prevents pruning, moving, and deletion; it is not an ownership lease or deletion
    authority. If its reason says the worktree is active, or the user assigns it to another worker,
-   stop before inspecting its contents and do not unlock it as a workaround.
+   stop before inspecting its contents and do not unlock it as a workaround. A checkout that a
+   scheduled job runs from is also in use, although it looks idle: no process holds it between runs,
+   and its files stop changing once it is pinned. Before retiring, search the scheduler definitions
+   for its absolute path (launchd plists in `~/Library/LaunchAgents`, `crontab -l`, systemd units).
+   Real case: a detached "deploy" worktree with no open handles and no file change in ten days was
+   the working copy of a LaunchAgent that ran every 30 minutes.
 2. **Inspect tracked and untracked state in the linked checkout itself:** run
    `git -C <worktree-path> status --porcelain=v1 --untracked-files=all`. The output must be
    empty. Do not substitute the primary checkout's status.
