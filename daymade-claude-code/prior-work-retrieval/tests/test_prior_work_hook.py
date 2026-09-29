@@ -115,6 +115,50 @@ class PriorWorkHookTests(unittest.TestCase):
                     hook.classify_prompt(prompt, False), "required_prior_signal"
                 )
 
+    def test_no_reuse_token_does_not_arm(self) -> None:
+        # 2026-09-29 live corpus: a watchdog loop's tick prompts carried the
+        # receipt field name "no-reuse" and minted a fresh requirement on every
+        # tick. The token is ASCII bookkeeping, never a retrieval request.
+        prompts = [
+            "用最小 retrieve+complete（no-reuse：零生产）满足它",
+            "回执的 no_reuse_reason 字段写明零生产",
+        ]
+        for prompt in prompts:
+            with self.subTest(prompt=prompt):
+                self.assertEqual(hook.classify_prompt(prompt, False), "none")
+
+    def test_reusability_property_statements_still_arm(self) -> None:
+        # Accepted tradeoff, locked in deliberately (2026-09-30 review): in
+        # Chinese, property statements ("这批工具可复用") and genuine recall asks
+        # ("有可复用的现成方案吗") share the same surface form, and excising
+        # 可复用 cost real recall shapes in testing. So property statements
+        # keep arming; operational/loop text must avoid the word 复用 instead.
+        prompts = [
+            "有可复用的现成方案吗",
+            "哪里能找到可复用的实现",
+            "输入切片脚本与校验 harness 都可复用",
+        ]
+        for prompt in prompts:
+            with self.subTest(prompt=prompt):
+                self.assertEqual(
+                    hook.classify_prompt(prompt, False), "required_prior_signal"
+                )
+
+    def test_reuse_questions_with_an_object_still_arm(self) -> None:
+        # The narrow half of the same fix: excising property statements must
+        # not cost genuine recall asks. 能复用 + an object is a real question
+        # about retrieving prior work, not a property statement.
+        prompts = [
+            "这个方案能复用之前的框架吗",
+            "能不能复用已有代码",
+            "复用 Flowzero 长音频 checkpoint 与本地 ASR 实现",
+        ]
+        for prompt in prompts:
+            with self.subTest(prompt=prompt):
+                self.assertEqual(
+                    hook.classify_prompt(prompt, False), "required_prior_signal"
+                )
+
     def test_ordinary_production_prompt_does_not_create_requirement(self) -> None:
         event = {
             "hook_event_name": "UserPromptSubmit",
