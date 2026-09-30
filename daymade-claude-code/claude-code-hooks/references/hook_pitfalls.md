@@ -2936,3 +2936,36 @@ this list and describe defects you reach by asking a different question):
   spot to name, not to hide: if the subject *dies before printing* its terminal
   marker (crash mid-fire, not a handled API error), the detector stays silent —
   the marker only covers failure paths the subject itself survives.
+
+## 55. A path argument that starts with `-` is an option to every tool that parses options — and macOS BSD tools accept no `--` escape
+
+- **Symptom:** a repair or fallback branch fails on *every single file* with a
+  bare usage error from a basic utility (`dirname: illegal option -- U`),
+  in a code path that passed calibration against real-corpus fixtures.
+- **Cause and fix:** any path derived from data can start with a dash (here:
+  every project directory under `~/.claude/projects/` is named
+  `-Users-<name>-…`, so a relative path stripped from it inherits the dash).
+  macOS BSD userland (`dirname`, `basename`, …) parses leading dashes as
+  options like GNU does, but unlike GNU accepts **no** `--` end-of-options
+  marker — there is no spelling that passes such an argument positionally.
+  What works: pure shell parameter expansion, which never re-parses
+  (`${rel%/*}` for dirname, `${rel##*/}` for basename — add the no-slash
+  guard `[ "$d" = "$rel" ] && d="."`), or prefixing `./` so the argument no
+  longer leads with a dash. The calibration half of the lesson: this branch
+  was calibrated against the real error-report corpus with a stubbed uploader,
+  and the fixture proved the *parser* (report line → extracted path) while the
+  stub boundary was drawn one layer too far out — the filesystem calls the
+  extracted path then flowed into (`mkdir`/`cp`) were never exercised against
+  a dash-leading input. A stub must stand in at the outermost effect boundary;
+  every layer between parser and boundary is uncalibrated surface.
+- **Real case (2026-09-30, a nightly OSS backup):** active-session `.jsonl`
+  files lose an append race during the backup window (Content-Length stales
+  mid-upload), so a targeted snapshot re-upload branch existed: parse the
+  failed files from the uploader's report, `cp` each to a static temp dir,
+  re-upload. Its first real run: 5/5 snapshots "failed" —
+  `mkdir -p "$repair_dir/$(dirname "$rel")"` died on the dash-leading rel,
+  leaving `cp` no directory to land in. The main backup had already failed
+  rc=4 on all three retries, so the branch whose whole purpose was surviving
+  that exact failure mode died on a second, unrelated one — at 03:00, with no
+  one watching. Parameter expansion fixed it; the manual re-run uploaded 5/5
+  with bucket-side read-back.
