@@ -290,8 +290,8 @@ behavior. Local one-main state and WIP byte preservation are separate `git-safet
 # Check CI/CD status
 gh pr checks 123
 
-# Watch PR checks in real-time
-gh pr checks 123 --watch
+# Watch PR checks until they finish; exit 0 only when all passed (see best_practices.md)
+gh pr checks 123 --watch --fail-fast
 
 # Get checks as JSON
 gh pr checks 123 --json name,state,bucket,workflow
