@@ -2937,7 +2937,7 @@ this list and describe defects you reach by asking a different question):
   marker (crash mid-fire, not a handled API error), the detector stays silent —
   the marker only covers failure paths the subject itself survives.
 
-## 55. A path argument that starts with `-` is an option to every tool that parses options — and macOS BSD tools accept no `--` escape
+## 55. A dash-leading path argument is parsed as options — `--` works even on macOS, but parameter expansion skips the subprocess and the option table entirely
 
 - **Symptom:** a repair or fallback branch fails on *every single file* with a
   bare usage error from a basic utility (`dirname: illegal option -- U`),
@@ -2945,13 +2945,15 @@ this list and describe defects you reach by asking a different question):
 - **Cause and fix:** any path derived from data can start with a dash (here:
   every project directory under `~/.claude/projects/` is named
   `-Users-<name>-…`, so a relative path stripped from it inherits the dash).
-  macOS BSD userland (`dirname`, `basename`, …) parses leading dashes as
-  options like GNU does, but unlike GNU accepts **no** `--` end-of-options
-  marker — there is no spelling that passes such an argument positionally.
-  What works: pure shell parameter expansion, which never re-parses
-  (`${rel%/*}` for dirname, `${rel##*/}` for basename — add the no-slash
-  guard `[ "$d" = "$rel" ] && d="."`), or prefixing `./` so the argument no
-  longer leads with a dash. The calibration half of the lesson: this branch
+  A tool that parses options rejects such an operand because its letters
+  are not in the tool's optstring — `dirname`/`basename` take no options at
+  all, so *any* dash-leading operand fails. The escape: `--` works fine on
+  macOS BSD userland (`dirname -- "$rel"` verified on Darwin 25; these tools
+  go through getopt, which handles `--` natively) — prefer parameter
+  expansion anyway: `${rel%/*}` for dirname, `${rel##*/}` for basename (plus
+  the no-slash guard `[ "$d" = "$rel" ] && d="."`) spawns no subprocess and
+  has no per-tool option table to remember, so it cannot regress the day
+  someone swaps in a tool with different parsing. The calibration half of the lesson: this branch
   was calibrated against the real error-report corpus with a stubbed uploader,
   and the fixture proved the *parser* (report line → extracted path) while the
   stub boundary was drawn one layer too far out — the filesystem calls the
@@ -2968,4 +2970,11 @@ this list and describe defects you reach by asking a different question):
   rc=4 on all three retries, so the branch whose whole purpose was surviving
   that exact failure mode died on a second, unrelated one — at 03:00, with no
   one watching. Parameter expansion fixed it; the manual re-run uploaded 5/5
-  with bucket-side read-back.
+  with bucket-side read-back. One more correction, same night: this entry's
+  first published version converted the incident into a wrong platform claim
+  ("macOS BSD tools accept no `--`"); post-merge review re-probed and
+  `dirname --` returned the correct answer — the third time in one night a
+  mechanism claim in this family was falsified by re-running the probe
+  instead of believing the plausible explanation (see #52's two corrections).
+  The incident facts were all reproducible; only the generalization was
+  wrong.
