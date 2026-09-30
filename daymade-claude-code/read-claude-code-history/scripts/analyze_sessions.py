@@ -178,7 +178,7 @@ def classify_session_tail(path: Path) -> SessionTail:
     that crashed before responding to its latest question as `done`.
 
     The interruption marker is checked the same way: `tail_is_interrupt` is
-    reset by any later user or assistant record, so it only survives to the
+    reset by any later non-local user or assistant record, so it survives to the
     end of the loop when the marker is the LAST relevant record in the file.
     A mid-session Ctrl+C that the conversation continued past is not a tail
     interruption — treating "marker appears anywhere" as equivalent to "the
