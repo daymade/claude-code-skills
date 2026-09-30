@@ -196,10 +196,17 @@ gh pr view feature-branch -R OWNER/REPO \
 
 ```bash
 head_sha=$(gh pr view 123 -R OWNER/REPO --json headRefOid --jq '.headRefOid')
-gh pr checks 123 -R OWNER/REPO --watch
-gh pr merge 123 -R OWNER/REPO --squash --match-head-commit "$head_sha"
+gh pr checks 123 -R OWNER/REPO --required --watch --fail-fast &&
+  gh pr merge 123 -R OWNER/REPO --squash --match-head-commit "$head_sha"
 gh pr view 123 -R OWNER/REPO --json number,state,mergedAt,mergeCommit,url
 ```
+
+Chain the merge to the checks with `&&`: written as two separate lines, a failed watch still
+reaches the merge. `gh pr checks` exits 0 when every check passed and 8 while checks are pending.
+It exits 1 both when a check failed and when the read failed (measured: a PR with a failed check
+and a nonexistent PR both return 1), so only exit 0 means the checks passed. A hand-written loop
+that greps the output for `pending` reads a failed call, whose output has no such word, as
+finished; use `--watch` and the exit status instead.
 
 The final GitHub readback proves PR state; fetch the base and run the acceptance check to prove
 the intended behavior landed.
