@@ -324,6 +324,19 @@ with path.open("r+b") as handle:
         if holder.stderr is not None:
             holder.stderr.close()
 
+    def test_codex_markdown_preserves_project_without_claude_provenance(self) -> None:
+        self.seed_codex_database()
+        completed = self.run_cli(
+            "--source", "codex", "--codex-home", str(self.codex_home),
+            "--all-projects", "--language", "en",
+        )
+        row = next(
+            line for line in completed.stdout.splitlines()
+            if "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" in line
+        )
+        self.assertIn("demo-project", row)
+        self.assertNotIn("`(unknown)`", row)
+
     def test_combined_json_inventory_filters_noise(self) -> None:
         self.seed_claude()
         self.seed_codex_database()
@@ -1214,6 +1227,59 @@ with path.open("r+b") as handle:
             conversation.source_labels,
             ["active:main", "active:kimi", "archive:full-backup"],
         )
+
+    def test_claude_cwd_provenance_keeps_original_filter_and_renders_last_runtime(self) -> None:
+        project_dir = claude_project_dir(self.claude_home, self.workspace)
+        session_id = "30303030-3030-4030-8030-303030303030"
+        moved_to = self.root / "workspaces" / "moved-project"
+        write_jsonl(
+            project_dir / f"{session_id}.jsonl",
+            [
+                claude_user_record(session_id, self.workspace, "Start here", "2026-04-01T00:00:00Z"),
+                {
+                    "type": "assistant", "sessionId": session_id,
+                    "cwd": str(moved_to), "timestamp": "2026-04-01T00:01:00Z",
+                    "message": {"role": "assistant", "content": "Moved"},
+                },
+            ],
+        )
+        completed = self.run_cli(
+            "--cwd", str(self.workspace), "--source", "claude",
+            "--claude-home", str(self.claude_home), "--format", "json",
+        )
+        conversation = json.loads(completed.stdout)["providers"]["claude"]["conversations"][0]
+        self.assertEqual(conversation["cwd"], str(self.workspace))
+        self.assertEqual(conversation["original_cwd"], str(self.workspace))
+        self.assertEqual(conversation["original_cwd_line"], 1)
+        self.assertEqual(conversation["last_runtime_cwd"], str(moved_to))
+        self.assertEqual(conversation["last_runtime_cwd_line"], 2)
+
+        markdown = self.run_cli(
+            "--cwd", str(self.workspace), "--source", "claude",
+            "--claude-home", str(self.claude_home), "--recursive", "--format", "markdown",
+        ).stdout
+        self.assertIn("→", markdown)
+        self.assertIn("moved-project", markdown)
+
+    def test_claude_missing_persisted_cwd_stays_unknown_despite_legacy_scope(self) -> None:
+        project_dir = claude_project_dir(self.claude_home, self.workspace)
+        session_id = "31313131-3131-4131-8131-313131313131"
+        write_jsonl(
+            project_dir / f"{session_id}.jsonl",
+            [{"type": "user", "sessionId": session_id, "message": {"role": "user", "content": "No cwd record"}}],
+        )
+        completed = self.run_cli(
+            "--all-projects", "--source", "claude", "--claude-home", str(self.claude_home), "--format", "json",
+        )
+        conversation = json.loads(completed.stdout)["providers"]["claude"]["conversations"][0]
+        self.assertEqual(conversation["cwd"], "")
+        self.assertIsNone(conversation["original_cwd"])
+        self.assertIsNone(conversation["last_runtime_cwd"])
+
+        markdown = self.run_cli(
+            "--all-projects", "--source", "claude", "--claude-home", str(self.claude_home), "--format", "markdown",
+        ).stdout
+        self.assertIn("(unknown)", markdown)
 
     def test_date_filter_uses_session_overlap_and_excludes_unknown_time(self) -> None:
         project_dir = claude_project_dir(self.claude_home, self.workspace)

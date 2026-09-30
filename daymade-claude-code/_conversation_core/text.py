@@ -46,6 +46,18 @@ ATTACHMENT_IMAGE_RE = re.compile(
 )
 FILE_SUFFIX_RE = re.compile(r"\.[A-Za-z0-9]{1,16}$")
 SLASH_COMMAND_RE = re.compile(r"^/[A-Za-z0-9_:-]+(?:[ \t].*)?$")
+LOCAL_COMMAND_ENVELOPE_NAME_RE = re.compile(
+    r"^\s*<command-name>\s*(/model|/codex:transfer|/copy)\s*</command-name>"
+    r"\s*<command-message>\s*(model|codex:transfer|copy)\s*</command-message>"
+    r"\s*<command-args>[^<]*</command-args>\s*$",
+    re.IGNORECASE,
+)
+LOCAL_COMMAND_ENVELOPE_RE = re.compile(
+    r"^\s*<local-command-(caveat|stdout|stderr)>"
+    r"(?:(?!</?local-command-(?:caveat|stdout|stderr)>).)*"
+    r"</local-command-\1>\s*$",
+    re.DOTALL,
+)
 
 
 @dataclass(frozen=True)
@@ -54,6 +66,34 @@ class SearchSegment:
 
     source: str
     text: str
+
+
+def is_local_command_record(value: object) -> bool:
+    """Whether a user-role record is Claude's local-command runtime noise.
+
+    Command envelopes also represent user-invoked Skills, so the wrapper alone
+    is not enough.  Only the runtime's own local output tags and the observed
+    local commands are ignorable for terminal-state purposes.
+    """
+    def is_local_text(text: str) -> bool:
+        return bool(
+            LOCAL_COMMAND_ENVELOPE_RE.fullmatch(text)
+            or LOCAL_COMMAND_ENVELOPE_NAME_RE.fullmatch(text)
+        )
+
+    if isinstance(value, str):
+        return is_local_text(value)
+    if not isinstance(value, list) or not value:
+        return False
+    # Do not concatenate blocks: a local stdout block can sit next to actual
+    # human prose. Every block must independently prove it is local runtime.
+    return all(
+        isinstance(block, dict)
+        and block.get("type") == "text"
+        and isinstance(block.get("text"), str)
+        and is_local_text(block["text"])
+        for block in value
+    )
 
 
 def looks_like_attachment_prefix(value: str) -> bool:

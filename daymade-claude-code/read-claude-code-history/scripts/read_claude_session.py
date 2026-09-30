@@ -49,6 +49,7 @@ PROJECTS_DIR = CLAUDE_DIR / "projects"  # default home only; discovery below spa
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _core.homes import discover_claude_homes  # noqa: E402
 from _core.claude import scan_claude_session  # noqa: E402
+from _core.text import is_local_command_record  # noqa: E402
 from _core.sources import (  # noqa: E402
     HistorySourceConfigError,
     discover_claude_sources,
@@ -457,6 +458,7 @@ def parse_session_structure(session_file: Path) -> Dict:
     errors = []
     files_touched = set()
     last_message_role = None
+    last_assistant_has_text = False
     error_count = 0
     observed_session_ids = set()
 
@@ -584,7 +586,16 @@ def parse_session_structure(session_file: Path) -> Dict:
             # (same semantics as analyze_sessions.classify_session_tail — a
             # mid-session Ctrl+C the conversation continued past is not a
             # tail interruption).
+            # Local command runtime records arrive as user messages after a
+            # completed reply. They are transport output, not a new human
+            # turn, so they cannot turn a completed session into abandoned.
+            is_local_runtime = role == "user" and is_local_command_record(content)
             if role in ("user", "assistant"):
+                # Chronology is evidence, including runtime records.  Only
+                # terminal-state bookkeeping ignores proven local output.
+                messages.append(obj)
+                if is_local_runtime:
+                    continue
                 if (
                     role == "user"
                     and isinstance(content, str)
@@ -594,7 +605,10 @@ def parse_session_structure(session_file: Path) -> Dict:
                 else:
                     tail_is_interrupt = False
                 last_message_role = role
-                messages.append(obj)
+                if role == "assistant":
+                    last_assistant_has_text = any(
+                        kind == "assistant_text" for kind, _ in _turn_kinds(obj)
+                    )
 
     unresolved_tool_calls = {
         tool_id: info
@@ -605,6 +619,7 @@ def parse_session_structure(session_file: Path) -> Dict:
     # Detect session end reason
     end_reason = _detect_end_reason(
         last_message_role, unresolved_tool_calls, error_count, tail_is_interrupt,
+        last_assistant_has_text,
     )
 
     return {
@@ -628,6 +643,7 @@ def _detect_end_reason(
     unresolved: Dict,
     error_count: int,
     tail_is_interrupt: bool = False,
+    last_assistant_has_text: bool = True,
 ) -> str:
     """Detect why the session ended."""
     if tail_is_interrupt:
@@ -637,7 +653,7 @@ def _detect_end_reason(
     if error_count >= 3:
         return "error_cascade"  # Multiple API errors suggest systemic failure
     if last_role == "assistant":
-        return "completed"  # Assistant had the last word — clean end
+        return "completed" if last_assistant_has_text else "abandoned"
     if last_role == "user":
         return "abandoned"  # User sent a message but got no response
     return "unknown"
@@ -665,6 +681,8 @@ def extract_user_text(messages: List[Dict], limit: int = 5) -> List[str]:
         if msg.get("role") != "user":
             continue
         content = msg.get("content", "")
+        if is_local_command_record(content):
+            continue
         if isinstance(content, str) and content.strip():
             if _is_noise_user_text(content):
                 continue
@@ -770,8 +788,15 @@ def extract_turn_timeline(messages: List[Dict]) -> List[Dict]:
         role = msg.get("role")
         if role not in ("user", "assistant"):
             continue
+        is_local_runtime = role == "user" and is_local_command_record(
+            msg.get("content", "")
+        )
         for kind, text in _turn_kinds(msg_obj):
-            if kind == "user" and "[Request interrupted by user" in text:
+            if is_local_runtime:
+                # Keep the exact runtime payload and record coordinate, but do
+                # not attribute it to a person or reinterpret its contents.
+                kind = "local_runtime"
+            elif kind == "user" and "[Request interrupted by user" in text:
                 # Harness-written esc marker, not human prose — labeled apart
                 # from the user's own words (and deliberately NOT in
                 # NOISE_USER_PATTERNS: verbatim export keeps it, end-state
@@ -825,14 +850,25 @@ def _append_timeline(sections: List[str], messages: List[Dict], full: bool) -> N
                 role = "ASSISTANT (thinking)"
             elif turn.get("kind") == "interrupt_marker":
                 role = "USER (interrupt marker)"
+            elif turn.get("kind") == "local_runtime":
+                role = "LOCAL RUNTIME (output)"
             queued = " · queued human input" if turn["queued"] else ""
             sections.append(f"### Record {turn['ordinal']} · {role}{queued}\n")
             limit = 1000 if role == "USER" else 1600
             sections.append(_clip(turn["text"], limit, full) + "\n")
-    if timeline[-1]["role"] == "user":
+    # Local runtime records are chronology, not requests.  Find the last real
+    # human turn and only call it unanswered when no later assistant prose was
+    # retained; a local envelope after it cannot erase that state.
+    last_human_index = max(
+        (index for index, turn in enumerate(timeline) if turn.get("kind") == "user"),
+        default=None,
+    )
+    if last_human_index is not None and not any(
+        turn["kind"] == "assistant_text" for turn in timeline[last_human_index + 1 :]
+    ):
         sections.append(
             f"> **Unanswered retained request**: the evidence ends on record "
-            f"{timeline[-1]['ordinal']}.\n"
+            f"{timeline[last_human_index]['ordinal']}.\n"
         )
 
 
@@ -1359,6 +1395,16 @@ def build_briefing(
     sections.append("**Chronology coverage**: every physical JSONL record")
     if parsed["error_count"] > 0:
         sections.append(f"**API errors**: {parsed['error_count']}")
+    cwd_provenance = parsed.get("cwd_provenance")
+    if cwd_provenance:
+        original = cwd_provenance.get("original_cwd") or "(unknown)"
+        last = cwd_provenance.get("last_runtime_cwd") or "(unknown)"
+        original_line = cwd_provenance.get("original_cwd_line") or "unknown"
+        last_line = cwd_provenance.get("last_runtime_cwd_line") or "unknown"
+        sections.append(
+            f"**Original cwd**: `{original}` (line {original_line}); "
+            f"**last runtime cwd**: `{last}` (line {last_line})"
+        )
 
     # Session memory (newer CC versions generate this automatically)
     session_mem = get_session_memory(session_file)
@@ -1743,11 +1789,18 @@ def main():
     parsed["selected_session_id"] = session_id
     parsed["source_labels"] = source_labels
     parsed["copy_paths"] = copy_paths
+    cwd_summary = scan_claude_session(session_file)
+    parsed["cwd_provenance"] = {
+        "original_cwd": cwd_summary.original_cwd or None,
+        "original_cwd_line": cwd_summary.original_cwd_line,
+        "last_runtime_cwd": cwd_summary.last_runtime_cwd or None,
+        "last_runtime_cwd_line": cwd_summary.last_runtime_cwd_line,
+    }
     if global_exact_session:
         # The caller may be standing in an unrelated repository. Bind the
         # workspace-state readback to the selected Session's own recorded cwd;
         # an explicit --project remains the caller's intentional scope.
-        selected_cwd = scan_claude_session(session_file).cwd
+        selected_cwd = cwd_summary.cwd
         if selected_cwd:
             project_path = os.path.abspath(selected_cwd)
     briefing = build_briefing(

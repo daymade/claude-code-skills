@@ -31,6 +31,10 @@ class Conversation:
     timestamp_source: str
     source_kind: str = ""
     source_labels: list[str] = field(default_factory=list)
+    original_cwd: Optional[str] = None
+    original_cwd_line: Optional[int] = None
+    last_runtime_cwd: Optional[str] = None
+    last_runtime_cwd_line: Optional[int] = None
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
