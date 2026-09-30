@@ -582,7 +582,7 @@ def parse_session_structure(session_file: Path) -> Dict:
 
             # Track last message for end-reason detection. The interruption
             # marker survives as `tail_is_interrupt` only when it is the LAST
-            # relevant record: any later user/assistant record resets it
+            # relevant record: any later non-local user/assistant record resets it
             # (same semantics as analyze_sessions.classify_session_tail — a
             # mid-session Ctrl+C the conversation continued past is not a
             # tail interruption).

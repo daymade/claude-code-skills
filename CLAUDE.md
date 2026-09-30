@@ -183,6 +183,10 @@ unavailable, report an unknown inventory; do not substitute a raw rollout scan.
 Edit shared reader code in `daymade-claude-code/_conversation_core/`, then run
 `python3 daymade-claude-code/sync_core.py sync` and `check` before shipping;
 bundled `scripts/_core/` copies are generated projections.
+For Claude task-ending and cwd interpretation, enter `read-claude-code-history`
+and its [local runtime and cwd contract](daymade-claude-code/read-claude-code-history/references/session_file_format.md#local-runtime-and-working-directory-evidence).
+Use its [session-ending workflow](daymade-claude-code/read-claude-code-history/references/workflow_examples.md#inspect-session-endings)
+for candidate selection and commands; keep the detailed rules in those owners.
 
 ### Local Agent Messaging
 

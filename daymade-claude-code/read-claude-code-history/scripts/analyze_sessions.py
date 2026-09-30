@@ -178,7 +178,7 @@ def classify_session_tail(path: Path) -> SessionTail:
     that crashed before responding to its latest question as `done`.
 
     The interruption marker is checked the same way: `tail_is_interrupt` is
-    reset by any later user or assistant record, so it only survives to the
+    reset by any later non-local user or assistant record, so it survives to the
     end of the loop when the marker is the LAST relevant record in the file.
     A mid-session Ctrl+C that the conversation continued past is not a tail
     interruption — treating "marker appears anywhere" as equivalent to "the
@@ -2739,12 +2739,11 @@ def main():
         default=200,
         help="Max sessions to print, 0 = no limit (default: 200). This is a "
         "print-time cap, not a scan-time one: every session in scope is "
-        "still classified before --limit or --kind trims the output, so "
-        "--kind does not reduce cost the way narrowing --from-date/--to-date "
-        "does. The 200 default exists specifically to stop an accidentally "
-        "unscoped `--all-projects` with no date bound from dumping tens of "
-        "thousands of lines; pass --limit 0 to explicitly opt into an "
-        "unbounded dump once you know the scope is narrow.",
+        "still classified before --limit or --kind trims the output. Date "
+        "flags filter metadata after candidate transcript bodies are read; "
+        "bound project_path before using this command. --all-projects is "
+        "not made a bounded scan by dates or output limits. Pass --limit 0 "
+        "only when the preselected scope is already narrow.",
     )
     _add_home_flags(triage_parser)
 

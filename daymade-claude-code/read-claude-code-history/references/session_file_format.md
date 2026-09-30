@@ -90,6 +90,39 @@ Conversation messages are the lines you usually want. In current Claude Code (>=
   `tool_result`, which remains real execution evidence. Assistant-side
   sidechain records are the subagent's real output and remain searchable.
 
+### Local runtime and working-directory evidence
+
+Use the bundled reader's classification rather than interpreting every user-role
+record as a human turn. `is_local_command_record` in
+[`scripts/_core/text.py`](../scripts/_core/text.py) recognizes whole local-output
+wrappers and the supported `/model`, `/copy`, and `/codex:transfer` command
+envelopes. For a content-block list, every block must independently match; a
+mixed runtime/human record remains a user turn. Other Skill command envelopes
+and prose discussing a slash command also remain user turns.
+
+Keep local records in chronology, labeled `LOCAL RUNTIME (output)`, while
+excluding them from task-tail bookkeeping and human-request extraction. Local
+output cannot replace a pending request or reset an explicit interruption;
+interruption text inside a proven local-output wrapper is not an interruption.
+Require actual nonblank assistant prose before calling the exact reader's tail
+`completed`. Thinking-only or empty assistant tails remain `abandoned` when no
+higher-priority interruption, unresolved tool, or error condition applies. The
+`Unanswered retained request` warning requires a retained human turn with no
+later `assistant_text`; thinking does not answer it. These are structural
+observations, not proof that the user's business task is complete.
+
+Use `scan_claude_session` in [`scripts/_core/claude.py`](../scripts/_core/claude.py)
+for cwd provenance. Treat `original_cwd` as the first nonblank persisted cwd and
+`last_runtime_cwd` as the last; their `_line` fields are one-based physical JSONL
+lines, including blank or malformed lines in the numbering. This tolerant
+inventory receipt does not relax the exact reader's malformed-JSONL rejection.
+Preserve the legacy `cwd` field and its workspace filter as the original value. Inventory JSON
+carries the provenance fields; Markdown shows both paths when they differ and
+falls back to the provider's existing `cwd` when no Claude provenance exists.
+The exact briefing reports both paths with line coordinates. Neither path alone
+selects a universal recovery destination; verify the intended target before
+writing recovered files.
+
 ### Non-message event lines
 
 Recent sessions also interleave non-message event lines. Their `type` can be
@@ -492,8 +525,8 @@ file or the session's overall range.
 
 After an abnormal shutdown, or when auditing a backlog of older sessions, the
 question is not "what did this session say" but "does it still need a human
-response." Two axes answer different questions and must not be collapsed into
-one (observed 2026-08 auditing sessions around two real reboots):
+response." Distinguish structural from pragmatic terminal state when deciding whether
+a session needs a response:
 
 - **Structural terminal state** — what kind of record ends the session
   (`text`, `tool_use`, an API error string).
@@ -505,9 +538,11 @@ one (observed 2026-08 auditing sessions around two real reboots):
 
 Steps:
 
-1. Scope the candidate sessions — by internal timestamp window (e.g. the hour
-   before a reboot) or by project/profile — using the same union-of-sources
-   and internal-timestamp discipline as "Search Conversations" above.
+1. Select exact sessions through indexed recall, or physically bound a known
+   project's candidate directories before triage. Date flags filter after the
+   candidate bodies are read; `--all-projects` plus dates or output limits is
+   not a bounded scan. Follow [workflow_examples.md](workflow_examples.md#inspect-session-endings)
+   for the executable route.
 2. For each session, scan forward from its last non-`isMeta` `assistant`
    record. If a later `user`-typed record's string content contains
    `[Request interrupted by user`, that is the single most reliable
@@ -518,9 +553,10 @@ Steps:
    read for the opposite purpose — as a positive interruption signal, not
    noise to filter.) `read_claude_session.py` implements this rule: the
    marker surfaces as the `interrupted_explicit` end reason **only** when it
-   is the last relevant record (any later user/assistant record resets the
-   flag — a mid-session Ctrl+C the conversation continued past is not a tail
-   interruption), and the marker's timeline turn is labeled
+   is the last relevant non-local record. A later non-local user/assistant
+   record resets it; local runtime records follow the exclusion above. A
+   mid-session Ctrl+C that the conversation continued past is not a tail
+   interruption, and the marker's timeline turn is labeled
    `interrupt_marker` instead of being read as human prose.
 3. Absent that marker, classify the *last assistant record's raw content only*
    — do not let an earlier turn's classification carry forward when the final

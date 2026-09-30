@@ -40,10 +40,9 @@ assigning a provider.
 
 ## Provider scope — the job only this entry point routes
 
-Each executor defaults to its own provider, so a request that spans providers
-never widens by itself. **Naming the scope is this skill's whole job.** It has
-two axes, and they use different flags — conflating them is the failure this
-section exists to prevent.
+Name the requested providers before handing off. Inventory and content recall
+use different executors; do not assume a provider-specific default covers a
+cross-provider request.
 
 | Cross-provider need | Route to | Name this scope |
 |---|---|---|
@@ -60,13 +59,6 @@ verify their original messages. For Codex, follow **Locate a quoted exchange** i
 candidates miss or its scope is incomplete, report the gap and refine the indexed query.
 Keep the current Session excluded. A request for only an ID stops at verified
 message evidence; it does not require reconstructing every unrelated conversation.
-
-For a complete unknown-provider ID, first use the Codex exact-ID locator,
-then the Claude Code exact-session lookup if Codex does not verify it. Do not
-substitute a broad inventory. For a remembered title or content without an
-exact ID, use indexed metadata or indexed recall with supplied date/project
-clues. Do not promise exhaustive search or absence when an index or
-exact-session read cannot cover the requested records.
 
 **Search history through the index or an exact known session.** A raw sweep of
 every conversation is prohibited, including when an output limit or scan timeout

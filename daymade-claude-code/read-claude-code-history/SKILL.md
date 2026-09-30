@@ -28,7 +28,7 @@ hand the verified evidence to `daymade-claude-code:continue-claude-code-work`.
 | A conversation or quote by keyword | `scripts/history_index.py recall --mode bm25`, then the exact-session reader |
 | Prior work whose wording may have changed | `scripts/history_index.py recall` after checking index status |
 | A topic with no known Session ID | `scripts/history_index.py status`, then `recall`; state index coverage and freshness |
-| How sessions in a time window ended | `scripts/analyze_sessions.py triage` |
+| How identified sessions or a physically bounded project ended | Follow **Inspect session endings** in `references/workflow_examples.md` |
 | A deleted/overwritten file preserved in Claude file-history records | `scripts/recover_content.py` |
 | How often each Skill ran and who started it (user command, model after the user named it, model unprompted), e.g. to decide model-visible vs user-invocable-only | `scripts/skill_usage_ledger.py index`, then `report` (Claude and Codex together); see **Skill usage ledger** below |
 | Kimi CLI sessions | `history_index.py recall --provider kimi`, then read the named session's `wire.jsonl`; see **Kimi CLI** below |
@@ -110,10 +110,8 @@ Session identities, a missing record-level Session identity, malformed JSONL, or
 unreadable bytes. With an exact Session ID and no `--project`, it searches every
 project across the discovered active homes and registered archives; an explicit
 `--project` remains a strict scope. A filename alone never proves Session identity.
-Its cwd receipt reports the first valid persisted cwd and the last valid runtime
-cwd, each with its physical JSONL line. The legacy `cwd` field and workspace
-filter retain the first-valid value; the receipt does not choose either path as
-the universal recovery target.
+Read [Local runtime and working-directory evidence](references/session_file_format.md#local-runtime-and-working-directory-evidence)
+before interpreting task endings, local-command output, or cwd receipts.
 
 ### Command behind a hook audit row
 

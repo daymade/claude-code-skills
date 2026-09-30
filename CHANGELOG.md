@@ -34,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Local conversation history** (`daymade-claude-code` v4.5.0 → v4.6.0): Align the active SOPs with local-runtime tail exclusion and physical cwd receipts, route repository instructions to their owners, remove repeated exact-ID routing, and correct triage help to distinguish physical project bounds from post-read date/output filters. Replace the stale Codex inventory-fallback claim with the current reader contract. Preserve frozen migration snapshots.
+
 - **read-claude-code-history / local-conversation-history** (`daymade-claude-code` v4.4.3 → v4.5.0): Preserve task completion state after local CLI commands and label their runtime output separately. Report original and last runtime working directories with physical source coordinates while retaining the legacy `cwd` filter. Separate exact-ID lookup from indexed content discovery.
 
 - **report-with-html** (`report-with-html` v1.0.1 → v1.0.2): Every direct Chrome launch passes `--disable-features=MacAppCodeSignClone`. On macOS each launch copies the Chrome app into a temporary `code_sign_clone` directory, and a Chrome that gets killed leaves the copy behind. `reconcile_content_diff.py` passes `--user-data-dir`, with which Chrome 154 keeps running after printing the DOM of the pages it checks, so it ends Chrome itself, and every page it rendered left a copy (measured: two per run comparing one old and one new page, none after this change). `render_report.sh` no longer waits for Chrome without limit: it stops Chrome once the PNG is complete, sends SIGKILL if SIGTERM does not end it within 5 seconds, and fails after `CHROME_TIMEOUT` seconds (default 90).
