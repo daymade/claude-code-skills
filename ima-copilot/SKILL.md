@@ -4,7 +4,7 @@ description: >-
   Installs, diagnoses, repairs, and personalizes the official Tencent IMA skill (a wrapper around
   upstream ima-skill, not a replacement), including fan-out search across IMA knowledge bases with
   priority boosting. Use when the user mentions IMA / 腾讯 IMA / ima-skill, needs IMA API key setup,
-  知识库搜索 / 笔记搜索, or hits "Skipped loading skill(s) due to invalid SKILL.md" (ima-skill's
+  知识库搜索 / 笔记搜索, imports URLs into a KB to extract content, or hits "Skipped loading skill(s) due to invalid SKILL.md" (ima-skill's
   missing-YAML-frontmatter bug).
 ---
 
@@ -38,6 +38,7 @@ This skill is a **wrapper layer** around ima-skill. The wrapper contract is non-
 | 2. Configure API credentials (XDG style) | Inline workflow below | See `references/api_key_setup.md` |
 | 3. Diagnose and fix known upstream issues | `scripts/diagnose.sh` + workflow below | See `references/known_issues.md` |
 | 4. Fan-out search with priority boosting | `scripts/search_fanout.py` | See `references/search_best_practices.md` |
+| 5. Import URLs and extract page content as structured text | OpenAPI `import_urls` + notes API | See `references/import_and_extract.md` |
 
 ## Routing
 
@@ -49,6 +50,7 @@ When this skill is triggered, classify the user's intent and jump to the corresp
 | "配 ima 的 key"、"configure ima credentials"、"ima API key" | **Capability 2** |
 | "ima 报错"、"SKILL.md warning"、"frontmatter 错误"、"ima 加载失败" | **Capability 3** |
 | "搜 X"、"在 ima 里搜 X"、"跨知识库搜索"、"扇出搜 X" | **Capability 4** |
+| "把这批链接导进 ima 并整理成结构化内容"、"import URLs into a knowledge base"、"让 ima 读这些页面" | **Capability 5** |
 | "帮我从头跑一遍 ima" | 1 → 2 → 3 → 4 in sequence |
 
 When in doubt, start with Capability 3 (diagnose) — it surfaces exactly which capabilities are blocked and in what order.
@@ -160,6 +162,10 @@ The personalization file is **per-user** and private. This skill ships only a te
 
 For the full algorithm, truncation handling strategy, rendering format, and a walkthrough of the evidence-based decision to allow a "subset KB skip" (e.g., a curated KB that is a strict subset of a master KB can be safely skipped to reduce duplicate hits), read `references/search_best_practices.md`.
 
+## Capability 5: Import URLs and extract content
+
+When the pages to read are ones the local machine cannot fetch but IMA's servers can, import them with `wiki/v1/import_urls` and have IMA turn them into JSON that is saved as a note and read back over the API. Imports write to the user's account and no delete endpoint is documented, so confirm the target knowledge base and URL list with the user first. Read `references/import_and_extract.md` before starting: it lists which capabilities were not found in the upstream ima-skill docs (delete, full entry body read) and why extraction goes through the desktop app, how entries resolve asynchronously, the extraction protocol and its measured failure modes (unescaped quotes, truncated rounds, empty placeholder objects), and the desktop-app automation traps.
+
 ## What this skill refuses to do
 
 - **Never vendor upstream content.** This directory does not contain and will never contain a copy of `ima-skill/SKILL.md`, `ima-skill/notes/**`, `ima-skill/knowledge-base/**`, or any other upstream file. Anyone adding such files to this skill should be rejected.
@@ -181,7 +187,8 @@ ima-copilot/
 │   ├── installation_flow.md         # Capability 1 deep dive
 │   ├── api_key_setup.md             # Capability 2 deep dive
 │   ├── known_issues.md              # Issue registry — source of truth for repairs
-│   └── search_best_practices.md     # Capability 4 deep dive
+│   ├── search_best_practices.md     # Capability 4 deep dive
+│   └── import_and_extract.md        # Capability 5 deep dive
 └── config-template/
     └── copilot.json.example         # Template for ~/.config/ima/copilot.json
 ```
