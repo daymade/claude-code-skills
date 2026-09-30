@@ -33,6 +33,15 @@ uv run python scripts/forecast_log.py summary
    按当前证据给判断，记录为空不构成错误。接续监测轮用 `handoff` 读取最新完整交接；
    需要其他轮次的原始读数时再读数据目录的 `findings.jsonl` 原始行。
    `findings` 命令只返回摘要（id/invocation/query/endpoints 数），不含 `readings` 与 `notes`。
+   `summary` 还带 `snapshot`（只读探测，不创建目录）：`ok` 表示已存在的台账文件都已进 git
+   快照（还没有任何台账文件时也是 `ok`）；`lagging` 并列出 `uncommitted` 文件（含被
+   `.gitignore` 挡住、从没进过快照的），另带一句 `hint`，表示有内容没进快照——多半是某次快照
+   提交被拒，被拒的内容留在暂存区。快照只重试它被触发的那一份台账：`forecasts.jsonl` 靠再
+   `record`/`review` 一次，`findings.jsonl` 靠再 `finding` 一次，`withdrawals.jsonl` 靠再
+   `withdraw` 一次，重试失败会在那次追加的 stderr 打出原因；往别的台账追加清不掉它。
+   `no_repo` 是快照还没建立（全新目录也是这样，不算故障）；`disabled` 是用了 `--no-git`；
+   `unknown` 是 git 自身出错。快照失败只在追加当时的 stderr 打一行，`summary` 是每轮第一眼
+   读到它的地方。
 2. 按主 Skill 取得本轮本来要查的事件证据，核对它能否回答未决预测。明确只有个人额度的
    查询无需为台账另开一轮全局调查；缺证据的记录继续保留，下次有相关证据再核验。
    窗口刚过期的未决预测趁观测区间未漂移立即核验；拖延会扩大观测区间，使窗口跨边界。
@@ -87,7 +96,7 @@ id 前缀），每个引用必须已存在于 findings.jsonl，否则报错退�
 git 任何失败只在 stderr 打一行 note、绝不影响追加成功，也不构成备份承诺；`--no-git` 关闭。
 findings 同台账隐私契约：不放邮箱、token 或产品凭据；`readings` 只放逐字读数（邮箱除外，见上）
 与公开 URL。这条契约有执行层：机器上若配置了全局 pre-commit 的个人信息检查，findings 里出现
-邮箱就会让快照提交被拒——追加本身仍然成功，但被拒的内容留在暂存区，此后每次快照都会带着它
+邮箱就会让快照提交被拒——追加本身仍然成功，但被拒的内容留在暂存区，同一份台账此后每次快照都会带着它
 再失败一次，完整性护栏形同失效。快照失败时 stderr 的 note 是一行 JSON：
 `{"note": "git snapshot skipped: <git 报错首行，含命令行与状态目录路径> | <stderr 末三行>"}`
 （stderr 里含 `@` 的片段会被替换成 `<email>`），用 `git snapshot skipped:` 前缀就能认出。

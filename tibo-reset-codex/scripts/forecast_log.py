@@ -462,6 +462,43 @@ def snapshot(state_dir, filename, record_type, enabled=True):
               file=sys.stderr)
 
 
+JOURNALS = ("forecasts.jsonl", "findings.jsonl", "withdrawals.jsonl")
+
+
+def snapshot_health(state_dir, enabled=True):
+    """Report whether the best-effort git snapshots are keeping up. Read-only.
+
+    A failed snapshot prints one stderr note and never blocks the append, so a
+    journal can go on lagging for days with nothing on the read path showing it.
+    `summary` runs at the start of every round, which makes it the place to look.
+    """
+    if not enabled:
+        return {"status": "disabled"}
+    if not (state_dir / ".git").exists():
+        return {"status": "no_repo"}
+    present = [name for name in JOURNALS if (state_dir / name).exists()]
+    if not present:
+        # An empty pathspec would make `git status` cover the whole repo.
+        return {"status": "ok"}
+    try:
+        # --ignored: a journal that .gitignore hides has never been in a snapshot.
+        out = subprocess.run(
+            ["git", "--no-optional-locks", "-C", str(state_dir), "status", "--porcelain",
+             "--ignored", "--", *present], capture_output=True, text=True, timeout=15,
+            check=True).stdout
+    except (OSError, subprocess.SubprocessError) as error:
+        detail = str(error).splitlines()[0] if str(error) else type(error).__name__
+        return {"status": "unknown", "detail": detail}
+    behind = sorted({line[3:] for line in out.splitlines() if line.strip()})
+    if not behind:
+        return {"status": "ok"}
+    return {"status": "lagging", "uncommitted": behind,
+            "hint": "These journals have content the local git snapshot does not. A snapshot "
+                    "retries only the journal it was triggered for, so the next append to the "
+                    "same journal retries it and prints the reason on stderr ('git snapshot "
+                    "skipped'); appends to other journals never clear it."}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     root = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state")
@@ -483,6 +520,7 @@ def main():
     try:
         if args.command == "summary":
             result = summarize(path, args.kind)
+            result["snapshot"] = snapshot_health(state, enabled=not args.no_git)
         elif args.command == "findings":
             result = list_findings(state / "findings.jsonl", max(args.limit, 0))
         elif args.command == "handoff":
