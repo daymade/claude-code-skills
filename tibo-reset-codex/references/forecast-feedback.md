@@ -64,13 +64,16 @@ uv run python scripts/forecast_log.py handoff               # 最新完整监测
 | `invocation` | 必填；本次调用形态，常用 `bare` / `announcement` / `account` / `incident` / `monitor` / `loop` / `other`，接受任意非空串 |
 | `query` | 必填；本次触发问题的一句话概括 |
 | `endpoints` | 必填字符串数组（可为空）；实际请求过的 URL |
-| `readings` | 必填对象（可为空）；源名 → 逐字字段值，只抄读到的值，不改写不概括 |
+| `readings` | 必填对象（可为空）；源名 → 逐字字段值，只抄读到的值，不改写不概括；唯一例外是邮箱一律省略，由 `account_ref` 代替（见下） |
 | `notes` | 可选字符串数组 |
 | `session_ref` | 可选；本 session transcript 的本机路径 |
 
-账号查询的 `readings` 只存实际读到的非敏感字段；经当前认证身份核对的本地账号标签可写进
-`notes`，并说明标签对应哪一次查询。未核对时保留账号未知，不把多条「当前账号」读数自动接成
-同一账号的历史。用户纠正时先逐字记录原话；时间格式、被核对的账号与因果归因若未明说，
+账号查询的 `readings` 只存实际读到的非敏感字段，并必须带账号句柄 `account_ref`（放在该来源的
+读数对象里；`query_usage` 输出里有，网页读数按账号 SOP 在本地算；邮箱的无盐短哈希，只作本地
+假名）——抄读数时省略 `email` 字段和任何邮箱文本；banked 与用量读数缺 `account_ref` 就不能作
+后来的基线。账号标签只作 `notes` 里的可读别名（说明它对应哪一次查询），不能替代
+`account_ref`，也不能当基线。未核对时
+保留账号未知，不把多条「当前账号」读数自动接成同一账号的历史。用户纠正时先逐字记录原话；时间格式、被核对的账号与因果归因若未明说，
 放在 `notes` 标为推断，不改写成用户直接观测。
 
 完全相同的输入重试返回原记录。`evidence_refs` 链接规则：先 `finding` 后 `record`/`review`
@@ -82,7 +85,17 @@ id 前缀），每个引用必须已存在于 findings.jsonl，否则报错退�
 
 每次成功追加后脚本尽力在数据目录做一次本地 git 快照（自动 `init`、目录 0700）；
 git 任何失败只在 stderr 打一行 note、绝不影响追加成功，也不构成备份承诺；`--no-git` 关闭。
-findings 同台账隐私契约：不放邮箱、token 或产品凭据；`readings` 只放逐字读数与公开 URL。
+findings 同台账隐私契约：不放邮箱、token 或产品凭据；`readings` 只放逐字读数（邮箱除外，见上）
+与公开 URL。这条契约有执行层：机器上若配置了全局 pre-commit 的个人信息检查，findings 里出现
+邮箱就会让快照提交被拒——追加本身仍然成功，但被拒的内容留在暂存区，此后每次快照都会带着它
+再失败一次，完整性护栏形同失效。快照失败时 stderr 的 note 是一行 JSON：
+`{"note": "git snapshot skipped: <git 报错首行，含命令行与状态目录路径> | <stderr 末三行>"}`
+（stderr 里含 `@` 的片段会被替换成 `<email>`），用 `git snapshot skipped:` 前缀就能认出。
+先按 stderr 的原因分：是个人信息检查拒绝，就查 findings 里是否混入邮箱
+（`grep -nE '[^[:space:]]+@[^[:space:]]+' <状态目录>/findings.jsonl`），不要用 `--no-verify` 绕过，已追加的记录不
+改写，此后的追加不再写邮箱，已入库的命中记录如何处理（例如是否把既有指纹加进该 hook 的基线）
+由用户决定，向用户报告，不自行改 hook 配置；是其他原因（如未配置 git 身份、超时、非仓库），
+按 stderr 给出的原因处理，与邮箱无关。
 
 ## 保存预测：record
 

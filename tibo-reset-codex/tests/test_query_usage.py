@@ -37,6 +37,15 @@ class UsageTests(unittest.TestCase):
         self.assertEqual(result["purchased_credits_balance"], "0")
         self.assertEqual(result["windows"][0]["remaining_percent"], 52)
 
+    def test_account_ref_is_stable_case_insensitive_and_not_the_email(self):
+        first = self.read()["account_ref"]
+        self.data["email"] = "Account@Example.com"
+        self.assertEqual(self.read()["account_ref"], first)
+        self.data["email"] = "other@example.com"
+        self.assertNotEqual(self.read()["account_ref"], first)
+        self.assertEqual(len(first), 8)
+        self.assertNotIn("example", first)
+
     def test_swapped_slots_are_identified_by_duration(self):
         weekly = self.data["rate_limit"]["primary_window"]
         self.data["rate_limit"] = {"secondary_window": weekly, "primary_window": {
