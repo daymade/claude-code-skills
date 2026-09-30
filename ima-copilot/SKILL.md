@@ -164,7 +164,7 @@ For the full algorithm, truncation handling strategy, rendering format, and a wa
 
 ## Capability 5: Import URLs and extract content
 
-When the pages to read are ones the local machine cannot fetch but IMA's servers can, import them with `wiki/v1/import_urls` and have IMA turn them into JSON that is saved as a note and read back over the API. Read `references/import_and_extract.md` before starting: it lists what the API cannot do (no delete, no entry body read), how entries resolve asynchronously, the extraction protocol and its measured failure modes (unescaped quotes, truncated rounds, empty placeholder objects), and the desktop-app automation traps.
+When the pages to read are ones the local machine cannot fetch but IMA's servers can, import them with `wiki/v1/import_urls` and have IMA turn them into JSON that is saved as a note and read back over the API. Imports write to the user's account and cannot be deleted through the API, so confirm the target knowledge base and URL list with the user first. Read `references/import_and_extract.md` before starting: it lists which capabilities were not found in the upstream ima-skill docs (delete, full entry body read) and why extraction goes through the desktop app, how entries resolve asynchronously, the extraction protocol and its measured failure modes (unescaped quotes, truncated rounds, empty placeholder objects), and the desktop-app automation traps.
 
 ## What this skill refuses to do
 
