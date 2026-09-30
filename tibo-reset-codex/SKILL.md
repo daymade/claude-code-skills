@@ -72,7 +72,7 @@ description: >-
   本机扫描的每次实际抓取先落 findings 记录，回填时用
   evidence_refs 挂链（见[预测反馈的 findings 节](references/forecast-feedback.md)）。**§2 之后必须再跑一次实时 banked 查询**（`scripts/query_usage.py`，读法与字段表见
   [账号 SOP](references/account-usage.md)）——§2 的 rollout 快照结构上没有备用重置字段，不跑就
-  答不全「现在什么情况」这个最常被问的维度；只取 banked 一个数即可，并把输出里的 `account_ref` 一起记进 findings（不记 `email`；banked 计数是净值、只在同一账号内可比，此前没有 `account_ref` 的 banked 数不能当基线，见账号 SOP）；本条其余部分仍只管重置状态。
+  答不全「现在什么情况」这个最常被问的维度；只取 banked 一个数即可，并把输出里的 `account_ref` 一起记进 findings（记录规则见 forecast-feedback.md 的隐私契约，banked 计数的可比范围见账号 SOP）；本条其余部分仍只管重置状态。
   ⚠️ **scan 与 banked 不要 `&&` 串联**：scan_rollouts 无快照时 exit 1，`&&` 会把 banked 查询直接
   短路掉——表面上全套像跑过了，实际少一维（2026-09-19 实测）。两条分开跑，或串联时给 scan
   加 `|| true`。**循环场景下 skill 里的裸命令被 `same-cmd-resend-guard` 拦**（端点抖动失败一次
