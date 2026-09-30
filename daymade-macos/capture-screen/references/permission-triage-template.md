@@ -43,9 +43,8 @@ open "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone
 
 本模板只覆盖 capture-screen 自己需要的 Screen Recording / 麦克风。Full Disk Access、
 Automation、辅助功能，以及「弹窗一直弹 / 授权对象是谁」的通用诊断，一律走
-`daymade-macos:macos-permissions` skill（它有完整的 TCC service 目录、schema、auth_value
-语义、`uv`-in-launchd 的 FDA 陷阱，和「弹窗显示名 ≠ 发起方、先查 TCC.db 的 `from Sub`」这条
-第一诊断铁律）。
+`daymade-macos:macos-permissions` skill。`from Sub:` 在 TCC 日志中，不在 TCC.db 中；
+该 Skill 负责归因、授权状态与后台受保护读取的验证。
 
 ## 验收标准（用户侧）
 

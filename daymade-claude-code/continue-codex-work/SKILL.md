@@ -1,15 +1,11 @@
 ---
 name: continue-codex-work
 description: >-
-  Continues interrupted OpenAI Codex work only after read-codex-history verifies
-  the selected rollout identity and complete fork/compaction lineage. Use when
-  the user provides a Codex Session ID, asks to pick up a prior Codex run, says
-  Codex was interrupted, fused, compacted, or stuck, or wants the current Agent
-  to take over without `codex resume`. Restores the original business outcome,
-  unfulfilled requests, user corrections, proven prior assets, current workspace
-  truth, and the next action that directly advances the goal. Do not use when
-  Codex itself natively resumed this same conversation and its prior turns or
-  compaction state are already present in the current context.
+  Continues interrupted Codex work only after read-codex-history verifies rollout identity and
+  fork/compaction lineage — restores the original outcome, unfulfilled requests, and the next
+  action. Use when given a Codex Session ID, asked to pick up a prior Codex run, told Codex was
+  interrupted, fused, compacted or stuck, or asked to take over without `codex resume`. Not for a
+  conversation Codex already natively resumed.
 argument-hint: "[session-id]"
 ---
 

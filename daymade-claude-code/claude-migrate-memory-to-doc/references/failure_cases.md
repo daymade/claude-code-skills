@@ -57,3 +57,29 @@ A memory file about the prod cutover was referenced by the project's own `CLAUDE
 ## 15. Partial duplicates were overwritten instead of merged (2026-07-06)
 
 Several memory files (`architecture_v2_decision.md`, `cache_regression_2026_04_12.md`, `project_upstream_capture_shipped_2026_05_13.md`) were partial duplicates of existing project docs. The first instinct was to replace the doc with the memory version; that would have lost doc-only updates and formatting. The correct move: diff the two, append the memory's **unique** details to the existing doc, and archive the memory.
+
+## 16. Inventory agents reported "no home" for content a private skill repo already held (2026-09-24, Goal B)
+
+Three sub-agents classified 70 memory files. Their prompts named the global references, the
+public skill repo and the project docs, but not the private skill repo. Two entries — a
+font-substitution finding and a subtitle toolchain — came back as "needs migration"; both
+were already documented in the private repo's skills. The fix: list every search root in the
+prompt, public and private, and treat an agent's "no home" as covering only the roots it was
+told about.
+
+## 17. A search that searched nothing reported fourteen clean misses (2026-09-24)
+
+A spot-check stored several directories in one shell variable and passed it unquoted. In zsh
+that variable does not split into words, so the search tool received one nonexistent path
+and every one of fourteen patterns returned nothing. The misses looked exactly like "no
+existing home". Running the same command on a string known to exist returned nothing too,
+which exposed it. Pass multiple roots as an array (`"${ROOTS[@]}"`) and calibrate each
+search shape on a known hit before believing a zero.
+
+## 18. Another session was still writing memory during the migration (2026-09-24, Goal B)
+
+One memory file grew from 11 KB to 26 KB an hour into the migration — a different session in
+the same project had appended new material. Two sessions contacted about it had not written
+it. Recording each file's hash when it was migrated, and comparing again right before
+archiving, is what makes the archive step safe; migrating the latest content first and
+archiving last keeps nothing from being lost if a late write lands.

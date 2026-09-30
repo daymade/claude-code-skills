@@ -2,7 +2,7 @@
 # /// script
 # requires-python = ">=3.10"
 # ///
-"""verify_queue_audio.py — 批量 pending 音频交叉核验（双引擎片段识别）。
+"""verify_queue_audio.py — 批量 pending 音频交叉核验（第二引擎双窗口识别）。
 
 对某转写文件在 review queue 里的 pending 项，逐项从源音频剪 tight/medium
 双片段，送第二识别引擎（默认 StepFun）交叉识别，输出对照表供裁决。
@@ -16,17 +16,14 @@
     --audio /abs/path/source.wav \
     [--speed 1.3]            # 转写时间轴→音频轴倍速（加速上传的妙记=原始/加速比；反推法：源音频时长/妙记时长）
     [--queue-ids 1817,1818]  # 默认该文件全部 pending
-    [--engine-script /abs/stepfun-asr/scripts/asr_transcribe.py]
+    --engine-script /abs/stepfun-asr/scripts/asr_transcribe.py
     [--outdir /tmp/asr-verify]
 
-输出：<outdir>/results.json（每项：id/line/original/suggested/token_wav_time/tight/medium 识别文本）
-判读（裁决矩阵，详 references/advanced_correction_evidence.md §批量 pending 音频核验）：
-  - 双窗一致且与候选同 → accepted
-  - 双窗一致但与候选不同 → 按引擎输出 overridden（或 kept_original 若证明原词无误）
-  - 双窗矛盾/空 → 保留 pending，不换方法重复（两窗不一致本身是信号）
-依赖：ffmpeg/ffprobe；识别引擎脚本（stdout 出文本）。
+输出：<outdir>/results.json；相同音频片段不调用 ASR，结果标记 same_clip。
+脚本只附加符合条件的音证，不写裁决；逐项裁决见 references/advanced_correction_evidence.md。
+依赖：ffmpeg；识别引擎脚本（音频路径作为位置参数，识别文本写 stdout）。
 """
-import argparse, datetime, json, os, re, subprocess, sys
+import argparse, datetime, hashlib, json, os, re, subprocess, sys
 
 TS_RE = re.compile(r'^(\S+) (\d{2}):(\d{2}):(\d{2})\.(\d{3})\s*$')
 SKILL_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -81,22 +78,67 @@ def list_pending(transcript, queue_ids):
     return items
 
 
+def both_windows_support_suggestion(result):
+    """Require a delimited candidate with the same following context in both cuts."""
+    normalize = lambda value: "".join(
+        char for char in (value or "") if char.isalnum())
+    suggestion = normalize(result.get("suggested"))
+    original = normalize(result.get("original"))
+    if result.get("same_clip") or not suggestion or not original or suggestion == original \
+            or result.get("tight_exit") or result.get("medium_exit"):
+        return False
+    boundaries = []
+    for window in ("tight", "medium"):
+        raw = result.get(window) or ""
+        recognized = normalize(raw)
+        if original in recognized:
+            return False
+        if all("\u3400" <= char <= "\u9fff" for char in suggestion):
+            raw_hits = list(re.finditer(re.escape(suggestion), raw))
+            if not raw_hits or any(
+                    raw[match.end():].lstrip()
+                    and "\u3400" <= raw[match.end():].lstrip()[0] <= "\u9fff"
+                    for match in raw_hits):
+                return False
+        matches = {
+            recognized[pos + len(suggestion):pos + len(suggestion) + 1]
+            for pos in range(len(recognized))
+            if recognized.startswith(suggestion, pos)
+        }
+        if len(matches) != 1:
+            return False
+        boundaries.append(matches.pop())
+    return boundaries[0] == boundaries[1]
+
+
+def same_clip_bytes(first, second):
+    if os.path.getsize(first) != os.path.getsize(second):
+        return False
+    def digest(path):
+        with open(path, "rb") as stream:
+            return hashlib.sha256(stream.read()).digest()
+    return digest(first) == digest(second)
+
+
 def main():
-    ap = argparse.ArgumentParser(description="批量 pending 音频交叉核验（双引擎片段识别）")
+    ap = argparse.ArgumentParser(description="批量 pending 音频交叉核验（第二引擎双窗口识别）")
     ap.add_argument("--transcript", required=True)
     ap.add_argument("--audio", required=True)
     ap.add_argument("--speed", type=float, default=1.0,
                     help="转写时间轴→音频轴倍速（加速上传的妙记=源时长/妙记时长，如 1.3）")
     ap.add_argument("--queue-ids", default="", help="逗号分隔；默认该文件全部 pending")
     ap.add_argument("--engine-script", required=True,
-                    help="第二识别引擎脚本（stdin 音频路径，stdout 文本），如 stepfun-asr/scripts/asr_transcribe.py")
+                    help="第二识别引擎脚本（音频路径位置参数，stdout 文本），如 stepfun-asr/scripts/asr_transcribe.py")
     ap.add_argument("--outdir", default="/tmp/asr-verify")
     ap.add_argument("--tight", type=float, default=5.0, help="tight 窗 ±秒（默认 5）")
     ap.add_argument("--medium", type=float, default=20.0, help="medium 窗 ±秒（默认 20）")
     a = ap.parse_args()
+    if a.tight <= 0 or a.medium <= a.tight:
+        ap.error("--medium must be greater than positive --tight")
 
     os.makedirs(a.outdir, exist_ok=True)
-    lines = open(a.transcript, encoding="utf-8").read().splitlines()
+    with open(a.transcript, encoding="utf-8") as transcript_file:
+        lines = transcript_file.read().splitlines()
     turns = parse_turns(lines)
     if not turns:
         sys.exit("no speaker turns parsed — 转写需含「说话人 HH:MM:SS.mmm」行")
@@ -116,6 +158,18 @@ def main():
             subprocess.run(["ffmpeg", "-y", "-ss", f"{max(start, 0):.3f}", "-t", f"{dur:.0f}",
                             "-i", a.audio, "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", clip],
                            capture_output=True, check=True)
+        if same_clip_bytes(tight, med):
+            results.append({
+                "id": tid, "line": it["line_number"],
+                "original": it["original_text"],
+                "suggested": it.get("suggested_text") or "",
+                "token_wav_time": round(tok_t, 2),
+                "tight": "", "medium": "", "tight_exit": -1, "medium_exit": -1,
+                "err": "tight and medium clips have identical bytes; no independent audio evidence",
+                "same_clip": True,
+            })
+            print(f"done {tid}: identical clips, pending", flush=True)
+            continue
         r1 = subprocess.run(["python3", a.engine_script, tight], capture_output=True, text=True)
         r2 = subprocess.run(["python3", a.engine_script, med], capture_output=True, text=True)
         results.append({
@@ -123,6 +177,8 @@ def main():
             "original": it["original_text"], "suggested": it.get("suggested_text") or "",
             "token_wav_time": round(tok_t, 2),
             "tight": r1.stdout.strip()[:300], "medium": r2.stdout.strip()[:500],
+            "tight_exit": r1.returncode, "medium_exit": r2.returncode,
+            "same_clip": False,
             "err": (r1.stderr + r2.stderr)[:200],
         })
         print(f"done {tid}: {it['original_text']}", flush=True)
@@ -132,24 +188,19 @@ def main():
         json.dump(results, f, ensure_ascii=False, indent=1)
     print(f"\n{len(results)} items -> {out}")
 
-    # Write the verdict back into the queue's evidence column — but ONLY when
-    # the audio supports the suggestion. The name-convergence gate treats a
-    # 音证 citation as an authority, so attaching one the audio does not
-    # support would launder an unsupported write through the gate. When the
-    # engines do not return the suggestion, nothing is attached: the operator
-    # reads results.json and decides with a different authority (or keeps the
-    # original).
+    # Different clip bytes and an explicit CJK word boundary are required before
+    # agreeing recognizer text can serve as authority.
+    # This never records a review verdict.
     attached, unsupported = [], []
     for r in results:
         sug = (r.get("suggested") or "").strip()
         if not sug:
             continue
-        norm = lambda s: re.sub(r"\s+", "", s or "")
-        if any(sug in norm(r.get(k) or "") for k in ("tight", "medium")):
+        if both_windows_support_suggestion(r):
             text = (f"音证 {datetime.date.today().isoformat()}：token≈{r['token_wav_time']}s，"
                     f"tight 窗识别「{(r.get('tight') or '')[:80]}」"
-                    f"/ medium 窗「{(r.get('medium') or '')[:80]}」含建议词「{sug[:40]}」"
-                    f"（verify_queue_audio 双引擎回写）")
+                    f"/ medium 窗「{(r.get('medium') or '')[:80]}」均含建议词「{sug[:40]}」"
+                    f"（verify_queue_audio 双窗口及右边界一致）")
             cp = subprocess.run(
                 ["uv", "run", FIX, "--attach-authority", str(r["id"]),
                  "--authority-text", text, "--by", "verify_queue_audio", "--json"],
@@ -163,7 +214,7 @@ def main():
     if attached:
         print(f"音证已回写 evidence（作为后续裁决的权威源）: {attached}")
     if unsupported:
-        print(f"音证不含建议词、未回写权威（请读 results.json 自行裁决）: {unsupported}")
+        print(f"双窗口未一致支持建议词、未回写权威（请读 results.json 自行裁决）: {unsupported}")
 
 
 if __name__ == "__main__":

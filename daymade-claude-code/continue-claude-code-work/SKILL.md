@@ -1,13 +1,10 @@
 ---
 name: continue-claude-code-work
 description: >-
-  Continues interrupted Claude Code work only after local history has been read
-  and reconciled. Use when the user provides a Claude Code Session ID, asks to
-  pick up prior Claude work, says a Claude run was interrupted or compacted, or
-  wants the current Agent to take over without `claude --resume`. Reconstructs
-  the original business outcome, unfulfilled requests, user corrections,
-  successful prior assets, current workspace truth, and the next action that
-  directly advances the goal. For Codex sessions use continue-codex-work.
+  Continues interrupted Claude Code work after local history is read and reconciled — reconstructs
+  the original outcome, unfulfilled requests, and the next action. Use when given a Claude Code
+  Session ID, asked to pick up prior Claude work, told a run was interrupted or compacted, or asked
+  to take over without `claude --resume`. Not for Codex sessions (use continue-codex-work).
 argument-hint: "[session-id]"
 ---
 

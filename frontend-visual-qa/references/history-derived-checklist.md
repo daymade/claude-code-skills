@@ -251,6 +251,14 @@ Verify:
 - asset relevance to the product/domain;
 - use of approved logo, imagery, and design-system assets.
 
+For a repeated list or table with optional media, inspect real rows with media,
+without media, and with a failed load, alongside a long title or description.
+Compare the media slot and text bounds across those rows at the same viewport.
+If imagery is a stable identity cue, missing media needs an intentional visible
+state or an explicitly chosen reflow; a blank gap or text crossing into the next
+column is not a healthy empty state. A successful image request in other rows
+does not verify the missing-media branch.
+
 Classify media before calling it broken:
 
 - **not requested** — a rendered but offscreen lazy image has not entered its

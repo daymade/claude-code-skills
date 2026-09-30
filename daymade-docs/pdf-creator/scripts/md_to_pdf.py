@@ -29,9 +29,11 @@ import os
 import platform
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -410,27 +412,92 @@ def _render_chrome(full_html: str, pdf_file: str) -> None:
         f.write(full_html)
         html_path = f.name
 
+    # Headless Chrome can write the PDF and then never exit, so a PDF that ends in %%EOF
+    # counts as done, Chrome is stopped here, and the wait is bounded. The
+    # MacAppCodeSignClone flag stops each launch from copying the Chrome app into a
+    # code_sign_clone directory on macOS, which a stopped Chrome would leave behind.
+    pdf_path = Path(pdf_file)
+    pdf_path.unlink(missing_ok=True)  # a stale PDF would read as "done"
+    # A TERM/HUP aimed at this script alone still stops Chrome: the finally below runs.
+    # Only signals still at their default: under nohup SIGHUP is ignored and stays so.
+    caught = [s for s in (getattr(signal, "SIGTERM", None), getattr(signal, "SIGHUP", None))
+              if s and signal.getsignal(s) is signal.SIG_DFL]
+    previous = {s: signal.signal(s, _raise_exit) for s in caught}
+    timed_out = False
     try:
-        result = subprocess.run(
-            [
-                chrome,
-                "--headless",
-                "--disable-gpu",
-                "--no-pdf-header-footer",
-                f"--print-to-pdf={pdf_file}",
-                html_path,
-            ],
-            capture_output=True,
-            text=True,
-        )
-        if not Path(pdf_file).exists():
-            print(
-                f"Error: Chrome failed to generate PDF. stderr: {result.stderr}",
-                file=sys.stderr,
+        with tempfile.TemporaryFile() as stderr_file:
+            proc = subprocess.Popen(
+                [
+                    chrome,
+                    "--headless",
+                    "--disable-features=MacAppCodeSignClone",
+                    "--disable-gpu",
+                    "--no-pdf-header-footer",
+                    f"--print-to-pdf={pdf_file}",
+                    html_path,
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=stderr_file,
             )
-            sys.exit(1)
+            deadline = time.monotonic() + CHROME_TIMEOUT_SECONDS
+            try:
+                while proc.poll() is None and not _pdf_complete(pdf_path):
+                    if time.monotonic() > deadline:
+                        timed_out = True
+                        break
+                    time.sleep(0.2)
+            finally:
+                _stop_chrome(proc)
+                for s, handler in previous.items():
+                    signal.signal(s, handler)
+            if not _pdf_complete(pdf_path):
+                stderr_file.seek(0)
+                stderr = stderr_file.read().decode("utf-8", "replace")
+                reason = (
+                    f"within {CHROME_TIMEOUT_SECONDS}s"
+                    if timed_out
+                    else f"before exiting (exit code {proc.returncode})"
+                )
+                print(
+                    f"Error: Chrome did not produce a complete PDF {reason}. stderr: {stderr}",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
     finally:
         Path(html_path).unlink(missing_ok=True)
+
+
+CHROME_TIMEOUT_SECONDS = 120
+
+
+def _pdf_complete(path: Path) -> bool:
+    try:
+        with path.open("rb") as f:
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            if size < 64:
+                return False
+            f.seek(max(0, size - 64))
+            return f.read().rstrip().endswith(b"%%EOF")
+    except OSError:
+        return False
+
+
+def _stop_chrome(proc: subprocess.Popen) -> None:
+    """SIGTERM, then SIGKILL if Chrome is still running after 5 s. Chrome's helper
+    processes exit with the browser process."""
+    if proc.poll() is not None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+
+
+def _raise_exit(signum, _frame):
+    raise SystemExit(128 + signum)
 
 
 # ---------------- Visual self-check (post-render PNG previews) ----------------

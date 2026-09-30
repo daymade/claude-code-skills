@@ -6,6 +6,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -23,6 +24,7 @@ class ForecastLogTests(unittest.TestCase):
         self.addCleanup(self.folder.cleanup)
         self.path = Path(self.folder.name) / "private" / "forecasts.jsonl"
         self.findings_path = Path(self.folder.name) / "private" / "findings.jsonl"
+        self.withdrawals_path = Path(self.folder.name) / "private" / "withdrawals.jsonl"
         self.now = datetime(2026, 10, 10, tzinfo=timezone.utc)
         self.forecast = {
             "kind": "global_reset", "confidence": "low",
@@ -47,6 +49,13 @@ class ForecastLogTests(unittest.TestCase):
                 "lesson": "Retain the multi-day window until more cycles are observed."}
         return log.append_record(self.path, "review", {**data, **changes}, self.now + timedelta(days=6))
 
+    def withdraw(self, fid, *, now=None, **changes):
+        data = {"forecast_id": fid,
+                "reason": "The issued date lacked evidence for its deadline.",
+                "lesson": "Keep the promise, but withdraw the unsupported date."}
+        return log.append_record(self.path, "withdraw", {**data, **changes},
+                                 now or self.now + timedelta(hours=1))
+
     def finding(self, **changes):
         data = {"invocation": "announcement", "query": "What did Tibo announce today?",
                 "endpoints": ["https://example.invalid/timeline"],
@@ -56,6 +65,22 @@ class ForecastLogTests(unittest.TestCase):
     def test_empty_summary_is_read_only(self):
         self.assertEqual(log.summarize(self.path)["forecast_count"], 0)
         self.assertFalse(self.path.parent.exists())
+
+    def test_monitor_handoff_keeps_open_questions_and_ignores_later_account_reading(self):
+        self.assertIsNone(log.latest_monitor_handoff(self.findings_path))
+        first = self.finding(invocation="monitor", notes=["9/16 reply 的承诺尚未确认；下轮查原帖"],
+                             readings={}, endpoints=[])
+        self.finding(invocation="account", notes=["banked=0"])
+        self.assertEqual(log.latest_monitor_handoff(self.findings_path)["id"], first["id"])
+        self.assertEqual(log.latest_monitor_handoff(self.findings_path)["notes"], first["notes"])
+        second = log.append_finding(self.findings_path, {"invocation": "monitor", "query": "follow up",
+                    "endpoints": [], "readings": {}, "notes": ["旧承诺已由原帖证实；继续查兑现"]},
+                    self.now - timedelta(minutes=5))
+        self.assertEqual(log.latest_monitor_handoff(self.findings_path)["id"], second["id"])
+        third = log.append_finding(self.findings_path, {"invocation": "monitor", "query": "same clock",
+                    "endpoints": [], "readings": {}, "notes": ["同时刻写入的新问题"]},
+                    self.now - timedelta(minutes=5))
+        self.assertEqual(log.latest_monitor_handoff(self.findings_path)["id"], third["id"])
 
     def test_records_original_forecast_feedback_and_private_permissions(self):
         row = self.record()
@@ -149,6 +174,118 @@ class ForecastLogTests(unittest.TestCase):
         hit = self.review(first["id"])
         self.assertEqual(self.review(first["id"])["id"], hit["id"])
         self.assertEqual(len(self.path.read_text().splitlines()), 2)
+
+    def test_withdrawal_is_append_only_and_leaves_followup_without_hiding_history(self):
+        found = self.finding()
+        issued = self.record()
+        before = self.path.read_bytes()
+        withdrawal = self.withdraw(issued["id"], evidence_refs=[found["id"][:8]])
+        self.assertEqual(withdrawal["record_type"], "withdrawal")
+        self.assertEqual(withdrawal["evidence_refs"], [found["id"]])
+        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(self.withdrawals_path.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(len(self.withdrawals_path.read_text().splitlines()), 1)
+        result = log.summarize(self.path, now=self.now + timedelta(days=10))
+        self.assertEqual(result["forecast_count"], 1)
+        self.assertEqual(result["pending"], [])
+        self.assertEqual(result["due_for_followup"], [])
+        self.assertEqual(result["recent_withdrawn"][0]["id"], issued["id"])
+        self.assertEqual(result["recent_withdrawn"][0]["latest_withdrawal"]["id"],
+                         withdrawal["id"])
+        self.assertEqual(result["recent_withdrawn"][0]["latest_withdrawal"]["evidence_refs_count"], 1)
+        self.assertEqual(result["cycle_counts"]["global_reset"]["withdrawn"], 1)
+        with self.assertRaisesRegex(ValueError, "withdrawn forecast cannot be reviewed"):
+            self.review(issued["id"])
+
+    def test_withdrawal_rejects_invalid_targets_and_resolved_predictions(self):
+        with self.assertRaisesRegex(ValueError, "forecast_id not found"):
+            self.withdraw("absent")
+        issued = self.record()
+        for changes in ({"reason": ""}, {"lesson": "   "},
+                        {"evidence_refs": ["missing"]}):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                self.withdraw(issued["id"], **changes)
+        first = self.withdraw(issued["id"])
+        self.assertEqual(self.withdraw(issued["id"])["id"], first["id"])
+        with self.assertRaisesRegex(ValueError, "forecast already withdrawn"):
+            self.withdraw(issued["id"], reason="Different correction")
+        self.assertEqual(len(self.path.read_text().splitlines()), 1)
+        self.assertEqual(len(self.withdrawals_path.read_text().splitlines()), 1)
+
+        resolved = self.record(rationale="A distinct issued forecast.")
+        self.review(resolved["id"])
+        with self.assertRaisesRegex(ValueError, "resolved forecast cannot be withdrawn"):
+            self.withdraw(resolved["id"], now=self.now + timedelta(days=7))
+        self.review(resolved["id"], unknown=True)
+        with self.assertRaisesRegex(ValueError, "resolved forecast cannot be withdrawn"):
+            self.withdraw(resolved["id"], now=self.now + timedelta(days=8))
+
+    def test_unknown_review_can_be_withdrawn_but_scored_review_cannot(self):
+        issued = self.record()
+        self.review(issued["id"], unknown=True)
+        self.withdraw(issued["id"], now=self.now + timedelta(days=7))
+        result = log.summarize(self.path)
+        self.assertEqual(result["pending"], [])
+        self.assertEqual(result["recent_withdrawn"][0]["latest_review"]["outcome"], "unknown")
+
+    def test_scored_review_from_legacy_writer_after_withdrawal_is_surfaced(self):
+        issued = self.record()
+        withdrawn = self.withdraw(issued["id"])
+        legacy_review = {"schema_version": 1, "id": "legacy-review", "record_type": "review",
+                         "recorded_at": (self.now + timedelta(hours=2)).isoformat(),
+                         "forecast_id": issued["id"], "outcome": "hit",
+                         "reason": "A legacy client wrote this after withdrawal.",
+                         "lesson": "Reconcile before scoring."}
+        with self.path.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(legacy_review) + "\n")
+        result = log.summarize(self.path)
+        self.assertEqual(result["withdrawal_conflicts"], [{
+            "forecast_id": issued["id"], "withdrawal_id": withdrawn["id"],
+            "review_id": "legacy-review", "review_outcome": "hit"}])
+        self.assertEqual(result["pending"], [])
+        self.assertEqual(result["recent_withdrawn"][0]["latest_review"]["outcome"], "hit")
+        later_unknown = {**legacy_review, "id": "legacy-unknown", "outcome": "unknown",
+                         "recorded_at": (self.now + timedelta(hours=3)).isoformat()}
+        with self.path.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(later_unknown) + "\n")
+        result = log.summarize(self.path)
+        self.assertEqual(result["withdrawal_conflicts"], [{
+            "forecast_id": issued["id"], "withdrawal_id": withdrawn["id"],
+            "review_id": "legacy-review", "review_outcome": "hit"}])
+        self.assertEqual(result["recent_withdrawn"][0]["latest_review"]["outcome"], "unknown")
+        backdated_score = {**legacy_review, "id": "legacy-backdated", "outcome": "early",
+                           "recorded_at": (self.now - timedelta(hours=1)).isoformat()}
+        with self.path.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(backdated_score) + "\n")
+        result = log.summarize(self.path)
+        self.assertEqual([row["review_id"] for row in result["withdrawal_conflicts"]],
+                         ["legacy-review", "legacy-backdated"])
+
+    def test_cli_withdrawal_changes_summary_state(self):
+        script = Path(__file__).resolve().parents[1] / "scripts" / "forecast_log.py"
+        state = self.path.parent
+        start = datetime.now(timezone.utc) + timedelta(days=2)
+        payload = {**self.forecast, "window_start": start.isoformat(),
+                   "window_end": (start + timedelta(days=2)).isoformat()}
+        input_path = Path(self.folder.name) / "input.json"
+
+        def invoke(command, data=None):
+            if data is not None:
+                input_path.write_text(json.dumps(data), encoding="utf-8")
+            argv = [sys.executable, str(script), "--state-dir", str(state), "--no-git", command]
+            if data is not None:
+                argv.extend(("--input", str(input_path)))
+            return json.loads(subprocess.run(argv, capture_output=True, text=True,
+                                             check=True).stdout)
+
+        issued = invoke("record", payload)
+        withdrawn = invoke("withdraw", {"forecast_id": issued["id"],
+                                        "reason": "The timing premise was unsupported.",
+                                        "lesson": "Do not invent a deadline."})
+        summary = invoke("summary")
+        self.assertEqual(withdrawn["record_type"], "withdrawal")
+        self.assertEqual(summary["pending"], [])
+        self.assertEqual(summary["recent_withdrawn"][0]["id"], issued["id"])
 
     def test_delayed_exact_retry_returns_original_after_window_started(self):
         first = self.record()
@@ -365,6 +502,122 @@ class ForecastLogTests(unittest.TestCase):
         with mock.patch.object(log.subprocess, "run", boom):
             self.record(rationale="A later forecast still appends fine.")
 
+    def test_git_snapshot_note_carries_the_pre_commit_hook_reason(self):
+        # A hook rejection is exit status 1 with the reason only on stderr; the
+        # note must surface it or the failure is undiagnosable from the log.
+        self.record()
+        state = self.path.parent
+        hooks = state / ".git" / "hooks"
+        # A machine-global core.hooksPath would shadow this repo's hooks dir.
+        for argv in (["init"], ["config", "user.email", "t@example.invalid"],
+                     ["config", "user.name", "t"], ["config", "core.hooksPath", str(hooks)]):
+            subprocess.run(["git", "-C", str(state), *argv], check=True, capture_output=True)
+        hooks.mkdir(parents=True, exist_ok=True)
+        hook = hooks / "pre-commit"
+        hook.write_text("#!/bin/sh\nprintf \"found leak@corp.example o'brien@corp.example "
+                        "bob@localhost in findings.jsonl:1\\n\" >&2\n"
+                        "printf '\\033[0;31mCommit blocked by test guard\\033[0m\\n' >&2\nexit 1\n")
+        hook.chmod(0o755)
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            log.snapshot(state, self.path.name, "forecast")
+        self.assertIn("git snapshot skipped", stderr.getvalue())
+        self.assertIn("Commit blocked by test guard", stderr.getvalue())
+        self.assertNotIn("\x1b", stderr.getvalue())
+        self.assertIn("found <email> <email> <email> in findings.jsonl:1", stderr.getvalue())
+        for leaked in ("corp.example", "brien", "localhost"):
+            self.assertNotIn(leaked, stderr.getvalue())
+
+    def _health_repo(self):
+        """A state dir with a real git repo that neither hooks nor identity can break."""
+        self.record()
+        state = self.path.parent
+        for argv in (["init"], ["config", "user.email", "t@example.invalid"],
+                     ["config", "user.name", "t"], ["config", "core.hooksPath", "/dev/null"]):
+            subprocess.run(["git", "-C", str(state), *argv], check=True, capture_output=True)
+        return state
+
+    def _git(self, state, *argv):
+        subprocess.run(["git", "-C", str(state), *argv], check=True, capture_output=True)
+
+    def test_snapshot_health_covers_every_state_a_journal_can_be_in(self):
+        state = self.path.parent
+        self.assertEqual(log.snapshot_health(state, enabled=False), {"status": "disabled"})
+        self.assertEqual(log.snapshot_health(state)["status"], "no_repo")
+        state = self._health_repo()
+        # never committed and unstaged
+        untracked = log.snapshot_health(state)
+        self.assertEqual((untracked["status"], untracked["uncommitted"]),
+                         ("lagging", ["forecasts.jsonl"]))
+        # staged but never committed: the state a rejected commit leaves behind
+        self._git(state, "add", "--", "forecasts.jsonl")
+        self.assertEqual(log.snapshot_health(state)["uncommitted"], ["forecasts.jsonl"])
+        self._git(state, "commit", "-m", "snap", "--", "forecasts.jsonl")
+        self.assertEqual(log.snapshot_health(state), {"status": "ok"})
+        # appended after the last snapshot
+        self.record(rationale="A later forecast the snapshot has not seen yet.")
+        self.assertEqual(log.snapshot_health(state)["uncommitted"], ["forecasts.jsonl"])
+        # an unrelated dirty file is not the journals' problem
+        self._git(state, "add", "--", "forecasts.jsonl")
+        self._git(state, "commit", "-m", "snap2", "--", "forecasts.jsonl")
+        (state / "unrelated.txt").write_text("x")
+        self.assertEqual(log.snapshot_health(state), {"status": "ok"})
+
+    def test_a_snapshot_retries_only_the_journal_it_was_triggered_for(self):
+        # The doc and the lagging hint promise exactly this and no more.
+        state = self._health_repo()
+        self.finding()
+        log.snapshot(state, "findings.jsonl", "finding")
+        health = log.snapshot_health(state)
+        self.assertEqual((health["status"], health["uncommitted"]), ("lagging", ["forecasts.jsonl"]))
+        log.snapshot(state, "forecasts.jsonl", "forecast")
+        self.assertEqual(log.snapshot_health(state), {"status": "ok"})
+
+    def test_snapshot_health_ignores_a_repo_that_has_no_journals_yet(self):
+        # A pathspec-less `git status` would report the whole repo as lagging.
+        state = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(state, ignore_errors=True))
+        for argv in (["init"], ["config", "core.hooksPath", "/dev/null"]):
+            self._git(state, *argv)
+        (state / "notes.txt").write_text("unrelated and dirty")
+        self.assertEqual(log.snapshot_health(state), {"status": "ok"})
+
+    def test_snapshot_health_flags_a_journal_that_gitignore_hides(self):
+        state = self._health_repo()
+        (state / ".gitignore").write_text("*.jsonl\n")
+        health = log.snapshot_health(state)
+        self.assertEqual((health["status"], health["uncommitted"]), ("lagging", ["forecasts.jsonl"]))
+
+    def test_snapshot_health_is_read_only_and_never_creates_the_state_dir(self):
+        missing = self.path.parent / "not-created"
+        self.assertEqual(log.snapshot_health(missing)["status"], "no_repo")
+        self.assertFalse(missing.exists())
+        state = self._health_repo()
+        before = sorted(p.name for p in (state / ".git").iterdir())
+        log.snapshot_health(state)
+        self.assertEqual(sorted(p.name for p in (state / ".git").iterdir()), before)
+        self.assertFalse((state / ".git" / "index.lock").exists())
+
+    def test_snapshot_health_reports_unknown_when_git_itself_fails(self):
+        state = self._health_repo()
+
+        def boom(*argv, **kwargs):
+            raise subprocess.SubprocessError("git exploded")
+
+        with mock.patch.object(log.subprocess, "run", boom):
+            self.assertEqual(log.snapshot_health(state)["status"], "unknown")
+
+    def test_cli_summary_carries_snapshot_health(self):
+        state = self._health_repo()
+        argv = [sys.executable, str(Path(log.__file__).resolve()), "--state-dir", str(state)]
+        out = json.loads(subprocess.run([*argv, "summary"], capture_output=True, text=True,
+                                        check=True).stdout)
+        self.assertEqual(out["snapshot"]["status"], "lagging")
+        out = json.loads(subprocess.run([*argv[:1], argv[1], "--state-dir", str(state), "--no-git",
+                                         "summary"], capture_output=True, text=True,
+                                        check=True).stdout)
+        self.assertEqual(out["snapshot"], {"status": "disabled"})
+
     def test_no_git_flag_disables_the_snapshot_entirely(self):
         def boom(*argv, **kwargs):
             raise AssertionError("git must not run under --no-git")
@@ -383,6 +636,42 @@ class ForecastLogTests(unittest.TestCase):
                 self.record()
             self.assertEqual(self.path.read_bytes(), bad)
             self.path.write_text(original)
+
+    def test_due_for_followup_flags_overdue_pending_with_elapsed_hours(self):
+        """过期未定论的预测必须第一眼可见，不用从 rationale 里人工拼。
+
+        2026-09-24 实战：一条窗口已过 26h 的 banked 预测靠人工读 pending 文本才
+        被发现，到账观测区间已跨边界，本可判 hit 拖成 unknown。summary 要把
+        「窗口已过、尚无定论」机械地单列出来。
+        """
+        row = self.record()  # window 2026-10-12T00:00Z → 2026-10-14T00:00Z
+        summary = log.summarize(self.path, now=self.now + timedelta(days=5, hours=6))
+        self.assertEqual(len(summary["due_for_followup"]), 1)
+        entry = summary["due_for_followup"][0]
+        self.assertEqual(entry["id"], row["id"])
+        self.assertEqual(entry["urgency"], "overdue")
+        self.assertEqual(entry["hours_overdue"], 30.0)
+        self.assertEqual(entry["latest_outcome"], "unreviewed")
+
+    def test_due_for_followup_flags_windows_closing_within_24h(self):
+        row = self.record()
+        # 距窗口关闭 30h：不进（阈值 24h）。
+        early = log.summarize(self.path, now=self.now + timedelta(days=2, hours=18))
+        self.assertEqual(early["due_for_followup"], [])
+        # 距窗口关闭 6h：closing_soon，剩余时长正确。
+        soon = log.summarize(self.path, now=self.now + timedelta(days=3, hours=18))
+        self.assertEqual(len(soon["due_for_followup"]), 1)
+        entry = soon["due_for_followup"][0]
+        self.assertEqual(entry["urgency"], "closing_soon")
+        self.assertEqual(entry["hours_until_close"], 6.0)
+        self.assertEqual(entry["id"], row["id"])
+
+    def test_due_for_followup_excludes_resolved_and_empty_journals(self):
+        self.assertEqual(log.summarize(self.path, now=self.now)["due_for_followup"], [])
+        row = self.record()
+        self.review(row["id"])  # resolves to hit
+        summary = log.summarize(self.path, now=self.now + timedelta(days=9))
+        self.assertEqual(summary["due_for_followup"], [])
 
 
 if __name__ == "__main__":

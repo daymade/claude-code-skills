@@ -1,12 +1,12 @@
 ---
 name: claude-md-progressive-disclosurer
 description: >-
-  Optimize, slim, or restructure CLAUDE.md/AGENTS.md with progressive disclosure and zero
-  information loss. Use when the user explicitly asks to audit, 精简, 瘦身, 重构, split, or
-  diagnose adherence problems in instruction files. Profiles the whole resident startup surface,
-  allocates rules among prose, path rules, Skills, hooks, and references, then moves low-frequency
-  sections verbatim with content-integrity checks. Also use when an active task starts moving or
-  compressing instruction sections. Not for generic task drift unless instruction files are in scope.
+  Optimizes or restructures CLAUDE.md/AGENTS.md with progressive disclosure and zero
+  information loss. Use when the user asks to optimize, audit, 精简/瘦身/重构, or split instruction
+  files, asks for their best practices (最佳实践), sees Memory files taking a large share of
+  /context, reports rules in instruction files being ignored, or a task starts moving
+  instruction sections. Not for generic task drift unless instruction files are in scope; not
+  for moving memory entries into docs (use claude-code-ops-router).
 ---
 
 # CLAUDE.md 渐进式披露优化器
@@ -28,7 +28,7 @@ description: >-
 - 先修会改变当前任务决策的冲突、失效规则、权限歧义、假指针或真实截断。只有在问题确实是常驻负担时，才用测量贡献度安排减负顺序；不因文件最大就先改它，也不为缩小指令而新建 hook、监控或 Skill。
 - 验收是：授权范围内的改动完整且无误、真实宿主加载路径正确、代表性任务符合预期。完成必要检查后停止；仅因新改动、失败或未决疑点扩大验证。普通小修改不自动加独立审阅，复杂且缺少机械裁判的改动按当前协作契约做一次有界审阅。
 
-当前依据与适用边界见 [references/progressive_disclosure_principles.md](references/progressive_disclosure_principles.md) 开头；核查外部机制或研究结论时读取，历史案例不覆盖这里的现行契约。
+当前依据与适用边界见 [references/progressive_disclosure_principles.md](references/progressive_disclosure_principles.md) 开头；核查外部机制或研究结论时读取，历史案例不覆盖这里的现行契约。用户问「有哪些最佳实践」或要求参考外部做法时，先读那张证据表作答；是否需要重新调研，按表下的刷新规则判断。
 
 ### 铁律：行数禁作 KPI，可作诊断症状
 
@@ -144,6 +144,8 @@ Skills 描述常驻正文按需、以及 **Claude Code 的动态工具选择（�
    ```
 
    同时读各条 developer message 的开头，区分全局指令、项目指令、Skill catalog、hook/plugin 注入；**单量 CLAUDE.md 会漏掉常驻 Skill 描述和 hook 文字**。
+
+   Claude 的 `/context` 把 auto memory 的 `MEMORY.md` 与 CLAUDE.md 一并计入 Memory files。官方 memory 文档写明它每次会话加载前 200 行或 25KB（先到为准），开关是设置项 `autoMemoryEnabled` 或环境变量 `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`。它由模型自己写入，常与用户写的指令重复或矛盾（例如用户规定经验落文档，auto memory 却仍开着），按冲突处理。把 memory 条目迁进文档是另一个 Skill 的职责，经 `claude-code-ops-router` 路由到 `claude-migrate-memory-to-doc`；本 Skill 只负责把它列为加载面和冲突来源。
 2. **分节字节表**：按 heading 统计 bytes/lines；父节包含子节，只在同层比较，不能相加当总量。体积用于定位，不直接决定改动顺序；优先级仍由当前失败、错误代价、任务相关性与可验证收益决定。
 3. **行长分布**：>1KB 的巨型行是「规则+战例焊死在一个 bullet」的签名（实战：4.4% 的行承载 35.6% 的字节）
 4. **载入语义与上限**：逐宿主实测，禁把历史版本的默认值当当前不变量。当前 Codex 的 `project_doc_max_bytes` 是**项目层级文档的累计预算**；全局用户指令可走另一条加载路径，不能拿该值推断它是否截断。先查 `~/.codex/config.toml`，再以同 cwd 的 `codex debug prompt-input` 实际字节为裁决。历史上确有 96 KiB 配置配合旧加载行为导致 164KB 文件尾部 41% 不可见的事故，但它只证明「必须实测」，不证明今天仍按 32 KiB 或同一路径截断。确认真截断后，在当前授权内选择能恢复所需内容可见的最小修复；修改预算、重组文件、增加监控是不同动作，不自动捆绑。
@@ -379,6 +381,8 @@ function getDatabase() {
 ### 原则 4：用三态优先级，不要"全标铁律"
 
 把所有规则标成最高优先级会掩盖实际边界。先消除在同一场景给出相反动作的规则，再明确必须、禁止、可选及各自触发与停止条件；标签或位置不能覆盖真实宿主的指令优先级。
+
+堆叠强调词（加粗、`CRITICAL`、`MUST`、「铁律」「绝对禁止」、惩罚威胁）属于同一问题。Anthropic 官方提示建议指出新模型会因此过度触发；改写时换成平常语气，写清适用条件和原因，规则的边界与停止点保持不变。
 
 ✅/⚠️/🚫 可作为显示样式，不是经对照实验证明的最佳结构。没有足够证据把“150–200 条规则”“只保留 5–7 条高危规则”设为现代 GPT/Claude 的通用上限。数量与位置相关研究的适用范围见 reference 开头的证据表；以当前宿主上的实际行为裁决。
 

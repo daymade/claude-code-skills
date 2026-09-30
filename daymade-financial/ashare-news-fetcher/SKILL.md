@@ -1,5 +1,6 @@
 ---
 name: ashare-news-fetcher
+disable-model-invocation: true
 description: >-
   抓取 A 股消息面情报：从财联社、华尔街见闻、金十、新浪 7x24、东财快讯、
   证监会/央行/上交所/财政部政策公告、东方财富股吧等公开来源抓取与股票相关的

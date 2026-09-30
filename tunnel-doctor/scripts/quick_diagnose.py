@@ -3,8 +3,8 @@
 Quick tunnel/proxy conflict diagnostics for macOS.
 
 This script detects the most common local and Tailscale networking conflicts:
-1) Shell proxy env + NO_PROXY mismatch
-2) System proxy exceptions mismatch
+1) Shell proxy env path vs direct path
+2) System proxy path vs direct path
 3) Proxy path failure vs direct path success
 4) Local TLS trust issues
 5) Route ownership conflicts for a Tailscale IP (optional)
@@ -67,7 +67,7 @@ def has_host_bypass(host: str, patterns: List[str]) -> bool:
 def parse_scutil_proxy() -> Dict[str, object]:
     code, stdout, _stderr = run(["scutil", "--proxy"])
     if code != 0:
-        return {"raw": "", "exceptions": [], "http_enabled": False, "https_enabled": False}
+        return {"raw": "", "exceptions": [], "http_enabled": False, "https_enabled": False, "http_proxy": "", "https_proxy": ""}
 
     raw = stdout
     exceptions: List[str] = []
@@ -79,11 +79,20 @@ def parse_scutil_proxy() -> Dict[str, object]:
     http_enabled = bool(re.search(r"HTTPEnable\s*:\s*1", raw))
     https_enabled = bool(re.search(r"HTTPSEnable\s*:\s*1", raw))
 
+    def proxy_endpoint(kind: str, enabled: bool) -> str:
+        if not enabled:
+            return ""
+        host = re.search(rf"^\s*{kind}Proxy\s*:\s*(\S+)\s*$", raw, re.MULTILINE)
+        port = re.search(rf"^\s*{kind}Port\s*:\s*(\d+)\s*$", raw, re.MULTILINE)
+        return f"http://{host.group(1)}:{port.group(1)}" if host and port else ""
+
     return {
         "raw": raw,
         "exceptions": exceptions,
         "http_enabled": http_enabled,
         "https_enabled": https_enabled,
+        "http_proxy": proxy_endpoint("HTTP", http_enabled),
+        "https_proxy": proxy_endpoint("HTTPS", https_enabled),
     }
 
 
@@ -116,6 +125,7 @@ def curl_status(url: str, timeout: int, mode: str, proxy_url: Optional[str] = No
 
     env = os.environ.copy()
     if mode == "direct":
+        cmd.extend(["--noproxy", "*"])
         for key in (
             "http_proxy",
             "https_proxy",
@@ -126,7 +136,7 @@ def curl_status(url: str, timeout: int, mode: str, proxy_url: Optional[str] = No
         ):
             env.pop(key, None)
     elif mode == "forced_proxy" and proxy_url:
-        cmd.extend(["--proxy", proxy_url])
+        cmd.extend(["--noproxy", "", "--proxy", proxy_url])
 
     code, stdout, stderr = run(cmd, env=env)
     http_code = stdout if stdout else "000"
@@ -229,8 +239,9 @@ def route_check(tailscale_ip: str) -> Dict[str, object]:
     }
 
 
-def pick_proxy_url() -> Optional[str]:
-    for key in ("http_proxy", "HTTP_PROXY", "https_proxy", "HTTPS_PROXY"):
+def pick_proxy_url(url: str) -> Optional[str]:
+    keys = ("https_proxy", "HTTPS_PROXY") if url.startswith("https://") else ("http_proxy",)
+    for key in (*keys, "all_proxy", "ALL_PROXY"):
         value = os.environ.get(key)
         if value:
             return value
@@ -245,15 +256,17 @@ def build_report(
 ) -> Dict[str, object]:
     no_proxy = os.environ.get("NO_PROXY", "")
     no_proxy_lc = os.environ.get("no_proxy", "")
-    no_proxy_entries = split_csv(no_proxy if no_proxy else no_proxy_lc)
+    no_proxy_entries = split_csv(no_proxy_lc if no_proxy_lc else no_proxy)
 
     scutil_info = parse_scutil_proxy()
     scutil_exceptions = scutil_info["exceptions"]
 
-    proxy_url = pick_proxy_url()
+    proxy_url = pick_proxy_url(url)
+    system_proxy_url = scutil_info["https_proxy" if url.startswith("https://") else "http_proxy"]
     direct = curl_status(url, timeout, mode="direct")
     ambient = curl_status(url, timeout, mode="ambient")
     forced_proxy = curl_status(url, timeout, mode="forced_proxy", proxy_url=proxy_url) if proxy_url else None
+    system_proxy = curl_status(url, timeout, mode="forced_proxy", proxy_url=system_proxy_url) if system_proxy_url else None
     strict_tls = strict_tls_check(url, timeout) if url.startswith("https://") else None
 
     host_ips = resolve_host(host)
@@ -272,43 +285,29 @@ def build_report(
             }
         )
 
-    if proxy_url and not host_in_no_proxy:
+    if direct["ok"] and system_proxy and not system_proxy["ok"] and not host_in_scutil_exceptions:
         findings.append(
             {
                 "level": "warn",
-                "title": "NO_PROXY missing target host",
-                "detail": f"Proxy is enabled ({proxy_url}) but NO_PROXY does not match {host}.",
+                "title": "System proxy probe failed; client impact unverified",
+                "detail": f"The forced system proxy probe failed for {host}; the curl no-proxy path succeeded. scutil exceptions do not include the host.",
                 "fix": (
-                    "Add host to NO_PROXY/no_proxy, e.g. "
-                    f"NO_PROXY=...,{host}"
+                    "Verify the same URL in the affected browser or system client. If that path also fails, "
+                    "inspect its proxy rule and consider a host-specific DIRECT/skip-proxy entry."
                 ),
             }
         )
 
-    if (scutil_info["http_enabled"] or scutil_info["https_enabled"]) and not host_in_scutil_exceptions:
-        findings.append(
-            {
-                "level": "warn",
-                "title": "System proxy exception missing target host",
-                "detail": f"scutil active exceptions do not include {host}.",
-                "fix": (
-                    "Add host to proxy app skip/bypass list (Shadowrocket/Clash/Surge), "
-                    "then reload profile."
-                ),
-            }
-        )
-
-    if direct["ok"] and forced_proxy and not forced_proxy["ok"]:
+    if direct["ok"] and forced_proxy and not forced_proxy["ok"] and not ambient["ok"]:
         findings.append(
             {
                 "level": "error",
                 "title": "Proxy path is broken for target host",
                 "detail": (
-                    "Direct access works, but forced proxy tunnel fails. "
-                    "Traffic must bypass proxy for this host."
+                    "Direct curl access works, but the forced env-proxy path fails."
                 ),
                 "fix": (
-                    f"Add {host} to both NO_PROXY and proxy app skip-proxy/DIRECT rules."
+                    f"Check the env proxy and consider NO_PROXY for {host}; verify the affected client afterward."
                 ),
             }
         )
@@ -378,7 +377,8 @@ def build_report(
         "url": url,
         "host_ips": host_ips,
         "proxy_url": proxy_url or "",
-        "env_no_proxy": no_proxy if no_proxy else no_proxy_lc,
+        "system_proxy_url": system_proxy_url or "",
+        "env_no_proxy": no_proxy_lc if no_proxy_lc else no_proxy,
         "host_in_no_proxy": host_in_no_proxy,
         "scutil_http_enabled": scutil_info["http_enabled"],
         "scutil_https_enabled": scutil_info["https_enabled"],
@@ -387,6 +387,7 @@ def build_report(
             "ambient": ambient,
             "direct": direct,
             "forced_proxy": forced_proxy,
+            "system_proxy": system_proxy,
             "strict_tls": strict_tls,
         },
         "tailscale_route": route_info,
@@ -405,6 +406,7 @@ def print_human(report: Dict[str, object]) -> int:
 
     print("Proxy Context")
     print(f"- proxy env: {report['proxy_url'] or '(not set)'}")
+    print(f"- system proxy: {report['system_proxy_url'] or '(not available)'}")
     print(f"- host in NO_PROXY: {'yes' if report['host_in_no_proxy'] else 'no'}")
     print(
         "- system proxy enabled: "
@@ -416,7 +418,7 @@ def print_human(report: Dict[str, object]) -> int:
 
     conn = report["connectivity"]
     print("Connectivity Checks")
-    for key in ("ambient", "direct", "forced_proxy", "strict_tls"):
+    for key in ("ambient", "direct", "forced_proxy", "system_proxy", "strict_tls"):
         value = conn.get(key)
         if not value:
             continue

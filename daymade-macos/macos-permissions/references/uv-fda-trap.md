@@ -1,6 +1,6 @@
 # The `uv`-in-launchd Full-Disk-Access trap
 
-The single most frequent permission problem on this machine: a LaunchAgent running `uv run`
+An observed permission problem on this machine: a LaunchAgent running `uv run`
 repeatedly pops "python3.x would like to access data from other apps", and clicking Allow does
 not stop it. This is the applied case behind `../SKILL.md`'s attribution trap — same root cause
 family as Claude Code issues #74234 / #84948 / #86706 (per-version binary path).
@@ -8,8 +8,8 @@ family as Claude Code issues #74234 / #84948 / #86706 (per-version binary path).
 ## Symptom
 
 A background job (LaunchAgent) prompts every few minutes; the same command run interactively in a
-terminal does NOT prompt. The dialog names `python3.11` / `python3.14` / a bare version number —
-never `uv`.
+terminal does not prompt. In this case the dialog named `python3.11` / `python3.14` / a bare version
+number rather than `uv`.
 
 ## Root cause
 
@@ -38,22 +38,17 @@ session type. In the TCC log:
 - `launchctl asuser 501` re-launch from inside the job — the detached process still has no FDA parent.
 - Pinning `uv run --python 3.12` — still `uv` requesting FDA.
 
-## Fix
+## Repair
 
-**Grant Full Disk Access to the `uv` binary itself.** One grant covers every `uv run` LaunchAgent
-(dji / toas / weread / filehelper — they all bottom out in `uv`).
+Follow [`automated-full-disk-access.md`](automated-full-disk-access.md) first: check the exact
+requester and any existing grant, then test the protected read under the real LaunchAgent.
+In this observed case, `uv` was the responsible requester. Reusing its existing FDA grant
+worked for the Mac WeChat reader; that result does not establish inheritance for every job.
 
-1. System Settings → Privacy & Security → Full Disk Access → `+`
-2. `Cmd+Shift+G`, enter `~/.local/bin/uv`, add it, toggle ON.
-   (uv is NOT in the list by default and is not under /Applications — the picker's search won't
-   find it; use Go to Folder.)
-3. Verify (independent read-back, not the toggle):
-   ```bash
-   sudo -n sqlite3 '/Library/Application Support/com.apple.TCC/TCC.db' \
-     "select auth_value from access where client='~/.local/bin/uv' and service='kTCCServiceSystemPolicyAllFiles';"
-   # expect 2
-   ```
-4. Re-run the job; `from Sub: uv` FDA requests should now be Allowed, Denied count = 0.
+If no usable grant exists, use that GUI route for the **absolute `uv` path from the job's actual
+`ProgramArguments`**. Verify that exact client in the system TCC database using
+[`tcc-mechanics.md`](tcc-mechanics.md), then restart the job and
+repeat its protected read. TCC stores the absolute path, not a literal `~`.
 
 ## It recurs
 

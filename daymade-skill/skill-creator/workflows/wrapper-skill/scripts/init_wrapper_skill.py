@@ -52,7 +52,7 @@ PLACEHOLDER = "<<< FILL FROM Step {step} of workflow.md >>>"
 
 SKILL_MD_TEMPLATE = """---
 name: {name}
-description: {placeholder_step_4} Describe the wrapper skill in 4-8 sentences. Use the mined Step 2c error strings as literal triggers. Be pushy — false positives are cheaper than false negatives.
+description: {placeholder_step_4} One short routing key of 200-300 characters, shaped as <what it does>. Use when <tool name + the 1-2 most common Step 2c error strings>. Not for <nearest sibling>. Full error-string list goes in the body.
 ---
 
 # {display_name}

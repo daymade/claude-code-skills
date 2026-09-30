@@ -53,10 +53,13 @@ signal sat unused in the original request: the peer set (Codex, Claude).
   profile-mirror page (bio text) is a good second source for identity.
 - **SVG → PNG with real transparency**: headless Chrome does it without any
   native dependency:
-  `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --disable-gpu --screenshot=out.png --window-size=512,512 --default-background-color=00000000 file.svg`
+  `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --disable-features=MacAppCodeSignClone --disable-gpu --screenshot=out.png --window-size=512,512 --default-background-color=00000000 file.svg`
   (macOS full path — `chrome` is usually not on PATH; on Linux use
   `google-chrome`/`chromium`. cairosvg and svglib/renderPM both need system
-  cairo — often absent).
+  cairo — often absent). `--disable-features=MacAppCodeSignClone` keeps an
+  interrupted run from leaving a copy of the Chrome app in a temporary
+  directory. Do not add `--user-data-dir`: with it, headless Chrome 154 on macOS
+  writes `out.png` and then never exits.
 - Verify each fetched image is what you think before compositing: open it
   (view the file), confirm it has an alpha channel with real transparency,
   and confirm the depicted entity matches the identity you bound.

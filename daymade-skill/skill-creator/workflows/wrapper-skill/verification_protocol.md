@@ -60,7 +60,7 @@ uv run --frozen python -m scripts.quick_validate "$REPO_ROOT/<wrapper-skill-name
 uv run --frozen python -m scripts.security_scan "$REPO_ROOT/<wrapper-skill-name>"
 ```
 
-Both should pass. `quick_validate` enforces SKILL.md frontmatter shape, the 1024-char description cap, and path reference integrity. `security_scan` catches committed credentials, personal directories, and company names.
+Both should pass. `quick_validate` enforces SKILL.md frontmatter shape, the 1024-char description cap (and warns above 420), and path reference integrity. `security_scan` catches committed credentials, personal directories, and company names.
 
 ### Step 2 — Track 1 verification: session cross-reference
 

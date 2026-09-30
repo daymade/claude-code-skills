@@ -16,7 +16,7 @@
     {
       "id": 3,
       "prompt": "在所有 Claude Code 项目和已登记备份里找‘release codename’，它可能只在 tool_result 或附件中；不要把我刚输入的这句话当历史命中。",
-      "expected_output": "Runs analyze_sessions.py search --all-projects with the current Session excluded, searches structured event fields and reports the exact source and internal match range.",
+      "expected_output": "Checks index scope/freshness and uses indexed recall excluding the current Session; opens exact candidate Sessions to verify source labels, and reports that unindexed tool results or attachments remain a coverage gap instead of doing a raw corpus scan.",
       "files": []
     },
     {

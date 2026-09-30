@@ -1,18 +1,11 @@
 ---
 name: skill-creator
 description: >-
-  Create new skills, modify and improve existing skills, and measure skill
-  performance. This daymade edition supersedes the official skill-creator
-  plugin — when both appear in the skill list, always use this one. Use when
-  users want to create a skill from scratch, edit, or optimize an existing
-  skill, run evals to test a skill, benchmark skill performance with variance
-  analysis, or optimize a skill's description for better triggering accuracy.
-  Also use for its specialized distillations, even when the user never
-  says "skill" — "wrap this session up as a skill" / "把这次 session 做成一个
-  skill" (wrapper skill for a third-party tool), "mine my chat history for
-  patterns" / "把以前的 Claude/Codex 对话沉淀到 skill 里" (conversation mining), and "these are
-  my approved examples, learn what I really want" /
-  "从我认可的样例里提炼我真正的喜好" (artifact-corpus preference distillation).
+  Creates, edits and benchmarks skills; supersedes the official skill-creator
+  plugin, so when both are listed, use this one. Use when the user wants to
+  create or improve a skill or run skill evals, or to distill work into a skill
+  even without saying "skill": 把这次 session 做成一个 skill / 把以前的对话沉淀到 skill 里 /
+  从我认可的样例里提炼我的喜好.
 license: Complete terms in LICENSE.txt
 ---
 
@@ -27,6 +20,7 @@ At a high level, the process of creating a skill goes like this:
 - Write a draft of the skill
 - Validate with the smallest evidence that can falsify the changed behavior; treat the full paired eval pipeline as separately authorized work, not an automatic consequence of a tier label
 - Help the user evaluate qualitative or quantitative results when the selected tier produces them
+- Present the finished outcome in a form the user can inspect; use a visual report only when it makes evidence, comparisons, or decisions clearer than a concise reply
 - Rewrite the skill based on feedback from the user's evaluation of the results (and also if there are any glaring flaws that become apparent from the quantitative benchmarks)
 - Repeat until you're satisfied
 - Escalate the verification tier only when the current evidence cannot resolve the changed behavior
@@ -89,7 +83,7 @@ On the other hand, maybe they already have a draft of the skill. In this case yo
 
 Of course, you should always be flexible and if the user is like "I don't need to run a bunch of evaluations, just vibe with me", you can do that instead.
 
-Then after the skill is done (but again, the order is flexible), you can also run the skill description improver, which we have a whole separate script for, to optimize the triggering of the skill.
+Do not run the description optimizer as a default step after building a skill. Write the description by the rules below and tune it later from real sessions where the skill missed or misfired.
 
 Cool? Cool.
 
@@ -107,6 +101,18 @@ If the hook is already installed (`scripts/setup_supersede_hook.sh status` shows
 The same machinery is available for skills the user creates: when their skill deliberately overlaps an installed one, generate them a kit with `scripts/generate_supersede_kit.py` — see "Coexistence & Precedence" under Prior Art Research and [references/skill-precedence-and-coexistence.md](references/skill-precedence-and-coexistence.md).
 
 ## Communicating with the user
+
+### Show the result, not just the work
+
+At delivery, ask whether the user needs to compare outcomes, inspect several artifacts or evidence items, or choose among unresolved options. If a visual report would make that result easier to understand or judge, load `report-with-html` and let it own the page structure, template, evidence presentation, and browser verification. Load `data-visualization-discipline` through that Skill when the report needs a chart. A single small edit or status update needs only a concise reply; the paired-eval viewer below already owns review of individual eval outputs and feedback, so do not duplicate it with another report.
+
+When creating or improving another skill, apply the same decision to **that skill's normal user-facing result**. If visual reporting is a recurring part of its job, add a conditional handoff to `report-with-html` at the end of its runtime workflow and declare that dependency. If the reporting Skill is unavailable, say the requested visual deliverable is unavailable; do not silently invent a substitute template or claim a report was produced. Do not make every invocation generate HTML, and do not substitute a polished page for a verified result.
+
+**Let a real report earn its template.** For a new Skill that will repeatedly generate customer-specific reports, first run it on a real authorized case and use `report-with-html` to produce and browser-verify the actual report. Show that report to the user. Once they can inspect its content, layout, and interactions, ask separately whether this report's reusable form should become that Skill's default template. Their approval of the report's facts is not approval of its future template. If they reject or have not answered, revise the report or leave it as a one-off; do not promote a template.
+
+An approved template is **user-owned local data, not part of the Skill package**. Extract its reusable structure, visual treatment, and interactions to `~/.claude/skill-report-templates/<publisher-or-project>/<skill-name>/template.html`, with a sibling `manifest.json` recording the qualified Skill identity, approval date, and Skill version. Freeze the two filesystem-safe path segments in the new Skill's runtime instructions; do not derive a different directory from each installation path or current working directory. Remove the first customer's data, names, evidence, and conclusions. Do not write the approved template into the Skill's `assets/`, source repository, installation symlink, or plugin cache: an update to the Skill must not overwrite the user's approved form. Do not create this local directory before approval.
+
+When authoring the new Skill, teach its runtime to check that stable local path. If an approved template exists and still fits the current report output contract, pass it as the approved starting form to `report-with-html`; otherwise use that Skill's ordinary report workflow and seek approval of the new form after the report is shown. If a Skill update changes the report contract, keep the old local template untouched and ask for renewed approval before replacing it. Future reports fill the approved form with each customer's verified data and still use `report-with-html` for generation and visual QA. A template on this machine does not ship with the Skill or automatically appear on another machine; do not freeze customer-specific claims or reuse an old report as current evidence.
 
 The skill creator is liable to be used by people across a wide range of familiarity with coding jargon. If you haven't heard (and how could you, it's only very recently that it started), there's a trend now where the power of Claude is inspiring plumbers to open up their terminals, parents and grandparents to google "how to install npm". On the other hand, the bulk of users are probably fairly computer-literate.
 
@@ -270,7 +276,7 @@ Choose the **lowest tier that can falsify the changed behavior** before taking a
 |---|---|---|---|
 | **1 — Targeted** | This is an existing skill; no capability, trigger family, workflow branch, output contract, dependency, permission, or external-write behavior is added or materially changed; and the edit is exactly one of: (a) spelling/format-only with no behavior change, (b) a factual doc/config correction whose truth a direct authority decides, or (c) a bounded implementation repair that restores an explicit existing contract **and** whose repaired behavior a deterministic regression check covers. A clarification that can change agent behavior is not Tier 1. **Adding or materially rewriting `references/` content is not Tier 1 either, even when the SKILL.md diff is one line**: it changes the runtime loading surface — what an executing agent is told to open, and when — which is exactly the axis the deterministic gates cannot see (they check that references are *reachable*, never that their pointers are *acted on*). Start it at Tier 2, and escalate to Tier 3 when the change itself hits a Tier-3 trigger (it is a methodology expansion, or spans 3+ prompt classes). Tier 2's evidence for this shape: 1–2 with-skill replays whose acceptance criteria are **output-level** (did the new content shape the output — a literal "was the file opened" assertion is the literal-tool-path failure mode this skill's own guidance forbids); where the reference-load ledger hook is installed, its record of whether the file was opened is mechanical corroboration, not the criterion | For all three: run `quick_validate`, inspect the diff, and complete the existing-skill migration gate. Then use the matching evidence only: (a) exact readback/format check; (b) authoritative fact plus its narrow check; (c) explicit existing contract plus deterministic regression. Add discipline #5's one fresh reviewer only when its rule/contract/number threshold is crossed | Agent behavior replays, paired runs, baselines, graders, benchmark, viewer, eval files |
 | **2 — Sampled behavior** | This is an existing skill; the change affects agent behavior but adds no capability, trigger family, output contract, script behavior, dependency, permission, or external write; and 1–2 named examples with explicit acceptance criteria can exercise the whole changed behavior. A bounded correction to one existing routing or evidence-selection rule stays here even when it changes the chosen path | Run only those 1–2 representative with-skill replays plus the narrow deterministic checks and the one fresh-context review required by discipline #5 | Baselines, paired fan-out, variance analysis, benchmark, viewer, or eval files by default. An explicit request for them goes through the separate evidence-budget gate and does not reclassify the change |
-| **3 — Broad / high-risk** | Any of these is true: any new skill; any new or materially changed capability; broad cross-branch rewrite or methodology expansion; trigger/description optimization; a new workflow branch or materially changed output contract, script capability, dependency, or permission; high-risk automation or external writes; or the changed behavior itself spans 3+ distinct prompt classes, repeated trials, or materially different approaches | Run deterministic gates first, then add only the evidence needed for the named failure axes. The full paired pipeline below is available only after the separate heavy-eval authorization gate passes; Tier 3 by itself does not start it, and the same gate can authorize extra evidence at another tier | Automatic paired fan-out, graders, benchmark, or viewer based only on the Tier 3 label |
+| **3 — Broad / high-risk** | Any of these is true: any new skill; any new or materially changed capability; broad cross-branch rewrite or methodology expansion; trigger/description optimization (running the optimizer loop, or adding or removing trigger families — shortening a description under the frontmatter rule with every old clause cited by the regression gate is not this); a new workflow branch or materially changed output contract, script capability, dependency, or permission; high-risk automation or external writes; or the changed behavior itself spans 3+ distinct prompt classes, repeated trials, or materially different approaches | Run deterministic gates first, then add only the evidence needed for the named failure axes. The full paired pipeline below is available only after the separate heavy-eval authorization gate passes; Tier 3 by itself does not start it, and the same gate can authorize extra evidence at another tier | Automatic paired fan-out, graders, benchmark, or viewer based only on the Tier 3 label |
 
 #### Heavy-eval authorization gate — separate from tier classification
 
@@ -468,9 +474,24 @@ or merging for cosmetic uniformity.
 Based on the user interview, fill in these components:
 
 - **name**: Skill identifier
-- **description**: When to trigger, what it does. This is the primary triggering mechanism - include both what the skill does AND specific contexts for when to use it. All "when to use" info goes here, not in the body. Note: currently Claude has a tendency to "undertrigger" skills -- to not use them when they'd be useful. To combat this, please make the skill descriptions a little bit "pushy". So for instance, instead of "How to build a simple fast dashboard to display internal Anthropic data.", you might write "How to build a simple fast dashboard to display internal Anthropic data. Make sure to use this skill whenever the user mentions dashboards, data visualization, internal metrics, or wants to display any kind of company data, even if they don't explicitly ask for a 'dashboard.'"
+- **description**: the routing key — what the skill does and when to use it, nothing else. Every installed skill's description sits in every session's context, and they all share one listing budget: Claude Code cuts each entry at 1,536 characters and, when the listing overflows, drops the descriptions of the least-used skills entirely, leaving only their names. A long description does not just spend its own tokens; it pushes other skills out of view. 1024 characters is the spec's validity ceiling, not a target.
 
-  **Budget it: the description has a hard 1024-character ceiling, and validation rejects anything longer.** This is in direct tension with the "pushy" advice above — every trigger phrase you add for coverage spends budget — so measure before you expand rather than after: `len(description)`, not vibes. The trap is not the first draft (which is rarely near the limit) but the *update years later* that adds triggers for newly-covered scope: a mature description often sits within a few dozen characters of the ceiling, at which point **adding a trigger is zero-sum — you are deleting an existing one to pay for it.** Make that trade consciously and say so in the commit, because a silently-dropped trigger phrase is a real narrowing of when the skill fires, and nobody will notice until it stops triggering for someone. (Seen in practice: an update added triggers for a newly-covered failure mode, pushed the description to 1280 characters, and took two rounds of compression to reach 1003 — the price was three pre-existing trigger phrases, which is a decision that deserved to be explicit rather than discovered while fighting a validator.) When you must cut, prefer phrases whose scenario is still reachable through a synonym or a sibling phrase, keep the ones with no other route in, and remember that qualifiers inside the prose ("on platform X and Y", parenthetical enumerations) are usually cheaper to drop than a distinct trigger phrase — the prose is re-derivable from the body, a trigger phrase is not.
+  Shape: `<what it does, one clause>. Use when <2–4 concrete situations or phrasings users actually type>. Not for <nearest sibling case> (use <sibling>).` Put the key use case first and write in third person. The first ~160 characters must stand on their own — what the skill does and its main trigger: Codex shows each description cut to a short prefix when many skills are installed (measured: ~165 characters with 260 skills), so later "Use when" items and "Not for" redirects reach only Claude Code.
+
+  - **Length**: aim for 200–300 characters. Up to about 420 is fine when the skill must route between siblings or is itself a router; `quick_validate` warns above 420. When keeping every distinct job pushes past that, compress before accepting it: one phrasing per situation, a shorter what-it-does clause, no transport or implementation details ("over Tailscale", "via qmd"). Go over only if a distinct job would otherwise be lost, and say why in the PR.
+  - **Hidden trigger moment**: if the moment to use the skill is not visible in the user's words (for example "before choosing any library"), open with one short `MUST be used before …` clause.
+  - **Keep**: redirects to the nearest one or two sibling skills; a non-obvious secondary job, in one clause; one short "even when …" clause if it corrects a known misjudgment (e.g. "even when it looks like a one-line ffmpeg job"); two to four phrasings users really type, in their language (Chinese included).
+  - **Move to the body**: operational rules ("CRITICAL: fetch media by path"), pitfalls, methodology, failure history, internal mechanisms, file or reference routing, version notes.
+  - **Rewriting an existing description**: run the existing-skill regression gate ([Step 4](#step-4-edit-the-skill): `compare` against a Git-ref baseline, then `classify`, then `verify`). It lists every old description clause that no longer appears verbatim as a `description_clause` candidate. Split a clause that bundles several situations into single items, then give each item a home by its type:
+    - **When to use** (a situation or phrasing that should make the skill fire, including timing such as "runs before committing", whose home is the hidden-trigger-moment clause): the home must be in the new description — the body is read only after the skill fires, so a body line cannot bring the trigger back. If the new description no longer covers it, decide: a variant or sub-case of a situation the new description still names, or another phrasing of one, is secondary and may be dropped; a distinct job the user would ask for on its own, which nothing left in the description leads to, goes back in. List every drop in the PR and changelog so a real miss can restore it. Record a drop as `removed_by_explicit_user_request`, citing the owner's request to rewrite under this rule as `user_approval`; without such a request, ask.
+    - **Not for** (an exclusion or sibling redirect): the new description or the body. Never dropped.
+    - **Operational rule, pitfall or routing**: the body, on a SKILL.md line about that same situation. A reference reached only through a row about a different situation is not a home. Never dropped.
+
+    Same meaning in shorter or broader words is a home ("architecture" in a list of decision types covers "architecture decision"). A shared word with a different meaning is not ("inside a bug fix" does not preserve "Not for bug fixes"). Nor is a placeholder for words users literally type — people's names, product names, error strings: "its named contacts" does not preserve the names themselves.
+  - **Drop**: exhaustive keyword lists, synonyms the model can infer, and "use it even when none of these words appear".
+  - **Write sibling skills together**: descriptions in one family must agree on which skill owns what.
+  - **Tune from real use, not up front**: when a real session shows the skill missing or misfiring, fix the description from that prompt. Do not run trigger-rate optimization on a fresh skill; you do not yet know how people will phrase it.
+  - **User-started only**: if only the user should start the skill, set `disable-model-invocation: true`; its description then costs nothing in the listing.
 - **compatibility**: Required tools, dependencies (optional, rarely needed)
 - **the rest of the skill :)**
 
@@ -1125,7 +1146,7 @@ This is optional, requires subagents, and most users won't need it. The human re
 
 ## Description Optimization
 
-The description field in SKILL.md frontmatter is the primary mechanism that determines whether Claude invokes a skill. After creating or improving a skill, offer to optimize the description for better triggering accuracy.
+The description field in SKILL.md frontmatter is the primary mechanism that determines whether Claude invokes a skill. This loop is optional and not a default step: use it only when real sessions have shown the skill missing or misfiring, and build the eval set from those real prompts. Most description problems are fixed faster by editing the description by hand against the rules in the frontmatter section.
 
 ### Step 1: Generate trigger eval queries
 
@@ -1318,6 +1339,7 @@ Analyze each example by:
 1. Considering how to execute on the example from scratch
 2. Determining the appropriate level of freedom for Claude
 3. Identifying what scripts, references, and assets would be helpful when executing these workflows repeatedly
+4. Deciding how a user will inspect the result: a concise reply, an existing domain artifact or viewer, or a conditional handoff to `report-with-html` when a visual report would clarify evidence, comparisons, or decisions. For recurring customer reports, plan a first real report and a **post-review template decision**; the approved form lives in user-local data outside the Skill package, never in its `assets/` or an update-owned cache.
 
 **Match specificity to task risk:**
 - **High freedom (text instructions)**: Multiple valid approaches exist
@@ -1887,6 +1909,7 @@ Repeating one more time the core loop here for emphasis:
 - Repeat until you and the user are satisfied
 - Run and clear the existing-skill regression review; eval-only survival does not count
 - Package the final skill and return it to the user.
+- Apply the outcome-presentation decision: show verified change and remaining choices in chat, or open a visual report when that helps the user inspect the result.
 
 Please add the selected verification tier and its default evidence to your TodoList, if you have one. Add "Create evals JSON and run `eval-viewer/generate_review.py` so human can review test cases" only after the generic paired pipeline is explicitly authorized.
 

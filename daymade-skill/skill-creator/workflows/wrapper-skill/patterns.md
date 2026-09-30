@@ -13,7 +13,7 @@ Per-file templates in bundle order: SKILL.md (overview / principles / routing / 
 ```markdown
 ---
 name: <wrapper-skill-name>
-description: <pushy, trigger-heavy description including tool name, related keywords, literal error strings from Step 2c, and "when to use" signals. 4-8 sentences. Err on side of too many triggers.>
+description: <routing key, 200-300 characters: what it does, when to use it (tool name + the 1-2 most common Step 2c error strings), nearest sibling it is not>
 ---
 
 # <Wrapper Skill Display Name>
@@ -91,7 +91,7 @@ When in doubt, default to Capability 3 (diagnose). It is the only read-only entr
 
 **Concrete version**: `ima-copilot/SKILL.md`.
 
-**Why the description is so long**: Claude's skill selector is pattern matching on the description field. A 3-sentence description gets triggered 30% of the time it should; an 8-sentence description with literal error strings gets triggered 95% of the time. The cost of false positives (skill fires when it isn't needed) is much lower than the cost of false negatives (user hits an error this skill could have fixed but the skill didn't fire). Err on the verbose side. Note: there is a hard 1024-character cap on the description field, enforced by `skill-creator/scripts/quick_validate.py`. Run validation before commit to catch overlong descriptions early.
+**Why the description is short**: every installed skill's description shares one listing budget, and when it overflows Claude Code drops the least-used skills' descriptions entirely. Keep the description to the tool name and the few error strings users most often paste; put the full error-string list in the body's routing table. See skill-creator's description rule (SKILL.md, frontmatter section).
 
 **What to pack into the description** (checklist):
 

@@ -1,15 +1,10 @@
 ---
 name: codex-1m-context-window-setup
 description: >-
-  Configures and verifies an expanded, model-aware context window for OpenAI
-  Codex CLI and Codex Desktop by safely updating the shared base config. Use
-  whenever Codex shows about 258K context, the user asks for 500K or 1M context,
-  auto-compaction happens too often, model_context_window or
-  model_auto_compact_token_limit needs repair, or a workstation/classroom needs
-  the same long-context setup across macOS and Windows. Detects the selected
-  model's live maximum, requests up to 1M tokens, sets compaction to 60% of the
-  attainable window, preserves unrelated TOML, backs up changes, and fails
-  rather than guessing when the model contract cannot be verified.
+  Configures and verifies an expanded, model-aware context window for OpenAI Codex CLI and Desktop.
+  Use when Codex shows ~258K context, you want 500K or 1M tokens, auto-compaction fires too often,
+  or model_context_window/model_auto_compact_token_limit needs repair. Not for changing the selected
+  model or other Codex settings.
 argument-hint: "[doctor|apply|verify]"
 ---
 

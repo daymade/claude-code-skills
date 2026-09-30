@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import pwd
 import subprocess
 import sys
 import tempfile
@@ -1690,7 +1691,7 @@ class RawBytePrefilterSafetyTests(unittest.TestCase):
             # ensure_ascii=True is the point of this fixture — do not "fix" it.
             target.write_text(json.dumps(record, ensure_ascii=True) + "\n", encoding="utf-8")
 
-            env = dict(os.environ, CLAUDE_CONFIG_DIR=str(home))
+            env = dict(os.environ, HOME=str(root), CLAUDE_CONFIG_DIR=str(home))
             for keyword in ("café", "你好"):
                 with self.subTest(keyword=keyword):
                     completed = subprocess.run(
@@ -1729,6 +1730,25 @@ class RawBytePrefilterSafetyTests(unittest.TestCase):
             codex_body,
             "Codex must not build line_keywords — it collapses Internal range",
         )
+
+
+class LiveSearchBoundaryTests(unittest.TestCase):
+    def test_live_raw_search_rejects_before_reading_even_with_dates(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_root:
+            home = Path(raw_root) / "claude"
+            (home / "projects").mkdir(parents=True)
+            command = [
+                sys.executable, str(SCRIPT), "search", "--all-projects",
+                "--home", str(home), "--from-date", "2026-09-23",
+                "--to-date", "2026-09-24", "example",
+            ]
+            result = subprocess.run(
+                command, capture_output=True, text=True,
+                env={**os.environ, "HOME": pwd.getpwuid(os.getuid()).pw_dir},
+            )
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("raw history search is disabled", result.stderr)
+            self.assertNotIn("Searching ", result.stdout)
 
 
 if __name__ == "__main__":

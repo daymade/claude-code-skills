@@ -1,0 +1,74 @@
+<!-- ══════════════════════════════════════════════════════════════════
+     sticky-nav · 长报告页锚点导航（交互组件货架 · 认可组件）
+     ══════════════════════════════════════════════════════════════════
+     解决什么：读者主动跳到长页章节，并始终知道当前 hash 指向哪一节。
+
+     页面先提供语义 markup：
+       <nav class="report-sticky-nav" aria-label="报告章节">
+         <a href="#s1">系统结构</a>
+         <a href="#p1" data-pending>待拍板</a>
+       </nav>
+
+     契约：
+       · position:sticky；窄屏只让导航自身横向滚动，不撑宽页面
+       · 原生锚点跳转，无平滑滚动和装饰动画
+       · 当前 hash 对应链接用 aria-current="location"
+       · data-pending 只表示悬而未决，使用固定金色语义
+       · hash 编码非法或目标不存在时在 console 明确报错，并继续初始化其他链接
+
+     使用：写好 nav 与真实 section id，再把 BEGIN…END 整块放到 </body> 前。
+     ══════════════════════════════════════════════════════════════════ -->
+<!-- BEGIN sticky-nav -->
+<style>
+  .report-sticky-nav{
+    position:sticky;top:0;z-index:30;display:flex;gap:4px;align-items:center;
+    max-width:100%;overflow-x:auto;padding:8px 10px;margin:0 0 24px;
+    background:color-mix(in srgb,var(--paper,#fbf9f4) 94%,transparent);
+    border:1px solid var(--line,#e7dfcf);border-radius:8px;
+    scrollbar-width:thin;overscroll-behavior-inline:contain;
+  }
+  .report-sticky-nav a{
+    flex:0 0 auto;padding:6px 10px;border-radius:5px;color:var(--ink-2,#5b5349);
+    font:600 12px/1.35 var(--sans,system-ui,sans-serif);text-decoration:none;
+    border:1px solid transparent;
+  }
+  .report-sticky-nav a:hover{background:var(--card,#fff);border-color:var(--line,#e7dfcf);}
+  .report-sticky-nav a:focus-visible{outline:2px solid var(--red,#a62b1f);outline-offset:2px;}
+  .report-sticky-nav a[aria-current="location"]{
+    background:var(--card,#fff);border-color:var(--red,#a62b1f);color:var(--red,#a62b1f);
+  }
+  .report-sticky-nav a[data-pending]{color:var(--gold,#8a6d3b);}
+  .report-sticky-nav a[data-pending][aria-current="location"]{
+    border-color:var(--gold,#8a6d3b);background:var(--gold-bg,#f6efdf);
+  }
+</style>
+<script>
+(() => {
+  document.querySelectorAll('.report-sticky-nav').forEach(nav => {
+    if (!nav.hasAttribute('aria-label')) nav.setAttribute('aria-label', '报告章节');
+    const links = [...nav.querySelectorAll('a[href^="#"]')];
+    links.forEach(link => {
+      let id = '';
+      try {
+        id = decodeURIComponent(link.hash.slice(1));
+      } catch (error) {
+        console.error('sticky-nav: 无效的锚点编码', link.getAttribute('href'), error);
+        return;
+      }
+      if (!id || !document.getElementById(id)) {
+        console.error('sticky-nav: 找不到锚点目标', link.getAttribute('href'));
+      }
+    });
+    const sync = () => {
+      const activeHash = location.hash || links[0]?.hash || '';
+      links.forEach(link => {
+        if (link.hash === activeHash) link.setAttribute('aria-current', 'location');
+        else link.removeAttribute('aria-current');
+      });
+    };
+    window.addEventListener('hashchange', sync);
+    sync();
+  });
+})();
+</script>
+<!-- END sticky-nav -->

@@ -181,6 +181,8 @@ Every entry here is a bug that shipped. When a hook misbehaves, match the
   | tr -d ' ') || STAGED='?'`. Put it inside (`… | wc -l || echo '?'`) and `wc`
   still prints `0` when git fails, yielding the malformed two-line value `0\n?`.
   (2026-07-21 in git-commit-headcheck.)
+  `grep -c` produces the same kind of two-line value with no pipe at all; #47
+  covers it and what it does to arithmetic.
 - **Alternative shape — keep `-e` and trap the contract:** `set -euo pipefail` +
   `trap 'exit 0' ERR` converts every failure to exit 0 while `-e` keeps guarding
   the plumbing (git-commit-headcheck's production form; the choice between this
@@ -1210,6 +1212,64 @@ this list and describe defects you reach by asking a different question):
   touch this round, even after you wrote down exactly why the touched one
   didn't need another pass? → it tracks file *kind*, not the specific diff,
   and nothing in it reads prose (#31).
+- Does the guard **block a dangerous command alone but allow it once unrelated
+  text is combined with it** — four comment lines in front, say? → two parallel
+  arrays, the text and its quote mask, drifting out of alignment (#32).
+- Does the guard **block the typed form but allow the same argv** reached
+  through brace expansion, ANSI-C quoting, or `${IFS:0:1}`? → a shlex-based
+  guard judging the text you typed, not the argv bash builds (#33).
+- Is a PostToolUse hook **silent exactly on the calls whose command failed**,
+  while every other Bash call triggers it? → failures route to
+  `PostToolUseFailure`, which was never registered (#34).
+- Does an existence probe's `|| echo` fallback **never fire**, so an empty
+  result could mean "found nothing" or "died upstream"? → `||` binds to the
+  last pipeline segment, and `head`/`tail`/`wc`/`cat` exit 0 on empty input
+  (#35). With `grep` last, it does fire, but identically in both cases.
+- Is an agent's **review-and-fix cycle expanding without end**, each round
+  justified on its own? → a self-applied review rule with no loop key, failure
+  axis, or cycle budget; no hook is needed for this one (#36).
+- Does a review-loop guard **stay silent through the exact repeat it exists to
+  catch** — three review dispatches on one artifact, back to back? → its
+  keyword whitelist misses the wording real prompts use (#37).
+- Is a registered, executable, syntax-clean injecting hook **producing no
+  output, session after session, with no error**? → it reads the prompt from
+  an environment variable the host never sets (#38).
+- Does a hook fail with **"No such file or directory" for a script that
+  exists** and runs fine by hand from the repo root? → a relative path in the
+  project's `.claude/settings.json`, resolved against the session's cwd (#39).
+- Does an injected message **come out with a passage missing**, stderr showing
+  `command not found` and the exit code still 0? → an unquoted heredoc running
+  the prose's markdown backticks as commands (#40).
+- Does a "re-run when this file changes" scheduler **run its expensive check
+  once and never again**? → `stat` without `-L` reading the symlink's mtime,
+  not the file it points to (#41).
+- Does a `--selftest` **pass by its SSOT path but fail from the health check**,
+  every session? → a sibling lookup from `dirname "${BASH_SOURCE[0]}"`, which
+  is the symlink's directory (#42).
+- Does an auditor over the registered hooks **skip some as unreadable while
+  they are live and firing**? → it expands `~` but not a literal `$HOME`
+  spelling (#43).
+- Is a human confirmation gate **firing constantly, approved within seconds,
+  with a dialog that lists nothing to decide**? → the dialog is built from
+  pre-command state, empty by construction on the new trigger path (#44).
+- Does the model **follow a block's printed remedy exactly and get blocked
+  again** on the same grounds, round after round? → a remedy sanitized for
+  display, or self-checked with a different parser than the gate's own (#45).
+- Is a suite **green and growing while the defect it covers ships anyway**,
+  with a deliberate break turning nothing red, or a row red for the wrong
+  reason? → assertions that never reach the condition they claim to test
+  (#46).
+- Does `--fire-rate` or a similar subcommand **print
+  `syntax error in expression`, then hang or exit 0 without its report**, on
+  some inputs only? → a `$(( ))` error discarding the whole branch, `exit`
+  included, so the main path runs (#47). In a `--selftest` branch the same
+  fall-through reports a pass.
+- Did a suite row **fail right after your edit, on machinery your edit never
+  touched**? → the suite may have been red for days before you arrived; run it
+  at HEAD first or you will debug someone else's rot as your regression (#48).
+- Did you edit a guard's classifier and **the next health check stayed green
+  without re-running its full battery**? → the scheduler signs the registered
+  wrapper, not the sibling `.py` it runs or the modules that file imports (#49).
 
 ## 29. A trailing `exit 0` swallows the exit-code decision — the message prints, the state writes, the guard never blocks
 
@@ -1256,6 +1316,29 @@ this list and describe defects you reach by asking a different question):
      guidance on stderr when you run the hook by hand is not proof the harness
      will block — stderr shows on allow too. The decision channel is the exit
      code; test the channel, not the ink.
+
+- **Sibling form: a top-level `trap 'exit 0' EXIT` does the same to
+  `--selftest`.** Some always-exit-0 hooks enforce the contract with a trap on
+  EXIT at the top of the file instead of the ERR trap in SKILL.md's "-e or
+  trap" bullet. An EXIT trap that runs `exit 0` replaces whatever status the
+  script was about to exit with, so a failing `--selftest` that ends in
+  `exit 1` exits 0 (measured on bash 3.2.57 and 5.3.15). The selftest still
+  prints its failures, but the health check reads only the status, so the hook
+  can never be reported broken. The ERR trap is not immune either: placed above
+  the dispatch, it turns any unexpected failing command inside `--selftest`
+  into a silent exit 0, with or without `-e` (also measured on both versions),
+  so a selftest whose own plumbing broke reports a pass.
+  - **Fix:** install the trap, EXIT or ERR, after the subcommand dispatch, on
+    the main path only, or clear it with `trap - EXIT` / `trap - ERR` as the
+    first line of the selftest branch. Build-order step 4 already asks you to
+    break the detector on purpose and confirm `--selftest` exits non-zero; that
+    calibration catches the EXIT-trap form on its first run.
+  - **Real case (2026-09-23, a private hooks repository):** an advisory hook
+    had shipped the day before with the EXIT trap at the top of the file, and
+    a mutant whose detector fired on every input printed `FAILED` eleven times
+    and exited 0. Sweeping the same repository afterwards found the ERR form in
+    two more hooks; a mutant that put a failing command at the top of each
+    selftest exited 0 in both.
 
 ---
 
@@ -2460,3 +2543,438 @@ this list and describe defects you reach by asking a different question):
   mutations exist only because writing them exposed an assertion that could not die.
   Shape 5 came out of the same gate a day later, and only because someone asked for a
   call-site audit that no plan contained.
+
+---
+
+## 47. A `$(( ))` error in a subcommand branch skips the branch's own `exit` — the hook runs its main path instead, and under `</dev/null` that reads as success
+
+- **Symptom:** a reporting subcommand (`--fire-rate` and the like) prints
+  `syntax error in expression` (bash 5 words it `arithmetic syntax error`),
+  then behaves differently depending on stdin: left open, it hangs; closed,
+  it exits 0 without printing its report. Only
+  some inputs do it, typically a log with no firing rows. The same fall-through
+  in a `--selftest` branch is worse, because it reports a pass. The health check
+  in build-order step 4 runs each selftest as
+  `bash "$h" "$mode" >/dev/null 2>&1 </dev/null`, so the main path reads an
+  empty stdin and, like most hook main paths, exits 0 on empty input, while the
+  error message is discarded with the rest of the output (reproduced on a
+  fixture).
+- **Cause:** a syntax error inside `$(( ))` is not a failed command. Bash
+  prints the error, discards the whole top-level command that contains the
+  expansion, and continues with the next one. When the branch is
+  `if [ "${1:-}" = --fire-rate ]; then …; exit 0; fi`, the whole `if` is
+  discarded, its `exit 0` included, and the next top-level command is the
+  hook's main path, which reads stdin. Measured on bash 3.2.57 (macOS
+  `/bin/bash`) and 5.3.15, with identical results: the plain script,
+  `set -e`, `set -euo pipefail`, `trap 'exit 0' ERR`, and moving the body into
+  a function all fall through to the main path; `set -o posix` exits 1 at the
+  error; `let` treats the same expression as an ordinary failed command and
+  stays inside the branch. So neither `-e` nor the ERR trap from SKILL.md's
+  "-e or trap" bullet sees this.
+
+  A common way for a hook to build the bad expression is a count with a fallback:
+  on zero matches `grep -c` prints `0` **and** exits 1, so
+  `n=$(grep -c FIRED "$LOG" || echo 0)` holds `0\n0` (#8's `wc -l || echo '?'`
+  shape again), and the first `$(( n * 100 / total ))` is the syntax error.
+- **Fix:**
+  1. Don't build the two-line value. Put the fallback outside the substitution,
+     as #8 already says: `n=$(grep -c FIRED "$LOG" 2>/dev/null) || n=0`. Zero
+     matches and a missing file both end as `0`, under `set -euo pipefail` too.
+  2. Keep a subcommand's failure inside the subcommand. Run the body in a
+     subshell and exit with its status:
+     `if [ "${1:-}" = --fire-rate ]; then ( … ); exit $?; fi`. Measured: the
+     error ends the subshell with status 1, and the main path never runs.
+  3. Test each subcommand on the input that makes a count zero (an empty log, a
+     log with no firing rows) with stdin closed, and assert on what it prints,
+     not on its status. Exit 0 is exactly what the fall-through produces.
+- **Real case (2026-09-23, a private hooks repository):** two advisory hooks
+  shipped `--fire-rate` with the `|| echo 0` count. On a log with no firing
+  rows, one hung when run with stdin open; the other had been noted as
+  "crashes, yet exits 0" and stayed unexplained until the fall-through was
+  reproduced. Searching the same repository for the pattern turned up two more
+  files, where the malformed value only garbled a failure message.
+
+## 48. A suite that has not run since its dependencies changed is green by reputation — run it at HEAD before you edit, or someone else's rot lands in your diff
+
+- **Symptom:** you change file X, run its test suite, and a row fails. You start
+  debugging your own diff.
+- **Cause:** the row was already failing before you touched anything — a sibling
+  component the fixtures depend on changed days earlier and the suite had not been
+  run since. Your change's first suite run is the first run in that window, so the
+  pre-existing failure is attributed to you. Every round you spend "fixing your
+  regression" is wasted, and the real repair (fixture or environment) never happens.
+- **Fix:** before editing code a suite covers, run the suite once on the unmodified
+  tree and record which rows already fail — that baseline turns "did I break it?"
+  into a lookup. When a row fails both before and after, repair the fixture rot
+  first and label it separately in the commit; folding the repair silently into your
+  feature change makes the next bisect lie.
+- **Real case (2026-09-29):** rewriting the LFS-verification stage of a git pre-push
+  hook hit two consecutive "my edit broke the suite" rounds that were actually
+  fixture rot from a whole-tree-audit change eight days prior — the rows now
+  required a resolvable remote and `gitleaks` on PATH. Seeding local bare remotes
+  and shimming `gitleaks` (with `git-lfs` deliberately absent, which the rows' own
+  assertion needs) was the prerequisite for calibrating the rewrite at all. The
+  failure had been invisible because nothing runs the suite between edits.
+
+## 49. A selftest scheduler that signs only the registered hook file never re-runs after edits to the logic — sign what the hook runs and imports
+
+- **Symptom:** you edit a guard's classifier, the next session's health check
+  reports every hook healthy, and that guard's full battery does not run. Nothing
+  warns. If the scheduler also caches passes, not even the cheap probe re-runs
+  until its TTL expires.
+- **Cause:** the scheduler's signature is the `stat` of the registered file, and
+  for most guards that file is a thin wrapper: the decision lives in a sibling
+  `guard.py`, which may import a shared module, and the battery lives in a test
+  file beside it. Editing any of those leaves the wrapper untouched, so the stamp
+  stays valid. #41 fixed *which inode* gets read; this is *which files*.
+- **Fix:** sign the hook together with the files it executes and imports, found
+  by reading them, recursively and bounded:
+  1. In shell and JS files, on non-comment lines, a filename joined onto a path —
+     `"$HERE/guard.py"`, `"$(dirname "$0")/lib.sh"`, `"$HOME/…"`, an absolute path —
+     that exists next to the file, one directory up, or under `$HOME`, kept only
+     inside the hooks tree. The walk tries all three rather than parsing `..`;
+     trying one directory up is what resolves `"$DIR/../lib.sh"`.
+  2. In Python files, same-directory imports: `import a`, `import a, b`,
+     `from a import x`. Relative imports are not followed; a hook runs as a
+     script and cannot use them.
+  3. Nothing else. A comment naming a script, a bare script name in a message,
+     a `case` pattern listing script names: these are data. Following them
+     chains through prose. Measured on one hooks directory, a walk that followed
+     bare mentions signed one guard over 18 files, including other guards and
+     replay scripts. Once every hook depends on most of the directory, any edit
+     re-runs every full battery and the cache is gone.
+
+  The walk cannot tell a path-joined name inside a message or a data list from
+  one in a command, so it follows those too. That over-signs only the hook that
+  contains them: on the same directory, one hook of 72 (a fixture advisor that
+  lists other hooks' corpora) signed 21 files. The cost is extra full runs for
+  that hook, not the cache for every hook.
+
+  Resolve the hook's symlink before walking (#41), so dependencies are found
+  next to the target rather than the link (#42). Keep the failure direction: a
+  hook that is missing or cannot be read (`chmod 000`) gets an empty signature,
+  and the caller runs the full battery.
+
+  Sign every hook in **one** process before the scheduling loop. Shelling out per
+  hook (`realpath`, `grep`, `stat` and a hash for each file) cost 1.3 s at every
+  session start for 72 hooks; one Python pass took 0.14 s, less than the old
+  single-`stat` loop.
+  ```python
+  #!/usr/bin/env python3
+  """sign_hooks: print "<hook>\t<mtime:size,...> <n>" for each hook path given."""
+  import os, re, sys
+  HOME = os.path.expanduser("~")
+  PATH_TOKEN = re.compile(r"/[A-Za-z0-9_][A-Za-z0-9_.-]*(?:/[A-Za-z0-9_][A-Za-z0-9_.-]*)*"
+                          r"\.(?:sh|bash|py|js|mjs|cjs|ts|json|toml|ya?ml)")
+  IMPORT = re.compile(r"^[ \t]*(?:from[ \t]+([A-Za-z_]\w*)|import[ \t]+([A-Za-z_][\w \t.,]*))", re.M)
+
+  def deps(f):
+      d = os.path.dirname(f)
+      parent = os.path.dirname(d)
+      try:
+          text = open(f, encoding="utf-8", errors="replace").read()
+      except OSError:
+          return
+      if f.endswith(".py"):
+          for frm, imp in IMPORT.findall(text):
+              names = [frm] if frm else [n.split()[0].split(".")[0] for n in imp.split(",") if n.strip()]
+              for name in names:
+                  if os.path.isfile(os.path.join(d, name + ".py")):
+                      yield os.path.join(d, name + ".py")
+      elif f.endswith((".sh", ".bash", ".js", ".mjs", ".cjs", ".ts")):
+          for line in text.splitlines():
+              if line.lstrip().startswith("#"):
+                  continue
+              for tok in PATH_TOKEN.findall(line):
+                  for cand in (d + tok, parent + tok, tok, HOME + tok):
+                      if os.path.isfile(cand):
+                          if cand.startswith(parent + os.sep):  # stay inside the hooks tree
+                              yield cand
+                          break
+
+  for hook in sys.argv[1:]:
+      real = os.path.realpath(hook)
+      if not (os.path.isfile(real) and os.access(real, os.R_OK)):
+          print(f"{hook}\t")
+          continue
+      files, queue = [], [real]
+      while queue and len(files) < 40:
+          f = queue.pop(0)
+          if f not in files:
+              files.append(f)
+              queue.extend(deps(f))
+      stamps = []
+      for f in files:
+          try:
+              st = os.stat(f)
+              stamps.append(f"{int(st.st_mtime)}:{st.st_size}")
+          except OSError:
+              stamps.append("gone")
+      print(f"{hook}\t{','.join(stamps)} {len(files)}")
+  ```
+  Compare the signature as one string; its first field is a list, not an mtime.
+  Old stamps stop matching once, so the first session after the change runs every
+  battery.
+- **Regression cases** (each has to go red when its rule is mutated away): edit
+  the sibling `.py` and not the wrapper → the full battery runs; edit a module
+  that `.py` imports → it runs; edit a file named only in a comment, written in
+  the path-joined form the walk does follow on code lines → it does **not** run
+  (this is the case that catches a walk that stopped skipping comments); reach
+  the hook through a symlink and edit the target's sibling → it runs; delete a
+  dependency → it runs; `import a, b` and edit `b` → it runs; make the hook
+  unreadable → its signature is empty.
+- **Real case (2026-09-29, a private hooks repository):** a guard's classifier
+  and a newly extracted shared module were edited and pushed. The health check's
+  stamps, keyed on the wrapper, stayed valid, so neither the probe nor the full
+  battery ran on the new logic. Across that repository's 72 installed hooks, 19
+  had logic outside the registered file.
+
+## 50. A gate that passes slowly raises no signal — and the host records the run time of only some of the hooks that succeed
+
+- **Symptom:** every session starts a minute late, or a push waits twenty minutes,
+  and nobody can say which hook is responsible. Block counts, bypass counts and
+  self-test results are all healthy, because the slow hook works and exits 0.
+- **Cause:** the two signals a guard normally has, "it blocked" and "it broke", say
+  nothing about cost. The host writes run times for many hooks, but no report reads
+  them unless you write one, and a PreToolUse hook that prints nothing may leave no
+  record at all (step 1).
+- **Fix:**
+  1. Read the run times the host already writes. Session transcripts are JSONL
+     files under the host's projects directory. A successful hook run is a record
+     `{"type": "attachment", "attachment": {"type": "hook_success", …}}`, and the
+     fields are inside `attachment`: `hookEvent`, `hookName`, `toolUseID`,
+     `command`, `exitCode`, `stdout`, `stderr`, `content`, `durationMs`. Blocked runs
+     (`hook_blocking_error`) and injected context (`hook_additional_context`) records
+     carry no duration. Group by event and by the script's file stem; for a binary
+     use its file name, and for a hook with no executable (a prompt) use the text.
+     Parse `command` with Python's `shlex.split` rather than `str.split` (a path
+     containing a space breaks the latter). Deduplicate forked or resumed
+     transcripts by `(toolUseID, command)`. Report count, median, p95 and max per
+     hook, and set the alert threshold from the observed distribution rather than a
+     guess: in one week's data most hooks had a median far below a second, and the
+     few worth reading were those with a median of 1 s or more, or a p95 of 5 s or
+     more.
+     **Not every run leaves a record.** Probe: count one hook's records in a
+     transcript and compare with the session's tool calls it matches. In one session
+     (682 Bash calls, 2026-09-30) each PreToolUse advisor of ours had between 2 and
+     29 records, every one with non-empty `stdout`, while PostToolUse, Stop and
+     SessionStart hooks had silent records as well (802 of 858 PostToolUse records
+     had empty `stdout`); one third-party PreToolUse binary was recorded on every
+     call. So for a PreToolUse hook a record count is a count of runs that
+     produced output, its median describes only those runs, and "zero records" does
+     not mean "never ran". To time a silent PreToolUse hook, have it log its own
+     duration (step 3).
+  2. Count output as well. A hook whose `stdout` is non-empty and not `{}` is doing
+     something a block count cannot see, usually injecting advisory context, so a
+     block-count report shows it as silent or dead. Read its JSON before calling it
+     advisory: a hook that exits 0 with `hookSpecificOutput.permissionDecision` set
+     to `deny`, or a top-level `decision` of `block`, does block. A tool that prints
+     `{}` on every call is not an advisor.
+  3. Guards that git runs, not the host, never appear in a transcript. Have the
+     guard append one line per run (time, name, seconds, exit code, repository) to a
+     state log, and read that log in the same report. Print one "still running" line
+     from inside the guard's long loop once a single run passes a threshold (60 s in
+     the case below), so no background process is needed. That threshold is one
+     run's seconds; the median and p95 lines in step 1 describe a hook's whole
+     distribution. Set them separately.
+  4. A health check that runs every hook's self-test at session start is a common
+     slow pass. Keep a stamp per hook, for example `<hash of the hook path>.pass`
+     holding the signature and the epoch seconds of the last pass. The signature is
+     the file's modification time and size, read through symlinks
+     (`stat -L -f '%m %z'` on BSD and macOS, `stat -L -c '%Y %s'` on GNU), so an edit
+     made through a symlink counts. Skip the self-test when the signature is
+     unchanged and the last pass is younger than a TTL, a day being a workable
+     default. A failure, a changed file, and a missing, corrupt or unreadable stamp
+     all still run the self-test, and a failed run writes no stamp. The signature
+     covers the hook file only: an edit to a helper it sources goes unseen until the
+     TTL expires, so include those files in the signature if the TTL is long.
+     Measure the change by alternating old and new on one machine: machine load
+     moves the number more than the code does.
+- **Real case (2026-09-29, one hooks repository):** adding per-hook timing to a
+  weekly hook report showed a SessionStart health check at a median of 65 s over 257
+  runs in a week. A trace (`bash -x` with `PS4='+T$SECONDS '`, then the largest gaps
+  between lines) put the time in about thirty hooks' self-tests, some 5 to 11 s
+  each. With the signature-and-TTL skip, four old runs alternated with four new ones
+  on one machine took 69 to 83 s before and 4 to 20 s after; the fastest new run
+  had warm stamps, and the first (16 s) ran the two full self-tests that had no
+  stamp yet. The 65 s median came from other times and load. In the same week, a
+  global pre-push check that took 22 to 29 minutes per new branch, and moved no
+  count in that report, was attributed by the commit that fixed it to a full tree
+  listing for every commit in the range. The first version of that report also
+  printed "0 runs in the window" for silent guards; the probe in step 1 showed the
+  wording was wrong, and the report now says "0 records" and states the coverage.
+
+## 51. Adding a run recorder to a guard: `exec` skips your trap, other sessions' fixtures fill the log, and a missing stamp leaks a redirect error
+
+- **Symptom:** the recorder never logs the runs of a hook that ends in `exec`; the
+  log on its first day is mostly rows nobody ran; a first run prints
+  `No such file or directory` on stderr although the code redirects that error; and
+  a new self-test row makes the whole self-test exit silently with status 2.
+- **Cause and fix**, in four parts (bash, and zsh for part 3):
+  1. `exec` replaces the process, so an EXIT trap is never reached. Replace
+     `exec child "$@"` with
+     `child_rc=0; child "$@" || child_rc=$?; exit "$child_rc"` and keep the EXIT
+     trap that records the run: it then fires once, with the child's status, for
+     this path and for every path that leaves before the child. Do not also call
+     the recorder before `exit`, or the run is logged twice. The child's refusal
+     must reach the caller unchanged, so this is a security edit, and a passing
+     suite does not show it: the usual fixtures make the guard's own checks refuse
+     before the child runs, and they pass with `exit 0` hard-coded. Test it with a
+     stub child that exits 7 and assert both the hook's status and the recorded
+     one. A mutation that swallowed the status survived until that test existed.
+  2. A fixture repository's git hooks fire the real global guards, so every
+     self-test and test suite, from every session, writes to a machine-wide log.
+     Asking each suite to redirect it holds until the next session forgets. Filter
+     in the writer instead: skip a repository whose top-level path
+     (`git rev-parse --show-toplevel`) starts with `/tmp/`, `/private/tmp/`,
+     `/var/folders/`, `/private/var/folders/` (macOS resolves the first and third to
+     the `/private` spellings) or `${TMPDIR%/}/`. Write the prefixes with the
+     trailing slash: `/tmp*` also matches a sibling such as `/tmpfoo`. Guard the
+     `TMPDIR` test with `[[ -n "${TMPDIR:-}" && … ]]`: with `TMPDIR` unset or empty
+     the pattern becomes `/*`, and every path counts as a fixture. Give the suites
+     that assert on the log an explicit opt-in variable, for example
+     `RECORD_TEMP=1`. Cleaning the log afterwards by name patterns never finishes,
+     because fixtures are named by whoever writes them.
+  3. In bash and zsh, `read -r a b < "$stamp" 2>/dev/null` applies the redirections
+     left to right, so the failing `<` prints its error before `2>/dev/null`
+     exists. Write `read -r a b 2>/dev/null < "$stamp" || true`, and assert that a
+     first run prints nothing to stderr.
+  4. In a self-test, `text=$(run_the_guard_on_a_blocked_input)` returns the guard's
+     status 2 and, under `set -e`, ends the script silently with that status, so the
+     health check reports the hook as dead. Add `|| true` inside the helper when the
+     output is what you want, and compare the new self-test's exit status with the
+     old version's before trusting a green run.
+- **Real case (2026-09-29, one hooks repository):** after per-run timing went into
+  three git guards (pre-commit, pre-push and one that blocks recursive backups), 507
+  of the log's first 552 lines came from the temporary repositories of tests, under
+  many naming schemes; two attempts to clean the log by name each dropped real rows
+  or kept fixture rows. The writer-side path filter ended it. In the same change,
+  turning `exec` into a child call passed the whole suite with the status swallowed,
+  and the health check's stamp read printed a redirect error on every hook's first
+  sight.
+
+## 52. `$var` glued to full-width punctuation is one long variable name in a UTF-8 locale — and the detector you print must name its engine
+
+- **Symptom:** under `set -u`, the script aborts with `<name><mojibake>: unbound
+  variable` on a line whose variable was provably set a few lines above. The
+  happy path never reaches that line, so the bug lives in exactly the
+  retry/failure branch the line was written for.
+- **Cause and fix:** in a UTF-8 locale, bash admits the high bytes of a
+  multibyte character into the variable name, so `$rc；` or `$rc（` parses as
+  one long unbound name. Measured matrix (2026-09-30, macOS `/bin/bash` 3.2
+  and Homebrew 5.3 × C / POSIX / en_US.UTF-8 / zh_CN.UTF-8 / unset): **UTF-8
+  glues on both builds; C/POSIX is clean on both**; the builds differ only
+  when the locale is unset entirely — 3.2 falls back to C (clean) while 5.3
+  falls back to the macOS default UTF-8 (glues), which is the launchd shape
+  (minimal env, no locale variables). So the safety boundary is the locale,
+  not the build: explicit C/POSIX protects every bash, and both
+  "the C locale is what glues" and "system bash is safe" are
+  plausible-sounding and false. Fix is engine-independent: brace every
+  expansion that is immediately followed by non-ASCII text — `${rc}`. ⚠️ The detector you ship with this rule must
+  name its engine: the byte-class regex `\$[A-Za-z_][A-Za-z0-9_]*[\x80-\xff]`
+  is correct only as a **byte** scan (Python `re` on `rb""` bytes, or
+  `rg '(?-u)' …`); under rg/ugrep's default Unicode-aware mode the same
+  pattern reads as codepoints U+0080–U+00FF and misses full-width punctuation
+  (U+FF08/U+FF1B) entirely — printing the bare regex with no engine note hands
+  the reader a false-clean instrument, the exact failure #53 describes.
+  Verify any detector on a known-bad sample before trusting its "clean".
+- **Real case (2026-09-30):** a nightly sync script gained a retry loop; both
+  new Chinese log lines carried the glue. It fired in the calibration harness
+  (which ran under Homebrew bash) and would have fired for every
+  `#!/usr/bin/env bash` hook — 104 of 119 checked scripts in one hooks
+  directory, versus 15 on `/bin/bash` 3.2. The script being edited was itself
+  on 3.2, so under launchd's unset locale it would not have hit the bug in
+  production — but the same script in any UTF-8 locale (an interactive
+  login shell, for instance) would have, because 3.2 glues there too. Both
+  statements matter: the bug was real and the harness caught it, and the
+  harness, not the production shebang, was the vulnerable layer. This entry
+  was itself wrong twice and caught by re-probe both times: the first draft
+  claimed the opposite causality ("the C locale glues") and shipped the
+  engine-less detector regex; the rewrite then claimed 3.2 was immune under
+  every locale, which a UTF-8 re-probe of `/bin/bash` contradicted.
+
+## 53. A validator that folds "the call failed" into "nothing found" manufactures false greens
+
+- **Symptom:** a review or check logs "no issues found" for input it never
+  actually examined. The failure appears only in a debug log; the run that died
+  and the run that was clean are byte-identical to anyone reading the outcome.
+- **Cause and fix:** `if not result:` folds `result is None` (the API/tool call
+  failed) and "result exists and is empty" (genuinely clean) into one branch.
+  Failure, empty, and unexamined are three states and must log as three:
+  `if result is None: log "review NOT completed — UNKNOWN"` before the clean
+  branch. Then make the failure visible where the user actually looks (a
+  system message / status line), because a failure that only writes a debug
+  log is a pass. If the check lives in a vendor file that marketplace refreshes
+  overwrite, land the patch with a marker comment plus an idempotent repatch
+  script plus a health-check assertion that re-applies it on refresh and only
+  pages a human when the repatch script's anchors no longer match (meaning
+  upstream changed the code under the patch).
+- **Real case (2026-09-29, a security-review plugin):** primary and fallback
+  models both died on proxy-cut TLS in two burst clusters; the fire was logged
+  "no vulnerabilities found" — one confirmed false green among the day's 170
+  reviews, and the same None-vs-clean fold existed in three branches across
+  two of its files. The repaired build's regression harness goes red on exactly
+  the failure-direction rows when run against the unpatched copy.
+
+## 54. A detector keyed on neighbour-line heuristics false-alerts on recovery — key on the subject's own terminal marker
+
+- **Symptom:** the health detector reports more failures than the subject
+  itself recorded — because its rule ("the previous non-noise line is a
+  terminal failure") stays true across a *successful* fallback: the
+  "falling back to <model>" line was itself on the detector's noise list, so
+  the recovery was invisible to it.
+- **Cause and fix:** neighbour-line heuristics cannot see events they filter
+  out. Prefer the marker the subject prints only when it truly failed — here,
+  the per-fire closing line `API call failed with status`, emitted iff the
+  fire's final call failed. Then calibrate the rewritten criterion against the
+  real log in both directions on the same day: the fallback-succeeded fire must
+  *not* alert, the genuinely-failed fire must.
+- **Real case (2026-09-29, same incident family as #53):** the old criterion
+  reported 2 silent failures for a day that had exactly 1; the marker-keyed
+  criterion reports 1, and after the #53 fail-loud patch the new UNKNOWN lines
+  became the counted signal — detector and patched subject agree. One blind
+  spot to name, not to hide: if the subject *dies before printing* its terminal
+  marker (crash mid-fire, not a handled API error), the detector stays silent —
+  the marker only covers failure paths the subject itself survives.
+
+## 55. A dash-leading path argument is parsed as options — `--` works even on macOS, but parameter expansion skips the subprocess and the option table entirely
+
+- **Symptom:** a repair or fallback branch fails on *every single file* with a
+  bare usage error from a basic utility (`dirname: illegal option -- U`),
+  in a code path that passed calibration against real-corpus fixtures.
+- **Cause and fix:** any path derived from data can start with a dash (here:
+  every project directory under `~/.claude/projects/` is named
+  `-Users-<name>-…`, so a relative path stripped from it inherits the dash).
+  A tool that parses options rejects such an operand because its letters
+  are not in the tool's optstring — `dirname`/`basename` take no options at
+  all, so *any* dash-leading operand fails. The escape: `--` works fine on
+  macOS BSD userland (`dirname -- "$rel"` verified on Darwin 25; these tools
+  go through getopt, which handles `--` natively) — prefer parameter
+  expansion anyway: `${rel%/*}` for dirname, `${rel##*/}` for basename (plus
+  the no-slash guard `[ "$d" = "$rel" ] && d="."`) spawns no subprocess and
+  has no per-tool option table to remember, so it cannot regress the day
+  someone swaps in a tool with different parsing. The calibration half of the lesson: this branch
+  was calibrated against the real error-report corpus with a stubbed uploader,
+  and the fixture proved the *parser* (report line → extracted path) while the
+  stub boundary was drawn one layer too far out — the filesystem calls the
+  extracted path then flowed into (`mkdir`/`cp`) were never exercised against
+  a dash-leading input. A stub must stand in at the outermost effect boundary;
+  every layer between parser and boundary is uncalibrated surface.
+- **Real case (2026-09-30, a nightly OSS backup):** active-session `.jsonl`
+  files lose an append race during the backup window (Content-Length stales
+  mid-upload), so a targeted snapshot re-upload branch existed: parse the
+  failed files from the uploader's report, `cp` each to a static temp dir,
+  re-upload. Its first real run: 5/5 snapshots "failed" —
+  `mkdir -p "$repair_dir/$(dirname "$rel")"` died on the dash-leading rel,
+  leaving `cp` no directory to land in. The main backup had already failed
+  rc=4 on all three retries, so the branch whose whole purpose was surviving
+  that exact failure mode died on a second, unrelated one — at 03:00, with no
+  one watching. Parameter expansion fixed it; the manual re-run uploaded 5/5
+  with bucket-side read-back. One more correction, same night: this entry's
+  first published version converted the incident into a wrong platform claim
+  ("macOS BSD tools accept no `--`"); post-merge review re-probed and
+  `dirname --` returned the correct answer — the third time in one night a
+  mechanism claim in this family was falsified by re-running the probe
+  instead of believing the plausible explanation (see #52's two corrections).
+  The incident facts were all reproducible; only the generalization was
+  wrong.

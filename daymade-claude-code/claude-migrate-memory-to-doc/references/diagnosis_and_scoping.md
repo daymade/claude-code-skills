@@ -12,14 +12,14 @@ Classify each memory file by **scope** — who/what needs it — not by "is it m
 | Collaboration preferences / feedback (how to work with this user) | global `~/.claude/references/user/` | cross-tool; not a project artifact |
 | User's methodology / principles | global `~/.claude/references/user/` | cross-tool |
 | Personal affairs (life facts the AI needs to act correctly) | global `~/.claude/references/user/` | cross-tool, but mark as privacy |
-| Temporary handoff snapshot (state for the next session) | **stays in memory** | this is memory's legitimate purpose |
-| External system pointer (a ticket, a channel id) | **stays in memory** | personal working context |
+| Temporary handoff snapshot (state for the next session) | **stays in memory** (Goal B: a document, see `retire_auto_memory.md` §4) | this is memory's legitimate purpose |
+| External system pointer (a ticket, a channel id) | **stays in memory** (Goal B: a document, see `retire_auto_memory.md` §4) | personal working context |
 
 ## The deciding question (three steps, in order)
 
 1. Would a **teammate** opening this project need this rule/standard? → project `CLAUDE.md` / `docs/`.
 2. Else, would **another AI tool** (Codex, Cursor) or **another project** need this user fact/preference? → global `~/.claude/references/user/` (tool-agnostic).
-3. Else — it's just a handoff for the next session, or an external pointer? → leave it in `memory/`.
+3. Else — it's just a handoff for the next session, or an external pointer? → leave it in `memory/` (Goal B: give it a document home).
 
 The pre-existing project rule may say "user preferences → memory". That rule predates multi-tool use; this migration supersedes it for the cross-tool bucket. Update the rule (see tool_agnostic_migration.md) so it stops contradicting reality.
 

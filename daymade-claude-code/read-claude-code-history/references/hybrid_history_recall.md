@@ -20,7 +20,7 @@ Use the two search paths for different claims:
 | Need | Command | What it can support |
 |---|---|---|
 | You remember the meaning but not the wording | `history_index.py recall` | Ranked candidate sessions |
-| Exact phrase, tool call/result, thinking, attachment, queue, summary, or file-history evidence | `analyze_sessions.py search` | Exhaustive scoped evidence and, after the widening ladder, an absence claim |
+| Exact phrase or topic discovery | `history_index.py recall --mode bm25` | Ranked candidate sessions within the index's stated coverage |
 
 The recall index intentionally stores only user/assistant prose. It does not
 duplicate the forensic event store. Every result includes the project, exact
@@ -29,8 +29,8 @@ copy that actually contains that record. The primary result path is selected
 from those record-bearing copies, so an archive-only hit never points at a
 newer active file that lacks the evidence.
 
-Never convert zero recall results into “it was never discussed.” Run exact
-search with the complete source set instead.
+Never convert zero recall results into “it was never discussed.” State the
+index frontier and missing record types; open exact known sessions where useful.
 
 Both paths exclude prose prompts sent by the main agent to subagents by default
 (`type=user` + `isSidechain=true`). They keep assistant-side subagent output.

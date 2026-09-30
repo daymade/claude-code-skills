@@ -1,13 +1,10 @@
 ---
 name: openclaw-model-switch
 description: >-
-  Switch or repair the model configuration of an OpenClaw instance (e.g. Kimi k2p6 → k3):
-  change the default model, add model definitions, and fix model-config failures — 401
-  "Invalid token", "No available channel / model not found", thinking-level rejections
-  ("Thinking level X is not supported"), and config edits that don't take effect.
-  Use whenever the user wants to switch/upgrade/rollback the OpenClaw model (切换模型/换模型/
-  升级模型), or says the OpenClaw/龙虾 bot's model is misconfigured (模型配的错了),
-  or the bot falls back / errors on LLM calls.
+  Switches or repairs an OpenClaw instance's model config: changes the default model, adds model
+  definitions, and fixes 401 "Invalid token", "No available channel / model not found", "Thinking
+  level X is not supported", or a config edit that doesn't take effect. Use for 切换模型/换模型/升级模型 or
+  模型配的错了. Not for plain config audits (use openclaw).
 ---
 
 # OpenClaw Model Switch

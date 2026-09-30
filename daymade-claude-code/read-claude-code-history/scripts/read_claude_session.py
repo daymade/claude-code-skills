@@ -961,6 +961,298 @@ def extract_subagent_context(session_file: Path) -> List[Dict]:
     return results
 
 
+def command_sha256(command: str) -> str:
+    """Digest a tool call's ``command`` the way hook audit logs key it.
+
+    Hook logs that avoid storing command text (for example a Bash guard's
+    ``sid=<session> cmd_sha256=<hex>`` audit row) hash ``tool_input.command``
+    as UTF-8. ``surrogatepass`` keeps a lone surrogate from a JSON ``\\ud800``
+    escape hashable instead of raising.
+    """
+    return hashlib.sha256(command.encode("utf-8", "surrogatepass")).hexdigest()
+
+
+def find_tool_uses_by_command_sha256(session_file: Path, digest: str) -> Dict:
+    """Find the tool calls in one Session whose ``input.command`` hashes to ``digest``.
+
+    A hook event made inside a subagent carries the parent Session ID, so the
+    matching record can live in ``<session>/subagents/*.jsonl`` rather than the
+    main transcript; both are searched. Returns the examined files, how many
+    tool calls carried a string ``command``, unparseable line counts, the main
+    transcript's record-level Session IDs, and every match in file order.
+    """
+    files = [session_file]
+    subagents_dir = session_file.parent / session_file.stem / "subagents"
+    if subagents_dir.is_dir():
+        files.extend(sorted(subagents_dir.glob("*.jsonl")))
+
+    examined = 0
+    unparseable: Dict[str, int] = {}
+    observed_ids: set[str] = set()
+    matches: List[Dict] = []
+    for path in files:
+        is_main = path == session_file
+        with path.open(encoding="utf-8", errors="surrogateescape") as handle:
+            for line_number, line in enumerate(handle, 1):
+                # Only the main transcript needs every record (for its Session
+                # identity); a subagent line without a tool call cannot match.
+                if not is_main and '"tool_use"' not in line:
+                    continue
+                if not line.strip():
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    unparseable[str(path)] = unparseable.get(str(path), 0) + 1
+                    continue
+                if not isinstance(record, dict):
+                    continue
+                if is_main and isinstance(record.get("sessionId"), str):
+                    observed_ids.add(record["sessionId"])
+                message = record.get("message")
+                content = message.get("content") if isinstance(message, dict) else None
+                if not isinstance(content, list):
+                    continue
+                for block in content:
+                    if not isinstance(block, dict) or block.get("type") != "tool_use":
+                        continue
+                    tool_input = block.get("input")
+                    command = (
+                        tool_input.get("command") if isinstance(tool_input, dict) else None
+                    )
+                    if not isinstance(command, str):
+                        continue
+                    examined += 1
+                    if command_sha256(command) != digest:
+                        continue
+                    matches.append({
+                        "path": path,
+                        "subagent": None if is_main else path.stem,
+                        "line": line_number,
+                        "timestamp": record.get("timestamp"),
+                        "uuid": record.get("uuid"),
+                        "cwd": record.get("cwd"),
+                        "tool": block.get("name"),
+                        "tool_use_id": block.get("id"),
+                        "command": command,
+                    })
+    return {
+        "files": files,
+        "examined": examined,
+        "unparseable": unparseable,
+        "observed_session_ids": observed_ids,
+        "matches": matches,
+    }
+
+
+def _fence_for(text: str) -> str:
+    """Return a backtick fence one run longer than the longest run inside ``text``.
+
+    A verbatim payload can itself contain a run of backticks (including a
+    triple-backtick code fence); a fixed ```` ``` ```` fence would close early
+    and truncate the printed output. This guarantees the fence cannot appear
+    inside the payload.
+    """
+    return "`" * max(3, max((len(run) for run in re.findall(r"`+", text)), default=0) + 1)
+
+
+def format_command_matches(session_id: str, digest: str, result: Dict) -> str:
+    """Render a command-hash lookup as Markdown with the full command text."""
+    subagent_files = len(result["files"]) - 1
+    lines = [
+        f"# Tool calls whose `command` has SHA-256 `{digest}`",
+        "",
+        f"- **Session**: `{session_id}`",
+        f"- **Examined**: {len(result['files'])} transcript file(s) "
+        f"(main + {subagent_files} subagent), {result['examined']} tool call(s) "
+        "with a string `command`",
+        f"- **Matches**: {len(result['matches'])}",
+    ]
+    for path, count in result["unparseable"].items():
+        lines.append(f"- **Unparseable lines skipped**: {count} in `{path}`")
+    if not result["matches"]:
+        lines += [
+            "",
+            "No tool call in this Session's main transcript or subagent transcripts "
+            "has this digest. The digest must be SHA-256 over the raw "
+            "`tool_input.command` string as UTF-8, and the Session ID must be the "
+            "one the hook event carried.",
+        ]
+        if result["unparseable"]:
+            lines.append(
+                "Some lines could not be parsed (listed above), so this does not "
+                "prove the call is absent."
+            )
+    for index, match in enumerate(result["matches"], 1):
+        where = f"subagent `{match['subagent']}`" if match["subagent"] else "main transcript"
+        fence = _fence_for(match["command"])
+        lines += [
+            "",
+            f"## Match {index} — {where}",
+            "",
+            f"- **File**: `{match['path']}` line {match['line']}",
+            f"- **Timestamp**: {match['timestamp'] or 'unknown'}",
+            f"- **Record uuid**: `{match['uuid'] or 'unknown'}`",
+            f"- **Tool**: {match['tool'] or 'unknown'} (tool_use id `{match['tool_use_id'] or 'unknown'}`)",
+            f"- **cwd**: `{match['cwd'] or 'unknown'}`",
+            "",
+            f"{fence}text",
+            match["command"],
+            fence,
+        ]
+    return "\n".join(lines)
+
+
+# Claude Code has shipped its subagent-dispatch tool under two names: `Task`
+# (older releases) and `Agent` (current). Both are searched so a lookup
+# works regardless of which release wrote the transcript.
+AGENT_TOOL_NAMES = ("Agent", "Task")
+
+
+def find_agent_prompts_in_session(
+    session_file: Path, description_prefix: Optional[str] = None
+) -> Dict:
+    """Find every Agent/Task tool_use in one Session, verbatim.
+
+    A review record must quote the prompt given to an independent reviewer
+    agent verbatim. Searches the main transcript and
+    ``<session>/subagents/*.jsonl`` (a subagent can itself dispatch another
+    agent). Returns the examined files, how many Agent/Task tool calls
+    carried a string ``prompt`` (before any ``description_prefix`` filter),
+    unparseable line counts, the main transcript's record-level Session IDs,
+    and every match in file order — including duplicates: the same prompt
+    dispatched twice is reported twice, not collapsed.
+    """
+    files = [session_file]
+    subagents_dir = session_file.parent / session_file.stem / "subagents"
+    if subagents_dir.is_dir():
+        files.extend(sorted(subagents_dir.glob("*.jsonl")))
+
+    examined = 0
+    unparseable: Dict[str, int] = {}
+    observed_ids: set[str] = set()
+    matches: List[Dict] = []
+    for path in files:
+        is_main = path == session_file
+        with path.open(encoding="utf-8", errors="surrogateescape") as handle:
+            for line_number, line in enumerate(handle, 1):
+                # Only the main transcript needs every record (for its Session
+                # identity); a subagent line without a tool call cannot match.
+                if not is_main and '"tool_use"' not in line:
+                    continue
+                if not line.strip():
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    unparseable[str(path)] = unparseable.get(str(path), 0) + 1
+                    continue
+                if not isinstance(record, dict):
+                    continue
+                if is_main and isinstance(record.get("sessionId"), str):
+                    observed_ids.add(record["sessionId"])
+                message = record.get("message")
+                content = message.get("content") if isinstance(message, dict) else None
+                if not isinstance(content, list):
+                    continue
+                for block in content:
+                    if not isinstance(block, dict) or block.get("type") != "tool_use":
+                        continue
+                    if block.get("name") not in AGENT_TOOL_NAMES:
+                        continue
+                    tool_input = block.get("input")
+                    prompt = (
+                        tool_input.get("prompt") if isinstance(tool_input, dict) else None
+                    )
+                    if not isinstance(prompt, str):
+                        continue
+                    examined += 1
+                    description = (
+                        tool_input.get("description") if isinstance(tool_input, dict) else None
+                    )
+                    if description_prefix is not None and not (
+                        isinstance(description, str) and description.startswith(description_prefix)
+                    ):
+                        continue
+                    matches.append({
+                        "path": path,
+                        "subagent": None if is_main else path.stem,
+                        "line": line_number,
+                        "timestamp": record.get("timestamp"),
+                        "uuid": record.get("uuid"),
+                        "tool": block.get("name"),
+                        "tool_use_id": block.get("id"),
+                        "description": description,
+                        "subagent_type": tool_input.get("subagent_type"),
+                        "model": tool_input.get("model"),
+                        "run_in_background": tool_input.get("run_in_background"),
+                        "prompt": prompt,
+                    })
+    return {
+        "files": files,
+        "examined": examined,
+        "unparseable": unparseable,
+        "observed_session_ids": observed_ids,
+        "matches": matches,
+    }
+
+
+def format_agent_prompts(
+    session_id: str, result: Dict, description_prefix: Optional[str]
+) -> str:
+    """Render an Agent/Task prompt lookup as Markdown with each prompt verbatim."""
+    subagent_files = len(result["files"]) - 1
+    lines = [
+        f"# Agent/Task prompts in session `{session_id}`",
+        "",
+        f"- **Session**: `{session_id}`",
+        f"- **Examined**: {len(result['files'])} transcript file(s) "
+        f"(main + {subagent_files} subagent), {result['examined']} Agent/Task "
+        "tool call(s) with a string `prompt`",
+    ]
+    if description_prefix is not None:
+        lines.append(f"- **Description prefix filter**: `{description_prefix}`")
+    lines.append(f"- **Matches**: {len(result['matches'])}")
+    for path, count in result["unparseable"].items():
+        lines.append(f"- **Unparseable lines skipped**: {count} in `{path}`")
+    if not result["matches"]:
+        no_match = (
+            "No Agent/Task tool call in this Session's main transcript or "
+            "subagent transcripts"
+        )
+        if description_prefix is not None:
+            no_match += f" has a description starting with `{description_prefix}`."
+        else:
+            no_match += "."
+        lines += ["", no_match]
+        if result["unparseable"]:
+            lines.append(
+                "Some lines could not be parsed (listed above), so this does not "
+                "prove the call is absent."
+            )
+    for index, match in enumerate(result["matches"], 1):
+        where = f"subagent `{match['subagent']}`" if match["subagent"] else "main transcript"
+        fence = _fence_for(match["prompt"])
+        lines += [
+            "",
+            f"## Match {index} — {where}",
+            "",
+            f"- **File**: `{match['path']}` line {match['line']}",
+            f"- **Timestamp**: {match['timestamp'] or 'unknown'}",
+            f"- **Record uuid**: `{match['uuid'] or 'unknown'}`",
+            f"- **Tool**: {match['tool']} (tool_use id `{match['tool_use_id'] or 'unknown'}`)",
+            f"- **Description**: {match['description'] if match['description'] is not None else 'unknown'}",
+            f"- **subagent_type**: {match['subagent_type'] if match['subagent_type'] is not None else 'unknown'}",
+            f"- **model**: {match['model'] if match['model'] is not None else 'unknown'}",
+            f"- **run_in_background**: {match['run_in_background'] if match['run_in_background'] is not None else 'unknown'}",
+            "",
+            f"{fence}text",
+            match["prompt"],
+            fence,
+        ]
+    return "\n".join(lines)
+
+
 # ── Context sources ──────────────────────────────────────────────────
 
 
@@ -1264,7 +1556,48 @@ def main():
             "when present)"
         ),
     )
+    parser.add_argument(
+        "--find-command-sha256",
+        metavar="HEX",
+        help=(
+            "With --session: print the full tool call(s) whose input.command has "
+            "this SHA-256 (the cmd_sha256 a hook audit log records), searching "
+            "the main transcript and its subagents; exit 1 when none match"
+        ),
+    )
+    parser.add_argument(
+        "--agent-prompts",
+        action="store_true",
+        help=(
+            "With --session: print every Agent/Task tool_use (Claude Code's "
+            "subagent-dispatch tool; Task in older releases) verbatim — "
+            "timestamp, record uuid, description, subagent_type, model, "
+            "run_in_background, and the prompt — searching the main "
+            "transcript and its subagents; exit 1 when none match"
+        ),
+    )
+    parser.add_argument(
+        "--agent-description-prefix",
+        metavar="TEXT",
+        default=None,
+        help="With --agent-prompts: only print calls whose description "
+        "starts with TEXT",
+    )
     args = parser.parse_args()
+    if args.find_command_sha256 is not None:
+        if not args.session or args.query or args.list:
+            parser.error("--find-command-sha256 needs --session and no --query/--list")
+        if not re.fullmatch(r"[0-9a-fA-F]{64}", args.find_command_sha256):
+            parser.error("--find-command-sha256 takes a 64-character hex SHA-256 digest")
+        args.find_command_sha256 = args.find_command_sha256.lower()
+    if args.agent_description_prefix is not None and not args.agent_prompts:
+        parser.error("--agent-description-prefix needs --agent-prompts")
+    if args.agent_prompts:
+        if not args.session or args.query or args.list or args.find_command_sha256:
+            parser.error(
+                "--agent-prompts needs --session and no "
+                "--query/--list/--find-command-sha256"
+            )
 
     project_path = os.path.abspath(args.project or os.getcwd())
     global_exact_session = bool(
@@ -1403,6 +1736,27 @@ def main():
     except SessionEvidenceError as error:
         print(f"Error: cannot recover complete Claude Session evidence: {error}", file=sys.stderr)
         sys.exit(1)
+
+    if args.find_command_sha256:
+        try:
+            found = find_tool_uses_by_command_sha256(session_file, args.find_command_sha256)
+            validate_selected_session_identity(found["observed_session_ids"], session_id)
+        except (SessionEvidenceError, OSError) as error:
+            print(f"Error: cannot search Claude Session evidence: {error}", file=sys.stderr)
+            sys.exit(1)
+        print(format_command_matches(session_id, args.find_command_sha256, found))
+        sys.exit(0 if found["matches"] else 1)
+
+    if args.agent_prompts:
+        try:
+            found = find_agent_prompts_in_session(session_file, args.agent_description_prefix)
+            validate_selected_session_identity(found["observed_session_ids"], session_id)
+        except (SessionEvidenceError, OSError) as error:
+            print(f"Error: cannot search Claude Session evidence: {error}", file=sys.stderr)
+            sys.exit(1)
+        print(format_agent_prompts(session_id, found, args.agent_description_prefix))
+        sys.exit(0 if found["matches"] else 1)
+
     project_dir = session_file.parent
     entries = load_sessions_index(project_dir)
     session_entry = next(

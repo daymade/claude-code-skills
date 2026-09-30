@@ -1,7 +1,10 @@
 ---
 name: meme-creator
 description: >-
-  Creates video/GIF memes by overlaying images (logos, avatars, stickers) onto moving objects in a clip with frame-accurate tracking, then exports MP4 + GIF. Use whenever the user wants a meme, 梗图, 表情包, or reaction GIF from existing footage; to cover faces or heads in a video; to make a logo or avatar follow a moving person or object; to turn a video moment into a shareable GIF; or asks to 把 logo/头像贴到视频里跟着动. Handles source download (yt-dlp), segment picking via contact sheets, CSRT tracking with re-anchors and a manual-keyframe fallback, fades at frame edges and shot changes, and GIF size budgeting. Not for transcript-driven editing, programmatic scene generation, or subtitle work.
+  Creates video/GIF memes by overlaying images (logos, avatars, stickers) onto moving objects in a
+  clip with frame-accurate tracking, then exports MP4 + GIF. Use whenever the user wants a meme, 梗图,
+  表情包, or reaction GIF from footage; to cover faces in a video; or asks to 把 logo/头像贴到视频里跟着动. Not
+  for transcript-driven editing, programmatic scene generation, or subtitle work.
 ---
 
 # Meme Creator

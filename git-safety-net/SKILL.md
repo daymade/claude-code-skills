@@ -1,19 +1,11 @@
 ---
 name: git-safety-net
 description: >-
-  Audits, preserves, recovers, and safely retires local Git state: unpushed or
-  wrong-branch commits, dirty or detached worktrees, forgotten duplicate clones of the
-  same repo, untracked work no bundle can back up, orphaned stashes, dangling commits,
-  stale branches, and squash/rebase merge uncertainty. Use when the user fears work was
-  lost; asks to recover a commit or branch; asks whether a worktree, clone, or scratch
-  directory can be deleted; wants everything converged onto one main branch; or
-  needs proof that cleanup will not drop work. Use it even after an audit reported clean
-  — the usual gap is scope: every in-repo command is blind to a second clone elsewhere
-  on disk. Triggers on "did I lose work", "is everything merged", "is anything else
-  lost", "safe to delete this clone", "clean up old branches/stashes", "only keep one
-  main branch", "git reflog", "dangling commits", "分支灾难", "误删分支/commit",
-  "worktree 能删吗", "还有没有丢的东西", "只保留一个主分支".
-  Covers local-Git forensics, not GitHub PR/API operations or routine sync.
+  Audits, preserves and recovers local Git state before cleanup: unpushed or wrong-branch commits,
+  dirty worktrees, duplicate clones, stashes, dangling commits, squash-merge uncertainty. Use when
+  the user fears lost work, wants to recover a commit, asks if a branch is actually merged, asks
+  whether a branch, worktree or clone is safe to delete, or wants one clean main (误删分支 / 还有没有丢的东西).
+  Not for GitHub PR operations.
 ---
 
 # Git Safety Net
@@ -819,6 +811,15 @@ the helpers authorizes `checkout`, `reset`, `push`, `stash drop`, `branch -d`, o
 - **`refs/dangling-backup/*` refs are cluttering things later** — once you've confirmed (Mode C)
   their content is on a remote, delete them with `git for-each-ref --format='%(refname)'
   refs/dangling-backup/ | xargs -n1 git update-ref -d`. Only after you've verified.
+- **Your branch diverged from its upstream, but the unique local commits look familiar** — run
+  `git cherry <upstream> <branch>`. All `-` lines means every local-only commit is patch-identical
+  to one already upstream (`git cherry` compares patch-ids, so the SHAs need not match). The
+  typical cause: you committed on a branch whose remote-tracking ref was stale, and the same change
+  was later re-made and pushed. When every line is `-`, fast-forward the branch to the upstream —
+  the duplicate objects stay recoverable in the object store. Any `+` line is real local-only work;
+  treat it as an ordinary divergence instead (and remember the Step 1 caution cuts the other way:
+  after a squash merge a `+` does not prove missing work, so read `git cherry` as a hint, not a
+  verdict — all-`-` is the only reading that licenses the fast-forward).
 
 ## Next step
 

@@ -162,6 +162,7 @@ claude plugin install daymade-docs@daymade-skills
 这个套件会在同一个命名空间下暴露相关技能：
 
 ```text
+/daymade-docs:docs-router
 /daymade-docs:doc-to-markdown
 /daymade-docs:mermaid-tools
 /daymade-docs:pdf-creator
@@ -172,6 +173,8 @@ claude plugin install daymade-docs@daymade-skills
 ```
 
 这些技能以套件形式整体发布，不再提供单独的单技能插件。所有文档技能都在 `daymade-docs/` 下，随套件一起安装。
+自动选择由 `docs-router` 负责；各专业技能的原有命令仍可手动调用。
+`ppt-creator` 仅供手动兼容调用；已安装 `deck-creator` 时由它处理新建演示文稿。
 
 **Apple 平台套件**（为 macOS/iOS 开发与运维提供统一命名空间）：
 ```bash
@@ -218,6 +221,7 @@ claude plugin install daymade-claude-code@daymade-skills
 一次安装即可获得扩展 Claude Code 本体的全部 power-user 技能——跨代码、项目文档、Skill/SOP、会议、微信归档与对话历史的已有工作检索；跨 Claude Code/Codex 的快速本地对话发现；会话恢复；CLAUDE.md 调优；随 lark-cli 版本同步的飞书路由；故障诊断；statusline 配置；导出修复；marketplace 开发与 suite 收敛；终端截图渲染；用量分析；以及多 Provider 模型切换：
 
 ```text
+/daymade-claude-code:claude-code-ops-router
 /daymade-claude-code:local-conversation-history
 /daymade-claude-code:read-claude-code-history
 /daymade-claude-code:read-codex-history
@@ -226,7 +230,7 @@ claude plugin install daymade-claude-code@daymade-skills
 /daymade-claude-code:claude-skills-troubleshooting
 /daymade-claude-code:claude-md-progressive-disclosurer
 /daymade-claude-code:statusline-generator
-/daymade-claude-code:claude-export-txt-better
+/daymade-claude-code:fixing-claude-export-conversations
 /daymade-claude-code:marketplace-dev
 /daymade-claude-code:terminal-screenshot
 /daymade-claude-code:claude-usage-analyst
@@ -251,6 +255,7 @@ claude plugin install daymade-financial@daymade-skills
 一次安装即可获得完整的金融数据与投研技能——Bigdata.com（RavenPack）结构化财务与情绪数据、美股基本面数据（yfinance）、Gangtise（岗底斯）OpenAPI 投研套件安装与编排、A 股消息面与政策聚合、A 股医药板块日报、投资论点的结构化「魔鬼代言人」压力测试，以及对成功样板宣传水分与可复制性的对抗尽调：
 
 ```text
+/daymade-financial:financial-router
 /daymade-financial:bigdata-skill
 /daymade-financial:financial-data-collector
 /daymade-financial:gangtise-copilot
@@ -297,6 +302,7 @@ claude plugin install repomix-safe-mixer@daymade-skills
 
 # 完整语音套件（ASR + 转录校正 + 会议纪要 + TTS）
 claude plugin install daymade-audio@daymade-skills
+
 
 # 视频比较和质量分析
 claude plugin install video-comparer@daymade-skills
@@ -419,6 +425,16 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 ---
 
+### **docs-router** - Daymade 文档路由
+
+> **安装**：`claude plugin install daymade-docs@daymade-skills`（套件成员，调用方式 `daymade-docs:docs-router`）
+
+按输入和交付格式选择套件内的专业技能，读取该技能的完整说明及当前任务所需参考资料。
+覆盖文档转换、Word/PDF 制作、Mermaid 图片、macOS Excel 自动化、扫描件、DOCX 审阅提取和文档整理。
+专业技能的原命令保留手动调用；已安装 `deck-creator` 时由它处理新建演示文稿，`ppt-creator` 仅供手动兼容调用。
+
+---
+
 ### **doc-to-markdown** - 文档转换套件
 
 > **安装**：`claude plugin install daymade-docs@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-docs:doc-to-markdown`）
@@ -466,6 +482,14 @@ CC-Switch 支持以下中国 AI 服务提供商：
 **🎬 实时演示**
 
 ![Mermaid 工具演示](./demos/mermaid-tools/extract-diagrams.gif)
+
+---
+
+### **claude-code-ops-router** - Claude Code 配置与运维路由
+
+> **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:claude-code-ops-router`）
+
+按任务读取一个专用 Skill：插件和 Skill 故障、marketplace、状态栏、模型 Profile 与源码同步、1M 上下文提前压缩、用量和额度定时器、memory 迁移、导出 `.txt` 修复。原有专用斜杠命令仍可手动调用。
 
 ---
 
@@ -1645,6 +1669,14 @@ python3 scripts/enable_all_plugins.py daymade-skills
 
 ---
 
+### **audio-router** - 阶跃语音与会议纪要路由
+
+> **安装**：`claude plugin install daymade-audio@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-audio:audio-router`）
+
+按任务读取 StepFun ASR、StepFun TTS 或现成转录稿转会议纪要的完整专用说明。原斜杠命令仍可手动调用；通用音视频转录和转录纠错保持自动直达。
+
+---
+
 ### **meeting-minutes-taker** - 会议纪要生成器
 
 > **安装**：`claude plugin install daymade-audio@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-audio:meeting-minutes-taker`）
@@ -1684,7 +1716,7 @@ claude plugin install daymade-audio@daymade-skills
 
 ### **deep-research** - 深度调研报告生成器
 
-生成格式可控的调研报告，支持证据追踪与引用。
+生成可追溯的调研报告。每次研究都保存原始来源、断言与此前研究的关联；需要多渠道时，由现有供应商 Skill 分别执行并保留原件。
 
 **使用场景：**
 - 需要结构化调研报告、文献综述或行业/市场分析
@@ -1697,6 +1729,8 @@ claude plugin install daymade-audio@daymade-skills
 - 证据表与来源质量评级
 - 多轮完整草稿与 UNION 合并
 - 引用校验与冲突处理
+- 单路或多路研究都建立来源与断言记录，供下一次研究检索和复核
+- 给各渠道交接指定原文；会话跳转可追溯，旧研究检索优先显示已核原件
 - 即用型报告模板与格式规则
 
 **示例用法：**
@@ -1711,7 +1745,7 @@ claude plugin install deep-research@daymade-skills
 
 *即将推出*
 
-📚 **文档**：参见 [deep-research/SKILL.md](./deep-research/SKILL.md) 与 [deep-research/references/research_report_template.md](./deep-research/references/research_report_template.md) 了解工作流程与结构。
+📚 **文档**：参见 [deep-research/SKILL.md](./deep-research/SKILL.md)、[research-asset-contract.md](./deep-research/references/research-asset-contract.md) 与 [research_report_template.md](./deep-research/references/research_report_template.md)。
 
 **要求**：无
 
@@ -1994,27 +2028,15 @@ claude plugin install daymade-macos@daymade-skills
 
 📚 **文档**：参见 [capture-screen/SKILL.md](./daymade-macos/capture-screen/SKILL.md)。
 
-### **macos-permissions** - 诊断 macOS TCC 权限弹窗
+### **macos-permissions** - 诊断并修复 macOS 隐私权限
 
 > **安装**：`claude plugin install daymade-macos@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-macos:macos-permissions`）
 
-诊断 macOS 隐私弹窗（屏幕录制、完全磁盘访问、自动化等）为何反复弹出或授权给了错误对象。核心规则：**弹窗显示的名字 ≠ 发起方**——先读 TCC 日志的 `from Sub:` 归因确定真正在请求的进程，再读 TCC.db 的 `auth_value` 确认当前授权状态，然后才决定该给谁授权。
-
-**适用场景：**
-- 权限弹窗（"想要访问其他 App 的数据"、屏幕录制、麦克风）点了允许后仍反复出现
-- 需要授权的 App 不在系统设置里，或列表中的名字与预期进程不符
-- 后台/launchd 任务触发权限弹窗，而同一命令交互运行时却不触发
-- 无签名 CLI 工具（uv 托管的 python、自定义二进制）在 launchd 下撞权限墙
-
-**核心能力：**
-- 决策树区分「发起方」（TCC 日志 `from Sub:`）与「显示名」（无签名、按路径归因的二进制会随版本漂移）
-- 完整 `kTCCService` 目录、`auth_value`/`auth_reason` 语义与 `tccutil` 速查
-- uv-in-launchd 完全磁盘访问陷阱：作为无带 FDA 父进程可继承的 root 进程运行；给 uv 二进制授权即可，路径变更会复发
-- 确认「哪个二进制在请求权限」的仪器纪律（优先日志归因，规避 `fs_usage`/`pgrep` 的假阴性）
+用于排查反复弹出的 TCC 权限提示、静默拒绝，以及后台任务无法读取受保护文件的问题。Skill 会定位实际请求权限的进程，检查现有授权能否复用，并通过真实后台读取验收；诊断和完全磁盘访问权限的修复步骤以 Skill 正文为准。
 
 📚 **文档**：参见 [macos-permissions/SKILL.md](./daymade-macos/macos-permissions/SKILL.md)。
 
-**要求**：macOS（Swift + AppleScript + `screencapture`）。
+**要求**：macOS。读取 TCC.db 时，执行读取的进程还需具备完全磁盘访问权限。
 
 ---
 
@@ -2133,7 +2155,7 @@ claude plugin install ima-copilot@daymade-skills
 
 ### **claude-export-txt-better** - 修复 Claude Code 导出文件的断行
 
-> **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:claude-export-txt-better`）
+> **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:fixing-claude-export-conversations`）
 
 重建 Claude Code 导出的 `.txt` 对话文件中被硬换行切坏的表格、段落、路径和工具调用输出。附带 53 项自动校验套件（文件无关，能捕捉 over-/under-merge 回归）。
 
@@ -2575,6 +2597,14 @@ claude plugin install feishu-doc-scraper@daymade-skills
 ```
 
 **要求**：已认证到目标租户的 `lark-cli` 二进制（npm `@larksuite/cli`）、`jq`。兜底路径需要浏览器自动化环境；docx 路径需要 `python-docx` 和一个 docx→md 转换器（内置的 doc-to-markdown 技能或 pandoc）。
+
+---
+
+### **financial-router** - 金融数据路由
+
+> **安装**：`claude plugin install daymade-financial@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-financial:financial-router`）
+
+按任务读取 Bigdata/RavenPack、美股免费基本面、A 股消息、行业 Top N 与公告、Gangtise 安装诊断的专用 Skill。医药日报和通用论证审查保持直接入口，专用斜杠命令仍可手动调用。
 
 ---
 
@@ -3405,7 +3435,8 @@ main 真的全部合并了吗，还是还有东西被滞留在某个分支？
 - 两层架构：`references/` + CLAUDE.md 内联 + AGENTS.md symlink，按各工具真实的
   自动加载机制设计（纯文本指针在两个工具里都只是按需加载）
 - 完整流程：诊断、多 agent 评审、用 `codex` 实测验证、memory 清理
-- memory 退化为薄薄的交接缓存，不再当 SSOT
+- 两个目标：解决工具锁定，memory 只留作薄薄的交接缓存；或整体退役某个项目的 auto memory，
+  每条迁进文档、关掉这个项目的开关，再用对照探针确认 memory 不再加载
 - 内联运行，直接编排评审 subagent 并调用 `codex`
 
 **示例：**
@@ -3414,6 +3445,7 @@ main 真的全部合并了吗，还是还有东西被滞留在某个分支？
 迁移我的记忆——Codex 不知道我是谁
 我的 memory 被锁在 Claude Code 里，让它工具无关
 memory 膨胀了，把该共享的内容迁到文档里
+把这个项目的 auto memory 关掉，内容都迁进文档
 ```
 
 ---
@@ -3573,6 +3605,7 @@ A 股行业投研工作流：全板块成分股 Top N 涨幅计算、公告窗�
 - 同时覆盖 Claude Code computer-use 与 Codex computer control
 - 提供强制逐项标来源、查不到就明确说未知的查询模式
 - 防止列表截断、屏幕识别错人名和财务口径混淆
+- Work 自主任务发出前核对接口积分，重试保留每次原始返回；Chat 深度研究单独导出原件
 
 **使用示例：**
 ```text
@@ -3585,7 +3618,7 @@ A 股行业投研工作流：全板块成分股 Top N 涨幅计算、公告窗�
 
 > **安装**：`claude plugin install tibo-reset-codex@daymade-skills`
 
-查询重置公告，核实多个 Pro 账号的剩余额度与备用重置；预测下一轮时间，并在本地保存预测、核对结果，供后续判断调整。
+查询重置公告，核实多个 Pro 账号的剩余额度与备用重置；有时间依据时预测下一轮，记录预测、核验与撤回，供后续判断调整。
 
 [操作说明](tibo-reset-codex/SKILL.md)
 
@@ -3806,6 +3839,38 @@ build or buy — evaluate the options
 📚 **文档**：参见 [meme-creator/SKILL.md](./meme-creator/SKILL.md) 及随包 `references/`（跟踪手册与素材绑定闸）。
 
 **运行要求**：`ffmpeg`；`uv`（随包 Python 脚本自带内联依赖）。源是 URL 时才需要 `yt-dlp`。
+
+---
+
+### **data-visualization-discipline** - 图表与看板的判断层
+
+> **安装**：`claude plugin install data-visualization-discipline@daymade-skills`
+
+动手画图之前先定这张图该不该存在、该怎么画：每张图要让读者得出的那一个结论、用均值还是中位数、分段能否聚合、堆叠还是折线、能不能上双轴、几个颜色、同一实体跨图是否同色、表格留几列。介质无关——HTML 报告、React/Vue 看板、PPT 原生图表、matplotlib/plotly/ECharts/D3 一律适用。
+
+**核心特性：**
+- 五个阶段（意图 → 数据 → 选形 → 编码 → 交付）：前四段各有一个交接检查，第五段是交付闸
+- 九条交付闸，含遮字渲染自测与可见条长的比例量测
+- 可评审既有图表（"这几张图有什么问题"、"图例为什么不一致"）
+
+- [`data-visualization-discipline`](./data-visualization-discipline/SKILL.md)——完整说明。与 `report-with-html` 成对使用，后者负责报告页本身。
+
+---
+
+### **report-with-html** - 有证据支撑的 HTML 报告
+
+> **安装**：`claude plugin install report-with-html@daymade-skills`
+
+产出面向读者的 HTML 制品——报告、看板、架构或旅程视图、数据浏览器、审阅工作台。页面骨架跟着读者的问题走，每个数字可追溯，交付前在真实浏览器里验证。
+
+**核心特性：**
+- 按读者的问题选骨架（怎么运作 / 要定什么 / 为什么发生 / 哪个更好 / 翻看一批数据）
+- 决策卡契约、可复用的交互组件、暖纸起手模板
+- 交付闸脚本：遮字渲染、整页分段截图、零上下文的独立读者审阅
+
+- [`report-with-html`](./report-with-html/SKILL.md)——完整说明。画图的判断交给 `data-visualization-discipline`。
+
+**运行要求**：Google Chrome 或 Chromium；`uv`；Python 3.10+。
 
 ---
 

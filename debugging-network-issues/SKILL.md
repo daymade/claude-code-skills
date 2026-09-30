@@ -1,18 +1,11 @@
 ---
 name: debugging-network-issues
 description: >-
-  Investigates network, streaming, and protocol failures with falsification-first
-  layered experiments. Use for ECONNRESET, HTTP/2 RST_STREAM, SSE or long-polling
-  stalls, fixed-time drops, CDN/proxy/CGNAT timeouts, client-side proxy/TUN
-  misrouting, CNAME-rule surprises, certificate errors, generic throughput collapse
-  where everything returns 200 but transfers crawl, or LAN identity/topology
-  mysteries. Trigger phrases include "socket closed unexpectedly", "stream
-  interrupted", "fails after N seconds", "works sometimes but not always",
-  "upstream silent for X seconds", ERR_CONNECTION_CLOSED, SSL_ERROR_SYSCALL,
-  UNKNOWN_CERTIFICATE_VERIFICATION_ERROR, and wrong-site certificate. Treat this as
-  the general method and unknown-root-cause fallback. Use tunnel-doctor for known
-  Tailscale/TUN/DNS/route/WSL-Docker conflicts and for a confirmed proxy
-  exit/node/chain quality problem.
+  Investigates network, streaming and protocol failures with falsification-first layered
+  experiments, the general fallback for unknown root causes. Use for ECONNRESET / RST_STREAM / SSE
+  stalls, CDN/CGNAT timeouts or certificate errors, throughput collapse where everything returns 200
+  but transfers crawl, or LAN identity/topology mysteries. Not for known
+  Tailscale/TUN/DNS/proxy-path conflicts (use tunnel-doctor).
 ---
 
 # Debugging Network Issues

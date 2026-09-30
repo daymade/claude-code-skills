@@ -1,14 +1,11 @@
 ---
 name: auto-repo-setup
 description: >-
-  Diagnose, repair, and standardize repository setup and safe Git workflows for
-  Claude Code or Codex. Use when a repository will not run, a collaborator is
-  onboarding, dependencies or credentials are missing, the user wants startup
-  sync, SessionStart output is duplicated, project instructions or hooks need
-  auditing, or commit/push/conflict/history-cleanup needs a guarded workflow.
-  Route ordinary startup behavior through project instructions or a natural
-  language request; use lifecycle hooks only when behavior must occur before the
-  first prompt and the target runtime has been verified.
+  Diagnoses and repairs repository setup and guarded Git workflows for Claude Code or Codex —
+  environment repair, startup sync, hook auditing, collaborator handoff. Use when a repo won't run,
+  a teammate onboards, hook output duplicates, or commit/push/conflict needs guarding. Not for
+  lost-commit recovery (use git-safety-net), GitHub ops (use github-ops), or history scrubbing (use
+  github-sensitive-data-cleanup).
 argument-hint: "[repository path]"
 ---
 

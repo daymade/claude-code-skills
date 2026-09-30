@@ -1,21 +1,10 @@
 ---
 name: claude-code-hooks
 description: >-
-  How to write, test, register, and debug Claude Code hooks — PreToolUse /
-  PostToolUse / SessionStart / Stop Bash guards that enforce a rule the model
-  would otherwise talk itself past. Use whenever the user wants to create a
-  hook, block/intercept a tool call, turn a repeatedly-violated rule into a
-  hard gate, add a guard rail, debug a hook that misfires or "poisons the
-  session", register a hook across profiles, or mentions hooks /
-  PreToolUse / Stop hook / 拦截 / 守卫 / 钩子 / 拦下. Bakes in the hard-won
-  pitfalls: UserPromptSubmit only ever sees user input, never Claude's own
-  text — a rule about Claude's own output belongs on Stop instead;
-  token-level shlex matching (never awk splitting); bash -n + real-JSON
-  end-to-end testing BEFORE registering (a corrupted PreToolUse hook poisons
-  every Bash call); SSOT + symlink so a ~/.claude reinstall can't lose it;
-  multi-profile convergence; and human-confirmation release gates. Reach for
-  this even for "make it stop doing X" — a durable stop is a hook, not a
-  reminder.
+  Writes, tests, registers and debugs Claude Code hooks (PreToolUse, PostToolUse, SessionStart,
+  Stop) that turn a rule the model keeps breaking into a hard gate. Use when the user wants to block
+  or intercept a tool call, add a guard rail, fix a misfiring hook, or says 拦截 / 守卫 / 钩子 — including
+  "make it stop doing X".
 ---
 
 # Claude Code Hooks
@@ -1069,6 +1058,12 @@ accident, and its failure direction is a miss.
 Sizing, so this doesn't read as a research project: one harvest plus one loop, minutes of
 wall time.
 
+**Changing a gate that already ships**, above all adding an allow branch, fails in the
+other direction: the new branch can let a dangerous command through, and a false-positive
+count never shows that. Replay the corpus through the old and new versions, compose the new
+branch's trigger into every must-block row, and mutate the branch until those rows go red:
+[hook_patterns.md](references/hook_patterns.md#changing-a-shipped-gate--prove-a-new-allow-branch-opens-no-hole).
+
 ### 10. A guard that blocks legitimate work needs a **consent channel** — and the consent signal must come from a hook that sees the prompt
 
 A guard built to block a failure mode will eventually block a **legitimate,
@@ -1203,11 +1198,21 @@ the consent file) must back up and restore any real consent file around itself.
      `shared-repo-head-drift` (21 cases / 17.8 s cold, collapsing SessionStart's
      health check to a probe of 9 assertions / 2.2 s): keep both halves in the hook
      as `--selftest` and `--selftest-full`, and let the health check pick — run the
-     full battery when the file has changed since the last full pass, otherwise the
-     probe. The cost then lands on the first session *after an edit*, which is
-     exactly when the full battery is worth paying for.
+     full battery when the hook's code has changed since the last full pass, otherwise
+     the probe. The cost then lands on the first session *after an edit*, which is
+     exactly when the full battery is worth paying for. **"The hook's code" is the
+     registered file plus what it runs and imports.** Most guards are a thin wrapper
+     around a classifier in a sibling `.py`, so a signature taken from the wrapper
+     alone stays valid through every edit to the logic, and the battery never runs
+     after exactly the changes it exists for (#49 — which also gives the dependency
+     rule and a one-process implementation).
      ```bash
-     sig=$(stat -L -f '%m %z' "$h" 2>/dev/null || true)   # -L or you stat the symlink — #41
+     # once, before the loop: #49's sign_hooks.py signs every hook and what it
+     # runs/imports in one process, symlinks resolved (#41)
+     python3 sign_hooks.py "$HOOK_DIR"/*.sh > "$SIGS"   # "<hook>\t<sig>" per line
+     # then, for each hook $h:
+     mode="--selftest"   # reset per hook, or a fresh hook inherits the last one's tier
+     sig=$(awk -F'\t' -v h="$h" '$1 == h { print $2 }' "$SIGS")
      stamp="$STAMPS/$(printf '%s' "$h" | shasum | cut -c1-16).full"
      [ -n "$sig" ] && [ "$(cat "$stamp" 2>/dev/null || true)" = "$sig" ] || mode="--selftest-full"
      bash "$h" "$mode" >/dev/null 2>&1 </dev/null || return 1   # </dev/null: an

@@ -1,5 +1,6 @@
 ---
 name: ppt-creator
+disable-model-invocation: true
 description: >-
   【DEPRECATED · 已废弃】本 skill 已于 2026-08-07 停止维护。对作者本机环境：其方法论已整体并入
   deck-creator（私有仓 daymade-skills-pro 的 Route B · draft），装有 deck-creator 的环境不要调用本 skill。

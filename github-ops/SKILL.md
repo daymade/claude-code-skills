@@ -1,14 +1,11 @@
 ---
 name: github-ops
 description: >-
-  Operates GitHub through gh CLI and the REST/GraphQL APIs with explicit target,
-  authorization, impact preview, and independent readback. Use for pull requests,
-  issues, Actions, repositories, collaborators, teams, organization member
-  privileges, base permissions, 2FA enforcement, repository settings, API
-  automation, parallel or superseded PR convergence, and public or enterprise
-  GitHub. Also use when a GitHub write returned success but the requested state did
-  not change, or when deciding whether a setting is writable through CLI, REST,
-  GraphQL, or only the GitHub UI.
+  Operates GitHub via gh CLI and REST/GraphQL — PRs, issues, Actions, repos, collaborators, org
+  permissions, 2FA — with explicit target, authorization, and independent readback. Use when a write
+  reports success but state didn't change, or choosing gh/REST/GraphQL/UI-only. Not for local Git
+  recovery (use git-safety-net), maintainer PR review (use github-review-pr), or upstream
+  contribution (use github-contributor).
 ---
 
 # GitHub Operations

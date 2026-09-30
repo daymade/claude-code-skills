@@ -1,6 +1,12 @@
 ---
 name: financial-data-collector
-description: "Collect real financial data for any US publicly traded company from free public sources (yfinance). Output structured JSON consumable by downstream financial skills (DCF modeling, comps analysis, earnings review). Handles market data (price, shares, beta), historical financials (income statement, cash flow, balance sheet), WACC inputs, and analyst estimates. Use when users request collect data for ticker, get financials for company, pull market data, gather DCF inputs, or any task requiring structured financial data before analysis. Also triggers on financial data, company data, stock data."
+disable-model-invocation: true
+description: >-
+  Collects real financial data for any US publicly traded company from free public sources
+  (yfinance) and outputs structured JSON for downstream skills (DCF modeling, comps analysis,
+  earnings review): market data, historical financials, WACC inputs, analyst estimates — never
+  fabricated fallback values. Use to collect or pull financial/market data, or gather DCF inputs,
+  for a ticker.
 ---
 
 # Financial Data Collector

@@ -1,6 +1,11 @@
 ---
 name: bilibili-source
-description: Fetch comprehensive, login-free data for any Bilibili (B站) video — title, UP name and follower count, publish date, partition, tags, per-part cids, live stats (view, like, coin, favorite, share, reply, danmaku), and full danmaku (bullet-comment) text. Use this skill whenever working with a Bilibili video and needing real, citable numbers or metadata — ingesting a Bilibili source into a knowledge base, analyzing why a video performed, verifying a creator's claimed metrics, building a case study, or any time a Bilibili view/like/favorite count is about to be written into a document — fetch it, never hand-type or estimate it. Accepts BVID, av numbers, b23.tv short links, or full URLs. Subtitles and favorites-folder (收藏夹) enumeration are also covered but require the user's Bilibili login.
+description: >-
+  Fetches real, citable Bilibili (B站) video data — stats, metadata, tags, and full danmaku text —
+  via login-free API calls, never hand-typed or estimated. Use when citing view/like/favorite
+  counts, analyzing why a video performed, or archiving a Bilibili source into a knowledge base.
+  Accepts BVID, av numbers, b23.tv links, or full URLs; subtitles and 收藏夹 (favorites) enumeration
+  need the user's Bilibili login.
 ---
 
 # bilibili-source

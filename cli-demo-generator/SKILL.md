@@ -1,6 +1,10 @@
 ---
 name: cli-demo-generator
-description: Generates professional animated CLI demos as GIFs using VHS terminal recordings. Handles tape file creation, self-bootstrapping demos with hidden setup, output noise filtering, post-processing speed-up, and frame-level verification. Use when users want to create terminal demos, record CLI workflows as GIFs, generate animated documentation, build demo tapes for README files, or need to showcase any command-line tool visually. Also triggers on "record terminal", "VHS tape", "demo GIF", "animate my CLI", or any request to visually demonstrate shell commands.
+description: >-
+  Generates professional animated CLI demos as GIFs using VHS terminal recordings. Use to create
+  terminal demos, record CLI workflows as GIFs, generate animated documentation, build demo tapes
+  for README files, or showcase any command-line tool visually: record terminal / VHS tape / demo
+  GIF / animate my CLI.
 ---
 
 # CLI Demo Generator

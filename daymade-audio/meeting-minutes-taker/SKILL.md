@@ -1,16 +1,12 @@
 ---
 name: meeting-minutes-taker
-description: >
-  Transforms raw meeting transcripts into high-fidelity, structured meeting minutes
-  (notes / summaries). Use when (1) a meeting transcript is provided and meeting
-  minutes, notes, or a summary are requested; (2) multiple versions of minutes must be
-  merged without losing content; (3) existing minutes need review against the original
-  transcript for missing items; (4) the transcript has anonymous speakers like
-  "Speaker 1/2/3" or "发言人1" that need identifying (optionally mapped via a context.md
-  team directory). Triggers on 会议纪要 / 会议记录 / 整理纪要 / 妙记转纪要, "write meeting
-  minutes", "summarize this meeting", "merge these minutes", "what's missing from these
-  notes". For fixing ASR/STT recognition errors in the raw transcript first, use
-  transcript-fixer; this skill structures clean transcripts into minutes.
+disable-model-invocation: true
+description: >-
+  Transforms raw meeting transcripts into structured, evidence-based meeting minutes — merges
+  multiple versions without losing content, reviews existing minutes against the transcript for
+  missing items, and identifies anonymous speakers (Speaker 1/2/3, 发言人1). Triggers on 会议纪要, 会议记录,
+  整理纪要, 妙记转纪要, "write meeting minutes", "merge these minutes". Not for fixing ASR/STT errors first
+  (use transcript-fixer).
 ---
 
 # Meeting Minutes Taker

@@ -1,14 +1,10 @@
 ---
 name: read-codex-history
 description: >-
-  Reads, searches, and exports local OpenAI Codex history without continuing the
-  old task. Lists recent Codex sessions, extracts exact prompt-ledger inputs by
-  Session, locates a rollout by verified session_meta identity, reconstructs one
-  chronological user/assistant timeline with fork and compaction lineage, and
-  performs bounded keyword search across live and archived rollouts. Use whenever
-  the user asks what they told Codex, wants recent original inputs, a Codex Session
-  ID, full prior context, fork ancestry, or evidence of what a Codex run did. For
-  Claude Code history use read-claude-code-history.
+  Reads, searches and exports local OpenAI Codex history without continuing work: session inventory,
+  timelines, verbatim user input, indexed search, and rollout identity/fork lineage. Use when the
+  user asks what they told Codex, wants a Session ID, or evidence of what a run did. Not for Claude
+  Code (use read-claude-code-history); with no platform named, start at local-conversation-history.
 argument-hint: "[session-id | keywords | workspace-path]"
 ---
 
@@ -24,7 +20,7 @@ to `daymade-claude-code:continue-codex-work`.
 |---|---|---|
 | `<codex-home>/history.jsonl` | What the user submitted, keyed by Session ID and internal epoch timestamp | Exact recent user-input tables |
 | `state_*.sqlite` | Inventory metadata such as cwd, title, update time, and rollout path | Fast listing and candidate discovery |
-| `sessions/**/rollout-*.jsonl` and `archived_sessions/**` | Full user/assistant/tool/compaction/fork event stream | Session evidence, lineage, behavior audit, and keyword search |
+| `sessions/**/rollout-*.jsonl` and `archived_sessions/**` | Full user/assistant/tool/compaction/fork event stream | Exact-session evidence and keyword verification after indexed or physical preselection |
 
 Do not substitute one surface for another. A prompt-ledger row proves what was
 submitted, not what the Agent answered. A state DB path is only a candidate until
@@ -41,14 +37,14 @@ interpreting fork snapshots, compaction, event streams, or end reasons.
 
 | User wants | Use |
 |---|---|
-| Recent Codex sessions, titles, IDs, or positive writer-lock evidence | `scripts/list_local_history.py --source codex` |
+| Recent Codex sessions, titles, IDs, or positive writer-lock evidence | `scripts/list_local_history.py --source codex --index-only`; an unavailable index leaves inventory unknown |
 | Find the Session containing a pasted quote, with a known project, date, or title clue | **Locate a quoted exchange** below: inventory candidates, then verify the original messages |
 | Exact recent user inputs from newest to oldest, grouped by Session | `scripts/list_codex_user_inputs.py` |
 | Whole-conversation original-input counts and quotations, including inherited history | `scripts/reconcile_codex_inputs.py --session <ID>` |
 | Locate one exact rollout by internal identity | `scripts/analyze_sessions.py locate-codex <ID>` |
 | Reconstruct one Session and its declared parent snapshots | `scripts/read_codex_session.py --session <ID>` |
-| Search full rollout events by keyword | `scripts/analyze_sessions.py search --codex-only` |
-| Content remembered but whose wording drifted, with no session ID, date, or project to bound it | The external `claude-flow-viewer` full-text index — **Cross-provider content recall** below |
+| Find a rollout containing a topic or phrase | `read-claude-code-history/scripts/history_index.py recall --provider codex`, then verify the exact rollout |
+| Content remembered but whose wording drifted | The same indexed recall in hybrid mode, if vectors are complete |
 | Continue after evidence is complete | Stop reading and invoke `daymade-claude-code:continue-codex-work` |
 
 The requested output wins over the motivation. “Show my recent original inputs”
@@ -74,7 +70,7 @@ SQLite, Node, `jq`, or recursive grep.
 
 ```text
 <skill-dir>/scripts/list_local_history.py \
-  --source codex --cwd <workspace> --limit 20 --language zh
+  --source codex --index-only --cwd <workspace> --limit 20 --language zh
 ```
 
 Writer-lock output is positive-only: a held lock proves that exact advisory lock
@@ -90,7 +86,7 @@ these clues already bound discovery.
 
 ```text
 <skill-dir>/scripts/list_local_history.py \
-  --source codex --cwd <workspace> --include-archived \
+  --source codex --index-only --cwd <workspace> --include-archived \
   --from-date <YYYY-MM-DD> --to-date <YYYY-MM-DD> --limit 20
 <skill-dir>/scripts/read_codex_session.py --session <CANDIDATE_ID> --full
 ```
@@ -112,9 +108,8 @@ lookup does not require reading unrelated history or continuing the old task.
 Stop once the quote and identity are verified; return the ID and source coordinate.
 If a candidate misses, try the remaining plausible candidates. A truncated listing,
 missing timestamps, an unavailable inventory, or no matching candidate is not
-absence: expand the inventory limit/scope or use **Bounded full-event search**
-with the supplied clues and current-Session exclusion. If no useful clue exists,
-use the existing search/recall routes directly.
+absence: refine indexed recall and state its coverage. Do not fall back to raw
+corpus search.
 
 ### Exact original inputs
 
@@ -169,34 +164,27 @@ existing headings or exact record coordinates, keep coverage against the recorde
 count, and report every unread range as a gap. Do not rerun the reader with different
 truncation and fuse the outputs into a complete-looking chronology.
 
-### Bounded full-event search
+### Indexed content search
 
-Codex searches include native `event_msg/item_completed` command output as
-`tool_result:CommandExecution`. Stream output takes precedence over duplicate
-aggregate/formatted views. Matching item/call ID plus exact text deduplicates
-repeated results; equal output from different command IDs remains separate.
-User/assistant event mirrors continue to be excluded. Wrappers with unrelated
-IDs cannot be assumed to be mirrors merely because their text overlaps.
+The index returns candidates from stored prose. Read the exact rollout to check
+tool outputs, thinking, compaction, and the speaker of a quoted line.
 
 ```text
-<skill-dir>/scripts/analyze_sessions.py search \
-  --codex-only --all-projects --exclude-session <CURRENT_ID> \
-  --from-date <YYYY-MM-DD> --to-date <YYYY-MM-DD> \
-  '<keyword-1>' '<keyword-2>'
+<read-claude-code-history-dir>/scripts/history_index.py status
+<read-claude-code-history-dir>/scripts/history_index.py recall '<keyword>' \
+  --mode bm25 --provider codex --exclude-session <CURRENT_ID>
 ```
 
-Start with exact ID, project, date, or known asset names. Broad scans have a stop-loss
-and must fail visibly rather than present partial results as complete. The exact-ID
-locator is seconds cheaper than a corpus scan.
+Start with an exact ID, known date, or indexed content lead. Verify candidate
+rollouts by their `session_meta.id`. A timeout and the old `--from-date` filter
+do not prevent the raw command from reading every rollout; that command now
+rejects live sources.
 
-### Cross-provider content recall (external full-text index)
+### Alternative indexed full-text lookup
 
-`scripts/analyze_sessions.py search` remains the authoritative bounded scan of Codex
-rollouts. A separate local index at `~/.claude-flow-viewer/search.sqlite` answers the
-different question — "we discussed something once and I no longer remember how it was
-worded" — in about a second across Codex, Claude, and CherryStudio sessions. Use it to
-find a session, then verify that session with the readers above. It is a discovery
-layer that returns leads, never evidence: a hit names a session you still have to open.
+The separate `~/.claude-flow-viewer/search.sqlite` FTS index can also locate
+candidate sessions. Check its provider coverage and freshness before using it,
+then verify each hit with the exact-session reader. A hit is a lead, not evidence.
 
 ```bash
 sqlite3 ~/.claude-flow-viewer/search.sqlite "
@@ -260,7 +248,7 @@ negative result.
 - Do not load multi-megabyte rollouts directly into context; use the bundled reader.
 - Do not infer Session state or ownership from process names, cwd, or writer-lock absence.
 - Keep raw history local unless the user explicitly asks to share it.
-- Do not read a zero-row hit from the `claude-flow-viewer` index as "the conversation never happened": it cannot see a paraphrase, cannot see sessions past `last_indexed_at`, and finds a Chinese phrase only when it aligns with a whole token run. Confirm an absence claim with the bounded rollout search or the hybrid recall index in `read-claude-code-history`, and say which one you ran.
+- Do not read a zero-row hit from either index as "the conversation never happened": check provider scope and freshness, and report unindexed records as unknown. Verify positive leads with exact rollout reads.
 
 ## Router and legacy compatibility
 

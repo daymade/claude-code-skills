@@ -1,14 +1,11 @@
 ---
 name: marketplace-health-check
 description: >-
-  Run a full 6-dimension health check of this Claude Code skills marketplace repo — code/script
-  safety, documentation/SSOT consistency, security/PII leaks, open-PR triage, open-issue triage,
-  and marketplace-manifest integrity — via a parallel fan-out Dynamic Workflow, then verify the
-  serious findings and report them by priority. Use this whenever the user asks to check the repo,
-  run a health check, do a full sweep/audit before a release, 全面体检, 检查仓库状态, 看看仓库健康吗,
-  审计一下仓库, or asks whether the PRs / issues / docs / versions / PII are in good shape across the
-  board — even if they never say the word "workflow". Reach for it for any broad "is this whole repo
-  OK" request, not just one-file checks.
+  Runs a 6-dimension evidence-based health audit of this skills marketplace repo — code safety,
+  docs/SSOT, security/PII, PR/issue triage, manifest integrity — via a parallel workflow, then
+  verifies findings by priority. Use for 全面体检 / 检查仓库状态 / 审计一下仓库, a pre-release sweep, or "is this
+  repo OK" even without saying "workflow". Not for building marketplace.json (use marketplace-dev)
+  or cache drift (use skill-governance).
 ---
 
 # Marketplace Health Check

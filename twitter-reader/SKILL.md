@@ -1,6 +1,10 @@
 ---
 name: twitter-reader
-description: Fetch Twitter/X post content including long-form Articles with full images and metadata. Use when Claude needs to retrieve tweet/article content, author info, engagement metrics, and embedded media. Supports individual posts and X Articles (long-form content). Automatically downloads all images to local attachments folder and generates complete Markdown with proper image references. Preferred over Jina for X Articles with images.
+description: >-
+  Fetches Twitter/X post and Article content — text, author, engagement metrics and embedded media —
+  downloading images locally and generating complete Markdown with image references. Use when
+  retrieving a tweet's text or an X Article with images, or pulling post metadata for a Markdown/PKM
+  record. Preferred over Jina alone for X Articles with images.
 ---
 
 # Twitter Reader

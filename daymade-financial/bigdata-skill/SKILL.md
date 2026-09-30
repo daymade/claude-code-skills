@@ -1,14 +1,12 @@
 ---
 name: bigdata-skill
+disable-model-invocation: true
 description: >-
-  Pull Bigdata.com (RavenPack) financial and news data via the official
-  `bigdata-client` SDK and `/v1/*` REST endpoints — structured financials,
-  prices, analyst estimates, daily entity-sentiment series, annotated chunk
-  search, screener — when the Bigdata MCP returns only pre-synthesized tearsheets
-  but you need the machine-readable substrate. Use when the user mentions
-  Bigdata.com, RavenPack, a `bd_v2_` key, the bigdata MCP, rp_entity_id,
-  chunk/query_unit cost, or wants structured financials, fundamentals, prices,
-  sentiment, or annotated news.
+  Pulls Bigdata.com (RavenPack) financial and news data via the official bigdata-client SDK and
+  /v1/* REST endpoints — structured financials, prices, analyst estimates, entity-sentiment series,
+  annotated chunk search, screener. Use when the Bigdata MCP's tearsheets/search feel thin and you
+  need the machine-readable substrate: mentions of Bigdata.com, RavenPack, a bd_v2_ key,
+  rp_entity_id, or chunk/query_unit cost.
 ---
 
 # Bigdata.com SDK + REST Toolkit

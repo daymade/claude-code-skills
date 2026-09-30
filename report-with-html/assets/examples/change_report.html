@@ -1,0 +1,334 @@
+<meta charset="utf-8">
+<title>report-with-html 优化 v2 · 全几何</title>
+<style>
+  :root{
+    --paper:#FBF9F4; --paper-2:#F4EFE4; --card:#FFFFFF;
+    --ink:#211D17; --ink-2:#5B5349; --ink-3:#8A8073;
+    --line:#E7DFCF; --line-2:#D8CDB6;
+    --red:#A62B1F; --red-bg:#FBEDEA; --red-soft:#C4634F;
+    --gold:#8A6D3B; --gold-bg:#F6EFDF;
+    --green:#3F6B4A; --green-bg:#E9F0E9;
+    --blue:#33566E; --blue-bg:#E7EEF2;
+    --track:#EDEAE0; --dead:#C9C0AE;
+    --serif:"Songti SC","STSong","Source Han Serif SC","Noto Serif CJK SC",Georgia,serif;
+    --sans:"PingFang SC","Hiragino Sans GB","Source Han Sans SC","Noto Sans CJK SC",sans-serif;
+    --mono:"SF Mono","JetBrains Mono","Menlo",ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:13.5px;line-height:1.55;
+    -webkit-font-smoothing:antialiased;padding:42px 40px 38px}
+  .wrap{max-width:1180px;margin:0 auto}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  /* masthead */
+  .mast{position:relative;border-bottom:2px solid var(--ink);padding-bottom:15px;margin-bottom:22px}
+  .kick{font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--red);font-weight:600}
+  h1{font-family:var(--serif);font-size:31px;font-weight:700;margin:7px 0 5px;line-height:1.16}
+  .sub{color:var(--ink-2);font-size:13.5px;max-width:720px}
+  .seal{position:absolute;right:0;top:0;width:82px;height:82px;border:2px solid var(--red);border-radius:9px;
+    transform:rotate(-8deg);color:var(--red);font-family:var(--serif);display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;background:var(--red-bg);opacity:.94}
+  .seal .s1{font-size:10.5px;font-weight:600;letter-spacing:.05em}
+  .seal .s2{font-family:var(--mono);font-size:23px;font-weight:700;line-height:1.05;margin:1px 0}
+  .seal .s3{font-size:10.5px;font-weight:600;color:var(--gold)}
+  /* number strip */
+  .strip{display:grid;grid-template-columns:repeat(6,1fr);border:1px solid var(--line);border-radius:9px;
+    overflow:hidden;margin-bottom:26px;background:var(--card)}
+  .stat{padding:13px 14px;border-right:1px solid var(--line)}
+  .stat:last-child{border-right:0}
+  .stat .n{font-family:var(--mono);font-size:23px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+  .stat .n.ok{color:var(--green)} .stat .n.hot{color:var(--red)} .stat .n.wait{color:var(--gold)}
+  .stat .l{font-size:11px;color:var(--ink-3);margin-top:2px;line-height:1.3}
+  /* section head */
+  section{margin:26px 0}
+  .h{display:flex;align-items:baseline;gap:10px;margin-bottom:12px}
+  .h .num{font-family:var(--serif);font-size:14px;font-weight:700;color:var(--red);border:1.5px solid var(--red);
+    width:23px;height:23px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:0 0 auto;transform:translateY(3px)}
+  .h h2{font-family:var(--serif);font-size:18.5px;font-weight:700}
+  .h .lead{color:var(--ink-3);font-size:12px;margin-left:auto;max-width:440px;text-align:right;line-height:1.4}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+  .note{font-size:11.5px;color:var(--ink-2);margin-top:10px;line-height:1.45}
+  .note b{color:var(--ink)}
+  .rev{border-left:2.5px solid var(--gold);background:var(--gold-bg);padding:8px 12px;border-radius:0 5px 5px 0;font-size:11.5px;color:var(--ink-2);margin-top:11px;line-height:1.45}
+  .rev b{color:var(--ink)}
+
+  /* ===== ② pipeline broken link ===== */
+  .pipe{display:flex;align-items:center;gap:0}
+  .pnode{flex:1;border:1px solid var(--line);border-radius:8px;padding:9px 6px;text-align:center;background:var(--card);position:relative}
+  .pnode .pn{font-family:var(--mono);font-size:11.5px;font-weight:600;color:var(--ink);line-height:1.25}
+  .pnode .pd{font-size:9.5px;color:var(--ink-3);margin-top:2px}
+  .pnode.dead{background:repeating-linear-gradient(45deg,#EEE9DD,#EEE9DD 5px,#F6F2E8 5px,#F6F2E8 10px);
+    border-style:dashed;border-color:var(--dead);color:var(--ink-3);opacity:.72}
+  .pnode.dead .pn{color:var(--ink-3)}
+  .pnode.green{background:var(--green-bg);border-color:#BFD3BF}
+  .pnode.amber{background:var(--gold-bg);border-color:#DFCB9A}
+  .lnk{flex:0 0 46px;height:2px;background:var(--green);position:relative}
+  .lnk.solid{background:var(--green)}
+  .lnk.dot{background:transparent;border-top:2px dashed var(--dead)}
+  .lnk.broken{flex:0 0 46px;background:transparent;display:flex;align-items:center;justify-content:center;position:relative}
+  .lnk.broken::before{content:"";position:absolute;left:0;top:50%;width:14px;height:2px;background:var(--red)}
+  .lnk.broken::after{content:"";position:absolute;right:0;top:50%;width:14px;height:2px;background:var(--red)}
+  .lnk.broken .x{color:var(--red);font-weight:700;font-size:15px;font-family:var(--mono);z-index:1;background:var(--paper);padding:0 1px}
+  .lnk .cap{position:absolute;top:-17px;left:50%;transform:translateX(-50%);white-space:nowrap;font-family:var(--mono);
+    font-size:9.5px;font-weight:600}
+  .rowlbl{width:52px;flex:0 0 52px;font-family:var(--serif);font-weight:700;font-size:12px;color:var(--ink-2);text-align:right;padding-right:10px}
+  .piperow{display:flex;align-items:center;margin:6px 0}
+  .deadband{margin:2px 0 0 62px;font-size:10.5px;color:var(--red);font-family:var(--mono)}
+
+  /* ===== ③ gate intensity bars ===== */
+  .gbar{display:grid;grid-template-columns:118px 1fr 128px;gap:12px;align-items:center;margin:9px 0}
+  .gbar .gl{font-size:12.5px}.gbar .gl b{font-family:var(--serif);font-weight:700}
+  .gtrack{height:17px;background:var(--track);border-radius:3px;overflow:hidden;position:relative}
+  .gfill{height:100%;border-radius:3px}
+  .gfill.red{background:var(--red)} .gfill.gold{background:var(--gold)} .gfill.blue{background:var(--blue)}
+  .gtrack.empty::after{content:"无改动 · 稳定";position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:10px;color:var(--ink-3);font-family:var(--mono)}
+  .gbar .gr{font-size:11px;color:var(--ink-3);line-height:1.3}.gbar .gr b{color:var(--ink);font-family:var(--mono)}
+
+  /* ===== ④ confluence ===== */
+  .conf{display:grid;grid-template-columns:340px 1fr 250px;gap:0;align-items:center}
+  .pools{display:flex;flex-direction:column;gap:12px}
+  .pool{border:1px solid var(--line);border-radius:8px;padding:9px 11px;background:var(--card)}
+  .pool .pt{font-size:11px;color:var(--ink-2);margin-bottom:7px;display:flex;justify-content:space-between}
+  .pool .pt b{font-family:var(--serif);color:var(--ink)} .pool .pt .cnt{font-family:var(--mono);font-weight:600}
+  .fbar{display:grid;grid-template-columns:78px 1fr 26px;gap:7px;align-items:center;margin:4px 0}
+  .fbar .fl{font-size:10.5px;color:var(--ink-2);text-align:right}
+  .ftrack{height:11px;background:var(--track);border-radius:2px;overflow:hidden}
+  .ffill{height:100%;border-radius:2px}
+  .fbar .fn{font-family:var(--mono);font-size:10px;font-weight:600;color:var(--red)}
+  .src1 .fbar .fl{color:var(--ink-2)}
+  .confsvg{height:210px;position:relative}
+  .confsvg svg{width:100%;height:100%;display:block}
+  .changes{border:1px solid var(--line);border-radius:8px;background:var(--green-bg);padding:9px 11px}
+  .changes .ct{font-family:var(--serif);font-weight:700;font-size:12px;color:var(--green);margin-bottom:5px;text-align:center}
+  .changes ol{list-style:none;counter-reset:c}
+  .changes li{counter-increment:c;font-size:10.5px;color:var(--ink);padding:2.5px 0 2.5px 18px;position:relative;border-bottom:1px dashed #D9E2D6;line-height:1.35}
+  .changes li:last-child{border-bottom:0}
+  .changes li::before{content:counter(c);position:absolute;left:0;top:2.5px;font-family:var(--mono);font-size:9px;font-weight:700;color:var(--green);background:var(--card);border:1px solid #BFD3BF;width:13px;height:13px;border-radius:50%;text-align:center;line-height:12px}
+
+  /* ===== ⑤ SSOT convergence ===== */
+  .ssrow{display:grid;grid-template-columns:96px 1fr 34px 200px;gap:12px;align-items:center;margin:12px 0;padding:10px 0;border-bottom:1px dashed var(--line)}
+  .ssrow:last-child{border-bottom:0}
+  .ssrow .sk{font-family:var(--mono);font-size:12px;font-weight:600}
+  .ssrow .sk s{display:block;font-family:var(--sans);font-size:10px;color:var(--red);font-weight:400;margin-top:2px}
+  .copies{display:flex;flex-direction:column;gap:4px}
+  .copy{height:13px;background:var(--gold-bg);border:1px solid #DFCB9A;border-radius:3px;display:flex;align-items:center;padding-left:7px;font-size:9px;color:var(--gold);font-family:var(--mono)}
+  .ss-arrow{text-align:center;color:var(--ink-3);font-size:19px;font-family:var(--mono)}
+  .ssout{display:flex;flex-direction:column;gap:4px}
+  .ssot{height:15px;background:var(--green-bg);border:1px solid #BFD3BF;border-radius:3px;display:flex;align-items:center;padding-left:8px;font-size:9.5px;color:var(--green);font-family:var(--mono);font-weight:600}
+  .ptr{height:11px;border:1px dashed var(--line-2);border-radius:3px;display:flex;align-items:center;padding-left:8px;font-size:8.5px;color:var(--ink-3);font-family:var(--mono)}
+
+  /* ===== ⑥ tree + heat ===== */
+  .tree{font-family:var(--mono);font-size:12px}
+  .troot{font-weight:600;color:var(--ink);margin-bottom:5px}
+  .tbranch{display:grid;grid-template-columns:230px 15px 1fr 70px;gap:8px;align-items:center;padding:3.5px 0;color:var(--ink-2)}
+  .tbranch .tb{padding-left:14px;position:relative}
+  .tbranch .tb::before{content:"└";position:absolute;left:0;color:var(--line-2)}
+  .dot{width:11px;height:11px;border-radius:50%;justify-self:center}
+  .dot.red{background:var(--red)} .dot.gold{background:var(--gold)} .dot.grey{background:var(--line-2)}
+  .tbranch .tw{font-size:10.5px;color:var(--ink-3);font-family:var(--sans)}
+  .tbranch .tc{font-family:var(--mono);font-size:10px;color:var(--ink-3);text-align:right}
+
+  /* ===== ⑦ progress track ===== */
+  .prog{position:relative;display:flex;height:44px;border-radius:8px;overflow:hidden;border:1px solid var(--line);margin-top:6px}
+  .pseg{display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;font-weight:600;text-align:center;line-height:1.2;border-right:1px solid rgba(255,255,255,.5)}
+  .pseg .pi{font-family:var(--mono);font-size:9px;font-weight:400;margin-top:1px}
+  .pseg.done{background:var(--green-bg);color:var(--green)}
+  .pseg.wait{background:var(--gold-bg);color:var(--gold)}
+  .pseg.opt{background:transparent;border:1px dashed var(--line-2);color:var(--ink-3)}
+  .youare{position:absolute;top:-6px;bottom:-6px;width:2px;background:var(--red);z-index:3}
+  .youare .yl{position:absolute;top:-16px;left:50%;transform:translateX(-50%);white-space:nowrap;font-family:var(--mono);font-size:9.5px;font-weight:600;color:var(--red)}
+  .cmds{margin-top:24px;font-family:var(--mono);font-size:11px;color:var(--ink-2)}
+  .cmds code{background:var(--paper-2);padding:2px 7px;border-radius:4px;color:var(--ink);margin-right:8px;display:inline-block;margin-top:4px}
+
+  .foot{margin-top:28px;border-top:1px solid var(--line);padding-top:12px;display:flex;justify-content:space-between;font-size:10.5px;color:var(--ink-3);font-family:var(--mono)}
+  .foot .hon{color:var(--gold)}
+</style>
+<div class="wrap">
+
+  <div class="mast">
+    <div class="kick">skill-creator · 上线复盘 · 全几何重画</div>
+    <h1>report-with-html —— 接通一条断掉的加载链路</h1>
+    <div class="sub">按 Cleveland 图形感知 + preattentive 原理重画：量全部编成长度/位置/填充，颜色只表类别与阈值。遮住所有文字，光看形状应能读出：改动集中在闸0/闸2、链路曾在第 2 环断、4 份副本并成 1 源、进度卡在未激活。</div>
+    <div class="seal"><span class="s1">已注册</span><span class="s2">56</span><span class="s3">未激活</span></div>
+  </div>
+
+  <div class="strip">
+    <div class="stat"><div class="n ok">56</div><div class="l">marketplace<br>已在册 ✓</div></div>
+    <div class="stat"><div class="n">4→3</div><div class="l">闸门<br>动了 3 道</div></div>
+    <div class="stat"><div class="n">2</div><div class="l">证据链<br>审查+考古</div></div>
+    <div class="stat"><div class="n">15→7</div><div class="l">教训→改动<br>过滤后</div></div>
+    <div class="stat"><div class="n hot">6→2</div><div class="l">副本→SSOT<br>双重去重</div></div>
+    <div class="stat"><div class="n wait">待提交</div><div class="l">上线卡在<br>commit</div></div>
+  </div>
+
+  <!-- ② HERO pipeline -->
+  <section>
+    <div class="h"><div class="num">2</div><h2>加载链路 · 一个没注册的环让整套 skill 加载不到</h2>
+      <div class="lead">承重环只有一个：注册。断了，源仓里全部优化都到不了 session。</div></div>
+    <div class="panel">
+      <div class="piperow">
+        <div class="rowlbl">注册前</div>
+        <div class="pnode"><div class="pn">源仓</div><div class="pd">7改动·5refs</div></div>
+        <div class="lnk broken"><span class="cap" style="color:var(--red)">✗ 未注册</span><span class="x">✗</span></div>
+        <div class="pnode dead"><div class="pn">marketplace<br>条目</div><div class="pd">缺席</div></div>
+        <div class="lnk dot"></div>
+        <div class="pnode dead"><div class="pn">plugins<br>cache</div><div class="pd">—</div></div>
+        <div class="lnk dot"></div>
+        <div class="pnode dead"><div class="pn">新 session<br>加载</div><div class="pd">—</div></div>
+      </div>
+      <div class="deadband">▚▚ 斜纹死段：源仓一格都点不亮 = 整套 skill 是死的</div>
+      <div class="piperow" style="margin-top:16px">
+        <div class="rowlbl">注册后</div>
+        <div class="pnode green"><div class="pn">源仓</div><div class="pd">7改动·5refs</div></div>
+        <div class="lnk solid"><span class="cap" style="color:var(--green)">● 已注册 56 ✓</span></div>
+        <div class="pnode green"><div class="pn">marketplace<br>条目</div><div class="pd">validate ✓</div></div>
+        <div class="lnk solid"></div>
+        <div class="pnode green"><div class="pn">plugins<br>cache</div><div class="pd">待拷入</div></div>
+        <div class="lnk solid"></div>
+        <div class="pnode amber"><div class="pn">新 session<br>加载 ⧗</div><div class="pd">待激活</div></div>
+      </div>
+      <div class="rev"><b>形状读出：</b>上排断口 + 下游斜纹全灭 = 改动量再大也点不亮；下排焊通，但末节点仍是琥珀——接到 cache 了，进 live 还差一跳（呼应 ⑦）。</div>
+    </div>
+  </section>
+
+  <!-- ③ gate intensity -->
+  <section>
+    <div class="h"><div class="num">3</div><h2>本次改动量 · 落在哪道闸</h2>
+      <div class="lead">条长 = 改动量。闸1 是空轨（本身就是信息：骨架成熟未动）。</div></div>
+    <div class="panel">
+      <div class="gbar"><div class="gl"><b>闸0</b> 内容先行</div><div class="gtrack"><div class="gfill red" style="width:100%"></div></div><div class="gr"><b>大</b> +受众落地 §9</div></div>
+      <div class="gbar"><div class="gl"><b>闸1</b> 骨架即系统</div><div class="gtrack empty"></div><div class="gr"><b>无</b> 稳定·未动</div></div>
+      <div class="gbar"><div class="gl"><b>闸2</b> 一切可视化</div><div class="gtrack"><div class="gfill blue" style="width:58%"></div></div><div class="gr"><b>中</b> +几何货架·遮字测试</div></div>
+      <div class="gbar"><div class="gl"><b>闸3</b> register+自验</div><div class="gtrack"><div class="gfill gold" style="width:24%"></div></div><div class="gr"><b>小</b> register 正名</div></div>
+      <div class="rev"><b>形状读出：</b>改动扎堆在闸0（内容/受众），闸1 全空，闸3 最短——<b>承重看位置不看长度</b>：闸3 那根最短的，正是它接活了 ② 的断口。</div>
+    </div>
+  </section>
+
+  <!-- ④ confluence -->
+  <section>
+    <div class="h"><div class="num">4</div><h2>两条证据链 · 汇成 7 项改动</h2>
+      <div class="lead">池高 ∝ 条数、频次 ∝ 条长。信号主要来自更高的考古池。</div></div>
+    <div class="panel">
+      <div class="conf">
+        <div class="pools">
+          <div class="pool src1" style="height:52px">
+            <div class="pt"><b>源① agent 质量审查</b><span class="cnt">3</span></div>
+            <div class="fbar"><div class="fl">SSOT 双写</div><div class="ftrack"><div class="ffill" style="width:100%;background:var(--red)"></div></div><div class="fn">🔴</div></div>
+          </div>
+          <div class="pool src2">
+            <div class="pt"><b>源② 90 session 考古</b><span class="cnt">12</span></div>
+            <div class="fbar"><div class="fl">受众落地</div><div class="ftrack"><div class="ffill" style="width:100%;background:var(--gold)"></div></div><div class="fn">×9</div></div>
+            <div class="fbar"><div class="fl">先对齐意图</div><div class="ftrack"><div class="ffill" style="width:89%;background:var(--gold)"></div></div><div class="fn">×8</div></div>
+            <div class="fbar"><div class="fl">为转述人</div><div class="ftrack"><div class="ffill" style="width:44%;background:var(--gold)"></div></div><div class="fn">×4</div></div>
+            <div class="fbar"><div class="fl">表格纪律</div><div class="ftrack"><div class="ffill" style="width:44%;background:var(--gold)"></div></div><div class="fn">×4</div></div>
+            <div class="fbar"><div class="fl">相邻消歧</div><div class="ftrack"><div class="ffill" style="width:22%;background:var(--gold)"></div></div><div class="fn">×2</div></div>
+          </div>
+        </div>
+        <div class="confsvg">
+          <svg viewBox="0 0 260 210" preserveAspectRatio="none">
+            <path d="M0,42 C90,42 120,105 175,105" fill="none" stroke="#A62B1F" stroke-width="1.6" stroke-opacity=".55"/>
+            <path d="M0,150 C90,150 120,105 175,105" fill="none" stroke="#8A6D3B" stroke-width="3" stroke-opacity=".5"/>
+            <path d="M0,132 C80,132 120,105 175,105" fill="none" stroke="#8A6D3B" stroke-width="2" stroke-opacity=".4"/>
+            <circle cx="177" cy="105" r="9" fill="#FBF9F4" stroke="#211D17" stroke-width="1.3"/>
+            <text x="177" y="109" font-size="11" text-anchor="middle" font-family="Songti SC" fill="#211D17">汇</text>
+            <path d="M186,105 C210,105 220,40 260,40" fill="none" stroke="#3F6B4A" stroke-width="1" stroke-opacity=".5"/>
+            <path d="M186,105 C210,105 220,72 260,72" fill="none" stroke="#3F6B4A" stroke-width="1" stroke-opacity=".5"/>
+            <path d="M186,105 C214,105 220,105 260,105" fill="none" stroke="#3F6B4A" stroke-width="1" stroke-opacity=".5"/>
+            <path d="M186,105 C210,105 220,138 260,138" fill="none" stroke="#3F6B4A" stroke-width="1" stroke-opacity=".5"/>
+            <path d="M186,105 C210,105 220,170 260,170" fill="none" stroke="#3F6B4A" stroke-width="1" stroke-opacity=".5"/>
+          </svg>
+        </div>
+        <div class="changes">
+          <div class="ct">7 项已应用改动</div>
+          <ol>
+            <li>SSOT 去重 · DNA/slop 各归一</li>
+            <li>+原则 §9 受众落地</li>
+            <li>register 正名</li>
+            <li>description 前置动词+护栏</li>
+            <li>+表格空间纪律</li>
+            <li>+工作流 step0 先对齐</li>
+            <li>+相邻数字消歧</li>
+          </ol>
+        </div>
+      </div>
+      <div class="rev"><b>形状读出：</b>考古池比审查池高 4 倍、"受众落地"条最长——直接解释了 ③ 为何闸0 吃下最多改动（④频次 → ③分布，跨块自洽）。</div>
+    </div>
+  </section>
+
+  <!-- ⑤ SSOT convergence -->
+  <section>
+    <div class="h"><div class="num">5</div><h2>SSOT 去重 · 副本收敛成单一真相源</h2>
+      <div class="lead">左侧块数 = 副本数；AI-slop 那 4 块长短不齐 = 已漂移、各写各的。</div></div>
+    <div class="panel">
+      <div class="ssrow">
+        <div class="sk">六条 DNA<s>原 2 处</s></div>
+        <div class="copies">
+          <div class="copy" style="width:100%">文件 A · design-principles</div>
+          <div class="copy" style="width:100%">文件 B · approved-examples</div>
+        </div>
+        <div class="ss-arrow">▶</div>
+        <div class="ssout">
+          <div class="ssot" style="width:100%">1 SSOT · approved-examples</div>
+          <div class="ptr" style="width:70%">┈ 指针 ×1</div>
+        </div>
+      </div>
+      <div class="ssrow">
+        <div class="sk">AI-slop 签名<s>原 4 处·已漂</s></div>
+        <div class="copies">
+          <div class="copy" style="width:100%">处1</div>
+          <div class="copy" style="width:62%">处2 · 少收录深色</div>
+          <div class="copy" style="width:120%;max-width:100%">处3</div>
+          <div class="copy" style="width:78%">处4 · 少 emoji</div>
+        </div>
+        <div class="ss-arrow">▶</div>
+        <div class="ssout">
+          <div class="ssot" style="width:100%">1 SSOT · design-principles</div>
+          <div class="ptr" style="width:80%">┈ 指针 ×3</div>
+        </div>
+      </div>
+      <div class="rev"><b>形状读出：</b>左侧 4 块不等长 = 4 份"AI 味定义"已经互相矛盾；收敛成 1 实心源 + 空心指针。<b>skill 把自己教的 SSOT 原则用在了自己身上。</b></div>
+    </div>
+  </section>
+
+  <!-- ⑥ tree + heat -->
+  <section>
+    <div class="h"><div class="num">6</div><h2>资产结构 · 改动热度落在哪枝</h2>
+      <div class="lead">热度点：红=大改 / 金=小改 / 灰=未动。红金扎堆在内容·语料层。</div></div>
+    <div class="panel">
+      <div class="tree">
+        <div class="troot">report-with-html/</div>
+        <div class="tbranch"><div class="tb">design-principles.md</div><div class="dot red"></div><div class="tw">+地基理论·遮字测试·§9</div><div class="tc">9 原则</div></div>
+        <div class="tbranch"><div class="tb">approved-examples.md</div><div class="dot red"></div><div class="tw">DNA 收敛点（见⑤）</div><div class="tc">7 语料</div></div>
+        <div class="tbranch"><div class="tb">visualization-patterns.md</div><div class="dot gold"></div><div class="tw">+抽象几何货架·表格纪律</div><div class="tc">—</div></div>
+        <div class="tbranch"><div class="tb">assets/（模板+2副本）</div><div class="dot gold"></div><div class="tw">register 正名</div><div class="tc">2 副本</div></div>
+        <div class="tbranch"><div class="tb">scripts/render_report.sh</div><div class="dot grey"></div><div class="tw">+长页裁切提示</div><div class="tc">—</div></div>
+      </div>
+      <div class="rev"><b>形状读出：</b>两颗红点都在内容/语料层——第三次印证"内容层是主战场"（③闸0 / ④受众落地 / ⑥红点，三块同指）。</div>
+    </div>
+  </section>
+
+  <!-- ⑦ progress track -->
+  <section>
+    <div class="h"><div class="num">7</div><h2>上线进度 · 诚实四则</h2>
+      <div class="lead">段填充=完成态。绿到"已注册"就停，红线（live）未过。</div></div>
+    <div class="panel">
+      <div class="prog">
+        <div class="pseg done" style="width:22%">改动已应用<span class="pi">✓</span></div>
+        <div class="pseg done" style="width:26%">已注册·validate<span class="pi">✓ 56</span></div>
+        <div class="youare" style="left:48%"><span class="yl">你在这里 · live 未过</span></div>
+        <div class="pseg wait" style="width:20%">激活<span class="pi">⧗ 2 命令</span></div>
+        <div class="pseg wait" style="width:19%">提交<span class="pi">⧗ commit gate</span></div>
+        <div class="pseg opt" style="width:13%">触发实测<span class="pi">○ 可选</span></div>
+      </div>
+      <div class="cmds">激活（本地路径 marketplace，不用先 commit）：
+        <br><code>claude plugin marketplace update daymade-skills-pro</code><code>claude plugin install report-with-html@daymade-skills-pro</code>
+      </div>
+      <div class="rev"><b>形状读出：</b>绿色填到"已注册"戛然而止、后面全是琥珀——报头印章、②末节点、⑦进度条三处同一诚实：<b>进了目录 ≠ 已 live，还差 2 命令 + 1 commit。</b></div>
+    </div>
+  </section>
+
+  <div class="foot">
+    <span>SSOT · report-with-html/SKILL.md + references/ · 事实源=本对话 tool 输出 · 理论=Cleveland 1984 / Bertin / preattentive / Munzner</span>
+    <span class="hon">诚实注：已注册 · 未激活 · 未提交</span>
+  </div>
+
+</div>

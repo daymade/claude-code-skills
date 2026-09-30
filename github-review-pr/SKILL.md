@@ -1,7 +1,11 @@
 ---
 name: github-review-pr
 description: >-
-  Reviews or re-reviews one contributor pull request—including an explicitly named closed PR being reconsidered—or a bounded newest-to-oldest sweep of all open contributor PRs, for a GitHub repository maintainer against the current base branch. Handles base drift, history discontinuities, polluted branches, ownership, curation, supersession, and review-conditioned repair or landing using immutable Git snapshots, three-way merge results, isolated contribution projection, checks, tests, and findings-first reporting. Use for a PR URL or number, "main changed, review again", "review all open PRs newest to oldest", "apply our maintainer principles", "can we merge this and fix the rest ourselves?", or merge readiness. Do not use for general GitHub CRUD, repository-wide audits, CI-only diagnosis, security-only diff audits, unpushed local diffs, merely addressing existing review comments, or merging without a fresh review.
+  Reviews or re-reviews a contributor PR as repository maintainer — a closed PR reconsidered, or a
+  sweep of open PRs — against the live base with immutable snapshots and three-way merges. Use for a
+  PR URL/number, "main changed, review again", "review all open PRs", "fix the rest ourselves?", or
+  merge readiness. Not for GitHub CRUD (use github-ops), your own PR (use github-contributor), or
+  merging without fresh review.
 argument-hint: "[--personal-maintainer] [--all-open | PR URL or owner/repo#number]"
 ---
 

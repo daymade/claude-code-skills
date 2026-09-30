@@ -1,6 +1,11 @@
 ---
 name: llm-wiki-setup
-description: Co-create a personal investment-research LLM Wiki (Andrej Karpathy's pattern) where the user's OWN analysis framework becomes a living CLAUDE.md — by interviewing them, NOT by handing them a template. Use whenever the user wants to build a compounding research knowledge base, 投研第二大脑, 投研知识库, or 个人投研 wiki; instantiate Karpathy's LLM Wiki gist for finance/investing; turn their stock-picking, analyst-tracking, or earnings-watching workflow into a structured markdown vault; or build a wiki tracking companies / industries / macro / analysts over time. Pure markdown + wikilinks; no RAG in place of compilation (Karpathy's core idea — qmd search over the grown wiki is in-pattern). Also triggers for ingesting research reports / earnings calls / expert notes into an existing wiki, and for post-earnings prediction→fulfillment reviews. Core value = extracting the user's personal investment preferences into THEIR OWN schema, never imposing a standard one.
+description: >-
+  Co-creates a personal investment-research LLM Wiki (Karpathy's pattern) by interviewing the user
+  for THEIR OWN analysis framework, not a template — a living CLAUDE.md of pure markdown +
+  wikilinks, no RAG in place of compilation. Use to build a compounding 投研第二大脑 / 投研知识库 / 个人投研 wiki,
+  ingest research reports / earnings calls into an existing wiki, or run post-earnings
+  prediction→fulfillment reviews.
 ---
 
 # LLM Wiki Setup（投研第二大脑共创）

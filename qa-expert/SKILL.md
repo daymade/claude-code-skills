@@ -1,6 +1,11 @@
 ---
 name: qa-expert
-description: This skill should be used when establishing comprehensive QA testing processes for any software project. Use when creating test strategies, writing test cases following Google Testing Standards, executing test plans, tracking bugs with P0-P4 classification, calculating quality metrics, or generating progress reports. Includes autonomous execution capability via master prompts and complete documentation templates for third-party QA team handoffs. Implements OWASP security testing and achieves 90% coverage targets.
+description: >-
+  Sets up QA testing processes: test strategies, Google Testing Standards test cases, P0-P4 bug
+  tracking, quality metrics, progress reports, autonomous execution via master prompts, and OWASP
+  security testing, with third-party QA handoff docs. Use when establishing QA infrastructure,
+  writing test cases, executing test plans, or tracking bugs. Not for auditing an already-rendered
+  UI (use frontend-visual-qa).
 ---
 
 # QA Expert

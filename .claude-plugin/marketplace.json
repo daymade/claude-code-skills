@@ -5,16 +5,16 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code and Codex skills marketplace — production-ready skills spanning GitHub and git operations (including current-base contributor PR review), document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, local inter-agent messaging, Claude Code operations, technology selection and build-vs-buy decisions, and model-aware Codex workstation setup. Suite plugins bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
-    "version": "3.14.0"
+    "description": "Professional Claude Code and Codex skills marketplace — production-ready skills spanning GitHub and git operations (including current-base contributor PR review), document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, evidence-backed HTML reports and data-visualization judgment, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, local inter-agent messaging, Claude Code operations, technology selection and build-vs-buy decisions, and model-aware Codex workstation setup. Suite plugins bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
+    "version": "3.19.0"
   },
   "plugins": [
     {
       "name": "bilibili-source",
-      "description": "Fetch comprehensive, login-free data for any Bilibili (B站) video — title, UP name and follower count, publish date, partition, tags, per-part cids, live stats (view, like, coin, favorite, share, reply, danmaku), and full danmaku (bullet-comment) text. Use this skill whenever working with a Bilibili video and needing real, citable numbers or metadata — ingesting a Bilibili source into a knowledge base, analyzing why a video performed, verifying a creator's claimed metrics, building a case study, or any time a Bilibili view/like/favorite count is about to be written into a document — fetch it, never hand-type or estimate it. Accepts BVID, av numbers, b23.tv short links, or full URLs. Subtitles and favorites-folder (收藏夹) enumeration are also covered but require the user's Bilibili login.",
+      "description": "Fetches real, citable Bilibili (B站) video data — stats, metadata, tags, and full danmaku text — via login-free API calls, never hand-typed or estimated. Use when citing view/like/favorite counts, analyzing why a video performed, or archiving a Bilibili source into a knowledge base. Accepts BVID, av numbers, b23.tv links, or full URLs; subtitles and 收藏夹 (favorites) enumeration need the user's Bilibili login.",
       "source": "./bilibili-source",
       "strict": false,
-      "version": "1.2.0",
+      "version": "1.3.0",
       "category": "developer-tools",
       "keywords": [
         "bilibili",
@@ -30,10 +30,10 @@
     },
     {
       "name": "kimi-use",
-      "description": "Drive the Kimi desktop app (Kimi.app) through computer-use to query its built-in data plugins — 天眼查 company records, 同花顺 iFinD financials, 财新数据, 标普全球市场财智, 恒生聚源, SEC, IMF, 世界银行公开数据, 学术数据库, 法律数据库 and more — through the user's own logged-in Kimi session, with no separate API keys. Use whenever the user says \"用 Kimi 查\" / \"操作 Kimi 客户端\" / \"Kimi 插件\", asks to fetch company shareholders, financial statements, market data, or academic/legal records via Kimi, or needs a data source that has no standalone API but exists as a Kimi plugin. Covers both Claude Code (computer-use MCP) and Codex (computer plugin) driving, query-prompt patterns that force source-labeled honest answers, and the cross-checking discipline that screen-transcribed data requires. Not for kimi.com browser automation (that is kimi-webbridge) or for direct credentialed iFinD API access.",
+      "description": "Drives Kimi.app via computer-use for Work/Agent data-plugin queries and Chat 深度研究 reports, using the user's logged-in session. Use for \"用 Kimi 查\" / \"操作 Kimi 客户端\" / \"Kimi 插件\" / \"Kimi 深度研究\". Not for kimi.com browser automation or direct iFinD API access.",
       "source": "./kimi-use",
       "strict": false,
-      "version": "1.2.0",
+      "version": "1.5.1",
       "category": "developer-tools",
       "keywords": [
         "kimi",
@@ -52,7 +52,7 @@
       "description": "Bridge local Claude Code and Codex sessions only when the current host's native communication tools do not cover the target. Use for cross-product messages, hooks/scripts posting to sessions, fallback reply lookup and delivery verification, or diagnosing Held peer messages. Also use its coordination guidance when shared-work ownership or an inbound peer assertion needs verification. For ordinary parent/subagent, teammate, or independent-session communication, first discover and use available native tools; do not load this skill merely to send a native message. When the target is on another machine entirely, the bundled network preview pairs agents over an operator-provided relay — approved contacts answer questions from explicitly shared, read-only documents (invitations use the peer-message:v1 format). Never bypass a denied or Held message with another transport. Not for spawning agents, moving full history, or granting user approval. Triggers: 跨产品通信、原生工具未覆盖的会话、脚本回帖、peer 送达排查、共享在制品归属核实、跨机器配对问答、peer-message:v1 邀请。",
       "source": "./peer-message",
       "strict": false,
-      "version": "1.13.0",
+      "version": "1.14.0",
       "category": "communication",
       "keywords": [
         "agent-communication",
@@ -74,7 +74,7 @@
       "description": "Generate professional animated CLI demos and terminal recordings with VHS. Supports automated generation, batch processing, and interactive recording for documentation and tutorials",
       "source": "./cli-demo-generator",
       "strict": false,
-      "version": "1.0.1",
+      "version": "1.1.0",
       "category": "developer-tools",
       "keywords": [
         "cli",
@@ -109,7 +109,7 @@
       "description": "Discover, clone, update, and analyze competitor repositories with evidence-based competitive intelligence. Use when tracking competitors, reviewing competitor source code, adding a competitor repository, comparing product capabilities, building a competitor landscape, checking latest competitor code, or when the user says 竞品分析, competitor scan, analyze competitor, or compare with X. Repository-backed findings must come from local cloned code with file:line citations; market-landscape claims must cite their source and volatility.",
       "source": "./competitors-analysis",
       "strict": false,
-      "version": "1.3.0",
+      "version": "1.4.0",
       "category": "productivity",
       "keywords": [
         "competitors",
@@ -126,7 +126,7 @@
       "description": "Claude Code operations suite that bundles cross-project prior-work retrieval across code, docs, Skills, meetings, WeChat archives, and conversation history; provider-separated Claude Code and Codex history readers; identity- and lineage-gated continuation workflows; plugin/skill troubleshooting; CLAUDE.md progressive disclosure optimization; version-synced Lark CLI routing; statusline configuration; exported .txt repair; full claude.ai conversation extraction with tool-call rendering and file download; plugin marketplace development and suite consolidation; writing/testing/debugging Claude Code hooks; multi-provider profile isolation; personal-memory migration into tool-agnostic AGENTS.md reference docs; one-shot local timers that ping Claude right after subscription quota reset to start a fresh 5-hour usage window; working web search installed on an agent whose relayed model backend cannot execute the built-in one; and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
       "source": "./daymade-claude-code",
       "strict": false,
-      "version": "3.58.0",
+      "version": "4.5.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -151,6 +151,7 @@
         "memory-migration"
       ],
       "skills": [
+        "./claude-code-ops-router",
         "./local-conversation-history",
         "./read-claude-code-history",
         "./read-codex-history",
@@ -179,7 +180,7 @@
       "description": "OpenAI Codex operations and design exploration suite bundling model-aware long-context workstation setup, local Codex delegation, generated-image review, static visual-direction selection, and runnable HTML interaction Design Boards under one shared namespace.",
       "source": "./daymade-codex",
       "strict": false,
-      "version": "1.2.3",
+      "version": "1.3.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -206,10 +207,10 @@
     },
     {
       "name": "daymade-docs",
-      "description": "Documentation suite plugin that exposes document conversion, Mermaid diagram generation, PDF/PPT/DOCX creation, Excel workbook creation/parsing/control, and documentation cleanup, and docx review-comment/track-changes extraction skills under one shared namespace",
+      "description": "Routes docs: Word/PDF/PPTX→Markdown; MD/Word→PDF; create Word; PDF HTML/translate; Excel/xlsm/macOS; photo/signed scans; Mermaid; DOCX review; post-change docs. Reads one bundled Daymade specialist. New slide decks use deck-creator when installed; generic PDF reading/editing and spreadsheet analysis stay with their own Skills. Retired ppt-creator stays manual-only.",
       "source": "./daymade-docs",
       "strict": false,
-      "version": "1.16.0",
+      "version": "1.20.1",
       "category": "suite",
       "keywords": [
         "suite",
@@ -231,6 +232,7 @@
         "review"
       ],
       "skills": [
+        "./docs-router",
         "./doc-to-markdown",
         "./mermaid-tools",
         "./pdf-creator",
@@ -248,7 +250,7 @@
       "description": "Financial data and investment-research suite covering the full China A-share and global equity data pipeline: Bigdata.com (RavenPack) structured financials and news sentiment, US equity fundamentals via yfinance, Gangtise (岗底斯) OpenAPI research suite installation and orchestration, A-share news and policy aggregation, A-share pharmaceutical sector daily reporting, structured devil's-advocate pressure-testing of investment theses, and adversarial due diligence on inflated benchmark claims with replicability mapping. Install once for the complete financial research workflow.",
       "source": "./daymade-financial",
       "strict": false,
-      "version": "1.2.1",
+      "version": "1.5.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -267,6 +269,7 @@
         "due-diligence"
       ],
       "skills": [
+        "./financial-router",
         "./bigdata-skill",
         "./financial-data-collector",
         "./gangtise-copilot",
@@ -279,10 +282,10 @@
     },
     {
       "name": "daymade-macos",
-      "description": "Apple-platform development and operations suite bundling programmatic macOS window capture, iOS/macOS app development with XcodeGen and SwiftUI, safe disk-space diagnosis and cleanup, and disciplined launchd watchdog design under one shared namespace. Install once for the complete macOS and iOS toolkit.",
+      "description": "Apple-platform development and operations suite for macOS window capture, TCC permission diagnosis and Full Disk Access repair, iOS/macOS app development, disk cleanup, and launchd watchdogs.",
       "source": "./daymade-macos",
       "strict": false,
-      "version": "1.6.1",
+      "version": "1.14.1",
       "category": "suite",
       "keywords": [
         "suite",
@@ -308,7 +311,7 @@
       "description": "Audio processing suite covering the full speech pipeline: ASR transcription (Qwen3, StepFun) with batch-mode guards against music-only repetition-loop hallucinations, speaker diarization and CAM++ voiceprint identification for multi-speaker recordings, transcript error correction, structured meeting minutes generation, and TTS voice synthesis (StepFun). Install once for the complete audio workflow.",
       "source": "./daymade-audio",
       "strict": false,
-      "version": "1.41.3",
+      "version": "1.44.2",
       "category": "suite",
       "keywords": [
         "suite",
@@ -322,6 +325,7 @@
         "voice"
       ],
       "skills": [
+        "./audio-router",
         "./asr-transcribe-to-text",
         "./stepfun-asr",
         "./transcript-fixer",
@@ -334,7 +338,7 @@
       "description": "Daymade skills core suite. Bundles skill creation, quality review, real Claude/Codex Skill-surface governance, suite-migration reconciliation, and marketplace development tooling under one shared namespace. Skill governance separates canonical source, installed inventory, discovery policy, the fresh model-visible catalog, and router-resolved cold resources instead of optimizing cache counts; it preserves Claude's official versioned-cache lifecycle and verifies selected entries in the real host prompt. Skill verification separates risk classification from evaluation spend: bounded fixes use targeted checks, narrow behavior changes use sampled replays, and paired baselines, graders, benchmarks, or a viewer run only after explicit user authorization or a decision-bearing evidence plan plus opt-in; that authorization does not change the risk tier. Existing-skill edits retain an old-vs-new capability audit and content-bound packaging attestation so prompt compression cannot silently delete runtime contracts. When the official skill-creator plugin is also installed, skill-creator detects the coexistence and offers a consent-based, reversible SessionStart routing hook so the daymade edition wins deterministically; on machines without the official plugin nothing is ever installed.",
       "source": "./daymade-skill",
       "strict": false,
-      "version": "1.45.0",
+      "version": "1.54.3",
       "category": "suite",
       "keywords": [
         "suite",
@@ -354,10 +358,10 @@
     },
     {
       "name": "deep-research",
-      "description": "Generate format-controlled research reports with citations, original-source verification, and evidence-family tracking. Select research depth and enterprise analysis frameworks by the decision question; distinguish authorized first-party context from independent external corroboration.",
+      "description": "Generate evidence-tracked research reports with reusable source and claim records, original-source verification, and evidence-family tracking. Coordinate provider-specific Skills across selected modes, retain original artifacts, and synthesize by decision; select depth and routes by the question.",
       "source": "./deep-research",
       "strict": false,
-      "version": "2.6.0",
+      "version": "2.11.1",
       "category": "documentation",
       "keywords": [
         "research",
@@ -409,10 +413,10 @@
     },
     {
       "name": "feishu-doc-scraper",
-      "description": "Extract Feishu (Lark) Docs, Wiki pages/collections, spreadsheets, and Minutes (妙记) transcripts into faithful local Markdown via the lark-cli API (no LLM rewriting of the body; browser-DOM fallback when lark-cli can't reach the content). Use whenever the source is a Feishu/Lark URL and fidelity matters — 导出飞书文档/合集/妙记转写, 把飞书 wiki/知识库转 markdown, archiving a Feishu collection, exporting a 妙记 transcript, or saving a Feishu page — even if the user only says clipping, archiving, converting, or \"save this\". Also covers the owner-exported .docx → faithful Markdown path. Document reading includes comments, feedback and all replies in the selected solved scope; Minutes comments are outside this capability.",
+      "description": "Extracts Feishu/Lark Docs, Wiki, Sheets, and Minutes (妙记) transcripts into faithful local Markdown via the lark-cli API — no LLM paraphrasing, browser-DOM fallback when lark-cli can't reach content. Use whenever the source is a Feishu/Lark URL and fidelity matters — 导出飞书文档/合集/妙记转写, 把飞书 wiki 转 markdown, or archiving a collection — even if the user just says \"save this\". Also covers owner-exported .docx → Markdown.",
       "source": "./feishu-doc-scraper",
       "strict": false,
-      "version": "1.5.2",
+      "version": "1.6.0",
       "category": "productivity",
       "keywords": [
         "feishu",
@@ -438,7 +442,7 @@
       "description": "End-to-end playbook for shipping high-quality pull requests to open-source projects you don't maintain — discovery, CONTRIBUTING compliance, PR-size check, minimal-diff implementation, PR description with AI-assisted disclosure, conflict resolution, and post-submission maintainer interaction. Use whenever creating, editing, or pushing a PR to a third-party GitHub repo — submit a PR, open a PR, fix this upstream, rebase against main, respond to the bot review, an owner/repo target, or 提 PR / 上游 PR / 贡献代码 / rebase 冲突 / 回应维护者.",
       "source": "./github-contributor",
       "strict": false,
-      "version": "1.2.0",
+      "version": "1.3.0",
       "category": "developer-tools",
       "keywords": [
         "github",
@@ -457,10 +461,10 @@
     },
     {
       "name": "github-ops",
-      "description": "Operates GitHub through gh CLI and the REST/GraphQL APIs with explicit target, authorization, impact preview, and independent readback. Use for pull requests, issues, Actions, repositories, collaborators, teams, organization member privileges, base permissions, 2FA enforcement, repository settings, API automation, parallel or superseded PR convergence, and public or enterprise GitHub. Also use when a GitHub write returned success but the requested state did not change, or when deciding whether a setting is writable through CLI, REST, GraphQL, or only the GitHub UI.",
+      "description": "Operates GitHub via gh CLI and REST/GraphQL — PRs, issues, Actions, repos, collaborators, org permissions, 2FA — with explicit target, authorization, and independent readback. Use when a write reports success but state didn't change, or choosing gh/REST/GraphQL/UI-only. Not for local Git recovery (use git-safety-net), maintainer PR review (use github-review-pr), or upstream contribution (use github-contributor).",
       "source": "./github-ops",
       "strict": false,
-      "version": "1.6.0",
+      "version": "1.7.2",
       "category": "developer-tools",
       "keywords": [
         "github",
@@ -476,10 +480,10 @@
     },
     {
       "name": "github-review-pr",
-      "description": "Reviews or re-reviews one contributor pull request—including an explicitly named closed PR being reconsidered—or a bounded newest-to-oldest sweep of all open contributor PRs, for a GitHub repository maintainer against the current base branch. Handles base drift, history discontinuities, polluted branches, ownership, curation, supersession, and review-conditioned repair or landing using immutable Git snapshots, three-way merge results, isolated contribution projection, checks, tests, and findings-first reporting. Use for a PR URL or number, \"main changed, review again\", \"review all open PRs newest to oldest\", \"apply our maintainer principles\", \"can we merge this and fix the rest ourselves?\", or merge readiness. Do not use for general GitHub CRUD, repository-wide audits, CI-only diagnosis, security-only diff audits, unpushed local diffs, merely addressing existing review comments, or merging without a fresh review.",
+      "description": "Reviews or re-reviews a contributor PR as repository maintainer — a closed PR reconsidered, or a sweep of open PRs — against the live base with immutable snapshots and three-way merges. Use for a PR URL/number, \"main changed, review again\", \"review all open PRs\", \"fix the rest ourselves?\", or merge readiness. Not for GitHub CRUD (use github-ops), your own PR (use github-contributor), or merging without fresh review.",
       "source": "./github-review-pr",
       "strict": false,
-      "version": "1.3.0",
+      "version": "1.4.0",
       "category": "developer-tools",
       "keywords": [
         "github",
@@ -496,10 +500,10 @@
     },
     {
       "name": "git-safety-net",
-      "description": "Audits, preserves, recovers, and safely retires local Git state: unpushed or wrong-branch commits, dirty or detached worktrees, forgotten duplicate clones of the same repo, untracked work no bundle can back up, orphaned stashes, dangling commits, stale branches, and squash/rebase merge uncertainty. Use when the user fears work was lost; asks to recover a commit or branch; asks whether a worktree, clone, or scratch directory can be deleted; wants everything converged onto one main branch; or needs proof that cleanup will not drop work. Use it even after an audit reported clean — the usual gap is scope: every in-repo command is blind to a second clone elsewhere on disk. Triggers on \"did I lose work\", \"is everything merged\", \"is anything else lost\", \"safe to delete this clone\", \"clean up old branches/stashes\", \"only keep one main branch\", \"git reflog\", \"dangling commits\", \"分支灾难\", \"误删分支/commit\", \"worktree 能删吗\", \"还有没有丢的东西\", \"只保留一个主分支\". Covers local-Git forensics, not GitHub PR/API operations or routine sync.",
+      "description": "Audits, preserves and recovers local Git state before cleanup: unpushed or wrong-branch commits, dirty worktrees, duplicate clones, stashes, dangling commits, squash-merge uncertainty. Use when the user fears lost work, wants to recover a commit, asks if a branch is actually merged, asks whether a branch, worktree or clone is safe to delete, or wants one clean main (误删分支 / 还有没有丢的东西). Not for GitHub PR operations.",
       "source": "./git-safety-net",
       "strict": false,
-      "version": "1.20.5",
+      "version": "1.22.2",
       "category": "developer-tools",
       "keywords": [
         "git",
@@ -543,7 +547,7 @@
       "description": "One-stop companion and installer for the official Tencent IMA skill (ima.qq.com). Installs upstream ima-skill to Claude Code/Codex/OpenClaw via npx skills add, guides API key setup, detects and fixes known issues (including the missing-YAML-frontmatter bug in submodule SKILL.md files) with user consent, and implements a personalized fan-out search strategy with priority-based knowledge base boosting and silent truncation detection",
       "source": "./ima-copilot",
       "strict": false,
-      "version": "1.0.1",
+      "version": "1.2.1",
       "category": "developer-tools",
       "keywords": [
         "ima",
@@ -561,10 +565,10 @@
     },
     {
       "name": "llm-eval-harness",
-      "description": "Test/evaluate any LLM behind an OpenAI- or Anthropic-compatible endpoint: availability (max_tokens-aware), request fidelity (does system prompt/tools/history REACH the model, or does the gateway silently drop it), speed (TTFT+tok/s), concurrency (before a workshop), Anthropic protocol compliance, quality regression, vendor bug reports, deployment gates, resident canaries. Use BEFORE hand-rolling a curl loop (it skips the N=10 sampling, Connection:close, and env-var key handling this bakes in). Use when someone tests/benchmarks/测评/压测 a model/endpoint, onboards a provider, decides whether to switch or temporarily fail over to an alternate channel (outage/quota), writes a supported-models list, debugs \"model ignores system prompt\", or verifies a tok/s claim. NOT for TTS/voice-clone supplier eval (audio side has its own skill). Triggers on \"benchmark this model\", \"测一下这个模型/渠道/API\", \"接入新模型先测一下\", \"system prompt 不生效\", \"这个渠道能不能用/稳不稳\", \"临时切换过去顶一阵子\" — even without \"eval\", even wrapped in business narrative.",
+      "description": "Tests/benchmarks a third-party LLM endpoint (OpenAI- or Anthropic-compatible): availability, fidelity, speed, concurrency, protocol compliance, quality regression. Use before hand-rolling a curl loop, when onboarding a provider, or debugging \"system prompt 不生效\" / a tok/s claim — 测评/压测一个模型或渠道. Not for TTS/voice-clone supplier eval (use the audio skill).",
       "source": "./llm-eval-harness",
       "strict": false,
-      "version": "1.4.2",
+      "version": "1.5.0",
       "category": "developer-tools",
       "keywords": [
         "llm",
@@ -624,7 +628,7 @@
       "description": "Transform vague prompts into precise, well-structured specifications using EARS (Easy Approach to Requirements Syntax) methodology. Use when users provide loose requirements, ambiguous feature descriptions, need to enhance prompts for AI-generated code/products/documents, request prompt optimization, or want to improve requirements engineering. Applies domain theories (GTD, BJ Fogg, Gestalt, AIDA, Zero Trust) and structured Role/Skills/Workflows/Examples/Formats framework",
       "source": "./prompt-optimizer",
       "strict": false,
-      "version": "1.1.0",
+      "version": "1.2.0",
       "category": "productivity",
       "keywords": [
         "prompt-engineering",
@@ -660,7 +664,7 @@
       "description": "Comprehensive QA testing infrastructure with autonomous LLM execution, Google Testing Standards (AAA pattern), and OWASP security testing. Use when establishing QA processes, writing test cases, executing test plans, tracking bugs with P0-P4 classification, calculating quality metrics, enforcing quality gates, or preparing third-party QA handoffs. Enables 100x faster test execution via master prompts",
       "source": "./qa-expert",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "developer-tools",
       "keywords": [
         "qa",
@@ -730,7 +734,7 @@
       "description": "【DEPRECATED · 已废弃】叙事优先的幻灯片创建方法论已于 2026-08-07 并入 deck-creator（作者私有仓 Route A）。本条目仅为退役通告保留，请勿调用。",
       "source": "./slides-creator",
       "strict": false,
-      "version": "2.0.0",
+      "version": "2.1.0",
       "category": "content-creation",
       "keywords": [
         "slides",
@@ -747,7 +751,7 @@
       "description": "Create professional Microsoft Teams channel posts with Adaptive Cards, formatted announcements, and corporate communication standards",
       "source": "./teams-channel-post-writer",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "communication",
       "keywords": [
         "teams",
@@ -759,10 +763,10 @@
     },
     {
       "name": "terraform-skill",
-      "description": "Diagnoses and designs safe Terraform releases, provisioners, multi-environment isolation, and fresh-host bootstrap. Use when writing or reviewing plan/apply wrappers, null_resource, remote-exec, local-exec, file provisioners, cloud-init, Docker Compose or Caddy deployment; when staging and production configuration may differ; when an IaC rollout can mutate a shared gateway; or when debugging drift, saved-plan, provenance, TLS, Restarting/unhealthy containers, DNS duplication, snapshot contamination, and post-apply failures. It emphasizes exact reviewed artifacts, pre-mutation validation, explicit production authorization, and independent live readback.",
+      "description": "Diagnoses and designs safe Terraform releases, provisioners (remote-exec/local-exec/file, cloud-init, Compose, Caddy), multi-environment isolation, and fresh-host bootstrap. Use when writing or reviewing plan/apply wrappers or provisioners; when staging/production config may differ; when a rollout can mutate a shared gateway; or debugging drift, TLS, container restarts, DNS duplication, or snapshot contamination.",
       "source": "./terraform-skill",
       "strict": false,
-      "version": "1.2.0",
+      "version": "1.4.0",
       "category": "developer-tools",
       "keywords": [
         "terraform",
@@ -777,10 +781,10 @@
     },
     {
       "name": "tunnel-doctor",
-      "description": "Diagnoses concrete tunnel and proxy-path failures across macOS and Windows/WSL: Tailscale routing, proxy env/system bypass, SSH double tunneling, VM/container propagation, stalled DNS, TUN DIRECT split-brain, Windows-host TUN cascades, and single-hop or chained proxy node/exit throughput. Use when Tailscale ping works but SSH/HTTP fails, browser returns 503 while curl works, Git SSH closes through the proxy, Docker pull/build fails behind TUN, getaddrinfo stalls while nslookup is fast, raw probes report physically impossible results, domestic DIRECT-routed sites fail while proxied sites work, a blocked port could be your tunnel or the destination's firewall, or the proxy is reachable but real downloads and full Git clones crawl. Also use when Git reports \"failed to begin relaying via HTTP\", ssh -vvv freezes at \"debug2: resolving\", ping works but dig times out, or setting up Tailscale SSH to WSL. Use debugging-network-issues only when the root cause remains unknown or belongs to an application/protocol layer.",
+      "description": "MUST be used first for tunnel / proxy-path connectivity failures or slow throughput (网络故障 / 连不上 / 代理或隧道下超时). Diagnoses Tailscale, proxy, TUN, DNS and SSH-tunnel problems on macOS and Windows/WSL, e.g. Tailscale ping works but SSH fails, curl works but browser gets 503, Git/Docker fails behind the proxy, or downloads crawl despite a reachable proxy. Not for application-layer bugs (use debugging-network-issues).",
       "source": "./tunnel-doctor",
       "strict": false,
-      "version": "1.12.8",
+      "version": "1.15.2",
       "category": "developer-tools",
       "keywords": [
         "tailscale",
@@ -808,7 +812,7 @@
       "description": "Fetch Twitter/X post content including long-form Articles with full images and metadata. Use when Claude needs to retrieve tweet/article content, author info, engagement metrics (likes, retweets, bookmarks), and embedded media. Supports individual posts and X Articles (long-form content). Automatically downloads all images to local attachments folder and generates complete Markdown with proper image references. Preferred over Jina for X Articles with images.",
       "source": "./twitter-reader",
       "strict": false,
-      "version": "1.3.0",
+      "version": "1.4.0",
       "category": "utilities",
       "keywords": [
         "twitter",
@@ -860,10 +864,10 @@
     },
     {
       "name": "windows-remote-desktop-connection-doctor",
-      "description": "Diagnose Windows App (Microsoft Remote Desktop / Azure Virtual Desktop / W365 / direct PC) connection issues on macOS. Analyze transport protocol selection (UDP Shortpath vs WebSocket), detect VPN/proxy interference, parse Windows App logs for Shortpath failures, and resolve stuck \"Configuring remote PC...\" dialogs caused by expired Microsoft accounts, server reboots, or client-side auth poisoning. Use when VDI connections are slow or stuck, when direct PC connections fail to connect, when transport shows WebSocket instead of UDP, when RDP Shortpath fails, or when Windows App is frozen at a progress dialog.",
+      "description": "Diagnoses Windows App (Remote Desktop / AVD / W365 / direct PC) connection problems on macOS: transport selection (UDP Shortpath vs WebSocket), VPN/proxy interference, and stuck \"Configuring remote PC...\" dialogs. Use when a VDI connection is slow/stuck, transport shows WebSocket not UDP, or Windows App freezes at a progress dialog. Not for general network diagnosis (use debugging-network-issues or tunnel-doctor).",
       "source": "./windows-remote-desktop-connection-doctor",
       "strict": false,
-      "version": "1.1.0",
+      "version": "1.2.0",
       "category": "developer-tools",
       "keywords": [
         "rdp",
@@ -906,10 +910,10 @@
     },
     {
       "name": "debugging-network-issues",
-      "description": "Investigates network, streaming, and protocol failures with falsification-first layered experiments. Use for ECONNRESET, HTTP/2 RST_STREAM, SSE or long-polling stalls, fixed-time drops, CDN/proxy/CGNAT timeouts, client-side proxy/TUN misrouting, CNAME-rule surprises, certificate errors, generic throughput collapse where everything returns 200 but transfers crawl, or LAN identity/topology mysteries. Trigger phrases include \"socket closed unexpectedly\", \"stream interrupted\", \"fails after N seconds\", \"works sometimes but not always\", \"upstream silent for X seconds\", ERR_CONNECTION_CLOSED, SSL_ERROR_SYSCALL, UNKNOWN_CERTIFICATE_VERIFICATION_ERROR, and wrong-site certificate. Treat this as the general method and unknown-root-cause fallback. Use tunnel-doctor for known Tailscale/TUN/DNS/route/WSL-Docker conflicts and for a confirmed proxy exit/node/chain quality problem.",
+      "description": "Investigates network, streaming and protocol failures with falsification-first layered experiments, the general fallback for unknown root causes. Use for ECONNRESET / RST_STREAM / SSE stalls, CDN/CGNAT timeouts or certificate errors, throughput collapse where everything returns 200 but transfers crawl, or LAN identity/topology mysteries. Not for known Tailscale/TUN/DNS/proxy-path conflicts (use tunnel-doctor).",
       "source": "./debugging-network-issues",
       "strict": false,
-      "version": "1.9.0",
+      "version": "1.10.0",
       "category": "developer-tools",
       "keywords": [
         "debugging",
@@ -939,7 +943,7 @@
       "description": "Evidence-driven repository setup, repair, handoff, and safe Git workflow for Claude Code or Codex. Detects the actual stack from project instructions and manifests instead of assuming Python, ffmpeg, uv, or .env; preserves local work during sync/conflict handling; diagnoses repeated SessionStart output before editing config; and defaults routine startup behavior to AGENTS.md/CLAUDE.md or a normal Agent request. Lifecycle hooks are an explicit pre-prompt exception with guarded, idempotent Claude Code setup and runtime-specific Codex verification.",
       "source": "./auto-repo-setup",
       "strict": false,
-      "version": "2.0.0",
+      "version": "2.1.0",
       "category": "developer-tools",
       "keywords": [
         "repo-setup",
@@ -957,10 +961,10 @@
     },
     {
       "name": "llm-wiki-setup",
-      "description": "Co-create a personal investment-research LLM Wiki (Andrej Karpathy's pattern) where the user's OWN analysis framework becomes a living CLAUDE.md — by interviewing them, NOT by handing them a template. Use whenever the user wants to build a compounding research knowledge base, 投研第二大脑, 投研知识库, or 个人投研 wiki; instantiate Karpathy's LLM Wiki gist for finance/investing; turn their stock-picking, analyst-tracking, or earnings-watching workflow into a structured markdown vault; or build a wiki tracking companies / industries / macro / analysts over time. Pure markdown + wikilinks; no RAG in place of compilation (Karpathy's core idea — qmd search over the grown wiki is in-pattern). Also triggers for ingesting research reports / earnings calls / expert notes into an existing wiki, and for post-earnings prediction→fulfillment reviews. Core value = extracting the user's personal investment preferences into THEIR OWN schema, never imposing a standard one.",
+      "description": "Co-creates a personal investment-research LLM Wiki (Karpathy's pattern) by interviewing the user for THEIR OWN analysis framework, not a template — a living CLAUDE.md of pure markdown + wikilinks, no RAG in place of compilation. Use to build a compounding 投研第二大脑 / 投研知识库 / 个人投研 wiki, ingest research reports / earnings calls into an existing wiki, or run post-earnings prediction→fulfillment reviews.",
       "source": "./llm-wiki-setup",
       "strict": false,
-      "version": "1.1.1",
+      "version": "1.2.0",
       "category": "documentation",
       "keywords": [
         "llm-wiki",
@@ -980,7 +984,7 @@
       "description": "Run a full 6-dimension health check of this Claude Code skills marketplace repo — code/script safety, documentation/SSOT consistency, security/PII leaks, open-PR triage, open-issue triage, and marketplace-manifest integrity — via a parallel fan-out Dynamic Workflow, then verify the serious findings and report by priority. Use this whenever the user asks to check the repo, run a health check, do a full sweep/audit before a release, 全面体检, 检查仓库状态, 看看仓库健康吗, 审计一下仓库, or asks whether the PRs / issues / docs / versions / PII are in good shape across the board — even if they never say workflow. Reach for it for any broad is-this-whole-repo-OK request, not just one-file checks.",
       "source": "./marketplace-health-check",
       "strict": false,
-      "version": "1.0.1",
+      "version": "1.1.0",
       "category": "developer-tools",
       "keywords": [
         "health-check",
@@ -1033,7 +1037,7 @@
       "description": "Scan and remove sensitive data (secrets, API keys, private domains/IPs, PII) from GitHub repository history. Use this skill whenever the user says scan sensitive data, clean git history, remove secrets from repo, sanitize GitHub history, 清理敏感数据, 历史重写, force push, 泄露, or needs to repair a public repo after accidental secret/private context leakage. Also use before any force push to a public repository to verify visibility, backup, and scan results.",
       "source": "./github-sensitive-data-cleanup",
       "strict": false,
-      "version": "1.2.0",
+      "version": "1.3.0",
       "category": "security",
       "keywords": [
         "github",
@@ -1053,7 +1057,7 @@
       "description": "Audits already-rendered web, landing-page, HTML deck/slide, browser tool/game, dashboard/admin, design-system, and desktop UIs with real-browser or native-app journeys, inspected screenshots, DOM geometry, responsive or projection viewports, and a Playwright sweep. Use after implementation to find typography, wrapping, overlap, overflow, responsive, route, authorization-state, overlay, map, transient-state, data-visualization, runtime-label, browser-output, file-dialog, PDF/print, or Electron-shell defects, or to compare a rendered artifact with a visual reference. Not for greenfield UI design, design-system extraction, general QA-program setup, or nonvisual debugging.",
       "source": "./frontend-visual-qa",
       "strict": false,
-      "version": "1.13.0",
+      "version": "1.15.1",
       "category": "design",
       "keywords": [
         "frontend",
@@ -1072,7 +1076,7 @@
       "description": "Manage OpenClaw (龙虾 / lobster) instance configurations, gateway health, and plugin lifecycle — audit, diff, copy, add-model, list, and switch models across openclaw.json files; diagnose a parked or down gateway, plugin register failures, and hooks blocked after an upgrade; confirm whether an install is out of date. Use when juggling multiple OpenClaw / Claude Code wrapper instances, applying DeepSeek model patches, managing default models and aliases, or validating config.",
       "source": "./openclaw",
       "strict": false,
-      "version": "1.2.1",
+      "version": "1.3.0",
       "category": "claude-code",
       "keywords": [
         "openclaw",
@@ -1141,7 +1145,7 @@
       "description": "Switch or repair the model configuration of an OpenClaw instance (e.g., Kimi k2p6 → k3): change the default model, add model definitions, and fix model-config failures — 401 \"Invalid token\", \"No available channel / model not found\", thinking-level rejections, and config edits that don't take effect. Ships a config-discovering switch script with backup + mirror sync, an endpoint probe protocol, and a field-tested trap catalog (env-var key hijack, provider-plugin thinking restrictions, relay availability).",
       "source": "./openclaw-model-switch",
       "strict": false,
-      "version": "1.1.0",
+      "version": "1.2.0",
       "category": "claude-code",
       "keywords": [
         "claude-code",
@@ -1165,7 +1169,7 @@
       "description": "查询 ChatGPT/Codex 重置公告及多个 Pro 账号的剩余额度、备用 Full reset；复用 Google 登录逐个核实并恢复网页账号，换算北京时间。区分 Tibo 官宣、未官宣的平台静默重置、banked reset 与账户级周期重置。Use when 用户问「什么时候重置」「额度什么时候恢复」「下次全员重置几点」 「banked reset 到了吗」「Tibo 说了什么」「usage limit when reset」，或说「额度突然回到 100%」「好像/肯定又重置了」，或问「几个账号都用完了吗」「哪个还满额」。必须用实时产品状态、独立用户实测与公告交叉核验；禁止因 Tibo Radar 没有新条目就否定已经发生的重置，并须把太平洋时间当场换算为北京时间。",
       "source": "./tibo-reset-codex",
       "strict": false,
-      "version": "1.13.2",
+      "version": "1.18.2",
       "category": "utilities",
       "keywords": [
         "chatgpt",
@@ -1181,10 +1185,10 @@
     },
     {
       "name": "excalidraw-use",
-      "description": "Place existing images onto an Excalidraw whiteboard, turn a slide deck into clean per-slide images first, and inspect what is inside a .excalidraw file. Use whenever someone mentions Excalidraw, a whiteboard or canvas, a .excalidraw file, 白板 or 画板 — especially \"put these screenshots on my board\", \"add my old workshop images to the canvas\", \"space them out so I don't have to adjust spacing by hand\", \"turn these slides into images I can draw on\", or \"what's in this scene file\". Also use when a talk or workshop is delivered by hand-drawing over screenshots on a shared canvas, or when someone needs a pick tray of many images to choose from. Not for generating a diagram from a text description — that is a different job.",
+      "description": "Places existing images onto an Excalidraw whiteboard, turns a slide deck into clean per-slide images, and inspects a .excalidraw file. Use whenever someone mentions Excalidraw, a whiteboard/canvas, .excalidraw, 白板 or 画板 — e.g. \"put these screenshots on my board\" — or a workshop delivered by hand-drawing over screenshots on a shared canvas. Not for generating a diagram from a text description.",
       "source": "./excalidraw-use",
       "strict": false,
-      "version": "1.0.2",
+      "version": "1.1.0",
       "category": "developer-tools",
       "keywords": [
         "excalidraw",
@@ -1199,10 +1203,10 @@
     },
     {
       "name": "meme-creator",
-      "description": "Creates video/GIF memes by overlaying images (logos, avatars, stickers) onto moving objects in a clip with frame-accurate tracking, then exports MP4 + GIF. Use whenever the user wants a meme, 梗图, 表情包, or reaction GIF from existing footage; to cover faces or heads in a video; to make a logo or avatar follow a moving person or object; to turn a video moment into a shareable GIF; or asks to 把 logo/头像贴到视频里跟着动. Handles source download (yt-dlp), segment picking via contact sheets, CSRT tracking with re-anchors and a manual-keyframe fallback, fades at frame edges and shot changes, and GIF size budgeting. Not for transcript-driven editing, programmatic scene generation, or subtitle work.",
+      "description": "Creates video/GIF memes by overlaying images (logos, avatars, stickers) onto moving objects in a clip with frame-accurate tracking, then exports MP4 + GIF. Use whenever the user wants a meme, 梗图, 表情包, or reaction GIF from footage; to cover faces in a video; or asks to 把 logo/头像贴到视频里跟着动. Not for transcript-driven editing, programmatic scene generation, or subtitle work.",
       "source": "./meme-creator",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.1.1",
       "category": "media",
       "keywords": [
         "meme",
@@ -1215,6 +1219,64 @@
         "sticker",
         "avatar",
         "logo"
+      ]
+    },
+    {
+      "name": "data-visualization-discipline",
+      "description": "数据可视化的判断层 SSOT——画任何图表、dashboard、看板之前先加载它，不是画完之后。管\"该不该这么画\"：这张图想让读者得出什么结论、用均值还是中位数、能不能聚合、堆叠还是折线、能不能上双轴、配色与颜色数量、同一实体跨图是否同色同位、表格该留几列。介质无关：HTML 报告页、React/Vue dashboard、PPT 原生图表、matplotlib/plotly/ECharts/D3、渲染成 PNG 的图，一律适用。Use when 动手画图之前，或评审既有图表（\"这几张图有什么问题\"、\"图例为什么不一致\"）。Not for 报告页的排版/组件/交互（用 report-with-html:report-with-html）或 PPT 原生图表的实现与渲染陷阱（用 deck-creator:deck-creator）。",
+      "source": "./data-visualization-discipline",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "documentation",
+      "keywords": [
+        "数据可视化",
+        "图表",
+        "chart",
+        "dashboard",
+        "看板",
+        "可视化纪律",
+        "图型选择",
+        "统计量",
+        "中位数",
+        "堆叠图",
+        "双轴",
+        "配色",
+        "图例",
+        "Cleveland",
+        "Tufte",
+        "Bertin",
+        "data visualization",
+        "chart critique",
+        "图表评审"
+      ]
+    },
+    {
+      "name": "report-with-html",
+      "description": "Produces the reader-facing HTML artifact — report, dashboard, architecture view, data browser, or review workbench — evidence-backed, browser-verified. Use when the deliverable IS a visual HTML report, or the user asks for an HTML/web presentation. Load data-visualization-discipline for chart judgment. Not for chat status or Markdown prose unless asked to become a report; not for PowerPoint (deck-creator Route C).",
+      "source": "./report-with-html",
+      "strict": false,
+      "version": "1.0.2",
+      "category": "documentation",
+      "keywords": [
+        "HTML报告",
+        "可视化报告",
+        "一页纸",
+        "数据报告",
+        "半年报",
+        "系统可视化",
+        "差距地图",
+        "架构可视化",
+        "用户旅程",
+        "决策看板",
+        "事故时间线",
+        "对比看板",
+        "dashboard",
+        "html",
+        "html one-pager",
+        "数据浏览器",
+        "归档浏览器",
+        "审核工作台",
+        "review workbench"
       ]
     }
   ]

@@ -77,11 +77,11 @@ log show --predicate 'process == "launchd"' --last 15m | grep <label>
 
 ## TCC / permissions under launchd
 
-A `uv run` (or any unsigned-binary) LaunchAgent that keeps prompting for Full Disk Access is a
-TCC-attribution problem, not a launchd-plist problem — the requester is the `uv` binary itself.
-Diagnosis and fix live in the `daymade-macos:macos-permissions` skill (`references/uv-fda-trap.md`).
-This reference only notes the launchd-side fact: a launchd-spawned process has no FDA-bearing
-parent to inherit from, which is why the same command prompts under launchd but not interactively.
+When a LaunchAgent can read protected files interactively but fails under launchd, inspect the
+actual TCC requester and any existing grant through `daymade-macos:macos-permissions`.
+Its automated Full Disk Access route owns the repair and background readback; its `uv`
+attribution reference records the observed case. Do not infer the
+requester from the dialog title or assume every unsigned binary behaves like that case.
 
 ## launchctl command reference
 

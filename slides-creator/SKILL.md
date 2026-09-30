@@ -1,11 +1,9 @@
 ---
 name: slides-creator
 description: >-
-  【DEPRECATED · 已废弃】本 skill 已于 2026-08-07 停止维护。对作者本机环境：其方法论
-  （First Law 用户原话优先 / ABCDEFG 叙事框架 / baoyu-slide-deck 委托协议 / 四层目录治理）
-  已整体并入 deck-creator（私有仓 daymade-skills-pro 的 Route A · narrative），
-  装有 deck-creator 的环境不要调用本 skill。对外部用户：这是最终版本，
-  保留安装兼容，不再接收更新。将在后续大版本中物理移除。
+  已废弃的叙事型 PPT/幻灯片生成器（2026-08-07 起停止维护，不再接收更新）。做新 deck 请用 deck-creator：本 skill 的方法论（First Law 用户原话优先
+  / ABCDEFG 叙事框架 / baoyu-slide-deck 委托协议 / 四层目录治理）已整体并入 deck-creator 的 Route A · narrative，装有
+  deck-creator 的环境不要调用本 skill。外部用户：这是保留安装兼容的最终版本，将在后续大版本中物理移除。
 ---
 
 # slides-creator —— DEPRECATED（2026-08-07）

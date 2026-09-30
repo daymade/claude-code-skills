@@ -1,6 +1,10 @@
 ---
 name: local-codex
-description: "Launch and manage OpenAI Codex CLI (local agent) as a non-interactive coding sub-agent. Use when the user wants to delegate coding tasks to Codex, run code reviews, generate or refactor code, or use Codex GPT-5.5 agent capabilities through local CLI. Triggers on phrases like 'codex', 'run codex', 'codex exec', 'code review with codex', 'delegate to codex', 'use codex for coding', or any request to invoke the local Codex CLI agent. Uses ChatGPT Pro OAuth (flat-rate, no API charges) via ~/.codex/auth.json. Never uses API keys."
+description: >-
+  Launches and manages the local OpenAI Codex CLI as a non-interactive coding sub-agent via ChatGPT
+  Pro OAuth, never API keys. Use to delegate coding tasks to Codex, run codex exec, generate or
+  refactor code, or get a Codex code review; phrases like 'codex', 'run codex', 'codex exec',
+  'delegate to codex'.
 ---
 
 # Local Codex

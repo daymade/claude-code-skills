@@ -164,6 +164,7 @@ claude plugin install daymade-docs@daymade-skills
 This suite exposes related skills under one namespace, including:
 
 ```text
+/daymade-docs:docs-router
 /daymade-docs:doc-to-markdown
 /daymade-docs:mermaid-tools
 /daymade-docs:pdf-creator
@@ -174,6 +175,8 @@ This suite exposes related skills under one namespace, including:
 ```
 
 These skills ship as a bundle — there are no separate single-skill plugins. All documentation skills live under `daymade-docs/` and install together from the suite.
+The router handles automatic selection. The specialist commands remain available for manual use;
+`ppt-creator` is manual-only. New presentation creation uses `deck-creator` when installed.
 
 **Apple Platform Suite** (shared namespace for macOS and iOS development/operations):
 ```bash
@@ -221,6 +224,7 @@ claude plugin install daymade-claude-code@daymade-skills
 This suite bundles the skills that extend Claude Code itself — cross-project prior-work retrieval across code, docs, Skills, meetings, WeChat archives, and conversation history; fast local conversation discovery across Claude Code and Codex; session recovery; CLAUDE.md tuning; version-synced Lark CLI routing; troubleshooting; statusline configuration; export repair; marketplace development and suite consolidation; terminal screenshot rendering; usage analysis; and multi-provider model switching:
 
 ```text
+/daymade-claude-code:claude-code-ops-router
 /daymade-claude-code:local-conversation-history
 /daymade-claude-code:read-claude-code-history
 /daymade-claude-code:read-codex-history
@@ -229,7 +233,7 @@ This suite bundles the skills that extend Claude Code itself — cross-project p
 /daymade-claude-code:claude-skills-troubleshooting
 /daymade-claude-code:claude-md-progressive-disclosurer
 /daymade-claude-code:statusline-generator
-/daymade-claude-code:claude-export-txt-better
+/daymade-claude-code:fixing-claude-export-conversations
 /daymade-claude-code:marketplace-dev
 /daymade-claude-code:terminal-screenshot
 /daymade-claude-code:claude-usage-analyst
@@ -254,6 +258,7 @@ claude plugin install daymade-financial@daymade-skills
 This suite bundles the skills that fetch and analyze financial data — Bigdata.com (RavenPack) structured financials and sentiment, US equity fundamentals via yfinance, Gangtise (岗底斯) OpenAPI research suite orchestration, A-share news and policy aggregation, A-share pharmaceutical sector daily reporting, structured devil's-advocate pressure-testing of investment theses, and adversarial due diligence on inflated benchmark claims:
 
 ```text
+/daymade-financial:financial-router
 /daymade-financial:bigdata-skill
 /daymade-financial:financial-data-collector
 /daymade-financial:gangtise-copilot
@@ -300,6 +305,7 @@ claude plugin install repomix-safe-mixer@daymade-skills
 
 # Full audio suite (ASR + transcript correction + meeting minutes + TTS)
 claude plugin install daymade-audio@daymade-skills
+
 
 # Video comparison and quality analysis
 claude plugin install video-comparer@daymade-skills
@@ -401,6 +407,18 @@ independent state verification.
 
 ---
 
+### **docs-router** - Daymade Document Routing
+
+> **Install**: `claude plugin install daymade-docs@daymade-skills` (suite-only — invoked as `daymade-docs:docs-router`)
+
+Selects the bundled specialist for document conversion, Word and PDF production,
+Mermaid images, macOS Excel automation, scanned PDFs, DOCX review extraction, or
+documentation cleanup. It reads the selected specialist's full instructions and
+required references. Specialist slash commands remain available for manual use.
+New presentation creation uses `deck-creator` when installed; `ppt-creator` is manual-only.
+
+---
+
 ### **doc-to-markdown** - Document Conversion Suite
 
 > **Install**: `claude plugin install daymade-docs@daymade-skills` (suite-only — invoked as `daymade-docs:doc-to-markdown`)
@@ -448,6 +466,14 @@ Extracts Mermaid diagrams from markdown and generates high-quality PNG images.
 **🎬 Live Demo**
 
 ![Mermaid Tools Demo](./demos/mermaid-tools/extract-diagrams.gif)
+
+---
+
+### **claude-code-ops-router** - Claude Code Setup Router
+
+> **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:claude-code-ops-router`)
+
+Routes plugin and Skill repair, marketplace work, statusline, model profiles and source sync, 1M context-window repair, usage and quota timers, memory migration, and exported `.txt` repair to one bundled specialist. The selected Skill's full instructions are read at use time; its original slash command remains available for manual use.
 
 ---
 
@@ -1629,6 +1655,14 @@ python3 scripts/enable_all_plugins.py daymade-skills
 
 ---
 
+### **audio-router** - StepFun Speech and Meeting-Minutes Routing
+
+> **Install**: `claude plugin install daymade-audio@daymade-skills` (suite-only — invoked as `daymade-audio:audio-router`)
+
+Selects the installed StepFun ASR, StepFun TTS, or transcript-to-minutes specialist and reads its full instructions at use time. Their original slash commands remain available manually. General audio transcription and transcript correction retain direct automatic entries.
+
+---
+
 ### **meeting-minutes-taker** - Meeting Minutes Generator
 
 > **Install**: `claude plugin install daymade-audio@daymade-skills` (suite-only — invoked as `daymade-audio:meeting-minutes-taker`)
@@ -1666,9 +1700,9 @@ claude plugin install daymade-audio@daymade-skills
 
 ---
 
-### **deep-research** - Research Report Generator
+### **deep-research** - Research Reports and Provider Runs
 
-Generate format-controlled research reports with evidence tracking and citations.
+Generate research reports from a durable study record: original sources, claim-level citations, rejected leads, and prior studies remain available for the next question. When several AI products or modes investigate one decision, coordinate their existing Skills and agents in parallel, preserve original outputs, and synthesize against the underlying sources and business question.
 
 **When to use:**
 - Need a structured research report, literature review, or market/industry analysis
@@ -1681,6 +1715,10 @@ Generate format-controlled research reports with evidence tracking and citations
 - Evidence table with source quality rubric
 - Multi-pass complete drafting with UNION merge
 - Citation verification and conflict handling
+- Project-local source and claim records for single-route and multi-route studies, with a searchable catalog for reuse
+- Exact seed-document handoff, persistent session aliases, and verified-source-first catalog search
+- Local provider × mode task and artifact ledger with provenance and hash checks
+- Read-only parallel dispatch board that separates shared app control, active tasks, completed reports and held routes; actual provider calls follow their own Skills and authorization rules
 - Ready-to-use report template and formatting rules
 
 **Example usage:**
@@ -1695,7 +1733,7 @@ claude plugin install deep-research@daymade-skills
 
 *Coming soon*
 
-📚 **Documentation**: See [deep-research/SKILL.md](./deep-research/SKILL.md) and [deep-research/references/research_report_template.md](./deep-research/references/research_report_template.md) for workflow and structure.
+📚 **Documentation**: See [deep-research/SKILL.md](./deep-research/SKILL.md), [research-asset-contract.md](./deep-research/references/research-asset-contract.md), and [research_report_template.md](./deep-research/references/research_report_template.md).
 
 **Requirements**: None
 
@@ -1978,27 +2016,15 @@ claude plugin install daymade-macos@daymade-skills
 
 📚 **Documentation**: See [capture-screen/SKILL.md](./daymade-macos/capture-screen/SKILL.md).
 
-### **macos-permissions** - Diagnose macOS TCC Permission Dialogs
+### **macos-permissions** - Diagnose and Repair macOS Privacy Permissions
 
 > **Install**: `claude plugin install daymade-macos@daymade-skills` (suite-only — invoked as `daymade-macos:macos-permissions`)
 
-Diagnose why a macOS privacy dialog (Screen Recording, Full Disk Access, Automation, …) keeps firing or grants the wrong subject. The core rule: **the dialog's displayed name is not the requester** — read the TCC `from Sub:` attribution to find who is actually asking, and the TCC.db `auth_value` for what is currently granted, before deciding what to authorize.
-
-**When to use:**
-- A permission prompt ("would like to access data from other apps", screen recording, microphone) keeps reappearing after clicking Allow
-- The app you need to authorize is not in System Settings, or the listed name does not match the process you expected
-- A background/launchd job triggers a permission dialog that the same command does not trigger interactively
-- Unsigned CLI tools (uv-managed python, custom binaries) hit permission walls under launchd
-
-**Key features:**
-- Decision tree that separates the *requester* (TCC log `from Sub:`) from the *displayed name* (which drifts for unsigned, path-keyed binaries)
-- Full `kTCCService` catalogue, `auth_value`/`auth_reason` semantics, and `tccutil` shorthand
-- The uv-in-launchd Full-Disk-Access trap: root process with no FDA-bearing parent to inherit from; grant FDA to the uv binary, and it recurs on path change
-- Instrument discipline for confirming which binary requests a permission (log attribution over `fs_usage`/`pgrep` false negatives)
+Use for repeated TCC prompts, silent denials, and background jobs that cannot read protected files. It identifies the actual requester, checks for a usable existing grant, and verifies the repair through the real job. The Skill contains the diagnostic and Full Disk Access repair procedure.
 
 📚 **Documentation**: See [macos-permissions/SKILL.md](./daymade-macos/macos-permissions/SKILL.md).
 
-**Requirements**: macOS (Swift + AppleScript + `screencapture`).
+**Requirements**: macOS. Reading TCC.db also requires Full Disk Access for the process doing the read.
 
 ---
 
@@ -2118,7 +2144,7 @@ claude plugin install ima-copilot@daymade-skills
 
 ### **claude-export-txt-better** - Fix Claude Code Export Formatting
 
-> **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:claude-export-txt-better`)
+> **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:fixing-claude-export-conversations`)
 
 Reconstruct broken line wrapping in Claude Code exported `.txt` conversation files. Rebuilds tables, paragraphs, paths, and tool calls that were hard-wrapped at fixed column widths, and ships with an automated 53-check validation suite (file-agnostic, catches over- and under-merging regressions).
 
@@ -2601,6 +2627,14 @@ claude plugin install feishu-doc-scraper@daymade-skills
 ```
 
 **Requirements**: `lark-cli` binary (npm `@larksuite/cli`) authenticated to the target tenant; `jq`. Fallback path needs a browser-automation surface; the docx path needs `python-docx` and a docx→md converter (the bundled doc-to-markdown skill or pandoc).
+
+---
+
+### **financial-router** - Financial Data Routing
+
+> **Install**: `claude plugin install daymade-financial@daymade-skills` (suite-only — invoked as `daymade-financial:financial-router`)
+
+Routes Bigdata/RavenPack, free US company fundamentals, A-share news, sector Top N and announcements, and Gangtise setup to one bundled specialist. Pharmaceutical reporting and general argument review keep their direct Skills; all specialist slash commands remain available for manual use.
 
 ---
 
@@ -3414,7 +3448,9 @@ blind to them.
 - Two-layer architecture: `references/` + CLAUDE.md-inline + AGENTS.md-symlink, designed around
   what each tool actually auto-loads (plain-text pointers are on-demand in both tools)
 - Full workflow: diagnosis, multi-agent review, empirical `codex` verification, and memory cleanup
-- Leaves memory as a thin handoff cache instead of the SSOT
+- Two goals: end tool lock-in, where memory stays as a thin handoff cache; or retire a project's
+  auto memory, where every entry moves to a document, the project switch goes off, and a control
+  probe confirms memory no longer loads
 - Runs inline, orchestrating review subagents and invoking `codex` directly
 
 **Example usage:**
@@ -3423,6 +3459,7 @@ blind to them.
 migrate my memory — Codex doesn't know who I am
 my memory is locked to Claude Code, make it tool-agnostic
 memory has grown bloated with content that should live in docs
+turn off auto memory for this project and move everything into docs
 ```
 
 ---
@@ -3522,7 +3559,7 @@ watchdogs and their incident history.
 
 **Key features:**
 - The quiet-watchdog contract — premise-state self-check (a monitor's lifecycle binds to its premise), patient mode (defer disruption, not detection), escalating auto-cooldown, and never-resurrect-what-the-user-quit
-- Deploy mechanics that bite — gui vs system domain, StandardOut/ErrorPath, TCC/FDA on the actual interpreter, and stop semantics (`unload` is deprecated and gets resurrected by `RunAtLoad` — bootout/bootstrap/disable only)
+- Deploy mechanics that bite — gui vs system domain, StandardOut/ErrorPath, TCC/FDA attribution through `macos-permissions`, and stop semantics (`unload` is deprecated and gets resurrected by `RunAtLoad` — bootout/bootstrap/disable only)
 - Batch-loop throttling by default and SRE alert layering (page vs ticket, fatigue numbers)
 - Bundles `watchdog-cooldown.sh` (source-able escalating cooldown + manual pause state machine), `new-launchagent.sh` (idempotent installer with validation), and an annotated plist template
 
@@ -3577,18 +3614,20 @@ adversarial verification. All public, no-login data sources.
 判断医药板块现在的市场情绪
 ```
 
-### **kimi-use** - Query Kimi Desktop Data Plugins
+### **kimi-use** - Kimi Desktop Plugins and Deep Research
 
 Drive the logged-in Kimi desktop app through computer-use to query its built-in
 company, financial, market, academic, and legal data plugins without separate
 API keys. Results stay source-labeled and must be independently checked before
-they become load-bearing data.
+they become load-bearing data. Its separate Chat Deep Research route exports a full report and attachments.
 
 **Key features:**
 - Routes requests to installed Kimi plugins such as 天眼查, 同花顺 iFinD, SEC, IMF, and academic/legal databases
 - Covers both Claude Code computer-use and Codex computer control
 - Provides query patterns that require explicit sources and honest unknowns
 - Guards against truncated lists, OCR/name errors, and financial-data scope mismatches
+- Separates Work/Agent plugin calls from Chat Deep Research and preserves the original report export
+- Checks per-interface credits before autonomous Work tasks and retains distinct raw returns for retries
 
 **Example usage:**
 ```text
@@ -3601,7 +3640,7 @@ they become load-bearing data.
 
 > **Install**: `claude plugin install tibo-reset-codex@daymade-skills`
 
-查询重置公告，核实多个 Pro 账号的剩余额度与备用重置；预测下一轮时间，并在本地保存预测、核对结果，供后续判断调整。
+查询重置公告，核实多个 Pro 账号的剩余额度与备用重置；有时间依据时预测下一轮，记录预测、核验与撤回，供后续判断调整。
 
 [操作说明](tibo-reset-codex/SKILL.md)
 
@@ -3836,6 +3875,38 @@ Glue logos, avatars, or stickers onto moving objects in a video clip so they fol
 📚 **Documentation**: See [meme-creator/SKILL.md](./meme-creator/SKILL.md) and the bundled `references/` for the tracking playbook and the asset-binding gate.
 
 **Requirements**: `ffmpeg`; `uv` (bundled Python scripts carry inline dependencies). `yt-dlp` only when downloading from a URL.
+
+---
+
+### **data-visualization-discipline** - Judgment Layer for Charts and Dashboards
+
+> **Install**: `claude plugin install data-visualization-discipline@daymade-skills`
+
+Decides whether a chart should exist and how it should be drawn before any code is written: the one conclusion each chart must support, mean vs. median, whether segments may be aggregated, stacked vs. line, dual axes, color count and cross-chart color identity, and how many columns a table keeps. Medium-agnostic — HTML reports, React/Vue dashboards, native PowerPoint charts, matplotlib/plotly/ECharts/D3.
+
+**Key features:**
+- Five stages (intent → data validity → form → encoding → delivery): the first four end with a handoff check, the fifth is the delivery gate
+- A nine-item delivery gate, including a masked-render self-test and painted-span proportion checks
+- Reviews existing charts ("what is wrong with these charts", "why do the legends disagree")
+
+- [`data-visualization-discipline`](./data-visualization-discipline/SKILL.md) — full instructions. Pairs with `report-with-html`, which owns the report page itself.
+
+---
+
+### **report-with-html** - Evidence-Backed HTML Reports
+
+> **Install**: `claude plugin install report-with-html@daymade-skills`
+
+Produces the reader-facing HTML artifact — report, dashboard, architecture or journey view, data browser, or review workbench — built around the reader's question, with every number traceable and the page verified in a real browser before delivery.
+
+**Key features:**
+- Skeleton chosen by the reader's question (how it works / what to decide / why it happened / which is better / inspect a collection)
+- Decision-card contract, reusable interaction components, and a warm-paper starter template
+- Delivery gate script with a masked (text-free) render, segment cropping for full-page review, and a zero-context independent reader review
+
+- [`report-with-html`](./report-with-html/SKILL.md) — full instructions. Load `data-visualization-discipline` for chart judgment.
+
+**Requirements**: Google Chrome or Chromium; `uv`; Python 3.10+.
 
 ---
 

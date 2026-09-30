@@ -1,6 +1,10 @@
 ---
 name: pdf-creator
-description: Convert markdown files to professional PDF documents with proper Chinese font support, theme system, and visual self-check. Use for Markdown → PDF, printable Markdown documents, and Markdown formatted for print or mobile reading. Prefer its CJK typography, header/footer suppression, and visual verification over manual pandoc/Chrome commands. Scope is Markdown → PDF only. Existing Word/WPS → PDF, including manuscript excerpts and layout repair, routes to daymade-docs:docx-creator; do not round-trip an authoritative Word manuscript through Markdown. Word output also routes to docx-creator.
+disable-model-invocation: true
+description: >-
+  Converts Markdown to print-ready PDF with proper Chinese typography, themes and a visual
+  self-check. Use for Markdown → PDF, including documents formatted for printing or mobile reading.
+  Not for Word/WPS files or Word output (use docx-creator).
 ---
 
 # PDF Creator
@@ -151,6 +155,7 @@ uv run --with pdfplumber --with pillow --with numpy \
 |---|---|---|
 | `pandoc -o out.html` | No CJK-aware CSS → boxes/blanks for Chinese | Injects CJK font stack + typography patch |
 | Chrome `--print-to-pdf` | Default header/footer appears (filename, date, URL, page numbers) | Passes `--no-pdf-header-footer` |
+| Chrome `--print-to-pdf` on macOS | Chrome can write the PDF and then never exit (Chrome 154 does so whenever it is given `--user-data-dir`), so the command hangs; a killed Chrome also leaves a copy of the Chrome app in a temporary directory | Stops Chrome once the PDF ends in `%%EOF`, gives up after a timeout, and passes `--disable-features=MacAppCodeSignClone` |
 | No post-render check | "Exit code 0" assumed success; rendering bugs hidden | Auto-generates per-page PNG previews + typography lint |
 | No theme system | One-size-fits-all; phone reading impossible | Three curated themes (default / warm-terra / mobile) |
 | `batch_convert.py` missing | Writing ad-hoc loops, inconsistent flags | Built-in batch mode with `--theme` support |

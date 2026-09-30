@@ -1,7 +1,10 @@
 ---
 name: asr-transcribe-to-text
 description: >-
-  Transcribe audio/video to speaker-labeled text — who-said-what by default, plain-text opt-out; MLX-local on Apple Silicon or remote; local files, media URLs. Use for transcribing recordings/podcasts/lectures/meetings, ASR, speech-to-text, 转录, 语音转文字, 录音转文字, speaker diarization/说话人分离/识别/谁在说话, timestamps 字幕/时间戳/音画对齐, CAM++ voiceprint ID. This skill ALSO owns audio PREPROCESSING for ASR as a first-class trigger, even without transcription: convert any audio/video into an ASR-ready file (转换成适合 ASR 的格式, 转格式, convert/prepare audio for ASR, 音频预处理), downsample to 16kHz mono 16-bit (降采样, 重采样, 单声道, 归一化), merge multi-segment recorder dumps (多段合并/拼接, DJI TX01/TX02), transcode to small M4A + pitch-preserved speedup to cut metered-ASR billed minutes (转 M4A, 压缩上传, 加速, 1.3x, 飞书妙记/Feishu Minutes). Trigger even when it looks like a trivial one-line ffmpeg — the skill owns sample-rate/bit-depth/channel, merge-order, speed-vs-WER, format choices + a blessed prepare_asr_input.py.
+  Transcribes audio or video to speaker-labeled, timestamped text, locally with MLX on Apple Silicon
+  or remotely. Use for 转录 / 录音转文字 / 说话人分离 / 字幕, and also for preparing audio for ASR without
+  transcribing: 转格式, 降采样到 16kHz, merging recorder segments, or compressing and speeding up audio
+  before 飞书妙记 — even when it looks like a one-line ffmpeg job.
 argument-hint: "[audio-or-video-file-path-or-url ...]"
 ---
 

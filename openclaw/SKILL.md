@@ -1,13 +1,10 @@
 ---
 name: openclaw
 description: >-
-  Manage OpenClaw (龙虾) instance configurations, gateway health, and plugin
-  lifecycle. Use whenever the user wants to audit, diff, copy, add-model, list,
-  or switch models in an openclaw.json file; when a lobster's gateway is down or
-  parked; when a plugin fails to register or stops working after an upgrade; or
-  when they ask whether an OpenClaw install is out of date.
-  Also triggers on: lobsters, 虾, 甲虾, 乙虾, DeepSeek patch, default model,
-  model aliases, OpenClaw config validation.
+  Audits, diffs, copies, and lists providers/models, adds models, and switches the default model in
+  local openclaw.json configs; diagnoses gateway/plugin failures (down, parked, broken, or out of
+  date after an upgrade). Use for 虾/龙虾 config audits. Not for model-error repair (use
+  openclaw-model-switch).
 argument-hint: '[audit|diff|copy|add-model|list|switch] [options]'
 ---
 

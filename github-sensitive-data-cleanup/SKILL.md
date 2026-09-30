@@ -1,13 +1,11 @@
 ---
 name: github-sensitive-data-cleanup
 description: >-
-  Scan and remove sensitive data (secrets, API keys, private domains/IPs, PII)
-  from GitHub repository history. Use this skill whenever the user says
-  "scan sensitive data", "clean git history", "remove secrets from repo",
-  "sanitize GitHub history", "清理敏感数据", "历史重写", "force push",
-  "泄露", or needs to repair a public repo after accidental secret/private
-  context leakage. Also use before any force push to a public repository to
-  verify visibility, backup, and scan results.
+  Scans and removes sensitive data (secrets, API keys, private domains/IPs, PII) from GitHub
+  repository history, then verifies and force-pushes safely. Use for 清理敏感数据 / 历史重写 / 泄露, "scan
+  sensitive data", "clean git history", "remove secrets from repo", or before any force push to a
+  public repo. Not for local-only Git recovery (use git-safety-net) or ordinary repository setup
+  (use auto-repo-setup).
 ---
 
 # GitHub Sensitive Data Cleanup

@@ -1,17 +1,11 @@
 ---
 name: docx-creator
+disable-model-invocation: true
 description: >-
-  Produce Word (.docx) and export existing Word/WPS manuscripts to PDF (Word 转 PDF / 试读版 /
-  排版修复), preserving revisions, tables and images. Especially for Chinese documents, drive
-  minimax-skills:minimax-docx OpenXML correctly. Use whenever the deliverable is a .docx
-  file: 生成 Word 文档 / 做一份 docx / 写合同 docx / 起草协议 / 正式文书 / 公文 / offer / 劳动合同 /
-  把 markdown 转成 Word / Word 排版 / 中文排版 / 签字栏 / 盖章版 / 甲方乙方, or any plain
-  "give me a Word file" request. This skill adds the layer minimax-docx does not ship: a verified
-  markdown-to-docx OpenXML generator, alignment rules for info and signature blocks, list numbering,
-  CJK font dual-slot setup, and a mandatory LibreOffice-to-PDF-to-PNG visual verification chain
-  (qlmanage thumbnails are banned — they hide exactly the bugs that matter). Engine belongs to
-  minimax-docx; correct usage and field-tested workarounds belong here. For Markdown → PDF use
-  daymade-docs:pdf-creator.
+  Produces Word (.docx) and exports existing Word/WPS manuscripts to PDF, preserving revisions,
+  tables and images, especially Chinese formal documents via a verified OpenXML generator with
+  mandatory visual verification. Use for 生成 Word 文档 / 写合同 docx / 把 markdown 转成 Word / 中文排版. Not for
+  Markdown → PDF (use daymade-docs:pdf-creator).
 ---
 
 # DOCX Creator

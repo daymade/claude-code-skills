@@ -7,9 +7,321 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **ima-copilot** (`ima-copilot` v1.2.0 → v1.2.1): the import reference records that upstream `SKILL.md` forbids passing `knowledge_base_id` as `folder_id` (so the retry is a fallback), that the note list's order and maximum `limit` are undocumented (page before diffing), that where 解析失败 appeared was not recorded, and upstream's instruction for URL kinds the API cannot import.
+- **ima-copilot** (`ima-copilot` v1.1.0 → v1.2.0): new `references/import_and_extract.md` and Capability 5 for using IMA as a page reader — `import_urls` (≤10 URLs per call, `media_id` per URL, titles resolve asynchronously), the note-as-structured-output protocol, which capabilities were not found in the upstream ima-skill docs (no KB or entry delete, no full entry body read) and a confirm-with-the-user step before the first import, and the failure modes seen in one 98-URL run (unescaped inner quotes, a 12-title round returning 7 objects, empty placeholder objects for unreadable pages, 9 of 98 pages ending as 解析失败) plus desktop-app automation traps (tool success flag ≠ text delivered, lazily-loaded note menu appending to an existing note). Numbers are from that single run.
+- **tibo-reset-codex** (`tibo-reset-codex` v1.18.1 → v1.18.2): the rule that the journal carries no email was stated in five places; `forecast-feedback.md`'s privacy contract is now its only full statement and the others point to it. The repo `CLAUDE.md` check for third-party reset signals now also asks whether the event cites a source post, since operator-entered events do not.
+- **skill-creator** (`daymade-skill` v1.54.2 → v1.54.3): the review-budget and hook-restricted-path additions to the independent-review protocol drop a quoted copy of the Loop Contract's template line and two incident anecdotes; the pointers stay.
+- **skill-creator** (`daymade-skill` v1.54.1 → v1.54.2): the independent-review protocol's stop rule now points at the host's review-loop budget (the Loop Contract in `claude-code-hooks`, fixed before the first cycle), so a reviewer beyond it is a new user-authorized task and the unreviewed remainder is recorded as the capped exit. The review-file step notes that the knowledge repo's own commit hook may restrict where such files live; follow the hook's stated directory instead of bypassing it.
+- **tibo-reset-codex** (`tibo-reset-codex` v1.18.0 → v1.18.1): `forecast_log.py summary` now carries a read-only `snapshot` field (`ok` / `lagging` with the uncommitted journal files / `no_repo` / `disabled` / `unknown`). A rejected snapshot commit prints one stderr line at append time and then leaves its content staged, so a journal could lag for days with nothing on the read path showing it; the real journal had been in that state since 2026-09-21. The monitoring round's first step now reads it.
+- **tibo-reset-codex** (`tibo-reset-codex` v1.17.1 → v1.18.0): A banked reset can be issued with no X post (the 2026-09-29 DevDay one was first recorded by a tracker's operator, then confirmed by readings from several accounts), so the reset-type table and the tracker leg now say to read `resetType` and `source.origin` before using an event, and to treat operator-sourced events as leads. `query_usage.py` adds `account_ref`, a short unsalted hash of the account email (a local pseudonym, not anonymization); banked counts are net values and comparable only within one account, so journaled readings must carry it instead of the email. `forecast_log.py`'s "git snapshot skipped" note now includes the pre-commit hook's stderr, which exposed why the snapshot had been failing: a personal-information hook rejecting emails that had been written into `findings.jsonl`. The `twitter user-posts` example discards stderr so CLI warnings cannot break JSON parsing.
+- **github-ops** (`github-ops` v1.7.1 → v1.7.2): the "merge only the reviewed head" recipe chains `gh pr merge` to `gh pr checks --required --watch --fail-fast` with `&&`; as two separate lines a failed watch still reached the merge. States the exit codes (0 all passed, 8 pending, 1 for both a failed check and a failed read, measured) and that a loop grepping for `pending` reads a failed call as finished.
+- **claude-code-hooks** (`daymade-claude-code` v4.4.2 → v4.4.3): `hook_pitfalls.md` gains #55 — a dash-leading path argument is parsed as options, so a repair branch that ran `dirname` on data-derived paths (all `-Users-…` under `~/.claude/projects/`) failed on every file at 03:00 despite passing calibration; the fixture had proven the parser while the stub boundary left the filesystem calls unexercised. `--` works even on macOS BSD tools (verified), but the recommended fix is parameter expansion (`${rel%/*}`) — no subprocess, no per-tool option table. The first published version of #55 claimed BSD tools accept no `--`; post-merge review re-probed and falsified it, and the entry now records that correction too. (Released as v4.4.2 with the wrong mechanism claim, corrected in v4.4.3 before any other change.)
+- **github-ops** (`github-ops` v1.7.0 → v1.7.1): `best_practices.md` records that in a fork a `gh` command with neither `--repo` nor a default repository resolves to the `upstream` remote, not `origin` (measured: `gh repo view` named the upstream project), so a read meant for the fork queries the upstream project. Pass `--repo` on every call or set the default once per clone.
+- **claude-code-hooks** (`daymade-claude-code` v4.4.0 → v4.4.1): `hook_pitfalls.md` gains #52-#54 from one overnight repair session. #52: `$var` glued to full-width punctuation is one long variable name whenever bash runs in a UTF-8 locale (both `/bin/bash` 3.2 and Homebrew 5.x; the builds differ only on unset-locale fallback) and dies only on the retry branch (`set -u`), with a byte-level detector regex whose engine must be named (rg/ugrep's default Unicode mode misses full-width punctuation). #53: a validator that folds "the call failed" into "nothing found" manufactures false greens — failure/empty/unexamined must log as three states, fail loud where the user looks, and vendor-file patches need a marked repatch script plus a health-check presence assertion. #54: a detector keyed on neighbour-line heuristics false-alerts on fallback recovery — key on the subject's own per-fire terminal marker, and calibrate the rewritten criterion against the real log in both directions.
+- **prior-work-retrieval** (`daymade-claude-code` v4.4.0 → v4.4.1): the prompt classifier excises the ASCII token `no-reuse`/`no_reuse` before matching — that spelling is the receipt field name and ops-ledger vocabulary (`no_reuse_reason`), not a retrieval request, and a watchdog loop's tick prompts armed a fresh requirement on every tick because of it (six forced retrieve+complete rituals in one night, blocking even two-line ledger edits). An earlier draft of this change also excised the Chinese property statements 可复用/可重用, but independent review reproduced true recall asks in that exact attributive shape (「有可复用的现成方案吗」) that the excision would have silenced — property statement and recall request share one surface form in Chinese, and where they cannot be separated the gate keeps arming; the operational fix for loop text is to not write the word, which the state file now avoids. Regression cases lock both directions: `no-reuse` does not arm, Chinese reusability asks still do.
+
+- **claude-code-hooks** (`daymade-claude-code` v4.3.3 → v4.4.0): `hook_pitfalls.md` gains #49 — a selftest scheduler that signs only the registered hook file never re-runs after edits to the logic, because most guards are a thin wrapper around a sibling classifier. The fix signs the hook together with the files it runs and imports (path-joined filenames on non-comment lines, same-directory imports; never bare mentions, which chain through prose until every hook depends on the whole directory), in one process for all hooks. The pitfall carries a reference implementation, checked against 72 real hooks; SKILL.md's tiered-selftest snippet now uses it.
+- **Repository**: `.gitattributes` merges `CHANGELOG.md` as a union, so a local merge or rebase keeps both sides' `[Unreleased]` entries instead of conflicting. GitHub's own mergeability check ignores the attribute; CLAUDE.md says how to resolve a PR that still shows CONFLICTING and what to check after a union merge.
+- **claude-code-hooks** (`daymade-claude-code` v4.3.2 → v4.3.3): `hook_pitfalls.md` gains #50 and #51. #50: a gate that works and is slow raises no block, bypass or self-test signal, and the host records a duration for only some hook runs (a PreToolUse hook that prints nothing may leave no record), so the entry gives the transcript fields, a probe for that coverage, and a stamp-and-TTL skip for a health check that runs every self-test. Measured: a session-start check went from 69–83 s to 4–20 s. #51: four traps when a guard starts recording its own run time: `exec` skips the EXIT trap, fixture repositories from every session flood a machine-wide log unless the writer filters by path, `read … < f 2>/dev/null` leaks its error, and a self-test row that runs a blocked input ends the script silently under `set -e`.
+- **claude-code-hooks** (`daymade-claude-code` v4.3.1 → v4.3.2): `hook_pitfalls.md` gains #48 — a test suite that has not run since its dependencies changed is green by reputation. Run the suite at HEAD before editing what it covers, or a sibling change's fixture rot lands in your diff and reads as your regression. Real case: an LFS-dispatch rewrite in a pre-push hook spent two rounds on "my edit broke the suite" before an at-HEAD run showed the rows had been failing for eight days.
+
+### Changed
+
+- **macos-cleaner** (`daymade-macos` v1.14.0 → v1.14.1): The Chromium code-sign-clone reference records a measured release: deleting 293 inactive Chrome clones, 606.5 GiB path-accounted, freed roughly 0.2–0.4 GiB, and clones of an unreferenced older version did not free a bundle's size either, so release stays `unknown` until the `df` readback. It also gives a named-pipe script for agents whose shell cannot hold `safe_delete.py`'s prompt open while the final analyzer check runs.
+- **git-safety-net** (`git-safety-net` v1.22.1 → v1.22.2): Worktree retirement now checks scheduler definitions (launchd plists, crontab, systemd units) for the worktree's path first. A checkout that a scheduled job runs from shows no open handles and no recent file changes between runs.
+
 ### Fixed
 
-- **read-claude-code-history / local-conversation-history** (`daymade-claude-code` v3.57.0 → v3.58.0): Keep local CLI commands from changing a conversation's task completion state. Report original and last runtime working directories with source coordinates while preserving the existing `cwd` field. Distinguish exact-ID provider lookup from content-based conversation discovery.
+- **read-claude-code-history / local-conversation-history** (`daymade-claude-code` v4.4.3 → v4.5.0): Preserve task completion state after local CLI commands and label their runtime output separately. Report original and last runtime working directories with physical source coordinates while retaining the legacy `cwd` filter. Separate exact-ID lookup from indexed content discovery.
+
+- **report-with-html** (`report-with-html` v1.0.1 → v1.0.2): Every direct Chrome launch passes `--disable-features=MacAppCodeSignClone`. On macOS each launch copies the Chrome app into a temporary `code_sign_clone` directory, and a Chrome that gets killed leaves the copy behind. `reconcile_content_diff.py` passes `--user-data-dir`, with which Chrome 154 keeps running after printing the DOM of the pages it checks, so it ends Chrome itself, and every page it rendered left a copy (measured: two per run comparing one old and one new page, none after this change). `render_report.sh` no longer waits for Chrome without limit: it stops Chrome once the PNG is complete, sends SIGKILL if SIGTERM does not end it within 5 seconds, and fails after `CHROME_TIMEOUT` seconds (default 90).
+- **pdf-creator, pdf-to-html** (`daymade-docs` v1.20.0 → v1.20.1): `md_to_pdf.py --backend chrome` and `verify_render.py` no longer wait for Chrome without limit. They stop it once the PDF ends in `%%EOF` or the PNG is complete, fail after a timeout with a message that tells a timeout from an early exit, and still stop Chrome when the script itself receives SIGTERM, or SIGHUP when it is not running under `nohup`. Both pass `--disable-features=MacAppCodeSignClone`. `verify_render.py` builds the page URL from the absolute path, so a relative HTML path now works.
+- **terminal-screenshot** (`daymade-claude-code` v4.3.0 → v4.3.1): The Chrome fallback in `render_ansi.sh` builds the page URL from an absolute path (a relative output path used to produce a broken `file://` URL), stops Chrome once the PNG is complete, fails after 60 seconds with a message that tells a timeout from an early exit, and passes `--disable-features=MacAppCodeSignClone`.
+- **macos-cleaner** (`daymade-macos` v1.13.0 → v1.14.0): The Chromium code-sign clone reference now says which launches leave clones behind, measured on Chrome 154. Chrome removes its clone when it exits normally and leaves it when killed. A one-shot headless run exits by itself unless it is given `--user-data-dir`; then it can keep running after writing its output, and every such run that gets stopped leaves a clone. A Playwright `browser.close()` removes its own. The reference now recommends `--disable-features=MacAppCodeSignClone` for direct launches, and says not to add it to Playwright launches: Chrome keeps only the last `--disable-features`, so Playwright's own list would be dropped.
+- **meme-creator** (`meme-creator` v1.1.0 → v1.1.1), **frontend-visual-qa** (`frontend-visual-qa` v1.15.0 → v1.15.1): The direct headless Chrome commands in their references pass `--disable-features=MacAppCodeSignClone`, and the references warn that with `--user-data-dir` headless Chrome 154 can keep running after writing its output.
+- **skill-creator** (`daymade-skill` v1.54.0 → v1.54.1): `audit_skill_regression.py` now orders files the same way when hashing a `git-ref:` baseline as when hashing the extracted copy. The Git side sorted paths as strings, so `probes-r3/` came before `probes/`, and any skill with sibling directories sharing a prefix failed with "before tree does not match" against an unedited baseline.
+- **transcript-fixer** (`daymade-audio` v1.44.1 → v1.44.2): Align batch-audio guidance and CLI help with the shipped evidence-only behavior. The operator guide now leaves identical clips, uncertain boundaries, and conflicting readings pending; the CLI documents a positional audio-path argument. Remove copied gate conditions from the parameter reference.
+
+- **transcript-fixer** (`daymade-audio` v1.44.0 → v1.44.1): `verify_queue_audio.py` now adds audio authority only when successful ASR outputs from different audio clips agree on the proposed term and its following character, with no recognition of the original alternative. A Chinese name embedded in a longer name, identical clip bytes, one-window match, or recognizer failure stays pending.
+
+### Added
+
+- **read-claude-code-history** (`daymade-claude-code` v4.2.0 → v4.3.0): Add `read_claude_session.py --agent-prompts` (with `--agent-description-prefix`), which prints every Agent/Task tool_use dispatched in a Session — timestamp, record uuid, description, subagent_type, model, run_in_background, and the prompt verbatim inside a backtick fence sized so the prompt's own backtick runs cannot close it early — searching the main transcript and its subagent transcripts, listing a prompt dispatched twice as two matches. Add `analyze_sessions.py tool-calls --from --to --pattern [--tool]`, which selects candidate session/subagent files by filesystem `stat()` metadata alone before opening any body (modified-time lower bound, and a creation-time upper bound where the platform's `stat()` exposes one — absent on Linux, which is stated in the output), de-duplicates physical copies reachable through a symlinked `projects/` tree or an archived copy of the same Session ID, then reads only the candidates and keeps only records whose own internal timestamp falls inside the window; Codex rollout files are out of scope for this subcommand and the gap is stated in its output.
+
+- **terraform-skill** (`terraform-skill` v1.3.0 → v1.4.0): Add a symptom entry for an apply whose side effects landed but whose backend state upload failed (`Failed to save state`, `errored.tfstate`). It says to confirm from the apply log that only the state upload failed, not to re-run apply, to compare lineage and serial with the remote state, push, and read back, and never to use `-force`. It also says to finish the wrapper steps skipped by the non-zero exit. The `state push` refusal cases were observed on Terraform 1.5.7 with a local backend.
+
+- **macos-cleaner** (`daymade-macos` v1.12.1 → v1.13.0): Route "what has been filling the disk lately" questions to a new `references/growth_attribution.md`; a size ranking does not answer them. It diffs a saved GrandPerspective text export or earlier `du` output against the current disk, after confirming on an unchanged directory that both sides measure size the same way. Directories missing from the baseline count as not scanned rather than new: in one observed case a naive diff reported 106 GiB of growth where 1.4 GiB had arrived. Each delta is confirmed with file timestamps. The attributed total is checked against the `df` change, counting swap, local snapshots and short-lived copies, and every row names the process or session that writes to it.
+
+- **read-claude-code-history** (`daymade-claude-code` v4.1.0 → v4.2.0): Add `read_claude_session.py --session <ID> --find-command-sha256 <HEX>`, which resolves a hook audit row keyed by Session ID and command SHA-256 to the full tool call: file and line, timestamp, record uuid, cwd and command text. It also searches the Session's subagent transcripts, because a hook event raised inside a subagent carries the parent Session ID. Unparseable lines are counted and reported rather than hidden.
+
+- **claude-code-hooks** (`daymade-claude-code` v4.1.0 → v4.2.0): Add a pattern for changing a gate that already ships, above all adding an allow branch. Replay the same corpus through the old and new versions and account for every moved decision. Compose the new branch's trigger into every must-block row, and mutate the branch until those rows go red.
+
+- **read-claude-code-history** (`daymade-claude-code` v4.0.0 → v4.1.0): Add `skill_usage_ledger.py`, an incremental index of Skill invocations across every registered Claude home, backup archive and Codex. Each event records who started it: a typed slash command, the model after the user named the Skill, or the model unprompted. Claude calls refused because the Skill is not model-invocable are recorded as `blocked`; Codex reads made while developing a Skill, or several SKILL.md files at once, are kept apart from use. Unchanged session files are not re-read.
+
+- **skill-governance** (`daymade-skill` v1.53.1 → v1.54.0): Decide model-visible versus user-invocable-only per Skill from recorded use instead of descriptions or install location. The new procedure keeps router children cold, keeps Skills the model has started or that rules tell the model to use, and checks large counts against the working directories they came from.
+
+### Breaking
+
+- **read-codex-history** (`daymade-claude-code` v3.69.0 → v4.0.0): Codex inventory no longer falls back to scanning rollout trees when the state database is missing or unreadable. The shared core and both bundled copies now fail closed; exact-session reading remains available.
+
+### Added
+
+- **tibo-reset-codex** (`tibo-reset-codex` v1.16.2 → v1.17.0): Report low-usage anchor advances as unattributed leads when a second reset would fall below the scanner's 20-point drop threshold. Historical `--as-of` scans now exclude later snapshots. Account guidance keeps natural and additional resets as separate events and keeps current balance out of landing evidence until its cause is established. Its offline tests now run in CI.
+
+- **git-safety-net** (`git-safety-net` v1.22.0 → v1.22.1): Troubleshooting entry for the diverged-but-familiar branch: `git cherry <upstream> <branch>` returning all `-` means every local-only commit is patch-identical to one already upstream (typical cause: committing against a stale remote-tracking ref, after which the same change was re-made and pushed), so the branch can be fast-forwarded; any `+` remains an ordinary divergence.
+
+- **deep-research** (`deep-research` v2.10.1 → v2.11.0): Hand an exact user-named seed to each isolated provider and reject wrong-document findings during synthesis. Preserve the submitted session URL while recording an evidenced persistent URL for task resumption. Harvest visible HTML citations without browser assets, prefer verified sources in prior-study search, and append catalog revisions when a study gains sources or claims. Store a portable catalog path in each new study and verify catalog continuity before relinking older absolute paths.
+
+- **kimi-use** (`kimi-use` v1.4.0 → v1.5.0): Check per-interface credits before an autonomous Work task; defer when unapproved charges cannot be gated. Preserve separate raw returns for each failed or retried call, and inspect complete exported data before repeating a query. Record the observed fund-data plugin coverage and its account-specific cost limit.
+
+- **deep-research** (`deep-research` v2.10.0 → v2.10.1): Check metered subtools before handing a research lane to an autonomous Work agent. An existing account does not authorize unbounded credit use; defer a lane when unapproved calls cannot be gated, and preserve actual usage in its raw task record.
+
+- **deep-research** (`deep-research` v2.9.0 → v2.10.0): Create a durable study for every research run, including direct-source and single-provider work. The new research-asset CLI records prior-study decisions, source originals and leads, source-bound claims, and a searchable project catalog; final checks reject missing study files, unrecorded report/provider URLs and broken source snapshots. Provider dispatch remains with the installed specialist Skills.
+
+- **tibo-reset-codex** (`tibo-reset-codex` v1.14.6 → v1.15.0): Add an append-only `withdraw` command for forecasts whose dates lack evidence. Withdrawn forecasts remain visible in the journal but leave the pending and follow-up lists. The monitoring route now pursues an unverified reset promise through sources that can distinguish announcement, account arrival, and cause; a promise without a deadline no longer forces a dated prediction.
+
+- **deep-research** (`deep-research` v2.8.0 → v2.9.0): Add a coordinator for parallel provider × mode research, composing existing Skills and agents rather than embedding vendor adapters. Its read-only planner assigns one owner per control surface, keeps active tasks in the same owner queue, and synthesizes by original evidence rather than model agreement. It makes no provider calls or purchases.
+
+- **deep-research** (`deep-research` v2.7.0 → v2.8.0): Add a local multi-provider run contract and CLI that separates provider modes, records original tasks and artifacts, and rejects missing origins, changed run identities, and modified exports. The existing citation registry still owns factual verification.
+
+- **tunnel-doctor** (`tunnel-doctor` v1.15.0 → v1.15.1): Step 2K now counts a venue change (phone hotspot, different WiFi) as a second vantage point — a 2026-09-24 cafe-WiFi blackout of an entire proxy provider's domains and nodes was indistinguishable from a provider block, and switching networks fixed it with zero config change.
+- **claude-migrate-memory-to-doc** (`daymade-claude-code` v3.68.0 → v3.69.0): Add a second goal, retiring a project's auto memory entirely, with its own reference (per-project switch, shared-directory coordination, inventory across every skill repo, one disposition per file, verbatim migration, pointer repointing, a control probe that proves memory stopped loading, and an archive index). `scripts/migrate_verbatim.py` appends memory bodies to their owning documents and checks every line landed; its tests are registered. Three new failure cases. `claude-code-ops-router` now routes requests to turn auto memory off.
+
+- **report-with-html** (v1.0.0): new skill — reader-facing HTML reports, dashboards, and review workbenches with traceable numbers, a decision-card contract, reusable interaction components, a masked-render delivery gate, and an independent reader review. Pairs with `data-visualization-discipline`.
+
+- **data-visualization-discipline** (v1.0.0): new skill — the judgment layer for charts and dashboards: which conclusion a chart supports, which statistic and chart type fit, whether segments may be aggregated, and how color and tables are disciplined, with a nine-item delivery gate. Medium-agnostic.
+
+- **daymade-skill** (v1.52.0 → v1.53.0): Route decision-useful outcome reports from `skill-creator` and newly created Skills through `report-with-html`. A recurring customer-report Skill saves its own reusable template only after the user reviews a real report and approves that form; concise replies and the existing eval viewer remain the default where they already fit.
+
+- **daymade-audio** (v1.43.0 → v1.44.0): Add `audio-router` for StepFun ASR/TTS and minutes from existing transcripts. Those three specialist instructions and manual commands stay installed; general transcription and transcript correction remain directly discoverable.
+
+- **daymade-claude-code** (v3.64.0 → v3.65.0): Add `claude-code-ops-router` for eight setup and maintenance specialists. Their full instructions and manual commands remain installed; conversation history, continuation, hooks, prior-work retrieval, and other distinct automatic entries stay direct.
+
+- **daymade-financial** (v1.4.0 → v1.5.0): Add `financial-router` for five data, sector-research, and Gangtise setup specialists. Their full instructions and manual commands remain installed; `devils-advocate`, `benchmark-due-diligence`, and the Feishu-sending `pharma-daily-report` stay directly discoverable.
+
+- **daymade-docs** (v1.18.0 → v1.19.0): Add `docs-router` as the suite's automatic document-work entry. It selects a bundled specialist by input and requested output, resolves the active router's canonical source path to find sibling skills on Claude Code or Codex, then reads the selected full `SKILL.md` and task-required references. Routes cover document-to-Markdown, Markdown-to-PDF, existing Word-to-PDF, DOCX creation and review, PDF-to-HTML including translation with figures, Mermaid PNGs, complex Excel models and macOS automation, photos or unsigned digital documents to scanned PDFs, post-change documentation impact checks, and explicit cleanup.
+
+### Changed
+
+- **tibo-reset-codex** (`tibo-reset-codex` v1.15.1 → v1.16.0): For an unfulfilled reset promise or a timing question, give a sourced event timeline after the current-state conclusion. Distinguish service recovery, the original future-tense promise, account readings, and any completion signal without treating the announcement time as arrival.
+
+- **kimi-use** (`kimi-use` v1.3.2 → v1.4.0): Distinguish Work/Agent plugin queries from Chat Deep Research, document the verified K3 and export routes, and retrieve Work outputs from Kimi's own task folder when no project folder is mounted.
+
+- **kimi-use** (`kimi-use` v1.3.1 → v1.3.2): Route Codex to the currently available CUA or legacy computer plugin. The CUA path pastes Chinese text into Kimi's rich editor and reads back the full prompt and enabled send button before sending.
+
+- **macos-permissions** (`daymade-macos` v1.12.0 → v1.12.1): Route LaunchAgent Full Disk Access repair from `CLAUDE.md` to the canonical SOP, and remove transient UI tool status and a derived route count from that SOP.
+
+- **macos-permissions** (`daymade-macos` v1.11.1 → v1.12.0): Document two end-to-end macOS Full Disk Access GUI routes verified with real LaunchAgents: enabling an existing denied entry and adding a new executable through the file picker. Both require a system TCC readback and protected background read; hidden-path picker submission remains unverified on this host.
+
+- **macos-permissions** (`daymade-macos` v1.11.0 → v1.11.1): Correct the Full Disk Access SQL example to read the system TCC database. User-database examples no longer appear to prove an FDA grant.
+
+- **macos-permissions, macos-watchdog, capture-screen** (`daymade-macos` v1.10.0 → v1.11.0): Align Full Disk Access guidance with the tested background reader and its installer. The repair route now checks existing grants before opening System Settings, uses exact TCC client paths, and validates a protected read. LaunchAgent and README guidance point to that route instead of treating the displayed interpreter or a manual grant as universal.
+
+- **macos-permissions** (`daymade-macos` v1.9.1 → v1.10.0): Route background Full Disk Access failures through requester identification, verified reuse of an existing grant when the owning installer supports it, and a real background readback. New grants use System Settings; the GUI path remains unverified in the documented case.
+
+- **tibo-reset-codex** (`tibo-reset-codex` v1.14.5 → v1.14.6): Clarify that the hosted branch is a read-only research **task** with application-owned state, even when its workspace sandbox permits network access and temporary files to read explicitly authorized private sources. The normal direct-call ledger path remains unchanged.
+
+- **tibo-reset-codex** (`tibo-reset-codex` v1.14.4 → v1.14.5): Define a read-only, application-owned research mode for an Agent host that supplies the prior report, unresolved state, corrections and exact source authorization. The Skill keeps its Tibo evidence and reset-type decisions, returns leads and next checks in the host artifact, and does not write or silently read the standalone local ledger in that mode. Ordinary direct invocations retain the existing local findings/forecast workflow.
+
+- **tibo-reset-codex** (`tibo-reset-codex` v1.14.3 → v1.14.4): Add a read-only `forecast_log.py handoff` command that returns the latest complete monitor finding, including unresolved questions and source coverage. Monitoring rounds now read that handoff directly instead of manually scanning raw JSONL; `null` stays unknown, and the due-forecast summary remains the first check.
+
+- **read-codex-history** (`daymade-claude-code` v3.67.0 → v3.68.0): Add `--index-only` to Codex inventory. Missing or unreadable state metadata now returns an explicit unavailable result before any rollout fallback; the Skill and storage reference use this guarded route.
+
+- **tibo-reset-codex** (`tibo-reset-codex` v1.14.2 → v1.14.3): Sync SKILL.md to the new summary contract — the monitoring round's first step and the sleep-window escalation note now read `due_for_followup` instead of hunting due promises through pending rationale text; the closing-soon threshold is defined once via the script constant and referenced, not re-copied.
+
+- **tibo-reset-codex** (`tibo-reset-codex` v1.14.1 → v1.14.2): `forecast_log.py summary` now surfaces `due_for_followup` — pending forecasts whose window has elapsed or closes within 24 hours, with full ids, urgency, and elapsed hours — so a bare invocation sees what needs verification before reading any rationale text. Motivation: on 2026-09-24 a banked forecast sat 26h past its window before anyone checked it, and the arrival interval could no longer be narrowed inside the window (would-be hit scored unknown).
+- **tibo-reset-codex** (`tibo-reset-codex` v1.14.0 → v1.14.1): Record the 2026-09-24 field lessons: authenticated `twitter-cli` slots into the fallback chain before fxtwitter (both Radar and fxtwitter were down that day and it covered announcement plus known-thread reply legs); known candidate threads read in one call via `twitter tweet <id> --json` (author field `data[].author.screenName`); the negative-claim boundary moves when `twitter-cli` is logged in; `query_usage` `reset_at` cross-checks the `scan_rollouts` tail anchor to bind the mixed rollout series tail to the current CLI account; elapsed forecasts must be verified immediately (a 26h delay turned a would-be hit into unknown), `event_start` must follow forecast issuance, and the `findings` command returns summaries only — raw readings live in `findings.jsonl`; the fxtwitter win-channel claim is clamped to when `twitter-cli` is unavailable.
+- **tibo-reset-codex** (`tibo-reset-codex` v1.13.3 → v1.14.0): Make each invoked monitoring round carry unresolved questions forward, judge new and newly discovered older posts by their effect on the user's decision, follow relevant source leads including the identified WeChat group and its image or voice messages, and keep global, banked, both, and unknown recommendations distinct. The existing forecast ledger stores the handoff; no standalone monitor or scheduler is added.
+
+- **claude-md-progressive-disclosurer** (`daymade-claude-code` v3.66.0 → v3.67.0): Description now also routes requests to optimize instruction files, questions about CLAUDE.md/AGENTS.md best practices, and /context reports of large Memory files; it points memory-to-docs migration to `claude-code-ops-router`. Step 2.0 lists auto memory's `MEMORY.md` as a loaded surface, with its official load limit and switches, and treats it as a conflict source.
+
+- **claude-md-progressive-disclosurer** (`daymade-claude-code` v3.65.1 → v3.66.0): Extend the evidence table with the 2026 factorial study of file structure (arXiv 2605.10039), IFScale, Chroma Context Rot, Anthropic's guidance on emphatic wording, and practitioner guides, each with what it does not support; add a refresh rule so best-practice questions start from the table instead of a new search; treat stacked emphasis as priority inflation.
+
+- **prior-work-retrieval** (`daymade-claude-code` v3.65.0 → v3.65.1): Route conversation evidence through provider-scoped indexed recall and exact-session verification; restrict project `rg` to code/docs and report uncovered history instead of suggesting raw corpus search.
+
+- **frontend-visual-qa** (`frontend-visual-qa` v1.14.0 → v1.15.0): Check image-present, image-absent, failed-load, and long-text rows together when media is optional in a repeated list or table; compare the actual media slot and text bounds before calling the layout consistent.
+
+- **slides-creator** (`slides-creator` v2.0.0 → v2.1.0): description now opens with what it was and where to go instead (deck-creator), so the first ~160 characters Codex shows are usable; deprecation notice unchanged in substance.
+
+- **auto-repo-setup** (`auto-repo-setup` v2.0.0 → v2.1.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **bilibili-source** (`bilibili-source` v1.2.0 → v1.3.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **cli-demo-generator** (`cli-demo-generator` v1.0.1 → v1.1.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **competitors-analysis** (`competitors-analysis` v1.3.0 → v1.4.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **meeting-minutes-taker, stepfun-asr, stepfun-tts, transcript-fixer** (`daymade-audio` v1.42.0 → v1.43.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **agent-web-search-setup, claude-export-txt-better, claude-md-progressive-disclosurer, claude-migrate-memory-to-doc, claude-switch-models-setup, continue-claude-code-work, continue-codex-work, lark-cli-router, marketplace-dev, prior-work-retrieval, read-claude-web-conversation, read-codex-history, statusline-generator, terminal-screenshot** (`daymade-claude-code` v3.63.0 → v3.64.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **codex-1m-context-window-setup, interaction-design-board, local-codex** (`daymade-codex` v1.2.3 → v1.3.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **benchmark-due-diligence, bigdata-skill, financial-data-collector** (`daymade-financial` v1.3.0 → v1.4.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **developing-ios-apps, macos-cleaner, macos-permissions** (`daymade-macos` v1.8.0 → v1.9.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **skill-governance** (`daymade-skill` v1.51.0 → v1.52.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **deep-research** (`deep-research` v2.6.0 → v2.7.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **excalidraw-use** (`excalidraw-use` v1.0.2 → v1.1.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **feishu-doc-scraper** (`feishu-doc-scraper` v1.5.2 → v1.6.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **frontend-visual-qa** (`frontend-visual-qa` v1.13.0 → v1.14.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **github-contributor** (`github-contributor` v1.2.0 → v1.3.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **github-ops** (`github-ops` v1.6.0 → v1.7.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **github-review-pr** (`github-review-pr` v1.3.0 → v1.4.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **github-sensitive-data-cleanup** (`github-sensitive-data-cleanup` v1.2.0 → v1.3.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **ima-copilot** (`ima-copilot` v1.0.1 → v1.1.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **kimi-use** (`kimi-use` v1.2.0 → v1.3.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **llm-eval-harness** (`llm-eval-harness` v1.4.2 → v1.5.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **llm-wiki-setup** (`llm-wiki-setup` v1.1.1 → v1.2.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **marketplace-health-check** (`marketplace-health-check` v1.0.1 → v1.1.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **meme-creator** (`meme-creator` v1.0.0 → v1.1.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **openclaw-model-switch** (`openclaw-model-switch` v1.1.0 → v1.2.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **openclaw** (`openclaw` v1.2.1 → v1.3.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **prompt-optimizer** (`prompt-optimizer` v1.1.0 → v1.2.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **qa-expert** (`qa-expert` v1.0.0 → v1.1.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **teams-channel-post-writer** (`teams-channel-post-writer` v1.0.0 → v1.1.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **terraform-skill** (`terraform-skill` v1.2.0 → v1.3.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **windows-remote-desktop-connection-doctor** (`windows-remote-desktop-connection-doctor` v1.1.0 → v1.2.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **docs-router** (`daymade-docs` v1.19.0 → v1.20.0): Its first 160 description characters now name the document routes and post-change checks that Codex can see. The nine specialist instructions and manual commands are unchanged.
+
+- **skill-creator** (`daymade-skill` v1.50.0 → v1.51.0): The description rule now requires the first ~160 characters to stand on their own (what the skill does and its main trigger). Measured in `codex debug prompt-input` with 260 skills installed: Codex cuts 254 of them at 164–168 characters, so later trigger phrases and "Not for" redirects are invisible there.
+
+- **daymade-docs**: Make the nine active specialists manual-only for direct skill invocation while preserving their bodies and `/daymade-docs:<leaf>` commands. `ppt-creator` remains manual-only; new presentation creation routes to `deck-creator` when installed, while public users without it keep explicit compatibility access to `ppt-creator`. The router preserves `docs-cleaner`'s post-change documentation check after authorized code/config/deployment work, even when docs were not mentioned, and also handles explicit cleanup. This changes discovery without retiring the post-change workflow.
+
+- **skill-creator** (`daymade-skill` v1.49.0 → v1.50.0): When rewriting a description, a placeholder such as "its named contacts" no longer counts as a home for the literal names, product names or error strings users type. Found when a rewrite collapsed a client's contact list into a placeholder that can no longer trigger.
+
+- **read-codex-history** (`daymade-claude-code` v3.62.0 → v3.63.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **docx-creator** (`daymade-docs` v1.17.0 → v1.18.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **daymade-sector-research** (`daymade-financial` v1.2.1 → v1.3.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **debugging-network-issues** (`debugging-network-issues` v1.9.0 → v1.10.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **peer-message** (`peer-message` v1.13.0 → v1.14.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **twitter-reader** (`twitter-reader` v1.3.0 → v1.4.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **skill-creator** (`daymade-skill` v1.48.0 → v1.49.0): The description Length rule now says what to do when keeping every distinct job pushes past 420 characters: compress first (one phrasing per situation, a shorter what-it-does clause, no transport or implementation details), and go over only when a distinct job would otherwise be lost.
+
+- **read-claude-code-history, tech-selection** (`daymade-claude-code` v3.61.0 → v3.62.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **git-safety-net** (`git-safety-net` v1.21.0 → v1.22.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **tunnel-doctor** (`tunnel-doctor` v1.14.0 → v1.15.0): description rewritten as a short routing key under skill-creator's rule; every removed clause has a cited home, and dropped secondary phrasings are listed in the PR description.
+
+- **Local conversation history** (`daymade-claude-code` v3.60.2 → v3.61.0): Live `analyze_sessions.py search` now fails before reading conversation files. History discovery uses indexed recall and exact-session verification; the Skills report index coverage gaps instead of falling back to a raw corpus sweep. Isolated fixture search remains available for parser regression tests.
+
+- **claude-switch-models-setup** (`daymade-claude-code` v3.60.0 → v3.60.1): The profile settings converger now propagates env deletions: a non-identity env key removed from main is deleted from every profile and reported, instead of surviving forever under the old additive-only merge. Identity keys (provider routing, Anthropic-native isolation) are exempt — main never carries them, so their absence is not deletion evidence. Deletion also propagates when main drops the `env` key entirely, which the old loop-shaped code could never do.
+
+- **claude-switch-models-setup** (`daymade-claude-code` v3.60.1 → v3.60.2): Docs now match the v3.60.1 deletion-propagation behavior: SKILL.md describes the two-way env convergence (non-identity residue keys are deleted and reported; identity keys exempt), and troubleshooting.md's synthetic-main incident notes the damage is two-sided — a fake main now also deletes every non-identity env key the real profile carries, including credential keys.
+
+- **macos-watchdog** (`daymade-macos` v1.7.0 → v1.8.0): Shorten the discovery description
+  while preserving watchdog setup, repair, and stop triggers; add Script Editor notification
+  attribution as a trigger and route it to the delivered-card check in `alert-discipline.md`.
+
+- **skill-creator** (`daymade-skill` v1.46.0 → v1.47.0): Rewriting an existing description now goes through the existing-skill regression gate, and each removed clause gets a home by type: a when-to-use situation must stay in the description or be listed as a dropped secondary phrasing; a Not-for exclusion or operational rule must land in the description or the body and is never dropped. Blind audits of two real rewrites showed body-only checks miss lost triggers. The Tier 3 row no longer classifies such a rewrite as trigger optimization.
+
+- **tunnel-doctor** (`tunnel-doctor` v1.13.0 → v1.14.0): 1019 → 355 characters; description rewritten by skill-creator's new rule as a short routing key; operational rules it used to carry already live in the SKILL.md body.
+
+- **tech-selection, claude-code-hooks, local-conversation-history, read-claude-code-history** (`daymade-claude-code` v3.59.0 → v3.60.0): 810–1011 → 315–420 characters; description rewritten by skill-creator's new rule as a short routing key; operational rules it used to carry already live in the SKILL.md body.
+
+- **asr-transcribe-to-text** (`daymade-audio` v1.41.3 → v1.42.0): 972 → 345 characters; description rewritten by skill-creator's new rule as a short routing key; operational rules it used to carry already live in the SKILL.md body.
+
+- **pdf-creator** (`daymade-docs` v1.16.1 → v1.17.0): 594 → 244 characters; description rewritten by skill-creator's new rule as a short routing key; operational rules it used to carry already live in the SKILL.md body.
+
+- **git-safety-net** (`git-safety-net` v1.20.5 → v1.21.0): 1018 → 379 characters; description rewritten by skill-creator's new rule as a short routing key; operational rules it used to carry already live in the SKILL.md body.
+
+- **skill-creator** (`daymade-skill` v1.45.0 → v1.46.0): Replaces the description-writing rule. The old rule
+  treated the 1024-character spec limit as a budget to fill; the new one treats the description as a routing
+  key sharing one listing budget with every installed skill: aim for 200–300 characters (about 420 for
+  routers), shape `<what it does>. Use when <situations>. Not for <sibling>`, move operational rules to the
+  body. `quick_validate` now warns above 420 characters. The trigger-rate optimizer is no longer a default step;
+  descriptions are tuned from real sessions where the skill missed or misfired.
+
+- **macos-watchdog** (`daymade-macos` v1.6.1 → v1.7.0): Check the delivered macOS notification's
+  app label in Notification Center. `osascript` can appear as Script Editor; when that label is generic,
+  put the watcher or monitored service in the title so the reader can identify its log.
+
+- **tech-selection** (`daymade-claude-code` v3.58.0 → v3.59.0): When a `favorites-search` skill is installed, the
+  description now requires running it on the user's own curated favorites before external research, and Step 1
+  lists those favorites as a layer-1 source, so the prior-art gate starts from sources the user already vetted. Wording elsewhere is compressed to stay within the
+  1024-character frontmatter limit; every trigger phrase is kept.
+
+- **tunnel-doctor** (`tunnel-doctor` v1.12.8 → v1.13.0): The description now opens with a mandatory trigger —
+  use this skill first for any tunnel / proxy-path connectivity failure before ad-hoc probes — and adds Chinese
+  trigger phrases (网络故障 / 连不上 / 代理或隧道下超时 / Tailscale 不通). Existing symptom triggers are kept with
+  compressed wording so the description stays within the 1024-character frontmatter limit.
+
+### Fixed
+
+- **tibo-reset-codex** (`tibo-reset-codex` v1.17.0 → v1.17.1): Label zeroings by observed anchor shape instead of calling every non-clean window a backjump, and remove full/underfull cause hints already implied by the displayed usage. Align the account, forecast, and repository routes with anonymous-snapshot attribution; remove derived historical counts from the touched guidance.
+
+- **deep-research** (`deep-research` v2.11.0 → v2.11.1) and **kimi-use** (`kimi-use` v1.5.0 → v1.5.1): Make catalog-migration commands directly executable, route maintainers to the owning research contracts, and remove hand-maintained headings and repeated cost totals from the touched Kimi references.
+
+- **tibo-reset-codex** (v1.16.1 → v1.16.2): Remove a count-based claim that missing the official fault feed loses half of reset signals; the source categories do not establish their frequency. The Skill keeps the incident-search step and distinguishes a post classifier from account evidence.
+
+- **tibo-reset-codex** (v1.16.0 → v1.16.1): Refresh the third-party prediction source's current field map and reject a scheduled time that precedes its cited announcement. The post classifier example marks an uninitialized or untimed `No` as unknown and treats the mirror as a candidate pending upstream and time checks; silent resets still require account evidence.
+
+- **tibo-reset-codex** (v1.15.0 → v1.15.1): Align repository entry points and forecast SOPs with conditional date forecasts and the separate withdrawal journal. Remove stale forecast status and copied or derived counts from the touched guidance; convert the monitoring sleep window using the target date's Pacific offset.
+
+- **tunnel-doctor** (`tunnel-doctor` v1.15.1 → v1.15.2): The quick diagnostic compares scheme-specific shell and system-proxy paths before suggesting a host bypass. A failed forced system-proxy probe alone now calls for checking the affected client; the deterministic regression suite is registered in CI.
+
+- **report-with-html** (v1.0.0 → v1.0.1): `reconcile_content_diff.py` no longer waits for Chrome to exit after `--dump-dom`. Chrome can print the complete DOM and then never exit (reproduced on Chrome 153 / macOS even for a minimal page), so every extraction timed out twice and the tool gave no verdict; it now takes the dump once it is complete and still reaps the whole process group. The regression suite (`tests/report-with-html/`) is repaired — browser probes use the same completion rule, the regen fixtures fill the template's TODO config block, and the narrow-viewport probe asserts the 500 px width headless Chrome actually honours — and now runs in CI.
+
+- **CI**: restore the two report-with-html checks that did not survive its moves between repositories — `Delivery gates match data-viz SSOT` (`scripts/sync_delivery_gates.py --check` plus its tests, so an edit to data-visualization-discipline's nine gates cannot ship without regenerating `report-with-html/assets/delivery-gates.json`) and `Report renderer reaps its process group` (`test_reconcile_content_diff.py` under `-W error::ResourceWarning`).
+
+- **daymade-skill** (v1.53.0 → v1.53.1): Direct user-approved customer-report templates to a stable local data directory outside Skill source and plugin caches, so package updates do not own the approved form.
+
+- **daymade-macos** (v1.9.0 → v1.9.1): `macos-permissions` no longer sends public readers to an app-development skill that is not in this repository; permission-onboarding UX is marked out of scope.
+
+- **kimi-use** (v1.3.0 → v1.3.1): The routing table notes that `kimi-webbridge` belongs to the Kimi Browser Extension and is not part of this repository.
+
+- **skill-creator** (`daymade-skill` v1.47.0 → v1.48.0): `audit_skill_regression` no longer loses parts of an old description. Short trigger phrases in a long comma list ("选哪个", "which library") and short sentences fell under the minimum clause length and were silently dropped, and a `|-`/`>-` description stopped at its first blank line. Both now reach the review, so removing them from a description is surfaced. Checked against all 149 current descriptions over 420 characters: every word now lands in some candidate (was 148).
+
+- **tibo-reset-codex** (`tibo-reset-codex` v1.13.2 → v1.13.3): Preserve the approved sleep-window
+  polling reduction while closing its signal-loss exception. Normal rounds now read Tibo's main-post
+  timeline independently of Radar, so an unindexed standalone post can still become a signal; reduced
+  rounds record that omitted leg as uncovered. A newly indexed announcement now requires
+  full-text adjudication before `official_window=null` can keep the reduced path; future commitments,
+  decision-changing time/type/scope, and due unresolved promises escalate to follow-up. Reply and parent
+  discovery now has an executable bounded `with_replies` route with a fixed UTC start, observed post IDs,
+  candidate-chain verification (including explicit quote id/URL/text output, with `null` as a healthy no-quote
+  result), explicit stop reasons, and `partial`/`unknown` negative exits. `covered` is
+  reserved for a complete named candidate chain or a genuinely exhaustive interface, so a main-post miss,
+  CLI search 404, or scrolling past a time boundary can no longer be presented as proof that no reply exists.
+  Requests about a known missed result route to historical
+  evidence-chain diagnosis instead of repeating current-state polling, and the Skill states that unattended
+  scheduling, delivery, and ACK remain outside this single-run fix.
+
+- **ppt-creator** (`daymade-docs` v1.16.0 → v1.16.1): Keep the retired skill available only by explicit invocation.
+
+- **claude-code-hooks** (`daymade-claude-code` v3.57.0 → v3.58.0): Add pitfall #47: a syntax error inside `$(( ))` makes bash discard the whole top-level command, so a subcommand branch skips its own `exit` and runs the hook's main path; under the health check's `</dev/null` a `--selftest` that hits it reports a pass. #29 gains a sibling form: an `exit 0` trap installed above the `--selftest` dispatch swallows the selftest's failures (EXIT: every `exit 1`; ERR: any failing command). #8 points to the `grep -c` variant of the two-line fallback value. The by-shape router, which stopped at #31, now also routes to #32–#47.
 
 - **claude-switch-models-setup** (`daymade-claude-code` v3.56.0 → v3.57.0): Add explicit, strictly qualified source preferences for intentional same-name variants. Undeclared collisions still fail; both source bundles remain intact, and Codex, Claude personal links and installation audits share one resolver. Deploy the source-sync failure recorder and its calibration script as managed links without enabling the wrapper. Refuse to overwrite ordinary copies and document their preservation and migration during pinned-runtime updates.
 - **skill-governance** (`daymade-skill` v1.44.1 → v1.45.0): Read supported activation schemas through the source owner's parser and consume its selected source inventory. Malformed policy or unavailable inventory remains invalid evidence instead of a clean or fabricated catalog result.

@@ -6,7 +6,8 @@
 ## 存在哪里、如何执行
 
 在 Skill 目录运行 `scripts/forecast_log.py`，需要 Python 3.10+ 与 macOS/Linux。
-默认文件是 `${XDG_STATE_HOME:-~/.local/state}/tibo-reset-codex/forecasts.jsonl`；
+默认状态目录是 `${XDG_STATE_HOME:-~/.local/state}/tibo-reset-codex/`；其中
+`forecasts.jsonl` 保存预测与核验，`withdrawals.jsonl` 保存撤回，`findings.jsonl` 保存原始读数。
 未设置 `XDG_STATE_HOME` 时解析用户家目录，已设置时使用该环境变量的目录。
 可用全局参数 `--state-dir` 显式选择另一个数据目录，之后查询与追加必须使用同一目录；
 `--no-git` 关闭本地 git 快照（规则见下方 findings 节）。
@@ -20,22 +21,38 @@ uv run python scripts/forecast_log.py summary
 （自动 init、逐次 commit、失败不阻塞，规则见下方 findings 节）；不联网、不取账号凭据、
 不兑换额度。首次写入创建权限为 0600 的文件，
 并以文件锁串行追加；读写遇到损坏或未写完的记录会报错并保留原文件。不要清空台账来消除错误。
-记录中只放预测、公开证据链接与分析，不放邮箱、token 或产品凭据，不提交到公开仓库。
+记录中只放预测、公开证据链接与分析，不提交到公开仓库；不得写入的字段见 findings 节的隐私契约。
 本地保存不等于已有异机备份，本流程不宣称提供备份或后台追踪。
 
 ## 每次调用先回看
 
-1. 运行 `summary`，读 `pending` 和 `recent_resolved`。`pending` 同时含未核验与证据不足的
-   记录；`window_elapsed` 只说明窗口已过，不判输赢。没有历史时按当前证据预测，记录为空
-   不构成错误。需要当时的原始读数时用 `findings` 列表回看。
+1. 运行 `summary`，先读 `due_for_followup`（窗口已过期或即将关闭、尚无定论的 pending；
+   临近关闭阈值以脚本常量 `CLOSING_SOON_HOURS` 为准，完整 id 可直接喂 review），
+   再核对 `withdrawal_conflicts`，然后读 `pending`、`recent_resolved` 和 `recent_withdrawn`。`pending`
+   同时含未核验与证据不足的记录；`window_elapsed` 只说明窗口已过，不判输赢。没有历史时
+   按当前证据给判断，记录为空不构成错误。接续监测轮用 `handoff` 读取最新完整交接；
+   需要其他轮次的原始读数时再读数据目录的 `findings.jsonl` 原始行。
+   `findings` 命令只返回摘要（id/invocation/query/endpoints 数），不含 `readings` 与 `notes`。
+   `summary` 还带 `snapshot`（只读探测，不创建目录）：`ok` 表示已存在的台账文件都已进 git
+   快照（还没有任何台账文件时也是 `ok`）；`lagging` 并列出 `uncommitted` 文件（含被
+   `.gitignore` 挡住、从没进过快照的），另带一句 `hint`，表示有内容没进快照——多半是某次快照
+   提交被拒，被拒的内容留在暂存区。快照只重试它被触发的那一份台账：`forecasts.jsonl` 靠再
+   `record`/`review` 一次，`findings.jsonl` 靠再 `finding` 一次，`withdrawals.jsonl` 靠再
+   `withdraw` 一次，重试失败会在那次追加的 stderr 打出原因；往别的台账追加清不掉它。
+   `no_repo` 是快照还没建立（全新目录也是这样，不算故障）；`disabled` 是用了 `--no-git`；
+   `unknown` 是 git 自身出错。快照失败只在追加当时的 stderr 打一行，`summary` 是每轮第一眼
+   读到它的地方。
 2. 按主 Skill 取得本轮本来要查的事件证据，核对它能否回答未决预测。明确只有个人额度的
    查询无需为台账另开一轮全局调查；缺证据的记录继续保留，下次有相关证据再核验。
+   窗口刚过期的未决预测趁观测区间未漂移立即核验；拖延会扩大观测区间，使窗口跨边界。
+   banked 的判别器是 query_usage 的计数变化，不是落地确认帖。
 3. 对可核验的记录追加 `review`。核对**预测发出后首个同类型事件**，不能挑后面恰好命中
    窗口的那次；不能用备用重置兑现全局重置预测，也不能用个人额度回满证明全局发生。
-4. 读最新结果再预测。关注是否持续偏早/偏晚、哪个催化信号有效（预测的 `catalyst_expected`
-   对照回填的 `catalyst_actual`）、窗口是否过宽；结合当前
-   产品规则判断旧结果是否仍可比。用一句话说明本次因此怎样调整窗口/信心/信号权重；
-   不调整也写理由。一次失误不足以归纳固定规律，不能把本来不知道的信息写成当时应知。
+4. 读最新结果，再决定能否给出有依据的日期预测。关注是否持续偏早/偏晚、哪个催化信号有效
+   （预测的 `catalyst_expected` 对照回填的 `catalyst_actual`）、窗口是否过宽；结合当前产品
+   规则判断旧结果是否仍可比。若给日期窗口，说明本次为何调整窗口、信心或信号权重；不调整也
+   写理由。没有可支持的日期时给等待判断，不创建窗口。一次失误不足以归纳固定规律，不能把
+   本来不知道的信息写成当时应知。
 
 ## findings：原始读数层
 
@@ -47,7 +64,8 @@ uv run python scripts/forecast_log.py summary
 
 ```bash
 uv run python scripts/forecast_log.py finding --input /tmp/tibo-finding.json
-uv run python scripts/forecast_log.py findings              # 最近 20 条；--limit N 可调
+uv run python scripts/forecast_log.py findings              # --limit N 可调
+uv run python scripts/forecast_log.py handoff               # 最新完整监测交接；无记录时为 null
 ```
 
 | 字段 | 含义 |
@@ -55,9 +73,16 @@ uv run python scripts/forecast_log.py findings              # 最近 20 条；--
 | `invocation` | 必填；本次调用形态，常用 `bare` / `announcement` / `account` / `incident` / `monitor` / `loop` / `other`，接受任意非空串 |
 | `query` | 必填；本次触发问题的一句话概括 |
 | `endpoints` | 必填字符串数组（可为空）；实际请求过的 URL |
-| `readings` | 必填对象（可为空）；源名 → 逐字字段值，只抄读到的值，不改写不概括 |
+| `readings` | 必填对象（可为空）；源名 → 逐字字段值，只抄读到的值，不改写不概括（邮箱例外，见隐私契约） |
 | `notes` | 可选字符串数组 |
 | `session_ref` | 可选；本 session transcript 的本机路径 |
+
+账号查询的 `readings` 只存实际读到的非敏感字段，并必须带账号句柄 `account_ref`（放在该来源的
+读数对象里；`query_usage` 输出里有，网页读数按账号 SOP 在本地算）；banked 与用量读数缺
+`account_ref` 就不能作后来的基线。账号标签只作 `notes` 里的可读别名（说明它对应哪一次查询），不能替代
+`account_ref`，也不能当基线。未核对时
+保留账号未知，不把多条「当前账号」读数自动接成同一账号的历史。用户纠正时先逐字记录原话；时间格式、被核对的账号与因果归因若未明说，
+放在 `notes` 标为推断，不改写成用户直接观测。
 
 完全相同的输入重试返回原记录。`evidence_refs` 链接规则：先 `finding` 后 `record`/`review`
 ——record/review 输入里的 `evidence_refs` 是 finding id 数组（完整 id，或能唯一解析的短
@@ -68,7 +93,18 @@ id 前缀），每个引用必须已存在于 findings.jsonl，否则报错退�
 
 每次成功追加后脚本尽力在数据目录做一次本地 git 快照（自动 `init`、目录 0700）；
 git 任何失败只在 stderr 打一行 note、绝不影响追加成功，也不构成备份承诺；`--no-git` 关闭。
-findings 同台账隐私契约：不放邮箱、token 或产品凭据；`readings` 只放逐字读数与公开 URL。
+findings 隐私契约（本文件对它唯一的完整表述）：不放邮箱——`query_usage` 输出的 `email` 字段、
+`read-usage-profile.cjs` 输出的邮箱行、说明文字里的邮箱都不抄，账号一律用 `account_ref` 指代——
+也不放 token 或产品凭据；`readings` 只放逐字读数与公开 URL。这条契约有执行层：机器上若配置了全局 pre-commit 的个人信息检查，findings 里出现
+邮箱就会让快照提交被拒——追加本身仍然成功，但被拒的内容留在暂存区，同一份台账此后每次快照都会带着它
+再失败一次，完整性护栏形同失效。快照失败时 stderr 的 note 是一行 JSON：
+`{"note": "git snapshot skipped: <git 报错首行，含命令行与状态目录路径> | <stderr 末三行>"}`
+（stderr 里含 `@` 的片段会被替换成 `<email>`），用 `git snapshot skipped:` 前缀就能认出。
+先按 stderr 的原因分：是个人信息检查拒绝，就查 findings 里是否混入邮箱
+（`grep -nE '[^[:space:]]+@[^[:space:]]+' <状态目录>/findings.jsonl`），不要用 `--no-verify` 绕过，已追加的记录不
+改写，此后的追加不再写邮箱，已入库的命中记录如何处理（例如是否把既有指纹加进该 hook 的基线）
+由用户决定，向用户报告，不自行改 hook 配置；是其他原因（如未配置 git 身份、超时、非仓库），
+按 stderr 给出的原因处理，与邮箱无关。
 
 ## 保存预测：record
 
@@ -102,11 +138,33 @@ uv run python scripts/forecast_log.py summary
 会自动标为 `revision_of`；必须沿用同一规范原帖 URL，不用不同镜像伪造不同轮次。
 完全相同的输入重试返回原记录。脚本记录真实写入时刻，不为以前的口头预测伪造精确发出时间。
 
-**`pending` 按 `recorded_at` 递增排序，`recent_resolved` 按最新核验排序，两者都不依赖台账的
-文件顺序**（2026-09-16 起为显式保证；此前 `pending` 只靠 JSONL 追加顺序，任何重写、合并或
-按 id 过滤台账的命令都会打乱它）。所以读 `pending` 时**最后一条就是当前有效预测**——它一定
-是同一锚点下的最新 `record`，`revision_of` 链上更早的论据不会因为台账被动过而浮到前面。
-倒序台账上已验证：`summary` 仍报出递增顺序。据此判断，**不要自己按文件位置挑记录**。
+**`pending` 按 `recorded_at` 递增排序，`recent_resolved` 与 `recent_withdrawn` 分别按核验、
+撤回的追加顺序排序。** `pending` 的最后一条只是最近发出且尚未核验或撤回的
+预测；若更新的同锚点预测已撤回，它可能是较早的旧判断。先读 `recent_withdrawn` 和监测交接，
+再决定是否沿用；不要单靠文件位置或 `pending[-1]` 宣称它当前有效。
+
+## 撤回没有依据的预测：withdraw
+
+预测的时间前提被证伪或发现原本缺少依据时，追加撤回记录，不把 `confidence` 改低后继续保留
+同一个无依据窗口，也不编一个替代日期。撤回写入同一 state-dir 的 `withdrawals.jsonl`；
+`forecasts.jsonl` 保持原有 forecast/review 格式，让仍使用旧版脚本的会话继续读账。撤回只改
+新版摘要中的有效状态，不删除最初判断或修改原始读数。
+
+```bash
+uv run python scripts/forecast_log.py withdraw --input /tmp/tibo-withdrawal.json
+uv run python scripts/forecast_log.py summary
+```
+
+输入 JSON 必填 `forecast_id`、`reason`（具体撤回依据）、`lesson`（下一次怎样避免）；如有
+对应 findings，以 `evidence_refs` 挂链。完全相同的输入重试返回原记录；已撤回预测不能再
+`review`，已有 `hit` / `early` / `late` 核验的预测也不能用撤回来掩盖结果。`summary` 将它从
+`pending` 和 `due_for_followup` 移到 `recent_withdrawn`，但 `forecast_count` 仍包含原预测；
+若它是同锚点的首份预测，`cycle_counts` 明列 `withdrawn`，不把撤回算作命中或未知。
+若旧版会话在撤回后仍写入有分数的 `review`，新版 `summary.withdrawal_conflicts` 列出
+每条冲突记录的 ID 与结果；即使后来又写入 `unknown` 或旧版请求早于撤回开始但晚于撤回落盘，
+冲突仍保留。撤回时新版会拒绝已有分数的预测，所以任何共存的有分数 `review` 都需要核对；
+不能从任一客户端的单侧摘要直接定案。
+下一轮从 `summary` 及 `handoff` 读回后才说“已撤回”；交接文字不能代替台账状态。
 
 ## 回填证据：review
 
@@ -124,13 +182,17 @@ uv run python scripts/forecast_log.py summary
 - `catalyst_actual`：可选，回填事件实际的催化类型（枚举同上），与预测时的
   `catalyst_expected` 对照后，「哪个催化信号有效」才可机械统计。它与是否有事件证据
   无关——`unknown: true` 的核验同样接受（代码先于 unknown 早退解析该字段）。
-- 本机 rollout 快照覆盖落地窗口时，用观测到的归零区间收窄 `event_start`/`event_end`，
-  不要把确认帖时刻当唯一上界——窗口收窄到日内量级时，这决定 hit 与 unknown 的差别
-  （2026-09-12 实测：两条官宣帖夹逼出 4.8h 宽区间，本机快照的 79%→0% 归零
-  （11:03→17:52 北京）可再收窄）。
+- 本机 rollout 快照覆盖落地窗口时，先按主 Skill §3 把归零前后读数绑定同一账号，并核对
+  该账号原先显示的自然重置时刻。只有证据支持这次跳变属于所复盘的事件，才能用归零区间
+  收窄 `event_start`/`event_end`；原因未定时保留 `unknown`，不能用它制造 `hit`。
+  `forecast_log.py` 只按输入时间与标志计分，不会替你核验事件归因。已归因的区间可以
+  比确认帖时刻给出更窄上界。
 
 - `time_basis`：`occurrence` 表示明确发生时刻（起止相同）；`observed_interval` 表示已核实的
   发生区间；`confirmation_only` 表示只有完成帖时间，不能把它冒充发生时间。
+- 预测发出前的最后读数不能作 `event_start`——脚本会以
+  「event interval must follow forecast issuance」拒绝；取发出后一刻，先验读数写进 `reason`
+  （2026-09-24 实测）。
 - `first_event_verified`：只有证据足以确认是发出预测后首个同类型事件才填 `true`。
   来源覆盖不足或存在更早事件疑点时填 `false`，在 `reason` 说明，不为得到分数硬填。
 
@@ -144,7 +206,7 @@ uv run python scripts/forecast_log.py summary
 同一事件的多次预测都保留，但 `cycle_counts` 只按同类型同锚点的首份预测
 计数，未知锚点不进该计数。未决项单列；不要把所有调用次数当独立样本，也不要删去失败的
 首份预测、只展示后来改中的版本。结合 `window_hours` 看窗口宽度，不能靠无限放宽刷命中。
+撤回记录在 `recent_withdrawn` 单列，不与 `review` 的事件结果混算。
 
 将 `lesson` 用于下次 `feedback_applied`，完成「预测 → 事件核验 → 调整」闭环。没有已核实
-结果就诚实保持原先低信心，不宣称准确率提高。结构测试和离线回放只验证记录与判读行为；
-首次真实预测到期后的核验仍待未来调用完成。
+结果就诚实保持原先低信心，不宣称准确率提高。结构测试和离线回放只验证记录与判读行为。

@@ -38,6 +38,23 @@ jobs:
       - name: Marketplace manifest resolves
         run: python3 scripts/ci/check_marketplace.py
 
+      - name: Shared conversation core matches bundled readers
+        run: python3 daymade-claude-code/sync_core.py check
+
+      # report-with-html's delivery gate carries a generated copy of
+      # data-visualization-discipline's nine gates (delivery-gates.json). The hand-kept
+      # copy it replaced had drifted twice, and a stale paraphrase reads exactly like a
+      # faithful one, so regeneration is checked here rather than remembered.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Delivery gates match data-viz SSOT
+        run: |
+          python3 -m pip install --quiet markdown-it-py
+          python3 scripts/test_sync_delivery_gates.py
+          python3 scripts/sync_delivery_gates.py --check
+
       # Skills ship scripts users execute directly, usually mid-incident.
       - name: Shell scripts parse
         run: scripts/ci/check_shell_syntax.sh
@@ -176,6 +193,22 @@ jobs:
       # output and exits nonzero. That bug shipped green from a macOS-only test run.
       - name: Run registered suites
         run: scripts/ci/run_registered_tests.sh
+
+      # Not in the registry: its point is that a leaked child process surfaces as a
+      # ResourceWarning, which only fails the run under -W error.
+      - name: Report renderer reaps its process group
+        if: ${{ !cancelled() }}
+        run: python3 -W error::ResourceWarning -m unittest report-with-html/scripts/test_reconcile_content_diff.py
+
+      # Needs a real browser (the runner image ships Google Chrome), so it is not in the
+      # stdlib-only registry. It drives render_report.sh, the reconciler and the shelf
+      # components headless; a Chrome that hangs after --dump-dom is part of what it covers.
+      - name: report-with-html regression suite
+        if: ${{ !cancelled() }}
+        run: |
+          export CHROME_BIN="$(command -v google-chrome)"
+          "$CHROME_BIN" --version
+          python3 -m unittest tests/report-with-html/test_regressions.py
 
   secrets:
     name: Secret scan

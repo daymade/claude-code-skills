@@ -18,7 +18,7 @@ skill-name/
 ├── SKILL.md (required)          # Core skill instructions with YAML frontmatter
 ├── scripts/ (optional)          # Executable Python/Bash scripts
 ├── references/ (optional)       # Documentation loaded as needed
-└── assets/ (optional)           # Templates and resources for output
+└── assets/ (optional)           # Update-owned templates and resources for output
 ```
 
 ### Progressive Disclosure Pattern
@@ -63,6 +63,15 @@ Use [skill-creator](daymade-skill/skill-creator/SKILL.md) before creating or
 changing a skill. It owns change classification, evidence selection, regression
 review, validation, initialization, and packaging.
 
+For Deep Research or Kimi financial-research changes, enter the owning
+[`deep-research`](deep-research/SKILL.md) or [`kimi-use`](kimi-use/SKILL.md) Skill.
+Their linked references own the run, source-archive, mode, and billing procedures;
+the bundled CLIs own executable argument and validation behavior. Keep this file
+as the route rather than a second copy of those procedures.
+
+For customer-approved report forms, follow
+[skill-creator's report-template contract](daymade-skill/skill-creator/SKILL.md#show-the-result-not-just-the-work).
+
 Treat [packaging_policy.py](daymade-skill/skill-creator/scripts/packaging_policy.py)
 as the canonical inclusion policy for packaging, security attestation, source
 audits, and version checks. Keep consumers on this shared implementation. Preserve the recorded policy
@@ -79,9 +88,9 @@ explicitly blocked, unshipped, or pending. Test advisory liveness across later
 fully-due windows, and leave current thresholds in the owning implementation
 rather than copying them into this file.
 
-Synchronous Claude Code/Codex lifecycle hooks and background services
-(LaunchAgents included) must call a fixed direct interpreter **owned by the
-installer that writes it**. Do not register a Python entry point through a
+Python entry points registered as synchronous Claude Code/Codex lifecycle hooks or
+background services (LaunchAgents included) must call a fixed direct interpreter
+**owned by the installer that writes it**. Do not register a Python entry point through a
 package manager, generic interpreter dispatcher, or `.py` shebang lookup: a
 shared environment/cache lock can stall every prompt or tool boundary, and a
 bare `python3` resolves under launchd's minimal PATH to the Developer Tools
@@ -92,7 +101,19 @@ Own the literal path, the way `SYSTEM_GIT` is owned. Explicit maintenance,
 retrieval, validation, and test commands may still use their declared `uv`
 project; the runtime boundary is the rule. The concrete prior-work wrapper and
 profile-converger registration live in their respective Skills rather than
-being copied here.
+being copied here. An owning installer may support an already authorized
+launcher; that does not make a package-manager dispatcher the default for
+Python hooks.
+
+### Background Full Disk Access repair
+
+When a LaunchAgent cannot read protected data, enter
+[`macos-permissions`](daymade-macos/macos-permissions/SKILL.md) and its
+[automated repair SOP](daymade-macos/macos-permissions/references/automated-full-disk-access.md).
+Identify the actual permission subject and reuse an existing usable grant when
+the owning installer supports it. After repair, restart the job and verify a
+protected read in its real background context; a GUI switch or foreground read
+alone is not completion.
 
 Treat `daymade-skill/skill-creator` as a locked uv project. Run its bundled Python tools from that directory with `uv run --frozen`; the project-local `.venv` is isolated from caller projects while uv's shared cache supplies the pinned packages. Do not reintroduce per-call `--with` overlays for dependencies already in its `pyproject.toml`.
 
@@ -127,6 +148,10 @@ validation behavior in
 [native_review.py](daymade-audio/transcript-fixer/scripts/native_review.py), and
 queue anchor behavior in
 [review_queue.py](daymade-audio/transcript-fixer/scripts/core/review_queue.py).
+For batch audio checks, use [verify_queue_audio.py](daymade-audio/transcript-fixer/scripts/verify_queue_audio.py)
+and its [adjudication guide](daymade-audio/transcript-fixer/references/advanced_correction_evidence.md):
+audio verification may add evidence but never resolves a review row or proves
+whole-transcript completion.
 When changing these paths, update their owning instructions together; keep
 review coverage, unresolved verdicts, and repository publication distinct.
 
@@ -149,6 +174,15 @@ already created by the current prompt. Artifact selection and runtime-read
 comparison are owned by that Skill; a receipt about a locator is not proof of
 the delivered artifact. Detailed retrieval mechanics remain in
 `daymade-claude-code/prior-work-retrieval/SKILL.md`.
+
+### Local Conversation History Boundary
+
+Codex inventory must use the index-only command in
+`daymade-claude-code/read-codex-history/SKILL.md`. If its state database is
+unavailable, report an unknown inventory; do not substitute a raw rollout scan.
+Edit shared reader code in `daymade-claude-code/_conversation_core/`, then run
+`python3 daymade-claude-code/sync_core.py sync` and `check` before shipping;
+bundled `scripts/_core/` copies are generated projections.
 
 ### Local Agent Messaging
 
@@ -176,10 +210,25 @@ Skill links.
 For Codex reset announcements or account quota questions, enter
 [tibo-reset-codex](tibo-reset-codex/SKILL.md). Follow its
 [account usage SOP](tibo-reset-codex/references/account-usage.md) for authentication,
-per-account verification and browser restoration. Treat
+per-account verification, adjacent-reset attribution and browser restoration. Treat
 [query_usage.py](tibo-reset-codex/scripts/query_usage.py) as the executable authority
-for query parameters, supported response fields and exit behavior. Keep detailed
-commands and changing account state out of this file.
+for query parameters, supported response fields and exit behavior. For local
+snapshot reconstruction, [scan_rollouts.py](tibo-reset-codex/scripts/scan_rollouts.py)
+owns candidate output. An unfulfilled
+reset promise or a question about missing execution signals enters the Skill's
+[monitoring route](tibo-reset-codex/SKILL.md#监测轮从信息到可行动信号) and
+[output contract](tibo-reset-codex/SKILL.md#输出合同先给结论再交代边界).
+Before using a third-party date or Yes/No as a reset signal, check its source-post
+chronology (an operator-entered event cites no source post), whether it observes
+account quota changes or only classifies posts, and whether the monitor completed a
+plausible-time check. The Skill owns the
+detailed procedure.
+[Next-reset forecast](tibo-reset-codex/references/next-reset-forecast.md) owns
+date judgments; [forecast feedback](tibo-reset-codex/references/forecast-feedback.md)
+owns recording, review and withdrawal, with
+[forecast_log.py](tibo-reset-codex/scripts/forecast_log.py) as the executable
+authority for CLI and local journal layout. Keep detailed commands and changing
+account or forecast state out of this file.
 
 ### WeCom Send Boundary
 
@@ -425,6 +474,7 @@ If it fires, fix the issue — do NOT use `--no-verify` to bypass.
 - Move detailed documentation to `references/` files
 - Avoid duplication between SKILL.md and references
 - Keep `tunnel-doctor` environment-neutral: it may teach discovery and presence checks, but exact private node labels, billing identities, endpoints, credentials, and current chain state remain in the owning private configuration/Skill and must not be copied into this public repository.
+- Kimi desktop input and tunnel diagnostics follow the current host-specific procedures in `kimi-use/references/driving-kimi-app.md` and `tunnel-doctor/SKILL.md`; a proxy bypass recommendation requires compared path evidence.
 - Scripts must be executable with proper shebangs
 - All bundled resources must be referenced in SKILL.md
 
@@ -481,6 +531,23 @@ before anyone started editing. (2026-09-04: a bump computed from the working
 tree adopted another session's staged `peer-message` 1.1.1→1.2.0 as its own
 baseline. Every status-shaped signal stayed green; a CHANGELOG anchor assertion
 was the only thing that caught it.)
+
+**CHANGELOG.md merges as a union** (`.gitattributes`). Parallel PRs add their
+entries at the same spot under `## [Unreleased]`, so two PRs open at the same
+time conflicted there. Merging `origin/main` into a branch locally, or rebasing
+onto it, now keeps both sides' lines without stopping. Two limits:
+
+- GitHub's mergeability check ignores the attribute, so a PR can still show
+  CONFLICTING until `origin/main` is merged into it locally.
+- Git reads the attribute from the branch you are on. A branch cut before
+  `.gitattributes` existed conflicts as before: commit the file onto it first
+  (`git checkout origin/main -- .gitattributes`, then commit), then merge.
+
+Read the merged section before you push. Union keeps lines, not structure:
+lines can come out duplicated or interleaved, a blank line can go missing, and
+across a release cut an entry can land under the new version heading instead of
+`[Unreleased]`. The CHANGELOG structure check still fails a duplicated
+`[Unreleased]` heading; it cannot see a misplaced entry.
 
 ## Available Skills
 

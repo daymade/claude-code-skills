@@ -1,5 +1,6 @@
 ---
 name: read-docx-review
+disable-model-invocation: true
 description: >-
   读取 Word/WPS 审阅后的 docx，把批注（comments）与修订（track changes）提取成可逐条裁决的
   markdown 对账表或 JSON。触发场景：对方批注完的合同/协议/书稿/报告回来了要读意见；「提取

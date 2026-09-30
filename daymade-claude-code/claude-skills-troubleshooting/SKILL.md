@@ -1,5 +1,6 @@
 ---
 name: claude-skills-troubleshooting
+disable-model-invocation: true
 description: Diagnose and resolve Claude Code plugin and skill issues. This skill should be used when plugins are installed but not showing in available skills list, skills are not activating as expected, or when troubleshooting enabledPlugins configuration in settings.json. Triggers include "plugin not working", "skill not showing", "installed but disabled", or "enabledPlugins" issues.
 ---
 

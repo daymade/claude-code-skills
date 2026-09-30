@@ -2,26 +2,24 @@
 """
 Analyze Claude Code session files to find relevant sessions and statistics.
 
-This script helps locate sessions containing specific keywords, analyze
-session activity, and generate reports about session content.
+This script lists and analyzes sessions. Its raw keyword search remains
+available only for isolated test fixtures; live discovery uses the index.
 
 By default, history is searched across every active Claude config home plus
 every long-term archive registered in ~/.claude/history-sources.json. Searching
 only ~/.claude or only the current active tree can silently miss a real session.
 Conversation dates come from internal JSONL records, never file mtime.
 
-Three opt-in widenings exist because "not found" is the expensive answer:
---all-projects sweeps every project when the project is a guess, --codex
-also searches Codex rollout history (~/.codex), and --kimi also searches
-Kimi CLI sessions (~/.kimi-code) — different stores that the Claude registry
-never covers.
+Exact-session lookup and indexed recall avoid reading the whole corpus.
 """
 
 import hashlib
 import json
 import os
+import pwd
 import re
 import sys
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -2160,6 +2158,22 @@ def _codex_home_for(args) -> Path:
     return Path.home() / ".codex"
 
 
+def _fixture_raw_search_allowed(args, sources: List[HistorySource]) -> bool:
+    """Permit isolated test fixtures, never the live conversation stores."""
+    real_home = Path(pwd.getpwuid(os.getuid()).pw_dir).resolve()
+    if Path.home().resolve() == real_home:
+        return False
+    roots = [source.home for source in sources]
+    if args.codex:
+        roots.append(_codex_home_for(args))
+    if args.kimi:
+        roots.append(_kimi_home_for(args))
+    temp_root = Path(tempfile.gettempdir()).resolve()
+    return bool(roots) and all(
+        root.resolve().is_relative_to(temp_root) for root in roots
+    )
+
+
 def _kimi_home_for(args) -> Path:
     return resolve_kimi_home(getattr(args, "kimi_home", None))
 
@@ -2195,6 +2209,236 @@ def _print_search_widening_hint(args) -> None:
     print("Tip: no matches. Before concluding it is absent, retry with:", file=sys.stderr)
     for tip in tips:
         print(f"  - {tip}", file=sys.stderr)
+
+
+@dataclass
+class ToolCallCandidate:
+    """One session/subagent file selected as a window candidate by stat() only."""
+
+    path: Path
+    project_dir_name: str
+    source_labels: List[str]
+
+
+def _st_birthtime(stat_result: os.stat_result) -> Optional[float]:
+    """Return file creation time when this platform's stat() exposes one.
+
+    macOS/BSD expose a true creation time as ``st_birthtime``. Linux's
+    ``os.stat()`` does not expose file creation time at all — there is no
+    ``st_birthtime`` attribute on the result, and ``st_ctime`` is inode
+    *metadata-change* time (bumped by rename/chmod/etc.), not creation time,
+    so it must never be substituted. Callers treat ``None`` as "the --to
+    upper bound cannot be applied for this file", not as "before --to".
+    """
+    return getattr(stat_result, "st_birthtime", None)
+
+
+def find_tool_call_candidate_files(
+    sources: List[HistorySource],
+    from_ts: Optional[float],
+    to_ts: Optional[float],
+) -> tuple[List[ToolCallCandidate], int, bool]:
+    """Select session/subagent files worth reading, from filesystem metadata alone.
+
+    Never opens or reads a file's contents. A candidate must have been
+    modified at or after ``from_ts``; when the platform's ``stat()`` exposes
+    a creation time (see ``_st_birthtime``) it must also have been created at
+    or before ``to_ts`` — a file created after the window's end cannot hold a
+    record from inside it. This is deliberately a superset: the caller still
+    filters by each record's own internal timestamp after reading.
+
+    De-duplicates physical copies at the metadata stage, before anything is
+    opened: a whole ``projects/`` tree symlinked across config homes (a
+    multi-model profile) collapses to one group via
+    ``group_claude_sources_by_projects``, and within a group the key
+    ``(encoded project dir name, path relative to that project dir)`` is kept
+    only once — for a main session file that relative path is the Session ID
+    filename itself, and for a subagent file it is
+    ``<session-id>/subagents/<agent-id>.jsonl``, so an archive that holds an
+    independent (non-symlinked) copy of the same Session ID is recognized as
+    a duplicate and only read once.
+
+    Returns ``(candidates, groups_scanned, birthtime_available)``.
+    ``birthtime_available`` is False as soon as any stat() lacks
+    ``st_birthtime`` (expected on every Linux file), signaling that the
+    candidate set only had the ``--from`` lower bound applied and is
+    correspondingly coarser — never missing files, only possibly wider.
+    """
+    groups = group_claude_sources_by_projects(sources)
+    candidates: List[ToolCallCandidate] = []
+    seen_keys: set[tuple[str, str]] = set()
+    birthtime_available = True
+    for group in groups:
+        representative = group[0]
+        projects_dir = representative.home / "projects"
+        if not projects_dir.is_dir():
+            continue
+        labels = [source.display_label for source in group]
+        for project_dir in sorted(p for p in projects_dir.iterdir() if p.is_dir()):
+            project_name = project_dir.name
+            candidate_paths = sorted(project_dir.glob("*.jsonl")) + sorted(
+                project_dir.glob("*/subagents/*.jsonl")
+            )
+            for file_path in candidate_paths:
+                try:
+                    rel = str(file_path.relative_to(project_dir))
+                except ValueError:
+                    rel = str(file_path)
+                key = (project_name, rel)
+                if key in seen_keys:
+                    continue
+                try:
+                    stat_result = file_path.stat()
+                except OSError:
+                    continue
+                if from_ts is not None and stat_result.st_mtime < from_ts:
+                    continue
+                birthtime = _st_birthtime(stat_result)
+                if birthtime is None:
+                    birthtime_available = False
+                elif to_ts is not None and birthtime > to_ts:
+                    continue
+                seen_keys.add(key)
+                candidates.append(
+                    ToolCallCandidate(
+                        path=file_path,
+                        project_dir_name=project_name,
+                        source_labels=labels,
+                    )
+                )
+    return candidates, len(groups), birthtime_available
+
+
+def _cmd_tool_calls(args, parser) -> int:
+    """Find tool_use calls across sessions inside a time window.
+
+    Candidate files are selected by filesystem metadata alone (see
+    ``find_tool_call_candidate_files``) before any body is opened, then only
+    those candidates are read, and only records whose own internal timestamp
+    falls inside the window are kept — the metadata pass narrows what gets
+    opened, it is not itself the time filter. ``--pattern`` is matched against
+    ``"<tool name> <JSON-serialized input>"`` for every ``tool_use`` block, so
+    a tool-name-only query still works (``--pattern Bash``) alongside an
+    input-shaped one (``--pattern 'npm run build'``).
+
+    Codex rollout files are not covered: this skill's SKILL.md routes Codex
+    conversations to ``daymade-claude-code:read-codex-history`` (a different
+    store and record schema), so that gap is reported here rather than adding
+    a second, undertested reader into this subcommand.
+    """
+    try:
+        from_ts = parse_date_boundary(args.from_iso)
+        to_ts = parse_date_boundary(args.to_iso, end=True)
+    except ValueError as error:
+        parser.error(str(error))
+    if from_ts > to_ts:
+        parser.error("--from must not be later than --to")
+    try:
+        pattern = re.compile(args.pattern, 0 if args.case_sensitive else re.IGNORECASE)
+    except re.error as error:
+        parser.error(f"--pattern is not a valid regex: {error}")
+
+    try:
+        sources, narrowed, warnings = _sources_for(args)
+    except HistorySourceConfigError as error:
+        print(f"History source configuration error: {error}", file=sys.stderr)
+        return 2
+    for warning in warnings:
+        print(f"History source warning: {warning}", file=sys.stderr)
+    if narrowed and not sources:
+        print(
+            "No Claude home with a projects/ dir matched your --home/--main-only "
+            "selection.",
+            file=sys.stderr,
+        )
+        return 1
+
+    candidates, groups_scanned, birthtime_available = find_tool_call_candidate_files(
+        sources, from_ts, to_ts
+    )
+
+    hits_by_session: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    files_read = 0
+    unparseable = 0
+    for candidate in candidates:
+        files_read += 1
+        try:
+            handle = candidate.path.open(encoding="utf-8", errors="surrogateescape")
+        except OSError:
+            continue
+        with handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    unparseable += 1
+                    continue
+                if not isinstance(record, dict):
+                    continue
+                ts = parse_timestamp(record.get("timestamp"))
+                if ts is None or not timestamp_in_window(ts, from_ts, to_ts):
+                    continue
+                message = record.get("message")
+                content = message.get("content") if isinstance(message, dict) else None
+                if not isinstance(content, list):
+                    continue
+                session_id = record.get("sessionId") or "unknown"
+                for block in content:
+                    if not isinstance(block, dict) or block.get("type") != "tool_use":
+                        continue
+                    tool_name = block.get("name") or ""
+                    if args.tool and tool_name != args.tool:
+                        continue
+                    tool_input = block.get("input")
+                    try:
+                        input_text = json.dumps(tool_input, ensure_ascii=False, sort_keys=True)
+                    except (TypeError, ValueError):
+                        input_text = str(tool_input)
+                    haystack = f"{tool_name} {input_text}"
+                    if not pattern.search(haystack):
+                        continue
+                    hits_by_session[session_id].append(
+                        {
+                            "timestamp": record.get("timestamp"),
+                            "epoch": ts,
+                            "tool": tool_name,
+                            "input_clip": input_text[: args.clip],
+                            "file": candidate.path,
+                        }
+                    )
+
+    total_hits = sum(len(hits) for hits in hits_by_session.values())
+    print(f"# Tool calls matching `{args.pattern}` in [{args.from_iso} .. {args.to_iso}]\n")
+    print(
+        f"- **Candidate files (filesystem metadata only)**: {len(candidates)} "
+        f"across {groups_scanned} project-tree group(s)"
+    )
+    print(f"- **Candidate files read**: {files_read}")
+    if not birthtime_available:
+        print(
+            "- **Creation-time upper bound**: unavailable on this platform "
+            "(`stat()` has no `st_birthtime` — expected on Linux); only the "
+            "`--from` modified-time lower bound narrowed candidates, so this "
+            "candidate set is coarser than on macOS/BSD, never missing files"
+        )
+    print("- **Codex rollout files**: not covered by this subcommand (routed to "
+          "daymade-claude-code:read-codex-history)")
+    if unparseable:
+        print(f"- **Unparseable lines skipped**: {unparseable}")
+    print(f"- **Sessions with a match**: {len(hits_by_session)}")
+    print(f"- **Total matches**: {total_hits}")
+
+    for session_id in sorted(
+        hits_by_session, key=lambda sid: min(h["epoch"] for h in hits_by_session[sid])
+    ):
+        hits = sorted(hits_by_session[session_id], key=lambda h: h["epoch"])
+        print(f"\n## Session `{session_id}` ({len(hits)} match(es))\n")
+        for hit in hits:
+            print(f"- {hit['timestamp']}  {hit['tool']}  {hit['input_clip']}")
+
+    return 0 if total_hits else 1
 
 
 def _cmd_plan_bindings(args) -> int:
@@ -2349,6 +2593,75 @@ def main():
     plan_parser.add_argument("plan_file", help="Absolute path of the plan file")
     _add_home_flags(plan_parser)
 
+    # Tool-calls command — bounded-window tool_use search across sessions.
+    # Candidate files are selected by filesystem metadata (stat()) alone,
+    # before any body is opened; see find_tool_call_candidate_files().
+    tool_calls_parser = subparsers.add_parser(
+        "tool-calls",
+        help="Find tool_use calls across sessions inside a time window; "
+        "candidate files are narrowed by filesystem metadata before any "
+        "body is read",
+    )
+    tool_calls_parser.add_argument(
+        "--from",
+        dest="from_iso",
+        required=True,
+        metavar="ISO",
+        help="Inclusive window start: YYYY-MM-DD (local day) or "
+        "timezone-qualified ISO datetime",
+    )
+    tool_calls_parser.add_argument(
+        "--to",
+        dest="to_iso",
+        required=True,
+        metavar="ISO",
+        help="Inclusive window end: YYYY-MM-DD (local day) or "
+        "timezone-qualified ISO datetime",
+    )
+    tool_calls_parser.add_argument(
+        "--pattern",
+        required=True,
+        metavar="REGEX",
+        help="Regex matched against '<tool name> <JSON-serialized input>' "
+        "for every tool_use block found in the window",
+    )
+    tool_calls_parser.add_argument(
+        "--tool",
+        metavar="NAME",
+        help="Restrict to tool_use blocks with exactly this tool name",
+    )
+    tool_calls_parser.add_argument(
+        "--case-sensitive",
+        action="store_true",
+        help="Case-sensitive --pattern match (default: case-insensitive)",
+    )
+    tool_calls_parser.add_argument(
+        "--clip",
+        type=int,
+        default=200,
+        metavar="N",
+        help="Max characters of each hit's JSON input printed (default: 200)",
+    )
+    tool_calls_parser.add_argument(
+        "--home",
+        action="append",
+        metavar="DIR",
+        help="Restrict to exact Claude home dir(s) and bypass the archive "
+        "registry (repeatable). Default: search every active home plus "
+        "registered archives.",
+    )
+    tool_calls_parser.add_argument(
+        "--main-only",
+        action="store_true",
+        help="Search only ~/.claude, bypassing profile homes and archives.",
+    )
+    tool_calls_parser.add_argument(
+        "--history-sources",
+        metavar="FILE",
+        help="History source registry (default: ~/.claude/history-sources.json "
+        "when present). Incompatible with --home/--main-only.",
+    )
+
     # Triage command — classify how sessions in scope ended (crash recovery,
     # backlog audit). Distinct from `list`: prints the full last-assistant
     # text so a human/agent can judge whether a reply is still expected,
@@ -2447,7 +2760,9 @@ def main():
     )
 
     # Search command
-    search_parser = subparsers.add_parser("search", help="Search sessions for keywords")
+    search_parser = subparsers.add_parser(
+        "search", help="Raw keyword search for isolated test fixtures only"
+    )
     search_parser.add_argument(
         "search_terms",
         nargs="+",
@@ -2460,8 +2775,7 @@ def main():
     search_parser.add_argument(
         "--all-projects",
         action="store_true",
-        help="Sweep every project across all sources — the default move when "
-        "you do not know which project the conversation happened in.",
+        help="Fixture-only: include every project in the isolated test corpus.",
     )
     search_parser.add_argument(
         "--exclude-session",
@@ -2488,9 +2802,7 @@ def main():
         type=float,
         default=DEFAULT_CODEX_SCAN_BUDGET_SECONDS,
         metavar="SECONDS",
-        help="Stop a broad Codex rollout scan after SECONDS (default: 300). "
-        "Use 0 only to explicitly accept an unbounded scan; partial results "
-        "are never reported as complete.",
+        help="Fixture-only Codex scan time cap (default: 300 seconds).",
     )
     search_parser.add_argument(
         "--kimi",
@@ -2563,6 +2875,9 @@ def main():
 
     if args.command == "plan-bindings":
         sys.exit(_cmd_plan_bindings(args))
+
+    if args.command == "tool-calls":
+        sys.exit(_cmd_tool_calls(args, parser))
 
     if args.command == "list":
         _validate_project_scope(args, parser)
@@ -2763,6 +3078,13 @@ def main():
         _validate_project_scope(args, parser)
         from_timestamp, to_timestamp = _parse_date_window(args, parser)
         analyzer = _analyzer_or_exit(args)
+        if not _fixture_raw_search_allowed(args, analyzer.sources):
+            parser.error(
+                "raw history search is disabled for live sources: use "
+                "history_index.py recall, then read an exact session. "
+                "Date flags currently filter after reading files and do not "
+                "make this command bounded."
+            )
         source_summary = _source_summary(analyzer.sources)
         (
             sessions,

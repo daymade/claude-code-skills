@@ -1,7 +1,11 @@
 ---
 name: macos-watchdog
 description: >-
-  Design, deploy, and discipline macOS launchd watchdogs — LaunchAgents/LaunchDaemons that detect a recurring problem and auto-remediate it. Use whenever creating or editing a persistent background monitor / daemon / agent on macOS, writing a launchd plist, scheduling a self-healing script, or when a watchdog has become a disturbance itself: re-launching apps the user quit, firing repeated notifications, re-running its full repair ladder every few minutes on an unfixable network, or hammering the system (crash loops, fork storms, runaway restarts). Also use for stop/disable semantics (bootout vs bootstrap vs disable vs unload), adding cooldown / backoff / notification throttling to a self-healer, binding a monitor's lifecycle to its premise state, or auditing existing LaunchAgents. 中文触发：launchd 守护进程、常驻任务、开机自启、后台监控、定时自愈脚本。 Covers KeepAlive/ThrottleInterval/domains/logging, premise self-checks, auto-cooldown, alert layering, batch throttling.
+  Designs and audits macOS launchd watchdogs. Use for LaunchAgent/LaunchDaemon setup,
+  plist changes, scheduled self-healing, repeated notifications, apps reopening after
+  quit, crash or repair loops hammering the Mac, or a watchdog alert shown as Script Editor.
+  Covers stop/disable/restart, cooldown/backoff, notification throttling and alert
+  decisions. 中文：launchd 守护进程、常驻任务、开机自启、后台监控、定时自愈、通知来源排查。
 ---
 
 # macOS Watchdog
@@ -20,6 +24,7 @@ The governing principle, learned the expensive way: **a watchdog's lifecycle is 
 | plist key details (KeepAlive forms, domains, logging, resource limits) | `references/launchd-plist-reference.md` |
 | Cooldown/backoff/notification-throttle patterns + sanitized war stories | `references/quiet-watchdog-patterns.md` |
 | SRE alert layering (page vs ticket, fatigue numbers) | `references/alert-discipline.md` |
+| A watchdog alert appears under Script Editor or its sender is unclear | `references/alert-discipline.md` § Message content; inspect the delivered card |
 
 ## The quiet-watchdog contract (the four clauses)
 
@@ -66,7 +71,7 @@ Gate every such action: check the target process is alive before invoking its sc
 3. **Load/reload**: `launchctl bootstrap gui/$(id -u) <plist>`; after editing a plist, `bootout` then `bootstrap` again — launchd's active state must match disk. Force one run with `launchctl kickstart -k gui/$(id -u)/<label>`.
 4. **Logs**: `StandardOutPath`/`StandardErrorPath` are non-negotiable (without them failures vanish), plus in-script log rotation (cap ~1 MB).
 5. **Idempotency guard**: re-running your deploy must not double-install. `scripts/new-launchagent.sh <label> <script> <interval>` is the idempotent wrapper (bootout-if-loaded → write plist → bootstrap → verify `launchctl list`).
-6. **TCC / Full Disk Access**: a LaunchAgent reading another app's Group Container or protected dirs needs FDA granted to the *actual interpreter* — Xcode's python3 stub fails where your real python3 works. Verify with the exact binary from `ProgramArguments`, not the one your shell resolves.
+6. **TCC / Full Disk Access**: a LaunchAgent reading protected files needs a working grant for its effective permission subject. Use `macos-permissions` to inspect TCC attribution and verify a protected read from the actual job; the shell's interpreter path alone does not decide this.
 7. **Batch throttling by default**: any watchdog loop that spawns work (replays, fuzz, batch scans, parallel API calls) needs an explicit rate cap as a default parameter, not a later optimization. To the machine, an unthrottled loop and a runaway process are indistinguishable (real case: an unthrottled test replay forked 1,041 processes/sec for 7 minutes and pushed the die to 83 °C).
 
 ## Stop semantics (the deprecated trap)

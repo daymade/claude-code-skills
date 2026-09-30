@@ -1,18 +1,10 @@
 ---
 name: llm-eval-harness
 description: >-
-  Test/evaluate any LLM behind an OpenAI- or Anthropic-compatible endpoint:
-  availability (max_tokens-aware), request fidelity (does system prompt/tools/history
-  REACH the model, or does the gateway silently drop it), speed (TTFT+tok/s),
-  concurrency (before a workshop), Anthropic protocol compliance, quality regression,
-  vendor bug reports, deployment gates, resident canaries. Use BEFORE hand-rolling a curl
-  loop (it skips the N=10 sampling, Connection:close, and env-var key handling this bakes
-  in). Use when someone tests/benchmarks/测评/压测 a model/endpoint, onboards a provider,
-  decides whether to switch or temporarily fail over to an alternate channel (outage/quota), writes a supported-models list, debugs "model
-  ignores system prompt", or verifies a tok/s claim. NOT for TTS/voice-clone supplier eval (audio side has its own skill). Triggers on "benchmark this
-  model", "测一下这个模型/渠道/API", "接入新模型先测一下", "system prompt 不生效",
-  "这个渠道能不能用/稳不稳", "临时切换过去顶一阵子" — even without "eval", even wrapped
-  in business narrative.
+  Tests/benchmarks a third-party LLM endpoint (OpenAI- or Anthropic-compatible): availability,
+  fidelity, speed, concurrency, protocol compliance, quality regression. Use before hand-rolling a
+  curl loop, when onboarding a provider, or debugging "system prompt 不生效" / a tok/s claim —
+  测评/压测一个模型或渠道. Not for TTS/voice-clone supplier eval (use the audio skill).
 ---
 
 # LLM Eval Harness
