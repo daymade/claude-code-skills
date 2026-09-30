@@ -5,6 +5,33 @@ Use `history_index.py status` to check provider coverage and freshness, then
 candidate Session IDs. Open only those exact sessions. The old raw search
 command is disabled for live stores; its date flags did not bound file reads.
 
+## Inspect Session Endings
+
+Use indexed recall to identify candidates, then read an exact session:
+
+```bash
+python3 scripts/history_index.py status
+python3 scripts/history_index.py recall 'distinctive task' --mode bm25 --provider claude
+python3 scripts/read_claude_session.py --session <SESSION_ID> --full
+```
+
+Use triage only when a known project physically bounds candidate directories:
+
+```bash
+python3 scripts/analyze_sessions.py triage /absolute/path/to/project --tail-chars 0
+```
+
+Optionally filter that preselected project by internal end time with `--from-date`
+and `--to-date`. These flags are applied after candidate bodies are read; they
+cannot bound an all-project scan. Keep an index coverage gap explicit when no
+exact session or physical project bound is available.
+
+Interpret results using [Local runtime and working-directory evidence](session_file_format.md#local-runtime-and-working-directory-evidence)
+and [Detect Session Interruption](session_file_format.md#detect-session-interruption-crash--reboot-triage).
+Keep the exact briefing's end reason distinct from triage's structural `kind`.
+Read the retained final prose before deciding whether work or a human reply is
+still pending.
+
 ## Recover Files Deleted in Cleanup
 
 **Scenario**: Files were deleted during code review, need to recover specific components.

@@ -2739,12 +2739,11 @@ def main():
         default=200,
         help="Max sessions to print, 0 = no limit (default: 200). This is a "
         "print-time cap, not a scan-time one: every session in scope is "
-        "still classified before --limit or --kind trims the output, so "
-        "--kind does not reduce cost the way narrowing --from-date/--to-date "
-        "does. The 200 default exists specifically to stop an accidentally "
-        "unscoped `--all-projects` with no date bound from dumping tens of "
-        "thousands of lines; pass --limit 0 to explicitly opt into an "
-        "unbounded dump once you know the scope is narrow.",
+        "still classified before --limit or --kind trims the output. Date "
+        "flags filter metadata after candidate transcript bodies are read; "
+        "bound project_path before using this command. --all-projects is "
+        "not made a bounded scan by dates or output limits. Pass --limit 0 "
+        "only when the preselected scope is already narrow.",
     )
     _add_home_flags(triage_parser)
 

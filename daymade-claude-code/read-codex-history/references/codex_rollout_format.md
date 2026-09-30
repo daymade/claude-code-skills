@@ -16,7 +16,11 @@ Verified against ~2,600 real rollouts spanning Codex CLI `0.142.2`–`0.149.0` (
 └── AGENTS.md                              # project/global standing instructions (re-injected into rollouts)
 ```
 
-The session id is a UUIDv7 embedded in the rollout filename and repeated inside the `session_meta` record. The optional `state_*.sqlite` `threads` table indexes sessions (id, cwd, title, timestamps, `rollout_path`); the shared `_core.codex` reader prefers it and falls back to scanning rollout files directly when it is missing or its schema has changed.
+Verify the session ID against the rollout's `session_meta` record; a filename or
+state-database row alone is not identity proof. Treat `state_*.sqlite` as an
+inventory metadata index. Follow the [current inventory contract](../SKILL.md#recent-inventory)
+when it is missing or unreadable, and use the [exact-session locator](../SKILL.md#exact-session-evidence-and-lineage)
+for a known ID. Do not substitute a raw rollout sweep for an unavailable inventory.
 
 ## Rollout JSONL — record schema
 
