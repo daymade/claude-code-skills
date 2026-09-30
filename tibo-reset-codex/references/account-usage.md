@@ -56,7 +56,7 @@ Windows 未实测。请求、认证文件默认位置、参数和退出行为的
 输出里直接带；网页读数或用户转述的读数没有，就在本地用已知邮箱算——先去掉首尾空白与标点
 （网页文本抓出的邮箱常带句末的 `.`，会算出另一个值），再小写取哈希：
 `python3 -c "import hashlib,sys;print(hashlib.sha256(sys.argv[1].strip().strip('.,;:').casefold().encode()).hexdigest()[:8])" <email>`。
-邮箱出现在这条命令行里只留在本次终端，不写进台账。它是无盐的 32 位短哈希，已知邮箱能反推，
+邮箱只出现在这条命令行里。它是无盐的 32 位短哈希，已知邮箱能反推，
 只当本地假名，不当匿名化。`account_ref` 是唯一的账号句柄：账号标签只作 `notes` 里的可读别名，
 不能替代它，也不能当基线。没有 `account_ref` 的旧读数不能当基线；没有基线时只报告当前值，
 banked 到账写「未核实」。判断该账号上次读数之后是否兑现过：问用户，或读官网备用重置的逐条
@@ -93,9 +93,8 @@ uv run python -m unittest discover -s tests -v
 ## 官网：复用 Google 登录，逐个查完
 
 1. 先记录当前浏览器/配置文件、当前 ChatGPT 邮箱、切换菜单保存的邮箱集合及待恢复目标。
-   查看页面身份后再绑定额度，不能用头像名字或当前 CLI 身份替代网页身份。这些邮箱只在本次
-   汇报里用来说明账号；写台账时每个账号一律用上文算出的 `account_ref`，不抄邮箱（包括
-   `read-usage-profile.cjs` 输出里的邮箱行）。
+   查看页面身份后再绑定额度，不能用头像名字或当前 CLI 身份替代网页身份。这些邮箱只用于本次
+   汇报里说明账号；写台账按 forecast-feedback.md 的隐私契约，以 `account_ref` 指代账号。
 2. 打开官方用量页：`https://chatgpt.com/codex/settings/usage`。2026-09-08 实测会跳转到
    `https://chatgpt.com/codex/cloud/settings/analytics#usage`，页面标题为 `Codex and Work Analytics`。
    跳转或路径变化时按可见 Settings → Analytics → Usage 导航。
