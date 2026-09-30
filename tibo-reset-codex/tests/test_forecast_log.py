@@ -528,6 +528,96 @@ class ForecastLogTests(unittest.TestCase):
         for leaked in ("corp.example", "brien", "localhost"):
             self.assertNotIn(leaked, stderr.getvalue())
 
+    def _health_repo(self):
+        """A state dir with a real git repo that neither hooks nor identity can break."""
+        self.record()
+        state = self.path.parent
+        for argv in (["init"], ["config", "user.email", "t@example.invalid"],
+                     ["config", "user.name", "t"], ["config", "core.hooksPath", "/dev/null"]):
+            subprocess.run(["git", "-C", str(state), *argv], check=True, capture_output=True)
+        return state
+
+    def _git(self, state, *argv):
+        subprocess.run(["git", "-C", str(state), *argv], check=True, capture_output=True)
+
+    def test_snapshot_health_covers_every_state_a_journal_can_be_in(self):
+        state = self.path.parent
+        self.assertEqual(log.snapshot_health(state, enabled=False), {"status": "disabled"})
+        self.assertEqual(log.snapshot_health(state)["status"], "no_repo")
+        state = self._health_repo()
+        # never committed and unstaged
+        untracked = log.snapshot_health(state)
+        self.assertEqual((untracked["status"], untracked["uncommitted"]),
+                         ("lagging", ["forecasts.jsonl"]))
+        # staged but never committed: the state a rejected commit leaves behind
+        self._git(state, "add", "--", "forecasts.jsonl")
+        self.assertEqual(log.snapshot_health(state)["uncommitted"], ["forecasts.jsonl"])
+        self._git(state, "commit", "-m", "snap", "--", "forecasts.jsonl")
+        self.assertEqual(log.snapshot_health(state), {"status": "ok"})
+        # appended after the last snapshot
+        self.record(rationale="A later forecast the snapshot has not seen yet.")
+        self.assertEqual(log.snapshot_health(state)["uncommitted"], ["forecasts.jsonl"])
+        # an unrelated dirty file is not the journals' problem
+        self._git(state, "add", "--", "forecasts.jsonl")
+        self._git(state, "commit", "-m", "snap2", "--", "forecasts.jsonl")
+        (state / "unrelated.txt").write_text("x")
+        self.assertEqual(log.snapshot_health(state), {"status": "ok"})
+
+    def test_a_snapshot_retries_only_the_journal_it_was_triggered_for(self):
+        # The doc and the lagging hint promise exactly this and no more.
+        state = self._health_repo()
+        self.finding()
+        log.snapshot(state, "findings.jsonl", "finding")
+        health = log.snapshot_health(state)
+        self.assertEqual((health["status"], health["uncommitted"]), ("lagging", ["forecasts.jsonl"]))
+        log.snapshot(state, "forecasts.jsonl", "forecast")
+        self.assertEqual(log.snapshot_health(state), {"status": "ok"})
+
+    def test_snapshot_health_ignores_a_repo_that_has_no_journals_yet(self):
+        # A pathspec-less `git status` would report the whole repo as lagging.
+        state = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(state, ignore_errors=True))
+        for argv in (["init"], ["config", "core.hooksPath", "/dev/null"]):
+            self._git(state, *argv)
+        (state / "notes.txt").write_text("unrelated and dirty")
+        self.assertEqual(log.snapshot_health(state), {"status": "ok"})
+
+    def test_snapshot_health_flags_a_journal_that_gitignore_hides(self):
+        state = self._health_repo()
+        (state / ".gitignore").write_text("*.jsonl\n")
+        health = log.snapshot_health(state)
+        self.assertEqual((health["status"], health["uncommitted"]), ("lagging", ["forecasts.jsonl"]))
+
+    def test_snapshot_health_is_read_only_and_never_creates_the_state_dir(self):
+        missing = self.path.parent / "not-created"
+        self.assertEqual(log.snapshot_health(missing)["status"], "no_repo")
+        self.assertFalse(missing.exists())
+        state = self._health_repo()
+        before = sorted(p.name for p in (state / ".git").iterdir())
+        log.snapshot_health(state)
+        self.assertEqual(sorted(p.name for p in (state / ".git").iterdir()), before)
+        self.assertFalse((state / ".git" / "index.lock").exists())
+
+    def test_snapshot_health_reports_unknown_when_git_itself_fails(self):
+        state = self._health_repo()
+
+        def boom(*argv, **kwargs):
+            raise subprocess.SubprocessError("git exploded")
+
+        with mock.patch.object(log.subprocess, "run", boom):
+            self.assertEqual(log.snapshot_health(state)["status"], "unknown")
+
+    def test_cli_summary_carries_snapshot_health(self):
+        state = self._health_repo()
+        argv = [sys.executable, str(Path(log.__file__).resolve()), "--state-dir", str(state)]
+        out = json.loads(subprocess.run([*argv, "summary"], capture_output=True, text=True,
+                                        check=True).stdout)
+        self.assertEqual(out["snapshot"]["status"], "lagging")
+        out = json.loads(subprocess.run([*argv[:1], argv[1], "--state-dir", str(state), "--no-git",
+                                         "summary"], capture_output=True, text=True,
+                                        check=True).stdout)
+        self.assertEqual(out["snapshot"], {"status": "disabled"})
+
     def test_no_git_flag_disables_the_snapshot_entirely(self):
         def boom(*argv, **kwargs):
             raise AssertionError("git must not run under --no-git")

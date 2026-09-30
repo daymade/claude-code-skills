@@ -155,8 +155,9 @@ description: >-
 1. **接上上轮的问题。** 读 `forecast_log.py summary`，先看 `due_for_followup`（窗口已过期或
    即将关闭、尚无定论的预测——到期跟进项从这里第一眼读，不用翻 rationale；closing_soon 的
    阈值定义见 forecast-feedback.md）；若有 `withdrawal_conflicts`，先核对冲突的撤回与旧版核验；
-   若有 `recent_withdrawn`，先排除已撤回的旧窗口，再从
-   同一 state-dir 运行 `forecast_log.py handoff`
+   若有 `recent_withdrawn`，先排除已撤回的旧窗口；也看 `snapshot.status`——`lagging` 表示台账
+   的 git 快照落后（原因与处置见 forecast-feedback.md 的 findings 节），要在本轮汇报里说明；
+   再从同一 state-dir 运行 `forecast_log.py handoff`
    读取最新一条 `invocation=monitor` 的完整原始行；`findings` 子命令的紧凑列表不显示
    `notes`，不能用它代替交接正文。`handoff` 返回 `null` 表示尚无监测交接，不能推断此前
    没有值得追的线索。
