@@ -689,6 +689,32 @@ class ClaudeSessionEvidenceTests(unittest.TestCase):
         self.assertEqual(set(parsed["unresolved_tool_calls"]), {"toolu_9"})
         self.assertEqual(parsed["end_reason"], "interrupted")
 
+    def test_local_commands_do_not_complete_thinking_or_empty_assistant_tail(self):
+        for content in (
+            [{"type": "thinking", "thinking": "still working"}],
+            [],
+            "",
+            [{"type": "text", "text": "   "}],
+        ):
+            with self.subTest(content=content):
+                session_file = self._session_file([
+                    {"type": "user", "sessionId": "incomplete", "message": {
+                        "role": "user", "content": "please finish"}},
+                    {"type": "assistant", "sessionId": "incomplete", "message": {
+                        "role": "assistant", "content": content}},
+                    {"type": "user", "sessionId": "incomplete", "message": {
+                        "role": "user", "content":
+                        "<local-command-stdout>copied</local-command-stdout>"}},
+                ])
+                parsed = MODULE.parse_session_structure(session_file)
+                self.assertEqual(parsed["end_reason"], "abandoned")
+                briefing = MODULE.build_briefing(
+                    {"sessionId": "incomplete"}, parsed, "/tmp",
+                    session_file.parent, session_file, full=True,
+                )
+                self.assertIn("Unanswered retained request", briefing)
+                self.assertIn("LOCAL RUNTIME (output)", briefing)
+
     def test_local_command_runtime_records_do_not_replace_completed_tail(self):
         records = [
             {

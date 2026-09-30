@@ -458,6 +458,7 @@ def parse_session_structure(session_file: Path) -> Dict:
     errors = []
     files_touched = set()
     last_message_role = None
+    last_assistant_has_text = False
     error_count = 0
     observed_session_ids = set()
 
@@ -604,6 +605,10 @@ def parse_session_structure(session_file: Path) -> Dict:
                 else:
                     tail_is_interrupt = False
                 last_message_role = role
+                if role == "assistant":
+                    last_assistant_has_text = any(
+                        kind == "assistant_text" for kind, _ in _turn_kinds(obj)
+                    )
 
     unresolved_tool_calls = {
         tool_id: info
@@ -614,6 +619,7 @@ def parse_session_structure(session_file: Path) -> Dict:
     # Detect session end reason
     end_reason = _detect_end_reason(
         last_message_role, unresolved_tool_calls, error_count, tail_is_interrupt,
+        last_assistant_has_text,
     )
 
     return {
@@ -637,6 +643,7 @@ def _detect_end_reason(
     unresolved: Dict,
     error_count: int,
     tail_is_interrupt: bool = False,
+    last_assistant_has_text: bool = True,
 ) -> str:
     """Detect why the session ended."""
     if tail_is_interrupt:
@@ -646,7 +653,7 @@ def _detect_end_reason(
     if error_count >= 3:
         return "error_cascade"  # Multiple API errors suggest systemic failure
     if last_role == "assistant":
-        return "completed"  # Assistant had the last word — clean end
+        return "completed" if last_assistant_has_text else "abandoned"
     if last_role == "user":
         return "abandoned"  # User sent a message but got no response
     return "unknown"
@@ -857,7 +864,7 @@ def _append_timeline(sections: List[str], messages: List[Dict], full: bool) -> N
         default=None,
     )
     if last_human_index is not None and not any(
-        turn["role"] == "assistant" for turn in timeline[last_human_index + 1 :]
+        turn["kind"] == "assistant_text" for turn in timeline[last_human_index + 1 :]
     ):
         sections.append(
             f"> **Unanswered retained request**: the evidence ends on record "
