@@ -547,7 +547,7 @@
       "description": "One-stop companion and installer for the official Tencent IMA skill (ima.qq.com). Installs upstream ima-skill to Claude Code/Codex/OpenClaw via npx skills add, guides API key setup, detects and fixes known issues (including the missing-YAML-frontmatter bug in submodule SKILL.md files) with user consent, and implements a personalized fan-out search strategy with priority-based knowledge base boosting and silent truncation detection",
       "source": "./ima-copilot",
       "strict": false,
-      "version": "1.2.0",
+      "version": "1.2.1",
       "category": "developer-tools",
       "keywords": [
         "ima",
