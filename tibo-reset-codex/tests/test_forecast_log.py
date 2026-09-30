@@ -502,6 +502,32 @@ class ForecastLogTests(unittest.TestCase):
         with mock.patch.object(log.subprocess, "run", boom):
             self.record(rationale="A later forecast still appends fine.")
 
+    def test_git_snapshot_note_carries_the_pre_commit_hook_reason(self):
+        # A hook rejection is exit status 1 with the reason only on stderr; the
+        # note must surface it or the failure is undiagnosable from the log.
+        self.record()
+        state = self.path.parent
+        hooks = state / ".git" / "hooks"
+        # A machine-global core.hooksPath would shadow this repo's hooks dir.
+        for argv in (["init"], ["config", "user.email", "t@example.invalid"],
+                     ["config", "user.name", "t"], ["config", "core.hooksPath", str(hooks)]):
+            subprocess.run(["git", "-C", str(state), *argv], check=True, capture_output=True)
+        hooks.mkdir(parents=True, exist_ok=True)
+        hook = hooks / "pre-commit"
+        hook.write_text("#!/bin/sh\nprintf \"found leak@corp.example o'brien@corp.example "
+                        "bob@localhost in findings.jsonl:1\\n\" >&2\n"
+                        "printf '\\033[0;31mCommit blocked by test guard\\033[0m\\n' >&2\nexit 1\n")
+        hook.chmod(0o755)
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            log.snapshot(state, self.path.name, "forecast")
+        self.assertIn("git snapshot skipped", stderr.getvalue())
+        self.assertIn("Commit blocked by test guard", stderr.getvalue())
+        self.assertNotIn("\x1b", stderr.getvalue())
+        self.assertIn("found <email> <email> <email> in findings.jsonl:1", stderr.getvalue())
+        for leaked in ("corp.example", "brien", "localhost"):
+            self.assertNotIn(leaked, stderr.getvalue())
+
     def test_no_git_flag_disables_the_snapshot_entirely(self):
         def boom(*argv, **kwargs):
             raise AssertionError("git must not run under --no-git")

@@ -7,6 +7,7 @@ sent only to the fixed official usage endpoint. No refresh or redemption occurs.
 
 import argparse
 import base64
+import hashlib
 import json
 import math
 import os
@@ -106,6 +107,11 @@ def normalize_usage(data, expected_account_id, expected_email=None):
         "checked_at_utc": datetime.now(timezone.utc).isoformat(),
         "source": USAGE_URL,
         "email": email,
+        # Pseudonymous handle for journals: findings must not hold emails, but
+        # banked counts are only comparable between reads of the same account.
+        # Unsalted and short, so a known email can be matched to it: a pseudonym,
+        # not anonymization.
+        "account_ref": hashlib.sha256(email.casefold().encode()).hexdigest()[:8],
         "plan_type": data.get("plan_type"),
         "windows": windows,
         "banked_resets_available": available,

@@ -25,7 +25,7 @@ description: >-
 |---|---|---|---|
 | **官宣广域 RESET** | Tibo / OpenAI | 官方 X 原帖；追踪站只作公告索引 | 无固定排期，常用于里程碑或故障补偿 |
 | **静默平台重置** | OpenAI 后端或限额配置发布 | 产品 usage 状态 + 同时段多账户第一手实测 + 排除各自正常周期；官方限额变更只作上下文 | 可以没有 reset 帖；未获官方范围声明时只能称「大范围观测到」，不能称「全员」 |
-| **BANKED reset** | Tibo 推文 | 官宣：官方原帖；到账：逐账号对照产品内备用重置库存前后读数 | 一次性「存着随你用」的额度包，**到账后不自动消耗**，由用户在 usage 页手动兑现；官宣 ≠ 人人到账（有过分批延迟）。触发形态含里程碑庆祝与故障补偿——§1 所述 rollout 延迟补偿属后者（按无访问天数累积，可一人多笔；2026-09 GPT-6 Astra 补偿即此形态） |
+| **BANKED reset** | Tibo 推文，或官方现场活动 | 官宣：官方原帖——也可能没有 X 原帖（2026-09-29 DevDay 现场按按钮发放，最先由第三方站运营者记录，随后经用户名下多账号读数证实；此时没有官宣，到账按用户对自己账号的直接观测或同一 `account_ref` 的前后读数判，都没有则未核实）；到账：逐账号对照产品内备用重置库存前后读数 | 一次性「存着随你用」的额度包，**到账后不自动消耗**，由用户在 usage 页手动兑现；官宣 ≠ 人人到账（有过分批延迟）。触发形态含里程碑庆祝与故障补偿——§1 所述 rollout 延迟补偿属后者（按无访问天数累积，可一人多笔；2026-09 GPT-6 Astra 补偿即此形态） |
 | **账户级周重置** | 系统按该账户当前用量窗口 | ChatGPT 产品内「Next reset: …」 | 每人时间不同；使用 Full reset 也会改变周重置日期，不从订阅开通日推算 |
 
 ## 先判宿主：应用托管的只读研究任务
@@ -72,7 +72,7 @@ description: >-
   本机扫描的每次实际抓取先落 findings 记录，回填时用
   evidence_refs 挂链（见[预测反馈的 findings 节](references/forecast-feedback.md)）。**§2 之后必须再跑一次实时 banked 查询**（`scripts/query_usage.py`，读法与字段表见
   [账号 SOP](references/account-usage.md)）——§2 的 rollout 快照结构上没有备用重置字段，不跑就
-  答不全「现在什么情况」这个最常被问的维度；只取 banked 一个数即可，本条其余部分仍只管重置状态。
+  答不全「现在什么情况」这个最常被问的维度；只取 banked 一个数即可，并把输出里的 `account_ref` 一起记进 findings（不记 `email`；banked 计数是净值、只在同一账号内可比，此前没有 `account_ref` 的 banked 数不能当基线，见账号 SOP）；本条其余部分仍只管重置状态。
   ⚠️ **scan 与 banked 不要 `&&` 串联**：scan_rollouts 无快照时 exit 1，`&&` 会把 banked 查询直接
   短路掉——表面上全套像跑过了，实际少一维（2026-09-19 实测）。两条分开跑，或串联时给 scan
   加 `|| true`。**循环场景下 skill 里的裸命令被 `same-cmd-resend-guard` 拦**（端点抖动失败一次
@@ -211,8 +211,11 @@ description: >-
 帮助与 JSON 输出均核对过）：
 
 ```bash
-twitter user-posts thsottiaux -n 50 --json
+twitter user-posts thsottiaux -n 50 --json 2>/dev/null
 ```
+
+CLI 的 WARNING（如 `Failed to init ClientTransaction`）走 stderr、不影响 JSON；用 `2>&1` 合流会让
+JSON 解析在首字符失败（2026-09-30 实测），所以丢弃 stderr。
 
 把返回项按 `createdAtISO` / `id` 与上次 finding 的主帖游标比较；新主帖逐条读完整 `text`，并保留
 `quotedTweet` 关系。若两轮间发帖量超过当前窗口、最旧返回项仍晚于上次游标，扩大 `-n`（最多
@@ -333,6 +336,15 @@ curl -sS --max-time 20 "https://api.fxtwitter.com/<user>/status/<status-id>" \
 `effectiveAt` 甚至早于原帖 `announcedAt`；生效时间早于来源帖或原帖没有时限时，保留承诺
 待兑现，弃用站点给出的日期。`reset_completed` 也只是站点分类，
 须回原帖找完成措辞或用产品读数核验；按 `status=='completed'` 过滤不是事件判据。
+**先看 `resetType` 与 `source.origin` 再用这条事件**：`resetType` 是 `global` 或 `banked`，
+`banked` 不用来核验 global 预测。`source.origin=operator` 表示站点运营者手工录入、没有 X 原帖
+（`source` 里只有内部 `postId`，没有 `handle` 与 x.com 链接）；X 来源的事件没有 `origin` 键。
+两种类型都可能是 operator 来源（`global` 的例子：2026-08-25 「Operator-confirmed … without an
+X announcement」）。这类事件按候选处理：2026-09-29
+DevDay 的 banked 到账最先就是这种形态，站点自述来源是运营者而非原帖，直到用户确认名下多个
+账号都收到才证实。升级为已到账的依据按类型分：`banked` 事件——官方原帖，或用户对自己账号的
+直接观测，或同一 `account_ref` 的 banked 库存前后读数；`global` 事件——官方原帖，或多个账号排除
+自然周期后的用量回满读数。没有前置读数时只报告当前值：banked 写「到账未核实」，global 写「发生未核实」。
 
 **Radar 索引不到官方故障线——这是公告路径的结构性盲区。** Radar 只索引 @thsottiaux，而
 ChatGPT/Codex 的故障由 **@ChatGPT** 账号和 **status.openai.com** 发布。重置也可能用于

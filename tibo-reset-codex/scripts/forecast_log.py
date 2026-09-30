@@ -12,6 +12,7 @@ import fcntl
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import uuid
@@ -446,6 +447,17 @@ def snapshot(state_dir, filename, record_type, enabled=True):
         run("commit", "-m", f"tibo-reset-codex: append {record_type}", "--", filename)
     except (OSError, subprocess.SubprocessError) as error:
         detail = str(error).splitlines()[0] if str(error) else type(error).__name__
+        stderr = getattr(error, "stderr", None)
+        if isinstance(stderr, str):
+            # A commit rejected by a pre-commit hook says why only on stderr; the
+            # exception text alone is just "exit status 1".
+            # A hook may echo the matched text; the note must not carry an email
+            # into logs when the journal contract forbids one.
+            tail = [re.sub(r"\S*@\S*", "<email>",
+                           re.sub(r"\x1b\[[0-9;]*m", "", line)).strip()
+                    for line in stderr.splitlines() if line.strip()][-3:]
+            if tail:
+                detail += " | " + " | ".join(tail)[:300]
         print(json.dumps({"note": f"git snapshot skipped: {detail}"}, ensure_ascii=False),
               file=sys.stderr)
 
