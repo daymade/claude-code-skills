@@ -553,7 +553,7 @@ Steps:
    read for the opposite purpose — as a positive interruption signal, not
    noise to filter.) `read_claude_session.py` implements this rule: the
    marker surfaces as the `interrupted_explicit` end reason **only** when it
-   is the last relevant non-local record. A later meaningful user/assistant
+   is the last relevant non-local record. A later non-local user/assistant
    record resets it; local runtime records follow the exclusion above. A
    mid-session Ctrl+C that the conversation continued past is not a tail
    interruption, and the marker's timeline turn is labeled

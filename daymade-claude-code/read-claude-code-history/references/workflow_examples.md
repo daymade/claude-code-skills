@@ -7,7 +7,9 @@ command is disabled for live stores; its date flags did not bound file reads.
 
 ## Inspect Session Endings
 
-Use indexed recall to identify candidates, then read an exact session:
+Use a configured recall index to identify candidates, then read an exact session.
+Follow [the index setup and coverage SOP](hybrid_history_recall.md) when its
+backend is missing or its coverage is incomplete:
 
 ```bash
 python3 scripts/history_index.py status
