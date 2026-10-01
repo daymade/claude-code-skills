@@ -766,7 +766,7 @@
       "description": "Diagnoses and designs safe Terraform releases, provisioners (remote-exec/local-exec/file, cloud-init, Compose, Caddy), multi-environment isolation, and fresh-host bootstrap. Use when writing or reviewing plan/apply wrappers or provisioners; when staging/production config may differ; when a rollout can mutate a shared gateway; or debugging drift, TLS, container restarts, DNS duplication, or snapshot contamination.",
       "source": "./terraform-skill",
       "strict": false,
-      "version": "1.4.1",
+      "version": "1.5.0",
       "category": "developer-tools",
       "keywords": [
         "terraform",

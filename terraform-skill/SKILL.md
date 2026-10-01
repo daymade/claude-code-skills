@@ -18,7 +18,7 @@ green wrappers, or process completeness.
 
 - Release, shared gateway, saved plan, staging receipt, or production promotion: read
   [release-safety-and-environment-parity.md](references/release-safety-and-environment-parity.md).
-- A second environment, environment retirement, shared data backend, DNS ownership, state, or snapshots: read
+- Environment isolation, including cached initialization, environment retirement, shared data backend, DNS ownership, state, or snapshots: read
   [multi-env-isolation.md](references/multi-env-isolation.md).
 - Pre-deploy checks or a validator: read
   [pre-deploy-validation.md](references/pre-deploy-validation.md).

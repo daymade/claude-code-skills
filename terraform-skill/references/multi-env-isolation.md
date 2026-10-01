@@ -1,6 +1,6 @@
 # Multi-Environment Isolation Checklist
 
-Use when creating, changing or retiring an environment alongside production. Verify both state isolation and physical data ownership; separate Terraform addresses do not prove separate cloud backends.
+Use when creating, changing or retiring an environment alongside production, or reusing Terraform initialization across reads. Verify both state isolation and physical data ownership; separate Terraform addresses do not prove separate cloud backends.
 
 ## Configuration contract parity
 
@@ -37,6 +37,26 @@ backend "oss" {
 ```
 
 **Verification**: Compare physical resource IDs and consumer bindings across the relevant states and live APIs. Different addresses or names in state lists do not prove separation.
+
+## Cached initialization in read-only wrappers
+
+Use this check when a canonical wrapper reuses initialized Terraform directories to speed up `output` or other state reads. [Terraform's working directory](https://developer.hashicorp.com/terraform/cli/init) retains backend configuration and workspace selection as well as provider/module preparation; its [backend metadata](https://developer.hashicorp.com/terraform/language/backend) is separate from infrastructure state. Reusing preparation must not reuse a previous output value.
+
+Bind reuse to the root module, target environment, backend configuration, selected workspace, Terraform implementation/version, provider lockfile and relevant module/CLI configuration. Include changed authentication context in invalidation without storing or printing credential values. Each environment/workspace needs isolated writable initialization metadata; a caller-supplied data directory is not proof of isolation. Serialize concurrent users of the same metadata directory.
+
+A cache receipt is insufficient if the initialized files are missing, malformed or select another workspace. Verify the effective backend and caller-selected workspace on a hit and after reinitialization. Repair through the canonical initialization entry with that same identity, or fail explicitly. Reconfiguration must not silently inherit a stale workspace-selection file, migrate state or fall back to another environment. Preserve the repository's existing plan/apply authorization and saved-plan gates.
+
+Validate with an isolated backend and distinct synthetic outputs:
+
+| Input | Required observable result |
+|---|---|
+| Cold read followed by a cache hit; then the authoritative state changes | Correct environment/workspace on every read; the next hit returns the changed output, not the earlier value |
+| Alternating environments or named workspaces, including a shared caller data-directory setting | Each call returns its own state's sentinel; preparation metadata cannot cross-select a backend/workspace |
+| Missing/corrupt receipt or metadata; a stale non-default workspace file | Explicit repair or refusal; no value from the unintended workspace |
+| Initialization or state-read failure, on cold and cached paths | Original failure remains visible and nonzero; no stale-value fallback or false-success receipt |
+| Concurrent readers of one initialization directory | Serialized preparation and correct results; a failed initializer cannot publish a reusable success receipt |
+
+For a performance claim, measure the user's complete command and separate preparation, backend read and required verification. A smaller preparation time is not an end-to-end speedup if the same wait moved elsewhere. Stop when identity, freshness and failure behavior hold for the affected paths; do not turn a read optimization into a new deployment mechanism.
 
 ## Resource naming collision matrix
 

@@ -63,6 +63,10 @@ Use [skill-creator](daymade-skill/skill-creator/SKILL.md) before creating or
 changing a skill. It owns change classification, evidence selection, regression
 review, validation, initialization, and packaging.
 
+For Terraform environment isolation or initialization-cache changes, enter
+[`terraform-skill`](terraform-skill/SKILL.md); its bundled reference owns backend/workspace
+identity and fresh-state validation.
+
 For Deep Research or Kimi financial-research changes, enter the owning
 [`deep-research`](deep-research/SKILL.md) or [`kimi-use`](kimi-use/SKILL.md) Skill.
 Their linked references own the run, source-archive, mode, and billing procedures;
