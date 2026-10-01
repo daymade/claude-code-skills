@@ -54,6 +54,25 @@ green wrappers, or process completeness.
 Use these incident-derived symptom patterns to choose the next falsifying check. Confirm the current
 source and runtime before promoting a historical cause into the present diagnosis.
 
+### terraform plan says "No changes" but the site is down
+
+**Symptom**: Browser `ERR_SSL_PROTOCOL_ERROR` or similar, `terraform plan` shows `No changes`, but the service is actually broken.
+
+**Root cause**: Terraform validates config↔state, **not state↔reality**. Resources created by `null_resource` + provisioners (files synced to a server, containers started, etc.) can be modified out-of-band and terraform will never notice. The 80→443 redirect may still work, creating a "half-healthy" illusion.
+
+**Diagnosis**:
+1. Check the actual server state, not terraform's opinion (e.g., `ls /path/on/server`, not `terraform plan`)
+2. Look for signs of out-of-band modification: all files same mtime, source files (`.tftpl`, `.static`) mixed into deployed directories
+3. Compare state-tracked hashes vs live files: `terraform show -json` → extract `triggers.gateway_files_json` → sha256 each file → compare with `sha256sum` on server
+
+**Fix**: Force the provisioner to re-run from frozen plan bytes:
+```bash
+TF_CLI_ARGS_plan='-replace=module.<name>.null_resource.<resource>' terraform plan ...
+```
+Then apply. The provisioner will rebuild from the plan's frozen bytes, ignoring the corrupted live state.
+
+**Prevention**: Add a periodic job that compares state-tracked file hashes against live server files. Terraform alone will never catch this.
+
 ### `docker: not found` in remote-exec
 
 cloud-init still installing Docker when provisioner SSHs in.
