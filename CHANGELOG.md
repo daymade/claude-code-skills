@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **terraform-skill** (`terraform-skill` v1.5.0 → v1.5.1): Document the staging-green/production-port-collision provisioner trap: parity covers configuration, not host port allocation — check the exact bind on the target host, and keep host-local probe targets out of containers.
+
 - **terraform-skill** (`terraform-skill` v1.4.1 → v1.5.0): Extend environment-isolation guidance for cached read-only initialization: verify effective backend/workspace, keep state reads fresh, invalidate changed preparation inputs, serialize shared metadata and exercise corrupt-cache and failure paths. Preserve canonical release gates.
 - **terraform-skill** (`terraform-skill` v1.4.0 → v1.4.1): new provisioner trap for "terraform plan says No changes but the site is down" — the out-of-band overwrite shape where a non-terraform process replaces provisioner-managed files (e.g., gateway conf.d) and terraform never notices because it validates config↔state, not state↔reality. Documents the symptom fingerprint (ERR_SSL_PROTOCOL_ERROR + no certificate), diagnosis steps (check live server state, not terraform's opinion), the `-replace` recovery path, and prevention via periodic state↔live hash comparison. Incident: 2026-09-30, shendutuili.com down ~40h until user noticed.
 - **ima-copilot** (`ima-copilot` v1.2.0 → v1.2.1): the import reference records that upstream `SKILL.md` forbids passing `knowledge_base_id` as `folder_id` (so the retry is a fallback), that the note list's order and maximum `limit` are undocumented (page before diffing), that where 解析失败 appeared was not recorded, and upstream's instruction for URL kinds the API cannot import.
