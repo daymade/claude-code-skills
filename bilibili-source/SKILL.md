@@ -48,9 +48,10 @@ Returns one JSON object with everything from a single `view/detail` API call:
 | `scripts/bili-fetch.sh <ref>` | Core: full metadata + live stats (run this first) | No |
 | `scripts/bili-danmaku.sh <ref> [P]` | Danmaku (bullet-comment) full text for a part | No |
 | `scripts/bili-subs.sh <ref> [browser]` | Subtitle/transcript track | **Yes** |
-| `scripts/bili-selftest.sh` | Health-check every capability against the live API | No |
+| `scripts/bili-selftest.sh` | Test anonymous metadata, danmaku and selected API shapes | No |
+| `scripts/bili-access.py` | Diagnose identity, entitlement, subtitle shape and per-part media; replay/probe/verify-report | Explicit cookie file only |
 
-All three **execute** (don't read them as reference). `bili-danmaku.sh` reuses `bili-fetch.sh` to resolve the part's cid, so they must stay siblings in `scripts/`.
+The shell fetch scripts **execute** (don't read them as reference). `bili-danmaku.sh` reuses `bili-fetch.sh` to resolve the part's cid, so they must stay siblings in `scripts/`.
 
 **Danmaku** are time-synced comments overlaid on the video — a Bilibili-specific signal of *where and how* viewers reacted, qualitatively richer than a flat reply count:
 
@@ -77,6 +78,12 @@ scripts/bili-subs.sh BV1xxxxxxxxx chrome   # or firefox / safari / edge
 
 The `ai-zh` track is Bilibili's AI-generated subtitle — treat it as a draft transcript (same-sound/segmentation errors), mark it as AI-ASR in whatever you produce, and don't claim it is a human-checked verbatim. If a video has no subtitle track, there is nothing to fetch — don't invent one. A SESSDATA-env API alternative is documented in the reference.
 
+## Diagnose access before downloading or ASR
+
+Run `scripts/bili-access.py probe --bvid BV0000000000 --page 1` for an authorized source; add `--cookie-file <authorized-netscape-jar>` only when that account access is authorized. Never read arbitrary browser cookies through this diagnostic. Omit `--cid` to resolve the selected P from view metadata. Replay captured nav/view/player/playurl/ffprobe JSON offline when diagnosing existing evidence.
+
+Consume `download_allowed` before downloading; consume `asr_allowed` only after `verify-report` reads a fresh ffprobe of the actual ASR input. Keep authenticated identity separate from target payment entitlement: logged-in membership alone does not grant every creator's paid video. Stop on paid preview, denied or unknown entitlement; do not send a preview to full-content ASR. Compare duration with the selected CID/P, never the total multi-part duration. Read [the access diagnostic contract](references/bilibili_api.md#access-diagnostic-contract) for JSON states, commands and exits; run `uv run python -m unittest discover -s bilibili-source/tests -v` from the repository root for deterministic synthetic coverage.
+
 ## Going deeper
 
 For the full endpoint catalog (UP fan history, video tags, real-time viewer count, danmaku archive, the SESSDATA subtitle path, **favorites-folder enumeration** — `x/v3/fav/*`, login-gated, no WBI needed), the WBI request-signing algorithm needed for `space/wbi/*` endpoints, and every gotcha with a tested command, see **[references/bilibili_api.md](references/bilibili_api.md)**.
@@ -95,4 +102,4 @@ This skill wraps a third-party API that drifts over time — fields get renamed,
 scripts/bili-selftest.sh
 ```
 
-It hits every capability (and the login-gate invariant) against a stable public fixture and prints one PASS/FAIL row per capability, so drift surfaces as a clear FAIL pointing at what broke — not a silent wrong answer. When a row fails, the endpoint paths, field names, and WBI signing needed to fix it are in [references/bilibili_api.md](references/bilibili_api.md); update the "Verified" dates above once you re-confirm.
+It tests anonymous metadata, danmaku and selected endpoint shapes against a public fixture and prints PASS/FAIL rows. It does not test authenticated retrieval, target payment rights or media completeness; a pass only covers the printed checks — not a silent wrong answer. When a row fails, the endpoint paths, field names, and WBI signing needed to fix it are in [references/bilibili_api.md](references/bilibili_api.md); update the "Verified" dates above once you re-confirm.

@@ -37,13 +37,13 @@ if env -u http_proxy -u https_proxy -u all_proxy -u HTTP_PROXY -u HTTPS_PROXY -u
      --user-agent "$UA" --add-header "Referer:https://www.bilibili.com" \
      --cookies-from-browser "$browser" \
      -o "%(id)s.%(ext)s" "$url"; then
-  echo "Done. If no subtitle file appeared, this video simply has no subtitle track." >&2
+  echo "Request finished. If no file appeared, the requested languages were not retrieved under this access context. Diagnose login, target entitlement and the player subtitle field separately; file absence does not prove the video has no subtitles." >&2
 else
   cat >&2 <<'EOF'
-ERROR: subtitle download failed. Most likely causes:
+ERROR: subtitle download failed. Inspect the failed interface and verify separately:
   - Not logged into bilibili.com in the chosen browser (subtitles are login-gated).
   - Browser cookie DB locked — close the browser and retry, or pass a different browser.
-  - The video has no subtitle track at all (then there is nothing to fetch — do not invent one).
+  - Target payment entitlement and the requested language/track response. Empty, missing and null subtitle fields are distinct; no file does not establish absence.
 Alternative: export SESSDATA and use the player/wbi/v2 API path (see references/bilibili_api.md).
 EOF
   exit 1
