@@ -273,10 +273,23 @@ python3 scripts/history_index.py recall 'query' --project /absolute/project/path
 python3 scripts/history_index.py recall 'query' --exclude-session <current-session-id>
 python3 scripts/history_index.py recall 'query' --include-agent-prompts
 python3 scripts/history_index.py recall 'query' --json
+python3 scripts/history_index.py recall 'query' --role user --phrase 'literal text' --json
 ```
 
 The current session can match text just typed. Exclude its session ID before
 accepting a result as historical evidence.
+
+`--role` filters storage labels, not human authorship. Each result includes a
+`record_key`, a conservative `source_kind`, and `human_authorship` stating that
+the role alone does not establish the speaker. Existing injected records can
+remain indexed; provenance labeling does not rewrite history or authenticate it.
+`--phrase` is case-sensitive literal matching, repeatable with AND semantics;
+it and `--role` apply before candidate ranking in both lexical and vector legs.
+`--terms` remains an additional FTS-only constraint. The main query still needs
+an indexed lexical or semantic lead; this is not an unindexed substring scan.
+Candidate previews retain their existing display limit and are not verbatim
+exports. No automatic content redaction is applied. Verify exact text, including
+tool results omitted from the prose index, with the owning exact-session reader.
 
 ## Status and freshness
 

@@ -43,6 +43,7 @@ interpreting fork snapshots, compaction, event streams, or end reasons.
 | Whole-conversation original-input counts and quotations, including inherited history | `scripts/reconcile_codex_inputs.py --session <ID>` |
 | Locate one exact rollout by internal identity | `scripts/analyze_sessions.py locate-codex <ID>` |
 | Reconstruct one Session and its declared parent snapshots | `scripts/read_codex_session.py --session <ID>` |
+| Verify a tool return, a comment ID, or external messages already read in a known Session | The **Original tool and record evidence** command below; briefing previews are not complete tool evidence |
 | Find a rollout containing a topic or phrase | `read-claude-code-history/scripts/history_index.py recall --provider codex`, then verify the exact rollout |
 | Content remembered but whose wording drifted | The same indexed recall in hybrid mode, if vectors are complete |
 | Continue after evidence is complete | Stop reading and invoke `daymade-claude-code:continue-codex-work` |
@@ -163,6 +164,30 @@ payload or one monolithic context load. Read bounded, non-overlapping ranges usi
 existing headings or exact record coordinates, keep coverage against the recorded line
 count, and report every unread range as a gap. Do not rerun the reader with different
 truncation and fuse the outputs into a complete-looking chronology.
+
+### Original tool and record evidence
+
+After selecting a Session by identity or indexed recall, read stored tool results
+with the bundled reader rather than writing another JSONL parser:
+
+```text
+<skill-dir>/scripts/read_codex_session.py --session <ID> --tools --contains '<literal clue>' --format json
+<skill-dir>/scripts/read_codex_session.py --session <ID> --record <ORDINAL> --format json
+```
+
+Repeat `--record` for several 1-based nonblank-record ordinals. `--tools` selects
+tool calls and returns; `--contains` is a literal substring filter within that
+selected rollout. Combining the selectors intersects them. This mode preserves
+the original stored record, including every output string and field, with no
+content redaction or preview truncation. `paired_call` locates the preceding call
+for a result; inspect both coordinates before attributing an external message.
+It does not expand ancestry; inherited records must be read from the identified
+parent when necessary. Role labels do not establish human authorship.
+
+Expected output reports `identity`, `records_examined`, `matched_records`, source
+coordinates, and `truncated: false`. Missing requested ordinals fail visibly.
+Zero matches apply only to this selected rollout. `--full` still governs prose
+briefing clipping; it does not turn a briefing into complete tool evidence.
 
 ### Indexed content search
 

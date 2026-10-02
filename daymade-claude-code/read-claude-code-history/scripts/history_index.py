@@ -2405,6 +2405,18 @@ def _vector_candidates(
     return ranks, snippets, search_k
 
 
+def _source_kind(role: str, text: str, fields: list[str]) -> str:
+    """Label stored provenance without treating a role label as a human identity."""
+    if role == "user" and text.lstrip().startswith((
+        *CODEX_INJECTED_PREFIXES, "Another Claude session sent a message",
+        "<codex_delegation>", "<system-reminder>", "[自动主线回锚",
+    )):
+        return "injected_user_role_message"
+    if any("tool" in field for field in fields):
+        return "tool_derived_content"
+    return "assistant_prose" if role == "assistant" else "user_role_message"
+
+
 def recall(
     db_path: Path,
     query: str,
@@ -2418,7 +2430,13 @@ def recall(
     simple_root: Path | None,
     providers: Sequence[str] = (),
     terms: str | None = None,
+    role: str | None = None,
+    phrases: Sequence[str] = (),
 ) -> dict[str, Any]:
+    if role not in {None, "user", "assistant"}:
+        raise IndexError("role must be user or assistant")
+    if any(not phrase for phrase in phrases):
+        raise IndexError("literal phrases cannot be empty")
     connection = _connect(
         db_path,
         readonly=True,
@@ -2486,6 +2504,12 @@ def recall(
     params: list[Any] = []
     if not include_agent_prompts:
         filters.append("records.agent_prompt=0")
+    if role is not None:
+        filters.append("records.role=?")
+        params.append(role)
+    for phrase in phrases:
+        filters.append("instr(records.fts_text, ?)>0")
+        params.append(phrase)
     project_value = _project_filter(project)
     if project_value:
         filters.append("sessions.project=?")
@@ -2567,7 +2591,7 @@ def recall(
         placeholders = ",".join("?" for _ in ranked_ids)
         detail_rows = connection.execute(
             f"""
-            SELECT records.id, records.role, records.ts, records.fts_text,
+            SELECT records.id, records.record_key, records.role, records.ts, records.fts_text,
                    records.segment_sources_json, records.copy_paths_json,
                    records.source_labels_json, sessions.project,
                    sessions.session_id, sessions.primary_path, sessions.sources_json,
@@ -2599,6 +2623,10 @@ def recall(
             {
                 "provider": row["provider"],
                 "role": row["role"],
+                "record_key": row["record_key"],
+                "source_kind": _source_kind(row["role"], row["fts_text"],
+                                             json.loads(row["segment_sources_json"])),
+                "human_authorship": "not_established_by_role",
                 "timestamp": (
                     datetime.fromtimestamp(row["ts"], tz=timezone.utc)
                     .isoformat()
@@ -2628,6 +2656,13 @@ def recall(
         "mode": actual_mode,
         "query": query,
         "terms": terms,
+        "role_filter": role,
+        "literal_phrases": list(phrases),
+        "filter_scope": "role and literal phrases constrain both BM25 and vector candidates; "
+                        "terms constrain the FTS leg only",
+        "evidence_boundary": "Ranked user/assistant prose candidates. Codex tool returns "
+                             "are not indexed; inspect original records in selected sessions. "
+                             "Source labels do not authenticate a human speaker.",
         "database": str(db_path),
         "last_indexed_at": _meta_get(connection, "last_indexed_at"),
         "complete_frontier": _meta_get(connection, "complete_frontier"),
@@ -2857,6 +2892,10 @@ def build_parser() -> argparse.ArgumentParser:
         "positional query (e.g. outcome terms forwarded by prior-work retrieval)",
     )
     recall_parser.add_argument("--json", action="store_true")
+    recall_parser.add_argument("--role", choices=("user", "assistant"),
+                               help="Filter the stored role in both ranking legs; not human attribution")
+    recall_parser.add_argument("--phrase", action="append", default=[],
+                               help="Require a literal substring in both ranking legs; repeat for AND")
 
     status_parser = subparsers.add_parser("status", help="Inspect index completeness")
     _add_source_scope(status_parser)
@@ -2998,6 +3037,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 simple_root=args.simple_root,
                 providers=args.provider or (),
                 terms=args.terms,
+                role=args.role,
+                phrases=args.phrase,
             )
             _print_payload(payload, json_output=args.json)
             return 0

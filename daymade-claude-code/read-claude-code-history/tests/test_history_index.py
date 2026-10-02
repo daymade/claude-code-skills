@@ -127,6 +127,65 @@ class HistoryIndexTests(unittest.TestCase):
             all_projects=True,
         )
 
+    def test_literal_phrase_role_and_provenance_do_not_conflate_nearby_facts(self):
+        sid = "12121212-1212-4212-8212-121212121212"
+        records = [
+            user_record(sid, self.workspace, "accounts count four", "2026-08-01T00:00:00Z"),
+            user_record(sid, self.workspace, "accounts assigned three to colleague", "2026-08-01T00:00:01Z"),
+            user_record(sid, self.workspace, "Another Claude session sent a message: accounts assigned three", "2026-08-01T00:00:02Z"),
+        ]
+        assistant = user_record(sid, self.workspace, "accounts assigned three", "2026-08-01T00:00:03Z")
+        assistant["type"] = assistant["message"]["role"] = "assistant"
+        records.append(assistant)
+        write_jsonl(project_dir(self.active, self.workspace) / f"{sid}.jsonl", records)
+        with portable_backend():
+            history_index.update_index(self.db, self.scope(self.active_source), rebuild=True)
+            result = history_index.recall(
+                self.db, "accounts", mode="bm25", limit=10, project=None,
+                exclude_sessions=[], include_agent_prompts=False, model_path=None,
+                simple_root=None, role="user", phrases=["assigned three"])
+        self.assertEqual(len(result["results"]), 2)
+        self.assertTrue(all(row["role"] == "user" for row in result["results"]))
+        self.assertEqual({row["source_kind"] for row in result["results"]},
+                         {"user_role_message", "injected_user_role_message"})
+        self.assertTrue(all(row["record_key"] for row in result["results"]))
+        self.assertTrue(all(row["human_authorship"] == "not_established_by_role" for row in result["results"]))
+        self.assertIn("not indexed", result["evidence_boundary"])
+
+    def test_hybrid_vector_candidates_receive_and_obey_same_literal_role_filters(self):
+        sid = "13131313-1313-4313-8313-131313131313"
+        records = [
+            user_record(sid, self.workspace, "accounts assigned three", "2026-08-01T00:00:00Z"),
+            user_record(sid, self.workspace, "accounts count four", "2026-08-01T00:00:01Z"),
+        ]
+        write_jsonl(project_dir(self.active, self.workspace) / f"{sid}.jsonl", records)
+        with portable_backend():
+            history_index.update_index(self.db, self.scope(self.active_source), rebuild=True)
+            connection = plain_connect(self.db)
+            for row in connection.execute("SELECT id,fts_text FROM records").fetchall():
+                connection.execute("INSERT INTO chunks(record_id,seq,ntok,text,usable) VALUES(?,?,?,?,1)",
+                                   (row[0], 0, 4, row[1]))
+            connection.execute("CREATE TABLE vec_chunks(embedding BLOB)")
+            for row in connection.execute("SELECT id FROM chunks").fetchall():
+                connection.execute("INSERT INTO vec_chunks(rowid,embedding) VALUES(?,?)", (row[0], b"fixture"))
+            history_index._meta_set(connection, "chunks_complete", "true")
+            history_index._meta_set(connection, "vectors_complete", "true")
+            connection.commit()
+            connection.close()
+            observed = []
+            def vector_candidates(conn, blob, *, where, params, wanted_records):
+                observed.append((where, list(params)))
+                rows = conn.execute("SELECT records.id,records.fts_text FROM records JOIN sessions ON sessions.session_id=records.session_id WHERE " + where, params).fetchall()
+                return ({r[0]: n for n, r in enumerate(rows, 1)}, {r[0]: r[1] for r in rows}, len(rows))
+            with mock.patch.object(history_index, "_vector_query", return_value=(b"query", 0)), mock.patch.object(history_index, "_vector_candidates", side_effect=vector_candidates):
+                result = history_index.recall(self.db, "unrelated semantic wording", mode="hybrid", limit=10,
+                    project=None, exclude_sessions=[], include_agent_prompts=False, model_path=None,
+                    simple_root=None, role="user", phrases=["assigned three"])
+        self.assertEqual(len(observed), 1)
+        self.assertEqual(len(result["results"]), 1)
+        self.assertEqual(result["results"][0]["snippet"], "accounts assigned three")
+        self.assertIsNotNone(result["results"][0]["vector_rank"])
+
     def test_embed_defaults_are_bounded_and_invalid_limits_fail_before_backend(self) -> None:
         args = history_index.build_parser().parse_args(["embed"])
         self.assertEqual(args.batch_size, 16)
