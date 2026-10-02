@@ -26,9 +26,9 @@ The governing principle, learned the expensive way: **a watchdog's lifecycle is 
 | SRE alert layering (page vs ticket, fatigue numbers) | `references/alert-discipline.md` |
 | A watchdog alert appears under Script Editor or its sender is unclear | `references/alert-discipline.md` § Message content; inspect the delivered card |
 
-## The quiet-watchdog contract (the four clauses)
+## The quiet-watchdog contract
 
-Before shipping or blessing any watchdog, all four must hold. Each clause exists because a real watchdog violated it.
+Before shipping or blessing any watchdog, every clause below must hold. Each clause exists because a real watchdog violated it.
 
 ### 1. Premise-state self-check — it knows when it has no job
 
