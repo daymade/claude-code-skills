@@ -81,11 +81,25 @@ and output format. This skill names which providers are in scope.
 | A list of conversations: titles, dates, session IDs | The indexed inventory row under **Provider scope**; if unavailable, state the gap |
 | The conversation where a topic, quote, file, or tool result appeared — "find that old chat", "did we ever discuss X" | The **indexed content search** row under **Provider scope**; use supplied clues to narrow candidates first. Listing titles alone is not evidence the content exists |
 | Their own raw inputs in chronological order, verbatim | The matching reader's verbatim-input path. Preserve duplicates and session boundaries; duplicates are part of the ledger, not noise |
+| Recent requests that may have stalled — "anything we recently forgot to finish?" / "最近提过却没推进的事" | The indexed inventory/content-search routes under **Provider scope**, then the matching exact-session readers. Verify candidates against current project records; a project registry alone does not cover unregistered requests |
 | Picking work back up from an identified session | The matching continuation skill, after a read |
 
 The requested output wins over the background motivation. If someone explains a
 problem and then asks for a window of their own raw inputs, return that window —
 the explanation's topic clues do not convert the request into a content search.
+
+For a recent-unfinished-work request, keep the retrieval read-only. Establish
+the requested time window and relevant providers, inspect index freshness, and
+open only selected sessions through their owning readers. Pair each candidate's
+original user request with the latest relevant handoff or completion evidence;
+check the project's current decision/status source before calling it unfinished.
+Keep completed work, user-paused work, external blockers, and work awaiting
+acceptance distinct. Treat reminders, assistant plans, and uncompleted reference
+bookmarks as leads, not proof of an outstanding commitment. Report the candidate,
+next action, evidence source/date, and any unresolved coverage gap. Stop after
+the requested inventory; do not resume old work or migrate tasks without that
+authorization. The calling agent performs this reconciliation; the readers own
+retrieval, and no mechanical check establishes real-world completion for them.
 
 ## Invariants that survive routing
 
