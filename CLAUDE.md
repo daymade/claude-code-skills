@@ -146,6 +146,11 @@ deterministic, Linux-verified) and the runner types (`python-unittest` via
 check the registry before assuming otherwise, and note `unittest discover`
 only collects `unittest.TestCase` subclasses, not bare pytest-style functions.
 
+For browser-backed recurring jobs, enter
+[macos-watchdog](daymade-macos/macos-watchdog/SKILL.md) and apply its deployment
+acceptance before shipping. That Skill owns resource-budget and focus evidence;
+keep the detailed procedure there.
+
 ### Transcript Correction
 
 Use [transcript-fixer](daymade-audio/transcript-fixer/SKILL.md) for transcript
