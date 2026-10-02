@@ -1480,6 +1480,8 @@ Review and improve Claude Code skills against official best practices with three
 - **Additive-only principle**: Never delete files when contributing to others
 - **PR guidelines**: Tone recommendations and professional templates
 - **Reliable automation**: Distinguishes review findings from invocation/runtime failures with structured JSON output
+- **Evidence-based design review**: Score six dimensions with exact source citations; keep documented design quality separate from measured task benefit
+- **Read-only batch review**: Inventory collections against declared host contracts, prepare complete selected-source packets, and export JSON/CSV/Markdown with explicit coverage and invalid decisions quarantined
 
 **Example usage:**
 ```bash

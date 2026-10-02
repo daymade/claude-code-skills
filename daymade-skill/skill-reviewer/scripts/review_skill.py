@@ -47,6 +47,8 @@ EXIT_FINDINGS = 2
 EXIT_OPERATIONAL = 3
 
 IGNORED_DIRECTORY_NAMES = {
+    ".venv",
+    "venv",
     ".git",
     ".pytest_cache",
     "__pycache__",
@@ -229,12 +231,12 @@ def check_frontmatter(fm, issues):
         if len(desc) > 1024:
             issues.append(("warning", "frontmatter", f"'description' is {len(desc)} chars (max 1024)"))
         if len(desc) < 50:
-            issues.append(("warning", "frontmatter", "'description' is very short -- may not trigger reliably"))
+            issues.append(("info", "frontmatter", "Short description: inspect the actual trigger contract; length alone is not a defect"))
 
         trigger_phrases = ["use when", "use this", "trigger", "when the user", "when you"]
         has_trigger = any(p in desc.lower() for p in trigger_phrases)
         if not has_trigger:
-            issues.append(("warning", "frontmatter", "'description' has no trigger conditions (e.g. 'Use when...')"))
+            issues.append(("info", "frontmatter", "No English trigger phrase detected; inspect meaning in the original language"))
 
 
 def check_structure(skill_path, issues):
@@ -263,7 +265,7 @@ def check_body_size(body, issues):
     lines = body.strip().split("\n")
     line_count = len(lines)
     if line_count > 500:
-        issues.append(("warning", "size", f"SKILL.md body is {line_count} lines (recommended: under 500). Move details to references/"))
+        issues.append(("info", "size", f"SKILL.md body is {line_count} lines; inspect information density and reference routing, not length alone"))
     elif line_count > 400:
         issues.append(("info", "size", f"SKILL.md body is {line_count} lines -- approaching 500 limit"))
 
