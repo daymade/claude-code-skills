@@ -206,6 +206,7 @@ Run these commands from the skill directory. Replace the synthetic IDs with the 
 
 Consume schema version 1:
 
+- `interfaces`: each captured endpoint retains `state`, API `code` and HTTP `http` status. Probe failures add a fixed `error` category: `http_error`, `network_error`, `timeout`, `invalid_json` or `unexpected_error`. HTTP errors retain their status (including 403/412); `http:0` means no HTTP status was observed. Invalid JSON retains an observed response status. Exception messages, response bodies and URLs are excluded from error diagnostics. Healthy interfaces keep their existing shape; omitted captures remain missing.
 - `target`: `bvid`, `cid`, `page`, `state` (`matched`, `mismatch`, `unknown`), bound through both view pages and player identifiers.
 - `identity`: `state` (`authenticated`, `anonymous`, `unknown`, `mismatch`), nav `mid`, optional `expected_mid`; cross-check player `login_mid`. Accept explicit anonymous nav `isLogin:false` including code -101; other API failures remain failures.
 - `entitlement`: `state` (`free`, `entitled`, `paid_preview`, `denied`, `unknown`), plus separate `fields` entries for `is_upower_exclusive`, `is_upower_play`, `is_ugc_pay_preview`. Each field retains `missing`, `null` or `present` and its value. Require explicit boolean evidence for free/entitled; a true preview flag blocks even when media appears full. Missing or contradictory rights never become free.

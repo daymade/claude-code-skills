@@ -7,12 +7,14 @@ import json
 import math
 import re
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
 
 SCHEMA_VERSION = 1
 FLAGS = ('is_upower_exclusive', 'is_upower_play', 'is_ugc_pay_preview')
+ERROR_CATEGORIES = ('http_error', 'network_error', 'timeout', 'invalid_json', 'unexpected_error')
 UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/124.0 Safari/537.36'
 
 
@@ -39,12 +41,16 @@ def unwrap(capture):
         return {}, {'state': 'invalid', 'code': None}
     code = body.get('code')
     http = capture.get('http', 200)
-    ok = type(code) is int and code == 0 and type(http) is int and 200 <= http < 300
+    error = capture.get('error')
+    ok = error is None and type(code) is int and code == 0 and type(http) is int and 200 <= http < 300
     data = body.get('data')
-    return (data if isinstance(data, dict) and ok else {}), {
+    status = {
         'state': 'ok' if ok and isinstance(data, dict) else 'failed',
         'code': code, 'http': http,
     }
+    if error is not None:
+        status['error'] = error if error in ERROR_CATEGORIES else 'unexpected_error'
+    return (data if isinstance(data, dict) and ok else {}), status
 
 
 def media_check(expected, ffprobe):
@@ -165,7 +171,8 @@ def evaluate(captures, bvid, cid, page=1, expected_mid=None):
             if (isinstance(body, dict) and body.get('code') == -101
                     and isinstance(body.get('data'), dict)
                     and body['data'].get('isLogin') is False
-                    and captures[name].get('http', 200) == 200):
+                    and captures[name].get('http', 200) == 200
+                    and captures[name].get('error') is None):
                 data[name] = body['data']
                 interfaces[name]['state'] = 'ok'
     nav, view, player = data['nav'], data['view'], data['player']
@@ -338,12 +345,23 @@ def probe(bvid, cid, page, cookie_file=None):
             params.update(fnval=16, qn=64)
         url = 'https://api.bilibili.com/' + path + '?' + urllib.parse.urlencode(params)
         request = urllib.request.Request(url, headers={'User-Agent': UA, 'Referer': 'https://www.bilibili.com'})
+        status = 0
         try:
             with opener.open(request, timeout=20) as response:
-                captures[name] = {'http': response.status, 'body': json.load(response)}
+                status = response.status
+                captures[name] = {'http': status, 'body': json.load(response)}
+        except urllib.error.HTTPError as exc:
+            captures[name] = {'http': exc.code, 'body': {'code': None}, 'error': 'http_error'}
+        except urllib.error.URLError as exc:
+            category = 'timeout' if isinstance(exc.reason, TimeoutError) else 'network_error'
+            captures[name] = {'http': status, 'body': {'code': None}, 'error': category}
+        except TimeoutError:
+            captures[name] = {'http': status, 'body': {'code': None}, 'error': 'timeout'}
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            captures[name] = {'http': status, 'body': {'code': None}, 'error': 'invalid_json'}
         except Exception:
             # Do not expose cookies, signed URLs, or server bodies in errors.
-            captures[name] = {'http': 0, 'body': {'code': None}}
+            captures[name] = {'http': status, 'body': {'code': None}, 'error': 'unexpected_error'}
     return captures
 
 

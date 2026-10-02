@@ -84,6 +84,8 @@ Run `scripts/bili-access.py probe --bvid BV0000000000 --page 1` for an authorize
 
 Consume `download_allowed` before downloading; consume `asr_allowed` only after `verify-report` reads a fresh ffprobe of the actual ASR input. Keep authenticated identity separate from target payment entitlement: logged-in membership alone does not grant every creator's paid video. Stop on paid preview, denied or unknown entitlement; do not send a preview to full-content ASR. Compare duration with the selected CID/P, never the total multi-part duration. Read [the access diagnostic contract](references/bilibili_api.md#access-diagnostic-contract) for JSON states, commands and exits; run `uv run python -m unittest discover -s bilibili-source/tests -v` from the repository root for deterministic synthetic coverage.
 
+Inspect each `interfaces` entry's `http` and optional `error` before attributing a failure: HTTP 403/412 responses retain their status and do not imply a network failure or cookie expiry. Network errors, timeouts and invalid JSON have separate categories; these diagnostics do not establish payment rights.
+
 ## Going deeper
 
 For the full endpoint catalog (UP fan history, video tags, real-time viewer count, danmaku archive, the SESSDATA subtitle path, **favorites-folder enumeration** — `x/v3/fav/*`, login-gated, no WBI needed), the WBI request-signing algorithm needed for `space/wbi/*` endpoints, and every gotcha with a tested command, see **[references/bilibili_api.md](references/bilibili_api.md)**.

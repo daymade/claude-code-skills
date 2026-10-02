@@ -14,7 +14,7 @@
       "description": "Fetches real, citable Bilibili (B站) video data — stats, metadata, tags, and full danmaku text — via login-free API calls, never hand-typed or estimated. Use when citing view/like/favorite counts, analyzing why a video performed, or archiving a Bilibili source into a knowledge base. Accepts BVID, av numbers, b23.tv links, or full URLs; subtitles and 收藏夹 (favorites) enumeration need the user's Bilibili login.",
       "source": "./bilibili-source",
       "strict": false,
-      "version": "1.4.0",
+      "version": "1.4.1",
       "category": "developer-tools",
       "keywords": [
         "bilibili",
