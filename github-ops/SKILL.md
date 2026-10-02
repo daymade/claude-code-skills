@@ -78,6 +78,35 @@ gh repo view OWNER/REPO \
   --json nameWithOwner,visibility,isPrivate,stargazerCount,forkCount,url
 ```
 
+Bind identity to the interface that will perform the write. CLI identity does
+not establish a connector, browser, REST client, or Git SSH identity. Resolve the
+expected actor from the user's authorized task; neither the repository owner nor
+an available credential selects that actor automatically. For connectors, use a
+read-only current-user operation from that same connector and confirm its actor.
+If that interface cannot expose the actor, use the already verified CLI channel
+for the authorized write; do not make a test comment to discover its identity.
+
+For `gh` API/hosted-state operations, use the bundled checked invocation:
+
+```bash
+uv run python scripts/checked_gh.py --expected-login <EXPECTED_LOGIN>
+uv run python scripts/checked_gh.py --expected-login <EXPECTED_LOGIN> -- pr edit <NUMBER> -R OWNER/REPO --title '<AUTHORIZED_TITLE>'
+```
+
+The first command is read-only. The second resolves the current credential,
+checks `GET /user`, and pins that same credential for one command. A mismatch or
+unknown actor exits before execution. It guards only `gh`, not connector calls,
+browser actions or Git pushes. Authentication/configuration commands are rejected;
+task authorization, exact targets and independent readback remain required.
+Switching account, credential, host or interface invalidates earlier identity
+evidence. Recheck before the next write; do not reuse a prior session's pass.
+
+For incident attribution, preserve event ID/time, actor and interface separately
+from the ChatGPT execution account. A comment author's `login` and
+`performed_via_github_app` establish GitHub actor/application, not the ChatGPT
+email. A session's creator identity and today's auth file do not establish its
+historical execution account. Keep missing links unknown.
+
 ### 3. Read current authority and preview the delta
 
 Use GitHub-hosted state, not a stale local ref or remembered setting. Capture only the

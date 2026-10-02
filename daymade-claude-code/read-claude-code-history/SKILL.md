@@ -147,6 +147,16 @@ recall returns ranked prose candidates, not a census of thinking, tool results,
 attachments, or unindexed records. The raw `analyze_sessions.py search` entry
 is disabled for live stores: its date flags filter after reading the files.
 
+Use `--role user` or `--role assistant` to narrow the stored role, and repeat
+`--phrase '<literal text>'` to require exact substrings. These filters constrain
+both BM25 and vector candidates; `--terms` constrains only the FTS leg. Returned
+`record_key`, `source_kind`, and `human_authorship` describe provenance, not an
+authenticated human speaker. Inspect the original record before saying “you said”.
+Codex tool results are outside this prose index; hand a selected Codex candidate
+to `read-codex-history`'s original tool/record evidence route. Export original
+values without automatic content redaction. A result about a neighboring fact
+does not answer the requested proposition.
+
 ### Human-input export
 
 ```text

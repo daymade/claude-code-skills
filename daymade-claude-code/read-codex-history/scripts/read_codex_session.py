@@ -1606,6 +1606,78 @@ def build_briefing(conv, data: dict, project_path: str, full: bool = False) -> s
 # ── CLI ──────────────────────────────────────────────────────────────────────
 
 
+def extract_record_evidence(
+    path: Path, session_id: str, *, records: list[int], tools: bool,
+    contains: Optional[str] = None, end_byte_offset: Optional[int] = None,
+) -> dict[str, Any]:
+    """Read original records from one identity-verified rollout, without clipping.
+
+    Ordinals use the briefing's 1-based nonblank-record convention. Tool returns
+    retain their original payload and a locator for the preceding matching call.
+    This is selected-session evidence, never a raw-corpus discovery interface.
+    """
+    requested = set(records)
+    if any(isinstance(value, bool) or value < 1 for value in requested):
+        raise LineageResolutionError("record ordinals must be positive integers")
+    calls: dict[str, dict[str, Any]] = {}
+    matches: list[dict[str, Any]] = []
+    found: set[int] = set()
+    total = 0
+    for total, record in enumerate(_iter_rollout_records(path, end_byte_offset), 1):
+        payload = record.get("payload")
+        payload = payload if isinstance(payload, dict) else {}
+        kind = payload.get("type")
+        is_tool = record.get("type") == "response_item" and kind in {
+            "function_call", "custom_tool_call", "function_call_output",
+            "custom_tool_call_output",
+        }
+        call_id = payload.get("call_id")
+        if is_tool and kind in {"function_call", "custom_tool_call"} and call_id:
+            calls[call_id] = {"record": total, "name": payload.get("name"),
+                              "call_id": call_id}
+        if total in requested:
+            found.add(total)
+        if requested and total not in requested:
+            continue
+        if tools and not is_tool:
+            continue
+        original = json.dumps(record, ensure_ascii=False)
+        if contains is not None and contains not in original:
+            continue
+        matches.append({
+            "record": total,
+            "source_kind": "tool_record" if is_tool else "rollout_record",
+            "role": payload.get("role"),
+            "human_authorship": "not_established_by_role",
+            "paired_call": calls.get(call_id) if is_tool else None,
+            "original": record,
+            "truncated": False,
+        })
+    missing = sorted(requested - found)
+    if missing:
+        raise LineageResolutionError(f"requested record(s) absent: {missing}")
+    return {
+        "session_id": session_id, "path": str(path),
+        "identity": "verified", "scope": "selected_rollout_only",
+        "records_examined": total, "matched_records": len(matches),
+        "requested_records": sorted(requested), "contains": contains,
+        "tools_only": tools, "truncated": False,
+        "coverage": "Original stored records; no ancestry expansion or content redaction. "
+                    "Empty matches do not prove absence outside this selected rollout.",
+        "results": matches,
+    }
+
+
+def render_record_evidence(evidence: dict[str, Any]) -> str:
+    sections = ["# Codex Original Record Evidence", json.dumps(
+        {key: value for key, value in evidence.items() if key != "results"},
+        ensure_ascii=False, indent=2)]
+    for entry in evidence["results"]:
+        sections.append(f"\n## record {entry['record']} · {entry['source_kind']}")
+        sections.append(json.dumps(entry, ensure_ascii=False, indent=2))
+    return "\n".join(sections)
+
+
 def _print_session_list(convs: list, limit: int) -> None:
     for conv in convs[:limit]:
         updated = format_timestamp(conv.updated_at) if conv.updated_at else "?"
@@ -1705,7 +1777,23 @@ def main() -> int:
                         help="Do not truncate retained long-section text (summary / user "
                              "requests / assistant responses / compacted context); "
                              "tool/file preview caps still apply")
+    parser.add_argument("--record", type=int, action="append", default=[],
+                        help="Original 1-based record ordinal; repeatable; requires --session")
+    parser.add_argument("--tools", action="store_true",
+                        help="Original tool calls/results in one --session, without preview caps")
+    parser.add_argument("--contains", help="Literal substring filter for original-record mode")
+    parser.add_argument("--format", choices=("markdown", "json"), default="markdown",
+                        help="Output format for original-record mode")
     args = parser.parse_args()
+    evidence_mode = bool(args.record or args.tools)
+    if evidence_mode and (not args.session or args.list or args.query):
+        parser.error("--record/--tools require an explicit --session, without --list/--query")
+    if any(value < 1 for value in args.record):
+        parser.error("--record must be a positive 1-based ordinal")
+    if (args.contains is not None or args.format == "json") and not evidence_mode:
+        parser.error("--contains/--format json require --record or --tools")
+    if args.contains == "":
+        parser.error("--contains cannot be empty")
 
     project_path = os.path.abspath(args.project)
 
@@ -1803,6 +1891,18 @@ def main() -> int:
         return 1
 
     meta = data.get("meta") or {}
+    if evidence_mode:
+        try:
+            evidence = extract_record_evidence(
+                rollout, conv.session_id, records=args.record, tools=args.tools,
+                contains=args.contains, end_byte_offset=data["parsed_bytes"],
+            )
+        except LineageResolutionError as exc:
+            print(f"Error: cannot read original record evidence: {exc}", file=sys.stderr)
+            return 1
+        print(json.dumps(evidence, ensure_ascii=False, indent=2)
+              if args.format == "json" else render_record_evidence(evidence))
+        return 0
     lineage: list = []
     lineage_warnings: list[str] = []
     try:
