@@ -11,6 +11,9 @@ or its lifecycle is controlled by another session.
 from __future__ import annotations
 
 import hashlib
+import argparse
+import contextlib
+import io
 import importlib.util
 import json
 import os
@@ -22,6 +25,7 @@ import sys
 import tempfile
 import textwrap
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 
@@ -812,6 +816,38 @@ window.addEventListener('load', () => {
         html = html.replace("</body>", probe, 1)
         state = self.browser_probe("report-template-narrow", html, window_size="500,844")
         self.assertTrue(all(state.values()), state)
+
+
+class SemanticAcceptanceGateTests(unittest.TestCase):
+    def test_old_or_deleted_semantic_evidence_slot_cannot_pass(self) -> None:
+        spec = importlib.util.spec_from_file_location("semantic_delivery_gate", SKILL_ROOT / "scripts/delivery_gate.py")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as temporary:
+            page = Path(temporary) / "page.html"
+            page.write_text("<html><body><p>单页说明</p></body></html>", encoding="utf-8")
+            # This fixture tests the structural gate, not image or semantic quality.
+            for image in [page.with_suffix(".png"), page.with_name("page--masked.png")]:
+                image.write_bytes(b"fixture")
+            geometry = module.GeometryScan()
+            body = module.build_gate(page, geometry, [], 0.1,
+                                     page.with_suffix(".png"), page.with_name("page--masked.png"))
+            filled = body.replace(module.PLACEHOLDER, "不适用：纯文字首次交付，无合并或现状判断")
+            section = next(line for line in filled.splitlines() if line.startswith(f"- **{module.SEMANTIC_LABEL}**"))
+            missing = filled.replace(section + "\n  > 不适用：纯文字首次交付，无合并或现状判断\n", "")
+            for candidate, expected in [
+                (filled, 0),
+                (missing, 1),
+                (missing + "\n## 上一轮的答案\n" + filled, 1),
+                (filled.replace(section + "\n  > 不适用：纯文字首次交付，无合并或现状判断", section + "\n  > "), 1),
+                (filled.replace(section + "\n  > 不适用：纯文字首次交付，无合并或现状判断", section + "\n  > " + module.PLACEHOLDER), 1),
+            ]:
+                module.gate_path(page).write_text(candidate, encoding="utf-8")
+                # Geometry/rendering have separate browser regressions. Keep this
+                # acceptance-slot test stdlib-only, as the CI runner requires.
+                with patch.object(module, "scan_geometries", return_value=geometry), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                    self.assertEqual(module.cmd_check(argparse.Namespace(page=str(page))), expected)
 
 
 class SkillWorkflowContractTests(unittest.TestCase):

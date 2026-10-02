@@ -139,8 +139,13 @@ COORD_SCRIPT_LABEL = "坐标产出脚本"
 # 同一个理由：写在 SKILL.md 里但没人 stat 的规则，是下一个被跳过的候选。这里的机器执法点
 # 是「声明的词必须真的出现在页面里」——防止拿一堆没在页面里用过的词凑数糊弄这一栏。
 AUDIENCE_LABEL = "读者已知清单"
+SEMANTIC_LABEL = "合并与现行事实验收"
 
 STAGE1 = [
+    (SEMANTIC_LABEL,
+     "合并/综合：给旧版信息点去向对账与冲突裁定证据的位置；更新现状：给现行入口、选定版本、"
+     "实际消费处读回及未验证层。原件保全、语义综合、系统采用分别说明；独立验收者回核，"
+     "本脚本只检查显式作答。既非合并也非现状更新 → 写「不适用：<为什么>」"),
     ("受众×形态", "汇报（→静态结论图）还是操盘（→交互工具）？"),
     ("北极星指标", "哪个指标，凭什么是它（判据是受众做决策时直接依赖它，不是数最大）"),
     ("每图一句结论", "在下面的量纲表里逐个写"),
@@ -677,6 +682,10 @@ def cmd_check(args: argparse.Namespace) -> int:
         if gate.stat().st_mtime < page_mtime:
             fails.append("gate 文件比页面旧 —— 填完闸门之后页面又被改过，答案已失效，重跑 init")
         text = gate.read_text(encoding="utf-8")
+        active_text = text.split("## 上一轮的答案", 1)[0]
+        semantic_answer = re.search(rf"(?m)^- \*\*{re.escape(SEMANTIC_LABEL)}\*\*[^\n]*\n[ \t]*>[ \t]*([^\n]*)", active_text)
+        if not semantic_answer or not semantic_answer.group(1).strip():
+            fails.append(f"gate 缺少「{SEMANTIC_LABEL}」——旧模板不能证明本轮综合或现行判断，重跑 init")
         slots = unfilled_lines(text)
         if slots:
             lines = [f"{i}: {t}" for i, t in slots]
