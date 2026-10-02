@@ -101,6 +101,35 @@ class CheckedGhTests(unittest.TestCase):
         self.assertEqual(checked.checked_invocation("owner", "github.com", ["repo", "edit", "org/repo"], run=run), 0)
         self.assertEqual(calls[-1][0], ["gh", "repo", "edit", "github.com/org/repo"])
 
+    def test_option_like_body_and_title_values_are_preserved(self):
+        for option in ("--body", "-b", "--title", "-t"):
+            for body in ("-Rorg/repo", "--repo=other.example/org/repo", "--hostname=other.example", "https://other.example/evidence", "--body", "--org"):
+                with self.subTest(option=option, body=body):
+                    run, calls = self.runner()
+                    command = ["pr", "edit", "1", option, body, "-R", "github.com/org/repo"]
+                    self.assertEqual(checked.checked_invocation("owner", "github.com", command, run=run), 0)
+                    self.assertEqual(calls[-1][0], ["gh", *command])
+
+    def test_org_variable_secret_and_personal_secret_keep_their_scope(self):
+        for command in (["secret", "set", "TEST_NAME", "--org", "org", "--body", "synthetic-value"],
+                        ["variable", "set", "TEST_NAME", "--org=org", "--body", "synthetic-value"],
+                        ["secret", "set", "TEST_NAME", "--user", "--body", "synthetic-value"]):
+            run, calls = self.runner()
+            self.assertEqual(checked.checked_invocation("owner", "github.com", command, run=run), 0)
+            self.assertEqual(calls[-1][0], ["gh", *command])
+
+    def test_scope_flag_inside_body_cannot_authorize_an_inferred_repo(self):
+        run, calls = self.runner()
+        with self.assertRaises(ValueError):
+            checked.checked_invocation("owner", "github.com", ["secret", "set", "TEST_NAME", "--body", "--org"], run=run)
+        self.assertFalse(calls)
+
+    def test_public_api_absolute_url_is_not_a_foreign_host(self):
+        run, calls = self.runner()
+        command = ["api", "https://api.github.com/user"]
+        self.assertEqual(checked.checked_invocation("owner", "github.com", command, run=run), 0)
+        self.assertEqual(calls[-1][0], ["gh", *command])
+
 
 if __name__ == "__main__":
     unittest.main()

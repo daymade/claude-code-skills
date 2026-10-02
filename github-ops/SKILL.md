@@ -102,6 +102,10 @@ Supply `-R OWNER/REPO` for repository-scoped commands, or an explicit repository
 operand for `gh repo`. The wrapper qualifies that target with the checked host,
 removes inherited `GH_REPO` and alternate token variables from the child, and
 rejects conflicting host operands. Omit the command for an identity-only read.
+Organization secret/variable operations instead use their explicit `--org`
+scope; personal Codespaces secrets use `--user`. Body/title/field values remain
+unchanged even when they resemble flags or URLs. Public API absolute URLs use
+`api.github.com`; relative API endpoints remain supported.
 Switching account, credential, host or interface invalidates earlier identity
 evidence. Recheck before the next write; do not reuse a prior session's pass.
 

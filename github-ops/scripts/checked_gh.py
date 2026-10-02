@@ -26,6 +26,11 @@ def checked_invocation(expected_login: str, host: str, command: list[str],
         raise ValueError("use a supported builtin operation, not an alias or extension")
     command = list(command)
     repo_bound = False
+    account_scope = False
+    data_indices: set[int] = set()
+    value_options = {"--title", "-t", "--body", "-b", "--body-file", "--notes", "-n",
+                     "--notes-file", "-f", "-F", "--field", "--raw-field", "--input",
+                     "--header", "-H", "--repo", "-R", "--hostname", "--org", "-o"}
     def qualified_repo(value: str) -> str:
         if value.startswith(("https://", "http://")):
             url = urlsplit(value)
@@ -40,15 +45,34 @@ def checked_invocation(expected_login: str, host: str, command: list[str],
             raise ValueError("an explicit OWNER/REPO target is required")
         return host + "/" + "/".join(parts)
     for index, arg in enumerate(command):
+        if index in data_indices:
+            # An option's string value is data even if it begins with -R,
+            # --repo= or a URL. Preserve it exactly.
+            continue
+        if arg in value_options:
+            if index + 1 == len(command):
+                raise ValueError("option needs a value")
+            data_indices.add(index + 1)
         if arg.startswith("--hostname=") and arg.split("=", 1)[1] != host:
             raise ValueError("command hostname differs from the checked host")
         if arg == "--hostname" and (index + 1 == len(command) or command[index + 1] != host):
             raise ValueError("command hostname differs from the checked host")
-        previous = command[index - 1] if index else ""
-        text_value = previous in {"--title", "--body", "--body-file", "--notes", "--notes-file",
-                                  "-f", "-F", "--field", "--raw-field", "--input"}
-        if not text_value and arg.startswith(("https://", "http://")) and urlsplit(arg).hostname != host:
+        url_hosts = {host}
+        if command[:1] == ["api"] and host == "github.com":
+            url_hosts.add("api.github.com")
+        if arg.startswith(("https://", "http://")) and urlsplit(arg).hostname not in url_hosts:
             raise ValueError("URL operand differs from the checked host")
+        if command[:1] in (["secret"], ["variable"]):
+            if arg in {"--org", "-o"}:
+                if index + 1 == len(command) or not command[index + 1].strip():
+                    raise ValueError("organization scope needs an explicit owner")
+                account_scope = True
+            elif arg.startswith("--org="):
+                if not arg.split("=", 1)[1].strip():
+                    raise ValueError("organization scope needs an explicit owner")
+                account_scope = True
+            elif command[0] == "secret" and arg in {"--user", "-u"}:
+                account_scope = True
         repo_arg = None
         if arg in {"-R", "--repo"} and index + 1 < len(command):
             repo_arg = command[index + 1]
@@ -63,7 +87,7 @@ def checked_invocation(expected_login: str, host: str, command: list[str],
             repo_bound = True
     repository_commands = {"pr", "issue", "workflow", "run", "release", "secret",
                            "variable", "label", "cache", "ruleset", "attestation"}
-    if command and command[0] in repository_commands and not repo_bound:
+    if command and command[0] in repository_commands and not repo_bound and not account_scope:
         raise ValueError("repository operations require explicit -R OWNER/REPO")
     if command[:1] == ["repo"]:
         if len(command) < 3 or command[2].startswith("-"):
