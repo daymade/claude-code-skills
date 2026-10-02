@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **bilibili-source** (v1.3.0 → v1.4.0): Add a shared read-only access diagnostic and captured-response replay for account identity, target entitlement, subtitle shape, source span and actual audio completeness. Preserve unknown fields, distinguish paid previews from incomplete local downloads, and limit subtitle/self-test success statements to verified coverage.
+- **daymade-claude-code** (v4.8.0 → v4.9.0): Distinguish Lark command transport success from per-item business success; reconcile batch identities, errors and expected artifacts before reporting completion.
+
 - **read-codex-history, read-claude-code-history, local-conversation-history** (`daymade-claude-code` v4.7.0 → v4.8.0): recover complete tool records from an explicitly selected Codex session, retaining original values and call/result coordinates; add literal-phrase and stored-role filters to both recall ranking legs and label source provenance. Route retries across evidence lanes instead of substituting neighboring facts.
 - **github-ops** (v1.7.2 → v1.8.0): check the expected actor in the actual write channel; add a checked `gh` invocation that pins the credential used for authenticated-user lookup through command execution. Keep connector identity and historical ChatGPT account attribution separate.
 - **tibo-reset-codex** (v1.18.2 → v1.19.0): separate creation, execution, CLI, browser and external connector identities by source and observation time; pause browser account switching on concurrent interference and keep unverified restoration explicit.

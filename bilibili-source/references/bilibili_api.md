@@ -113,9 +113,7 @@ every anonymous request tested, new videos included). Two authenticated options:
    extract once via `yt-dlp --cookies-from-browser chrome --cookies <file> --skip-download --simulate <any-video-URL>`
    — the URL is required even though nothing downloads: bare `--cookies-from-browser` with no URL
    exits 2 before reliably writing the jar. Then keep only bilibili
-   domains and delete the full dump — it contains every site's cookies). An empty `subtitles[]` on a
-   logged-in request means the video genuinely has no subtitle track (common for music/effects videos) —
-   record "none", don't invent one. Multi-part videos: query each part's own cid; each part has its own track.
+   domains and delete the full dump — it contains every site's cookies). An explicit empty `subtitles[]` records zero returned tracks for that account, target and request; it does not prove there is no speech or that the account has full target entitlement. Preserve a missing `subtitle`/`subtitles` field as missing, and JSON null as null; never convert either to an empty array. Multi-part videos: query each part's own cid; each part has its own track.
 
 `ai-zh` is AI-generated — same-sound/segmentation errors; mark output as AI-ASR, never as verbatim.
 
@@ -182,3 +180,39 @@ Gotcha: `space/wbi/*` also needs an **anonymous `buvid3`** cookie (get it login-
   capture a transcript — only the API path above can.
 - **Watch pages come back gzip'd even without `Accept-Encoding`** — add `--compressed` to curl
   when fetching page HTML (the JSON API endpoints return plain JSON and don't need it).
+
+
+## Access diagnostic contract
+
+Use the bundled standard-library `scripts/bili-access.py` as the single decision implementation. Preserve the captured responses outside the public source tree; the report excludes Cookie values, subtitle text and signed media links. Accept direct `{code,data}` API JSON or captured `{http,body:{code,data}}` wrappers. Use the raw ffprobe object (`streams[]`, `format`), not a duration string.
+
+```bash
+# Offline pre-access decision; supply the full player response, including payment flags.
+uv run python scripts/bili-access.py replay --bvid BV0000000000 --cid 123 --page 1 \
+  --nav nav.json --view view.json --player player.json > access.json
+# Read-only fixed API endpoints; explicit authorized cookie jar only, no browser extraction.
+uv run python scripts/bili-access.py probe --bvid BV0000000000 --page 1 \
+  --cookie-file authorized-cookie-jar.txt --expected-mid 42 > access.json
+# Before downloading, validate the saved report against the requested part.
+uv run python scripts/bili-access.py verify-report access.json \
+  --bvid BV0000000000 --cid 123 --page 1 --require download
+# After downloading (also for existing wav files and ASR-only runs), probe that actual file.
+ffprobe -v error -show_streams -show_format -of json audio.wav > ffprobe.json
+uv run python scripts/bili-access.py verify-report access.json \
+  --bvid BV0000000000 --cid 123 --page 1 --ffprobe ffprobe.json --require asr
+```
+
+Run these commands from the skill directory. Replace the synthetic IDs with the authorized target. `probe` resolves a missing CID from `view.pages[]` for the selected page, then queries nav/view/player/playurl once each with the existing direct-network/header contract; it does not change proxies, cycle User-Agents, purchase access or fetch media. Inspect `interfaces` for failures; a 412 is an interface response, not evidence of cookie expiry. Omitted replay captures remain missing. Exit 0 means download is allowed for replay/probe, or the requested permission is allowed for verify-report; exit 1 means denied/unknown, and exit 2 means invalid input. Always inspect the emitted JSON.
+
+Consume schema version 1:
+
+- `target`: `bvid`, `cid`, `page`, `state` (`matched`, `mismatch`, `unknown`), bound through both view pages and player identifiers.
+- `identity`: `state` (`authenticated`, `anonymous`, `unknown`, `mismatch`), nav `mid`, optional `expected_mid`; cross-check player `login_mid`. Accept explicit anonymous nav `isLogin:false` including code -101; other API failures remain failures.
+- `entitlement`: `state` (`free`, `entitled`, `paid_preview`, `denied`, `unknown`), plus separate `fields` entries for `is_upower_exclusive`, `is_upower_play`, `is_ugc_pay_preview`. Each field retains `missing`, `null` or `present` and its value. Require explicit boolean evidence for free/entitled; a true preview flag blocks even when media appears full. Missing or contradictory rights never become free.
+- `subtitle`: `state` (`missing`, `null`, `empty`, `available`, `invalid`, `unknown`), returned `count`, and separate `need_login` field evidence. Empty refers only to the returned track list; it is independent of speech and full-content rights.
+- `source_span`: `state` (`unverified`, `complete`, `partial`, `unknown`), declared/observed durations and tolerance. Compare playurl `durl[].length` summed in milliseconds or `dash.duration` in seconds against the selected CID/P duration, with integer rounding plus the 0.05-second timing floor. Preserve a known source fragment across report verification; missing optional playurl duration remains unverified. This source access check is independent of a local interrupted WAV.
+- `media`: `state` (`unverified`, `complete`, `partial`, `unknown`), `expected_duration_s`, `actual_duration_s`, `tolerance_s`, `has_audio`. Use only selected `pages[].duration`. Allow less-than-one-second declaration rounding/truncation for integer-second durations, plus a bounded 0.05-second timing floor. For declared AAC audio, use the larger of that floor and one 1024-sample frame at the ffprobe sample rate (require a valid rate of at least 8000 Hz). Fractional declarations receive only the frame/floor allowance. This is a bounded policy, not a measured promise about every codec. Reject larger differences in either direction. Prefer audio-stream duration; container duration is usable only for an audio-only file, so a full-length video container cannot conceal short audio.
+- `download_allowed`: require matched target, known matching identity, free or authenticated entitled access, successful required interfaces and a positive selected-part duration. Block a known partial/unknown source span. Local input media may be partial while download remains allowed, enabling a replacement download from a verified full source. A supplied failed playurl blocks downloading; an omitted playurl replay is not treated as failed.
+- `asr_allowed`: additionally require complete duration and an audio stream. `verify-report --require asr` requires a fresh `--ffprobe`; saved media/allow booleans are not enough. Bind the probed file to the selected part in the caller's download manifest; duration alone cannot prove content identity or transcript accuracy.
+
+Keep raw access reports and cookie files private. Re-run access diagnosis if the account or entitlement changes. Run `uv run python -m unittest discover -s tests -v` from the skill directory to test synthetic healthy and blocked states; these offline tests do not establish live authenticated health.

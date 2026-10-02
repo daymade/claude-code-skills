@@ -63,7 +63,7 @@ fi
 #    A non-empty anonymous list means Bilibili opened subtitles up: update SKILL.md if so.
 if [ -n "$CID" ]; then
   SUBS=$(np_curl "https://api.bilibili.com/x/player/wbi/v2?aid=170001&cid=$CID" 2>/dev/null \
-         | jq -r '.data.subtitle.subtitles | length' 2>/dev/null || echo ERR)
+         | jq -er 'if .code == 0 and (.data.subtitle.subtitles | type) == "array" then .data.subtitle.subtitles | length else error("missing or invalid subtitle array") end' 2>/dev/null || echo ERR)
   case "$SUBS" in
     0)   ok "subtitles: still login-gated (anonymous list empty, as documented)";;
     ERR) bad "subtitles: player/wbi/v2 call failed (endpoint drifted)";;
@@ -91,7 +91,7 @@ fi
 echo ""
 printf "Result: %d passed, %d failed\n" "$pass" "$fail"
 if [ "$fail" -eq 0 ]; then
-  echo "✅ All capabilities healthy."; exit 0
+  echo "✅ Tested anonymous metadata, danmaku and endpoint-shape checks passed. Authenticated access, target payment rights, subtitle retrieval and media completeness were not tested."; exit 0
 else
   echo "❌ Drift detected — see failing rows; consult references/bilibili_api.md."; exit 1
 fi

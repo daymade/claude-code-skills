@@ -112,8 +112,19 @@ a replacement.
 6. For writes, use `--dry-run` when the command supports a useful preview. If a
    high-risk write exits `10`, present the proposed action and wait for explicit
    human confirmation; never append `--yes` automatically.
-7. Treat the command as successful only when its process exits `0` or its JSON
-   envelope has `ok == true`. Do not test for a top-level `code == 0`.
+7. Separate transport completion from business success. Process exit `0` alone
+   does not prove the requested result; for JSON output, inspect `ok` and errors
+   as well. Outer `ok == true` does not prove each item succeeded. Do not test for
+   a top-level `code == 0`; interpret domain results using the loaded guide.
+   For batches, reconcile each requested resource identity with its returned
+   item, error and expected result/artifact. Identify missing, duplicate and
+   unrequested items; a duplicate never fills a missing request. Count verified
+   successes, explicit failures and missing/unknown results against the request
+   total, counting each requested identity at most once; report anomalies
+   separately, and report `partial` whenever any requested result is not verified.
+   For example, three requested items with one verified
+   result, one permission error and one missing item are `partial: 1/3 successful,
+   1 failed, 1 missing`, even with exit `0` and outer `ok == true`.
 8. After a write, follow the selected guide's domain-specific verification
    contract. If it defines none, perform the narrowest independent read that proves
    the requested state changed. A guide that explicitly forbids an opportunistic
