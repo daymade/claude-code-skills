@@ -25,6 +25,7 @@ import sys
 import tempfile
 import textwrap
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 
@@ -829,7 +830,8 @@ class SemanticAcceptanceGateTests(unittest.TestCase):
             # This fixture tests the structural gate, not image or semantic quality.
             for image in [page.with_suffix(".png"), page.with_name("page--masked.png")]:
                 image.write_bytes(b"fixture")
-            body = module.build_gate(page, module.scan_geometries(page), [], 0.1,
+            geometry = module.GeometryScan()
+            body = module.build_gate(page, geometry, [], 0.1,
                                      page.with_suffix(".png"), page.with_name("page--masked.png"))
             filled = body.replace(module.PLACEHOLDER, "不适用：纯文字首次交付，无合并或现状判断")
             section = next(line for line in filled.splitlines() if line.startswith(f"- **{module.SEMANTIC_LABEL}**"))
@@ -842,7 +844,9 @@ class SemanticAcceptanceGateTests(unittest.TestCase):
                 (filled.replace(section + "\n  > 不适用：纯文字首次交付，无合并或现状判断", section + "\n  > " + module.PLACEHOLDER), 1),
             ]:
                 module.gate_path(page).write_text(candidate, encoding="utf-8")
-                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                # Geometry/rendering have separate browser regressions. Keep this
+                # acceptance-slot test stdlib-only, as the CI runner requires.
+                with patch.object(module, "scan_geometries", return_value=geometry), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
                     self.assertEqual(module.cmd_check(argparse.Namespace(page=str(page))), expected)
 
 
