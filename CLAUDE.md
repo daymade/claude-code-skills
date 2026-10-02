@@ -184,6 +184,14 @@ the delivered artifact. Detailed retrieval mechanics remain in
 For recent unfinished-request inventories, follow
 [`local-conversation-history`](daymade-claude-code/local-conversation-history/SKILL.md).
 
+For remembered facts or a repeated search request, use that router's evidence
+selection contract. The provider readers own original-record retrieval;
+[`read-codex-history`](daymade-claude-code/read-codex-history/SKILL.md#original-tool-and-record-evidence)
+owns complete Codex tool evidence, and
+[`hybrid history recall`](daymade-claude-code/read-claude-code-history/references/hybrid_history_recall.md#query)
+owns indexed role/phrase filters. Keep commands and source-attribution rules in
+those owners rather than copying them here.
+
 Codex inventory must use the index-only command in
 `daymade-claude-code/read-codex-history/SKILL.md`. If its state database is
 unavailable, report an unknown inventory; do not substitute a raw rollout scan.
@@ -352,6 +360,10 @@ For GitHub-hosted state — PRs, issues, Actions, repository or organization set
 and API/UI mutations — treat `github-ops/SKILL.md` as the canonical operating contract. A command
 receipt is not completion; use that Skill's operation-specific independent readback. Keep detailed
 GitHub SOPs there rather than copying them into this repository-level instruction file.
+For hosted-state writes through `gh`, follow its
+[identity, host and target binding](github-ops/SKILL.md#2-bind-identity-host-and-target)
+before using an operation recipe. For historical account or connector attribution,
+use the [identity-source contract](tibo-reset-codex/references/account-usage.md#区分身份来源与观察时刻).
 
 **Closing a PR unmerged (declined, or superseded by another PR) → delete its head
 branch in the same action.** `gh pr merge --delete-branch` only covers merged PRs.

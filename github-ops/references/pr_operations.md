@@ -3,15 +3,8 @@
 Comprehensive examples for GitHub pull request operations using gh CLI.
 
 All writes follow the target, authorization, impact-preview, and independent-readback contract
-in [`../SKILL.md`](../SKILL.md). Use `-R OWNER/REPO` whenever the current directory is not itself
-the verified target repository.
+in [operating and checked-invocation contract](../SKILL.md#universal-operating-contract).
 
-## Contents
-
-- Creating, viewing, managing, commenting on, and reviewing pull requests
-- Advanced PR operations and checks
-- Converging parallel PRs and retiring remote branches
-- Output formatting, bulk operations, and best practices
 
 ## Creating Pull Requests
 

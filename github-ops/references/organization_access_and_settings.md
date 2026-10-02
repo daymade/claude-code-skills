@@ -4,18 +4,9 @@ Use this reference for organization membership, outside collaborators, direct or
 repository access, base permissions, member privileges, repository creation policy, and
 organization-wide 2FA requirements.
 
-## Contents
+Apply the [operating and checked-invocation contract](../SKILL.md#universal-operating-contract)
+before executing the operation examples.
 
-- Access model and least-privilege decision
-- Read-only access audit
-- Granting and revoking repository access
-- Changing base permissions and repository-creation policy
-- UI-only member privileges and silent API no-ops
-- Requiring organization 2FA
-- Verification and recovery
-
-All writes follow the authorization, impact-preview, and independent-readback contract in
-[`../SKILL.md`](../SKILL.md).
 
 ## Access model
 

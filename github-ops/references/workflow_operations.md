@@ -3,7 +3,7 @@
 Comprehensive guide for GitHub Actions workflow management using gh CLI.
 
 All writes follow the target, authorization, impact-preview, and independent-readback contract
-in [`../SKILL.md`](../SKILL.md). Workflow dispatch, rerun, cancel, enable/disable, secret writes,
+in [operating and checked-invocation contract](../SKILL.md#universal-operating-contract). Workflow dispatch, rerun, cancel, enable/disable, secret writes,
 and history deletion are external state changes; a command receipt is not terminal evidence.
 
 ## Listing Workflows

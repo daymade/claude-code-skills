@@ -86,11 +86,14 @@ read-only current-user operation from that same connector and confirm its actor.
 If that interface cannot expose the actor, use the already verified CLI channel
 for the authorized write; do not make a test comment to discover its identity.
 
-For authorized `gh` API/hosted-state writes, use the bundled checked invocation:
+For authorized `gh` API/hosted-state writes, use the bundled checked invocation.
+Resolve `<github-ops-dir>` to the directory containing this SKILL.md; run the
+helper by that path from the task's working directory. Its executable argument
+and rejection contract is [checked_gh.py](scripts/checked_gh.py).
 
 ```bash
-uv run python scripts/checked_gh.py --expected-login <EXPECTED_LOGIN>
-uv run python scripts/checked_gh.py --expected-login <EXPECTED_LOGIN> -- pr edit <NUMBER> -R OWNER/REPO --title '<AUTHORIZED_TITLE>'
+uv run python <github-ops-dir>/scripts/checked_gh.py --expected-login <EXPECTED_LOGIN> --host HOST
+uv run python <github-ops-dir>/scripts/checked_gh.py --expected-login <EXPECTED_LOGIN> --host HOST -- pr edit <NUMBER> -R OWNER/REPO --title '<AUTHORIZED_TITLE>'
 ```
 
 The first command is read-only. The second resolves the current credential,
@@ -108,6 +111,14 @@ unchanged even when they resemble flags or URLs. Public API absolute URLs use
 `api.github.com`; relative API endpoints remain supported.
 Switching account, credential, host or interface invalidates earlier identity
 evidence. Recheck before the next write; do not reuse a prior session's pass.
+
+Reference examples show native `gh` operation syntax. Execute hosted-state
+mutations by passing those arguments after the helper's `--`, with an explicit
+repository or account scope; bare `gh` remains suitable for readback and
+separately authorized authentication/configuration. When a builtin's operand
+shape is rejected, use its supported explicit REST/GraphQL equivalent through
+the same helper; do not bypass the actor check. A failed or timed-out invocation
+does not prove the mutation was absent: read the exact target before retrying.
 
 For incident attribution, preserve event ID/time, actor and interface separately
 from the ChatGPT execution account. A comment author's `login` and

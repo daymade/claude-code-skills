@@ -3,20 +3,8 @@
 This reference provides common GitHub REST and GraphQL operations through `gh api`. GitHub's
 current official endpoint documentation and the installed `gh ... --help` output are the contract
 authority; this file is an execution guide, not a frozen copy of every schema. All writes follow
-the mutation contract in [`../SKILL.md`](../SKILL.md).
+the mutation contract in [operating and checked-invocation contract](../SKILL.md#universal-operating-contract).
 
-## Table of Contents
-
-1. [Authentication](#authentication)
-2. [Pull Requests API](#pull-requests-api)
-3. [Issues API](#issues-api)
-4. [Repositories API](#repositories-api)
-5. [Organization Access and Settings](#organization-access-and-settings)
-6. [Actions/Workflows API](#actionsworkflows-api)
-7. [Search API](#search-api)
-8. [GraphQL API](#graphql-api)
-9. [Rate Limiting](#rate-limiting)
-10. [Webhooks](#webhooks)
 
 ## Authentication
 
