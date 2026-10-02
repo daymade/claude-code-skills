@@ -2,11 +2,14 @@
 """Synthetic API shapes; no real accounts, cookies, URLs, or subtitle text."""
 import copy
 import importlib.util
+import io
 import json
 import subprocess
 import sys
 import tempfile
 import unittest
+import urllib.error
+from contextlib import redirect_stdout
 from unittest.mock import patch
 from pathlib import Path
 
@@ -207,6 +210,76 @@ class AccessTests(unittest.TestCase):
             self.assertEqual(subprocess.run(command, capture_output=True).returncode, 0)
             report.write_text('{bad')
             self.assertEqual(subprocess.run(command, capture_output=True).returncode, 2)
+
+    def test_probe_failure_evidence_survives_emitted_report(self):
+        sensitive = 'https://example.invalid/?signature=SYNTHETIC_COOKIE'
+        cases = [
+            (urllib.error.HTTPError(sensitive, 412, sensitive, {}, None), 412, 'http_error'),
+            (urllib.error.HTTPError(sensitive, 403, sensitive, {}, None), 403, 'http_error'),
+            (urllib.error.URLError(sensitive), 0, 'network_error'),
+            (urllib.error.URLError(TimeoutError(sensitive)), 0, 'timeout'),
+            (TimeoutError(sensitive), 0, 'timeout'),
+            (b'{invalid ' + sensitive.encode(), 200, 'invalid_json'),
+            (RuntimeError(sensitive), 0, 'unexpected_error'),
+        ]
+        for failure, http, category in cases:
+            with self.subTest(http=http, error=category):
+                def open_response(request, timeout):
+                    if '/nav?' in request.full_url:
+                        if isinstance(failure, Exception):
+                            raise failure
+                        payload = failure
+                    else:
+                        name = 'view' if '/view?' in request.full_url else 'player' if '/v2?' in request.full_url else 'playurl'
+                        payload = json.dumps(healthy().get(name, {'code': 0, 'data': {}})).encode()
+                    response = io.BytesIO(payload)
+                    response.status = 200
+                    return response
+                with patch.object(engine.urllib.request, 'build_opener') as build:
+                    build.return_value.open.side_effect = open_response
+                    captures = engine.probe(BVID, CID, 1)
+                    self.assertEqual(captures['nav'], {
+                        'http': http, 'body': {'code': None}, 'error': category})
+                    output = io.StringIO()
+                    args = [str(SCRIPT), 'probe', '--bvid', BVID, '--cid', str(CID)]
+                    with patch.object(sys, 'argv', args), redirect_stdout(output):
+                        self.assertEqual(engine.main(), 1)
+                    report = json.loads(output.getvalue())
+                self.assertEqual(report['interfaces']['nav'], {
+                    'state': 'failed', 'code': None, 'http': http, 'error': category})
+                self.assertFalse(report['download_allowed'])
+                self.assertFalse(report['asr_allowed'])
+                self.assertNotIn(sensitive, json.dumps(captures))
+                self.assertNotIn('SYNTHETIC_COOKIE', output.getvalue())
+                saved = engine.evaluate_report(report, BVID, CID)
+                self.assertEqual(saved['interfaces'], report['interfaces'])
+                self.assertFalse(saved['download_allowed'])
+
+    def test_probe_healthy_preserves_interface_shape_and_permissions(self):
+        captures = healthy()
+        captures['playurl'] = {'code': 0, 'data': {'dash': {'duration': 100}}}
+        responses = []
+        for name in ('nav', 'view', 'player', 'playurl'):
+            response = io.BytesIO(json.dumps(captures[name]).encode())
+            response.status = 200
+            responses.append(response)
+        with patch.object(engine.urllib.request, 'build_opener') as build:
+            build.return_value.open.side_effect = responses
+            result = engine.probe(BVID, CID, 1)
+        result['ffprobe'] = captures['ffprobe']
+        report = engine.evaluate(result, BVID, CID)
+        self.assertEqual(report, engine.evaluate(captures, BVID, CID))
+        self.assertEqual(report['interfaces']['nav'], {'state': 'ok', 'code': 0, 'http': 200})
+        self.assertTrue(report['download_allowed'])
+        self.assertTrue(report['asr_allowed'])
+
+    def test_error_category_cannot_echo_arbitrary_replay_text_or_allow_access(self):
+        captures = healthy()
+        captures['nav'] = {'http': 200, 'body': captures['nav'], 'error': 'SYNTHETIC_COOKIE'}
+        report = engine.evaluate(captures, BVID, CID)
+        self.assertEqual(report['interfaces']['nav']['error'], 'unexpected_error')
+        self.assertFalse(report['download_allowed'])
+        self.assertNotIn('SYNTHETIC_COOKIE', json.dumps(report))
 
 
 if __name__ == '__main__':

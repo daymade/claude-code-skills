@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **github-ops** (v1.8.0 → v1.9.0): align operation recipes with the checked actor/host invocation, resolve the helper from its Skill directory, and use an explicit API target for repository rename. Keep one runtime contract and remove hand-maintained heading summaries.
 - **read-claude-code-history** (`daymade-claude-code` v4.9.0 → v4.10.0): correct the recall guide's obsolete live raw-search claim, make script path resolution explicit, and remove mutable corpus-size aggregates and obsolete POC narration. Route original tool evidence and account attribution from the repository guide to their existing owners.
+### Fixed
+
+- **bilibili-source** (v1.4.0 → v1.4.1): Preserve HTTP failure status and safe error categories in access reports, distinguishing HTTP refusal from network errors, timeouts and invalid JSON without exposing exception text. Healthy access decisions remain unchanged; synthetic tests cover capture and emitted reports.
 
 ### Added
 
