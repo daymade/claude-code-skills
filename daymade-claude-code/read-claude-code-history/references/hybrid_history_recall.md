@@ -1,19 +1,9 @@
 # Hybrid History Recall
 
-## Contents
+Resolve `scripts/` relative to the directory containing this Skill's SKILL.md.
+Run the examples below from that directory, or use the resolved script path.
 
-- Contract: recall versus exact search
-- One-time setup
-- Build and refresh
-- Boilerplate policy: what never earns a vector
-- Embedding: pauses, progress, and one writer
-- Query
-- Status and freshness
-- Platform and dependency boundaries
-- State and recovery
-- Maintainer smoke checks
-
-## Contract: recall versus exact search
+## Contract: indexed recall versus original evidence
 
 Use the two search paths for different claims:
 
@@ -32,11 +22,11 @@ newer active file that lacks the evidence.
 Never convert zero recall results into “it was never discussed.” State the
 index frontier and missing record types; open exact known sessions where useful.
 
-Both paths exclude prose prompts sent by the main agent to subagents by default
+Both recall modes exclude prose prompts sent by the main agent to subagents by default
 (`type=user` + `isSidechain=true`). They keep assistant-side subagent output.
-Exact search also keeps sidechain `tool_result` records. Add
-`--include-agent-prompts` only when the question is specifically “how did I
-instruct the agent?”
+Tool results are outside this prose index; use the owning exact-session reader
+to verify them. Live-source raw search is disabled. Add `--include-agent-prompts`
+only when the question is specifically “how did I instruct the agent?”
 
 ## One-time setup
 
@@ -70,10 +60,6 @@ frontier, checkpoints it, and only then atomically replaces the active index.
 Incremental reconciliation is one transaction: a mid-update failure cannot
 leave half the sessions updated under the previous complete marker. Session
 freshness fingerprints include content SHA-256, not only size and mtime.
-An earlier POC database was never altered or trusted as a baseline: it had no
-schema/provenance metadata and its checked-in fresh-build schema drifted from
-the live database. It was retired after a source-presence audit confirmed it
-was fully derivable and held no unique conversation content.
 
 Run an incremental prose/FTS refresh after new conversations:
 
@@ -362,10 +348,8 @@ about work it had not done yet.
   `coverage` line names the providers the index does **not** hold. Asking
   `recall --provider` for an uncovered provider fails loudly instead of
   returning zero rows that look like absence.
-- Codex is a large corpus — roughly 9k rollouts and 40 GB on the maintainer
-  machine, of which about 9% of records are indexable prose. Adding it multiplies
-  record count and costs a proportional embedding pass, so turn it on
-  deliberately rather than wiring it into a daily job by default.
+- Adding Codex changes the indexed provider scope and embedding workload;
+  include it deliberately rather than wiring it into a daily job by default.
 
 ## State and recovery
 

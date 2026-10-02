@@ -4,6 +4,9 @@ Use this workflow when an authorized contributor must be able to push topic bran
 changes to the default branch require PR review. It applies only to the named repositories;
 it does not change organization-wide base permissions or future repositories by inference.
 
+Apply the [operating and checked-invocation contract](../SKILL.md#universal-operating-contract)
+before executing the operation examples.
+
 ## Inspect before changing rules
 
 1. Resolve the active GitHub account, repository owner, effective administrative permission,

@@ -3,7 +3,7 @@
 Comprehensive examples for GitHub issue management using gh CLI.
 
 All writes follow the target, authorization, impact-preview, and independent-readback contract
-in [`../SKILL.md`](../SKILL.md). Creating, commenting on, transferring, or closing an issue is an
+in [operating and checked-invocation contract](../SKILL.md#universal-operating-contract). Creating, commenting on, transferring, or closing an issue is an
 external action; bind the exact repository and content before executing it.
 
 ## Creating Issues

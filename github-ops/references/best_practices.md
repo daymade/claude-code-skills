@@ -2,17 +2,8 @@
 
 Use this reference for machine-readable output, pagination, retries, bulk operations,
 GitHub Enterprise hosts, scripting, debugging, and performance. All writes follow the
-mutation contract in [`../SKILL.md`](../SKILL.md).
+mutation contract in [operating and checked-invocation contract](../SKILL.md#universal-operating-contract).
 
-## Contents
-
-- Machine-readable output
-- Pagination and large result sets
-- Error handling and retries
-- Safe bulk operations
-- Enterprise hosts and authentication
-- Automation patterns
-- Configuration, performance, and debugging
 
 ## Machine-readable output
 

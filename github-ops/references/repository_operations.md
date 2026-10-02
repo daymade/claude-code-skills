@@ -2,17 +2,8 @@
 
 Use this reference to inspect, clone, create, edit, rename, archive, transfer, change visibility,
 or delete a repository. All hosted writes follow the authorization, impact-preview, recovery, and
-independent-readback contract in [`../SKILL.md`](../SKILL.md).
+independent-readback contract in [operating and checked-invocation contract](../SKILL.md#universal-operating-contract).
 
-## Contents
-
-- Inspect a repository
-- Clone into a safe local destination
-- Create with explicit owner and visibility
-- Edit, rename, archive, and change visibility
-- Transfer ownership
-- Delete and recover
-- Terminal evidence
 
 ## Inspect a repository
 
@@ -88,7 +79,7 @@ Use a fully qualified repository and read back the exact fields changed:
 gh repo edit OWNER/REPO --description 'Repository description'
 gh repo view OWNER/REPO --json nameWithOwner,description,url
 
-gh repo rename NEW_NAME --repo OWNER/REPO
+gh api -X PATCH repos/OWNER/REPO -f name=NEW_NAME
 gh repo view OWNER/NEW_NAME --json nameWithOwner,url
 
 gh repo archive OWNER/REPO
