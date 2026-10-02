@@ -20,6 +20,25 @@ def checked_invocation(expected_login: str, host: str, command: list[str],
         raise ValueError("expected login and a hostname are required")
     if command and command[0] in {"auth", "alias", "extension", "config"}:
         raise ValueError("authentication/configuration commands are not guarded operations")
+    supported = {"api", "pr", "issue", "workflow", "run", "release", "secret", "variable",
+                 "label", "cache", "ruleset", "attestation", "repo", "org", "project", "search", "gist"}
+    if command and command[0] not in supported:
+        raise ValueError("use a supported builtin operation, not an alias or extension")
+    command = list(command)
+    repo_bound = False
+    def qualified_repo(value: str) -> str:
+        if value.startswith(("https://", "http://")):
+            url = urlsplit(value)
+            if url.hostname != host:
+                raise ValueError("repository hostname differs from the checked host")
+            value = url.path.strip("/")
+        parts = value.split("/")
+        if len(parts) == 3:
+            if parts.pop(0) != host:
+                raise ValueError("repository hostname differs from the checked host")
+        if len(parts) != 2 or not all(parts):
+            raise ValueError("an explicit OWNER/REPO target is required")
+        return host + "/" + "/".join(parts)
     for index, arg in enumerate(command):
         if arg.startswith("--hostname=") and arg.split("=", 1)[1] != host:
             raise ValueError("command hostname differs from the checked host")
@@ -33,18 +52,32 @@ def checked_invocation(expected_login: str, host: str, command: list[str],
         repo_arg = None
         if arg in {"-R", "--repo"} and index + 1 < len(command):
             repo_arg = command[index + 1]
+            command[index + 1] = qualified_repo(repo_arg)
         elif arg.startswith("--repo="):
             repo_arg = arg.split("=", 1)[1]
+            command[index] = "--repo=" + qualified_repo(repo_arg)
         elif arg.startswith("-R") and arg != "-R":
             repo_arg = arg[2:]
-        if repo_arg and repo_arg.count("/") == 2 and repo_arg.split("/", 1)[0] != host:
-            raise ValueError("repository hostname differs from the checked host")
+            command[index] = "-R" + qualified_repo(repo_arg)
+        if repo_arg:
+            repo_bound = True
+    repository_commands = {"pr", "issue", "workflow", "run", "release", "secret",
+                           "variable", "label", "cache", "ruleset", "attestation"}
+    if command and command[0] in repository_commands and not repo_bound:
+        raise ValueError("repository operations require explicit -R OWNER/REPO")
+    if command[:1] == ["repo"]:
+        if len(command) < 3 or command[2].startswith("-"):
+            raise ValueError("repo operations require an explicit OWNER/REPO operand")
+        command[2] = qualified_repo(command[2])
     captured = run(["gh", "auth", "token", "--hostname", host],
                    capture_output=True, text=True, timeout=30)
     if captured.returncode != 0 or not captured.stdout.strip():
         print("checked-gh: cannot resolve this channel's credential; no operation ran", file=sys.stderr)
         return 2
-    env = dict(os.environ, GH_HOST=host)
+    env = {key: value for key, value in os.environ.items()
+           if key not in {"GH_REPO", "GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN",
+                          "GITHUB_ENTERPRISE_TOKEN"}}
+    env["GH_HOST"] = host
     token_key = "GH_TOKEN" if host == "github.com" or host.endswith(".ghe.com") else "GH_ENTERPRISE_TOKEN"
     env[token_key] = captured.stdout.strip()
     identity = run(["gh", "api", "--hostname", host, "user"], env=env,

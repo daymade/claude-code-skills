@@ -1606,6 +1606,16 @@ def build_briefing(conv, data: dict, project_path: str, full: bool = False) -> s
 # ── CLI ──────────────────────────────────────────────────────────────────────
 
 
+def _contains_original_string(value: Any, needle: str) -> bool:
+    if isinstance(value, str):
+        return needle in value
+    if isinstance(value, dict):
+        return any(_contains_original_string(item, needle) for item in value.values())
+    if isinstance(value, list):
+        return any(_contains_original_string(item, needle) for item in value)
+    return False
+
+
 def extract_record_evidence(
     path: Path, session_id: str, *, records: list[int], tools: bool,
     contains: Optional[str] = None, end_byte_offset: Optional[int] = None,
@@ -1641,8 +1651,7 @@ def extract_record_evidence(
             continue
         if tools and not is_tool:
             continue
-        original = json.dumps(record, ensure_ascii=False)
-        if contains is not None and contains not in original:
+        if contains is not None and not _contains_original_string(record, contains):
             continue
         matches.append({
             "record": total,

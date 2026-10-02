@@ -51,6 +51,16 @@ class OriginalRecordTests(unittest.TestCase):
         self.assertEqual(result["results"][0]["original"]["payload"]["output"], structured)
         self.assertEqual(result["results"][0]["paired_call"]["record"], 2)
 
+    def test_literal_filter_matches_original_quotes_newlines_and_backslashes(self):
+        self.rows[2]["payload"]["output"] = [{"type": "text", "text": '"quoted"\nline2 C:\\folder'}]
+        self.path.write_text("\n".join(json.dumps(r) for r in self.rows) + "\n")
+        for needle in ['"quoted"', '\nline2', 'C:\\folder', 'line2']:
+            with self.subTest(needle=needle):
+                result = reader.extract_record_evidence(self.path, "fixture", records=[3], tools=True, contains=needle)
+                self.assertEqual(result["matched_records"], 1)
+                self.assertEqual(result["results"][0]["original"], self.rows[2])
+        self.assertEqual(reader.extract_record_evidence(self.path, "fixture", records=[3], tools=True, contains='not present')["matched_records"], 0)
+
     def test_selectors_intersect_and_empty_match_is_scoped(self):
         result = reader.extract_record_evidence(self.path, "fixture", records=[4], tools=True)
         self.assertEqual(result["matched_records"], 0)

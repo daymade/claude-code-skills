@@ -86,7 +86,7 @@ read-only current-user operation from that same connector and confirm its actor.
 If that interface cannot expose the actor, use the already verified CLI channel
 for the authorized write; do not make a test comment to discover its identity.
 
-For `gh` API/hosted-state operations, use the bundled checked invocation:
+For authorized `gh` API/hosted-state writes, use the bundled checked invocation:
 
 ```bash
 uv run python scripts/checked_gh.py --expected-login <EXPECTED_LOGIN>
@@ -98,6 +98,10 @@ checks `GET /user`, and pins that same credential for one command. A mismatch or
 unknown actor exits before execution. It guards only `gh`, not connector calls,
 browser actions or Git pushes. Authentication/configuration commands are rejected;
 task authorization, exact targets and independent readback remain required.
+Supply `-R OWNER/REPO` for repository-scoped commands, or an explicit repository
+operand for `gh repo`. The wrapper qualifies that target with the checked host,
+removes inherited `GH_REPO` and alternate token variables from the child, and
+rejects conflicting host operands. Omit the command for an identity-only read.
 Switching account, credential, host or interface invalidates earlier identity
 evidence. Recheck before the next write; do not reuse a prior session's pass.
 
