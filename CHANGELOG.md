@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **kimi-use** (`kimi-use` v1.5.1 → v1.6.0): new `references/kimi-cu-desktop-automation.md` — the kimi-cu macOS desktop-automation playbook distilled from a full day driving WeChat DevTools (Electron + webview console): channel reliability tiers (set_value > keyboard > click), foregrounding vs "control doesn't respond" misdiagnosis, AX-tree death recovery via window reopen, Tab-Tab-Space add-row recipe, auth-dialog SOP, and the delivery-verification rule (ok:true means posted, not landed). SKILL.md + marketplace description widened to scope (2) general kimi-cu desktop automation.
 - **terraform-skill** (`terraform-skill` v1.5.0 → v1.5.1): Document the staging-green/production-port-collision provisioner trap: parity covers configuration, not host port allocation — check the exact bind on the target host, and keep host-local probe targets out of containers.
 
 - **terraform-skill** (`terraform-skill` v1.4.1 → v1.5.0): Extend environment-isolation guidance for cached read-only initialization: verify effective backend/workspace, keep state reads fresh, invalidate changed preparation inputs, serialize shared metadata and exercise corrupt-cache and failure paths. Preserve canonical release gates.

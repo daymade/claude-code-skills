@@ -1,10 +1,13 @@
 ---
 name: kimi-use
 description: >-
-  Drives Kimi.app via computer-use for two separate jobs: Work/Agent data-plugin queries
-  (天眼查、同花顺 iFinD、SEC、IMF etc.) and Chat's built-in 深度研究 report. Use for "用 Kimi 查" /
-  "操作 Kimi 客户端" / "Kimi 插件" / "Kimi 深度研究". Not for kimi.com browser automation
-  (use kimi-webbridge) or direct iFinD API access.
+  Two scopes: (1) drives Kimi.app via computer-use for Work/Agent data-plugin queries
+  (天眼查、同花顺 iFinD、SEC、IMF etc.) and Chat's built-in 深度研究 report;
+  (2) kimi-cu macOS desktop-automation playbook — AX set_value / keyboard / click
+  channel selection, foregrounding, AX-tree recovery, form & dialog recipes.
+  Use for "用 Kimi 查" / "操作 Kimi 客户端" / "Kimi 插件" / "Kimi 深度研究" /
+  driving any macOS desktop app (Electron/webview/native) via kimi-cu.
+  Not for kimi.com browser automation (use kimi-webbridge) or direct iFinD API access.
 ---
 
 # kimi-use — Kimi 桌面客户端的插件取数与 Chat 深度研究
@@ -40,6 +43,7 @@ Kimi 桌面客户端（Kimi.app，`com.moonshot.kimichat`）自带一个插件�
 | **A 股券商研报** | 先走**东方财富研报公开 JSON API**（`reportapi.eastmoney.com`，免费免代理、无 GUI 开销；参数与实测见 `references/plugin-capabilities.md`）；Kimi 侧恒生聚源当**第二通道取并集**——两条实测互不包含 |
 | 驱动浏览器里的 kimi.com 网页版 | `kimi-webbridge` skill（Kimi Browser Extension 的 skill，不在本仓；本地 daemon，不走 GUI） |
 | Kimi 客户端生成独立深度研究报告 | 本 skill 的 **Chat 深度研究**分支；不沿用插件探针的模式限制 |
+| **用 kimi-cu 驱动任意 macOS 桌面应用**（Electron / webview / 原生；表单填写、弹窗、前台化、AX 树恢复） | **`references/kimi-cu-desktop-automation.md`**——可靠性分层与操作配方，与 Kimi.app 业务无关、可独立使用 |
 | **无凭据 / 只有插件形态的数据源 / 一次要横跨多个源** | **本 skill** |
 
 路由表管的是「默认该走哪条」；用户当面指定「就用 Kimi 查」时不挡路——Kimi 是取数通道、专用 CLI 是复核通道，两个角色不冲突。
@@ -81,5 +85,6 @@ Kimi 桌面客户端（Kimi.app，`com.moonshot.kimichat`）自带一个插件�
 ## References
 
 - `references/driving-kimi-app.md` — Claude Code MCP、Codex 旧 computer 插件与当前 CUA 的驱动流；Work 插件取数与 Chat 深度研究的模式、安全和产物提取
+- `references/kimi-cu-desktop-automation.md` — kimi-cu 通用桌面自动化操作法：可靠性分层（set_value > 键盘 > 点击）、前台化与 primary、AX 树恢复、表单/弹窗配方、投递验证
 - `references/plugin-capabilities.md` — 插件清单快照、已实测的能力边界（带日期与证据级别）、券商研报的两条通道及其互不包含
 - `references/query-and-verification.md` — 查询 prompt 模式库 + 数据核验纪律（含战例）
