@@ -181,6 +181,9 @@ the delivered artifact. Detailed retrieval mechanics remain in
 
 ### Local Conversation History Boundary
 
+For recent unfinished-request inventories, follow
+[`local-conversation-history`](daymade-claude-code/local-conversation-history/SKILL.md).
+
 Codex inventory must use the index-only command in
 `daymade-claude-code/read-codex-history/SKILL.md`. If its state database is
 unavailable, report an unknown inventory; do not substitute a raw rollout scan.
@@ -398,12 +401,14 @@ git -C <worktree> \
 
 1. **Never commit directly to local `main`.** All work starts on a feature
    branch (`git checkout -b <topic>`), ships via PR, and lands by squash merge.
-2. **After every merge, run the post-merge ritual:** `git checkout main && git pull --ff-only`.
-   A successful ff-only pull proves nobody broke rule 1. If it fails, someone
-   committed to local `main` — inspect `git log origin/main..main` and rebase
-   the stray commits onto a feature branch; do not merge or force-push `main`.
-3. **If step 2's `git checkout main` itself refuses** ("local changes would be
-   overwritten") while you're still on your feature branch: this is not
+2. **After every merge, read the current branch before updating the checkout.**
+   If already on `main`, pull with `--ff-only` without another checkout. If the
+   shared checkout is on another session's branch, coordinate before moving it.
+   A failed pull is not proof of local-main commits: inspect its error and compare
+   the local and remote refs to distinguish divergence, changed files, and a
+   failed remote read. Do not merge or force-push `main` to bypass a refusal.
+3. **If switching your own feature checkout to `main` is refused** ("local
+   changes would be overwritten"): this is not
    automatically the divergence case above. Check whether local `main` is
    merely **stale** (nobody committed to it, it just never got its ref
    updated after a previous merge) before assuming divergence — `git diff
@@ -543,7 +548,7 @@ was the only thing that caught it.)
 **CHANGELOG.md merges as a union** (`.gitattributes`). Parallel PRs add their
 entries at the same spot under `## [Unreleased]`, so two PRs open at the same
 time conflicted there. Merging `origin/main` into a branch locally, or rebasing
-onto it, now keeps both sides' lines without stopping. Two limits:
+onto it, now keeps both sides' lines without stopping. Limits:
 
 - GitHub's mergeability check ignores the attribute, so a PR can still show
   CONFLICTING until `origin/main` is merged into it locally.
