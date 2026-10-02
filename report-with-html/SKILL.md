@@ -290,6 +290,10 @@ Every interaction must work without a pointer:
    is present" is not.
 8. **Reconcile and verify.**
 
+   For a merge or a current-state update, apply the semantic acceptance contract in
+   `references/long-lived-report-maintenance.md` §6.1. Keep the information-point
+   mapping with the gate evidence; a source-link index is not the requested synthesis.
+
    - For a rewrite or merge, run:
 
      ```bash
@@ -530,8 +534,13 @@ never as a pass.
    reads as a pass. `-nt` collapses stale, missing and misnamed into one STALE.
 3. **Content integrity** — if the page was rewritten or merged, the
    `reconcile_content_diff.py` output must be supplied; if it is generated, the generator's
-   `--check` output. Both answer a question no amount of looking at the page can: whether
-   it still says what its sources say. If the author states neither applies (hand-authored,
+   `--check` output. These detect textual omissions or generated-output drift; neither
+   proves semantic completeness, reconciled contradictions, or current business status.
+   For merges/current-state updates, also inspect the information-point mapping and
+   evidence requested by `合并与现行事实验收` in the delivery gate. Apply §6.1 of the
+   long-lived-report reference: reject an archive index offered as synthesis, a historical
+   snapshot offered as current, or stored evidence offered as production adoption.
+   If the author states neither applies (hand-authored,
    first version), record that answer as given — an explicit skip is auditable, an assumed
    one is not.
 
