@@ -103,6 +103,22 @@ retrieval, and no mechanical check establishes real-world completion for them.
 
 ## Invariants that survive routing
 
+For remembered facts, identify the exact proposition before searching: account
+count, account users, and an event's execution identity are different questions.
+Check three evidence lanes in selected sessions: direct user words, assistant
+retellings as locators, and original external records previously read by tools.
+An assistant's quote locates the source; it does not replace that source. Use the
+provider reader's complete tool-evidence route when the target is a prior read.
+
+When the user says “search again”, change a concrete search dimension: source
+lane, indexed provider/date/project scope, literal versus semantic matching, or
+the selected session's original records. Do not end the retry with the same
+ranked prose query and different synonyms alone. State which coverage changed.
+Keep a found subclaim separate from an unfound remainder; current explicit user
+facts remain authoritative even when their historical wording is not located.
+Preserve original evidence values; do not silently redact, replace, or summarize
+the stored text while exporting a record.
+
 - **Coverage.** Read the index's provider and source scope plus its freshness
   frontier. An archive or provider outside that scope is unknown. A missing
   required source cannot support an absence claim.

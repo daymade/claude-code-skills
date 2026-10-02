@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **read-codex-history, read-claude-code-history, local-conversation-history** (`daymade-claude-code` v4.7.0 → v4.8.0): recover complete tool records from an explicitly selected Codex session, retaining original values and call/result coordinates; add literal-phrase and stored-role filters to both recall ranking legs and label source provenance. Route retries across evidence lanes instead of substituting neighboring facts.
+- **github-ops** (v1.7.2 → v1.8.0): check the expected actor in the actual write channel; add a checked `gh` invocation that pins the credential used for authenticated-user lookup through command execution. Keep connector identity and historical ChatGPT account attribution separate.
+- **tibo-reset-codex** (v1.18.2 → v1.19.0): separate creation, execution, CLI, browser and external connector identities by source and observation time; pause browser account switching on concurrent interference and keep unverified restoration explicit.
 - **skill-reviewer** (`daymade-skill` v1.54.3 → v1.55.0): add read-only collection inventory, host-aware source packets, six-dimension design scoring with verified citations, and JSON/CSV/Markdown exports; preserve unknowns and quarantine evaluation faults while keeping design quality separate from measured task benefit. Retain the existing reviewer CLI and three review modes.
 - **local-conversation-history** (`daymade-claude-code` v4.6.0 → v4.7.0): route recent unfinished-request inventories through bounded indexed discovery and exact-session readers, then reconcile current project evidence; keep completed, paused, externally blocked, and awaiting-acceptance work distinct without resuming or migrating it.
 - **kimi-use** (`kimi-use` v1.6.0 → v1.6.1): `kimi-cu-desktop-automation.md` 投递验证节补上执行层兜底——PreToolUse hook `kimi-cu-repeat-guard` 在同一动作签名连续 3 次（观测透明）时拦一次并注入换通道指引；真实 616 调用语料重放标定（4 触发全真阳性零误报）。
