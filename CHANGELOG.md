@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **macos-watchdog** (`daymade-macos` v1.14.1 → v1.14.2): require browser resource and focus evidence across repeated watchdog runs and initialization/cleanup failures; preserve protected user pages.
 - **github-ops** (v1.8.0 → v1.9.0): align operation recipes with the checked actor/host invocation, resolve the helper from its Skill directory, and use an explicit API target for repository rename. Keep one runtime contract and remove hand-maintained heading summaries.
 - **read-claude-code-history** (`daymade-claude-code` v4.9.0 → v4.10.0): correct the recall guide's obsolete live raw-search claim, make script path resolution explicit, and remove mutable corpus-size aggregates and obsolete POC narration. Route original tool evidence and account attribution from the repository guide to their existing owners.
 ### Fixed
