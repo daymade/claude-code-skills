@@ -115,7 +115,7 @@ Contract for safe writes:
 - The tunnel process (`MacPacketTunnel.appex`) **mmap's `~/Library/Group Containers/group.com.liguangming.Shadowrocket/default.db.rule`** — an `XDAT`-magic binary decision table used for domain/rule matching. `tun-excluded-routes` CIDRs are **not** in it (byte-pattern search finds none of them).
 - The excluded routes come from `rule.db` → table `rule` → row `key='general'` → NSKeyedArchiver bplist → `tun-excluded-routes` string array. The route table (`netstat -rn` `UGSc en0` entries) tracks exactly this array. The `ipcidr` table's `policy=2891846` group mirrors the same set, but editing it alone injected **nothing** — the bplist array is the load-bearing copy.
 - **On this Catalyst build every GUI compile trigger failed**: double-clicking or keyboard-selecting **Compile Config** (click selects the row; Enter/Space bounce back to Home with no recompile), **Edit Plain Text**'s `api/save` (the editor is an embedded WKWebView CodeMirror page on `*:8080`; its web Save button *is* `POST /api/save`, which writes only the web session buffer — `default.db` mtime unchanged, no recompile), and subscription refresh (`shadowrocket://update-subs`) all left `default.db.rule`'s mtime untouched.
-- **What works instead: patch `rule.db`'s `general` bplist directly, then quit+relaunch the app.** Append new segment strings to the archiver's `$objects` tail (never renumber — append-only keeps existing UIDs valid), swap the array's `NS.objects` UID list, re-serialize with `plistlib.dumps(..., FMT_BINARY)`. Relaunch + reconnect injected all 103 segments (99 `UGSc en0` routes verified; earlier failures had edited the bplist *without* the app restart — the running app/tunnel keep their own copies). The app did **not** overwrite the patched `rule.db` on launch. A ready-made implementation with a target list, replay, CIDR capture, and a subscription-wipe guard lives in the `shadowrocket-splitting` skill (private `claude-code-skills-pro` repo), its `scripts/replay.sh` step 2.5.
+- **What works instead: patch `rule.db`'s `general` bplist directly, then quit+relaunch the app.** Append new segment strings to the archiver's `$objects` tail (never renumber — append-only keeps existing UIDs valid), swap the array's `NS.objects` UID list, re-serialize with `plistlib.dumps(..., FMT_BINARY)`. Relaunch + reconnect installed the excluded routes; editing the bplist alone leaves the running app/tunnel on their in-memory copies. The app did **not** overwrite the patched `rule.db` on launch. A ready-made implementation with a target list, replay, CIDR capture, and a subscription-wipe guard lives in the `shadowrocket-splitting` skill (private `claude-code-skills-pro` repo), its `<shadowrocket-splitting-skill-root>/scripts/replay.sh` compiled-config update.
 - Verify with `netstat -rn -f inet | grep -c 'UGSc.*en0'` (count ≈ segments minus a few overlapping system routes) and spot-check new CIDRs as `^<a.b.c>/24` (netstat prints them **without** the trailing `.0`).
 
 ### Local modules (.sgmodule) — the durable injection point
@@ -188,6 +188,30 @@ IP-CIDR,100.64.0.0/10,DIRECT
 
 ## Clash / ClashX Pro
 
+### macOS Python urllib: empty environment can still select a proxy
+
+[Python `getproxies()`](https://docs.python.org/3/library/urllib.request.html#urllib.request.getproxies) checks proxy environment variables first, then falls back to macOS System Configuration. Clearing `http_proxy`/`https_proxy` alone does not prove a `urllib` request bypasses the system proxy. Inspect the same interpreter and process environment used by the sender:
+
+```bash
+python3 - <<'PYCODE'
+import urllib.request
+from urllib.parse import urlsplit
+for scheme, value in urllib.request.getproxies().items():
+    if scheme in ('http', 'https', 'all'):
+        peer = urlsplit(value)
+        print(scheme, peer.hostname, peer.port)  # excludes userinfo and URL tokens
+for host in ('localhost', '127.0.0.1', 'qyapi.weixin.qq.com'):
+    print(host, 'bypass=', urllib.request.proxy_bypass(host))
+PYCODE
+scutil --proxy
+```
+
+Replace the example hosts with the task's actual destination and internal endpoint. The probe reports HTTP-proxy selection, not the eventual overseas egress or TUN bypass. Run it in the background job's actual environment when that differs from the shell. Do not print unredacted proxy URLs or credentials.
+
+macOS system exceptions match the supplied hostname or literal IP; the inspected CPython `_proxy_bypass_macosx_sysconf` implementation does not resolve a hostname before matching an IP range. A fake-IP range exception therefore does not establish bypass for a domestic hostname. Verify `localhost` and `127.0.0.1` separately.
+
+After the task's destination policy is confirmed, set both `NO_PROXY` and `no_proxy` for a child dedicated to that destination, preserving existing exceptions and leaving the parent unchanged. In CPython, setting only `NO_PROXY` can make the environment proxy map nonempty and suppress the macOS fallback. A child that also calls proxy-required destinations must explicitly preserve their effective proxy configuration; verify both destination classes rather than assuming the system proxy is still inherited. Explicit HTTP bypass still traverses system TUN routes. If the ordinary domain fails while a real-IP request with the original TLS host/SNI succeeds, diagnose the forwarding path; do not persist the sampled IP as a permanent route or disable certificate checks.
+
 ### The Fix
 
 Add Tailscale CIDRs to the rules section before `MATCH`:
@@ -237,7 +261,7 @@ always-real-ip = *.ts.net
 
 ### The Problem
 
-Even when system routes are correct (Tailscale `utun` interface wins), HTTP clients like curl, Python requests, and Node.js fetch respect `http_proxy`/`https_proxy` env vars. If `NO_PROXY` doesn't exclude Tailscale addresses, HTTP traffic is sent to the proxy process, which may fail to reach `100.x` addresses.
+Even when system routes are correct (Tailscale `utun` interface wins), an HTTP client configured to use a proxy can send internal requests to that proxy instead. Inspect the actual client and process configuration; environment-variable support differs by runtime. Node built-in proxy routing requires explicit enablement or an appropriate agent/dispatcher; see [Node proxy support](https://nodejs.org/api/cli.html#node_use_env_proxy1).
 
 This is a **different conflict layer** from route hijacking — routes are fine, but the application bypasses them by sending traffic to the local proxy port.
 
@@ -249,17 +273,12 @@ export NO_PROXY=localhost,127.0.0.1,.ts.net,100.64.0.0/10,192.168.*,10.*,172.16.
 
 ### NO_PROXY Syntax Pitfalls
 
-| Syntax | curl | Python requests | Go `net/http` | Node.js | Meaning |
-|--------|------|-----------------|---------------|---------|---------|
-| `.ts.net` | ✅ | ✅ | ✅ | ✅ | Domain suffix match (correct) |
-| `*.ts.net` | ❌ | ✅ | ❌ | varies | Glob — curl and Go do NOT support this |
-| `100.64.0.0/10` | ✅ 7.86+ | ✅ 2.25+ | ❌ | ❌ native | CIDR notation — Go silently ignores it |
-| `100.*` | ✅ | ✅ | ❌ | ✅ | Too broad — covers public IPs `100.0-63.*` and `100.128-255.*` |
-| `workstation-name` | ✅ | ✅ | ✅ | ✅ | Exact hostname match (safest for Go) |
+Treat `NO_PROXY` syntax as a client contract, not one portable wildcard/CIDR table. Test the actual hostname and literal-IP cases with the client being repaired; no DNS or network call is needed for a proxy-selection probe.
 
-**Go `net/http` warning**: Go's proxy bypass logic (`httpproxy.Config.ProxyFunc`) does not implement CIDR matching. `NO_PROXY=100.64.0.0/10` is silently ignored — Go programs will still route traffic through the proxy. Use MagicDNS hostnames (e.g., `my-wsl-box`) or explicit IPs (e.g., `100.101.102.103`) instead of CIDR ranges when Go programs need to bypass the proxy.
-
-**Key rule**: Always use `.ts.net` (leading dot, no asterisk) for domain suffix matching. This is the most portable syntax across all HTTP clients.
+- A leading-dot suffix such as `.ts.net` is a useful domain form; include the apex explicitly when it must also match. Do not assume `*.ts.net` behaves the same across clients.
+- [Go `httpproxy`](https://github.com/golang/net/blob/master/http/httpproxy/proxy.go) accepts CIDR for literal IPs and `*.domain` for subdomains. It does not resolve hostnames into IPs for CIDR matching; keep the MagicDNS suffix or exact hostname for hostname requests.
+- Python `urllib` environment bypass and macOS system exceptions are separate matchers. Verify the matcher actually selected by `getproxies()` instead of transferring results from `requests` or curl.
+- [curl's `NO_PROXY` contract](https://curl.se/docs/manpage.html#--noproxy) owns its supported syntax; a global `NO_PROXY=*` is only appropriate for a task explicitly authorized to bypass every HTTP proxy.
 
 ### Why Not `100.*`?
 
@@ -272,7 +291,7 @@ Using `100.*` in `NO_PROXY` would bypass the proxy for services on public `100.x
 
 ### MagicDNS Recommendation
 
-Prefer accessing Tailscale devices by MagicDNS name (e.g., `my-server` or `my-server.tailnet.ts.net`) rather than raw IPs. This makes `.ts.net` in `NO_PROXY` the primary bypass mechanism, with `100.64.0.0/10` as a fallback for direct IP usage.
+Prefer accessing Tailscale devices by MagicDNS name (e.g., `my-server` or `my-server.tailnet.ts.net`) rather than raw IPs. Use the hostname suffix for hostname requests and a client-supported CIDR or exact address for literal-IP requests; verify both forms with the actual client.
 
 Check MagicDNS status:
 ```bash

@@ -63,6 +63,11 @@ Use [skill-creator](daymade-skill/skill-creator/SKILL.md) before creating or
 changing a skill. It owns change classification, evidence selection, regression
 review, validation, initialization, and packaging.
 
+For proxy-selection or disruptive VPN recovery changes, enter `tunnel-doctor` and its
+proxy-conflict and network-recovery references. For automatic WeCom integration,
+enter `setup-notifications-via-wecom`; its receipt contract owns accepted/rejected/unknown
+handling, while the worker owns event identity and delivery state.
+
 For Terraform environment isolation or initialization-cache changes, enter
 [`terraform-skill`](terraform-skill/SKILL.md); its bundled reference owns backend/workspace
 identity and fresh-state validation.

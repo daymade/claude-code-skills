@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **tunnel-doctor** (v1.15.2 → v1.16.0): Document macOS urllib proxy fallback and client-specific bypass matching; verify OnDemand VPN recovery through lifecycle and normal-domain requests.
+- **setup-notifications-via-wecom** (v1.0.1 → v1.1.0): Define strict automatic-worker receipt classification and single-attempt event handling; route proxy diagnosis to tunnel-doctor.
+
 - **bilibili-source** (v1.3.0 → v1.4.0): Add a shared read-only access diagnostic and captured-response replay for account identity, target entitlement, subtitle shape, source span and actual audio completeness. Preserve unknown fields, distinguish paid previews from incomplete local downloads, and limit subtitle/self-test success statements to verified coverage.
 - **daymade-claude-code** (v4.8.0 → v4.9.0): Distinguish Lark command transport success from per-item business success; reconcile batch identities, errors and expected artifacts before reporting completion.
 - **report-with-html** (v1.0.2 → v1.0.3): require semantic information-point and current-consumer evidence for merges and state updates; distinguish source preservation from synthesis and adoption, and reject obsolete or empty acceptance slots while retaining existing visual checks.
