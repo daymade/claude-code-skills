@@ -223,7 +223,7 @@ curl -s -X POST 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY' 
   }'
 ```
 
-**Network**: Inherit the host/project HTTP(S) proxy and `no_proxy` policy. A required proxy must remain in use; do not infer a direct-connect requirement from the Tencent domain. Configure an HTTP(S) proxy explicitly when the host requires one: Python urllib does not implement generic SOCKS `ALL_PROXY` routing.
+**Network**: Inherit the host/project HTTP(S) proxy and `no_proxy` policy. A required proxy must remain in use; do not infer a direct-connect requirement from the Tencent domain. Configure an HTTP(S) proxy explicitly when the host requires one: Python urllib does not implement generic SOCKS `ALL_PROXY` routing. On macOS, an empty proxy environment can still select the system proxy. For proxy selection, exceptions and HTTP-bypass versus TUN diagnosis, load `tunnel-doctor` and its proxy-conflict reference (`proxy_conflict_reference.md`, NO_PROXY section); inspect the sender process rather than clearing all proxies.
 
 After upgrading the sender, refresh its configured digest using the existing
 `set_recipient.py` workflow, preserving the same scope and label. Do not relabel
@@ -239,7 +239,21 @@ When a user asks "let my backup script send WeCom notifications", do the followi
 4. Collect the exact numbers and their definitions from the script output.
 5. Craft the message using the templates above.
 6. For `others`, obtain human confirmation; then call `scripts/send_wecom.py`.
-7. Verify the message arrived at the configured target.
+7. Verify the message arrived at the configured target. For automatic monitor/worker integration, follow the receipt contract below.
+
+### Automatic worker receipts
+
+Use the existing bound sender and target; keep event identity and delivery state in the owning worker. For one automatic event, call `send_message(..., max_attempts=1)` or the supported guard-owned outbox path. The general manual-send retry default is not the worker's delivery policy.
+
+Classify the parsed response before deciding whether a later attempt is permitted:
+
+| Evidence | Worker outcome |
+|---|---|
+| JSON object with integer `errcode=0` | API accepted; receiver confirmation is a separate observation |
+| JSON object with nonzero integer `errcode` | Explicit API rejection |
+| Missing/null `errcode`, boolean, string, non-integer, invalid JSON, timeout or lost connection | Unknown; keep the event identity and do not automatically replay it |
+
+For Python, test `type(code) is int`; `isinstance(False, int)` is true and `False == 0` must not become acceptance. If the generic sender raises before returning a valid response, the owning worker keeps the result unknown. A new test must exercise a genuinely distinct event with an explicit test label, not rename or resubmit an ambiguous old event. Verify the actual scheduler/worker → event → sender → receipt path; a standalone bot call does not validate the background chain.
 
 ## What This Skill Does NOT Do
 

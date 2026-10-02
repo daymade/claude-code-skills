@@ -784,7 +784,7 @@
       "description": "MUST be used first for tunnel / proxy-path connectivity failures or slow throughput (网络故障 / 连不上 / 代理或隧道下超时). Diagnoses Tailscale, proxy, TUN, DNS and SSH-tunnel problems on macOS and Windows/WSL, e.g. Tailscale ping works but SSH fails, curl works but browser gets 503, Git/Docker fails behind the proxy, or downloads crawl despite a reachable proxy. Not for application-layer bugs (use debugging-network-issues).",
       "source": "./tunnel-doctor",
       "strict": false,
-      "version": "1.15.2",
+      "version": "1.16.0",
       "category": "developer-tools",
       "keywords": [
         "tailscale",
@@ -1001,7 +1001,7 @@
       "description": "Set up and send technical status notifications through WeCom (Enterprise WeChat) webhooks. Use this skill whenever the user needs to send notifications, alerts, backup completion reports, or status updates via WeCom; when they mention 企业微信, 企微机器人, webhook, or alerting; or when a message needs to be clear, unambiguous, and technically precise rather than vague or condescending.",
       "source": "./setup-notifications-via-wecom",
       "strict": false,
-      "version": "1.0.1",
+      "version": "1.1.0",
       "category": "developer-tools",
       "keywords": [
         "wecom",

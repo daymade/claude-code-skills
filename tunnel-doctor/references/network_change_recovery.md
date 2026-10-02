@@ -51,6 +51,10 @@ Never exercise these failures on a colleague's working computer merely to test t
 Read actual service state and test the specific repaired path plus the user's original network
 use, such as an existing proxy-dependent application connection. A URL-scheme command returning
 zero proves only that the request was accepted. Keep an untested application path `not_checked`.
+An OnDemand VPN can reconnect before a polling loop observes `Disconnected`. A wait timeout does not prove the disruptive request had no effect. Preserve that timeout as the operation result, then inspect connection lifecycle counters/timestamps or logs and repeat the original failing request on its normal domain path. `Connected` alone cannot prove a reconnect occurred; a successful `--resolve` workaround alone cannot prove the repaired domain path works. Do not issue another reconnect just to make the status waiter green when lifecycle evidence and the requested path already show recovery.
+
+Include a harmless recovery fixture where the observed state stays `Connected` while the connection lifecycle advances, and another where it stays `Connected` without lifecycle change and the business request still fails. The former must not cause a blind extra disconnect; the latter must remain unverified. Keep the existing bounded restoration path for genuinely disconnected or failed states.
+
 Retire only the exact task-owned recovery job after successful readback, within the original
 maintenance scope. Stop when the requested result and necessary verification are complete.
 If the user withdraws access, do not reconnect for cleanup or proof of stopping; disclose any
