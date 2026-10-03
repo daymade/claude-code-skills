@@ -2978,3 +2978,52 @@ this list and describe defects you reach by asking a different question):
   instead of believing the plausible explanation (see #52's two corrections).
   The incident facts were all reproducible; only the generalization was
   wrong.
+
+## 56. bash 3.2 scans a quoted heredoc *inside `$( )`* for quote characters — one stray backtick in a body comment kills the whole file, and every guard in it dies silently
+
+- **Symptom:** `bash -n file` fails with
+  `unexpected EOF while looking for matching '`'`, and the line it names is deep
+  inside a quoted heredoc body — an innocent Python line, or even a comment — far
+  from any real quoting error. Several hook files fail at once after one routine
+  edit. The file is dead *in toto*: the shell cannot parse it, so the hook never
+  runs at all, and a hook whose contract is "always exit 0" (an injector, a
+  reminder) gives no signal that it has stopped running.
+- **Cause and fix:** on macOS, `#!/usr/bin/env bash` resolves to the stock
+  **bash 3.2** (it stays first in PATH even after a newer bash is installed), and
+  bash 3.2 parses the body of a quoted heredoc that sits **inside a command
+  substitution** with quote awareness: every `'`, `"`, and `` ` `` in the body —
+  including inside comments and example code — toggles parser quote state. One
+  line with an odd count (a markdown-ish `` `) ))"` `` in a comment is enough)
+  poisons everything after it; the error then surfaces at EOF or at a random
+  later line. The same bytes at top level parse fine — identical body outside
+  `$( )`, different verdict — which sends you hunting in the wrong place. The
+  fix is structural, not quote-whack-a-mole: **hoist the heredoc out of the
+  command substitution.** Read the program into a variable at top level (top-level
+  quoted heredocs are immune — verified against the failing bytes), then execute
+  it *through the environment*, not the command line:
+  `IFS= read -rd '' PROG <<'EOF' … EOF || true`, then
+  `PROG="$PROG" python3 -c 'import os;exec(os.environ["PROG"])'` — env values are
+  never re-parsed by the shell, so `$`, backticks, and backslashes pass through
+  byte-exact. Do **not** reach for `python3 -c "$PROG"`: inside double quotes the
+  program text is re-expanded — a regex like `$((…))` in a comment becomes
+  arithmetic expansion and `$(…)` becomes command substitution, the same bug
+  class in a new costume (and a cousin of #9). Do not "fix" it by rebalancing
+  quotes in the comments either — the next comment re-breaks it; the hoisted
+  form makes the body permanently inert to the shell parser.
+- **Real case (2026-10-03/04, a 61-hook guard fleet):** a routine commit edited
+  four hook files whose Python bodies lived in `$(python3 - <<'EOF' …)` blocks.
+  Comment edits left a stray backtick in one body and an escaped `\"` in another;
+  all four files failed `bash -n` whole-file, so four production guards — among
+  them a push *injector* whose contract is to always exit 0 — silently stopped
+  running. Nothing fired for hours: exit codes stayed green by design, and the
+  only detector that caught it was the SessionStart health check's *syntax*
+  pass (its selftest stamps happily re-validated the other hooks). The first
+  repair attempt then demonstrated the second half of the trap: editing the
+  body to please the *shell* parser (dropping a backslash before a quote inside
+  a Python raw string) converted the shell syntax error into a *Python* syntax
+  error that only fired at runtime under `2>/dev/null` — invisible to
+  `bash -n`, caught only because the bidirectional selftest asserted both a
+  must-fire and a must-quiet row. Two confirmations in one incident: whole-file
+  parse failure is the failure mode that turns one stray character into a dead
+  fleet, and only a two-sided selftest sees a guard that dies in ways exit
+  codes cannot show.
