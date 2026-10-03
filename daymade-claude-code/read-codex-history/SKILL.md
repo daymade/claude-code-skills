@@ -14,18 +14,61 @@ Read Codex evidence only. Do not continue the old task or change its project. If
 the user wants execution after the read is complete, pass the verified evidence
 to `daymade-claude-code:continue-codex-work`.
 
-## Codex has three different history surfaces
+## Codex has four different history surfaces
 
 | Surface | Authority | Use |
 |---|---|---|
 | `<codex-home>/history.jsonl` | What the user submitted, keyed by Session ID and internal epoch timestamp | Exact recent user-input tables |
 | `state_*.sqlite` | Inventory metadata such as cwd, title, update time, and rollout path | Fast listing and candidate discovery |
 | `sessions/**/rollout-*.jsonl` and `archived_sessions/**` | Full user/assistant/tool/compaction/fork event stream | Exact-session evidence and keyword verification after indexed or physical preselection |
+| `<codex-home>/logs_*.sqlite` (pick the latest by mtime) | Runtime events: per-event `ts`, `level`, `target`, `feedback_log_body`, `process_uuid` (embeds the OS pid), optional `thread_id` | Which live process is failing and how — error-shape bucketing and time distribution |
 
 Do not substitute one surface for another. A prompt-ledger row proves what was
 submitted, not what the Agent answered. A state DB path is only a candidate until
 the rollout's `session_meta.id` matches. A rollout can exist without a prompt-ledger
-row, and a `/fork` prompt can exist without a child rollout.
+row, and a `/fork` prompt can exist without a child rollout. A runtime-log thread
+is not a resumable session until `state_*.sqlite` confirms it (see below).
+
+### Runtime error log (`logs_*.sqlite`)
+
+For "Codex is slow / keeps reconnecting / which of my sessions is erroring", read
+this surface before blaming the network or the service. Bucket by error shape and
+by hour: errors clustered in time windows mean episodic transport instability; a
+steady rate means a standing condition; one `process_uuid` failing where others
+are clean means a per-process cause (for example a stale in-memory token), not an
+outage.
+
+```sql
+-- error shapes in the last 24h
+SELECT CASE WHEN feedback_log_body LIKE '%timed out%' THEN 'timeout'
+            WHEN feedback_log_body LIKE '%could not be refreshed%' THEN 'token-refresh'
+            WHEN feedback_log_body LIKE '%error sending request%' THEN 'send-failure'
+            ELSE 'other' END AS shape, COUNT(*)
+FROM logs WHERE ts >= strftime('%s','now','-24 hours') AND level IN ('ERROR','WARN')
+GROUP BY shape ORDER BY 2 DESC;
+
+-- the same buckets per hour: clustered windows or a steady rate?
+SELECT strftime('%m-%d %H', ts, 'unixepoch', 'localtime') AS hr,
+       SUM(feedback_log_body LIKE '%timed out%') AS timeouts,
+       SUM(feedback_log_body LIKE '%could not be refreshed%') AS token_refresh
+FROM logs WHERE ts >= strftime('%s','now','-72 hours') AND level IN ('ERROR','WARN')
+GROUP BY hr ORDER BY hr;
+
+-- which OS processes are failing, and since when
+SELECT process_uuid, COUNT(*), datetime(MIN(ts),'unixepoch','localtime') first_seen
+FROM logs WHERE feedback_log_body LIKE '%could not be refreshed%'
+GROUP BY process_uuid ORDER BY 2 DESC;
+```
+
+Two pitfalls measured 2026-10-03:
+
+- A `thread_id` found here is an app-server thread handle, not proof of a
+  resumable rollout. Verify it exists in `state_*.sqlite` `threads.id` before
+  handing out `codex resume <id>`; a logs-only id fails with "No saved session
+  found with ID".
+- `strftime('%s', '<local wall time>', 'localtime')` double-converts and can
+  push the boundary into the future, returning 0 rows that look like "no data".
+  Write boundaries as UTC literals (local wall time minus your offset) instead.
 
 Read [references/storage_and_portability.md](references/storage_and_portability.md)
 for source discovery, timestamps, writer-lock semantics, legacy Kimi compatibility,
@@ -45,6 +88,7 @@ interpreting fork snapshots, compaction, event streams, or end reasons.
 | Reconstruct one Session and its declared parent snapshots | `scripts/read_codex_session.py --session <ID>` |
 | Verify a tool return, a comment ID, or external messages already read in a known Session | The **Original tool and record evidence** command below; briefing previews are not complete tool evidence |
 | Find a rollout containing a topic or phrase | `read-claude-code-history/scripts/history_index.py recall --provider codex`, then verify the exact rollout |
+| Which live processes are erroring, error shapes over time, reconnect/timeout history | The **Runtime error log** section above (`logs_*.sqlite` bucketing); not the rollout event stream |
 | Content remembered but whose wording drifted | The same indexed recall in hybrid mode, if vectors are complete |
 | Continue after evidence is complete | Stop reading and invoke `daymade-claude-code:continue-codex-work` |
 
