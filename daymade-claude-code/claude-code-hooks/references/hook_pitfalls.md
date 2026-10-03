@@ -2652,8 +2652,10 @@ this list and describe defects you reach by asking a different question):
 
   Resolve the hook's symlink before walking (#41), so dependencies are found
   next to the target rather than the link (#42). Keep the failure direction: a
-  hook that is missing or cannot be read (`chmod 000`) gets an empty signature,
-  and the caller runs the full battery.
+  hook that is missing or cannot be read (`chmod 000`) gets an empty signature.
+  Treat that as unknown, not a cached pass. Make full validation due in the owning
+  build/commit check; keep SessionStart limited to bounded deployment and liveness
+  probes even when a full-pass stamp is absent or stale.
 
   Sign every hook in **one** process before the scheduling loop. Shelling out per
   hook (`realpath`, `grep`, `stat` and a hash for each file) cost 1.3 s at every
@@ -2713,16 +2715,21 @@ this list and describe defects you reach by asking a different question):
       print(f"{hook}\t{','.join(stamps)} {len(files)}")
   ```
   Compare the signature as one string; its first field is a list, not an mtime.
-  Old stamps stop matching once, so the first session after the change runs every
-  battery.
+  Use this walk to discover local dependencies, not as a complete validation
+  identity: its mtime/size stamps can miss same-size edits within a timestamp
+  tick. Include dependency contents, the resolved runtime and its version, test
+  harness and relevant configuration in the full-pass cache key. A changed key
+  invalidates the pass at build/commit time; it does not schedule a full battery
+  during startup.
 - **Regression cases** (each has to go red when its rule is mutated away): edit
-  the sibling `.py` and not the wrapper → the full battery runs; edit a module
-  that `.py` imports → it runs; edit a file named only in a comment, written in
-  the path-joined form the walk does follow on code lines → it does **not** run
+  the sibling `.py` and not the wrapper → full validation becomes due; edit a module
+  that `.py` imports → it becomes due; edit a file named only in a comment, written in
+  the path-joined form the walk does follow on code lines → it does **not** become due
   (this is the case that catches a walk that stopped skipping comments); reach
-  the hook through a symlink and edit the target's sibling → it runs; delete a
-  dependency → it runs; `import a, b` and edit `b` → it runs; make the hook
-  unreadable → its signature is empty.
+  the hook through a symlink and edit the target's sibling → it becomes due;
+  delete a dependency → it becomes due; `import a, b` and edit `b` → it becomes
+  due; make the hook unreadable → its signature is empty and status unknown;
+  change the registered runtime or test harness → the cached pass is invalid.
 - **Real case (2026-09-29, a private hooks repository):** a guard's classifier
   and a newly extracted shared module were edited and pushed. The health check's
   stamps, keyed on the wrapper, stayed valid, so neither the probe nor the full
@@ -2743,17 +2750,26 @@ this list and describe defects you reach by asking a different question):
      files under the host's projects directory. A successful hook run is a record
      `{"type": "attachment", "attachment": {"type": "hook_success", …}}`, and the
      fields are inside `attachment`: `hookEvent`, `hookName`, `toolUseID`,
-     `command`, `exitCode`, `stdout`, `stderr`, `content`, `durationMs`. Blocked runs
-     (`hook_blocking_error`) and injected context (`hook_additional_context`) records
-     carry no duration. Group by event and by the script's file stem; for a binary
+     `command`, `exitCode`, `stdout`, `stderr`, `content`, `durationMs`. Also count
+     `hook_cancelled` (retain `timedOut` separately) and `hook_non_blocking_error`;
+     read each record's actual fields before aggregating. Preserve cancellations,
+     timeouts, runtime errors and guard refusals as distinct outcomes. Missing
+     duration is unknown cost, not zero. Blocked runs (`hook_blocking_error`) and
+     injected context (`hook_additional_context`) may carry no duration. Group by
+     event and by the script's file stem; for a binary
      use its file name, and for a hook with no executable (a prompt) use the text.
      Parse `command` with Python's `shlex.split` rather than `str.split` (a path
      containing a space breaks the latter). Deduplicate forked or resumed
-     transcripts by `(toolUseID, command)`. Report count, median, p95 and max per
-     hook, and set the alert threshold from the observed distribution rather than a
-     guess: in one week's data most hooks had a median far below a second, and the
-     few worth reading were those with a median of 1 s or more, or a p95 of 5 s or
-     more.
+     transcripts using a proved per-invocation record identity. When using
+     `toolUseID`, include `hookEvent`, `hookName` and command identity; identical
+     commands on different events or hooks are distinct runs. Missing or empty
+     identifiers do not prove duplication. Keep provenance so copied records can
+     be reconciled without collapsing separate invocations. Report count, median,
+     p95 and max per hook. Keep a minimum sample size for distribution alerts,
+     but add a separate single-run maximum alert so one extreme successful run
+     is not suppressed for lack of samples. Choose both thresholds from measured
+     cost and the runtime's latency budget; do not describe a singleton's p95 as
+     a reliable distribution.
      **Not every run leaves a record.** Probe: count one hook's records in a
      transcript and compare with the session's tool calls it matches. In one session
      (682 Bash calls, 2026-09-30) each PreToolUse advisor of ours had between 2 and
@@ -2777,19 +2793,17 @@ this list and describe defects you reach by asking a different question):
      the case below), so no background process is needed. That threshold is one
      run's seconds; the median and p95 lines in step 1 describe a hook's whole
      distribution. Set them separately.
-  4. A health check that runs every hook's self-test at session start is a common
-     slow pass. Keep a stamp per hook, for example `<hash of the hook path>.pass`
-     holding the signature and the epoch seconds of the last pass. The signature is
-     the file's modification time and size, read through symlinks
-     (`stat -L -f '%m %z'` on BSD and macOS, `stat -L -c '%Y %s'` on GNU), so an edit
-     made through a symlink counts. Skip the self-test when the signature is
-     unchanged and the last pass is younger than a TTL, a day being a workable
-     default. A failure, a changed file, and a missing, corrupt or unreadable stamp
-     all still run the self-test, and a failed run writes no stamp. The signature
-     covers the hook file only: an edit to a helper it sources goes unseen until the
-     TTL expires, so include those files in the signature if the TTL is long.
-     Measure the change by alternating old and new on one machine: machine load
-     moves the number more than the code does.
+  4. A health check that runs every hook's full self-test at session start is a
+     common slow pass. Put the full battery in the owning build/commit check;
+     startup may run bounded deployment and bidirectional liveness probes. Use
+     #49's dependency and runtime identity for any pass cache, with separate probe
+     and full-pass stamps. A failed, timed-out, cancelled or unexamined test writes
+     no pass stamp (#53). Give individual probes and the entire startup scan their
+     own deadlines and clean up only their own descendants. Keep failed diagnostic
+     output and report the checked and unexamined boundary when the total budget
+     ends. Measure startup and full-validation costs separately: a changed helper,
+     missing stamp or expired cache must not move the full battery back to startup.
+     Compare old and new on one machine under similar load.
 - **Real case (2026-09-29, one hooks repository):** adding per-hook timing to a
   weekly hook report showed a SessionStart health check at a median of 65 s over 257
   runs in a week. A trace (`bash -x` with `PS4='+T$SECONDS '`, then the largest gaps
@@ -2978,3 +2992,24 @@ this list and describe defects you reach by asking a different question):
   instead of believing the plausible explanation (see #52's two corrections).
   The incident facts were all reproducible; only the generalization was
   wrong.
+
+## 56. A medium heredoc can block Bash before its reader starts on macOS
+
+- **Symptom:** a hook stops during heredoc setup, before its intended child
+  produces output; syntax checks pass and the same script may work under another
+  shell or system load.
+- **Cause:** an affected Bash build chooses a pipe using a capacity measured at
+  compile time. macOS can reduce the available pipe capacity with system-wide
+  pipe usage. Writing the heredoc before a reader starts can then block. This is
+  a shell redirection failure, not evidence that the child or its service hung.
+  GNU Bash's [bash53-016 patch](https://ftp.gnu.org/gnu/bash/bash-5.3-patches/bash53-016)
+  uses a nonblocking write and falls back to a temporary file on capacity errors.
+- **Diagnose and repair:** identify the exact registered Bash executable and
+  patch level. Use a bounded harmless reproduction and process evidence to
+  distinguish shell setup from a running child; retain unknown when that evidence
+  is missing. Verify the patched build or use a tested file-backed input under
+  the hook's existing contract. Re-run through the registered executable, not
+  whichever `bash` happens to resolve in an interactive shell. Do not turn an
+  observed capacity into a constant for every macOS machine, or stress the live
+  host by exhausting its pipes to reproduce it. Keep the startup deadline from
+  #50 even after fixing this particular cause.

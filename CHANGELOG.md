@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **read-claude-code-history** (`daymade-claude-code` v4.11.0 → v4.12.0): Advertise the existing `analyze_sessions.py tool-calls` time-window query in the skill description ("which session ran a given command in a known time window", "past-session runtime evidence about command and tool-call activity — query this index instead of raw-scanning transcript files"). All previous description clauses survive; the route table is unchanged. Description passes 420 characters because the skill is a cross-suite router and the new routing clause is the point of the change.
+- **claude-code-hooks** (`daymade-claude-code` v4.12.0 → v4.13.0): Correct hook timing guidance to preserve event/hook identity, cancellation and error outcomes, and single-run latency outliers. Move full validation to build/commit checks, keep startup probes bounded, bind caches to dependencies and runtime, and document GNU Bash's macOS heredoc pipe fix. Targeted factual corrections and workflow redesign; retain existing hook capabilities.
 
 - **tibo-reset-codex** (`tibo-reset-codex` v1.20.0 → v1.20.1): Add frozen v1.19 writer/reader compatibility tests, established-state isolation and persisted unknown-evidence readback. The new regressions detect the prior faulty implementation; runtime behavior is unchanged.
 

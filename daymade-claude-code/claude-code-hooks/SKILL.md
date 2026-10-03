@@ -66,11 +66,13 @@ The loop may be created entirely by an agent repeatedly applying a prose rule.
 - **PostToolUse** can't undo, but it can **inject authoritative context** so a
   later hallucination can't stand (e.g. re-read the real git HEAD after a commit
   and surface it — the model can't "believe it committed" against injected truth).
-- **SessionStart** is for **health checks of the guard rails themselves** —
+- **SessionStart** is for **bounded deployment and liveness probes of the guard rails themselves** —
   silent when healthy, warn on breakage, always exit 0. Note *why*: it is not that
   a non-zero exit would block the session (it cannot), but that it would print a
   hook-error notice at every session start until someone fixes it — a check that
-  cries wolf on startup is a check people learn to scroll past.
+  cries wolf on startup is a check people learn to scroll past. Run the full
+  regression battery after edits in the build/commit check, not at session start
+  (build order step 4; pitfall #50).
 - **`set -euo pipefail` vs `set -uo pipefail` — pick by contract, and know there
   are two ways to keep an always-exit-0 contract.** A hook that may block
   (PreToolUse) wants `-e`: an unexpected failure aborting the script is
@@ -1197,34 +1199,27 @@ the consent file) must back up and restore any real consent file around itself.
      fails the same way. The shape that closes it, measured on
      `shared-repo-head-drift` (21 cases / 17.8 s cold, collapsing SessionStart's
      health check to a probe of 9 assertions / 2.2 s): keep both halves in the hook
-     as `--selftest` and `--selftest-full`, and let the health check pick — run the
-     full battery when the hook's code has changed since the last full pass, otherwise
-     the probe. The cost then lands on the first session *after an edit*, which is
-     exactly when the full battery is worth paying for. **"The hook's code" is the
+     as `--selftest` and `--selftest-full`. Have the owning build/commit check run
+     the full battery when its validation identity changes; let SessionStart run
+     only the bounded probe. A missing full-pass stamp makes full validation due
+     at build/commit time, not an instruction to run it during startup.
+     **"The hook's code" is the
      registered file plus what it runs and imports.** Most guards are a thin wrapper
      around a classifier in a sibling `.py`, so a signature taken from the wrapper
      alone stays valid through every edit to the logic, and the battery never runs
      after exactly the changes it exists for (#49 — which also gives the dependency
      rule and a one-process implementation).
-     ```bash
-     # once, before the loop: #49's sign_hooks.py signs every hook and what it
-     # runs/imports in one process, symlinks resolved (#41)
-     python3 sign_hooks.py "$HOOK_DIR"/*.sh > "$SIGS"   # "<hook>\t<sig>" per line
-     # then, for each hook $h:
-     mode="--selftest"   # reset per hook, or a fresh hook inherits the last one's tier
-     sig=$(awk -F'\t' -v h="$h" '$1 == h { print $2 }' "$SIGS")
-     stamp="$STAMPS/$(printf '%s' "$h" | shasum | cut -c1-16).full"
-     [ -n "$sig" ] && [ "$(cat "$stamp" 2>/dev/null || true)" = "$sig" ] || mode="--selftest-full"
-     bash "$h" "$mode" >/dev/null 2>&1 </dev/null || return 1   # </dev/null: an
-     # unknown flag drops into the main path and reads stdin — on SessionStart that
-     # hangs every new session
-     [ "$mode" = "--selftest-full" ] && printf '%s' "$sig" > "$stamp" 2>/dev/null
-     ```
-     Failure direction is *toward the full battery*: signature unreadable,
-     mismatched, or stamp dir unwritable all run full. There is no remediation loop
-     here (rule 7 does not apply) — it only picks which tier to run, so slow beats
-     blind. Write the stamp only on a **passing** full run, so a failure leaves the
-     next session still on full.
+     Include the resolved interpreter and its version, test harness and relevant
+     configuration in that identity, alongside the hook and its dependencies.
+     Give each probe and the whole startup scan explicit deadlines; clean up only
+     their own descendants on timeout or cancellation. Invoke through the same
+     installer-owned runtime as the registered hook, with closed stdin for tests
+     that do not consume events. Keep bounded failure diagnostics instead of
+     discarding all child output. Record timeout, cancellation, unreadable identity
+     or incomplete coverage as unknown under pitfall #53; write pass stamps only
+     after the intended test actually completes successfully. Validate this split
+     with an unchanged hook, a changed helper and a slow or failed probe: none may
+     pull the full battery back into SessionStart.
      Choosing the probe's cases is not "the first N": it needs one must-fire and one
      must-quiet, or the two degradation directions are not both covered. Watch for a
      must-quiet case that is secretly vacuous — an advisory-only hook always exits 0,
