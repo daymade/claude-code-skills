@@ -547,3 +547,18 @@ does anyone other than a typed slash command start it?
 Record the thresholds, the per-Skill decision, and the backup path in the change
 report. Never hide a batch selected by install location, marketplace, or name
 pattern without running steps 1–5 on each member.
+
+
+## 16. Audit an explicit delivery contract
+
+Read the original user requirement before accepting the contract's outcome, scope and source owner. Author-supplied tests or a self-written contract cannot establish that this is what the user requested.
+
+```bash
+python3 scripts/audit_skill_delivery.py <skill-path> --delivery-contract <private-contract.json> --json
+```
+
+The private JSON object requires integer `schema_version: 1`, non-empty `user_outcome`, `scope` (`marketplace` or `project`), `source_repo`, and `skill_name`. Optional `installed_path` and `inventory` are non-empty path strings; inventory uses the source owner's schema. Omitted installation evidence remains unknown. Keep private paths and requirements outside the distributed Skill bundle.
+
+The adapter invokes sibling `skill-creator/scripts/source_contract.py audit` for all source, registration and link rules; it adds no source whitelist. Inspect its `source_audit` checks individually. A runnable, discoverable Skill stored outside the contracted source repo fails delivery. Project scope uses its declared project owner rather than a global marketplace requirement. Quality-only external reviews need no delivery contract.
+
+Exit 2 means invalid delivery evidence, exit 1 means unknown. The adapter's static source result is `static_status`; overall delivery stays unknown until independent evidence establishes the original requirement and requested current host result. This command does not probe a host and never reports current loading as verified. For that claim, run §14's applicable fresh-host checks and, when requested, its task behavior probe. Preserve source, registration, installation and current host evidence as separate observations.

@@ -64,6 +64,7 @@ completely before using that workflow.
 
 | Request | Read and use |
 |---|---|
+| Explicit delivery contract; verify source owner, registration and installed route | §16, then requested fresh-host gate in §14 |
 | What Codex really loads; count, truncation, duplicate identity, missing router | §3–4, then §11 |
 | Reconcile owned source links or `~/.agents/skills` activation | §2–5, then §11 |
 | Keep gstack/Lark/IMA/UiPath or another bundle cold behind a router | §2–4, §6, then §11 |
@@ -146,6 +147,10 @@ read back the result. Treat cache folders as derived runtime artifacts.
 
 For suite topology changes, use `marketplace-dev` to edit the source manifest;
 use this Skill only to reconcile already-landed migrations on the current host.
+
+## Read-only delivery contract audit
+
+For an explicit delivery review, read §16 and run `scripts/audit_skill_delivery.py <skill-path> --delivery-contract <private-contract.json> --json`. It delegates source ownership to `skill-creator`; runtime visibility and original-requirement fidelity remain separate evidence. A source error blocks delivery even if the Skill can run.
 
 ## Definition of done
 

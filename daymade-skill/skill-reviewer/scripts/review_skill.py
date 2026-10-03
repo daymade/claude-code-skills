@@ -24,6 +24,7 @@ Exit codes:
 """
 
 import ast
+import importlib.util
 import re
 import sys
 import json
@@ -409,7 +410,18 @@ def check_content_quality(body, issues):
         issues.append(("info", "quality", f"'You should' used {len(you_should)} times -- prefer imperative form ('Run...' not 'You should run...')"))
 
 
-def run_review(skill_path):
+def run_delivery_review(skill_path, contract_path):
+    """Use the suite's thin adapter; do not duplicate source ownership rules."""
+    adapter = Path(__file__).resolve().parents[2] / "skill-governance/scripts/audit_skill_delivery.py"
+    if not adapter.is_file():
+        raise ReviewRuntimeError(f"Delivery audit adapter not found: {adapter}")
+    spec = importlib.util.spec_from_file_location("skill_delivery_audit", adapter)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.audit_delivery(skill_path, contract_path)
+
+
+def run_review(skill_path, delivery_contract=None, delivery_report=None):
     """Run all checks. Returns (issues, skill_name)."""
     issues = []
     skill_path = Path(skill_path).resolve()
@@ -417,9 +429,18 @@ def run_review(skill_path):
     if not skill_path.is_dir():
         raise ReviewRuntimeError(f"Path is not a directory: {skill_path}")
 
+    if delivery_contract is not None:
+        report = run_delivery_review(skill_path, delivery_contract)
+        if delivery_report is not None:
+            delivery_report.update(report)
+        if report["status"] == "invalid":
+            issues.append(("error", "delivery", "Delivery contract failed; inspect delivery_review checks"))
+        elif report["status"] == "unknown":
+            issues.append(("warning", "delivery", "Delivery remains unverified; current runtime loading was not probed"))
+
     skill_md = skill_path / "SKILL.md"
     if not skill_md.exists():
-        return [("error", "structure", "SKILL.md not found")], None
+        return issues + [("error", "structure", "SKILL.md not found")], None
 
     try:
         content = skill_md.read_text(encoding="utf-8")
@@ -474,9 +495,10 @@ def format_text(issues, skill_path, skill_name=None):
     return "\n".join(lines)
 
 
-def format_json(issues, skill_path, skill_name=None):
+def format_json(issues, skill_path, skill_name=None, delivery_report=None):
     """Format issues as JSON."""
     return json.dumps({
+        "delivery_review": delivery_report or {"status": "not_requested", "message": "Quality review only; no delivery contract supplied"},
         "skill": skill_name or Path(skill_path).name,
         "skill_path": str(skill_path),
         "issues": [{"level": lvl, "category": cat, "message": msg} for lvl, cat, msg in issues],
@@ -505,19 +527,25 @@ def main():
     parser = ReviewArgumentParser(description="Review a Claude Code skill")
     parser.add_argument("skill_path", help="Path to skill directory")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
+    parser.add_argument("--delivery-contract", help="Private JSON contract for an explicitly requested delivery review")
     args = parser.parse_args()
+    delivery_report = {}
 
     try:
-        issues, skill_name = run_review(args.skill_path)
+        issues, skill_name = run_review(args.skill_path, args.delivery_contract, delivery_report)
     except ReviewRuntimeError as exc:
         output = format_operational_error(str(exc), as_json=args.json)
         print(output, file=sys.stdout if args.json else sys.stderr)
         return EXIT_OPERATIONAL
 
     if args.json:
-        print(format_json(issues, args.skill_path, skill_name))
+        print(format_json(issues, args.skill_path, skill_name, delivery_report))
     else:
         print(format_text(issues, args.skill_path, skill_name))
+        if args.delivery_contract:
+            print(json.dumps({"delivery_review": delivery_report}, indent=2))
+        else:
+            print("Delivery review not requested: no delivery contract supplied.")
 
     errors = sum(1 for i in issues if i[0] == "error")
     warnings = sum(1 for i in issues if i[0] == "warning")

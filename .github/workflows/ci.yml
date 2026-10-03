@@ -85,6 +85,9 @@ jobs:
       - name: Install validator dependency
         run: python3 -m pip install --quiet pyyaml
 
+      - name: Source ownership and initialization contract
+        run: python3 -m unittest discover -s daymade-skill/skill-creator/tests -p test_source_contract.py
+
       - name: Validate skills touched by this change
         env:
           # Every value crosses into the shell through the environment, never through

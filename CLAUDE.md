@@ -309,41 +309,17 @@ aligned. That reference owns the request fields and probe commands.
 
 In Claude Code, use `/plugin ...` slash commands. In your terminal, use `claude plugin ...`.
 
-### Source Location Guard for Skill Edits
+### Source Location Guard for Skill Creation and Edits
 
-Before editing an existing skill, verify the **source** path, not just the path currently loaded by Codex / Claude Code.
+Load [skill-creator](daymade-skill/skill-creator/SKILL.md) and follow its canonical
+source preflight before the first write. Its shared source-contract checker owns
+repository identity, marketplace registration and project-local placement; use
+[skill-governance](daymade-skill/skill-governance/SKILL.md) for installation and
+fresh-host readback. Keep source, installed entry and private review archive distinct.
 
-Treat these as installed copies unless proven otherwise:
-- `~/.codex/skills/<skill-name>`
-- `~/.claude/skills/<skill-name>`
-- `~/.agents/skills/<skill-name>`
-- `~/.claude/plugins/cache/...`
-- `~/.codex/plugins/cache/...`
-
-The source for this marketplace is this repository. For single-skill plugins, edit:
-```bash
-<repo-root>/<skill-name>/SKILL.md
-```
-
-For suite skills, edit:
-```bash
-<repo-root>/<suite-name>/<skill-name>/SKILL.md
-```
-
-Required workflow before any skill edit:
-```bash
-pwd
-git rev-parse --show-toplevel
-rg -n '"name": "<skill-or-suite-name>"' .claude-plugin/marketplace.json
-find . -path '*/SKILL.md' -maxdepth 4 | rg '(^|/)<skill-name>/SKILL.md$'
-```
-
-After editing, commit and run `scripts/ci/validate_changed_skills.sh origin/main` (it examines the committed
-diff, so it sees nothing until you commit). It runs the same per-skill `quick_validate` the CI uses;
-repo-level `claude plugin validate --strict .` passes even when a description exceeds the 1024-character
-cap, so a green repo-level validate is not evidence the touched skill will pass.
-
-If the user gives a source path, use that path. If the available skill list points to a different installed copy, update the source first, then sync the installed copy only if the user explicitly needs the current session to use the new version immediately.
+After committing, run `scripts/ci/validate_changed_skills.sh origin/main`; it checks
+the committed diff. A repository-level plugin validation does not replace per-Skill
+validation.
 
 ### Git Operations
 
