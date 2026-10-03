@@ -68,15 +68,26 @@ def validate_manifest(data, require_source=True):
 def git(repo, *args):
     # Read only object plumbing: no filters, checkout, network, or history copies.
     p = subprocess.run(["git", "--literal-pathspecs", "-C", repo, *args],
-                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=git_environment())
     if p.returncode:
         raise MaterializationError(p.stderr.decode(errors="replace").strip())
     return p.stdout
 
 
+def git_environment():
+    env = dict(os.environ)
+    for key in ("GIT_DIR", "GIT_WORK_TREE", "GIT_NAMESPACE", "GIT_INDEX_FILE"):
+        env.pop(key, None)
+    # Partial clones must not turn an object read into a fetch. The protocol
+    # restriction also fails closed on Git versions without the lazy-fetch flag.
+    env.update(GIT_NO_LAZY_FETCH="1", GIT_ALLOW_PROTOCOL="", GIT_NO_REPLACE_OBJECTS="1",
+               GIT_OPTIONAL_LOCKS="0")
+    return env
+
+
 def blob_chunks(repo, oid):
     p = subprocess.Popen(["git", "-C", repo, "cat-file", "blob", oid],
-                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=git_environment())
     try:
         while chunk := p.stdout.read(65536):
             yield chunk

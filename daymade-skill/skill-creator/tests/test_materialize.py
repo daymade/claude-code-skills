@@ -66,6 +66,21 @@ class MaterializeTests(unittest.TestCase):
         with self.assertRaises(m.MaterializationError):
             self.prepare()
 
+    def test_missing_promisor_blob_does_not_spawn_fetch(self):
+        oid = self.g("rev-parse", f"{self.ref}:selected/input.txt")
+        self.g("config", "remote.origin.promisor", "true")
+        self.g("config", "remote.origin.url", str(self.base / "absent-remote"))
+        self.g("config", "extensions.partialClone", "origin")
+        (self.repo / ".git" / "objects" / oid[:2] / oid[2:]).unlink()
+        trace = self.base / "git-trace.jsonl"
+        with mock.patch.dict(os.environ, {"GIT_TRACE2_EVENT": str(trace)}):
+            with self.assertRaises(m.MaterializationError):
+                self.prepare()
+        events = [json.loads(line) for line in trace.read_text().splitlines()]
+        children = [e.get("argv", []) for e in events if e.get("event") == "child_start"]
+        self.assertFalse(any("fetch" in arg for argv in children for arg in argv), children)
+        self.assertFalse(self.root.exists())
+
     def test_missing_blank_null_and_nonpositive_required_keys(self):
         for key in self.manifest:
             for replacement in (None, "", [], 0):

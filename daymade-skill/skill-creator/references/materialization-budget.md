@@ -45,6 +45,8 @@ LFS pointers stay pointers unless `materialize_lfs` is true. Local materializati
 checks the object's SHA-256 and declared size; an unavailable or mismatched object
 fails. The runner does not fetch, download, invoke smudge filters or borrow an
 external LFS cache.
+Git object reads disable lazy promisor fetches and remote protocols, so a missing
+partial-clone object fails instead of silently downloading into a shared cache.
 
 ## Runnable small example
 
