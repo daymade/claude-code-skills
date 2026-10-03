@@ -553,11 +553,13 @@ pattern without running steps 1–5 on each member.
 
 Read the original user requirement before accepting the contract's outcome, scope and source owner. Author-supplied tests or a self-written contract cannot establish that this is what the user requested.
 
+Run from this skill-governance directory, or use the script's absolute path:
+
 ```bash
 python3 scripts/audit_skill_delivery.py <skill-path> --delivery-contract <private-contract.json> --json
 ```
 
-The private JSON object requires integer `schema_version: 1`, non-empty `user_outcome`, `scope` (`marketplace` or `project`), `source_repo`, and `skill_name`. Optional `installed_path` and `inventory` are non-empty path strings; inventory uses the source owner's schema. Omitted installation evidence remains unknown. Keep private paths and requirements outside the distributed Skill bundle.
+The private JSON object requires integer `schema_version: 1`, non-empty `user_outcome`, `scope` (`marketplace` or `project`), `source_repo`, and `skill_name`. Optional `installed_path` and `inventory` are non-empty path strings; inventory uses the source owner's schema. `installed_path` checks a source-backed alias resolving to the declared source directory; it is not a validator for an ordinary versioned plugin copy. Use §7 for that copy's installation lifecycle and §14 for host verification. Omitted installation evidence remains unknown. Keep private paths and requirements outside the distributed Skill bundle.
 
 The adapter invokes sibling `skill-creator/scripts/source_contract.py audit` for all source, registration and link rules; it adds no source whitelist. Inspect its `source_audit` checks individually. A runnable, discoverable Skill stored outside the contracted source repo fails delivery. Project scope uses its declared project owner rather than a global marketplace requirement. Quality-only external reviews need no delivery contract.
 

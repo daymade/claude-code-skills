@@ -316,6 +316,8 @@ source preflight before the first write. Its shared source-contract checker owns
 repository identity, marketplace registration and project-local placement; use
 [skill-governance](daymade-skill/skill-governance/SKILL.md) for installation and
 fresh-host readback. Keep source, installed entry and private review archive distinct.
+A registered marketplace source does not prove the installed copy or current host advanced;
+follow the consumed-file checks in that governance reference before claiming activation.
 
 After committing, run `scripts/ci/validate_changed_skills.sh origin/main`; it checks
 the committed diff. A repository-level plugin validation does not replace per-Skill

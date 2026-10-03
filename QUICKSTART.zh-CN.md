@@ -1,6 +1,6 @@
 # 快速入门指南
 
-在不到 2 分钟的时间内开始使用 Claude Code 技能市场！
+安装技能，或在已有源码仓库中创建技能。
 
 ## 面向技能创建者
 
@@ -16,7 +16,7 @@
 然后：
 1. 选择 **Browse and install plugins**
 2. 选择 **daymade/claude-code-skills**
-3. 选择 **skill-creator**
+3. 选择 **daymade-skill**
 4. 选择 **Install now**
 
 **在终端（CLI）：**
@@ -29,67 +29,35 @@ claude plugin marketplace add https://github.com/daymade/claude-code-skills
 claude plugin install daymade-skill@daymade-skills
 ```
 
-### 步骤 2：初始化你的第一个技能
+### 步骤 2：选定源码后初始化
+
+先加载 [skill-creator](./daymade-skill/skill-creator/SKILL.md#critical-edit-skills-at-source-location)，按其源码预检确认归属。下面演示已有 Git 项目中的项目级技能；可复用的全局技能应先选定自己的 marketplace 源码仓库，再走该 Skill 的创建流程。
+
+将变量替换为实际加载的 skill-creator 目录和已有 Git 项目的绝对路径：
 
 ```bash
-# 从模板创建一个新技能
-daymade-skill/skill-creator/scripts/init_skill.py my-first-skill --path ~/my-skills
+TASK_CREATOR=/absolute/path/to/loaded/skill-creator
+TASK_PROJECT=/absolute/path/to/existing/git-project
+uv run --project "$TASK_CREATOR" --frozen python "$TASK_CREATOR/scripts/init_skill.py" my-first-skill \
+  --path "$TASK_PROJECT/.claude/skills" --repo "$TASK_PROJECT" --scope project
 ```
 
-这将生成：
-```
-~/my-skills/my-first-skill/
-├── SKILL.md                  # 主技能文件
-├── scripts/                  # 可执行代码
-│   └── example_script.py
-├── references/               # 文档
-│   └── example_reference.md
-└── assets/                   # 模板/资源
-    └── example_asset.txt
-```
+### 步骤 3：编辑与验证
 
-### 步骤 3：自定义你的技能
-
-编辑 `~/my-skills/my-first-skill/SKILL.md`：
-
-1. **更新前置信息** - 设置名称和描述
-2. **编写"何时使用此技能"** - 定义激活条件
-3. **记录工作流** - 解释 Claude 应如何使用你的技能
-4. **添加资源** - 根据需要创建脚本、参考文档或资源
-
-### 步骤 4：验证你的技能
+编辑 `$TASK_PROJECT/.claude/skills/my-first-skill/SKILL.md`，定义触发条件、操作和失败判据，添加需要的资源。删除未使用的模板示例。
 
 ```bash
-# 检查你的技能是否符合质量标准
-daymade-skill/skill-creator/scripts/quick_validate.py ~/my-skills/my-first-skill
+uv run --project "$TASK_CREATOR" --frozen python "$TASK_CREATOR/scripts/quick_validate.py" \
+  "$TASK_PROJECT/.claude/skills/my-first-skill"
 ```
 
-修复报告的任何错误，然后再次验证。
+继续按 [skill-creator 的交付流程](./daymade-skill/skill-creator/SKILL.md#skill-creation-process-step-by-step)完成所需的安全、回归和打包检查；结构验证通过不等于已完成交付。
 
-### 步骤 5：打包用于分发
+### 步骤 4：验证宿主读取结果
 
-```bash
-# 创建可分发的 .zip 文件
-daymade-skill/skill-creator/scripts/package_skill.py ~/my-skills/my-first-skill
-```
+按 [skill-governance](./daymade-skill/skill-governance/references/skill-surface-governance.md) 中的安装生命周期和 fresh-host 检查，读回实际消费的文件并验证任务行为。不要用 `cp -r` 创建另一份维护副本，也不要把重启或目录可见当作已加载的证明。
 
-这将创建 `my-first-skill.zip`，可以分享了！
-
-### 步骤 6：测试你的技能
-
-```bash
-# 复制到 Claude Code 技能目录
-cp -r ~/my-skills/my-first-skill ~/.claude/skills/
-
-# 重启 Claude Code
-# 你的技能现在已激活！
-```
-
-### 下一步
-
-- 📖 阅读 [skill-creator/SKILL.md](./daymade-skill/skill-creator/SKILL.md) 获取全面指导
-- 🔍 研究此市场中的现有技能以获取示例
-- 💡 查看 [CONTRIBUTING.md](./CONTRIBUTING.md) 以分享你的技能
+贡献范围见 [CONTRIBUTING.md](./CONTRIBUTING.md)。
 
 ---
 
@@ -128,27 +96,9 @@ claude plugin install daymade-docs@daymade-skills
 # 步骤 3：重启 Claude Code
 ```
 
-### 可用技能（快速入门）
+### 查找、更新与卸载
 
-本表为快速入门列表。完整 25 个技能请见 [README.zh-CN.md](./README.zh-CN.md)。
-
-| 技能 | 描述 | 使用场景 |
-|-------|-------------|-------------|
-| **skill-creator** ⭐ | 创建你自己的技能 | 构建自定义工作流 |
-| **github-ops** | GitHub 操作 | 管理 PR、问题、工作流 |
-| **doc-to-markdown** | 文档转换 | 将文档转换为 markdown |
-| **mermaid-tools** | 图表生成 | 创建 PNG 图表 |
-| **statusline-generator** | 状态栏定制 | 自定义 Claude Code UI |
-| **teams-channel-post-writer** | Teams 通信 | 编写专业帖子 |
-| **repomix-unmixer** | 仓库提取 | 提取 repomix 文件 |
-| **llm-icon-finder** | AI/LLM 品牌图标 | 查找模型徽标 |
-
-### 更新技能
-
-```bash
-# 使用相同的安装命令进行更新
-claude plugin install skill-name@daymade-skills
-```
+技能目录见 [README.zh-CN.md](./README.zh-CN.md)。安装来源、套件边界、更新和卸载按 [skill-governance](./daymade-skill/skill-governance/references/skill-surface-governance.md) 的对应流程操作。
 
 ---
 
@@ -189,22 +139,22 @@ claude plugin install skill-name@daymade-skills
 ## 常见问题
 
 **Q：我应该首先安装哪些技能？**
-A：如果你想创建技能，从 **skill-creator** 开始。否则，根据你的需求安装（参见快速入门表及 README 完整列表）。
+A：如果你想创建技能，从 **skill-creator** 开始。否则，根据你的需求安装（参见 README 技能目录）。
 
 **Q：我可以安装多个技能吗？**
-A：可以！每个技能都是独立的。根据需要安装任意数量的技能。
+A：插件边界以 [marketplace manifest](./.claude-plugin/marketplace.json) 为准。
 
 **Q：如何卸载技能？**
-A：从 `~/.claude/skills/` 中删除它并重启 Claude Code。
+A：按 [skill-governance](./daymade-skill/skill-governance/references/skill-surface-governance.md) 的卸载流程操作。
 
 **Q：我在哪里可以获得帮助？**
 A：在 [github.com/daymade/claude-code-skills](https://github.com/daymade/claude-code-skills/issues) 开启问题
 
 **Q：技能是否安全？**
-A：是的！所有技能都是开源的，代码可供检查。我们遵循严格的质量标准。
+A：开源便于检查，但不能证明安全。审查方法见 [skill-reviewer](./daymade-skill/skill-reviewer/SKILL.md) 与 [安全检查清单](./daymade-skill/skill-creator/references/sanitization_checklist.md)。
 
 **Q：如何为这个项目做贡献？**
-A：查看 [CONTRIBUTING.md](./CONTRIBUTING.md) 了解指南。我们欢迎技能提交、错误报告和改进建议！
+A：查看 [CONTRIBUTING.md](./CONTRIBUTING.md)。
 
 ---
 

@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-Get started with Claude Code Skills Marketplace in less than 2 minutes!
+Install Skills or create a Skill in an existing source repository.
 
 ## For Skill Creators
 
@@ -16,7 +16,7 @@ Get started with Claude Code Skills Marketplace in less than 2 minutes!
 Then:
 1. Select **Browse and install plugins**
 2. Select **daymade/claude-code-skills**
-3. Select **skill-creator**
+3. Select **daymade-skill**
 4. Select **Install now**
 
 **From your terminal (CLI):**
@@ -29,67 +29,35 @@ claude plugin marketplace add https://github.com/daymade/claude-code-skills
 claude plugin install daymade-skill@daymade-skills
 ```
 
-### Step 2: Initialize Your First Skill
+### Step 2: Select the source and initialize
+
+Load [skill-creator](./daymade-skill/skill-creator/SKILL.md#critical-edit-skills-at-source-location) and complete its source preflight first. This example creates a project Skill in an existing Git project. For a reusable global Skill, select your own marketplace source repository and follow the creator workflow.
+
+Replace these variables with the absolute paths of the loaded skill-creator directory and an existing Git project:
 
 ```bash
-# Create a new skill from template
-daymade-skill/skill-creator/scripts/init_skill.py my-first-skill --path ~/my-skills
+TASK_CREATOR=/absolute/path/to/loaded/skill-creator
+TASK_PROJECT=/absolute/path/to/existing/git-project
+uv run --project "$TASK_CREATOR" --frozen python "$TASK_CREATOR/scripts/init_skill.py" my-first-skill \
+  --path "$TASK_PROJECT/.claude/skills" --repo "$TASK_PROJECT" --scope project
 ```
 
-This generates:
-```
-~/my-skills/my-first-skill/
-├── SKILL.md                  # Main skill file
-├── scripts/                  # Executable code
-│   └── example_script.py
-├── references/               # Documentation
-│   └── example_reference.md
-└── assets/                   # Templates/resources
-    └── example_asset.txt
-```
+### Step 3: Edit and validate
 
-### Step 3: Customize Your Skill
-
-Edit `~/my-skills/my-first-skill/SKILL.md`:
-
-1. **Update frontmatter** - Set name and description
-2. **Write "When to Use This Skill"** - Define activation criteria
-3. **Document workflows** - Explain how Claude should use your skill
-4. **Add resources** - Create scripts, references, or assets as needed
-
-### Step 4: Validate Your Skill
+Edit `$TASK_PROJECT/.claude/skills/my-first-skill/SKILL.md` to define triggers, actions and failure criteria. Add needed resources and remove unused template examples.
 
 ```bash
-# Check if your skill meets quality standards
-daymade-skill/skill-creator/scripts/quick_validate.py ~/my-skills/my-first-skill
+uv run --project "$TASK_CREATOR" --frozen python "$TASK_CREATOR/scripts/quick_validate.py" \
+  "$TASK_PROJECT/.claude/skills/my-first-skill"
 ```
 
-Fix any errors reported, then validate again.
+Continue through [skill-creator's delivery workflow](./daymade-skill/skill-creator/SKILL.md#skill-creation-process-step-by-step) for the required security, regression and packaging checks. Structural validation alone does not establish delivery.
 
-### Step 5: Package for Distribution
+### Step 4: Verify host consumption
 
-```bash
-# Create a distributable .zip file
-daymade-skill/skill-creator/scripts/package_skill.py ~/my-skills/my-first-skill
-```
+Follow the installation lifecycle and fresh-host checks in [skill-governance](./daymade-skill/skill-governance/references/skill-surface-governance.md). Read the actual consumed file and verify task behavior. Avoid creating another maintained copy with `cp -r`; restarting or seeing a directory does not prove loading.
 
-This creates `my-first-skill.zip` ready to share!
-
-### Step 6: Test Your Skill
-
-```bash
-# Copy to Claude Code skills directory
-cp -r ~/my-skills/my-first-skill ~/.claude/skills/
-
-# Restart Claude Code
-# Your skill is now active!
-```
-
-### Next Steps
-
-- 📖 Read [skill-creator/SKILL.md](./daymade-skill/skill-creator/SKILL.md) for comprehensive guidance
-- 🔍 Study existing skills in this marketplace for examples
-- 💡 Check [CONTRIBUTING.md](./CONTRIBUTING.md) to share your skill
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for the contribution policy.
 
 ---
 
@@ -128,27 +96,9 @@ claude plugin install daymade-docs@daymade-skills
 # Step 3: Restart Claude Code
 ```
 
-### Available Skills (Starter Set)
+### Discovery, updates and removal
 
-This table is a quick starter list. See [README.md](./README.md) for the full catalog (25 skills).
-
-| Skill | Description | When to Use |
-|-------|-------------|-------------|
-| **skill-creator** ⭐ | Create your own skills | Building custom workflows |
-| **github-ops** | GitHub operations | Managing PRs, issues, workflows |
-| **doc-to-markdown** | Document conversion | Converting docs to markdown |
-| **mermaid-tools** | Diagram generation | Creating PNG diagrams |
-| **statusline-generator** | Statusline customization | Customizing Claude Code UI |
-| **teams-channel-post-writer** | Teams communication | Writing professional posts |
-| **repomix-unmixer** | Repository extraction | Extracting repomix files |
-| **llm-icon-finder** | AI/LLM brand icons | Finding model logos |
-
-### Updating Skills
-
-```bash
-# Use the same install command to update
-claude plugin install skill-name@daymade-skills
-```
+See [README.md](./README.md) for the catalog. Follow [skill-governance](./daymade-skill/skill-governance/references/skill-surface-governance.md) for installation source, suite boundaries, updates and removal.
 
 ---
 
@@ -174,13 +124,13 @@ If you're in China, install [CC-Switch](https://github.com/farion1231/cc-switch)
 ## Common Questions
 
 **Q: Which skills should I install first?**
-A: Start with **skill-creator** if you want to create skills. Otherwise, install based on your needs (see the starter table and the full list in README).
+A: Start with **skill-creator** if you want to create skills. Otherwise, install based on your needs (see the catalog in README).
 
 **Q: Can I install multiple skills?**
-A: Yes! Each skill is independent. Install as many or as few as you need.
+A: Follow the plugin boundaries in the [marketplace manifest](./.claude-plugin/marketplace.json).
 
 **Q: How do I uninstall a skill?**
-A: Remove it from `~/.claude/skills/` and restart Claude Code.
+A: Follow the removal workflow in [skill-governance](./daymade-skill/skill-governance/references/skill-surface-governance.md).
 
 **Q: Where can I get help?**
 A: Open an issue at [github.com/daymade/claude-code-skills](https://github.com/daymade/claude-code-skills/issues)

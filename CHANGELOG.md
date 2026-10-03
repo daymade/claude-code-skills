@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **read-claude-code-history** (`daymade-claude-code` v4.9.0 → v4.10.0): correct the recall guide's obsolete live raw-search claim, make script path resolution explicit, and remove mutable corpus-size aggregates and obsolete POC narration. Route original tool evidence and account attribution from the repository guide to their existing owners.
 ### Fixed
 
+- **skill-creator, skill-reviewer, skill-governance** (`daymade-skill` v1.57.1 → v1.57.2): Align source and delivery instructions with the locked runtime and actual consumed-file checks; distinguish source-backed aliases from versioned plugin copies. Correct bilingual initialization and installation guidance and remove derived catalog and checklist summaries.
+
 - **skill-creator** (`daymade-skill` v1.57.0 → v1.57.1): Treat missing, null, blank and unqualified source-inventory paths as unknown evidence. These paths previously borrowed the caller's current directory and could falsely validate source ownership; valid registered sources remain unchanged.
 
 - **bilibili-source** (v1.4.0 → v1.4.1): Preserve HTTP failure status and safe error categories in access reports, distinguishing HTTP refusal from network errors, timeouts and invalid JSON without exposing exception text. Healthy access decisions remain unchanged; synthetic tests cover capture and emitted reports.
