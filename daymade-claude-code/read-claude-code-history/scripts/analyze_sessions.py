@@ -2441,6 +2441,156 @@ def _cmd_tool_calls(args, parser) -> int:
     return 0 if total_hits else 1
 
 
+def _cmd_hook_events(args, parser) -> int:
+    """Find hook execution records across sessions inside a time window.
+
+    Same narrowing contract as ``tool-calls``: candidate files are selected
+    by filesystem metadata alone before any body is opened, and only records
+    whose own top-level timestamp falls inside the window are kept. A
+    forked/resumed session copies its parent's attachment records, so a run
+    is deduplicated across sessions by ``(toolUseID, hookEvent, hookName,
+    command)`` — the same identity rule the machine hook-signal digest uses —
+    and attributed to the first-read session that carries it.
+    """
+    try:
+        from_ts = parse_date_boundary(args.from_iso)
+        to_ts = parse_date_boundary(args.to_iso, end=True)
+    except ValueError as error:
+        parser.error(str(error))
+    if from_ts > to_ts:
+        parser.error("--from must not be later than --to")
+    pattern = None
+    if args.pattern is not None:
+        try:
+            pattern = re.compile(args.pattern, 0 if args.case_sensitive else re.IGNORECASE)
+        except re.error as error:
+            parser.error(f"--pattern is not a valid regex: {error}")
+
+    try:
+        sources, narrowed, warnings = _sources_for(args)
+    except HistorySourceConfigError as error:
+        print(f"History source configuration error: {error}", file=sys.stderr)
+        return 2
+    for warning in warnings:
+        print(f"History source warning: {warning}", file=sys.stderr)
+    if narrowed and not sources:
+        print(
+            "No Claude home with a projects/ dir matched your --home/--main-only "
+            "selection.",
+            file=sys.stderr,
+        )
+        return 1
+
+    candidates, groups_scanned, birthtime_available = find_tool_call_candidate_files(
+        sources, from_ts, to_ts
+    )
+
+    hook_attachment_types = ("hook_success", "hook_cancelled", "hook_non_blocking_error")
+    hits_by_session: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    files_read = 0
+    unparseable = 0
+    seen_runs: set[tuple[str, str, str, str]] = set()
+    for candidate in candidates:
+        files_read += 1
+        try:
+            handle = candidate.path.open(encoding="utf-8", errors="surrogateescape")
+        except OSError:
+            continue
+        with handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    unparseable += 1
+                    continue
+                if not isinstance(record, dict):
+                    continue
+                ts = parse_timestamp(record.get("timestamp"))
+                if ts is None or not timestamp_in_window(ts, from_ts, to_ts):
+                    continue
+                attachment = record.get("attachment")
+                if not isinstance(attachment, dict) or attachment.get("type") not in hook_attachment_types:
+                    continue
+                command = str(attachment.get("command") or "")
+                tool_use_id = str(attachment.get("toolUseID") or "").strip()
+                event = str(attachment.get("hookEvent") or "").strip()
+                hook_name = str(attachment.get("hookName") or "").strip()
+                # Missing identity parts cannot establish a copied run (same
+                # rule as the machine hook-signal digest); only complete keys
+                # deduplicate.
+                if tool_use_id and event and (command or hook_name):
+                    run_key = (tool_use_id, event, hook_name, (command or hook_name))
+                    if run_key in seen_runs:
+                        continue
+                    seen_runs.add(run_key)
+                if args.event and event != args.event:
+                    continue
+                haystack = f"{hook_name} {event} {command}"
+                if pattern is not None and not pattern.search(haystack):
+                    continue
+                outcome = "success"
+                if attachment.get("type") == "hook_cancelled":
+                    outcome = "timeout" if attachment.get("timedOut") is True else "cancelled"
+                elif attachment.get("type") == "hook_non_blocking_error":
+                    outcome = "error"
+                session_id = record.get("sessionId") or "unknown"
+                try:
+                    duration_ms = int(attachment.get("durationMs"))
+                except (TypeError, ValueError):
+                    duration_ms = None
+                hits_by_session[session_id].append(
+                    {
+                        "timestamp": record.get("timestamp"),
+                        "epoch": ts,
+                        "hook": hook_name or command or "unknown",
+                        "event": event or "?",
+                        "outcome": outcome,
+                        "exit_code": str(attachment.get("exitCode") or "0"),
+                        "duration_ms": duration_ms,
+                        "command_clip": command[: args.clip],
+                        "file": candidate.path,
+                    }
+                )
+
+    total_runs = sum(len(runs) for runs in hits_by_session.values())
+    label = args.pattern if args.pattern is not None else "all hooks"
+    print(f"# Hook runs matching `{label}` in [{args.from_iso} .. {args.to_iso}]\n")
+    print(
+        f"- **Candidate files (filesystem metadata only)**: {len(candidates)} "
+        f"across {groups_scanned} project-tree group(s)"
+    )
+    print(f"- **Candidate files read**: {files_read}")
+    if not birthtime_available:
+        print(
+            "- **Creation-time upper bound**: unavailable on this platform "
+            "(`stat()` has no `st_birthtime` — expected on Linux); only the "
+            "`--from` modified-time lower bound narrowed candidates, so this "
+            "candidate set is coarser than on macOS/BSD, never missing files"
+        )
+    print("- **Codex rollout files**: not covered by this subcommand (routed to "
+          "daymade-claude-code:read-codex-history)")
+    if unparseable:
+        print(f"- **Unparseable lines skipped**: {unparseable}")
+    print(f"- **Sessions with a run**: {len(hits_by_session)}")
+    print(f"- **Total runs**: {total_runs}")
+
+    for session_id in sorted(
+        hits_by_session, key=lambda sid: min(r["epoch"] for r in hits_by_session[sid])
+    ):
+        runs = sorted(hits_by_session[session_id], key=lambda r: r["epoch"])
+        print(f"\n## Session `{session_id}` ({len(runs)} run(s))\n")
+        for run in runs:
+            duration = f"  {run['duration_ms']}ms" if run["duration_ms"] is not None else ""
+            print(
+                f"- {run['timestamp']}  {run['hook']}  {run['event']}  {run['outcome']}"
+                f"  exit={run['exit_code']}{duration}  {run['command_clip']}"
+            )
+
+    return 0 if total_runs else 1
+
+
 def _cmd_plan_bindings(args) -> int:
     """Reverse lookup: which session(s) bind this plan file.
 
@@ -2662,6 +2812,77 @@ def main():
         "when present). Incompatible with --home/--main-only.",
     )
 
+    # Hook-events command — bounded-window hook execution search across
+    # sessions. Same candidate-first narrowing as tool-calls; reads only the
+    # harness attachment records (hook_success / hook_cancelled /
+    # hook_non_blocking_error).
+    hook_events_parser = subparsers.add_parser(
+        "hook-events",
+        help="Find hook execution records across sessions inside a time "
+        "window; candidate files are narrowed by filesystem metadata before "
+        "any body is read",
+    )
+    hook_events_parser.add_argument(
+        "--from",
+        dest="from_iso",
+        required=True,
+        metavar="ISO",
+        help="Inclusive window start: YYYY-MM-DD (local day) or "
+        "timezone-qualified ISO datetime",
+    )
+    hook_events_parser.add_argument(
+        "--to",
+        dest="to_iso",
+        required=True,
+        metavar="ISO",
+        help="Inclusive window end: YYYY-MM-DD (local day) or "
+        "timezone-qualified ISO datetime",
+    )
+    hook_events_parser.add_argument(
+        "--pattern",
+        metavar="REGEX",
+        help="Optional regex matched against '<hookName> <hookEvent> <command>' "
+        "for every hook run found in the window; omit it to inventory every "
+        "hook run",
+    )
+    hook_events_parser.add_argument(
+        "--event",
+        metavar="NAME",
+        help="Restrict to records whose hookEvent is exactly this value "
+        "(e.g. PreToolUse, SessionStart)",
+    )
+    hook_events_parser.add_argument(
+        "--clip",
+        type=int,
+        default=120,
+        metavar="N",
+        help="Max characters of each run's command printed (default: 120)",
+    )
+    hook_events_parser.add_argument(
+        "--case-sensitive",
+        action="store_true",
+        help="Case-sensitive --pattern match (default: case-insensitive)",
+    )
+    hook_events_parser.add_argument(
+        "--home",
+        action="append",
+        metavar="DIR",
+        help="Restrict to exact Claude home dir(s) and bypass the archive "
+        "registry (repeatable). Default: search every active home plus "
+        "registered archives.",
+    )
+    hook_events_parser.add_argument(
+        "--main-only",
+        action="store_true",
+        help="Search only ~/.claude, bypassing profile homes and archives.",
+    )
+    hook_events_parser.add_argument(
+        "--history-sources",
+        metavar="FILE",
+        help="History source registry (default: ~/.claude/history-sources.json "
+        "when present). Incompatible with --home/--main-only.",
+    )
+
     # Triage command — classify how sessions in scope ended (crash recovery,
     # backlog audit). Distinct from `list`: prints the full last-assistant
     # text so a human/agent can judge whether a reply is still expected,
@@ -2877,6 +3098,8 @@ def main():
 
     if args.command == "tool-calls":
         sys.exit(_cmd_tool_calls(args, parser))
+    if args.command == "hook-events":
+        sys.exit(_cmd_hook_events(args, parser))
 
     if args.command == "list":
         _validate_project_scope(args, parser)
