@@ -109,6 +109,11 @@ a replacement.
    typed command covers the endpoint.
 5. Preserve any explicitly supplied `--profile`; never guess a profile or identity.
    Use `lark-cli whoami` when identity is material or ambiguous.
+   Before a read through another existing profile, confirm that it belongs to the
+   requesting user and that the profile/read is already authorized. Keep
+   `--profile` explicit; do not switch the global profile or enumerate unrelated
+   accounts. If ownership is unknown, skip that candidate and report the gap.
+   Different app-specific openIds alone do not establish different people.
 6. For writes, use `--dry-run` when the command supports a useful preview. If a
    high-risk write exits `10`, present the proposed action and wait for explicit
    human confirmation; never append `--yes` automatically.
@@ -130,6 +135,23 @@ a replacement.
    the requested state changed. A guide that explicitly forbids an opportunistic
    second query takes precedence. Report partial results or missing coverage.
 
-On authorization errors, load `lark-shared` and follow its user/bot and missing-
-scope branch. Do not turn an auth failure into repeated retries or a browser/raw-API
-fallback.
+On authentication or permission errors, load `lark-shared` and its embedded
+`lark-shared/references/lark-shared-identity-and-permissions.md`. Follow its
+user/bot and missing-scope branch, and interpret the current CLI's auth status:
+
+```bash
+lark-cli --profile "<authorized-profile>" auth status --json
+```
+
+Do not classify `needs_refresh` as unusable login. When the status says it will
+auto-refresh on the next user API call, an already-authorized ordinary read may
+proceed with explicit `--profile` and `--as user`; let the CLI renew normally.
+Do not initiate login, new grants/scopes or manual credential writes merely to
+handle that state. A ready token still does not prove target read permission.
+
+Scope an actual target read-permission denial to its target/profile/identity and
+stop that route. Do not turn authentication failures or that refusal into retry
+loops or browser/raw-API fallbacks.
+It does not prove that every other already-authorized profile of the requesting
+user is denied. Assess another profile only after the ownership/authorization
+check above, and verify its own target result rather than assuming access.
