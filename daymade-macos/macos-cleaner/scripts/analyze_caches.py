@@ -19,7 +19,13 @@ import re
 import sys
 import subprocess
 import argparse
+import stat
 from pathlib import Path
+
+
+def report_unknown(path, reason):
+    """Keep failed observations distinct from successful zero measurements."""
+    print(f"⚠️  unknown: {path}: {reason}", file=sys.stderr)
 
 
 def get_dir_size(path):
@@ -30,7 +36,8 @@ def get_dir_size(path):
         path: Directory path
 
     Returns:
-        Size in bytes, or 0 if error
+        Size in bytes (including a measured zero), or None if unknown.
+        Failure diagnostics are written to stderr with the exact path.
     """
     try:
         result = subprocess.run(
@@ -39,17 +46,30 @@ def get_dir_size(path):
             text=True,
             timeout=30
         )
-        if result.returncode == 0:
-            # du -sk returns size in KB
-            size_kb = int(result.stdout.split()[0])
-            return size_kb * 1024  # Convert to bytes
-        return 0
-    except (subprocess.TimeoutExpired, ValueError, IndexError):
-        return 0
+        if result.returncode != 0:
+            report_unknown(path, f"du exited {result.returncode}; "
+                           f"stderr={result.stderr.strip()!r}; "
+                           f"partial stdout={result.stdout.strip()!r}")
+            return None
+        # A non-zero exit can leave partial output; only successful du is parsed.
+        size_kb = int(result.stdout.split()[0])
+        if size_kb < 0:
+            raise ValueError('negative allocation')
+        return size_kb * 1024
+    except subprocess.TimeoutExpired as exc:
+        report_unknown(path, f"du timed out after {exc.timeout}s; "
+                       f"stderr={exc.stderr!r}; partial stdout={exc.output!r}")
+    except (ValueError, IndexError) as exc:
+        report_unknown(path, f"invalid du output {result.stdout!r}: {exc}")
+    except OSError as exc:
+        report_unknown(path, f"could not run du: {exc}")
+    return None
 
 
 def format_size(bytes_size):
     """Convert bytes to human-readable format."""
+    if bytes_size is None:
+        return 'unknown'
     for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
         if bytes_size < 1024.0:
             return f"{bytes_size:.1f} {unit}"
@@ -66,24 +86,34 @@ def analyze_cache_dir(base_path, min_size_bytes):
         min_size_bytes: Minimum size to report
 
     Returns:
-        List of (name, path, size_bytes) tuples
+        List of (name, path, size_bytes) tuples; None sizes are unknown and
+        always retained, even above the reporting threshold.
     """
-    if not os.path.exists(base_path):
-        return []
-
     results = []
     try:
-        for entry in os.scandir(base_path):
-            if entry.is_dir():
-                size = get_dir_size(entry.path)
-                if size >= min_size_bytes:
-                    results.append((entry.name, entry.path, size))
-    except PermissionError:
-        print(f"⚠️  Permission denied: {base_path}", file=sys.stderr)
+        entries = os.scandir(base_path)
+    except FileNotFoundError:
         return []
+    except OSError as exc:
+        report_unknown(base_path, f"could not scan directory: {exc}")
+        return [(os.path.basename(base_path), base_path, None)]
+    try:
+        with entries:
+            for entry in entries:
+                try:
+                    if entry.is_dir():
+                        size = get_dir_size(entry.path)
+                        if size is None or size >= min_size_bytes:
+                            results.append((entry.name, entry.path, size))
+                except OSError as exc:
+                    report_unknown(entry.path, f"could not inspect entry: {exc}")
+                    results.append((entry.name, entry.path, None))
+    except OSError as exc:
+        report_unknown(base_path, f"could not scan directory: {exc}")
+        results.append((os.path.basename(base_path), base_path, None))
 
-    # Sort by size descending
-    results.sort(key=lambda x: x[2], reverse=True)
+    # Known values descend; failed observations remain visible after them.
+    results.sort(key=lambda x: (x[2] is not None, x[2] or 0), reverse=True)
     return results
 
 
@@ -224,7 +254,8 @@ def analyze_xdg_dev_caches(min_size_bytes):
     ~/Library/Caches totaled 24.5 G — a 4x under-report if only the latter is scanned).
 
     Returns:
-        (results, unresolved) where results is a list of (label, path, size_bytes)
+        (results, unresolved) where results is a list of (label, path, size_bytes),
+        including None sizes for unknown measurements regardless of threshold,
         and unresolved is a list of (label, path, reason) for paths that exist but
         could not be confirmed against the tool's live config.
     """
@@ -246,16 +277,26 @@ def analyze_xdg_dev_caches(min_size_bytes):
         seen.add(canon)
         # Surface a resolved-but-nonexistent path explicitly: the tool's config points
         # here, so an empty/absent directory is a real finding, not "not found".
-        if not os.path.isdir(path):
+        try:
+            is_dir = stat.S_ISDIR(os.stat(path).st_mode)
+        except FileNotFoundError:
+            is_dir = False
+        except OSError as exc:
+            report_unknown(path, f"could not inspect developer cache: {exc}")
+            results.append((label, path, None))
+            if reason:
+                unresolved.append((label, path, reason))
+            continue
+        if not is_dir:
             unresolved.append((label, path,
                                reason or 'resolved from tool config but path does not exist'))
             continue
         size = get_dir_size(path)
-        if size >= min_size_bytes:
+        if size is None or size >= min_size_bytes:
             results.append((label, path, size))
         if reason:
             unresolved.append((label, path, reason))
-    results.sort(key=lambda x: x[2], reverse=True)
+    results.sort(key=lambda x: (x[2] is not None, x[2] or 0), reverse=True)
     return results, unresolved
 
 
@@ -294,6 +335,8 @@ def main():
 
     user_caches = analyze_cache_dir(user_cache_path, min_size_bytes)
     total_user = 0
+    incomplete_user = any(size is None for _, _, size in user_caches)
+    incomplete = incomplete_user
 
     if user_caches:
         print(f"{'Application':<40} {'Size':<12} {'Decision'}")
@@ -302,23 +345,41 @@ def main():
             safety, reason = categorize_safety(name)
             safety_icon = {'rebuildable': '🟡', 'check': '🟡', 'keep': '🔴'}[safety]
             print(f"{name:<40} {format_size(size):<12} {safety_icon} {safety}")
-            total_user += size
+            if size is None:
+                print(f"   unknown allocation: {path} (see stderr diagnostics)")
+            else:
+                total_user += size
         print("-" * 70)
-        print(f"{'Total':<40} {format_size(total_user):<12}")
+        label = 'Known lower bound (incomplete)' if incomplete_user else 'Total'
+        print(f"{label:<40} {format_size(total_user):<12}")
     else:
         print("No cache directories found above minimum size.")
 
     # User logs
     user_log_path = os.path.expanduser('~/Library/Logs')
-    if os.path.exists(user_log_path):
+    try:
+        os.stat(user_log_path)
+    except FileNotFoundError:
+        log_exists = False
+    except OSError as exc:
+        report_unknown(user_log_path, f"could not inspect logs: {exc}")
+        log_exists = True
+        log_size = None
+    else:
+        log_exists = True
         log_size = get_dir_size(user_log_path)
-        if log_size >= min_size_bytes:
+    if log_exists:
+        if log_size is None or log_size >= min_size_bytes:
             print(f"\n📝 User Logs: {user_log_path}")
             print(
                 f"   Size: {format_size(log_size)} "
                 "🟡 Diagnostic history — review exact targets"
             )
-            total_user += log_size
+            if log_size is None:
+                incomplete_user = incomplete = True
+                print("   unknown allocation (see stderr diagnostics)")
+            else:
+                total_user += log_size
 
     # Developer caches outside ~/Library/Caches. Pass --include-dev to scan them:
     # without it the report misses the largest items on a dev machine (~4x under-report),
@@ -329,6 +390,9 @@ def main():
         print("-" * 50)
         dev_caches, dev_unresolved = analyze_xdg_dev_caches(min_size_bytes)
         total_dev = 0
+        incomplete_dev = (any(size is None for _, _, size in dev_caches)
+                          or bool(dev_unresolved))
+        incomplete = incomplete or incomplete_dev
 
         if dev_caches:
             print(f"{'Cache':<44} {'Size':<12} {'Decision'}")
@@ -337,9 +401,14 @@ def main():
                 safety, reason = categorize_safety(name)
                 safety_icon = {'rebuildable': '🟡', 'check': '🟡', 'keep': '🔴'}[safety]
                 print(f"{name:<44} {format_size(size):<12} {safety_icon} {safety}")
-                total_dev += size
+                if size is None:
+                    print(f"   unknown allocation: {path} (see stderr diagnostics)")
+                else:
+                    total_dev += size
             print("-" * 84)
-            print(f"{'Total (disjoint from user caches above)':<44} {format_size(total_dev):<12}")
+            label = ('Known lower bound (incomplete)' if incomplete_dev
+                     else 'Total (disjoint from user caches above)')
+            print(f"{label:<44} {format_size(total_dev):<12}")
             print(
                 "\n   Paths resolved from each tool's own config (uv cache dir, "
                 "npm config get cache, HF_HOME/HF_HUB_CACHE, PLAYWRIGHT_BROWSERS_PATH)."
@@ -348,6 +417,8 @@ def main():
                 "   🔴 keep = preserve-by-default per references/cleanup_targets.md "
                 "(rebuildable does NOT mean proposable)."
             )
+        elif dev_unresolved:
+            print("No measured developer caches above minimum size; paths unresolved.")
         else:
             print("No developer caches above minimum size found.")
 
@@ -368,17 +439,25 @@ def main():
         system_cache_path = '/Library/Caches'
         system_caches = analyze_cache_dir(system_cache_path, min_size_bytes)
         total_system = 0
+        incomplete_system = any(size is None for _, _, size in system_caches)
+        incomplete = incomplete or incomplete_system
 
         if system_caches:
             print(f"{'Application':<40} {'Size':<12}")
             print("-" * 70)
-            for name, path, size in system_caches[:10]:  # Top 10 only
+            known_system = [row for row in system_caches if row[2] is not None]
+            unknown_system = [row for row in system_caches if row[2] is None]
+            for name, path, size in known_system[:10] + unknown_system:
                 print(f"{name:<40} {format_size(size):<12}")
-                total_system += size
-            if len(system_caches) > 10:
-                print(f"... and {len(system_caches) - 10} more")
+                if size is None:
+                    print(f"   unknown allocation: {path} (see stderr diagnostics)")
+                else:
+                    total_system += size
+            if len(known_system) > 10:
+                print(f"... and {len(known_system) - 10} more measured entries")
             print("-" * 70)
-            print(f"{'Total':<40} {format_size(total_system):<12}")
+            label = 'Known lower bound (incomplete)' if incomplete_system else 'Total'
+            print(f"{label:<40} {format_size(total_system):<12}")
         else:
             print("No cache directories found above minimum size.")
 
@@ -386,13 +465,25 @@ def main():
     print("\n" + "=" * 50)
     print("📊 Summary")
     print("=" * 50)
-    print(f"Observed user cache/log allocation above threshold: {format_size(total_user)}")
+    user_label = ('Known user cache/log lower bound above threshold (incomplete)'
+                  if incomplete_user else 'Observed user cache/log allocation above threshold')
+    print(f"{user_label}: {format_size(total_user)}")
+    if args.include_dev:
+        dev_label = ('Known developer-cache lower bound above threshold (incomplete)'
+                     if incomplete_dev else 'Observed developer-cache allocation above threshold')
+        print(f"{dev_label}: {format_size(total_dev)}")
     if not args.user_only:
-        print(f"Displayed system-cache allocation (up to 10): {format_size(total_system)}")
+        system_label = ('Known displayed system-cache lower bound (incomplete)'
+                        if incomplete_system else 'Displayed system-cache allocation (up to 10)')
+        print(f"{system_label}: {format_size(total_system)}")
         print(
             "Displayed cross-scope allocation sum (partial): "
             f"{format_size(total_user + total_system)}"
         )
+
+    if incomplete:
+        print("Scan incomplete: unknown allocations or unresolved developer paths; "
+              "known subtotals exclude them and are lower bounds, not complete totals.")
 
     print("These are inventory allocations, not approved or guaranteed physical savings.")
     if not args.include_dev:
@@ -409,7 +500,7 @@ def main():
     print("   3. For 🟡 items, verify the application is not running")
     print("   4. Return exact candidates to the main skill's impact and confirmation gate")
 
-    return 0
+    return 1 if incomplete else 0
 
 
 if __name__ == '__main__':
