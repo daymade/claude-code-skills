@@ -88,6 +88,10 @@ jobs:
       - name: Source ownership and initialization contract
         run: python3 -m unittest discover -s daymade-skill/skill-creator/tests -p test_source_contract.py
 
+      - name: Selected inputs and cumulative disk budget
+        working-directory: daymade-skill/skill-creator
+        run: python3 -m unittest tests.test_materialize
+
       - name: Validate skills touched by this change
         env:
           # Every value crosses into the shell through the environment, never through

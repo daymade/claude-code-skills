@@ -302,6 +302,16 @@ Before spawning more than one research, mining, eval, or grading agent, separate
 
 If a unit is neither a distinct role/output nor a necessary isolated arm/shard, do not spawn it.
 
+Before preparing disk inputs for an authorized evaluation, declare the necessary
+paths and one cumulative byte budget covering every arm, retry and evidence file,
+with an explicit minimum free-space reserve and session owner. Use the executable
+prepare → monitored run → finish contract in
+[materialization-budget.md](references/materialization-budget.md). Read its measured
+usage and terminal state; finish on success, failure and interruption, retaining
+changed inputs and evidence. Missing limits stop preparation; sampling is not a hard
+filesystem quota. The runner stops on observed overage; the agent must still
+justify scope and verify the business outcome.
+
 Escalate when a lower tier exposes unresolved behavior or contradictory evidence. A user's request to cancel or de-escalate evaluation immediately stops already-launched paired eval agents, baselines, graders, aggregation, and viewer work. Keep the risk classification if it remains informative, but report only the evidence actually run and the axes left unchecked; do not describe an unrun heavy suite as automatically "required" by the label. Do not cancel discipline #5's single fresh-context reviewer when its rule/contract/number threshold is crossed, or any safety gate needed to prevent destructive or external effects. The mechanical existing-skill migration audit, public-skill sanitization, and any domain-specific safety gate also remain independent of this router.
 
 ### Specialized Workflow: Wrapper Skills for Third-Party CLI Tools
@@ -927,6 +937,10 @@ Run this section only after the heavy-eval authorization gate passes. The risk t
 Put results in `<skill-name>-workspace/` as a sibling to the skill directory. Within the workspace, organize results by iteration (`iteration-1/`, `iteration-2/`, etc.) and within that, each test case gets a directory (`eval-0/`, `eval-1/`, etc.). Don't create all of this upfront — just create directories as you go.
 
 ### Step 1: Run the approved with-skill / baseline pairs
+
+Before making isolated input copies, follow
+[materialization-budget.md](references/materialization-budget.md); export only the
+declared paths from the frozen ref and run all arms under their shared budget.
 
 For each approved test case, run one with-skill sample and its baseline under the same prompt and side-effect budget. These two arms intentionally share one failure axis but require isolated contexts; they are necessary experimental units, not extra reviewer roles. State the total arms and capped concurrency before launch. Run serially by default, and never exceed the authorized unit count.
 

@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **skill-creator** (`daymade-skill` v1.57.2 → v1.58.0): Add selected-ref materialization with explicit input paths, a cumulative disk budget across evaluation arms, monitored subprocess execution and conservative input retirement. Keep modified files and evidence on successful, failed or interrupted runs.
+- **macos-cleaner** (`daymade-macos` v1.14.3 → v1.14.4): Preserve unknown measurements when `du` fails, times out or returns malformed output. Show diagnostics and known lower bounds, and return an incomplete-scan exit status instead of reporting failed probes as zero.
+
 - **read-claude-code-history** (`daymade-claude-code` v4.14.0 → v4.15.0): Add the `hook-events` subcommand to `analyze_sessions.py` — bounded-window hook-run search across sessions (outcome, duration, exit code per run), with the same candidate-first metadata narrowing as `tool-calls`, `--pattern`/`--event` filters and forked-run deduplication. Advertise hook runs in the description ("commands, tool calls and hook runs") and add the route-table row. Deterministic tests cover window/pattern/event filtering, the run-identity rule and outcome mapping; a live replay against the real corpus answered "which sessions ran hook-health-check and how slow" in one query.
 - **claude-code-hooks** (`daymade-claude-code` v4.15.0 → v4.16.0): Correct the PreToolUse exit-2/JSON precedence to the current official contract and require checking compatible existing engines before another hook entry. Preserve separate entries for incompatible event, matcher, decision or state/authorization boundaries. Factual correction and bounded routing redesign.
 

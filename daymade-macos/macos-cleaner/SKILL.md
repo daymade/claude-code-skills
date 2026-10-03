@@ -257,7 +257,7 @@ Load only the branch relevant to the current task:
 - `references/mole_integration.md` — TTY workflow for interactive Mole analysis and preview.
 - `references/report_templates.md` — long-form general and Docker report templates.
 - `references/safety_rules.md` — blocked paths, confirmation, recovery, and file-deletion safety checks.
-- `scripts/analyze_caches.py` — bounded cache inventory.
+- `scripts/analyze_caches.py` — bounded cache inventory; retain `unknown` measurements and diagnostics, treat incomplete subtotals as known lower bounds, and interpret exit 1 as incomplete measurement or unresolved developer paths rather than zero usage.
 - `scripts/check_gate_plan.py` — Phase 2 entry gate checker: parses the classification table and the plan, verifies governing-rule quotes against the references, destructive-command target coverage (with unrecognized command forms counted and reported), action-set class and unlock rules, the preserve-by-default downgrade cross-check, category-wide exclusions, the lead-row ranking rule, and tool verification. Exit 0 is required before a plan may be sent. Its command whitelist is a declared limitation: forms outside the list are reported as unrecognized rather than silently ignored.
 - `scripts/analyze_code_sign_clones.py` — read-only current-user code-sign-clone inventory; after approval it can revalidate an exact candidate SHA and write a non-overwriting batch manifest.
 - `scripts/find_app_remnants.py` — application-remnant candidates; reads its fixed Applications and `~/Library` roots, so require that scope first.
