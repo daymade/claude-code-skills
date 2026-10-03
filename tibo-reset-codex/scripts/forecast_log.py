@@ -146,27 +146,130 @@ def make_forecast(data):
                ("rationale", "revision_trigger", "feedback_applied")}}
 
 
+def make_announcement(data, now):
+    """Store an official point ETA without inventing a forecast window."""
+    if data.get("kind") not in KINDS:
+        raise ValueError("invalid kind")
+    announced = instant(data.get("announced_at"))
+    eta = instant(data.get("eta_at"))
+    if announced > now or eta < announced:
+        raise ValueError("announcement must be published and ETA cannot precede it")
+    source = required_text(data, "source_url")
+    urls = evidence(data)
+    if source not in urls:
+        raise ValueError("source_url must appear in evidence_urls")
+    alternative = data.get("alternative_eta_at")
+    if alternative is not None:
+        alternative = instant(alternative)
+        if alternative < announced or alternative == eta:
+            raise ValueError("alternative ETA must be distinct and follow announcement")
+    anchor = data.get("anchor_event_url")
+    if anchor is not None and (not isinstance(anchor, str) or not anchor.startswith("https://")):
+        raise ValueError("anchor_event_url must be https or null")
+    return {"entry_type": "official_announcement", "kind": data["kind"],
+            "announced_at": announced.isoformat(), "eta_at": eta.isoformat(),
+            "alternative_eta_at": alternative.isoformat() if alternative else None,
+            "source_url": source, "source_text": required_text(data, "source_text"),
+            "interpretation": required_text(data, "interpretation"),
+            "revision_trigger": required_text(data, "revision_trigger"),
+            "anchor_event_url": anchor, "evidence_urls": urls}
+
+
+def target_bounds(item):
+    if item.get("entry_type") == "official_announcement":
+        eta = instant(item["eta_at"])
+        return eta, eta
+    return instant(item["window_start"]), instant(item["window_end"])
+
+
+def issuance_at(item):
+    # A point announcement may be archived after it was completed. Its source
+    # publication time, not our later append time, bounds its confirmation.
+    return instant(item["announced_at"] if item.get("entry_type") == "official_announcement"
+                   else item["recorded_at"])
+
+
+def event_confirmed(review):
+    if not review:
+        return False
+    if "event_status" in review:
+        return review["event_status"] == "confirmed"
+    # Old evidence-bearing reviews already distinguish a completed event from
+    # an unavailable observation. Infer only that event layer, never its score.
+    return (review.get("time_basis") in ("occurrence", "observed_interval", "confirmation_only")
+            and bool(review.get("evidence_urls")) and bool(review.get("event_start"))
+            and bool(review.get("event_end")))
+
+
+def review_delivery(data, now):
+    result = {}
+    if "account_status" not in data:
+        if "account_ref" in data or "account_checked_at" in data:
+            raise ValueError("account fields require account_status")
+        return result
+    status = data["account_status"]
+    if status not in ("unknown", "delivered", "not_delivered"):
+        raise ValueError("invalid account_status")
+    result["account_status"] = status
+    if status != "unknown" or "account_ref" in data or "account_checked_at" in data:
+        ref = required_text(data, "account_ref")
+        if not re.fullmatch(r"[0-9a-f]{8}", ref):
+            raise ValueError("account_ref must be the local eight-character account hash")
+        checked = instant(data.get("account_checked_at"))
+        if checked > now:
+            raise ValueError("account_checked_at cannot be in the future")
+        result.update(account_ref=ref, account_checked_at=checked.isoformat())
+        evidence(data)
+    return result
+
+
 def make_review(data, forecasts, now):
     fid = required_text(data, "forecast_id")
     if fid not in forecasts:
         raise ValueError("forecast_id not found")
     forecast = forecasts[fid]
+    score_update = data.get("score_update")
+    if "score_update" in data and not isinstance(score_update, bool):
+        raise ValueError("score_update must be a boolean")
+    if score_update is None:
+        score_update = not (data.get("time_basis") == "confirmation_only" or
+                            (data.get("unknown") is True and
+                             ("account_status" in data or "event_status" in data)))
     result = {"forecast_id": fid, "reason": required_text(data, "reason"),
               "lesson": required_text(data, "lesson"), "outcome": "unknown",
+              "score_update": score_update,
               "catalyst_actual": optional_catalyst(data, "catalyst_actual")}
+    result.update(review_delivery(data, now))
+    status = data.get("event_status", "unknown")
+    if status not in ("unknown", "confirmed"):
+        raise ValueError("invalid event_status")
     if data.get("unknown") is True:
+        if "event_status" in data:
+            result["event_status"] = status
+        if status == "confirmed":
+            if data.get("kind") != forecast["kind"]:
+                raise ValueError("event kind does not match the forecast")
+            confirmed = instant(data.get("confirmed_at"))
+            if confirmed > now or confirmed <= issuance_at(forecast):
+                raise ValueError("confirmed_at must follow issuance and precede review")
+            result.update(kind=data["kind"], confirmed_at=confirmed.isoformat(), evidence_urls=evidence(data))
+        elif "account_status" in result and (result.get("account_ref") or result["account_status"] != "unknown"):
+            result["evidence_urls"] = evidence(data)
         return result
     if data.get("kind") != forecast["kind"]:
         raise ValueError("event kind does not match the forecast")
     start, end = instant(data.get("event_start")), instant(data.get("event_end"))
-    if start > end or end > now or start <= instant(forecast["recorded_at"]):
+    if start > end or end > now or start <= issuance_at(forecast):
         raise ValueError("event interval must follow forecast issuance and precede review")
     basis = data.get("time_basis")
     if basis not in ("occurrence", "observed_interval", "confirmation_only"):
         raise ValueError("invalid time_basis")
     result.update(kind=data["kind"], event_start=start.isoformat(), event_end=end.isoformat(),
                   time_basis=basis, first_event_verified=data.get("first_event_verified") is True,
-                  evidence_urls=evidence(data))
+                  evidence_urls=evidence(data), event_status=data.get("event_status", "confirmed"))
+    if (not score_update or result["event_status"] == "unknown"
+            or forecast.get("entry_type") == "official_announcement"):
+        return result  # Official ETAs are not judged forecasts or hit-rate samples.
     # A completion post alone gives an upper bound, not an exact reset instant.
     if basis == "confirmation_only" or not result["first_event_verified"]:
         return result
@@ -197,6 +300,14 @@ def read_withdrawals(path):
     with path.open(encoding="utf-8") as stream:
         fcntl.flock(stream, fcntl.LOCK_SH)
         return read_rows(stream, kinds=("withdrawal",))
+
+
+def read_announcements(path):
+    if not path.exists():
+        return []
+    with path.open(encoding="utf-8") as stream:
+        fcntl.flock(stream, fcntl.LOCK_SH)
+        return read_rows(stream, kinds=("forecast",))
 
 
 def make_finding(data):
@@ -270,22 +381,28 @@ def append_record(path, command, data, now=None):
     if not isinstance(data, dict):
         raise ValueError("input must be a JSON object")
     now = now or datetime.now(timezone.utc)
+    if command == "announce":
+        path = path.parent / "announcements.jsonl"
     with locked_journal(path) as (stream, rows):
-        forecasts = {r["id"]: r for r in rows if r["record_type"] == "forecast"}
+        announcement_rows = (read_announcements(path.parent / "announcements.jsonl")
+                             if command != "announce" else [])
+        forecasts = {r["id"]: r for r in rows + announcement_rows if r["record_type"] == "forecast"}
         withdrawals_path = path.parent / "withdrawals.jsonl"
         withdrawals = {r["forecast_id"]: r for r in read_withdrawals(withdrawals_path)}
         # Resolved before the idempotency check so a retry that names the same
         # findings matches the original record instead of silently dropping them.
         refs = evidence_refs(data, path.parent / "findings.jsonl")
-        if command == "record":
-            body = {**make_forecast(data), **refs}
+        if command in ("record", "announce"):
+            body = {**(make_announcement(data, now) if command == "announce"
+                       else make_forecast(data)), **refs}
             for old in forecasts.values():
                 if all(old.get(k) == v for k, v in body.items()):
                     return old  # Retrying an identical request preserves the issued forecast.
-            if instant(body["window_start"]) <= now:
+            if command == "record" and instant(body["window_start"]) <= now:
                 raise ValueError("new forecast window must start in the future")
             same_cycle = [r for r in forecasts.values() if body["anchor_event_url"] and
                           r["kind"] == body["kind"] and
+                          r.get("entry_type") == body.get("entry_type") and
                           r["anchor_event_url"] == body["anchor_event_url"]]
             body["revision_of"] = same_cycle[0]["id"] if same_cycle else None
             record_type = "forecast"
@@ -295,6 +412,9 @@ def append_record(path, command, data, now=None):
             body = {**make_review(data, forecasts, now), **refs}
             previous = [r for r in rows if r["record_type"] == "review" and
                         r["forecast_id"] == body["forecast_id"]]
+            if not body["score_update"]:
+                prior_score = next((r for r in reversed(previous) if r.get("score_update") is not False), None)
+                body["outcome"] = prior_score["outcome"] if prior_score else "unknown"
             if previous and all(previous[-1].get(k) == v for k, v in body.items()):
                 return previous[-1]
             body["supersedes_review"] = previous[-1]["id"] if previous else None
@@ -337,7 +457,18 @@ def summarize(path, kind=None, now=None):
             fcntl.flock(stream, fcntl.LOCK_SH)
             rows = read_rows(stream)
             withdrawal_rows = read_withdrawals(path.parent / "withdrawals.jsonl")
+    rows += read_announcements(path.parent / "announcements.jsonl")
     latest = {r["forecast_id"]: r for r in rows if r["record_type"] == "review"}
+    latest_event, latest_account, latest_score = {}, {}, {}
+    for row in rows:
+        if row["record_type"] != "review":
+            continue
+        if "event_status" in row or event_confirmed(row):
+            latest_event[row["forecast_id"]] = row
+        if "account_status" in row:
+            latest_account[(row["forecast_id"], row.get("account_ref"))] = row
+        if row.get("score_update") is not False:
+            latest_score[row["forecast_id"]] = row
     withdrawals = {r["forecast_id"]: r for r in withdrawal_rows}
     review_order = {r["forecast_id"]: i for i, r in enumerate(rows)
                     if r["record_type"] == "review"}
@@ -345,20 +476,42 @@ def summarize(path, kind=None, now=None):
     forecasts = [r for r in rows if r["record_type"] == "forecast" and
                  (kind is None or r["kind"] == kind)]
     pending, resolved, withdrawn, conflicts, counts = [], [], [], [], {}
+    confirmed_unscored, account_followup = [], []
     for forecast in forecasts:
         review = latest.get(forecast["id"])
+        score_review = latest_score.get(forecast["id"])
+        event_review = latest_event.get(forecast["id"])
+        account_reviews = [r for (fid, _), r in latest_account.items() if fid == forecast["id"]]
+        account_review = account_reviews[0] if len(account_reviews) == 1 else None
         withdrawal = withdrawals.get(forecast["id"])
         outcome = ("withdrawn" if withdrawal else
-                   review["outcome"] if review else "unreviewed")
+                   score_review["outcome"] if score_review else
+                   "unknown" if review else "unreviewed")
         shown_review = None
         if review is not None:
             shown_review = {**review,
                             "evidence_refs_count": len(review.get("evidence_refs", []))}
+        low, high = target_bounds(forecast)
         item = {**forecast, "latest_review": shown_review,
                 "evidence_refs_count": len(forecast.get("evidence_refs", [])),
-                "window_elapsed": now > instant(forecast["window_end"]),
-                 "window_hours": (instant(forecast["window_end"]) -
-                                 instant(forecast["window_start"])).total_seconds() / 3600}
+                "window_elapsed": now > high,
+                "window_hours": (high - low).total_seconds() / 3600,
+                "event_status": "confirmed" if event_confirmed(event_review) else "unknown",
+                "account_status": (account_review or {}).get("account_status", "unknown"),
+                "event_review_id": (event_review or {}).get("id"),
+                "account_review_id": (account_review or {}).get("id"),
+                "score_review_id": (score_review or {}).get("id"),
+                "score_outcome": outcome,
+                "account_observations": [{"review_id": r["id"],
+                                          **{k: r[k] for k in ("account_ref", "account_status", "account_checked_at")
+                                             if k in r}} for r in account_reviews]}
+        for account_row in account_reviews:
+            if (not withdrawal and account_row.get("account_ref")
+                    and account_row.get("account_status") in ("unknown", "not_delivered")
+                    and account_row.get("account_checked_at")):
+                account_followup.append({"id": forecast["id"], "kind": forecast["kind"],
+                                         **{k: account_row[k] for k in
+                                            ("account_ref", "account_status", "account_checked_at")}})
         if withdrawal:
             item["latest_withdrawal"] = {**withdrawal,
                                          "evidence_refs_count": len(withdrawal.get("evidence_refs", []))}
@@ -371,12 +524,15 @@ def summarize(path, kind=None, now=None):
                                       "withdrawal_id": withdrawal["id"],
                                       "review_id": scored_review["id"],
                                       "review_outcome": scored_review["outcome"]})
+        elif outcome == "unknown" and event_confirmed(event_review):
+            confirmed_unscored.append(item)
         elif outcome in ("unreviewed", "unknown"):
             pending.append(item)
         else:
             resolved.append(item)
         # One original forecast per verified anchor/type; revisions remain visible below.
-        if not forecast.get("revision_of") and forecast.get("anchor_event_url"):
+        if (forecast.get("entry_type") != "official_announcement"
+                and not forecast.get("revision_of") and forecast.get("anchor_event_url")):
             bucket = counts.setdefault(forecast["kind"], {k: 0 for k in
                                        ("hit", "early", "late", "unknown", "unreviewed", "withdrawn")})
             bucket[outcome] += 1
@@ -393,23 +549,28 @@ def summarize(path, kind=None, now=None):
     # first, most overdue first; closing_soon entries follow, soonest first.
     due = []
     for item in pending:
-        end = instant(item["window_end"])
+        _, end = target_bounds(item)
         outcome = item["latest_review"]["outcome"] if item["latest_review"] else "unreviewed"
         if now > end:
             due.append({"id": item["id"], "kind": item["kind"],
-                        "window_end": item["window_end"], "urgency": "overdue",
+                        "entry_type": item.get("entry_type", "forecast"),
+                        "window_end": end.isoformat(), "urgency": "overdue",
                         "hours_overdue": round((now - end).total_seconds() / 3600, 1),
                         "latest_outcome": outcome})
         elif (end - now).total_seconds() <= CLOSING_SOON_HOURS * 3600:
             due.append({"id": item["id"], "kind": item["kind"],
-                        "window_end": item["window_end"], "urgency": "closing_soon",
+                        "entry_type": item.get("entry_type", "forecast"),
+                        "window_end": end.isoformat(), "urgency": "closing_soon",
                         "hours_until_close": round((end - now).total_seconds() / 3600, 1),
                         "latest_outcome": outcome})
     due.sort(key=lambda d: (-(d["urgency"] == "overdue"),
                             -d.get("hours_overdue", 0), d.get("hours_until_close", 0)))
     return {"journal": str(path), "checked_at": now.isoformat(),
-            "forecast_count": len(forecasts), "cycle_counts": counts,
+            "forecast_count": sum(f.get("entry_type") != "official_announcement" for f in forecasts),
+            "announcement_count": sum(f.get("entry_type") == "official_announcement" for f in forecasts),
+            "cycle_counts": counts,
             "due_for_followup": due,
+            "confirmed_unscored": confirmed_unscored, "account_followup": account_followup,
             "pending": pending, "recent_resolved": resolved[-10:],
             "recent_withdrawn": withdrawn[-10:],
             "withdrawal_conflicts": conflicts,
@@ -418,6 +579,25 @@ def summarize(path, kind=None, now=None):
                     "Withdrawals remain visible but leave pending follow-up. "
                     "A scored review written after withdrawal requires reconciliation. "
                     "Review evidence is supplied by the caller, not independently verified here."}
+
+
+def followup_plan(path, now=None):
+    """Produce the next read-only evidence tasks; do not fetch or schedule them."""
+    summary = summarize(path, now=now)
+    tasks = []
+    for item in summary["due_for_followup"]:
+        overdue = item["urgency"] == "overdue"
+        tasks.append({**item, "questions": ["Has the official promise changed or completed?",
+                     "Has the same account changed before its natural reset?"],
+                     "required_sources": ["fresh_account_usage", "official_main_posts",
+                                          "candidate_reply_chain"] +
+                     (["bounded_reply_discovery", "authorized_community_increment"] if overdue else []),
+                     "unavailable_source_policy": "Record unknown and its next retry condition; do not infer absence."})
+    return {"checked_at": summary["checked_at"], "event_tasks": tasks,
+            "account_tasks": summary["account_followup"],
+            "confirmed_unscored_count": len(summary["confirmed_unscored"]),
+            "handoff": latest_monitor_handoff(path.parent / "findings.jsonl"),
+            "background_monitoring": False}
 
 
 def snapshot(state_dir, filename, record_type, enabled=True):
@@ -462,7 +642,7 @@ def snapshot(state_dir, filename, record_type, enabled=True):
               file=sys.stderr)
 
 
-JOURNALS = ("forecasts.jsonl", "findings.jsonl", "withdrawals.jsonl")
+JOURNALS = ("forecasts.jsonl", "announcements.jsonl", "findings.jsonl", "withdrawals.jsonl")
 
 
 def snapshot_health(state_dir, enabled=True):
@@ -508,12 +688,13 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
     summary = sub.add_parser("summary", help="Read pending forecasts, outcomes and lessons")
     summary.add_argument("--kind", choices=KINDS)
-    for command in ("record", "review", "withdraw", "finding"):
+    for command in ("record", "announce", "review", "withdraw", "finding"):
         p = sub.add_parser(command)
         p.add_argument("--input", type=Path, required=True, help="UTF-8 JSON object file")
     listing = sub.add_parser("findings", help="List recent raw data findings")
     listing.add_argument("--limit", type=int, default=20)
     sub.add_parser("handoff", help="Read the complete latest monitor handoff")
+    sub.add_parser("followup", help="List evidence tasks for due promises and account arrival")
     args = parser.parse_args()
     state = args.state_dir.expanduser()
     path = state / "forecasts.jsonl"
@@ -525,14 +706,17 @@ def main():
             result = list_findings(state / "findings.jsonl", max(args.limit, 0))
         elif args.command == "handoff":
             result = latest_monitor_handoff(state / "findings.jsonl")
+        elif args.command == "followup":
+            result = followup_plan(path)
         elif args.command == "finding":
             target = state / "findings.jsonl"
             result = append_finding(target, json.loads(args.input.read_text(encoding="utf-8")))
             snapshot(state, target.name, "finding", enabled=not args.no_git)
         else:
             result = append_record(path, args.command, json.loads(args.input.read_text(encoding="utf-8")))
-            filename = "withdrawals.jsonl" if args.command == "withdraw" else path.name
-            snapshot(state, filename, {"record": "forecast", "review": "review",
+            filename = ("withdrawals.jsonl" if args.command == "withdraw" else
+                        "announcements.jsonl" if args.command == "announce" else path.name)
+            snapshot(state, filename, {"record": "forecast", "announce": "announcement", "review": "review",
                                        "withdraw": "withdrawal"}[args.command],
                      enabled=not args.no_git)
         print(json.dumps(result, ensure_ascii=False, indent=2))

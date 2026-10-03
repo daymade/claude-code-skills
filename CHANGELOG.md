@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **tibo-reset-codex** (`tibo-reset-codex` v1.19.0 → v1.20.0): Preserve the local-time and literal-PST interpretations of ambiguous announcements. Record official point ETAs without fabricated forecast windows; separate event completion, per-account arrival and forecast scoring, including legacy completion reviews. Add a read-only follow-up plan for overdue evidence checks and keep confirmed but unscored events out of the arrival queue.
+
 - **macos-watchdog** (`daymade-macos` v1.14.2 → v1.14.3): remove derived contract counts and route recurring browser-job acceptance from the repository guide to its owning Skill.
 - **macos-watchdog** (`daymade-macos` v1.14.1 → v1.14.2): require browser resource and focus evidence across repeated watchdog runs and initialization/cleanup failures; preserve protected user pages.
 - **github-ops** (v1.8.0 → v1.9.0): align operation recipes with the checked actor/host invocation, resolve the helper from its Skill directory, and use an explicit API target for repository rename. Keep one runtime contract and remove hand-maintained heading summaries.

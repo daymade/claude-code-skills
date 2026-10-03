@@ -8,6 +8,9 @@
 在 Skill 目录运行 `scripts/forecast_log.py`，需要 Python 3.10+ 与 macOS/Linux。
 默认状态目录是 `${XDG_STATE_HOME:-~/.local/state}/tibo-reset-codex/`；其中
 `forecasts.jsonl` 保存预测与核验，`withdrawals.jsonl` 保存撤回，`findings.jsonl` 保存原始读数。
+有明确时刻的官宣由 `announce` 追加到独立的 `announcements.jsonl`，标为
+`entry_type=official_announcement`；它不进入预测样本数或命中率统计。官宣的 review 仍保存为
+旧格式兼容的 review 行，旧读取器可继续读 forecasts.jsonl，不会碰到缺少窗口字段的新官宣行。
 未设置 `XDG_STATE_HOME` 时解析用户家目录，已设置时使用该环境变量的目录。
 可用全局参数 `--state-dir` 显式选择另一个数据目录，之后查询与追加必须使用同一目录；
 `--no-git` 关闭本地 git 快照（规则见下方 findings 节）。
@@ -33,6 +36,9 @@ uv run python scripts/forecast_log.py summary
    按当前证据给判断，记录为空不构成错误。接续监测轮用 `handoff` 读取最新完整交接；
    需要其他轮次的原始读数时再读数据目录的 `findings.jsonl` 原始行。
    `findings` 命令只返回摘要（id/invocation/query/endpoints 数），不含 `readings` 与 `notes`。
+   `confirmed_unscored` 是已确认事件但仍不可评分的记录，已退出事件待查队列；
+   `account_followup` 是绑定账号后仍未确认到账的独立队列。运行 `followup` 取得本轮证据任务，
+   再按主 Skill 的监测轮实际获取；它不联网、不安排后台任务，也不证明清单已完成。
    `summary` 还带 `snapshot`（只读探测，不创建目录）：`ok` 表示已存在的台账文件都已进 git
    快照（还没有任何台账文件时也是 `ok`）；`lagging` 并列出 `uncommitted` 文件（含被
    `.gitignore` 挡住、从没进过快照的），另带一句 `hint`，表示有内容没进快照——多半是某次快照
@@ -133,9 +139,75 @@ uv run python scripts/forecast_log.py summary
 以 `summary` 独立读回原样窗口、依据与 ID 后再说「已记录」。窗口端点要在回答里说清；
 若还给出日内偏好，把它及依据写进 `rationale`，日内偏好不参与日期窗口命中统计。
 不支持日期的等待策略无需造出一个 `record`；可以在下一条有日期的预测中解释沿用的判断。
+官方给出的单点时刻用下面的 `announce`，不要为满足 `window_end > window_start` 人造一秒
+窗口。`record` 仍用于有依据的判断预测，不因一次查询失败修改窗口或增加宽限。
+
+## 官宣单点时间与事件账号状态
+
+保存已核验原帖的具体目标时间：
+
+```bash
+uv run python scripts/forecast_log.py announce --input /tmp/tibo-announcement.json
+uv run python scripts/forecast_log.py followup
+```
+
+`/tmp/tibo-announcement.json` 是本轮准备的输入。必填：`kind`（沿用两种 reset 类型）、
+`announced_at`（原帖发布时间）、`eta_at`（主解释的单点时刻）、`source_url`、`source_text`
+（原帖逐字时间措辞）、`interpretation`（解释与未澄清之处）、`revision_trigger`、
+`evidence_urls`（必须包含 source_url）。可选：`alternative_eta_at`（承重的另一时区解释）、
+`anchor_event_url`、`evidence_refs`。时间均为带时区的 ISO 字符串；无具体时刻的未来承诺仍
+留在监测 finding 中，不造 ETA。官宣可以补录已经过去的目标，实际追加时间不回填为发帖时间。
+
+官宣没有 `confidence` 或预测窗口，不计入 `forecast_count`、`cycle_counts`；
+`announcement_count` 单独计数。主 ETA 已过即进入 overdue，不用备选解释推迟复查；回答中
+仍保留两种解释与官方澄清状态。官宣的 `review` 可以给出发布之后、补录之前已有的完成确认，
+判断预测的发生区间仍必须晚于预测实际发出时间。
+
+`review` 的事件层与评分层独立：
+
+| 输入 / 输出 | 含义 |
+|---|---|
+| `event_status=confirmed` | 已有该事件的正向确认；不代表任何指定账号到账或预测命中 |
+| `event_status=unknown` | 事件仍待核；不按窗口过期推成失败 |
+| `outcome=unknown` | 预测暂不可评分；不能据此把已确认事件重新变成待兑现 |
+| `account_status` | `delivered` / `not_delivered` / `unknown`，只描述绑定账号 |
+
+使用有效的 `occurrence` / `observed_interval` / `confirmation_only` 事件证据提交 review 时，
+事件默认标 confirmed；明确未确认则填 `event_status=unknown`，不评分。`unknown:true` 只表示
+缺少可评分证据，默认事件也 unknown；若事件已有独立完成确认，可同时填
+`event_status=confirmed`、`confirmed_at`、`evidence_urls`，但评分仍 unknown。
+confirmed_at 必须是来源中的确认时刻，不是估计的发生时刻。已存的旧 review 只有在携带
+有效 time_basis、事件时间与 evidence_urls 时才派生为已确认；旧的裸 unknown 保持待查。
+三个层分别采用最后一次明确更新：新的裸 unknown 评分不擦掉已有事件确认或账号观测。
+要撤销已有事件确认，显式填 `event_status=unknown` 并说明反证；事件与账号的来源 review ID
+分别显示为 `event_review_id` 与 `account_review_id`，不把旧读数伪装成本轮的新读数。
+多个账号按各自 account_ref 保留最近观测，列表显示为 `account_observations`；一个账号到账
+不删除其他账号的待查项。多账号时顶层 account_status 保持 unknown，不伪造全员送达汇总。
+单独更新账号时使用 `unknown:true` 与 account_status 字段，默认 `score_update=false`；只提供
+完成确认的 review 也默认不修改既有评分。需要明确修订评分时填 `score_update=true`，或用
+原来的裸 `unknown:true` 表示证据不足的评分修订。未评分记录仍可以保留 unknown；已有的
+hit/early/late 不因补一条到账记录消失。`score_review_id` 与 `score_outcome` 指向实际采用的
+评分更新；不更新评分的 review 保留既有 outcome，兼容旧读取器，不冒充新评分依据。
+
+保存账号状态时，非 unknown 的 `account_status` 必须同时带 `account_ref`、
+`account_checked_at` 与 `evidence_urls`；已指定账号但到账未知时同样保存这组字段。
+`account_ref` 沿用查询脚本的八位本地哈希，不保存邮箱。脚本验证字段形状与时间，原始读数的
+真实性、账号绑定和归因仍由调用者核对，需用 `evidence_refs` 链接本轮账号 finding。
+未提供账号状态仍为 unknown，不能把事件 confirmed 当作账号 delivered。
+
+事件确认、评分 unknown 的记录进入 `confirmed_unscored`，不再进入 `pending` 或
+`due_for_followup`；其 unknown 分数仍留在预测统计中，不伪造命中，也不靠 withdraw 隐藏。
+若绑定账号仍 not_delivered 或 unknown，它独立留在 `account_followup`。补查账号后再追加
+review 并保留事件确认事实，不编辑旧行；账号送达后退出该账号队列。
+
+`followup` 返回 `event_tasks`、`account_tasks` 和最新监测 `handoff`。事件 overdue 的任务要求
+新鲜账号读数、官方主帖、候选回复链、有界回复发现与已授权社区增量；到窗前只准备较窄的
+前三腿。沿主 Skill 逐项执行，失败写本轮 unknown/uncovered 与下一复查条件；不由清单推断
+实际覆盖，不把别人的失败复述成自己的实测。仅剩 account_tasks 时只核对相应账号。
 
 修改已发出的预测时再追加一条 `record`，不能编辑历史行。同类型且 `anchor_event_url` 相同
 会自动标为 `revision_of`；必须沿用同一规范原帖 URL，不用不同镜像伪造不同轮次。
+官宣与判断预测各自建立修订链，不互相算作同一类记录；官宣修订追加另一条 `announce`。
 完全相同的输入重试返回原记录。脚本记录真实写入时刻，不为以前的口头预测伪造精确发出时间。
 
 **`pending` 按 `recorded_at` 递增排序，`recent_resolved` 与 `recent_withdrawn` 分别按核验、
