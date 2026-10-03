@@ -3,8 +3,8 @@
 Review a Claude Code skill against official best practices.
 
 Usage:
-    uv run --with PyYAML python review_skill.py <skill-path>
-    uv run --with PyYAML python review_skill.py <skill-path> --json
+    uv run --project <skill-creator-path> --frozen python <skill-reviewer-path>/scripts/review_skill.py <skill-path>
+    uv run --project <skill-creator-path> --frozen python <skill-reviewer-path>/scripts/review_skill.py <skill-path> --json
 
 Checks:
     - Canonical validation: YAML frontmatter, schema, internal paths
@@ -137,7 +137,7 @@ def load_yaml_module():
     except ModuleNotFoundError as exc:
         raise ReviewRuntimeError(
             "Missing dependency: PyYAML. Run with: "
-            "uv run --with PyYAML python review_skill.py <skill-path>"
+            "uv run --project <skill-creator-path> --frozen python <skill-reviewer-path>/scripts/review_skill.py <skill-path>"
         ) from exc
     return yaml
 

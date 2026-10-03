@@ -27,7 +27,7 @@ At a high level, the process of creating a skill goes like this:
 
 Your job when using this skill is to figure out where the user is in this process and then jump in and help them progress through the applicable stages. Full A/B benchmarking is a capability, not a tax on every edit. Words such as "optimize", "improve", or "comprehensive" describe intent, not failure surface or evaluation budget. Do not create eval files, fan out paired agents, grade outputs, or launch a viewer merely because a task sounds broad or a long conversation precedes it.
 
-Six standing disciplines apply throughout, because these failure modes ship convincing-looking skills that are wrong:
+Standing disciplines apply throughout, because these failure modes ship convincing-looking skills that are wrong:
 
 1. **Verify before you write.** Every technical assertion that enters the skill (endpoint, parameter, command, version, behavior) must trace to something you executed and observed — in this session or an explicitly approved mined one. Can't verify it right now? Either go verify it, or mark it explicitly ("unverified — from memory"). A skill multiplies whatever it contains: verified knowledge compounds, and so do confidently-stated errors. For knowledge skills (content is mostly facts about an external system — API endpoints, parameters, fields, platform behavior), read [references/knowledge-skill-grounding.md](references/knowledge-skill-grounding.md) for the operational version: the authority ladder (observed behavior > machine-readable contract > exercised production code > official docs > memory), evidence-scope annotation and live/replay/synthetic evidence tiers, pre-ship doc-example smoke runs, and the audience/Windows portability checklist. A source-grounding audit once found multiple confident contract claims that contradicted evidence already available to the author (methodology Case 9). **A "landed" claim is verified against the target ref, not the commit message.** When a commit message, changelog entry, or skill section asserts a capability was implemented/fixed/landed, the assertion is not evidence — before reporting it done, and again before any later session builds on it, grep the *target ref itself* (`git show <ref>:<path>`) for that capability's signature strings and read the key lines back. Real incident (2026-09-17): a commit message claimed a voice-input chain had been rewritten to a single-click model, while the pushed ref still carried the hold-to-talk model — only a post-compaction grep of the actual ref caught it. The commit message, the changelog entry, and the author's summary are one source; counting them as three is exactly how such a claim survives review. Criterion: every capability named in the claim has its implementation signature present in the target ref, read from the ref.
 2. **Treat "impossible / not supported" as a hypothesis, not a conclusion.** When a capability seems blocked (an API error wall, a tool that won't connect, a format that won't open), exhaust the observation paths — the UI's own network traffic, an alternative channel, a different documented identifier — before writing "the platform doesn't support this" into a skill. Observed behavior outranks speculative request shapes.
@@ -147,7 +147,7 @@ It's OK to briefly explain terms if you're in doubt, and feel free to clarify te
 
 ### Capture Intent
 
-Before the first write, select the canonical source repository and Skill subdirectory separately from the installed entry and private review archive. Run `scripts/source_contract.py check-path <skill-dir> --phase create --repo <source-repo> --scope marketplace` (use `--scope project` for that project's `.claude/skills` or `.agents/skills`). A declared repository cannot override an existing owner in the local source inventory; use `--inventory <frozen-owner-inventory.json>` when checking an exported inventory. Stop on `invalid` or `unknown`; do not use the PKM review archive or a user-global installation root as an implicit source. The initializer performs this same check before making directories. New marketplace members must be registered before delivery; an allowed draft location is not a completed install.
+Before the first write, follow [Edit Skills at Source Location](#critical-edit-skills-at-source-location).
 
 Start by understanding the user's intent. The current conversation might already contain a workflow the user wants to capture (e.g., they say "turn this into a skill"). If so, extract answers from the live conversation first — the tools used, the sequence of steps, corrections the user made, input/output formats observed. The user may need to fill the gaps, and should confirm before proceeding to the next step.
 
@@ -1273,16 +1273,18 @@ Editing installed copies first causes changes to be:
 **Before any creation or edit**, run the source-owner check and say which path is source. This is separate from the private review archive and the runtime installation path:
 
 ```bash
-python3 <skill-creator-dir>/scripts/source_contract.py check-path <skill-dir> \
+uv run --project <skill-creator-dir> --frozen python <skill-creator-dir>/scripts/source_contract.py check-path <skill-dir> \
   --phase create --repo <source-repo> --scope marketplace
 ```
 
-For managed local sources, omit `--repo` only when the source-sync owner's inventory can establish the repository identity. An unavailable inventory is `unknown`, not permission to guess. Linked worktrees are checked by their Git common directory. Project-local Skills use `--scope project`; reviewing or installing third-party packages does not make their cache an authored source.
+Stop on `invalid` or `unknown` before writing. An explicit `--repo` cannot override an existing source owner; for exported owner evidence, pass `--inventory <frozen-owner-inventory.json>`. New marketplace members must be registered before delivery; a permitted draft location is not a completed install.
+
+For managed local sources, omit `--repo` only when the source-sync owner's inventory can establish the repository identity. An unavailable inventory is `unknown`, not permission to guess. Inventory source paths must be qualified absolute paths; missing, null or blank paths cannot borrow the caller's current directory. Linked worktrees are checked by their Git common directory. Project-local Skills use `--scope project`; reviewing or installing third-party packages does not make their cache an authored source.
 
 At delivery, run the read-only check against the requested Skill name and declared source owner, not merely whatever happens to appear in a catalog:
 
 ```bash
-python3 <skill-creator-dir>/scripts/source_contract.py audit <skill-dir> \
+uv run --project <skill-creator-dir> --frozen python <skill-creator-dir>/scripts/source_contract.py audit <skill-dir> \
   --repo <source-repo> --scope marketplace --install-path <installed-skill-entry>
 ```
 
@@ -1290,22 +1292,7 @@ This checks source containment, exact registration and source-backed installatio
 
 If the available-skills list points at `~/.codex/skills`, `~/.claude/skills`, or a plugin cache, do not assume that path is source. Locate the repository-backed source first, edit it, validate it, and only then sync the installed copy when the user needs immediate local runtime use.
 
-**Then answer the follow-up question that decides whether "sync the installed copy" is even work: does the runtime already read the source?** Three installs behave differently, and guessing wrong either wastes a sync or ships an edit the user's next session never sees:
-
-```bash
-ls -la ~/.claude/skills/<name>                       # a symlink into the repo? -> edits are live already
-grep -A3 '"<marketplace-name>"' ~/.claude/plugins/known_marketplaces.json   # "source": "directory" -> reads the repo in place
-```
-
-- **Symlinked** into the source tree → the edit *is* the runtime. Nothing to sync.
-- **Marketplace with `source: directory`** pointing at the repo → same: it reads the working tree, so a version bump is bookkeeping for other consumers, not a local activation step.
-- **Anything cached/copied** (git-sourced marketplace, a `cp -r` install) → the runtime is a separate copy and genuinely needs the official update command before the new content is live.
-
-**And verify activation by content, not by a version string.** A registry can record a path or version that does not exist on disk — one session read a plugin record naming a cache directory with the *new* version number in it and nearly reported the update as live; that directory had never been created, and the real runtime path was a symlink to the source all along. The authoritative check is to grep the runtime file for something only the new version contains:
-
-```bash
-grep -c "<a phrase unique to the new content>" <resolved-runtime-path>/SKILL.md   # 0 = not live
-```
+**Verify the actual consumed file before claiming availability.** A marketplace's registered source path does not identify its installed cache or prove session loading. Resolve the installed entry, read the content at that resolved location, and run the applicable fresh-host check. For source-backed aliases and ordinary versioned plugin copies, follow the installation and verification procedures in [skill-governance](../skill-governance/references/skill-surface-governance.md). Source ownership, installation identity and current session evidence are separate checks.
 
 ### Concurrent sessions on the same skill repo
 

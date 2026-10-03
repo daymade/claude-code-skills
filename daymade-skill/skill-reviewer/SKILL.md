@@ -21,11 +21,11 @@ Define the reviewed units, user outcome, intended host and evidence scope first.
 
 ## Quick Start
 
-Run the bundled reviewer with PyYAML declared explicitly through `uv`:
+Run the bundled reviewer through the sibling skill-creator's locked uv project. Replace `<skill-creator-path>` with that directory:
 
 ```bash
-uv run --with PyYAML python <this-skill-path>/scripts/review_skill.py <target-skill-path>
-uv run --with PyYAML python <this-skill-path>/scripts/review_skill.py <target-skill-path> --json
+uv run --project <skill-creator-path> --frozen python <this-skill-path>/scripts/review_skill.py <target-skill-path>
+uv run --project <skill-creator-path> --frozen python <this-skill-path>/scripts/review_skill.py <target-skill-path> --json
 ```
 
 The reviewer delegates YAML, schema, and internal-path validation to the canonical `skill-creator` validator bundled in the same suite. It then checks frontmatter metadata, directory structure, SKILL.md size, hardcoded paths and possible secrets, script hygiene, `subagent_type` validity, and instruction-style heuristics. These heuristics are advisory review leads: line count, code presence and English trigger wording do not establish semantic quality. This older checker targets Claude Code; do not apply its host schema to a different runtime without checking that contract.
@@ -35,16 +35,16 @@ Interpret exit codes as follows: 0 = clean, 1 = warnings only, 2 = review errors
 For an explicitly requested delivery review, first compare the original user request with the private delivery contract: required outcome, scope, source owner, Skill identity and authorized install target. Author-written tests cannot replace these inputs. Then add:
 
 ```bash
-uv run --with PyYAML python <this-skill-path>/scripts/review_skill.py <target-skill-path> --delivery-contract <private-contract.json> --json
+uv run --project <skill-creator-path> --frozen python <this-skill-path>/scripts/review_skill.py <target-skill-path> --delivery-contract <private-contract.json> --json
 ```
 
-The contract uses `schema_version: 1`, `user_outcome`, `scope` (`marketplace` or `project`), `source_repo`, `skill_name`, and optional `installed_path` and owner `inventory` path. Source ownership and registration are checked by the sibling `skill-creator/scripts/source_contract.py` through `skill-governance`'s thin adapter. A wrong source fails even when execution, tests and discovery pass. Missing installation evidence stays unknown; static checks never certify current host loading or prove the contract matches the user's request. Inspect `delivery_review.source_audit` and run the declared fresh-host probe separately before claiming current availability.
+The private contract schema, source-backed installation boundary and unknown-evidence semantics are defined in [skill-governance's delivery audit](../skill-governance/references/skill-surface-governance.md#16-audit-an-explicit-delivery-contract). Inspect `delivery_review.source_audit`; static checks cannot prove the contract matches the original request or establish current host loading.
 
 Without an explicit delivery contract, this remains a quality review and reports delivery as `not_requested`. External and project Skill reviews do not inherit global marketplace ownership rules.
 
 Use the sibling `skill-creator` scripts for the deeper security scan and packaging checks.
 
-## Three Modes
+## Review modes
 
 ### Mode 1: Self-Review
 
@@ -53,14 +53,14 @@ Check your own skill before publishing.
 **Automated review:**
 
 ```bash
-uv run --with PyYAML python <this-skill-path>/scripts/review_skill.py <target-skill>
+uv run --project <skill-creator-path> --frozen python <this-skill-path>/scripts/review_skill.py <target-skill>
 ```
 
 **Extended security validation:**
 
 ```bash
 # Security scan
-uv run python <this-skill-path>/../skill-creator/scripts/security_scan.py <target-skill> --verbose
+uv run --project <skill-creator-path> --frozen python <skill-creator-path>/scripts/security_scan.py <target-skill> --verbose
 ```
 
 **Manual evaluation**: See `references/evaluation_checklist.md`.
@@ -218,6 +218,6 @@ Respect Check:
 - `references/pr_template.md` - PR description template
 - `scripts/quality_review.py` - Collection inventory, complete packets and validated exports
 - `references/batch_quality_review.md` - Batch CLI, decision schema and coverage contract
-- `references/quality_rubric.json` - Six design dimensions with 0–4 anchors and type adaptations
+- `references/quality_rubric.json` - Design anchors and type adaptations
 - `references/quality_method_sources.md` - Fixed-revision evidence, calibration and runtime boundary
 - Best practices: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices
