@@ -2,10 +2,12 @@
 name: read-claude-code-history
 description: >-
   Reads, searches and exports local Claude Code and Kimi CLI history without resuming work:
-  timelines, verbatim user input, keyword or fuzzy recall, file recovery from transcripts. Use when
-  the user asks what was said, wants a session ID or original context, or needs proof of what a
-  session contained. Not for Codex (use read-codex-history); with no platform or several named,
-  start at local-conversation-history.
+  timelines, verbatim user input, keyword or fuzzy recall, file recovery from transcripts, and
+  which session ran a given command in a known time window. Use when the user asks what was
+  said, wants a session ID or original context, needs proof of what a session contained, or
+  needs past-session runtime evidence about command and tool-call activity — query this index
+  instead of raw-scanning transcript files. Not for Codex (use read-codex-history); with no
+  platform or several named, start at local-conversation-history.
 argument-hint: "[session-id | keywords | workspace-path]"
 ---
 
