@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **lark-cli-router** (`daymade-claude-code` v4.10.0 → v4.11.0): Interpret refreshable user authentication through the installed CLI, retain target/profile/identity scope for read denials, and verify existing owner-authorized profiles without changing login, grants or credentials.
+
 - **skill-creator, skill-reviewer, skill-governance** (`daymade-skill` v1.56.0 → v1.57.0): add a shared read-only source contract, checked initialization before the first write, and optional delivery review that separates source ownership, registration, source-backed installation and current runtime evidence. This workflow and safety redesign rejects implicit user-global or knowledge-archive source locations while retaining repository-local project Skills and external quality reviews.
 
 - **tunnel-doctor** (v1.15.2 → v1.16.0): Document macOS urllib proxy fallback and client-specific bypass matching; verify OnDemand VPN recovery through lifecycle and normal-domain requests.
