@@ -72,8 +72,11 @@ def owned_repository(identity, market, inventory):
     for entry in entries.values():
         candidates = entry if isinstance(entry, list) else [entry]
         for candidate in candidates:
-            if not isinstance(candidate, dict) or not isinstance(candidate.get("source_dir"), str):
-                raise EvidenceError("Source inventory candidate lacks source_dir")
+            if (not isinstance(candidate, dict) or not isinstance(candidate.get("source_dir"), str)
+                    or not candidate["source_dir"].strip()):
+                raise EvidenceError("Source inventory candidate requires a non-empty source_dir")
+            if not Path(candidate["source_dir"]).is_absolute():
+                raise EvidenceError("Source inventory source_dir must be absolute; caller cwd is not ownership evidence")
             other = git_identity(Path(candidate["source_dir"]))
             if other is not None:
                 identities.add(str(other["common"]))
