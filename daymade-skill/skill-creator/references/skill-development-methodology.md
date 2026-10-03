@@ -93,7 +93,7 @@ SKILL.md 的 "Skill Writing Guide" 已覆盖 frontmatter、progressive disclosur
 
 ### 4.4 Console output 示例
 
-展示一次成功运行的完整控制台输出。让 agent 知道"正确运行"长什么样，方便验证（SKILL.md Phase 5 的 self-verification）。
+展示一次成功运行中可判断结果的控制台输出。短输出可以完整展示；长输出保留原始文件，展示退出码、结果摘要和文件路径，按 [长输出配方](stateful-script-verification.md#large-command-output) 分段读取。截断的回执不能证明输出完整。
 
 ### 4.5 脚本健壮性
 

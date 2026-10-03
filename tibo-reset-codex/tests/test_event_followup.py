@@ -13,6 +13,11 @@ SPEC = importlib.util.spec_from_file_location(
 log = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(log)
 
+LEGACY_SPEC = importlib.util.spec_from_file_location(
+    "forecast_log_v119", Path(__file__).resolve().parent / "fixtures" / "forecast_log_v119.py")
+legacy = importlib.util.module_from_spec(LEGACY_SPEC)
+LEGACY_SPEC.loader.exec_module(legacy)
+
 
 class EventFollowupTests(unittest.TestCase):
     def setUp(self):
@@ -34,16 +39,16 @@ class EventFollowupTests(unittest.TestCase):
     def announce(self, **changes):
         return log.append_record(self.path, "announce", {**self.announcement, **changes}, self.now)
 
-    def forecast(self):
-        return log.append_record(self.path, "record", {
+    def forecast(self, writer=log):
+        return writer.append_record(self.path, "record", {
             "kind": "global_reset", "confidence": "low",
             "window_start": "2026-10-02T17:00:00Z", "window_end": "2026-10-02T19:00:00Z",
             "anchor_event_url": self.url, "evidence_urls": [self.url],
             "rationale": "Synthetic forecast.", "revision_trigger": "New evidence.",
             "feedback_applied": "No calibration claimed."}, self.now)
 
-    def review(self, row, **changes):
-        return log.append_record(self.path, "review", {
+    def review(self, row, writer=log, **changes):
+        return writer.append_record(self.path, "review", {
             "forecast_id": row["id"], "kind": "global_reset",
             "event_start": "2026-10-02T21:18:48Z", "event_end": "2026-10-02T21:18:48Z",
             "time_basis": "confirmation_only", "first_event_verified": False,
@@ -195,6 +200,59 @@ class EventFollowupTests(unittest.TestCase):
         r = self.review(a, unknown=True, account_status="unknown", account_ref="1234abcd",
                         account_checked_at="2026-10-02T23:00:00Z")
         self.assertEqual(r["evidence_urls"], ["https://example.invalid/official/completion"])
+        persisted = [json.loads(line) for line in self.path.read_text().splitlines()]
+        self.assertEqual(persisted[-1]["id"], r["id"])
+        self.assertEqual(persisted[-1]["evidence_urls"], r["evidence_urls"])
+        self.assertEqual(log.summarize(self.path)["pending"][0]["id"], a["id"])
+
+    def test_old_writer_new_reader_preserves_scored_record(self):
+        a = self.forecast(writer=legacy)
+        hit = self.review(a, writer=legacy, event_start="2026-10-02T18:00:00Z",
+                          event_end="2026-10-02T18:00:00Z", time_basis="occurrence",
+                          first_event_verified=True)
+        old = legacy.summarize(self.path, now=self.now + timedelta(days=1))
+        new = log.summarize(self.path, now=self.now + timedelta(days=1))
+        self.assertEqual(old["cycle_counts"]["global_reset"]["hit"], 1)
+        self.assertEqual(new["cycle_counts"], old["cycle_counts"])
+        self.assertEqual(new["recent_resolved"][0]["id"], a["id"])
+        self.assertEqual(new["recent_resolved"][0]["score_review_id"], hit["id"])
+
+    def test_new_writer_old_reader_preserves_hit_across_new_record_types(self):
+        a = self.forecast()
+        self.review(a, event_start="2026-10-02T18:00:00Z", event_end="2026-10-02T18:00:00Z",
+                    time_basis="occurrence", first_event_verified=True)
+        before = legacy.summarize(self.path, now=self.now + timedelta(days=1))
+        announcement = self.announce()
+        self.review(announcement)
+        self.review(a, unknown=True, account_status="delivered", account_ref="1234abcd",
+                    account_checked_at="2026-10-02T23:42:54Z")
+        after = legacy.summarize(self.path, now=self.now + timedelta(days=1))
+        self.assertEqual(after["forecast_count"], before["forecast_count"])
+        self.assertEqual(after["cycle_counts"], before["cycle_counts"])
+        self.assertEqual(after["recent_resolved"][0]["id"], a["id"])
+        self.assertEqual(log.summarize(self.path)["announcement_count"], 1)
+
+    def test_account_update_preserves_established_score_event_and_other_account(self):
+        a = self.forecast()
+        hit = self.review(a, event_start="2026-10-02T18:00:00Z", event_end="2026-10-02T18:00:00Z",
+                          time_basis="occurrence", first_event_verified=True)
+        for account in ("1234abcd", "5678abcd"):
+            self.review(a, unknown=True, account_status="not_delivered", account_ref=account,
+                        account_checked_at="2026-10-02T23:00:00Z")
+        before = log.summarize(self.path)["recent_resolved"][0]
+        self.review(a, unknown=True, account_status="delivered", account_ref="1234abcd",
+                    account_checked_at="2026-10-02T23:42:54Z")
+        after = log.summarize(self.path)["recent_resolved"][0]
+        self.assertEqual(after["event_status"], before["event_status"])
+        self.assertEqual(after["event_review_id"], before["event_review_id"])
+        self.assertEqual(after["score_review_id"], hit["id"])
+        self.assertEqual(log.summarize(self.path)["cycle_counts"]["global_reset"]["hit"], 1)
+        previous_other = next(r for r in before["account_observations"]
+                              if r["account_ref"] == "5678abcd")
+        current_other = next(r for r in after["account_observations"]
+                             if r["account_ref"] == "5678abcd")
+        self.assertEqual(current_other, previous_other)
+        self.assertEqual(log.summarize(self.path)["account_followup"][0]["account_ref"], "5678abcd")
 
     def test_announcement_completion_never_changes_forecast_hit_rate(self):
         a = self.announce()
