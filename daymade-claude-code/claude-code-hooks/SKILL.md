@@ -1204,8 +1204,12 @@ Before writing or registering another hook, inspect existing engines and extend 
      as `--selftest` and `--selftest-full`. Have the owning build/commit check run
      the full battery when its validation identity changes; let SessionStart run
      only the bounded probe. A missing full-pass stamp makes full validation due
-     at build/commit time, not an instruction to run it during startup.
-     **"The hook's code" is the
+     at build/commit time, not an instruction to run it during startup. Measured
+     why (2026-10-04, a 61-hook fleet): the full battery costs 1m44s cold, and
+     concurrent session starts amplify that into 5–10-minute stalls — so the
+     build/commit gate should scope selftests to the files staged in that commit,
+     or an unrelated broken guard deadlock-blocks the commit that fixes another
+     one. **"The hook's code" is the
      registered file plus what it runs and imports.** Most guards are a thin wrapper
      around a classifier in a sibling `.py`, so a signature taken from the wrapper
      alone stays valid through every edit to the logic, and the battery never runs
@@ -1221,7 +1225,11 @@ Before writing or registering another hook, inspect existing engines and extend 
      or incomplete coverage as unknown under pitfall #53; write pass stamps only
      after the intended test actually completes successfully. Validate this split
      with an unchanged hook, a changed helper and a slow or failed probe: none may
-     pull the full battery back into SessionStart.
+     pull the full battery back into SessionStart. One structural guard for the
+     scheduler's own source: if its program bodies live in quoted heredocs inside
+     command substitutions, a stray quote in any body comment kills the whole file
+     under the macOS stock bash — hoist them out per #57, or the scheduler itself
+     joins the guards it polices.
      Choosing the probe's cases is not "the first N": it needs one must-fire and one
      must-quiet, or the two degradation directions are not both covered. Watch for a
      must-quiet case that is secretly vacuous — an advisory-only hook always exits 0,
