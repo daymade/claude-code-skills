@@ -32,6 +32,16 @@ The reviewer delegates YAML, schema, and internal-path validation to the canonic
 
 Interpret exit codes as follows: 0 = clean, 1 = warnings only, 2 = review errors, 3 = invocation or runtime failure. Codes 1 and 2 describe the target skill; code 3 means the reviewer could not complete a trustworthy review.
 
+For an explicitly requested delivery review, first compare the original user request with the private delivery contract: required outcome, scope, source owner, Skill identity and authorized install target. Author-written tests cannot replace these inputs. Then add:
+
+```bash
+uv run --with PyYAML python <this-skill-path>/scripts/review_skill.py <target-skill-path> --delivery-contract <private-contract.json> --json
+```
+
+The contract uses `schema_version: 1`, `user_outcome`, `scope` (`marketplace` or `project`), `source_repo`, `skill_name`, and optional `installed_path` and owner `inventory` path. Source ownership and registration are checked by the sibling `skill-creator/scripts/source_contract.py` through `skill-governance`'s thin adapter. A wrong source fails even when execution, tests and discovery pass. Missing installation evidence stays unknown; static checks never certify current host loading or prove the contract matches the user's request. Inspect `delivery_review.source_audit` and run the declared fresh-host probe separately before claiming current availability.
+
+Without an explicit delivery contract, this remains a quality review and reports delivery as `not_requested`. External and project Skill reviews do not inherit global marketplace ownership rules.
+
 Use the sibling `skill-creator` scripts for the deeper security scan and packaging checks.
 
 ## Three Modes

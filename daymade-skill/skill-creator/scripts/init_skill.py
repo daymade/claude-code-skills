@@ -3,16 +3,22 @@
 Skill Initializer - Creates a new skill from template
 
 Usage:
-    init_skill.py <skill-name> --path <path>
+    init_skill.py <skill-name> --path <source-parent> --repo <source-repo>
 
 Examples:
-    init_skill.py my-new-skill --path skills/public
-    init_skill.py my-api-helper --path skills/private
-    init_skill.py custom-skill --path /custom/location
+    init_skill.py my-new-skill --path /source/repo --repo /source/repo
+    init_skill.py project-helper --path /project/.claude/skills --repo /project --scope project
 """
 
+import argparse
+import re
 import sys
 from pathlib import Path
+
+try:
+    from .source_contract import check_source
+except ImportError:
+    from source_contract import check_source
 
 
 SKILL_TEMPLATE = """---
@@ -198,7 +204,7 @@ def title_case_skill_name(skill_name):
     return ' '.join(word.capitalize() for word in skill_name.split('-'))
 
 
-def init_skill(skill_name, path):
+def init_skill(skill_name, path, *, repo=None, scope="auto", inventory=None):
     """
     Initialize a new skill directory with template SKILL.md.
 
@@ -209,8 +215,18 @@ def init_skill(skill_name, path):
     Returns:
         Path to created skill directory, or None if error
     """
-    # Determine skill directory path
+    if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", skill_name) or len(skill_name) > 64:
+        print("Error: Skill name must be a hyphen-case identifier of at most 64 characters")
+        return None
+    # No files or directories are created until source ownership is established.
     skill_dir = Path(path).resolve() / skill_name
+    ownership = check_source(skill_dir, repo=repo, scope=scope, phase="create", inventory=inventory)
+    if ownership["status"] != "valid":
+        print("Error: source ownership preflight failed")
+        for error in ownership["errors"]:
+            print("  " + error)
+        return None
+    print(f"Source repository: {ownership['source_repo']} ({ownership['scope']})")
 
     # Check if directory already exists
     if skill_dir.exists():
@@ -272,33 +288,26 @@ def init_skill(skill_name, path):
     print("\nNext steps:")
     print("1. Edit SKILL.md to complete the TODO items and update the description")
     print("2. Customize or delete the example files in scripts/, references/, and assets/")
-    print("3. Run the validator when ready to check the skill structure")
+    print("3. Register the Skill where required, then run structural and source-delivery checks")
 
     return skill_dir
 
 
 def main():
-    if len(sys.argv) < 4 or sys.argv[2] != '--path':
-        print("Usage: init_skill.py <skill-name> --path <path>")
-        print("\nSkill name requirements:")
-        print("  - Hyphen-case identifier (e.g., 'data-analyzer')")
-        print("  - Lowercase letters, digits, and hyphens only")
-        print("  - Max 40 characters")
-        print("  - Must match directory name exactly")
-        print("\nExamples:")
-        print("  init_skill.py my-new-skill --path skills/public")
-        print("  init_skill.py my-api-helper --path skills/private")
-        print("  init_skill.py custom-skill --path /custom/location")
-        sys.exit(1)
-
-    skill_name = sys.argv[1]
-    path = sys.argv[3]
+    parser = argparse.ArgumentParser(description="Initialize a Skill after source ownership preflight")
+    parser.add_argument("skill_name")
+    parser.add_argument("--path", required=True, help="Parent directory in the source repository")
+    parser.add_argument("--repo", type=Path, help="Explicit source repository; otherwise use registered owner inventory")
+    parser.add_argument("--scope", choices=("auto", "marketplace", "project"), default="auto")
+    parser.add_argument("--inventory", type=Path, help="Frozen source-owner inventory for read-only replay")
+    args = parser.parse_args()
+    skill_name, path = args.skill_name, args.path
 
     print(f"🚀 Initializing skill: {skill_name}")
     print(f"   Location: {path}")
     print()
 
-    result = init_skill(skill_name, path)
+    result = init_skill(skill_name, path, repo=args.repo, scope=args.scope, inventory=args.inventory)
 
     if result:
         sys.exit(0)

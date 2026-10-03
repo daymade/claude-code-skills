@@ -147,6 +147,8 @@ It's OK to briefly explain terms if you're in doubt, and feel free to clarify te
 
 ### Capture Intent
 
+Before the first write, select the canonical source repository and Skill subdirectory separately from the installed entry and private review archive. Run `scripts/source_contract.py check-path <skill-dir> --phase create --repo <source-repo> --scope marketplace` (use `--scope project` for that project's `.claude/skills` or `.agents/skills`). A declared repository cannot override an existing owner in the local source inventory; use `--inventory <frozen-owner-inventory.json>` when checking an exported inventory. Stop on `invalid` or `unknown`; do not use the PKM review archive or a user-global installation root as an implicit source. The initializer performs this same check before making directories. New marketplace members must be registered before delivery; an allowed draft location is not a completed install.
+
 Start by understanding the user's intent. The current conversation might already contain a workflow the user wants to capture (e.g., they say "turn this into a skill"). If so, extract answers from the live conversation first — the tools used, the sequence of steps, corrections the user made, input/output formats observed. The user may need to fill the gaps, and should confirm before proceeding to the next step.
 
 **Source inventory — always before drafting, with consent boundaries.** Inventory the live conversation and existing docs/skills that overlap (see Prior Art Research below). Earlier local session JSONL files are a separate private source: do not open or parse them unless the user explicitly asks to mine history or affirmatively approves that source after you explain what will be read. If approved, fold only relevant prior sessions in through the conversation-mining workflow's redacted extraction; never load raw transcripts into your own context. If not approved, continue from the live conversation and existing project sources without treating the missing history as a blocker.
@@ -1268,14 +1270,23 @@ Editing installed copies first causes changes to be:
 <repo-root>/my-skill/SKILL.md
 ```
 
-**Before any edit**, run a source-location check and say which path is source:
+**Before any creation or edit**, run the source-owner check and say which path is source. This is separate from the private review archive and the runtime installation path:
 
 ```bash
-pwd
-git rev-parse --show-toplevel
-rg -n '"name": "<skill-or-suite-name>"' .claude-plugin/marketplace.json
-find . -path '*/SKILL.md' -maxdepth 4 | rg '(^|/)<skill-name>/SKILL.md$'
+python3 <skill-creator-dir>/scripts/source_contract.py check-path <skill-dir> \
+  --phase create --repo <source-repo> --scope marketplace
 ```
+
+For managed local sources, omit `--repo` only when the source-sync owner's inventory can establish the repository identity. An unavailable inventory is `unknown`, not permission to guess. Linked worktrees are checked by their Git common directory. Project-local Skills use `--scope project`; reviewing or installing third-party packages does not make their cache an authored source.
+
+At delivery, run the read-only check against the requested Skill name and declared source owner, not merely whatever happens to appear in a catalog:
+
+```bash
+python3 <skill-creator-dir>/scripts/source_contract.py audit <skill-dir> \
+  --repo <source-repo> --scope marketplace --install-path <installed-skill-entry>
+```
+
+This checks source containment, exact registration and source-backed installation identity. It never proves a current session loaded the Skill. Pass the original user outcome and separate source/install paths to `skill-reviewer`'s delivery contract; a runnable Skill, green tests and catalog visibility cannot substitute for ownership validation. Keep the contract private when it contains local paths. Missing runtime observations remain `unknown`.
 
 If the available-skills list points at `~/.codex/skills`, `~/.claude/skills`, or a plugin cache, do not assume that path is source. Locate the repository-backed source first, edit it, validate it, and only then sync the installed copy when the user needs immediate local runtime use.
 
@@ -1355,10 +1366,12 @@ Analyze each example by:
 
 Skip this step if the skill already exists.
 
-When creating a new skill from scratch, always run the `init_skill.py` script:
+When creating a new skill from scratch, run [scripts/init_skill.py](scripts/init_skill.py)
+from the locked skill-creator project:
 
 ```bash
-scripts/init_skill.py <skill-name> --path <output-directory>
+uv run --frozen python -m scripts.init_skill <skill-name> \
+  --path <source-parent> --repo <source-repo> --scope marketplace
 ```
 
 The script creates a template skill directory with proper frontmatter, resource directories, and example files.

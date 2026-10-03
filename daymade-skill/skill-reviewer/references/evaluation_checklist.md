@@ -2,6 +2,14 @@
 
 Use this checklist as an advisory inspection aid for the intended host. For scored design review, load `references/quality_rubric.json` through the batch workflow. A checklist match is not a quality score or proof of task benefit.
 
+## Delivery review (only when explicitly requested)
+
+- [ ] Read the original user requirement, declared scope and source ownership; independently check the private contract against them.
+- [ ] Run `review_skill.py --delivery-contract <private-contract.json> --json`; inspect source ownership, registration and installed route separately.
+- [ ] Treat execution/tests/discovery green with a wrong source as delivery failure.
+- [ ] Record missing install or current host loading evidence as unknown; use the fresh-host checks from `skill-governance` for current availability.
+- [ ] Without a contract, report quality coverage only, not completed delivery review; third-party reviews require no owned-marketplace contract.
+
 ## YAML Frontmatter
 
 - [ ] `name` field present and valid

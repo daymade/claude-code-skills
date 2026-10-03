@@ -215,3 +215,62 @@ def test_reviewer_accepts_its_own_bundle():
     result = run_reviewer(SKILL_DIR, "--json")
 
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_quality_only_review_does_not_claim_delivery(tmp_path):
+    skill = write_skill(tmp_path, valid_frontmatter())
+    result = run_reviewer(skill, '--json')
+    assert result.returncode == 0
+    assert json.loads(result.stdout)['delivery_review']['status'] == 'not_requested'
+
+
+def test_explicit_invalid_delivery_contract_blocks_healthy_quality(tmp_path):
+    skill = write_skill(tmp_path, valid_frontmatter())
+    contract = tmp_path / 'delivery.json'
+    contract.write_text(json.dumps({'schema_version': 1}))
+    result = run_reviewer(skill, '--delivery-contract', str(contract), '--json')
+    report = json.loads(result.stdout)
+    assert result.returncode == 2
+    assert report['delivery_review']['status'] == 'invalid'
+    assert any(issue['category'] == 'delivery' for issue in report['issues'])
+
+
+def test_wrong_source_blocks_delivery_even_with_valid_structure_and_working_script(tmp_path):
+    source_repo = tmp_path / 'expected-owner'
+    source_repo.mkdir()
+    subprocess.run(['git', '-C', str(source_repo), 'init', '-q'], check=True)
+    other_repo = tmp_path / 'pkm'
+    other_repo.mkdir()
+    subprocess.run(['git', '-C', str(other_repo), 'init', '-q'], check=True)
+    skill = write_skill(other_repo, valid_frontmatter())
+    scripts = skill / 'scripts'
+    scripts.mkdir()
+    script = scripts / 'run.py'
+    script.write_text("#!/usr/bin/env python3\nprint('working')\n")
+    assert subprocess.run([sys.executable, str(script)], capture_output=True, text=True, check=True).stdout.strip() == 'working'
+    installed = tmp_path / 'installed'
+    installed.symlink_to(skill, target_is_directory=True)
+    contract = tmp_path / 'delivery.json'
+    contract.write_text(json.dumps({
+        'schema_version': 1, 'user_outcome': 'Deliver from expected-owner',
+        'scope': 'marketplace', 'source_repo': str(source_repo),
+        'skill_name': 'target-skill', 'installed_path': str(installed),
+    }))
+    quality_only = run_reviewer(skill, '--json')
+    assert quality_only.returncode == 0, quality_only.stdout + quality_only.stderr
+    result = run_reviewer(skill, '--delivery-contract', str(contract), '--json')
+    report = json.loads(result.stdout)
+    assert result.returncode == 2, report
+    assert report['delivery_review']['status'] == 'invalid'
+    assert report['delivery_review']['runtime']['status'] == 'unknown'
+
+
+def test_legacy_run_review_api_keeps_two_item_return(tmp_path):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('reviewer_legacy_api', REVIEWER)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    skill = write_skill(tmp_path, valid_frontmatter())
+    issues, name = module.run_review(skill)
+    assert name == 'target-skill'
+    assert not any(issue[0] in ('error', 'warning') for issue in issues)
