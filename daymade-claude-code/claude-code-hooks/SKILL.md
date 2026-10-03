@@ -41,7 +41,7 @@ The loop may be created entirely by an agent repeatedly applying a prose rule.
 
 | Type | Fires | Exit 0 | Exit 2 | Other |
 |---|---|---|---|---|
-| **PreToolUse** | before a tool runs | allow | **block** the call (stderr → shown to model as guidance) | any other exit = "non-blocking error" → **the call proceeds** — but only while stdout carries no valid JSON. Claude Code reads JSON output on **every** exit code, and valid JSON overrides the code entirely. The skeletons here print nothing on stdout, so their fail-open reasoning holds; add a `permissionDecision` payload and the exit code stops being the decision |
+| **PreToolUse** | before a tool runs | normal permission flow unless JSON supplies allow/deny/ask | **block** the call even when JSON says `allow`; read valid JSON fields (v2.1.214+). JSON blocking reason or stderr → model | without schema-valid JSON, another nonzero exit is a non-blocking error and the call proceeds; with valid JSON, the supported fields decide and that status is ignored. Use exit 0 for structured control. Follow the [official exit-code contract](https://code.claude.com/docs/en/hooks#exit-code-output) |
 | **PostToolUse** | after a tool ran | quiet **unless it prints a `hookSpecificOutput` JSON on stdout — that is how context injection works, and it happens at exit 0** | feedback to the model (can't un-run the tool) | — |
 | **SessionStart** | session begins | proceed | **cannot block** — stderr shows the user a hook-error notice, Claude never sees it, the session starts anyway | **exit 0 anyway**: not because a non-zero would block (it can't), but because anything non-zero puts a `<hook> hook error` in the user's transcript on every single session start. Takes a `matcher` on *how the session started* — `startup`, `resume`, `clear`, `compact`, `fork` |
 | **Stop** (+ `SubagentStop`) | the model is about to finish responding | let it stop | **block the stop** — forces the model to keep going (stderr → fed back as the reason) | loop safety: the hook checks `stop_hook_active` (necessary, **not** sufficient — rule 7). The harness's consecutive-block ceiling (default 8) is **not** a general backstop — its counter resets on any continuation that executed tools, so it never arrives for a hook whose remediation involves tool calls, which is most of them (#27). Carry your own bound. All Stop hooks for an event run **in parallel** — one block round can carry several hooks' feedback |
@@ -1126,6 +1126,8 @@ consent never unlocks the hard-blocked rule. A stateful selftest (it creates
 the consent file) must back up and restore any real consent file around itself.
 
 ## Build order (in sequence)
+
+Before writing or registering another hook, inspect existing engines and extend one when the event, matcher, advisory/blocking role and state/authorization boundaries fit; use a separate entry when they do not. Shared intent alone does not establish compatible mechanisms.
 
 1. **Confirm it's a real recurrence**, not hypothetical — else don't build it.
    If the hook will **demand a remediation** rather than just block, write its
