@@ -14,6 +14,7 @@ import signal
 import stat
 import subprocess
 import sys
+import threading
 import time
 
 STATE = ".materialization.json"
@@ -244,7 +245,8 @@ def root_record(root, owner):
     validate_manifest(record, require_source=False)
     for entry in record["inputs"]:
         relative_path(entry["path"])
-        if not entry["path"].startswith("arms/") or not re.fullmatch(r"[0-9a-f]{64}", entry["sha256"]):
+        if (not entry["path"].startswith("arms/") or not re.fullmatch(r"[0-9a-f]{64}", entry["sha256"])
+                or entry.get("mode") not in ("100644", "100755")):
             raise MaterializationError("invalid persisted input entry")
     return root, record
 
@@ -449,7 +451,9 @@ def remove_unchanged(root, entry):
     try:
         with safe_directory(root, str(relative.parent)) as parent_fd:
             before = os.stat(relative.name, dir_fd=parent_fd, follow_symlinks=False)
-            if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
+            expected_mode = 0o755 if entry["mode"] == "100755" else 0o644
+            if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
+                    or stat.S_IMODE(before.st_mode) != expected_mode):
                 return False
             fd = os.open(relative.name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=parent_fd)
             with os.fdopen(fd, "rb") as f:
@@ -527,7 +531,7 @@ def recover(root, owner):
     return record
 
 
-def main(argv=None):
+def _main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     p = sub.add_parser("prepare")
@@ -561,6 +565,18 @@ def main(argv=None):
         return EXIT.get(reason, 2)
     except KeyboardInterrupt:
         return 130
+
+
+def main(argv=None):
+    if threading.current_thread() is not threading.main_thread():
+        return _main(argv)
+    def interrupted(_signum, _frame):
+        raise KeyboardInterrupt
+    previous = signal.signal(signal.SIGTERM, interrupted)
+    try:
+        return _main(argv)
+    finally:
+        signal.signal(signal.SIGTERM, previous)
 
 
 if __name__ == "__main__":

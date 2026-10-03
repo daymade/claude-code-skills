@@ -117,7 +117,7 @@ the created process group are outside its accounting/control boundary. Keep all
 task-generated outputs inside the root and prevent dependency installation from
 duplicating runtime caches as part of the task plan.
 
-On cumulative overage, low free space, unknown measurement, or Ctrl-C, the runner
+On cumulative overage, low free space, unknown measurement, Ctrl-C or CLI SIGTERM, the runner
 forcibly stops only the new process group it created. It also checks immediately
 after a fast child exits and stops leftover group members after the leader exits.
 Existing unrelated processes are not selected or stopped.
@@ -138,7 +138,8 @@ Use the same `finish` command after any completed run, including a failed or
 interrupted run and partial preparation. It verifies root path, inode and owner,
 and refuses an active child group or active lock. It unlinks only declared
 rebuildable regular inputs whose content still matches the recorded hash/size.
-It refuses symlinks in the input path and checks file identity while hashing.
+It refuses symlinks in the input path, checks file identity while hashing and
+requires the original permission mode. Permission-only changes remain work.
 Modified inputs, hard links, unknown files and all `artifacts/` evidence remain,
 with their paths in `cleanup.retained`; inspect those paths before further work.
 Empty directories and the receipt remain. There is no whole-root recursive delete

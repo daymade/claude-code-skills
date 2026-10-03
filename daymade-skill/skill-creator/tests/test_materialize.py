@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import signal
+import time
 import tempfile
 import unittest
 from unittest import mock
@@ -80,6 +82,44 @@ class MaterializeTests(unittest.TestCase):
         children = [e.get("argv", []) for e in events if e.get("event") == "child_start"]
         self.assertFalse(any("fetch" in arg for argv in children for arg in argv), children)
         self.assertFalse(self.root.exists())
+
+    def test_permission_only_change_is_retained(self):
+        self.prepare()
+        path = self.root / "arms" / "with" / "selected" / "input.txt"
+        path.chmod(0o755)
+        record = m.finish(self.root, "fixture-session")
+        self.assertTrue(path.exists())
+        self.assertIn("arms/with/selected/input.txt", record["cleanup"]["retained"])
+
+    def test_cli_sigterm_stops_own_child_and_retains_evidence(self):
+        self.prepare()
+        child_pgid = None
+        p = subprocess.Popen([sys.executable, "-m", "scripts.materialize", "run", "--root", str(self.root),
+                              "--owner", "fixture-session", "--arm", "with", "--", sys.executable,
+                              "-c", "import time;time.sleep(30)"], stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE, start_new_session=True, env=self.env)
+        try:
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                record = self.read()
+                if record.get("child_pgid"):
+                    child_pgid = record["child_pgid"]
+                    break
+                time.sleep(0.02)
+            self.assertIsNotNone(child_pgid)
+            p.send_signal(signal.SIGTERM)
+            out, err = p.communicate(timeout=5)
+            self.assertEqual(p.returncode, 130, (out, err))
+            self.assertEqual(self.read()["state"], "interrupted")
+            self.assertFalse(m.alive(child_pgid, group=True))
+            result = m.finish(self.root, "fixture-session")
+            self.assertIn("artifacts/run-0001/stdout.log", result["cleanup"]["retained"])
+        finally:
+            if p.poll() is None:
+                os.killpg(p.pid, signal.SIGKILL)
+                p.communicate()
+            if child_pgid and m.alive(child_pgid, group=True):
+                os.killpg(child_pgid, signal.SIGKILL)
 
     def test_missing_blank_null_and_nonpositive_required_keys(self):
         for key in self.manifest:
