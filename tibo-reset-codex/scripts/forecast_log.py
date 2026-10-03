@@ -228,8 +228,16 @@ def make_review(data, forecasts, now):
     if fid not in forecasts:
         raise ValueError("forecast_id not found")
     forecast = forecasts[fid]
+    score_update = data.get("score_update")
+    if "score_update" in data and not isinstance(score_update, bool):
+        raise ValueError("score_update must be a boolean")
+    if score_update is None:
+        score_update = not (data.get("time_basis") == "confirmation_only" or
+                            (data.get("unknown") is True and
+                             ("account_status" in data or "event_status" in data)))
     result = {"forecast_id": fid, "reason": required_text(data, "reason"),
               "lesson": required_text(data, "lesson"), "outcome": "unknown",
+              "score_update": score_update,
               "catalyst_actual": optional_catalyst(data, "catalyst_actual")}
     result.update(review_delivery(data, now))
     status = data.get("event_status", "unknown")
@@ -245,7 +253,7 @@ def make_review(data, forecasts, now):
             if confirmed > now or confirmed <= issuance_at(forecast):
                 raise ValueError("confirmed_at must follow issuance and precede review")
             result.update(kind=data["kind"], confirmed_at=confirmed.isoformat(), evidence_urls=evidence(data))
-        elif "account_status" in result and result["account_status"] != "unknown":
+        elif "account_status" in result and (result.get("account_ref") or result["account_status"] != "unknown"):
             result["evidence_urls"] = evidence(data)
         return result
     if data.get("kind") != forecast["kind"]:
@@ -259,7 +267,8 @@ def make_review(data, forecasts, now):
     result.update(kind=data["kind"], event_start=start.isoformat(), event_end=end.isoformat(),
                   time_basis=basis, first_event_verified=data.get("first_event_verified") is True,
                   evidence_urls=evidence(data), event_status=data.get("event_status", "confirmed"))
-    if result["event_status"] == "unknown" or forecast.get("entry_type") == "official_announcement":
+    if (not score_update or result["event_status"] == "unknown"
+            or forecast.get("entry_type") == "official_announcement"):
         return result  # Official ETAs are not judged forecasts or hit-rate samples.
     # A completion post alone gives an upper bound, not an exact reset instant.
     if basis == "confirmation_only" or not result["first_event_verified"]:
@@ -291,6 +300,14 @@ def read_withdrawals(path):
     with path.open(encoding="utf-8") as stream:
         fcntl.flock(stream, fcntl.LOCK_SH)
         return read_rows(stream, kinds=("withdrawal",))
+
+
+def read_announcements(path):
+    if not path.exists():
+        return []
+    with path.open(encoding="utf-8") as stream:
+        fcntl.flock(stream, fcntl.LOCK_SH)
+        return read_rows(stream, kinds=("forecast",))
 
 
 def make_finding(data):
@@ -364,8 +381,12 @@ def append_record(path, command, data, now=None):
     if not isinstance(data, dict):
         raise ValueError("input must be a JSON object")
     now = now or datetime.now(timezone.utc)
+    if command == "announce":
+        path = path.parent / "announcements.jsonl"
     with locked_journal(path) as (stream, rows):
-        forecasts = {r["id"]: r for r in rows if r["record_type"] == "forecast"}
+        announcement_rows = (read_announcements(path.parent / "announcements.jsonl")
+                             if command != "announce" else [])
+        forecasts = {r["id"]: r for r in rows + announcement_rows if r["record_type"] == "forecast"}
         withdrawals_path = path.parent / "withdrawals.jsonl"
         withdrawals = {r["forecast_id"]: r for r in read_withdrawals(withdrawals_path)}
         # Resolved before the idempotency check so a retry that names the same
@@ -391,6 +412,9 @@ def append_record(path, command, data, now=None):
             body = {**make_review(data, forecasts, now), **refs}
             previous = [r for r in rows if r["record_type"] == "review" and
                         r["forecast_id"] == body["forecast_id"]]
+            if not body["score_update"]:
+                prior_score = next((r for r in reversed(previous) if r.get("score_update") is not False), None)
+                body["outcome"] = prior_score["outcome"] if prior_score else "unknown"
             if previous and all(previous[-1].get(k) == v for k, v in body.items()):
                 return previous[-1]
             body["supersedes_review"] = previous[-1]["id"] if previous else None
@@ -433,8 +457,9 @@ def summarize(path, kind=None, now=None):
             fcntl.flock(stream, fcntl.LOCK_SH)
             rows = read_rows(stream)
             withdrawal_rows = read_withdrawals(path.parent / "withdrawals.jsonl")
+    rows += read_announcements(path.parent / "announcements.jsonl")
     latest = {r["forecast_id"]: r for r in rows if r["record_type"] == "review"}
-    latest_event, latest_account = {}, {}
+    latest_event, latest_account, latest_score = {}, {}, {}
     for row in rows:
         if row["record_type"] != "review":
             continue
@@ -442,6 +467,8 @@ def summarize(path, kind=None, now=None):
             latest_event[row["forecast_id"]] = row
         if "account_status" in row:
             latest_account[(row["forecast_id"], row.get("account_ref"))] = row
+        if row.get("score_update") is not False:
+            latest_score[row["forecast_id"]] = row
     withdrawals = {r["forecast_id"]: r for r in withdrawal_rows}
     review_order = {r["forecast_id"]: i for i, r in enumerate(rows)
                     if r["record_type"] == "review"}
@@ -452,12 +479,14 @@ def summarize(path, kind=None, now=None):
     confirmed_unscored, account_followup = [], []
     for forecast in forecasts:
         review = latest.get(forecast["id"])
+        score_review = latest_score.get(forecast["id"])
         event_review = latest_event.get(forecast["id"])
         account_reviews = [r for (fid, _), r in latest_account.items() if fid == forecast["id"]]
         account_review = account_reviews[0] if len(account_reviews) == 1 else None
         withdrawal = withdrawals.get(forecast["id"])
         outcome = ("withdrawn" if withdrawal else
-                   review["outcome"] if review else "unreviewed")
+                   score_review["outcome"] if score_review else
+                   "unknown" if review else "unreviewed")
         shown_review = None
         if review is not None:
             shown_review = {**review,
@@ -471,6 +500,8 @@ def summarize(path, kind=None, now=None):
                 "account_status": (account_review or {}).get("account_status", "unknown"),
                 "event_review_id": (event_review or {}).get("id"),
                 "account_review_id": (account_review or {}).get("id"),
+                "score_review_id": (score_review or {}).get("id"),
+                "score_outcome": outcome,
                 "account_observations": [{"review_id": r["id"],
                                           **{k: r[k] for k in ("account_ref", "account_status", "account_checked_at")
                                              if k in r}} for r in account_reviews]}
@@ -611,7 +642,7 @@ def snapshot(state_dir, filename, record_type, enabled=True):
               file=sys.stderr)
 
 
-JOURNALS = ("forecasts.jsonl", "findings.jsonl", "withdrawals.jsonl")
+JOURNALS = ("forecasts.jsonl", "announcements.jsonl", "findings.jsonl", "withdrawals.jsonl")
 
 
 def snapshot_health(state_dir, enabled=True):
@@ -683,7 +714,8 @@ def main():
             snapshot(state, target.name, "finding", enabled=not args.no_git)
         else:
             result = append_record(path, args.command, json.loads(args.input.read_text(encoding="utf-8")))
-            filename = "withdrawals.jsonl" if args.command == "withdraw" else path.name
+            filename = ("withdrawals.jsonl" if args.command == "withdraw" else
+                        "announcements.jsonl" if args.command == "announce" else path.name)
             snapshot(state, filename, {"record": "forecast", "announce": "announcement", "review": "review",
                                        "withdraw": "withdrawal"}[args.command],
                      enabled=not args.no_git)

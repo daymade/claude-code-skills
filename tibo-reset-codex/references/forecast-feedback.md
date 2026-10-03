@@ -8,8 +8,9 @@
 在 Skill 目录运行 `scripts/forecast_log.py`，需要 Python 3.10+ 与 macOS/Linux。
 默认状态目录是 `${XDG_STATE_HOME:-~/.local/state}/tibo-reset-codex/`；其中
 `forecasts.jsonl` 保存预测与核验，`withdrawals.jsonl` 保存撤回，`findings.jsonl` 保存原始读数。
-有明确时刻的官宣也由 `announce` 追加到 `forecasts.jsonl`，标为
-`entry_type=official_announcement`；它不进入预测样本数或命中率统计。
+有明确时刻的官宣由 `announce` 追加到独立的 `announcements.jsonl`，标为
+`entry_type=official_announcement`；它不进入预测样本数或命中率统计。官宣的 review 仍保存为
+旧格式兼容的 review 行，旧读取器可继续读 forecasts.jsonl，不会碰到缺少窗口字段的新官宣行。
 未设置 `XDG_STATE_HOME` 时解析用户家目录，已设置时使用该环境变量的目录。
 可用全局参数 `--state-dir` 显式选择另一个数据目录，之后查询与追加必须使用同一目录；
 `--no-git` 关闭本地 git 快照（规则见下方 findings 节）。
@@ -182,6 +183,11 @@ confirmed_at 必须是来源中的确认时刻，不是估计的发生时刻。�
 分别显示为 `event_review_id` 与 `account_review_id`，不把旧读数伪装成本轮的新读数。
 多个账号按各自 account_ref 保留最近观测，列表显示为 `account_observations`；一个账号到账
 不删除其他账号的待查项。多账号时顶层 account_status 保持 unknown，不伪造全员送达汇总。
+单独更新账号时使用 `unknown:true` 与 account_status 字段，默认 `score_update=false`；只提供
+完成确认的 review 也默认不修改既有评分。需要明确修订评分时填 `score_update=true`，或用
+原来的裸 `unknown:true` 表示证据不足的评分修订。未评分记录仍可以保留 unknown；已有的
+hit/early/late 不因补一条到账记录消失。`score_review_id` 与 `score_outcome` 指向实际采用的
+评分更新；不更新评分的 review 保留既有 outcome，兼容旧读取器，不冒充新评分依据。
 
 保存账号状态时，非 unknown 的 `account_status` 必须同时带 `account_ref`、
 `account_checked_at` 与 `evidence_urls`；已指定账号但到账未知时同样保存这组字段。

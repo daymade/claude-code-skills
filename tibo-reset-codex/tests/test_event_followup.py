@@ -64,6 +64,8 @@ class EventFollowupTests(unittest.TestCase):
         self.assertEqual(s["pending"][0]["window_hours"], 0)
         self.assertEqual(s["due_for_followup"][0]["window_end"], "2026-10-02T17:00:00+00:00")
         self.assertEqual(s["due_for_followup"][0]["urgency"], "overdue")
+        self.assertFalse(self.path.exists())
+        self.assertTrue((self.path.parent / "announcements.jsonl").exists())
 
     def test_invalid_or_empty_announcement_fields_are_not_silently_defaulted(self):
         for key, value in [("eta_at", None), ("eta_at", ""), ("announced_at", None),
@@ -169,6 +171,30 @@ class EventFollowupTests(unittest.TestCase):
                     account_checked_at="2026-10-02T23:42:54Z")
         self.assertEqual(log.summarize(self.path)["pending"], [])
         self.assertEqual(log.summarize(self.path)["account_followup"], [])
+
+    def test_account_only_update_preserves_hit_and_explicit_score_retraction_works(self):
+        a = self.forecast()
+        hit = self.review(a, event_start="2026-10-02T18:00:00Z", event_end="2026-10-02T18:00:00Z",
+                          time_basis="occurrence", first_event_verified=True)
+        self.assertEqual(hit["outcome"], "hit")
+        arrival = self.review(a, unknown=True, account_status="delivered", account_ref="1234abcd",
+                              account_checked_at="2026-10-02T23:42:54Z")
+        self.assertFalse(arrival["score_update"])
+        self.assertEqual(arrival["outcome"], "hit")
+        s = log.summarize(self.path)
+        self.assertEqual(s["cycle_counts"]["global_reset"]["hit"], 1)
+        self.assertEqual(s["recent_resolved"][0]["score_review_id"], hit["id"])
+        self.review(a, unknown=True, score_update=True)
+        self.assertEqual(log.summarize(self.path)["cycle_counts"]["global_reset"]["unknown"], 1)
+        for value in (None, "", "false", 0):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                self.review(a, unknown=True, score_update=value)
+
+    def test_bound_unknown_account_keeps_its_evidence_urls(self):
+        a = self.announce()
+        r = self.review(a, unknown=True, account_status="unknown", account_ref="1234abcd",
+                        account_checked_at="2026-10-02T23:00:00Z")
+        self.assertEqual(r["evidence_urls"], ["https://example.invalid/official/completion"])
 
     def test_announcement_completion_never_changes_forecast_hit_rate(self):
         a = self.announce()
