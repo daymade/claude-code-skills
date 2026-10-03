@@ -1199,8 +1199,20 @@ the consent file) must back up and restore any real consent file around itself.
      health check to a probe of 9 assertions / 2.2 s): keep both halves in the hook
      as `--selftest` and `--selftest-full`, and let the health check pick — run the
      full battery when the hook's code has changed since the last full pass, otherwise
-     the probe. The cost then lands on the first session *after an edit*, which is
-     exactly when the full battery is worth paying for. **"The hook's code" is the
+     the probe. **Which event pays for the full battery is a tier decision, and the
+     measured answer (2026-10-04, a 61-hook fleet) is: the edit, not the session
+     start.** Auto-promotion on signature mismatch at SessionStart means every
+     session after any hook edit pays the whole changed set's batteries — measured
+     1m44s cold for the fleet, and concurrent session starts amplify each other
+     into 5–10 minutes when several agents open sessions in the same window. So
+     the scheduler runs in two tiers: the SessionStart invocation is a **probe
+     tier** (light `--selftest` only, signature+TTL skip, *never* promotes to the
+     full battery), and a **`--full` tier** keeps the promote-on-change behavior
+     above but is invoked at edit time — the owning repo's `pre-commit` runs the
+     health check with `--full`, and gates the commit on the staged hooks'
+     selftests (gating only on *staged* files, so an unrelated broken guard never
+     deadlock-blocks the commit that fixes another one). Verification cost belongs
+     to the edit action, not to opening a session. **"The hook's code" is the
      registered file plus what it runs and imports.** Most guards are a thin wrapper
      around a classifier in a sibling `.py`, so a signature taken from the wrapper
      alone stays valid through every edit to the logic, and the battery never runs
@@ -1210,21 +1222,30 @@ the consent file) must back up and restore any real consent file around itself.
      # once, before the loop: #49's sign_hooks.py signs every hook and what it
      # runs/imports in one process, symlinks resolved (#41)
      python3 sign_hooks.py "$HOOK_DIR"/*.sh > "$SIGS"   # "<hook>\t<sig>" per line
-     # then, for each hook $h:
+     # then, for each hook $h (probe tier: force mode="--selftest" and skip this
+     # promotion block entirely; the full tier runs it)
      mode="--selftest"   # reset per hook, or a fresh hook inherits the last one's tier
      sig=$(awk -F'\t' -v h="$h" '$1 == h { print $2 }' "$SIGS")
      stamp="$STAMPS/$(printf '%s' "$h" | shasum | cut -c1-16).full"
-     [ -n "$sig" ] && [ "$(cat "$stamp" 2>/dev/null || true)" = "$sig" ] || mode="--selftest-full"
+     [ "$TIER" = "full" ] && [ -n "$sig" ] && \
+       [ "$(cat "$stamp" 2>/dev/null || true)" != "$sig" ] && mode="--selftest-full"
      bash "$h" "$mode" >/dev/null 2>&1 </dev/null || return 1   # </dev/null: an
      # unknown flag drops into the main path and reads stdin — on SessionStart that
      # hangs every new session
      [ "$mode" = "--selftest-full" ] && printf '%s' "$sig" > "$stamp" 2>/dev/null
      ```
-     Failure direction is *toward the full battery*: signature unreadable,
-     mismatched, or stamp dir unwritable all run full. There is no remediation loop
+     Failure direction is *toward the full battery* **within the full tier**:
+     signature unreadable, mismatched, or stamp dir unwritable all run full. The
+     probe tier fails toward *skipping* (it re-checks on the next TTL/sig boundary)
+     because its failure domain is session-start latency, not verification
+     coverage — coverage is the full tier's job. There is no remediation loop
      here (rule 7 does not apply) — it only picks which tier to run, so slow beats
      blind. Write the stamp only on a **passing** full run, so a failure leaves the
-     next session still on full.
+     next full run still on full. One structural guard for the scheduler's own
+     source: if the health check's Python program bodies live in `$(python3 - <<'EOF' …)`
+     heredocs, a stray quote in any body comment kills the whole file under the
+     macOS stock bash — hoist them out per #56, or the scheduler itself joins the
+     guards it polices.
      Choosing the probe's cases is not "the first N": it needs one must-fire and one
      must-quiet, or the two degradation directions are not both covered. Watch for a
      must-quiet case that is secretly vacuous — an advisory-only hook always exits 0,
