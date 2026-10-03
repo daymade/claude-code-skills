@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -130,6 +131,22 @@ class SourceContractTests(unittest.TestCase):
                 file.write_text(json.dumps(data))
                 result = source.check_source(self.repo / "seed", phase="create", inventory=file)
                 self.assertEqual(result["status"], "unknown")
+
+    def test_missing_null_and_blank_source_dirs_never_use_cwd_as_owner(self):
+        file = self.root / "inventory.json"
+        previous = Path.cwd()
+        try:
+            os.chdir(self.repo)
+            for candidate in ({}, {"source_dir": None}, {"source_dir": ""}, {"source_dir": "   "},
+                              {"source_dir": "."}, {"source_dir": "missing/skill"}, {"source_dir": "~/unresolved-owner"}):
+                with self.subTest(candidate=candidate):
+                    file.write_text(json.dumps({"schema_version": 2, "marketplaces": {
+                        "test-market": {"seed": candidate}}}))
+                    result = source.check_source(self.repo / "seed", inventory=file)
+                    self.assertEqual(result["status"], "unknown")
+            self.assertEqual(source.check_source(self.repo / "seed", inventory=self.inventory())["status"], "valid")
+        finally:
+            os.chdir(previous)
 
     def test_escaping_source_and_alias_rejected(self):
         outside = self.root / "outside"
