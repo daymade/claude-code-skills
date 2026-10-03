@@ -66,6 +66,10 @@ Gate every such action: check the target process is alive before invoking its sc
 
 ## Deploy (mechanics that bite)
 
+Before deploying or integrating an existing periodic observer, apply
+`references/probe-cost.md`. Require bounded observation work and a completed native
+launchd round; importing an existing script does not certify its cost or verdict.
+
 1. **Location**: user agent → `~/Library/LaunchAgents/` (GUI session context: can `open` apps, show notifications); system daemon → `/Library/LaunchDaemons/` (root, no GUI access). Choose by whether the job needs the user's GUI session, not by habit.
 2. **plist**: start from `assets/launchagent.template.plist` (annotated: Label, ProgramArguments, StartInterval, StandardOutPath/StandardErrorPath, ThrottleInterval, Nice). Validate with `plutil -lint`. `ProgramArguments` element 0 = absolute path; never rely on PATH inheritance.
 3. **Load/reload**: `launchctl bootstrap gui/$(id -u) <plist>`; after editing a plist, `bootout` then `bootstrap` again — launchd's active state must match disk. Force one run with `launchctl kickstart -k gui/$(id -u)/<label>`.
@@ -96,5 +100,6 @@ Gate every such action: check the target process is alive before invoking its sc
 | Silent no-runs | `StandardErrorPath` missing → failures invisible; then `log show --predicate 'process == "launchd"' --last 15m` |
 | "log mtime is fresh" but the job is actually failing | out.log all-green is **not** health — a failed pass may write nothing (`set -e` + prints-verified-only-on-success), so the last-success timestamp stays fresh forever. Judge the **failure** path (err.log / last-exit status), not success-side freshness (Pattern 7) |
 | Works interactively, fails under launchd | TCC/FDA on the wrong interpreter; PATH assumptions in `ProgramArguments` |
+| Observation becomes slower as history grows | Audit cold, warm and delta work using `references/probe-cost.md`; caching bytes does not bound parsing or queries |
 
 Details and the sanitized war stories behind each clause: `references/quiet-watchdog-patterns.md`.
