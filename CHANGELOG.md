@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **tibo-reset-codex** (`tibo-reset-codex` v1.20.0 → v1.20.1): Add frozen v1.19 writer/reader compatibility tests, established-state isolation and persisted unknown-evidence readback. The new regressions detect the prior faulty implementation; runtime behavior is unchanged.
+
+- **skill-creator** (`daymade-skill` v1.55.0 → v1.56.0): Add verification recipes for mixed-version persisted formats, partial updates from established state, evidence readback and bounded output capture. Workflow redesign; existing capabilities remain available.
+
 - **tibo-reset-codex** (`tibo-reset-codex` v1.19.0 → v1.20.0): Preserve the local-time and literal-PST interpretations of ambiguous announcements. Record official point ETAs without fabricated forecast windows; separate event completion, per-account arrival and forecast scoring, including legacy completion reviews. Add a read-only follow-up plan for overdue evidence checks and keep confirmed but unscored events out of the arrival queue.
 
 - **macos-watchdog** (`daymade-macos` v1.14.2 → v1.14.3): remove derived contract counts and route recurring browser-job acceptance from the repository guide to its owning Skill.
