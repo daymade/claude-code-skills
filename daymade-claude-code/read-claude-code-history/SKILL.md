@@ -5,8 +5,8 @@ description: >-
   timelines, verbatim user input, keyword or fuzzy recall, file recovery from transcripts, and
   which session ran a given command in a known time window. Use when the user asks what was
   said, wants a session ID or original context, needs proof of what a session contained, or
-  needs past-session runtime evidence about command and tool-call activity — query this index
-  instead of raw-scanning transcript files. Not for Codex (use read-codex-history); with no
+  needs past-session runtime evidence about commands, tool calls and hook runs — query this
+  index instead of raw-scanning transcript files. Not for Codex (use read-codex-history); with no
   platform or several named, start at local-conversation-history.
 argument-hint: "[session-id | keywords | workspace-path]"
 ---
@@ -26,6 +26,7 @@ hand the verified evidence to `daymade-claude-code:continue-claude-code-work`.
 | The exact command behind a hook audit row that records a Session ID and a command SHA-256 instead of the text | `scripts/read_claude_session.py --session <ID> --find-command-sha256 <HEX>`; see **Command behind a hook audit row** below |
 | Every Agent/Task tool_use in one Session, quoted verbatim (e.g. the exact prompt handed to an independent reviewer agent) | `scripts/read_claude_session.py --session <ID> --agent-prompts` (optionally `--agent-description-prefix TEXT`); a prompt dispatched twice is listed twice |
 | Which session launched a program in a known time window, across sessions | `scripts/analyze_sessions.py tool-calls --from <ISO> --to <ISO> --pattern <REGEX> [--tool NAME]`; candidates are selected by filesystem metadata before any body is read, then grouped by session; Codex rollouts are out of scope and the gap is stated in the output |
+| When hook runs happened across sessions — outcome, duration, exit code per run (e.g. "why was session startup slow", "did this guard fire today") | `scripts/analyze_sessions.py hook-events --from <ISO> --to <ISO> [--pattern <REGEX>] [--event NAME]`; same candidate-first narrowing as tool-calls; forked-session copies of a run collapse to one; Codex rollouts are out of scope and the gap is stated in the output |
 | The user's recent words, including human queued prompts | `scripts/extract_user_messages.py` |
 | A conversation or quote by keyword | `scripts/history_index.py recall --mode bm25`, then the exact-session reader |
 | Prior work whose wording may have changed | `scripts/history_index.py recall` after checking index status |

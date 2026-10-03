@@ -998,7 +998,7 @@ resuming or modifying the old task.
 - Searching for specific code across conversation history
 - Tracking file modifications across multiple sessions
 - Finding sessions containing specific keywords or implementations
-- Finding which session ran a given command or tool call in a known time window
+- Finding which session ran a given command or tool call in a known time window, or when hook runs happened (outcome, duration, exit code)
 - Verifying date-bounded topics after a machine migration without trusting mtime
 
 **Key features:**
