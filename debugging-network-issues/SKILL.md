@@ -468,7 +468,7 @@ If all of the above point to a proxy client that resolves a bad CNAME or relies 
 
 ## Case studies
 
-Five canonical cases illustrate the methodology in different failure modes:
+The canonical cases below illustrate the methodology in different failure modes:
 
 1. [references/case-sse-rst-130s.md](references/case-sse-rst-130s.md) — a 5-hour investigation where the assistant repeatedly jumped to the wrong conclusion. The right answer — Cloudflare edge HTTP/2 stream idle timeout at 126 seconds, amplified by <upstream-provider> not emitting SSE ping during <model-name> tool_use generation — surfaced in 10 minutes once a subagent designed a 3-path layered isolation experiment with a mock idle upstream.
 
