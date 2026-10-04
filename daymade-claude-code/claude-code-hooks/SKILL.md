@@ -1124,8 +1124,9 @@ in the 2026-09-19 implementation; the instance is `home-scan-guard.sh` +
 its current file; verify its resolved path and dependencies. Register or recover
 the granter through its owning installer (in the setup above, `register-hook.sh`),
 then apply rule 4's fresh-session event check. Until the granter has been observed
-in the session receiving the authorization, use the existing user-operated
-fallback; do not infer consent capture from a settings write, or assume that all
+in the session receiving the authorization, use only an owner-documented
+user-operated fallback; if none is available, leave the guarded action pending
+until a verified grant. Do not infer consent capture from a settings write, or assume that all
 registration changes either require a restart or hot reload immediately.
 
 **Calibration is the load-bearing part:** the granter's selftest must prove
