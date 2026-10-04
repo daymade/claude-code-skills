@@ -502,17 +502,7 @@ tmutil deletelocalsnapshots <snapshot_date>
 - `*.db`, `*.sqlite` files for running applications
 - Docker volumes in active use
 
-## Safety Checklist
-
-Before deleting ANY directory:
-
-1. ✅ Do you know what it is?
-2. ✅ Is the application truly uninstalled?
-3. ✅ Have you checked if it's in use? (lsof, Activity Monitor)
-4. ✅ Do you have a Time Machine backup?
-5. ✅ Have you confirmed with the user?
-
-When in doubt, **DON'T DELETE**.
+Apply the main skill's [safety and authorization contract](../SKILL.md#safety-and-authorization-contract) together with the target-specific semantics in this reference.
 
 ## Recovery Options
 
