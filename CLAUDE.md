@@ -63,8 +63,8 @@ Use [skill-creator](daymade-skill/skill-creator/SKILL.md) before creating or
 changing a skill. It owns change classification, evidence selection, regression
 review, validation, initialization, and packaging.
 
-For first-use setup or interrupted-task recovery in an operational Skill, enter
-`skill-creator` and load its
+When creating or changing an operational Skill's first-use setup or recovery
+workflow, enter `skill-creator` and load its
 [first-use and recovery contract](daymade-skill/skill-creator/references/first-use-and-resume.md).
 
 For proxy-selection or disruptive VPN recovery changes, enter `tunnel-doctor` and its
