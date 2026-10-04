@@ -247,6 +247,13 @@ them instead of restating volatile protocol facts. The repository-wide
 local-source activation contract below still applies—never hand-create Codex
 Skill links.
 
+### Ghostty Terminal Sessions
+
+For snapshotting, restoring or reconciling Claude Code / Codex sessions in Ghostty
+across reboots, enter [`ghostty-use`](ghostty-use/SKILL.md). Its bundled script owns
+liveness classification and the paste-restore + auto-reconciliation loop; keep the
+storage-layout facts and macOS Ghostty limits in its references rather than here.
+
 ### Codex Quota and Account Checks
 
 For Codex reset announcements or account quota questions, enter

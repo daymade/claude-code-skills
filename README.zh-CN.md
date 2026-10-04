@@ -562,6 +562,39 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 ---
 
+### **ghostty-use** - Ghostty 终端会话快照与恢复
+
+重启前快照 Ghostty 里所有活跃的 Claude Code / Codex 会话，重启后用原始 session ID 一键重开所有值得保留的 tab，并证明没有任何会话被静默丢失。活性等级按会话文件内容里的最后事件时间判定（不用文件 mtime——空闲 TUI 会持续 touch 文件），渠道健康按结构化错误标志识别，恢复结束强制自动对账，粘贴失败的 tab 会显式报告并给出手动补开命令。
+
+**使用场景：**
+- 要重启电脑更新系统，希望重启后每个还在干的会话都原样回来
+- 重启后一条命令重开几十个 tab，各自带上原来的 `--resume` / `codex resume` session ID
+- 中断后盘点哪些会话还在、哪些丢了
+- 恢复前分辨死渠道会话（停在 `/login`）与健康会话
+
+**核心特性：**
+- `snapshot` / `restore` / `check` 三命令闭环，活性分级（active / stale / dead-channel / no-artifact）
+- 会话锚点用命令行 UUID，不受 argv[0] 全路径/裸名形态影响
+- 恢复后自动对账：漏开的 tab 逐个打印手动补开命令
+- 可选 profile 环境映射（`~/.ghostty-session/profile-env.json`），带环境启动的 profile 会话按原环境恢复
+- 合成 fixture 自测套件已注册 CI（16 例，纯标准库）
+
+**示例：**
+```bash
+# 安装
+claude plugin install ghostty-use@daymade-skills
+
+# 然后自然对话
+"我要重启电脑更新，把终端会话都保存一下"
+"恢复之前的 ghostty 窗口和会话"
+"restore my ghostty tabs after the update"
+"检查一下有没有会话丢了"
+```
+
+**依赖**：macOS + Ghostty；恢复键击需辅助功能权限；`python3`（纯标准库）。快照状态存于 `~/.ghostty-session/`。
+
+---
+
 ### **repomix-unmixer** - 仓库提取
 
 从 repomix 打包的仓库中提取文件并恢复目录结构。

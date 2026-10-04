@@ -282,6 +282,9 @@ claude plugin install teams-channel-post-writer@daymade-skills
 # Local Claude/Codex agent messaging
 claude plugin install peer-message@daymade-skills
 
+# Ghostty terminal session snapshot/restore
+claude plugin install ghostty-use@daymade-skills
+
 # Repomix extraction
 claude plugin install repomix-unmixer@daymade-skills
 
@@ -2807,6 +2810,39 @@ claude plugin install bilibili-source@daymade-skills
 ```
 
 **Requirements**: `curl`, `jq`, `python3` (danmaku decompression). `yt-dlp` only for the login-gated subtitle path. No login for stats / metadata / danmaku.
+
+---
+
+### **ghostty-use** - Ghostty Terminal Session Snapshot & Restore
+
+Snapshot every live Claude Code / Codex session in Ghostty before a reboot, reopen all worthwhile tabs with their original session IDs after restart, and prove nothing was silently dropped. Liveness is graded from the last in-file event timestamp (never the file mtime), channel health keys on structured error flags, and restore finishes with a mandatory auto-reconciliation that surfaces any paste that silently failed.
+
+**When to use:**
+- Quitting the Mac for a macOS update and wanting every working session back afterwards
+- After a restart: reopen 40 tabs with their original `--resume` / `codex resume` session IDs in one command
+- Auditing which sessions are still running versus lost after an interruption
+- Telling dead-provider sessions (stops at `/login`) apart from healthy ones before restoring
+
+**Key features:**
+- `snapshot` / `restore` / `check` loop with liveness grading (active / stale / dead-channel / no-artifact)
+- Session anchor is the command-line UUID, immune to argv[0] bare-vs-qualified instability
+- Auto-reconciliation after restore: every missed tab prints its manual reopen command
+- Optional profile-env mapping (`~/.ghostty-session/profile-env.json`) so profile-bootstrapped sessions restore with the same environment
+- Synthetic-fixture self-test suite registered in CI (16 cases, stdlib-only)
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install ghostty-use@daymade-skills
+
+# Then ask Claude naturally
+"我要重启电脑更新，把终端会话都保存一下"
+"恢复之前的 ghostty 窗口和会话"
+"restore my ghostty tabs after the update"
+"检查一下有没有会话丢了"
+```
+
+**Requirements**: macOS with Ghostty; Accessibility permission for the restore keystrokes; `python3` (stdlib-only). Snapshot state lives in `~/.ghostty-session/`.
 
 ---
 
