@@ -577,7 +577,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 - 会话锚点用命令行 UUID，不受 argv[0] 全路径/裸名形态影响
 - 恢复后自动对账：漏开的 tab 逐个打印手动补开命令
 - 可选 profile 环境映射（`~/.ghostty-session/profile-env.json`），带环境启动的 profile 会话按原环境恢复
-- 合成 fixture 自测套件已注册 CI（16 例，纯标准库）
+- 合成 fixture 自测套件已注册 CI（纯标准库）
 
 **示例：**
 ```bash
