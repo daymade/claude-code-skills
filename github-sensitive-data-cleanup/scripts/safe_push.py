@@ -7,11 +7,13 @@ HOST/OWNER/REPO, --expected-remote-sha (before rewrite), --verified-local-sha
 callable but fail closed without these saved preconditions. No force fallback.
 """
 import argparse
+import contextlib
 import json
 import os
 import re
 import subprocess
 import sys
+import tempfile
 import uuid
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -168,6 +170,111 @@ def pinned_remote_environment(url):
     return name, env
 
 
+def config_quote(value):
+    return '"' + value.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\t', '\\t').replace('\b', '\\b') + '"'
+
+
+def private_write(path, text, mode=0o600):
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)
+    with os.fdopen(fd, "w", encoding="utf-8") as stream:
+        stream.write(text)
+
+
+@contextlib.contextmanager
+def frozen_transport(repo_path, layout, incoming, pinned, url):
+    """Freeze Git URL/config reads; forward native hooks in their original context.
+
+    Only config, refs and shallow metadata are copied, never object storage or
+    arbitrary common-dir receipts. Authentication values stay in a private
+    temporary config; diagnostics never print them. SSH/DNS state is not frozen.
+    """
+    try:
+        raw = subprocess.run(["git", "-C", str(repo_path), "config", "--null", "--list", "--includes"],
+                             env=incoming, capture_output=True, check=False)
+        if raw.returncode or not isinstance(raw.stdout, bytes):
+            raise PushError("Effective Git configuration could not be captured")
+        records = raw.stdout.decode("utf-8", errors="strict").split("\0")
+        pairs = []
+        for record in records:
+            if not record:
+                continue
+            key, separator, value = record.partition("\n")
+            if not re.fullmatch(r"[A-Za-z0-9-]+\..*[A-Za-z0-9-]+", key):
+                raise PushError("Effective Git configuration contains an unsupported key")
+            if key.lower().startswith(("include.", "includeif.")) or key.lower() == "extensions.worktreeconfig":
+                continue  # Values from these sources were expanded by Git above.
+            if key.lower() == "extensions.refstorage" and value != "files":
+                raise PushError("Git ref storage cannot be safely isolated")
+            pairs.append((key, value if separator else None))
+        hook_value = next((value for key, value in reversed(pairs) if key.lower() == "core.hookspath"), None)
+        original_hook = ((repo_path / hook_value) if hook_value is not None
+                         else layout["common_dir"] / "hooks") / "pre-push"
+        original_hook = original_hook.resolve()
+        refs = run(repo_path, ["for-each-ref", "--format=%(objectname) %(refname)"])
+        if refs.returncode or not isinstance(refs.stdout, str):
+            raise PushError("Git refs could not be captured")
+        with tempfile.TemporaryDirectory(prefix="cleanup-push-context-") as temporary:
+            common = Path(temporary)
+            common.chmod(0o700)
+            (common / "objects/info").mkdir(parents=True)
+            private_write(common / "objects/info/alternates", str(layout["common_dir"] / "objects") + "\n")
+            (common / "refs").mkdir()
+            for row in refs.stdout.splitlines():
+                sha, separator, ref = row.partition(" ")
+                if not separator or not ref.startswith("refs/") or run(repo_path, ["check-ref-format", ref]).returncode:
+                    raise PushError("Captured Git refs are invalid")
+                full_sha(repo_path, sha)
+                file = common / ref
+                file.parent.mkdir(parents=True, exist_ok=True)
+                private_write(file, sha + "\n")
+            shallow = layout["common_dir"] / "shallow"
+            if shallow.is_file():
+                private_write(common / "shallow", shallow.read_text(encoding="utf-8"))
+            hooks = common / "forward-hooks"
+            hooks.mkdir(mode=0o700)
+            restored = {key: incoming.get(key) for key in set(incoming) |
+                        {"GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "GIT_CONFIG_NOSYSTEM", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS", "GIT_COMMON_DIR"}
+                        if key.startswith("GIT_CONFIG_") or key == "GIT_COMMON_DIR"}
+            if original_hook.is_file() and os.access(original_hook, os.X_OK):
+                private_write(common / "hook-context.json", json.dumps({"restore": restored,
+                    "cwd": str(repo_path), "hook": str(original_hook), "url": url}))
+                wrapper = '''#!INTERPRETER
+import json, os, sys
+from pathlib import Path
+try:
+    data = json.loads((Path(__file__).parent.parent / "hook-context.json").read_text())
+    if len(sys.argv) != 3 or sys.argv[2] != data["url"]:
+        sys.exit("Native hook destination differs from the saved URL")
+    env = os.environ.copy()
+    for key in tuple(env):
+        if key.startswith("GIT_CONFIG_") or key == "GIT_COMMON_DIR":
+            env.pop(key, None)
+    for key, value in data["restore"].items():
+        if value is not None:
+            env[key] = value
+    os.chdir(data["cwd"])
+    os.execve(data["hook"], [data["hook"], *sys.argv[1:]], env)
+except (OSError, ValueError, KeyError):
+    sys.exit("Original native pre-push hook could not be executed")
+'''.replace("INTERPRETER", sys.executable)
+                private_write(hooks / "pre-push", wrapper, 0o700)
+            lines = []
+            for key, value in pairs:
+                section, suffix = key.split(".", 1)
+                subsection, dotted, option = suffix.rpartition(".")
+                lines.append("[" + section + (" " + config_quote(subsection) if dotted else "") + "]")
+                lines.append("\t" + (option if dotted else suffix) + (" = " + config_quote(value) if value is not None else ""))
+            lines.extend(("[extensions]", "\tworktreeConfig = false", "[core]", "\thooksPath = " + config_quote(str(hooks))))
+            private_write(common / "config", "\n".join(lines) + "\n")
+            env = {key: value for key, value in incoming.items()
+                   if not key.startswith("GIT_CONFIG_") and key != "GIT_COMMON_DIR"}
+            env.update(GIT_COMMON_DIR=str(common), GIT_CONFIG_NOSYSTEM="1",
+                       GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull)
+            yield env
+    except (OSError, UnicodeError, ValueError):
+        raise PushError("Private Git transport context could not be created") from None
+
+
 def remote_sha(repo_path, remote, ref, env):
     result = run(repo_path, ["ls-remote", "--refs", remote, ref], env=env)
     lines = result.stdout.splitlines() if result.returncode == 0 else []
@@ -182,7 +289,7 @@ def remote_sha(repo_path, remote, ref, env):
 def push(repo_path, remote, branch, *, expected_repository=None,
          expected_remote_sha=None, verified_local_sha=None):
     """One leased push; missing saved inputs fail before Git push, including legacy calls."""
-    layout, error = get_repository_layout(Path(repo_path))
+    layout, error = get_repository_layout(repo_path)
     if error or layout is None:
         raise PushError("Repository root could not be verified")
     repo_path = layout["root"]
@@ -207,24 +314,25 @@ def push(repo_path, remote, branch, *, expected_repository=None,
     pinned, env = pinned_remote_environment(url)
     # ls-remote recognizes command-scoped names that remote get-url may omit.
     # Identical explicit url/pushurl disables pushInsteadOf for this remote.
-    for suffix in ("url", "pushurl"):
-        configured = run(repo_path, ["config", "--get-all", "remote." + pinned + "." + suffix], env=env)
-        if configured.returncode or configured.stdout.splitlines() != [url]:
-            raise PushError("Pinned remote configuration is ambiguous")
-    effective = run(repo_path, ["ls-remote", "--get-url", pinned], env=env)
-    if effective.returncode or effective.stdout.splitlines() != [url]:
-        raise PushError("Pinned push destination differs from verified URL")
-    if remote_sha(repo_path, pinned, ref, env) != expected:
-        raise PushError("Remote branch changed from saved preimage; push aborted")
-    current = run(repo_path, ["rev-parse", "--verify", ref + "^{commit}"])
-    if current.returncode or current.stdout.strip() != candidate:
-        raise PushError("Local branch changed during verification")
-    result = run(repo_path, ["push", pinned, candidate + ":" + ref,
-                            "--force-with-lease=" + ref + ":" + expected,
-                            "--no-follow-tags", "--recurse-submodules=no"], env=env)
-    observed = remote_sha(repo_path, pinned, ref, env)
-    if observed != candidate:
-        raise PushError("Push failed or remote readback differs from verified candidate")
+    with frozen_transport(repo_path, layout, env, pinned, url) as frozen:
+        for suffix in ("url", "pushurl"):
+            configured = run(repo_path, ["config", "--get-all", "remote." + pinned + "." + suffix], env=frozen)
+            if configured.returncode or configured.stdout.splitlines() != [url]:
+                raise PushError("Pinned remote configuration is ambiguous")
+        effective = run(repo_path, ["ls-remote", "--get-url", pinned], env=frozen)
+        if effective.returncode or effective.stdout.splitlines() != [url]:
+            raise PushError("Pinned push destination differs from verified URL")
+        if remote_sha(repo_path, pinned, ref, frozen) != expected:
+            raise PushError("Remote branch changed from saved preimage; push aborted")
+        current = run(repo_path, ["rev-parse", "--verify", ref + "^{commit}"])
+        if current.returncode or current.stdout.strip() != candidate:
+            raise PushError("Local branch changed during verification")
+        result = run(repo_path, ["push", pinned, candidate + ":" + ref,
+                                "--force-with-lease=" + ref + ":" + expected,
+                                "--no-follow-tags", "--recurse-submodules=no"], env=frozen)
+        observed = remote_sha(repo_path, pinned, ref, frozen)
+        if observed != candidate:
+            raise PushError("Push failed or remote readback differs from verified candidate")
     if result.returncode:
         print("Git reported failure, but independent readback confirms the verified candidate.")
     else:
@@ -241,6 +349,9 @@ def main():
     parser.add_argument("--verified-local-sha", required=True, help="Local branch SHA after verification")
     parser.add_argument("--yes", action="store_true", help="Authorize this exact bound leased push")
     args = parser.parse_args()
+    if args.repo == "":
+        print("Repository path must be supplied explicitly.", file=sys.stderr)
+        return 1
     if not args.yes:
         print("Push not authorized; --yes is required.", file=sys.stderr)
         return 1

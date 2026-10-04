@@ -117,7 +117,7 @@ def check_clean_working_tree(repo_path: Path) -> None:
         text=True, errors="replace",
         check=False,
     )
-    if result.returncode != 0:
+    if result.returncode != 0 or not isinstance(result.stdout, str):
         raise RuntimeError("Working tree cleanliness could not be verified")
     if result.stdout:
         raise RuntimeError("Working tree is not clean; preserve pending work and use an independent clone")

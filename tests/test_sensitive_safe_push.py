@@ -254,6 +254,28 @@ class SafePushTests(unittest.TestCase):
             with self.subTest(branch=branch), self.assertRaises(push.PushError):
                 push.branch_ref(self.a, branch)
 
+    def test_empty_repo_cli_and_api_do_not_select_cwd(self):
+        argv = ["safe_push.py", "--repo", "", "--remote", "origin", "--branch", "main",
+                "--expected-repository", IDENTITY, "--expected-remote-sha", self.old,
+                "--verified-local-sha", self.candidate, "--yes"]
+        with patch.object(sys, "argv", argv), patch.object(push, "push") as write, \
+                contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(push.main(), 1)
+            write.assert_not_called()
+        for repo in (None, ""):
+            with self.subTest(repo=repo), patch.object(push, "run") as commands, self.assertRaises(push.PushError):
+                push.push(repo, "origin", "main", expected_repository=IDENTITY,
+                          expected_remote_sha=self.old, verified_local_sha=self.candidate)
+            commands.assert_not_called()
+        argv[2] = "."
+        with patch.object(sys, "argv", argv), patch.object(push, "push") as write:
+            self.assertEqual(push.main(), 0)
+            self.assertEqual(write.call_args.args[0], Path("."))
+        argv[2] = " 合成 路径 "
+        with patch.object(sys, "argv", argv), patch.object(push, "push") as write:
+            self.assertEqual(push.main(), 0)
+            self.assertEqual(write.call_args.args[0], Path(" 合成 路径 "))
+
     def test_readback_failure_and_hook_rejection_do_not_claim_success(self):
         os.environ["PUSH_HOOK_EXIT"] = "1"
         with self.assertRaises(push.PushError):
@@ -321,6 +343,92 @@ class SafePushTests(unittest.TestCase):
         with patch.object(push, "pinned_remote_environment", side_effect=redirected), self.assertRaises(push.PushError):
             self.invoke()
         self.assertFalse(any(args[0] == "push" for args in self.calls))
+
+    def test_post_preflight_config_race_cannot_redirect_push_or_readback(self):
+        for location in ("local", "global", "include", "worktree"):
+            with self.subTest(location=location):
+                alternate = self.root / ("alternate-" + location + ".git")
+                self.git(self.root, "clone", "--mirror", "--no-local", str(self.remote), str(alternate))
+                included = self.root / "included.config"
+                included.write_text("")
+                self.git(self.a, "config", "include.path", str(included))
+                self.git(self.a, "config", "extensions.worktreeConfig", "true")
+                global_file = self.root / "global.config"
+                global_file.write_text("")
+                os.environ["GIT_CONFIG_GLOBAL"] = str(global_file)
+                key = "url." + str(alternate) + ".insteadOf"
+                actual = push.run
+                shadows = []
+
+                def race(repo, args, **kwargs):
+                    if args[0] == "push":
+                        shadows.append(Path(kwargs["env"]["GIT_COMMON_DIR"]))
+                        self.assertEqual(shadows[-1].stat().st_mode & 0o777, 0o700)
+                        self.assertEqual((shadows[-1] / "config").stat().st_mode & 0o777, 0o600)
+                        if location == "global":
+                            self.git(self.a, "config", "--global", key, str(self.remote))
+                        elif location == "include":
+                            self.git(self.a, "config", "--file", str(included), key, str(self.remote))
+                        elif location == "worktree":
+                            self.git(self.a, "config", "--worktree", key, str(self.remote))
+                        else:
+                            self.git(self.a, "config", key, str(self.remote))
+                    return actual(repo, args, **kwargs)
+
+                with patch.object(push, "url_identity", return_value=tuple(IDENTITY.split("/"))), \
+                        patch.object(push, "run", side_effect=race), contextlib.redirect_stdout(io.StringIO()):
+                    push.push(self.a, "origin", "main", expected_repository=IDENTITY,
+                              expected_remote_sha=self.old, verified_local_sha=self.candidate)
+                self.assertEqual(self.sha(self.remote, "main"), self.candidate)
+                self.assertEqual(self.sha(alternate, "main"), self.old)
+                self.assertEqual(len(shadows), 1)
+                self.assertFalse(shadows[0].exists())
+                # Reset only synthetic fixture state for the next independent case.
+                if location == "global":
+                    self.git(self.a, "config", "--global", "--unset-all", key)
+                elif location == "include":
+                    included.write_text("")
+                elif location == "worktree":
+                    self.git(self.a, "config", "--worktree", "--unset-all", key)
+                else:
+                    self.git(self.a, "config", "--unset-all", key)
+                self.git(self.remote, "update-ref", "refs/heads/main", self.old)
+
+    def test_forwarded_hook_retains_common_receipt_external_query_and_command_config(self):
+        common = Path(self.git(self.a, "rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip())
+        (common / "synthetic-release-receipt").write_text("approved")
+        outside = self.root / "outside"
+        outside.mkdir()
+        self.git(outside, "init", "--initial-branch=main")
+        relative = self.a / "relative-hooks"
+        relative.mkdir()
+        self.git(self.a, "config", "core.hooksPath", "relative-hooks")
+        hook = relative / "pre-push"
+        hook.write_text("#!" + sys.executable + "\n" +
+            "import os,sys,subprocess\nfrom pathlib import Path\n" +
+            "def git(*a): return subprocess.check_output(['git',*a],text=True).strip()\n" +
+            "assert Path(git('rev-parse','--path-format=absolute','--git-common-dir'),'synthetic-release-receipt').read_text()=='approved'\n" +
+            "assert git('config','--get','synthetic.command')=='retained-count'\n" +
+            "assert git('config','--get','synthetic.parameters')=='retained-parameters'\n" +
+            "assert git('config','--get','remote.'+sys.argv[1]+'.url')==sys.argv[2]\n" +
+            "env=os.environ.copy()\n" +
+            "for k in git('rev-parse','--local-env-vars').splitlines(): env.pop(k,None)\n" +
+            "actual=subprocess.check_output(['git','-C'," + repr(str(outside)) + ",'rev-parse','--show-toplevel'],env=env,text=True).strip()\n" +
+            "assert actual==" + repr(str(outside)) + "\n" +
+            "assert os.getcwd()==" + repr(str(self.a)) + "\n" +
+            "assert sys.stdin.read().strip().split()[1]==" + repr(self.candidate) + "\n" +
+            "sys.exit(int(os.environ.get('PUSH_HOOK_EXIT','0')))\n")
+        hook.chmod(0o700)
+        os.environ.update(GIT_CONFIG_COUNT="1", GIT_CONFIG_KEY_0="synthetic.command",
+                          GIT_CONFIG_VALUE_0="retained-count",
+                          GIT_CONFIG_PARAMETERS="'synthetic.parameters=retained-parameters'")
+        self.invoke()
+        self.assertEqual(self.sha(self.remote, "main"), self.candidate)
+        self.git(self.remote, "update-ref", "refs/heads/main", self.old)
+        os.environ["PUSH_HOOK_EXIT"] = "1"
+        with self.assertRaises(push.PushError):
+            self.invoke()
+        self.assertEqual(self.sha(self.remote, "main"), self.old)
 
 
 if __name__ == "__main__":

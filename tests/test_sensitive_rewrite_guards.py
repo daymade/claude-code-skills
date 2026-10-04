@@ -147,6 +147,7 @@ class RewriteGuardTests(unittest.TestCase):
     def test_status_errors_empty_partial_dirty_and_oserror_stop_before_backup(self):
         for rc, output, error in [(0, " M synthetic.txt\n", False),
                                   (0, "\n ", False),
+                                  (0, None, False), (0, False, False),
                                   (128, "", False), (128, " M synthetic.txt\n", False),
                                   (128, "\n ", False), (0, "", True)]:
             with self.subTest(rc=rc, output=output, oserror=error):
