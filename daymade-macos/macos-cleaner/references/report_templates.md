@@ -1,6 +1,6 @@
 # Report templates
 
-Use these templates after the read-only evidence phase. They implement the main skill's Observe → Plan → Confirm → Execute → Verify contract. A report is not cleanup authorization: finish the plan, stop at the gate, and wait for the user's explicit approval.
+Use these templates after the read-only evidence phase. Apply the main skill's [safety and authorization contract](../SKILL.md#safety-and-authorization-contract): a report does not create cleanup authorization. Record the existing authorization covering the verified targets and consequences, or the exact confirmation still missing. Stop when authorization is missing or the user requested a plan-only phase.
 
 ## General phase-2 cleanup plan
 
@@ -54,13 +54,13 @@ Recommend <option> because <evidence-based reason>. Alternatives:
 
 Expected result: <projected free space and capacity, with assumptions>.
 
-## Confirmation gate
+## Authorization status
 
 No state-changing command has run.
 
-Reply with:
-
-`<the exact confirmation phrase supplied for this plan>`
+- Covering authorization: <original instruction and the verified targets/conditions it covers, or none>
+- Missing confirmation: <exact target, consequence or user-supplied confirmation phrase still required, or none>
+- Next action: <execute within covering authorization, stop for the missing confirmation, or hand off a plan-only result>
 ```
 
 ## Apple Content Caching variant

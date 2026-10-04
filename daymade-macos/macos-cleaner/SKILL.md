@@ -58,7 +58,7 @@ Use this state machine for every cleanup:
 
 1. **Observe — read-only.** Capture identity, disk baseline, the suspected subsystem's status and configuration, physical allocation, and critical-service health.
 1b. **Authorize stateful inspection when unavoidable.** If deeper evidence requires creating a temporary container, pulling an image, mounting a volume, or writing a snapshot, first finish the metadata-only observation, list the exact inspection commands and their side effects, and obtain separate approval. Inspection approval is not cleanup approval.
-2. **Plan — no mutation.** Pass the Phase 2 entry gate first (four steps: target confirmation, classification table, gate rules, checker — see below), then explain findings, commands, impact, recovery, expected release, and success criteria. Stop at the confirmation gate.
+2. **Plan — no mutation.** Pass the Phase 2 entry gate first, then explain findings, commands, impact, recovery, expected release, and success criteria. Stop at the confirmation gate when authorization is missing or the user requested a plan-only phase.
 3. **Execute — approved scope only.** Re-read live state immediately before acting, then run each approved command separately and check its exit status and postcondition.
 4. **Verify — independent readback.** Measure disk space and subsystem state again, recheck protected services, and observe long enough to detect immediate refill.
 
@@ -138,9 +138,9 @@ When discovery is fanned out to sub-agents, each returns candidates and measurem
 
 Read `references/docker_analysis.md` before reporting Docker savings. List every image, container, and volume individually; inspect references and database-like contents; use actual sparse-file allocation rather than apparent size. A resource reported as dangling is not proof that its data is worthless. Build-cache measurement is supported, but build-cache deletion is deliberately out of scope because the available Docker controls are prune-family operations.
 
-## Phase 2: report and stop at the gate
+## Phase 2: report and resolve authorization
 
-### Phase 2 entry gate — four steps before any plan text
+### Phase 2 entry gate
 
 A real 2026-09-19 run followed the Phase 1 machinery to the letter and still shipped three bad plans: it proposed preserve-by-default caches (npm `_cacache`, Playwright browsers, Homebrew) as a "low-risk combo" because the rule lives in `references/cleanup_targets.md` — a file the discovery workflow never opens; it proposed `uv cache prune` as zero-impact from a `--help` line plus size ratios, never verifying semantics or the installed version; and it led with 2 GB items beside a 91 GB candidate because no free-space target had been set. The rules that would have caught all three already existed in this skill — in a reference the procedure never opened, which makes them not rules in practice. A prose checklist is only one level better than the reference it summarizes: an independent review of the first draft of this gate found thirteen blocking defects, the deepest being that the gate itself had no mechanical enforcement. Step 4 is therefore a script, not a promise — run it, or the plan does not exist.
 

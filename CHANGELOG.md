@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **macos-cleaner** (`daymade-macos` v1.16.0 → v1.16.1): Align cleanup plans and target guidance with existing scoped authorization; document the copy-budget option and route necessary-copy capacity checks to their owning contract. Remove duplicated gate counts and obsolete universal backup/confirmation requirements.
+
 - **skill-creator** (`daymade-skill` v1.59.1 → v1.59.2): Correct the materialization SOP's retry/finish ordering: finish closes the whole root, and run rejects its finished state. Keep the CLI as lifecycle authority; no runtime behavior changes.
 
 - **skill-creator** (`daymade-skill` v1.59.0 → v1.59.1): Handle ordinary child-file and directory removal during budget measurement without aborting healthy runs. Preserve cumulative high-water charges and unknown outcomes for missing/replaced roots, permission/I/O errors and unsupported files. Bounded bug correction, with regression coverage.
