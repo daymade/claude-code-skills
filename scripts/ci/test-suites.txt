@@ -74,3 +74,4 @@ python-unittest  setup-notifications-via-wecom/tests
 python-unittest  tibo-reset-codex/tests
 python-unittest  tunnel-doctor/tests
 python-unittest  bilibili-source/tests
+python-unittest  ghostty-use/scripts
