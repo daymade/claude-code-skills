@@ -3,12 +3,12 @@
 Phase 2 entry-gate checker for the macos-cleaner skill.
 
 Reads the classification table and the plan the agent wrote, then mechanically
-enforces the gate rules stated in SKILL.md ("Phase 2 entry gate — four steps
-before any plan text"). Exit 0 is required before a plan may be sent.
+enforces the gate rules stated in SKILL.md. Exit 0 is required before a plan
+may be sent.
 
 Usage:
     uv run scripts/check_gate_plan.py --table <gate-table.md> --plan <plan.md> \
-        [--reference <path>]
+        [--reference <path>] [--copy-budget <manifest.json>] [--verbose]
 
 Options:
     --reference   Reference corpus the governing-rule quotes are verified
@@ -18,6 +18,7 @@ Options:
                   provenance too, because the gate contract allows a quote from
                   "the route's dedicated reference" and real plans also quote the
                   skill body. An explicit --reference is authoritative on its own.
+    --copy-budget JSON copy rationale/peak budget; run on the destination host.
     --verbose     Also print per-row parse details.
 
 Exit codes:
