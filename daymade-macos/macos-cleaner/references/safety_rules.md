@@ -2,13 +2,13 @@
 
 Critical safety guidelines to prevent data loss and system damage.
 
-This reference defines the agent's required preflight, not a claim that every check is implemented by `scripts/safe_delete.py`. The bundled helper performs an exact-path existence check, a limited hard denylist, an interactive prompt, and permanent deletion. It does **not** move items to Trash, hard-block all user-data roots, run `lsof`, enforce the >10 GiB backup discussion, or independently measure physical space after deletion. The main skill therefore keeps user data and application state outside that helper and uses Finder Trash for recoverable ordinary-file handling.
+This reference defines the agent's required preflight, not a claim that every check is implemented by `scripts/safe_delete.py`. The bundled helper performs an exact-path existence check, a limited hard denylist, an interactive prompt, and permanent deletion. It does **not** move items to Trash, hard-block all user-data roots, run `lsof`, check a copy budget, or independently measure physical space after deletion. Keep user data and application state outside that helper; choose Trash or authorized permanent deletion under the main skill's contract.
 
 ## Golden Rules
 
-### Rule 1: Never Delete Without Confirmation
+### Rule 1: Delete Only Within Verified Authorization
 
-**ALWAYS** ask user before deleting ANY file or directory.
+Resolve the main skill's authorization contract first. Ask when the exact target or consequence is outside existing approval; do not ask again for a verified disposable target already covered by an explicit safe-cleanup instruction. Keep exact-phrase requirements and user exclusions intact.
 
 **Bad**:
 ```python
@@ -17,7 +17,7 @@ shutil.rmtree(cache_dir)  # Immediately deletes
 
 **Good**:
 ```python
-if confirm_delete(cache_dir, size, description):
+if authorization_covers(cache_dir, size, description):
     shutil.rmtree(cache_dir)
 else:
     print("Skipped")
@@ -46,9 +46,9 @@ Ask user to verify instead.
 
 These paths and their descendants are blocked even when the user selects `all` in batch mode.
 
-### Rule 5: Suggest Backups for Large Deletions
+### Rule 5: Back Up Unique Value, Not a Size Threshold
 
-Before deleting >10 GiB, recommend Time Machine backup.
+Use the main skill's deletion-basis rules. Large disposable dependency trees and retired test builds do not need a second full copy merely because they exceed 10 GiB. Preserve unique state; a backup is not evidence that the source is safe to delete. Use a necessary or explicitly requested copy only after the capacity preflight below.
 
 ### Rule 6: Docker Prune Prohibition
 
@@ -152,25 +152,23 @@ uv run scripts/safe_delete.py "/exact/approved/path"
 
 ### Large Deletions
 
-**Threshold**: >10 GiB
+Classify contents and verify current authorization regardless of size. State permanent deletion and rebuild cost once. Ask only for unresolved unique value or a consequence not covered by the instruction; do not turn a size threshold into a backup or reconfirmation requirement.
 
-**Action**: Warn user and suggest Time Machine backup
+### Necessary-copy capacity preflight
 
-**Example**:
-```
-⚠️ This operation will delete 45 GB of data.
+Run `scripts/check_gate_plan.py --table <gate-table.md> --plan <plan.md> --copy-budget <manifest.json>` on the destination host before starting a backup, extraction or verification copy. The JSON object contains:
 
-💡 Recommendation:
-   Create a Time Machine backup first.
+| Field | Required value |
+|---|---|
+| `destination_parent` | Absolute existing directory on the destination filesystem |
+| `max_total_bytes` | Positive integer allowance for all retained copies, partials, logs and metadata |
+| `minimum_free_bytes` | Positive integer destination free-space reserve |
+| `copies` | Nonempty array; each entry has an exact classification-table `target`, positive integer `source_bytes` and `copies_at_peak`, a nonblank `reason`, and `basis` of `unique-state` or `user-requested` |
+| `copies[].user_direction` | Nonblank original instruction when `basis` is `user-requested`; the executor verifies its authority and scope |
 
-   Check last backup:
-     tmutil latestbackup
+Count each archive, extracted tree, verification tree and retained partial as a copy at its measured uncompressed size. Charge metadata/log overhead within the total allowance. The checker rejects absent/invalid fields, automatic copies of REBUILDABLE/PROPOSABLE targets, a peak estimate above the allowance, and insufficient live destination space for the allowance plus reserve. For necessary preservation, reclassify genuine unique state with evidence before copying; user-requested artifact preservation remains supported.
 
-   Create backup now:
-     tmutil startbackup
-
-Proceed without backup? [y/N]:
-```
+Without `--copy-budget`, a passing plan grants no copy preparation. This preflight does not run or monitor copies and cannot prove source classification or user authority. Re-run it before each stage with the complete still-retained set. On low space or an unknown measurement, stop the affected copy, keep the original, reassess its necessity, and continue independent authorized cleanup.
 
 ### System-Wide Caches
 
@@ -366,13 +364,8 @@ def safe_delete(path, size, description):
     if not can_delete(path):
         return (False, "No permission")
 
-    # Backup warning for large deletions
-    if size > 10 * 1024 * 1024 * 1024:  # 10 GiB
-        if not confirm_large_deletion(size):
-            return (False, "User cancelled")
-
-    # Final confirmation
-    if not confirm_delete(path, size, description):
+    # Existing authorization covers this verified target and consequence.
+    if not authorization_covers(path, size, description):
         return (False, "User cancelled")
 
     # Execute deletion
@@ -448,7 +441,7 @@ tmutil browse
 ### Preventing Accidents
 
 1. **Use Trash instead of rm** when possible
-2. **Require Time Machine backup** for >10 GiB deletions
+2. **Preserve unique state**; run capacity preflight for any necessary copy
 3. **Test on small items first** before batch operations
 4. **Show dry-run results** before actual deletion
 
@@ -513,7 +506,7 @@ When implementing cleanup:
 1. **Assume danger** until proven safe
 2. **Explain everything** to user
 3. **Confirm each step**
-4. **Suggest backups** for large operations
+4. **Choose recovery from the contents**, not their size
 5. **Use Trash** when possible
 6. **Test thoroughly** before packaging
 
@@ -533,7 +526,7 @@ Before any deletion:
 - [ ] Path is not in use
 - [ ] User has been informed of impact
 - [ ] User has explicitly confirmed
-- [ ] Backup suggested for large deletions
+- [ ] Unique state preserved; any necessary copy passed destination capacity preflight
 - [ ] Error handling in place
 - [ ] Recovery options documented
 

@@ -335,7 +335,7 @@ Build-cache deletion is outside this skill's execution scope. Do not advertise t
 
 **Safety**: 🟡 **Rebuildable**
 
-**Impact**: Need to run `npm install` to restore
+**Impact**: Restore with the project's package manager and retained lockfile. Verify registry/private-package availability and any patch inputs rather than assuming `npm install` reproduces every project.
 
 **Finding large node_modules inside an exact approved project root**:
 ```bash
@@ -344,7 +344,13 @@ find "<approved-project-root>" -name "node_modules" -type d -prune -print 2>/dev
 done | sort -hr
 ```
 
-**Cleanup**: after confirming the project is reproducible and the exact directory is approved, use the main skill's Finder Trash path. Permanent deletion needs separate irreversible approval.
+**Cleanup**: verify inactivity, retained source/lockfile and reinstall inputs. With an existing instruction covering safe permanent cleanup, remove the exact disposable directory without making a dependency backup or asking again. Otherwise use the main skill's approval/Trash path. Actual hand edits or unavailable dependencies require preservation; do not invent them as a reason to copy every dependency tree.
+
+### Retired packaged test Apps and build caches
+
+Verify that an exact bundle/cache is a generated test artifact rather than an installed or currently selected application. Check current processes, open files and live launch/configuration references; retain source, build inputs and diagnostic records outside the deletion target. Confirm retirement independently of inactivity: an offline installer or required historical reproduction may still matter.
+
+Under an existing safe-cleanup instruction, delete a verified disposable build cache or retired test bundle without first cloning or archiving it. An explicit instruction to discard the old binary does not require proving that the identical signed binary can be rebuilt. Embedded unique data, an active/reference-dependent runtime or a still-required offline artifact stays protected until resolved. Report physical release from `df`, not the bundle's nominal size.
 
 ### Python Virtual Environments
 

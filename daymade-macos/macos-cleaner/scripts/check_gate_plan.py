@@ -27,6 +27,8 @@ Exit codes:
 """
 
 import argparse
+import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -1640,6 +1642,64 @@ def load_references(reference, bundle):
 
 # --- entry point ------------------------------------------------------------
 
+def check_copy_budget(path, gate_rows):
+    """Read-only destination preflight; absent input authorizes no copies."""
+    if path is None:
+        return Result('copy_budget', True, ['no copy preparation authorized; '
+                      'supply --copy-budget before making a copy'])
+    try:
+        data = json.loads(Path(path).read_text(encoding='utf-8'))
+        if not isinstance(data, dict):
+            raise ValueError('copy budget must be an object')
+        def positive(value, label):
+            if type(value) is not int or value <= 0:
+                raise ValueError(label + ' must be a positive integer')
+            return value
+        allowance = positive(data.get('max_total_bytes'), 'max_total_bytes')
+        reserve = positive(data.get('minimum_free_bytes'), 'minimum_free_bytes')
+        parent = data.get('destination_parent')
+        if not isinstance(parent, str) or not parent.strip() or \
+                not Path(parent).is_absolute() or not Path(parent).is_dir():
+            raise ValueError('destination_parent must be an absolute existing directory')
+        copies = data.get('copies')
+        if not isinstance(copies, list) or not copies:
+            raise ValueError('copies must be a nonempty array')
+        rows = {row.target.strip().strip('`'): row for row in gate_rows}
+        peak = 0
+        for item in copies:
+            if not isinstance(item, dict):
+                raise ValueError('each copy must be an object')
+            target = item.get('target')
+            if not isinstance(target, str) or target not in rows:
+                raise ValueError('copy target must match an exact classified target')
+            reason = item.get('reason')
+            if not isinstance(reason, str) or not reason.strip():
+                raise ValueError('copy reason is missing or blank')
+            basis = item.get('basis')
+            if basis not in ('unique-state', 'user-requested'):
+                raise ValueError('copy basis must be unique-state or user-requested')
+            if basis == 'user-requested':
+                direction = item.get('user_direction')
+                if not isinstance(direction, str) or not direction.strip():
+                    raise ValueError('user-requested copy lacks original user_direction')
+            elif rows[target].cls in ('REBUILDABLE', 'PROPOSABLE'):
+                raise ValueError('automatic backup of disposable target: ' + target)
+            peak += positive(item.get('source_bytes'), 'source_bytes') * \
+                positive(item.get('copies_at_peak'), 'copies_at_peak')
+        if peak > allowance:
+            raise ValueError('uncompressed copy peak %d exceeds allowance %d' % (peak, allowance))
+        capacity = os.statvfs(parent)
+        available = capacity.f_bavail * capacity.f_frsize
+        if available < allowance + reserve:
+            raise ValueError('destination available %d cannot cover allowance %d plus reserve %d'
+                             % (available, allowance, reserve))
+        return Result('copy_budget', True, ['%d copy entries examined; peak %d, allowance %d, '
+                      'reserve %d, destination available %d bytes' %
+                      (len(copies), peak, allowance, reserve, available)])
+    except (OSError, ValueError, TypeError) as error:
+        return Result('copy_budget', False, [str(error)])
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         description='Check a macos-cleaner Phase 2 plan against the entry gate.')
@@ -1655,6 +1715,8 @@ def build_parser():
                              'the default is the calibrated configuration.)')
     parser.add_argument('--verbose', action='store_true',
                         help='print the parsed rows as well as the verdicts')
+    parser.add_argument('--copy-budget', default=None,
+                        help='JSON copy rationale/peak budget; run on the destination host')
     return parser
 
 
@@ -1689,6 +1751,7 @@ def main(argv=None):
         check_category_wide_exclusion(commands, gate_rows, plan_tables),
         check_lead_rule(commands, gate_rows, plan_text),
         check_tool_verification(commands, plan_text, gate_rows, plan_tables),
+        check_copy_budget(args.copy_budget, gate_rows),
     ]
 
     for result in results:
