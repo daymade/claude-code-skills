@@ -15,7 +15,10 @@ catches the failure it exists for, or whether it would block a healthy plan.
 
 import importlib.util
 import io
+import json
 import os
+import tempfile
+from types import SimpleNamespace
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -1518,6 +1521,92 @@ class Probe4EvidenceRequirementControlTests(Probe4Case):
 
     TABLE = 'r4-13ctl'
     EXPECT_RULES = ('action_set_classes', 'preserve_by_default')
+
+
+class CopyBudgetTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.path = Path(self.temp.name) / 'copy.json'
+        self.rows = CHECKER.collect_gate_rows(
+            '| Target | Class | Verdict | Rule |\n|---|---|---|---|\n'
+            '| /example/node_modules | REBUILDABLE | in action set | rebuild |\n'
+            '| /example/old.app | PROPOSABLE | in action set | retired |\n'
+            '| /example/unique | USER-DATA | not in action set | keep |\n')
+        self.data = dict(destination_parent=self.temp.name, max_total_bytes=1024,
+                         minimum_free_bytes=100, copies=[dict(
+                             target='/example/unique', source_bytes=100,
+                             copies_at_peak=3, reason='unique local work', basis='unique-state')])
+
+    def check(self, available=5000):
+        self.path.write_text(json.dumps(self.data))
+        with patch.object(CHECKER.os, 'statvfs', return_value=SimpleNamespace(
+                f_bavail=available, f_frsize=1)):
+            return CHECKER.check_copy_budget(str(self.path), self.rows)
+
+    def test_no_manifest_authorizes_no_copy(self):
+        result = CHECKER.check_copy_budget(None, self.rows)
+        self.assertTrue(result.passed)
+        self.assertIn('no copy preparation authorized', result.render())
+
+    def test_small_unique_copy_and_exact_count(self):
+        result = self.check()
+        self.assertTrue(result.passed)
+        self.assertIn('1 copy entries examined; peak 300', result.render())
+
+    def test_actual_destination_measurement(self):
+        self.path.write_text(json.dumps(self.data))
+        self.assertTrue(CHECKER.check_copy_budget(str(self.path), self.rows).passed)
+
+    def test_disposable_backup_rejected_and_user_request_supported(self):
+        for target in ('/example/node_modules', '/example/old.app'):
+            with self.subTest(target=target):
+                self.data['copies'][0]['target'] = target
+                self.data['copies'][0]['basis'] = 'unique-state'
+                self.assertIn('automatic backup', self.check().render())
+                self.data['copies'][0]['basis'] = 'user-requested'
+                self.data['copies'][0].pop('user_direction', None)
+                self.assertFalse(self.check().passed)
+                self.data['copies'][0]['user_direction'] = 'Preserve this exact artifact'
+                self.assertTrue(self.check().passed)
+
+    def test_all_uncompressed_copies_count_even_when_compression_expected(self):
+        self.data['copies'][0]['copies_at_peak'] = 11
+        self.assertIn('peak 1100 exceeds allowance 1024', self.check().render())
+
+    def test_reserve_and_unknown_capacity_fail(self):
+        self.assertFalse(self.check(1123).passed)
+        self.assertTrue(self.check(1124).passed)
+        with patch.object(CHECKER.os, 'statvfs', side_effect=OSError('unknown')):
+            self.path.write_text(json.dumps(self.data))
+            self.assertFalse(CHECKER.check_copy_budget(str(self.path), self.rows).passed)
+
+    def test_missing_blank_null_and_boolean_budget_fields(self):
+        for key in ('max_total_bytes', 'minimum_free_bytes'):
+            for bad in (None, '', 0, -1, True):
+                with self.subTest(key=key, bad=bad):
+                    original = self.data.pop(key)
+                    self.assertFalse(self.check().passed)
+                    self.data[key] = bad
+                    self.assertFalse(self.check().passed)
+                    self.data[key] = original
+        for key in ('source_bytes', 'copies_at_peak', 'reason', 'basis', 'target'):
+            original = self.data['copies'][0].pop(key)
+            self.assertFalse(self.check().passed)
+            self.data['copies'][0][key] = None
+            self.assertFalse(self.check().passed)
+            self.data['copies'][0][key] = original
+
+    def test_invalid_manifest_and_destination(self):
+        for bad in ('', '{', '[]', 'null'):
+            self.path.write_text(bad)
+            self.assertFalse(CHECKER.check_copy_budget(str(self.path), self.rows).passed)
+        for parent in ('', '.', '/nonexistent-copy-destination'):
+            self.data['destination_parent'] = parent
+            self.assertFalse(self.check().passed)
+        self.data['destination_parent'] = self.temp.name
+        self.data['copies'] = []
+        self.assertFalse(self.check().passed)
 
 
 if __name__ == '__main__':
