@@ -112,6 +112,11 @@ This measures observed storage growth, not every byte ever written: same-path
 rewrites and creation/deletion entirely between samples can escape cumulative
 measurement. Keep retry outputs in distinct paths and preserve evidence.
 
+A normal child file or directory that disappears during traversal is sampled as
+absent; its previously recorded high-water charge remains. A missing or replaced
+root, permission/I/O errors, special files, and traversal errors without a named
+strict descendant still make measurement unknown. The traversal is not atomic.
+
 Use `run --poll-interval <seconds>` to choose the polling interval; the
 [CLI argument parser](../scripts/materialize.py) defines its default.
 A write burst can overshoot between samples or during filesystem traversal.
@@ -182,7 +187,8 @@ uv run --frozen python -m unittest tests.test_materialize
 The tests create isolated small Git repositories and exercise selected-ref export,
 all-arm/ref-based preflight, missing and blank limits, LFS pointer/local-only modes,
 monitored overage, free/unknown measurements, failed and interrupted runs, stale
-lock recovery, and conservative cleanup. No fixture loads the source repository's
+lock recovery, disappearing-child races, root identity, retained high-water charges,
+and conservative cleanup. No fixture loads the source repository's
 history or downloads dependencies/media. The subprocess lifecycle follows Python's
 [subprocess contract](https://docs.python.org/3/library/subprocess.html); Git input
 selection is explicit rather than the whole-tree default documented by

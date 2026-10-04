@@ -1,4 +1,5 @@
 """KB-scale isolated Git fixtures; no user Git config, hooks, or network."""
+import errno
 import hashlib
 import json
 import os
@@ -55,6 +56,154 @@ class MaterializeTests(unittest.TestCase):
 
     def read(self):
         return json.loads((self.root / m.STATE).read_text())
+
+    def test_scan_file_removed_between_walk_and_lstat_is_sampled_absent(self):
+        self.root.mkdir()
+        gone = self.root / ".next" / "export" / "transient.js"
+        gone.parent.mkdir(parents=True)
+        gone.write_bytes(b"temporary")
+        (self.root / "kept.log").write_bytes(b"kept")
+        original = Path.lstat
+        removed = []
+
+        def remove_then_lstat(path, *args, **kwargs):
+            if path == gone:
+                path.unlink()
+                removed.append(path)
+            return original(path, *args, **kwargs)
+
+        with mock.patch.object(Path, "lstat", remove_then_lstat):
+            sizes = m.scan(self.root)
+        self.assertEqual(removed, [gone])
+        self.assertIn("kept.log", sizes)
+        self.assertNotIn(".next/export/transient.js", sizes)
+
+    def test_scan_directory_removed_before_scandir_is_sampled_absent(self):
+        self.root.mkdir()
+        gone = self.root / ".next" / "export"
+        gone.mkdir(parents=True)
+        (self.root / "kept.log").write_bytes(b"kept")
+        original = os.scandir
+        removed = []
+
+        def remove_then_scandir(path):
+            if Path(path) == gone:
+                gone.rmdir()
+                removed.append(gone)
+            return original(path)
+
+        with mock.patch.object(m.os, "scandir", remove_then_scandir):
+            sizes = m.scan(self.root)
+        self.assertEqual(removed, [gone])
+        self.assertIn("kept.log", sizes)
+        self.assertFalse(gone.exists())
+
+    def test_scan_root_missing_or_replaced_during_walk_remains_unknown(self):
+        self.root.mkdir()
+        with mock.patch.object(m.os, "walk", return_value=iter(())):
+            self.assertIn(".", m.scan(self.root))
+        for replace in (False, True):
+            with self.subTest(replace=replace):
+                root = self.base / ("replace-root" if replace else "missing-root")
+                root.mkdir()
+
+                def change_root(*args, **kwargs):
+                    root.rename(root.with_name(root.name + "-old"))
+                    if replace:
+                        root.mkdir()
+                    yield str(root), [], []
+
+                with mock.patch.object(m.os, "walk", change_root):
+                    with self.assertRaises(m.MaterializationError) as error:
+                        m.scan(root)
+                self.assertEqual(error.exception.reason, "measurement_unknown")
+        with self.assertRaises(m.MaterializationError) as error:
+            m.scan(self.base / "never-present-root")
+        self.assertEqual(error.exception.reason, "measurement_unknown")
+
+    def test_scan_child_permission_io_and_special_files_remain_unknown(self):
+        self.root.mkdir()
+        child = self.root / "child"
+        child.write_bytes(b"kept")
+        original = Path.lstat
+        for number in (errno.EACCES, errno.EIO):
+            with self.subTest(stage="lstat", errno=number):
+                def fail_child(path, *args, **kwargs):
+                    if path == child:
+                        raise OSError(number, "synthetic measurement failure", str(child))
+                    return original(path, *args, **kwargs)
+                with mock.patch.object(Path, "lstat", fail_child):
+                    with self.assertRaises(m.MaterializationError) as error:
+                        m.scan(self.root)
+                self.assertEqual(error.exception.reason, "measurement_unknown")
+            with self.subTest(stage="walk", errno=number):
+                def fail_walk(*args, **kwargs):
+                    kwargs["onerror"](OSError(number, "synthetic walk failure", str(child)))
+                    return iter(())
+                with mock.patch.object(m.os, "walk", fail_walk):
+                    with self.assertRaises(m.MaterializationError) as error:
+                        m.scan(self.root)
+                self.assertEqual(error.exception.reason, "measurement_unknown")
+        os.mkfifo(self.root / "special")
+        with self.assertRaises(m.MaterializationError) as error:
+            m.scan(self.root)
+        self.assertEqual(error.exception.reason, "measurement_unknown")
+
+    def test_scan_walk_enoent_requires_a_named_strict_descendant(self):
+        self.root.mkdir()
+        for filename in (None, "", str(self.root), str(self.base / "outside")):
+            with self.subTest(filename=filename):
+                def fail_walk(*args, **kwargs):
+                    kwargs["onerror"](FileNotFoundError(errno.ENOENT, "synthetic disappearance", filename))
+                    return iter(())
+                with mock.patch.object(m.os, "walk", fail_walk):
+                    with self.assertRaises(m.MaterializationError) as error:
+                        m.scan(self.root)
+                self.assertEqual(error.exception.reason, "measurement_unknown")
+
+    def test_scan_symlink_stays_accounted_without_following_target(self):
+        self.root.mkdir()
+        target = self.base / "link-target"
+        target.mkdir()
+        (target / "sentinel").write_bytes(b"outside sentinel")
+        link = self.root / "link"
+        link.symlink_to(target, target_is_directory=True)
+        self.assertEqual((link / "sentinel").read_bytes(), b"outside sentinel")
+        sizes = m.scan(self.root)
+        self.assertIn("link", sizes)
+        self.assertNotIn("link/sentinel", sizes)
+        self.assertEqual(set(sizes), {".", "link"})
+
+    def test_disappearing_sample_preserves_saved_highwater_and_budget_overage(self):
+        self.prepare()
+        gone = self.root / ".next" / "export" / "sampled.js"
+        gone.parent.mkdir(parents=True)
+        gone.write_bytes(b"x" * 4096)
+        record = self.read()
+        m.measure(record, self.root)
+        previous = record["charged_bytes"]
+        highwater = record["path_highwater"][".next/export/sampled.js"]
+        original = Path.lstat
+        removed = []
+
+        def remove_then_lstat(path, *args, **kwargs):
+            if path == gone:
+                path.unlink()
+                removed.append(path)
+            return original(path, *args, **kwargs)
+
+        with mock.patch.object(Path, "lstat", remove_then_lstat):
+            m.measure(record, self.root)
+        self.assertEqual(removed, [gone])
+        self.assertGreaterEqual(record["charged_bytes"], previous)
+        self.assertEqual(record["path_highwater"][".next/export/sampled.js"], highwater)
+        m.save(self.root, record)
+        self.assertEqual(self.read()["charged_bytes"], record["charged_bytes"])
+        self.assertEqual(self.read()["path_highwater"][".next/export/sampled.js"], highwater)
+        record["max_total_bytes"] = previous - 1
+        with self.assertRaises(m.MaterializationError) as error:
+            m.measure(record, self.root)
+        self.assertEqual(error.exception.reason, "budget_exceeded")
 
     def test_small_selected_export_uses_immutable_ref_and_no_history(self):
         (self.repo / "selected" / "input.txt").write_text("HEAD changed\n")

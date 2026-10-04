@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **skill-creator** (`daymade-skill` v1.59.0 → v1.59.1): Handle ordinary child-file and directory removal during budget measurement without aborting healthy runs. Preserve cumulative high-water charges and unknown outcomes for missing/replaced roots, permission/I/O errors and unsupported files. Bounded bug correction, with regression coverage.
+
 - **claude-code-hooks** (`daymade-claude-code` v4.17.0 → v4.18.0): Prefer compatible in-process rule modules over one registration per rule. Preserve tool coverage, per-rule authorization/state/failure semantics, lifecycle writers and independent human-wait budgets; verify native handler and child-process counts. Replace pitfall #22's blanket recommendation to retain the fleet. Bounded routing correction.
 
 - **skill-creator** (`daymade-skill` v1.58.1 → v1.59.0): Add a first-use and recovery contract for operational Skills: assign software preparation to the agent, check identity and privilege context across human handoffs, and distinguish dependency readiness from the requested task's verified result. Preserve existing installers, reference-only workflows and evaluation budgets.
