@@ -1127,7 +1127,26 @@ the consent file) must back up and restore any real consent file around itself.
 
 ## Build order (in sequence)
 
-Before writing or registering another hook, inspect existing engines and extend one when the event, matcher, advisory/blocking role and state/authorization boundaries fit; use a separate entry when they do not. Shared intent alone does not establish compatible mechanisms.
+Before writing or registering another hook, inspect existing engines by mechanism
+and host event. Prefer an in-process rule module that shares input parsing and
+lazy fact queries. Keep each rule's tool selector, authorization evidence, state
+namespace, cadence and failure policy independent; those boundaries do not by
+themselves require separate processes. When combining matchers, preserve their
+original coverage with internal selectors, including non-Bash tools, and keep
+state writers on their original lifecycle events.
+
+Preserve the complete host protocol when combining results: exit 0/1/2, structured
+deny, advisory context and error diagnostics. An allow from one rule must not
+release another rule's denial. Use separate entries when host/event/runtime
+contracts cannot be combined, or when combining independent human waits would
+serialize them or truncate their existing budgets. Never apply a short common
+timeout to an interactive authorization gate.
+
+Verify both unique matching handlers and spawned interpreters in a representative
+native-host task. A dispatcher that launches every old hook as a child reduces
+registrations without removing the per-call work. Keep module-specific tests and
+observable failure identities; do not merge unrelated judgments into one shared
+approval or “already reminded” flag.
 
 1. **Confirm it's a real recurrence**, not hypothetical — else don't build it.
    If the hook will **demand a remediation** rather than just block, write its
