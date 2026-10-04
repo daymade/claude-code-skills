@@ -134,6 +134,15 @@ _UNOBTAINED_MARKER_RE = re.compile(
 )
 
 
+# Explicit denial must take an authority citation as its immediate object.
+# Only enumerated objects continue that phrase; unrelated negative statements
+# and independently obtained citations retain the existing authority rules.
+_DENIED_AUTHORITY_RE = re.compile(r"不声称|没有")
+# A bounded object prefix: determiner, acquisition verb, validity modifier.
+# Punctuation, unrelated prose and independent obtained/contrast clauses are
+# not object modifiers. This is citation syntax, not general language inference.
+_DENIAL_OBJECT_PREFIX_RE = re.compile(r"(?:\s|任何|取得|获得|有效的?)*")
+
 def _ungoverned_authority_starts(clause: str) -> set[int]:
     """Start offsets of the authority nouns in ``clause`` no need-marker governs.
 
@@ -142,9 +151,26 @@ def _ungoverned_authority_starts(clause: str) -> set[int]:
     nouns = list(_AUTHORITY_RE.finditer(clause))
     if not nouns:
         return set()
+    denied: set[int] = set()
+    for denial in _DENIED_AUTHORITY_RE.finditer(clause):
+        following = [noun for noun in nouns if noun.start() >= denial.end()]
+        previous_end = denial.end()
+        for index, noun in enumerate(following):
+            connector = clause[previous_end:noun.start()]
+            if index == 0:
+                if not _DENIAL_OBJECT_PREFIX_RE.fullmatch(connector):
+                    break
+            elif not re.match(r"^[、/或和]", connector) or re.search(
+                r"但|已(?:取得|获得|获取)", connector
+            ):
+                break
+            denied.add(noun.start())
+            if noun.end() < len(clause) and clause[noun.end()].isspace():
+                break
+            previous_end = noun.end()
     markers = list(_UNOBTAINED_MARKER_RE.finditer(clause))
     if not markers:
-        return {m.start() for m in nouns}
+        return {m.start() for m in nouns} - denied
     # A whitespace that closes an authority noun terminates the governed noun
     # phrase: the citation is complete, so what follows is a new one.
     boundaries = {
@@ -169,7 +195,7 @@ def _ungoverned_authority_starts(clause: str) -> set[int]:
             # this can only add refusals, never let one pass.
             reachable = {noun.start() for noun in nouns}
         governed |= reachable
-    return {m.start() for m in nouns} - governed
+    return {m.start() for m in nouns} - governed - denied
 
 
 @dataclass

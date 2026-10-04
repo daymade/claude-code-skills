@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **daymade-audio** (v1.44.2 → v1.44.3): transcript-fixer rejects explicitly denied authority citations while preserving independent obtained citations.
+
 ### Changed
 
 - **macos-cleaner** (`daymade-macos` v1.16.0 → v1.16.1): Align cleanup plans and target guidance with existing scoped authorization; document the copy-budget option and route necessary-copy capacity checks to their owning contract. Remove duplicated gate counts and obsolete universal backup/confirmation requirements.
