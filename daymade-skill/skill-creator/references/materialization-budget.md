@@ -53,9 +53,8 @@ partial-clone object fails instead of silently downloading into a shared cache.
 
 ## Runnable small example
 
-Run this from the skill-creator directory. It selects only this skill's committed
-`SKILL.md`; the example explicitly chooses a 1 MiB allowance and a one-byte reserve
-for a tiny smoke test. Set operational limits from the real task before any larger
+Run this from the skill-creator directory. The manifest below chooses explicit
+limits for a tiny smoke test. Set operational limits from the real task before any larger
 run. The root below does not exist when `prepare` creates it.
 
 ```bash
