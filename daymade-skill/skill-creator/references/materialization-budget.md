@@ -112,8 +112,9 @@ This measures observed storage growth, not every byte ever written: same-path
 rewrites and creation/deletion entirely between samples can escape cumulative
 measurement. Keep retry outputs in distinct paths and preserve evidence.
 
-A normal child file or directory that disappears during traversal is sampled as
-absent; its previously recorded high-water charge remains. A missing or replaced
+A child entry or subtree unavailable with ENOENT during traversal is skipped;
+sizes already observed in that sample and previously recorded high-water charges
+remain. A missing or replaced
 root, permission/I/O errors, special files, and traversal errors without a named
 strict descendant still make measurement unknown. The traversal is not atomic.
 
