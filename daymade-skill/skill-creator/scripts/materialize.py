@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import errno
 import hashlib
 import json
 import math
@@ -193,19 +194,40 @@ def check_limits(record, root):
 def scan(root):
     """Bounded to this root; account allocated and logical sizes, never follow links."""
     sizes = {}
+
+    def walk_error(error):
+        if (isinstance(error, FileNotFoundError) and error.errno == errno.ENOENT
+                and isinstance(error.filename, str) and error.filename):
+            try:
+                missing = Path(os.path.abspath(error.filename)).relative_to(root.absolute())
+            except ValueError:
+                pass
+            else:
+                if missing.parts:
+                    return
+        raise error
+
     try:
         root_stat = root.lstat()
         if not stat.S_ISDIR(root_stat.st_mode):
             raise OSError("task root is no longer a directory")
         sizes["."] = max(root_stat.st_size, root_stat.st_blocks * 512)
-        for directory, dirs, files in os.walk(root, followlinks=False,
-                                              onerror=lambda e: (_ for _ in ()).throw(e)):
+        for directory, dirs, files in os.walk(root, followlinks=False, onerror=walk_error):
             for name in list(dirs) + files:
                 path = Path(directory) / name
-                s = path.lstat()
+                try:
+                    s = path.lstat()
+                except FileNotFoundError as error:
+                    if error.errno != errno.ENOENT:
+                        raise
+                    continue
                 if not (stat.S_ISREG(s.st_mode) or stat.S_ISDIR(s.st_mode) or stat.S_ISLNK(s.st_mode)):
                     raise OSError(f"cannot account special file: {path}")
                 sizes[path.relative_to(root).as_posix()] = max(s.st_size, s.st_blocks * 512)
+        after = root.lstat()
+        if (not stat.S_ISDIR(after.st_mode)
+                or (after.st_dev, after.st_ino) != (root_stat.st_dev, root_stat.st_ino)):
+            raise OSError("task root changed during measurement")
     except OSError as e:
         raise MaterializationError(f"task-size measurement unavailable: {e}", "measurement_unknown") from e
     return sizes
