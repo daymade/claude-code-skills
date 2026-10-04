@@ -5,8 +5,9 @@ This marketplace's existing pre-push dispatcher checks changed shipped Skill roo
 against the exact pushed commit. Both branch and tag pushes are checked; annotated
 tags bind to their target commit. Tags pointing to a commit already reachable from
 current main introduce no new Skill content and need no new receipt. Root documentation and excluded test/eval-only
-changes do not need a release receipt. The normal version and shared PII guards
-still run. CI does not have access to the private archive and does not run this
+changes do not need a release receipt. Branch pushes retain the version guard;
+the shared PII guard still receives the original update set. CI does not have
+access to the private archive and does not run this
 local evidence check.
 
 ## Commit the current review first
@@ -23,8 +24,13 @@ the reviewer prompt verbatim, findings/dispositions and limits required by
 
 List every changed shipped Skill root. Include the exact commit under review;
 resolve it with `git rev-parse HEAD`. Commit the archive and inspect that command's
-exit status before any dependent action. A failed commit stops publication. Resolve
-the archive's full commit only after success. Never send private archive content
+exit status before any dependent action. If committing and landing are combined,
+classify the result using that tool's exit-code contract: a nonzero result can
+report completed landing with a concurrent-state notice. Independently verify
+the exact archive path is committed at current HEAD, unchanged on disk, and bound
+to the reviewed candidate before proceeding. A failed or unverified commit stops
+publication; do not recreate a commit merely because landing reported a notice.
+Resolve the archive's full commit only after that readback. Never send private archive content
 into the public Skill repository.
 
 ```bash
@@ -41,8 +47,9 @@ Repeat `--skill-path` for multiple roots. The receipt is local under Git's commo
 metadata directory, shared by linked worktrees. Verification requires the archive
 blob to remain committed at its current HEAD and unchanged on disk; unrelated
 archive commits are allowed. A missing, dirty, replaced, stale or non-passed review
-blocks push. A new candidate commit needs a new review binding. Stop on nonzero
-status; do not batch dependent mutations without checking each result.
+blocks push. A new candidate commit needs a new review binding. A nonzero or
+ambiguous result pauses dependent mutations until its documented meaning and
+the required readback establish readiness; do not batch unchecked mutations.
 
 For a spelling-only or pure formatting change, the existing review exemption can
 be declared with `--review-not-required typo-only` or `format-only` and a nonblank

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **skill-creator** (`daymade-skill` v1.60.0 → v1.60.1): align release instructions with branch-only version checks and local private-review verification. Classify combined commit/landing results through their owning exit contract and require independent archive readback before dependent publication; correct the project CI description. Documentation correction to observed behavior.
+
 ### Changed
 
 - **skill-creator** (`daymade-skill` v1.59.2 → v1.60.0): add bounded complete-file read plans and a local publication check that binds an exact Skill commit to committed private review evidence. Integrate with the existing marketplace pre-push dispatcher; retain explicit typo/format exemptions and the existing version/PII checks.
