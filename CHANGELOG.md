@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **claude-code-hooks** (`daymade-claude-code` v4.18.0 → v4.19.0): Align creation, installation and recovery with in-process rule modules and installer-owned active entries. Preserve event-specific authorization handlers, avoid resurrecting retired aliases, and require observed activation rather than universal restart/hot-reload claims. Restrict startup to declared bounded offline liveness modes, retaining unknown coverage instead of falling back to selftests. Add the repository route and remove duplicated navigation and derived prose counts; keep historical measurements and runtime budgets. Bounded workflow correction.
+
 - **macos-cleaner** (`daymade-macos` v1.16.0 → v1.16.1): Align cleanup plans and target guidance with existing scoped authorization; document the copy-budget option and route necessary-copy capacity checks to their owning contract. Remove duplicated gate counts and obsolete universal backup/confirmation requirements.
 
 - **skill-creator** (`daymade-skill` v1.59.1 → v1.59.2): Correct the materialization SOP's retry/finish ordering: finish closes the whole root, and run rejects its finished state. Keep the CLI as lifecycle authority; no runtime behavior changes.
