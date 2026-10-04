@@ -775,6 +775,15 @@ Output: feat(auth): implement JWT-based authentication
 - **Troubleshooting section**: enumerate the known failure modes and their fixes — the single most valuable section for a skill others will run on machines you can't see.
 - **Step-0 idempotency guard**: if re-running could redo finished work, open with a cheap "is this already done?" check before doing anything expensive.
 
+For an operational Skill whose changed workflow needs installation, account
+configuration, a live service or human cooperation, read
+[first use and recovery](references/first-use-and-resume.md) before drafting that
+workflow. Put automatic preparation and continuation in the ordinary entry,
+reuse existing execution owners, and test the affected missing-state, valid-state
+and interrupted-state paths against the original task. A written setup guide,
+healthy process or loaded model alone does not establish first-use success.
+Skip this route for reference-only Skills and self-sufficient file transforms.
+
 ### Writing Style
 
 Try to explain to the model why things are important in lieu of heavy-handed musty MUSTs. Use theory of mind and try to make the skill general and not super-narrow to specific examples. Start by writing a draft and then look at it with fresh eyes and improve it.
