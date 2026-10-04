@@ -30,8 +30,9 @@ security checks.
 **Prevention:**
 
 - The skill never uses `--no-verify` automatically.
-- `safe_push.py` uses `--force-with-lease` first and only falls back to
-  `--force` when the remote ref is stale because of the rewrite itself.
+- `safe_push.py` uses one explicit lease against the target/remote SHA saved
+  before rewriting, and the local SHA verified afterwards. A rejected lease
+  stops; it never falls back to `--force`.
 - The user is told to fix hook failures, not bypass them.
 
 ## Lesson 3: Public Repo with Forks Was Treated as Low-Risk
@@ -125,15 +126,16 @@ other active sessions sat in the working tree. `rewrite_history.py` aborts on
 any `git status --short` output, and the foreign files could neither be
 committed (not the rewriter's work) nor moved (active writers).
 
-**Why it matters:** The check protects against losing uncommitted tracked
-changes during the post-rewrite checkout, but untracked files are not touched
-by a ref rewrite or by the final `reset --hard` — blocking on them conflates
-two different risks and can stall an urgent cleanup.
+**Why it matters:** Clean status in one directory does not establish exclusive
+ownership of shared Git history. A rewrite can change refs and objects used by
+other worktrees, even when the selected checkout has no tracked modifications.
 
-**Prevention:** If the tree is clean except foreign-owned untracked paths,
-run the script's exact steps manually (backup bundle, `git filter-repo`,
-verify) and document the deviation — never delete or stash another session's
-files to satisfy the check.
+**Prevention:** Preserve the original checkout and other sessions' files. Use
+an independent fresh clone for the rewrite; do not execute manual steps to
+bypass the shared-history or fresh-clone refusal. The wrapper rejects linked
+roots and ordinary/bare repositories with attached worktrees. For a bare
+mirror it verifies the no-working-tree layout instead of treating a failed
+status command as clean. See SKILL.md's independent mirror route.
 
 ## Lesson 9: The Tooling Crashed on Exactly the Repos It Cleans
 
