@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **debugging-network-issues** (`debugging-network-issues` v1.11.0 → v1.11.1): drop the persisted derived count from the case-studies intro ("Five canonical cases" → "The canonical cases below") — the number is computable from the numbered list it introduces and only ever drifts.
+
 ### Added
 
 - **debugging-network-issues** (`debugging-network-issues` v1.10.0 → v1.11.0): add case `references/case-iot-router-migration-wpa3.md` — an IoT group outage three weeks after a clone-the-SSID router swap, root-caused to the new AP's WPA2/WPA3 transition mode against legacy Wi-Fi silicon. The falsification chain runs passively from one laptop: an mDNS service census falsifies AP isolation, an ARP+OUI census shows the hub's OUI absent (a hub is itself a Wi-Fi client; its children cast N shadows of one failure), and beacon parameters identify the mode; the decisive measurement is intervention→effect (WPA2-only restored, twelve devices back within minutes). The case contributes the router-replacement alignment checklist (SSID / password / security mode / band-PHY — validate with the oldest client, not the newest), passive IoT census probes, hub-first decomposition for group outages, and cognitive trap 20 (validating a network change on the newest client and the nearest physical evidence). SKILL.md gains a triage row for IoT group outages and the case-studies and reference-file listings.
