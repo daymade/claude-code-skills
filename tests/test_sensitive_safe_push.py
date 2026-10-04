@@ -430,6 +430,108 @@ class SafePushTests(unittest.TestCase):
             self.invoke()
         self.assertEqual(self.sha(self.remote, "main"), self.old)
 
+    def test_native_tilde_hook_path_preserves_acceptance_and_rejection_all_layouts(self):
+        hookdir = self.home / "tilde-hooks"
+        hookdir.mkdir()
+        hook = hookdir / "pre-push"
+        linked = self.root / "linked"
+        self.git(self.a, "worktree", "add", "--detach", str(linked), "HEAD")
+        bare = self.root / "mirror.git"
+        self.git(self.root, "clone", "--mirror", "--no-local", str(self.a), str(bare))
+        self.git(bare, "remote", "set-url", "origin", str(self.remote))
+        for repo in (self.a, linked, bare):
+            with self.subTest(repo=repo.name):
+                self.git(repo, "config", "core.hooksPath", "~/tilde-hooks")
+                hook.write_text("#!/bin/sh\nexit 1\n")
+                hook.chmod(0o700)
+                resolved = self.git(repo, "rev-parse", "--path-format=absolute", "--git-path", "hooks/pre-push")
+                self.assertEqual(Path(resolved.stdout.removesuffix("\n")), hook)
+                native = self.git(repo, "push", "origin", self.candidate + ":refs/heads/main",
+                                  "--force-with-lease=refs/heads/main:" + self.old, check=False)
+                self.assertNotEqual(native.returncode, 0)
+                self.assertEqual(self.sha(self.remote, "main"), self.old)
+                with patch.object(push, "url_identity", return_value=tuple(IDENTITY.split("/"))), \
+                        contextlib.redirect_stdout(io.StringIO()), self.assertRaises(push.PushError):
+                    push.push(repo, "origin", "main", expected_repository=IDENTITY,
+                              expected_remote_sha=self.old, verified_local_sha=self.candidate)
+                self.assertEqual(self.sha(self.remote, "main"), self.old)
+                hook.write_text("#!/bin/sh\nexit 0\n")
+                with patch.object(push, "url_identity", return_value=tuple(IDENTITY.split("/"))), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    push.push(repo, "origin", "main", expected_repository=IDENTITY,
+                              expected_remote_sha=self.old, verified_local_sha=self.candidate)
+                self.assertEqual(self.sha(self.remote, "main"), self.candidate)
+                self.git(self.remote, "update-ref", "refs/heads/main", self.old)
+
+    def test_saved_repository_identity_is_bound_to_first_url_across_aba(self):
+        alternate = self.root / "B.git"
+        self.git(self.root, "clone", "--mirror", "--no-local", str(self.remote), str(alternate))
+        identity_b = "github.fixture.invalid/owner-b/synthetic-repo"
+        metadata_b = json.loads(json.dumps(METADATA))
+        metadata_b["owner"]["login"] = "owner-b"
+        os.environ["GH_TEST_METADATA"] = json.dumps(metadata_b)
+        identities = {str(self.remote): tuple(IDENTITY.split("/")),
+                      str(alternate): tuple(identity_b.split("/"))}
+        original = push.run
+        queries, writes = [], []
+
+        def aba(repo, args, **kwargs):
+            if args == ["remote", "get-url", "--push", "--all", "origin"]:
+                selected = alternate if len(queries) == 1 else self.remote
+                self.git(self.a, "remote", "set-url", "origin", str(selected))
+                queries.append(str(selected))
+            if args[0] == "push":
+                writes.append(args)
+            return original(repo, args, **kwargs)
+
+        with patch.object(push, "url_identity", side_effect=lambda value: identities[value]), \
+                patch.object(push, "run", side_effect=aba), self.assertRaises(push.PushError):
+            push.push(self.a, "origin", "main", expected_repository=identity_b,
+                      expected_remote_sha=self.old, verified_local_sha=self.candidate)
+        self.assertEqual(queries, [str(self.remote)])
+        self.assertFalse(writes)
+        self.assertFalse(self.gh_log.exists())
+        self.assertEqual(self.sha(self.remote, "main"), self.old)
+        self.assertEqual(self.sha(alternate, "main"), self.old)
+        # Healthy control uses the real typed metadata function and a URL-specific
+        # identity mapping; no constant identity or metadata-function stub.
+        os.environ["GH_TEST_METADATA"] = json.dumps(METADATA)
+        with patch.object(push, "url_identity", side_effect=lambda value: identities[value]), \
+                contextlib.redirect_stdout(io.StringIO()):
+            push.push(self.a, "origin", "main", expected_repository=IDENTITY,
+                      expected_remote_sha=self.old, verified_local_sha=self.candidate)
+        self.assertEqual(self.sha(self.remote, "main"), self.candidate)
+        self.assertEqual(self.sha(alternate, "main"), self.old)
+
+    def test_native_hook_executable_directory_missing_and_nonexec_parity(self):
+        hook = self.a / ".git/hooks/pre-push"
+        hook.unlink()
+        for shape in ("directory", "healthy", "missing", "nonexec"):
+            with self.subTest(shape=shape):
+                if shape == "directory":
+                    hook.mkdir(mode=0o700)
+                elif shape in ("healthy", "nonexec"):
+                    hook.write_text("#!/bin/sh\nexit " + ("0" if shape == "healthy" else "1") + "\n")
+                    hook.chmod(0o700 if shape == "healthy" else 0o600)
+                native = self.git(self.a, "push", "origin", self.candidate + ":refs/heads/main",
+                                  "--force-with-lease=refs/heads/main:" + self.old, check=False)
+                if shape == "directory":
+                    self.assertNotEqual(native.returncode, 0)
+                    self.assertEqual(self.sha(self.remote, "main"), self.old)
+                    with self.assertRaises(push.PushError):
+                        self.invoke()
+                    self.assertEqual(self.sha(self.remote, "main"), self.old)
+                else:
+                    self.assertEqual(native.returncode, 0)
+                    self.git(self.remote, "update-ref", "refs/heads/main", self.old)
+                    self.invoke()
+                    self.assertEqual(self.sha(self.remote, "main"), self.candidate)
+                    self.git(self.remote, "update-ref", "refs/heads/main", self.old)
+                if shape == "directory":
+                    hook.rmdir()
+                elif shape in ("healthy", "nonexec"):
+                    hook.unlink()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -206,10 +206,12 @@ def frozen_transport(repo_path, layout, incoming, pinned, url):
             if key.lower() == "extensions.refstorage" and value != "files":
                 raise PushError("Git ref storage cannot be safely isolated")
             pairs.append((key, value if separator else None))
-        hook_value = next((value for key, value in reversed(pairs) if key.lower() == "core.hookspath"), None)
-        original_hook = ((repo_path / hook_value) if hook_value is not None
-                         else layout["common_dir"] / "hooks") / "pre-push"
-        original_hook = original_hook.resolve()
+        hook_path = run(repo_path, ["rev-parse", "--path-format=absolute", "--git-path", "hooks/pre-push"], env=incoming)
+        if hook_path.returncode or not isinstance(hook_path.stdout, str):
+            raise PushError("Original native pre-push hook path could not be verified")
+        original_hook = Path(hook_path.stdout.removesuffix("\n"))
+        if not original_hook.is_absolute():
+            raise PushError("Original native pre-push hook path is invalid")
         refs = run(repo_path, ["for-each-ref", "--format=%(objectname) %(refname)"])
         if refs.returncode or not isinstance(refs.stdout, str):
             raise PushError("Git refs could not be captured")
@@ -235,7 +237,7 @@ def frozen_transport(repo_path, layout, incoming, pinned, url):
             restored = {key: incoming.get(key) for key in set(incoming) |
                         {"GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "GIT_CONFIG_NOSYSTEM", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS", "GIT_COMMON_DIR"}
                         if key.startswith("GIT_CONFIG_") or key == "GIT_COMMON_DIR"}
-            if original_hook.is_file() and os.access(original_hook, os.X_OK):
+            if os.access(original_hook, os.X_OK):
                 private_write(common / "hook-context.json", json.dumps({"restore": restored,
                     "cwd": str(repo_path), "hook": str(original_hook), "url": url}))
                 wrapper = '''#!INTERPRETER
@@ -301,6 +303,8 @@ def push(repo_path, remote, branch, *, expected_repository=None,
     if current.returncode or current.stdout.strip() != candidate:
         raise PushError("Local branch differs from verified candidate")
     url = selected_push_url(repo_path, remote)
+    if url_identity(url) != repository_identity(expected_repository):
+        raise PushError("Captured push URL differs from saved repository identity")
     info = get_remote_repo_info(repo_path, remote, expected_repository=expected_repository)
     if info is None:
         raise PushError("Repository metadata could not be verified; push aborted")
