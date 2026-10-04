@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **skill-creator** (`daymade-skill` v1.59.2 → v1.60.0): add bounded complete-file read plans and a local publication check that binds an exact Skill commit to committed private review evidence. Integrate with the existing marketplace pre-push dispatcher; retain explicit typo/format exemptions and the existing version/PII checks.
+
 ### Fixed
 
 - **debugging-network-issues** (`debugging-network-issues` v1.11.0 → v1.11.1): drop the persisted derived count from the case-studies intro ("Five canonical cases" → "The canonical cases below") — the number is computable from the numbered list it introduces and only ever drifts.

@@ -192,6 +192,11 @@ function prePush() {
     if (seen.has(update.localSha)) continue;
     seen.add(update.localSha);
     runProgression(base, ["--candidate", update.localSha]);
+    const release = run("python3", [
+      path.join(REPO_ROOT, "scripts/ci/check_skill_release.py"),
+      "--repo", REPO_ROOT, "--base", base, "--candidate", update.localSha,
+    ]);
+    if (release.status !== 0) fail("current Skill release evidence is not ready.", 2);
   }
 }
 
