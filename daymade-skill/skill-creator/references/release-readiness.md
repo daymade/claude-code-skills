@@ -2,7 +2,9 @@
 
 Use this after the required independent review and before a Git publication step.
 This marketplace's existing pre-push dispatcher checks changed shipped Skill roots
-against the exact pushed commit. Root documentation and excluded test/eval-only
+against the exact pushed commit. Both branch and tag pushes are checked; annotated
+tags bind to their target commit. Tags pointing to a commit already reachable from
+current main introduce no new Skill content and need no new receipt. Root documentation and excluded test/eval-only
 changes do not need a release receipt. The normal version and shared PII guards
 still run. CI does not have access to the private archive and does not run this
 local evidence check.

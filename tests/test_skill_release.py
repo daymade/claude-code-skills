@@ -50,6 +50,8 @@ class ReleaseTests(MainlineGuardTests):
         run(self.review, "git", "init", "-q")
         run(self.review, "git", "config", "user.email", "test@example.invalid")
         run(self.review, "git", "config", "user.name", "Test")
+        run(self.review, "git", "config", "core.hooksPath", "/dev/null")
+        run(self.review, "git", "commit", "--allow-empty", "-qm", "private archive baseline")
         self.base = run(self.repo, "git", "rev-parse", "HEAD").stdout.strip()
         self.skill = "daymade-audio/transcript-fixer"
         p = self.repo / self.skill / "SKILL.md"
@@ -78,7 +80,7 @@ class ReleaseTests(MainlineGuardTests):
         self.assertNotEqual(blocked.returncode, 0, blocked.stdout + blocked.stderr)
         self.assertIn("skill release blocked", blocked.stderr)
         with self.assertRaises(rr.ReleaseError):
-            rr.attest(self.repo, self.head, paths, self.review, run(self.repo, "git", "rev-parse", "HEAD").stdout.strip(), self.path)
+            rr.attest(self.repo, self.head, paths, self.review, run(self.review, "git", "rev-parse", "HEAD").stdout.strip(), self.path)
         run(self.review, "git", "add", "--", self.path)
         run(self.review, "git", "commit", "-qm", "review exact candidate")
         commit = run(self.review, "git", "rev-parse", "HEAD").stdout.strip()
@@ -107,6 +109,26 @@ class ReleaseTests(MainlineGuardTests):
         run(self.repo, "git", "commit", "--allow-empty", "-qm", "new head")
         with self.assertRaises(OSError):
             rr.verify(self.repo, run(self.repo, "git", "rev-parse", "HEAD").stdout.strip(), [self.skill])
+
+    def test_lightweight_annotated_and_published_tags(self):
+        env = dict(self.env, GIT_PII_GUARD_DIR=str(self.root / "absent"))
+        run(self.repo, "git", "tag", "-a", "review-probe", "-m", "fixture", self.head)
+        annotated = run(self.repo, "git", "rev-parse", "refs/tags/review-probe").stdout.strip()
+        for sha in (self.head, annotated):
+            stdin = f"refs/tags/review-probe {sha} refs/tags/review-probe {'0'*40}\n"
+            blocked = run(self.repo, "bash", ".githooks/pre-push", "origin", str(self.remote), input_text=stdin, env=env, check=False)
+            self.assertNotEqual(blocked.returncode, 0, blocked.stdout + blocked.stderr)
+            self.assertIn("skill release blocked", blocked.stderr)
+        stdin = f"refs/tags/old {self.base} refs/tags/old {'0'*40}\n"
+        passed = run(self.repo, "bash", ".githooks/pre-push", "origin", str(self.remote), input_text=stdin, env=env, check=False)
+        self.assertEqual(passed.returncode, 0, passed.stdout + passed.stderr)
+        run(self.review, "git", "add", "--", self.path)
+        run(self.review, "git", "commit", "-qm", "review tags")
+        rr.attest(self.repo, self.head, [self.skill], self.review, run(self.review, "git", "rev-parse", "HEAD").stdout.strip(), self.path)
+        for sha in (self.head, annotated):
+            stdin = f"refs/tags/review-probe {sha} refs/tags/review-probe {'0'*40}\n"
+            passed = run(self.repo, "bash", ".githooks/pre-push", "origin", str(self.remote), input_text=stdin, env=env, check=False)
+            self.assertEqual(passed.returncode, 0, passed.stdout + passed.stderr)
 
     def test_committed_metadata_rejects_missing_empty_stale_and_failed(self):
         original = (self.review / self.path).read_text()
