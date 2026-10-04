@@ -41,4 +41,4 @@
 
 每个关键动作后用 get_app_state（AX 读回或截图）确认状态真的变了；**没变化立刻换通道（点击→键盘→set_value），同一通道原样重试不超过一次**——几十轮「ok:true 但无效果」的重试不产生任何新信息。
 
-**执行层兜底（2026-10-02 起）**：PreToolUse hook `kimi-cu-repeat-guard` 在「同一 app + 同一动作签名（同 index / 坐标 ±10px / 同组键）连续 3 次、观测透明」时拦一次并注入换通道指引，之后放行——读回无变化仍原样重发第 3 次时一定会听到它。SSOT `~/scripts/claude-hooks/kimi-cu-repeat-guard.sh`（私有仓 daymade/scripts）。
+**可选的本地防护**：宿主已有重复动作检测 hook 时，核实其实际注册、触发条件和执行读回，再把它作为辅助提醒。本 Skill 不分发或安装该 hook，也不保证宿主会自动拦截重复动作；没有已验证的 hook 时，仍须执行上面的读回、换通道和重试限制。

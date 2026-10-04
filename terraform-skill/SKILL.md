@@ -77,7 +77,7 @@ Then apply. The provisioner will rebuild from the plan's frozen bytes, ignoring 
 
 **Symptom**: Compose deploy passes staging verification, then the production apply dies at `docker compose up` with `Bind for 127.0.0.1:<port> failed: port is already allocated`.
 
-**Root cause**: Staging/production parity covers configuration, **not host port allocation**. The staging host does not run the colliding service (2026-10-01: 3001 was free on staging, occupied by lobe-new-api on the production gateway). A tainted `null_resource` is left behind, so the retry must go through the replace flow (`CONFIRM_REPLACE`), not a plain re-apply.
+**Root cause**: Staging/production parity covers configuration, **not host port allocation**. A port that is free on staging can already be occupied by another service on the production host. A tainted `null_resource` is left behind, so the retry must go through the replace flow (`CONFIRM_REPLACE`), not a plain re-apply.
 
 **Diagnosis**:
 ```bash
