@@ -92,14 +92,11 @@ when verifying an existing baseline; consult
 [source snapshot archives](daymade-skill/skill-creator/references/source-snapshot-archives.md)
 before archiving or restoring it.
 
-For hook loop and reminder semantics, load
-`daymade-claude-code:claude-code-hooks` and follow rule 7. Keep recurring
-advisory injectors available for the whole session, using cadence/hysteresis
-and reset semantics to limit frequency; never add a lifetime session cap.
-Reserve repetition budgets for blocking remediation loops whose capped exit is
-explicitly blocked, unshipped, or pending. Test advisory liveness across later
-fully-due windows, and leave current thresholds in the owning implementation
-rather than copying them into this file.
+For hook creation, consolidation, registration or recovery, load
+[`daymade-claude-code:claude-code-hooks`](daymade-claude-code/claude-code-hooks/SKILL.md)
+and follow its Build order and installer-owned recovery contract. Follow that
+Skill's rule 7 for loop and reminder semantics; keep current thresholds in the
+owning implementation.
 
 Python entry points registered as synchronous Claude Code/Codex lifecycle hooks or
 background services (LaunchAgents included) must call a fixed direct interpreter

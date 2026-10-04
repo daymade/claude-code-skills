@@ -2119,8 +2119,10 @@ this list and describe defects you reach by asking a different question):
   ```
   Then close the observability hole rather than trusting the next author to read
   this entry: run the real JSON through it before registering (rule 2), and give
-  it a `--selftest` (build order step 4) so the SessionStart health check can tell
-  a live hook from a dead one. A `--selftest` that has never been watched failing
+  it bidirectional editing/maintenance selftests. Use only an owner-declared
+  bounded offline `--liveness` mode at SessionStart (build order step 4); without
+  one, retain unknown/incomplete logic coverage instead of running the selftest
+  battery at startup. A `--selftest` that has never been watched failing
   proves nothing — calibrate it by injecting this exact defect (swap stdin parsing
   back for the env var) and confirming the must-fire fixture goes red.
 
@@ -2208,8 +2210,8 @@ this list and describe defects you reach by asking a different question):
   like it is working: the cheap path runs, the stamp file exists, nothing warns.
 - **Cause:** BSD `stat -f '%m %z'` does **not** follow symlinks — it reports the
   link's own mtime (when the link was made) and size (the length of the target
-  path string). And rule 3 of this skill *requires* `~/.claude/hooks/` to be
-  symlinks into a version-controlled SSOT. So the two prescriptions compose into a
+  path string). In the symlink installation layout described by rule 3,
+  `~/.claude/hooks/` points into a version-controlled SSOT. These choices compose into a
   guaranteed defect: editing the SSOT leaves the link untouched, the signature
   never moves, and the full battery never re-fires. Measured: the stamp held
   `1787620496 61` — a 61-byte "file" that is really the target path string, and
@@ -2233,15 +2235,14 @@ this list and describe defects you reach by asking a different question):
   on every session. Nothing else is wrong: `bash -n` is clean, the detector blocks
   and allows correctly, the registration is present. Only the health check disagrees,
   and only ever in one direction.
-- **Precondition (or you will not see this at all):** the health check has to actually
-  run the selftest. Pattern C as printed in `hook_patterns.md` does **not** — it does
-  `bash -n` plus a registration `grep`. It is SKILL.md's **build order step 4** that
-  extends that same loop with `bash "$h" "$mode"` over the registered-hooks path. So
-  this pitfall bites the design this skill prescribes in full, not the compact skeleton
-  alone; if your health check only syntax-checks, a broken sibling lookup stays invisible
-  until the day you need the battery.
-- **Cause:** the same two prescriptions as #41, composing through a different
-  mechanism. Rule 3 requires `~/.claude/hooks/<name>.sh` to be a **symlink** into the
+- **Precondition (or you will not see this at all):** the selected check must
+  exercise the sibling lookup. Pattern C's compact syntax/registration scan
+  does not. SKILL.md's **build order step 4** keeps editing/maintenance selftests
+  separate from owner-declared offline startup liveness; exercise each supported
+  mode through its registered path. A syntax-only scan leaves sibling lookup
+  unverified; it is not a reason to run the full battery at startup.
+- **Cause:** the same choices as #41, composing through a different
+  mechanism. In rule 3's symlink layout, `~/.claude/hooks/<name>.sh` links into the
   SSOT; that build-order health check invokes hooks by that path. `${BASH_SOURCE[0]}` is the path
   bash was **invoked with**, not the resolved file — so inside the hook
   `dirname "${BASH_SOURCE[0]}"` is `~/.claude/hooks`, and a sibling lookup such as
@@ -2272,9 +2273,10 @@ this list and describe defects you reach by asking a different question):
   ```
 - **The calibration that catches it, and the reason it shipped:** the author tests
   the hook the way the author invokes it — by the SSOT path, where `dirname` is
-  accidentally right. **Run the selftest through the registered path too**
+  accidentally right. **During editing/maintenance, run the selftest through the registered path too**
   (`bash ~/.claude/hooks/<name>.sh --selftest-full`), because that is the path the
-  harness will use. The general form: a hook reached through more than one path is a
+  maintenance harness will use. Startup follows build order step 4's declared
+  offline liveness contract. The general form: a hook reached through more than one path is a
   hook that must be exercised through each of them. Same lesson as #41's
   "the regression test has to exercise the link".
 - **Diagnosing it from the outside** (you see only `selftest failed`): run the two
@@ -2659,7 +2661,8 @@ this list and describe defects you reach by asking a different question):
   hook that is missing or cannot be read (`chmod 000`) gets an empty signature.
   Treat that as unknown, not a cached pass. Make full validation due in the owning
   build/commit check; keep SessionStart limited to bounded deployment and liveness
-  probes even when a full-pass stamp is absent or stale.
+  probes even when a full-pass stamp is absent or stale. Select only the owner's
+  declared offline liveness mode; otherwise keep logic coverage unknown/incomplete.
 
   Sign every hook in **one** process before the scheduling loop. Shelling out per
   hook (`realpath`, `grep`, `stat` and a hash for each file) cost 1.3 s at every
@@ -2799,7 +2802,9 @@ this list and describe defects you reach by asking a different question):
      distribution. Set them separately.
   4. A health check that runs every hook's full self-test at session start is a
      common slow pass. Put the full battery in the owning build/commit check;
-     startup may run bounded deployment and bidirectional liveness probes. Use
+     startup may run bounded deployment and owner-declared offline bidirectional
+     liveness probes. A missing mode leaves logic coverage unknown/incomplete;
+     never fall back to a selftest battery or machine audit. Use
      #49's dependency and runtime identity for any pass cache, with separate probe
      and full-pass stamps. A failed, timed-out, cancelled or unexamined test writes
      no pass stamp (#53). Give individual probes and the entire startup scan their

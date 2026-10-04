@@ -46,7 +46,7 @@ The loop may be created entirely by an agent repeatedly applying a prose rule.
 | **SessionStart** | session begins | proceed | **cannot block** — stderr shows the user a hook-error notice, Claude never sees it, the session starts anyway | **exit 0 anyway**: not because a non-zero would block (it can't), but because anything non-zero puts a `<hook> hook error` in the user's transcript on every single session start. Takes a `matcher` on *how the session started* — `startup`, `resume`, `clear`, `compact`, `fork` |
 | **Stop** (+ `SubagentStop`) | the model is about to finish responding | let it stop | **block the stop** — forces the model to keep going (stderr → fed back as the reason) | loop safety: the hook checks `stop_hook_active` (necessary, **not** sufficient — rule 7). The harness's consecutive-block ceiling (default 8) is **not** a general backstop — its counter resets on any continuation that executed tools, so it never arrives for a hook whose remediation involves tool calls, which is most of them (#27). Carry your own bound. All Stop hooks for an event run **in parallel** — one block round can carry several hooks' feedback |
 
-- **PreToolUse** is the workhorse for stopping a *tool call* — the four types in this
+- **PreToolUse** is the workhorse for stopping a *tool call* — the types in this
   table are the ones this file teaches, not the complete set of blockable events, and
   the **official** hooks reference (docs.claude.com / code.claude.com, not the
   `references/` files in this bundle — those cover only the four types above) now
@@ -71,7 +71,9 @@ The loop may be created entirely by an agent repeatedly applying a prose rule.
   a non-zero exit would block the session (it cannot), but that it would print a
   hook-error notice at every session start until someone fixes it — a check that
   cries wolf on startup is a check people learn to scroll past. Run the full
-  regression battery after edits in the build/commit check, not at session start
+  regression battery after edits in the build/commit check, not at session start.
+  Invoke only owner-declared bounded offline liveness modes at startup; missing
+  modes leave logic unknown/incomplete, without falling back to `--selftest`
   (build order step 4; pitfall #50).
 - **`set -euo pipefail` vs `set -uo pipefail` — pick by contract, and know there
   are two ways to keep an always-exit-0 contract.** A hook that may block
@@ -163,7 +165,7 @@ pure guard overhead and put Gatekeeper at the top of an all-day CPU ranking with
 runaway process anywhere — the fleet was fine; the *irrelevant path's* per-call cost
 was the bug (#22, with the per-guard conversion recipe and its measured floor).
 
-Three caveats before you copy the `case` line anywhere else — the first one is the
+Check these caveats before copying the `case` line — the first one is the
 difference between a fast path and a bypass:
 
 - **A coarse filter must be a SUPERSET of what you block, and a raw substring test
@@ -199,7 +201,7 @@ difference between a fast path and a bypass:
   because zero processes. It is best-effort by design (the docs say it fails *open*,
   running your hook anyway, when the Bash command can't be parsed), so treat it as a
   cost optimization and **never as the gate** — the in-script check still decides.
-  Three sharp edges: it holds exactly one rule (no `&&`/`||`), it is only evaluated
+  Check its limits: it holds exactly one rule (no `&&`/`||`), it is only evaluated
   on tool events, and a hook that sets `if` on a non-tool event **never runs at all**.
 
 ## Rules that separate a working guard from a session-poisoning one
@@ -328,20 +330,24 @@ evidence turned out to be a hallucinated doc quote — caught only because the
 verifier was required to curl the raw source and grep for the exact string
 rather than trust the citation.
 
-### 3. SSOT + symlink so a reinstall can't silently disarm the guard
+### 3. Installer-owned source, installation and recovery
 
-Real script in a version-controlled dir, **symlinked** into the hooks dir Claude reads:
+Keep the entrypoint and its rule modules in version-controlled source. Use the
+owning installer's current entry map for installation and recovery; a rule module
+does not need its own link or registration. When that installer uses symlinks,
+the layout is:
 ```
 ~/scripts/claude-hooks/<name>.sh      # SSOT (this setup: a private git repo)
 ~/.claude/hooks/<name>.sh             # symlink → SSOT
 
-# install / recover:
-ln -s ~/scripts/claude-hooks/<name>.sh ~/.claude/hooks/<name>.sh
 ```
-A `~/.claude` reinstall wipes the hooks dir; the symlink target survives, and
-recovery is one `ln -s`. A dangling symlink disables a Tier-0 guard with **zero
-signal** — which is why a SessionStart health check exists (rule 4; runnable
-skeleton: Pattern C in [references/hook_patterns.md](references/hook_patterns.md)).
+After a reinstall, restore only the entries the current installer declares active;
+do not reconstruct registrations from old filenames or reinstall retired aliases.
+Preserve independent rule state and authorization writers when migrating entries.
+Verify the consumed entrypoint, modules and effective settings, then exercise a
+real matching event in a fresh native session. A dangling link can silently disarm
+a guard; use bounded deployment/liveness checks (rule 4; Pattern C in
+[references/hook_patterns.md](references/hook_patterns.md)).
 
 ### 4. Registration is per-profile — converge ALL profiles, release via a HUMAN gate
 
@@ -358,19 +364,24 @@ skeleton: Pattern C in [references/hook_patterns.md](references/hook_patterns.md
   walk up from the event's cwd for project settings.
 - A hook in `~/.claude/hooks/` protects **nothing** if the *active profile's*
   `settings.json` doesn't call it. Multi-profile users ran with zero guards until
-  every profile was converged. Register in the **main** profile's settings
+  every profile was converged. Use the owning installer to update the **main** profile's settings
   (`~/.claude/settings.json` in this setup; the Registration section of
   [references/hook_patterns.md](references/hook_patterns.md) has the exact jsonc
-  shape) — PreToolUse → matcher `Bash` → your hook — and nothing further: in this
+  shape). Update an existing engine's matcher only when its coverage changes;
+  preserve each rule's narrower internal selector. In this
   setup the converger is registered as a SessionStart hook **without arguments**
   (`sync-profile-settings.py`, owned by the `claude-switch-models-setup` skill),
   so the next profile to start a session carries the registration into every
-  profile. `--all` is the human mode — run it once by hand when you edited
-  settings and want the change live now instead of at the next session start.
+  profile. `--all` is the explicit convergence mode; run it when immediate
+  profile synchronization is needed, without treating that write as activation proof.
   A SessionStart health check greps each profile for the Tier-0 guards to
-  catch drift. Settings edits are picked up by the CLI's file watcher (official
-  hooks docs), so registration is live without a restart — confirm by watching
-  the guard fire on a safe probe, or at next session's health-check line.
+  catch drift. For new or changed registrations, verify a real matching event
+  and debug evidence in a fresh native session. Claim current-session hot reload
+  only after observing that session invoke the changed registration; a successful
+  settings write or startup health line alone is insufficient. The current
+  [ConfigChange contract](https://code.claude.com/docs/en/hooks#configchange)
+  allows settings changes to be applied to a running session; it does not prove
+  this particular registration has fired.
 - **If the guard needs a release valve, make it a *human* gate, not an env var.**
   A static `GUARD_OK=1` escape hatch is no gate — the model can set the env var
   itself. Use a native macOS dialog (`osascript` — the model can't click);
@@ -634,7 +645,7 @@ header:
 # decreased by: R writes the receipt; nothing R does afterwards can remove it.
 ```
 
-"Show it decreases" is three concrete questions, and the answers go in that
+Answer the following questions to show it decreases; the answers go in that
 comment:
 
 1. **What does R change?** Name the exact file / field / timestamp.
@@ -700,7 +711,7 @@ profile/mode, not fixture-testing one schema. (The repair for the case above:
 multi-schema detection + teammate deliveries excluded from turn boundaries so
 they can't truncate the detection window — pitfall #20.)
 
-**Pick by axis first, then by order — these are not five strengths of one thing.**
+**Pick by axis first, then by order.**
 0 decides *whether to block at all*; 1 decides *which event to hang it on*; 2–4
 are the *predicate's shape* (choose 1 and you still need one of 2–4). The 0→4
 order is "how completely the loop is removed", and it runs **inversely to how
@@ -830,8 +841,8 @@ enforcement you actually need, not simply the first one.
    after firing, suppress re-evaluation for a window — a stamp file plus
    `[ $(( $(date +%s) - <stamp mtime> )) -lt 900 ] && exit 0` (mtime is
    `stat -L -f %m` on BSD/macOS, `stat -L -c %Y` on GNU — as are the other
-   snippets here; **the `-L` is load-bearing**, since rule 3 puts a symlink at
-   every path you will stat, and without it you read the link's own mtime and
+   snippets here; **the `-L` is load-bearing when the installer uses symlinks**,
+   since without it you read the link's own mtime and
    the stamp never moves when the SSOT is edited — #41). Right for conditions that *oscillate around a threshold*; **wrong** for
    conditions that remediation **resets** — those need 2 or 3.
    ⚠️ **Hysteresis supplies no V — it is a rate limiter, not a termination
@@ -995,7 +1006,7 @@ ships (`split_shell_lines`, the command-position walk, `is_git_write`'s handling
 and its argument). Rule 1's *use the walker verbatim* was the cheaper fix that got skipped;
 replay is the backstop, not the first line.
 
-**The method — four steps, and step 2 is the one that gets skipped:**
+**The method — pay particular attention to step 2:**
 
 1. **Harvest.** Session transcripts live at
    `~/.claude/projects/<encoded-cwd>/<session-id>.jsonl`, plus any archives registered in
@@ -1074,10 +1085,10 @@ conversation; the guard cannot know. `home-scan-guard` (blocks enumeration of
 personal stash directories) hits this the first time the user says "I authorize
 you to scan my Downloads for the disk cleanup."
 
-**The architectural constraint that decides the design: a PreToolUse hook sees
-the command text, never the conversation.** "The user just authorized this" is a
-fact only a `UserPromptSubmit` hook can observe. So a single hook cannot honor
-verbal authorization — the pattern is necessarily two hooks:
+Capture verbal authorization at the prompt boundary rather than inferring it
+from command text. Keep explicit `UserPromptSubmit` and `PreToolUse`
+registrations; their event-specific handlers may share an engine while keeping
+grant and guard logic separate:
 
 ```text
 UserPromptSubmit granter: reads the user's prompt → matches an explicit
@@ -1109,13 +1120,14 @@ in the 2026-09-19 implementation; the instance is `home-scan-guard.sh` +
   one — inverse of the guard's.
 - **Revocation by phrase** ("撤销 home-scan 授权") and by file deletion.
 
-**Registration timing (snapshotted, not live):** Claude Code captures the hook
-configuration at session start. **Script edits take effect immediately** (each
-invocation re-reads the file); **registration changes — a new hook — do not fire
-until the next session.** Plan for it: after registering a granter, the current
-session still needs the fallback (user runs one `!`-prefixed command, or the
-agent waits for a restart). Register through `register-hook.sh`, never by
-hand-editing settings.json.
+**Activation evidence:** an invocation of an already registered script reads
+its current file; verify its resolved path and dependencies. Register or recover
+the granter through its owning installer (in the setup above, `register-hook.sh`),
+then apply rule 4's fresh-session event check. Until the granter has been observed
+in the session receiving the authorization, use only an owner-documented
+user-operated fallback; if none is available, leave the guarded action pending
+until a verified grant. Do not infer consent capture from a settings write, or assume that all
+registration changes either require a restart or hot reload immediately.
 
 **Calibration is the load-bearing part:** the granter's selftest must prove
 both directions — the grant cases pass AND the ambiguous/negation cases do
@@ -1161,7 +1173,9 @@ approval or “already reminded” flag.
    state. “The advisory is permanently silent although the session continues”
    is not a terminal state; keep recurring advisory delivery lifetime-uncapped
    and prove long-horizon liveness after several fully-due windows instead.
-2. Write the script in the SSOT dir; `chmod +x`.
+2. Write the rule module in the existing engine's SSOT, or write a separate
+   entrypoint only when the contracts above require it. Set executable mode
+   only for files invoked directly.
 3. **Detection** with shlex token-level matching (rule 1), keyed on a fact the
    world can answer rather than your own rendering or a naming convention (rule 6).
    - **First check whether ShellCheck already decides it — then record the answer,
@@ -1173,7 +1187,7 @@ approval or “already reminded” flag.
      input: **default config reports nothing, exit 0**. `--enable=all` surfaces
      **SC2312** (`check-extra-masked-returns`), but it fires on `cmd | jq . || echo bad`
      too, where the last stage genuinely can fail and the fallback is meaningful.
-     Three reasons that disqualify it as *the gate* — each one generalizes:
+     Reasons that disqualify it as *the gate* — each one generalizes:
      it is **off by default** (so it is not protecting anyone today), it cannot
      distinguish a dead fallback from a live one (blanket firing = the rule-1
      false-block spiral), and its own suggested remedy is "use `|| true` to ignore",
@@ -1185,16 +1199,15 @@ approval or “already reminded” flag.
      precision lives in a small list of last-stage commands that actually swallow the
      upstream code (`head`/`tail`/`wc`/`cat`/`sort`/…) and which deliberately excludes
      `grep`/`jq`/`awk`/`sed` because those fail for real.
-4. **`bash -n` + `test_hook.sh`** with trigger AND healthy-lookalike cases (rule 2) — do not register until green. Include the shapes that carry an unexpanded path (`cd ~/elsewhere && …`, rule 5); if the hook has a human gate, a forced-decline row (Pattern B, "Make the gate testable"); and if it demands remediation, the **after-remediation row pair** — fires without the receipt, quiet with it (template in `scripts/test_hook.sh`; rule 7 — point-in-time fixtures structurally cannot see non-termination).
-   - **Give the hook a `--selftest` mode, and make it bidirectional.** Then have the
-     SessionStart guard-rail health check (see "Hook types" above — the one whose whole
-     job is checking the guards themselves) invoke `<hook> --selftest` for every
-     installed hook that offers one. This is the only automatic check that catches the
-     failure `bash -n` and steps 4-7 below both structurally miss: a hook that has
-     **degraded into a permanent no-op**. That failure is invisible by construction —
-     a guard that never fires produces output identical to a session with nothing to
-     report, which is why it can persist for weeks. Keep the coverage boundary straight:
-     `--selftest` proves the *logic* still fires; the exec bit, the symlink and the
+4. **Validate the module and actual entrypoint** with trigger AND healthy-lookalike cases (rule 2); for shell entrypoints, run `bash -n` + `test_hook.sh`. Do not register until green. Include the shapes that carry an unexpanded path (`cd ~/elsewhere && …`, rule 5); if the hook has a human gate, a forced-decline row (Pattern B, "Make the gate testable"); and if it demands remediation, the **after-remediation row pair** — fires without the receipt, quiet with it (template in `scripts/test_hook.sh`; rule 7 — point-in-time fixtures structurally cannot see non-termination).
+   - **Provide bidirectional selftests for editing and maintenance.** Syntax and
+     registration checks cannot detect a hook that has **degraded into a permanent
+     no-op**. A guard that never fires produces output identical to a session with
+     nothing to report. Give startup its own owner-declared, bounded offline
+     `--liveness` mode. If no such mode is declared, report logic as unverified and
+     coverage as unknown/incomplete; do not try legacy `--selftest`, a full battery,
+     network calls or a machine audit as a fallback. Keep the coverage boundary straight:
+     a bidirectional test exercises *logic*; the exec bit, the symlink and the
      registered path resolving are *deployment* facts the health check's own
      executable/registration scans cover — a green selftest says nothing about wiring,
      and the wiring scans say nothing about logic. Neither substitutes for the other. Two fixtures is the *floor*, not
@@ -1206,12 +1219,14 @@ approval or “already reminded” flag.
      Measured on the shipped `compounding-edit-review`: its **first version's two
      fixtures killed only 4 of 14 mutants** — every behavior its own comments declared
      load-bearing had zero coverage, including a mutation that short-circuits the
-     anti-loop check while the selftest still printed OK. It now runs 58 cases.
+     anti-loop check while the selftest still printed OK. The revised suite in
+     that measurement ran 58 cases.
      The real constraint is not fixture count but **wall-clock at session start**,
      where this is paid on every session: those 58 cases measure **~5.3 s**, against
      **~140 ms** for a two-probe liveness check. When killing the mutants pushes you
-     past that budget, **split** rather than shrink — a cheap fixed-size liveness probe
-     on `--selftest`, the full regression battery in `test_hook.sh` at build time.
+     past that budget, **split** rather than shrink — a cheap fixed-size offline
+     probe on the declared `--liveness` mode, the full regression battery in
+     editing/maintenance checks.
      Shrinking below the mutant-kill line just buys back a selftest that passes
      while the guard is dead.
      **Give the split a trigger, or the full half never runs.** "At build time" is
@@ -1219,8 +1234,9 @@ approval or “already reminded” flag.
      is the same prose-vs-enforcement gap this whole file exists to close, and it
      fails the same way. The shape that closes it, measured on
      `shared-repo-head-drift` (21 cases / 17.8 s cold, collapsing SessionStart's
-     health check to a probe of 9 assertions / 2.2 s): keep both halves in the hook
-     as `--selftest` and `--selftest-full`. Have the owning build/commit check run
+     health check to a probe of 9 assertions / 2.2 s): keep startup liveness
+     separate from maintenance modes such as `--selftest` and `--selftest-full`.
+     Have the owning build/commit check run
      the full battery when its validation identity changes; let SessionStart run
      only the bounded probe. A missing full-pass stamp makes full validation due
      at build/commit time, not an instruction to run it during startup. Measured
@@ -1258,30 +1274,21 @@ approval or “already reminded” flag.
    false-block surface, which the fixture table in step 4 structurally cannot. Slice the
    shipped detector out verbatim to pre-filter; feed each candidate **to** the real hook
    with its own real transcript and `session_id`, under a scratch `TMPDIR`.
-6. **Symlink** into `~/.claude/hooks/` (rule 3).
-7. **Register** in main `settings.json` + converge profiles (rule 4).
+6. **Install or recover the entrypoint through its owner** (rule 3). Reuse the
+   current entry for a module change; create a symlink only when that installer's
+   active-entry contract calls for one. Keep retired aliases unregistered.
+7. **Reconcile registrations only when entrypoints or coverage change**, then
+   converge profiles and verify effective entries in a fresh native session
+   (rule 4). A module-only change does not add a handler.
 8. For a Tier-0/irreversible action, add the **human-confirmation release gate** (rule 4).
-9. **Persist**: commit the SSOT to its private repo. Optionally add a CLAUDE.md line (prose says *why* + the alternative; the hook enforces).
+9. **Persist sources through the repository's normal flow.** When the workflow
+   changes, update its affected operator SSOT and CLAUDE.md route. Reuse the
+   existing route; do not duplicate implementation facts or add an incident
+   bullet to standing instructions.
 
 ## Known pitfalls (read before debugging a misfiring hook)
 
 Full catalog with symptom → cause → fix: [references/hook_pitfalls.md](references/hook_pitfalls.md).
-Headliners: `stdin` consumed by a `python3 - <<PY` heredoc (hook silently allows
-everything), awk-split false-blocks (rule 1), corrupted hook poisoning the session
-(rule 2), a quote or backtick inside a Python *comment* silently corrupting a
-`python3 -c "…"` block with no syntax error (pitfall #9 — use the quoted-heredoc
-form from Pattern E instead), static env escape hatch (rule 4), multi-profile
-under-registration, a commit message reaching the walker as pseudo-command-text
-and false-blocking your own fix commit unless `git` write segments are exempted
-(#7), and a path parsed from command text keeping its literal `~` so
-the guard fails **open** with no symptom at all (#10 — the one you cannot wait to
-notice, because silence is its only sign), a branch reading the hook's own
-truncated display string (#12) or keyed on a naming convention this repo doesn't
-follow (#13) — both invisible while the suite asserts only exit codes (#14) —
-command text that merely *contains* a redirect counted as a write (#15), and a
-hook whose **demanded remediation re-arms it**, looping with a green self-test
-because point-in-time fixtures structurally cannot see non-termination (#16,
-rule 7).
 
 **The harness is the hidden variable — use `scripts/test_hook.sh`, don't hand-roll
 one.** Every hand-rolled failure mode below produces the *same* output as a clean
@@ -1345,10 +1352,7 @@ a worked harness instance (a test script) → `scripts/`. This file only takes
 type, a changed exit-code contract, a new rule in the `## Rules that separate
 a working guard from a session-poisoning one` series). The loaded-at-trigger
 surface stays stable while the knowledge base keeps growing; depth lives one
-pointer away. (The "Known pitfalls" headliners above are a highlights list,
-not an index — they have not been extended since pitfall #16; the numbered
-catalog in `hook_pitfalls.md` is the SSOT, and a new pitfall does not owe a
-headliner.)
+pointer away.
 
 Why this is written down (2026-08-02): backports have in fact always gone to
 references — what grew this file 10k→50k chars in one week was *rules* prose
