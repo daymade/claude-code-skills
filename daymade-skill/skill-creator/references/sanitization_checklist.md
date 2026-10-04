@@ -1,6 +1,6 @@
 # Skill Sanitization Checklist
 
-When extracting a skill from a business project for public distribution, systematically remove all business-specific content to make it generic and reusable.
+When extracting a skill from a business project for public distribution, remove private business-specific content while preserving reusable behavior and verified public examples.
 
 ## Step 0: decide the destination — this checklist may not apply at all
 
@@ -45,9 +45,39 @@ The primary sanitization method is therefore **you reading the entire skill** �
 
 > "Does this read like a generic placeholder or a public entity (Claude, GitHub, LangChain, `<project>`), or like it was lifted from a real project / person / transcript?"
 
-Anything in the second category gets replaced — **even if no scanner flagged it.**
+Private material in the second category gets replaced unless explicitly approved
+for this public use — **even if no scanner flagged it.**
 
 **"grep returned no matches" is not a clean bill of health.** It only means the word list you guessed didn't fire. Run the scanners below as a cheap first pass for the obvious stuff, then do the read-through as the actual gate. If you only do one, do the read-through.
+
+### Trace examples and verify required helpers
+
+Before adding or changing a concrete example, identifier, quotation or incident
+fragment, identify its source: a verifiable public source, an invented example,
+or private work. Keep source locators and replacement decisions in the existing
+private review artifact; do not ship private logs or their identifiers as provenance.
+Check session/rollout IDs and operational details even when they contain no name
+or secret signature. Renaming a service does not sanitize a description that still
+reveals its private architecture or incident.
+
+Retain public facts and examples explicitly approved for public use within that
+approval's scope. When a source cannot be established, use a clearly synthetic
+equivalent that preserves the command, failure mechanism or teaching point.
+Do not present the replacement as an observed incident or force a user decision
+when an equivalent invented example resolves the uncertainty.
+
+For each helper required by the changed instructions, verify how the public
+reader obtains it. Inspect a bundled helper in the actual distributed file set;
+for a separately maintained dependency, follow its declared installation path
+and verify a representative operation within existing authorization. Keep its
+update owner, as defined in SKILL.md's Complementary Skills contract. A helper on
+the author's machine is not a distributed dependency. Replacing an absolute path
+with `~/` fixes the path shape, not the helper's availability. Mark unavailable
+runtime evidence as unverified rather than claiming the command works.
+
+The author performs these checks, and the required independent pass reviews their
+evidence using [the public-distribution axes](independent-review-protocol.md#public-distribution-axes).
+Scanners and release receipts do not enforce these semantic judgments.
 
 ## Quick Scan Commands
 
@@ -97,7 +127,7 @@ grep -rniE "ultrathink|internal-only|confidential" skill-folder/
 - Author attributions that reveal identity
 
 **How to replace:**
-- Real incident cases are not exempt: keep the date, mechanics, and failure shape, but swap every person for an invented name — a case's persuasiveness comes from its concrete detail, never from a real name. Check the invented name against your actual team roster so the fiction doesn't accidentally land on a real colleague (short common names do).
+- Private incident cases are not exempt: preserve the mechanics and failure shape, but replace private identities with invented names. Keep verified public attributions or identities explicitly approved for this publication. Check invented names against the actual team roster so the fiction does not accidentally identify a colleague.
 - Use generic names: "Alice", "Bob", "the developer", "the reviewer"
 - Use role-based references: "Backend team", "PM", "Designer"
 - Remove author attributions or use placeholders
@@ -186,7 +216,7 @@ grep -rniE "pattern1|pattern2|pattern3" skill-folder/ > sanitization_report.txt
 
 ### Phase 2: Manual Review
 
-For each match:
+For each changed example and scan match, apply the source and helper checks above:
 1. Determine if it's truly business-specific or generic
 2. Decide on appropriate replacement
 3. Check if replacement maintains meaning
@@ -197,7 +227,7 @@ For each match:
 After sanitization:
 1. **Read the whole skill again yourself** — SKILL.md + every reference + every example — re-asking the semantic question above on each concrete noun and snippet. This is what catches the no-keyword leaks (a verbatim transcript line, a real spoken example) that scanners structurally cannot see. **This step, not the grep, is what "passes" sanitization.**
 2. Re-run the grep patterns + `security_scan.py` as a secondary check — but read "no matches" as "the obvious stuff is gone", never as "it's clean"
-3. Test skill functionality still works (no broken references after replacements)
+3. Test skill functionality still works through the distributed helpers or declared dependencies (no broken references after replacements)
 4. If you can, have a fresh reader — a person, or a subagent with no prior context — read it cold; fresh eyes catch what you've already read past
 
 ## Common Pitfalls
@@ -213,12 +243,12 @@ After sanitization:
 ## Checklist Before Completion
 
 - [ ] No product/project codenames remain
-- [ ] No real person names in examples
+- [ ] No private person names in examples without explicit publication approval
 - [ ] No business-specific entity names
 - [ ] No internal folder structures
 - [ ] No unexplained jargon or abbreviations
 - [ ] No language-specific content (unless intentional)
 - [ ] No internal API or service references
-- [ ] All examples are generic and universally understandable
+- [ ] Examples are synthetic, verifiably public or explicitly approved for publication, and understandable to the intended reader
 - [ ] Skill still functions correctly after changes
 - [ ] Someone unfamiliar with original project can understand it

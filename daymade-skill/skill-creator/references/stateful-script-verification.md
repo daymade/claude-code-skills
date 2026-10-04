@@ -67,6 +67,15 @@ account identifiers; do not copy live secrets into fixtures.
 
 ## Large command output
 
+When the host returns a running-session or cell identifier, the executing agent
+preserves the complete result: output, identifier and available status fields.
+Forwarding only the text field discards the handle needed to observe completion.
+Resume through that host's documented wait/poll API until a terminal exit status
+is received. Partial output without terminal status remains running or unknown.
+If the handle is lost, recover the existing run through the host's supported
+status/artifact query; leave its outcome unknown when that evidence is unavailable.
+Do not repeat a write to replace missing completion evidence.
+
 Before a command expected to produce large output, choose a scratch output path
 outside the shipped Skill. Capture raw stdout/stderr and the exit status, then
 return a small summary and the path. For example, this stdlib recipe runs an

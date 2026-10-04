@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **skill-creator** (`daymade-skill` v1.60.1 → v1.60.2): require public-example provenance and distributed dependency evidence in the existing review, and retain asynchronous command handles through terminal status.
+- **github-sensitive-data-cleanup** (v1.3.0 → v1.3.1): propagate scan and verification failures instead of treating partial results as clean; continue semantic review when pattern scans report zero findings.
+- **github-ops** (v1.10.0 → v1.10.1): bind public source files, PR title/body, changelog entries and new commit messages to the reviewed publication; independently read back hosted text and the exact landed commit while retaining separate history-rewrite authorization.
+
 - **skill-creator** (`daymade-skill` v1.60.0 → v1.60.1): align release instructions with branch-only version checks and local private-review verification. Classify combined commit/landing results through their owning exit contract and require independent archive readback before dependent publication; correct the project CI description. Documentation correction to observed behavior.
 
 ### Changed

@@ -16,15 +16,13 @@ Usage:
 import argparse
 import json
 import re
-import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 # Share the all-commits grep helper so fixes to chunking/error handling apply
 # to both scanning and verification.
-from scan_repo import grep_all_commits
+from scan_repo import grep_all_commits, run_gitleaks as scan_gitleaks
 
 
 def extract_patterns_from_replacements(replacements_path: Path) -> list[dict]:
@@ -97,17 +95,23 @@ def check_pattern_in_messages(
     Hashes are returned so a FAILED report locates the offending commits
     instead of just counting hits.
     """
-    log = subprocess.run(
-        ["git", "-C", str(repo_path), "log", "--all",
-         "--format=%H%x1f%B%x1e", "--no-color"],
-        capture_output=True,
-        text=True,
-        errors="replace",
-        check=False,
-    )
+    try:
+        log = subprocess.run(
+            ["git", "-C", str(repo_path), "log", "--all",
+             "--format=%H%x1f%B%x1e", "--no-color"],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            check=False,
+        )
+    except OSError:
+        return [], 0, "git log could not be executed"
     if log.returncode != 0:
-        return [], 0, f"git log failed: {log.stderr}"
-    rx = re.compile(pattern) if is_regex else None
+        return [], 0, f"git log failed (exit {log.returncode})"
+    try:
+        rx = re.compile(pattern) if is_regex else None
+    except re.error:
+        return [], 0, "commit message pattern is invalid"
     hashes: list[str] = []
     hits = 0
     for record in log.stdout.split("\x1e"):
@@ -125,36 +129,11 @@ def check_pattern_in_messages(
 
 
 def run_gitleaks(repo_path: Path) -> list[dict]:
-    gitleaks_bin = shutil.which("gitleaks")
-    if not gitleaks_bin:
-        return [{"tool": "gitleaks", "error": "gitleaks not found on PATH"}]
-
-    with tempfile.NamedTemporaryFile(mode="w+", suffix=".json", delete=False) as tmp:
-        tmp_path = Path(tmp.name)
-
-    cmd = [
-        gitleaks_bin,
-        "detect",
-        "--source",
-        str(repo_path),
-        "--report-format",
-        "json",
-        "--report-path",
-        str(tmp_path),
-    ]
-    subprocess.run(cmd, capture_output=True, text=True, errors="replace", check=False)
-
-    findings = []
-    if tmp_path.exists():
-        try:
-            with tmp_path.open("r", encoding="utf-8") as f:
-                data = json.load(f)
-            findings = data if isinstance(data, list) else data.get("findings", [])
-        except json.JSONDecodeError:
-            pass
-        finally:
-            tmp_path.unlink(missing_ok=True)
-    return findings
+    """Preserve the verification list API, including its error sentinel."""
+    result = scan_gitleaks(repo_path)
+    if result["error"]:
+        return [{"tool": "gitleaks", "error": result["error"]}]
+    return result["findings"]
 
 
 def main():
@@ -176,15 +155,18 @@ def main():
         sys.exit(1)
 
     patterns = []
-    if args.replacements:
-        replacements_path = Path(args.replacements).resolve()
-        if not replacements_path.is_file():
-            print(f"Replacements file not found: {replacements_path}", file=sys.stderr)
-            sys.exit(1)
-        patterns.extend(extract_patterns_from_replacements(replacements_path))
-
-    if args.patterns:
-        patterns.extend(load_extra_patterns(Path(args.patterns).resolve()))
+    try:
+        if args.replacements is not None:
+            if not args.replacements.strip():
+                raise ValueError
+            patterns.extend(extract_patterns_from_replacements(Path(args.replacements).resolve()))
+        if args.patterns is not None:
+            if not args.patterns.strip():
+                raise ValueError
+            patterns.extend(load_extra_patterns(Path(args.patterns).resolve()))
+    except (OSError, UnicodeError, ValueError):
+        print("Verification input file is missing, unreadable or invalid", file=sys.stderr)
+        sys.exit(1)
 
     if not patterns:
         print(

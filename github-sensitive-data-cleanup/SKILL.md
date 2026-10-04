@@ -119,7 +119,9 @@ Review `/tmp/scan-report.json`. It includes:
 - Layer 3 context matches (private domains, IPs, identities from your config).
 - A reminder to do an AI semantic review for content that regex cannot catch.
 
-If nothing sensitive is found, **stop**. Do not rewrite history.
+Check that the scan completed successfully before interpreting its findings.
+An execution error leaves the scan incomplete. Zero findings still proceeds to
+Step 1.5; it does not authorize a clean result or a history rewrite.
 
 ### Step 1.5: AI semantic review (Layer 4)
 
@@ -127,8 +129,13 @@ Regex scanners (Layers 1-3) cannot catch novel private context: real names,
 project codenames, transcript snippets, internal meeting references, or
 architecture descriptions. You must do an AI semantic review.
 
-Use the prompt in `references/ai_semantic_review_prompt.md` on the flagged
-commits. Re-run the review until no new private context is found.
+Use the prompt in `references/ai_semantic_review_prompt.md` on the frozen refs
+and file set for this task, including material with no scanner hits. Scanner
+findings prioritize inspection; they do not define its coverage. Record inspected
+items, findings and unreviewed coverage outside the public repository.
+
+If the completed scan and semantic review find nothing sensitive in that scope,
+**stop**. Do not rewrite history. Incomplete coverage remains unverified, not clean.
 
 If you skip this step, you may push private context that gitleaks never knew to
 look for.
@@ -214,6 +221,8 @@ uv run scripts/verify_cleanup.py --repo /path/to/repo --replacements /tmp/sensit
 
 This re-runs the scanner and also checks that none of the original sensitive
 strings remain in any commit. If it finds anything, go back to Step 3.
+Repeat Step 1.5 against the rewritten refs within the same task scope before
+pushing; successful pattern checks alone do not complete semantic verification.
 
 ### Step 6: Check visibility and push
 
