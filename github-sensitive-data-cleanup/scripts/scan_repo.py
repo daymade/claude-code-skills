@@ -26,6 +26,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from datetime import datetime, timezone
 try:
     import tomllib
 except ModuleNotFoundError:
@@ -47,23 +48,27 @@ DEFAULT_PATTERNS = [
 
 # Layer 3: rule IDs to extract from the user's gitleaks config.
 LAYER3_RULE_IDS = ["private-domain-context", "private-ip-context"]
+GITLEAKS_FINDINGS_EXIT = 10
 
 
-def run_gitleaks(repo_path: Path, output_path: Path) -> dict:
-    """Run gitleaks and return parsed findings."""
+def run_gitleaks(repo_path: Path, output_path: Path | None = None) -> dict:
+    """Return validated, redacted findings, or an explicit scan error.
+
+    output_path remains accepted for existing callers; the CLI writes the final
+    multi-layer report independently of gitleaks' temporary report.
+    """
+    def failed(message):
+        return {"tool": "gitleaks", "error": message, "findings": []}
+
     gitleaks_bin = shutil.which("gitleaks")
     if not gitleaks_bin:
-        return {
-            "tool": "gitleaks",
-            "error": "gitleaks not found on PATH; install with `brew install gitleaks`",
-            "findings": [],
-        }
+        return failed("gitleaks not found on PATH; install with `brew install gitleaks`")
 
-    # Write gitleaks JSON to a temp file so we can parse it even if it exits 1.
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".json", delete=False
-    ) as tmp:
-        tmp_path = Path(tmp.name)
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
+            tmp_path = Path(tmp.name)
+    except OSError:
+        return failed("gitleaks report could not be created")
 
     cmd = [
         gitleaks_bin,
@@ -74,34 +79,60 @@ def run_gitleaks(repo_path: Path, output_path: Path) -> dict:
         "json",
         "--report-path",
         str(tmp_path),
-        "--verbose",
+        "--exit-code",
+        str(GITLEAKS_FINDINGS_EXIT),
+        "--redact",
     ]
 
-    try:
-        subprocess.run(cmd, capture_output=True, text=True, errors="replace", check=False)
-    except Exception as e:
-        tmp_path.unlink(missing_ok=True)
-        return {
-            "tool": "gitleaks",
-            "error": f"failed to run gitleaks: {e}",
-            "findings": [],
-        }
+    def read_report():
+        try:
+            try:
+                process = subprocess.run(cmd, capture_output=True, text=True, errors="replace", check=False)
+            except OSError:
+                return failed("gitleaks could not be executed")
+            if process.returncode not in (0, GITLEAKS_FINDINGS_EXIT):
+                return failed(f"gitleaks scan failed (exit {process.returncode})")
+            with tmp_path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                findings = data
+            elif isinstance(data, dict):
+                findings = data.get("findings")
+            else:
+                findings = None
+            if not isinstance(findings, list):
+                return failed("gitleaks report must contain a findings array")
+            for finding in findings:
+                if not isinstance(finding, dict) or any(
+                    not isinstance(finding.get(key), str) or not finding[key].strip()
+                    for key in ("RuleID", "File")
+                ):
+                    return failed("gitleaks report contains an invalid finding")
+                if "StartLine" in finding and (type(finding["StartLine"]) is not int or finding["StartLine"] < 1):
+                    return failed("gitleaks report contains an invalid finding location")
+            if bool(findings) != (process.returncode == GITLEAKS_FINDINGS_EXIT):
+                return failed("gitleaks exit status disagrees with its report")
+            # Keep rule/file/commit/line metadata usable without echoing credentials.
+            findings = [dict(finding) for finding in findings]
+            for finding in findings:
+                for key in ("Secret", "Match"):
+                    if key in finding:
+                        finding[key] = "REDACTED"
+            return {"tool": "gitleaks", "error": None, "findings": findings}
+        except (OSError, UnicodeError):
+            return failed("gitleaks report is missing or unreadable")
+        except json.JSONDecodeError:
+            return failed("gitleaks report is empty or invalid JSON")
 
-    findings = []
+    cleanup_error = None
     try:
-        with tmp_path.open("r", encoding="utf-8") as f:
-            data = json.load(f)
-        findings = data if isinstance(data, list) else data.get("findings", [])
-    except json.JSONDecodeError:
-        pass
+        result = read_report()
     finally:
-        tmp_path.unlink(missing_ok=True)
-
-    return {
-        "tool": "gitleaks",
-        "error": None,
-        "findings": findings,
-    }
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except OSError:
+            cleanup_error = "gitleaks temporary report could not be removed"
+    return failed(cleanup_error) if cleanup_error else result
 
 
 def load_custom_patterns(repo_path: Path) -> list[str]:
@@ -120,7 +151,7 @@ def load_custom_patterns(repo_path: Path) -> list[str]:
 
 def load_identities(identities_path: Path | None) -> list[str]:
     """Load known identities from a one-per-line file."""
-    if not identities_path or not identities_path.exists():
+    if identities_path is None:
         return []
     identities = []
     for line in identities_path.read_text(encoding="utf-8").splitlines():
@@ -188,15 +219,9 @@ def grep_all_commits(
     Returns a set of commit hashes that contain the pattern, or an error string.
     """
     if commits is None:
-        rev_list = subprocess.run(
-            ["git", "-C", str(repo_path), "rev-list", "--all"],
-            capture_output=True,
-            text=True, errors="replace",
-            check=False,
-        )
-        if rev_list.returncode != 0:
-            return set(), f"git rev-list failed: {rev_list.stderr}"
-        commits = [c for c in rev_list.stdout.splitlines() if c.strip()]
+        commits, error = get_all_commits(repo_path)
+        if error:
+            return set(), error
 
     if not commits:
         return set(), None
@@ -204,27 +229,20 @@ def grep_all_commits(
     matched: set[str] = set()
     for i in range(0, len(commits), batch_size):
         batch = commits[i : i + batch_size]
-        result = subprocess.run(
-            [
-                "git",
-                "-C",
-                str(repo_path),
-                "grep",
-                "--perl-regexp",
-                "-n",
-                "-e",
-                pattern,
-            ]
-            + batch,
-            capture_output=True,
-            text=True, errors="replace",
-            check=False,
-        )
+        try:
+            result = subprocess.run(
+                ["git", "-C", str(repo_path), "grep", "--perl-regexp", "-n", "-e", pattern] + batch,
+                capture_output=True,
+                text=True, errors="replace",
+                check=False,
+            )
+        except OSError:
+            return set(), "git grep could not be executed"
         if result.returncode == 1 and not result.stdout:
             # No matches in this batch.
             continue
         if result.returncode != 0:
-            return set(), result.stderr.strip()
+            return set(), f"git grep failed (exit {result.returncode})"
 
         for line in result.stdout.splitlines():
             if ":" in line:
@@ -241,10 +259,11 @@ def run_custom_scan(
         return {"tool": "custom-grep", "findings": []}
 
     findings = []
+    errors = []
     for pattern in patterns:
         matched, error = grep_all_commits(repo_path, pattern, commits=commits)
         if error:
-            findings.append({"pattern": pattern, "error": error})
+            errors.append({"pattern": pattern, "error": error})
             continue
         if matched:
             findings.append(
@@ -255,7 +274,8 @@ def run_custom_scan(
                 }
             )
 
-    return {"tool": "custom-grep", "findings": findings}
+    return {"tool": "custom-grep", "findings": findings, "errors": errors,
+            "error": "custom pattern scan could not complete" if errors else None}
 
 
 def run_layer3_scan(
@@ -274,22 +294,31 @@ def run_layer3_scan(
     patterns = []
     rule_sources = {}
 
-    if gitleaks_config_path and gitleaks_config_path.exists():
+    if gitleaks_config_path is not None:
         try:
             rules = parse_gitleaks_rules(gitleaks_config_path)
             for rule_id in LAYER3_RULE_IDS:
                 regex = rules.get(rule_id)
+                if rule_id in rules and not regex:
+                    raise ValueError
                 if regex:
                     patterns.append(regex)
                     rule_sources[regex] = f"gitleaks:{rule_id}"
-        except Exception as e:
+            if not patterns:
+                raise ValueError
+        except (OSError, ValueError, TypeError, AttributeError):
             return {
                 "tool": "layer3-context",
-                "error": f"failed to parse {gitleaks_config_path}: {e}",
+                "error": "Layer 3 config is missing, unreadable or invalid",
                 "findings": [],
             }
 
-    identities = load_identities(identities_path)
+    try:
+        identities = load_identities(identities_path)
+    except (OSError, UnicodeError):
+        return {"tool": "layer3-context", "error": "Layer 3 identities file is missing or unreadable", "findings": []}
+    if identities_path is not None and not identities:
+        return {"tool": "layer3-context", "error": "Layer 3 identities file contains no identities", "findings": []}
     for identity in identities:
         escaped = re.escape(identity)
         patterns.append(escaped)
@@ -303,10 +332,11 @@ def run_layer3_scan(
         }
 
     findings = []
+    errors = []
     for pattern in patterns:
         matched, error = grep_all_commits(repo_path, pattern, commits=commits)
         if error:
-            findings.append(
+            errors.append(
                 {"source": rule_sources.get(pattern, "unknown"), "error": error}
             )
             continue
@@ -320,19 +350,23 @@ def run_layer3_scan(
                 }
             )
 
-    return {"tool": "layer3-context", "findings": findings}
+    return {"tool": "layer3-context", "findings": findings, "errors": errors,
+            "error": "Layer 3 scan could not complete" if errors else None}
 
 
 def get_all_commits(repo_path: Path) -> tuple[list[str], str | None]:
     """Return all commit hashes for the repo, or an error string."""
-    result = subprocess.run(
-        ["git", "-C", str(repo_path), "rev-list", "--all"],
-        capture_output=True,
-        text=True, errors="replace",
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo_path), "rev-list", "--all"],
+            capture_output=True,
+            text=True, errors="replace",
+            check=False,
+        )
+    except OSError:
+        return [], "git rev-list could not be executed"
     if result.returncode != 0:
-        return [], result.stderr.strip()
+        return [], f"git rev-list failed (exit {result.returncode})"
     return [c for c in result.stdout.splitlines() if c.strip()], None
 
 
@@ -355,15 +389,23 @@ def main():
         print(f"Not a git repository: {repo_path}", file=sys.stderr)
         sys.exit(1)
 
-    gitleaks_config = Path(args.gitleaks_config) if args.gitleaks_config else None
-    identities_file = Path(args.identities_file) if args.identities_file else None
+    for option in (args.gitleaks_config, args.identities_file):
+        if option is not None and not option.strip():
+            print("Explicit Layer 3 input paths must not be empty", file=sys.stderr)
+            sys.exit(1)
+    gitleaks_config = Path(args.gitleaks_config) if args.gitleaks_config is not None else None
+    identities_file = Path(args.identities_file) if args.identities_file is not None else None
 
     all_commits, commits_err = get_all_commits(repo_path)
     if commits_err:
         print(f"Failed to list commits: {commits_err}", file=sys.stderr)
         sys.exit(1)
 
-    patterns = DEFAULT_PATTERNS + load_custom_patterns(repo_path)
+    try:
+        patterns = DEFAULT_PATTERNS + load_custom_patterns(repo_path)
+    except (OSError, UnicodeError):
+        print("Custom patterns file could not be read", file=sys.stderr)
+        sys.exit(1)
 
     gitleaks_result = run_gitleaks(repo_path, Path(args.output))
     custom_result = run_custom_scan(repo_path, patterns, commits=all_commits)
@@ -373,12 +415,7 @@ def main():
 
     report = {
         "repo": str(repo_path),
-        "scanned_at": subprocess.run(
-            ["date", "-u", "+%Y-%m-%dT%H:%M:%SZ"],
-            capture_output=True,
-            text=True, errors="replace",
-            check=True,
-        ).stdout.strip(),
+        "scanned_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "tools": [gitleaks_result, custom_result, layer3_result],
         "ai_semantic_review_required": True,
         "ai_semantic_review_prompt": "Use references/ai_semantic_review_prompt.md",
@@ -390,9 +427,19 @@ def main():
     }
 
     output_path = Path(args.output)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w", encoding="utf-8") as f:
-        json.dump(report, f, ensure_ascii=False, indent=2)
+    try:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with output_path.open("w", encoding="utf-8") as f:
+            json.dump(report, f, ensure_ascii=False, indent=2)
+    except OSError:
+        print("Scan report could not be written", file=sys.stderr)
+        sys.exit(1)
+
+    errors = [result["error"] for result in report["tools"] if result.get("error")]
+    if errors:
+        print("Scan failed: " + "; ".join(errors), file=sys.stderr)
+        print(f"Report written to: {output_path}")
+        sys.exit(1)
 
     total = (
         report["summary"]["gitleaks_findings"]

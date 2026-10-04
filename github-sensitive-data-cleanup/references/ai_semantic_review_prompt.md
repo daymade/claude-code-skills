@@ -5,12 +5,13 @@ already listed. They cannot recognize novel private context: real names,
 project codenames, transcript snippets, internal meeting references,
 infra nicknames, or descriptions that reveal internal architecture.
 
-Use this prompt to perform Layer 4 review on the commits or files flagged by
-Layers 1-3, or on any commit you suspect contains private context.
+Use this prompt on the refs and file set frozen for the cleanup task, including
+items with zero Layer 1-3 findings. Use scanner hits to prioritize inspection,
+not to choose the only material the semantic pass can see.
 
 ## When to Run
 
-- After `scan_repo.py` reports any Layer 3 findings.
+- After a completed `scan_repo.py` run, including a run with zero findings.
 - Before any force-push to a public repo.
 - When the repo contains meeting transcripts, Slack/WeChat logs, runbooks,
   incident notes, or architectural docs.
@@ -18,34 +19,48 @@ Layers 1-3, or on any commit you suspect contains private context.
 ## Prompt
 
 ```text
-You are reviewing git history for accidental leakage of private business
-context. The following commits/files were flagged by regex scanners or are
-otherwise suspicious.
+Review the following frozen scope for accidental leakage of private business
+context. Inspect every listed item even when regex scanners reported no findings.
 
-<paste commit hashes, file paths, or diff excerpts here>
+<exact refs, file set, available source locators and terminal condition>
 
 For each item, answer:
 1. Does it contain any real person name, project codename, internal system
-   name, private domain, internal IP, meeting/transcript snippet, or business
-   context that is not a public entity or generic placeholder?
-2. If yes, is the information already public (e.g., on the company website,
-   public blog, open-source repo) or genuinely private?
+   name, private domain, internal IP, meeting/transcript snippet, session/rollout
+   identifier, or operational detail from private work? Check descriptions that
+   disclose architecture or an incident even without an identifying name.
+2. For each concrete example or identifier, is its source verifiably public,
+   explicitly approved for this public use, synthetic, private, or unknown?
+   Cite the source evidence available within authorized scope; a public-looking
+   value or an author assertion does not establish provenance. Do not remove
+   verified public examples or examples within explicit publication approval.
 3. List the exact strings or excerpts that should be redacted.
 4. Suggest replacement placeholders (e.g., internal.example.com, PERSON_NAME,
-   PROJECT_CODENAME).
+   PROJECT_CODENAME), or an invented equivalent that preserves the failure
+   mechanism. Do not describe invented details as an observed incident.
+5. List what you inspected and any missing content or source evidence. A diff
+   excerpt cannot establish that the unprovided parts of a listed file are clean.
 
-Be conservative: when in doubt, treat it as private. Do not quote large blocks
-of text in your answer; only list the minimal strings that need action.
+Keep unresolved provenance unknown. When an equivalent synthetic example
+preserves the function, suggest it without forcing a user decision. Stop when
+the declared scope is inspected and no actionable in-scope finding remains;
+otherwise report the findings or incomplete coverage. Keep private source
+locators and minimal redaction excerpts in the private review artifact, not in
+public PR text. Do not quote large blocks of private material.
 ```
 
 ## How to Apply
 
-1. Run the prompt against the flagged commits.
-2. Add the identified private strings to your replacements file
-   (`/tmp/sensitive-replacements.txt`).
-3. Re-run `rewrite_history.py` with the updated replacements file.
-4. Re-run `verify_cleanup.py` with the same file.
-5. Re-run this AI semantic review until no new private context is found.
+1. Freeze the task's refs/file set and stopping condition, then run the prompt
+   across that scope. Keep the review outside the public repository.
+2. Verify findings against the actual commits. If both the scan and this review
+   completed with no findings, stop without rewriting history.
+3. For an authorized cleanup, add the identified private strings to the external
+   replacements file (`/tmp/sensitive-replacements.txt`) and re-run
+   `rewrite_history.py` with that file.
+4. Re-run `verify_cleanup.py` and this semantic review on the rewritten refs in
+   the same scope. A failed scanner or missing review coverage stays incomplete;
+   a successful pattern verification does not replace this pass.
 
 ## Limitations
 

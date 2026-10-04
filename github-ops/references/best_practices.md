@@ -180,7 +180,7 @@ gh pr create -R OWNER/REPO \
   --head feature-branch
 
 gh pr view feature-branch -R OWNER/REPO \
-  --json number,title,state,headRefOid,baseRefOid,url
+  --json number,title,body,state,headRefOid,baseRefOid,url
 ```
 
 ### Merge only the reviewed head

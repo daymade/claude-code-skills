@@ -10,6 +10,13 @@ the shared PII guard still receives the original update set. CI does not have
 access to the private archive and does not run this
 local evidence check.
 
+Before attesting a public release, check that the private review records the
+[public-distribution axes](independent-review-protocol.md#public-distribution-axes)
+against this exact candidate and the public files declared for that pass. Use the
+shared `scripts/packaging_policy.py` for the distributed dependency set. Source dispositions and
+dependency observations belong in the review; a `passed` metadata field alone
+does not establish them.
+
 ## Commit the current review first
 
 Keep the review in the private knowledge repository's permitted directory. Preserve

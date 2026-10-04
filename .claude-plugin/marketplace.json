@@ -338,7 +338,7 @@
       "description": "Daymade skills core suite. Bundles skill creation, quality review, real Claude/Codex Skill-surface governance, suite-migration reconciliation, and marketplace development tooling under one shared namespace. Skill governance separates canonical source, installed inventory, discovery policy, the fresh model-visible catalog, and router-resolved cold resources instead of optimizing cache counts; it preserves Claude's official versioned-cache lifecycle and verifies selected entries in the real host prompt. Skill verification separates risk classification from evaluation spend: bounded fixes use targeted checks, narrow behavior changes use sampled replays, and paired baselines, graders, benchmarks, or a viewer run only after explicit user authorization or a decision-bearing evidence plan plus opt-in; that authorization does not change the risk tier. Existing-skill edits retain an old-vs-new capability audit and content-bound packaging attestation so prompt compression cannot silently delete runtime contracts. When the official skill-creator plugin is also installed, skill-creator detects the coexistence and offers a consent-based, reversible SessionStart routing hook so the daymade edition wins deterministically; on machines without the official plugin nothing is ever installed.",
       "source": "./daymade-skill",
       "strict": false,
-      "version": "1.60.1",
+      "version": "1.60.2",
       "category": "suite",
       "keywords": [
         "suite",
@@ -464,7 +464,7 @@
       "description": "Operates GitHub via gh CLI and REST/GraphQL — PRs, issues, Actions, repos, collaborators, org permissions, 2FA — with explicit target, authorization, and independent readback. Use when a write reports success but state didn't change, or choosing gh/REST/GraphQL/UI-only. Not for local Git recovery (use git-safety-net), maintainer PR review (use github-review-pr), or upstream contribution (use github-contributor).",
       "source": "./github-ops",
       "strict": false,
-      "version": "1.10.0",
+      "version": "1.10.1",
       "category": "developer-tools",
       "keywords": [
         "github",
@@ -1037,7 +1037,7 @@
       "description": "Scan and remove sensitive data (secrets, API keys, private domains/IPs, PII) from GitHub repository history. Use this skill whenever the user says scan sensitive data, clean git history, remove secrets from repo, sanitize GitHub history, 清理敏感数据, 历史重写, force push, 泄露, or needs to repair a public repo after accidental secret/private context leakage. Also use before any force push to a public repository to verify visibility, backup, and scan results.",
       "source": "./github-sensitive-data-cleanup",
       "strict": false,
-      "version": "1.3.0",
+      "version": "1.3.1",
       "category": "security",
       "keywords": [
         "github",

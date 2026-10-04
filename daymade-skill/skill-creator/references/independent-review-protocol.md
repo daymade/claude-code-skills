@@ -135,6 +135,8 @@ Common axes, and the one that matters most:
 | **Fidelity** | **Is this still faithful to commitments already made?** |
 | Completeness | Is anything in the sources missing here? |
 | Comprehensibility | Could a naive reader act on this? |
+| Public-distribution privacy | Do concrete examples, identifiers or incident details disclose private source material? |
+| Dependency availability | Can the intended reader obtain and use each helper required by the changed instructions? |
 
 **Fidelity is the axis self-review is structurally worst at**, because the author is the one
 who moved the commitment. Coherence and fidelity are orthogonal: an artifact can be flawlessly
@@ -158,6 +160,25 @@ the author's conclusion:
 3. **Change blast radius** — capabilities, rules, scripts, and runtime paths this edit touched or newly advertised.
 4. **Failure axes** — the bounded questions this pass must answer.
 5. **Terminal condition** — for example: no unresolved BLOCKER/MAJOR on those axes, deterministic gates pass, and every old scenario has a classified disposition.
+
+### Public-distribution axes
+
+For a public Skill change, include privacy and dependency availability in the
+existing required pass. Use [the sanitization checklist](sanitization_checklist.md#trace-examples-and-verify-required-helpers)
+for the checks; do not limit the privacy read to scanner hits. Bind the artifact
+input to the exact candidate and public files declared for this pass; verify helper
+availability against the actual distributed file set. Include source locators
+for changed examples in that input, with private originals outside the public
+tree and available only within authorized scope. A locator or author assertion
+does not prove that its source is public or its replacement is synthetic.
+
+The reviewer checks the cited source or reports the provenance gap, and checks
+required helpers against the distributed files or declared dependency interface.
+Record the inspected files, source dispositions and representative dependency
+observations in the private review artifact. Missing source context can be
+resolved with a synthetic equivalent; an unavailable runtime check remains in
+Not checked. Do not call that check passed. This adds questions to the existing
+pass, not another reviewer or an unbounded audit of unrelated historical content.
 
 Triage each finding by causal relationship to the current change:
 

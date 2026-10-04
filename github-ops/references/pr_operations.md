@@ -44,6 +44,41 @@ inspect `CONTRIBUTING.md`, the PR template, title-check workflow, or accepted re
 invent a ticket prefix or a bypass marker. After creation, read back the new PR's repository,
 base/head SHAs, title, body, and URL.
 
+### Public publication text
+
+Before publishing to a public repository, the acting agent freezes the candidate SHA,
+owned source paths, PR title/body, changed changelog entries and new commit messages.
+Include all these surfaces in the repository's existing publication checks and review.
+Use the owning sanitization workflow for content decisions; this reference binds the
+inputs and hosted result. A clean source-file scan leaves PR text and commit messages
+unchecked unless they were also supplied. Do not add a separate reviewer for metadata.
+
+Create or edit the PR from the reviewed text, then use a fresh read to compare its exact
+title/body and head SHA with that reviewed input:
+
+```bash
+gh pr view NUMBER -R OWNER/REPO \
+  --json number,title,body,headRefOid,baseRefOid,url
+```
+
+Read each newly pushed commit's message through the commit API and compare it with the
+reviewed input. After landing, read the PR's merge commit and its hosted message:
+
+```bash
+gh pr view NUMBER -R OWNER/REPO --json state,mergeCommit,url
+gh api repos/OWNER/REPO/commits/MERGE_SHA --jq '{sha,message:.commit.message}'
+```
+
+Set `MERGE_SHA` from that fresh PR read. Compare the published message with the intended
+landing text, and read the frozen source paths and changelog from that exact fetched
+commit. Squash/rebase can change both commit identity and message. Missing reads or
+mismatches leave publication unverified. These checks are executed by the acting agent;
+the source scanner alone does not enforce coverage of hosted text.
+
+A correction to current files or PR text does not remove text from earlier commits.
+Use `github-sensitive-data-cleanup` for an already-published history finding only within
+an explicitly authorized rewrite scope, including its preservation and recovery checks.
+
 ---
 
 ## Viewing Pull Requests
