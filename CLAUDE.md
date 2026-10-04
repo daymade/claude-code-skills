@@ -134,16 +134,25 @@ cd daymade-skill/skill-creator
 uv run --frozen python -m scripts.quick_validate <skill-path> --audience public
 ```
 
+### Review and evaluation input preparation
+
+When review, replay or evaluation needs input copies, follow
+[the materialization SOP](daymade-skill/skill-creator/references/materialization-budget.md)
+from the locked skill-creator project above. Its
+[CLI](daymade-skill/skill-creator/scripts/materialize.py) owns argument parsing,
+accounting and cleanup behavior. For disk diagnosis, use
+[macos-cleaner](daymade-macos/macos-cleaner/SKILL.md).
+
 ### Automated Test Suites (CI)
 
 A `tests/` directory under a skill does **not** automatically run in CI. The
-"Registered test suites (Linux)" GitHub Actions job only runs directories
-explicitly listed in `scripts/ci/test-suites.txt` — that file's header is the
+registered-suite runner uses `scripts/ci/test-suites.txt` — that file's header is the
 SSOT for the admission criteria (stdlib-only, no network/credentials,
 deterministic, Linux-verified) and the runner types (`python-unittest` via
 `unittest discover`, `node-test`). Adding a test file to an unregistered
-`tests/` directory gives you a suite you can run locally, not CI coverage —
-check the registry before assuming otherwise, and note `unittest discover`
+`tests/` directory does not establish CI coverage. Check the registry and the
+explicit test steps in [.github/workflows/ci.yml](.github/workflows/ci.yml),
+which also runs selected suites directly. Note that `unittest discover`
 only collects `unittest.TestCase` subclasses, not bare pytest-style functions.
 
 For browser-backed recurring jobs, enter

@@ -8,6 +8,9 @@ description: >-
 
 # Budgeted input copies and evaluation runs
 
+For read-only work that needs no input copy, read the required objects directly
+with `git show <commit>:<path>`.
+
 Use `scripts/materialize.py` on POSIX with Python 3.10+ and Git. It uses the standard
 library and local Git object reads. It creates no Git history, background service,
 system hook or periodic deletion job.
@@ -89,7 +92,7 @@ printf 'run exit: %s\n' "$materialization_exit"
 
 Expected: preparation reports `prepared`; run reports `run_succeeded` with child
 return code 0; `artifacts/run-0001/stdout.log` contains `True`. Finish reports
-`finished`, lists the two removed input paths, and retains both log files. Read
+`finished`, lists the removed input paths, and retains the log files. Read
 `task/.materialization.json` independently to check the persisted outcome and
 cleanup paths. Process exit 0 does not establish business acceptance; inspect the
 task's outputs against the user's acceptance criterion.
@@ -109,8 +112,9 @@ This measures observed storage growth, not every byte ever written: same-path
 rewrites and creation/deletion entirely between samples can escape cumulative
 measurement. Keep retry outputs in distinct paths and preserve evidence.
 
-The default polling interval is 0.1 seconds; `run --poll-interval <seconds>` changes
-it. A write burst can overshoot between samples or during filesystem traversal.
+Use `run --poll-interval <seconds>` to choose the polling interval; the
+[CLI argument parser](../scripts/materialize.py) defines its default.
+A write burst can overshoot between samples or during filesystem traversal.
 This is a monitored budget, not a hard disk quota or hostile-process sandbox.
 Writes outside this root, global dependency caches, and descendants that escape
 the created process group are outside its accounting/control boundary. Keep all
