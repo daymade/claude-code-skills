@@ -285,6 +285,15 @@ may exceed the tool response, load
 [stateful-script-verification.md](references/stateful-script-verification.md).
 Select its affected recipes as narrow deterministic evidence within the chosen tier.
 
+For an operational Skill whose changed workflow needs installation, account
+configuration, a live service or human cooperation, read
+[first use and recovery](references/first-use-and-resume.md) before drafting that
+workflow. Put automatic preparation and continuation in the ordinary entry,
+reuse existing execution owners, and test the affected missing-state, valid-state
+and interrupted-state paths against the original task. A written setup guide,
+healthy process or loaded model alone does not establish first-use success.
+Skip this route for reference-only Skills and self-sufficient file transforms.
+
 #### Heavy-eval authorization gate — separate from tier classification
 
 A tier describes **risk and uncertainty**; it does not authorize token spend or agent fan-out. Passing this gate changes the permitted evidence plan, not the tier. The generic paired baseline → grader → benchmark → viewer pipeline may run only when either:

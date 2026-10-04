@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **skill-creator** (`daymade-skill` v1.58.1 → v1.59.0): Add a first-use and recovery contract for operational Skills: assign software preparation to the agent, check identity and privilege context across human handoffs, and distinguish dependency readiness from the requested task's verified result. Preserve existing installers, reference-only workflows and evaluation budgets.
+
 - **skill-creator** (`daymade-skill` v1.58.0 → v1.58.1): Index the materialization SOP from CLAUDE.md, clarify direct immutable reads and CI coverage, and leave the polling default in the CLI authority.
 
 - **macos-watchdog** (`daymade-macos` v1.14.4 → v1.15.0): Add a bounded periodic-observation cost check before deploy/integration: preserve business predicates, separate cold/warm/delta/audit work, calibrate parsing/query growth and require a completed native launchd round. Keep sleep/wake continuity and power outcomes separate. Workflow verification correction; preserve existing watchdog contracts.
