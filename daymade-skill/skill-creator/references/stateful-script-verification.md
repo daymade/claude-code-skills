@@ -91,3 +91,22 @@ already truncated, read the missing evidence from the saved output; if nothing
 was saved, rerun only a safe read-only command or retrieve its existing artifact.
 Do not rerun a write merely to recapture its output. Truncated responses cannot
 establish completeness. File length alone does not justify reorganizing the Skill.
+
+## Complete file reads
+
+Prefer the host's Skill/Read loader. For a shell fallback, first run:
+
+```bash
+python3 <skill-creator-path>/scripts/skill_read_plan.py <file> --max-chunk-bytes 12000
+```
+
+Choose the byte budget below both the inner tool and outer response limits; 12000
+is a starting choice, not a universal safe limit. The plan reports a content hash
+and contiguous, nonoverlapping line ranges covering the entire file. Read each
+range with a separate literal `sed -n '<start>,<end>p' <file>` or native Read call;
+do not aggregate all ranges into one capped response. Track successfully received
+ranges against that hash. If either layer truncates, reduce the budget and read
+the missing range again. If the file changes, regenerate the plan and load the new
+content. An oversized single line requires a byte-range reader or a larger safe
+budget. The planner never sets a loaded marker. Reuse verified loading in the same
+session instead of repeatedly rereading unchanged text.

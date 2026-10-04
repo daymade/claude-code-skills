@@ -13,6 +13,10 @@ license: Complete terms in LICENSE.txt
 
 A skill for creating new skills and iteratively improving them.
 
+When loading this file through an output-limited shell tool, use the complete-read
+recipe in [stateful script verification](references/stateful-script-verification.md#complete-file-reads).
+A truncated response does not count as loading the missing text.
+
 At a high level, the process of creating a skill goes like this:
 
 - Decide what you want the skill to do and roughly how it should do it
@@ -1816,6 +1820,11 @@ every user who already installed it — Claude Code does not clean up installed 
 when an entry disappears, leaving dangling installs that error on every `marketplace
 update`. Treat such changes like an API deprecation: ship a migration note in the
 changelog, and follow marketplace-dev's guidance for the mechanics.
+
+For repositories with the local release gate installed, use
+[release readiness](references/release-readiness.md) to bind committed review evidence
+to the exact head before push. The gate checks persistence and coverage; it does not
+replace the independent pass or determine whether a typo exemption is truthful.
 
 **If you commit/push the skill repo yourself:** for an existing skill whose current change crosses discipline #5's rule/contract/number threshold, confirm the review artifact records this change and is committed (check its exact path with `git status` and `git log -1 -- <artifact>`, not merely whether some historical `independent-review.md` exists). A typo or pure reformat does not require that artifact; an older review never satisfies a current substantive change. Step 5's note explains why push, not packaging, is the real enforcement point for an already-published skill. Then stage only the skill's explicit paths (`git add <skill-dir> .claude-plugin/marketplace.json`) — never `git add .`; the working tree is usually full of unrelated churn that will otherwise ride into the commit (one commit swept in a pile of unrelated transcript files and had to be `git reset` and re-staged). Before pushing, confirm the repo's real visibility with `gh repo view --json visibility,isPrivate` instead of assuming from the path — a public skill repo deserves a PR + review, not a direct push to main.
 

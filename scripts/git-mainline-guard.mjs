@@ -166,12 +166,12 @@ function prePush() {
     fail("direct pushes to main are forbidden; merge a reviewed feature PR instead.");
   }
 
-  const featureUpdates = updates.filter(
+  const publicationUpdates = updates.filter(
     (update) =>
-      update.remoteRef.startsWith("refs/heads/") &&
+      (update.remoteRef.startsWith("refs/heads/") || update.remoteRef.startsWith("refs/tags/")) &&
       update.localSha !== ZERO_SHA,
   );
-  if (featureUpdates.length === 0) return;
+  if (publicationUpdates.length === 0) return;
 
   const fetchResult = run("git", [
     "fetch",
@@ -185,13 +185,29 @@ function prePush() {
   }
   const base = `refs/remotes/${remoteName}/main`;
   const seen = new Set();
-  for (const update of featureUpdates) {
+  for (const update of publicationUpdates) {
     if (!/^[0-9a-f]{40}$/.test(update.localSha)) {
       fail(`candidate SHA is not a full commit identity: ${update.localSha}`, 2);
     }
-    if (seen.has(update.localSha)) continue;
-    seen.add(update.localSha);
-    runProgression(base, ["--candidate", update.localSha]);
+    const isTag = update.remoteRef.startsWith("refs/tags/");
+    const candidate = isTag
+      ? gitCapture("rev-parse", `${update.localSha}^{commit}`)
+      : update.localSha;
+    if (isTag) {
+      // Tagging an already published commit introduces no new Skill content.
+      const published = run("git", ["merge-base", "--is-ancestor", candidate, base], { capture: true });
+      if (published.status === 0) continue;
+      if (published.status !== 1) fail("could not establish tag publication state.", 2);
+    } else {
+      runProgression(base, ["--candidate", candidate]);
+    }
+    if (seen.has(candidate)) continue;
+    seen.add(candidate);
+    const release = run("python3", [
+      path.join(REPO_ROOT, "scripts/ci/check_skill_release.py"),
+      "--repo", REPO_ROOT, "--base", base, "--candidate", candidate,
+    ]);
+    if (release.status !== 0) fail("current Skill release evidence is not ready.", 2);
   }
 }
 

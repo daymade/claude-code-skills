@@ -393,6 +393,10 @@ Squash-merged PRs rewrite commits under new SHAs, so every direct commit to
 local `main` guarantees divergence the moment its PR merges. These rules keep
 `main` clean:
 
+Before pushing shipped Skill changes, follow
+[skill release readiness](daymade-skill/skill-creator/references/release-readiness.md).
+The existing pre-push entry checks committed current-review evidence for the exact head.
+
 `.githooks/pre-commit` and `.githooks/pre-push` dispatch to
 `scripts/git-mainline-guard.mjs`, which rejects direct local-main work and stale
 marketplace manifests or reused plugin versions against current main. The

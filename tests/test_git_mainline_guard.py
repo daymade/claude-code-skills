@@ -50,12 +50,19 @@ class MainlineGuardTests(unittest.TestCase):
         run(self.repo, "git", "init", "-q")
         run(self.repo, "git", "config", "user.email", "test@example.invalid")
         run(self.repo, "git", "config", "user.name", "Test")
+        run(self.repo, "git", "config", "core.hooksPath", "/dev/null")
         (self.repo / "scripts/ci").mkdir(parents=True)
         (self.repo / ".githooks").mkdir()
         (self.repo / ".claude-plugin").mkdir()
         (self.repo / "daymade-audio/transcript-fixer").mkdir(parents=True)
         shutil.copy2(GUARD_SOURCE, self.repo / "scripts/git-mainline-guard.mjs")
         shutil.copy2(CHECKER_SOURCE, self.repo / "scripts/ci/check_version_progression.py")
+        shutil.copy2(REPO_ROOT / "scripts/ci/check_skill_release.py", self.repo / "scripts/ci/check_skill_release.py")
+        helpers = self.repo / "daymade-skill/skill-creator/scripts"
+        helpers.mkdir(parents=True)
+        for helper in ("release_readiness.py", "packaging_policy.py"):
+            shutil.copy2(REPO_ROOT / "daymade-skill/skill-creator/scripts" / helper, helpers / helper)
+
         shutil.copy2(PRE_COMMIT_SOURCE, self.repo / ".githooks/pre-commit")
         shutil.copy2(PRE_PUSH_SOURCE, self.repo / ".githooks/pre-push")
         (self.repo / ".claude-plugin/marketplace.json").write_text(
