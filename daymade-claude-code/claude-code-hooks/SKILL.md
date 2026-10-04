@@ -49,7 +49,7 @@ The loop may be created entirely by an agent repeatedly applying a prose rule.
 - **PreToolUse** is the workhorse for stopping a *tool call* — the types in this
   table are the ones this file teaches, not the complete set of blockable events, and
   the **official** hooks reference (docs.claude.com / code.claude.com, not the
-  `references/` files in this bundle — those cover only the four types above) now
+  `references/` files in this bundle — those cover only the types above) now
   lists many more blockable events, including `UserPromptSubmit`, `PreCompact`,
   `TeammateIdle`, and task and config events. If what you need to gate is not a tool
   call, look there before forcing it onto PreToolUse.
