@@ -144,7 +144,7 @@ When review, replay or evaluation needs input copies, follow
 [the materialization SOP](daymade-skill/skill-creator/references/materialization-budget.md)
 from the locked skill-creator project above. Its
 [CLI](daymade-skill/skill-creator/scripts/materialize.py) owns argument parsing,
-accounting and cleanup behavior. For disk diagnosis, use
+accounting, retry eligibility and cleanup behavior. For disk diagnosis, use
 [macos-cleaner](daymade-macos/macos-cleaner/SKILL.md).
 When changing measurement, run the SOP's targeted regression suite before shipping.
 

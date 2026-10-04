@@ -101,21 +101,21 @@ task's outputs against the user's acceptance criterion.
 
 Launch an argument vector after `--`; no shell is inserted. The working directory
 is `arms/<arm>`. Each attempt gets a new `artifacts/run-NNNN/` containing stdout
-and stderr. Call `run` again for a retry under the same root and cumulative budget.
+and stderr. Call `run` again for a retry under the same root and cumulative budget,
+before calling `finish`.
 Runs are serialized; another run or finish cannot acquire its active lock.
 
 The runner samples only its own root and the root filesystem's available space.
 It charges the larger of each path's logical or allocated size, including
 directory metadata. Per-path observed high-water sizes and charged bytes persist
-across runs; deleting a file or finishing an arm does not reset the allowance.
+across runs; deleting a file does not reset the allowance.
 This measures observed storage growth, not every byte ever written: same-path
 rewrites and creation/deletion entirely between samples can escape cumulative
 measurement. Keep retry outputs in distinct paths and preserve evidence.
 
 A child entry or subtree unavailable with ENOENT during traversal is skipped;
 sizes already observed in that sample and previously recorded high-water charges
-remain. A missing or replaced
-root, permission/I/O errors, special files, and traversal errors without a named
+remain. A missing or replaced root, permission/I/O errors, special files, and traversal errors without a named
 strict descendant still make measurement unknown. The traversal is not atomic.
 
 Use `run --poll-interval <seconds>` to choose the polling interval; the
@@ -152,6 +152,9 @@ It refuses symlinks in the input path, checks file identity while hashing and
 requires the original permission mode. Permission-only changes remain work.
 Modified inputs, hard links, unknown files and all `artifacts/` evidence remain,
 with their paths in `cleanup.retained`; inspect those paths before further work.
+`finish` marks the whole root `finished`, not an individual arm. `run` rejects
+that state. Complete planned retries before finishing; preserve a finished receipt
+rather than editing it or creating a new root to reset the same task's allowance.
 Empty directories and the receipt remain. There is no whole-root recursive delete
 and no scan/cleanup of unrelated temporary directories.
 
