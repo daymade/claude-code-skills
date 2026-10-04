@@ -59,7 +59,7 @@ No default mapping ships; the file is user data outside the bundle.
      "cwd": "<working dir>", "cmdline": "<captured argv>",
      "profile": "<settings-name or direct>",
      "last_interaction": "<UTC ISO or null>", "error": "ok|login-expired|api-error|no-file",
-     "status": "active|stale|dead-channel|no-artifact|stale+api-error",
+     "status": "active|stale|dead-channel|no-artifact|active+api-error|stale+api-error",
      "age_hours": 0.5}
   ]
 }

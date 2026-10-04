@@ -68,7 +68,8 @@ def list_sessions():
         if sid in seen:
             continue  # node wrapper + vendor binary share one session
         seen[sid] = {
-            "tty": tty, "tool": "codex" if "codex" in cmd.split()[0] or "/codex" in cmd else "claude",
+            "tty": tty,
+            "tool": "codex" if re.search(r"(^|/)codex( |$)", cmd) else "claude",
             "sid": sid, "cwd": _proc_cwd(pid), "cmdline": cmd.strip(),
             "profile": _detect_profile(cmd),
         }
@@ -236,7 +237,9 @@ def restore_cmd(s):
             flags.append("--dangerously-skip-permissions")
         core = f"claude {' '.join(flags)} -r {s['sid']}".replace("  ", " ")
     env_prefix = _profile_env_prefix(s)
-    return f"cd {s['cwd'] or '~'} && {env_prefix}{core}"
+    cwd = s["cwd"] or "~"
+    quoted = f'"{cwd}"' if not cwd.startswith(("'", '"')) and " " in cwd else cwd
+    return f"cd {quoted} && {env_prefix}{core}"
 
 
 def _profile_env_prefix(s):
@@ -256,7 +259,13 @@ def cmd_restore(args):
     sel = doc["sessions"]
     if args.only:
         want = set(args.only)
-        sel = [s for s in sel if s["sid"] in want]
+        # accept full UUIDs or the truncated prefixes all our own output prints
+        sel = [s for s in sel if any(s["sid"].startswith(w) for w in want)]
+        if not sel:
+            print(f"ERROR: --only matched no snapshot session "
+                  f"(given: {sorted(want)}). Passing a prefix from tool output is fine; "
+                  f"check `check`/`snapshot` for the current ids.", file=sys.stderr)
+            return 2
     elif not args.all and not args.stale_too:
         sel = [s for s in sel if s["status"].startswith("active")]
     print(f"restoring {len(sel)} of {len(doc['sessions'])} sessions "

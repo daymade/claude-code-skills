@@ -34,8 +34,11 @@ major app update rather than trusting the dates.
   — **filename time is local; the embedded `timestamp` is UTC** (Z-suffix).
   This pairing cost one matching round-trip before it was pinned down
   (2026-10-04).
-- Filename ULID ≈ creation order. `codex resume <old-id>` may keep appending to
-  the original file instead of forking a new one (both behaviors observed).
+- Filename id is a hyphenated hex UUID (UUIDv7-shaped, e.g.
+  `rollout-2026-10-04T00-04-21-01a10282-61da-76b0-a057-5d0f7ec44e1a.jsonl`);
+  its ordering prefix ≈ creation order. `codex resume <old-id>` may keep
+  appending to the original file instead of forking a new one (both behaviors
+  observed).
 - Spawned subagents create sibling files named
   `rollout-...-<child>_<parent>.jsonl` (double ULID = spawn artifact, not a
   resume fork).

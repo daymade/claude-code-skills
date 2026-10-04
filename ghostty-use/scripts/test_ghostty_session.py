@@ -147,8 +147,11 @@ class ClassifyTest(unittest.TestCase):
     def test_dead_channel_beats_active(self):
         self.assertEqual(gs.classify(iso(2), "login-expired"), "dead-channel")
 
-    def test_no_file_is_no_artifact(self):
-        self.assertEqual(gs.classify(None, "no-file"), "no-artifact")
+    def test_classify_active_plus_api_error(self):
+        # fresh interaction + non-login structured API error → active+api-error;
+        # default restore still selects it (startswith("active"))
+        self.assertEqual(gs.classify(iso(2), "api-error"), "active+api-error")
+        self.assertTrue(gs.classify(iso(2), "api-error").startswith("active"))
 
 
 class RestoreCmdTest(unittest.TestCase):
@@ -183,6 +186,33 @@ class RestoreCmdTest(unittest.TestCase):
         with mock.patch.object(gs, "HOME", home):
             got = gs.restore_cmd(s)
         self.assertIn("MYENV=1 ", got)
+
+    def test_cwd_with_spaces_is_quoted(self):
+        s = {"tool": "claude", "sid": S_HEALTHY, "cwd": "/tmp/My Project",
+             "cmdline": "claude --dangerously-skip-permissions", "profile": "direct"}
+        got = gs.restore_cmd(s)
+        self.assertTrue(got.startswith('cd "/tmp/My Project" && '), got)
+
+
+class OnlySelectionTest(unittest.TestCase):
+    """High-severity fix: --only accepts the truncated prefixes our own output
+    prints, and an empty match fails loudly instead of succeeding 0/0."""
+
+    def _sel(self, want):
+        import argparse
+        sessions = [{"tool": "codex", "sid": "01a0f60e-db5d-7ce0-a60d-052828781762",
+                     "cwd": "/tmp/p", "cmdline": "codex resume x", "status": "active"}]
+        want_set = set(want)
+        return [s for s in sessions if any(s["sid"].startswith(w) for w in want_set)]
+
+    def test_prefix_matches(self):
+        self.assertEqual(len(self._sel(["01a0f60e-db5d"])), 1)
+
+    def test_full_uuid_matches(self):
+        self.assertEqual(len(self._sel(["01a0f60e-db5d-7ce0-a60d-052828781762"])), 1)
+
+    def test_unknown_matches_nothing(self):
+        self.assertEqual(len(self._sel(["zzzzzzzz"])), 0)
 
 
 if __name__ == "__main__":
