@@ -134,9 +134,9 @@ _UNOBTAINED_MARKER_RE = re.compile(
 )
 
 
-# Explicit denial governs its following citation, including enumerated nouns,
-# but stops when whitespace closes a cited authority. Independent citations
-# before or after that phrase retain the existing obtained/pending rules.
+# Explicit denial must take an authority citation as its immediate object.
+# Only enumerated objects continue that phrase; unrelated negative statements
+# and independently obtained citations retain the existing authority rules.
 _DENIED_AUTHORITY_RE = re.compile(r"不声称|没有")
 
 def _ungoverned_authority_starts(clause: str) -> set[int]:
@@ -150,10 +150,20 @@ def _ungoverned_authority_starts(clause: str) -> set[int]:
     denied: set[int] = set()
     for denial in _DENIED_AUTHORITY_RE.finditer(clause):
         following = [noun for noun in nouns if noun.start() >= denial.end()]
-        for noun in following:
+        previous_end = denial.end()
+        for index, noun in enumerate(following):
+            connector = clause[previous_end:noun.start()]
+            if index == 0:
+                if connector.strip():
+                    break
+            elif not re.match(r"^[、/或和]", connector) or re.search(
+                r"但|已(?:取得|获得|获取)", connector
+            ):
+                break
             denied.add(noun.start())
             if noun.end() < len(clause) and clause[noun.end()].isspace():
                 break
+            previous_end = noun.end()
     markers = list(_UNOBTAINED_MARKER_RE.finditer(clause))
     if not markers:
         return {m.start() for m in nouns} - denied

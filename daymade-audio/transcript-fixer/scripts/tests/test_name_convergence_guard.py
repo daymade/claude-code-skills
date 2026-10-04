@@ -760,3 +760,21 @@ class TestExplicitDeniedAuthority:
 
     def test_non_name_shape_stays_outside_guard(self):
         assert guard("ABC", "XYZ", "没有音证", "wording", lookup_fn=lambda _: _lookup()) is None
+
+
+class TestDenialObjectBoundary:
+    @pytest.mark.parametrize("text", [
+        "没有音证但已取得roster 行 ### 合成条目",
+        "没有争议：roster 行 ### 合成条目",
+        "没有争议：名册已核对",
+        "不声称音证但已取得群昵称",
+        "没有音证和已取得roster 行 ### 合成条目",
+    ])
+    def test_denial_does_not_govern_an_independent_obtained_citation(self, text):
+        assert evidence_names_authority(text)
+        assert guard("甲琳", "甲林", text, "entity", lookup_fn=lambda _: _lookup()) is None
+
+    @pytest.mark.parametrize("connector", ["、", "或", "和", "/"])
+    def test_real_denied_object_enumeration_still_refused(self, connector):
+        text = "没有音证" + connector + "群昵称" + connector + "用户裁定"
+        assert evidence_names_authority(text) is False
