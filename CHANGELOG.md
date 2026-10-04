@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **github-sensitive-data-cleanup** (v1.3.1 → v2.0.0): require saved repository identity, the remote SHA before rewriting and the verified local SHA before a single explicitly leased push; remove the force fallback and preserve named-remote hooks while pinning the destination. Reject shared or unverified rewrite state and retain git-filter-repo's fresh-clone guard. Read-only scan/verify now recognize ordinary, linked and bare Git roots. Existing push callers must supply the new preconditions; the workflow guide documents the migration.
+
 ### Fixed
 
 - **skill-creator** (`daymade-skill` v1.60.1 → v1.60.2): require public-example provenance and distributed dependency evidence in the existing review, and retain asynchronous command handles through terminal status.

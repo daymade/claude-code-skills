@@ -370,9 +370,52 @@ def get_all_commits(repo_path: Path) -> tuple[list[str], str | None]:
     return [c for c in result.stdout.splitlines() if c.strip()], None
 
 
+def get_repository_layout(repo_path: Path) -> tuple[dict | None, str | None]:
+    """Discover a readable Git root; callers enforce their own write boundaries."""
+    if repo_path is None or repo_path == "":
+        return None, "Repository path must not be empty"
+
+    def value(flag):
+        result = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", flag],
+            capture_output=True, text=True, errors="replace", check=False,
+        )
+        if result.returncode != 0 or not isinstance(result.stdout, str):
+            raise ValueError
+        # Git terminates each result with LF; spaces belong to the actual path.
+        text = result.stdout.removesuffix("\n")
+        if not text:
+            raise ValueError
+        return text
+
+    try:
+        root = Path(repo_path).resolve()
+        bare = value("--is-bare-repository")
+        if bare not in ("true", "false"):
+            raise ValueError
+        git_dir_text = value("--absolute-git-dir")
+        if not Path(git_dir_text).is_absolute():
+            raise ValueError
+        git_dir = Path(git_dir_text).resolve()
+        common_dir_text = value("--git-common-dir")
+        common_dir = Path(common_dir_text)
+        if not common_dir.is_absolute():
+            common_dir = root / common_dir
+        common_dir = common_dir.resolve()
+        discovered_root = git_dir if bare == "true" else Path(value("--show-toplevel"))
+        if not discovered_root.is_absolute() or discovered_root.resolve() != root:
+            return None, "Repository path must be the Git repository root"
+        if not root.is_dir() or not git_dir.is_dir() or not common_dir.is_dir():
+            raise ValueError
+        return {"root": root, "is_bare": bare == "true",
+                "git_dir": git_dir, "common_dir": common_dir}, None
+    except (OSError, ValueError, TypeError, RuntimeError):
+        return None, "Git repository discovery failed or returned invalid layout data"
+
+
 def main():
     parser = argparse.ArgumentParser(description="Scan a repo for sensitive data.")
-    parser.add_argument("--repo", required=True, help="Path to the git repository.")
+    parser.add_argument("--repo", required=True, help="Path to the Git repository root (working tree or bare repository).")
     parser.add_argument("--output", required=True, help="Path for the JSON report.")
     parser.add_argument(
         "--gitleaks-config",
@@ -384,10 +427,11 @@ def main():
     )
     args = parser.parse_args()
 
-    repo_path = Path(args.repo).resolve()
-    if not (repo_path / ".git").is_dir():
-        print(f"Not a git repository: {repo_path}", file=sys.stderr)
+    layout, error = get_repository_layout(args.repo)
+    if error:
+        print(error, file=sys.stderr)
         sys.exit(1)
+    repo_path = layout["root"]
 
     for option in (args.gitleaks_config, args.identities_file):
         if option is not None and not option.strip():

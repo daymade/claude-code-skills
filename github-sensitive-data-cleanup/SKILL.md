@@ -67,8 +67,9 @@ will check this before running destructive operations.
    public/private from the URL or directory name.
 4. **Never use `--no-verify` to bypass hooks.** If the PII Guard hook fails,
    fix the underlying issue or add an allowlist; do not bypass.
-5. **Use `--force-with-lease` first.** Fall back to `--force` only if the
-   remote ref is stale because of the rewrite itself.
+5. **Use one explicit lease bound to the saved remote commit.** A rejected
+   lease stops the push; never fall back to `--force` or refresh the expected
+   commit to bypass concurrent work.
 6. **Verify after rewriting.** A clean `git log` is not enough; re-run the
    scanner and do an AI semantic review.
 7. **Public repos with forks need extra care.** Every fork keeps a copy of the
@@ -83,6 +84,11 @@ cd /path/to/repo
 git status --short
 git remote -v
 ```
+
+Use an exact repository root. Scan and verification accept ordinary, linked
+worktree and bare roots. Rewrite requires an independent clone: linked roots
+and ordinary or bare repositories with attached worktrees are refused. A bare
+mirror has no working-tree status to check; verify its Git identity instead.
 
 ### Step 1: Scan for sensitive data
 
@@ -181,7 +187,36 @@ Use `literal:` for exact string matches. For regex replacements, use
 
 Save this file outside the repo, e.g. `/tmp/sensitive-replacements.txt`.
 
-### Step 4: Create a backup
+### Step 4: Save the publication target, then back up and rewrite
+
+Before rewriting, save these observed values in the existing task state outside
+the repository: the selected remote name and verified transport configuration,
+the fully qualified GitHub target (`HOST/OWNER/REPO`), the exact destination
+branch ref, and its full remote commit SHA. Keep credentials out of this state;
+retain the configured credential mechanism. Resolve the selected remote's single
+push URL, including configured push URLs and URL rewrites. Reject URLs containing
+credentials before passing them to another command or saving them; keep
+authentication in the existing credential mechanism. Check that the verified
+credential-free URL resolves unchanged before querying its branch. A changed
+resolution is unknown and stops the snapshot. A plain `ls-remote origin` can
+follow a different fetch URL:
+
+```bash
+git -C /path/to/repo remote get-url --push --all origin
+git -C /path/to/repo ls-remote --get-url '<verified-push-url>'
+git -C /path/to/repo ls-remote --refs '<verified-push-url>' refs/heads/main
+```
+
+Require one verified push URL and a successful ref query with exactly one
+matching full SHA/ref row. An absent
+branch or failed query is not a saved preimage. Do not derive this value from
+the rewritten local branch or a stale remote-tracking ref. If this task resumes
+after rewriting, reuse the saved target/preimage; missing state stops the push.
+
+`--yes` confirms the displayed rewrite target and backup paths. It does not
+authorize rewriting shared history or bypassing git-filter-repo's native
+fresh-clone checks. Preserve pending work in the original checkout and use the
+independent clone route below when necessary.
 
 ```bash
 uv run scripts/rewrite_history.py --repo /path/to/repo \
@@ -199,12 +234,14 @@ uv run scripts/rewrite_history.py --repo /path/to/repo \
 
 This script:
 
-1. Verifies `git-filter-repo` is installed and executable.
-2. Checks that the working tree is clean (no uncommitted changes or untracked
-   files). If not, aborts.
+1. Verifies an independent repository with no attached worktrees.
+2. Verifies `git-filter-repo` is installed and executable. For an
+   ordinary clone, requires a successful clean-status query; for a bare mirror,
+   uses the verified no-working-tree layout. A failed query stops the rewrite.
 3. Creates a `git bundle` backup of the current state.
 4. Verifies the backup bundle with `git bundle verify`.
-5. Runs `git filter-repo --replace-text`. When `--message-replacements` is
+5. Runs `git filter-repo --replace-text` without bypassing its native safety
+   checks. When `--message-replacements` is
    given, it also runs `--replace-message` so commit messages are rewritten,
    not just file blobs — a cleanup that only covers blobs can leave the
    entity naming itself in a commit message.
@@ -223,23 +260,51 @@ This re-runs the scanner and also checks that none of the original sensitive
 strings remain in any commit. If it finds anything, go back to Step 3.
 Repeat Step 1.5 against the rewritten refs within the same task scope before
 pushing; successful pattern checks alone do not complete semantic verification.
+After both checks pass, resolve and save the exact local commit that was
+verified for the selected branch:
+
+```bash
+git -C /path/to/repo rev-parse refs/heads/main^{commit}
+```
+
+A later local change invalidates that verification binding. Recheck the changed
+candidate before choosing a new verified local SHA.
 
 ### Step 6: Check visibility and push
 
+git-filter-repo may remove `origin`. If the saved named remote is absent,
+restore it using the previously verified transport configuration and existing
+credential mechanism; do not guess a URL or credential. If the remote exists
+but differs, stop and reconcile the target. A clone made from a local source
+does not make that local source URL the authorized GitHub destination.
+
+Supply the saved publication target and old remote SHA, plus the local SHA
+verified in Step 5. Keep the remote name so its ordinary hooks still run:
+
 ```bash
-uv run scripts/safe_push.py --repo /path/to/repo --remote origin --branch main
+uv run scripts/safe_push.py --repo /path/to/repo --remote origin --branch main \
+  --expected-repository '<saved-host/owner/repo>' \
+  --expected-remote-sha '<saved-full-remote-sha>' \
+  --verified-local-sha '<verified-full-local-sha>' \
+  --yes
 ```
 
 This script:
 
-1. Runs `gh repo view` to confirm `visibility`, `isPrivate`, and `forks`.
+1. Binds the selected push URL to the saved repository target, then validates
+   that target's visibility and fork metadata.
 2. Warns loudly if the repo is public and has forks.
-3. Uses `--force-with-lease` first.
-4. Falls back to `--force` only if the remote ref is stale because of the
-   local rewrite.
+3. Checks the local candidate equals the verified SHA.
+4. Makes one push with an explicit expected-commit lease to the saved remote
+   branch. A lease or hook rejection stops; there is no force fallback.
 5. Refuses to add `--no-verify`.
 
 If the PII Guard hook fails, fix the issue and re-run. Do not bypass.
+
+Migration: callers supplying only `--repo`, `--remote` and `--branch` now fail
+closed. Capture the remote target/preimage before rewrite and add all three
+binding arguments above. `--yes` cannot fill missing evidence. The existing
+backup, replacement and optional message-replacement arguments remain supported.
 
 ### Step 7: Post-push verification
 
@@ -296,7 +361,11 @@ uv run --with gitpython scripts/verify_cleanup.py \
 Checks visibility and pushes safely.
 
 ```bash
-uv run --with gitpython scripts/safe_push.py --repo /path/to/repo --remote origin --branch main
+uv run --with gitpython scripts/safe_push.py --repo /path/to/repo --remote origin --branch main \
+  --expected-repository '<saved-host/owner/repo>' \
+  --expected-remote-sha '<saved-full-remote-sha>' \
+  --verified-local-sha '<verified-full-local-sha>' \
+  --yes
 ```
 
 ## Handling Special Cases
@@ -323,14 +392,18 @@ rewrite and move on.
 
 ### `git filter-repo` reports "need a fresh clone"
 
-`git-filter-repo` refuses to run on repos with multiple remotes or non-origin
-refs. To fix:
+Keep the native refusal. Preserve the original checkout and create a fresh
+independent mirror; `--no-local` avoids the local-clone object-sharing shortcut:
 
 ```bash
-git clone --mirror /path/to/repo /tmp/repo-mirror.git
-cd /tmp/repo-mirror.git
-# run rewrite_history.py against the mirror
+git clone --mirror --no-local /path/to/repo /tmp/repo-mirror.git
 ```
+
+After the clone succeeds, run the bundled `rewrite_history.py` with
+`--repo /tmp/repo-mirror.git` from its Skill directory.
+Save the approved publication target/preimage before this route and retain it
+through the rewrite. Do not add `--force` to bypass the fresh-clone guard or
+delete another session's work to satisfy it.
 
 ### gitleaks false positives
 

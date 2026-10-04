@@ -22,7 +22,7 @@ from pathlib import Path
 
 # Share the all-commits grep helper so fixes to chunking/error handling apply
 # to both scanning and verification.
-from scan_repo import grep_all_commits, run_gitleaks as scan_gitleaks
+from scan_repo import get_repository_layout, grep_all_commits, run_gitleaks as scan_gitleaks
 
 
 def extract_patterns_from_replacements(replacements_path: Path) -> list[dict]:
@@ -138,7 +138,7 @@ def run_gitleaks(repo_path: Path) -> list[dict]:
 
 def main():
     parser = argparse.ArgumentParser(description="Verify a repo is clean of sensitive data.")
-    parser.add_argument("--repo", required=True, help="Path to the git repository.")
+    parser.add_argument("--repo", required=True, help="Path to the Git repository root (working tree or bare repository).")
     parser.add_argument(
         "--replacements",
         help="Path to the git-filter-repo replacements file used for the rewrite.",
@@ -149,10 +149,11 @@ def main():
     )
     args = parser.parse_args()
 
-    repo_path = Path(args.repo).resolve()
-    if not (repo_path / ".git").is_dir():
-        print(f"Not a git repository: {repo_path}", file=sys.stderr)
+    layout, error = get_repository_layout(args.repo)
+    if error:
+        print(error, file=sys.stderr)
         sys.exit(1)
+    repo_path = layout["root"]
 
     patterns = []
     try:

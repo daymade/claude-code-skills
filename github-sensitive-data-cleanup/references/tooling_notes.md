@@ -37,15 +37,23 @@ normally.
 **Fix:**
 
 ```bash
-git clone --mirror /path/to/repo /tmp/repo-mirror.git
-cd /tmp/repo-mirror.git
-# run rewrite_history.py here
+git clone --mirror --no-local /path/to/repo /tmp/repo-mirror.git
 ```
+
+After a successful clone, run the bundled `rewrite_history.py` from the Skill
+directory with `--repo /tmp/repo-mirror.git`.
+Keep the native fresh-clone guard; do not add `--force`. The wrapper rejects
+linked worktrees and ordinary/bare repositories with attached worktrees.
+Save the verified publication target and remote preimage before rewriting, as
+described in SKILL.md's Step 4; a local mirror's source URL is not the approved
+push destination. If git-filter-repo removes the remote, restore only its saved
+verified configuration and retain the old remote SHA for the explicit lease.
 
 ### "Cannot combine --force with ..."
 
-`git-filter-repo` has strict option validation. Read the error and adjust the
-command. The bundled `rewrite_history.py` uses the minimal safe set of flags.
+`git-filter-repo` has strict option validation. Read the error and preserve its
+safety boundary. The bundled `rewrite_history.py` does not pass `--force` and
+provides no fresh-clone or shared-history bypass.
 
 ## gitleaks Allowlist Patterns
 

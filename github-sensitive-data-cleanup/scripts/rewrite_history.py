@@ -21,10 +21,13 @@ Usage:
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+from scan_repo import get_repository_layout
 
 
 def get_current_heads(repo_path: Path) -> dict:
@@ -35,12 +38,49 @@ def get_current_heads(repo_path: Path) -> dict:
         text=True, errors="replace",
         check=False,
     )
+    if result.returncode == 1 and result.stdout == "" and result.stderr == "":
+        return {}  # show-ref uses 1 when no matching local branch refs exist.
+    if result.returncode != 0 or not result.stdout:
+        raise RuntimeError("Local branch refs could not be read")
     heads = {}
     for line in result.stdout.splitlines():
         parts = line.split()
-        if len(parts) == 2:
-            heads[parts[1]] = parts[0]
+        if (len(parts) != 2 or not re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", parts[0])
+                or not parts[1].startswith("refs/heads/") or parts[1] == "refs/heads/"
+                or parts[1] in heads):
+            raise RuntimeError("Local branch ref output is invalid")
+        heads[parts[1]] = parts[0]
+    if not heads:
+        raise RuntimeError("Local branch ref output is empty")
     return heads
+
+
+def check_rewrite_layout(repo_path: Path) -> dict:
+    """Require an independent repository before any destructive operation."""
+    layout, error = get_repository_layout(repo_path)
+    if error or not isinstance(layout, dict):
+        raise RuntimeError("Repository identity could not be verified")
+    if (type(layout.get("is_bare")) is not bool
+            or any(not isinstance(layout.get(key), Path)
+                   for key in ("root", "git_dir", "common_dir"))
+            or layout["root"] != repo_path
+            or any(not layout[key].is_absolute() for key in ("root", "git_dir", "common_dir"))):
+        raise RuntimeError("Repository layout is incomplete or invalid")
+    if layout["git_dir"] != layout["common_dir"]:
+        raise RuntimeError("Refusing shared history in a linked worktree; use an independent clone")
+    result = subprocess.run(
+        ["git", "-C", str(repo_path), "worktree", "list", "--porcelain", "-z"],
+        capture_output=True, text=True, errors="replace", check=False,
+    )
+    if result.returncode != 0 or not result.stdout.endswith("\0\0"):
+        raise RuntimeError("Worktree membership could not be verified")
+    entries = [token[len("worktree "):] for token in result.stdout.split("\0")
+               if token.startswith("worktree ")]
+    if len(entries) != 1:
+        raise RuntimeError("Refusing a repository with attached worktrees; use an independent clone")
+    if not entries[0] or not Path(entries[0]).is_absolute() or Path(entries[0]).resolve() != repo_path:
+        raise RuntimeError("Worktree membership does not match the requested repository")
+    return layout
 
 
 def create_backup(repo_path: Path, backup_path: Path) -> None:
@@ -77,14 +117,10 @@ def check_clean_working_tree(repo_path: Path) -> None:
         text=True, errors="replace",
         check=False,
     )
-    if result.stdout.strip():
-        print(
-            "Working tree is not clean. Commit, stash, or remove the following "
-            "before rewriting history:\n",
-            file=sys.stderr,
-        )
-        print(result.stdout, file=sys.stderr)
-        sys.exit(1)
+    if result.returncode != 0 or not isinstance(result.stdout, str):
+        raise RuntimeError("Working tree cleanliness could not be verified")
+    if result.stdout:
+        raise RuntimeError("Working tree is not clean; preserve pending work and use an independent clone")
 
 
 def main():
@@ -106,6 +142,12 @@ def main():
     )
     args = parser.parse_args()
 
+    if any(not value.strip() for value in (args.repo, args.replacements, args.backup)) or (
+        args.message_replacements is not None and not args.message_replacements.strip()
+    ):
+        print("Repository, replacement and backup paths must not be empty", file=sys.stderr)
+        sys.exit(1)
+
     repo_path = Path(args.repo).resolve()
     replacements_path = Path(args.replacements).resolve()
     message_replacements_path = (
@@ -113,8 +155,10 @@ def main():
     )
     backup_path = Path(args.backup).resolve()
 
-    if not (repo_path / ".git").is_dir():
-        print(f"Not a git repository: {repo_path}", file=sys.stderr)
+    try:
+        layout = check_rewrite_layout(repo_path)
+    except (OSError, RuntimeError) as error:
+        print(f"Rewrite preflight failed: {error}", file=sys.stderr)
         sys.exit(1)
 
     if not replacements_path.is_file():
@@ -136,12 +180,14 @@ def main():
         )
         sys.exit(1)
 
-    version_check = subprocess.run(
-        [filter_repo_bin, "--version"],
-        capture_output=True,
-        text=True, errors="replace",
-        check=False,
-    )
+    try:
+        version_check = subprocess.run(
+            [filter_repo_bin, "--version"],
+            capture_output=True, text=True, errors="replace", check=False,
+        )
+    except OSError:
+        print("git-filter-repo could not be executed", file=sys.stderr)
+        sys.exit(1)
     if version_check.returncode != 0:
         print(
             f"git-filter-repo found but not executable: {version_check.stderr}",
@@ -149,7 +195,12 @@ def main():
         )
         sys.exit(1)
 
-    check_clean_working_tree(repo_path)
+    if not layout["is_bare"]:
+        try:
+            check_clean_working_tree(repo_path)
+        except (OSError, RuntimeError) as error:
+            print(f"Rewrite preflight failed: {error}", file=sys.stderr)
+            sys.exit(1)
 
     # Safety: confirm the user wants to proceed.
     print("=" * 60)
@@ -163,12 +214,16 @@ def main():
         print("Re-run with --yes to confirm.", file=sys.stderr)
         sys.exit(1)
 
-    old_heads = get_current_heads(repo_path)
+    try:
+        old_heads = get_current_heads(repo_path)
+    except (OSError, RuntimeError) as error:
+        print(f"Rewrite preflight failed: {error}", file=sys.stderr)
+        sys.exit(1)
 
     print("Creating backup bundle...")
     try:
         create_backup(repo_path, backup_path)
-    except (subprocess.CalledProcessError, RuntimeError) as e:
+    except (OSError, subprocess.CalledProcessError, RuntimeError) as e:
         print(f"Backup failed: {e}", file=sys.stderr)
         sys.exit(1)
     print(f"Backup created: {backup_path}")
@@ -176,7 +231,6 @@ def main():
     print("Running git-filter-repo...")
     cmd = [
         filter_repo_bin,
-        "--force",
         "--replace-text",
         str(replacements_path),
     ]
@@ -184,12 +238,17 @@ def main():
         cmd += ["--replace-message", str(message_replacements_path)]
     try:
         subprocess.run(cmd, cwd=str(repo_path), check=True)
-    except subprocess.CalledProcessError as e:
+    except (OSError, subprocess.CalledProcessError) as e:
         print(f"History rewrite failed: {e}", file=sys.stderr)
         print(f"Your backup is still available at: {backup_path}", file=sys.stderr)
         sys.exit(1)
 
-    new_heads = get_current_heads(repo_path)
+    try:
+        new_heads = get_current_heads(repo_path)
+    except (OSError, RuntimeError) as error:
+        print(f"Rewritten refs could not be verified: {error}", file=sys.stderr)
+        print(f"Your backup is still available at: {backup_path}", file=sys.stderr)
+        sys.exit(1)
 
     report = {
         "repo": str(repo_path),
