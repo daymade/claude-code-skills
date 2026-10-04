@@ -405,7 +405,8 @@ repository **from the canonical primary main checkout** with
 `git config core.hooksPath "$(pwd -P)/.githooks"`. The absolute path matters:
 `core.hooksPath` is shared by linked worktrees, so a relative path would let a
 stale feature worktree select its own stale dispatcher. CI and the GitHub main
-ruleset independently require the same release checks on every PR.
+ruleset independently enforce version progression on PRs; private review
+evidence is checked locally by pre-push, as defined in the linked release SOP.
 
 **Push through the remote name, never a bare URL.** The guard resolves the
 remote from its argument (`process.argv[3]`) and then fetches
