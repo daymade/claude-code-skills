@@ -134,6 +134,11 @@ _UNOBTAINED_MARKER_RE = re.compile(
 )
 
 
+# Explicit denial governs its following citation, including enumerated nouns,
+# but stops when whitespace closes a cited authority. Independent citations
+# before or after that phrase retain the existing obtained/pending rules.
+_DENIED_AUTHORITY_RE = re.compile(r"不声称|没有")
+
 def _ungoverned_authority_starts(clause: str) -> set[int]:
     """Start offsets of the authority nouns in ``clause`` no need-marker governs.
 
@@ -142,9 +147,16 @@ def _ungoverned_authority_starts(clause: str) -> set[int]:
     nouns = list(_AUTHORITY_RE.finditer(clause))
     if not nouns:
         return set()
+    denied: set[int] = set()
+    for denial in _DENIED_AUTHORITY_RE.finditer(clause):
+        following = [noun for noun in nouns if noun.start() >= denial.end()]
+        for noun in following:
+            denied.add(noun.start())
+            if noun.end() < len(clause) and clause[noun.end()].isspace():
+                break
     markers = list(_UNOBTAINED_MARKER_RE.finditer(clause))
     if not markers:
-        return {m.start() for m in nouns}
+        return {m.start() for m in nouns} - denied
     # A whitespace that closes an authority noun terminates the governed noun
     # phrase: the citation is complete, so what follows is a new one.
     boundaries = {
@@ -169,7 +181,7 @@ def _ungoverned_authority_starts(clause: str) -> set[int]:
             # this can only add refusals, never let one pass.
             reachable = {noun.start() for noun in nouns}
         governed |= reachable
-    return {m.start() for m in nouns} - governed
+    return {m.start() for m in nouns} - governed - denied
 
 
 @dataclass

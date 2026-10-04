@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **daymade-audio** (v1.44.2 → v1.44.3): transcript-fixer rejects explicitly denied authority citations while preserving independent obtained citations.
+
 ### Changed
 
 - **skill-creator** (`daymade-skill` v1.59.1 → v1.59.2): Correct the materialization SOP's retry/finish ordering: finish closes the whole root, and run rejects its finished state. Keep the CLI as lifecycle authority; no runtime behavior changes.

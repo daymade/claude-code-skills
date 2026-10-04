@@ -731,3 +731,32 @@ class TestRefusedVerdictLeavesNoSideEffects:
         assert self._audit_actions(item_id) == [
             "review_enqueue", "review_evidence_attach", "review_resolve",
         ]
+
+
+class TestExplicitDeniedAuthority:
+    @pytest.mark.parametrize("text", [
+        "原视频字幕明确合成技术词XYZ；这是源图证据，不声称音证、人名或用户裁定。",
+        "没有音证",
+        "不声称名册、音频或用户裁定",
+        "不声称音证和群昵称",
+        "没有roster",
+    ])
+    def test_denied_citations_do_not_claim_obtained_authority(self, text):
+        assert evidence_names_authority(text) is False
+        assert guard("甲琳", "甲林", text, "entity", lookup_fn=lambda _: _lookup()).code == "target_unknown"
+
+    @pytest.mark.parametrize("separator", [" ", "\t", "\u3000", "，", ",", "；", ";", "。", "！", "?", "\n"])
+    def test_independent_obtained_citation_survives_both_orders(self, separator):
+        citation = "roster 行 ### 合成条目"
+        assert evidence_names_authority(citation + separator + "不声称音证")
+        assert evidence_names_authority("不声称音证" + separator + citation)
+
+    @pytest.mark.parametrize("lookup", [_lookup(roster_entry=True), _lookup(dictionary_active_to=True)])
+    def test_claimed_canonical_form_still_precedes_denied_evidence(self, lookup):
+        assert guard("甲琳", "甲林", "没有音证", "entity", lookup_fn=lambda _: lookup) is None
+
+    def test_recorded_variant_still_rejected_before_positive_citation(self):
+        assert guard("甲琳", "甲林", "roster 行 ### 合成条目", "entity", lookup_fn=lambda _: _lookup(roster_variant_of="甲霖")).code == "target_is_variant"
+
+    def test_non_name_shape_stays_outside_guard(self):
+        assert guard("ABC", "XYZ", "没有音证", "wording", lookup_fn=lambda _: _lookup()) is None
