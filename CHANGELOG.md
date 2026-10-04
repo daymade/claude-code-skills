@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **terraform-skill** (v1.5.1 → v1.5.2): Generalize the deployment port-collision example while preserving its diagnosis and retry procedure.
+- **ghostty-use** (v1.0.1 → v1.0.2): Replace the session filename example with an explicitly synthetic UUID.
+- **kimi-use** (v1.6.1 → v1.6.2): Correct the repeat-action hook's distribution boundary: local integration is optional; readback and retry limits still apply without it.
+- **tunnel-doctor** (v1.17.0 → v1.17.1): Keep the configuration update recipe and clarify that replay helpers and subscription protection are local integrations, outside this bundle.
+
 - **debugging-network-issues** (`debugging-network-issues` v1.11.0 → v1.11.1): drop the persisted derived count from the case-studies intro ("Five canonical cases" → "The canonical cases below") — the number is computable from the numbered list it introduces and only ever drifts.
 
 ### Added
@@ -98,7 +103,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **tibo-reset-codex** (v1.18.2 → v1.19.0): separate creation, execution, CLI, browser and external connector identities by source and observation time; pause browser account switching on concurrent interference and keep unverified restoration explicit.
 - **skill-reviewer** (`daymade-skill` v1.54.3 → v1.55.0): add read-only collection inventory, host-aware source packets, six-dimension design scoring with verified citations, and JSON/CSV/Markdown exports; preserve unknowns and quarantine evaluation faults while keeping design quality separate from measured task benefit. Retain the existing reviewer CLI and three review modes.
 - **local-conversation-history** (`daymade-claude-code` v4.6.0 → v4.7.0): route recent unfinished-request inventories through bounded indexed discovery and exact-session readers, then reconcile current project evidence; keep completed, paused, externally blocked, and awaiting-acceptance work distinct without resuming or migrating it.
-- **kimi-use** (`kimi-use` v1.6.0 → v1.6.1): `kimi-cu-desktop-automation.md` 投递验证节补上执行层兜底——PreToolUse hook `kimi-cu-repeat-guard` 在同一动作签名连续 3 次（观测透明）时拦一次并注入换通道指引；真实 616 调用语料重放标定（4 触发全真阳性零误报）。
+- **kimi-use** (`kimi-use` v1.6.0 → v1.6.1): Document the author's locally installed repeat-action detector as a delivery-verification reminder. The hook was not distributed with this Skill; automatic enforcement depends on the host installation.
 - **kimi-use** (`kimi-use` v1.5.1 → v1.6.0): new `references/kimi-cu-desktop-automation.md` — the kimi-cu macOS desktop-automation playbook distilled from a full day driving WeChat DevTools (Electron + webview console): channel reliability tiers (set_value > keyboard > click), foregrounding vs "control doesn't respond" misdiagnosis, AX-tree death recovery via window reopen, Tab-Tab-Space add-row recipe, auth-dialog SOP, and the delivery-verification rule (ok:true means posted, not landed). SKILL.md + marketplace description widened to scope (2) general kimi-cu desktop automation.
 - **terraform-skill** (`terraform-skill` v1.5.0 → v1.5.1): Document the staging-green/production-port-collision provisioner trap: parity covers configuration, not host port allocation — check the exact bind on the target host, and keep host-local probe targets out of containers.
 

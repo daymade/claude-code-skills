@@ -34,8 +34,8 @@ major app update rather than trusting the dates.
   — **filename time is local; the embedded `timestamp` is UTC** (Z-suffix).
   This pairing cost one matching round-trip before it was pinned down
   (2026-10-04).
-- Filename id is a hyphenated hex UUID (UUIDv7-shaped, e.g.
-  `rollout-2026-10-04T00-04-21-01a10282-61da-76b0-a057-5d0f7ec44e1a.jsonl`);
+- Filename id is a hyphenated hex UUID (UUIDv7-shaped; synthetic example:
+  `rollout-2026-01-01T00-00-00-00000000-0000-7000-8000-000000000001.jsonl`);
   its ordering prefix ≈ creation order. `codex resume <old-id>` may keep
   appending to the original file instead of forking a new one (both behaviors
   observed).
