@@ -755,10 +755,14 @@ unresolvable path means **block**.
      irrelevant call now cost ~6 (independently re-measured at 4.7 ms on
      the heaviest one), and that is the entire win — the
      blocking path is intentionally unchanged.
-- **Why not a dispatcher instead:** merging N guards into one process saves
-  the same forks but couples their blast radius (one corrupted shared file
-  poisons every Bash call) and breaks per-guard SSOT/test ownership. Slim
-  each guard; keep the fleet.
+- **Consolidate compatible mechanisms:** use in-process rule modules with shared
+  input parsing and lazy queries; preserve each module's SSOT, tests, selectors,
+  state and authorization evidence. Keep failure identities observable and
+  calibrate parse/import failures so one broken module cannot silently disable
+  the other rules. Follow the Skill's Build order for protocol and wait-budget
+  boundaries. Launching the old scripts behind one dispatcher hides the fleet
+  without removing its process cost; measure child processes as well as native
+  handler count.
 
 ---
 
