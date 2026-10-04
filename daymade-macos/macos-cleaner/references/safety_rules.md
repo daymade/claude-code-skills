@@ -487,15 +487,15 @@ Test safety checks:
 2. ✅ Attempt to delete user data → Should require extra confirmation
 3. ✅ Attempt to delete in-use file → Should warn
 4. ✅ Attempt to delete without permission → Should fail gracefully
-5. ✅ Large deletion → Should suggest backup
+5. ✅ Disposable artifact → No automatic backup; necessary copy → Capacity preflight
 
 ### In Production
 
 Always:
-- Start with smallest items
+- Follow the main skill's physical-release/hotspot ranking
 - Confirm results after each deletion
 - Monitor disk space before/after
-- Ask user to verify important apps still work
+- Verify protected apps/services with available probes; ask only for a user-only check
 
 ## Summary
 
@@ -505,7 +505,7 @@ When implementing cleanup:
 
 1. **Assume danger** until proven safe
 2. **Explain everything** to user
-3. **Confirm each step**
+3. **Resolve authorization once per scope**, then verify each action
 4. **Choose recovery from the contents**, not their size
 5. **Use Trash** when possible
 6. **Test thoroughly** before packaging
@@ -525,7 +525,7 @@ Before any deletion:
 - [ ] Path is not user data (or extra confirmed)
 - [ ] Path is not in use
 - [ ] User has been informed of impact
-- [ ] User has explicitly confirmed
+- [ ] Existing explicit authorization covers this exact target and consequence
 - [ ] Unique state preserved; any necessary copy passed destination capacity preflight
 - [ ] Error handling in place
 - [ ] Recovery options documented
