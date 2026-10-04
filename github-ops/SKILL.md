@@ -24,6 +24,7 @@ Read only the reference required for the task:
 | Create, review, merge, close, compare, or converge PRs; retire remote PR branches | [`references/pr_operations.md`](references/pr_operations.md) |
 | Create, edit, search, transfer, close, or bulk-manage issues | [`references/issue_operations.md`](references/issue_operations.md) |
 | Inspect, clone, create, edit, rename, archive, transfer, change visibility, or delete repositories | [`references/repository_operations.md`](references/repository_operations.md) |
+| Copy repositories accessible to another account while keeping the usual account active; configure private copies and upstream sync | [`references/multi_account_repository_sync.md`](references/multi_account_repository_sync.md) |
 | Inspect or change collaborators, teams, base permissions, member privileges, or organization 2FA | [`references/organization_access_and_settings.md`](references/organization_access_and_settings.md) |
 | Protect a default branch while letting collaborators contribute through PRs | [`references/branch_protection.md`](references/branch_protection.md) |
 | Trigger, inspect, rerun, cancel, or purge Actions; manage secrets or variables | [`references/workflow_operations.md`](references/workflow_operations.md) |
@@ -33,6 +34,7 @@ Read only the reference required for the task:
 
 For local Git recovery, dirty worktrees, bundles, or lost commits, use `git-safety-net`.
 This skill owns GitHub-hosted state.
+For repository copies, also handle per-remote authentication and sync setup.
 
 ## Universal operating contract
 

@@ -4,6 +4,10 @@ Use this reference to inspect, clone, create, edit, rename, archive, transfer, c
 or delete a repository. All hosted writes follow the authorization, impact-preview, recovery, and
 independent-readback contract in [operating and checked-invocation contract](../SKILL.md#universal-operating-contract).
 
+For a copy owned by one account with an upstream accessible only to another,
+use [multi-account repository copy and sync](multi_account_repository_sync.md).
+Distinguish a local clone from a separately hosted copy before creating anything.
+
 
 ## Inspect a repository
 
