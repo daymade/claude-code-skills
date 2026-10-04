@@ -778,3 +778,21 @@ class TestDenialObjectBoundary:
     def test_real_denied_object_enumeration_still_refused(self, connector):
         text = "没有音证" + connector + "群昵称" + connector + "用户裁定"
         assert evidence_names_authority(text) is False
+
+
+class TestModifiedDeniedCitationObject:
+    @pytest.mark.parametrize("text", [
+        "没有任何音证",
+        "没有取得音证",
+        "没有获得名册",
+        "没有有效的群昵称",
+        "没有任何有效的音证或用户裁定",
+    ])
+    def test_object_modifiers_do_not_turn_denial_into_authority(self, text):
+        assert evidence_names_authority(text) is False
+        assert guard("甲琳", "甲林", text, "entity", lookup_fn=lambda _: _lookup()).code == "target_unknown"
+
+    @pytest.mark.parametrize("denial", ["没有任何音证", "没有取得音证", "没有获得名册", "没有有效的群昵称"])
+    def test_modified_denial_keeps_independent_obtained_citation(self, denial):
+        assert evidence_names_authority(denial + "但已取得roster 行 ### 合成条目")
+        assert evidence_names_authority("roster 行 ### 合成条目；" + denial)

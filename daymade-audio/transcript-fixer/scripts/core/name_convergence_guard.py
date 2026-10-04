@@ -138,6 +138,10 @@ _UNOBTAINED_MARKER_RE = re.compile(
 # Only enumerated objects continue that phrase; unrelated negative statements
 # and independently obtained citations retain the existing authority rules.
 _DENIED_AUTHORITY_RE = re.compile(r"不声称|没有")
+# A bounded object prefix: determiner, acquisition verb, validity modifier.
+# Punctuation, unrelated prose and independent obtained/contrast clauses are
+# not object modifiers. This is citation syntax, not general language inference.
+_DENIAL_OBJECT_PREFIX_RE = re.compile(r"(?:\s|任何|取得|获得|有效的?)*")
 
 def _ungoverned_authority_starts(clause: str) -> set[int]:
     """Start offsets of the authority nouns in ``clause`` no need-marker governs.
@@ -154,7 +158,7 @@ def _ungoverned_authority_starts(clause: str) -> set[int]:
         for index, noun in enumerate(following):
             connector = clause[previous_end:noun.start()]
             if index == 0:
-                if connector.strip():
+                if not _DENIAL_OBJECT_PREFIX_RE.fullmatch(connector):
                     break
             elif not re.match(r"^[、/或和]", connector) or re.search(
                 r"但|已(?:取得|获得|获取)", connector
