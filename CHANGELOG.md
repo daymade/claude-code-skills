@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **skill-creator** (`daymade-skill` v1.59.1 → v1.59.2): Correct the materialization SOP's retry/finish ordering: finish closes the whole root, and run rejects its finished state. Keep the CLI as lifecycle authority; no runtime behavior changes.
+
 - **skill-creator** (`daymade-skill` v1.59.0 → v1.59.1): Handle ordinary child-file and directory removal during budget measurement without aborting healthy runs. Preserve cumulative high-water charges and unknown outcomes for missing/replaced roots, permission/I/O errors and unsupported files. Bounded bug correction, with regression coverage.
 - **macos-cleaner** (`daymade-macos` v1.16.0): Reuse scoped safe-cleanup authorization, retire disposable test builds without compulsory backups, and check necessary-copy peak allocation against live destination capacity.
 
