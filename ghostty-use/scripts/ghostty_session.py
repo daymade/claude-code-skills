@@ -179,13 +179,19 @@ def _codex_file(sid):
     conv = next((c for c in _indexed_conversations(reader) if c.session_id == sid), None)
     if conv is None:
         raise RecoveryError(f"Codex session {sid} is absent from the state index")
-    if conv.path and Path(conv.path).is_file() and reader._rollout_session_id(Path(conv.path)) != sid:
+    return resolve_indexed_rollout(reader, conv)
+
+
+def resolve_indexed_rollout(reader, conv):
+    """Validate the selected physical segment before the owning resolver runs."""
+    if not conv.path or not Path(conv.path).is_file():
+        raise RecoveryError("index-selected rollout path is missing")
+    if reader._rollout_session_id(Path(conv.path)) != conv.session_id:
         raise RecoveryError("indexed rollout internal identity mismatch")
     try:
-        path = reader.resolve_rollout(conv)
+        return reader.resolve_rollout(conv)
     except (ValueError, OSError, RuntimeError) as error:
         raise RecoveryError(str(error)) from error
-    return path
 
 
 def verified_codex_tail(reader, path, sid):
@@ -333,7 +339,7 @@ def cmd_reconstruct(args):
         if sid in known:
             continue
         try:
-            path = reader.resolve_rollout(SimpleNamespace(session_id=sid, path=row["path"]))
+            path = resolve_indexed_rollout(reader, SimpleNamespace(session_id=sid, path=row["path"]))
             if path is None:
                 raise RecoveryError("indexed rollout missing")
             payload, ts = verified_codex_tail(reader, path, sid)

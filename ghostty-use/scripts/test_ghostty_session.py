@@ -411,6 +411,44 @@ class RecoveryWorkflowTest(unittest.TestCase):
             self.assertEqual(gs.main(["restore", "--snapshot", self.snapshot([entry()]), "--all"]), 2)
             paste.assert_not_called()
 
+    def test_reconstruct_refuses_bad_selected_file_despite_intact_old_rollout(self):
+        make_codex_file(self.home, S_CODEX, [
+            {"type": "session_meta", "payload": {"id": S_CODEX, "source": "cli"}},
+            {"timestamp": iso(72)}])
+        selected = make_codex_file(self.home, S_CODEX + "_" + S_HEALTHY, [
+            {"type": "session_meta", "payload": {"id": S_DEAD, "source": "cli"}},
+            {"timestamp": iso(1)}])
+        make_index(self.home, [(S_CODEX, selected)])
+        saved = self.snapshot([entry(S_PROSE)])
+        for state in ("mismatched", "missing"):
+            with self.subTest(selected_state=state):
+                if state == "missing":
+                    Path(selected).unlink()
+                self.assertEqual(gs.codex_liveness(S_CODEX), (None, "identity-unavailable"))
+                output = io.StringIO()
+                with redirect_stdout(output):
+                    self.assertEqual(gs.main(["reconstruct", "--snapshot", saved, "--dry-run"]), 1)
+                result = json.loads(output.getvalue())
+                self.assertEqual([row["sid"] for row in result["sessions"]], [S_PROSE])
+                self.assertEqual(result["discovery"]["rejected"][0]["sid"], S_CODEX)
+
+    def test_reconstruct_uses_healthy_selected_file_with_intact_old_rollout(self):
+        make_codex_file(self.home, S_CODEX, [
+            {"type": "session_meta", "payload": {"id": S_CODEX, "source": "cli"}},
+            {"timestamp": iso(72)}])
+        selected = make_codex_file(self.home, S_CODEX + "_" + S_HEALTHY, [
+            {"type": "session_meta", "payload": {"id": S_CODEX, "source": "cli"}},
+            {"timestamp": iso(1)}])
+        make_index(self.home, [(S_CODEX, selected)])
+        output = io.StringIO()
+        with redirect_stdout(output):
+            self.assertEqual(gs.main(["reconstruct", "--dry-run"]), 0)
+        result = json.loads(output.getvalue())
+        self.assertEqual(len(result["sessions"]), 1)
+        self.assertEqual(result["sessions"][0]["sid"], S_CODEX)
+        self.assertEqual(result["sessions"][0]["last_interaction"], iso(1))
+        self.assertEqual(result["discovery"]["rejected"], [])
+
     def test_rejected_candidate_nonzero_and_not_in_manifest(self):
         path = make_codex_file(self.home, S_CODEX + "_" + S_HEALTHY, [{"type": "session_meta", "payload": {"id": S_DEAD, "source": "cli"}}])
         make_index(self.home, [(S_CODEX, path)])
