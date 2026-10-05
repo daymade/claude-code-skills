@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **doc-to-markdown, docs-router** (`daymade-docs` v1.20.1 → v1.21.0): Route saved HTML/HTM through Pandoc, retain source hyperlinks with Markdown AST checks, and provide an explicit content selector and parsed heading offset for manual assembly. Add source-link reconciliation after cleanup and book/chapter/lesson guidance without changing Office conversion paths.
+- **frontend-visual-qa** (v1.15.1 → v1.16.0): Add the Markdown reader handoff for complete figures, including HTML captions and SVG/CSS dependencies. Compare the source with the actual document reading canvas; keep unavailable consumer evidence partial and preserve original SVGs when an authorized PNG repair is needed.
+
 ### Changed
 
 - **github-sensitive-data-cleanup** (v1.3.1 → v2.0.0): require saved repository identity, the remote SHA before rewriting and the verified local SHA before a single explicitly leased push; remove the force fallback and preserve named-remote hooks while pinning the destination. Reject shared or unverified rewrite state and retain git-filter-repo's fresh-clone guard. Read-only scan/verify now recognize ordinary, linked and bare Git roots. Existing push callers must supply the new preconditions; the workflow guide documents the migration.

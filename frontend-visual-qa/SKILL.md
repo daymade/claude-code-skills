@@ -33,6 +33,12 @@ profile that covers the request:
 - **reference parity** — comparison with a named screenshot, product, or tier;
 - **data visualization** — chart hierarchy, tokens, semantics, and accessibility.
 
+For a website/document converted to Markdown and consumed in Obsidian or another
+named reader, load
+[references/markdown-reader-handoff.md](references/markdown-reader-handoff.md)
+before judging figure readability. Compare the complete source figure with its
+actual document reading canvas, including HTML captions and SVG/CSS dependencies.
+
 Combine profiles only when the changed surface or the user requests a broad
 release review. Do not force a local line-break review through unrelated auth,
 map, export, and native-shell checks.
@@ -522,6 +528,8 @@ check the available agent tools can perform.
   catalog plus standards-backed checks.
 - references/journey-and-page-contracts.md — state, route, overlay,
   browser-output, native-shell, and page-type contracts.
+- references/markdown-reader-handoff.md — complete-figure comparison in the actual
+  Markdown reader, dependency diagnosis and authorized readable-image repair.
 - references/auth-session-and-environment-traps.md — authenticated-SPA login and
   post-login navigation driving traps plus environment hijack diagnostics
   (proxy, CSP entry point, server-log triangulation).

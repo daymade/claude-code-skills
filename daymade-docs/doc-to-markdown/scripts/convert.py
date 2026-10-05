@@ -33,6 +33,7 @@ import subprocess
 import sys
 import shutil
 import zipfile
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -1197,6 +1198,14 @@ Examples:
         help="Force specific tool (overrides auto-selection)",
     )
     parser.add_argument(
+        "--html-heading-offset", type=int, default=0,
+        help="HTML only: shift headings by 0..5 levels; fail if a heading would exceed H6",
+    )
+    parser.add_argument(
+        "--html-selector",
+        help="HTML only: select exactly one tag, #id or .class (default: entire body)",
+    )
+    parser.add_argument(
         "--list-tools",
         action="store_true",
         help="List available tools and exit",
@@ -1222,6 +1231,36 @@ Examples:
 
     # Determine output path
     output_path = args.output or args.input.with_suffix(".md")
+
+    # HTML is a separate, verified Pandoc route; Office orchestration is unchanged.
+    if args.input.suffix.lower() in {".html", ".htm"}:
+        if args.docx_deep or (args.tool and args.tool != "pandoc"):
+            parser.error("HTML conversion uses pandoc; --docx-deep and other --tool values are unsupported")
+        if args.assets_dir is not None:
+            parser.error("HTML preserves image targets; --assets-dir extraction is unsupported")
+        if args.heavy:
+            parser.error("HTML uses one verified Pandoc route; --heavy is unsupported")
+        from html_to_markdown import convert_html
+        try:
+            markdown = convert_html(args.input, args.html_selector, args.html_heading_offset)
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            print(f"Error: HTML conversion failed: {exc}", file=sys.stderr)
+            sys.exit(1)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=output_path.parent,
+                                             prefix=f".{output_path.name}.", delete=False) as handle:
+                temporary = Path(handle.name)
+                handle.write(markdown)
+            os.replace(temporary, output_path)
+        finally:
+            if temporary is not None and temporary.exists():
+                temporary.unlink()
+        print(f"Output: {output_path} ({len(markdown):,} characters; HTML links verified)")
+        return
+    if args.html_selector or args.html_heading_offset:
+        parser.error("--html-selector/--html-heading-offset only work with HTML/HTM files")
 
     # Determine assets directory
     assets_dir = args.assets_dir

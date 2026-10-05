@@ -1,7 +1,8 @@
 ---
 name: doc-to-markdown
 disable-model-invocation: true
-description: Converts DOCX/PDF/PPTX to high-quality Markdown with automatic post-processing. Fixes pandoc grid tables, simple tables, image paths, CJK bold spacing, attribute noise, and code blocks; for PDFs also strips OCR garbage blocks, repeated headers/footers/watermarks, and absolute image paths from pymupdf4llm output. Benchmarked best-in-class (7.6/10) against Docling, MarkItDown, Pandoc raw, and Mammoth. Trigger on "convert document", "docx to markdown", "parse word", "doc to markdown", "解析word", "转换文档".
+description: >-
+  Converts DOCX/PDF/PPTX and saved HTML/HTM to high-quality Markdown with automatic post-processing. Fixes pandoc grid tables, simple tables, image paths, CJK bold spacing, attribute noise, and code blocks; for PDFs also strips OCR garbage blocks, repeated headers/footers/watermarks, and absolute image paths from pymupdf4llm output. Benchmarked best-in-class (7.6/10) against Docling, MarkItDown, Pandoc raw, and Mammoth. Trigger on "convert document", "docx to markdown", "parse word", "doc to markdown", "解析word", "转换文档", "HTML to Markdown".
 ---
 
 # Doc to Markdown
@@ -18,6 +19,9 @@ uv run --with pymupdf4llm --with markitdown scripts/convert.py document.docx -o 
 
 # PDF → Markdown
 uv run --with pymupdf4llm --with markitdown scripts/convert.py document.pdf -o output.md
+
+# Saved HTML → Markdown (Pandoc required; no remote fetching)
+uv run scripts/convert.py page.html -o page.md
 
 # Run tests
 uv run --with pytest pytest scripts/test_convert.py -v
@@ -38,6 +42,21 @@ uv run --with pytest pytest scripts/test_convert.py -v
 | DOCX | pandoc + post-processing | pandoc + markitdown |
 | PPTX | markitdown | markitdown + pandoc |
 | XLSX | markitdown | markitdown |
+| HTML/HTM | pandoc + source-href retention check | unsupported; use the HTML quick path |
+
+## Saved HTML And Website Manuals
+
+For HTML/HTM, read [references/html-conversion.md](references/html-conversion.md)
+before converting. Use `scripts/convert.py`; the default converts the whole body
+and does not trim navigation. An explicit `--html-selector` selects exactly one
+tag, `#id` or `.class`. `--html-heading-offset` shifts parsed headings for assembly
+and rejects overflow beyond H6. Relative assets are not downloaded or copied.
+
+Verify source `href` occurrences against the emitted Markdown AST, then rerun
+`scripts/html_to_markdown.py` after cleanup or merging. For manuals, map the book,
+chapters, lessons and internal headings before assembly; preserve code fences and
+reconcile rewritten anchors. Conversion success does not certify that figures
+are readable inside the recipient's actual Markdown reader.
 
 ## DOCX Post-Processing (automatic)
 
@@ -179,6 +198,7 @@ brew install pandoc
 | Script | Purpose |
 |--------|---------|
 | `convert.py` | Main orchestrator with Quick/Heavy mode + DOCX post-processing |
+| `html_to_markdown.py` | Pandoc HTML adapter and saved-output source-href retention verifier |
 | `test_convert.py` | 31 tests covering all post-processing functions |
 | `merge_outputs.py` | Merge multiple markdown outputs |
 | `validate_output.py` | Quality validation with HTML report |
@@ -191,6 +211,7 @@ brew install pandoc
 - `references/heavy-mode-guide.md` - Detailed Heavy Mode documentation
 - `references/tool-comparison.md` - Tool capabilities comparison
 - `references/conversion-examples.md` - Batch operation examples
+- `references/html-conversion.md` - Saved HTML scope, link retention, assets and manual heading assembly
 
 ## Next Step: Clean Up Converted Content
 
