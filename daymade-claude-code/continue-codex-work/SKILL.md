@@ -70,6 +70,15 @@ verified parent snapshot. A local cue is not a standalone goal.
 4. Retrieve and reuse prior successful assets before creating a replacement.
 5. For transient failures such as usage limits or service errors, verify whether the
    original process later resumed and finished before duplicating work.
+6. Check what was **in flight** when the session died. A foreground long task
+   (remote diagnostic, download, build) dies with its session, and its unpersisted
+   output dies with the pipe — the rollout records that the task started, never its
+   result. Treat such a result as not done: probe whether the remote process or its
+   output file survived, and before re-running, give the rerun a detached
+   result-to-disk channel (e.g. remote `( cmd > log 2>&1 </dev/null; echo $? > rc ) &`
+   polled through the rc file — prefer `setsid`/`nohup` where the target has them,
+   since a pty-backed session can still SIGHUP a bare subshell) so the next
+   interruption cannot take the result again.
 
 ## Step 4: Execute the business task
 

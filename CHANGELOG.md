@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **continue-codex-work** (`daymade-claude-code` v4.19.2 → v4.19.3): Reconcile what was in flight when the interrupted session died — a foreground long task's unpersisted output dies with the pipe, so treat it as not done, probe for a surviving remote process or output file, and give any rerun a detached result-to-disk channel before re-executing.
 - **doc-to-markdown, docs-router** (`daymade-docs` v1.20.1 → v1.21.0): Route saved HTML/HTM through Pandoc, retain source hyperlinks with Markdown AST checks, and provide an explicit content selector and parsed heading offset for manual assembly. Add source-link reconciliation after cleanup and book/chapter/lesson guidance without changing Office conversion paths.
 - **frontend-visual-qa** (v1.15.1 → v1.16.0): Add the Markdown reader handoff for complete figures, including HTML captions and SVG/CSS dependencies. Compare the source with the actual document reading canvas; keep unavailable consumer evidence partial and preserve original SVGs when an authorized PNG repair is needed.
 
