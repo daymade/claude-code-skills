@@ -196,10 +196,14 @@ root-to-child fork lineage, exact parent byte boundaries, chronological handoff,
 compacted context, latest plan, tool calls, files, errors, end reason, and workspace
 state. If the state DB points to a rollout with the wrong identity, the reader must
 reject it and try the exact `session_meta.id` locator; never continue from the wrong
-file because its title or filename looked close. When live and archived copies share
-an ID, the reader accepts byte-identical copies or a strict append-only superset and
-otherwise fails as ambiguous. Every selected and inherited JSONL record is parsed
-strictly; malformed lines cannot become a complete-looking receipt.
+file because its title or filename looked close. Codex 0.160 separates a logical
+thread from its immutable physical rollouts: the state index selects the current
+rollout, and `history_base.thread_id` references a physical rollout ID. Multiple
+segments require a valid indexed selection. Copies of the same physical rollout
+must be byte-identical or an append-only superset; divergent copies remain errors.
+Inherited prefixes must match both byte and ordinal boundaries. Paginated records
+must retain continuous stored ordinals. Missing, malformed, ambiguous, cyclic,
+oversized, identity-mismatched, or partial-line history fails visibly.
 
 If the complete briefing is too large for one model context, materialize it once to a
 private temporary file and record its SHA-256 plus line count before reading. That one
@@ -219,18 +223,25 @@ with the bundled reader rather than writing another JSONL parser:
 <skill-dir>/scripts/read_codex_session.py --session <ID> --record <ORDINAL> --format json
 ```
 
-Repeat `--record` for several 1-based nonblank-record ordinals. `--tools` selects
-tool calls and returns; `--contains` is a literal substring filter within that
-selected rollout. Combining the selectors intersects them. This mode preserves
+`--tools` without `--record` expands the complete declared logical history in
+root-to-selected order, using exact ancestor prefixes. Its `scope` is
+`logical_history`; `sources` names every physical source and cutoff. Each result
+retains its source path, physical rollout ID, physical `record` ordinal, and
+`logical_record` position. A `paired_call` can point into an earlier segment.
+Separate subagent threads and attachment bytes are not expanded.
+
+Repeat `--record` for several 1-based nonblank-record ordinals in the selected
+physical rollout. This selector keeps `scope: selected_rollout_only`; combining
+it with `--tools` intersects those selected physical records. `--contains` is a
+literal substring filter within the reported scope. Both modes preserve
 the original stored record, including every output string and field, with no
 content redaction or preview truncation. `paired_call` locates the preceding call
 for a result; inspect both coordinates before attributing an external message.
-It does not expand ancestry; inherited records must be read from the identified
-parent when necessary. Role labels do not establish human authorship.
+Role labels do not establish human authorship.
 
 Expected output reports `identity`, `records_examined`, `matched_records`, source
 coordinates, and `truncated: false`. Missing requested ordinals fail visibly.
-Zero matches apply only to this selected rollout. `--full` still governs prose
+Zero matches apply only to the reported scope. `--full` still governs prose
 briefing clipping; it does not turn a briefing into complete tool evidence.
 
 ### Indexed content search

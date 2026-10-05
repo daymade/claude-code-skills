@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **read-codex-history** (`daymade-claude-code` v4.19.1 → v4.19.2): distinguish Codex 0.160 logical threads from physical rollout segments. Follow immutable history-base references with exact byte and stored ordinal validation; export complete logical tool history with source coordinates and cross-segment call pairing. Preserve divergent-copy rejection and selected-rollout `--record` semantics. Synthetic regressions cover three segments, prefix cutoffs, malformed history, and CLI selectors.
+
 - **skill-creator** (`daymade-skill` v1.60.1 → v1.60.2): require public-example provenance and distributed dependency evidence in the existing review, and retain asynchronous command handles through terminal status.
 - **github-sensitive-data-cleanup** (v1.3.0 → v1.3.1): propagate scan and verification failures instead of treating partial results as clean; continue semantic review when pattern scans report zero findings.
 - **github-ops** (v1.10.0 → v1.10.1): bind public source files, PR title/body, changelog entries and new commit messages to the reviewed publication; independently read back hosted text and the exact landed commit while retaining separate history-rewrite authorization.
