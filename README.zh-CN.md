@@ -578,6 +578,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 - 会话锚点用命令行 UUID，不受 argv[0] 全路径/裸名形态影响
 - 恢复后自动对账：漏开的 tab 逐个打印手动补开命令
 - 可选 profile 环境映射（`~/.ghostty-session/profile-env.json`），带环境启动的 profile 会话按原环境恢复
+- 可选每分钟自动快照：只保存恢复状态变化，明确标出 UUID 未覆盖项，保留全部旧版本
 - 合成 fixture 自测套件已注册 CI（纯标准库）
 
 **示例：**
@@ -592,7 +593,7 @@ claude plugin install ghostty-use@daymade-skills
 "检查一下有没有会话丢了"
 ```
 
-**依赖**：macOS + Ghostty；恢复键击需辅助功能权限；`python3`（纯标准库）。快照状态存于 `~/.ghostty-session/`。
+**依赖**：macOS + Ghostty；恢复键击需辅助功能权限；`python3`（纯标准库）；定时机制首次配置还需 `uv`。快照状态存于 `~/.ghostty-session/`。
 
 ---
 

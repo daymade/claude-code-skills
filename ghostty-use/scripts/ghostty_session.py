@@ -256,13 +256,13 @@ def snapshot_sessions(sessions):
 
 
 def write_snapshot(sessions, out_path=None):
-    os.makedirs(SNAP_DIR, exist_ok=True)
+    from ghostty_storage import atomic_manifest, snapshot_lock
     doc = {"captured_at": datetime.now().isoformat(timespec="seconds"),
            "active_hours_threshold": ACTIVE_HOURS, "sessions": sessions}
-    path = out_path or os.path.join(SNAP_DIR, f"snapshot-{datetime.now().strftime('%Y%m%d-%H%M%S')}.json")
-    for target in (path, os.path.join(SNAP_DIR, "latest.json")):
-        with open(target, "w") as fh:
-            json.dump(doc, fh, ensure_ascii=False, indent=1)
+    path = out_path or os.path.join(SNAP_DIR, f"snapshot-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}.json")
+    with snapshot_lock(Path(SNAP_DIR).parent):
+        atomic_manifest(path, doc, replace=out_path is not None)
+        atomic_manifest(Path(SNAP_DIR) / "latest.json", doc)
     return path
 
 
@@ -394,8 +394,13 @@ def cmd_check(args):
 
 # ---------- restore ----------
 
-def restore_cmd(s):
+def restore_cmd(s, *, env_mapping=None):
     """Quote captured argv and paths; preserve flags and user-local profile prefix."""
+    if "restore_command" in s:
+        command = s["restore_command"]
+        if not isinstance(command, str) or not command.strip():
+            raise RecoveryError("stored restore command must be a nonempty string")
+        return command
     tokens = shlex.split(s.get("cmdline") or s["tool"])
     start = next((i for i, token in enumerate(tokens) if Path(token).name == s["tool"]), None)
     if start is None:
@@ -416,22 +421,22 @@ def restore_cmd(s):
     command = ([s["tool"], "resume", s["sid"]] + flags if s["tool"] == "codex"
                else [s["tool"]] + flags + ["-r", s["sid"]])
     cwd = s.get("cwd") or HOME
-    return f"cd -- {shlex.quote(cwd)} && {_profile_env_prefix(s)}{shlex.join(command)}"
+    return f"cd -- {shlex.quote(cwd)} && {_profile_env_prefix(s, env_mapping)}{shlex.join(command)}"
 
 
-def _profile_env_prefix(s):
+def _profile_env_prefix(s, mapping=None):
     cfg = os.path.join(HOME, ".ghostty-session", "profile-env.json")
-    if os.path.exists(cfg):
+    if mapping is None:
+        if not os.path.exists(cfg):
+            return ""
         with open(cfg) as fh:
             mapping = json.load(fh)
-        if not isinstance(mapping, dict):
-            raise RecoveryError("profile-env.json must contain an object")
-        prefix = mapping.get(s.get("profile") or "", "")
-        if prefix and not isinstance(prefix, str):
-            raise RecoveryError("profile environment prefix must be a string")
-        if prefix:
-            return prefix + " "
-    return ""
+    if not isinstance(mapping, dict):
+        raise RecoveryError("profile-env.json must contain an object")
+    prefix = mapping.get(s.get("profile") or "", "")
+    if prefix and not isinstance(prefix, str):
+        raise RecoveryError("profile environment prefix must be a string")
+    return prefix + " " if prefix else ""
 
 
 def reconcile(sessions, timeout=10):
@@ -447,7 +452,8 @@ def reconcile(sessions, timeout=10):
 def cmd_restore(args):
     doc = load_snapshot(args.snapshot)
     sel = select_sessions(doc["sessions"], args.only)
-    if not args.only and not args.all and not args.stale_too:
+    automatic = doc.get("kind") == "automatic-recovery-snapshot"
+    if not automatic and not args.only and not args.all and not args.stale_too:
         sel = [s for s in sel if s.get("status", "").startswith("active")]
     if not sel:
         raise RecoveryError("no sessions selected; use --all or --only for waiting/stale/unknown records")
