@@ -28,8 +28,12 @@ green wrappers, or process completeness.
 
 ## Operating contract
 
-1. Use the repository's canonical wrapper when it has one. Do not bypass it with a raw Terraform,
-   SSH, SCP, helper-script, or console path because a gate rejects the planned release.
+1. Use the repository's canonical release entry. When shared-gateway publication requires standard
+   CI, agents may initiate that CI within existing authorization; normal release, restoration,
+   rollback, and static-content transfer all use its controlled executor and existing wrappers.
+   Do not substitute a local Terraform apply, root SSH/SCP, helper, or console write. Verify the
+   implemented workflow and supported inputs before dispatch; lint or image-build CI alone is not a
+   deployment lane. A missing lane blocks the live write, not preparation or read-only diagnosis.
 2. Prefer provider resources, image baking, cloud-init, or configuration management. HashiCorp
    recommends exhausting purpose-built alternatives because Terraform cannot model provisioner side
    effects predictably. When a provisioner remains necessary, make its artifact, target, lock,
@@ -44,8 +48,9 @@ green wrappers, or process completeness.
 6. Treat a saved plan as an executable artifact. Bind it to reviewed source/artifact identity and apply
    that exact file. A successful apply is not a staging receipt; record promotion evidence only after
    every required live verifier succeeds.
-7. Require an explicit production decision at the last reversible point. A deadline, `PLAN_DIGEST`,
-   `CONFIRM_*`, or agent inference is not production authorization.
+7. Honor the user's production authorization, including standing authorization, at the last
+   reversible point. A deadline, `PLAN_DIGEST`, `CONFIRM_*`, or agent inference does not supply it.
+   Do not add personal signatures or per-run human approval when the authorized contract is standard CI.
 8. Stop after the requested result is verified. Do not turn a single-service fix into full-stack drift
    reconciliation, recovery redesign, or unrelated hardening.
 
@@ -58,20 +63,34 @@ source and runtime before promoting a historical cause into the present diagnosi
 
 **Symptom**: Browser `ERR_SSL_PROTOCOL_ERROR` or similar, `terraform plan` shows `No changes`, but the service is actually broken.
 
-**Root cause**: Terraform validates config↔state, **not state↔reality**. Resources created by `null_resource` + provisioners (files synced to a server, containers started, etc.) can be modified out-of-band and terraform will never notice. The 80→443 redirect may still work, creating a "half-healthy" illusion.
+**Interpretation**: `No changes` is not a live-health check. Terraform refreshes provider-managed
+attributes, but a provisioner's remote files and container side effects are not automatically
+represented by those attributes. A broken site can follow an authorized apply, another IaC writer,
+or an out-of-band change; this symptom alone does not identify which happened. An HTTP redirect or
+healthy container does not prove the affected HTTPS route works.
 
 **Diagnosis**:
-1. Check the actual server state, not terraform's opinion (e.g., `ls /path/on/server`, not `terraform plan`)
-2. Look for signs of out-of-band modification: all files same mtime, source files (`.tftpl`, `.static`) mixed into deployed directories
-3. Compare state-tracked hashes vs live files: `terraform show -json` → extract `triggers.gateway_files_json` → sha256 each file → compare with `sha256sum` on server
+1. Probe the affected hostname and user path, then inspect the loaded route and live files.
+2. Compare the exact deployed source/artifact and state-tracked hashes, where present, with live
+   hashes. Read the actual provisioner commands and release logs for every writer of that directory.
+   Shared mtimes and deployed `.tftpl`/`.static` files are clues to inspect the archive and copy path,
+   not proof of an out-of-band write: a normal archive extraction can produce them too.
+3. Reconstruct each writer's candidate file set and delete/exclude scope. In particular, a valid
+   `rsync --delete` can remove another owner's route omitted from its candidate while retaining
+   syntactically valid configuration. Check the complete existing hostname set, not just the main API.
 
-**Fix**: Force the provisioner to re-run from frozen plan bytes:
-```bash
-TF_CLI_ARGS_plan='-replace=module.<name>.null_resource.<resource>' terraform plan ...
-```
-Then apply. The provisioner will rebuild from the plan's frozen bytes, ignoring the corrupted live state.
+**Recovery**: Use the repository's canonical release entry and its plan/apply wrapper; where standard
+CI is required, initiate the supported recovery or rollback through that same CI. Before a replacement,
+verify the candidate against the current live baseline and name exactly which files/resources may
+change. A frozen old commit can be reproducible and still roll back a newer route, policy, environment,
+or image. Restore only the authorized scope; stop if the current writer cannot preserve other owners'
+files. Do not use a broad replacement followed by a second sync as the default repair.
 
-**Prevention**: Add a periodic job that compares state-tracked file hashes against live server files. Terraform alone will never catch this.
+A saved plan freezes Terraform's planned values, not arbitrary files or external downloads read by
+its provisioners at apply time. Check that the actual implementation consumes the validated immutable
+artifact before claiming recovery will publish those bytes. After the authorized apply, independently
+verify the affected user path and the previously working routes. Live hash checks can detect drift;
+they do not by themselves establish its writer or prevent deletion.
 
 ### Staging applies cleanly but production fails `port is already allocated`
 
