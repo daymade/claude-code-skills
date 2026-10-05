@@ -116,6 +116,23 @@ class PaginatedLineageTests(unittest.TestCase):
         with self.assertRaisesRegex(reader.LineageResolutionError, "was not found"):
             self.lineage()
 
+    def test_cli_physical_record_survives_missing_ancestor_but_logical_tools_refuse(self):
+        self.write(SECOND, [meta({**self.base, "thread_id": THIRD}), self.child_rows[1]])
+        with sqlite3.connect(self.home / "state_5.sqlite") as db:
+            db.execute("CREATE TABLE threads (id TEXT, cwd TEXT, updated_at INTEGER, source TEXT, archived INTEGER, rollout_path TEXT)")
+            db.execute("INSERT INTO threads VALUES (?, '/synthetic', 1700000000, 'cli', 0, ?)", (THREAD, str(self.child)))
+        for selectors in [["--record", "2"], ["--tools", "--record", "2"]]:
+            result = subprocess.run([sys.executable, str(SCRIPT), "--session", THREAD, *selectors, "--format", "json"], env={**os.environ, "CODEX_HOME": str(self.home)}, text=True, capture_output=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            output = json.loads(result.stdout)
+            self.assertEqual(output["scope"], "selected_rollout_only")
+            self.assertEqual(output["matched_records"], 1)
+            self.assertEqual(output["results"][0]["original"], self.child_rows[1])
+        result = subprocess.run([sys.executable, str(SCRIPT), "--session", THREAD, "--tools", "--format", "json"], env={**os.environ, "CODEX_HOME": str(self.home)}, text=True, capture_output=True, timeout=10)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("was not found", result.stderr)
+        self.assertEqual(result.stdout, "")
+
     def test_same_physical_divergence_is_still_rejected(self):
         self.write(SECOND, [meta(self.base), tool("function_call_output", "across", output="CONFLICT")], archive=True)
         with self.assertRaisesRegex(reader.LineageResolutionError, "divergent physical rollout copies"):

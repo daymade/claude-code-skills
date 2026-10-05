@@ -2074,6 +2074,20 @@ def main() -> int:
         return 1
 
     meta = data.get("meta") or {}
+    # Physical record coordinates are independently useful even when an
+    # ancestor has been pruned. Do not make this existing local-evidence mode
+    # depend on reconstructing the logical thread.
+    if evidence_mode and args.record:
+        try:
+            evidence = extract_record_evidence(
+                rollout, conv.session_id, records=args.record, tools=args.tools,
+                contains=args.contains, end_byte_offset=data["parsed_bytes"])
+        except LineageResolutionError as exc:
+            print(f"Error: cannot read original record evidence: {exc}", file=sys.stderr)
+            return 1
+        print(json.dumps(evidence, ensure_ascii=False, indent=2)
+              if args.format == "json" else render_record_evidence(evidence))
+        return 0
     lineage: list = []
     lineage_warnings: list[str] = []
     try:
