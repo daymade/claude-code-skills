@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **read-codex-history** (`daymade-claude-code` v4.19.3 → v4.19.4): Read subagent originals using the concrete thread ID and validate the shared family session ID separately. Preserve wrong-thread, fused-rollout, and malformed-identity rejection.
+
 - **read-codex-history** (`daymade-claude-code` v4.19.1 → v4.19.2): distinguish Codex 0.160 logical threads from physical rollout segments. Follow immutable history-base references with exact byte and stored ordinal validation; export complete logical tool history with source coordinates and cross-segment call pairing. Preserve divergent-copy rejection and selected-rollout `--record` semantics. Synthetic regressions cover three segments, prefix cutoffs, malformed history, and CLI selectors.
 
 - **skill-creator** (`daymade-skill` v1.60.1 → v1.60.2): require public-example provenance and distributed dependency evidence in the existing review, and retain asynchronous command handles through terminal status.

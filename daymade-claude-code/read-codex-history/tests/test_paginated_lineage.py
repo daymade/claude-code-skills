@@ -85,6 +85,30 @@ class PaginatedLineageTests(unittest.TestCase):
         self.assertEqual(filtered["matched_records"], 1)
         self.assertEqual(filtered["results"][0]["paired_call"]["path"], str(self.parent))
 
+    def test_subagent_family_session_id_does_not_replace_its_thread_identity(self):
+        rows=[meta(ident=SECOND),tool('function_call_output','child-call',output='exact child original')]
+        rows[0]['payload'].update({'session_id':THREAD,'parent_thread_id':THREAD,'cli_version':'0.160.0'})
+        path=self.home/'sessions'/('rollout-2026-01-01T00-00-00-'+SECOND+'.jsonl')
+        path.parent.mkdir(parents=True,exist_ok=True)
+        for i,row in enumerate(rows):row['ordinal']=i
+        raw=''.join(json.dumps(row)+'\n' for row in rows).encode();path.write_bytes(raw)
+        data=reader.parse_codex_rollout(path)
+        reader.validate_selected_rollout_identity(data,SECOND)
+        self.assertEqual(data['meta']['session_id'],THREAD)
+        self.assertEqual(data['meta']['id'],SECOND)
+        evidence=reader.extract_record_evidence(path,SECOND,records=[],tools=True)
+        self.assertEqual(evidence['results'][0]['original']['payload']['output'],'exact child original')
+        self.assertEqual(path.read_bytes(),raw)
+        with self.assertRaises(reader.LineageResolutionError):reader.validate_selected_rollout_identity(data,THREAD)
+
+    def test_family_identity_missing_is_legacy_but_present_invalid_is_rejected(self):
+        data=reader.parse_codex_rollout(self.parent)
+        data['meta'].pop('session_id')
+        reader.validate_selected_rollout_identity(data,THREAD)
+        for value in [None,'',123,'not-a-uuid']:
+            with self.subTest(value=value),self.assertRaises(reader.LineageResolutionError):
+                reader.validate_selected_rollout_identity({**data,'meta':{**data['meta'],'session_id':value}},THREAD)
+
     def test_three_segments_use_logical_ordinals_and_physical_parent_lookup(self):
         last = self.write(THIRD, [meta({"thread_id": SECOND, "end_byte_offset": self.child.stat().st_size, "end_ordinal_exclusive": 4}), tool("custom_tool_call", "new", name="apply", input="literal")])
         data, lineage = self.lineage(last)
