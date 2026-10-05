@@ -72,3 +72,13 @@ bytes, caption relationship and every affected figure in that same reading view.
 Keep relative links valid when the delivered folder moves as a unit. Report the
 actual-reader result separately from source/asset conversion success. This guide
 is a manual visual protocol; no bundled sweep certifies Markdown-reader parity.
+
+For automated HTML expansion through installed doc-to-markdown, load that owner's
+HTML conversion guide and use its `batch_html.py prepare` → reader observations →
+`reader_pilot_gate.py check` → `batch_html.py run` sequence. Place any authorized
+PNG/reference repair in the prepared HTML and local assets before `prepare`, so
+the tested recipe also executes during expansion. Preserve raw-source identity
+and explicit mappings. Record the whole-figure labels, relations and caption in
+the owner's evidence template, with retained source/recipient captures and actual
+reading-mode/theme/body-width settings. That gate validates evidence completeness
+and byte identity; continue to perform the visual checks here in the real canvas.

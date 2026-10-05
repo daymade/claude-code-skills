@@ -88,6 +88,9 @@ jobs:
       - name: Source ownership and initialization contract
         run: python3 -m unittest discover -s daymade-skill/skill-creator/tests -p test_source_contract.py
 
+      - name: Fixed skill-creator command entry
+        run: python3 -m unittest discover -s daymade-skill/skill-creator/tests -p test_creator_entry.py
+
       - name: Selected inputs and cumulative disk budget
         working-directory: daymade-skill/skill-creator
         run: python3 -m unittest tests.test_materialize
@@ -200,6 +203,17 @@ jobs:
       # output and exits nonzero. That bug shipped green from a macOS-only test run.
       - name: Run registered suites
         run: scripts/ci/run_registered_tests.sh
+
+      # The static HTML batch gate exercises the actual converter; schema-only
+      # fixtures cannot establish conversion behavior. Keep its CLI dependency
+      # explicit and its selected stdlib suite separate from unrelated tests.
+      - name: HTML reader pilot and batch safety
+        if: ${{ !cancelled() }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pandoc
+          pandoc --version
+          python3 -m unittest discover -s daymade-docs/doc-to-markdown/scripts -p test_reader_pilot_gate.py
 
       # Not in the registry: its point is that a leaked child process surfaces as a
       # ResourceWarning, which only fails the run under -W error.

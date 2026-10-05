@@ -62,3 +62,27 @@ controls survive. Preserve canonical note identity and the tested source/asset
 bytes. If Obsidian is unavailable, mark reader behavior partial and retain the
 conversion evidence separately. Continue the batch only after the pilot's
 required reader behavior is proven; repeat for a materially different link form.
+
+## Bind the repair before automated expansion
+
+Use [the gated batch route](html-conversion.md#gate-a-batch-through-the-existing-recipe)
+when expanding through `batch_html.py`. Keep the raw sample unchanged; create
+prepared HTML with the authorized reader targets and nonempty landing paragraphs,
+for example `<p>Chapter landing marker. ^chapter</p>`. Declare
+`#chapter` → `#^chapter` and `#source-1` → `#^source-1` in the plan's provenance.
+Preserve the source anchor text `[1]`; let the existing Pandoc owner emit its
+escaped Markdown label. Materialize any figure derivative under its actual
+relative asset path before `prepare`.
+
+Observe the reproducible pilot note in reading view, then complete a workspace
+copy of [the evidence template](../assets/reader-pilot-evidence-template.json).
+Set each navigation/citation record's `source_href` to the prepared HTML target;
+retain the original→prepared target mapping separately in `provenance`.
+Record the exact rendered label, clicked destination and landing text. Bind the
+source capture to its explicit raw/prepared role and the recipient capture to
+the final pilot note/assets/settings. Run the gate's `check`, then the batch
+owner's `run` only after the required reader observations pass.
+
+Keep manually repaired notes supported by the manual protocol above. Do not use
+one to authorize automated expansion through a recipe that would omit its repairs;
+the fixed sample is a reader control, not proof that batch conversion executed it.

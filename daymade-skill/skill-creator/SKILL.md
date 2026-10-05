@@ -1340,6 +1340,11 @@ When creating or updating a skill, follow these steps in order. Skip steps only 
 
 ### Step 0: Prerequisites Check
 
+For `audit_skill_regression`, `release_readiness`, `source_contract` and
+`materialize`, use the [fixed command entry](references/fixed-command-entry.md)
+when calling from another working directory. Supply absolute artifact paths;
+retain each owning tool's subcommands, flags and direct invocation.
+
 Before starting any skill work, auto-detect all dependencies and proactively install anything missing. Discovering a missing tool mid-workflow (e.g., gitleaks at packaging time, PyYAML at validation) wastes time and breaks flow.
 
 Run the quick check from [references/prerequisites.md](references/prerequisites.md), auto-install what you can, and present the user a summary checklist. Only proceed when all blocking dependencies are satisfied.

@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "manifest_sha256": "",
+  "observer": {
+    "identity": "",
+    "method": "",
+    "observed_at": ""
+  },
+  "observation_artifact": {
+    "path": "",
+    "sha256": ""
+  },
+  "reader_state": {
+    "reader": "",
+    "version": "",
+    "mode": "reading",
+    "theme": "",
+    "body_width_css_px": 0,
+    "device_scale": 0,
+    "capture_context": ""
+  },
+  "captures": [
+    {
+      "id": "source",
+      "kind": "source",
+      "source_role": "raw",
+      "source_sha256": "",
+      "artifact": {"path": "", "sha256": ""}
+    },
+    {
+      "id": "recipient",
+      "kind": "recipient",
+      "source_role": "prepared",
+      "source_sha256": "",
+      "note_sha256": "",
+      "assets_sha256": "",
+      "reader_settings_sha256": "",
+      "artifact": {"path": "", "sha256": ""}
+    }
+  ],
+  "observations": {
+    "navigation": [
+      {
+        "source_href": "",
+        "label": "",
+        "observed_label": "",
+        "intended_destination": "",
+        "observed_destination": "",
+        "intended_landing_text": "",
+        "observed_landing_text": "",
+        "capture_id": "recipient"
+      }
+    ],
+    "citations": [
+      {
+        "source_href": "",
+        "label": "",
+        "observed_label": "",
+        "intended_destination": "",
+        "observed_destination": "",
+        "intended_landing_text": "",
+        "observed_landing_text": "",
+        "capture_id": "recipient"
+      }
+    ],
+    "figures": [
+      {
+        "source_labels": [""],
+        "observed_labels": [""],
+        "source_relations": [""],
+        "observed_relations": [""],
+        "source_caption": "",
+        "observed_caption": "",
+        "source_capture_id": "source",
+        "recipient_capture_id": "recipient"
+      }
+    ]
+  }
+}

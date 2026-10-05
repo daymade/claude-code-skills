@@ -55,6 +55,23 @@ the tested conversion/export choices. Changed figure structures, dependencies,
 link forms or reader settings need another representative check. Whole-batch
 source/asset checks differ from visual sampling; sampling is not individual full review.
 
+When using installed doc-to-markdown's automated HTML batch owner, load its HTML
+conversion guide for `batch_html.py` and copy the evidence template linked by that
+guide into the task workspace. Freeze a new
+manifest and reproducible pilot with `prepare`; then collect the observations
+above against that exact note. Fill all three observation categories and retain
+the observer record, observation artifact, source/recipient captures and frozen
+reader settings. Declare whether each source capture shows raw or prepared HTML;
+the recipient capture binds the prepared input, final note and assets.
+
+Run `reader_pilot_gate.py check` before `batch_html.py run`. Missing/blank evidence,
+wrong landing text, changed labels and stale bytes reject expansion. A green
+check certifies the record's completeness/current bytes, not actual clicks or
+legibility. Keep repaired PNG references and block targets in ready-to-convert
+HTML, with raw-source provenance and mappings; a manually patched note does not
+authorize a batch recipe that cannot reproduce it. Keep the manual protocol when
+that recipe boundary does not fit the task, and preserve its separate verification.
+
 ## Capture recipe for the synthetic figure
 
 Read Ego's current Skill/API; set paths to an existing scratch folder/new PNG.
