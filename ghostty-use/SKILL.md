@@ -24,7 +24,7 @@ automatic reconciliation that makes every paste failure visible.
 | You just said / want | Run |
 |---|---|
 | Quitting for an update / reboot ("重启前保存会话") | `snapshot` |
-| Rebooted, want tabs back ("恢复之前的窗口") | `restore` (then read its auto-check) |
+| Rebooted, want tabs back ("恢复之前的窗口") | Use a suitable snapshot; if absent or outdated, `reconstruct`, then `restore --all` on the selected manifest |
 | "Was anything lost?" / suspicion after restore | `check` |
 | One specific session to bring back | `restore --only <id-prefix>` |
 
@@ -36,12 +36,61 @@ python3 <skill-dir>/scripts/ghostty_session.py snapshot
 
 # After restart (from any directory; needs Accessibility permission for keystrokes):
 python3 <skill-dir>/scripts/ghostty_session.py restore        # active sessions only
-python3 <skill-dir>/scripts/ghostty_session.py restore --all  # include stale ones
+python3 <skill-dir>/scripts/ghostty_session.py restore --all  # include waiting/quota/dead/stale/unknown records
 ```
 
 The snapshot lands in `~/.ghostty-session/snapshots/` (home-relative, survives reboot).
-`restore` finishes with an auto-check that prints `N/M present` plus a manual reopen
-command for anything missing — read it before declaring success.
+`restore` skips already-live IDs by default. It finishes with a bounded auto-check
+that prints `N/M present`, a manual reopen command and a retry command containing only
+missing IDs. Read that result before declaring success; per-tab `SENT (unverified)`
+is a paste acknowledgement, not proof that a session reopened. Re-running the same
+manifest opens only the IDs still missing. `--dry-run` prints commands without GUI actions.
+
+## No suitable snapshot: reconstruct the recovery manifest
+
+For Codex identity and indexed recovery, use the maintained
+`daymade-claude-code:read-codex-history` dependency. Resolve that Skill's directory
+from the current host; install its `daymade-claude-code` plugin through the host's
+ordinary marketplace flow when authorized and absent. The script discovers a source
+checkout or a separately installed sibling `read-codex-history`; other layouts use
+`--history-reader <reader-skill-dir>` or `GHOSTTY_CODEX_HISTORY_READER`. Missing reader
+or state index fails explicitly; do not replace it with a rollout corpus scan.
+
+```bash
+# Review candidates without writing state or opening tabs:
+python3 <skill-dir>/scripts/ghostty_session.py reconstruct \
+  --history-reader <reader-skill-dir> --recent-hours 72 --limit 100 --dry-run
+
+# Build one chosen set in a NEW file; --only accepts unambiguous ID prefixes:
+python3 <skill-dir>/scripts/ghostty_session.py reconstruct \
+  --history-reader <reader-skill-dir> --since <YYYY-MM-DD> \
+  --only <id-prefix-1> <id-prefix-2> --out <recovery-manifest.json>
+
+# Restore the full selected set in one invocation, including waiting/quota rows:
+python3 <skill-dir>/scripts/ghostty_session.py restore \
+  --snapshot <recovery-manifest.json> --all
+```
+
+Reconstruction merges the optional `--snapshot` (otherwise latest, if present) with
+bounded recent indexed Codex candidates. It verifies internal rollout identity using
+the owning reader and marks each row `past-snapshot` or `indexed-terminal-candidate`.
+Terminal evidence is `source=cli` or `originator=codex-tui`; actual TUIs can report
+`source=vscode`. `--terminal-source` and `--terminal-originator` customize those
+accepted metadata values. Subagents are excluded by the owning inventory's metadata,
+not by underscores in filenames. `--codex-home` selects a nondefault Codex store.
+
+Past membership proves only that a session appeared in that snapshot. Indexed
+terminal candidates prove terminal origin, not that the tab was live at shutdown.
+Review timestamps/titles and select the intended set before restore. `--limit` is a
+hard cap on indexed candidates inspected, with a default 72-hour window; widen the
+bounds only when needed. No snapshot means Claude membership remains unknown;
+reconstruction does not discover Claude sessions. Preserve explicit Claude records
+from a known snapshot rather than claiming an exhaustive recovery.
+
+The new manifest never changes `snapshots/latest.json` and refuses to overwrite an
+existing output. Exit 0 means the selected evidence was verified; exit 1 means the
+manifest lists rejected candidates requiring attention; exit 2 means invalid input
+or unavailable evidence. Dry-run output is JSON for inspection.
 
 ## What snapshot records per session
 
@@ -62,11 +111,16 @@ command for anything missing — read it before declaring success.
 ## Restore mechanics and limits
 
 - Reopen = activate Ghostty → Cmd+T → clipboard-paste the reopen command → Return, one
-  tab per session, followed by mandatory auto-reconciliation. Keystroke paste is
+  tab per missing session, followed by mandatory auto-reconciliation. Keystroke paste is
   timing-sensitive: an interruption between Cmd+T and the paste leaves an empty tab
   whose command was silently lost (measured 2026-10-04). The auto-check exists to make
   that visible; never skip it, and never declare success from paste return codes alone.
+- Before any paste, tell the user to leave keyboard and mouse untouched through
+  reconciliation. The script repeats this notice before its first GUI action.
 - Requires **Accessibility permission** for `osascript` keystrokes (System Events).
+  If the current host denies Ghostty UI automation, do not switch channels to
+  bypass it: prepare the selected manifest and exact user-run restore command,
+  then use read-only `check --snapshot <manifest> --strict` after the user runs it.
 - Window grouping is **not** restorable — Ghostty's macOS accessibility surface exposes
   no tab→window mapping. All tabs reopen into one window; reorder manually if needed.
 - Rollout files that codex itself cannot find anymore print `no-artifact`; restoring
@@ -82,15 +136,17 @@ context:
 {"research": "CLAUDE_CONFIG_DIR=~/.claude-profiles/research", "family": "HTTP_PROXY=http://127.0.0.1:7890"}
 ```
 
-Without it, restores replay the captured `--settings` flag only. The mapping is
+Without it, restores replay captured settings, profile and permission/model flags;
+process environment beyond argv remains unknown. The mapping is
 user-local data outside the skill bundle; no default mapping ships.
 
 ## Troubleshooting
 
 | Symptom | Cause / fix |
 |---|---|
-| `restore` reports `STILL MISSING` | paste raced an interruption; run the printed reopen command by hand in a new tab |
-| `no-artifact` on a codex session | its rollout file is gone from `~/.codex/sessions`; `codex resume <id>` is best-effort |
+| `restore` reports `STILL MISSING` | run the printed missing-only retry, or the exact reopen command by hand in a new tab |
+| `no-artifact` on a Codex session | the verified indexed session has no usable rollout; resume remains best-effort |
+| `unknown` Codex liveness | reader/index unavailable or identity ambiguous; resolve the dependency/store instead of choosing the first filename match |
 | `dead-channel` sessions restored anyway | expected: history reopens, session stops at `/login`; re-auth or switch provider |
 | `check` says present but tab looks empty | another live process already claimed that session id (e.g. resumed in another tab) |
 | osascript refuses keystrokes | grant Accessibility (System Events) permission; verify with `osascript -e 'tell application "System Events" to get UI elements enabled'` |

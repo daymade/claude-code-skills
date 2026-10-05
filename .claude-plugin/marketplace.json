@@ -1284,7 +1284,7 @@
       "description": "Snapshots, restores and reconciles Claude Code / Codex sessions inside Ghostty tabs across reboots. Use when quitting the Mac for an update (保存终端会话 / 重启前备份终端), after restart to reopen tabs with their original session IDs (恢复之前的窗口 / restore my ghostty tabs), or to audit which sessions survived. Not for resuming one conversation via its own --resume, terminal screenshots, or tmux state.",
       "source": "./ghostty-use",
       "strict": false,
-      "version": "1.0.2",
+      "version": "1.1.0",
       "category": "developer-tools",
       "keywords": [
         "ghostty",

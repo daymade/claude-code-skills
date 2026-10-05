@@ -39,12 +39,18 @@ major app update rather than trusting the dates.
   its ordering prefix ≈ creation order. `codex resume <old-id>` may keep
   appending to the original file instead of forking a new one (both behaviors
   observed).
-- Spawned subagents create sibling files named
-  `rollout-...-<child>_<parent>.jsonl` (double ULID = spawn artifact, not a
-  resume fork).
+- Current Codex can name physical segments
+  `rollout-...-<logical-thread>_<physical-rollout>.jsonl`. An underscore does not
+  prove a subagent: the maintained history reader's metadata establishes identity
+  and subagent status. The state database selects the current physical segment;
+  verify `session_meta.id` through `read-codex-history` rather than taking the
+  first filename match. Multiple segments without a valid indexed selection are
+  ambiguous; report unknown. A missing selected segment or mismatched internal
+  identity is unavailable evidence, not a license to use an older segment.
 - Some sessions have **no rollout file at all** while the process lives —
   resume targets whose source rollout left the default tree, plus TUIs never
-  used since start. These classify `no-artifact`; restoring replays
+  used since start. A verified indexed identity with no usable file can classify
+  `no-artifact`; missing index/reader or ambiguous identity classify `unknown`. Restoring replays
   `codex resume <id>` and stays best-effort. Absence is not data loss by
   itself.
 
@@ -57,7 +63,10 @@ major app update rather than trusting the dates.
   hold a refreshToken with a future expiry while the account itself refuses
   auth — the token's own clock proves nothing about the account.
 - `api-error` suffix: other structured API errors in the tail.
-- `no-artifact`: no session file found for the UUID.
+- `no-artifact`: no usable file for an otherwise verified indexed identity.
+- `unknown`: Codex reader/index unavailable or rollout identity cannot be proved.
+  Default active-only restoration skips it; explicit `--only` or `--all` preserves
+  the user's option to resume the recorded ID. Report the boundary.
 
 ## Misclassification war stories (why each rule exists)
 
