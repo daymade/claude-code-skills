@@ -98,3 +98,7 @@ that were only bold or determine the page-title/lesson mapping.
 The assembling agent owns that structure and its checks. Use `frontend-visual-qa`'s
 Markdown reader handoff reference when installed; keep conversion success separate
 from unverified reader presentation.
+
+For Obsidian chapter jumps or numbered citations, run the one-page handoff in
+[obsidian-link-examples.md](obsidian-link-examples.md) before batch assembly;
+source-link retention and actual reader target behavior are separate checks.

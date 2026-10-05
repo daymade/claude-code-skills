@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Reader link pilot</title></head>
+<body>
+<h1>Reader link pilot</h1>
+<p><a href="#chapter">Chapter</a> · <a href="#source-1">[1]</a> · <a href="#Controls">Controls</a></p>
+<p>This synthetic page tests navigation and source labels. Its prose is not taken from a real manual.</p>
+<h2 id="Controls">Controls</h2>
+<p>Keep ordinary wiki links such as <code>[[Note]]</code> when the target document uses them intentionally.</p>
+<p>Keep literal bracket text such as [draft] and [1]. A bracket label does not identify a wiki note.</p>
+<pre><code>[[1]](#source-1)
+[[Note]]
+[\[1\]](#^source-1)
+</code></pre>
+<h2 id="chapter">Evaluation chapter</h2>
+<p>Chapter landing marker.</p>
+<h3>Collect</h3>
+<p>Keep the complete source before adapting its presentation. Record the page and its related assets.</p>
+<h3>Compare</h3>
+<p>Open the source and the recipient document. Compare the same section at a readable width.</p>
+<h3>Choose</h3>
+<p>Use the evidence needed by the reader. A working browser link alone does not certify a link in another application.</p>
+<h2>Reading notes</h2>
+<p>The chapter link should land at the chapter. The numbered source link should land at the source, keeping the visible label [1].</p>
+<p>Formatting changes should leave unrelated wiki syntax, literal brackets and code examples intact.</p>
+<h2 id="source-1">Reference details</h2>
+<p>Source landing marker. Synthetic reference for this test page.</p>
+</body>
+</html>

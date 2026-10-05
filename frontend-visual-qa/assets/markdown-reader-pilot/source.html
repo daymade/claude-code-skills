@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Complete figure pilot</title>
+<style>
+:root{color-scheme:light;--paper:#ffffff;--ink:#172536;--line:#486e94;--soft:#e7eef6;--border:#b5c5d6}
+*{box-sizing:border-box}
+body{margin:0;padding:32px;background:#f3f6fa;color:var(--ink);font-family:Arial,sans-serif}
+main{max-width:1000px;margin:auto}
+h1{font-size:26px;margin:0 0 12px}
+h2{font-size:20px;margin:30px 0 12px}
+p{font-size:16px;line-height:1.55}
+figure{margin:0;background:var(--paper);border:1px solid var(--border);padding:20px}
+.frame{position:relative;width:800px;height:260px;margin:auto;color:var(--line)}
+.frame svg{display:block;position:absolute;inset:0;width:100%;height:100%}
+.node{position:absolute;top:64px;width:160px;min-height:80px;border:2px solid var(--line);border-radius:8px;background:var(--soft);text-align:center;padding:14px 8px;color:var(--ink)}
+.node strong{display:block;font-size:20px;line-height:1.25}
+.node span{display:block;margin-top:6px;font-size:14px}
+.one{left:60px}.two{left:320px}.three{left:580px}
+.edge-label{position:absolute;top:160px;font-size:14px;color:var(--ink)}
+.first-edge{left:231px}.second-edge{left:492px}
+figcaption{border-top:1px solid var(--border);padding-top:16px;font-size:15px;line-height:1.5;color:var(--ink)}
+figcaption strong{display:block;font-size:18px;margin-bottom:6px}
+.fragment{color:var(--line)}
+</style>
+</head>
+<body>
+<main>
+<h1>Complete figure pilot</h1>
+<p>Synthetic HTML/CSS figure. The SVG contains only connectors; every label and the caption is surrounding HTML.</p>
+<h2>Complete source figure</h2>
+<figure id="complete-figure">
+<div class="frame">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 260" role="img" aria-label="Two connectors">
+<defs><marker id="arrow-complete" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="currentColor"/></marker></defs>
+<path d="M220 104H314" stroke="currentColor" stroke-width="3" fill="none" marker-end="url(#arrow-complete)"/>
+<path d="M480 104H574" stroke="currentColor" stroke-width="3" fill="none" marker-end="url(#arrow-complete)"/>
+</svg>
+<div class="node one"><strong>Collect</strong><span>Keep the source</span></div>
+<div class="node two"><strong>Compare</strong><span>Inspect the whole figure</span></div>
+<div class="node three"><strong>Choose</strong><span>Verify the reader</span></div>
+<span class="edge-label first-edge">Source evidence</span>
+<span class="edge-label second-edge">Reader evidence</span>
+</div>
+<figcaption><strong>Source to reader</strong><span>Collect before comparison; compare before choosing. The labels and arrows jointly explain the order.</span></figcaption>
+</figure>
+<h2>SVG fragment alone</h2>
+<p>Diagnostic comparison: the same connectors without their HTML labels and caption are not the complete figure.</p>
+<figure id="svg-fragment">
+<div class="frame fragment">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 260" role="img" aria-label="Two connectors without labels">
+<defs><marker id="arrow-fragment" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="currentColor"/></marker></defs>
+<path d="M220 104H314" stroke="currentColor" stroke-width="3" fill="none" marker-end="url(#arrow-fragment)"/>
+<path d="M480 104H574" stroke="currentColor" stroke-width="3" fill="none" marker-end="url(#arrow-fragment)"/>
+</svg>
+</div>
+</figure>
+</main>
+</body>
+</html>
