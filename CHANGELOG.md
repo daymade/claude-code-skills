@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **continue-codex-work** (`daymade-claude-code` v4.19.2 → v4.19.3): Reconcile what was in flight when the interrupted session died — a foreground long task's unpersisted output dies with the pipe, so treat it as not done, probe for a surviving remote process or output file, and give any rerun a detached result-to-disk channel before re-executing.
+- **doc-to-markdown** (`daymade-docs` v1.21.0 → v1.22.0): Add synthetic Obsidian controls for arbitrary HTML anchors, bracketed source labels, healthy heading/wiki links and code. Exercise reader-specific repairs in a one-page actual-reader handoff while retaining the existing Pandoc conversion path.
+- **frontend-visual-qa** (v1.16.0 → v1.17.0): Add a complete HTML/CSS figure control and an exercised element-capture recipe with source/PNG readback. Require a one-page reader pilot before batch conversion, with separate source checks and representative visual coverage.
+
 - **doc-to-markdown, docs-router** (`daymade-docs` v1.20.1 → v1.21.0): Route saved HTML/HTM through Pandoc, retain source hyperlinks with Markdown AST checks, and provide an explicit content selector and parsed heading offset for manual assembly. Add source-link reconciliation after cleanup and book/chapter/lesson guidance without changing Office conversion paths.
 - **frontend-visual-qa** (v1.15.1 → v1.16.0): Add the Markdown reader handoff for complete figures, including HTML captions and SVG/CSS dependencies. Compare the source with the actual document reading canvas; keep unavailable consumer evidence partial and preserve original SVGs when an authorized PNG repair is needed.
 

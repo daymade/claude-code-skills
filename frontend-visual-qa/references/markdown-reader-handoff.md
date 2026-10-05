@@ -11,6 +11,10 @@ The auditor compares the source figure with the figure inside the recipient's
 actual document reading canvas. A standalone image tab is diagnostic evidence.
 Keep this pass within the existing audit-only or fix-and-verify authority.
 
+Before batch conversion, run one representative page through the actual reader
+using [markdown-reader-pilot.md](markdown-reader-pilot.md). Prove correct navigation
+targets, whole-figure labels/relations and fresh, readable image bytes there first.
+
 ## 1. Identify the complete figure
 
 For each affected figure, record the source page, figure position, title/caption,
