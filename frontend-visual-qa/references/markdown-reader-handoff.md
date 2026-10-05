@@ -1,0 +1,70 @@
+---
+name: markdown-reader-handoff
+description: >-
+  Verify website figures handed off as Markdown in Obsidian or another named reader.
+  Read when a conversion contains SVG, HTML captions, CSS-dependent figures, or unreadable images.
+---
+
+# Markdown reader handoff
+
+The auditor compares the source figure with the figure inside the recipient's
+actual document reading canvas. A standalone image tab is diagnostic evidence.
+Keep this pass within the existing audit-only or fix-and-verify authority.
+
+## 1. Identify the complete figure
+
+For each affected figure, record the source page, figure position, title/caption,
+asset paths and hashes, and the final Markdown path and references. Inspect the
+whole figure: labels or captions may be HTML siblings outside an SVG or image.
+
+Inventory dependencies before extracting or rasterizing:
+
+- SVG `currentColor`, inherited fill/stroke, CSS variables and external styles;
+- font families, font weights and whether those fonts actually loaded;
+- linked images, SVG references, masks and filters;
+- surrounding HTML labels/captions and the source background or transparency.
+
+Inspect the source in its rendered state. A correctly sized SVG file can still
+lose meaning after extraction if its colors or labels came from the surrounding
+page. Do not infer a universal reader limitation from one black or blank figure;
+keep the cause unknown until the dependency/renderer probe decides it.
+
+## 2. Compare at the reader's real width
+
+1. Open the source figure in its original page and the final Markdown in the
+   named reader's document reading mode. Record the reader, theme, Markdown path,
+   actual body width and referenced asset identity.
+2. Capture both complete figure regions at comparable reading widths, including
+   the adjacent heading, HTML-derived labels and caption. Inspect the captures
+   side by side; do not shrink both until text defects disappear.
+3. Check that labels, arrows, legends and distinctions remain understandable,
+   the background preserves contrast, text is legible without a separate zoom
+   tab, and the heading/caption still describes the figure actually displayed.
+4. Exercise any figure link or enlargement control within the authorized action
+   scope. Confirm the actual output, not the presence of the Markdown link.
+
+For Obsidian, verify the image embedded in the note's reading view. Browser SVG
+rendering, an image-file preview and a Markdown parser's successful parse do not
+establish that this view is readable. If the named reader is unavailable, preserve
+the available diagnostics and mark this handoff **partial**, naming the missing
+consumer evidence. Do not substitute a browser Markdown preview and mark it green.
+
+## 3. Repair only when authorized
+
+If the actual reader cannot present the figure readably, produce a PNG from the
+complete rendered figure or resolve its dependencies before rasterizing. Include
+external HTML labels/captions in the captured figure when they carry meaning;
+avoid duplicating them in both the image and surrounding Markdown.
+
+Choose dimensions from the actual reading width and label legibility. Preserve
+the source's transparent background only when it remains readable in the target
+theme; otherwise use an explicit background matched to the intended document.
+Inspect alpha, contrast, cropping and small labels in the real reader. Keep the
+original SVG/source asset as provenance and update the Markdown reference to the
+readable derivative using the real local directory name.
+
+Reopen the final note after changing assets or references; verify the referenced
+bytes, caption relationship and every affected figure in that same reading view.
+Keep relative links valid when the delivered folder moves as a unit. Report the
+actual-reader result separately from source/asset conversion success. This guide
+is a manual visual protocol; no bundled sweep certifies Markdown-reader parity.

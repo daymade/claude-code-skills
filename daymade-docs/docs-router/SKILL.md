@@ -1,7 +1,7 @@
 ---
 name: docs-router
 description: >-
-  Routes docs: Word/PDF/PPTX→Markdown; MD/Word→PDF; create Word; PDF
+  Routes docs: Word/PDF/PPTX/saved HTML→Markdown; MD/Word→PDF; create Word; PDF
   HTML/translate; Excel/xlsm/macOS; photo/signed scans; Mermaid; DOCX review;
   post-change docs. Reads one bundled Daymade specialist. New slide decks use
   deck-creator when installed; generic PDF reading/editing and spreadsheet
@@ -31,7 +31,7 @@ original `/daymade-docs:<leaf>` command manually.
 
 | Requested result | Read this exact file |
 |---|---|
-| Convert a DOCX, PDF, or PPTX to Markdown; parse Word or extract document text and images into Markdown | `../doc-to-markdown/SKILL.md` |
+| Convert a DOCX, PDF, PPTX, or saved HTML/HTM to Markdown; parse Word or extract document text and images into Markdown | `../doc-to-markdown/SKILL.md` |
 | Turn Markdown into a printable PDF | `../pdf-creator/SKILL.md` |
 | Create or format a Word `.docx`; export or repair an **existing Word/WPS manuscript** as PDF | `../docx-creator/SKILL.md` |
 | Turn a PDF into a self-contained, image-faithful HTML reading page, optionally translating it while keeping figures and charts | `../pdf-to-html/SKILL.md` |
@@ -46,6 +46,10 @@ or “document.” For example, Markdown → PDF selects `pdf-creator`; an exist
 Word manuscript → PDF selects `docx-creator`; PDF → Markdown selects
 `doc-to-markdown`; PDF → HTML selects `pdf-to-html`. If the request spans two
 results, read each relevant child before its stage.
+
+For website → Markdown, acquire the authorized pages through the owning web
+workflow first, then select `doc-to-markdown` for the saved HTML. That conversion
+branch does not crawl a site or certify presentation in a recipient's reader.
 
 Do not select a Daymade child for a new slide deck or generic PPT work. Use
 `deck-creator` for new presentation creation only when it is installed. If it
