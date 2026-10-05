@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **ghostty-use** (`ghostty-use` v1.1.0): add indexed, identity-verified recovery manifests when a pre-reboot snapshot is missing or outdated, keeping historical membership separate from terminal-origin candidates and leaving `latest.json` intact. Restore the chosen full set in one invocation, skip already-live IDs, acknowledge paste as sent rather than restored, and print bounded reconciliation plus missing-only retries. Fix Codex liveness to follow the state-index selected logical/physical rollout through the maintained reader; preserve captured flags and shell-quote paths. Synthetic tests cover missing state, legacy snapshots, current-rollout selection, partial delivery, duplicate-free reruns and CLI failures. Change types: capability addition, workflow/safety redesign, bug fix.
 ### Fixed
 
 - **doc-to-markdown** (`daymade-docs` v1.23.0 → v1.23.1): Correct source-capture role instructions against the existing reader gate; retain actual-reader evidence and reproducible-pilot requirements.

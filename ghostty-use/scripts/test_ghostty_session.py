@@ -11,6 +11,12 @@ generation only. Process enumeration (ps/lsof) is not exercised here; its
 live-machine calibration is recorded in references/session_liveness.md.
 """
 import json
+import argparse
+import io
+import sqlite3
+import subprocess
+from pathlib import Path
+from contextlib import redirect_stdout, redirect_stderr
 import os
 import sys
 import tempfile
@@ -123,9 +129,10 @@ class CodexLivenessTest(unittest.TestCase):
     def test_reads_embedded_timestamp(self):
         home = fresh_home()
         make_codex_file(home, S_CODEX, [
-            {"type": "session_meta"},
+            {"type": "session_meta", "payload": {"id": S_CODEX}},
             {"type": "response_item", "timestamp": iso(3)},
         ])
+        make_index(home, [(S_CODEX, str(Path(home) / ".codex/sessions/2026/10/04" / ("rollout-2026-10-04T12-00-00-" + S_CODEX + ".jsonl")))])
         with mock.patch.object(gs, "HOME", home):
             ts, err = gs.codex_liveness(S_CODEX)
         self.assertEqual(err, "ok")
@@ -134,7 +141,7 @@ class CodexLivenessTest(unittest.TestCase):
     def test_no_artifact_when_missing(self):
         with mock.patch.object(gs, "HOME", fresh_home()):
             ts, err = gs.codex_liveness("88888888-8888-8888-8888-888888888888")
-        self.assertEqual(err, "no-file")
+        self.assertEqual(err, "identity-unavailable")
 
 
 class ClassifyTest(unittest.TestCase):
@@ -158,13 +165,13 @@ class RestoreCmdTest(unittest.TestCase):
     def test_codex_replay(self):
         s = {"tool": "codex", "sid": S_CODEX, "cwd": "/tmp/proj",
              "cmdline": "codex resume " + S_CODEX}
-        self.assertEqual(gs.restore_cmd(s), "cd /tmp/proj && codex resume " + S_CODEX)
+        self.assertEqual(gs.restore_cmd(s), "cd -- /tmp/proj && codex resume " + S_CODEX)
 
     def test_claude_direct_replay(self):
         s = {"tool": "claude", "sid": S_HEALTHY, "cwd": "/tmp/proj",
              "cmdline": "claude --dangerously-skip-permissions", "profile": "direct"}
         got = gs.restore_cmd(s)
-        self.assertEqual(got, "cd /tmp/proj && claude --dangerously-skip-permissions -r " + S_HEALTHY)
+        self.assertEqual(got, "cd -- /tmp/proj && claude --dangerously-skip-permissions -r " + S_HEALTHY)
 
     def test_claude_with_settings_replay(self):
         s = {"tool": "claude", "sid": S_HEALTHY, "cwd": "/tmp/proj",
@@ -191,7 +198,7 @@ class RestoreCmdTest(unittest.TestCase):
         s = {"tool": "claude", "sid": S_HEALTHY, "cwd": "/tmp/My Project",
              "cmdline": "claude --dangerously-skip-permissions", "profile": "direct"}
         got = gs.restore_cmd(s)
-        self.assertTrue(got.startswith('cd "/tmp/My Project" && '), got)
+        self.assertTrue(got.startswith("cd -- '/tmp/My Project' && "), got)
 
 
 class OnlySelectionTest(unittest.TestCase):
@@ -200,19 +207,258 @@ class OnlySelectionTest(unittest.TestCase):
 
     def _sel(self, want):
         import argparse
-        sessions = [{"tool": "codex", "sid": "01a0f60e-db5d-7ce0-a60d-052828781762",
+        sessions = [{"tool": "codex", "sid": "aaaa0000-0000-7000-8000-000000000001",
                      "cwd": "/tmp/p", "cmdline": "codex resume x", "status": "active"}]
         want_set = set(want)
         return [s for s in sessions if any(s["sid"].startswith(w) for w in want_set)]
 
     def test_prefix_matches(self):
-        self.assertEqual(len(self._sel(["01a0f60e-db5d"])), 1)
+        self.assertEqual(len(self._sel(["aaaa0000-0000"])), 1)
 
     def test_full_uuid_matches(self):
-        self.assertEqual(len(self._sel(["01a0f60e-db5d-7ce0-a60d-052828781762"])), 1)
+        self.assertEqual(len(self._sel(["aaaa0000-0000-7000-8000-000000000001"])), 1)
 
     def test_unknown_matches_nothing(self):
         self.assertEqual(len(self._sel(["zzzzzzzz"])), 0)
+
+
+def make_index(home, rows):
+    db = Path(home) / ".codex" / "state_5.sqlite"
+    db.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(db) as conn:
+        conn.execute("CREATE TABLE threads (id TEXT, cwd TEXT, updated_at INTEGER, created_at INTEGER, source TEXT, archived INTEGER, rollout_path TEXT, title TEXT)")
+        for sid, path in rows:
+            conn.execute("INSERT INTO threads VALUES (?, ?, ?, ?, ?, 0, ?, ?)",
+                         (sid, "/tmp/demo", int(NOW.timestamp()), int(NOW.timestamp()), "vscode", path, "synthetic work"))
+    return db
+
+
+def entry(sid=S_CODEX, status="active"):
+    return {"tool": "codex", "sid": sid, "cwd": "/tmp/demo", "cmdline": "codex resume " + sid,
+            "profile": "direct", "tty": "ttys001", "status": status}
+
+
+class RecoveryWorkflowTest(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="ghostty-recovery-")
+        self.addCleanup(self.temp.cleanup)
+        self.home = self.temp.name
+        self.patch = mock.patch.multiple(gs, HOME=self.home, SNAP_DIR=str(Path(self.home) / ".ghostty-session/snapshots"),
+                                         HISTORY_READER=None, CODEX_HOME_OVERRIDE=None)
+        self.patch.start()
+        self.addCleanup(self.patch.stop)
+
+    def snapshot(self, sessions):
+        path = Path(self.home) / "old.json"
+        path.write_text(json.dumps({"captured_at": "2026-01-01", "sessions": sessions}))
+        return str(path)
+
+    def args(self, **kwargs):
+        values = dict(snapshot=None, only=None, all=True, stale_too=False, dry_run=False, reconcile_seconds=0)
+        values.update(kwargs)
+        return argparse.Namespace(**values)
+
+    def test_full_set_skips_present_and_rerun_opens_nothing(self):
+        sessions = [entry(S_CODEX), entry(S_HEALTHY, "waiting"), entry(S_DEAD, "dead-channel"), entry(S_PROSE, "stale")]
+        snapshot = self.snapshot(sessions)
+        with mock.patch.object(gs, "list_sessions", side_effect=[[sessions[0]], sessions]), mock.patch.object(gs, "_paste_tab", return_value=True) as paste:
+            self.assertEqual(gs.cmd_restore(self.args(snapshot=snapshot)), 0)
+            self.assertEqual(paste.call_count, 3)
+        with mock.patch.object(gs, "list_sessions", return_value=sessions), mock.patch.object(gs, "_paste_tab") as paste:
+            self.assertEqual(gs.cmd_restore(self.args(snapshot=snapshot)), 0)
+            paste.assert_not_called()
+
+    def test_partial_failure_prints_missing_only_retry_and_sent_label(self):
+        sessions = [entry(S_CODEX), entry(S_HEALTHY)]
+        output = io.StringIO()
+        with mock.patch.object(gs, "list_sessions", side_effect=[[], [sessions[0]]]), mock.patch.object(gs, "_paste_tab", side_effect=[True, False]), redirect_stdout(output):
+            self.assertEqual(gs.cmd_restore(self.args(snapshot=self.snapshot(sessions))), 1)
+        text = output.getvalue()
+        self.assertIn("SENT (unverified)", text)
+        self.assertIn("SEND FAILED", text)
+        self.assertIn("auto-check: 1/2 present", text)
+        self.assertIn("--only " + S_HEALTHY, text)
+        self.assertNotIn(S_CODEX, text.split("retry only missing:")[-1])
+        self.assertLess(text.index("keyboard and mouse"), text.index("SENT"))
+
+    def test_ambiguous_or_mixed_unknown_prefix_has_no_gui_effect(self):
+        first = entry("aaaa0000-0000-7000-8000-000000000001")
+        second = entry("aaaa0000-0000-7000-8000-000000000002")
+        with mock.patch.object(gs, "_paste_tab") as paste:
+            for only in (["aaaa"], [first["sid"], "bbbb"], [""]):
+                with self.assertRaises(gs.RecoveryError):
+                    gs.cmd_restore(self.args(snapshot=self.snapshot([first, second]), only=only))
+            paste.assert_not_called()
+
+    def test_only_prefix_selects_waiting_default_active_filter_does_not(self):
+        sessions = [entry(S_CODEX, "waiting"), entry(S_HEALTHY)]
+        with mock.patch.object(gs, "list_sessions", return_value=sessions), mock.patch.object(gs, "_paste_tab") as paste:
+            self.assertEqual(gs.cmd_restore(self.args(snapshot=self.snapshot(sessions), all=False, only=[S_CODEX[:8]])), 0)
+            paste.assert_not_called()
+
+    def test_dry_run_missing_no_paste_or_wait(self):
+        with mock.patch.object(gs, "list_sessions", return_value=[]), mock.patch.object(gs, "_paste_tab") as paste, mock.patch.object(gs, "reconcile") as check:
+            self.assertEqual(gs.cmd_restore(self.args(snapshot=self.snapshot([entry()]), dry_run=True)), 0)
+            paste.assert_not_called(); check.assert_not_called()
+
+    def test_cli_invalid_inputs_exit_two_no_gui(self):
+        for argv in ([], ["restore", "--only"], ["restore", "--snapshot", ""], ["reconstruct"],
+                     ["reconstruct", "--dry-run", "--limit", "0"], ["restore", "--reconcile-seconds", "61"]):
+            with mock.patch.object(gs, "_paste_tab") as paste, redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as result:
+                    gs.main(argv)
+                self.assertEqual(result.exception.code, 2)
+                paste.assert_not_called()
+        with mock.patch.object(gs, "_paste_tab") as paste, redirect_stderr(io.StringIO()):
+            self.assertEqual(gs.main(["restore", "--snapshot", str(Path(self.home) / "missing")]), 2)
+            paste.assert_not_called()
+
+    def test_commands_quote_metacharacters_and_preserve_flags(self):
+        session = entry()
+        session["cwd"] = "/tmp/space 'quote; $(touch owned)"
+        session["cmdline"] = "codex --profile test resume " + S_CODEX + " --model model-x --dangerously-bypass-approvals-and-sandbox"
+        command = gs.restore_cmd(session)
+        cwd_tokens = __import__("shlex").split(command.split(" && ")[0])
+        self.assertEqual(cwd_tokens, ["cd", "--", session["cwd"]])
+        self.assertIn("--profile test", command)
+        self.assertIn("--model model-x", command)
+        self.assertIn("--dangerously-bypass", command)
+        session.update(tool="claude", profile="quoted", cmdline='claude --settings "/tmp/with spaces/settings/quoted.json" --model x -r ' + S_CODEX)
+        self.assertEqual(gs._detect_profile(session["cmdline"]), "quoted")
+        command = gs.restore_cmd(session)
+        self.assertIn("--settings '/tmp/with spaces/settings/quoted.json'", command)
+        self.assertEqual(command.count(S_CODEX), 1)
+
+    def test_applescript_escapes_quotes_and_backslashes(self):
+        with mock.patch.object(gs.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)) as run:
+            self.assertTrue(gs._paste_tab('cd "a\\b"'))
+        script = run.call_args.args[0][-1]
+        self.assertIn('a\\\\b', script)
+        self.assertIn('\\"', script)
+
+    def test_index_selects_current_physical_rollout_over_older_file(self):
+        old = make_codex_file(self.home, S_CODEX, [{"type": "session_meta", "payload": {"id": S_CODEX}}, {"timestamp": iso(72)}])
+        new = make_codex_file(self.home, S_CODEX + "_" + S_HEALTHY, [{"type": "session_meta", "payload": {"id": S_CODEX, "source": "vscode", "originator": "codex-tui"}}, {"timestamp": iso(1)}])
+        make_index(self.home, [(S_CODEX, new)])
+        self.assertEqual(gs.codex_liveness(S_CODEX), (iso(1), "ok"))
+        self.assertNotEqual(str(gs._codex_file(S_CODEX)), old)
+
+    def test_missing_mismatched_and_fused_index_paths_fail_closed(self):
+        path = make_codex_file(self.home, S_CODEX + "_" + S_HEALTHY, [{"type": "session_meta", "payload": {"id": S_DEAD}}, {"timestamp": iso(1)}])
+        db = make_index(self.home, [(S_CODEX, path)])
+        self.assertEqual(gs.codex_liveness(S_CODEX)[1], "identity-unavailable")
+        Path(path).unlink()
+        self.assertEqual(gs.codex_liveness(S_CODEX)[1], "identity-unavailable")
+        Path(path).write_text(json.dumps({"type": "session_meta", "payload": {"id": S_CODEX}}) + "\n" + json.dumps({"type": "session_meta", "payload": {"id": S_DEAD}}) + "\n")
+        self.assertEqual(gs.codex_liveness(S_CODEX)[1], "identity-unavailable")
+
+    def test_reconstruct_no_snapshot_filters_terminal_identity_and_bounds(self):
+        terminal = make_codex_file(self.home, S_CODEX, [{"type": "session_meta", "payload": {"id": S_CODEX, "source": "vscode", "originator": "codex-tui"}}, {"timestamp": iso(1)}])
+        other = make_codex_file(self.home, S_HEALTHY, [{"type": "session_meta", "payload": {"id": S_HEALTHY, "source": "vscode", "originator": "desktop"}}, {"timestamp": iso(1)}])
+        make_index(self.home, [(S_CODEX, terminal), (S_HEALTHY, other)])
+        output = io.StringIO()
+        with redirect_stdout(output):
+            self.assertEqual(gs.main(["reconstruct", "--dry-run", "--recent-hours", "72", "--limit", "2"]), 0)
+        result = json.loads(output.getvalue())
+        self.assertEqual(len(result["sessions"]), 1)
+        self.assertEqual(result["sessions"][0]["sid"], S_CODEX)
+        self.assertEqual(result["sessions"][0]["membership"], "indexed-terminal-candidate")
+        self.assertEqual(result["discovery"]["indexed_rows"], 2)
+        self.assertIn("Claude discovery unknown", result["coverage"])
+        self.assertFalse(Path(gs.SNAP_DIR, "latest.json").exists())
+
+    def test_reconstruct_past_membership_preserves_profile_and_latest(self):
+        candidate = make_codex_file(self.home, S_CODEX, [{"type": "session_meta", "payload": {"id": S_CODEX, "source": "cli"}}, {"timestamp": iso(1)}])
+        make_index(self.home, [(S_CODEX, candidate)])
+        saved = entry(S_HEALTHY)
+        saved.update(tool="claude", profile="research", cmdline="claude --settings /tmp/settings/research.json --model x --dangerously-skip-permissions")
+        Path(gs.SNAP_DIR).mkdir(parents=True)
+        latest = Path(gs.SNAP_DIR, "latest.json")
+        latest.write_text(Path(self.snapshot([saved])).read_text())
+        before = latest.read_bytes()
+        output = Path(self.home, "recovered.json")
+        self.assertEqual(gs.main(["reconstruct", "--out", str(output)]), 0)
+        result = json.loads(output.read_text())
+        self.assertEqual(len(result["sessions"]), 2)
+        self.assertEqual(result["sessions"][0]["membership"], "past-snapshot")
+        self.assertEqual(result["sessions"][0]["cmdline"], saved["cmdline"])
+        self.assertEqual(latest.read_bytes(), before)
+        self.assertEqual(gs.main(["reconstruct", "--out", str(latest)]), 2)
+        self.assertEqual(latest.read_bytes(), before)
+        self.assertEqual(gs.main(["reconstruct", "--out", str(output)]), 2)
+
+    def test_no_index_or_missing_reader_no_raw_scan(self):
+        make_codex_file(self.home, S_CODEX, [{"type": "session_meta", "payload": {"id": S_CODEX}}])
+        self.assertEqual(gs.main(["reconstruct", "--dry-run"]), 2)
+        self.assertEqual(gs.main(["reconstruct", "--dry-run", "--history-reader", str(Path(self.home, "absent"))]), 2)
+
+    def test_check_reports_current_tty(self):
+        saved = entry()
+        live = dict(saved, tty="ttys099")
+        output = io.StringIO()
+        with mock.patch.object(gs, "list_sessions", return_value=[live]), redirect_stdout(output):
+            self.assertEqual(gs.cmd_check(argparse.Namespace(snapshot=self.snapshot([saved]), strict=True)), 0)
+        self.assertIn("PRESENT ttys099", output.getvalue())
+        self.assertNotIn("ttys001", output.getvalue())
+
+    def test_paste_timeout_returns_failure_for_reconciliation(self):
+        with mock.patch.object(gs.subprocess, "run", side_effect=subprocess.TimeoutExpired("osascript", 15)):
+            self.assertFalse(gs._paste_tab("echo synthetic"))
+
+    def test_failed_live_inventory_cannot_open_duplicates(self):
+        failure = subprocess.CompletedProcess([], 1, stdout="", stderr="synthetic ps error")
+        with mock.patch.object(gs.subprocess, "run", return_value=failure), mock.patch.object(gs, "_paste_tab") as paste:
+            self.assertEqual(gs.main(["restore", "--snapshot", self.snapshot([entry()]), "--all"]), 2)
+            paste.assert_not_called()
+
+    def test_reconstruct_refuses_bad_selected_file_despite_intact_old_rollout(self):
+        make_codex_file(self.home, S_CODEX, [
+            {"type": "session_meta", "payload": {"id": S_CODEX, "source": "cli"}},
+            {"timestamp": iso(72)}])
+        selected = make_codex_file(self.home, S_CODEX + "_" + S_HEALTHY, [
+            {"type": "session_meta", "payload": {"id": S_DEAD, "source": "cli"}},
+            {"timestamp": iso(1)}])
+        make_index(self.home, [(S_CODEX, selected)])
+        saved = self.snapshot([entry(S_PROSE)])
+        for state in ("mismatched", "missing"):
+            with self.subTest(selected_state=state):
+                if state == "missing":
+                    Path(selected).unlink()
+                self.assertEqual(gs.codex_liveness(S_CODEX), (None, "identity-unavailable"))
+                output = io.StringIO()
+                with redirect_stdout(output):
+                    self.assertEqual(gs.main(["reconstruct", "--snapshot", saved, "--dry-run"]), 1)
+                result = json.loads(output.getvalue())
+                self.assertEqual([row["sid"] for row in result["sessions"]], [S_PROSE])
+                self.assertEqual(result["discovery"]["rejected"][0]["sid"], S_CODEX)
+
+    def test_reconstruct_uses_healthy_selected_file_with_intact_old_rollout(self):
+        make_codex_file(self.home, S_CODEX, [
+            {"type": "session_meta", "payload": {"id": S_CODEX, "source": "cli"}},
+            {"timestamp": iso(72)}])
+        selected = make_codex_file(self.home, S_CODEX + "_" + S_HEALTHY, [
+            {"type": "session_meta", "payload": {"id": S_CODEX, "source": "cli"}},
+            {"timestamp": iso(1)}])
+        make_index(self.home, [(S_CODEX, selected)])
+        output = io.StringIO()
+        with redirect_stdout(output):
+            self.assertEqual(gs.main(["reconstruct", "--dry-run"]), 0)
+        result = json.loads(output.getvalue())
+        self.assertEqual(len(result["sessions"]), 1)
+        self.assertEqual(result["sessions"][0]["sid"], S_CODEX)
+        self.assertEqual(result["sessions"][0]["last_interaction"], iso(1))
+        self.assertEqual(result["discovery"]["rejected"], [])
+
+    def test_rejected_candidate_nonzero_and_not_in_manifest(self):
+        path = make_codex_file(self.home, S_CODEX + "_" + S_HEALTHY, [{"type": "session_meta", "payload": {"id": S_DEAD, "source": "cli"}}])
+        make_index(self.home, [(S_CODEX, path)])
+        saved = self.snapshot([entry(S_PROSE)])
+        output = io.StringIO()
+        with redirect_stdout(output):
+            self.assertEqual(gs.main(["reconstruct", "--snapshot", saved, "--dry-run"]), 1)
+        result = json.loads(output.getvalue())
+        self.assertEqual(len(result["sessions"]), 1)
+        self.assertEqual(result["discovery"]["rejected"][0]["sid"], S_CODEX)
 
 
 if __name__ == "__main__":
