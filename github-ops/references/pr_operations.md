@@ -75,9 +75,10 @@ commit. Squash/rebase can change both commit identity and message. Missing reads
 mismatches leave publication unverified. These checks are executed by the acting agent;
 the source scanner alone does not enforce coverage of hosted text.
 
-A correction to current files or PR text does not remove text from earlier commits.
-Use `github-sensitive-data-cleanup` for an already-published history finding only within
-an explicitly authorized rewrite scope, including its preservation and recovery checks.
+A correction to current files or PR text does not remove earlier Git objects or PR body
+revisions. For a body revision, follow [PR body edit-history cleanup](#pr-body-edit-history-cleanup).
+Use `github-sensitive-data-cleanup` for the finding's wider exposure scope and any separately
+authorized Git rewrite; deleting a PR revision does not authorize rewriting Git refs.
 
 ---
 
@@ -139,6 +140,71 @@ gh pr edit 123 --add-label "bug,priority-high"
 # Remove labels
 gh pr edit 123 --remove-label "wip"
 ```
+
+### PR body edit-history cleanup
+
+Use this when a named PR's current body has been corrected but an earlier body revision
+still exposes sensitive content. The acting agent owns the object selection and readback;
+source scans and the checked `gh` wrapper do not perform or enforce this UI deletion.
+
+1. **Freeze the exact revisions and retained content.** Bind host, repository and PR number.
+   Read the current title/body and body edit history, including revision IDs, deletion status
+   and content. Select by ID plus content, never by list position or timestamp alone. Save
+   the original evidence privately outside the distributed repository; preserve the current
+   title/body and every non-target revision for comparison. Correct remaining sensitive
+   current text through the authorized ordinary-edit workflow before freezing that baseline.
+
+   This read-only Bash example queries one PR. Replace `OWNER`, `REPO`, the number and the
+   private output path with the bound task values:
+
+   ```bash
+   gh api --hostname github.com graphql -f owner=OWNER -f repo=REPO -F number=123 \
+     -f query='query($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
+       repository(owner: $owner, name: $repo) {
+         pullRequest(number: $number) {
+           id title body
+           userContentEdits(first: 100, after: $cursor) {
+             pageInfo { hasNextPage endCursor }
+             nodes { id deletedAt diff }
+           }
+         }
+       }
+     }' > '<private-evidence-file>'
+   ```
+
+   If `hasNextPage` is true, repeat with `-f cursor='<endCursor>'` and a distinct evidence
+   file until the named history is complete. A failed query, missing PR or unsupported field
+   leaves API coverage unknown; inspect the actual history UI instead of inferring no history.
+
+2. **Prepare the irreversible-action preview before confirmation.** Show the exact revision
+   IDs, what their content exposes, what stays, and the recovery limit. A private text backup
+   preserves the words and metadata, but cannot restore the deleted GitHub revision. Obtain
+   authorization for that exact set and consequence; reuse an existing matching approval.
+   Do not infer approval to delete the PR, other revisions, branches or Git history.
+
+3. **Recheck and delete once through the supported interface.** Verify the actual browser
+   account under the operating contract; CLI identity does not bind a browser. Reread each
+   target's ID/content/status immediately before acting. If already deleted, skip it; if the
+   content, target or retained baseline changed, reconcile before deleting. Follow GitHub's
+   documented UI: **edited → selected revision → Options → Delete revision from history → OK**.
+   Match the selected revision to the saved ID, using the UI's revision link/form target when
+   available. If it cannot be mapped reliably, stop rather than choosing by order. Do not
+   construct a deletion API from read-only fields; use an API only after verifying its current
+   supported request contract. After a timeout, read the target before any retry.
+
+4. **Verify removal and preservation independently.** Fetch fresh history and the current
+   title/body, then compare with the private baseline. Require positive evidence that each
+   approved revision's content is unavailable and all non-target revisions are unchanged.
+   A deleted node can return nonempty `diff: "deleted"` with a populated `deletedAt`; do not
+   require an empty diff or accept a missing/error response as proof. Check the refreshed UI's
+   deleted marker when API evidence is unavailable or ambiguous. Changed retained content or
+   incomplete history leaves the result partial, not complete. Report this revision-content
+   result separately from old Git objects, caches and forks.
+
+GitHub retains who edited and when after revision-content deletion. See the
+[official edit-history procedure](https://docs.github.com/en/communities/moderating-comments-and-conversations/tracking-changes-in-a-comment)
+for permissions and the current interface. This workflow covers PR body revisions; do not
+assume the same query or object identifiers cover issue, review or commit comments.
 
 ### Merging PRs
 
