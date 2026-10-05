@@ -113,9 +113,11 @@ workspace copy of [the evidence template](../assets/reader-pilot-evidence-templa
 from retained observations: observer identity/method/time, separate observation
 artifact, source and recipient capture bindings, exact navigation and citation
 labels/destinations/landing text, whole-figure labels/relations/caption, and the
-frozen reader state. Bind raw source captures with `source_role: "raw"` and
-recipient captures with `source_role: "prepared"`. Copy manifest values for
-source/note/settings hashes; calculate `assets_sha256` with
+frozen reader state. Set each source capture's `source_role` to the HTML it shows:
+`"raw"` binds `source_sha256` to `manifest["provenance"][0]["raw_source"]["sha256"]`;
+`"prepared"` binds it to `manifest["inputs"][manifest["pages"][0]["source"]]`.
+Recipient captures must use `source_role: "prepared"` with that prepared-source
+hash. Copy manifest values for note/settings hashes; calculate `assets_sha256` with
 `reader_pilot_gate.digest_object(manifest["pilot"]["assets"])`.
 
 Require exit 0 and the nonzero observation counts from `check` before `run`.

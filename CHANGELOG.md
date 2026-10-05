@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **doc-to-markdown** (`daymade-docs` v1.23.0 → v1.23.1): Correct source-capture role instructions against the existing reader gate; retain actual-reader evidence and reproducible-pilot requirements.
+- **frontend-visual-qa** (v1.18.0 → v1.18.1): Route automated batch execution to the installed conversion owner without duplicating its recipe or evidence schema; retain manual visual checks.
+- **skill-creator** (`daymade-skill` v1.61.0 → v1.61.1): Remove a derived command count from the fixed-entry instructions while retaining the named owner interfaces.
+
 ### Added
 
 - **doc-to-markdown** (`daymade-docs` v1.22.0 → v1.23.0): Add a static HTML batch entry that freezes a reproducible pilot, source/assets/recipe/reader identities and retained navigation, citation and whole-figure observations. Reject missing or stale evidence before expansion; keep existing single-page and Office routes. The gate verifies evidence completeness and current bytes, while reader behavior and legibility remain observer claims.
