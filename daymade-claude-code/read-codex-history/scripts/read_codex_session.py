@@ -519,8 +519,14 @@ def validate_selected_rollout_identity(
             "selected rollout identity mismatch: requested "
             f"{expected_session_id!r}, session_meta.id={observed_session_id!r}"
         )
-    if meta.get("session_id") is not None and meta["session_id"] != expected_session_id:
-        raise LineageResolutionError("session_meta.session_id identity mismatch")
+    # SessionMeta.session_id identifies the root/subagent family. The concrete
+    # thread selected by the filename and native index is SessionMeta.id.
+    # Source: openai/codex codex-rs/thread-store/src/types.rs, ThreadCreateParams.
+    if "session_id" in meta and (
+        not isinstance(meta["session_id"], str)
+        or not re.fullmatch(_UUID, meta["session_id"])
+    ):
+        raise LineageResolutionError("session_meta.session_id is not a valid family identity")
     source_path = data.get("source_path")
     if meta.get("history_mode") == "paginated" and source_path:
         ids = _rollout_ids(Path(source_path))
