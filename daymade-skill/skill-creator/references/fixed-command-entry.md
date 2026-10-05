@@ -33,7 +33,7 @@ input copies. Use `source_contract check-path` before source edits and
 `source_contract audit` for source/install delivery checks as specified in
 SKILL.md. The entry does not select, prepare or run an operation on its own.
 
-Execute only the four named tools. The entry resolves its own file, including a
+Execute only the named tools. The entry resolves its own file, including a
 symlink, to locate the owner root and starts exactly one child:
 `uv run --frozen --project <owner-root> python -m scripts.<selected-tool>`.
 Pass the remaining arguments unchanged; retain the child's stdout, stderr and
