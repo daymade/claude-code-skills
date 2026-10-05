@@ -66,6 +66,70 @@ record an explicit old→new mapping and validate the new target/anchor. A check
 reporting “zero broken links” can pass after every link was deleted; it cannot
 replace this source-to-output comparison.
 
+## Gate a batch through the existing recipe
+
+Use `scripts/batch_html.py` on Linux/macOS for ordered local-page conversion.
+Keep the raw sources unchanged. Prepare a dedicated input folder containing the
+selected HTML and its complete local dependencies. Resolve `<base>`, page links,
+reader fragments and asset paths in these prepared inputs before freezing them.
+Keep each source and its planned Markdown output in the same relative parent
+directory. Use the delivered folder's actual asset paths. Dynamic scripts and event
+handlers, `srcset`, remote rendering dependencies and page links still targeting
+HTML are rejected; external HTTP navigation links remain supported.
+
+Record actual reader settings in a JSON file outside the input folder: `reader`,
+`version`, `mode` (`reading`), `theme`, positive `body_width_css_px` and
+`device_scale`, and `capture_context` identifying the observed canvas/window.
+Create a plan with the authorized page order:
+
+```json
+{
+  "input_root": "/absolute/path/ready-html",
+  "reader_settings_path": "/absolute/path/reader-settings.json",
+  "pages": [
+    {"source": "page-1.html", "output": "page-1.md", "selector": "main", "heading_offset": 0},
+    {"source": "page-2.html", "output": "page-2.md", "selector": "main", "heading_offset": 0}
+  ]
+}
+```
+
+For adapted inputs, add ordered `provenance` records, one per page:
+`prepared_source`, retained `raw_source` (`path` and `sha256`), `target_mapping`
+and `asset_mapping` arrays of `{ "from": "original target", "to": "prepared target" }`.
+Declare empty arrays when no remap occurred. Mappings retain provenance; they
+do not execute transformations. Without `provenance`, each selected input is
+also bound as its raw source.
+
+Run from this skill's directory; use new paths whose parents already exist:
+
+```bash
+uv run --no-project python scripts/batch_html.py prepare plan.json --manifest manifest.json --pilot-dir pilot
+uv run --no-project python scripts/reader_pilot_gate.py check manifest.json evidence.json
+uv run --no-project python scripts/batch_html.py run manifest.json evidence.json --output-dir delivered
+```
+
+After `prepare`, open the printed pilot note in the actual reader. Fill a
+workspace copy of [the evidence template](../assets/reader-pilot-evidence-template.json)
+from retained observations: observer identity/method/time, separate observation
+artifact, source and recipient capture bindings, exact navigation and citation
+labels/destinations/landing text, whole-figure labels/relations/caption, and the
+frozen reader state. Bind raw source captures with `source_role: "raw"` and
+recipient captures with `source_role: "prepared"`. Copy manifest values for
+source/note/settings hashes; calculate `assets_sha256` with
+`reader_pilot_gate.digest_object(manifest["pilot"]["assets"])`.
+
+Require exit 0 and the nonzero observation counts from `check` before `run`.
+The gate checks evidence completeness and current bytes, not click or legibility
+truth; the observer still performs the reading-view checks. A hand-edited pilot
+note cannot authorize this recipe: its bytes must reproduce through the existing
+Pandoc owner. Move authorized repairs into prepared HTML/assets and run a new
+pilot instead. Changed inputs, recipe, captures or reader settings require fresh
+evidence. `run` checks before creating/converting batch outputs, exclusively
+writes a new folder, reconciles source hyperlink counts, and reads back final
+note/asset hashes. Retain any failed folder for diagnosis; only a `complete`
+`batch-result.json` with matching output hashes establishes batch completion.
+This route emits ordered page notes; keep the assembly checks below for a book.
+
 ## Assemble a manual or book
 
 Before merging, freeze the authorized page order and chapter/lesson mapping from

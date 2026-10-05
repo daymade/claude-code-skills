@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **doc-to-markdown** (`daymade-docs` v1.22.0 → v1.23.0): Add a static HTML batch entry that freezes a reproducible pilot, source/assets/recipe/reader identities and retained navigation, citation and whole-figure observations. Reject missing or stale evidence before expansion; keep existing single-page and Office routes. The gate verifies evidence completeness and current bytes, while reader behavior and legibility remain observer claims.
+- **frontend-visual-qa** (v1.17.0 → v1.18.0): Connect the actual-reader pilot to the batch evidence template and distinguish raw-source captures from prepared conversion input.
+- **skill-creator** (`daymade-skill` v1.60.2 → v1.61.0): Add a fixed four-command entry that locates its own project from any working directory, rejects blank/unknown arguments before execution and preserves each owner command’s output and exit status.
+
 - **github-ops** (v1.10.1 → v1.11.0): Add exact-object PR body edit-history cleanup with private preservation, scoped irreversible-action approval and independent removal/preservation readback.
 - **github-sensitive-data-cleanup** (v2.0.0 → v2.1.0): Separate current publication text, Git history, PR revisions and cached or third-party copies; route PR revision operations to github-ops and report each surface's verified result and remaining limits.
 
