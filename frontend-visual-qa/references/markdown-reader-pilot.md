@@ -15,7 +15,7 @@ declared source, converter and reader. This adds no reader-certification tool.
 Open [source.html](../assets/markdown-reader-pilot/source.html) through the existing
 authorized browser channel. It is self-contained synthetic HTML/CSS/SVG:
 
-- `#complete-figure` includes three HTML node labels, two HTML edge labels and an
+- `#complete-figure` includes HTML node labels, HTML edge labels and an
   HTML caption; its SVG contains only connectors.
 - `#svg-fragment` shows those connectors without the HTML labels or caption.
   It is a deliberate incomplete extraction, not an alternative successful export.
@@ -55,22 +55,14 @@ the tested conversion/export choices. Changed figure structures, dependencies,
 link forms or reader settings need another representative check. Whole-batch
 source/asset checks differ from visual sampling; sampling is not individual full review.
 
-When using installed doc-to-markdown's automated HTML batch owner, load its HTML
-conversion guide for `batch_html.py` and copy the evidence template linked by that
-guide into the task workspace. Freeze a new
-manifest and reproducible pilot with `prepare`; then collect the observations
-above against that exact note. Fill all three observation categories and retain
-the observer record, observation artifact, source/recipient captures and frozen
-reader settings. Declare whether each source capture shows raw or prepared HTML;
-the recipient capture binds the prepared input, final note and assets.
-
-Run `reader_pilot_gate.py check` before `batch_html.py run`. Missing/blank evidence,
-wrong landing text, changed labels and stale bytes reject expansion. A green
-check certifies the record's completeness/current bytes, not actual clicks or
-legibility. Keep repaired PNG references and block targets in ready-to-convert
-HTML, with raw-source provenance and mappings; a manually patched note does not
-authorize a batch recipe that cannot reproduce it. Keep the manual protocol when
-that recipe boundary does not fit the task, and preserve its separate verification.
+When using installed doc-to-markdown's automated HTML batch owner, load its
+`references/html-conversion.md` for the batch commands, evidence template and
+capture bindings. Perform the observations above against that owner's exact pilot
+note. Its gate checks record completeness and current bytes; it does not observe
+clicks or decide legibility. Put authorized PNG/reference and link-target repairs
+in prepared HTML/assets so the batch recipe reproduces the tested note. A manually
+patched note cannot authorize a recipe that cannot reproduce it. Keep the manual
+protocol and its separate verification when that recipe boundary does not fit.
 
 ## Capture recipe for the synthetic figure
 

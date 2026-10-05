@@ -63,6 +63,13 @@ Use [skill-creator](daymade-skill/skill-creator/SKILL.md) before creating or
 changing a skill. It owns change classification, evidence selection, regression
 review, validation, initialization, and packaging.
 
+For its audit, release, source-contract or materialization commands from another
+working directory, use the [fixed command entry](daymade-skill/skill-creator/references/fixed-command-entry.md).
+
+For saved HTML batches, follow [the conversion owner](daymade-docs/doc-to-markdown/references/html-conversion.md#gate-a-batch-through-the-existing-recipe)
+and its actual-reader pilot before expansion. Keep conversion evidence and reader
+observations separate; this file does not define another batch recipe.
+
 When creating or changing an operational Skill's first-use setup or recovery
 workflow, enter `skill-creator` and load its
 [first-use and recovery contract](daymade-skill/skill-creator/references/first-use-and-resume.md).
@@ -657,7 +664,7 @@ https://docs.claude.com/en/docs/agents-and-tools/agent-skills/best-practices.md
 
 Infrastructure/SRE operating contracts stay in their owning Skills rather than this repository guide:
 `terraform-skill` owns generic Terraform release safety and environment-parity rules; an application's
-project-level health-check Skill owns that application's concrete audit facets. Keep those two layers
+project-level health-check Skill owns that application's concrete audit facets. Keep those layers
 aligned without copying project hostnames, variable lists, or rollout commands into this file.
 
 ## Plugin and Skill Architecture
