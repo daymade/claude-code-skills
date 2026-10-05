@@ -72,8 +72,9 @@ will check this before running destructive operations.
    commit to bypass concurrent work.
 6. **Verify after rewriting.** A clean `git log` is not enough; re-run the
    scanner and do an AI semantic review.
-7. **Public repos with forks need extra care.** Every fork keeps a copy of the
-   old history. Coordinate with fork owners if the leaked data is high-risk.
+7. **Public repos with forks need extra care.** Forks and clones may retain old
+   history. Verify the named exposure and ownership before choosing a route;
+   contact owners only within the authorized recipient/message scope.
 
 ## Workflow
 
@@ -89,6 +90,32 @@ Use an exact repository root. Scan and verification accept ordinary, linked
 worktree and bare roots. Rewrite requires an independent clone: linked roots
 and ordinary or bare repositories with attached worktrees are refused. A bare
 mirror has no working-tree status to check; verify its Git identity instead.
+
+### Step 0.5: Bind each exposed surface
+
+The acting agent records the known finding's exact public locations and the authorized
+remediation scope in private task evidence. Follow the finding, not an unbounded inventory
+of every repository. Keep these surfaces distinct:
+
+| Surface | Deciding evidence and remediation owner |
+|---|---|
+| Current files and hosted publication text | Read the named published files, PR title/body or other affected text. Ordinary corrections close only these current values; use `github-ops` for hosted edits. |
+| Git objects and refs | Bind file blobs, commit messages and the affected branch/tag history to immutable objects. This Skill owns an explicitly authorized rewrite and exact-ref readback. A clean tip does not prove clean ancestry or removal of an old object. |
+| PR body edit history | Inspect revisions of the named PR even when its current body is corrected. Use `github-ops`'s **PR body edit-history cleanup** in its Pull Request Operations reference; it owns exact revision selection, private backup, deletion authorization and preservation readback. |
+| Cached views, PR Git references, forks and clones | Check the known locators and ownership separately. Git rewrite or branch deletion does not establish erasure here; third-party copies and GitHub-controlled references may require a separate route. |
+
+Distinguish an object retained in a private backup from one still publicly obtainable.
+When claiming anonymous access, test the exact locator without authentication and compare
+the returned content with the intended immutable object; an authenticated read, error page
+or redirect alone does not prove anonymous exposure or removal. Include releases, attachments
+or logs only when the finding points to them, and leave uninspected surfaces unverified.
+
+For each named surface, report what was inspected, what the result proves, and what remains
+public or unverified. The bundled Git scanners do not inspect hosted PR revision history or
+prove removal from caches/forks. No finding within a completed scope means stop that audit;
+it does not convert excluded or unknown surfaces into clean ones. Once the approved changes
+are verified, report residuals rather than silently expanding into a rewrite, deletion or
+external message.
 
 ### Step 1: Scan for sensitive data
 
@@ -154,6 +181,10 @@ For each finding, decide:
 - **Remove from history** (for private domains/IPs, PII, or already-rotated
   secrets that still reveal internal context).
 - **Add to `.gitignore` or allowlist** (for false positives only).
+
+Select the route for the observed surface: correct current hosted text or clear approved
+PR body revisions through `github-ops`; use Steps 3–7 only for the separately authorized
+Git rewrite. A PR revision-content approval is not permission to rewrite branches or tags.
 
 **Live secrets must be rotated before history cleanup.** Removing history does
 not invalidate a secret that has already been exposed.
@@ -310,11 +341,13 @@ backup, replacement and optional message-replacement arguments remain supported.
 
 After the push succeeds:
 
-1. Open the repo on GitHub and confirm the sensitive strings are gone from
-   commit history.
-2. Check that open PRs still target valid commits. Rewriting history may break
-   existing PR branches.
-3. Notify any fork owners for high-risk leaks.
+1. Read back the exact published refs and the named content covered by the rewrite.
+   A verified local candidate alone does not prove the hosted objects changed.
+2. Check affected open PRs still target valid commits. Rewriting history may break
+   their branches; do not repair unrelated PRs or discard their work implicitly.
+3. Revisit the exposed surfaces recorded in Step 0.5. Report Git verification separately
+   from PR revision cleanup, cached-object access and third-party copies. Keep unavailable
+   checks unverified, even if the Git scanner is clean.
 
 ## What the Bundled Scripts Do
 
@@ -387,8 +420,12 @@ leaks (live secrets, production credentials), consider:
 2. Asking GitHub Support to remove cached views of the sensitive data.
 3. Notifying fork owners with a brief, factual message.
 
-For lower-risk leaks (internal domain names, placeholder IPs), document the
-rewrite and move on.
+Route Support requests and fork-owner communications through `github-ops`'s authorization
+contract; rewrite approval alone does not authorize them. GitHub Support's acceptance is
+conditional, not a guaranteed purge. See the
+[official removal limits](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository).
+For lower-risk findings, document any retained or unverified exposure and the chosen
+boundary; do not report a rewrite as complete erasure.
 
 ### `git filter-repo` reports "need a fresh clone"
 

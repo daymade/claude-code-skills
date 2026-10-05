@@ -21,7 +21,7 @@ Read only the reference required for the task:
 
 | Task | Reference |
 |---|---|
-| Create, review, merge, close, compare, or converge PRs; retire remote PR branches | [`references/pr_operations.md`](references/pr_operations.md) |
+| Create, review, merge, close, compare, or converge PRs; clear approved PR body revisions; retire remote PR branches | [`references/pr_operations.md`](references/pr_operations.md) |
 | Create, edit, search, transfer, close, or bulk-manage issues | [`references/issue_operations.md`](references/issue_operations.md) |
 | Inspect, clone, create, edit, rename, archive, transfer, change visibility, or delete repositories | [`references/repository_operations.md`](references/repository_operations.md) |
 | Copy repositories accessible to another account while keeping the usual account active; configure private copies and upstream sync | [`references/multi_account_repository_sync.md`](references/multi_account_repository_sync.md) |

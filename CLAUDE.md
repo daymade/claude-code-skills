@@ -375,17 +375,12 @@ use the [identity-source contract](tibo-reset-codex/references/account-usage.md#
 
 **Closing a PR unmerged (declined, or superseded by another PR) → delete its head
 branch in the same action.** `gh pr merge --delete-branch` only covers merged PRs.
-⚠️ Deleting the branch does NOT remove `refs/pull/<N>/head` — GitHub keeps serving
-that ref, so the commits remain publicly fetchable by anyone who fetches it, and the
-branch listing (plus the weekly `stale-branch-watch`, which only sees branch refs)
-loses sight of the residue. Branch deletion closes the *discoverable* surface, which
-is still worth doing at close time. But if the content needs **sanitizing**, branch
-deletion alone is cosmetic — first move the pull ref to a sanitized commit (reopen
-the PR → push the fix → close again; pushes do not move a *closed* PR's ref), then
-delete the branch, and accept that the old SHAs stay addressable from GitHub's object
-cache until GC — a guaranteed purge requires a GitHub support ticket. (2026-08-17: a
-closed-superseded PR's branch carried an unsanitized fixture for 13 days after the
-fix was written; the pull ref had to be moved via the reopen dance before deletion.)
+Use `github-ops`'s [exact-tip branch retirement workflow](github-ops/references/pr_operations.md#converging-parallel-prs-and-retiring-remote-branches).
+For sensitive publication residuals, first enter `github-sensitive-data-cleanup`'s
+[surface selection](github-sensitive-data-cleanup/SKILL.md#step-05-bind-each-exposed-surface);
+approved PR body revision removal follows `github-ops`'s
+[edit-history cleanup](github-ops/references/pr_operations.md#pr-body-edit-history-cleanup).
+Keep detailed procedures and completion limits in those owners.
 
 ### Local `main` Is a Read-Only Mirror
 
