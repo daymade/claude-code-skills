@@ -9,7 +9,7 @@ Verified against ~2,600 real rollouts spanning Codex CLI `0.142.2`–`0.149.0` (
 ~/.codex/                                  # CODEX_HOME (override with $CODEX_HOME)
 ├── sessions/
 │   └── YYYY/MM/DD/
-│       └── rollout-<ISO8601>-<uuid>.jsonl # one file per session; the uuid is the session id
+│       └── rollout-<ISO8601>-<thread-id>[_<rollout-id>].jsonl
 ├── archived_sessions/                     # same shape, archived sessions
 ├── sqlite/  or  ./                        # state_*.sqlite index (schema drifts between versions)
 ├── session_index.jsonl                    # optional id -> thread_name title map
@@ -78,9 +78,11 @@ A fork can have an almost empty local rollout — for example, its only local us
 }
 ```
 
-`end_byte_offset` is the executable snapshot boundary. The extractor reads the parent in the half-open byte range `[0, end_byte_offset)` and requires the offset to land exactly between JSONL records. It then repeats the same process if that parent has its own `history_base`, producing a root-first lineage. `end_ordinal_exclusive` is retained as provenance but is not guessed to be a physical line count; the byte boundary decides what was inherited.
+`end_byte_offset` selects the half-open physical byte range `[0, end_byte_offset)` and must end between complete JSONL records. `end_ordinal_exclusive`, when declared, must agree with that prefix. In paginated history, stored ordinals start at zero in an initial rollout and at the inherited `end_ordinal_exclusive` in a new segment; the leading metadata consumes one ordinal. The reader verifies every stored ordinal and rejects disagreement between byte and ordinal cutoffs.
 
-The current physical parent file is **not** the snapshot: it may have gained later records after the fork. Those bytes are reported and excluded. `forked_from_id` is only a cross-check; if it conflicts with `history_base.thread_id`, the extractor fails. If the parent id exists without `history_base`, no exact snapshot can be proven, so the briefing reports the gap instead of reading the full current parent.
+The parent file may contain later records; the reader excludes all bytes after the inherited cutoff. In Codex 0.160 paginated history, `history_base.thread_id` names an immutable physical rollout, while `session_meta.id` and `forked_from_id` identify logical threads. A revert can keep the logical ID and create a filename with a different `_rollout-id` suffix. The state index selects the current segment; ancestor references resolve by physical rollout ID, and repeated physical IDs fail as cycles. A missing indexed selection among multiple segments is ambiguous. Copies of one physical rollout retain the byte-identical/append-only rule and reject divergence. For older non-paginated history, `forked_from_id` remains a cross-check against the history-base ID. A parent ID without an exact boundary remains a reported gap; complete logical `--tools` export refuses that gap.
+
+Verified format authority: Codex [`rust-v0.160.0` rollout lineage](https://github.com/openai/codex/blob/rust-v0.160.0/codex-rs/thread-store/src/local/rollout_lineage.rs), [current rollout selection](https://github.com/openai/codex/blob/rust-v0.160.0/codex-rs/thread-store/src/local/thread_rollout_resolver.rs), and [stored ordinal state](https://github.com/openai/codex/blob/rust-v0.160.0/codex-rs/rollout/src/ordinal.rs).
 
 This recovery is compaction-aware. It reads raw pre-compaction records still present inside each exact snapshot and ingests every surviving `message` / `replacement_history`; it cannot recreate content absent from both sources or turn an image-only marker back into the original attachment. The briefing renders only the latest compacted context for the selected session and the latest one from each ancestor; when the selected child contains only a continuation cue, inherited latest context auto-expands because otherwise the hidden task can still sit beyond the default character cutoff. Selected and inherited raw history render every retained user and assistant text turn in record order. Neither role is count-capped because the original objective, a correction, or the only proven successful asset can occur in the middle; default mode clips each long turn and `--full` removes character clipping without changing turn selection. Inherited tool/file caps remain deliberate.
 

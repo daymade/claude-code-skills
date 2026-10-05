@@ -40,6 +40,11 @@ MAX_SUMMARY_CHARS = 8000
 MAX_TOOL_CALLS = 20
 MAX_FILES = 40
 MAX_LINEAGE_DEPTH = 16
+MAX_ROLLOUT_BYTES = 1 << 30
+MAX_RECORD_BYTES = 64 << 20
+MAX_HISTORY_POSITION = (1 << 64) - 1
+_UUID = r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}"
+_ROLLOUT_NAME = re.compile(rf"^rollout-\d{{4}}-\d{{2}}-\d{{2}}T\d{{2}}-\d{{2}}-\d{{2}}-({_UUID})(?:_({_UUID}))?\.jsonl$")
 # Two records sharing an id is not, by itself, strong enough evidence that a
 # legacy rollout's inline copy is a genuine embedded parent snapshot rather
 # than coincidence — see recover_legacy_embedded_fork.
@@ -105,16 +110,33 @@ def list_sessions(
 def _rollout_session_id(path: Path) -> Optional[str]:
     """Return the internal session_meta id, or None when it is not provable."""
     try:
-        for record in iter_jsonl(path):
-            if record.get("type") != "session_meta":
-                continue
+        records = _iter_rollout_records(path)
+        try:
+            record = next(records, None)
+            if not record or record.get("type") != "session_meta":
+                raise LineageResolutionError(f"rollout has no leading session_meta: {path}")
             payload = record.get("payload")
             if isinstance(payload, dict) and isinstance(payload.get("id"), str):
                 return payload["id"]
-            return None
+            raise LineageResolutionError(f"rollout has no valid session_meta identity: {path}")
+        finally:
+            records.close()
     except (OSError, UnicodeError, json.JSONDecodeError):
         return None
     return None
+
+
+def _rollout_ids(path: Path) -> Optional[tuple[str, str]]:
+    """Canonical filenames encode logical thread first, immutable rollout last."""
+    match = _ROLLOUT_NAME.fullmatch(path.name)
+    if match is None:
+        return None
+    return match[1].lower(), (match[2] or match[1]).lower()
+
+
+def _rollout_key(path: Path, logical_id: str) -> str:
+    ids = _rollout_ids(path)
+    return ids[1] if ids else logical_id
 
 
 def _resolved_path_key(path: Path) -> str:
@@ -127,6 +149,8 @@ def _resolved_path_key(path: Path) -> str:
 def _rollout_candidates(session_id: str, indexed_path: str = "") -> list[Path]:
     """Return every physical rollout whose first session_meta proves the ID."""
     candidates: list[Path] = []
+    if not re.fullmatch(r"[A-Za-z0-9-]+", session_id):
+        raise LineageResolutionError("unsafe rollout identity for exact filename selection")
     if indexed_path:
         candidates.append(Path(indexed_path))
     for dirname in ("sessions", "archived_sessions"):
@@ -193,7 +217,33 @@ def resolve_rollout(conv) -> Optional[Path]:
     ambiguous evidence and fail closed instead of letting directory traversal order
     decide whether the latest user correction survives.
     """
+    if conv.path:
+        indexed_ids = _rollout_ids(Path(conv.path))
+        if indexed_ids and indexed_ids[0] == conv.session_id.lower() and indexed_ids[1] != indexed_ids[0] and not Path(conv.path).is_file():
+            raise LineageResolutionError(f"selected physical rollout is missing: {conv.path}")
     candidates = _rollout_candidates(conv.session_id, str(conv.path or ""))
+    if not candidates:
+        return None
+    groups: dict[str, list[Path]] = {}
+    for candidate in candidates:
+        ids = _rollout_ids(candidate)
+        if ids and ids[0] != conv.session_id.lower():
+            raise LineageResolutionError(f"rollout filename/thread identity mismatch: {candidate}")
+        groups.setdefault(_rollout_key(candidate, conv.session_id), []).append(candidate)
+    if len(groups) > 1:
+        indexed = next((p for p in candidates if _resolved_path_key(p) ==
+                        _resolved_path_key(Path(conv.path))), None) if conv.path else None
+        if indexed is None:
+            raise LineageResolutionError(
+                f"session {conv.session_id} has ambiguous physical segments; "
+                "a valid state-index selected rollout is required"
+            )
+        candidates = groups[_rollout_key(indexed, conv.session_id)]
+    return _resolve_rollout_copies(candidates, conv.session_id)
+
+
+def _resolve_rollout_copies(candidates: list[Path], identity: str) -> Optional[Path]:
+    """Apply the original divergence gate to copies of ONE immutable rollout."""
     if not candidates:
         return None
     if len(candidates) == 1:
@@ -213,7 +263,7 @@ def resolve_rollout(conv) -> Optional[Path]:
             return candidate
 
     raise LineageResolutionError(
-        f"session {conv.session_id} resolves to divergent physical rollout copies: "
+        f"session {identity} resolves to divergent physical rollout copies: "
         + ", ".join(str(path) for path in candidates)
     )
 
@@ -235,16 +285,9 @@ def _iter_rollout_records(
     can make a partial receipt look complete even though the omitted line could
     contain the original objective or latest correction.
     """
-    if end_byte_offset is None:
-        try:
-            yield from iter_jsonl(path, strict=True)
-        except (OSError, UnicodeError, json.JSONDecodeError) as error:
-            raise LineageResolutionError(
-                f"cannot read complete rollout JSONL {path}: {error}"
-            ) from error
-        return
-
     physical_size = path.stat().st_size
+    if end_byte_offset is None:
+        end_byte_offset = physical_size
     if isinstance(end_byte_offset, bool) or not isinstance(end_byte_offset, int):
         raise LineageResolutionError(
             f"invalid history_base.end_byte_offset for {path}: {end_byte_offset!r}"
@@ -254,12 +297,16 @@ def _iter_rollout_records(
             f"history_base.end_byte_offset {end_byte_offset} is outside {path} "
             f"(physical size {physical_size})"
         )
+    if end_byte_offset > MAX_ROLLOUT_BYTES:
+        raise LineageResolutionError(f"rollout prefix exceeds byte safety limit: {path}")
 
     with path.open("rb") as handle:
         line_number = 0
+        record_number = 0
+        next_ordinal: Optional[int] = None
         while handle.tell() < end_byte_offset:
             start = handle.tell()
-            raw_line = handle.readline()
+            raw_line = handle.readline(MAX_RECORD_BYTES + 1)
             line_number += 1
             if not raw_line:
                 raise LineageResolutionError(
@@ -271,18 +318,36 @@ def _iter_rollout_records(
                     f"history_base.end_byte_offset {end_byte_offset} splits JSONL line "
                     f"{line_number} in {path}"
                 )
+            if len(raw_line) > MAX_RECORD_BYTES:
+                raise LineageResolutionError(f"rollout record exceeds byte safety limit: {path}")
+            if not raw_line.endswith(b"\n"):
+                raise LineageResolutionError(f"partial JSONL line {line_number} in {path}")
             if not raw_line.strip():
                 continue
             try:
                 record = json.loads(raw_line.decode("utf-8"))
             except (UnicodeDecodeError, json.JSONDecodeError) as exc:
                 raise LineageResolutionError(
-                    f"cannot decode inherited JSONL line {line_number} in {path}: {exc}"
+                    f"cannot read complete rollout JSONL line {line_number} in {path}: {exc}"
                 ) from exc
             if not isinstance(record, dict):
                 raise LineageResolutionError(
                     f"inherited JSONL line {line_number} is not an object in {path}"
                 )
+            if record_number == 0:
+                payload = record.get("payload")
+                if record.get("type") == "session_meta" and isinstance(payload, dict) and payload.get("history_mode") == "paginated":
+                    base = _history_base(payload, str(payload.get("id")))
+                    next_ordinal = base["end_ordinal_exclusive"] if base else 0
+            elif next_ordinal is not None and record.get("type") == "session_meta":
+                raise LineageResolutionError(f"duplicate paginated segment metadata in {path}")
+            if next_ordinal is not None:
+                if type(record.get("ordinal")) is not int or record["ordinal"] != next_ordinal:
+                    raise LineageResolutionError(f"paginated record ordinal mismatch at line {line_number} in {path}: expected {next_ordinal}")
+                next_ordinal += 1
+                if next_ordinal > MAX_HISTORY_POSITION:
+                    raise LineageResolutionError(f"paginated record ordinal overflow in {path}")
+            record_number += 1
             yield record
 
         if handle.tell() != end_byte_offset:
@@ -307,22 +372,30 @@ def _history_base(meta: dict[str, Any], session_id: str) -> Optional[dict[str, A
         raise LineageResolutionError(
             f"session {session_id} history_base has no valid thread_id"
         )
-    if isinstance(end_byte_offset, bool) or not isinstance(end_byte_offset, int):
-        raise LineageResolutionError(
-            f"session {session_id} history_base has no valid end_byte_offset"
-        )
-
+    if not re.fullmatch(r"[A-Za-z0-9-]+", parent_id) or (
+            meta.get("history_mode") == "paginated" and not re.fullmatch(_UUID, parent_id)):
+        raise LineageResolutionError(f"session {session_id} history_base has invalid physical rollout identity")
     forked_from_id = meta.get("forked_from_id")
-    if forked_from_id is not None and forked_from_id != parent_id:
+    if (meta.get("history_mode") != "paginated" and
+            forked_from_id is not None and forked_from_id != parent_id):
         raise LineageResolutionError(
             f"session {session_id} declares forked_from_id={forked_from_id!r} but "
             f"history_base.thread_id={parent_id!r}"
         )
+    minimum_offset = 1 if meta.get("history_mode") == "paginated" else 0
+    if type(end_byte_offset) is not int or not minimum_offset <= end_byte_offset <= MAX_HISTORY_POSITION:
+        raise LineageResolutionError(
+            f"session {session_id} history_base has no valid end_byte_offset"
+        )
 
+    ordinal = history_base.get("end_ordinal_exclusive")
+    if (ordinal is not None or meta.get("history_mode") == "paginated") and (
+            type(ordinal) is not int or not 0 < ordinal < MAX_HISTORY_POSITION):
+        raise LineageResolutionError(f"session {session_id} history_base has no valid end_ordinal_exclusive")
     return {
         "thread_id": parent_id,
         "end_byte_offset": end_byte_offset,
-        "end_ordinal_exclusive": history_base.get("end_ordinal_exclusive"),
+        "end_ordinal_exclusive": ordinal,
     }
 
 
@@ -351,7 +424,8 @@ def resolve_inherited_lineage(
     current_data = selected_data
     current_meta = current_data.get("meta") or {}
     current_id = str(current_meta.get("id") or "?")
-    seen = {current_id}
+    seen = {current_data.get("source_path")} if current_data.get("source_path") else set()
+    seen_rollouts = {_rollout_key(Path(current_data["source_path"]), current_id)} if seen else set()
     depth = 0
 
     while True:
@@ -371,15 +445,13 @@ def resolve_inherited_lineage(
             )
 
         parent_id = history_base["thread_id"]
-        if parent_id in seen:
-            raise LineageResolutionError(
-                f"history lineage cycle detected at session {parent_id}"
-            )
         parent_path = resolve_session(parent_id)
         if parent_path is None:
             raise LineageResolutionError(
                 f"parent rollout {parent_id} declared by session {current_id} was not found"
             )
+        if _resolved_path_key(parent_path) in seen or parent_id in seen_rollouts:
+            raise LineageResolutionError(f"history lineage cycle detected at rollout {parent_id}")
 
         if on_parent is not None:
             on_parent(parent_id, parent_path, history_base["end_byte_offset"])
@@ -387,17 +459,27 @@ def resolve_inherited_lineage(
             parent_path, end_byte_offset=history_base["end_byte_offset"]
         )
         try:
-            validate_selected_rollout_identity(parent_data, parent_id)
+            ids = _rollout_ids(parent_path)
+            if ids and ids[1] != parent_id.lower():
+                raise LineageResolutionError("history_base references a different physical rollout")
+            validate_selected_rollout_identity(parent_data, ids[0] if ids else parent_id)
         except LineageResolutionError as exc:
             raise LineageResolutionError(
                 f"parent snapshot identity is invalid for {parent_id}: {exc}: "
                 f"{parent_path}"
             ) from exc
         parent_meta = parent_data.get("meta") or {}
+        parent_base = _history_base(parent_meta, str(parent_meta.get("id")))
+        ordinal_start = (parent_base["end_ordinal_exclusive"] if parent_base and
+                         parent_meta.get("history_mode") == "paginated" else 0)
+        ordinal = history_base["end_ordinal_exclusive"]
+        if ordinal is not None and ordinal != ordinal_start + parent_data["total_lines"]:
+            raise LineageResolutionError(f"history_base ordinal/byte boundary mismatch for {parent_path}")
 
         lineage_nearest_first.append(
             {
-                "session_id": parent_id,
+                "session_id": parent_meta["id"],
+                "rollout_id": parent_id,
                 "inherited_by": current_id,
                 "path": parent_path,
                 "end_byte_offset": history_base["end_byte_offset"],
@@ -407,7 +489,8 @@ def resolve_inherited_lineage(
         )
         if on_verified_parent is not None:
             on_verified_parent(lineage_nearest_first[-1])
-        seen.add(parent_id)
+        seen.add(_resolved_path_key(parent_path))
+        seen_rollouts.add(parent_id)
         depth += 1
         current_data = parent_data
         current_meta = parent_meta
@@ -436,6 +519,13 @@ def validate_selected_rollout_identity(
             "selected rollout identity mismatch: requested "
             f"{expected_session_id!r}, session_meta.id={observed_session_id!r}"
         )
+    if meta.get("session_id") is not None and meta["session_id"] != expected_session_id:
+        raise LineageResolutionError("session_meta.session_id identity mismatch")
+    source_path = data.get("source_path")
+    if meta.get("history_mode") == "paginated" and source_path:
+        ids = _rollout_ids(Path(source_path))
+        if ids is None or ids[0] != expected_session_id.lower():
+            raise LineageResolutionError("paginated rollout requires a canonical matching filename")
 
 
 def _second_rollout_record(path: Path) -> Optional[dict[str, Any]]:
@@ -847,6 +937,8 @@ def parse_codex_rollout(
     """
     physical_file_size = path.stat().st_size
     data: dict[str, Any] = {
+        "source_path": _resolved_path_key(path),
+        "skip_record_index_range": skip_record_index_range,
         # Keep file_size as the physical on-disk size for backward-compatible
         # selected-session reporting. parsed_bytes names the exact prefix used
         # for an inherited snapshot and equals file_size for a normal parse.
@@ -1677,6 +1769,70 @@ def extract_record_evidence(
     }
 
 
+def extract_logical_record_evidence(
+    path: Path, session_id: str, data: dict[str, Any], lineage: list[dict[str, Any]],
+    *, contains: Optional[str] = None,
+) -> dict[str, Any]:
+    """Export original tool records root-first, retaining physical coordinates.
+
+    Calls and returns can straddle a segment boundary. Pair against the complete
+    retained stream before applying the literal filter, with source coordinates
+    attached to both sides. No inferred output, clipping or record deduplication.
+    """
+    sources = [{"path": str(edge["path"]), "session_id": edge["session_id"],
+                "rollout_id": edge.get("rollout_id", edge["session_id"]),
+                "end_byte_offset": edge["end_byte_offset"],
+                "end_ordinal_exclusive": edge.get("end_ordinal_exclusive"),
+                "records_examined": edge["data"]["total_lines"]}
+               for edge in lineage]
+    sources.append({"path": str(path), "session_id": session_id,
+                    "rollout_id": _rollout_key(path, session_id),
+                    "end_byte_offset": data["parsed_bytes"],
+                    "end_ordinal_exclusive": None,
+                    "skip_record_index_range": data.get("skip_record_index_range"),
+                    "records_examined": data["total_lines"]})
+    calls: dict[str, dict[str, Any]] = {}
+    matches: list[dict[str, Any]] = []
+    total = 0
+    retained = 0
+    for source in sources:
+        for ordinal, record in enumerate(_iter_rollout_records(
+                Path(source["path"]), source["end_byte_offset"]), 1):
+            total += 1
+            skip = source.get("skip_record_index_range")
+            if skip and skip[0] <= ordinal - 1 < skip[1]:
+                continue
+            retained += 1
+            payload = record.get("payload")
+            payload = payload if isinstance(payload, dict) else {}
+            kind = payload.get("type")
+            if record.get("type") != "response_item" or kind not in {
+                    "function_call", "custom_tool_call", "function_call_output",
+                    "custom_tool_call_output"}:
+                continue
+            call_id = payload.get("call_id")
+            locator = {"path": source["path"], "session_id": source["session_id"],
+                       "rollout_id": source["rollout_id"], "record": ordinal,
+                       "logical_record": retained}
+            if kind in {"function_call", "custom_tool_call"} and call_id:
+                calls[call_id] = {**locator, "name": payload.get("name"), "call_id": call_id}
+            if contains is not None and not _contains_original_string(record, contains):
+                continue
+            matches.append({**locator, "source_kind": "tool_record",
+                            "role": payload.get("role"),
+                            "human_authorship": "not_established_by_role",
+                            "paired_call": calls.get(call_id), "original": record,
+                            "truncated": False})
+    return {"session_id": session_id, "path": str(path), "identity": "verified",
+            "scope": "logical_history", "sources": sources,
+            "records_examined": total, "matched_records": len(matches),
+            "records_retained": retained,
+            "requested_records": [], "contains": contains, "tools_only": True,
+            "truncated": False, "coverage": "All original tool records in the selected "
+            "rollout and exact declared ancestor prefixes, in lineage order. Separate "
+            "subagent threads and attachment bytes are not expanded.", "results": matches}
+
+
 def render_record_evidence(evidence: dict[str, Any]) -> str:
     sections = ["# Codex Original Record Evidence", json.dumps(
         {key: value for key, value in evidence.items() if key != "results"},
@@ -1737,6 +1893,21 @@ def _make_exact_rollout_resolver(
 
     def resolve(session_id: str) -> Optional[Path]:
         nonlocal indexed
+        # history_base.thread_id names an immutable ROLLOUT, which may no
+        # longer have a SQLite thread row after revert. Preselect by physical
+        # suffix before reading metadata; never substitute the current thread.
+        physical: list[Path] = []
+        for dirname in ("sessions", "archived_sessions"):
+            root = CODEX_HOME / dirname
+            if root.is_dir():
+                physical.extend(p for p in root.rglob(f"rollout-*{session_id}.jsonl")
+                                if _rollout_ids(p) and _rollout_ids(p)[1] == session_id.lower())
+        if physical:
+            unique = {_resolved_path_key(p): p for p in physical}
+            for path in unique.values():
+                if _rollout_session_id(path) != _rollout_ids(path)[0]:
+                    raise LineageResolutionError(f"physical rollout identity mismatch: {path}")
+            return _resolve_rollout_copies(list(unique.values()), session_id)
         if indexed is None:
             convs, _ = list_sessions(
                 project_path, all_projects=True, explicit_id=True
@@ -1746,7 +1917,10 @@ def _make_exact_rollout_resolver(
         conv = indexed.get(session_id)
         if conv is None:
             conv = SimpleNamespace(path="", session_id=session_id)
-        return resolve_rollout(conv)
+        path = resolve_rollout(conv)
+        if path is not None and _rollout_ids(path) and _rollout_ids(path)[1] != session_id.lower():
+            return None
+        return path
 
     return resolve
 
@@ -1900,18 +2074,6 @@ def main() -> int:
         return 1
 
     meta = data.get("meta") or {}
-    if evidence_mode:
-        try:
-            evidence = extract_record_evidence(
-                rollout, conv.session_id, records=args.record, tools=args.tools,
-                contains=args.contains, end_byte_offset=data["parsed_bytes"],
-            )
-        except LineageResolutionError as exc:
-            print(f"Error: cannot read original record evidence: {exc}", file=sys.stderr)
-            return 1
-        print(json.dumps(evidence, ensure_ascii=False, indent=2)
-              if args.format == "json" else render_record_evidence(evidence))
-        return 0
     lineage: list = []
     lineage_warnings: list[str] = []
     try:
@@ -1928,6 +2090,24 @@ def main() -> int:
         return 1
     data["lineage"] = lineage
     data["lineage_warnings"] = lineage_warnings
+    if evidence_mode:
+        try:
+            if args.tools and not args.record:
+                if lineage_warnings:
+                    raise LineageResolutionError("complete logical tool history cannot be proven: " +
+                                                 "; ".join(lineage_warnings))
+                evidence = extract_logical_record_evidence(
+                    rollout, conv.session_id, data, lineage, contains=args.contains)
+            else:
+                evidence = extract_record_evidence(
+                    rollout, conv.session_id, records=args.record, tools=args.tools,
+                    contains=args.contains, end_byte_offset=data["parsed_bytes"])
+        except LineageResolutionError as exc:
+            print(f"Error: cannot read original record evidence: {exc}", file=sys.stderr)
+            return 1
+        print(json.dumps(evidence, ensure_ascii=False, indent=2)
+              if args.format == "json" else render_record_evidence(evidence))
+        return 0
     print(build_briefing(conv, data, project_path, full=args.full))
     return 0
 
