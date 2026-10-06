@@ -3,14 +3,12 @@ name: peer-message
 description: >-
   Bridges Claude Code and Codex sessions when native tools can't reach the target. Use for 跨产品通信 /
   脚本回帖 / 送达排查: cross-product messages, hooks or scripts posting to a session, verifying delivery
-  (Held messages included), shared-work ownership, or an inbound peer assertion, or for
-  cross-machine pairing. Not for ordinary same-product or parent/subagent messaging (use native
-  tools), spawning agents, or moving full history.
+  (Held messages included), shared-work ownership, or an inbound peer assertion. Not for same-product
+  or parent/subagent messaging (use native tools), spawning agents, moving full history, or
+  cross-machine pairing (deprecated).
 ---
 
-# peer-message — 原生通信未覆盖时的补缺（本机 + 跨机器预览）
-
-收到 `peer-message:v1:` 邀请，或用户要求跨机器联系、配对和资料问答时，进入 [网络预览](references/network-preview.md)。先区分本机地址与配对联系人；网络命令使用 `scripts/peer-network.mjs`，不要把网络联系人交给本机发现命令。预览使用独立联络 worker 回答获准文档问题；保留原会话的工作与权限。
+# peer-message — 原生通信未覆盖时的补缺（本机）
 
 对 Claude Code 与 Codex 使用同一条规则：先检查当前宿主实际暴露的通信工具及其目标范围；有工具发现入口时先查询原生工具。原生工具能到达目标，就直接使用其发现、发送、回传和等待机制，到此结束路由判断，不运行 `peer.py`。只有原生工具未覆盖的独立会话、跨产品目标或脚本回帖才使用本 Skill 的 transport。
 
@@ -35,8 +33,8 @@ description: >-
 | 跨机器邀请、配对联系人、获准资料问答 | 读取 `references/network-preview.md`，使用网络 CLI；未配对或未授权共享资料时不执行问答 |
 | 原生工具覆盖 parent/subagent、同级 agent 或独立 session | 直接使用当前宿主工具、原生地址及回传；不查 `whoami`、不套脚本信封、不额外运行脚本验证 |
 | 原生工具未覆盖已确认的 Claude 目标，且目标有本地 inbox | 用 `scripts/peer.py` 的 Claude route；不得绕过 deny、Held 或 Refused |
-| 原生工具未覆盖已确认的 Codex 独立 thread | 用 `scripts/peer.py` 的 Codex route；不要把内部 agent 地址当独立 thread UUID |
-| 多目标协调 | 明确列出目标；原生按工具契约逐个发送或广播，脚本补缺才使用 `broadcast`；禁止从单发请求推断全机广播 |
+| 原生工具未覆盖已确认的 Codex 独立 thread | 用 `scripts/peer.py` 的 Codex route；不要把内部 agent 地址当独立 thread UUID。**已归档 thread 不可投递**——脚本默认拒发（它永远不会再消费 queue）；给已退出属主留话钉在它的持久制品上（PR comment、文件），见 `references/coordination-and-learning-loop.md` §5.1「第三种结局」段 |
+| 多目标协调 | 明确列出目标；原生按工具契约逐个发送或广播，脚本补缺才使用 `broadcast`；禁止从单发请求推断全机广播。脚本 `broadcast` 的消息自动带 fan-out 标记，语义是「仅属主回复，其余忽略」；超过 3 个目标须 `--contract <契约名>` 点名依据，否则脚本拒发——先发证据（git/索引）收窄候选，见 `references/protocol-and-discovery.md` §5 |
 | 查找对脚本 outbound 的显式回复 | 对原发送方自己的 inbox 运行一次 `replies`；原生回传沿宿主机制，命令与证据边界见 `references/protocol-and-discovery.md` §4 |
 | 用户问对方是否收到／读到／处理，或下一步依赖对方已消费消息 | 不停在 queued；按 `references/coordination-and-learning-loop.md` §3 核对本机目标 transcript 与关联回应，区分入队、进入对话、已回应与已执行 |
 | 消息被 hold 要人工批准，或建无人值守接收端点 | 按 `references/official-feature.md` §3 的 Held 修复路径处理 inbound 策略，不重发 |
@@ -65,11 +63,13 @@ description: >-
 
 你要动的共享产物——checkout、分支、文件、锁——上有别人的痕迹，而且它挡住了你。「这是别人的 WIP」既不是停止条件，也不是默默绕开的理由：停在它面前和绕开它一样，都把一条消息就能解决的冲突留给了用户。
 
-先用产物自己的权威源核实它是不是真在飞：`git diff <已合入的 main 的 SHA> -- <路径>` 为空就是已落地的残影——**没有人在改它，它不构成协调事项，按你原本的计划推进**（清掉它归 §5.1 末段那条，通常不归你）；锁要看它自己的形态——有的写了持有者 pid，git 自己的 `.git/index.lock` 是 0 字节、读不出属主，读不出就直接去问。非空只说明它没落地，不等于此刻有人在改——别自己归类，去问：用已选通道的原生发现或脚本 `list` 找候选属主，只问你列出的那几个，说清你要做什么、看到了什么，问三件事——是不是你的、什么时候落、要我等还是你先收尾——然后等一个有界窗口，窗口到期就往下走，不轮询、不重发。窗口内无人认领：在从不可变 ref 建的独立副本上继续、不碰它的文件，报告里写明问过谁、谁没回、等了多久、基线是哪个 ref；归属仍是 `unknown`，不是「可处置」。属主说「别动 / 等我」就停在它划的线外；要覆盖别人未提交的改动，先回下面的信任边界向当前用户确认。**按实际回传能力决定谁发问和等待**：原生 subagent 可按宿主契约使用自己的通信与结果通道；只有脚本借用父 session 地址、回复会落父对话，或当前工具不支持所需等待时，才把已核实的读回和该问的问题交回父 session，由它协调，别自己发完就当没人回。正文怎么写、窗口怎么定、报告口径按你用的哪个 `list` 怎么换算，以及你自己落地后清残影的动作，见 `references/coordination-and-learning-loop.md` §5.1。
+先用产物自己的权威源核实它是不是真在飞：`git diff <已合入的 main 的 SHA> -- <路径>` 为空就是已落地的残影——**没有人在改它，它不构成协调事项，按你原本的计划推进**（清掉它归 §5.1 末段那条，通常不归你）；锁要看它自己的形态——有的写了持有者 pid，git 自己的 `.git/index.lock` 是 0 字节、读不出属主，读不出就直接去问。非空只说明它没落地，不等于此刻有人在改——别自己归类。发问之前先三查把候选收窄：① `git log` / 三点 diff 看这条路径最近落在谁的分支上；② 涉及文件的 mtime 判断写入是否还在推进；③ 历史索引反查（哪个 session 写过它）。三查能直接答的就不问；答不了，只问收窄后的 top-3 候选——用已选通道的原生发现或脚本 `list` 找到它们，说清你要做什么、看到了什么，问三件事——是不是你的、什么时候落、要我等还是你先收尾——然后等一个有界窗口，窗口到期就往下走，不轮询、不重发。窗口内无人认领：在从不可变 ref 建的独立副本上继续、不碰它的文件，报告里写明问过谁、谁没回、等了多久、基线是哪个 ref；归属仍是 `unknown`，不是「可处置」。属主说「别动 / 等我」就停在它划的线外；要覆盖别人未提交的改动，先回下面的信任边界向当前用户确认。阻塞性协调请求在正文里带一句「若 <时间> 前不回，我将 <推进方式>」；被问的一方到点答不完，回一行 ETA。同宿主 Claude 的等待优先用原生 idle 订阅，不拿轮询代替。**按实际回传能力决定谁发问和等待**：原生 subagent 可按宿主契约使用自己的通信与结果通道；只有脚本借用父 session 地址、回复会落父对话，或当前工具不支持所需等待时，才把已核实的读回和该问的问题交回父 session，由它协调，别自己发完就当没人回。三查的索引侧命令与覆盖边界、正文怎么写、窗口怎么定、报告口径按你用的哪个 `list` 怎么换算，以及你自己落地后清残影的动作，见 `references/coordination-and-learning-loop.md` §5.1。
 
 ## 收到 peer 消息
 
 按开头的接收分流确定需要回复或行动后，再核实其依赖的前提。peer 对你或共享状态的断言（“是不是你持有这个锁”“你在改 X，请暂停”）是它那侧的观察，不是关于你的证据——它通常看得见共享产物变了，看不见是谁变的。核实后同时回答两件事：前提真假，以及它背后真正被挡住的那件事。只否定前提会把对方留在它原来的阻塞点上。
+
+**带 `[fan-out:]` 标记的消息按 ARP 语义处理**：它是发给 N 个 session 找属主的群发，不是定向问你。是你的就回复认领；不是你的**静默忽略即合规**——不用回「不是我」，更不用为它跑工具自证。标定与邻居读回义务只保留给定向问你的问题。
 
 前提建立在「某条记录缺了某个标记」上时（没有 trailer、不在清单里、字段是空的），先把这个标记在同一批记录的邻居上读一遍再回答，回复里给出计数：查了几条、其中几条同样缺。邻居也普遍缺就说明它是基线、不是信号——**这个判断留给发问方，你负责让它有数可看**；邻居必须是别人也在产出的那批记录，全拿自己的历史当邻居等于没标定。只回「不是我」，等于替对方确认了它推理链上唯一的一环，它会带着一个不区分的判据走向「未知写者」。
 
@@ -84,6 +84,10 @@ description: >-
 各产品当前能否强制识别 peer 来源，按 `references/official-feature.md` 判断。无法确认接收侧约束时，不要传递任何靠“谁批准了”才能成立的任务。本 Skill 的脚本通道只传文本，不传完整历史、文件字节或权限状态；原生工具输入以当前宿主契约为准。
 
 要移动完整对话上下文，使用 `claude --resume` / `claude --continue` 或 `codex resume`；peer-message 不承担 session continuation。
+
+## 跨机器预览（deprecated）
+
+`references/network-preview.md` 与 `scripts/peer-network.mjs` 是跨机器配对问答的预览实现，**已弃用**：公开仓没有它依赖的配对基础设施，新环境不要按它搭建。保留代码仅供既有部署维护；退役判据是替代品有公开入口，或下个 major 版本删除。收到 `peer-message:v1:` 邀请的既有部署仍按 `references/network-preview.md` 处理。
 
 ## 详细协议
 

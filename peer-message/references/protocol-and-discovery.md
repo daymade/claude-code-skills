@@ -198,14 +198,18 @@ queue 项与已消费的 history 项可能是同一条回复。用 reply envelop
 - `delivery_status=verified_enqueued` / `verified_queued` / `verified_in_thread_history`：接收侧 evidence 已命中。
 - `delivery_status=accepted_unverified`：transport 接受，但等待窗口内没有读回接收侧 evidence；它不是失败，也不是“对方已收到”。
 
-退出码由脚本绑定：0 表示请求完成——请求了验证时已命中，未请求时只表示 transport 接受且没有检查 evidence；2 表示参数或 broadcast 确认错误；3 表示目标不存在、歧义或 Claude 无 inbox；4 表示 transport、证据读取或证据一致性失败；5 表示 broadcast 部分失败；10 表示 transport 接受但等待窗口内未验证，或只读回复查询没有适用 evidence store；11 表示只读回复查询成功读取了适用 store 但没有匹配记录。
+退出码由脚本绑定：0 表示请求完成——请求了验证时已命中，未请求时只表示 transport 接受且没有检查 evidence；2 表示参数错误、broadcast 确认错误或超过无契约目标数上限；3 表示目标不存在、歧义、Claude 无 inbox，或 **Codex thread 已归档**（归档 thread 永远不再消费 queue，send 默认拒绝；verify/replies 读路径不受影响）；4 表示 transport、证据读取或证据一致性失败；5 表示 broadcast 部分失败；10 表示 transport 接受但等待窗口内未验证，或只读回复查询没有适用 evidence store；11 表示只读回复查询成功读取了适用 store 但没有匹配记录。
+
+发送 receipt 带 `resolved` 对象（目标字符串实际解析出的地址/name/id/cwd/status）——最后一英里的寻址可观测性：认错的目录在它回答之前先在 resolved 里可见。非 JSON 输出与 `send --json` 时另打印一行到 stderr；`broadcast --json` 不打 stderr，resolved 随每条 receipt 在聚合 JSON 内携带。
 
 ## 5. Broadcast 语义
 
 Broadcast 是多个独立定向 send 的集合，不是事务：
 
-- 只接受重复 `--to` 的显式目标清单。
+- 只接受重复 `--to` 的显式目标清单；单个 `--to` 里逗号拼接多个地址会被拒绝并提示重复 `--to`（逗号检查先于一切数量检查，否则后续校验 grading 的是错误形状）。
+- 超过 3 个目标必须 `--contract <name>` 点名发起依据（如收尾契约），否则拒绝并提示先用 git/索引证据收窄候选。`--confirm-count` 只是确认数数的减速带，本项才是默认拦截——真实三连广播曾全部通过 confirm-count。
 - 去重后数量必须等于 `--confirm-count`；不一致只 preview，不发送。
+- 消息体自动加一行 fan-out 标记（含目标数），语义是 ARP 式「仅属主回复认领，其余静默忽略」——接收方据此把群发与定向问题分开，非属主零成本忽略，不再为每条群发付一遍自证成本。
 - 每个目标生成独立 message ID 和 receipt。
 - 某个目标失败不撤回已经接受的消息；退出 5 并列出成功/失败分区。
 

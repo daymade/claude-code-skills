@@ -1138,6 +1138,242 @@ class PeerMessageTests(unittest.TestCase):
             self.assertNotIn('from="claude:', first)
             self.assertIn('from-name="peer-a"', first)
 
+    def broadcast_argv(self, root: Path, *extra: str) -> list[str]:
+        return [
+            "--claude-home",
+            str(root / ".claude"),
+            "--codex-home",
+            str(root / ".codex"),
+            "broadcast",
+            *extra,
+        ]
+
+    def stub_receipt(self, target: str) -> dict:
+        return {
+            "provider": "claude",
+            "target": target,
+            "target_id": None,
+            "message_id": "stub-message",
+            "delivery_status": "not_checked",
+        }
+
+    def test_broadcast_marks_fanout_so_only_the_owner_answers(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            with mock.patch.object(
+                peer, "send_one", side_effect=lambda target, *a, **k: self.stub_receipt(target)
+            ) as send:
+                exit_code = peer.main(
+                    self.broadcast_argv(
+                        root,
+                        "--to", "claude:a",
+                        "--to", "codex:b",
+                        "--confirm-count", "2",
+                        "--message", "谁的锁？",
+                    )
+                )
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(send.call_count, 2)
+            for call in send.call_args_list:
+                body = call.args[1]
+                self.assertTrue(body.startswith("[fan-out:"))
+                self.assertIn("2 个 session", body)
+                self.assertIn("不是你的无需回复", body)
+                self.assertTrue(body.rstrip().endswith("谁的锁？"))
+
+    def test_single_send_carries_no_fanout_marker(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            with mock.patch.object(
+                peer, "send_one", return_value=self.stub_receipt("claude:a")
+            ) as send:
+                exit_code = peer.main(
+                    [
+                        "--claude-home", str(root / ".claude"),
+                        "--codex-home", str(root / ".codex"),
+                        "send", "claude:a", "--message", "定向问题",
+                    ]
+                )
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(send.call_args.args[1], "定向问题")
+
+    def test_broadcast_over_cap_refused_without_contract_sends_nothing(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            stderr = io.StringIO()
+            with mock.patch.object(peer, "send_one") as send:
+                with contextlib.redirect_stderr(stderr):
+                    exit_code = peer.main(
+                        self.broadcast_argv(
+                            root,
+                            "--to", "claude:a",
+                            "--to", "claude:b",
+                            "--to", "claude:c",
+                            "--to", "claude:d",
+                            "--confirm-count", "4",
+                            "--message", "找属主",
+                        )
+                    )
+            self.assertEqual(exit_code, peer.EXIT_USAGE)
+            send.assert_not_called()
+            self.assertIn("4-target" if "4-target" in stderr.getvalue() else "exceeds", stderr.getvalue())
+            self.assertIn("--contract", stderr.getvalue())
+
+    def test_broadcast_over_cap_allowed_with_named_contract(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            stderr = io.StringIO()
+            with mock.patch.object(
+                peer, "send_one", side_effect=lambda target, *a, **k: self.stub_receipt(target)
+            ) as send:
+                with contextlib.redirect_stderr(stderr):
+                    exit_code = peer.main(
+                        self.broadcast_argv(
+                            root,
+                            "--to", "claude:a",
+                            "--to", "claude:b",
+                            "--to", "claude:c",
+                            "--to", "claude:d",
+                            "--confirm-count", "4",
+                            "--contract", "pkm-wrap-up",
+                            "--message", "我要收这个工作区",
+                        )
+                    )
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(send.call_count, 4)
+            self.assertIn("broadcast contract: pkm-wrap-up", stderr.getvalue())
+
+    def test_broadcast_comma_joined_to_rejected_before_count_checks(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            stderr = io.StringIO()
+            with mock.patch.object(peer, "send_one") as send:
+                with contextlib.redirect_stderr(stderr):
+                    exit_code = peer.main(
+                        self.broadcast_argv(
+                            root,
+                            "--to", "claude:a,claude:b",
+                            "--confirm-count", "2",
+                            "--message", "找属主",
+                        )
+                    )
+            self.assertEqual(exit_code, peer.EXIT_USAGE)
+            send.assert_not_called()
+            self.assertIn("repeat --to", stderr.getvalue())
+
+    def insert_codex_thread(self, home: Path, root: Path, *, thread_id: str, name: str, archived: int):
+        connection = sqlite3.connect(home / "state_5.sqlite")
+        connection.execute(
+            "INSERT INTO threads VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (thread_id, name, f"{name} title", str(root / name), 101, archived, "visible"),
+        )
+        connection.commit()
+        connection.close()
+
+    def test_codex_send_to_archived_thread_refused_by_default(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            home = self.make_codex_state(root)
+            self.insert_codex_thread(
+                home, root,
+                thread_id="33333333-3333-4333-8333-333333333333",
+                name="dead-worker", archived=1,
+            )
+            with mock.patch.object(peer.subprocess, "run") as run:
+                with self.assertRaises(peer.PeerError) as caught:
+                    peer.send_codex(
+                        "codex:dead-worker", "hello", "claude:a", None, "mid", home
+                    )
+            self.assertEqual(caught.exception.exit_code, peer.EXIT_TARGET)
+            self.assertIn("archived", str(caught.exception))
+            run.assert_not_called()
+
+    def test_codex_name_prefers_live_thread_over_archived_corpse(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            home = self.make_codex_state(root)
+            self.insert_codex_thread(
+                home, root,
+                thread_id="33333333-3333-4333-8333-333333333333",
+                name="codex-worker", archived=1,
+            )
+            self.assertEqual(
+                peer.resolve_codex("codex:codex-worker", home),
+                "22222222-2222-4222-8222-222222222222",
+            )
+
+    def test_archived_thread_read_paths_still_resolve(self):
+        # Reverse guard for the send refusal: verify/replies must keep working
+        # on archived threads -- their delivery evidence lives there.
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            home = self.make_codex_state(root)
+            self.insert_codex_thread(
+                home, root,
+                thread_id="33333333-3333-4333-8333-333333333333",
+                name="dead-worker", archived=1,
+            )
+            self.assertEqual(
+                peer.resolve_codex("codex:dead-worker", home),
+                "33333333-3333-4333-8333-333333333333",
+            )
+            self.assertIsNone(peer.verify_codex("codex:dead-worker", "mid", home))
+
+    def test_list_reports_codex_truncation(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            home = self.make_codex_state(root)
+            self.insert_codex_thread(
+                home, root,
+                thread_id="33333333-3333-4333-8333-333333333333",
+                name="second-worker", archived=0,
+            )
+            stdout, stderr = io.StringIO(), io.StringIO()
+            args = peer.build_parser().parse_args(
+                [
+                    "--claude-home", str(root / ".claude"),
+                    "--codex-home", str(home),
+                    "list", "--provider", "codex", "--limit", "1",
+                ]
+            )
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                self.assertEqual(peer.cmd_list(args), 0)
+            self.assertEqual(stdout.getvalue().count("codex:"), 1)
+            self.assertIn("truncated at --limit 1", stderr.getvalue())
+
+    def test_list_rejects_nonpositive_limit(self):
+        # The truncation probe fetches limit+1 rows; limit <= 0 previously
+        # leaned on sqlite's LIMIT -1 = unlimited, which the probe reinterprets.
+        parser = peer.build_parser()
+        for value in ("0", "-1"):
+            with self.subTest(value=value), contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as caught:
+                    parser.parse_args(["list", "--limit", value])
+                self.assertEqual(caught.exception.code, peer.EXIT_USAGE)
+
+    def test_print_receipt_writes_resolved_context_to_stderr(self):
+        receipt = {
+            "provider": "claude",
+            "target": "claude:peer-a",
+            "target_id": "11111111-1111-4111-8111-111111111111",
+            "message_id": "mid",
+            "delivery_status": "not_checked",
+            "resolved": {
+                "address": "claude:peer-a",
+                "id": "11111111-1111-4111-8111-111111111111",
+                "name": "peer-a",
+                "cwd": "/fixture/project",
+                "status": "idle",
+                "alive": True,
+            },
+        }
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            peer.print_receipt(receipt, True)
+        json.loads(stdout.getvalue())  # stdout stays clean, parseable JSON
+        self.assertIn("resolved:", stderr.getvalue())
+        self.assertIn("cwd=/fixture/project", stderr.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()
