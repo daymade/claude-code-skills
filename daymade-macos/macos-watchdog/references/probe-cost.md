@@ -9,6 +9,22 @@ Apply when creating, changing or integrating a recurring health observer. Keep
 business backfills and historical audits under their own execution contracts;
 do not make them an implicit prerequisite of each short health observation.
 
+## Choose frequency from the business window
+
+Before choosing a cadence, name the captured state, tolerated staleness or
+missed-change window, the lifetime of relevant changes, and each round's reads
+and cost. Compare reasonable intervals by nominal capture delay and scheduled
+checks over the same period; include collection, scheduling, sleep and failure
+delays. Use probe cost to choose among cadences that meet the business window.
+
+An explicit user interval or applicable domain SLA takes precedence. Without a
+user SLO, state a reversible default, its basis and any unverified lifecycle or
+coverage assumptions in the current task's plan or result. Existing authorization
+governs the change; reversible parameters need no separate approval gate.
+Ten minutes is not a global minimum: short-lived states may require faster capture.
+
+## Verify observation cost and delivery
+
 1. Fix the business predicate before optimizing. Preserve owner intent, original
    event time, per-source failures and the distinction between observer failure
    and business failure. Compare old and new verdicts on the same sealed cohort.

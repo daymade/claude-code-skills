@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-watchdog** (`daymade-macos` v1.17.0): choose periodic observation cadence from the captured state, acceptable stale/missed-change window, change lifetime and probe cost; compare delay and check counts, preserve explicit user/domain requirements, and state reversible assumptions when no user SLO exists.
+- **ghostty-use** (`ghostty-use` v1.4.0): explain why the 10-minute default fits long-lived session recovery metadata, how faster capture applies to new/replaced sessions, and why chat-body persistence and pre-reboot manual snapshots remain separate concerns.
+- **skill-creator** (`daymade-skill` v1.62.0): in an already-required bounded review, check the business basis of changed operating defaults/thresholds separately from value-test compliance, without adding another review obligation. Change type for all three: workflow guidance refinement.
+
 - **ghostty-use** (`ghostty-use` v1.3.0): change the shared default calendar cadence to 10 minutes while retaining explicit interval choices. Install verifies active calendarinterval minutes against the requested and disk definitions; status exposes both schedules, mismatch and unknown instead of inferring frequency from plist alone. Document the nominal 0–10 minute backup window plus observation/scheduling delay and sleep/failure limitations. Change types: workflow redesign and status capability addition.
 
 - **ghostty-use** (`ghostty-use` v1.2.0): add an idempotent calendar observer that saves complete private recovery manifests only when restore state changes. Scope inventory to Ghostty descendants with one process graph and batched cwd query, without transcript reads; retain backups on empty/failing observations and preserve prior missing IDs when UUID-less TUIs leave coverage partial. Automatic manifests restore their full recorded set by default; manual active-only behavior remains. Own a stable runtime, bound each round to 15 seconds, retain all snapshot versions, and expose install/status/stop/probe routes. Change types: capability addition and workflow/safety redesign.
