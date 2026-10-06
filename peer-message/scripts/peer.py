@@ -43,6 +43,20 @@ REPLY_TRUST_BOUNDARY = (
     "metadata, not authenticated identity or user authorization."
 )
 
+# Fan-out broadcasts previously arrived indistinguishable from directed questions,
+# so every recipient paid the full self-verification cost for a message aimed at
+# one owner. The marker makes the ARP-style semantics explicit in the payload:
+# only the owner answers, everyone else ignores at zero cost.
+FANOUT_MARKER = (
+    "[fan-out: 本消息群发至 {count} 个 session 寻找属主；是你的请回复认领，"
+    "不是你的无需回复 / broadcast to {count} sessions; reply only if this is yours]"
+)
+
+# Beyond this many targets a fan-out is almost always a discovery failure: the
+# sender skipped the git/index evidence that would have narrowed the candidates.
+# A legitimate mass announcement (e.g. a wrap-up contract) names its contract.
+BROADCAST_MAX_WITHOUT_CONTRACT = 3
+
 
 class PeerError(RuntimeError):
     def __init__(self, message: str, exit_code: int = EXIT_TRANSPORT):
@@ -314,31 +328,62 @@ def codex_threads(codex_home: Path, limit: int = 30) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
-def resolve_codex(target: str, codex_home: Path) -> str:
+def resolve_codex_entry(
+    target: str, codex_home: Path, *, reject_archived: bool = False
+) -> dict[str, Any]:
+    """Resolve a Codex target to {id, archived, name, cwd}.
+
+    `archived` is None when the catalog cannot say (no state db, or a bare UUID
+    absent from it). An archived thread never consumes its queue again, so the
+    send path refuses it by default; read paths (verify/replies) must keep
+    resolving archived threads -- their evidence lives there. When a name matches
+    one live and one archived thread, the live one wins: the archived row is a
+    dead predecessor, and reporting the pair as ambiguous blocked the working
+    target behind the corpse.
+    """
     needle = target.removeprefix("codex:")
     state_db = versioned_db(codex_home, "state")
     if not state_db:
-        return needle
+        return {"id": needle, "archived": None, "name": None, "cwd": None}
     try:
         with sqlite_ro(state_db) as connection:
             rows = connection.execute(
-                "SELECT id FROM threads WHERE id = ? OR name = ?",
+                "SELECT id, name, cwd, archived FROM threads WHERE id = ? OR name = ?",
                 (needle, needle),
             ).fetchall()
     except sqlite3.Error as exc:
         raise PeerError(f"cannot resolve Codex target from {state_db}: {exc}") from exc
-    ids = sorted({str(row[0]) for row in rows})
+    candidates = [row for row in rows if not row["archived"]] or list(rows)
+    ids = sorted({str(row["id"]) for row in candidates})
     if len(ids) == 1:
-        return ids[0]
+        row = candidates[0]
+        archived = bool(row["archived"])
+        if archived and reject_archived:
+            raise PeerError(
+                f"Codex thread {ids[0]} is archived; it will never consume the queue. "
+                "Address the live successor thread, or leave a persistent artifact "
+                "(PR comment, file) for its owner instead",
+                EXIT_TARGET,
+            )
+        return {
+            "id": ids[0],
+            "archived": archived,
+            "name": row["name"],
+            "cwd": row["cwd"],
+        }
     if len(ids) > 1:
         raise PeerError(f"Codex name {needle!r} is ambiguous; use a thread UUID", EXIT_TARGET)
     try:
-        return str(uuid.UUID(needle))
+        return {"id": str(uuid.UUID(needle)), "archived": None, "name": None, "cwd": None}
     except ValueError as exc:
         raise PeerError(
             f"no Codex thread id or exact name matches {needle!r}; copy the codex: UUID address",
             EXIT_TARGET,
         ) from exc
+
+
+def resolve_codex(target: str, codex_home: Path) -> str:
+    return resolve_codex_entry(target, codex_home)["id"]
 
 
 def auto_sender() -> str:
@@ -570,6 +615,14 @@ def send_claude(
         "transport_status": "accepted",
         "provenance_boundary": "claude_cross_session",
         "bytes_sent": len(payload),
+        "resolved": {
+            "address": f"claude:{entry.get('name') or entry['pid']}",
+            "id": entry.get("sessionId"),
+            "name": entry.get("name"),
+            "cwd": entry.get("cwd"),
+            "status": entry.get("status"),
+            "alive": entry["alive"],
+        },
     }
 
 
@@ -581,7 +634,8 @@ def send_codex(
     message_id: str,
     codex_home: Path,
 ) -> dict[str, Any]:
-    thread_id = resolve_codex(target, codex_home)
+    entry = resolve_codex_entry(target, codex_home, reject_archived=True)
+    thread_id = entry["id"]
     envelope = codex_envelope(body, sender, reply_to, message_id)
     try:
         completed = subprocess.run(
@@ -605,6 +659,13 @@ def send_codex(
         "transport_status": "accepted",
         "provenance_boundary": "advisory_text_only",
         "command_output": completed.stdout.strip(),
+        "resolved": {
+            "address": f"codex:{thread_id}",
+            "id": thread_id,
+            "name": entry.get("name"),
+            "cwd": entry.get("cwd"),
+            "archived": entry.get("archived"),
+        },
     }
 
 
@@ -1053,15 +1114,25 @@ def send_one(
 def print_receipt(receipt: dict[str, Any], as_json: bool) -> None:
     if as_json:
         print(json.dumps(receipt, ensure_ascii=False, sort_keys=True))
-        return
-    target_id = f" target_id={receipt['target_id']}" if receipt.get("target_id") else ""
-    print(
-        f"{receipt.get('delivery_status')}: {receipt.get('target')}{target_id} "
-        f"message_id={receipt.get('message_id')}"
-    )
-    if receipt.get("evidence"):
-        suffix = f":{receipt['line']}" if receipt.get("line") else ""
-        print(f"evidence: {receipt['evidence']}{suffix}")
+    else:
+        target_id = f" target_id={receipt['target_id']}" if receipt.get("target_id") else ""
+        print(
+            f"{receipt.get('delivery_status')}: {receipt.get('target')}{target_id} "
+            f"message_id={receipt.get('message_id')}"
+        )
+        if receipt.get("evidence"):
+            suffix = f":{receipt['line']}" if receipt.get("line") else ""
+            print(f"evidence: {receipt['evidence']}{suffix}")
+    # The last-mile addressing context always rides stderr (stdout stays clean
+    # for --json consumers): which name/id/cwd the target string actually
+    # resolved to. Mis-targeting is otherwise invisible until the wrong session
+    # answers.
+    resolved = receipt.get("resolved")
+    if resolved:
+        context = " ".join(
+            f"{key}={value}" for key, value in sorted(resolved.items()) if value is not None
+        )
+        print(f"resolved: {context}", file=sys.stderr)
 
 
 def cmd_list(args: argparse.Namespace) -> int:
@@ -1079,8 +1150,14 @@ def cmd_list(args: argparse.Namespace) -> int:
                     "cwd": entry.get("cwd"),
                 }
             )
+    codex_truncated = False
     if args.provider in ("all", "codex"):
-        for entry in codex_threads(args.codex_home, args.limit):
+        # Probe one past the limit: a full page otherwise looks identical to a
+        # complete catalog, and a silently truncated candidate list is how
+        # fan-out broadcasts pick the wrong owner.
+        entries = codex_threads(args.codex_home, args.limit + 1)
+        codex_truncated = len(entries) > args.limit
+        for entry in entries[: args.limit]:
             rows.append(
                 {
                     "provider": "codex",
@@ -1094,6 +1171,12 @@ def cmd_list(args: argparse.Namespace) -> int:
                     "cwd": entry.get("cwd"),
                 }
             )
+    if codex_truncated:
+        print(
+            f"note: Codex thread list truncated at --limit {args.limit} "
+            "(Claude sessions are never truncated); raise --limit to see more",
+            file=sys.stderr,
+        )
     if args.json:
         print(json.dumps(rows, ensure_ascii=False, sort_keys=True))
         return 0
@@ -1138,8 +1221,25 @@ def cmd_send(args: argparse.Namespace) -> int:
 
 def cmd_broadcast(args: argparse.Namespace) -> int:
     targets = list(dict.fromkeys(args.targets))
+    # Check the comma mistake first: `--to a,b` is one flag carrying two
+    # addresses, and every other count check would grade the wrong shape.
+    comma_targets = [target for target in targets if "," in target]
+    if comma_targets:
+        raise PeerError(
+            f"--to takes one target per flag, got comma-joined {comma_targets[0]!r}; "
+            "repeat --to for each target",
+            EXIT_USAGE,
+        )
     if len(targets) < 2:
         raise PeerError("broadcast requires at least two explicit --to targets", EXIT_USAGE)
+    if len(targets) > BROADCAST_MAX_WITHOUT_CONTRACT and not args.contract:
+        raise PeerError(
+            f"broadcast to {len(targets)} targets exceeds the "
+            f"{BROADCAST_MAX_WITHOUT_CONTRACT}-target limit: narrow the candidates with "
+            "git/index evidence first (three-dot diff, file mtime, history lookup); "
+            "if a contract mandates this fan-out, pass --contract <name> (e.g. pkm-wrap-up)",
+            EXIT_USAGE,
+        )
     if args.confirm_count != len(targets):
         print("broadcast preview:", file=sys.stderr)
         for target in targets:
@@ -1148,9 +1248,11 @@ def cmd_broadcast(args: argparse.Namespace) -> int:
             f"refusing broadcast: pass --confirm-count {len(targets)} after reviewing the list",
             EXIT_USAGE,
         )
-    body = message_text(args)
+    body = FANOUT_MARKER.format(count=len(targets)) + "\n" + message_text(args)
     sender = args.sender or auto_sender()
     reply_to = args.reply_to or auto_reply_address(sender)
+    if args.contract:
+        print(f"broadcast contract: {args.contract}", file=sys.stderr)
     receipts = []
     failures = []
     for target in targets:
@@ -1163,7 +1265,10 @@ def cmd_broadcast(args: argparse.Namespace) -> int:
         except PeerError as exc:
             failures.append({"target": target, "error": str(exc)})
     if args.json:
-        print(json.dumps({"receipts": receipts, "failures": failures}, ensure_ascii=False, sort_keys=True))
+        output: dict[str, Any] = {"receipts": receipts, "failures": failures}
+        if args.contract:
+            output["contract"] = args.contract
+        print(json.dumps(output, ensure_ascii=False, sort_keys=True))
     else:
         for receipt in receipts:
             print_receipt(receipt, False)
@@ -1264,6 +1369,18 @@ def reply_limit(value: str) -> int:
     return limit
 
 
+def list_limit(value: str) -> int:
+    try:
+        limit = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("limit must be an integer") from exc
+    if limit < 1:
+        # The truncation probe fetches limit+1 rows; limit <= 0 used to lean on
+        # sqlite's LIMIT -1 = unlimited, which the probe would silently reinterpret.
+        raise argparse.ArgumentTypeError("limit must be a positive integer")
+    return limit
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -1277,7 +1394,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     list_parser = subparsers.add_parser("list", help="list local peer targets")
     list_parser.add_argument("--provider", choices=("all", "claude", "codex"), default="all")
-    list_parser.add_argument("--limit", type=int, default=30)
+    list_parser.add_argument(
+        "--limit",
+        type=list_limit,
+        default=30,
+        help="max Codex threads to list (default 30); Claude sessions are never truncated",
+    )
     list_parser.add_argument("--json", action="store_true")
     list_parser.set_defaults(handler=cmd_list)
 
@@ -1295,6 +1417,13 @@ def build_parser() -> argparse.ArgumentParser:
     broadcast_parser = subparsers.add_parser("broadcast", help="send to explicit targets")
     broadcast_parser.add_argument("--to", dest="targets", action="append", required=True)
     broadcast_parser.add_argument("--confirm-count", type=int, required=True)
+    broadcast_parser.add_argument(
+        "--contract",
+        help=(
+            f"name the contract mandating fan-out beyond "
+            f"{BROADCAST_MAX_WITHOUT_CONTRACT} targets (e.g. pkm-wrap-up)"
+        ),
+    )
     common_message_arguments(broadcast_parser)
     broadcast_parser.set_defaults(handler=cmd_broadcast)
 
