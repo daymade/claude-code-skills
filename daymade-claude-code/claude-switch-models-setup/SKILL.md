@@ -486,6 +486,48 @@ Fix: add the literal `[1m]` suffix to `ANTHROPIC_MODEL`, every `ANTHROPIC_DEFAUL
 3. Run `claude-profiles-init`.
 4. Add an alias to the shell rc file if desired.
 
+## Auditing and Retiring Profiles
+
+Profiles accumulate: a variant added for one experiment stays forever. Before
+removing anything, audit actual usage — three signals, in order of reliability:
+
+1. **Prompt history** (`~/.claude-profiles/<name>/history.jsonl`) — the
+   strongest signal. Count entries and read the first/last `timestamp` values;
+   a profile with no `history.jsonl` at all was never typed into.
+2. **Launch records in shell history** — e.g.
+   `atuin search --search-mode prefix "<alias> "` counts how often each launch
+   alias was actually used.
+3. **`.claude.json` mtime is NOT a usage signal** — the settings converger and
+   the behavior-key sync both rewrite this file on session starts, so every
+   profile looks recently active (observed 2026-10-06: a fleet of untouched
+   profiles shared one recent mtime left by a sync run).
+
+Retire by archiving, never by deleting outright:
+
+- Move the profile directory AND its `~/.claude/settings/<name>.json` provider
+  file to an archive location **outside** `~/.claude-profiles/`. If you keep a
+  dotfiles backup that mirrors that root with `--delete`, it would otherwise
+  erase the archived profile's backup copy on its next run; an archive outside
+  the mirror root survives.
+- When one profile succeeds another's role (same provider, new name), move the
+  old profile's `history.jsonl` into the successor's directory first, so the
+  prompt history follows the role.
+- Orphan profiles (directory exists, no `settings/<name>.json`) are covered in
+  Troubleshooting — the same audit applies before reviving or removing one.
+
+Verify that a new env pin in a provider file reaches a real session headlessly,
+without opening a window:
+
+```bash
+CLAUDE_CONFIG_DIR=~/.claude-profiles/<name> claude --settings ~/.claude/settings/<name>.json \
+  -p 'run printenv <VAR_NAME> via Bash and reply with only its value'
+```
+
+A launched session's Bash inherits the settings `env`, so the printed value
+proves the whole launch path — config dir, provider file, env application —
+end to end. This is the read-back for the `CLAUDE_CODE_EFFORT_LEVEL` pin
+described under How It Works.
+
 ## Security Notes
 
 - API keys are written to `~/.claude/settings/<provider>.json` in plain text, the same way Claude Code stores `ANTHROPIC_AUTH_TOKEN`. This matches Claude Code's own security model.
