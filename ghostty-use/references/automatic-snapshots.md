@@ -47,6 +47,12 @@ shows `schedule.active_minutes`, `disk_minutes` and `match`; missing or unfamili
 calendar formats remain `unknown`. Unrelated event-trigger Minute fields are not
 calendar evidence.
 
+The 10-minute default targets recovery metadata for long-lived terminal sessions:
+session IDs, working directories and launch parameters. Chat-body persistence
+belongs to the conversation application; this watcher captures the reopen list.
+When newly opened or replaced sessions need faster ID capture, choose an explicit
+shorter interval, such as 1 or 5 minutes, against that required window.
+
 While the Mac is awake and observations succeed, the nominal backup delay is
 0–10 minutes plus collection and scheduling delay. Sleep or failed observations
 can delay it further. Save a manual snapshot before a planned reboot when that
