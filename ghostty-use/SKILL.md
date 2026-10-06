@@ -42,6 +42,9 @@ python3 <skill-dir>/scripts/ghostty_session.py restore --all  # include waiting/
 ```
 
 The snapshot lands in `~/.ghostty-session/snapshots/` (home-relative, survives reboot).
+The report accounts for every live TUI: captured sessions plus an `unresolved`
+section for fresh tabs that have no transcript yet — a session count lower than
+the tab count is explained there, not silently lost.
 `restore` skips already-live IDs by default. It finishes with a bounded auto-check
 that prints `N/M present`, a manual reopen command and a retry command containing only
 missing IDs. Read that result before declaring success; per-tab `SENT (unverified)`
@@ -55,8 +58,10 @@ or operating `scripts/ghostty_watch.py`. It saves only changed restore state and
 keeps all prior versions. Unchanged
 rounds write no snapshot or routine log. Automatic manifests cover Ghostty
 process descendants without transcript reads; their liveness is explicitly unknown
-and `restore` selects the whole recorded set. UUID-less TUIs remain unresolved;
-partial observations preserve prior missing IDs conservatively. The watcher never
+and `restore` selects the whole recorded set. UUID-less TUIs remain unresolved in
+automatic manifests — the watcher's bounded scan deliberately reads no transcripts;
+manual snapshot/check/restore resolve them (see the anchor bullet below).
+Partial observations preserve prior missing IDs conservatively. The watcher never
 opens apps or tabs. Manual snapshots keep their active-only restore default.
 
 ## No suitable snapshot: reconstruct the recovery manifest
@@ -107,9 +112,18 @@ or unavailable evidence. Dry-run output is JSON for inspection.
 
 ## What manual snapshot records per session
 
-- **Anchor**: the session UUID from the process command line (never match on process
-  names — argv[0] flips between bare `claude` and `/usr/local/bin/claude`, and name
-  matching produced two false "all sessions gone" reports on 2026-10-04).
+- **Anchor**: the session UUID from the process command line when present (never
+  match on process names — argv[0] flips between bare `claude` and
+  `/usr/local/bin/claude`, and name matching produced two false "all sessions
+  gone" reports on 2026-10-04). Fresh TUIs carry no UUID on argv (only
+  resume/fork writes one), so they are anchored from transcript storage instead:
+  the session file born at or after the process started, in the project bucket
+  of the same cwd, internal identity verified (2026-10-07: 11 of 25 live
+  sessions were fresh TUIs, invisible to argv-only matching). When several
+  fresh TUIs share one bucket, transcripts are assigned disjointly — one file
+  per TUI; an undecidable race (equidistant claims) refuses to the unresolved
+  section rather than guessing. Live TUIs matching neither way are printed as
+  unresolved rows in the snapshot report — visible, never silently dropped.
 - **Liveness**: last real interaction time read from the *content* of the session file —
   not the file mtime (idle TUIs keep touching files; on 2026-10-04 an "active this
   afternoon" read was contradicted by in-file timestamps showing death at 03:21).
@@ -163,7 +177,7 @@ user-local data outside the skill bundle; no default mapping ships.
 | `dead-channel` sessions restored anyway | expected: history reopens, session stops at `/login`; re-auth or switch provider |
 | `check` says present but tab looks empty | another live process already claimed that session id (e.g. resumed in another tab) |
 | osascript refuses keystrokes | grant Accessibility (System Events) permission; verify with `osascript -e 'tell application "System Events" to get UI elements enabled'` |
-| session list empty right after opening tabs | TUIs take a few seconds to write their argv UUID; re-run after a pause |
+| a brand-new tab is missing from the session list | a fresh TUI has no argv UUID and its transcript file appears with its first message; until then it shows under unresolved live TUIs. If the first message came >20 minutes after the tab opened, the birth window has passed and the tab stays unresolved by design |
 
 ## Deeper details
 

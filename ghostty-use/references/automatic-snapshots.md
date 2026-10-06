@@ -122,8 +122,12 @@ not resumable sessions; use explicit indexed reconstruction and identity
 verification if their session IDs must be recovered. Partial snapshots may retain
 already-closed sessions conservatively; inspect the manifest or use `--only` when
 that distinction matters. Window grouping and UUID-less tab identity remain
-unavailable. Calendar observation also cannot capture a change that occurs and
-vanishes between scheduled rounds.
+unavailable in automatic manifests. Manual snapshot/check/restore resolve
+UUID-less TUIs from transcript storage (session file born after process start,
+same cwd, identity verified); the watcher deliberately keeps its argv-only,
+transcript-free scan to stay bounded — install-round manifests therefore keep
+their explicitly partial coverage. Calendar observation also cannot capture a
+change that occurs and vanishes between scheduled rounds.
 
 ## Recover observation failures
 

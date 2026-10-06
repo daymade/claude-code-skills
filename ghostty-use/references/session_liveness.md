@@ -80,3 +80,31 @@ major app update rather than trusting the dates.
    process and produced two false "all sessions gone" reports in one session.
    Rule: anchor on the command-line UUID at argv-token boundaries, skipping
    companion/snapshot/daemon processes.
+4. **Fresh-TUI invisibility** — only resume/fork writes the session UUID into
+   argv; a brand-new TUI has none. On 2026-10-07, 11 of 25 live Ghostty
+   sessions were fresh TUIs, and argv-only anchoring silently dropped them
+   from the snapshot, from `check` presence (false "gone"), and from
+   `restore`'s already-live filter (which would have reopened duplicate tabs).
+   Rule: UUID-less live TUIs are anchored from transcript storage — the
+   session file must be born at or after the process start (`ps lstart`,
+   second-truncated, vs float birthtime; a ½s clock tolerance is the whole
+   leeway — anything more only admits fresh corpse files, and one born 3s
+   before start is already a corpse). lstart field order varies by platform
+   locale ("Tue Oct  6 …" vs "Tue  6 Oct …", parse both). The bucket name
+   keeps the capitalization seen at creation (match case-insensitively) and
+   encodes every non-[A-Za-z0-9-] character as `-` (pinned on 347 real buckets
+   plus a live `foo_bar` probe: `/`, `.`, space, CJK and `_` all fold). The
+   file must pass internal identity verification (Claude head `cwd` within 40
+   lines — the worst real file first records it at line 9; Codex
+   `session_meta` id+cwd); a file with no verifiable cwd fails closed rather
+   than passing on the bucket alone. A node wrapper and its vendor child on
+   one pty count as one TUI — as competitors they once tied every offer and
+   excluded all three live codex sessions (2026-10-07 live regression caught
+   by re-running the snapshot after the assignment rewrite). When several
+   fresh TUIs share one bucket, candidates bind disjointly (one file per TUI,
+   closest verified claim first, fallback to the TUI's next candidate);
+   equidistant claims refuse to the unresolved section, and whatever still
+   matches nothing is reported as an unresolved row, never dropped silently.
+   Corpse files from dead earlier TUIs are the standing theft hazard: the
+   2026-10-07 pkm bucket held one born 10s before a live TUI's start, and the
+   disjoint-assignment rule plus the ½s leeway are what keep it from winning.

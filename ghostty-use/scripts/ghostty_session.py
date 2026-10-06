@@ -7,10 +7,17 @@ Usage:
   ghostty_session.py restore [--all|--stale-too] [--only ID]...
                                               # reopen tabs per snapshot, then auto-check
 
-Session anchor is always the session UUID found on the process command line — never
-the process name. argv[0] flips between bare (`claude`) and fully-qualified
-(`/usr/local/bin/claude`) depending on how the tab was started; matching on names
-produces silent false "missing" rows (measured 2026-10-04).
+Session anchor is the session UUID found on the process command line when present
+(resume/fork) — never the process name. argv[0] flips between bare (`claude`) and
+fully-qualified (`/usr/local/bin/claude`) depending on how the tab was started;
+matching on names produces silent false "missing" rows (measured 2026-10-04).
+Fresh TUIs carry no UUID on argv (only resume/fork writes one), so they are anchored
+from transcript storage instead: the session file must appear after the process
+started, in the project bucket of the same cwd (measured 2026-10-07: 11 of 25 live
+Ghostty sessions were invisible to argv-only matching). When several fresh TUIs
+share one bucket, candidates are assigned disjointly (one transcript per TUI);
+live TUI processes that match neither way, or lose an ambiguous race, are
+reported as unresolved rows, never dropped silently.
 
 Liveness reads the last event timestamp *inside* the session file, never the file
 mtime: idle TUI processes still touch their files, and a fresh mtime on a dead
@@ -49,8 +56,38 @@ SKIP_PATTERNS = ("app-server", "daemon", "code-mode", "companion", "chrome", "Co
 
 # ---------- process enumeration ----------
 
-def list_sessions():
-    """One entry per live claude/codex session, keyed by its command-line UUID."""
+BIRTH_LEEWAY_SECONDS = 0.5     # clock tolerance only; a transcript never predates its
+                               # TUI (float birthtime vs second-truncated lstart), so a
+                               # larger window would only admit fresh corpse files
+FIRST_WRITE_WINDOW_SECONDS = 1200  # first message may lag the tab opening
+
+
+class SessionList(list):
+    """Session entries plus the live TUI rows that could not be anchored.
+
+    .unresolved rows carry pid/tty/tool/cmd only (no sid); they are accounting
+    evidence for the snapshot report, never manifest members.
+    """
+
+    def __init__(self, entries=(), unresolved=()):
+        super().__init__(entries)
+        self.unresolved = list(unresolved)
+
+
+def list_sessions(resolve_uuidless=True):
+    """One entry per live claude/codex session.
+
+    Anchor is the argv UUID when present (resume/fork). A fresh TUI has no UUID
+    on its command line, so with resolve_uuidless its sid is recovered from
+    transcript storage (session file born after process start, same cwd). When
+    several UUID-less TUIs share one cwd bucket, candidates are assigned
+    disjointly — one transcript per TUI, closest verified birth first — and
+    anything ambiguous or left over lands in .unresolved rather than being
+    attributed to the wrong session or dropped silently (theft/collision probe
+    reproduced 2026-10-07). The watcher's bounded process-graph scan keeps its
+    own argv-only path; this resolution reads a bounded set of per-cwd buckets,
+    never a history scan.
+    """
     result = subprocess.run(["ps", "-eo", "pid,tty,command"], capture_output=True, text=True)
     if result.returncode:
         raise RecoveryError("live session inventory failed: " + result.stderr.strip())
@@ -62,25 +99,86 @@ def list_sessions():
             continue
         procs[int(parts[0])] = (parts[1], parts[2])
     seen = {}
+    uuidless_by_tui = {}
     for pid, (tty, cmd) in sorted(procs.items()):
         if any(p in cmd for p in SKIP_PATTERNS):
             continue
         # match on argv token boundaries: bare or path-qualified binary names only
-        if not (re.search(r"(^|/)codex( |$)", cmd) or re.search(r"(^|/)claude( |$)", cmd)):
+        tool = "codex" if re.search(r"(^|/)codex( |$)", cmd) else (
+            "claude" if re.search(r"(^|/)claude( |$)", cmd) else None)
+        if tool is None:
             continue
         m = UUID_RE.search(cmd)
-        if not m:
-            continue  # brand-new session: TUI has not persisted its id to argv yet
-        sid = m.group(0)
-        if sid in seen:
+        if m:
+            sid = m.group(0)
+            if sid not in seen:
+                seen[sid] = {
+                    "tty": tty, "tool": tool,
+                    "sid": sid, "cwd": _proc_cwd(pid), "cmdline": cmd.strip(),
+                    "profile": _detect_profile(cmd),
+                    "anchor": "argv", "transcript": None,
+                }
             continue  # node wrapper + vendor binary share one session
-        seen[sid] = {
-            "tty": tty,
-            "tool": "codex" if re.search(r"(^|/)codex( |$)", cmd) else "claude",
-            "sid": sid, "cwd": _proc_cwd(pid), "cmdline": cmd.strip(),
-            "profile": _detect_profile(cmd),
-        }
-    return sorted(seen.values(), key=lambda e: e["tty"])
+        if resolve_uuidless:
+            key = (tool, tty)
+            if key not in uuidless_by_tui:
+                uuidless_by_tui[key] = {"pid": pid, "tty": tty, "cmd": cmd, "tool": tool,
+                                        "cwd": _proc_cwd(pid), "started": _proc_start(pid)}
+            continue  # a node wrapper and its vendor child share one pty — one TUI
+                      # (sorted pids keep the wrapper; their lstarts agree to ~1s)
+    unresolved = []
+    for proc in _assign_transcripts(list(uuidless_by_tui.values()), seen):
+        if "sid" in proc:
+            seen[proc["sid"]] = {
+                "tty": proc["tty"], "tool": proc["tool"],
+                "sid": proc["sid"], "cwd": proc["cwd"], "cmdline": proc["cmd"].strip(),
+                "profile": _detect_profile(proc["cmd"]),
+                "anchor": "transcript", "transcript": proc["transcript"],
+            }
+        else:
+            unresolved.append({k: proc[k] for k in ("pid", "tty", "tool", "cmd")})
+    return SessionList(sorted(seen.values(), key=lambda e: e["tty"]), unresolved=unresolved)
+
+
+def _assign_transcripts(procs, seen):
+    """Joint disjoint assignment for UUID-less TUIs grouped by (tool, cwd).
+
+    Every verified candidate is offered (a TUI whose closest file is taken falls
+    back to its next one). Excluded as ambiguous: a TUI's own equidistant
+    alternatives, and any file whose closest claim is tied between TUIs. Remaining
+    offers bind closest-first, one transcript per TUI; losers and collisions with
+    argv-anchored sids come back without a sid (visible unresolved rows).
+    """
+    groups = {}
+    for proc in procs:
+        groups.setdefault((proc["tool"], proc["cwd"]), []).append(proc)
+    out = []
+    for (tool, cwd), members in sorted(groups.items()):
+        offers = []  # (dist, pid, sid, path), verified candidates only
+        for proc in members:
+            by_dist = {}
+            for dist, sid, path in _transcript_candidates(tool, cwd, proc["started"]):
+                by_dist.setdefault(dist, []).append((sid, path))
+            for dist, pairs in by_dist.items():
+                if len(pairs) == 1:
+                    offers.append((dist, proc["pid"], pairs[0][0], pairs[0][1]))
+        by_file = {}
+        for dist, pid, sid, path in offers:
+            by_file.setdefault((sid, path), []).append(dist)
+        firm = [(dist, pid, sid, path) for dist, pid, sid, path in offers
+                if by_file[(sid, path)].count(min(by_file[(sid, path)])) == 1]
+        used_files, group_assigned = set(), set()
+        by_pid = {p["pid"]: p for p in members}
+        for dist, pid, sid, path in sorted(firm):
+            if (sid, path) in used_files or pid in group_assigned or sid in seen:
+                continue  # file taken / TUI served / argv-anchored live TUI owns it
+            used_files.add((sid, path))
+            group_assigned.add(pid)
+            out.append(dict(by_pid[pid], sid=sid, transcript=path))
+        for proc in members:
+            if proc["pid"] not in group_assigned:
+                out.append(proc)
+    return out
 
 
 def _proc_cwd(pid):
@@ -90,6 +188,153 @@ def _proc_cwd(pid):
         if ln.startswith("n"):
             return ln[1:]
     return ""
+
+
+def _proc_start(pid):
+    """Process start as epoch seconds (ps lstart is local ctime text), None if unknown.
+
+    lstart field order is locale/platform-dependent: US layouts print
+    "Tue Oct  6 17:27:03 2026", this host prints "Tue  6 Oct 17:27:03 2026"
+    (measured 2026-10-07) — accept both rather than silently giving up.
+    """
+    out = subprocess.run(["ps", "-o", "lstart=", "-p", str(pid)],
+                         capture_output=True, text=True).stdout.strip()
+    if not out:
+        return None
+    norm = " ".join(out.split())
+    for fmt in ("%a %b %d %H:%M:%S %Y", "%a %d %b %H:%M:%S %Y"):
+        try:
+            return datetime.strptime(norm, fmt).timestamp()
+        except ValueError:
+            continue
+    return None
+
+
+# ---------- transcript anchoring for UUID-less argv ----------
+
+def _stat_birth_mtime(path):
+    st = os.stat(path)
+    return getattr(st, "st_birthtime", st.st_ctime), st.st_mtime
+
+
+def _claude_project_dir(cwd):
+    """The pool bucket for a cwd; APFS is case-insensitive but bucket names keep
+    the spelling seen at creation, so fall back to a case-insensitive match.
+
+    Bucket-name encoding (pinned against this host's 347 evidence-bearing
+    buckets plus a live `foo_bar` probe, 2026-10-07): every character outside
+    [A-Za-z0-9-] becomes `-`, per character, case preserved — `/`, `.`, space,
+    CJK and `_` all map to `-`.
+    """
+    enc = re.sub(r"[^A-Za-z0-9-]", "-", cwd)
+    root = os.path.join(HOME, ".claude", "projects")
+    exact = os.path.join(root, enc)
+    if os.path.isdir(exact):
+        return exact
+    try:
+        for name in os.listdir(root):
+            candidate = os.path.join(root, name)
+            if name.lower() == enc.lower() and os.path.isdir(candidate):
+                return candidate
+    except OSError:
+        pass
+    return None
+
+
+def _head_cwd(path, max_lines=40):
+    """First cwd recorded in a transcript, None when not visible in the head.
+
+    40 lines covers the worst real case on this host (first cwd at line 9 of
+    2924 transcripts sampled, 2026-10-07); a transcript that still shows no cwd
+    fails identity verification rather than passing unchecked.
+    """
+    try:
+        with open(path, errors="replace") as fh:
+            for _, line in zip(range(max_lines), fh):
+                try:
+                    rec = json.loads(line)
+                except Exception:
+                    continue
+                if isinstance(rec, dict) and rec.get("cwd"):
+                    return rec["cwd"]
+    except OSError:
+        pass
+    return None
+
+
+def _claude_candidates(cwd, started):
+    """Verified [(dist, sid, path)] for a UUID-less claude TUI, closest first."""
+    bucket = _claude_project_dir(cwd)
+    if not bucket:
+        return []
+    candidates = []
+    for path in glob.glob(os.path.join(bucket, "*.jsonl")):
+        sid = os.path.basename(path)[:-6]
+        if not UUID_RE.fullmatch(sid):
+            continue
+        try:
+            birth, mtime = _stat_birth_mtime(path)
+        except OSError:
+            continue
+        if not (started - BIRTH_LEEWAY_SECONDS <= birth <= started + FIRST_WRITE_WINDOW_SECONDS):
+            continue
+        if mtime < started - BIRTH_LEEWAY_SECONDS:
+            continue  # file stopped being written before this process started
+        file_cwd = _head_cwd(path)
+        if file_cwd is None or file_cwd.lower() != cwd.lower():
+            continue  # no verifiable identity, or a different cwd's file
+        candidates.append((abs(birth - started), sid, path))
+    return sorted(candidates)
+
+
+def _codex_home():
+    return Path(CODEX_HOME_OVERRIDE or os.environ.get("CODEX_HOME") or Path(HOME) / ".codex").expanduser()
+
+
+def _codex_candidates(cwd, started):
+    """Verified [(dist, sid, path)] for a UUID-less codex TUI, closest first."""
+    days = {(started + delta) for delta in (-BIRTH_LEEWAY_SECONDS, 0, FIRST_WRITE_WINDOW_SECONDS)}
+    buckets = {datetime.fromtimestamp(day).strftime("%Y/%m/%d") for day in days}
+    candidates = []
+    for day in buckets:
+        for path in glob.glob(str(_codex_home() / "sessions" / day / "rollout-*.jsonl")):
+            name = os.path.basename(path)
+            if len(name) < 34 or not name.startswith("rollout-"):
+                continue
+            try:
+                born = datetime.strptime(name[8:27], "%Y-%m-%dT%H-%M-%S").timestamp()
+            except ValueError:
+                continue
+            if not (started - BIRTH_LEEWAY_SECONDS <= born <= started + FIRST_WRITE_WINDOW_SECONDS):
+                continue
+            sid = name[28:-6]
+            if not UUID_RE.fullmatch(sid):
+                continue
+            meta = _codex_first_meta(path)
+            if not meta or meta.get("id") != sid:
+                continue  # filename claim must match internal identity
+            meta_cwd = meta.get("cwd")
+            if not meta_cwd or meta_cwd.lower() != cwd.lower():
+                continue
+            candidates.append((abs(born - started), sid, path))
+    return sorted(candidates)
+
+
+def _codex_first_meta(path):
+    try:
+        with open(path, errors="replace") as fh:
+            rec = json.loads(fh.readline())
+    except (OSError, ValueError):
+        return None
+    if isinstance(rec, dict) and rec.get("type") == "session_meta":
+        return rec.get("payload") or {}
+    return None
+
+
+def _transcript_candidates(tool, cwd, started):
+    if not cwd or started is None:
+        return []
+    return (_claude_candidates if tool == "claude" else _codex_candidates)(cwd, started)
 
 
 def _detect_profile(cmd):
@@ -116,6 +361,10 @@ def claude_liveness(sid):
     f = _claude_file(sid)
     if not f:
         return None, "no-file"
+    return _claude_liveness_path(f)
+
+
+def _claude_liveness_path(f):
     last_ts, err = None, None
     with open(f, errors="replace") as fh:
         tail = fh.readlines()[-60:]
@@ -132,6 +381,24 @@ def claude_liveness(sid):
                 c.get("text", "") for c in cont if isinstance(c, dict)) if isinstance(cont, list) else ""
             err = "login-expired" if "Login expired" in txt else "api-error"
     return last_ts, err or "ok"
+
+
+def _tail_last_ts(path, lines=60):
+    """Last timestamp inside a transcript already identity-verified at resolution."""
+    try:
+        with open(path, errors="replace") as fh:
+            tail = fh.readlines()[-lines:]
+    except OSError:
+        return None
+    last_ts = None
+    for line in tail:
+        try:
+            rec = json.loads(line)
+        except Exception:
+            continue
+        if isinstance(rec, dict) and rec.get("timestamp"):
+            last_ts = rec["timestamp"]
+    return last_ts
 
 
 class RecoveryError(ValueError):
@@ -245,9 +512,22 @@ def classify(last_ts, err):
 
 # ---------- snapshot ----------
 
+def _entry_liveness(e):
+    """Resolved entries already know their verified transcript path — read it
+    directly instead of rediscovering it through the pool glob or Codex index."""
+    path = e.get("transcript")
+    if path and e["tool"] == "claude":
+        return _claude_liveness_path(path)
+    if path:
+        # The file exists (identity-verified at resolution); a missing timestamp
+        # means "no events yet" (stale), matching the index path's verdict.
+        return _tail_last_ts(path), "ok"
+    return (claude_liveness if e["tool"] == "claude" else codex_liveness)(e["sid"])
+
+
 def snapshot_sessions(sessions):
     for e in sessions:
-        last_ts, err = (claude_liveness if e["tool"] == "claude" else codex_liveness)(e["sid"])
+        last_ts, err = _entry_liveness(e)
         e["last_interaction"] = last_ts
         e["error"] = err
         e["status"] = classify(last_ts, err)
@@ -267,14 +547,24 @@ def write_snapshot(sessions, out_path=None):
 
 
 def cmd_snapshot(args):
-    sessions = snapshot_sessions(list_sessions())
+    live = list_sessions()
+    sessions = snapshot_sessions(live)
     path = write_snapshot(sessions, args.out)
+    unresolved = live.unresolved if isinstance(live, SessionList) else []
+    anchored = len([s for s in sessions if s.get("anchor") == "transcript"])
     act = [s for s in sessions if s["status"].startswith("active")]
     print(f"captured {len(sessions)} sessions -> {path}")
-    print(f"  active(<{ACTIVE_HOURS}h): {len(act)}   other: {len(sessions) - len(act)}")
+    print(f"  active(<{ACTIVE_HOURS}h): {len(act)}   other: {len(sessions) - len(act)}   "
+          f"transcript-anchored: {anchored}")
     for s in sessions:
-        print(f"  {s['tty']:<8} {s['tool']:<6} {s['profile']:<8} {s['status']:<20} "
+        mark = "~" if s.get("anchor") == "transcript" else " "
+        print(f"  {s['tty']:<8} {s['tool']:<6} {s['profile']:<8} {s['status']:<20}{mark} "
               f"{s['sid'][:13]}  last={s['last_interaction'] or '???'}")
+    if unresolved:
+        print(f"  unresolved live TUIs (no argv UUID, no transcript match): {len(unresolved)}")
+        for u in unresolved:
+            print(f"    {u['tty']:<8} {u['tool']:<6} {u['cmd'][:110]}")
+        print("  a brand-new tab may not have written its transcript yet; re-run snapshot to catch it")
     return 0
 
 

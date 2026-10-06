@@ -461,5 +461,278 @@ class RecoveryWorkflowTest(unittest.TestCase):
         self.assertEqual(result["discovery"]["rejected"][0]["sid"], S_CODEX)
 
 
+class TranscriptAnchorTest(unittest.TestCase):
+    """UUID-less argv (fresh TUI) resolution via transcript storage."""
+
+    def setUp(self):
+        self.home = fresh_home()
+        self.cwd = "/Users/x/demo"
+        self.started = datetime(2026, 10, 6, 12, 0, 0).timestamp()
+        self.bucket = os.path.join(self.home, ".claude", "projects", "-Users-x-demo")
+        os.makedirs(self.bucket, exist_ok=True)
+
+    def _claude(self, sid, cwd=...):
+        path = os.path.join(self.bucket, sid + ".jsonl")
+        rows = [{"type": "user", "cwd": self.cwd if cwd is ... else cwd, "timestamp": iso(1)}]
+        with open(path, "w") as fh:
+            fh.write("\n".join(json.dumps(x) for x in rows) + "\n")
+        return path
+
+    def _codex(self, name_time, sid, meta_id=..., cwd=...):
+        d = os.path.join(self.home, ".codex", "sessions", "2026", "10", "06")
+        os.makedirs(d, exist_ok=True)
+        path = os.path.join(d, f"rollout-{name_time}-{sid}.jsonl")
+        payload = {"id": sid if meta_id is ... else meta_id,
+                   "cwd": self.cwd if cwd is ... else cwd, "source": "cli"}
+        with open(path, "w") as fh:
+            fh.write(json.dumps({"type": "session_meta", "payload": payload}) + "\n")
+            fh.write(json.dumps({"timestamp": iso(1)}) + "\n")
+        return path
+
+    def _cands(self, tool, births):
+        with mock.patch.object(gs, "HOME", self.home), \
+             mock.patch.object(gs, "_stat_birth_mtime", side_effect=lambda p: births.get(p, (0, 0))):
+            return gs._transcript_candidates(tool, self.cwd, self.started)
+
+    def test_claude_resolves_file_born_after_start(self):
+        live = self._claude(S_HEALTHY)
+        dead = self._claude(S_DEAD)
+        cands = self._cands("claude", {
+            live: (self.started + 20, self.started + 25),
+            dead: (self.started - 10, self.started - 5)})
+        self.assertEqual(cands, [(20.0, S_HEALTHY, live)])
+
+    def test_claude_rejects_file_born_before_start(self):
+        dead = self._claude(S_DEAD)
+        self.assertEqual(self._cands("claude", {dead: (self.started - 10, self.started - 5)}), [])
+
+    def test_claude_rejects_fresh_corpse_inside_old_leeway(self):
+        # birth 3s before start was admitted by the original 5s leeway (F5); 0.5s refuses it
+        corpse = self._claude(S_DEAD)
+        self.assertEqual(self._cands("claude", {corpse: (self.started - 3, self.started - 3)}), [])
+
+    def test_claude_rejects_cwd_mismatch(self):
+        other = self._claude(S_DEAD, cwd="/Users/x/other")
+        self.assertEqual(self._cands("claude", {other: (self.started + 20, self.started + 25)}), [])
+
+    def test_claude_rejects_unverifiable_head(self):
+        path = self._claude(S_DEAD, cwd=None)
+        with open(path, "w") as fh:
+            fh.write(json.dumps({"type": "user", "message": {"content": "hi"}, "timestamp": iso(1)}) + "\n")
+        self.assertEqual(self._cands("claude", {path: (self.started + 20, self.started + 25)}), [])
+
+    def test_claude_head_cwd_beyond_five_lines_is_verified(self):
+        path = os.path.join(self.bucket, S_HEALTHY + ".jsonl")
+        rows = [{"type": "meta", "n": n} for n in range(8)] + [{"type": "user", "cwd": self.cwd, "timestamp": iso(1)}]
+        with open(path, "w") as fh:
+            fh.write("\n".join(json.dumps(x) for x in rows) + "\n")
+        cands = self._cands("claude", {path: (self.started + 20, self.started + 25)})
+        self.assertEqual(cands, [(20.0, S_HEALTHY, path)])
+
+    def test_claude_bucket_encoding_dots_underscores_spaces(self):
+        cwd = "/Users/x/.worktrees/repo wt_1"
+        bucket = os.path.join(self.home, ".claude", "projects", "-Users-x--worktrees-repo-wt-1")
+        os.makedirs(bucket, exist_ok=True)
+        path = os.path.join(bucket, S_HEALTHY + ".jsonl")
+        with open(path, "w") as fh:
+            fh.write(json.dumps({"type": "user", "cwd": cwd, "timestamp": iso(1)}) + "\n")
+        with mock.patch.object(gs, "HOME", self.home), \
+             mock.patch.object(gs, "_stat_birth_mtime", side_effect=lambda p: (self.started + 20, self.started + 25)):
+            self.assertEqual(gs._transcript_candidates("claude", cwd, self.started),
+                             [(20.0, S_HEALTHY, path)])
+
+    def test_codex_resolves_rollout_by_filename_time_and_meta(self):
+        good = self._codex("2026-10-06T12-00-20", S_HEALTHY)
+        self._codex("2026-10-06T12-00-05", S_DEAD, meta_id=S_PROSE)
+        cands = self._cands("codex", {})
+        self.assertEqual(cands, [(20.0, S_HEALTHY, good)])
+
+    def test_codex_rejects_meta_id_mismatch(self):
+        self._codex("2026-10-06T12-00-20", S_DEAD, meta_id=S_PROSE)
+        self.assertEqual(self._cands("codex", {}), [])
+
+    def test_codex_rejects_cwd_mismatch(self):
+        self._codex("2026-10-06T12-00-20", S_DEAD, cwd="/Users/x/other")
+        self.assertEqual(self._cands("codex", {}), [])
+
+
+def _proc(pid, tty, tool="claude", cwd="/Users/x/demo", started=1000.0):
+    return {"pid": pid, "tty": tty, "cmd": tool + " --x", "tool": tool, "cwd": cwd, "started": started}
+
+
+class AssignTranscriptsTest(unittest.TestCase):
+    """Joint disjoint assignment for same-bucket UUID-less TUIs (F1 regression)."""
+
+    def _assign(self, procs, mapping, seen=None):
+        with mock.patch.object(gs, "_transcript_candidates",
+                               side_effect=lambda tool, cwd, started: mapping.get(started, [])):
+            return gs._assign_transcripts(procs, seen if seen is not None else {})
+
+    def test_distracted_first_tui_keeps_own_file(self):
+        # A starts at T, chats at T+30; B starts at T+3, chats at T+10 — closest-birth
+        # alone would let A steal B's file (review probe, F1 blocker)
+        procs = [_proc(1, "ttys042", started=1000.0), _proc(2, "ttys043", started=1003.0)]
+        mapping = {1000.0: [(10.0, S_DEAD, "/b"), (30.0, S_HEALTHY, "/a")],
+                   1003.0: [(7.0, S_DEAD, "/b")]}
+        out = self._assign(procs, mapping)
+        by_pid = {p["pid"]: p for p in out}
+        self.assertEqual(by_pid[1]["sid"], S_HEALTHY)
+        self.assertEqual(by_pid[2]["sid"], S_DEAD)
+        self.assertTrue(all("sid" in p for p in out))
+
+    def test_file_shortage_sends_loser_to_unresolved(self):
+        procs = [_proc(1, "ttys042", started=1000.0), _proc(2, "ttys043", started=1003.0)]
+        mapping = {1000.0: [(10.0, S_HEALTHY, "/a")], 1003.0: [(7.0, S_HEALTHY, "/a")]}
+        out = self._assign(procs, mapping)
+        resolved = [p for p in out if "sid" in p]
+        losers = [p for p in out if "sid" not in p]
+        self.assertEqual(len(resolved), 1)
+        self.assertEqual(resolved[0]["pid"], 2)  # closest claim wins the file
+        self.assertEqual([p["pid"] for p in losers], [1])
+
+    def test_tied_closest_claim_excludes_file_for_everyone(self):
+        procs = [_proc(1, "ttys042", started=1000.0), _proc(2, "ttys043", started=1003.0)]
+        mapping = {1000.0: [(10.0, S_HEALTHY, "/a")], 1003.0: [(10.0, S_HEALTHY, "/a")]}
+        out = self._assign(procs, mapping)
+        self.assertTrue(all("sid" not in p for p in out))
+
+    def test_within_process_equidistant_alternatives_are_ambiguous(self):
+        procs = [_proc(1, "ttys042", started=1000.0)]
+        mapping = {1000.0: [(10.0, S_HEALTHY, "/a"), (10.0, S_DEAD, "/b"), (20.0, S_PROSE, "/c")]}
+        out = self._assign(procs, mapping)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["sid"], S_PROSE)  # only the unambiguous 20s candidate binds
+
+    def test_argv_owned_session_stays_with_argv(self):
+        procs = [_proc(1, "ttys042", started=1000.0)]
+        mapping = {1000.0: [(10.0, S_HEALTHY, "/a")]}
+        out = self._assign(procs, mapping, seen={S_HEALTHY: {"anchor": "argv"}})
+        self.assertEqual(len(out), 1)
+        self.assertNotIn("sid", out[0])
+
+
+class ListSessionsAnchorTest(unittest.TestCase):
+    PS_HEADER = "  PID TTY      COMMAND\n"
+
+    def _run_list(self, ps_rows, resolve):
+        def fake_run(args, **kw):
+            if args[:3] == ["ps", "-eo", "pid,tty,command"]:
+                return subprocess.CompletedProcess(args, 0, stdout=self.PS_HEADER + ps_rows)
+            raise AssertionError(f"unexpected subprocess call: {args}")
+        with mock.patch.object(gs.subprocess, "run", side_effect=fake_run), \
+             mock.patch.object(gs, "_proc_cwd", return_value="/Users/x/demo"), \
+             mock.patch.object(gs, "_proc_start", return_value=1000.0), \
+             mock.patch.object(gs, "_transcript_candidates", side_effect=resolve):
+            return gs.list_sessions()
+
+    def test_uuidless_tui_anchored_via_transcript(self):
+        rows = ("  500 ttys042 claude --dangerously-skip-permissions\n"
+                "  501 ttys043 node /x/bin/codex resume " + S_DEAD + "\n")
+        sessions = self._run_list(rows, lambda tool, cwd, started: [(5.0, S_HEALTHY, "/tmp/x.jsonl")])
+        by_sid = {s["sid"]: s for s in sessions}
+        self.assertEqual(set(by_sid), {S_HEALTHY, S_DEAD})
+        self.assertEqual(by_sid[S_HEALTHY]["anchor"], "transcript")
+        self.assertEqual(by_sid[S_HEALTHY]["transcript"], "/tmp/x.jsonl")
+        self.assertEqual(by_sid[S_DEAD]["anchor"], "argv")
+        self.assertEqual(sessions.unresolved, [])
+
+    def test_unresolvable_tui_is_reported_not_dropped(self):
+        rows = "  500 ttys042 claude --dangerously-skip-permissions\n"
+        sessions = self._run_list(rows, lambda tool, cwd, started: [])
+        self.assertEqual(list(sessions), [])
+        self.assertEqual(len(sessions.unresolved), 1)
+        self.assertEqual(sessions.unresolved[0]["tty"], "ttys042")
+        self.assertEqual(sessions.unresolved[0]["tool"], "claude")
+
+    def test_wrapper_and_vendor_share_one_tui(self):
+        # node wrapper + vendor binary on one pty must not compete for transcripts
+        # (live regression 2026-10-07: identical offers tied → every file excluded)
+        rows = ("  500 ttys042 node /x/bin/codex\n"
+                "  501 ttys042 /x/vendor/codex\n"
+                "  502 ttys043 node /x/bin/codex\n"
+                "  503 ttys043 /x/vendor/codex\n")
+        offers = {"/Users/x/demo": [(1.0, S_HEALTHY, "/a"), (90.0, S_DEAD, "/b")],
+                  "/Users/x/other": [(1.0, S_PROSE, "/c")]}
+        def fake_run(args, **kw):
+            if args[:3] == ["ps", "-eo", "pid,tty,command"]:
+                return subprocess.CompletedProcess(args, 0, stdout=self.PS_HEADER + rows)
+            raise AssertionError(f"unexpected subprocess call: {args}")
+        cwds = {500: "/Users/x/demo", 501: "/Users/x/demo", 502: "/Users/x/other", 503: "/Users/x/other"}
+        with mock.patch.object(gs.subprocess, "run", side_effect=fake_run), \
+             mock.patch.object(gs, "_proc_cwd", side_effect=lambda pid: cwds[pid]), \
+             mock.patch.object(gs, "_proc_start", return_value=1000.0), \
+             mock.patch.object(gs, "_transcript_candidates",
+                               side_effect=lambda tool, cwd, started: offers[cwd]):
+            sessions = gs.list_sessions()
+        by_tty = {s["tty"]: s["sid"] for s in sessions}
+        self.assertEqual(by_tty, {"ttys042": S_HEALTHY, "ttys043": S_PROSE})
+        self.assertEqual(sessions.unresolved, [])
+        self.assertEqual({s["tty"] for s in sessions}, {"ttys042", "ttys043"})
+
+    def test_resolve_disabled_keeps_argv_only(self):
+        rows = "  500 ttys042 claude --dangerously-skip-permissions\n"
+        def fake_run(args, **kw):
+            if args[:3] == ["ps", "-eo", "pid,tty,command"]:
+                return subprocess.CompletedProcess(args, 0, stdout=self.PS_HEADER + rows)
+            raise AssertionError(f"unexpected subprocess call: {args}")
+        with mock.patch.object(gs.subprocess, "run", side_effect=fake_run), \
+             mock.patch.object(gs, "_transcript_candidates") as resolver:
+            sessions = gs.list_sessions(resolve_uuidless=False)
+        self.assertEqual(list(sessions), [])
+        resolver.assert_not_called()
+
+    def test_snapshot_output_accounts_unresolved(self):
+        live = gs.SessionList([], unresolved=[{"pid": 1, "tty": "ttys042", "tool": "claude",
+                                               "cmd": "claude --dangerously-skip-permissions"}])
+        output = io.StringIO()
+        with mock.patch.object(gs, "list_sessions", return_value=live), \
+             mock.patch.object(gs, "write_snapshot", return_value="x.json"), redirect_stdout(output):
+            self.assertEqual(gs.cmd_snapshot(argparse.Namespace(out=None)), 0)
+        self.assertIn("unresolved live TUIs", output.getvalue())
+
+    def test_resolved_codex_liveness_reads_transcript_without_index(self):
+        home = fresh_home()
+        d = os.path.join(home, ".codex", "sessions", "2026", "10", "06")
+        os.makedirs(d, exist_ok=True)
+        path = os.path.join(d, "rollout-2026-10-06T12-00-00-" + S_CODEX + ".jsonl")
+        with open(path, "w") as fh:
+            fh.write(json.dumps({"type": "session_meta", "payload": {"id": S_CODEX}}) + "\n")
+            fh.write(json.dumps({"timestamp": iso(3)}) + "\n")
+        entry = {"tool": "codex", "sid": S_CODEX, "transcript": path}
+        with mock.patch.object(gs, "codex_liveness", side_effect=AssertionError("index must not be used")):
+            self.assertEqual(gs._entry_liveness(entry), (iso(3), "ok"))
+
+    def test_resolved_codex_without_timestamps_is_stale_not_no_artifact(self):
+        path = os.path.join(fresh_home(), "rollout.jsonl")
+        with open(path, "w") as fh:
+            fh.write(json.dumps({"type": "session_meta", "payload": {"id": S_CODEX}}) + "\n")
+        ts, err = gs._entry_liveness({"tool": "codex", "sid": S_CODEX, "transcript": path})
+        self.assertEqual((ts, err), (None, "ok"))
+        self.assertEqual(gs.classify(ts, err), "stale")
+
+    def test_check_recognizes_transcript_anchored_live_session(self):
+        home = fresh_home()
+        manifest = os.path.join(home, "snap.json")
+        with open(manifest, "w") as fh:
+            json.dump({"sessions": [{"tool": "claude", "sid": S_HEALTHY}]}, fh)
+        live = gs.SessionList([{"sid": S_HEALTHY, "tty": "ttys042", "tool": "claude", "anchor": "transcript"}])
+        output = io.StringIO()
+        with mock.patch.object(gs, "list_sessions", return_value=live), redirect_stdout(output):
+            self.assertEqual(gs.main(["check", "--snapshot", manifest]), 0)
+        self.assertIn("1 present, 0 missing", output.getvalue())
+
+    def test_proc_start_parses_both_lstart_field_orders(self):
+        expect = datetime(2026, 10, 6, 17, 27, 3).timestamp()
+        for text in ("Tue Oct  6 17:27:03 2026\n", "Tue  6 Oct 17:27:03 2026    \n"):
+            with mock.patch.object(gs.subprocess, "run",
+                                   return_value=subprocess.CompletedProcess([], 0, stdout=text)):
+                self.assertEqual(gs._proc_start(1), expect, text)
+
+    def test_proc_start_garbage_is_none(self):
+        with mock.patch.object(gs.subprocess, "run",
+                               return_value=subprocess.CompletedProcess([], 0, stdout="???\n")):
+            self.assertIsNone(gs._proc_start(1))
+
+
 if __name__ == "__main__":
     unittest.main()
