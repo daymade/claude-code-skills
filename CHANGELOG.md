@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **continue-codex-work** (`daymade-claude-code` v4.19.5 → v4.20.0): Honor the latest authorized delivery stage, keep route-specific blockers local, and verify results at the consumption surface. Reconcile existing native Goals through the current host's verified recovery contract, preserving objective, budget and usage; distinguish active state from observed automatic continuation. Change type: continuation workflow correction.
+
 - **read-codex-history** (`daymade-claude-code` v4.19.4 → v4.19.5): Read paginated subagent and guardian-review originals with copied model context. Keep copied records separate from the child's own inputs and briefing, preserve physical coordinates and tool pairing, and require explicit parent relationships with strict identity and ordinal validation. Older two-header files without a proven relationship remain rejected.
 - **skill-creator** (`daymade-skill` v1.63.0 → v1.64.0): Match permission fixtures to the actual test-process identity, verify writable and denied controls, and report mismatched assumptions before attributing a product defect. Preserve genuine privileged-runtime tests and required repository checks. Change type: existing verification workflow clarification.
 - **docs-cleaner** (`daymade-docs` v1.24.0): enforce the ordered drift test for each claim, including historical entries: remove derivable aggregates, replace authoritative copies with links, and retain independent historical atoms without substituting current values. Remove the historical-first override and calculated reduction example.

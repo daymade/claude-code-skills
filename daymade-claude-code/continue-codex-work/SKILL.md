@@ -52,6 +52,7 @@ read receipt and current-state verification:
 |---|---|
 | Original business outcome | Earliest still-governing human request across inherited and selected timelines |
 | Current explicit request | Latest human request that is not only a continuation cue |
+| Current delivery stage / non-goals | Latest human correction narrowing what to deliver now and what to defer; do not promote the original long-term ambition back above it |
 | Already completed | Current independent verification, not old Agent narration |
 | Still unfulfilled | Requested result without completion evidence |
 | User corrections / do-not-repeat | Human messages rejecting a route, assumption, or output |
@@ -70,6 +71,10 @@ verified parent snapshot. A local cue is not a standalone goal.
 4. Retrieve and reuse prior successful assets before creating a replacement.
 5. For transient failures such as usage limits or service errors, verify whether the
    original process later resumed and finished before duplicating work.
+   For an existing native Goal, use [Native Goal reconciliation](references/native-goal-reconciliation.md)
+   to distinguish unfinished business, runtime status, supported recovery and observed
+   automatic continuation. An absent recovery tool in one tool menu is not proof that
+   the live host has no recovery control.
 6. Check what was **in flight** when the session died. A foreground long task
    (remote diagnostic, download, build) dies with its session, and its unpersisted
    output dies with the pipe — the rollout records that the task started, never its
@@ -86,8 +91,15 @@ Perform the next direct action and close its feedback loop. Reviews, Skill work,
 infrastructure cleanup, format polish, and extra safety machinery remain subordinate
 unless they directly unblock the original result or the user explicitly promoted them.
 
-Before every material branch, ask: “If this succeeds, which original unfulfilled
-result becomes smaller?” No answer means the branch is not continuation work.
+Before every material branch, ask: “If this succeeds, which unfulfilled result in
+the current authorized stage becomes smaller?” No answer means the branch is not
+continuation work. A blocked source, login or provider route blocks only dependent
+work; execute other necessary authorized work before declaring the whole task blocked.
+
+Verify the result at the user's consumption surface: searchable bytes alone do not
+prove a readable page, and generated suggestions do not prove saved human decisions.
+Reuse passed checks for unchanged inputs; expand verification only for new changes,
+failures or unresolved evidence gaps.
 
 Do not run `codex resume` or `codex --continue`. Do not overwrite unrelated changes.
 
