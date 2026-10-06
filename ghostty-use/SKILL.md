@@ -5,7 +5,8 @@ description: >-
   across reboots. Use when quitting the Mac for an update (保存终端会话 / 重启前备份终端),
   after restart to reopen tabs with their original session IDs (恢复之前的窗口 / restore
   my ghostty tabs), or to audit which sessions survived. Not for resuming one conversation
-  via its own --resume, terminal screenshots, or tmux state.
+  via its own --resume, terminal screenshots, or tmux state. Also use for periodic
+  change-only snapshots (定期增量快照 / 没变化不记录).
 ---
 
 # ghostty-use
@@ -24,6 +25,7 @@ automatic reconciliation that makes every paste failure visible.
 | You just said / want | Run |
 |---|---|
 | Quitting for an update / reboot ("重启前保存会话") | `snapshot` |
+| Periodic backup, save only changes ("定期增量快照") | Read automatic-snapshots.md, then `ghostty_watch.py install --apply` |
 | Rebooted, want tabs back ("恢复之前的窗口") | Use a suitable snapshot; if absent or outdated, `reconstruct`, then `restore --all` on the selected manifest |
 | "Was anything lost?" / suspicion after restore | `check` |
 | One specific session to bring back | `restore --only <id-prefix>` |
@@ -35,7 +37,7 @@ automatic reconciliation that makes every paste failure visible.
 python3 <skill-dir>/scripts/ghostty_session.py snapshot
 
 # After restart (from any directory; needs Accessibility permission for keystrokes):
-python3 <skill-dir>/scripts/ghostty_session.py restore        # active sessions only
+python3 <skill-dir>/scripts/ghostty_session.py restore        # manual: active only; automatic: full recorded set
 python3 <skill-dir>/scripts/ghostty_session.py restore --all  # include waiting/quota/dead/stale/unknown records
 ```
 
@@ -45,6 +47,17 @@ that prints `N/M present`, a manual reopen command and a retry command containin
 missing IDs. Read that result before declaring success; per-tab `SENT (unverified)`
 is a paste acknowledgement, not proof that a session reopened. Re-running the same
 manifest opens only the IDs still missing. `--dry-run` prints commands without GUI actions.
+
+## Automatic change-only backups
+
+Read [automatic-snapshots.md](references/automatic-snapshots.md) before installing
+or operating `scripts/ghostty_watch.py`. Its default calendar observes every
+minute, saves only changed restore state, and keeps all prior versions. Unchanged
+rounds write no snapshot or routine log. Automatic manifests cover Ghostty
+process descendants without transcript reads; their liveness is explicitly unknown
+and `restore` selects the whole recorded set. UUID-less TUIs remain unresolved;
+partial observations preserve prior missing IDs conservatively. The watcher never
+opens apps or tabs. Manual snapshots keep their active-only restore default.
 
 ## No suitable snapshot: reconstruct the recovery manifest
 

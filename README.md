@@ -2829,6 +2829,7 @@ Snapshot every live Claude Code / Codex session in Ghostty before a reboot, reop
 - Session anchor is the command-line UUID, immune to argv[0] bare-vs-qualified instability
 - Auto-reconciliation after restore: every missed tab prints its manual reopen command
 - Optional profile-env mapping (`~/.ghostty-session/profile-env.json`) so profile-bootstrapped sessions restore with the same environment
+- Optional every-minute calendar backups save only changed restore state; unknown UUID coverage is explicit and prior versions are retained
 - Synthetic-fixture self-test suite registered in CI (stdlib-only)
 
 **Example usage:**
@@ -2843,7 +2844,7 @@ claude plugin install ghostty-use@daymade-skills
 "检查一下有没有会话丢了"
 ```
 
-**Requirements**: macOS with Ghostty; Accessibility permission for the restore keystrokes; `python3` (stdlib-only). Snapshot state lives in `~/.ghostty-session/`.
+**Requirements**: macOS with Ghostty; Accessibility permission for the restore keystrokes; `python3` (stdlib-only); `uv` for one-time scheduled-runtime setup. Snapshot state lives in `~/.ghostty-session/`.
 
 ---
 
