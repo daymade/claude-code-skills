@@ -30,6 +30,7 @@ MAX_PROCESS_BYTES = 8 << 20
 MAX_PROCESSES = 25000
 MAX_SESSIONS = 256
 MAX_LOG_BYTES = 1 << 20
+DEFAULT_EVERY_MINUTES = 10
 
 
 def home_state():
@@ -358,7 +359,7 @@ def cycle(state, observer=observe):
         return dict(summary, state='changed', snapshot=str(archive))
 
 
-def calendar_definition(state, every_minutes=1):
+def calendar_definition(state, every_minutes=DEFAULT_EVERY_MINUTES):
     state = Path(state).expanduser().absolute()
     return {'Label': LABEL,
             'ProgramArguments': [str(owned_interpreter(state)), str(owned_script(state)), 'run', '--state-dir', str(state)],
@@ -368,6 +369,79 @@ def calendar_definition(state, every_minutes=1):
             'StandardErrorPath': str(state / 'watcher' / 'err.log'),
             'Nice': 10, 'ThrottleInterval': 30,
             'EnvironmentVariables': {'PATH': '/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin'}}
+
+
+def calendar_minutes(definition):
+    """Recognize only the minute-only calendar contract this installer owns."""
+    entries = definition.get('StartCalendarInterval') if isinstance(definition, dict) else None
+    entries = [entries] if isinstance(entries, dict) else entries
+    if not isinstance(entries, list) or not entries:
+        return None
+    minutes = []
+    for entry in entries:
+        if not isinstance(entry, dict) or set(entry) != {'Minute'}:
+            return None
+        minute = entry['Minute']
+        if type(minute) is not int or not 0 <= minute < 60 or minute in minutes:
+            return None
+        minutes.append(minute)
+    return sorted(minutes)
+
+
+def active_calendar_minutes(text):
+    """Read calendarinterval descriptors only; unfamiliar launchctl text is unknown."""
+    lines = text.splitlines()
+    def block(start):
+        depth = 0
+        for end in range(start, len(lines)):
+            depth += lines[end].count('{') - lines[end].count('}')
+            if depth == 0:
+                return lines[start + 1:end], end
+            if depth < 0:
+                break
+        return None
+    starts = [i for i, line in enumerate(lines) if re.fullmatch(r'\s*event triggers = \{\s*', line)]
+    if len(starts) != 1 or block(starts[0]) is None:
+        return None
+    body, _ = block(starts[0])
+    # Restrict subsequent block parsing to this event-triggers section.
+    lines, entries, cursor = body, [], 0
+    while cursor < len(lines):
+        if not lines[cursor].strip():
+            cursor += 1
+            continue
+        if not re.fullmatch(r'\s*[^{}]+ => \{\s*', lines[cursor]):
+            return None
+        event = block(cursor)
+        if event is None:
+            return None
+        event_lines, end = event
+        cursor = end + 1
+        streams = [m[1] for line in event_lines if (m := re.fullmatch(r'\s*stream = (\S+)\s*', line))]
+        if len(streams) != 1:
+            return None
+        if streams[0] != 'com.apple.launchd.calendarinterval':
+            continue
+        descriptor = '\n'.join(event_lines)
+        match = re.search(r'(?m)^\s*descriptor = \{\s*\n([^{}]*)^\s*\}\s*$', descriptor)
+        if not match:
+            return None
+        values = [line.strip() for line in match[1].splitlines() if line.strip()]
+        if len(values) != 1 or not (value := re.fullmatch(r'"Minute" => (\d+)', values[0])):
+            return None
+        entries.append({'Minute': int(value[1])})
+    return calendar_minutes({'StartCalendarInterval': entries})
+
+
+def schedule_readback(target, active_text):
+    try:
+        disk = calendar_minutes(plistlib.loads(Path(target).read_bytes()))
+    except (OSError, ValueError):
+        disk = None
+    active = active_calendar_minutes(active_text)
+    return {'disk_minutes': disk if disk is not None else 'unknown',
+            'active_minutes': active if active is not None else 'unknown',
+            'match': disk == active if disk is not None and active is not None else 'unknown'}
 
 
 def launch_target():
@@ -381,7 +455,7 @@ def system_run(command, check=True):
     return result
 
 
-def install(state, every_minutes=1, apply=False):
+def install(state, every_minutes=DEFAULT_EVERY_MINUTES, apply=False):
     state = Path(state).expanduser().absolute()
     definition = calendar_definition(state, every_minutes)
     target = launch_target()
@@ -421,19 +495,27 @@ def install(state, every_minutes=1, apply=False):
     service = f'gui/{os.getuid()}/{LABEL}'
     loaded = system_run(['/bin/launchctl', 'print', service], check=False)
     same = target.exists() and target.read_bytes() == definition_bytes
-    if loaded.returncode == 0 and not same:
+    expected_minutes = calendar_minutes(definition)
+    active_matches = loaded.returncode == 0 and active_calendar_minutes(loaded.stdout) == expected_minutes
+    reload_needed = not same or not active_matches
+    if loaded.returncode == 0 and reload_needed:
         system_run(['/bin/launchctl', 'bootout', service])
     if not same:
         atomic_bytes(target, definition_bytes)
     system_run(['/bin/launchctl', 'enable', f'user/{os.getuid()}/{LABEL}'])
-    if loaded.returncode != 0 or not same:
+    if loaded.returncode != 0 or reload_needed:
         system_run(['/bin/launchctl', 'bootstrap', f'gui/{os.getuid()}', str(target)])
     active = system_run(['/bin/launchctl', 'print', service]).stdout
     if str(interpreter) not in active or str(owned_script(state)) not in active:
         raise ValueError('launchd runtime readback mismatch')
     if plistlib.loads(target.read_bytes()) != definition:
         raise ValueError('LaunchAgent disk readback mismatch')
-    return {'installed': True, 'label': LABEL, 'runtime': str(interpreter), 'target': str(target)}
+    schedule = schedule_readback(target, active)
+    if schedule['active_minutes'] == 'unknown':
+        raise ValueError('active launchd calendar schedule unknown; install not verified')
+    if schedule['active_minutes'] != expected_minutes or schedule['match'] is not True:
+        raise ValueError('active launchd calendar does not match disk/requested minutes')
+    return {'installed': True, 'label': LABEL, 'runtime': str(interpreter), 'target': str(target), 'schedule': schedule}
 
 
 def stop():
@@ -458,6 +540,7 @@ def status(state):
         for key in ('last exit code', 'runs', 'state', 'pid'):
             match = re.search(r'^\s*' + re.escape(key) + r'\s*=\s*(.+)$', active.stdout, re.MULTILINE)
             result[key] = match[1] if match else 'unknown'
+    result['schedule'] = schedule_readback(target, active.stdout if active.returncode == 0 else '')
     latest = Path(state) / 'snapshots' / 'latest.json'
     if latest.exists():
         doc = read_manifest(latest)
@@ -516,7 +599,7 @@ def main(argv=None):
         item.add_argument('--state-dir', type=gs.nonempty, default=str(home_state()))
         if command == 'install':
             item.add_argument('--apply', action='store_true')
-            item.add_argument('--every-minutes', type=int, choices=(1, 2, 3, 5, 10, 15, 20, 30, 60), default=1)
+            item.add_argument('--every-minutes', type=int, choices=(1, 2, 3, 5, 10, 15, 20, 30, 60), default=DEFAULT_EVERY_MINUTES)
     args = parser.parse_args(argv)
     state = Path(args.state_dir).expanduser().absolute()
     try:
