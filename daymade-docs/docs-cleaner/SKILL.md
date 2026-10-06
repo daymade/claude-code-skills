@@ -65,7 +65,7 @@ available, Mode 2 still handles the file — you just do the value analysis by h
 ## The Drift Test (the core of both modes)
 
 Before writing any value into a document — and when deciding whether an existing one
-earns its place — ask these three questions **in order, and stop at the first hit**:
+earns its place — ask these questions **in order, and stop at the first hit**:
 
 **1. Can this be computed from details already recorded here or in the authoritative
 source?**
@@ -86,58 +86,28 @@ for. Check for a generator before deleting one.
 **2. Not computable, but the same fact is authoritatively defined somewhere else?**
 → It is a **copy**. Link to that definition. Do not restate the value.
 
-**3. Neither — it records what was true at a particular moment?**
-→ Now you may write it down. Price history rows, decision log entries, "as of 2026-03 the
-vendor required X" — these are the legitimate case, and deleting them destroys an audit
-trail.
+**3. Neither derivable nor copied — it independently records what was true at a
+particular moment?**
+→ It may remain as an **atomic historical observation**: a dated change, original
+measurement, price observation or decision. Never replace its past value with a
+current value or a current-config link.
 
-Question 3 needs care, because *every* stale value was true at some moment — that is what
-made it stale. But note what question 3 does and does not decide.
+Apply the ordered test to each claim, including claims inside changelogs,
+postmortems and dated notes. A date does not exempt a locally derivable total,
+ratio or copied summary from questions 1 and 2. Remove that derived or copied
+restatement while preserving the independent event, measurement and causal context.
 
-**It decides one thing: this passage is not a drift problem.** It is not a derived value and
-not a copy, so none of the drift remedies apply to it — do not recompute it, do not link it
-away, do not "update" it to the current value. Whether the passage is worth keeping at all
-is a *content-value* question, and it is answered in Mode 2's value analysis with the
-document's owner, not here.
+For example, a dated upload-limit change records the change at that time; today's
+config is a different fact. A region-addition event survives removal of a total
+computable from its recorded historical region details. Do not recompute that old
+total using today's regions.
 
-**Three earlier drafts of this section tried to decide keep-vs-delete right here, and each
-one failed review.** The reason is worth stating so nobody rebuilds it: every version needed
-the agent to know something it does not have — whether the content could be regenerated, at
-what cost, by whom, or whether the other copy someone believes exists actually does. A
-delete authorized on an unverifiable belief is the self-certifying shape this skill exists
-to remove, and it would be the only evidence-free deletion in the file.
-
-So the test is just the classification:
-
-> **Is this passage describing how things are now?** Then a dated old value in it is a
-> question 1 or 2 case wearing a date, and the date does not rescue it.
->
-> **Or is it recording what was true at a moment** — a changelog line, a decision log entry,
-> a price history row, an incident timeline, a dated measurement, a postmortem? Then it is
-> question 3. Leave the value alone.
-
-**Apply this to the passage, not the file** — where *passage* means the unit that would be
-read as one thing: **the entry, the table row, the dated note**, the section under one
-heading. A how-to guide can contain one genuinely
-historical block, and a changelog can carry a current-state summary at the top; a file-level
-verdict gets both wrong. But do not run it *below* the passage either — a postmortem's
-timeline and its root-cause section are one record, and splitting them so the timeline can
-be deleted as "reproducible from logs" destroys the thing whose parts they are.
-
-**Question 3 takes precedence over questions 1 and 2 for these passages, even though it is asked
-later.** A changelog line "2026-01-04: raised the upload limit to 50 MB" *does* hit question
-2 — the upload limit is authoritatively defined in config — and stopping there would replace
-it with a link and destroy the record. Question 1 does the same damage by a different route:
-"2026-01-04: added eu-west-3, bringing us to 12 regions" contains a count, and a count is
-question 1's own example — but recomputing it yields *today's* region count and rewrites what
-that day recorded. The stop-at-first-hit rule is about efficiency, not about routing history
-into a link or into a recomputation.
-
-When you cannot tell whether a passage is history or current-state, **ask — do not resolve
-it by deleting.** The asymmetry is the reason: deleting a record you mistook for a
-current-state restatement destroys the only copy, while keeping a restatement you mistook
-for a record costs a few lines. If you are running unattended and cannot ask, leave the
-passage untouched and report it.
+A unique historical atom that passes questions 1 and 2 is not a drift repair.
+Its content value still receives Mode 2's analysis under the existing authorization.
+When the evidence does not establish whether a claim is derivable, copied or
+independently observed, retain it as unresolved and report the gap; do not guess a
+basis for deletion. New approval is needed only when the intended action exceeds
+the authorization already given.
 
 **Linking only solves case 2.** Pointing a link at a derived value is a category error:
 there is no single authoritative cell to point at, so the link becomes scaffolding that
@@ -337,11 +307,9 @@ For each document, build a section-by-section table:
 | Setup Steps | 40 | Condense | Verbose but essential |
 | Env Var Table | 30 | Delete | Duplicates the table in `README.md`, which is authoritative |
 
-Note what the Delete example is *not*: a dated test run, a meeting note, an incident
-timeline. Those look like the easiest deletions in any document and they are the one class
-this skill will not let you delete quietly — see the rule three paragraphs down. The
-example above is a Delete because a named file holds the same content, which is the only
-Delete you can justify by pointing at something.
+The Delete example names an authoritative duplicate. Historical claims receive the
+same ordered Drift Test; a historical event and the current configuration are not
+necessarily the same fact.
 
 - **Keep** — unique, essential, frequently referenced
 - **Condense** — valuable but verbose
@@ -370,13 +338,11 @@ directions:
 
 - A section that only restates values computable from elsewhere is a **Delete** regardless
   of how well written it is (question 1).
-- A section **recording what was true at a moment** — a changelog, a decision log, an
-  incident timeline, a dated measurement, a postmortem — is question 3, and question 3 says
-  only that drift remedies do not apply to it. Its keep-or-delete verdict is a value
-  judgment you make here, on this table, like any other row. **The one thing you may not do
-  is delete it as a "one-time record" without saying so out loud**: it is the class the
-  Drift Test warns is an audit trail, so it goes to the owner as a named proposed deletion
-  with your reason, never as a quiet Delete row.
+- Historical sections still receive questions 1 and 2 per claim. Their locally
+  derivable aggregates and copied restatements can be removed; independent atomic
+  observations may remain under question 3. Name any proposed removal of a unique
+  historical atom in the value analysis and respect existing authorization; age or
+  "one-time record" alone is not a deletion reason.
 
 Detailed criteria: `references/value_analysis_template.md`.
 
@@ -388,17 +354,16 @@ plan Phase 4 asks you to get signed off before anything is deleted:
 ```
 Before: 726 lines (3 files, high redundancy)
 After:  ~100 lines (1 file + a pointer from the project's main doc)
-Reduction: 86%
 Value preserved: pending — established by the preservation check after execution
 ```
 
-The line counts and the reduction are measurements you can take now. **"Value preserved" is
+The before/after line measurements describe the proposed structure. **"Value preserved" is
 not**: at plan time it would be the deleting party asserting its own deletion was harmless,
 which is the self-certifying shape this skill exists to remove.
 
 It is filled in after Phase 4 step 7, and it is **not a percentage** — a percentage of what
 would have to be invented. It is a count against a stated denominator: *"all 34 items on
-the step-1 inventory survived"*, or *"31 of 34"* naming the three and where each went.
+the step-1 inventory survived"*, or *"31 of 34"* naming the missing items and where each went.
 
 **The denominator is the Keep and Condense items only.** The step-1 inventory deliberately
 also covers Delete sections, and those items are *supposed* to be absent from the
@@ -716,8 +681,8 @@ weakened sentence.
 | **Delete** | Per saved item: where the surviving copy is, or — if there is none — the reason it is going. "It looked redundant" is not a reason; naming what was in it is. |
 
 The categories below are a **recall prompt, not the unit** — they exist so you notice a class
-you forgot, and each one still resolves to per-item evidence from the table above. Six ticked
-categories is not six pieces of evidence.
+you forgot, and each one still resolves to per-item evidence from the table above. Ticked
+categories are not per-item evidence.
 
 | Category (applies to Keep and Condense alike) | Evidence to produce |
 |---|---|
@@ -739,8 +704,8 @@ Anything you cannot produce a hit for was not preserved — it was deleted. That
 right call, but it belongs in the report as a deletion, not inside a checkmark.
 
 **A zero-deletion outcome is a legitimate result.** If the value analysis says every
-section earns its place, report "nothing to consolidate" and stop. The reduction percentage
-in Phase 3 is a measurement, never a target — an agent that deletes something in order to
+section earns its place, report "nothing to consolidate" and stop. Line reduction
+is never a target — an agent that deletes something in order to
 have a number to report has inverted the whole point.
 
 ---
