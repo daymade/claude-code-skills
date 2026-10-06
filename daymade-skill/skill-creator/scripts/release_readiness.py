@@ -79,15 +79,33 @@ def evidence(review_repo, review_commit, review_path, candidate, paths):
     if git(root, "hash-object", "--no-filters", str(file)) != blob:
         raise ReleaseError("review working file does not match the committed blob")
     text = git(root, "show", review_commit + ":" + review_path)
-    blocks = re.findall(r"<!-- skill-release-review\s*\n(.*?)\n-->", text, re.S)
-    if len(blocks) != 1:
-        raise ReleaseError("review needs exactly one skill-release-review JSON block")
-    data = json.loads(blocks[0])
+    data = _parse_review_block(text)
     if not isinstance(data, dict) or data.get("schema") != 1 or data.get("result") != "passed":
         raise ReleaseError("review metadata is missing or not passed")
     if data.get("candidate") != candidate or scope(data.get("skill_paths")) != paths:
         raise ReleaseError("review does not cover this candidate and exact skill scope")
     return dict(review_repo=str(root), review_commit=review_commit, review_path=review_path, review_blob=blob)
+
+
+def _parse_review_block(text: str):
+    """Extract the one skill-release-review JSON block from review markdown.
+
+    Two failure shapes share neither cause nor fix, so they get distinct
+    errors: the opener comment is absent entirely (the block was never added),
+    versus the opener is present but nothing parses (a malformed closer such
+    as `--->`, or JSON the parser cannot read). Reporting the first as
+    "needs exactly one block" sent a maintainer to re-check content that was
+    fine while the actual defect was three dashes in the closer (2026-10-06).
+    """
+    blocks = re.findall(r"<!-- skill-release-review\s*\n(.*?)\n-->", text, re.S)
+    if len(blocks) == 1:
+        return json.loads(blocks[0])
+    if "<!-- skill-release-review" not in text:
+        raise ReleaseError("review has no skill-release-review block — add one "
+                           "(<!-- skill-release-review\\n{json}\\n-->) and commit it")
+    raise ReleaseError(f"review has a skill-release-review opener but {len(blocks)} parseable "
+                       "block(s), expected exactly 1 — check the closer is exactly `-->` "
+                       "(not `--->`)")
 
 
 def attest(repo, candidate, paths, review_repo=None, review_commit=None, review_path=None,
