@@ -107,9 +107,7 @@ Within an already-required review, examine a changed operating default or thresh
 against the original business request separately from its implementation. Distinguish
 explicit user or domain contracts from reversible assumptions; check whether the
 business acceptance criterion and relevant workload/cost evidence support the
-choice, or name the missing basis. For cadence changes, examine the captured state,
-tolerated window, change lifetime and single-round cost. Passing value tests proves
-implementation compliance, not
+choice, or name the missing basis. Passing value tests proves implementation compliance, not
 that the chosen value suits the task. Add this question to the existing bounded
 pass; it does not create another review obligation.
 
