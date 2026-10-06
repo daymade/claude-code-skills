@@ -21,7 +21,7 @@ An explicit user interval or applicable domain SLA takes precedence. Without a
 user SLO, state a reversible default, its basis and any unverified lifecycle or
 coverage assumptions in the current task's plan or result. Existing authorization
 governs the change; reversible parameters need no separate approval gate.
-Ten minutes is not a global minimum: short-lived states may require faster capture.
+No workflow's default interval is a global minimum: short-lived states may require faster capture.
 
 ## Verify observation cost and delivery
 
