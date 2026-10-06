@@ -11,13 +11,13 @@ description: >-
 
 # ghostty-use
 
-Seamlessly carry Claude Code and Codex terminal sessions across a reboot: capture every
-live session with a liveness grade before shutdown, reopen all worthwhile tabs with their
-original session IDs after restart, and prove nothing was silently dropped.
+Capture identifiable Claude Code and Codex terminal sessions before a reboot and
+reopen recorded IDs afterwards. Manual snapshots grade liveness; automatic backups
+store recovery metadata with explicit partial coverage and unknown liveness.
 
 Ghostty on macOS has no session-restoration CLI or AppleScript tab dictionary (verified
 on Ghostty 1.3.1, 2026-10-04), so this skill walks a practical loop around that limit:
-`ps`-derived session inventory → liveness-graded snapshot → keystroke-paste restore →
+manual `ps` inventory → liveness-graded snapshot → keystroke-paste restore →
 automatic reconciliation that makes every paste failure visible.
 
 ## Entry decision tree
@@ -51,8 +51,8 @@ manifest opens only the IDs still missing. `--dry-run` prints commands without G
 ## Automatic change-only backups
 
 Read [automatic-snapshots.md](references/automatic-snapshots.md) before installing
-or operating `scripts/ghostty_watch.py`. Its default calendar observes every
-10 minutes, saves only changed restore state, and keeps all prior versions. Unchanged
+or operating `scripts/ghostty_watch.py`. It saves only changed restore state and
+keeps all prior versions. Unchanged
 rounds write no snapshot or routine log. Automatic manifests cover Ghostty
 process descendants without transcript reads; their liveness is explicitly unknown
 and `restore` selects the whole recorded set. UUID-less TUIs remain unresolved;
@@ -95,8 +95,8 @@ not by underscores in filenames. `--codex-home` selects a nondefault Codex store
 Past membership proves only that a session appeared in that snapshot. Indexed
 terminal candidates prove terminal origin, not that the tab was live at shutdown.
 Review timestamps/titles and select the intended set before restore. `--limit` is a
-hard cap on indexed candidates inspected, with a default 72-hour window; widen the
-bounds only when needed. No snapshot means Claude membership remains unknown;
+hard cap on indexed candidates inspected; widen discovery bounds only when needed.
+No snapshot means Claude membership remains unknown;
 reconstruction does not discover Claude sessions. Preserve explicit Claude records
 from a known snapshot rather than claiming an exhaustive recovery.
 
@@ -105,7 +105,7 @@ existing output. Exit 0 means the selected evidence was verified; exit 1 means t
 manifest lists rejected candidates requiring attention; exit 2 means invalid input
 or unavailable evidence. Dry-run output is JSON for inspection.
 
-## What snapshot records per session
+## What manual snapshot records per session
 
 - **Anchor**: the session UUID from the process command line (never match on process
   names — argv[0] flips between bare `claude` and `/usr/local/bin/claude`, and name

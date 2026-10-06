@@ -8,7 +8,9 @@ description: >-
 
 # Periodic snapshots that save only changes
 
-Use `scripts/ghostty_watch.py` for scheduled observation. It never launches
+Use the [watcher implementation](../scripts/ghostty_watch.py) for scheduled observation.
+It defines the requested default cadence, resource limits, installer runtime and
+owned paths; the loaded launchd job is the authority for the active schedule. It never launches
 Ghostty, opens tabs, restores sessions or reads conversation history. Manual
 `snapshot` remains available for content-based liveness grading.
 
@@ -33,38 +35,30 @@ python3 <skill-dir>/scripts/ghostty_watch.py probe
 python3 <skill-dir>/scripts/ghostty_watch.py stop
 ```
 
-Expected install result: `installed: true`, label `io.ghostty.session-snapshot`,
-and an owned runtime path. The installer creates a Python 3.12 environment once
-with `uv`, then registers its fixed `~/.ghostty-session/watcher/venv/bin/python`.
-There is no package-manager dispatcher in launchd. Reinstall updates the owned
-script copies and enables the same job; it does not create another label.
+Expected install result: `installed: true`, with the verified runtime and schedule.
+The installer creates its owned environment once with `uv` and registers the
+fixed interpreter directly. Reinstall updates the owned script copies and enables
+the same job without creating another label.
 
-The LaunchAgent uses `RunAtLoad` and `StartCalendarInterval` every 10 minutes, with
-no `KeepAlive`. The shared default is 10 minutes; `install --every-minutes 5 --apply`
-changes the interval if asked. Install independently compares the loaded
-calendarinterval minutes with the requested definition and disk plist. `status`
-shows `schedule.active_minutes`, `disk_minutes` and `match`; missing or unfamiliar
-calendar formats remain `unknown`. Unrelated event-trigger Minute fields are not
-calendar evidence.
+Use the read-only `install` plan for the currently requested definition and
+`status` for the loaded schedule. Install independently compares calendarinterval
+minutes with the requested definition and disk plist. Status exposes active and
+disk minutes plus match or unknown; unrelated event-trigger fields are not evidence.
+`install --every-minutes 5 --apply` is an explicit interval request, not a statement
+of the current default. The calendar uses `RunAtLoad` without `KeepAlive`.
 
-The 10-minute default targets recovery metadata for long-lived terminal sessions:
-session IDs, working directories and launch parameters. Chat-body persistence
-belongs to the conversation application; this watcher captures the reopen list.
-When newly opened or replaced sessions need faster ID capture, choose an explicit
-shorter interval, such as 1 or 5 minutes, against that required window.
+The default suits recovery metadata for long-lived sessions: IDs, working
+directories and launch parameters. Chat-body persistence belongs to the conversation
+application. Request a shorter interval when new or replaced sessions need faster
+ID capture; use the existing manual `snapshot` before a planned reboot when needed.
+Collection and scheduling add delay beyond the chosen interval; sleep or failed
+observations can postpone capture further.
 
-While the Mac is awake and observations succeed, the nominal backup delay is
-0–10 minutes plus collection and scheduling delay. Sleep or failed observations
-can delay it further. Save a manual snapshot before a planned reboot when that
-window is too long.
-A supervisor kills the observation process group after 15 seconds. OS reads and
-process counts are bounded; a failed or timed-out observation exits nonzero.
-If Ghostty is not running, stand down quietly and retain the backup; do not
-resurrect the app or write a repeated error. If Ghostty is running but observation
-is empty or failed, report unknown instead of replacing the backup.
-The job uses one `ps` parent graph and one batch `lsof` cwd query for at most
-256 candidate CLI processes. It does not enumerate history trees or refresh an
-index, whether the inventory changed or stayed the same.
+The supervisor bounds each observation and kills its process group on timeout.
+Failed observations exit nonzero. With Ghostty absent, stand down quietly and retain
+the backup. With Ghostty present but observation empty or failed, report unknown
+and retain the backup. A process graph and batched cwd query observe candidate CLI
+processes without enumerating history trees or refreshing an index.
 
 After install, the deploying agent verifies a completed native round, not only
 registration. Read `status` before and after a scheduled round: the launchd run
@@ -141,5 +135,4 @@ valid latest manifest before reinstalling/enabling the observer.
 
 The shared atomic writer is `scripts/ghostty_storage.py`; both snapshot paths use
 it. Synthetic tests in `scripts/test_ghostty_watch.py` exercise cold, unchanged,
-changed, partial and failed observations without GUI actions, including 1- and
-1,000-file history trees with transcript-read rejection.
+changed, partial and failed observations without GUI actions, with transcript-read rejection against synthetic history trees.
