@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` v1.62.0 → v1.63.0): Match permission fixtures to the actual test-process identity, verify writable and denied controls, and report mismatched assumptions before attributing a product defect. Preserve genuine privileged-runtime tests and required repository checks. Change type: existing verification workflow clarification.
+
 - **macos-watchdog** (`daymade-macos` v1.17.0): choose periodic observation cadence from the captured state, acceptable stale/missed-change window, change lifetime and probe cost; compare delay and check counts, preserve explicit user/domain requirements, and state reversible assumptions when no user SLO exists.
 - **ghostty-use** (`ghostty-use` v1.4.0): explain why the 10-minute default fits long-lived session recovery metadata, how faster capture applies to new/replaced sessions, and why chat-body persistence and pre-reboot manual snapshots remain separate concerns.
 - **skill-creator** (`daymade-skill` v1.62.0): in an already-required bounded review, check the business basis of changed operating defaults/thresholds separately from value-test compliance, without adding another review obligation. Change type for all three: workflow guidance refinement.
