@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **claude-switch-models-setup** (`daymade-claude-code` v4.20.0 → v4.20.1): Document per-profile thinking effort — pin `CLAUDE_CODE_EFFORT_LEVEL` in the provider settings file (the one layer the converger never writes), never in the profile's `settings.json` env where deletion propagation removes it, and never in the default profile's env where it converges everywhere. Refresh alias examples to the current three-provider base set and add the StepFun subscription-plan/pay-as-you-go two-profile pattern. Change type: workflow guidance refinement.
 - **continue-codex-work** (`daymade-claude-code` v4.19.5 → v4.20.0): Honor the latest authorized delivery stage, keep route-specific blockers local, and verify results at the consumption surface. Reconcile existing native Goals through the current host's verified recovery contract, preserving objective, budget and usage; distinguish active state from observed automatic continuation. Change type: continuation workflow correction.
 - **setup-notifications-via-wecom** (v1.1.0 → v1.2.0, recurring-pipeline guidance): Add an SLS adapter reference for query-side truncation limits, evaluation dates, JSON serialization and native delivery acceptance. Reconcile conflicting recipient observations without weakening established self delivery or ambiguous-event receipt handling.
 

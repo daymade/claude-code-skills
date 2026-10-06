@@ -559,9 +559,11 @@ Environment:
 
 Shell aliases (add to ~/.zshrc or ~/.bashrc):
   alias csk='claude-profile kimi'              # Kimi K3 (1M context)
-  alias csks='claude-profile kimi-highspeed'   # Kimi K2.7 highspeed
   alias csd='claude-profile deepseek'
   alias csg='claude-profile glm'
   alias css='claude-profile stepfun'
+Per-plan/billing variants of one provider are separate profiles, e.g.:
+  alias cssplan='claude-profile step-plan'     # StepFun subscription plan endpoint
+  alias cssp='claude-profile step-pay'         # StepFun pay-as-you-go
 EOF
 }
