@@ -225,5 +225,111 @@ class PaginatedLineageTests(unittest.TestCase):
                 self.lineage()
 
 
+class CopiedSubagentContextTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
+        self.path=Path(self.tmp.name)/('rollout-2026-01-01T00-00-00-'+SECOND+'.jsonl')
+        self.rows=[
+            {'type':'session_meta','payload':{'id':SECOND,'session_id':THREAD,'history_mode':'paginated',
+                'thread_source':'subagent','parent_thread_id':THREAD,'forked_from_id':THREAD,
+                'subagent_history_start_ordinal':4}},
+            meta(ident=THREAD),
+            {'type':'response_item','payload':{'type':'message','role':'user','content':[{'type':'input_text','text':'INHERITED CONTEXT'}]}},
+            tool('function_call','copied-tool',name='exec',arguments='{}'),
+            {'type':'response_item','payload':{'type':'message','role':'user','content':[{'type':'input_text','text':'CHILD TASK'}]}},
+            tool('function_call_output','copied-tool',output='CHILD RESULT')]
+        for ordinal,row in enumerate(self.rows):row['ordinal']=ordinal
+
+    def write(self):
+        self.path.write_text(''.join(json.dumps(row)+'\n' for row in self.rows))
+        return self.path
+
+    def parse(self):
+        data=reader.parse_codex_rollout(self.write())
+        reader.validate_selected_rollout_identity(data,SECOND)
+        return data
+
+    def test_copied_context_separate_from_child_inputs_and_visible_in_full_briefing(self):
+        data=self.parse()
+        self.assertEqual(data['session_meta_ids'],[SECOND])
+        self.assertEqual(data['user_messages'],['CHILD TASK'])
+        self.assertEqual(len(data['input_evidence']),1)
+        self.assertEqual([item['record'] for item in data['copied_context_records']],[2,3,4])
+        self.assertEqual(data['copied_context_records'][1]['original'],self.rows[2])
+        self.assertFalse(data['copied_model_context']['external_parent_bytes_verified'])
+        self.assertIn('INHERITED CONTEXT',reader.build_briefing(None,data,'/synthetic/project',True))
+        self.assertIsNone(reader._detect_legacy_embedded_fork(self.path,data['meta']))
+
+    def test_physical_and_tool_evidence_preserve_copied_source_and_pairing(self):
+        data=self.parse()
+        evidence=reader.extract_record_evidence(self.path,SECOND,records=[3],tools=False)
+        self.assertEqual(evidence['results'][0]['original'],self.rows[2])
+        tools=reader.extract_logical_record_evidence(self.path,SECOND,data,[])
+        self.assertEqual(tools['matched_records'],2)
+        self.assertEqual(tools['results'][1]['paired_call']['record'],4)
+        self.assertEqual(tools['copied_model_context']['start_ordinal'],4)
+
+    def test_guardian_source_and_family_different_from_immediate_parent(self):
+        self.rows[0]['payload']['thread_source']='guardian_review'
+        self.rows[0]['payload']['session_id']=THIRD
+        self.rows[1]['payload']['session_id']=THIRD
+        self.assertEqual(self.parse()['meta']['id'],SECOND)
+
+    def test_family_identity_requires_an_explicit_ancestor_chain(self):
+        import copy
+        good=copy.deepcopy(self.rows)
+        self.rows[0]['payload']['session_id']=THIRD
+        self.rows[1]['payload'].update(id=THIRD,session_id=THIRD)
+        with self.assertRaises(reader.LineageResolutionError):self.parse()
+        self.rows=copy.deepcopy(good)
+        del self.rows[0]['payload']['parent_thread_id']
+        del self.rows[0]['payload']['forked_from_id']
+        with self.assertRaises(reader.LineageResolutionError):self.parse()
+        self.rows=copy.deepcopy(good)
+        self.rows[0]['payload'].update(session_id=THIRD,subagent_history_start_ordinal=5)
+        self.rows[1]['payload'].update(session_id=THIRD,parent_thread_id=THIRD)
+        ancestor=meta(ident=THIRD);ancestor['payload']['session_id']=THIRD
+        self.rows.insert(2,ancestor)
+        for i,row in enumerate(self.rows):row['ordinal']=i
+        self.assertEqual(self.parse()['user_messages'],['CHILD TASK'])
+
+    def test_empty_own_history_and_empty_copied_context(self):
+        self.rows[0]['payload']['subagent_history_start_ordinal']=len(self.rows)
+        self.assertEqual(self.parse()['user_messages'],[])
+        self.rows=[self.rows[0],self.rows[4]]
+        self.rows[0]['payload']['subagent_history_start_ordinal']=1
+        self.rows[1]['ordinal']=1
+        data=self.parse();self.assertEqual(data['copied_context_records'],[])
+        self.assertEqual(data['user_messages'],['CHILD TASK'])
+
+    def test_invalid_present_boundary_and_incomplete_capture_fail(self):
+        for value in [None,True,0,-1,'4',reader.MAX_HISTORY_POSITION,7]:
+            with self.subTest(start=value):
+                self.rows[0]['payload']['subagent_history_start_ordinal']=value
+                with self.assertRaises(reader.LineageResolutionError):self.parse()
+
+    def test_unrelated_or_own_tail_metadata_and_conflicting_parents_fail(self):
+        import copy
+        good=copy.deepcopy(self.rows)
+        for change in ['unrelated','canonical_duplicate','wrong_family','tail','root','conflict','missing']:
+            self.rows=copy.deepcopy(good)
+            if change=='unrelated':self.rows[1]['payload']['id']=THIRD
+            elif change=='canonical_duplicate':self.rows[1]['payload']['id']=SECOND
+            elif change=='wrong_family':self.rows[1]['payload']['session_id']=THIRD
+            elif change=='tail':self.rows[4]=meta(ident=THREAD);self.rows[4]['ordinal']=4
+            elif change=='root':self.rows[0]['payload']['thread_source']='user'
+            elif change=='conflict':self.rows[0]['payload']['forked_from_id']=THIRD
+            else:del self.rows[0]['payload']['subagent_history_start_ordinal']
+            with self.subTest(change=change),self.assertRaises(reader.LineageResolutionError):self.parse()
+
+    def test_copied_ordinals_and_partial_lines_keep_strict_validation(self):
+        for value in [None,True,0,3,'1']:
+            self.rows[1]['ordinal']=value
+            with self.subTest(ordinal=value),self.assertRaises(reader.LineageResolutionError):self.parse()
+        self.rows[1]['ordinal']=1
+        self.write();self.path.write_bytes(self.path.read_bytes()[:-1])
+        with self.assertRaises(reader.LineageResolutionError):reader.parse_codex_rollout(self.path)
+
+
 if __name__ == "__main__":
     unittest.main()
