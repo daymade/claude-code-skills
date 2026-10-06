@@ -79,9 +79,10 @@ proxy-conflict and network-recovery references. For automatic WeCom integration,
 enter `setup-notifications-via-wecom`; its receipt contract owns accepted/rejected/unknown
 handling, while the worker owns event identity and delivery state.
 
-For Terraform environment isolation or initialization-cache changes, enter
-[`terraform-skill`](terraform-skill/SKILL.md); its bundled reference owns backend/workspace
-identity and fresh-state validation.
+For Terraform publication, approval, first mutation, expired plans, environment isolation or
+initialization-cache changes, enter [`terraform-skill`](terraform-skill/SKILL.md).
+Its pre-deploy and release references own publisher preparation and authorization;
+its isolation reference owns backend/workspace identity and fresh-state validation.
 
 For Deep Research or Kimi financial-research changes, enter the owning
 [`deep-research`](deep-research/SKILL.md) or [`kimi-use`](kimi-use/SKILL.md) Skill.
@@ -672,10 +673,8 @@ Agent rules when an external PR appears:
 Always consult Anthropic's skill authoring best practices before creating or updating skills:
 https://docs.claude.com/en/docs/agents-and-tools/agent-skills/best-practices.md
 
-Infrastructure/SRE operating contracts stay in their owning Skills rather than this repository guide:
-`terraform-skill` owns generic Terraform release safety and environment-parity rules; an application's
-project-level health-check Skill owns that application's concrete audit facets. Keep those layers
-aligned without copying project hostnames, variable lists, or rollout commands into this file.
+An application's project-level health-check Skill owns its concrete audit facets; keep project
+hostnames, variable lists and rollout commands with that owner.
 
 ## Plugin and Skill Architecture
 
