@@ -63,6 +63,9 @@ Use [skill-creator](daymade-skill/skill-creator/SKILL.md) before creating or
 changing a skill. It owns change classification, evidence selection, regression
 review, validation, initialization, and packaging.
 
+For permission-sensitive fixtures, use its
+[execution-context verification recipe](daymade-skill/skill-creator/references/stateful-script-verification.md#execution-identity-and-permission-fixtures).
+
 For its audit, release, source-contract or materialization commands from another
 working directory, use the [fixed command entry](daymade-skill/skill-creator/references/fixed-command-entry.md).
 
