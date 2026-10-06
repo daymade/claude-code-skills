@@ -3018,6 +3018,8 @@ claude plugin install setup-notifications-via-wecom@daymade-skills
 
 Set up reusable WeCom (Enterprise WeChat) webhook notifications for technical status reports, alerts, and completion messages. The target is explicitly classified: the user's own channel may send automatically; every other target requires human confirmation.
 
+For recurring reports on an existing SLS pipeline, follow the bundled adapter guide for truncation limits, evaluation dates, recipient conflicts and native delivery acceptance.
+
 **When to use:**
 - Configuring a reusable 企业微信 / WeCom notification channel
 - Sending structured status notifications, backup reports, or alerts

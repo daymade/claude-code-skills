@@ -13,7 +13,7 @@ description: >-
 ## Overview
 
 This skill helps you send clear, unambiguous technical notifications through a WeCom group bot webhook.
-It covers two things:
+Use the setup and sending workflows below:
 
 1. **One-time setup**: store the webhook URL, test connectivity, and create a reusable sender script.
 2. **Send messages**: craft messages that distinguish state from delta, define every number, and avoid
@@ -21,6 +21,11 @@ It covers two things:
 
 The bundled script `scripts/send_wecom.py` handles the actual HTTP call, using the host network configuration. Recipient identity is explicit configuration:
 `self` may send automatically; `others` requires human confirmation; missing identity fails fast.
+
+When integrating an existing Alibaba Cloud SLS notification pipeline or a recurring
+digest, read [the SLS adapter guide](references/sls-recurring-notifications.md).
+Reuse the project's sampler, scheduler and SLS sync owner; the bundled sender
+continues to own ordinary plain-text sends.
 
 ## When to Use This Skill
 
@@ -188,6 +193,15 @@ is an external send: show the exact label and message and wait for the active
 human-confirmation gate. Missing/invalid metadata is a configuration error, not
 permission to guess.
 
+Matching webhook URLs proves the same endpoint, not the recipient scope. If new
+observations conflict with the stored `self` label, pause only that send and verify
+the exact group and audience. A displayed member name alone does not prove a
+different person's identity. Preserve normal automatic delivery for a confirmed
+`self` binding; do not relabel a group or rewrite shared metadata to bypass the
+confirmation boundary. For recurring delivery to `others`, confirmation must cover
+the exact group, report content and schedule, plus any separately required deployment
+approval.
+
 ### Option A: Use the bundled script directly
 
 ```bash
@@ -284,5 +298,6 @@ Run the setup step again. The script expects `~/.config/setup-notifications-via-
 ## References
 
 - `references/message_best_practices.md` — condensed checklist distilled from this session's corrections.
+- `references/sls-recurring-notifications.md` — read for SLS-backed recurring reports: result-size limits, evaluation dates, existing-owner reuse and native delivery acceptance.
 - `scripts/send_wecom.py` — the sender script.
 - `scripts/set_recipient.py` — atomically records `self` versus `others` plus the canonical sender path/digest without printing the webhook.
