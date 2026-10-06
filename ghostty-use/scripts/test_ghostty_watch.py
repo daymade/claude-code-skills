@@ -93,6 +93,85 @@ class ObserverTest(unittest.TestCase):
         value = watch.cli_identity({'cmdline': 'codex --model ' + S1})
         self.assertIsNone(value[1])
 
+    def test_noninteractive_and_other_context_clis_are_excluded(self):
+        commands = [
+            'claude --print --resume ' + S1 + ' synthetic-prompt',
+            'claude -p -r ' + S1 + ' synthetic-prompt',
+            'node /opt/bin/claude --print=true --resume=' + S1,
+            'node /opt/bin/claude -cp --resume ' + S1,
+            'claude -pd --resume ' + S1,
+            'claude --background --resume ' + S1,
+            'claude --bg --resume ' + S1,
+            'claude --desktop --resume ' + S1,
+            'claude --cloud synthetic --resume ' + S1,
+            'claude --environment synthetic --resume ' + S1,
+            'codex exec resume ' + S1,
+            'node /opt/bin/codex --profile synthetic e resume ' + S1,
+            'codex --model synthetic review ' + S1,
+        ]
+        for command in commands:
+            with self.subTest(command=command):
+                self.assertIsNone(watch.cli_identity({'cmdline': command}))
+
+    def test_interactive_identity_respects_option_values_and_short_clusters(self):
+        commands = [
+            'claude --resume ' + S1,
+            'claude --resume=' + S1,
+            'node /opt/bin/claude --settings /tmp/settings/research.json --model synthetic -r ' + S1,
+            "claude --system-prompt '-p' -r " + S1,
+            'claude --system-prompt -p -r ' + S1,
+            'claude --system-prompt resume -r ' + S1,
+            'claude -dvp -r ' + S1,
+            'claude -r' + S1,
+            'codex --profile synthetic --model resume resume ' + S1,
+            'codex --config resume resume ' + S1,
+        ]
+        for command in commands:
+            with self.subTest(command=command):
+                identity = watch.cli_identity({'cmdline': command})
+                self.assertIsNotNone(identity)
+                self.assertEqual(identity[1], S1)
+
+    def test_prompt_fork_and_unknown_option_cannot_supply_current_identity(self):
+        commands = [
+            'claude --system-prompt resume ' + S1,
+            'claude resume ' + S1,
+            'claude discuss --resume ' + S1,
+            'claude --resume ' + S1 + ' discuss --resume ' + S2,
+            'claude --resume ' + S1 + ' synthetic-prompt',
+            'codex resume ' + S1 + ' synthetic-prompt',
+            'claude --resume ' + S1 + ' synthetic-prompt --print',
+            'claude --resume ' + S1 + ' synthetic-prompt --fork-session',
+            'claude --system-prompt "--resume" ' + S1,
+            'claude --fork-session --resume ' + S1,
+            'node /opt/bin/claude --resume ' + S1 + ' --fork-session',
+            'claude --unknown-option --resume ' + S1,
+            'claude --resume ' + S1 + ' --session-id ' + S2,
+            'codex fork ' + S1,
+            'codex --unknown-option resume ' + S1,
+            'codex --model resume ' + S1,
+        ]
+        for command in commands:
+            with self.subTest(command=command):
+                identity = watch.cli_identity({'cmdline': command})
+                self.assertIsNotNone(identity)
+                self.assertIsNone(identity[1])
+
+    def test_print_workers_on_real_shaped_tty_topology_are_not_backed_up(self):
+        graph = self.process_graph() + '\n60 2 ttys006 node /opt/bin/claude -p --resume ' + S3 + ' synthetic-prompt\n61 60 ttys006 /opt/vendor/claude --print --resume ' + S3
+        seen_pids = []
+        def run(command, deadline, counters):
+            counters['commands'] += 1
+            if command[0] == '/bin/ps':
+                return graph
+            seen_pids.extend(command[3].split(','))
+            return ''.join('p' + pid + '\nn/tmp/demo\n' for pid in command[3].split(','))
+        with mock.patch.object(watch, 'run_bounded', side_effect=run):
+            result = watch.observe()
+        self.assertEqual({row['sid'] for row in result['sessions']}, {S1, S2})
+        self.assertEqual(result['unresolved'], [])
+        self.assertEqual(set(seen_pids), {'10', '20'})
+
     def test_failure_and_missing_cwd_are_not_empty_success(self):
         failed = subprocess.CompletedProcess([], 1, stdout='', stderr='synthetic failure')
         with mock.patch.object(watch.subprocess, 'run', return_value=failed):

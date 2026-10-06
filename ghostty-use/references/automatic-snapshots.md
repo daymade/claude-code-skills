@@ -91,6 +91,13 @@ Some native Codex TUIs do not expose a session UUID in argv. Record those as
 the newest rollout or an unrelated history row. A Node wrapper and its native
 vendor child count as one TUI. Noninteractive CLI workers are excluded.
 
+Identity parsing consumes known option values before recognizing selectors.
+Unknown option arity, Claude positional prompts, forked IDs, and prompts following
+a Codex resume ID remain unresolved. `ps` flattens argv and loses quoting: a quoted
+Codex prompt beginning `resume <UUID>` is indistinguishable from a real resume
+subcommand. This recognition assumes a prompt-free selector invocation; use
+explicit indexed identity verification when that boundary is uncertain.
+
 A nonempty known set can still produce a useful partial backup. While unresolved
 TUIs exist, preserve previously recorded IDs that are now absent as
 `retained-unverified`; do not interpret an ambiguous observation as a removal.

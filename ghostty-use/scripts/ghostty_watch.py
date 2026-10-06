@@ -82,6 +82,18 @@ def executable_tokens(command):
     return tokens
 
 
+# Static option arity from the installed CLIs' --help; never query help per round.
+CLAUDE_REQUIRED = set("--agent --agents --append-system-prompt --autocompact --debug-file --effort --environment --fallback-model --input-format --json-schema --max-budget-usd --model -n --name --output-format --permission-mode --permission-prompts --plugin-dir --plugin-url --remote-control-session-name-prefix --session-id --setting-sources --settings --system-prompt --system-prompt-snapshot".split())
+CLAUDE_OPTIONAL = set("-d --debug --cloud --from-pr --prompt-suggestions --remote-control -r --resume --teleport -w --worktree".split())
+CLAUDE_VARIADIC = set("--add-dir --allowedTools --allowed-tools --betas --disallowedTools --disallowed-tools --file --mcp-config --tools".split())
+CLAUDE_BOOLEAN = set("--allow-dangerously-skip-permissions --ax-screen-reader --bg --background --bare --brief --chrome -c --continue --dangerously-skip-permissions --desktop --disable-slash-commands --exclude-dynamic-system-prompt-sections --fork-session --forward-subagent-text -h --help --ide --include-hook-events --include-partial-messages --no-chrome --no-session-persistence -p --print --replay-user-messages --restricted --safe-mode --strict-mcp-config --tmux --verbose -v --version".split())
+CLAUDE_OTHER_CONTEXT = set("-p --print --bg --background --desktop --cloud --environment -h --help -v --version".split())
+CODEX_REQUIRED = set("-c --config --enable --disable --remote --remote-auth-token-env -m --model --local-provider -p --profile -s --sandbox -C --cd --add-dir -a --ask-for-approval".split())
+CODEX_VARIADIC = set("-i --image".split())
+CODEX_BOOLEAN = set("--strict-config --oss --approve-for-me --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --worktree --search --no-alt-screen --no-daemon --last --all --include-non-interactive --full-auto -h --help -V --version".split())
+CODEX_OTHER_COMMANDS = set("agents exec e review login logout mcp plugin app-server remote-control app completion update doctor sandbox debug apply queue archive delete migrate-rollouts unarchive cloud exec-server features help mcp-server daemon".split())
+
+
 def cli_identity(row):
     raw = row["cmdline"].split(None, 2)
     if not raw:
@@ -92,26 +104,87 @@ def cli_identity(row):
     if first in ("node", "nodejs") and (len(raw) < 2 or Path(raw[1]).name not in ("codex", "claude")):
         return None
     tokens = executable_tokens(row["cmdline"])
-    # Native executable or the Node wrapper whose executable argument is the CLI.
-    index = 0 if first in ('codex', 'claude') else (
-        1 if first in ('node', 'nodejs') and len(tokens) > 1 and Path(tokens[1]).name in ('codex', 'claude') else None)
-    if index is None:
-        return None
+    index = 1 if first in ('node', 'nodejs') else 0
     tool = Path(tokens[index]).name
-    if len(tokens) > index + 1 and tokens[index + 1] in ('exec', 'app-server', 'mcp-server', 'daemon'):
-        return None
-    # A UUID in a model/setting/prompt is not a resume identity.
-    sid = None
+    required = CLAUDE_REQUIRED if tool == 'claude' else CODEX_REQUIRED
+    optional = CLAUDE_OPTIONAL if tool == 'claude' else set()
+    variadic = CLAUDE_VARIADIC if tool == 'claude' else CODEX_VARIADIC
+    boolean = CLAUDE_BOOLEAN if tool == 'claude' else CODEX_BOOLEAN
     tail = tokens[index + 1:]
-    for i, token in enumerate(tail):
-        value = None
-        if token in ('resume', '-r', '--resume', '--session-id') and i + 1 < len(tail):
-            value = tail[i + 1]
-        elif token.startswith(('--resume=', '--session-id=')):
-            value = token.split('=', 1)[1]
-        if value and gs.UUID_RE.fullmatch(value):
-            sid = value
+    ids, forked, ambiguous, command = set(), False, False, None
+    cursor = 0
+    positional_only = False
+    while cursor < len(tail):
+        token = tail[cursor]
+        cursor += 1
+        if token == '--':
+            positional_only = True
+            continue
+        if not positional_only and token.startswith('-') and token != '-':
+            # Required/optional short-option values bind the rest of a cluster.
+            cluster = token[1:] if not token.startswith('--') else None
+            pending = [token.split('=', 1)[0]] if cluster is None else ['-' + cluster[0]]
+            attached = token.split('=', 1)[1] if cluster is None and '=' in token else None
+            if cluster is not None:
+                cluster = cluster[1:]
+            while pending:
+                option = pending.pop(0)
+                if tool == 'claude' and option in CLAUDE_OTHER_CONTEXT:
+                    return None
+                if tool == 'codex' and option in ('-h', '--help', '-V', '--version'):
+                    return None
+                if option in boolean:
+                    if option == '--fork-session':
+                        forked = True
+                    if cluster:
+                        pending.append('-' + cluster[0])
+                        cluster = cluster[1:]
+                    continue
+                if option not in required | optional | variadic:
+                    ambiguous = True
+                    break  # unknown arity: later words cannot establish identity
+                value = attached
+                if cluster:
+                    value, cluster = cluster, ''
+                if value is None:
+                    if cursor < len(tail) and (option in required or not tail[cursor].startswith('-')):
+                        value = tail[cursor]
+                        cursor += 1
+                    elif option in required or option in variadic:
+                        ambiguous = True
+                if option in variadic:
+                    while cursor < len(tail) and not tail[cursor].startswith('-'):
+                        cursor += 1
+                if tool == 'claude' and option in ('-r', '--resume', '--session-id'):
+                    if value and gs.UUID_RE.fullmatch(value):
+                        ids.add(value)
+                    else:
+                        ambiguous = True
+            if ambiguous:
+                break
+            continue
+        if tool == 'codex':
+            if command is None:
+                command = token
+                if command in CODEX_OTHER_COMMANDS:
+                    return None
+                if command == 'fork':
+                    forked = True
+            elif command == 'resume' and not ids:
+                if gs.UUID_RE.fullmatch(token):
+                    ids.add(token)
+                else:
+                    ambiguous = True
+            elif command == 'resume' and ids:
+                ambiguous = True  # trailing positional prompt is not replay-safe
+        else:
+            # ps loses argv quoting: prompt-bearing Claude invocations are
+            # unresolved even when an earlier selector looked valid.
+            ambiguous = True
             break
+    # Codex prompt text beginning "resume <UUID>" is indistinguishable from its
+    # subcommand in flattened ps output; this interface relies on that argv boundary.
+    sid = next(iter(ids)) if len(ids) == 1 and not forked and not ambiguous else None
     return tool, sid, tokens, index
 
 
