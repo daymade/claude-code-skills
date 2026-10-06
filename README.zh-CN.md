@@ -3019,6 +3019,8 @@ claude plugin install setup-notifications-via-wecom@daymade-skills
 
 配置可复用的企业微信/WeCom webhook 通知，用于技术状态报告、告警和任务完成消息。收件目标必须显式分类：用户本人通道可自动发送，其他目标必须经人类确认。
 
+复用已有 SLS 管道发送定期报告时，按随 Skill 提供的适配参考处理字段截断、当次日期、收件人冲突和原生派发验收。
+
 **使用场景：**
 - 配置可复用的企业微信 / WeCom 通知通道
 - 发送结构化状态通知、备份报告或告警
