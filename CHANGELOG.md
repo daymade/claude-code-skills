@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **read-codex-history** (`daymade-claude-code` v4.19.4 → v4.19.5): Read paginated subagent and guardian-review originals with copied model context. Keep copied records separate from the child's own inputs and briefing, preserve physical coordinates and tool pairing, and require explicit parent relationships with strict identity and ordinal validation. Older two-header files without a proven relationship remain rejected.
+
 - **macos-watchdog** (`daymade-macos` v1.17.0): choose periodic observation cadence from the captured state, acceptable stale/missed-change window, change lifetime and probe cost; compare delay and check counts, preserve explicit user/domain requirements, and state reversible assumptions when no user SLO exists.
 - **ghostty-use** (`ghostty-use` v1.4.0): explain why the 10-minute default fits long-lived session recovery metadata, how faster capture applies to new/replaced sessions, and why chat-body persistence and pre-reboot manual snapshots remain separate concerns.
 - **skill-creator** (`daymade-skill` v1.62.0): in an already-required bounded review, check the business basis of changed operating defaults/thresholds separately from value-test compliance, without adding another review obligation. Change type for all three: workflow guidance refinement.

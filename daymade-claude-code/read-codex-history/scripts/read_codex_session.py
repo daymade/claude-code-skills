@@ -275,6 +275,38 @@ class LineageResolutionError(RuntimeError):
     """The inherited history declared by a rollout cannot be proven exactly."""
 
 
+def copied_context_contract(meta: dict[str, Any]) -> Optional[dict[str, Any]]:
+    """Validate Codex's persisted subagent model-context boundary.
+
+    The prefix is stored in this child's original file. It is not proof of an
+    external parent's exact bytes: Codex may transform inherited model context.
+    """
+    if meta.get("history_mode") != "paginated" or "subagent_history_start_ordinal" not in meta:
+        return None
+    start = meta["subagent_history_start_ordinal"]
+    if type(start) is not int or not 1 <= start < MAX_HISTORY_POSITION:
+        raise LineageResolutionError("invalid subagent_history_start_ordinal")
+    if meta.get("thread_source") not in {"subagent", "guardian_review"}:
+        raise LineageResolutionError("copied context requires a declared child thread source")
+    if meta.get("history_base") is not None:
+        raise LineageResolutionError("copied context combined with history_base is unsupported")
+    for key in ("id", "session_id"):
+        if not isinstance(meta.get(key), str) or not re.fullmatch(_UUID, meta[key]):
+            raise LineageResolutionError("copied context lacks a valid " + key)
+    parents=[]
+    for key in ("parent_thread_id", "forked_from_id"):
+        if key in meta:
+            if not isinstance(meta[key],str) or not re.fullmatch(_UUID,meta[key]) or meta[key]==meta["id"]:
+                raise LineageResolutionError("invalid copied-context parent identity")
+            parents.append(meta[key])
+    if len(set(parents))>1:
+        raise LineageResolutionError("copied-context parent and fork identities conflict")
+    if not parents:
+        raise LineageResolutionError("copied context lacks a declared parent identity")
+    return {"start_ordinal":start,"canonical_id":meta["id"],"family_id":meta["session_id"],
+            "parent_id":parents[0] if parents else None,"external_parent_bytes_verified":False}
+
+
 def _iter_rollout_records(
     path: Path, end_byte_offset: Optional[int] = None
 ) -> Iterator[dict[str, Any]]:
@@ -304,6 +336,7 @@ def _iter_rollout_records(
         line_number = 0
         record_number = 0
         next_ordinal: Optional[int] = None
+        copied=None;declared_ancestors=set();imported=set()
         while handle.tell() < end_byte_offset:
             start = handle.tell()
             raw_line = handle.readline(MAX_RECORD_BYTES + 1)
@@ -339,8 +372,27 @@ def _iter_rollout_records(
                 if record.get("type") == "session_meta" and isinstance(payload, dict) and payload.get("history_mode") == "paginated":
                     base = _history_base(payload, str(payload.get("id")))
                     next_ordinal = base["end_ordinal_exclusive"] if base else 0
+                    copied=copied_context_contract(payload)
+                    if copied:
+                        declared_ancestors={copied["parent_id"]}
             elif next_ordinal is not None and record.get("type") == "session_meta":
-                raise LineageResolutionError(f"duplicate paginated segment metadata in {path}")
+                payload=record.get("payload")
+                identity=payload.get("id") if isinstance(payload,dict) else None
+                if (not copied or next_ordinal>=copied["start_ordinal"] or
+                    identity not in declared_ancestors or identity==copied["canonical_id"] or identity in imported):
+                    raise LineageResolutionError(f"duplicate paginated segment metadata in {path}")
+                if "session_id" in payload and payload["session_id"]!=copied["family_id"]:
+                    raise LineageResolutionError("copied metadata belongs to another thread family")
+                imported.add(identity)
+                related=[]
+                for key in ("parent_thread_id","forked_from_id"):
+                    if key in payload:
+                        value=payload[key]
+                        if not isinstance(value,str) or not re.fullmatch(_UUID,value) or value in imported or value==copied["canonical_id"]:
+                            raise LineageResolutionError("invalid copied ancestor relationship")
+                        related.append(value)
+                if len(set(related))>1:raise LineageResolutionError("copied ancestor relationships conflict")
+                declared_ancestors.update(related)
             if next_ordinal is not None:
                 if type(record.get("ordinal")) is not int or record["ordinal"] != next_ordinal:
                     raise LineageResolutionError(f"paginated record ordinal mismatch at line {line_number} in {path}: expected {next_ordinal}")
@@ -354,6 +406,8 @@ def _iter_rollout_records(
             raise LineageResolutionError(
                 f"could not stop at exact history boundary {end_byte_offset} in {path}"
             )
+        if copied and end_byte_offset==physical_size and next_ordinal<copied["start_ordinal"]:
+            raise LineageResolutionError("captured copied context is incomplete before own-history boundary")
 
 
 def _history_base(meta: dict[str, Any], session_id: str) -> Optional[dict[str, Any]]:
@@ -568,15 +622,15 @@ def _detect_legacy_embedded_fork(path: Path, meta: dict[str, Any]) -> Optional[s
     (no `history_base`, no matching second record), or the fused-rollout
     error for a real third identity.
     """
-    if meta.get("history_base") is not None:
+    if meta.get("history_mode")=="paginated" or meta.get("history_base") is not None:
         return None
     forked_from_id = meta.get("forked_from_id")
-    if not isinstance(forked_from_id, str) or not forked_from_id.strip():
-        return None
     second = _second_rollout_record(path)
     if second is None or second.get("type") != "session_meta":
         return None
     second_payload = second.get("payload")
+    if not isinstance(forked_from_id,str) or not forked_from_id.strip():
+        return None
     if not isinstance(second_payload, dict) or second_payload.get("id") != forked_from_id:
         return None
     return forked_from_id
@@ -955,6 +1009,8 @@ def parse_codex_rollout(
         "snapshot_end_byte_offset": end_byte_offset,
         "total_lines": 0,
         "meta": None,
+        "copied_model_context": None,
+        "copied_context_records": [],
         "session_meta_ids": [],
         "compact_summaries": [],
         "user_messages": [],
@@ -989,6 +1045,14 @@ def parse_codex_rollout(
         rtype = record.get("type")
         payload = record.get("payload") if isinstance(record.get("payload"), dict) else {}
         ptype = payload.get("type")
+        if data["meta"] is None and rtype=="session_meta":
+            data["copied_model_context"]=copied_context_contract(payload)
+        copied=data["copied_model_context"]
+        if copied and 0<record["ordinal"]<copied["start_ordinal"]:
+            # Keep exact objects and physical coordinates separately. Imported
+            # parent context must not inflate the child's own inputs or plan.
+            data["copied_context_records"].append({"record":data["total_lines"],"original":record})
+            continue
 
         if (rtype == "event_msg" and ptype == "user_message") or (
             rtype == "response_item" and ptype == "message" and payload.get("role") == "user"
@@ -1494,6 +1558,16 @@ def build_briefing(conv, data: dict, project_path: str, full: bool = False) -> s
         sections.append(f"- **Title**: {conv.title}")
     if meta.get("cli_version"):
         sections.append(f"- **Codex version**: {meta['cli_version']}")
+    copied=data.get("copied_model_context")
+    if copied:
+        records=data["copied_context_records"]
+        sections.append("\n## Stored Copied Model Context\n")
+        sections.append(f"Original records in this file before stored ordinal {copied['start_ordinal']}: "
+                        f"{len(records)}. These are inherited model context, separate from the child's own timeline. "
+                        "Their storage does not verify an external parent's exact byte snapshot.")
+        for item in records:
+            sections.append(f"\n### Original copied record {item['record']}\n")
+            sections.append(_clip(json.dumps(item['original'],ensure_ascii=False,indent=2),MAX_SUMMARY_CHARS,full))
 
     file_mb = data["file_size"] / 1_000_000
     end_label = END_REASON_LABELS.get(data["end_reason"], data["end_reason"])
@@ -1834,6 +1908,7 @@ def extract_logical_record_evidence(
             "records_examined": total, "matched_records": len(matches),
             "records_retained": retained,
             "requested_records": [], "contains": contains, "tools_only": True,
+            "copied_model_context":data.get("copied_model_context"),
             "truncated": False, "coverage": "All original tool records in the selected "
             "rollout and exact declared ancestor prefixes, in lineage order. Separate "
             "subagent threads and attachment bytes are not expanded.", "results": matches}

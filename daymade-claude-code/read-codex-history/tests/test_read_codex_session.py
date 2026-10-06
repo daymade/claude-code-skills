@@ -1385,6 +1385,31 @@ class LegacyEmbeddedForkTests(unittest.TestCase):
         self.assertIsNone(result)
         self.assertFalse(resolver_called)
 
+    def test_pre_relationship_recorder_context_has_no_proven_child_boundary(self):
+        parent_id='11111111-1111-4111-8111-111111111111'
+        child_id='22222222-2222-4222-8222-222222222222'
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            parent_rows=[{'type':'session_meta','payload':{'id':parent_id,'cli_version':'0.42.0'}},
+                         _msg('user','stored parent request','input_text'),
+                         _msg('assistant','stored parent response','output_text')]
+            parent=root/'parent.jsonl';_write_rollout_path(parent,parent_rows)
+            for version in ['0.42.0','0.45.0']:
+                rows=[{'type':'session_meta','payload':{'id':child_id,'cli_version':version}},
+                      *parent_rows,_msg('user','new child request','input_text')]
+                child=root/'child.jsonl';_write_rollout_path(child,rows)
+                data=mod.parse_codex_rollout(child)
+                self.assertIsNone(mod.recover_legacy_embedded_fork(child,data,child_id,lambda sid:parent))
+                with self.assertRaises(mod.LineageResolutionError):
+                    mod.validate_selected_rollout_identity(data,child_id)
+                for invalid in [None,'',7]:
+                    rows[0]['payload']['forked_from_id']=invalid
+                    _write_rollout_path(child,rows)
+                    data=mod.parse_codex_rollout(child)
+                    self.assertIsNone(mod.recover_legacy_embedded_fork(child,data,child_id,lambda sid:parent))
+                    with self.assertRaises(mod.LineageResolutionError):
+                        mod.validate_selected_rollout_identity(data,child_id)
+
 
 class TruncationContractTests(unittest.TestCase):
     """Default output truncates with a named escape hatch; --full does not."""
