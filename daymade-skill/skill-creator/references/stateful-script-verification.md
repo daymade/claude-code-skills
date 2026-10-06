@@ -74,18 +74,22 @@ elevation, capabilities, ACLs, mount restrictions or sandbox rules that affect
 that expectation. Observe the test process itself; the launching terminal's
 identity alone does not establish its child's permissions.
 
-Use an isolated temporary fixture and the operation under test to confirm both a
-normally writable control and the expected permission-denied control. File mode
-bits alone do not establish rejection: a root or otherwise privileged test context
+Use an isolated temporary fixture and low-level permission probes independent of
+the product's logic to confirm both a normally writable control and the expected
+permission-denied control. Run these probes in the same test process against the
+fixture's actual target paths; do not use the product's own result as the control.
+File mode bits alone do not establish rejection: a root or otherwise privileged test context
 may bypass a restriction that applies to an ordinary user. When the fixture expects
 ordinary-user rejection, run it with that intended identity and restrictions.
 For a genuinely privileged runtime branch, retain its real execution identity and
 state its expected result separately; do not force every test to run unprivileged.
 
-If either control contradicts the stated permission assumption, report an
-**environment mismatch** and preserve the failed result. Correct the test context,
-then rerun the affected gate unchanged before attributing the failure to product
-behavior. Still complete the repository's required checks. Do not change product
+Only when an independent control disproves the fixture's permission assumption,
+report an **environment mismatch** and preserve the failed result. Correct the test
+context, then rerun the affected gate unchanged. When the controls match the
+assumption but product behavior is wrong, retain the failure as a product defect
+or unresolved investigation; do not change the environment to make it pass.
+Still complete the repository's required checks. Do not change product
 code to satisfy an invalid fixture, broaden permissions on real account data, or
 suppress a failed check. Reuse a suitable existing test environment; this recipe
 does not require a new container or a blanket identity change for unrelated tests.
