@@ -3,6 +3,22 @@
 Run validation at the earliest phase that can still prevent the failure. Do not collapse syntax,
 candidate behavior, plan scope, deployed state, and user-visible outcome into one green check.
 
+## Before approval or mutation: inspect the actual publisher
+
+The release executor reads the canonical publisher and its invoked wrappers before the first
+approval request and before the first mutation. Enumerate their actual gates: source/commit pins,
+plan freshness, target and environment identity, required validation receipts, credential identity
+and required permissions, and authorization inputs. Run every gate that can be exercised read-only
+before requesting approval; refresh evidence that can expire before execution. A syntax pass or
+generic checklist does not establish that this publisher will accept the candidate.
+
+When the exact required permission cannot be proved without mutation, record it as `unknown` with
+the operation and failure/recovery boundary for the authorization decision. Do not change or pause
+a production service just to discover a preparation failure. Complete control-plane preparation
+and obtain the required authorization before an authorized production pause; an unresolved gate
+remains unresolved rather than being described as passed. This ordering is executed by the release
+executor through the repository's existing publisher; this reference installs no enforcement.
+
 ## 1. Static configuration
 
 Run the repository's canonical formatter and wrapper. If no wrapper exists:
@@ -162,6 +178,17 @@ Generate a saved plan, inspect it with `terraform show`, and bind it to:
 Apply that exact plan file. In saved-plan mode, Terraform treats passing the plan as approval and does
 not prompt; if production requires a fresh explicit decision, implement it in the wrapper at the last
 reversible point. Do not use target names or environment variables as proof of authorization.
+
+If the publisher rejects an expired plan, regenerate it through the normal plan path and inspect
+the fresh artifact. Reuse an existing scope authorization only when the authorization mechanism
+explicitly permits it and the complete material change remains unchanged: resources, actions,
+before/after values, replacement paths, unknown values and consequential output changes, as well
+as target/environment/backend, source/artifacts, executing identity and every authorization limit.
+Compare the publisher's full authorization-bound evidence, not just counts or a digest. Missing or
+unresolved comparison evidence returns to review as `unknown`. A plan-file or hash-bound approval
+does not become scope approval; obtain the decision its contract requires for the fresh plan.
+Apply the fresh exact bytes accepted by the wrapper. Do not bypass freshness/approval gates or
+invent urgency to reuse an approval.
 
 ## 6. Issue promotion evidence only after live verification
 
