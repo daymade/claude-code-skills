@@ -46,6 +46,13 @@ def unknown(**values):
     return row
 
 
+def active_calendar(minutes, stream='com.apple.launchd.calendarinterval'):
+    events = []
+    for index, minute in enumerate(reversed(minutes)):
+        events.append('synthetic.' + str(index) + ' => {\nstream = ' + stream + '\ndescriptor = {\n"Minute" => ' + str(minute) + '\n}\n}')
+    return 'event triggers = {\n' + '\n'.join(events) + '\n}\n'
+
+
 class ObserverTest(unittest.TestCase):
     def process_graph(self):
         return '\n'.join([
@@ -402,9 +409,10 @@ class InstallSupervisorTest(unittest.TestCase):
         self.target = Path(self.temp.name) / 'LaunchAgents' / (watch.LABEL + '.plist')
 
     def test_calendar_owned_interpreter_and_no_keepalive(self):
+        self.assertEqual(watch.DEFAULT_EVERY_MINUTES, 10)
         definition = watch.calendar_definition(self.state)
         self.assertEqual(definition['ProgramArguments'][0], str(self.state / 'watcher/venv/bin/python'))
-        self.assertEqual(definition['StartCalendarInterval'], [{'Minute': minute} for minute in range(60)])
+        self.assertEqual(definition['StartCalendarInterval'], [{'Minute': minute} for minute in range(0, 60, 10)])
         self.assertTrue(definition['RunAtLoad'])
         self.assertNotIn('KeepAlive', definition)
         self.assertNotIn('StartInterval', definition)
@@ -423,7 +431,7 @@ class InstallSupervisorTest(unittest.TestCase):
             if 'bootout' in command:
                 loaded = False
             if command[:2] == ['/bin/launchctl', 'print']:
-                return subprocess.CompletedProcess(command, 0 if loaded else 1, stdout=str(watch.owned_interpreter(self.state)) + '\n' + str(watch.owned_script(self.state)), stderr='')
+                return subprocess.CompletedProcess(command, 0 if loaded else 1, stdout=str(watch.owned_interpreter(self.state)) + '\n' + str(watch.owned_script(self.state)) + '\n' + active_calendar(range(0, 60, 10)), stderr='')
             if 'venv' in command:
                 interpreter = watch.owned_interpreter(self.state)
                 interpreter.parent.mkdir(parents=True, exist_ok=True)
@@ -442,6 +450,60 @@ class InstallSupervisorTest(unittest.TestCase):
             self.assertTrue(watch.stop()['disabled_across_login'])
             self.assertEqual(archive.read_text(), 'synthetic backup')
             self.assertTrue(self.target.exists())
+
+    def test_cli_default_and_explicit_cadences_reach_installer(self):
+        for supplied, expected in ((None, 10), (1, 1), (5, 5), (10, 10), (15, 15), (30, 30)):
+            argv = ['install', '--state-dir', str(self.state)]
+            if supplied is not None:
+                argv += ['--every-minutes', str(supplied)]
+            with self.subTest(interval=supplied), mock.patch.object(watch, 'install', return_value={}) as install, redirect_stdout(io.StringIO()):
+                self.assertEqual(watch.main(argv), 0)
+                install.assert_called_once_with(self.state, expected, False)
+
+    def test_calendar_readback_only_trusts_supported_calendar_descriptors(self):
+        minutes = list(range(0, 60, 10))
+        self.assertEqual(watch.active_calendar_minutes(active_calendar(minutes)), minutes)
+        other = active_calendar([7], 'com.apple.launchd.other-event')
+        mixed = active_calendar(minutes).replace('\n}\n', '\n}\n', 1)
+        mixed = mixed.rsplit('}', 1)[0] + other.split('{', 1)[1]
+        self.assertEqual(watch.active_calendar_minutes(mixed), minutes)
+        bad = ['', '"Minute" => 10', other, 'event triggers = {}',
+               active_calendar([60]), active_calendar([0, 0]),
+               active_calendar([0]).replace('"Minute" => 0', '"Minute" => 0\n"Hour" => 12'),
+               active_calendar([0]).replace('descriptor = {', 'unknown = {')]
+        for value in bad:
+            with self.subTest(text=value):
+                self.assertIsNone(watch.active_calendar_minutes(value))
+        for definition in ({}, {'StartCalendarInterval': None}, {'StartCalendarInterval': []},
+                           {'StartCalendarInterval': [{'Minute': True}]}, {'StartCalendarInterval': [{'Hour': 1}]}):
+            self.assertIsNone(watch.calendar_minutes(definition))
+
+    def test_status_reports_matching_mismatching_and_unknown_active_disk_state(self):
+        self.target.parent.mkdir(parents=True)
+        self.target.write_bytes(plistlib.dumps(watch.calendar_definition(self.state)))
+        for text, expected in ((active_calendar(range(0, 60, 10)), True), (active_calendar(range(0, 60, 5)), False), ('unrecognized schedule', 'unknown')):
+            active = subprocess.CompletedProcess([], 0, stdout=text, stderr='')
+            with mock.patch.object(watch, 'launch_target', return_value=self.target), mock.patch.object(watch, 'system_run', return_value=active):
+                self.assertEqual(watch.status(self.state)['schedule']['match'], expected)
+        self.target.unlink()
+        result = watch.schedule_readback(self.target, active_calendar(range(0, 60, 10)))
+        self.assertEqual(result['disk_minutes'], 'unknown')
+        self.assertEqual(result['active_minutes'], list(range(0, 60, 10)))
+        self.assertEqual(result['match'], 'unknown')
+        self.target.write_bytes(b'corrupt plist')
+        self.assertEqual(watch.schedule_readback(self.target, '')['match'], 'unknown')
+
+    def test_install_rejects_unknown_or_wrong_active_calendar(self):
+        interpreter = watch.owned_interpreter(self.state)
+        interpreter.parent.mkdir(parents=True); interpreter.write_text('synthetic runtime')
+        for text in ('unknown calendar format', active_calendar(range(0, 60, 1))):
+            def run(command, check=True):
+                if command[:2] == ['/bin/launchctl', 'print']:
+                    return subprocess.CompletedProcess(command, 0, stdout=str(interpreter) + '\n' + str(watch.owned_script(self.state)) + '\n' + text, stderr='')
+                return subprocess.CompletedProcess(command, 0, stdout='ok', stderr='')
+            with self.subTest(schedule=text), mock.patch.object(watch, 'launch_target', return_value=self.target), mock.patch.object(watch, 'system_run', side_effect=run):
+                with self.assertRaisesRegex(ValueError, 'calendar'):
+                    watch.install(self.state, apply=True)
 
     def test_foreign_existing_agent_and_dry_run_are_safe(self):
         with mock.patch.object(watch, 'launch_target', return_value=self.target), mock.patch.object(watch, 'system_run') as run:

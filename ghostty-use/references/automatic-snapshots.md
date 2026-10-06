@@ -39,8 +39,18 @@ with `uv`, then registers its fixed `~/.ghostty-session/watcher/venv/bin/python`
 There is no package-manager dispatcher in launchd. Reinstall updates the owned
 script copies and enables the same job; it does not create another label.
 
-The LaunchAgent uses `RunAtLoad` and `StartCalendarInterval` every minute, with
-no `KeepAlive`. `install --every-minutes 5 --apply` changes the interval if asked.
+The LaunchAgent uses `RunAtLoad` and `StartCalendarInterval` every 10 minutes, with
+no `KeepAlive`. The shared default is 10 minutes; `install --every-minutes 5 --apply`
+changes the interval if asked. Install independently compares the loaded
+calendarinterval minutes with the requested definition and disk plist. `status`
+shows `schedule.active_minutes`, `disk_minutes` and `match`; missing or unfamiliar
+calendar formats remain `unknown`. Unrelated event-trigger Minute fields are not
+calendar evidence.
+
+While the Mac is awake and observations succeed, the nominal backup delay is
+0–10 minutes plus collection and scheduling delay. Sleep or failed observations
+can delay it further. Save a manual snapshot before a planned reboot when that
+window is too long.
 A supervisor kills the observation process group after 15 seconds. OS reads and
 process counts are bounded; a failed or timed-out observation exits nonzero.
 If Ghostty is not running, stand down quietly and retain the backup; do not

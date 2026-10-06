@@ -2829,7 +2829,7 @@ Snapshot every live Claude Code / Codex session in Ghostty before a reboot, reop
 - Session anchor is the command-line UUID, immune to argv[0] bare-vs-qualified instability
 - Auto-reconciliation after restore: every missed tab prints its manual reopen command
 - Optional profile-env mapping (`~/.ghostty-session/profile-env.json`) so profile-bootstrapped sessions restore with the same environment
-- Optional every-minute calendar backups save only changed restore state; unknown UUID coverage is explicit and prior versions are retained
+- Optional calendar backups every 10 minutes save only changed restore state; unknown UUID coverage is explicit and prior versions are retained
 - Synthetic-fixture self-test suite registered in CI (stdlib-only)
 
 **Example usage:**

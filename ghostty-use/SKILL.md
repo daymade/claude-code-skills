@@ -52,7 +52,7 @@ manifest opens only the IDs still missing. `--dry-run` prints commands without G
 
 Read [automatic-snapshots.md](references/automatic-snapshots.md) before installing
 or operating `scripts/ghostty_watch.py`. Its default calendar observes every
-minute, saves only changed restore state, and keeps all prior versions. Unchanged
+10 minutes, saves only changed restore state, and keeps all prior versions. Unchanged
 rounds write no snapshot or routine log. Automatic manifests cover Ghostty
 process descendants without transcript reads; their liveness is explicitly unknown
 and `restore` selects the whole recorded set. UUID-less TUIs remain unresolved;
