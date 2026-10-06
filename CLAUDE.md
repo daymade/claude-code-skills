@@ -79,9 +79,10 @@ proxy-conflict and network-recovery references. For automatic WeCom integration,
 enter `setup-notifications-via-wecom`; its receipt contract owns accepted/rejected/unknown
 handling, while the worker owns event identity and delivery state.
 
-For Terraform environment isolation or initialization-cache changes, enter
-[`terraform-skill`](terraform-skill/SKILL.md); its bundled reference owns backend/workspace
-identity and fresh-state validation.
+For Terraform publication, approval, first mutation, expired plans, environment isolation or
+initialization-cache changes, enter [`terraform-skill`](terraform-skill/SKILL.md).
+Its pre-deploy and release references own publisher preparation and authorization;
+its isolation reference owns backend/workspace identity and fresh-state validation.
 
 For Deep Research or Kimi financial-research changes, enter the owning
 [`deep-research`](deep-research/SKILL.md) or [`kimi-use`](kimi-use/SKILL.md) Skill.
@@ -170,6 +171,12 @@ For browser-backed recurring jobs, enter
 [macos-watchdog](daymade-macos/macos-watchdog/SKILL.md) and apply its deployment
 acceptance before shipping. That Skill owns resource-budget and focus evidence;
 keep the detailed procedure there.
+
+Before choosing or changing any periodic observer's cadence, follow
+[macos-watchdog's observation contract](daymade-macos/macos-watchdog/references/probe-cost.md).
+For changed operating defaults or thresholds in an already-required review, use
+[skill-creator's independent-review protocol](daymade-skill/skill-creator/references/independent-review-protocol.md).
+Keep decision criteria and verification details in those owners.
 
 ### Transcript Correction
 
@@ -260,6 +267,8 @@ For snapshotting, restoring or reconciling Claude Code / Codex sessions in Ghost
 across reboots, enter [`ghostty-use`](ghostty-use/SKILL.md). Its bundled script owns
 liveness classification and the paste-restore + auto-reconciliation loop; keep the
 storage-layout facts and macOS Ghostty limits in its references rather than here.
+For change-only automatic backups, use its
+[automatic workflow](ghostty-use/references/automatic-snapshots.md).
 
 ### Codex Quota and Account Checks
 
@@ -615,6 +624,8 @@ For changes to scripts, configuration, or operating procedures, use
 [docs-cleaner](daymade-docs/docs-cleaner/SKILL.md) for scoped documentation delivery:
 resolve implementation intent and authorization before updating the owning SOP,
 and validate the delivered command examples. Keep detailed governance in that Skill.
+When a changed workflow affects stable rules or entry routes, update this file's
+rules and indices; retain implementation values and detailed procedures in their SSOT.
 
 Before submitting or modifying skills:
 - Valid YAML frontmatter with required fields
@@ -662,10 +673,8 @@ Agent rules when an external PR appears:
 Always consult Anthropic's skill authoring best practices before creating or updating skills:
 https://docs.claude.com/en/docs/agents-and-tools/agent-skills/best-practices.md
 
-Infrastructure/SRE operating contracts stay in their owning Skills rather than this repository guide:
-`terraform-skill` owns generic Terraform release safety and environment-parity rules; an application's
-project-level health-check Skill owns that application's concrete audit facets. Keep those layers
-aligned without copying project hostnames, variable lists, or rollout commands into this file.
+An application's project-level health-check Skill owns its concrete audit facets; keep project
+hostnames, variable lists and rollout commands with that owner.
 
 ## Plugin and Skill Architecture
 

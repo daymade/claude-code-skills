@@ -2816,25 +2816,12 @@ claude plugin install bilibili-source@daymade-skills
 
 ### **ghostty-use** - Ghostty Terminal Session Snapshot & Restore
 
-Snapshot every live Claude Code / Codex session in Ghostty before a reboot, reopen all worthwhile tabs with their original session IDs after restart, and prove nothing was silently dropped. Liveness is graded from the last in-file event timestamp (never the file mtime), channel health keys on structured error flags, and restore finishes with a mandatory auto-reconciliation that surfaces any paste that silently failed.
+Preserve and recover recorded Ghostty CLI sessions through the
+[canonical Skill](ghostty-use/SKILL.md). For scheduled metadata backups, partial
+coverage and operating prerequisites, use the
+[automatic workflow](ghostty-use/references/automatic-snapshots.md).
 
-**When to use:**
-- Quitting the Mac for a macOS update and wanting every working session back afterwards
-- After a restart: reopen 40 tabs with their original `--resume` / `codex resume` session IDs in one command
-- Auditing which sessions are still running versus lost after an interruption
-- Telling dead-provider sessions (stops at `/login`) apart from healthy ones before restoring
-
-**Key features:**
-- `snapshot` / `restore` / `check` loop with liveness grading (active / stale / dead-channel / no-artifact)
-- Session anchor is the command-line UUID, immune to argv[0] bare-vs-qualified instability
-- Auto-reconciliation after restore: every missed tab prints its manual reopen command
-- Optional profile-env mapping (`~/.ghostty-session/profile-env.json`) so profile-bootstrapped sessions restore with the same environment
-- Optional calendar backups every 10 minutes save only changed restore state; unknown UUID coverage is explicit and prior versions are retained
-- Synthetic-fixture self-test suite registered in CI (stdlib-only)
-
-**Example usage:**
 ```bash
-# Install the skill
 claude plugin install ghostty-use@daymade-skills
 
 # Then ask Claude naturally
@@ -2843,8 +2830,6 @@ claude plugin install ghostty-use@daymade-skills
 "restore my ghostty tabs after the update"
 "检查一下有没有会话丢了"
 ```
-
-**Requirements**: macOS with Ghostty; Accessibility permission for the restore keystrokes; `python3` (stdlib-only); `uv` for one-time scheduled-runtime setup. Snapshot state lives in `~/.ghostty-session/`.
 
 ---
 

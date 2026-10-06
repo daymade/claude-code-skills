@@ -210,7 +210,7 @@
       "description": "Routes docs: Word/PDF/PPTX/saved HTML→Markdown; MD/Word→PDF; create Word; PDF HTML/translate; Excel/xlsm/macOS; photo/signed scans; Mermaid; DOCX review; post-change docs. Reads one bundled Daymade specialist. New slide decks use deck-creator when installed; generic PDF reading/editing and spreadsheet analysis stay with their own Skills. Retired ppt-creator stays manual-only.",
       "source": "./daymade-docs",
       "strict": false,
-      "version": "1.23.1",
+      "version": "1.24.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -285,7 +285,7 @@
       "description": "Apple-platform development and operations suite for macOS window capture, TCC permission diagnosis and Full Disk Access repair, iOS/macOS app development, disk cleanup, and launchd watchdogs.",
       "source": "./daymade-macos",
       "strict": false,
-      "version": "1.17.0",
+      "version": "1.18.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -338,7 +338,7 @@
       "description": "Daymade skills core suite. Bundles skill creation, quality review, real Claude/Codex Skill-surface governance, suite-migration reconciliation, and marketplace development tooling under one shared namespace. Skill governance separates canonical source, installed inventory, discovery policy, the fresh model-visible catalog, and router-resolved cold resources instead of optimizing cache counts; it preserves Claude's official versioned-cache lifecycle and verifies selected entries in the real host prompt. Skill verification separates risk classification from evaluation spend: bounded fixes use targeted checks, narrow behavior changes use sampled replays, and paired baselines, graders, benchmarks, or a viewer run only after explicit user authorization or a decision-bearing evidence plan plus opt-in; that authorization does not change the risk tier. Existing-skill edits retain an old-vs-new capability audit and content-bound packaging attestation so prompt compression cannot silently delete runtime contracts. When the official skill-creator plugin is also installed, skill-creator detects the coexistence and offers a consent-based, reversible SessionStart routing hook so the daymade edition wins deterministically; on machines without the official plugin nothing is ever installed.",
       "source": "./daymade-skill",
       "strict": false,
-      "version": "1.62.0",
+      "version": "1.64.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -766,7 +766,7 @@
       "description": "Diagnoses and designs safe Terraform releases, provisioners (remote-exec/local-exec/file, cloud-init, Compose, Caddy), multi-environment isolation, and fresh-host bootstrap. Use when writing or reviewing plan/apply wrappers or provisioners; when staging/production config may differ; when a rollout can mutate a shared gateway; or debugging drift, TLS, container restarts, DNS duplication, or snapshot contamination.",
       "source": "./terraform-skill",
       "strict": false,
-      "version": "1.5.4",
+      "version": "1.5.5",
       "category": "developer-tools",
       "keywords": [
         "terraform",
@@ -1284,7 +1284,7 @@
       "description": "Snapshots, restores and reconciles Claude Code / Codex sessions inside Ghostty tabs across reboots. Use when quitting the Mac for an update (保存终端会话 / 重启前备份终端), after restart to reopen tabs with their original session IDs (恢复之前的窗口 / restore my ghostty tabs), or to audit which sessions survived. Not for resuming one conversation via its own --resume, terminal screenshots, or tmux state. Also use for periodic change-only snapshots (定期增量快照 / 没变化不记录).",
       "source": "./ghostty-use",
       "strict": false,
-      "version": "1.4.0",
+      "version": "1.5.0",
       "category": "developer-tools",
       "keywords": [
         "ghostty",
