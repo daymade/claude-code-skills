@@ -353,30 +353,14 @@ Do NOT add `count` to the data source — changes its state address, causes drif
 
 ## Pre-deploy validation
 
-Run the cheapest checks first, but do not let a syntax check certify runtime behavior. HashiCorp's
-`terraform validate` checks syntax and internal consistency without remote state or provider APIs.
-Preconditions can block before their resource action; postconditions run after change and do not undo
-what already happened; `check` assertions warn and continue. Choose the mechanism by when damage must
-be prevented.
-
-Key checks (see [references/pre-deploy-validation.md](references/pre-deploy-validation.md)):
-1. Format, initialize without backend where appropriate, and run `terraform validate`.
-2. Compare every environment against one required-key schema; reject missing, duplicate, and empty values.
-3. Render the exact Compose model from the candidate files and controlled interpolation environment.
-4. Run the production validator from the exact immutable image/module set against dangerous and healthy fixtures.
-5. Generate a saved plan; review resource addresses, actions, target scope, artifact identity, and digest.
-6. Apply that exact plan only after the required environment-specific authorization.
-7. Verify deployed identity and the real user path independently; only then issue a staging/promotion receipt.
+Before approval or mutation, read and execute
+[pre-deploy-validation.md](references/pre-deploy-validation.md). It owns the publisher gates,
+validation phases, fresh-plan authorization and target-bound promotion evidence.
 
 ## Zero-to-deployment
 
 Fresh disks expose every implicit dependency. See [references/zero-to-deploy-checklist.md](references/zero-to-deploy-checklist.md).
 
-Key items that break provisioners on fresh instances:
-1. **Directories**: `mkdir -p /data/{svc1,svc2}` in cloud-init — `file` provisioner fails if target dir missing
-2. **Databases**: Explicit `CREATE DATABASE` — PG init scripts only run on empty data dir
-3. **Migrations**: Tracked in `schema_migrations` table, applied idempotently
-4. **Provisioner ordering**: `depends_on` between resources sharing Docker networks
-5. **Memory**: Stop non-critical containers during Docker build on small instances (≤8GB)
-6. **Environment contract**: Every runtime-required value uses the same required-key schema in every environment
-7. **Credential capability**: Verify current status and the exact required operation; do not trust shape alone
+Before an authorized service pause or first live write, also use
+[pre-deploy-validation.md](references/pre-deploy-validation.md) for credential capability and
+publisher preparation. The fresh-host checklist owns bootstrap dependencies, ordering and memory.
