@@ -38,6 +38,7 @@ The result: you can open one terminal with Kimi, another with DeepSeek, another 
 - Sync scripts use a shared cross-process lock. This is required because users often open several provider windows from tmux or multiple terminals at once; concurrent launches must serialize marketplace/cache rewrites while still allowing all profiles to start.
 - For the full local-source architecture, read `references/local-source-sync-architecture.md` before changing these scripts.
 - Provider routing is done via `~/.claude/settings/<name>.json`, which sets `ANTHROPIC_MODEL`, `ANTHROPIC_BASE_URL`, and `ANTHROPIC_AUTH_TOKEN` for that window. **That file is a full settings file rather than an env file, and it is the one layer the converger never touches** — `claude-profile` launches with `claude --settings ~/.claude/settings/<name>.json`, while the converger only ever writes `<profile>/settings.json`. So anything that has to be per-profile *and* has to survive every session start belongs here; put it in the profile's own `settings.json` and the next convergence takes it back. Measured 2026-09-15 on `permissions.deny`: one `claude -p` run listed 50 tools with an empty `--settings` file and 48 with `{"permissions":{"deny":["WebSearch","WebFetch"]}}`, the two named tools being the difference. The cost of not knowing this is a detour: the session that worked it out had already forked the converger to add a per-profile exception before noticing that one key in the provider file did the same job with no code change.
+- **Per-profile thinking effort lives in that provider file too.** The default profile sets effort per Anthropic model via `modelSettings` in `~/.claude/settings.json`; a third-party profile that needs a *different* effort pins `CLAUDE_CODE_EFFORT_LEVEL` (e.g. `"max"`) in its `~/.claude/settings/<name>.json` env instead. The provider file is the only layer that can hold that pin: put it in the profile's own `settings.json` env and the converger deletes it at the next session start (a non-identity env key the default profile doesn't carry is deletion-propagated away); put it in the default profile's env and it applies there *and* converges into every third-party profile's `settings.json` — usually wrong, because weaker third-party models benefit from forced max effort exactly when the default flagship no longer does (verified end-to-end 2026-10-06: a session launched via `claude-profile` reads the pinned value back from its own environment).
 - **Credentials ride in that same file, so anything scripting a profile has to pass `--settings` as well.** `CLAUDE_CONFIG_DIR=<profile> claude -p ...` on its own answers `Not logged in · Please run /login`, because the token lives in the provider file and nothing else loads it. The message names login; the cause is the missing flag.
 - The converger has no single-profile mode: every invocation covers all of `~/.claude-profiles/*` plus `$CLAUDE_CONFIG_DIR`, and no flag narrows that. To converge one profile on demand, point `CLAUDE_PROFILES_ROOT` at a directory holding only it, or run `--check` and read the per-profile lines. The default profile's own files are the source and are never written.
 
@@ -160,9 +161,10 @@ When the user says something like "set up Claude Code profiles" or "I want to us
 
 3. **Add shell integration**
    - Source the profile manager in `~/.zshrc` or `~/.bashrc`
-   - Add aliases: `csk`, `csks`, `csd`, `csg`, `css`
+   - Add aliases: `csk`, `csd`, `csg`
    - Add any further per-account/per-plan variant alias by hand if needed —
-     `claude-profiles.sh` only defines the aliases listed above
+     the script's help text only lists the base examples above; variants like
+     `cssplan`/`cssp` are hand-added, not generated
    - Tell the user to run `source ~/.zshrc` (or open a new terminal)
 
 4. **Generate provider settings files**
@@ -176,6 +178,7 @@ When the user says something like "set up Claude Code profiles" or "I want to us
      - `DISABLE_GROWTHBOOK: "1"`
      - `DISABLE_TELEMETRY: "1"`
      - `DISABLE_AUTOUPDATER: "1"`
+   - Optionally pin `CLAUDE_CODE_EFFORT_LEVEL` (e.g. `"max"`) when this provider's model benefits from a forced thinking effort different from the default profile's. It belongs in this provider file — never in the profile's `settings.json` env, where the converger deletes it (see "Per-profile thinking effort" under How It Works).
 
 5. **Initialize profile directories**
    - Run `claude-profiles-init`
@@ -206,15 +209,22 @@ When the user says something like "set up Claude Code profiles" or "I want to us
    - This watches the activation manifest, default Claude install state, and local marketplace manifests, then repairs derived state after selection, install/uninstall, or plugin topology changes
 
 9. **Show the user how to launch**
-   - `csk` → Kimi K3 window
-   - `csks` → Kimi K2.7 highspeed window
+   - `csk` → Kimi window
    - `csd` → DeepSeek window
    - `csg` → GLM window
-   - `css` → StepFun window
    - `claude` (no alias) → default Anthropic profile
-   - Optional: hand-add a per-account/per-plan variant alias yourself, e.g.
-     `alias cssp='claude-profile step-pay --dangerously-skip-permissions'` —
-     `claude-profiles.sh` does not generate this; it is a manual pattern on top
+   - Optional: hand-add per-account/per-plan variant aliases yourself —
+     `claude-profiles.sh` does not generate them. StepFun is the running
+     example: its subscription plan only answers at a dedicated plan base URL
+     (`https://api.stepfun.com/step_plan`, single model), while pay-as-you-go
+     goes through the provider's standard endpoint or whatever gateway fronts
+     it — same provider, two billing modes, so they live as two profiles with
+     two aliases (always ask for the exact base URLs):
+
+     ```bash
+     alias cssplan='claude-profile step-plan --dangerously-skip-permissions'
+     alias cssp='claude-profile step-pay --dangerously-skip-permissions'
+     ```
 
 ## Commands
 
