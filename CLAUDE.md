@@ -112,10 +112,10 @@ when verifying an existing baseline; consult
 [source snapshot archives](daymade-skill/skill-creator/references/source-snapshot-archives.md)
 before archiving or restoring it.
 
-For hook creation, consolidation, registration or recovery, load
+For hook creation, consolidation, Skill-entry enforcement, registration or recovery, load
 [`daymade-claude-code:claude-code-hooks`](daymade-claude-code/claude-code-hooks/SKILL.md)
 and follow its Build order and installer-owned recovery contract. Follow that
-Skill's rule 7 for loop and reminder semantics; keep current thresholds in the
+Skill's loop and reminder contract; keep current thresholds in the
 owning implementation.
 
 Python entry points registered as synchronous Claude Code/Codex lifecycle hooks or
