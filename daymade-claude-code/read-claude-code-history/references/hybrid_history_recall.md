@@ -83,6 +83,34 @@ records the exact project/source scope that built it, and incremental refresh
 refuses a different scope instead of treating everything outside the narrower
 view as deleted.
 
+When a registered source was deliberately retired, preserve its indexed prose
+with an explicit identity declaration instead of rebuilding or rewriting scope:
+
+```json
+{"version":1,"retired_sources":[{"provider":"claude","kind":"active","label":"retired-profile","home":"/absolute/old-profile-home"}]}
+```
+
+Pass this file once with `index --retired-sources /absolute/retirement.json`,
+using the same project selection and the actual current registered sources.
+Every removed provider/kind/label/home tuple must match the old scope exactly;
+unknown, duplicate, empty or partial declarations fail. The accepted declaration
+is persisted, so subsequent scheduled `index` invocations keep their original
+arguments. Additional retirements need a declaration containing all approved
+identities. A legitimate source addition remains supported.
+
+The database retains the full historical `index_scope` and separately records
+`active_scan_scope`. Existing records bearing retired-source labels retain their
+IDs, core content and old provenance; the original extractor can append actual
+current-source record keys and verified provenance members. A different payload
+under the same key fails atomically. Session removal, injected-record sweeps and
+old writer cascades cannot delete retained records. The index transaction keeps
+their existing chunks/vectors; subsequent chunk/embed/dedup policies still work
+normally. Retired paths are neither recreated nor scanned, and their original
+`indexed_through` boundary does not advance with active-source refreshes.
+Retirement cannot change project scope or rebuild the existing database. Use a
+separate diagnostic database for rebuilds; preserve the retirement index when
+the retired originals are unavailable.
+
 Build semantic chunks, then embed until `remaining` is zero:
 
 ```bash
@@ -288,7 +316,8 @@ uv run --with sqlite-vec python scripts/history_index.py status --json
 Add `--check-sources` to compare every current session-copy fingerprint with the
 indexed frontier. This is slower because it enumerates and content-hashes the
 source corpus. The requested source/project scope must exactly match the stored
-database scope; a mismatch fails instead of calling healthy out-of-scope
+active scan scope (the full database scope when nothing is retired); a mismatch
+fails instead of calling healthy out-of-scope
 sessions stale:
 
 ```bash
@@ -362,10 +391,12 @@ The CLI reconfigures stdout/stderr as UTF-8 when the host permits it. Chinese
 history and emoji therefore remain printable under Windows or redirected
 non-UTF-8 environments instead of failing after a partial result.
 
-The index is rebuildable. The JSONL sources and their registered archives remain
+An index with all originals available is rebuildable. The JSONL sources and their registered archives remain
 authority. If status reports schema mismatch, incomplete build, stale sessions,
 or model-revision mismatch, rebuild or refresh from those sources; do not patch
 the SQLite schema by hand.
+An approved retirement index can contain prose absent from all current originals;
+keep its retained records instead of treating a rebuild as a recovery operation.
 
 Schema v3 adds `chunks.text_hash` and its index for the duplicate-chunk policy.
 The upgrade is an in-place `ALTER TABLE` plus a batch-committed backfill, run by
