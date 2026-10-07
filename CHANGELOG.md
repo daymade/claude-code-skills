@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` v1.66.1): Independent-review protocol gains a "Where the reviewer delivers its verdict" section — pin the reviewer`s deliverable as a file at an immutable path named in the prompt plus a one-line receipt (not a chat message, not the idle notification), and read whether an unresponsive reviewer already wrote a partial artifact before re-dispatching. Change type: capability addition from reviewer-delivery failures.
 - **github-ops** (v1.13.2): Disambiguate the two senses of "revert" in the probe section — a landed probe can always be *undone by a follow-up commit* through the same gap, while *removing it from history* is a `--force-with-lease` a `non_fast_forward` rule rejects. Change type: wording clarification from reviewer re-check.
 - **claude-code-hooks** (`daymade-claude-code` v4.25.5 → v4.25.6): Link the recovery pitfall to its owning contract without positional rule numbers. Align marketplace CI diagnosis, version ownership and Git closeout routes with their current sources.
 
