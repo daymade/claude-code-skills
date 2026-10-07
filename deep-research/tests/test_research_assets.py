@@ -21,7 +21,7 @@ class ResearchAssetsTest(unittest.TestCase):
         self.catalog = self.root / "research-catalog.jsonl"
         self.spec = self.root / "spec.json"
         self.spec.write_text(json.dumps({
-            "schema_version": 1,
+            "schema_version": 2,
             "study_id": "filing-study",
             "as_of": "2026-09-26",
             "business_outcome": "Explain a fund filing with traceable evidence",
@@ -31,9 +31,27 @@ class ResearchAssetsTest(unittest.TestCase):
                        "mode": "primary-source", "task_id": "Q1",
                        "prompt": "Target: Fund Alpha (FA01); seed: https://example.org/report.pdf. Open the issuer filing"}],
         }), encoding="utf-8")
+        self.request = self.root / "request.txt"
+        self.request.write_text("Explain the filing using the original source", encoding="utf-8")
+        spec = json.loads(self.spec.read_text())
+        spec["request_mode_contract"] = {
+            "basis": {"kind": "user", "path": "sources/requests/request.txt",
+                      "sha256": hashlib.sha256(self.request.read_bytes()).hexdigest(),
+                      "quote": self.request.read_text(), "locator": "synthetic intake turn"},
+            "interpretation": "User explicitly asks for a direct original source route",
+            "modes": [{"request_id": "R1", "provider": "direct", "mode": "primary-source", "lane_ids": ["official"]}],
+        }
+        self.spec.write_text(json.dumps(spec), encoding="utf-8")
         self.study = self.root / "study"
 
     def cli(self, script, *args):
+        args = list(args)
+        if script == ASSETS and args[0] == "start":
+            args.extend(["--request-source", self.request])
+        if script == RUNS and args[0] == "record" and args[3] == "collected" and "--imported" in args:
+            proof = Path(args[1]) / "sources" / "direct-route.txt"
+            proof.write_text("Synthetic investigator command log: direct primary-source retrieval", encoding="utf-8")
+            args.extend(["--observed-provider", "direct", "--observed-mode", "primary-source", "--mode-proof", proof])
         return subprocess.run([sys.executable, str(script), *map(str, args)],
                               capture_output=True, text=True)
 
@@ -477,6 +495,107 @@ class ResearchAssetsTest(unittest.TestCase):
         path = directory / "sources" / "official.md"
         path.write_text("https://example.org/report.pdf", encoding="utf-8")
         return path
+
+
+    def finish_valid(self):
+        self.start()
+        self.collect("https://example.org/report.pdf")
+        original = self.root / "report.pdf"
+        original.write_bytes(b"%PDF-example-source")
+        self.assertEqual(self.source(file=original).returncode, 0)
+        self.assertEqual(self.claim().returncode, 0)
+        report = self.study / "report.md"
+        report.write_text("[C1] https://example.org/report.pdf", encoding="utf-8")
+        return report
+
+    def test_new_study_rejects_legacy_format_without_modifying_existing_catalog(self):
+        spec = json.loads(self.spec.read_text())
+        spec["schema_version"] = 1
+        self.spec.write_text(json.dumps(spec))
+        result = self.cli(ASSETS, "start", self.study, "--spec", self.spec,
+                          "--catalog", self.catalog, "--query", "filing")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("new studies require", result.stderr)
+        self.assertFalse(self.study.exists())
+        self.assertFalse(self.catalog.exists())
+
+    def test_old_finalized_catalog_entry_is_readable_but_mode_coverage_unverified(self):
+        original = json.dumps({"study_id": "old-study", "path": "old",
+            "business_outcome": "Compare old filing", "coverage": "finalized",
+            "source_index": [], "claim_index": []}) + "\n"
+        self.catalog.write_text(original)
+        result = self.cli(ASSETS, "search", "--catalog", self.catalog, "--query", "filing")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)[0]["coverage"], "legacy-request-mode-unverified")
+        self.assertEqual(self.catalog.read_text(), original)
+
+    def test_missing_required_mode_blocks_start_and_preserves_request_original(self):
+        spec = json.loads(self.spec.read_text())
+        spec["request_mode_contract"]["modes"].append({"request_id": "R2", "provider": "vendor",
+            "mode": "native-research", "lane_ids": ["vendor-deep"]})
+        self.spec.write_text(json.dumps(spec))
+        original = self.request.read_bytes()
+        result = self.cli(ASSETS, "start", self.study, "--spec", self.spec,
+                          "--catalog", self.catalog, "--query", "filing")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("missing lane", result.stderr)
+        self.assertFalse(self.study.exists())
+        self.assertEqual(self.request.read_bytes(), original)
+
+    def test_unknown_route_and_legacy_checks_only_register_bounded_coverage(self):
+        report = self.finish_valid()
+        spec_path = self.study / "study.json"
+        spec = json.loads(spec_path.read_text())
+        spec["lanes"].append({"lane_id": "vendor", "provider": "vendor", "mode": "native-research",
+                              "task_id": "Q1", "prompt": spec["dispatch_context"]})
+        spec["request_mode_contract"]["modes"].append({"request_id": "R2", "provider": "vendor",
+            "mode": "native-research", "lane_ids": ["vendor"]})
+        spec_path.write_text(json.dumps(spec))
+        self.assertEqual(self.cli(RUNS, "record", self.study, "vendor", "prepared").returncode, 0)
+        self.assertEqual(self.cli(RUNS, "record", self.study, "vendor", "failed_unknown",
+                                  "--note", "Task identity cannot be established; no resubmission").returncode, 0)
+        blocked = self.cli(ASSETS, "check", self.study, "--report", report)
+        self.assertEqual(blocked.returncode, 2)
+        self.assertIn("coverage unknown", blocked.stderr)
+        self.assertEqual(self.cli(ASSETS, "check", self.study, "--report", report,
+                                  "--bounded-reason", " ").returncode, 2)
+        checked = self.cli(ASSETS, "check", self.study, "--report", report,
+                           "--bounded-reason", "Native lane unavailable; only direct evidence established")
+        self.assertEqual(checked.returncode, 0, checked.stderr)
+        self.assertEqual(json.loads(checked.stdout)["coverage"], "bounded")
+        registered = self.cli(ASSETS, "register", self.study, "--catalog", self.catalog,
+                              "--report", report, "--term", "filing", "--bounded-reason", "Missing native result")
+        self.assertEqual(registered.returncode, 0, registered.stderr)
+        found = json.loads(self.cli(ASSETS, "search", "--catalog", self.catalog, "--query", "filing").stdout)
+        self.assertEqual(found[0]["coverage"], "bounded")
+        # Existing schema-1 bytes remain readable and searchable without inventing mode proofs.
+        spec["schema_version"] = 1
+        spec.pop("request_mode_contract")
+        spec_path.write_text(json.dumps(spec))
+        self.assertEqual(self.cli(ASSETS, "check", self.study, "--report", report).returncode, 2)
+        checked = self.cli(ASSETS, "check", self.study, "--report", report,
+                           "--bounded-reason", "Historical mode inventory was not recorded")
+        self.assertEqual(checked.returncode, 0, checked.stderr)
+        self.assertEqual(json.loads(checked.stdout)["request_mode_coverage"]["status"], "legacy-request-mode-unverified")
+
+    def test_deferred_requested_route_is_reasoned_and_catalogued_with_limit(self):
+        report = self.finish_valid()
+        path = self.study / "study.json"
+        spec = json.loads(path.read_text())
+        spec["lanes"].append({"lane_id": "vendor", "provider": "vendor", "mode": "native-research",
+                              "task_id": "Q1", "prompt": spec["dispatch_context"]})
+        spec["request_mode_contract"]["modes"].append({"request_id": "R2", "provider": "vendor",
+            "mode": "native-research", "lane_ids": ["vendor"]})
+        path.write_text(json.dumps(spec))
+        self.assertEqual(self.cli(RUNS, "record", self.study, "vendor", "prepared").returncode, 0)
+        self.assertEqual(self.cli(RUNS, "record", self.study, "vendor", "deferred",
+                                  "--note", "Autonomous plugins cannot enforce authorized spend").returncode, 0)
+        checked = self.cli(ASSETS, "check", self.study, "--report", report)
+        self.assertEqual(checked.returncode, 0, checked.stderr)
+        self.assertEqual(json.loads(checked.stdout)["coverage"], "finalized-with-deferred-modes")
+        self.assertEqual(self.cli(ASSETS, "register", self.study, "--catalog", self.catalog,
+                                  "--report", report).returncode, 0)
+        self.assertEqual(json.loads(self.catalog.read_text())["coverage"], "finalized-with-deferred-modes")
 
 
 if __name__ == "__main__":

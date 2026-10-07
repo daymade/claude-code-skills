@@ -59,6 +59,8 @@ Layer 2 has a minimum coverage requirement: use a search tool to enumerate what 
 
 ### Step 2 · Probe for Evidence
 
+For ingestion, indexing, storage or batch-data choices, load `references/batch-data-probes.md` and derive the representative cases from the actual consumer contract before comparing engines.
+
 The only admissible evidence is behavior you ran and observed. READMEs, vendor pages, docs, and source-code claims are all downgraded. Termination clause: max two attempts across methods per candidate; two failures → "this cannot be done now."
 
 > Checkpoint: Every load-bearing claim must name its probe. A claim sourced only from a README → mark `unknown`, not `pass`.
@@ -163,6 +165,7 @@ Concurrency ceiling: 8–10 (measured, not theoretical). Exceeding it risks quot
 | File | Read when |
 |---|---|
 | `references/decision-axes.md` | Step 3 — the 13 core filter axes with mechanical criteria |
+| `references/batch-data-probes.md` | Step 2 — ingestion/indexing/storage correctness, growth, incremental work and recovery probes |
 | `references/scoped-criteria.md` | Step 3 supplementary — 13 narrower criteria with scope labels; C-class items are preferences, not default gates |
 | `references/rejection-modes.md` | Before proposing — 28 entries (16 rejection patterns + 18 anti-patterns, deduplicated) with self-test sentences |
 | `references/delegation-contract.md` | Step 4 — domain ownership table, autonomy threshold, the 6 resolved scope boundaries |

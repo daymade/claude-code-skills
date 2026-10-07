@@ -187,8 +187,11 @@ def find_prior(catalog, query, include_leads=False):
             if any(term in claim.get("text", "").casefold() for term in terms)
         ]
         if all(term in study_text for term in terms):
+            coverage = row.get("coverage", "unknown")
+            if coverage in {"finalized", "finalized-with-deferred-modes"} and "request_mode_coverage" not in row:
+                coverage = "legacy-request-mode-unverified"
             matches.append({"study_id": row["study_id"], "path": row["path"],
-                            "coverage": row.get("coverage", "unknown"),
+                            "coverage": coverage,
                             "source_matches": source_matches[:10],
                             "claim_matches": claim_matches[:10],
                             "match_truncated": len(source_matches) > 10 or len(claim_matches) > 10})
@@ -203,6 +206,8 @@ def cmd_start(args):
     spec = read_json(args.spec)
     if not isinstance(spec, dict):
         raise ValueError("study spec must be a JSON object")
+    if spec.get("schema_version") != 2:
+        raise ValueError("new studies require schema_version 2 and request_mode_contract; legacy reads remain supported")
     context = spec.get("dispatch_context")
     if not isinstance(context, str) or not context.strip():
         raise ValueError("dispatch_context required: include the exact seed URL, named targets, and identifiers available at dispatch")
@@ -216,6 +221,13 @@ def cmd_start(args):
     (directory / "sources" / "originals").mkdir(parents=True)
     (directory / "study.json").write_bytes(args.spec.read_bytes())
     try:
+        request_dir = directory / "sources" / "requests"
+        request_dir.mkdir()
+        for source in args.request_source:
+            target = request_dir / source.name
+            if target.exists():
+                raise ValueError(f"duplicate request source filename: {source.name}")
+            shutil.copyfile(source, target)
         provider_runs.load_study(directory)
     except Exception:
         shutil.rmtree(directory)
@@ -334,8 +346,8 @@ def provider_links(directory, events):
 
 def cmd_harvest(args):
     directory = args.study.resolve()
-    _, lanes = provider_runs.load_study(directory)
-    events, _, _ = provider_runs.load_events(directory, lanes)
+    study, lanes = provider_runs.load_study(directory)
+    events, _, _ = provider_runs.load_events(directory, lanes, study["schema_version"])
     known = {row["url"]: row for row in latest_sources(directory).values()}
     added = 0
     for url, lane_ids in sorted(provider_links(directory, events).items()):
@@ -405,16 +417,17 @@ def load_claims(directory, sources):
     return claims
 
 
-def check(directory, report):
+def check(directory, report, bounded_reason=""):
     directory = directory.resolve()
     report = report.resolve()
     if not report.is_relative_to(directory):
         raise ValueError("final report must be inside the durable study directory")
     study, lanes = provider_runs.load_study(directory)
-    events, states, _ = provider_runs.load_events(directory, lanes)
+    events, states, _ = provider_runs.load_events(directory, lanes, study["schema_version"])
     unfinished = [lane for lane in lanes if states.get(lane) not in {"collected", "deferred", "failed_unknown"}]
     if unfinished:
         raise ValueError(f"nonterminal lanes: {', '.join(unfinished)}")
+    coverage = provider_runs.completion_coverage(study, states, bounded_reason)
     prior = read_json(directory / "prior-research.json")
     if not prior.get("query") or not prior.get("searched_at") or not prior.get("catalog"):
         raise ValueError("prior research query, time, and catalog are required")
@@ -470,17 +483,17 @@ def check(directory, report):
                 if not expected.issubset(refs):
                     raise ValueError(f"report {claim_id} lacks its bound original link(s): "
                                      + ", ".join(sorted(expected - refs)))
-    return study, len(sources), len(cited)
+    return study, len(sources), len(cited), coverage
 
 
 def cmd_check(args):
-    study, source_count, citation_count = check(args.study, args.report)
+    study, source_count, citation_count, coverage = check(args.study, args.report, args.bounded_reason)
     print(json.dumps({"study_id": study["study_id"], "source_count": source_count,
-                      "report_url_count": citation_count, "status": "valid"}, ensure_ascii=False))
+                      "report_url_count": citation_count, "status": "valid", **coverage}, ensure_ascii=False))
 
 
 def cmd_register(args):
-    study, _, _ = check(args.study, args.report)
+    study, _, _, coverage = check(args.study, args.report, args.bounded_reason)
     prior = read_json(args.study.resolve() / "prior-research.json")
     if prior_catalog_path(args.study.resolve(), prior) != args.catalog.resolve():
         raise ValueError("registration catalog differs from the one searched at start")
@@ -496,7 +509,7 @@ def cmd_register(args):
     indexed = {
         "study_id": study["study_id"], "path": path, "as_of": study["as_of"],
         "business_outcome": study["business_outcome"],
-        "terms": terms, "coverage": "finalized",
+        "terms": terms, **coverage,
         "source_index": [{"source_id": row["source_id"], "title": row["title"],
                           "url": row["url"], "status": row["status"]}
                          for row in sources.values()],
@@ -579,7 +592,7 @@ def cmd_import_legacy(args):
         raise ValueError("legacy import needs an explicit coverage reason")
     directory = args.study.resolve()
     study, lanes = provider_runs.load_study(directory)
-    _, states, _ = provider_runs.load_events(directory, lanes)
+    _, states, _ = provider_runs.load_events(directory, lanes, study["schema_version"])
     if not any(state == "collected" for state in states.values()):
         raise ValueError("legacy study has no collected provider output")
     catalog = args.catalog.resolve()
@@ -627,6 +640,8 @@ def main():
     start.add_argument("--spec", required=True, type=Path)
     start.add_argument("--catalog", required=True, type=Path)
     start.add_argument("--query", required=True)
+    start.add_argument("--request-source", action="append", type=Path, default=[],
+                       help="archive an original request/workflow file as sources/requests/<filename>; repeat as needed")
     decide = commands.add_parser("decide", help="record a decision on a discovered prior study")
     decide.add_argument("study", type=Path)
     decide.add_argument("study_id")
@@ -659,11 +674,13 @@ def main():
     check_parser = commands.add_parser("check", help="check final source and provider coverage")
     check_parser.add_argument("study", type=Path)
     check_parser.add_argument("--report", required=True, type=Path)
+    check_parser.add_argument("--bounded-reason", default="", help="explicit legacy/unknown coverage limit; never full completion")
     register = commands.add_parser("register", help="add a valid study to the searchable catalog")
     register.add_argument("study", type=Path)
     register.add_argument("--catalog", required=True, type=Path)
     register.add_argument("--report", required=True, type=Path)
     register.add_argument("--term", action="append", default=[])
+    register.add_argument("--bounded-reason", default="")
     relink = commands.add_parser("relink-catalog", help="migrate an older absolute catalog path after checking the target study entry")
     relink.add_argument("study", type=Path)
     relink.add_argument("--catalog", required=True, type=Path)

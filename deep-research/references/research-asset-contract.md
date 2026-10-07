@@ -8,7 +8,7 @@ The useful unit for later research is a **source-bound claim with a date and lim
 
 ```text
 <study>/
-  study.json                business question, dispatch context, exact prompts, provider × mode lanes
+  study.json                business question, source-traced request mode inventory, exact prompts and execution lanes
   prior-research.json       explicit catalog search, prior candidates and reuse/adapt/reject reasons
   run-events.jsonl          append-only provider task states, origins and collected export hashes
   source-ledger.jsonl       every opened source and provider-surfaced URL, including rejected/failed leads
@@ -26,11 +26,11 @@ The useful unit for later research is a **source-bound claim with a date and lim
 
 1. Choose the owning project, durable study path and explicit project catalog. Run `search` on entity names, aliases and the business question. By default it searches approved originals, labeled legacy sources and claim text; an `unknown` claim is a **question to reopen**, not a verified finding. Use `--include-leads` when candidate or rejected source URLs may help discovery, and inspect their status before reuse. Open any relevant prior original or claim before deciding reuse; search hits are locators. If this is the first study, an empty catalog is a valid recorded result.
 2. Write a `study.json` spec with one or more decision questions and **one lane for each selected provider × actual mode**. Set `dispatch_context` to the exact user-supplied URL, named subjects, verified codes/identifiers and date window needed to distinguish this case. Copy that context into every lane's exact prompt. `start` refuses a spec if any prompt omits it; this catches a generic “four funds” or “specified stocks” prompt before it reaches an isolated provider workspace. For a route that needs extra inputs, name those explicitly in its prompt. Give a direct original-source route its own lane. Include every mode the user explicitly requested or a prior accepted project workflow requires; if a route cannot run or adds no decision value, keep it in the plan and record `deferred` with the reason. A paid lane needs its own authorization. Do not turn ordinary chat into a native Deep Research lane by naming it so.
-3. Run `start`, read the prior matches, and record a reasoned `reuse`, `adapt` or `reject` decision for each. Capture a user-named seed article or document as an original before external provider dispatch; [Seed source handoff](provider-run-contract.md#seed-source-handoff) owns its transfer and target check. Run `provider_runs.py plan` even for one lane. For several modes sharing an app, follow [parallel-provider-ops.md](parallel-provider-ops.md) and keep one UI owner.
+3. Use schema 2 and the [independent request inventory](provider-run-contract.md#request-inventory-independent-of-execution), including archived original request/workflow bytes. Missing named modes must fail before dispatch; an empty required-mode list is valid only with a source-traced interpretation that none was specified. `start --request-source <original-request.txt>` copies that file into `sources/requests/<filename>` before validation; repeat for other originals. Run `start`, read the prior matches, and record a reasoned `reuse`, `adapt` or `reject` decision for each. Capture a user-named seed article or document as an original before external provider dispatch; [Seed source handoff](provider-run-contract.md#seed-source-handoff) owns its transfer and target check. Run `provider_runs.py plan` even for one lane. For several modes sharing an app, follow [parallel-provider-ops.md](parallel-provider-ops.md) and keep one UI owner.
 
 ```bash
 python3 <skill>/scripts/research_assets.py search --catalog <project-catalog.jsonl> --query '<entity and question>'
-python3 <skill>/scripts/research_assets.py start <study-dir> --spec <prepared-study.json> --catalog <project-catalog.jsonl> --query '<entity and question>'
+python3 <skill>/scripts/research_assets.py start <study-dir> --spec <prepared-study.json> --request-source <original-request.txt> --catalog <project-catalog.jsonl> --query '<entity and question>'
 python3 <skill>/scripts/research_assets.py decide <study-dir> <prior-study-id> reuse --reason '<what source or claim remains useful and what must be refreshed>'
 python3 <skill>/scripts/provider_runs.py plan <study-dir>
 ```
@@ -63,6 +63,8 @@ python3 <skill>/scripts/research_assets.py register <study-dir> --catalog <proje
 ```
 
 `check` fails when there is no study, a final report outside the study, an unfinished lane, an undecided prior match, no approved original, a missing or changed snapshot, an unrecorded provider URL, an unapproved report URL, a report claim ID absent from the claim registry, or a claim placed beside the wrong original links. It checks records and file integrity; it cannot identify every unmarked consequential sentence, prove the UI really selected a native mode, or prove that a source supports a claim. Use the selected provider Skill's mode readback and P6–P7 original-source checks for those facts.
+
+Schema-2 `check` also checks every required mode against execution lanes and the submission/import's original actual-mode receipt. A reasoned `deferred` route can complete with coverage `finalized-with-deferred-modes`; it has not run. A `failed_unknown` route or schema-1 request inventory cannot be called full completion. To archive an otherwise valid bounded report, pass `--bounded-reason '<missing perspective and consequence>'` to `check` and `register`; the catalog records `coverage: bounded`, the request-coverage status and unknown lanes. Missing/blank reasons fail. This option never bypasses source/claim integrity, request/lane mismatch, an active lane or a missing actual-mode receipt on schema 2. Old schema-1 studies remain readable and discoverable through `import-legacy`; do not resend historical tasks to manufacture coverage. Source-traced fields check consistency, not whether the coordinator understood every sentence of the request.
 
 `start` records the catalog path relative to the study, so the project tree can move without breaking `check` or `register`. For an older study whose receipt contains an absolute temporary path, move the study and catalog together, then run:
 
