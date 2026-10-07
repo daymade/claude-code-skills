@@ -313,6 +313,8 @@ def _codex_candidates(cwd, started):
             meta = _codex_first_meta(path)
             if not meta or meta.get("id") != sid:
                 continue  # filename claim must match internal identity
+            if _codex_is_subagent(meta):
+                continue  # a spawned agent is not a separate terminal session
             meta_cwd = meta.get("cwd")
             if not meta_cwd or meta_cwd.lower() != cwd.lower():
                 continue
@@ -329,6 +331,46 @@ def _codex_first_meta(path):
     if isinstance(rec, dict) and rec.get("type") == "session_meta":
         return rec.get("payload") or {}
     return None
+
+
+def _codex_is_subagent(meta):
+    """Use explicit Codex metadata, never originator or filename heuristics."""
+    def has_subagent(value):
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except ValueError:
+                return False
+        if isinstance(value, dict):
+            return "subagent" in value or any(has_subagent(v) for v in value.values())
+        if isinstance(value, list):
+            return any(has_subagent(v) for v in value)
+        return False
+
+    return (bool(meta.get("agent_role"))
+            or str(meta.get("thread_source") or "").casefold() == "subagent"
+            or has_subagent(meta.get("source")))
+
+
+def _codex_parent_thread_id(meta):
+    """Read Codex's top-level and structured spawn parent, rejecting disagreement."""
+    source = meta.get("source")
+    if isinstance(source, str):
+        try:
+            source = json.loads(source)
+        except ValueError:
+            source = None
+    nested = None
+    if isinstance(source, dict):
+        agent = source.get("subagent")
+        if isinstance(agent, dict):
+            spawn = agent.get("thread_spawn")
+            if isinstance(spawn, dict):
+                nested = spawn.get("parent_thread_id")
+    parents = {p for p in (meta.get("parent_thread_id"), nested) if isinstance(p, str) and p}
+    if len(parents) > 1:
+        raise ValueError("sub-agent metadata contains conflicting parent thread IDs")
+    return next(iter(parents), None)
 
 
 def _transcript_candidates(tool, cwd, started):
@@ -861,7 +903,7 @@ def main(argv=None):
     p6.add_argument("--only", nargs="+", type=nonempty, metavar="ID")
     p6.add_argument("--dry-run", action="store_true", help="read-only readiness and command preview")
     p6.add_argument("--check", action="store_true", help="read-only account/process reconciliation")
-    p6.add_argument("--layout", choices=("windows", "tabs"), default="windows")
+    p6.add_argument("--layout", choices=("windows", "tabs"), default="tabs")
     p6.add_argument("--reconcile-seconds", type=bounded_seconds, default=10)
     for parser in (p1, p4, p5):
         parser.add_argument("--history-reader", type=nonempty, help="installed read-codex-history Skill directory")

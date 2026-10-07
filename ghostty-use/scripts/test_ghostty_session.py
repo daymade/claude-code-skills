@@ -63,6 +63,41 @@ def make_codex_file(home, sid, lines):
 
 
 class UuidAnchoringTest(unittest.TestCase):
+    def test_codex_spawn_parent_variants_and_disagreement(self):
+        source = {"subagent": {"thread_spawn": {"parent_thread_id": S_CODEX}}}
+        for meta in ({"parent_thread_id": S_CODEX}, {"source": source},
+                     {"source": json.dumps(source)}, {"parent_thread_id": None, "source": source}):
+            self.assertEqual(gs._codex_parent_thread_id(meta), S_CODEX)
+        for meta in ({}, {"parent_thread_id": None}, {"parent_thread_id": ""},
+                     {"source": "cli"}, {"source": None}):
+            self.assertIsNone(gs._codex_parent_thread_id(meta))
+        with self.assertRaisesRegex(ValueError, "conflicting parent"):
+            gs._codex_parent_thread_id({"parent_thread_id": S_DEAD, "source": source})
+
+    def test_codex_subagent_metadata_and_main_controls(self):
+        for metadata in ({"thread_source": "subagent"}, {"agent_role": "default"},
+                         {"source": {"subagent": {"thread_spawn": {"depth": 1}}}},
+                         {"source": '{"subagent":{"thread_spawn":{"depth":1}}}'}):
+            self.assertTrue(gs._codex_is_subagent(dict(originator="codex-tui", **metadata)))
+        for metadata in ({}, {"agent_role": None}, {"agent_role": ""},
+                         {"thread_source": None}, {"source": "cli"},
+                         {"source": None}, {"source": "vscode"},
+                         {"source": "a discussion of subagent errors"}):
+            self.assertFalse(gs._codex_is_subagent(metadata))
+
+    def test_fresh_codex_candidates_never_bind_a_spawned_agent(self):
+        started = datetime(2026, 10, 7, 22, 12, 12).timestamp()
+        child = f"/synthetic/sessions/2026/10/07/rollout-2026-10-07T22-12-12-{S_DEAD}.jsonl"
+        parent = f"/synthetic/sessions/2026/10/07/rollout-2026-10-07T22-12-13-{S_CODEX}.jsonl"
+        def metadata(path):
+            if path == child:
+                return dict(id=S_DEAD, cwd="/synthetic", thread_source="subagent",
+                            originator="codex-tui", parent_thread_id=S_CODEX)
+            return dict(id=S_CODEX, cwd="/synthetic", source="cli")
+        with mock.patch.object(gs.glob, "glob", return_value=[child, parent]), \
+                mock.patch.object(gs, "_codex_first_meta", side_effect=metadata):
+            self.assertEqual(gs._codex_candidates("/synthetic", started), [(1.0, S_CODEX, parent)])
+
     def test_uuid_regex_matches_bare_and_qualified(self):
         sid = "aaaaaaaa-0000-0000-0000-000000000001"
         for cmdline in [

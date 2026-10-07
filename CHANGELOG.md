@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **daymade-claude-code** (v4.25.3 → v4.25.4, factual hook-pitfall backport): Record the observed gap between cadence reset/generic compaction advice and current project-phase facts. Scope the existing owner's correction to compact and bare cues, preserve explicit specialty-task authorization, and distinguish context delivery from business acceptance without adding a new gate or SOP.
 
+- **ghostty-use** (v1.6.0 → v1.6.1): Restore Codex account-switch sessions as tabs by default; keep independent windows opt-in. Exclude spawned agents from fresh terminal matching, reject explicit sub-agent captures, and skip legacy child rows only when their main parent is saved. Change type: bug fix.
 - **daymade-claude-code** (v4.25.2 → v4.25.3): Correct the hook design contract for repeated Skill-entry bypass: loading does not prove compliant execution; bind detection to the actual operation, calibrate healthy maintenance and read-only cases, and verify interception in the native host.
 
 - **terraform-skill** (v1.5.5 → v1.5.6, existing validation contract correction): Validate embedded expressions with their native consumer when supported, distinguish local arithmetic replay from native validation, and require a fresh evaluation of the deployed rule for runtime verification.
