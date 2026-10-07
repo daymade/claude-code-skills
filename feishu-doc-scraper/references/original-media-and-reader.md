@@ -21,11 +21,8 @@ are separate operations. Preserve the error JSON/stderr outside the public bundl
 | Browser actually plays/displays the requested original | Capture its observed original request URL and narrowly scoped headers through the browser owner | No invented URL, token enumeration, login-wall bypass or cross-account credential borrowing |
 | No authorized original request is available | Retain text and source token; report the media gap | Do not claim an original was saved |
 
-This branch was exercised with lark-cli 1.0.96 on 2026-10-07: body capture worked,
-export was refused, CLI preview failed in transport, and the authorized browser's
-original request returned matching byte ranges. It establishes that branch on
-those sources, not universal availability. The older docx CLI failures through
-1.0.32 remain scoped to their tested commands and release.
+Read command availability from the installed CLI. An older command failure does
+not establish the permissions or behavior of a current original-preview operation.
 
 ## Download one original per destination
 
@@ -69,6 +66,9 @@ uv run --script <skill-dir>/scripts/render_api_capture.py \
   --source <original-feishu-url>
 ```
 
+The renderer defines its archive root as the manifest's parent directory. Put the
+manifest at that root; its local artifact paths are relative to the same directory.
+
 Expected: `status=converted_reader_pending`, nonzero `media_references` when the
 source contains media, and `actual_reader=not_verified`. The output note must
 remain under the manifest's archive directory; an outside output is refused. The helper localizes img/source tokens from the
@@ -84,6 +84,9 @@ before native input. User-performed acceptance is valid; record it as such.
 When the reader is unavailable or concurrently occupied, keep that observation
 pending instead of substituting a standalone image tab, parser or qmd result.
 Use frontend-visual-qa's Markdown reader handoff for the actual-reader protocol.
+If the user excludes playback or another reader check, preserve that exclusion:
+do not operate the reader or create evidence for the excluded action. Report the
+authorized structural result separately; a missing reader receipt remains pending.
 
 Native embedding follows [Obsidian's embed contract](https://obsidian.md/help/embeds).
 Keep local asset references relative to the Markdown directory so moving the
@@ -165,6 +168,10 @@ the source producer can publish the captured body catalog there:
 uv run --script <skill-dir>/scripts/build_manual_catalog.py <source-archive-root> \
   --collection fav-feishu --display-name '<selected-source-name>' --share-scope private
 ```
+
+The catalog source root may contain several archive folders. Keep SOPs and other
+process notes outside that root's Markdown mask; the producer rejects Markdown
+without captured source identity rather than treating it as course content.
 
 Expected: `status=declared`, the actual item count and `share_scope=private`.
 The producer creates `_data/source.json` and `_data/items.jsonl` from explicit

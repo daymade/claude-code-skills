@@ -8,7 +8,10 @@ For each artifact record:
 
 1. `storage` states the durable source of record: `git`, `source`, or `oss`.
 2. `locator` says how to retrieve that durable object.
-3. `cache_path` is optional and never changes the source of record. A cache may disappear on another machine without making the archive incomplete.
+3. `cache_path` is optional and never changes the source of record. Source authority
+   and local reader delivery are separate: an external original can remain retrievable
+   while a note's missing local attachment makes that reader handoff incomplete.
+   For local delivery, follow [original media and reader handoff](original-media-and-reader.md).
 
 Git is the default only for searchable structured material: Markdown, CSV, JSON, YAML, text, XML, and source HTML. The artifact role, path, and MIME must also agree with that structured format. A structured path normally has exactly one extension; the only multi-extension exception is a terminal version suffix such as `report-v2.0.md`, and the filename before that version may not contain another dot. This rejects `clip.mp4.md`, `photo.heic.md`, and `clip.mp4-v2.0.md` without pretending that a filename replaces byte/MIME verification. MP4, Office files, PDFs, and raster/vector images are raw binaries and must not use `storage: git`.
 
