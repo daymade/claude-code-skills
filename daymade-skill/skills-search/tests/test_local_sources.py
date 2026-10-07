@@ -189,6 +189,19 @@ class LocalSourcesTests(unittest.TestCase):
         self.assertEqual(result["candidates"][0]["path"], "bundle/browser/SKILL.md")
         self.assertEqual(local.snapshot(config["sources"][0])[0].resolve(), repo.resolve())
 
+    def test_non_string_tiers_report_structured_config_error(self):
+        self.register("public")
+        valid = local.load_config(self.config)
+        for tier in ([], {}, 1, True):
+            data = json.loads(json.dumps(valid))
+            data["sources"][0]["tier"] = tier
+            self.config.write_text(json.dumps(data))
+            with self.subTest(tier=tier):
+                rc, result = self.cli("list")
+                self.assertEqual(rc, 2)
+                self.assertEqual(result["status"], "error")
+                self.assertIn("tier", result["error"])
+
     def test_replace_failure_does_not_truncate_previous_file(self):
         self.config.parent.mkdir(parents=True)
         self.config.write_text("original")

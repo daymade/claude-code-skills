@@ -70,7 +70,7 @@ def validate_config(data):
         if source["id"] in ids:
             raise SourceError("Duplicate source id")
         ids.add(source["id"])
-        if source.get("tier") not in {"owned", "trusted"}:
+        if not isinstance(source.get("tier"), str) or source["tier"] not in {"owned", "trusted"}:
             raise SourceError("Source tier must be owned or trusted")
         if not isinstance(source.get("path"), str) or not Path(source["path"]).is_absolute():
             raise SourceError("Source path must be absolute")
