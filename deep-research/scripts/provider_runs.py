@@ -38,8 +38,10 @@ def read_json(path):
 
 def load_study(directory):
     study = read_json(directory / "study.json")
-    if study.get("schema_version") != 1:
-        raise ValueError("study.json schema_version must be 1")
+    if not isinstance(study, dict):
+        raise ValueError("study.json must be an object")
+    if type(study.get("schema_version")) is not int or study["schema_version"] not in {1, 2}:
+        raise ValueError("study.json schema_version must be 1 (legacy) or 2")
     if not isinstance(study.get("study_id"), str) or not study["study_id"]:
         raise ValueError("study_id required")
     if not isinstance(study.get("business_outcome"), str) or not study["business_outcome"]:
@@ -73,7 +75,86 @@ def load_study(directory):
             if key in lane and (not isinstance(lane[key], str) or not lane[key].strip()):
                 raise ValueError(f"lane {lane['lane_id']} has invalid {key}")
         lanes[lane["lane_id"]] = lane
+    if study["schema_version"] == 2:
+        check_request_contract(directory, study.get("request_mode_contract"), lanes)
     return study, lanes
+
+
+def check_request_basis(directory, basis):
+    """Check archived bytes and a claimed quotation, not semantic completeness."""
+    if not isinstance(basis, dict) or basis.get("kind") not in ("user", "accepted-project"):
+        raise ValueError("request basis needs kind user or accepted-project")
+    for key in ("locator", "quote"):
+        if not isinstance(basis.get(key), str) or not basis[key].strip():
+            raise ValueError(f"request basis needs {key}")
+    path = artifact_path(directory, basis)
+    if not path.is_file() or basis.get("sha256") != sha256(path):
+        raise ValueError("request basis original missing or changed")
+    if basis["quote"] not in path.read_text(encoding="utf-8"):
+        raise ValueError("request basis quote absent from original")
+
+
+def check_request_contract(directory, contract, lanes):
+    if not isinstance(contract, dict):
+        raise ValueError("request_mode_contract required for schema 2")
+    check_request_basis(directory, contract.get("basis"))
+    if not isinstance(contract.get("interpretation"), str) or not contract["interpretation"].strip():
+        raise ValueError("request mode interpretation required")
+    if not isinstance(contract.get("modes"), list):
+        raise ValueError("request modes must be a list; [] means no explicitly required mode")
+    request_ids, routes, assigned = set(), set(), set()
+    for request in contract["modes"]:
+        if not isinstance(request, dict):
+            raise ValueError("requested mode must be an object")
+        for key in ("request_id", "provider", "mode"):
+            if not isinstance(request.get(key), str) or not request[key].strip():
+                raise ValueError(f"requested mode missing {key}")
+        route = (request["provider"], request["mode"])
+        if request["request_id"] in request_ids or route in routes:
+            raise ValueError("duplicate requested mode or request_id")
+        request_ids.add(request["request_id"])
+        routes.add(route)
+        if "basis" in request:
+            check_request_basis(directory, request["basis"])
+        ids = request.get("lane_ids")
+        if not isinstance(ids, list) or not ids:
+            raise ValueError(f"unmapped requested mode {request['request_id']}")
+        for lane_id in ids:
+            if not isinstance(lane_id, str) or lane_id not in lanes:
+                raise ValueError(f"requested mode references missing lane {lane_id}")
+            if lane_id in assigned:
+                raise ValueError(f"lane mapped more than once: {lane_id}")
+            assigned.add(lane_id)
+            if (lanes[lane_id]["provider"], lanes[lane_id]["mode"]) != route:
+                raise ValueError(f"requested/plan mode mismatch: {lane_id}")
+
+
+def mode_coverage(study, states):
+    """Visible inventory coverage; no claim to infer intent or authenticate UI."""
+    if study["schema_version"] == 1:
+        return {"status": "legacy-request-mode-unverified", "requests": []}
+    requests = [{"request_id": req["request_id"], "provider": req["provider"],
+                 "mode": req["mode"], "lanes": [
+                     {"lane_id": lane, "state": states.get(lane, "planned")}
+                     for lane in req["lane_ids"]]}
+                for req in study["request_mode_contract"]["modes"]]
+    return {"status": "recorded-inventory-matched", "requests": requests,
+            "semantic_completeness": "requires-original-request-review"}
+
+
+def completion_coverage(study, states, bounded_reason=""):
+    unknown = [lane["lane_id"] for lane in study["lanes"]
+               if states.get(lane["lane_id"]) == "failed_unknown"]
+    legacy = study["schema_version"] == 1
+    if legacy or unknown:
+        if not isinstance(bounded_reason, str) or not bounded_reason.strip():
+            raise ValueError("request/provider coverage unknown; --bounded-reason required (not full completion)")
+        return {"coverage": "bounded", "request_mode_coverage": mode_coverage(study, states),
+                "unknown_lanes": unknown, "reason": bounded_reason}
+    deferred = [lane["lane_id"] for lane in study["lanes"]
+                if states.get(lane["lane_id"]) == "deferred"]
+    return {"coverage": "finalized-with-deferred-modes" if deferred else "finalized",
+            "request_mode_coverage": mode_coverage(study, states), "deferred_lanes": deferred}
 
 
 def origin_key(origin):
@@ -122,7 +203,7 @@ def sha256(path):
     return digest.hexdigest()
 
 
-def check_event(directory, event, lanes, previous, previous_origin=None, prior_events=()):
+def check_event(directory, event, lanes, previous, previous_origin=None, prior_events=(), require_mode=False):
     if not isinstance(event, dict):
         raise ValueError("event must be an object")
     lane_id = event.get("lane_id")
@@ -143,6 +224,21 @@ def check_event(directory, event, lanes, previous, previous_origin=None, prior_e
         raise ValueError("retry submission requires recovery evidence in note")
     if before is None and state == "collected" and event.get("imported") is not True:
         raise ValueError("first collected event requires imported=true for historical capture")
+    if require_mode and (state == "submitted" or (before is None and state == "collected")):
+        if "mode_observation" not in event:
+            raise ValueError("actual mode observation required for submission or imported collection")
+    if "mode_observation" in event:
+        observation = event["mode_observation"]
+        if state not in {"submitted", "running", "collected"} or not isinstance(observation, dict):
+            raise ValueError("mode observation requires a submitted, running or collected event")
+        lane = lanes[lane_id]
+        if (observation.get("provider"), observation.get("mode")) != (lane["provider"], lane["mode"]):
+            raise ValueError(f"actual/plan mode mismatch: {lane_id}")
+        proof = observation.get("receipt")
+        path = artifact_path(directory, proof)
+        if not path.is_file() or path.stat().st_size == 0 or proof.get("sha256") != sha256(path):
+            raise ValueError("actual mode receipt missing or changed")
+        timestamp(proof.get("captured_at"))
     if state in {"submitted", "running", "collected"}:
         origin_key(event.get("origin"))
         if before in {"submitted", "running", "collected"} and state in {"running", "collected"}:
@@ -196,7 +292,7 @@ def check_event(directory, event, lanes, previous, previous_origin=None, prior_e
         raise ValueError("only collected may carry an artifact")
 
 
-def load_events(directory, lanes):
+def load_events(directory, lanes, schema_version=1):
     path = directory / "run-events.jsonl"
     events = []
     current = {}
@@ -209,7 +305,8 @@ def load_events(directory, lanes):
                 raise ValueError(f"run-events.jsonl:{number}: blank line")
             try:
                 event = json.loads(line)
-                check_event(directory, event, lanes, current, origins.get(event.get("lane_id")), events)
+                check_event(directory, event, lanes, current, origins.get(event.get("lane_id")), events,
+                            require_mode=schema_version == 2)
             except (ValueError, TypeError, OSError) as exc:
                 raise ValueError(f"run-events.jsonl:{number}: {exc}") from exc
             events.append(event)
@@ -220,14 +317,15 @@ def load_events(directory, lanes):
 
 
 def cmd_validate(directory):
-    _, lanes = load_study(directory)
-    events, current, _ = load_events(directory, lanes)
+    study, lanes = load_study(directory)
+    events, current, _ = load_events(directory, lanes, study["schema_version"])
     print(f"valid: {len(lanes)} lanes, {len(events)} events, {sum(s == 'collected' for s in current.values())} collected")
+    print(json.dumps(mode_coverage(study, current), ensure_ascii=False))
 
 
 def cmd_status(directory):
-    _, lanes = load_study(directory)
-    _, current, _ = load_events(directory, lanes)
+    study, lanes = load_study(directory)
+    _, current, _ = load_events(directory, lanes, study["schema_version"])
     for lane in lanes.values():
         print(f"{lane['lane_id']}\t{lane['provider']}\t{lane['mode']}\t{current.get(lane['lane_id'], 'planned')}")
 
@@ -236,7 +334,7 @@ def cmd_plan(directory, max_parallel):
     if max_parallel < 1:
         raise ValueError("max_parallel must be positive")
     study, lanes = load_study(directory)
-    events, current, origins = load_events(directory, lanes)
+    events, current, origins = load_events(directory, lanes, study["schema_version"])
     latest = {event["lane_id"]: event for event in events}
     active = []
     collected = []
@@ -254,6 +352,10 @@ def cmd_plan(directory, max_parallel):
             "state": state,
         }
         if state in {"planned", "prepared"}:
+            if study["schema_version"] == 1:
+                card["note"] = "Legacy request inventory unknown: upgrade before new dispatch"
+                held.append(card)
+                continue
             card["prompt"] = lane["prompt"]
             surface_cards.setdefault(card["control_surface"], []).append(card)
         elif state in {"submitted", "running"}:
@@ -290,6 +392,7 @@ def cmd_plan(directory, max_parallel):
         "study_id": study["study_id"],
         "business_outcome": study["business_outcome"],
         "as_of": study["as_of"],
+        "request_mode_coverage": mode_coverage(study, current),
         "max_parallel": max_parallel,
         "parallel_groups": groups,
         "active_query_existing_origin": active,
@@ -299,8 +402,10 @@ def cmd_plan(directory, max_parallel):
 
 
 def cmd_record(directory, args):
-    _, lanes = load_study(directory)
-    events, current, origins = load_events(directory, lanes)
+    study, lanes = load_study(directory)
+    events, current, origins = load_events(directory, lanes, study["schema_version"])
+    if study["schema_version"] == 1 and args.state in {"prepared", "submitted"}:
+        raise ValueError("legacy request inventory unknown: upgrade before new dispatch")
     origin = None
     if args.origin_url and args.origin_task_id:
         raise ValueError("choose one origin")
@@ -316,6 +421,20 @@ def cmd_record(directory, args):
     }
     if origin:
         event["origin"] = origin
+    if any((args.observed_provider, args.observed_mode, args.mode_proof, args.mode_captured_at)):
+        if not all((args.observed_provider, args.observed_mode, args.mode_proof)):
+            raise ValueError("mode observation needs --observed-provider, --observed-mode and --mode-proof")
+        proof = Path(args.mode_proof).resolve()
+        try:
+            rel = proof.relative_to(directory.resolve())
+        except ValueError as exc:
+            raise ValueError("mode proof must be inside study directory") from exc
+        event["mode_observation"] = {
+            "provider": args.observed_provider, "mode": args.observed_mode,
+            "receipt": {"path": rel.as_posix(), "sha256": sha256(proof),
+                        "captured_at": args.mode_captured_at or datetime.fromtimestamp(
+                            proof.stat().st_mtime, timezone.utc).isoformat(timespec="seconds")},
+        }
     if args.alias_url or args.alias_proof:
         if not args.alias_url or not args.alias_proof:
             raise ValueError("origin alias needs both --alias-url and --alias-proof")
@@ -344,15 +463,17 @@ def cmd_record(directory, args):
             "sha256": sha256(path),
             "captured_at": args.captured_at or datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat(timespec="seconds"),
         }
-    check_event(directory, event, lanes, current, origins.get(args.lane_id), events)
+    check_event(directory, event, lanes, current, origins.get(args.lane_id), events,
+                require_mode=study["schema_version"] == 2)
     ledger = directory / "run-events.jsonl"
     # Single append keeps earlier events intact; caller should not edit the ledger by hand.
     fd = os.open(ledger, os.O_RDWR | os.O_CREAT | os.O_APPEND, 0o600)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX)
         # Independent agents can finish at once; recheck the transition under the ledger lock.
-        events, current, origins = load_events(directory, lanes)
-        check_event(directory, event, lanes, current, origins.get(args.lane_id), events)
+        events, current, origins = load_events(directory, lanes, study["schema_version"])
+        check_event(directory, event, lanes, current, origins.get(args.lane_id), events,
+                    require_mode=study["schema_version"] == 2)
         payload = (json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n").encode()
         while payload:
             payload = payload[os.write(fd, payload):]
@@ -378,6 +499,10 @@ def main():
     record.add_argument("--origin-task-id")
     record.add_argument("--alias-url", help="observed persistent URL for the same submitted session")
     record.add_argument("--alias-proof", help="saved UI/API receipt under sources/ proving the same session")
+    record.add_argument("--observed-provider")
+    record.add_argument("--observed-mode")
+    record.add_argument("--mode-proof", help="saved actual-route UI/API or direct execution receipt under sources/")
+    record.add_argument("--mode-captured-at", help="actual observation timestamp; file mtime is the default")
     record.add_argument("--file")
     record.add_argument("--captured-at")
     record.add_argument("--imported", action="store_true")
