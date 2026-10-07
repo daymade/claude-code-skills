@@ -74,3 +74,4 @@ python-unittest  tibo-reset-codex/tests
 python-unittest  tunnel-doctor/tests
 python-unittest  bilibili-source/tests
 python-unittest  ghostty-use/scripts
+python-unittest  frontend-visual-qa/tests
