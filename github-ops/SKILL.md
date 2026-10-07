@@ -26,7 +26,7 @@ Read only the reference required for the task:
 | Inspect, clone, create, edit, rename, archive, transfer, change visibility, or delete repositories | [`references/repository_operations.md`](references/repository_operations.md) |
 | Copy repositories accessible to another account while keeping the usual account active; configure private copies and upstream sync | [`references/multi_account_repository_sync.md`](references/multi_account_repository_sync.md) |
 | Inspect or change collaborators, teams, base permissions, member privileges, or organization 2FA | [`references/organization_access_and_settings.md`](references/organization_access_and_settings.md) |
-| Protect a default branch while letting collaborators contribute through PRs | [`references/branch_protection.md`](references/branch_protection.md) |
+| Protect a default branch while letting collaborators contribute through PRs; inventory protection gaps across an account, roll a baseline out to many repositories, and verify enforcement with a real push | [`references/branch_protection.md`](references/branch_protection.md) |
 | Trigger, inspect, rerun, cancel, or purge Actions; manage secrets or variables | [`references/workflow_operations.md`](references/workflow_operations.md) |
 | Build and publish a Docker/OCI image to GitHub Container Registry (GHCR) | [`references/ghcr_publishing.md`](references/ghcr_publishing.md) |
 | Use raw REST/GraphQL endpoints, pagination, rate limits, webhooks, or Enterprise hosts | [`references/api_reference.md`](references/api_reference.md) |
