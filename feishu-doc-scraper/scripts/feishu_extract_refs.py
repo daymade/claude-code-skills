@@ -47,13 +47,9 @@ from pathlib import Path
 # /minutes /base /file path scheme.
 _HOST = r"[a-z0-9-]+\.(?:feishu\.cn|larksuite\.com)"
 
-# Inline rich-media tags. Two eras coexist here: the pre-1.0.55 `.data.markdown`
-# pseudo-tags this script originally assumed (RE_MENTION_DOC, RE_IMAGE_TAG --
-# never observed in real raw HTML, but retained since nothing was verified
-# about what that branch emits when it fires) and the verified 1.0.55+ raw
-# `.data.document.content` HTML shapes (RE_CITE_TAG, RE_IMG_TAG) that replace
-# them on the current default (pandoc) path. Run this script on source.html
-# for the latter -- see the module docstring.
+# Inline rich-media tags: retain Markdown pseudo-tags for captured Markdown
+# and raw HTML shapes for captured HTML. Select the input from the actual
+# response; on the HTML branch enumerate source.html before pandoc conversion.
 
 # --- mention-doc references -------------------------------------------------
 # Verified 2026-08-17 (lark-cli 1.0.80, fresh fetch of a real hub doc; the
