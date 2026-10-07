@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **terraform-skill** (v1.5.5 → v1.5.6, existing validation contract correction): Validate embedded expressions with their native consumer when supported, distinguish local arithmetic replay from native validation, and require a fresh evaluation of the deployed rule for runtime verification.
+- **feishu-doc-scraper** (v1.8.0): Bind local archive completion to final Markdown references, original byte/hash evidence and a current actual-reader observation. Reject outside output paths, broken/absolute/escaping media links and stale reader records; keep conversion-only and reader-pending states distinct. Calibrate with historical broken links and accepted relative media, plus synthetic healthy/error/evidence cases.
 
 - **github-ops** (v1.12.0): Clarify self-hosted runner capacity checks: distinguish registrations, hosts and job eligibility; reuse project deployment procedures; prepare tools on the actual runner; preserve production routing; verify the target job on the intended runner.
 
