@@ -713,6 +713,59 @@ every path read back new content from `HEAD` — pure phantom, zero loss. The ch
 belonged to another session, so the disposal was: don't touch, continue in an isolated
 worktree, damage no one's WIP.
 
+### `git pull --ff-only` is not atomic: the half-applied fast-forward, and the already-published working-tree copy
+
+Two sibling drift shapes that both present as "`git status` shows `M` on a file you
+didn't edit this session":
+
+1. **Half-applied ff.** A fast-forward updates the working tree first and moves the ref
+   last; a failure between the two (lock contention with a parallel session, a packed-refs
+   race) leaves the working tree at the new content with HEAD still at the old one.
+   Signature — checkable *after* the fact, without having seen the pull's output:
+   `git rev-parse HEAD` still points at the old commit while the already-fetched
+   `git rev-parse origin/main` has the new one, and `git diff HEAD -- <file>` shows the
+   *incoming* changes as uncommitted modifications. Recovery: for **every** file listed
+   by `git status --porcelain` as `M` (an ff usually brings in several), align it back to
+   HEAD by hand — delete the incoming section with an editor, which is the compliant form
+   under `git-worktree-guard` (it hard-bans the discard-family commands
+   `git checkout --`/`git restore --worktree` that would do this in one step); once
+   `git status` is clean, re-run the ff and git writes the new content back itself.
+   The reason the failure was invisible in the first place: the pull was run as
+   `git pull ... 2>&1 | tail -1`, and "Updating A..B" is the *first* line of the output —
+   the error and ref-update lines never printed. State-changing git commands are never
+   truncated (the `instrument-calibration-guard` hook; if you *did* see the "Updating
+   A..B" line, it is supporting evidence, not the signature — the signature above works
+   without it).
+2. **Already-published copy.** You edited a file in a shared checkout, committed it
+   elsewhere (worktree / patch), and the PR merged. The checkout still holds your
+   pre-merge revision as an uncommitted modification. A later `git pull --ff-only` —
+   yours or the owner's — refuses with "Your local changes would be overwritten" because
+   git compares **paths against HEAD/index**, not content: even a copy byte-identical to
+   the merge target is still path-dirty relative to the old HEAD, and the ff refuses
+   anyway (measured). So the unblock is NOT "make the copy match the merge" — it is
+   "make the file match **HEAD**":
+   - *You want to ff now:* align the file back to the current HEAD (hand-edit the section
+     out, same compliant form as shape 1), run the ff — HEAD advances and git writes the
+     merged content back. Editing it to the merged revision first is wasted motion: the
+     ff refuses on the path-dirty check either way.
+   - *The owner will ff later, not you:* bring the copy to the merged revision (apply the
+     same fix patch, or edit it to match) purely so *their* ff sees no local diff on this
+     path. If the copy is *older* than the merge (review fixes landed in the PR after you
+     made it), "it will go clean on merge" is false — the delta stays as an uncommitted
+     reversion. Verify the copy really matches the merge with
+     `git show origin/main:<path> | cmp - <path>` (empty output = byte-identical).
+
+2026-10-07 case: both fired within one delivery round — an infra CLAUDE.md pre-review-fix
+copy in the main checkout (caught by a peer's blob check; editing it to the merged
+revision did NOT unblock the ff — path-dirty either way — so it was hand-aligned back to
+HEAD, the ff advanced, and git wrote the merged content back), a pkm review file misread
+as untracked from a stale HEAD snapshot and `rm`'d — it was tracked, another session had
+already advanced HEAD past the commit that added it (restored with
+`git show HEAD:<path> > <path>`; the rule "every read that enters a judgment uses an
+immutable ref" — the global contract's 共享工作树以不可变 ref 为基线 section — applies
+to *deletion* decisions too), and a skills-pro ff that updated the working tree but not
+the ref (recovered by hand-removing the incoming section and re-running the ff).
+
 ## Set a wider reflog safety window once
 
 The reflog is your recovery window; widen it once, globally, so a busy repo doesn't age work out:
