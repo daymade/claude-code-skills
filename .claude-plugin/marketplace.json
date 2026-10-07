@@ -33,7 +33,7 @@
       "description": "Drives Kimi.app via computer-use for Work/Agent data-plugin queries and Chat 深度研究 reports, using the user's logged-in session; also the kimi-cu macOS desktop-automation playbook (channel reliability tiers, foregrounding, AX-tree recovery, form & dialog recipes) for driving any desktop app. Use for \"用 Kimi 查\" / \"操作 Kimi 客户端\" / \"Kimi 插件\" / \"Kimi 深度研究\" / kimi-cu desktop automation. Not for kimi.com browser automation or direct iFinD API access.",
       "source": "./kimi-use",
       "strict": false,
-      "version": "1.6.2",
+      "version": "1.7.0",
       "category": "developer-tools",
       "keywords": [
         "kimi",
