@@ -177,3 +177,62 @@ close the last row.
   or workflow knowledge), *preserve* (never-delete list). A flat list of "large
   items" invites the wrong deletions — the 2026-09-19 user ruled agent session
   history absolutely off-limits only after it appeared in such a list.
+
+## Git work containers (worktree / detached HEAD / bundle-origin)
+
+When the large folder is a family of Git checkouts rather than plain data, the
+ladder's rungs get Git-specific instruments. A 2026-10-07 cleanup of a 57 GiB
+family on a remote worker worked these, in this order, and every anti-pattern
+below fired.
+
+### 0. Dependency direction before size ranking
+
+`git -C <dir> rev-parse --absolute-git-dir` and `--git-common-dir`. A checkout
+whose gitdir lives under another repo's `.git/worktrees/<name>` is a *worktree
+of that repo* — so the container that looks like the biggest disposable copy
+may be the load-bearing master: deleting it orphans every worktree's metadata.
+Three "repos" were worktrees of one 25 GiB container; the container was the one
+thing that could not go. Deleting by size alone would have picked exactly wrong.
+
+### 1. SHA-level uniqueness
+
+`git clone --filter=blob:none` silently degrades to a full clone when the server
+does not advertise filters (`warning: filtering not recognized by server,
+ignoring`, still exit 0) — on a multi-GiB family that turns the "scratch" mirror
+into a full object-store pull. Check for that warning before proceeding, or the
+space-minimization premise is gone. Fetch every ref into the mirror
+(`git clone --filter=blob:none --no-checkout`, then
+`git fetch ssh://<host>/<path> '+refs/heads/*:refs/remotes/wk/*'
+'HEAD:refs/remotes/wk/detached'` — zero writes to the source), then
+`git rev-list --remotes=wk --not --remotes=origin`. The count is the stranded set;
+ahead/behind per ref follows from `git rev-list --count`. (`<wk-refs>` expands to
+`--remotes=wk`, not a literal `refs/remotes/wk/*` — `--not` must precede ref
+arguments, and a pathspec there fails with exit 128.)
+
+### 2. Supersession is content, not ancestry
+
+`git cherry <base> <ref>` lies in both directions after squash merges (new
+patch-ids), and "the branch is gone from the remote" is not proof the work
+landed. The checks that held up: distinctive symbols on the base
+(`git show <base>:<path> | grep -c <symbol>`), then semantic coverage — the
+base's own test file carrying the same test cases (count hits for the case
+names, not just the function name). A fix whose function *and* tests are on the
+base is superseded; a fix against a since-rewritten architecture is obsolete;
+only "missing" justifies rescue, and neither of the first two is it.
+
+### 3. Dirty-content triage at blob level
+
+For uncommitted state, join `git hash-object <file>` (per dirty path, `-uall`
+expanded) against `git ls-tree <base> -r`: SAME = byte-identical (no residual
+value); DIFF splits into base-never-touched (the only one-of-a-kind class) and
+base-evolved (compare contents); ONLY = untracked (build output in practice —
+2952 of 3197 files that day). A trailing `??` directory in `status` hides
+thousands of files; expand before counting.
+
+### 4. Two stranded shapes with no upstream at all
+
+A repo whose `origin` points at a local *bundle file* has no repatriation path —
+pushing writes back into the bundle, so its commits exist nowhere else by
+construction. And squash-merged branches are ahead-by-SHA forever: exclude any
+branch that has a merged PR before calling work stranded (three fix branches
+with merged PRs read as "6 unpushed commits" that day — every one a phantom).
