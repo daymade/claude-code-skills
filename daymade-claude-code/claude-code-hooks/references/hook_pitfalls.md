@@ -3075,37 +3075,54 @@ this list and describe defects you reach by asking a different question):
   fleet, and only a two-sided selftest sees a guard that dies in ways exit
   codes cannot show.
 
-## 58. A `mode=ro` open of a cleanly-checkpointed WAL database always fails — a read-only query that only works while someone else is writing
+## 58. A read-only query on WAL state can fail only in the quiet hours — `mode=ro` plus an environment that cannot create `-shm`, not `mode=ro` alone
 
 - **Symptom:** a hook's read-only statistics command (`--status`, `--eval-queue`)
-  fails with `sqlite3.OperationalError: unable to open database file` — but
-  only *sometimes*. It worked fine during the busy hours and fails at 3am;
-  it fails under `env -i` and in launchd, then works again once any session
-  starts generating events. The same database opens fine with a plain
-  `sqlite3.connect(path)` in the same environment, so every minimal repro
-  you build looks healthy.
-- **Cause and fix:** the code opened the database with
-  `sqlite3.connect(f"file:{path}?mode=ro", uri=True)` on a WAL-mode database.
-  A WAL database whose last writer closed cleanly has no `-shm`/`-wal` files
-  left on disk; opening it `mode=ro` makes SQLite need to *create* the shm
-  file it is forbidden to create, and the open fails. While any writer is
-  active (or left a hot WAL behind), the read-only open succeeds — which is
-  exactly why the bug hides: the query works whenever the system is busy and
-  fails whenever it is quiet, and nobody runs the diagnostics until the
-  quiet hours. Do not reach for `mode=ro` on WAL state at all. Open a normal
-  connection, set `PRAGMA busy_timeout` and `PRAGMA query_only = ON` — the
-  read-only intent is preserved by the pragma, the open is not.
+  fails with `sqlite3.OperationalError` — but only *sometimes*. It worked
+  through the busy hours and failed at 3am; it failed under `env -i` and in
+  launchd, then worked again once sessions started generating events. Swapping
+  the open to a plain read-write connection plus `PRAGMA query_only = ON` made
+  it pass in the same environment, in the same minute, on the same database.
+- **Cause and fix:** the code opened the WAL-mode database with
+  `sqlite3.connect(f"file:{path}?mode=ro", uri=True)`. **Read this far
+  carefully, because the first published version of this entry got the
+  mechanism wrong and was rewritten after independent review measured it:**
+  `mode=ro` does NOT, by itself, make a WAL open fail — on a writable
+  directory a read-only connection happily creates the `-shm`/`-wal` side
+  files itself (measured on libsqlite 3.50.4). The failure needs an
+  environment that *cannot* create those side files (a read-only or sandboxed
+  directory, a TCC denial) or another not-fully-identified transient state —
+  which is exactly the shape that hides in production: busy hours keep a hot
+  `-wal`/`-shm` around so the read-only open succeeds, quiet hours remove
+  them and the same code fails, so nobody reproduces it until 3am. Two
+  refinements the review added: the side-file-blocked form reports
+  `attempt to write a readonly database`, while `unable to open database
+  file` points at a missing directory / unreadable file / sandbox EPERM —
+  read the error text, not just the exception type; and
+  `sqlite3.connect(path)` succeeding is *not* evidence the environment is
+  healthy, because connect() opens lazily and only the first statement
+  touches the file. The fix that worked at the incident site (writable state
+  directory): a normal connection plus `PRAGMA busy_timeout` and
+  `PRAGMA query_only = ON`. If the directory genuinely cannot be written,
+  that fix fails the same way — there the working read-only channel is
+  `file:...?immutable=1`, at the explicit price of seeing no concurrent
+  writes. Do not ship `mode=ro` against WAL state you do not control the
+  directory of.
 - **Real case (2026-10-06):** `goal-reanchor`'s evaluation queue had carried
-  this since its first version. It was discovered only while automating the
+  this since its first version, discovered only while automating the
   outcome-evaluation loop that had silently never run: the manual eval flow
-  worked in the afternoon (hooks firing everywhere, hot WAL present), and
-  the first launchd run of the batch job failed at night with no writer
-  active. Two lessons stack here: the failure is *invisible to any test that
-  runs while the system under test is also active* — the fix was verified by
-  replaying the command under `env -i` after the writers stopped, not by the
-  unit suite; and an operations SOP whose steps all "work when tried
-  interactively" can sit on a time bomb for months because nobody runs them
-  on a quiet database.
+  worked in the afternoon (hooks firing everywhere), the first launchd run
+  of the batch job failed at night. The fix above restored the command in
+  both interactive and `env -i` replays. Two stacked lessons: the failure is
+  *invisible to any test that runs while the system under test is also
+  active* — the fix was verified by replaying the command after the writers
+  stopped, not by the unit suite; and an operations SOP whose steps all
+  "work when tried interactively" can sit on a time bomb for months because
+  nobody runs them on a quiet database. The mechanism section you just read
+  is its second version: the first one asserted "`mode=ro` always fails on a
+  checkpointed WAL", an independent review measured the assertion false on
+  the same SQLite build, and the entry was rewritten — treat the environment
+  condition, not the open mode, as the suspect.
 
 ## 59. Adding a column without bumping the schema version makes the migration never run — and every writer fails open at once
 
@@ -3146,7 +3163,8 @@ this list and describe defects you reach by asking a different question):
   `all(c in managed for c in [])` reports an empty group as "fully managed".
   Shell groups with `hooks: []` are not rare leftovers here — a migration
   that strips handlers from a group deliberately leaves the empty shell in
-  place (deleting it would change group order, which is execution order).
+  place (deleting it would shift every later group's position in the list,
+  and list position is execution order).
   Decide the empty case **out loud** at the branch: name it in a comment and
   make the code say it — `cur_managed = any(...)` when "empty means not
   managed", `bool(cmds) and all(...)` when "empty means nothing to vouch
@@ -3164,3 +3182,32 @@ this list and describe defects you reach by asking a different question):
   walk (a foreign handler riding inside a duplicate of a managed group),
   which is why the fix also moved the predicate from `all` to `any` for the
   "is this group managed at all" question.
+
+## 61. A PreToolUse advisory's context arrives beside the tool result — diagnosing its timing from the conversation-surface label misreads it as post-hoc
+
+- **Symptom:** an advisory hook's message shows up on the conversation surface
+  labeled "PostToolUse:X hook additional context", even though the hook is
+  registered PreToolUse. The diagnostician concludes "the reminder only fires
+  after the fact" and proposes moving it to PreToolUse — where it has been
+  registered all along.
+- **Cause and fix:** the hook *run* and the *delivery* of its
+  `additionalContext` are two different records. The run is PreToolUse (it
+  evaluates before the tool executes); the injected context lands in the
+  transcript as a `hook_additional_context` attachment adjacent to the tool
+  result, and the surface label reflects that delivery position, not the
+  trigger event. Before diagnosing any hook-timing question, find the hook's
+  run record in the session transcript
+  (`~/.claude/projects/<encoded-cwd>/<session>.jsonl` — the attachment
+  carrying `durationMs` and the hook's command line) and read the event name
+  from there, never from the surface label. The adjacent design fact that
+  makes this matter: an advisory (exit 0 + context) structurally cannot
+  prevent the call it fires on — the model emitted that call before the hook
+  ran, so the reminder only teaches *subsequent* calls. If the rule must stop
+  the current call, it has to block (exit 2 / deny); choose that by
+  proportionality, not by habit.
+- **Real case (2026-10-07):** a branch-delete advisor fired PreToolUse
+  ("Checking repo policies", 155ms) with the trial-merge reminder ahead of a
+  `git branch -D` riding at the end of a compound command; the reminder
+  surfaced labeled PostToolUse, and the post-incident review came one step
+  from "fixing" a registration that was never missing. The transcript run
+  record, not the label, settled it.
