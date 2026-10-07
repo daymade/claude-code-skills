@@ -214,13 +214,14 @@ modifier eat the refspec, and the push then fails for a reason that has nothing 
 the ruleset. The expected outcomes are three independent facts: the default-branch push is
 rejected with the rule's own message, the topic-branch push succeeds, and the delete
 succeeds. If the default-branch push lands, the rule is not enforced — the empty probe adds
-zero diff, and the same gap that let it land will let its own revert commit land; report the
-configuration gap and do not treat the API readback as a substitute.
+zero diff, and the same gap that let it land will let a follow-up commit that undoes it land
+too; report the configuration gap and do not treat the API readback as a substitute.
 
-Reverting a landed probe is a `git push --force-with-lease` of the previous tip — the only
-way to move the default branch backwards — and a `non_fast_forward` rule (the baseline this
-fleet rolls out) rejects exactly that. In a mixed posture (`non_fast_forward` active while
-`pull_request` is still `evaluate`/disabled) the probe can land and its revert be refused,
+Removing a landed probe from history is a `git push --force-with-lease` of the previous
+tip — the only way to move the default branch backwards — and a `non_fast_forward` rule (the
+baseline this fleet rolls out) rejects exactly that. In a mixed posture (`non_fast_forward`
+active while `pull_request` is still `evaluate`/disabled) the probe can land and its
+removal be refused,
 leaving the empty commit on the default branch's first-parent. Verify both rules are
 `active` before probing, and treat that leftover as a configuration-gap report, not a silent
 state.
