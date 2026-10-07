@@ -101,7 +101,12 @@ id 前缀），每个引用必须已存在于 findings.jsonl，否则报错退�
 git 任何失败只在 stderr 打一行 note、绝不影响追加成功，也不构成备份承诺；`--no-git` 关闭。
 findings 隐私契约（本文件对它唯一的完整表述）：不放邮箱——`query_usage` 输出的 `email` 字段、
 `read-usage-profile.cjs` 输出的邮箱行、说明文字里的邮箱都不抄，账号一律用 `account_ref` 指代——
-也不放 token 或产品凭据；`readings` 只放逐字读数与公开 URL。这条契约有执行层：机器上若配置了全局 pre-commit 的个人信息检查，findings 里出现
+也不放 token 或产品凭据；`readings` 只放逐字读数与公开 URL。
+**群/项目/人名一律写全称，不自创简称**（2026-10-07 撞 group-name-guard 后加）：台账会在后续轮次
+被 `handoff` 原样读回并照抄进回复——简称进了台账，等于每轮引用它的回复都再撞一次群名闸门。
+写微信群名/项目名/人名时，用全称（规则与执行细节在 group-name-guard hook 与 read-wechat-messages skill，本行不复制——写之前先经 chatlog 核对该群的 remark/nickName 全称）；
+本轮没核实过全称就写「未确认全称的群」，别从旧台账记录里照抄一个看着像简称的写法。
+这条契约有执行层：机器上若配置了全局 pre-commit 的个人信息检查，findings 里出现
 邮箱就会让快照提交被拒——追加本身仍然成功，但被拒的内容留在暂存区，同一份台账此后每次快照都会带着它
 再失败一次，完整性护栏形同失效。快照失败时 stderr 的 note 是一行 JSON：
 `{"note": "git snapshot skipped: <git 报错首行，含命令行与状态目录路径> | <stderr 末三行>"}`
