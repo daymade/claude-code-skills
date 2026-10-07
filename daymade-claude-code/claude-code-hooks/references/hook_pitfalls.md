@@ -3182,3 +3182,38 @@ this list and describe defects you reach by asking a different question):
   walk (a foreign handler riding inside a duplicate of a managed group),
   which is why the fix also moved the predicate from `all` to `any` for the
   "is this group managed at all" question.
+
+## 61. An advisory's context lands bundled with the tool result — judging hook timing from that delivery position misreads a PreToolUse fire as post-hoc
+
+- **Symptom:** an advisory hook's `additionalContext` shows up in the
+  conversation flow *next to the tool result*, after the tool ran. The
+  diagnostician reads the delivery position as the firing time, concludes
+  "the reminder only arrives after the fact," and proposes moving the hook to
+  PreToolUse — where it has been registered all along. In the measured case
+  the retelling went one step further and confabulated a wrong surface label
+  ("PostToolUse") that the transcript's own records contradict — the label
+  had been correct; only the position was misleading.
+- **Cause and fix:** the hook *run* and the *delivery* of its
+  `additionalContext` are two different records. The run is PreToolUse (it
+  evaluates before the tool executes); the injected context is attached to
+  the transcript adjacent to the tool result, and the harness renders its
+  label from the hook's event name — so trust the label, distrust the
+  position. Before diagnosing any hook-timing question, find the hook's run
+  record in the session transcript
+  (`~/.claude/projects/<encoded-cwd>/<session>.jsonl` — the attachment
+  carrying `durationMs` and the hook's command line) and read the event name
+  from there. The adjacent design fact that makes this matter: an advisory
+  (exit 0 + context) structurally cannot prevent the call it fires on — the
+  model emitted that call before the hook ran, and the official contract
+  reserves stopping the call for block/deny — so the reminder only teaches
+  *subsequent* calls. If the rule must stop the current call, it has to
+  block; choose that by proportionality, not by habit.
+- **Real case (2026-10-07):** a branch-delete advisor fired PreToolUse
+  ("Checking repo policies", 155ms) with the trial-merge reminder ahead of a
+  `git branch -D` riding at the end of a compound command; the reminder
+  arrived bundled with the tool result and was misread as post-hoc — and the
+  incident write-up even invented a "PostToolUse" label that the transcript
+  contradicts. The run record, not the delivery position, settled it. The
+  label confabulation survived into this entry's own first draft and was
+  caught only by the release review — this failure mode recurs even inside
+  the document warning about it.
