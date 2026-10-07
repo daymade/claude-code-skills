@@ -187,8 +187,11 @@ jobs:
       - name: Install registered-suite runtime tools
         run: |
           if ! command -v rg >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y ripgrep
+            # Bound mirror retries on runner images that still carry apt defaults.
+            apt_options=(-o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15)
+            apt-config "${apt_options[@]}" dump Acquire::Retries Acquire::http::Timeout Acquire::https::Timeout
+            sudo apt-get "${apt_options[@]}" update
+            sudo apt-get "${apt_options[@]}" install -y ripgrep
           fi
           rg --version
 
