@@ -774,7 +774,7 @@ def cmd_restore(args):
     return 0 if not still_missing else 1
 
 
-def _paste_tab(cmd):
+def _paste_tab(cmd, *, layout="tabs"):
     """Activate Ghostty, open a tab (Cmd+T), paste `cmd`, press Return.
 
     Keystroke paste is timing-sensitive: an interruption between Cmd+T and the
@@ -782,11 +782,14 @@ def _paste_tab(cmd):
     after the loop is what makes such failures visible — never skip it.
     Requires Accessibility permission (System Events keystroke).
     """
+    if layout not in ("tabs", "windows"):
+        raise RecoveryError("layout must be tabs or windows")
+    key = "n" if layout == "windows" else "t"
     cmd = cmd.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
     script = (
         'tell application "Ghostty" to activate\n'
         "delay 0.8\n"
-        'tell application "System Events" to keystroke "t" using command down\n'
+        f'tell application "System Events" to keystroke "{key}" using command down\n'
         "delay 1.2\n"
         f'tell application "System Events"\n'
         f'  set the clipboard to "{cmd}"\n'
@@ -851,7 +854,16 @@ def main(argv=None):
     p4.add_argument("--limit", type=positive, default=100)
     p4.add_argument("--terminal-source", type=nonempty, action="append", help="verified session_meta.source (default cli)")
     p4.add_argument("--terminal-originator", type=nonempty, action="append", help="verified originator (default codex-tui)")
-    for parser in (p1, p4):
+    p5 = sub.add_parser("switch-prepare", help="freeze all Ghostty Codex sessions before a manual account switch")
+    p5.add_argument("--out", type=nonempty, help="new exclusive manifest path; never replaces an existing file")
+    p6 = sub.add_parser("switch-restore", help="restore the fixed Codex switch manifest after manual login")
+    p6.add_argument("--snapshot", type=nonempty)
+    p6.add_argument("--only", nargs="+", type=nonempty, metavar="ID")
+    p6.add_argument("--dry-run", action="store_true", help="read-only readiness and command preview")
+    p6.add_argument("--check", action="store_true", help="read-only account/process reconciliation")
+    p6.add_argument("--layout", choices=("windows", "tabs"), default="windows")
+    p6.add_argument("--reconcile-seconds", type=bounded_seconds, default=10)
+    for parser in (p1, p4, p5):
         parser.add_argument("--history-reader", type=nonempty, help="installed read-codex-history Skill directory")
         parser.add_argument("--codex-home", type=nonempty)
     args = ap.parse_args(argv)
@@ -860,6 +872,9 @@ def main(argv=None):
     HISTORY_READER = getattr(args, "history_reader", None)
     CODEX_HOME_OVERRIDE = getattr(args, "codex_home", None)
     try:
+        if args.cmd.startswith("switch-"):
+            import ghostty_switch
+            return ghostty_switch.run(args, sys.modules[__name__])
         return {"snapshot": cmd_snapshot, "check": cmd_check, "restore": cmd_restore,
                 "reconstruct": cmd_reconstruct}[args.cmd](args)
     except (RecoveryError, ValueError, OSError, RuntimeError) as error:

@@ -7,6 +7,7 @@ description: >-
   my ghostty tabs), or to audit which sessions survived. Not for resuming one conversation
   via its own --resume, terminal screenshots, or tmux state. Also use for periodic
   change-only snapshots (定期增量快照 / 没变化不记录).
+  Also use before or after a manual Codex account switch (额度耗尽换号 / 换号后恢复全部 Codex).
 ---
 
 # ghostty-use
@@ -29,6 +30,30 @@ automatic reconciliation that makes every paste failure visible.
 | Rebooted, want tabs back ("恢复之前的窗口") | Use a suitable snapshot; if absent or outdated, `reconstruct`, then `restore --all` on the selected manifest |
 | "Was anything lost?" / suspicion after restore | `check` |
 | One specific session to bring back | `restore --only <id-prefix>` |
+| Codex quota running out; manually switching account, keeping all Codex work | Read codex-account-switch.md; `switch-prepare` → manual exit/login → `switch-restore` |
+
+## Codex account switch
+
+Preserve all Ghostty Codex sessions before the user manually switches ChatGPT
+accounts, then reopen the original session IDs in one batch. Exclude Claude Code.
+Read [codex-account-switch.md](references/codex-account-switch.md) before this route.
+Use `scripts/ghostty_session.py switch-prepare` and `switch-restore`; the bundled
+`scripts/ghostty_switch.py` owns fixed-manifest selection, account/process checks,
+duplicate-safe retries and separate authentication reporting.
+
+```bash
+python3 <skill-dir>/scripts/ghostty_session.py switch-prepare
+# User: finish work, exit the saved Codex TUIs and manually switch account.
+python3 <skill-dir>/scripts/ghostty_session.py switch-restore
+```
+
+Default to one independent window per session; use `--layout tabs` to open tabs.
+Keep the printed fixed manifest through the handoff. Treat unresolved capture,
+unchanged account or still-running old processes as an incomplete handoff. Never
+terminate processes or switch credentials through this route. Ask for a bounded
+Ghostty keyboard/mouse handoff before actual opening; `--dry-run` and `--check`
+remain read-only. Distinguish reopened IDs from new-account requests that worked:
+the script reports authentication as `not_checked` and sends no test prompt.
 
 ## Quick start
 
