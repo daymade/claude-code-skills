@@ -79,7 +79,8 @@ major app update rather than trusting the dates.
 3. **argv[0] instability** — matching processes by name missed every bare-name
    process and produced two false "all sessions gone" reports in one session.
    Rule: anchor on the command-line UUID at argv-token boundaries, skipping
-   companion/snapshot/daemon processes.
+   companion/snapshot/daemon processes. (For argv that carries no UUID — fresh
+   TUIs — this rule is extended by item 4.)
 4. **Fresh-TUI invisibility** — only resume/fork writes the session UUID into
    argv; a brand-new TUI has none. On 2026-10-07, 11 of 25 live Ghostty
    sessions were fresh TUIs, and argv-only anchoring silently dropped them

@@ -38,7 +38,9 @@ python3 <skill-dir>/scripts/ghostty_watch.py stop
 Expected install result: `installed: true`, with the verified runtime and schedule.
 The installer creates its owned environment once with `uv` and registers the
 fixed interpreter directly. Reinstall updates the owned script copies and enables
-the same job without creating another label.
+the same job without creating another label. The observer runs those byte-copies,
+not the skill source — re-run `install --apply` after any skill update, or the
+loaded job keeps the pre-update scripts.
 
 Use the read-only `install` plan for the currently requested definition and
 `status` for the loaded schedule. Install independently compares calendarinterval
