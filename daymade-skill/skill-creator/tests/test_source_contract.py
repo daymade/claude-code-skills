@@ -206,6 +206,80 @@ class DeliveryIdentityTests(unittest.TestCase):
                 self.assertEqual(result["status"], "invalid")
                 self.assertEqual(result["examined_count"], 1)
 
+    def test_transport_line_endings_do_not_change_body_identity(self):
+        candidate = self.candidate() + "\n"
+        receipt = self.delivery.prepare_receipt("task-a", [self.identity], candidate)
+        self.assertEqual(receipt["schema_version"], 2)
+        self.assertEqual(receipt["comparison_policy"], "crlf-terminal-lf-v1")
+        for actual in (candidate[:-1], candidate.replace("\n", "\r\n"),
+                       candidate[:-1].replace("\n", "\r\n")):
+            with self.subTest(actual=actual):
+                result = self.delivery.check_receipt(receipt, "task-a", actual)
+                self.assertEqual((result["status"], result["examined_count"]), ("valid", 1))
+                self.assertEqual(result["actual_sha256"], self.delivery.digest(actual))
+                self.assertEqual(result["actual_comparison_sha256"], receipt["candidate_comparison_sha256"])
+                self.assertEqual(result["comparison_policy"], receipt["comparison_policy"])
+        reverse = self.delivery.prepare_receipt("task-a", [self.identity], candidate[:-1])
+        self.assertEqual(self.delivery.check_receipt(reverse, "task-a", candidate)["status"], "valid")
+
+    def test_normalization_preserves_markdown_spacing_and_real_content_drift(self):
+        candidate = self.candidate() + "\n"
+        receipt = self.delivery.prepare_receipt("task-a", [self.identity], candidate)
+        changes = (candidate + "\n", " " + candidate, candidate[:-1] + "  \n",
+                   candidate.replace("Updated", "Changed"), candidate + "New result.\n",
+                   candidate.replace("`chart-judgment`", "chart-lite"),
+                   candidate.replace("v1.2.0", "v1.3.0"),
+                   candidate.replace("example/skills", "other/skills"),
+                   candidate.replace("\n\n", "\n"), candidate.replace("\n", "\r"))
+        for actual in changes:
+            with self.subTest(actual=actual):
+                result = self.delivery.check_receipt(receipt, "task-a", actual)
+                self.assertEqual((result["status"], result["examined_count"]), ("invalid", 1))
+                self.assertEqual(result["actual_sha256"], self.delivery.digest(actual))
+
+    def test_legacy_exact_receipts_stay_exact_and_missing_new_fields_are_unknown(self):
+        candidate = self.candidate() + "\n"
+        new = self.delivery.prepare_receipt("task-a", [self.identity], candidate)
+        legacy_payload = {key: new[key] for key in ("session_id", "identities", "candidate_text", "candidate_sha256")}
+        legacy_payload["schema_version"] = 1
+        canonical = json.dumps(legacy_payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+        old = dict(legacy_payload, receipt_sha256=self.delivery.digest(canonical))
+        self.assertEqual(self.delivery.check_receipt(old, "task-a", candidate)["status"], "valid")
+        self.assertEqual(self.delivery.check_receipt(old, "task-a", candidate)["comparison_policy"], "exact-v1")
+        self.assertEqual(self.delivery.check_receipt(old, "task-a", candidate[:-1])["status"], "invalid")
+        for key in ("comparison_policy", "candidate_comparison_sha256"):
+            for value in (None, "", " ", "unsupported"):
+                broken = dict(new, **{key: value})
+                payload = {k: v for k, v in broken.items() if k != "receipt_sha256"}
+                broken["receipt_sha256"] = self.delivery.digest(json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")))
+                self.assertEqual(self.delivery.check_receipt(broken, "task-a", candidate)["status"], "unknown")
+            broken = dict(new)
+            del broken[key]
+            payload = {k: v for k, v in broken.items() if k != "receipt_sha256"}
+            broken["receipt_sha256"] = self.delivery.digest(json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")))
+            self.assertEqual(self.delivery.check_receipt(broken, "task-a", candidate)["status"], "unknown")
+        self.assertEqual(self.delivery.check_receipt(dict(new, schema_version=True), "task-a", candidate)["status"], "unknown")
+
+    def test_cli_preserves_raw_crlf_in_actual_digest(self):
+        import contextlib
+        import io
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = self.candidate() + "\n"
+            receipt = self.delivery.prepare_receipt("task-a", [self.identity], candidate)
+            receipt_path = root / "receipt.json"
+            receipt_path.write_text(json.dumps(receipt))
+            actual = candidate.replace("\n", "\r\n")
+            actual_path = root / "actual.txt"
+            actual_path.write_bytes(actual.encode("utf-8"))
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                code = self.delivery.main(["check", "--session-id", "task-a", "--receipt", str(receipt_path), "--actual", str(actual_path)])
+            result = json.loads(stdout.getvalue())
+            self.assertEqual(code, 0)
+            self.assertEqual(result["actual_sha256"], self.delivery.digest(actual))
+            self.assertNotEqual(result["actual_sha256"], self.delivery.digest(candidate))
+
     def test_quote_alias_and_chinese_description_do_not_create_new_subjects(self):
         for prefix in ('中文说明：该技能用于图表判断。\n',
                        'Earlier I wrote "chart is installed"; that was an imprecise alias.\n',

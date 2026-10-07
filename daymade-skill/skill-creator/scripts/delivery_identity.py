@@ -25,7 +25,8 @@ else:
     source = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(source)
 
-SCHEMA = 1
+SCHEMA = 2
+COMPARISON_POLICY = "crlf-terminal-lf-v1"
 
 
 class DeliveryError(ValueError):
@@ -40,6 +41,18 @@ def nonempty(value, field):
 
 def digest(text):
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def comparison_text(text):
+    """Normalize CRLF and at most one terminal LF, preserving all body spacing."""
+    value = text.replace("\r\n", "\n")
+    return value[:-1] if value.endswith("\n") else value
+
+
+def read_text_exact(path):
+    """Retain the caller's line endings in raw digests, unlike universal-newline reads."""
+    with Path(path).open(encoding="utf-8", newline="") as stream:
+        return stream.read()
 
 
 def git(repo, *args):
@@ -214,7 +227,9 @@ def prepare_receipt(session_id, identities, candidate_text):
         raise DeliveryError("; ".join(errors))
     payload = {"schema_version": SCHEMA, "session_id": session_id,
                "identities": identities, "candidate_text": candidate_text,
-               "candidate_sha256": digest(candidate_text)}
+               "candidate_sha256": digest(candidate_text),
+               "comparison_policy": COMPARISON_POLICY,
+               "candidate_comparison_sha256": digest(comparison_text(candidate_text))}
     canonical = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return {**payload, "receipt_sha256": digest(canonical)}
 
@@ -229,10 +244,21 @@ def check_receipt(receipt, session_id, actual_text):
     try:
         nonempty(session_id, "session_id")
         nonempty(actual_text, "actual last assistant message")
-        if not isinstance(receipt, dict) or receipt.get("schema_version") != SCHEMA:
+        if not isinstance(receipt, dict):
             raise DeliveryError("Unsupported or missing receipt")
+        schema = receipt.get("schema_version")
+        if isinstance(schema, bool) or schema not in (1, SCHEMA):
+            raise DeliveryError("Unsupported or missing receipt schema")
         nonempty(receipt.get("receipt_sha256"), "receipt_sha256")
-        payload = {key: receipt[key] for key in ("schema_version", "session_id", "identities", "candidate_text", "candidate_sha256")}
+        keys = ("schema_version", "session_id", "identities", "candidate_text", "candidate_sha256")
+        if schema == SCHEMA:
+            keys += ("comparison_policy", "candidate_comparison_sha256")
+            if receipt.get("comparison_policy") != COMPARISON_POLICY:
+                raise DeliveryError("Unsupported or missing comparison policy")
+            nonempty(receipt.get("candidate_comparison_sha256"), "candidate_comparison_sha256")
+        elif any(key in receipt for key in ("comparison_policy", "candidate_comparison_sha256")):
+            raise DeliveryError("Legacy exact receipt cannot declare normalization fields")
+        payload = {key: receipt[key] for key in keys}
         canonical = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
         if digest(canonical) != receipt["receipt_sha256"]:
             raise DeliveryError("Receipt content changed")
@@ -241,12 +267,20 @@ def check_receipt(receipt, session_id, actual_text):
         candidate = nonempty(receipt["candidate_text"], "candidate_text")
         if digest(candidate) != receipt["candidate_sha256"]:
             raise DeliveryError("Candidate digest differs")
+        if schema == SCHEMA and digest(comparison_text(candidate)) != receipt["candidate_comparison_sha256"]:
+            raise DeliveryError("Candidate comparison digest differs")
         errors = report_errors(receipt["identities"], actual_text)
         count = len(receipt["identities"])
-        if actual_text != candidate:
+        policy = COMPARISON_POLICY if schema == SCHEMA else "exact-v1"
+        actual_comparison = comparison_text(actual_text) if schema == SCHEMA else actual_text
+        candidate_comparison = comparison_text(candidate) if schema == SCHEMA else candidate
+        if actual_comparison != candidate_comparison:
             errors.append("Actual final reply differs from the checked candidate; prepare the actual text again")
         return {"status": "invalid" if errors else "valid", "examined_count": count,
-                "errors": errors, "actual_sha256": digest(actual_text)}
+                "errors": errors, "actual_sha256": digest(actual_text),
+                "comparison_policy": policy,
+                "actual_comparison_sha256": digest(actual_comparison),
+                "candidate_comparison_sha256": digest(candidate_comparison)}
     except (DeliveryError, KeyError, TypeError, ValueError) as exc:
         return {"status": "unknown", "examined_count": count, "errors": [str(exc)]}
 
@@ -276,12 +310,14 @@ def main(argv=None):
             print(render_entry(identity))
         elif args.command == "prepare":
             identities = json.loads(args.identities.read_text())
-            receipt = prepare_receipt(args.session_id, identities, args.candidate.read_text())
+            receipt = prepare_receipt(args.session_id, identities, read_text_exact(args.candidate))
             args.output.write_text(json.dumps(receipt, ensure_ascii=False, indent=2) + "\n")
             print(json.dumps({"status": "prepared", "examined_count": len(identities),
-                              "candidate_sha256": receipt["candidate_sha256"]}))
+                              "candidate_sha256": receipt["candidate_sha256"],
+                              "comparison_policy": receipt["comparison_policy"],
+                              "candidate_comparison_sha256": receipt["candidate_comparison_sha256"]}))
         else:
-            report = check_receipt(json.loads(args.receipt.read_text()), args.session_id, args.actual.read_text())
+            report = check_receipt(json.loads(args.receipt.read_text()), args.session_id, read_text_exact(args.actual))
             print(json.dumps(report, ensure_ascii=False))
             return 0 if report["status"] == "valid" else 2
         return 0
