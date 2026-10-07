@@ -101,6 +101,24 @@ Only what the reviewer can directly observe:
 
 Never *"confirm that X is fine."*
 
+### Where the reviewer delivers its verdict
+
+Pin the delivery artifact in the prompt, or the pass can end with nothing you can read. A
+reviewer teammate reports "idle" when it stops — idle only means it stopped, not that it
+produced anything or that a message reached you; reviewers have repeatedly gone idle with no
+delivered report. So name the single delivery target in the prompt itself:
+
+- The reviewer's only deliverable is **a file written to an immutable path you name** (the
+  review file from *The review file* below), plus a one-line receipt pointing at that path.
+  Tell it not to carry the conclusion in a chat message and not to treat the idle
+  notification as the delivery.
+- If a reviewer goes unresponsive, **read whether it already wrote a partial artifact before
+  re-dispatching** — stopping and re-spawning on the assumption of zero output can discard a
+  finished report that was merely delivered late. Interrupting a reviewer teammate pauses
+  its turn; it does not withdraw what it already wrote.
+- The stop rule from *The convergence protocol* still governs how many passes are
+  authorized; this field governs what a single authorized pass must leave behind.
+
 ### Changed operating defaults and thresholds
 
 Within an already-required review, examine a changed operating default or threshold
