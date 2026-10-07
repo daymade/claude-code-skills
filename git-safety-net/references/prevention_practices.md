@@ -661,6 +661,58 @@ the index (plumbing, a temporary `GIT_INDEX_FILE`), re-sync immediately after:
 `git diff --cached` (a parallel session's own staged entries are theirs, not yours to clear).
 Leaving the drift in place hands the next bare commit a loaded gun.
 
+### Phantom `D` triage: prove it by reconciliation, then dispose by ownership
+
+When the staged set shows a batch of `D` entries you don't recognize, don't conclude from "I
+don't remember deleting these" — prove or disprove the phantom with two reconciliation
+evidences:
+
+```bash
+git diff --cached --name-status | awk '$1=="D"{print $2}' | sort > /tmp/staged-d.txt
+# Candidate culprit commit: walk back from the HEAD tip one commit at a time.
+# `<C>^1` is correct for BOTH a squash/ordinary commit (its only parent) and a merge
+# commit (its first parent) — plain `git log --name-only` prints NOTHING for merges.
+git diff --name-only --diff-filter=A <C>^1 <C> | sort > /tmp/added-by-C.txt
+diff /tmp/staged-d.txt /tmp/added-by-C.txt   # empty output == culprit commit found
+git show HEAD:<one of the D paths>           # phantom: HEAD holds the full new content
+```
+
+It is a phantom only when both hold: ① walking back from the HEAD tip, some commit `<C>`
+whose added set is **exactly** the staged-`D` set (the `--stat` mirrors: N deletions staged
+vs N additions delivered) — stop at the first exact match; if no recent commit's added set
+matches, this is NOT a phantom, treat the `D`s as real and stop; ② every `D` path reads
+back as **new content** from HEAD via `git show HEAD:<path>` — the "deletion" exists only
+between the lagging index and the advanced HEAD; the working tree never owned those files.
+
+Disposal, by ownership (`git checkout -- .` / `git restore .` are destructive forms and stay
+banned even when the math looks lossless):
+
+- **Your own temporary worktree, no longer needed:** retire it through the "Worktree
+  retirement" flow in merge_verification.md — the reconciliation above doubles as that
+  flow's "prove the checkout is disposable" evidence: a worktree whose entire dirty set is
+  phantom contains no unsaved work. Plain `git worktree remove` refuses a dirty worktree
+  and the phantom `D` makes it look dirty; once reconciliation has explained *every* dirty
+  entry, adding `--force` only bypasses git's conservative refusal. That is not the banned
+  "use `--force` to make a dirty/uninspectable worktree disappear" — here the dirty was
+  inspected and fully accounted for, which is exactly the condition that ban exists to
+  force you to establish first.
+- **Your own primary checkout:** no immediate action is required as long as you never run a
+  bare commit over it — the drift harms nothing else by sitting there. `git restore --staged
+  -- .` only re-syncs the index; the working tree still lags HEAD and there is no
+  guard-compliant in-place command to advance it, so the honest options are: leave it (stage
+  explicit paths forever), or rebuild the checkout.
+- **Someone else's checkout / WIP: do not touch it.** The phantom itself loses no data; the
+  only danger is the next bare commit landing on it (the loaded gun above). Hand the
+  reconciliation evidence to the owner and coordinate per the global contract's
+  "someone else's WIP" flow (`~/.claude/references/irreversible-gates.md`) —
+  never "clean up" their index for them.
+
+2026-10-07 case: an infra shared checkout showed 7+11 staged `D` entries; reconciliation
+found them name-for-name identical to the 7+11 files a just-merged PR had *added*, and
+every path read back new content from `HEAD` — pure phantom, zero loss. The checkout
+belonged to another session, so the disposal was: don't touch, continue in an isolated
+worktree, damage no one's WIP.
+
 ## Set a wider reflog safety window once
 
 The reflog is your recovery window; widen it once, globally, so a busy repo doesn't age work out:
