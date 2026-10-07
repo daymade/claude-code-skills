@@ -206,6 +206,12 @@ close the source-to-target chain:
    alone proves nothing unless an expected manifest maps it;
 4. prove the intended route, actor, data, conditional state, and viewport.
 
+For GET-readable web resources, follow
+[delivery verification](references/delivery-verification.md) and run the bundled
+manifest comparison before claiming a matched deployment. Include separately
+served embedded components. Its result establishes only the supplied identity
+checks; keep pixel inspection and the actual user journey as independent gates.
+
 Without identity mapping, a freshness/deployment claim is **unprovable**; when
 neither is claimed, use **not applicable**. Current pixels remain independently verifiable.
 If a source fix and target differ, its closure stays **partial — source fixed,
