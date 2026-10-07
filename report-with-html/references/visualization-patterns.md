@@ -21,6 +21,9 @@
 
 ## 形式 → 本 skill 的组件实现
 
+涉及具体对象、实物方案或关系解释时，先执行 [图片与示意图](visual-evidence.md) 的选图、
+获取与就地编排流程，再选择下表的实现。真实图片识别对象，示意图解释连接，不能互相代替。
+
 判断层选定形式之后，实现只认 `assets/components/` 货架；`assets/report-template.html` 只实现 masthead、number strip 和组件 A–E。
 
 | 形式（判断层选出的） | 本 skill 的实现 |

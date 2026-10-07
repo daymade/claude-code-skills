@@ -55,6 +55,9 @@ contract, interaction contracts, and browser verification.
   `references/approved-examples.md`
 - Reusable interactions and their keyboard contracts:
   `references/interaction-components.md`
+- Photos, screenshots and explanatory diagrams: `references/visual-evidence.md`.
+  Load before authoring when objects, physical choices, visual defects or relationships
+  need to be seen; do not wait until images have already been selected.
 - Long-lived/generated-page maintenance:
   `references/long-lived-report-maintenance.md`
 - Fresh-context review payload:
@@ -130,7 +133,7 @@ what is banned is being forced to leave mid-read.
 
 Copy approved interactions from `assets/components/` instead of rebuilding them.
 Behavior is part of the component contract; register-specific styling may change.
-Copying a component is three steps, and the third is the one that gets skipped:
+Copy each component through its complete contract:
 
 1. Read the component file's own header contract — it states prerequisites the registry
    table does not repeat (required CSS tokens, required DOM structure, which element
@@ -173,13 +176,18 @@ Every interaction must work without a pointer:
    record complete readability and proof of the core causal claim as separate acceptance
    results. A readable report does not close the investigation while necessary, authorized
    actions can still advance that claim; unavailable historical evidence remains unknown.
-2. **Calibrate.** Read all four mandatory files — `design-principles.md`,
+2. **Calibrate.** Read the mandatory sources — `design-principles.md`,
    `references/visualization-patterns.md`, the closest entry in `approved-examples.md`, and
    `data-visualization-discipline` — then any component reference the artifact activates.
    Use the nearest approved register; do not copy a skin blindly. (This step used to say
    "the *activated* pattern reference", which let the patterns file be filed as not-yet-needed
    and skipped; the SSOT map above explains why that filter cannot work here.)
-3. **造量纲 — before a line of HTML.** Section by section, name what in the content is
+3. **Plan visual evidence and 造量纲 — before a line of HTML.** First follow
+   `references/visual-evidence.md` for sections about concrete objects, physical choices,
+   visual defects or relationships. Put representative images at the relevant options
+   and explain connections with diagrams; identify unavailable evidence explicitly.
+   Record the selected visuals in the existing page intent, not a second inventory.
+   Section by section, name what in the content is
    **ordered / has magnitude / has direction / has a counterpart**, and write that quantity
    down. Each geometry then carries it in the markup:
 
@@ -188,8 +196,9 @@ Every interaction must work without a pointer:
         data-derived-from="退款家数（0–30 家线性，共同基线；位置=家数÷30）"> … </div>
    ```
 
-   **A section whose quantity you cannot name is prose.** Say so and leave it as prose —
-   wrapping the sentence in a coloured box is the antipattern, not the fix.
+   **No supported quantity or relationship means no invented geometry.** Keep that
+   content as prose; a verified photo or screenshot can still show the object or evidence.
+   Wrapping a sentence in a coloured box does not make it a diagram.
 
    **A number and the coordinate that encodes it come out of the same script.** As soon as
    any geometry is positioned by a computed value — a bar length, a tick at `left:30.80%`,
@@ -204,7 +213,7 @@ Every interaction must work without a pointer:
    consumer rather than being one more thing only you referee. (It was prose-only for exactly
    one version, and an independent audit named it the next rule likely to get skipped — the
    variable that decides whether a step survives is not "does it produce an artifact" but
-   "does anything downstream consume the artifact". The nine visual-discipline gates were
+   "does anything downstream consume the artifact". The visual-discipline gates were
    already artifact steps when they got skipped.)
 
    Why this is a numbered step rather than a principle: the rule already lived in
@@ -299,7 +308,8 @@ Every interaction must work without a pointer:
    `frontend-visual-qa` for micro, macro, and intent review. Every shelf component you
    embedded gets its primary interaction clicked here, and you write down what you
    observed — "the drawer opened and highlighted clause 7" is evidence; "the component
-   is present" is not.
+   is present" is not. Check that actual images load, important details are readable,
+   captions remain next to their visuals, and the delivered local file has no missing assets.
 8. **Reconcile and verify.**
 
    For a merge or a current-state update, apply the semantic acceptance contract in
@@ -426,7 +436,7 @@ Every interaction must work without a pointer:
    ```
 
    This skill's own reviewer output has no severity vocabulary to key off — the review
-   prompt (`references/independent-review-prompt.md`) returns nine answered questions, not
+   prompt (`references/independent-review-prompt.md`) returns answered questions, not
    BLOCKER/MAJOR-rated findings, and step 10's acceptance vocabulary is PASS / FAIL /
    CANNOT-CHECK — so FIRE T and SUCCESS EXIT above are keyed to review-prompt item 9's own
    "最后一问" answer (can the reader act on this page with no other explanation?) rather
@@ -493,21 +503,21 @@ other; the table below states the same boundary from the other side.
 
 ## Delivery acceptance — an independent agent runs this list, not you
 
-Two independent passes close a delivery, and **they do not overlap**: every check lives in
+Reader review and acceptance close a delivery, and **they do not overlap**: every check lives in
 exactly one of them, so there is nothing for them to drift apart on.
 
 | | step 9 · reader review | step 10 · acceptance |
 |---|---|---|
 | gets | **the page and nothing else** (screenshots count as the page) | the page **plus** your sources, your commands, your review file, **and the gate artifacts** |
 | asks | can you read it? can you decide from it? | does what is off the page agree with what is on it? |
-| its questions live in | `references/independent-review-prompt.md` — all of them, used verbatim | the five items below |
+| its questions live in | `references/independent-review-prompt.md` — all of them, used verbatim | the items below |
 | authority | everything visible on the page | provenance and process |
 
 **The split rule, so a future addition lands in one place instead of both:** does answering
 it require something *outside* the page? **No → it is a reader question**; add it to the
 review prompt. **Yes → it belongs here.** Colour, wording, whether a chart supports its own
 caption, whether a decision card is missing an option, whether the headings form an
-argument — all visible on the page, all the reader's. Only the five below need what the
+argument — all visible on the page, all the reader's. The checks below need what the
 reader does not have.
 
 Hand this list, the page **and its gate artifacts** (`page.html.gate.md`, `page--masked.png`),
@@ -534,6 +544,10 @@ never as a pass.
    statements about a dependency's status. The reader can check a page against itself;
    only this pass can check it against the world. Anything untraceable is removed from the
    page or visibly marked unknown.
+   For sourced images, match the actual file to its original publisher and exact object /
+   variant, then check caption limitations and permitted use for the intended delivery.
+   For diagrams, trace load-bearing nodes, connections and dimensions to the sources;
+   an explanatory drawing is not evidence of an assembled or deployed system.
 2. **Fresh render** — the rendered PNG is newer than the page's last edit. Substitute the
    actual filenames:
 
