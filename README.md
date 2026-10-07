@@ -1081,9 +1081,9 @@ Consolidate redundant documentation while preserving all valuable content.
 
 ---
 
-### **skills-search** - CCPM Skill Registry Search
+### **skills-search** - Local Repositories and CCPM Search
 
-Search, discover, install, and manage Claude Code skills from the CCPM (Claude Code Plugin Manager) registry.
+Find Skills in configurable local repositories first, then approved sources and the CCPM registry. Preserve existing CCPM installation and management commands.
 
 **When to use:**
 - Finding skills for specific tasks (e.g., "find PDF skills")
@@ -1093,6 +1093,8 @@ Search, discover, install, and manage Claude Code skills from the CCPM (Claude C
 - Managing your Claude Code skill collection
 
 **Key features:**
+- **Local-first discovery**: Persist repository paths and trust tiers outside the Skill package; inspect every configured owned source before expanding
+- **Progressive reading**: Search cached name/description metadata, then open the selected Skill at its exact Git commit
 - **Registry search**: Search CCPM registry with `ccpm search <query>`
 - **Skill installation**: Install skills with `ccpm install <skill-name>`
 - **Version support**: Install specific versions with `@version` syntax
@@ -1102,7 +1104,10 @@ Search, discover, install, and manage Claude Code skills from the CCPM (Claude C
 
 **Example usage:**
 ```bash
-# Search for skills
+# Search configured local repositories first (<skill-dir> is this loaded Skill)
+uv run --script <skill-dir>/scripts/local_sources.py search pdf --tier owned
+
+# Expand to the external registry when needed
 ccpm search pdf              # Find PDF-related skills
 ccpm search "code review"    # Find code review skills
 
@@ -1124,9 +1129,9 @@ ccpm install-bundle web-dev  # Install web development skills bundle
 
 *Coming soon*
 
-📚 **Documentation**: See [daymade-skill/skills-search/SKILL.md](./daymade-skill/daymade-skill/skills-search/SKILL.md) for complete command reference
+📚 **Documentation**: See [daymade-skill/skills-search/SKILL.md](./daymade-skill/skills-search/SKILL.md) for configuration, coverage and commands
 
-**Requirements**: CCPM CLI (`npm install -g @daymade/ccpm`)
+**Requirements**: Python 3.10+, Git and uv for local search; CCPM CLI only for external registry/install/manage operations
 
 ---
 
@@ -4069,7 +4074,7 @@ Use **docs-cleaner** to consolidate redundant documentation while preserving val
 Use **claude-md-progressive-disclosurer** to reduce CLAUDE.md bloat by moving detailed sections into references while keeping core rules visible.
 
 ### For Skill Discovery & Management
-Use **skills-search** to find, install, and manage Claude Code skills from the CCPM registry. Perfect for discovering new skills for specific tasks, installing skill bundles for common workflows, and keeping your skill collection organized.
+Use **skills-search** to find and reuse Skills in configured local repositories before expanding to CCPM. Registry discovery, installation and management remain available when needed.
 
 ### For LLM Evaluation & Model Comparison
 Use **promptfoo-evaluation** to set up prompt tests, compare model outputs, and run automated evaluations with custom assertions. Use **llm-eval-harness** to benchmark an endpoint across speed (thinking-aware tok/s), concurrency/stability, Anthropic protocol compliance, and quality regression against your own use cases — verifying a vendor's tokens-per-second claim or vetting a newly released model before adopting it. The two compose: promptfoo for fast per-case rubric gating, llm-eval-harness for blind-judge precision and raw speed/concurrency probing.

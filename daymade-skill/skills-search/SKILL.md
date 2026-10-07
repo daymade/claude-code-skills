@@ -1,25 +1,56 @@
 ---
 name: skills-search
-description: This skill should be used when users want to search, discover, install, or manage Claude Code skills from the CCPM registry. Triggers include requests like "find skills for PDF", "search for code review skills", "install cloudflare-troubleshooting", "list my installed skills", "what does skill-creator do", or any mention of finding/installing/managing Claude Code skills or plugins.
+description: >-
+  Finds Skills in configured local repositories before searching CCPM. Use when
+  discovering or reusing a Skill, finding PDF/code-review tools, inspecting a Skill,
+  listing installed/popular/recent Skills, or installing/updating/removing Claude Code Skills/plugins.
 allowed-tools: Bash, Read
 ---
 
 # Skills Search — Agent Behavioral Directives
 
-## Auto-Bootstrap (Run First)
+## Local repositories first
 
-Before doing anything else, check if ccpm is available. If not, bootstrap the entire ecosystem with one command:
+For capability discovery or experience reuse, read
+[local repository search](references/local-repository-search.md) and execute its
+helper. Resolve the Skill directory from this loaded bundle, not an installed
+path guessed from memory.
 
 ```bash
-# Check availability
-which ccpm || npx @daymade/ccpm setup
+uv run --script <skill-dir>/scripts/local_sources.py list
+uv run --script <skill-dir>/scripts/local_sources.py search '<capability>' --tier owned
 ```
 
-`ccpm setup` installs this skill + configures Claude Desktop MCP server (if installed). After bootstrap, all commands below work directly.
+Search **every enabled repository in the owned tier** before choosing a candidate.
+Read the returned `coverage`, examined counts and exact commit. A missing source,
+bad configuration or interrupted scan is incomplete coverage, not "no Skill".
+The default installation directory is an inventory, not the user's complete
+source catalog. Configure all repositories the user named; do not stop after a
+hit in the first one or silently infer paths for another machine.
+
+Use progressive disclosure: catalog name/description → selected `SKILL.md` at
+its returned commit → only the relevant linked reference/script. Metadata scores
+rank candidates; read the capability, inputs, ownership and verification before
+deciding it fits. Update a suitable existing Skill; create a new Skill when none
+fits, rather than stuffing the workflow into an unrelated owner.
+
+If this layer cannot resolve the remaining task, search configured `trusted`
+repositories, then use the existing CCPM search below. Record why expansion was
+needed; do not send private paths, repository names or contents to the registry.
+Do not use an external hit to hide a failed local scan.
+
+## CCPM preparation (only when needed)
+
+For external registry discovery or an explicitly requested install/update/manage
+operation, check `command -v ccpm`. If unavailable, `npx @daymade/ccpm` is the
+existing CLI fallback. Local lookup needs neither CCPM nor registry credentials.
+Use `npx @daymade/ccpm setup` only when the user requests ecosystem setup: it
+also configures integrations and is not a prerequisite for an offline search.
 
 ## Core Behavior
 
-When this skill is activated, you MUST directly execute the appropriate `ccpm` command using the Bash tool. Do NOT show the user a command and ask them to copy-paste it — execute it yourself.
+Execute the selected local helper or `ccpm` command yourself through the shell.
+Do not ask the user to copy-paste a command you can run within the task's authorization.
 
 If `ccpm` is not globally installed, use `npx @daymade/ccpm` as a drop-in replacement for all commands below.
 
@@ -29,21 +60,21 @@ Match the user's intent to the correct action:
 
 | User Intent | Action |
 |-------------|--------|
-| "find skills for X" / "search X skills" | `ccpm search <query>` |
+| "find skills for X" / "search X skills" / reuse before writing a Skill | Owned repositories → configured trusted repositories → `ccpm search <query>` if still needed |
 | "what skills are popular" / "top skills" | `ccpm popular` |
 | "what's new" / "latest skills" | `ccpm recent` |
 | "install X" / "add X skill" | `ccpm install <skill-name>` |
-| "what does X do" / "tell me about X" | `ccpm info <skill-name>` |
+| "what does X do" / "tell me about X" | Read the local candidate first; `ccpm info <skill-name>` for registry candidates |
 | "what skills do I have" / "list skills" | `ccpm list` |
 | "remove X" / "uninstall X" | `ccpm uninstall <skill-name>` |
 | "update X" / "update all skills" | `ccpm update [name] [--all]` |
-| "I need help with PDF/Excel/..." | `ccpm search <topic>`, then offer to install the best match |
+| "I need help with PDF/Excel/..." | Local discovery first; expand to `ccpm search <topic>` if needed, then inspect fit before suggesting installation |
 
 ## Execution Rules
 
-1. **Always execute directly** — run `ccpm` commands via the Bash tool, never ask the user to run them manually.
+1. **Always execute directly** — run the selected local helper or `ccpm` command, never ask the user to run it manually.
 2. **Summarize results** — after executing, present the output in a clear, readable format.
-3. **Suggest next steps** — after search results, offer to install. After install, remind the user to restart Claude Code.
+3. **Choose from the result** — a local Skill may already be installed. Verify that separately; do not reinstall merely because it was found. If installation is needed, retain the existing opt-in installation flow. After install, remind the user to restart Claude Code.
 4. **Handle errors gracefully** — if `ccpm` is not found, fall back to `npx @daymade/ccpm`. If the registry is unreachable, say so clearly.
 5. **Namespaced skills** — support `@org/skill-name` format (e.g., `ccpm install @daymade/skill-creator`).
 
@@ -93,7 +124,8 @@ For Claude Desktop users who want native tool integration (no Bash needed), the 
 }
 ```
 
-Both this skill and the MCP server wrap the same `ccpm` CLI — they are complementary, not conflicting.
+The MCP server wraps the external `ccpm` CLI. It does not search this Skill's
+configured local repositories; local discovery remains with the bundled helper.
 
 ## Troubleshooting
 
