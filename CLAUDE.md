@@ -172,15 +172,12 @@ When changing measurement, run the SOP's targeted regression suite before shippi
 
 ### Automated Test Suites (CI)
 
-A `tests/` directory under a skill does **not** automatically run in CI. The
-registered-suite runner uses `scripts/ci/test-suites.txt` — that file's header is the
-SSOT for the admission criteria (stdlib-only, no network/credentials,
-deterministic, Linux-verified) and the runner types (`python-unittest` via
-`unittest discover`, `node-test`). Adding a test file to an unregistered
-`tests/` directory does not establish CI coverage. Check the registry and the
-explicit test steps in [.github/workflows/ci.yml](.github/workflows/ci.yml),
-which also runs selected suites directly. Note that `unittest discover`
-only collects `unittest.TestCase` subclasses, not bare pytest-style functions.
+A `tests/` directory under a Skill does **not** automatically run in CI.
+[The registry](scripts/ci/test-suites.txt) owns suite admission and membership;
+[the dispatcher](scripts/ci/run_registered_tests.sh) owns their execution commands.
+[The workflow](.github/workflows/ci.yml) owns job environments, dependency installation,
+timeouts and additional test steps. For required-check readback, installation stalls,
+test failures and temporary-Git cleanup, follow [CI operations](references/ci-operations.md).
 
 For browser-backed recurring jobs, enter
 [macos-watchdog](daymade-macos/macos-watchdog/SKILL.md) and apply its deployment
@@ -488,11 +485,11 @@ git -C <worktree> \
    SHA, who was asked, and that the ff is still outstanding — do not stash,
    `checkout --`, or `restore` it.
 
-If local `main` has already diverged: do not `reset --hard` until every stray
-commit is proven superseded — mechanical test: cherry-pick them onto
-`origin/main` resolving conflicts toward the upstream version; an empty net
-result means the content already shipped. Back up first
-(`git bundle create /tmp/main-backup.bundle main` and verify it restores).
+For divergent local `main` or branch/worktree retirement, follow
+[git-safety-net](git-safety-net/SKILL.md) and its
+[content-containment proof](git-safety-net/references/merge_verification.md).
+Resolving conflicts toward upstream can erase the very delta being checked;
+an empty result after that resolution does not prove it shipped.
 
 ## Skill Writing Requirements
 
@@ -559,20 +556,17 @@ The marketplace is configured in `.claude-plugin/marketplace.json`:
    - Bump when: Adding/removing skills, adding/removing suite plugins, major marketplace restructuring
    - Semantic versioning: MAJOR.MINOR.PATCH
 
-2. **Individual Skill Versions** (`.claude-plugin/marketplace.json` → `plugins[].version`)
-   - Each skill has its own independent version
-   - Bump when: Updating that specific skill
-   - **CRITICAL**: Skills should NOT have version sections in SKILL.md
+2. **Plugin release identity** (`.claude-plugin/marketplace.json` → `plugins[].version`)
+   - The registered plugin owns the release version. Suite members share their suite's
+     version; a standalone Skill uses its own plugin entry.
+   - Follow [skill-creator's versioning contract](daymade-skill/skill-creator/SKILL.md)
+     for shipped-file changes and change classification.
 
 ### ⚠️ Updating Existing Skills (MANDATORY)
 
-Changes to a skill's shipped files require a version bump in
-`marketplace.json`.
-
-**Version bump rules:**
-- Content/doc updates (new sections, rewritten principles) → bump **MINOR** (1.0.1 → 1.1.0)
-- Bug fixes, typo fixes → bump **PATCH** (1.0.1 → 1.0.2)
-- Breaking changes (renamed commands, removed features) → bump **MAJOR** (1.0.1 → 2.0.0)
+Use [skill-creator](daymade-skill/skill-creator/SKILL.md) to classify the change and
+[packaging_policy.py](daymade-skill/skill-creator/scripts/packaging_policy.py) to
+decide which changed files ship. Do not infer a separate member version from its directory.
 
 **Pre-commit check:** Before committing, run `git diff --name-only` and verify: for every `skill-name/` directory that appears, `marketplace.json` also has a version bump for that skill's `plugins[].version`.
 

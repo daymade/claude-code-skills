@@ -15,8 +15,8 @@
 #   4. verified green on Linux before being added, not just on the author's machine
 #
 # RUNNERS:
-#   python-unittest   python3 -m unittest discover -s <path>
-#   node-test         node --test <path>
+#   python-unittest and node-test are dispatched by run_registered_tests.sh.
+#   Read that implementation for the exact command and test-file selection.
 #
 # WHY NO python-pytest RUNNER (audited 2026-08, not an oversight):
 #   Several skills (daymade-skill/skill-creator/tests, daymade-audio/transcript-fixer's
@@ -31,8 +31,7 @@
 #   `python-pytest` runner here would open the door to *any* future contributor's test
 #   suite pulling in *any* pip package, an open-ended and growing surface, which is a
 #   different kind of commitment than one job installing one pinned tool for itself.
-#   Audited empirically as of the 2026-08 registry snapshot (6 directories, 9 files —
-#   re-count from the list below if you need the current number, don't trust this one):
+#   In the audited registry snapshot:
 #   every file registered at that time was unittest.TestCase style with matching idioms
 #   (Path(__file__).resolve().parents[N],
 #   importlib.util.spec_from_file_location, subprocess.run(text=True, encoding="utf-8")) —

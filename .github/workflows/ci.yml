@@ -1,9 +1,8 @@
 name: CI
 
-# Every job here was measured against main before being turned on, so a red result means
-# "this pull request broke something", never "this repo has always been like that". A gate
-# that fails for reasons the author did not cause is worse than no gate: people learn to
-# ignore it, and then it also stops catching the real thing.
+# Diagnose the failed step and compare the same check on main before attributing a red
+# result to a pull request. Installation, assertion and fixture-cleanup failures have
+# different recovery paths; see references/ci-operations.md.
 #
 # The logic lives in scripts/ci/, not inline here, so contributors can run exactly what CI
 # runs before pushing — and so the checks themselves are reviewable.
