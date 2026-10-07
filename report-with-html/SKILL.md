@@ -161,6 +161,18 @@ Every interaction must work without a pointer:
    `不适用: <why>` — the slot still has to be filled, just with that answer. Write this before
    step 9's first review, not after one returns findings — see `references/audience-triage.md`
    for why the ordering is load-bearing and how step 9 uses this list.
+
+   Resolve the actual reader and intended use from the original request, later corrections,
+   and the current project contract. Distinguish a publication-ready draft from an actual
+   external publication. Set evidence precision for that use: for private investigation,
+   retain traceable original identifiers, paths, and logs rather than silently substituting
+   a public, redacted edition. Follow the authorized project's existing delivery directory
+   or document library; a scratch directory is a working location. If no destination is
+   established, choose a reversible local default and state it. Ask only for missing inputs
+   that materially affect the result and cannot reasonably be defaulted. For an investigation,
+   record complete readability and proof of the core causal claim as separate acceptance
+   results. A readable report does not close the investigation while necessary, authorized
+   actions can still advance that claim; unavailable historical evidence remains unknown.
 2. **Calibrate.** Read all four mandatory files — `design-principles.md`,
    `references/visualization-patterns.md`, the closest entry in `approved-examples.md`, and
    `data-visualization-discipline` — then any component reference the artifact activates.
