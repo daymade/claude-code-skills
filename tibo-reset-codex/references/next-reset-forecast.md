@@ -76,9 +76,11 @@
 | 官方明确将重置及日期/时段 | 以该预告作为主窗口，核对时区与适用范围 | 预告已经到账 |
 | 官方庆祝暗示、已确认的近期发布、用户里程碑 | 结合历史对应事件，上调近期发放预期 | 每次发布必重置、未注明日期的发布清单本周必兑现 |
 | 官方确认故障并承诺补偿 | 以承诺类型和明确时间为准；没有时间则判断承诺待兑现，继续核实落地信号 | 有故障就一定全局重置、无时间承诺能支持自选日期窗口 |
-| **挑战活动期每日 poll 投出 reset**（2026-10-07 实证：28 天 ship 挑战 Day 2，社区 poll 投出 reset，Tibo 校准过投票权重仍按规则兑现——"the vote is clear and the community demands a reset… the reset has been processed"；落地先于确认帖约 5-7 分钟） | 挑战期内把 Tibo X 上的 Day N roundup 帖当天然复查点（走 §1 主帖时间线即可覆盖）：poll 结果就是当日是否重置的判据，不用等单独的官宣预告帖；监测节奏改为盯 roundup | 挑战期外该节奏继续有效；poll 每天必投出 reset（他校准过权重，可能不再偏向 reset） |
+| **挑战活动期每日 poll 投出 reset**（2026-10-07 实证：28 天 ship 挑战 Day 2，社区 poll 投出 reset，Tibo 校准过投票权重仍按规则兑现——"the vote is clear and the community demands a reset… the reset has been processed"；落地先于确认帖约 5-7 分钟） | 挑战期内把 Tibo X 上的 Day N roundup 帖当天然复查点（走 §1 主帖时间线即可覆盖）：poll 结果就是当日是否重置的判据，不用等单独的官宣预告帖；监测节奏改为盯 roundup | 挑战期外该节奏继续有效；poll 每天必投出 reset（他校准过权重，可能不再偏向 reset——2026-10-07 replay 补全 poll 本体后确认：Day 2 poll 实为 76% 投 🫨 needs a reset，非「游戏天然偏向 reset」的结构性结果） |
 | 用户抱怨用量快、模型容量紧张 | 描述使用压力；需要额外证据才改变预测 | 计量有 bug、官方一定补偿 |
 | 刚完成一轮、缺少新的催化信号 | 不把短期连续重置设为高信心预期 | 下一天不可能再重置 |
+
+**挑战期 poll 的完整形态（2026-10-07 replay 补全）**：roundup 帖后**另有一条独立 poll 帖**（Day 2 实况：roundup 20:56 → "Vote" 帖 20:58 以 reply 挂在 roundup 下、带顶层 `poll`；21:07 又有顶层帖 "Four updates or a reset. Or both. How was day 2." quote 了 Vote 帖、数据在 `quote.poll.choices`），roundup 正文本身不一定含投票框——**判据在 poll 帖，不在 roundup 正文**。监测动作：roundup 出现 → 找同日的 poll 帖（顶层包装帖与 roundup 下的 reply 都算；fxtwitter 的 `poll` 字段直接给选项与百分比）→ 读 poll 帖的 `poll.choices`（命中 quote 包装帖则在 `quote.poll.choices`）里 reset 选项是否领先。从复盘帖（如 "the vote is clear"）反推当日 poll 存在；无复盘帖时主动找 poll 帖，找不到记 unknown，不把「roundup 无投票框」当「当日无 poll」。
 
 把历史基线和本次判断分开写。追踪站预测只能作同源信号解读，不是独立证据；
 多个站转同一条推文不增加信心。当前状态页正常只代表该页未公告问题，不能抹掉产品实测。
