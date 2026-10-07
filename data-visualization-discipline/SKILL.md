@@ -66,6 +66,7 @@ description: >-
 | `references/chart-selection-and-statistics.md` | 阶段 2–3 的完整判据与实证出处：统计量、聚合、图型、配色 |
 | `references/visual-form-selection.md` | 阶段 3，且**内容不是现成数字**时：定性 / 抽象 / 过程内容该画成什么形状 |
 | `references/graphical-perception-science.md` | 被质疑"凭什么这么画"时：Cleveland & McGill / Bertin / Tufte / Few 的出处，以及这些理论互相冲突的地方 |
+| `references/transaction-status-colors.md` | 阶段 3–4，交易列表难以区分扣款、退款、待处理、取消/失败时：套用颜色语义与第二通道的合成案例，并按闸 4–5 验读者是否读对 |
 
 **先读哪个**：动手画图 → 直接按下面五个阶段走；内容是定性的、不知道画成什么形状 → 阶段 3「内容不是数字时」+ `visual-form-selection.md`；被质疑"凭什么这么画" → `graphical-perception-science.md` 拿实证出处。
 
@@ -393,6 +394,8 @@ Anscombe / Datasaurus 证明统计量全同的数据可以长得完全不同：*
 > 原话："**表格里写这么多数字干什么啊谁能有时间看这些数字？表格里写这么多文字干什么啊谁能有时间看这些文字？**"
 
 表格的默认失败模式是"什么都塞进去让读者自己找"。
+
+交易列表中的金额与状态容易被读成同一件事；遇到扣款/退款/未扣款难区分，读 [交易状态配色案例](references/transaction-status-colors.md)，沿用下方列价值判断与阶段 4 的颜色语义。
 
 - **每列先问"有业务价值吗"**，没有就砍——列不是越全越好。
 - **能编成图形的数值别留在表里**：占比 → 条，状态 → 色徽标，评分 → 填格条。表格留给**需要精确查阅**的值。
