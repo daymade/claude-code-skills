@@ -3217,3 +3217,41 @@ this list and describe defects you reach by asking a different question):
   label confabulation survived into this entry's own first draft and was
   caught only by the release review — this failure mode recurs even inside
   the document warning about it.
+
+## 62. Fleet-wide hook timeouts were an overloaded machine, not broken hooks — check load and the process census before touching any hook
+
+- **Symptom:** every hook on the machine starts timing out at once —
+  PreToolUse guards blowing their 60-second budgets, a SessionStart
+  health check exceeding its deadline, a third-party hook reporting
+  "protection check deadline exceeded". Each hook passes its own unit
+  tests, and times out again on the very next call.
+- **Cause and fix:** the hooks are victims, not suspects. One parent
+  process — in the real case a per-thread MCP server spawner that never
+  reaped its children — had accumulated ~300 child processes (141 copies
+  of one stdio↔SSE proxy, 123 copies of a desktop-automation app) and
+  pushed the load average to 243 on a machine whose comfortable ceiling
+  is ~20. Every hook process simply could not get CPU before its
+  deadline. The one-minute diagnostic order: `sysctl -n vm.loadavg`
+  first — a fleet-wide symptom with load in the hundreds is an
+  environment problem, full stop; then `ps -Ao pid,ppid,command`
+  aggregated by PPID (e.g. `ps -Ao ppid= | sort | uniq -c | sort -rn |
+  head`) — one parent holding hundreds of children IS the leak, and no
+  automatic mechanism ever terminates a live process somebody else
+  spawned: launchd only reaps zombies, it never kills live adoptees, so
+  unless the spawner or the user kills them, they accumulate for days. The fix lives
+  at the daemon/config level, never inside any hook — and on a shared
+  machine, process-level remediation belongs to the user, not to an
+  agent: report the diagnosis, do not kill. (A standing rule born from
+  this incident: agents must not terminate other sessions' processes,
+  including via a "daemon restart" whose documented side effect is
+  killing its children.)
+- **Real case (2026-10-07):** codex app-server 0.160.1 spawned the full
+  enabled-MCP set for every conversation thread and never reaped them
+  when threads ended; 304 accumulated children — MCP proxies plus 123
+  GUI app copies, the latter also hammering WindowServer — produced
+  load average 243 and simultaneous "hook timeout" reports from three
+  independent agent fleets. A daemon restart brought load back to ~22
+  within minutes; every "failing" hook passed, untouched. The
+  hook-fleet lesson: a health check that only inspects hooks will
+  report this as "69 hooks unverified" and send you reading hook
+  source — the load check has to come before the hook check.
