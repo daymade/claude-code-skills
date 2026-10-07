@@ -14,7 +14,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 ENTRY = ROOT / "scripts/creator.py"
 OWNERS = (
-    "audit_skill_regression", "release_readiness", "source_contract", "materialize",
+    "audit_skill_regression", "release_readiness", "source_contract", "materialize", "delivery_identity",
 )
 
 
@@ -75,7 +75,7 @@ class CreatorEntryTests(unittest.TestCase):
             return []
         return [json.loads(line) for line in self.trace.read_text().splitlines()]
 
-    def test_all_four_owner_helps_match_direct_invocation_from_other_cwd(self):
+    def test_all_registered_owner_helps_match_direct_invocation_from_other_cwd(self):
         for owner in OWNERS:
             with self.subTest(owner=owner):
                 actual = self.invoke(owner, "--help")
@@ -83,7 +83,7 @@ class CreatorEntryTests(unittest.TestCase):
                 self.assertEqual(expected.returncode, 0)
                 self.assertIn(b"usage:", expected.stdout)
                 self.assert_same_result(actual, expected)
-        self.assertEqual(len(self.calls()), 4)
+        self.assertEqual(len(self.calls()), len(OWNERS))
 
     def test_missing_owner_required_inputs_match_real_parser_and_do_not_write(self):
         output = self.workspace / "requested output"
@@ -91,6 +91,7 @@ class CreatorEntryTests(unittest.TestCase):
             ("audit_skill_regression", "snapshot", "--output", str(output)),
             ("release_readiness", "attest", "--repo", str(output)),
             ("source_contract", "check-path"),
+            ("delivery_identity", "prepare", "--output", str(output)),
             ("materialize", "prepare", "--root", str(output)),
         )
         for owner, *args in cases:

@@ -1,8 +1,8 @@
 ---
 name: fixed-command-entry
 description: >-
-  Run audit_skill_regression, release_readiness, source_contract or materialize
-  from another working directory through the fixed skill-creator entry.
+  Run audit_skill_regression, release_readiness, source_contract, materialize
+  or delivery_identity from another working directory through the fixed skill-creator entry.
 ---
 
 # Fixed command entry
@@ -15,6 +15,7 @@ python3 "<skill-creator-path>/scripts/creator.py" audit_skill_regression --help
 python3 "<skill-creator-path>/scripts/creator.py" release_readiness --help
 python3 "<skill-creator-path>/scripts/creator.py" source_contract --help
 python3 "<skill-creator-path>/scripts/creator.py" materialize --help
+python3 "<skill-creator-path>/scripts/creator.py" delivery_identity --help
 ```
 
 Replace `<skill-creator-path>` with an absolute path. Supply absolute paths for

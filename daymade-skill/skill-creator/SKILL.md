@@ -108,6 +108,12 @@ The same machinery is available for skills the user creates: when their skill de
 
 ### Show the result, not just the work
 
+For a Skill creation/update delivery, read
+[delivery identity](references/delivery-identity.md). Generate the formal Skill
+identity from verified source metadata, preserve its plugin version ownership,
+and check the actual final reply against the task-bound candidate. Keep
+installation, publication and business-result claims on their own evidence.
+
 At delivery, ask whether the user needs to compare outcomes, inspect several artifacts or evidence items, or choose among unresolved options. If a visual report would make that result easier to understand or judge, load `report-with-html` and let it own the page structure, template, evidence presentation, and browser verification. Load `data-visualization-discipline` through that Skill when the report needs a chart. A single small edit or status update needs only a concise reply; the paired-eval viewer below already owns review of individual eval outputs and feedback, so do not duplicate it with another report.
 
 When creating or improving another skill, apply the same decision to **that skill's normal user-facing result**. If visual reporting is a recurring part of its job, add a conditional handoff to `report-with-html` at the end of its runtime workflow and declare that dependency. If the reporting Skill is unavailable, say the requested visual deliverable is unavailable; do not silently invent a substitute template or claim a report was produced. Do not make every invocation generate HTML, and do not substitute a polished page for a verified result.
