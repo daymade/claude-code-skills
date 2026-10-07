@@ -41,7 +41,12 @@ The single most valuable part of this skill: a record of what does **not** work,
 | Chrome DevTools CDP on `:9222` | `curl :9222/json/list` → `[]` or 404 | CDP endpoints empty even with the flag (profile/policy) |
 | `minimax-docx` to convert docx→md | wrong direction | it is a docx *authoring/editing* tool, not an extractor |
 
-**Conclusion for docx embedded images:** lark-cli (through 1.0.32) cannot download `<image>` tokens embedded in a docx — seven distinct approaches were exhausted. Register the tokens and dimensions, note "document owner must right-click → save and send out-of-band", and move on. The text is the deliverable; images are a tracked, transparent gap. Grinding past the established try-limit is itself the mistake.
+**Conclusion for the tested docx image CLI methods through 1.0.32:** those seven
+approaches failed. Do not repeat them. This does not establish whether a current,
+authorized browser can expose the original. When body capture succeeds but media
+export or preview fails, use [the operation-specific original-preview branch](original-media-and-reader.md).
+If it yields no authorized original request, register the tokens/dimensions and
+report the owner-save gap. Never use that branch to bypass a body-read refusal.
 
 ## Why "empty JSON" from lark-cli is a lie
 

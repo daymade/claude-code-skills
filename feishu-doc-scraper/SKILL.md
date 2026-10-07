@@ -30,6 +30,13 @@ snapshot commands, interpretation and coverage checks.
 
 Before filing an archive, declare this split in an artifact manifest and run the bundled storage validator. The complete schema and examples are in **[references/archive-storage-contract.md](references/archive-storage-contract.md)**.
 
+For local original media, failed media exports, or an Obsidian handoff, load
+[original media and reader handoff](references/original-media-and-reader.md).
+Use its verified-preview downloader and API-capture renderer before expanding
+the batch; complete its actual-reader check separately from byte/search checks.
+For a user-selected personal favorites destination, its source catalog producer
+hands off to favorites-search without changing this Skill's filing ownership.
+
 ## Choose the path
 
 ```
@@ -145,7 +152,7 @@ These are the rules whose violation silently ruins the output. Each has a reason
 - **`export LARK_CLI_NO_PROXY=1` for `*.feishu.cn`.** Otherwise credentials transit a local proxy and DNS is hijacked.
 - **Transcripts come from the platform's native transcription, never re-ASR.** Downloading media and transcribing again loses speaker labels, timestamps, and accuracy.
 - **A generated docx Markdown is not done until it has been *visually* verified** against the source (render to image, read it). Feishu-exported docx uses font-size+bold for headings rather than Word heading styles, so a "no errors, word count matches" check passes while the entire heading hierarchy is silently flat. Text-level checks cannot catch this.
-- **Do not 死磕 (grind) on docx embedded-image download.** lark-cli (through 1.0.32) cannot download `<image>` tokens from a docx — exhaustively verified. Register the image tokens and note "needs document owner to right-click → save"; the text is the value, images are a tracked gap.
+- **Do not grind on the legacy docx image CLI methods.** Their failures through 1.0.32 do not decide a current browser original-preview permission. When body capture works but export/preview fails, use the operation-specific branch in [original media and reader handoff](references/original-media-and-reader.md); otherwise register the source tokens and report the unresolved image gap.
 - **Rich-media tag verification must run on each document's own `.html`, never its `.md`, on the pandoc fallback path — and each document needs its own filename, not a shared literal `source.html`.** `pandoc -f html -t gfm` silently strips Feishu's custom embedded tags — verified on a real document: 3 raw `whiteboard token="…"` tags in `.data.document.content` left zero trace in the converted `.md` (2026-08-16). Checking only the `.md` for residual tags on this path always reports "clean," even when content was silently discarded; reusing one hardcoded filename across a hub's multiple fetches (step 3) would additionally let a later document silently overwrite an earlier one's raw capture before it was ever checked.
 - **Never equate "downloaded" with "belongs in Git/LFS."** Raw video, Office files, PDFs, and images default to the Feishu original plus a stable locator; the local file is a cache. Git stores structured/searchable derivatives and provenance. OSS is an explicit durability route when source-only retention is insufficient. Run `python3 scripts/check_archive_storage.py <artifact-manifest.json>` before a package is committed.
 - **HTTP 200 from anonymous curl ≠ accessible.** A Feishu login wall returns 200 with a body containing `accounts.feishu.cn` / `login` / `passport` / an empty `<title>`. Check the body, never infer "public" from the status code.
@@ -171,7 +178,7 @@ Stop only when all that apply are true:
 Verified dead-ends — retrying them only wastes the session. Full table with failure modes and root causes: **[references/permission-and-failure-boundaries.md](references/permission-and-failure-boundaries.md)**. The top ones:
 
 - Bypassing `131006` permission-denied by any means (lark-cli / curl / anonymous browser) — it is a server-side boundary.
-- Downloading docx embedded images via `docs +media-download`, `api …/drive/v1/medias/<t>/download` (with or without `extra`), or `schema drive.medias.download` — none work; lark-cli even mis-reports the real HTTP 400 as "empty JSON".
+- Retrying the docx image CLI methods tested through 1.0.32: `docs +media-download`, `api …/drive/v1/medias/<t>/download` (with or without `extra`), or `schema drive.medias.download` — those methods failed; this does not rule out an authorized current original-preview request.
 - `WebFetch` against `open.feishu.cn/document/server-docs/...` for API specs — backend is flaky; use `open.feishu.cn/llms-docs/zh-CN/llms-<module>.txt` instead (LLM-friendly, stable).
 - AppleScript/JXA `executeJavaScript`, Chrome CDP on port 9222 — disabled/empty in this environment (browser path only).
 - Using `minimax-docx` to convert docx→md — it is a docx *authoring* tool; use the doc-to-markdown skill instead.
