@@ -1868,13 +1868,13 @@ def _bind_chunk_model(connection: sqlite3.Connection, resolved_model: Path) -> N
     stored_revision = _meta_get(connection, "embedding_model_revision")
     if existing_chunks and not stored_revision:
         raise IndexError(
-            "Existing chunks have no recorded model revision. Rebuild the versioned "
-            "index; refusing to guess which tokenizer produced them."
+            "Existing chunks have no recorded model revision. Run chunk --rebuild "
+            "with --model-path; refusing to guess which tokenizer produced them."
         )
     if existing_chunks and stored_revision != resolved_model.name:
         raise IndexError(
             f"Existing chunks use model revision {stored_revision}, but chunk resolved "
-            f"{resolved_model.name}. Rebuild the versioned index instead of mixing revisions."
+            f"{resolved_model.name}. Run chunk --rebuild with --model-path instead of mixing revisions."
         )
     _meta_set(connection, "embedding_model_id", EMBEDDING_MODEL_ID)
     _meta_set(connection, "embedding_model_path", str(resolved_model))
@@ -1993,6 +1993,7 @@ def build_chunks(
     *,
     model_path: Path | None,
     simple_root: Path | None = None,
+    rebuild: bool = False,
 ) -> dict[str, Any]:
     try:
         from chonkie import OverlapRefinery, RecursiveChunker
@@ -2005,19 +2006,42 @@ def build_chunks(
     resolved_model = _resolve_model_path(model_path, allow_download=False)
     connection = _connect(db_path, simple_root=simple_root)
     _validate_schema(connection)
-    try:
-        _bind_chunk_model(connection, resolved_model)
-    except IndexError:
-        connection.close()
-        raise
-    tokenizer = AutoTokenizer.from_pretrained(str(resolved_model))
-    chunker = RecursiveChunker(tokenizer=tokenizer, chunk_size=CHUNK_SIZE)
-    overlap = OverlapRefinery(
-        tokenizer=tokenizer,
-        context_size=OVERLAP,
-        method="prefix",
-        merge=True,
-    )
+    def pipeline():
+        tokenizer = AutoTokenizer.from_pretrained(str(resolved_model))
+        chunker = RecursiveChunker(tokenizer=tokenizer, chunk_size=CHUNK_SIZE)
+        overlap = OverlapRefinery(tokenizer=tokenizer, context_size=OVERLAP, method="prefix", merge=True)
+        return tokenizer, chunker, overlap
+
+    if rebuild:
+        # Validate the new tokenizer before discarding any existing cache.
+        try:
+            tokenizer, chunker, overlap = pipeline()
+            has_vectors = connection.execute("SELECT 1 FROM sqlite_master WHERE name='vec_chunks' AND type='table'").fetchone()
+            if has_vectors:
+                vector_connection = _connect(db_path, simple_root=simple_root, load_vectors=True)
+                connection.close()
+                connection = vector_connection
+                _validate_schema(connection)
+            connection.execute("BEGIN")
+            connection.execute("DROP TABLE IF EXISTS vec_chunks")
+            connection.execute("DELETE FROM chunks")
+            connection.execute("DELETE FROM meta WHERE key IN ('embedding_model_id','embedding_model_path',"
+                               "'embedding_model_revision','embedding_dimension','last_chunked_at',"
+                               "'last_embedded_at','embed_stop_reason')")
+            _bind_chunk_model(connection, resolved_model)
+        except Exception as error:
+            connection.rollback()
+            connection.close()
+            if isinstance(error, IndexError):
+                raise
+            raise IndexError(f"Chunk cache reset failed: {error}; cache transaction rolled back") from error
+    else:
+        try:
+            _bind_chunk_model(connection, resolved_model)
+        except IndexError:
+            connection.close()
+            raise
+        tokenizer, chunker, overlap = pipeline()
     rows = connection.execute(
         "SELECT id,semantic_text FROM records WHERE semantic_text IS NOT NULL "
         "AND id NOT IN (SELECT DISTINCT record_id FROM chunks) ORDER BY id"
@@ -2098,6 +2122,7 @@ def build_chunks(
         "missing_records": missing_records,
         **policy,
         "model_path": str(resolved_model),
+        **({"cache_rebuilt": True} if rebuild else {}),
         "elapsed_seconds": round(time.time() - started, 3),
     }
 
@@ -2282,7 +2307,7 @@ def embed_chunks(
         connection.close()
         raise IndexError(
             f"Chunks use model revision {stored_revision}, but embed resolved "
-            f"{resolved_model.name}; rebuild rather than mixing vector revisions."
+            f"{resolved_model.name}; run chunk --rebuild with --model-path rather than mixing vector revisions."
         )
     connection.execute(
         f"CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks USING vec0(embedding float[{EMBEDDING_DIM}])"
@@ -3057,6 +3082,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     chunk_parser = subparsers.add_parser("chunk", help="Chunk semantic message text")
     chunk_parser.add_argument("--model-path", type=Path)
+    chunk_parser.add_argument("--rebuild", action="store_true", help="Explicitly reset chunks/vectors from retained records; preserve indexed history")
     chunk_parser.add_argument("--json", action="store_true")
 
     embed_parser = subparsers.add_parser("embed", help="Embed missing chunks (Apple Silicon)")
@@ -3211,6 +3237,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     args.db.expanduser(),
                     model_path=args.model_path,
                     simple_root=args.simple_root,
+                    rebuild=args.rebuild,
                 )
             _print_payload(payload, json_output=args.json)
             return 0

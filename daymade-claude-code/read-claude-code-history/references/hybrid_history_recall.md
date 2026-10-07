@@ -103,13 +103,18 @@ The database retains the full historical `index_scope` and separately records
 IDs, core content and old provenance; the original extractor can append actual
 current-source record keys and verified provenance members. A different payload
 under the same key fails atomically. Session removal, injected-record sweeps and
-old writer cascades cannot delete retained records. The index transaction keeps
-their existing chunks/vectors; subsequent chunk/embed/dedup policies still work
+old incremental writer cascades cannot delete retained records. The index
+transaction keeps their existing chunks/vectors; subsequent chunk/embed/dedup policies still work
 normally. Retired paths are neither recreated nor scanned, and their original
 `indexed_through` boundary does not advance with active-source refreshes.
 Retirement cannot change project scope or rebuild the existing database. Use a
 separate diagnostic database for rebuilds; preserve the retirement index when
 the retired originals are unavailable.
+
+Old releases' explicit `index --rebuild` replaces the entire database file and
+bypasses this protection. It is unsupported for retirement databases; never run
+it against one. Old read-only recall and the guarded incremental compatibility
+are separate from that destructive command.
 
 Build semantic chunks, then embed until `remaining` is zero:
 
@@ -121,6 +126,21 @@ uv run --with mlx-embeddings --with numpy --with sqlite-vec \
   python scripts/history_index.py embed --download-model --max-seconds 1800
 ```
 
+To change the installed model revision or repair an absent chunk-model binding,
+explicitly rebuild the model cache from existing indexed records:
+
+```bash
+uv run --with chonkie --with transformers --with sqlite-vec \
+  python scripts/history_index.py chunk --rebuild --model-path /absolute/model-snapshot
+```
+
+This resets chunks, vectors and their model binding, preserving records,
+provenance and retirement receipts. The vector dependency is required when an
+existing vector table must be removed. Tokenizer initialization or a failed
+cache-reset transaction leaves the old cache intact. After a committed reset,
+chunking failure leaves the new revision bound and incomplete; resume with the
+ordinary `chunk --model-path` command, then run `embed` for that revision.
+
 `chunk` records an explicit completeness marker. If one record cannot be
 chunked, it fails with that record ID instead of silently embedding a truncated
 whole-message fallback. `embed` refuses incomplete chunks and is incremental:
@@ -128,7 +148,7 @@ a bounded run commits completed vectors and exits normally, so re-run the same
 command to continue. The query path will not claim hybrid readiness while any
 message lacks chunks or any usable chunk lacks a vector. Chunks, vectors, and
 queries must all resolve the same recorded model revision; mixing revisions is
-an error that requires a rebuild.
+an error that requires `chunk --rebuild`.
 
 Embedding is memory-bounded by default: batch size 16, an 8 GiB MLX memory
 limit, and a 0.5 GiB Metal cache limit. Source rows are streamed from SQLite,

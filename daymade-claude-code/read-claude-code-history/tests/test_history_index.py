@@ -1228,6 +1228,147 @@ class SourceRetirementTests(unittest.TestCase):
         self.assertEqual(self.snapshot(), self.before)
 
 
+class ChunkCacheResetTests(unittest.TestCase):
+    setUp = SourceRetirementTests.setUp
+    tearDown = SourceRetirementTests.tearDown
+    scope = SourceRetirementTests.scope
+    prepare = SourceRetirementTests.prepare
+    snapshot = SourceRetirementTests.snapshot
+    update = SourceRetirementTests.update
+
+    @contextmanager
+    def chunk_backend(self, *, bad_tokenizer=False, bad_chunk=False):
+        def tokenize(_path):
+            if bad_tokenizer:
+                raise ValueError("synthetic invalid tokenizer")
+            return types.SimpleNamespace(encode=lambda text, **kwargs: list(text))
+        class Chunker:
+            def __init__(self, **kwargs): pass
+            def __call__(self, text):
+                if bad_chunk:
+                    raise ValueError("synthetic chunk failure")
+                return [types.SimpleNamespace(text=text, token_count=len(text))]
+        fake = {"transformers": types.SimpleNamespace(AutoTokenizer=types.SimpleNamespace(from_pretrained=tokenize)),
+                "chonkie": types.SimpleNamespace(RecursiveChunker=Chunker, OverlapRefinery=lambda **kwargs: lambda pieces: pieces)}
+        with portable_backend(), mock.patch.dict(sys.modules, fake):
+            yield
+
+    def core(self):
+        conn = plain_connect(self.db, readonly=True)
+        result = {table: [tuple(row) for row in conn.execute(f"SELECT * FROM {table} ORDER BY rowid")]
+                  for table in ("records", "sessions", "retained_records")}
+        result["scope"] = [tuple(row) for row in conn.execute(
+            "SELECT key,value FROM meta WHERE key IN ('source_retirement','index_scope','active_scan_scope','last_indexed_at','complete_frontier') ORDER BY key")]
+        conn.close()
+        return result
+
+    def retired_cache(self):
+        self.prepare()
+        self.update(retired_sources=self.receipt)
+        self.model = self.root / "new-revision"
+        self.model.mkdir()
+        conn = plain_connect(self.db)
+        history_index._meta_set(conn, "embedding_model_revision", "old-revision")
+        conn.commit(); conn.close()
+
+    def test_explicit_cache_reset_rebinds_model_and_preserves_retired_history(self):
+        self.retired_cache()
+        before = self.core()
+        with self.chunk_backend(), self.assertRaisesRegex(history_index.IndexError, "mixing revisions"):
+            history_index.build_chunks(self.db, model_path=self.model)
+        with self.chunk_backend():
+            result = history_index.build_chunks(self.db, model_path=self.model, rebuild=True)
+        self.assertTrue(result["cache_rebuilt"])
+        self.assertEqual(result["missing_records"], 0)
+        self.assertEqual(self.core(), before)
+        conn = plain_connect(self.db)
+        self.assertEqual(history_index._meta_get(conn, "embedding_model_revision"), "new-revision")
+        self.assertEqual(history_index._meta_get(conn, "chunks_complete"), "true")
+        self.assertEqual(history_index._meta_get(conn, "vectors_complete"), "false")
+        self.assertIsNone(conn.execute("SELECT 1 FROM sqlite_master WHERE name='vec_chunks'").fetchone())
+        with self.assertRaises(sqlite3.IntegrityError): conn.execute("DELETE FROM records")
+        conn.rollback(); conn.close()
+        with self.chunk_backend():
+            resumed = history_index.build_chunks(self.db, model_path=self.model)
+        self.assertEqual(resumed["records_processed"], 0)
+        self.assertNotIn("cache_rebuilt", resumed)
+
+    def test_null_binding_and_empty_cache_have_explicit_valid_reset_path(self):
+        for empty in (False, True):
+            with self.subTest(empty=empty):
+                self.retired_cache()
+                conn = plain_connect(self.db)
+                conn.execute("DELETE FROM meta WHERE key='embedding_model_revision'")
+                if empty: conn.execute("DELETE FROM chunks")
+                conn.commit(); conn.close()
+                if not empty:
+                    with self.chunk_backend(), self.assertRaisesRegex(history_index.IndexError, "no recorded model revision"):
+                        history_index.build_chunks(self.db, model_path=self.model)
+                with self.chunk_backend():
+                    result = history_index.build_chunks(self.db, model_path=self.model, rebuild=True)
+                self.assertEqual(result["missing_records"], 0)
+                # Each subcase uses a fresh fixture database, not a formal index.
+                self.db.unlink()
+                self.model.rmdir()
+
+    def test_bad_tokenizer_and_missing_vector_backend_leave_old_cache_unchanged(self):
+        self.retired_cache()
+        before, core = self.snapshot(), self.core()
+        conn = plain_connect(self.db, readonly=True)
+        meta = [tuple(row) for row in conn.execute("SELECT * FROM meta ORDER BY key")]
+        conn.close()
+        with self.chunk_backend(bad_tokenizer=True), self.assertRaisesRegex(history_index.IndexError, "invalid tokenizer"):
+            history_index.build_chunks(self.db, model_path=self.model, rebuild=True)
+        def missing_vectors(path, **kwargs):
+            if kwargs.get("load_vectors"):
+                raise history_index.IndexError("Vector backend needs sqlite-vec")
+            return plain_connect(path, **kwargs)
+        with self.chunk_backend(), mock.patch.object(history_index, "_connect", side_effect=missing_vectors), self.assertRaisesRegex(history_index.IndexError, "needs sqlite-vec"):
+            history_index.build_chunks(self.db, model_path=self.model, rebuild=True)
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(self.core(), core)
+        conn = plain_connect(self.db, readonly=True)
+        self.assertEqual([tuple(row) for row in conn.execute("SELECT * FROM meta ORDER BY key")], meta)
+        conn.close()
+
+    def test_reset_sql_failure_rolls_back_cache_and_chunk_failure_can_resume(self):
+        self.retired_cache()
+        before, core = self.snapshot(), self.core()
+        conn = plain_connect(self.db)
+        conn.execute("CREATE TRIGGER cache_fault BEFORE DELETE ON chunks BEGIN SELECT RAISE(ABORT,'synthetic cache fault'); END")
+        conn.commit(); conn.close()
+        with self.chunk_backend(), self.assertRaisesRegex(history_index.IndexError, "cache fault"):
+            history_index.build_chunks(self.db, model_path=self.model, rebuild=True)
+        self.assertEqual(self.snapshot(), before)
+        conn = plain_connect(self.db)
+        conn.execute("DROP TRIGGER cache_fault"); conn.commit(); conn.close()
+        with self.chunk_backend(bad_chunk=True), self.assertRaisesRegex(history_index.IndexError, "No whole-message fallback"):
+            history_index.build_chunks(self.db, model_path=self.model, rebuild=True)
+        self.assertEqual(self.core(), core)
+
+        conn = plain_connect(self.db, readonly=True)
+        self.assertEqual(history_index._meta_get(conn, "embedding_model_revision"), "new-revision")
+        self.assertEqual(history_index._meta_get(conn, "chunks_complete"), "false")
+        self.assertEqual(conn.execute("SELECT count(*) FROM chunks").fetchone()[0], 0)
+        conn.close()
+        with self.chunk_backend():
+            result = history_index.build_chunks(self.db, model_path=self.model)
+        self.assertEqual(result["missing_records"], 0)
+        self.assertEqual(self.core(), core)
+
+    def test_cli_chunk_rebuild_is_explicit_and_uses_the_original_writer_lock(self):
+        model = self.root / "model"
+        def locked_build(*args, **kwargs):
+            with Path(str(self.db) + ".lock").open("a") as contender:
+                with self.assertRaises(BlockingIOError):
+                    fcntl.flock(contender.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return {"cache_rebuilt": True}
+        with mock.patch.object(history_index, "build_chunks", side_effect=locked_build) as build, redirect_stdout(io.StringIO()):
+            self.assertEqual(history_index.main(["--db", str(self.db), "chunk", "--rebuild", "--model-path", str(model), "--json"]), 0)
+        build.assert_called_once_with(self.db, model_path=model, simple_root=None, rebuild=True)
+        self.assertTrue(Path(str(self.db) + ".lock").exists())
+
+
 class MultiProviderIndexTests(unittest.TestCase):
     """Cover indexing providers other than Claude, and the v1 upgrade path."""
 
