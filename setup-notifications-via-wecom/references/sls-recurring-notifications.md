@@ -1,9 +1,9 @@
 ---
 name: sls-recurring-notifications
 description: >-
-  Adapt an existing Alibaba Cloud SLS pipeline to recurring WeCom reports.
-  Read for SLS webhook templates, fire_results truncation, daily report dates,
-  dedicated notification policies or scheduler-to-recipient verification.
+  Adapt an existing Alibaba Cloud SLS pipeline to recurring WeCom reports and
+  meaningful state changes. Read for grouping, deduplication, low-frequency
+  heartbeats, native webhook rendering or scheduler-to-recipient verification.
 ---
 
 # SLS recurring reports
@@ -31,8 +31,10 @@ SLS `alert.fire_results` returns at most 100 rows. It truncates a field over 1 K
 or the result variable over 2 KB; raw query results have the same byte limits.
 See [SLS template variables](https://help.aliyun.com/en/sls/variables-in-new-alert-templates).
 
-Select the newest sample in the query and project only the required scalar fields
-before the notification stage. Splitting a large JSON object into short result
+For a snapshot report, select the newest sample in the query and project only the
+required scalar fields before the notification stage. A change rule needs the
+sample sequence and a baseline before its event window; the newest sample alone
+can hide a transition that returns to the original state. Splitting a large JSON object into short result
 rows can preserve each account without parsing already-truncated JSON in Jinja.
 Verify the actual projected result's field and total sizes, including unknown/error
 cases; a miniature fixture cannot establish that a real multi-account record fits.
@@ -57,6 +59,38 @@ rendered `summary` string, the template envelope is:
 Read [SLS template functions](https://www.alibabacloud.com/help/en/sls/built-in-functions-in-alert-templates)
 for the native function contract. The project's SLS template/sync owner handles
 this Markdown envelope; the bundled plain-text sender is not its renderer.
+
+## Meaningful changes and quiet-period health
+
+The executing agent/operator first defines which observed changes affect the
+recipient's use or next action. A switch, exhausted quota, verified recovery or
+persistent sampling failure can qualify; routine percentage drift does not need
+a message. Report what recovered: quota, sampling, isolation and successful
+service are distinct observations. A window expiring is not a recovery.
+
+Reuse the existing scheduler to group changes into complete, non-overlapping
+windows, with a declared allowance for log arrival. Keep the window end as a
+stable event identity so reevaluating that window does not send it again. Compare
+the full sequence, retaining reverse transitions such as A→B→A and deduplicating
+repeated samples. Test a boundary event, a repeated evaluation, duplicate samples
+and a reverse transition against the actual query engine; keep unsampled or
+too-late changes outside the stated coverage.
+
+Use a low-frequency heartbeat when the user wants reassurance during quiet
+periods. It should report a fresh sample and its age; missing or stale data stays
+unknown. Detect missing producer samples independently of that producer, using
+the existing monitoring owner. A producer that stopped cannot send its own
+failure notification. Keep heartbeat and change cadence in project configuration,
+rather than adding a per-minute test-message loop or another notification daemon.
+
+## Combine results before the webhook
+
+WeCom expects one message object. SLS native batch delivery can render each item
+and assemble an array, which is a different payload. For an existing single-object
+WeCom integration, combine the event text in the query/template owner's path and
+use its single-message delivery setting. Exercise a multi-event native evaluation
+and inspect the dispatched JSON shape; local rendering of a hand-built `alerts`
+variable does not prove native batching. Retain the existing result-size checks.
 
 ## Acceptance at the consumer
 
