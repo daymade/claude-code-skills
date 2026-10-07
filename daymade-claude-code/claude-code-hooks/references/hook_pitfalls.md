@@ -3255,3 +3255,65 @@ this list and describe defects you reach by asking a different question):
   hook-fleet lesson: a health check that only inspects hooks will
   report this as "69 hooks unverified" and send you reading hook
   source — the load check has to come before the hook check.
+
+## 63. A working main path proves nothing about the suppression/degraded path — calibrate each path bidirectionally, on its own corpus
+
+- **Symptom:** a gate/alert's action path is calibrated and provably
+  works (the page goes out, the guard blocks), while its suppression or
+  degraded branch — the path that should fire *less* — has never once
+  fired since it shipped. Nobody notices, because "correctly silent"
+  and "dead silent" are indistinguishable from the outside: the
+  suppression path produces no output when it works *and* no output
+  when it is structurally impossible. The death of a suppression path
+  is silent by construction.
+- **Cause and fix:** bidirectional calibration was run only on the
+  action path — dangerous side (does it fire) and healthy side (does it
+  pass clean input) both proven there, zero probes aimed at the
+  suppression branch. That branch carries its own independent
+  always-false conditions, and they compound: in the real case the
+  suppression required channel `status==3` while the pool's slot-mode
+  design deliberately parks peers at `status=2` — an empty intersection
+  by construction — *and* its text prefixes only matched
+  monthly/weekly exhaustion wording, missing the 5-hour variant its own
+  pool produced. Two always-false layers stacked, so the suppression
+  never fired once — not even in the scenario it existed for (a
+  genuinely pool-wide weekly exhaustion paging hourly for days). The
+  seven midnight pages that triggered the investigation are NOT that
+  evidence: they were single-account 5-hour exhaustions with a parked
+  peer still holding quota, so the predicate was *correctly* false for
+  them — those pages walked through a working design, and fixing the
+  suppression could never have silenced them (a `threshold=3` debounce
+  did). A suppression path's death is proven by "it never fires even
+  when its own scenario occurs", never by "pages got through".
+  The calibration record for the main path stayed green the
+  whole time, which is exactly the trap: main-path green says nothing
+  about branch liveness. The fix is to unfold the calibration matrix by
+  path: every path (main / suppression / degraded / fallback) × both
+  sides (should-fire / should-not-fire) gets at least one real corpus
+  entry, and "this path has never fired in production" is itself a
+  finding to investigate — not evidence that nothing needed it.
+  Structural always-false conditions are found by reading the condition
+  against the *writer's* semantics (who sets `status=2` vs `3` and
+  when), not by re-running the main path.
+- **Real case (2026-10-07):** the SLS phone-alert VOICE_GUARD for
+  `kimi_dual_account_exhausted` carried a `quota_confirmed == "1"`
+  suppression meant to silence pages whose exhaustion was already
+  confirmed by the quota sampler. Investigation of a midnight-page
+  cluster (7 false pages from the 30–161s serial-burn routing vacuum,
+  fixed separately by `threshold=3`) incidentally found the suppression
+  had never fired since deployment — and would never have fired in its
+  intended scenario either (a pool-wide weekly exhaustion): the
+  annotation predicate required `channel status == 3`, but the Kimi
+  pool's slot mode parks standby accounts at `status = 2` by design, so
+  the intersection was empty on every evaluation; and the sampler's
+  exhaustion-text prefixes covered only monthly/weekly wording, missing
+  the 5-hour variant. Both layers had to be fixed (status predicate
+  widened to `IN (2,3)`, 5-hour prefix added, and a latest.json fast
+  path made the authoritative source) before the suppression could fire
+  for the first time — months after it shipped. The midnight pages
+  themselves were never its jurisdiction: with a parked peer still
+  holding quota, `quota_confirmed` is *correctly* 0 — the page-through
+  was the design working, not the suppression failing. The main path's
+  calibration corpus had shown "page goes out" the entire time; no
+  corpus entry had ever asked "does the guard stay quiet when it
+  should."
