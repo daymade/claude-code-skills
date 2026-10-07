@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **deep-research** (v2.11.1 → v2.12.0): Check requested provider modes independently of planned lanes; require actual-mode observations at submission/import and mark uncertain legacy coverage explicitly. Preserve provider exports through file channels before considering copied response text.
+- **kimi-use** (v1.7.0 → v1.8.0): Use attachment input and original-file collection when available. Missing plugin traces remain unverified until inspected; they no longer trigger an automatic duplicate request.
+- **tech-selection** (`daymade-claude-code` v4.24.0 → v4.25.0): Add representative ingestion/indexing probes for growth, incremental extraction, provenance, filtered search and recovery without an index.
+
 - **macos-load-doctor** (`daymade-macos` v1.18.0 → v1.19.0, new suite member): Diagnose macOS system-level slowness/heat/fleet-wide timeouts — load average first, then a three-reading process census (bundled `load_census.sh`: children-per-parent, cumulative CPU time, instantaneous %CPU), parent-chain attribution, and shape classification (leak / storm / busy loop / cascade) — with a hard shared-machine boundary: agents diagnose read-only and report; the owner terminates (a "daemon restart" counts). Incident playbook with four worked cases (per-thread MCP spawner leak at load 243, unthrottled replay fork storm, guard-fleet fork overhead, GUI busy loop) and the report-writing contract. Change type: new skill from four measured incidents.
 - **setup-notifications-via-wecom** (v1.2.0 → v1.3.0): Extend the existing SLS adapter with semantic change windows, stable deduplication, quiet-period heartbeats and independent missing-sample detection. Separate recovery observations and validate combined messages through native delivery rather than local batch fixtures. Existing senders and recipient boundaries remain unchanged.
 

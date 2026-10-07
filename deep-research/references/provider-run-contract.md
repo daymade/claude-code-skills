@@ -6,11 +6,19 @@ Use this contract for every Deep Research study, including a single direct origi
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "study_id": "example-study-2026-09-25",
   "as_of": "2026-09-25",
   "business_outcome": "Find out whether timely evidence changes a user's decision and its result.",
   "dispatch_context": "Seed: https://example.org/case; target: Example Co (EX01); window: 2026 H1.",
+  "request_mode_contract": {
+    "basis": {"kind":"user", "path":"sources/requests/request.txt", "sha256":"<SHA-256 of original request.txt>", "quote":"Use ordinary Pro chat and native Deep Research", "locator":"user intake turn"},
+    "interpretation":"The request names two distinct routes in one product; neither can substitute for the other.",
+    "modes": [
+      {"request_id":"R1", "provider":"chatgpt", "mode":"pro-chat", "lane_ids":["chatgpt-pro"]},
+      {"request_id":"R2", "provider":"chatgpt", "mode":"deep-research", "lane_ids":["chatgpt-deep"]}
+    ]
+  },
   "decision_questions": [{"id":"Q1","question":"Which decision could this evidence change?"}],
   "lanes": [
     {"lane_id":"chatgpt-pro","provider":"chatgpt","mode":"pro-chat","task_id":"Q1","prompt":"Seed: https://example.org/case; target: Example Co (EX01); window: 2026 H1. Assess the strongest counterevidence."},
@@ -22,6 +30,16 @@ Use this contract for every Deep Research study, including a single direct origi
 `provider` identifies the product; `mode` identifies the product route actually used. Names are extensible strings, not synonyms: `pro-chat` does not imply `deep-research`, and Kimi's Work tools are distinct from Kimi Chat deep research. A lane may be planned without being dispatched. `task_id` links each prompt to a decision question or P1 subtask; prompts can vary to exploit a mode's strengths, but each must contain the exact `dispatch_context` and state the requested evidence/unknowns. `research_assets.py start` checks that containment before dispatch. Record deliberate prompt differences and any later corrective follow-up separately; never overwrite the initial exact prompt or provider response. Add a future lane by appending a lane object, without changing old events.
 
 For direct source retrieval, use a separate lane such as `provider: "direct", mode: "primary-source"`; its collected artifact is the investigator's source packet under `sources/`, while the original PDFs or pages are recorded separately in `source-ledger.jsonl`. Internal subagents split questions but do not become external provider modes. A user-requested mode stays visible in `study.json` even when deferred; omitting it is a different decision from declining to dispatch it.
+
+### Request inventory independent of execution
+
+Before deriving lanes, reopen the user's original request and any accepted project workflow it invokes. Archive those originals as UTF-8 files. `research_assets.py start --request-source <request.txt>` copies each supplied file unchanged to `sources/requests/<filename>`; repeat the option for different filenames. Set each `basis.path` to that durable path, its actual SHA-256, an exact quotation and a locator. `basis.kind` is `user` or `accepted-project`; an entry in `modes` may carry its own `basis` when a project acceptance rather than the intake establishes that route.
+
+`request_mode_contract.interpretation` explains how the original maps to required provider × mode entries. `modes: []` is valid when no particular external route was requested or accepted; the basis and interpretation remain required. The validator checks archived bytes, quotation containment, nonempty interpretation, duplicate request IDs/routes, and every entry's nonempty `lane_ids` against exact planned provider/mode pairs. Several question lanes may fulfill one route; a lane cannot be mapped twice. Additional lanes are allowed. A deferred route still needs its mapped lane and reasoned event. Do not derive this inventory from the lanes after executing them: that would conceal the same omission it is meant to detect.
+
+This file does not infer user intent. An author could omit a mode from the inventory or misinterpret an ambiguous quotation and still pass structural checks. The coordinator must compare the inventory with the actual original and accepted workflow; a hash or an author-written interpretation is not user acceptance. State unresolved interpretation as unknown rather than fabricate a required vendor list.
+
+Schema 1 remains readable for old studies and events. `validate` labels its request coverage `legacy-request-mode-unverified`; `plan` exposes existing active tasks and collected files, but holds planned/prepared lanes instead of issuing new dispatch cards. `record` refuses new prepared/submitted events on schema 1. New `start` requires schema 2. To reuse old results without retriggering work, leave the old study intact and import its original exports into a new schema-2 study with recoverable actual-mode observations; if those observations cannot be recovered, retain the legacy coverage limit. Merely changing the schema number does not establish the missing evidence, and old events must not be rewritten to invent it.
 
 ## Seed source handoff
 
@@ -41,6 +59,8 @@ Each line is one JSON object with `at` (ISO 8601 with timezone), `lane_id`, `sta
 - `collected`: require `origin`, `artifact.path` relative to study directory, SHA-256 `artifact.sha256`, and `artifact.captured_at`. This proves the exported bytes were collected from the identified task. It **does not** verify claims in the report.
 - `deferred`: explicitly postponed, with reason in `note`.
 - `failed_unknown`: request result or task identity cannot be established; preserve observed IDs and uncertainty in `note`. Do not equate an uncertain create call with a definite failure.
+
+For schema 2, `submitted` and a first historical `collected --imported` event require `mode_observation`: the observed `provider`, actual `mode`, and a `receipt` with a relative `sources/` path, SHA-256 and capture timestamp. Record it with `--observed-provider <product> --observed-mode <actual-route> --mode-proof <saved-UI-or-API-receipt> [--mode-captured-at <ISO-time>]`. For direct research, save the investigator's actual retrieval command/API record rather than invent a UI receipt. `prepared` requires no submission proof. Later running/collected events inherit the checked submission's observation; a retry submission requires fresh observation. Supplied observations are checked on every read against planned mode and unchanged receipt bytes. The matching strings and hash prove consistency only: inspect the original UI/API evidence before recording them, and never use the prompt's words or the report's title as native-mode proof.
 
 Example:
 

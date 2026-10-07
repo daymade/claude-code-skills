@@ -89,7 +89,7 @@ its isolation reference owns backend/workspace identity and fresh-state validati
 
 For Deep Research or Kimi financial-research changes, enter the owning
 [`deep-research`](deep-research/SKILL.md) or [`kimi-use`](kimi-use/SKILL.md) Skill.
-Their linked references own the run, source-archive, mode, and billing procedures;
+Their linked references own the input handoff, download/export, run, source-archive, mode, and billing procedures;
 the bundled CLIs own executable argument and validation behavior. Keep this file
 as the route rather than a second copy of those procedures.
 
