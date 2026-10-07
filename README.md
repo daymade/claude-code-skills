@@ -187,6 +187,7 @@ claude plugin install daymade-macos@daymade-skills
 /daymade-macos:capture-screen
 /daymade-macos:developing-ios-apps
 /daymade-macos:macos-cleaner
+/daymade-macos:macos-load-doctor
 /daymade-macos:macos-permissions
 /daymade-macos:macos-watchdog
 ```
@@ -3597,6 +3598,28 @@ watchdogs and their incident history.
 make a launchd watchdog that reconnects my VPN when it drops
 my watchdog keeps re-launching an app I quit — make it stop
 audit my existing LaunchAgents for noise and crash loops
+```
+
+### **macos-load-doctor** - Diagnose macOS System-Level Load and Process Leaks
+
+> **Install**: `claude plugin install daymade-macos@daymade-skills` (suite-only — invoked as `daymade-macos:macos-load-doctor`)
+
+Find what is making the Mac slow or hot, attribute it to an owner, and act
+within the shared-machine boundary. Load average first, then a three-reading
+process census, parent-chain attribution, and shape classification — the
+skill's job is a correct, evidence-backed attribution, not process cleanup.
+
+**Key features:**
+- The fleet-wide rule — when independent apps/hooks/agents all time out at once, the machine is the suspect, not any of them: `vm.loadavg` before any individual debugging
+- Three-reading census (bundled `load_census.sh`) — children-per-parent (the leak that no orphan reaper will ever clean), cumulative CPU time (the busy loop %CPU dilutes), instantaneous %CPU (the active storm)
+- Shape classification that picks the right fix — leak / fork storm / busy loop / cascade — with a hard shared-machine boundary: agents diagnose read-only and report; the owner terminates (a "daemon restart" counts as terminating)
+- Incident playbook with four worked cases (per-thread MCP spawner leak at load 243, unthrottled replay fork storm, guard-fleet fork overhead, GUI busy loop) and the report-writing contract
+
+**Example usage:**
+```text
+everything on this Mac is slow and every agent's hooks are timing out
+the machine is burning hot and I can't tell why
+hundreds of node processes — where are they coming from?
 ```
 
 ### **devils-advocate** - Pressure-Test an Investment Thesis

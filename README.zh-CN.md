@@ -185,6 +185,7 @@ claude plugin install daymade-macos@daymade-skills
 /daymade-macos:capture-screen
 /daymade-macos:developing-ios-apps
 /daymade-macos:macos-cleaner
+/daymade-macos:macos-load-doctor
 /daymade-macos:macos-permissions
 /daymade-macos:macos-watchdog
 ```
@@ -3574,6 +3575,27 @@ LaunchAgent / LaunchDaemon，同时不让看门狗自己变成干扰源。提炼
 做一个 VPN 掉线自动重连的 launchd 看门狗
 我的看门狗总是把我退掉的 app 又拉起来——让它停
 审查我现有的 LaunchAgent 有没有噪音和崩溃循环
+```
+
+### **macos-load-doctor** - 诊断 macOS 系统级负载与进程泄漏
+
+> **安装**：`claude plugin install daymade-macos@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-macos:macos-load-doctor`）
+
+找出是什么让 Mac 变慢、发烫，归因到属主，并在共享机器边界内行动。
+先查负载均值，再做三路进程普查、父链归因与形态分类——这个 skill 的
+产出是正确、有据的归因，不是进程清理。
+
+**核心能力：**
+- 全体性症状法则——当互不相干的 app/hook/agent 同时超时，嫌疑犯是机器而不是其中任何一个：先 `vm.loadavg`，再谈个体排查
+- 三路普查（附带 `load_census.sh`）——按父进程聚合（孤儿回收永远清不到的泄漏）、累计 CPU 时间（被瞬时 %CPU 稀释的忙循环）、瞬时 %CPU（正在发生的风暴）
+- 形态分类对症修复——泄漏 / fork 风暴 / 忙循环 / 级联，并带一条硬边界：共享机器上 agent 只读诊断 + 报告，终止动作归属主（「daemon 重启」也算终止）
+- 事故 playbook 四个实战案例（load 243 的逐线程 MCP 泄漏、无限速回放 fork 风暴、守卫舰队 fork 开销、GUI 忙循环）与报告写作契约
+
+**使用示例：**
+```text
+这台 Mac 全都变慢了，每个 agent 的 hook 都在超时
+机器烫得不行但看不出为什么
+几百个 node 进程——都是从哪来的？
 ```
 
 ### **devils-advocate** - 压力测试你的投资论点
