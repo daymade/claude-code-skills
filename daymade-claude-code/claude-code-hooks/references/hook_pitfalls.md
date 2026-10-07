@@ -3385,8 +3385,8 @@ this list and describe defects you reach by asking a different question):
   not a keyword permission gate or a new user instruction overriding the latest
   request. This describes `compact` and bare cues, not `source=resume` or all native
   recovery modes.
-- **Existing-contract boundary:** rule 3's installer-owned recovery and rule 7's
-  fail-open advisory semantics still apply. Event/source and output calibration
+- **Existing-contract boundary:** the owning Skill's [installer-owned recovery and
+  fail-open advisory loop contract](../SKILL.md) still apply. Event/source and output calibration
   establish the supplied context; they do not prove the model's action was right.
   Reminder counts, registration and green fixtures remain distinct from business
   acceptance. This entry adds no new gate or guarantee against every priority error.
