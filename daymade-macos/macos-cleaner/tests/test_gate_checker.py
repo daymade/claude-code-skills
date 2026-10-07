@@ -307,6 +307,79 @@ class CategoryWideExclusionTests(unittest.TestCase):
                         .category_wide)
 
 
+class QuarantineMoveRecognitionTests(unittest.TestCase):
+    """The ssh/headless quarantine fallback gets target-coverage binding; an
+    ordinary `mv` / `git mv` / build-script rename must not be pulled in."""
+
+    def test_quarantine_mv_is_recognized(self):
+        commands = CHECKER.find_destructive_commands(
+            '`mv "/data/app" "/data/_quarantine-20261007/app"`\n')
+        self.assertEqual(1, len(commands))
+        self.assertIn('mv', commands[0].tools)
+        self.assertFalse(commands[0].category_wide)
+
+    def test_quarantine_mv_with_flags_and_tilde(self):
+        commands = CHECKER.find_destructive_commands(
+            '`mv -v ~/Library/Caches/foo ~/Library/_quarantine-20261007/foo`\n')
+        self.assertEqual(1, len(commands))
+
+    def test_quarantine_mv_leaves_unrecognized_report(self):
+        missed = CHECKER.unrecognized_command_lines(
+            '`mv "/data/app" "/data/_quarantine-20261007/app"`\n',
+            CHECKER.find_destructive_commands(
+                '`mv "/data/app" "/data/_quarantine-20261007/app"`\n'))
+        self.assertEqual([], missed)
+
+    def test_ordinary_mv_is_not_recognized(self):
+        self.assertEqual([], CHECKER.find_destructive_commands(
+            '`mv ~/Downloads/a ~/Downloads/b`\n'))
+
+    def test_git_mv_is_not_recognized(self):
+        self.assertEqual([], CHECKER.find_destructive_commands(
+            '`git mv old.md new.md`\n'))
+
+    def test_build_script_mv_is_not_recognized(self):
+        self.assertEqual([], CHECKER.find_destructive_commands(
+            '`mv dist/bundle.js dist/app.js`\n'))
+
+    def test_mv_to_a_non_quarantine_dir_is_not_recognized(self):
+        # A `mv` whose destination merely reorganizes (no `_quarantine-` marker)
+        # is not the sanctioned fallback and stays out of the gate.
+        self.assertEqual([], CHECKER.find_destructive_commands(
+            '`mv "/data/app" "/data/archive/app"`\n'))
+
+    def test_backticked_command_table_cell_is_recognized(self):
+        # The canonical calibration shape: a command-table cell keeps its
+        # markdown backticks (command_chunks strips them only from prose spans),
+        # so the pattern must tolerate the leading backtick.
+        plan = ('| 命令 | 精确目标 |\n|---|---|\n'
+                '| `mv ~/.npm/_npx ~/.npm/_quarantine-20261007/_npx` | `~/.npm/_npx` |\n')
+        commands = CHECKER.find_destructive_commands(plan)
+        self.assertEqual(1, len(commands))
+        self.assertIn('mv', commands[0].tools)
+
+    def test_prose_sentence_starting_with_mv_is_not_gated(self):
+        # A prose paraphrase of the approach is not a command; the first token
+        # after "mv" is a word, not a path/quote. The line MUST begin with "mv"
+        # (no leading label) — that is the previously-failed shape this pins:
+        # against the pre-fix pattern `^\s*mv\s+[^|;]*_quarantine-` a prefixed
+        # line would not be gated either, so a prefixed test would be vacuous.
+        plan = ('\nmv each approved target to a directory on the same volume '
+                '(<approved-dir>/_quarantine-<date>/), writing a MANIFEST beside it\n')
+        self.assertEqual([], CHECKER.find_destructive_commands(plan))
+
+    def test_sudo_mv_is_not_recognized(self):
+        self.assertEqual([], CHECKER.find_destructive_commands(
+            '`sudo mv /data/app /data/_quarantine-20261007/app`\n'))
+
+    def test_restore_from_quarantine_is_recognized(self):
+        # The reverse move (marker in the source) is also state-changing on the
+        # approved target; the marker may sit anywhere in the command.
+        commands = CHECKER.find_destructive_commands(
+            '`mv /data/_quarantine-20261007/app /data/app`\n')
+        self.assertEqual(1, len(commands))
+
+
 class LeadRuleTests(unittest.TestCase):
     GATE = ('| 候选 | 类别 | 判定 |\n|---|---|---|\n'
             '| `~/.cache/uv` | **PRESERVE** | 不入动作集 |\n'
