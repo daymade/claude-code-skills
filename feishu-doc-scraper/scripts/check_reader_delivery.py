@@ -65,8 +65,10 @@ class HtmlRefs(HTMLParser):
 
     def handle_starttag(self, tag, pairs):
         a = dict(pairs)
-        if tag in {'img', 'video', 'audio', 'source'}:
+        if tag in {'img', 'video', 'audio', 'source', 'iframe', 'embed'}:
             self.refs.append((a.get('src', ''), True, tag))
+        elif tag == 'object':
+            self.refs.append((a.get('data', ''), True, tag))
         elif tag == 'a' and a.get('href'):
             self.refs.append((a['href'], False, tag))
 
@@ -90,6 +92,7 @@ def references(text):
                 return
             if kind in {'Link', 'Image'}:
                 refs.append((c[2][0], kind == 'Image' or embedded_wikilink, 'markdown'))
+                walk(c[1])  # A linked thumbnail has its own image reference.
             elif kind in {'RawBlock', 'RawInline'} and c[0] == 'html':
                 parser = HtmlRefs()
                 parser.feed(c[1])
@@ -220,9 +223,9 @@ def validate_observation(report, e):
             raise ValueError('User acceptance needs the actual quote and exact entry-note scope')
     else:
         rows = e.get('observations')
-        if (not isinstance(rows, list) or len(rows) != len(artifact['entry_notes']) or
-                {r.get('note') for r in rows if isinstance(r, dict)} != set(artifact['entry_notes'])):
-            raise ValueError('Native observation must cover every entry note')
+        if (not isinstance(rows, list) or len(rows) != len(artifact['notes']) or
+                {r.get('note') for r in rows if isinstance(r, dict)} != set(artifact['notes'])):
+            raise ValueError('Native observation must cover every inspected note')
         for row in rows:
             expected = artifact['notes'][row['note']]
             if (row.get('images_displayed') != expected['images'] or row.get('videos_played') != expected['videos'] or

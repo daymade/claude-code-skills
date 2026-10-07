@@ -125,7 +125,8 @@ Skill. Reader evidence JSON supplies `kind` (`native-reader-observation` or
 `source_reference` to the original observation/message, and timezone-aware
 `observed_at` after inspection. User acceptance also needs the exact `quote` and
 `entry_notes` matching inspect; do not retroactively bind an old approval to new
-bytes. Native evidence needs one `observations` row per entry note: `note`,
+bytes. Native evidence needs one `observations` row per inspected note, including
+linked local Markdown: `note`,
 `images_displayed`, `videos_played`, `links_opened` lists covering the inspected
 paths and `reopened=true`, plus `evidence_files` with absolute `path` and `sha256`
 for retained native captures/tool records. Missing checks are unfinished work.

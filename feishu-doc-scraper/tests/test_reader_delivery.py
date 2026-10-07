@@ -84,6 +84,16 @@ class ReaderDeliveryTests(unittest.TestCase):
         self.seal()
         with self.assertRaisesRegex(ValueError,'raw HTML'): self.inspect()
 
+    def test_html_iframe_object_and_embed_are_not_invisible(self):
+        for text in ['<iframe src="file:///synthetic-outside/movie.mp4"></iframe>',
+                     '<object data="/synthetic-outside/image.png"></object>',
+                     '<embed src="https://example.org/external.png">',
+                     '<iframe src="media/course%20name.mp4"></iframe>']:
+            (self.root/'note.md').write_text(text);self.seal()
+            with self.assertRaises(ValueError): self.inspect()
+        (self.root/'note.md').write_text('```html\n<iframe src="file:///synthetic-outside/movie.mp4"></iframe>\n```')
+        self.seal();self.assertEqual(self.inspect()['examined_files'],1)
+
     def test_missing_asset_and_same_size_wrong_bytes_rejected(self):
         p=self.root/'media/image.png';p.write_bytes(b'x'*p.stat().st_size)
         with self.assertRaisesRegex(ValueError,'differs from manifest'): self.inspect()
@@ -131,6 +141,13 @@ class ReaderDeliveryTests(unittest.TestCase):
         self.seal();r=self.inspect();self.assertEqual(r['examined_files'],3)
         (self.root/'note.md').write_text('![[https://example.org/external.png]]');self.seal()
         with self.assertRaisesRegex(ValueError,'embed is not a movable'):self.inspect()
+
+    def test_linked_thumbnail_is_checked_with_its_source_link(self):
+        (self.root/'note.md').write_text('[![](media/image.png)](https://example.org/source)')
+        self.seal();r=self.inspect();self.assertEqual(r['examined_files'],2)
+        self.assertEqual(r['artifact']['notes']['note.md']['images'],['media/image.png'])
+        (self.root/'media/image.png').unlink()
+        with self.assertRaises(ValueError): self.inspect()
 
     def test_finalize_requires_evidence_not_conversion_success(self):
         r,code=gate.finalize(self.root,self.manifest,['note.md'],self.base/'missing.json')
@@ -184,6 +201,21 @@ class ReaderDeliveryTests(unittest.TestCase):
         receipt=json.loads(rp.read_text());receipt['observation']=e;receipt['evidence_sha256']=gate.sha(ep)
         rp.write_text(json.dumps(receipt))
         with self.assertRaisesRegex(ValueError,'actual quote'):gate.finalize(self.root,self.manifest,['note.md'],rp)
+
+    def test_native_observation_covers_linked_note_closure(self):
+        (self.root/'child.md').write_text('![](media/image.png)')
+        (self.root/'note.md').write_text('[child](child.md)');self.seal()
+        r=self.inspect()
+        captured=self.base/'capture.txt';captured.write_text('Synthetic closure observation')
+        rows=[{'note':name,'images_displayed':values['images'],'videos_played':values['videos'],
+               'links_opened':values['links'],'reopened':True} for name,values in r['artifact']['notes'].items()]
+        evidence={'kind':'native-reader-observation','reader':'Obsidian','source_reference':'synthetic-tool:closure',
+                  'artifact_fingerprint':r['artifact_fingerprint'],
+                  'observed_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                  'observations':rows,'evidence_files':[{'path':str(captured),'sha256':gate.sha(captured)}]}
+        gate.validate_observation(r,evidence)
+        with self.assertRaisesRegex(ValueError,'every inspected note'):
+            gate.validate_observation(r,{**evidence,'observations':[row for row in rows if row['note']=='note.md']})
 
     def test_reference_scanner_mutation_is_detected_by_counts(self):
         with patch.object(gate,'references',return_value=[]):
