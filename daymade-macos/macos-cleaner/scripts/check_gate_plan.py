@@ -348,6 +348,25 @@ DESTRUCTIVE_PATTERNS = (
     (('diskutil',), re.compile(r'\bdiskutil\s+(?:secureErase|eraseDisk|eraseVolume)\b'),
      False, False),
     (('xattr',), re.compile(r'\bxattr\s+(?:-[a-zA-Z]+\s+)*-d\b'), False, False),
+    # The quarantine fallback SKILL.md prescribes for ssh/headless targets:
+    # `mv <exact-target> <dir>/_quarantine-<date>/`. It is a recoverable move,
+    # not a permanent delete, so it is not versioned and not category-wide; but
+    # it IS a state-changing command on an approved target, so it deserves the
+    # same mechanical target-coverage binding as the osascript Trash form. The
+    # pattern is deliberately narrow, on three axes at once:
+    #   - anchored to a leading `mv` (so `git mv`, `sudo mv`, and an `mv` after
+    #     a command separator do not match);
+    #   - the first argument must be a quoted string or a path-ish token
+    #     (`/`, `~`, `.`, `$`), so a prose sentence that happens to start with
+    #     the word "mv" ("mv each approved target to ...") is not gated as an
+    #     unbound command;
+    #   - the `_quarantine-` marker must appear later in the same command, so an
+    #     ordinary rename or build-script `mv` is never pulled in.
+    # A leading backtick is tolerated because command-table cells keep their
+    # markdown quoting (unlike prose spans, which command_chunks strips).
+    (('mv',), re.compile(r'^\s*`?\s*mv\s+(?:-[a-zA-Z]+\s+)*'
+                         r'(?:"[^"]*"|\'[^\']*\'|[/~$.][^\s|;]*)[^|;]*_quarantine-'),
+     False, False),
 )
 
 # A command that itself carries a dry-run flag is a read-only probe.
