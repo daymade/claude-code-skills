@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **daymade-claude-code** (v4.25.2 → v4.25.3): Correct the hook design contract for repeated Skill-entry bypass: loading does not prove compliant execution; bind detection to the actual operation, calibrate healthy maintenance and read-only cases, and verify interception in the native host.
+
 - **terraform-skill** (v1.5.5 → v1.5.6, existing validation contract correction): Validate embedded expressions with their native consumer when supported, distinguish local arithmetic replay from native validation, and require a fresh evaluation of the deployed rule for runtime verification.
 
 - **github-ops** (v1.12.0): Clarify self-hosted runner capacity checks: distinguish registrations, hosts and job eligibility; reuse project deployment procedures; prepare tools on the actual runner; preserve production routing; verify the target job on the intended runner.
