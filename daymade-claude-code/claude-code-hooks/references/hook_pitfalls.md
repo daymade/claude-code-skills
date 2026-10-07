@@ -3074,3 +3074,111 @@ this list and describe defects you reach by asking a different question):
   parse failure is the failure mode that turns one stray character into a dead
   fleet, and only a two-sided selftest sees a guard that dies in ways exit
   codes cannot show.
+
+## 58. A read-only query on WAL state can fail only in the quiet hours — `mode=ro` plus an environment that cannot create `-shm`, not `mode=ro` alone
+
+- **Symptom:** a hook's read-only statistics command (`--status`, `--eval-queue`)
+  fails with `sqlite3.OperationalError` — but only *sometimes*. It worked
+  through the busy hours and failed at 3am; it failed under `env -i` and in
+  launchd, then worked again once sessions started generating events. Swapping
+  the open to a plain read-write connection plus `PRAGMA query_only = ON` made
+  it pass in the same environment, in the same minute, on the same database.
+- **Cause and fix:** the code opened the WAL-mode database with
+  `sqlite3.connect(f"file:{path}?mode=ro", uri=True)`. **Read this far
+  carefully, because the first published version of this entry got the
+  mechanism wrong and was rewritten after independent review measured it:**
+  `mode=ro` does NOT, by itself, make a WAL open fail — on a writable
+  directory a read-only connection happily creates the `-shm`/`-wal` side
+  files itself (measured on libsqlite 3.50.4). The failure needs an
+  environment that *cannot* create those side files (a read-only or sandboxed
+  directory, a TCC denial) or another not-fully-identified transient state —
+  which is exactly the shape that hides in production: busy hours keep a hot
+  `-wal`/`-shm` around so the read-only open succeeds, quiet hours remove
+  them and the same code fails, so nobody reproduces it until 3am. Two
+  refinements the review added: the side-file-blocked form reports
+  `attempt to write a readonly database`, while `unable to open database
+  file` points at a missing directory / unreadable file / sandbox EPERM —
+  read the error text, not just the exception type; and
+  `sqlite3.connect(path)` succeeding is *not* evidence the environment is
+  healthy, because connect() opens lazily and only the first statement
+  touches the file. The fix that worked at the incident site (writable state
+  directory): a normal connection plus `PRAGMA busy_timeout` and
+  `PRAGMA query_only = ON`. If the directory genuinely cannot be written,
+  that fix fails the same way — there the working read-only channel is
+  `file:...?immutable=1`, at the explicit price of seeing no concurrent
+  writes. Do not ship `mode=ro` against WAL state you do not control the
+  directory of.
+- **Real case (2026-10-06):** `goal-reanchor`'s evaluation queue had carried
+  this since its first version, discovered only while automating the
+  outcome-evaluation loop that had silently never run: the manual eval flow
+  worked in the afternoon (hooks firing everywhere), the first launchd run
+  of the batch job failed at night. The fix above restored the command in
+  both interactive and `env -i` replays. Two stacked lessons: the failure is
+  *invisible to any test that runs while the system under test is also
+  active* — the fix was verified by replaying the command after the writers
+  stopped, not by the unit suite; and an operations SOP whose steps all
+  "work when tried interactively" can sit on a time bomb for months because
+  nobody runs them on a quiet database. The mechanism section you just read
+  is its second version: the first one asserted "`mode=ro` always fails on a
+  checkpointed WAL", an independent review measured the assertion false on
+  the same SQLite build, and the entry was rewritten — treat the environment
+  condition, not the open mode, as the suspect.
+
+## 59. Adding a column without bumping the schema version makes the migration never run — and every writer fails open at once
+
+- **Symptom:** right after deploying a schema change, every hook invocation
+  across every session and host starts recording the *same* error
+  (`OperationalError: no such column: floor_at`), hundreds of receipts per
+  hour, while the hook "keeps working" (it fails open by design). The
+  migration code is present and correct; it simply never executes.
+- **Cause and fix:** the migration was gated on
+  `PRAGMA user_version < STATE_SCHEMA_VERSION`, and the deploy changed the
+  DDL and the queries but not the constant — the production database was
+  already stamped with the old version, so the gate evaluated to "nothing to
+  do" on every open. Any migration trigger (version pragma, sentinel file,
+  flag row) makes the version identifier *part of the schema change itself*:
+  adding a column without moving the identifier is an incomplete edit of the
+  same atomic change, the way changing a detector without its fixtures is.
+  Write the version bump into the same commit and assert it from the test
+  suite (a calibration test that pins the constant to its date-stamped value
+  caught the mismatch in the follow-up — but only after production had
+  already burned the receipts).
+- **Real case (2026-10-06, same deploy as #58's sibling work):** a cadence
+  hook added a `floor_at` column, bumped the policy version string but not
+  `STATE_SCHEMA_VERSION`. ~1100 error receipts accumulated in ~25 minutes of
+  double-registration concurrency before the constant was fixed; the first
+  post-fix open migrated the database and the receipts stopped. The failure
+  was loud in aggregate but invisible per-invocation — fail-open hooks need
+  an *error-receipt rate* in their health check, because "no crash" and
+  "healthy" diverge exactly here.
+
+## 60. `all([])` is True — an empty group's "all commands managed" check launders it into the privileged branch
+
+- **Symptom:** an alignment/authorization routine that treats "every command
+  in this group is known-good" as the condition for a trusted path starts
+  *refusing legitimate empty shell groups* (or, with the polarity flipped,
+  starts *trusting* them) — and the bug survives code review because the
+  one-liner reads correctly in English.
+- **Cause and fix:** `all(...)` over an empty iterable is vacuously True, so
+  `all(c in managed for c in [])` reports an empty group as "fully managed".
+  Shell groups with `hooks: []` are not rare leftovers here — a migration
+  that strips handlers from a group deliberately leaves the empty shell in
+  place (deleting it would shift every later group's position in the list,
+  and list position is execution order).
+  Decide the empty case **out loud** at the branch: name it in a comment and
+  make the code say it — `cur_managed = any(...)` when "empty means not
+  managed", `bool(cmds) and all(...)` when "empty means nothing to vouch
+  for". The general form: any predicate written as `all(...)` that gates a
+  trusted/allowed path needs an explicit answer for the empty input before it
+  needs a clever one for the hard inputs.
+- **Real case (2026-10-07):** a reconcile subcommand's ledger-alignment walk
+  classified current groups with `all(command in managed_commands)`. Empty
+  shell groups read as "managed", hit the "a managed group sitting out of
+  ledger order" refusal, and blocked a legitimate reconcile of six live
+  settings files. Found by a hand-driven replay of the alignment loop, not
+  by the first three read-throughs of the diff — the code reviewer's eye
+  slides over `all(...)` because the sentence it forms is grammatically
+  true. An adversarial review agent later found the *mirror* bug in the same
+  walk (a foreign handler riding inside a duplicate of a managed group),
+  which is why the fix also moved the predicate from `all` to `any` for the
+  "is this group managed at all" question.
