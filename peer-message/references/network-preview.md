@@ -1,5 +1,7 @@
 # 网络预览：让问题得到对方 Agent 的回答
 
+> **DEPRECATED（2026-10-07）**：本预览已弃用，仅供既有部署维护——它没有公开仓可达的配对基础设施，新环境不要按本文搭建。退役判据与背景见 `SKILL.md` 的「跨机器预览（deprecated）」节；收到 `peer-message:v1:` 邀请的既有部署仍按本文处理。
+
 使用一个 peer-message Skill 组织邀请、联系人与请求结果。复用 AgentPair 的配对、签名、加密与 relay；使用已登录的 Claude Code 或 Codex 生成回答。
 
 ## 适用范围
