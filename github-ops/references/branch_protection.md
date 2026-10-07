@@ -115,6 +115,11 @@ evidence is needed. Report configuration enforcement separately from unperformed
 Stop when the selected repositories are verified, or report the precise remaining entitlement,
 identity or policy gap. Permission repair does not authorize merging a contributor's pending PR.
 
+The probe in the fleet section below is the deliberate, content-neutral exception to "do not
+create fake commits": its tree is the default branch's current tree (zero diff), it is the
+fleet-verification path, and a single repository still uses an existing legitimate PR. That
+is the whole boundary — do not cite the probe to justify a content-bearing test commit.
+
 ## Fleet inventory, rollout, and enforcement verification
 
 Use these steps when the task is not one repository's policy but the whole account's posture:
@@ -130,8 +135,15 @@ one repository at a time with per-item results.
 ```bash
 gh repo list OWNER --limit 200 \
   --json name,visibility,isArchived,defaultBranchRef
+# The list endpoint has no `rules` field (it is only on the single-get), so a
+# `.rules[].type` projection on it exits 1 on any repository that already has a
+# ruleset. Read ids/names/enforcement from the list, then fetch each ruleset's
+# rules by id — a repository that already has one is exactly the "already
+# protected" case the inventory must classify, so this read must not fail there.
 gh api repos/OWNER/REPO/rulesets \
-  --jq '.[] | {id, name, enforcement, rules: [.rules[].type]}'
+  --jq '.[] | {id, name, enforcement}'
+gh api repos/OWNER/REPO/rulesets/RULESET_ID \
+  --jq '{id, name, enforcement, rules: [.rules[].type]}'
 ```
 
 A `404` from `branches/BRANCH/protection` says nothing about rulesets, and an empty ruleset
@@ -152,7 +164,8 @@ creation failed inside the report as a retryable item rather than silently dropp
 ### Choose the policy per repository — and record deliberate gaps
 
 `non_fast_forward` blocks force pushes while still allowing direct fast-forward pushes.
-`pull_request` additionally rejects every direct push to the targeted refs. The second is
+`pull_request` additionally rejects direct pushes to the targeted refs (any configured
+bypass actors excepted). The second is
 not automatically the stronger choice for every repository:
 
 - **Check for automated writers on the default branch first.** Scheduled jobs and
@@ -177,14 +190,21 @@ and `non_fast_forward`). A ruleset readback proves the rule is *declared*; only 
 proves it is *enforced*.
 
 The safe probe is a content-neutral commit: its tree is the default branch's current tree,
-so even if a misconfigured rule lets it through, it lands as an empty commit with zero diff:
+so even if a misconfigured rule lets it through, it lands as an empty commit with zero diff.
+Use the repository's actual default branch from the inventory's `defaultBranchRef` — the
+probe below writes `main`, but a repository whose default is `master` or `develop` needs the
+corresponding ref, or `git rev-parse origin/main` fails before any push happens. And run it
+from a clone without a client-side mainline guard: a versioned pre-push hook (e.g. this
+account's own `git-mainline-guard.mjs`) blocks the push locally with its own message, so the
+ruleset is never reached and the probe proves nothing:
 
 ```bash
-TIP=$(git rev-parse origin/main)
-TREE=$(git rev-parse "origin/main^{tree}")
+DEFAULT=main   # from the inventory's defaultBranchRef for this repository
+TIP=$(git rev-parse "origin/$DEFAULT")
+TREE=$(git rev-parse "origin/$DEFAULT^{tree}")
 PROBE=$(git commit-tree "$TREE" -p "$TIP" -m "ruleset enforcement probe (empty tree)")
-git push origin "${PROBE}:refs/heads/main"    # expect: remote rejected — Changes must be
-                                              # made through a pull request
+git push origin "${PROBE}:refs/heads/$DEFAULT"   # expect: remote rejected — Changes must be
+                                                 # made through a pull request
 git push origin "${PROBE}:refs/heads/ruleset-probe-tmp"   # control: must succeed
 git push origin --delete ruleset-probe-tmp
 ```
@@ -196,6 +216,14 @@ rejected with the rule's own message, the topic-branch push succeeds, and the de
 succeeds. If the default-branch push lands, the rule is not enforced — the empty probe adds
 zero diff, and the same gap that let it land will let its own revert commit land; report the
 configuration gap and do not treat the API readback as a substitute.
+
+Reverting a landed probe is a `git push --force-with-lease` of the previous tip — the only
+way to move the default branch backwards — and a `non_fast_forward` rule (the baseline this
+fleet rolls out) rejects exactly that. In a mixed posture (`non_fast_forward` active while
+`pull_request` is still `evaluate`/disabled) the probe can land and its revert be refused,
+leaving the empty commit on the default branch's first-parent. Verify both rules are
+`active` before probing, and treat that leftover as a configuration-gap report, not a silent
+state.
 
 ### Attribute push-side state before blaming anyone
 
