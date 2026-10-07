@@ -1,5 +1,6 @@
 """Synthetic HTTP transport; no sockets, services, credentials or live changes."""
 import hashlib
+from http.client import HTTPResponse
 from email.message import Message
 import importlib.util
 import io
@@ -45,7 +46,16 @@ class FixtureTransport(HTTPSHandler):
         message = Message()
         for name, value in headers.items():
             message[name] = value
-        response = addinfourl(io.BytesIO(body), message, request.full_url, status)
+        if message.get('Transfer-Encoding') == 'chunked':
+            wire = (f'HTTP/1.1 {status} synthetic\r\nTransfer-Encoding: chunked\r\n\r\n'.encode() + body)
+            class Socket:
+                def makefile(self, *args):
+                    return io.BytesIO(wire)
+            decoded = HTTPResponse(Socket())
+            decoded.begin()
+            response = addinfourl(decoded, decoded.headers, request.full_url, status)
+        else:
+            response = addinfourl(io.BytesIO(body), message, request.full_url, status)
         response.msg = 'synthetic HTTP response'
         return response
 
@@ -125,6 +135,35 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertTrue(report['unknown'])
         self.assertTrue(report['mismatches'])
+
+    def test_truncated_chunked_response_is_unknown_and_preserves_known_mismatch(self):
+        self.server.responses['/component/status'] = (200, {'Transfer-Encoding': 'chunked'}, b'A\r\nabc')
+        report, code = probe.verify(self.manifest())
+        self.assertEqual((report['status'], code), ('unprovable', 2))
+        self.assertEqual(report['unknown'][0]['reason'], 'IncompleteRead')
+        self.server.responses['/app.js'] = (200, {}, b'old')
+        report, code = probe.verify(self.manifest())
+        self.assertEqual((report['status'], code), ('mismatched', 1))
+        self.assertTrue(report['unknown'])
+
+    def test_cli_truncated_chunked_response_returns_json_and_unknown_exit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manifest = Path(directory)/'manifest.json'
+            value = self.manifest()
+            value['base_url'] = 'https://fixture-1.example.test'
+            manifest.write_text(json.dumps(value))
+            runner = Path(directory)/'runner.py'
+            runner.write_text("""import importlib.util, sys
+spec=importlib.util.spec_from_file_location('fixture_tests',sys.argv[1])
+fixture=importlib.util.module_from_spec(spec);spec.loader.exec_module(fixture)
+server=fixture.Server();server.responses['/component/status']=(200,{'Transfer-Encoding':'chunked'},b'A\\r\\nabc')
+fixture.probe.build_opener=fixture.fixture_opener
+sys.exit(fixture.probe.main(['--manifest',sys.argv[2]]))
+""")
+            result = subprocess.run([sys.executable, str(runner), str(Path(__file__)), str(manifest)], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(json.loads(result.stdout)['status'], 'unprovable')
+        self.assertNotIn('Traceback', result.stderr)
 
     def test_no_vacuous_manifest_or_empty_field_set(self):
         invalid = [{}, {'schema_version': 1}, self.manifest(), self.manifest(), self.manifest()]

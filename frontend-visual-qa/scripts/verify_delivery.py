@@ -6,6 +6,7 @@ Exit 0 = matched, 1 = mismatch, 2 = invalid input or incomplete observation.
 """
 import argparse
 import hashlib
+from http.client import HTTPException
 import json
 import math
 from pathlib import Path
@@ -172,7 +173,7 @@ def verify(manifest, timeout=5, max_bytes=16 * 1024 * 1024):
                         report['mismatches'].append({'resource_fingerprint': ref, 'kind': 'json', 'field': key,
                                                       'expected_fingerprint': fingerprint(expected),
                                                       'observed_fingerprint': fingerprint(observed[key])})
-        except (HTTPError, URLError, OSError, ValueError, OverflowError) as error:
+        except (HTTPError, URLError, HTTPException, OSError, ValueError, OverflowError) as error:
             if isinstance(error, HTTPError):
                 error.close()
             report['unknown'].append({'resource_fingerprint': ref, 'reason': type(error).__name__})
