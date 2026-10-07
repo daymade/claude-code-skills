@@ -3317,3 +3317,52 @@ this list and describe defects you reach by asking a different question):
   calibration corpus had shown "page goes out" the entire time; no
   corpus entry had ever asked "does the guard stay quiet when it
   should."
+
+## 64. skill-creator-guard's "loaded" verdict requires byte-verified Read coverage — Skill-tool invocation does not count, paged Reads leak seam lines, and parallel Reads race the ledger
+
+- **Symptom:** you loaded skill-creator this session — via the Skill
+  tool, or by reading its SKILL.md in a few big paged Reads — yet the
+  guard still blocks your SKILL.md edit with "load skill-creator
+  first". Re-invoking the Skill doesn't help; neither does topping up
+  the coverage with a parallel batch of small gap Reads.
+- **Cause and fix:** the marker is written only when the session
+  ledger records the *entire* file's bytes as verified, and three
+  independent mechanics conspire against reaching that. ① The Skill
+  tool's output is invisible to the hook (`response-empty-or-unknown`),
+  so a Skill invocation records zero verified bytes and even *clears*
+  any stale marker — only Read accumulates coverage. (Literal cat/sed
+  also feeds the ledger in the current implementation, but one serial
+  `sed` was observed not to register, cause not isolated — until
+  diagnosed, the numbered serial Read is the only known-reliable
+  form; see the Real case.) ② A paged Read verifies every line *except the page's
+  last one*: the hook reconstructs file bytes from the numbered
+  output, and the final displayed line carries no trailing newline, so
+  the requested range never matches exactly and the fallback covers
+  only up to the second-to-last line. Reading a 1965-line file in 7
+  pages leaks 6 seam lines of a few bytes each — top them up with
+  small windowed Reads centered on each seam. ③ Topping up in
+  parallel loses updates: every PostToolUse event reads the ledger,
+  merges, and writes it back with no transaction, so six parallel gap
+  Reads raced and later writes silently discarded ranges earlier calls
+  in the same batch had just recorded — the verified-byte count went
+  *down* between two of the calls. Re-read the gaps serially. Don't
+  guess which lines are missing: inspect the ledger itself — find this
+  session's file with `ls ~/.local/state/daymade-agent-hooks/skill-creator-loaded/`
+  (`<session-id>.read-coverage.json`), read the verified intervals
+  from `files["<path>"].verified_ranges`, and convert byte offsets to
+  line numbers with
+  `python3 -c "import bisect; d=open('<file>','rb').read(); s=[0]+[i+1 for i,c in enumerate(d) if c==10]; print(bisect.bisect_right(s, <byte>))"`.
+- **Real case (2026-10-07):** an o11y SKILL.md edit in a worktree was
+  blocked right after a Skill-tool load of skill-creator. The author
+  read the 220,657-byte file in 7 paged Reads (coverage stalled at
+  220,418), computed six seam gaps totalling 239 bytes from the
+  ledger, and topped them up with 6 *parallel* windowed Reads — the
+  ledger dropped from 220,615 to 220,571 as the parallel PostToolUse
+  events overwrote each other, discarding the +86-byte seam one call
+  had just recorded. One serial re-read of the last missing line
+  brought coverage to 220,657/220,657, the marker landed, and the
+  edit passed. A `sed -n '1428p'` read of the same line in between
+  did not move coverage either (the shell-read path shares the same
+  ledger and the same race; it was not isolated further once the
+  serial Read worked — treat numbered serial Reads as the reliable
+  form).
