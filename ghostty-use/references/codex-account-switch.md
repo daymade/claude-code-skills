@@ -22,11 +22,13 @@ python3 <skill-dir>/scripts/ghostty_session.py switch-prepare
 
 Expect `PREPARED N/N Codex sessions -> <fixed-manifest>` with each saved UUID and
 cwd. Select Ghostty descendants only, deduplicate Node/vendor wrapper pairs,
-resolve fresh TUIs through the existing bounded identity helper and verify the
+resolve fresh main TUIs through the existing bounded identity helper and verify the
 state-index selected rollout through `read-codex-history`. Include idle sessions
 regardless of liveness. Return 1 with `INCOMPLETE` and unresolved rows when any
 TUI lacks usable identity or replay-safe options; resolve these before exit and
 take another complete snapshot.
+Fresh candidate matching excludes explicit sub-agent metadata. An argv-anchored
+sub-agent makes capture incomplete rather than becoming a standalone resume command.
 
 Use the maintained `daymade-claude-code:read-codex-history` dependency resolution
 from SKILL.md. If discovery cannot locate it, pass
@@ -72,11 +74,11 @@ keyboard and mouse untouched through reconciliation. Do not send global
 keystrokes without that handoff or bypass a host denial.
 
 ```bash
-# Reopen one independent window per missing session:
+# Reopen missing sessions as tabs in one window:
 python3 <skill-dir>/scripts/ghostty_session.py switch-restore
 
-# Open tabs instead; original grouping is not reconstructed:
-python3 <skill-dir>/scripts/ghostty_session.py switch-restore --layout tabs
+# Open independent windows only when requested:
+python3 <skill-dir>/scripts/ghostty_session.py switch-restore --layout windows
 
 # Pin an earlier handoff after another preparation:
 python3 <skill-dir>/scripts/ghostty_session.py switch-restore --snapshot <fixed-manifest>
@@ -92,6 +94,9 @@ unknown/unsafe options rather than guessing them. Use Cmd+N for independent
 windows or Cmd+T for tabs; original positions, splits and grouping remain unknown.
 Verify shortcuts when Ghostty configuration remaps them. Clipboard delivery is
 timing-sensitive; paste acknowledgement alone does not prove reopening.
+For an older manifest containing a spawned agent, skip that row when its main
+parent is also saved. If the main parent is absent, stop before opening and
+report the parent ID; never independently resume the spawned agent.
 
 Bind progress to the fixed manifest and new account outside the Skill bundle.
 Serialize opening, re-probe account/process state before each send, stop on
