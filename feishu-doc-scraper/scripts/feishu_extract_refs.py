@@ -14,13 +14,9 @@ whiteboard (`<whiteboard token=...>` — an inline diagram block, NOT a
 followable reference, see DISPATCH["whiteboard"]), lark-table, and
 cross-tenant / personal-space / Minutes / Tencent-Meeting URLs.
 
-Input : the fetched Feishu body. On lark-cli builds where `.data.markdown` is
-        non-null (<=1.0.32; unconfirmed whether still reachable on any
-        current build, see SKILL.md Path A step 3), that Markdown is a valid
-        input. Otherwise (`.data.markdown` is null -- the current default,
-        verified null in 11/11 real documents checked including the
-        currently-installed lark-cli 1.0.80) the body only reaches disk as
-        raw HTML via `.data.document.content`; run this script on THAT saved
+Input : the fetched Feishu body. Choose the field from the actual response.
+        A nonblank `.data.markdown` string is a valid Markdown input.
+        For HTML from `.data.document.content`, run this script on that saved
         `source.html`, never on the pandoc-converted `source.md` -- pandoc
         silently strips several of these tags with zero trace (whiteboard
         and mention-doc confirmed; see SKILL.md Path A step 3's callout).
@@ -51,13 +47,9 @@ from pathlib import Path
 # /minutes /base /file path scheme.
 _HOST = r"[a-z0-9-]+\.(?:feishu\.cn|larksuite\.com)"
 
-# Inline rich-media tags. Two eras coexist here: the pre-1.0.55 `.data.markdown`
-# pseudo-tags this script originally assumed (RE_MENTION_DOC, RE_IMAGE_TAG --
-# never observed in real raw HTML, but retained since nothing was verified
-# about what that branch emits when it fires) and the verified 1.0.55+ raw
-# `.data.document.content` HTML shapes (RE_CITE_TAG, RE_IMG_TAG) that replace
-# them on the current default (pandoc) path. Run this script on source.html
-# for the latter -- see the module docstring.
+# Inline rich-media tags: retain Markdown pseudo-tags for captured Markdown
+# and raw HTML shapes for captured HTML. Select the input from the actual
+# response; on the HTML branch enumerate source.html before pandoc conversion.
 
 # --- mention-doc references -------------------------------------------------
 # Verified 2026-08-17 (lark-cli 1.0.80, fresh fetch of a real hub doc; the

@@ -78,17 +78,12 @@ The same step applies to documents reached recursively in Step 5.
 The body field moved between lark-cli versions, so probe both instead of hard-coding one — this keeps working whichever version is installed:
 
 ```bash
-lark-cli docs +fetch --doc <obj_token> --format json > /tmp/fetch.json 2> /tmp/fetch.err
-# ≤1.0.32: clean Markdown in .data.markdown.
-# 1.0.55+: body moved to .data.document.content as HTML (.data.markdown is
-# null — verified null in 11/11 real documents checked as of 2026-08-17,
-# including 3/3 fresh fetches on the currently-installed 1.0.80; whether the
-# .data.markdown branch is still reachable on any current build was not
-# confirmed).
-if jq -e -r '.data.markdown // empty' /tmp/fetch.json > "<sanitized-title>.md" && [ -s "<sanitized-title>.md" ]; then
+lark-cli docs +fetch --doc <obj_token> --format json > /tmp/fetch.json 2> /tmp/fetch.err || exit 1
+# Select a nonblank string from the actual response; null/missing fields are not bodies.
+if jq -e -r '.data.markdown | strings | select(test("\\S"))' /tmp/fetch.json > "<sanitized-title>.md"; then
   : # got clean Markdown directly
 else
-  jq -r '.data.document.content' /tmp/fetch.json > "<sanitized-title>.html"
+  jq -e -r '.data.document.content | strings | select(test("\\S"))' /tmp/fetch.json > "<sanitized-title>.html" || exit 1
   pandoc -f html -t gfm "<sanitized-title>.html" > "<sanitized-title>.md"
 fi
 ```
