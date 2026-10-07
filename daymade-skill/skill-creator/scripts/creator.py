@@ -13,6 +13,7 @@ COMMANDS = {
     "release_readiness": "scripts.release_readiness",
     "source_contract": "scripts.source_contract",
     "materialize": "scripts.materialize",
+    "delivery_identity": "scripts.delivery_identity",
 }
 
 
