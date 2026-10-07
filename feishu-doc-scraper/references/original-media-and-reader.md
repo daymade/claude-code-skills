@@ -69,8 +69,9 @@ uv run --script <skill-dir>/scripts/render_api_capture.py \
   --source <original-feishu-url>
 ```
 
-Expected: nonzero `media_references`, when the source contains media, and
-`actual_reader=not_verified`. The helper localizes img/source tokens from the
+Expected: `status=converted_reader_pending`, nonzero `media_references` when the
+source contains media, and `actual_reader=not_verified`. The output note must
+remain under the manifest's archive directory; an outside output is refused. The helper localizes img/source tokens from the
 manifest, preserves image alt text, converts attachment figures to native
 Markdown embeds plus filename links, and refuses missing originals/overwrites.
 It does not resolve whiteboards or replace the reference-graph worklist. Continue
@@ -91,6 +92,69 @@ reader-facing attachment directory. Keep source/Git/OSS authority and binary
 ignore/LFS policy with the archive storage owner; do not change it merely to
 make the note display. Download, conversion, actual-reader and search checks
 remain separate observations.
+
+## Delivery completion gate
+
+The executing agent runs `check_reader_delivery.py` before declaring a local
+reader-facing archive complete. Conversion exit 0 establishes conversion only.
+Use the actual user-selected delivery root and reader; do not choose a hidden
+cache as that root to make a bad note pass. The root is the folder the recipient
+can move as a unit. Keep the storage manifest current before this check.
+
+```bash
+uv run --script <skill-dir>/scripts/check_reader_delivery.py inspect \
+  --root <archive> --manifest <archive>/manifest.json \
+  --note '<entry-note.md>' --reader Obsidian --report <private-inspect.json>
+```
+
+Repeat `--note` for every delivered entry note. Expected: `status=reader_pending`,
+`actual_reader=not_verified`, and the examined note/file counts. The helper parses
+GFM/reference links and Obsidian wikilinks with actual pandoc, follows linked local
+Markdown, and checks every referenced local file against the manifest's bytes
+and SHA-256. Absolute/file URLs, escaping paths, symlinks, missing targets, external
+media embeds and raw-HTML media are refused. Remote source hyperlinks, anchors,
+code examples and text-only notes remain valid. This byte/closure check is not a
+visual or playback verdict. A video thumbnail or play button alone is not playback:
+observe time advancing and decoded frames/audio; if the actual reader buffers or
+reports failure, leave playback unverified and record the failure.
+
+Perform the real-reader protocol above on that snapshot. Preserve native tool
+observations/captures or the user's actual acceptance message outside the public
+Skill. Reader evidence JSON supplies `kind` (`native-reader-observation` or
+`user-acceptance`), exact `reader`, `artifact_fingerprint` from inspect,
+`source_reference` to the original observation/message, and timezone-aware
+`observed_at` after inspection. User acceptance also needs the exact `quote` and
+`entry_notes` matching inspect; do not retroactively bind an old approval to new
+bytes. Native evidence needs one `observations` row per inspected note, including
+linked local Markdown: `note`,
+`images_displayed`, `videos_played`, `links_opened` lists covering the inspected
+paths and `reopened=true`, plus `evidence_files` with absolute `path` and `sha256`
+for retained native captures/tool records. Missing checks are unfinished work.
+
+```bash
+uv run --script <skill-dir>/scripts/check_reader_delivery.py record-reader \
+  --report <private-inspect.json> --evidence <private-reader-evidence.json> \
+  --receipt <private-reader-receipt.json>
+uv run --script <skill-dir>/scripts/check_reader_delivery.py finalize \
+  --root <archive> --manifest <archive>/manifest.json \
+  --note '<entry-note.md>' --reader Obsidian \
+  --reader-receipt <private-reader-receipt.json>
+```
+
+Repeat the same entry-note set at finalize. Missing receipt returns exit 3 and
+`reader_pending`; invalid paths, changed files/manifest/evidence, incomplete
+observation coverage or a different reader return exit 1. Exit 0 with
+`ready_with_reader_evidence` means current bytes and retained observation
+coverage agree. Re-rendering or updating a note, asset, source manifest or entry
+set invalidates that binding. Do not overwrite old inspect/evidence files;
+retain the earlier result and create a new snapshot for a new real observation.
+
+The gate cannot authenticate who wrote an observation or decide that screenshots
+actually show readable images or playing video. It prints
+`provenance_authenticated=false` even on a healthy finish. The agent must obtain
+and inspect the named original evidence; invented JSON or its own unsupported
+"checked" statement is not reader acceptance. This is a workflow-local completion
+command, not a global Stop hook or a claim of universal behavior enforcement.
 
 ## Declare a selected personal collection
 

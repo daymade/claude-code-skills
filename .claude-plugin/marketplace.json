@@ -126,7 +126,7 @@
       "description": "Claude Code operations suite that bundles cross-project prior-work retrieval across code, docs, Skills, meetings, WeChat archives, and conversation history; provider-separated Claude Code and Codex history readers; identity- and lineage-gated continuation workflows; plugin/skill troubleshooting; CLAUDE.md progressive disclosure optimization; version-synced Lark CLI routing; statusline configuration; exported .txt repair; full claude.ai conversation extraction with tool-call rendering and file download; plugin marketplace development and suite consolidation; writing/testing/debugging Claude Code hooks; multi-provider profile isolation; personal-memory migration into tool-agnostic AGENTS.md reference docs; one-shot local timers that ping Claude right after subscription quota reset to start a fresh 5-hour usage window; working web search installed on an agent whose relayed model backend cannot execute the built-in one; and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
       "source": "./daymade-claude-code",
       "strict": false,
-      "version": "4.25.2",
+      "version": "4.25.3",
       "category": "suite",
       "keywords": [
         "suite",
@@ -417,7 +417,7 @@
       "description": "Extracts Feishu/Lark Docs, Wiki, Sheets, and Minutes (妙记) transcripts into faithful local Markdown via the lark-cli API — no LLM paraphrasing, browser-DOM fallback when lark-cli can't reach content. Use whenever the source is a Feishu/Lark URL and fidelity matters — 导出飞书文档/合集/妙记转写, 把飞书 wiki 转 markdown, or archiving a collection — even if the user just says \"save this\". Also covers owner-exported .docx → Markdown.",
       "source": "./feishu-doc-scraper",
       "strict": false,
-      "version": "1.7.0",
+      "version": "1.8.0",
       "category": "productivity",
       "keywords": [
         "feishu",

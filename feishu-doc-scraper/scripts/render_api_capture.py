@@ -60,6 +60,8 @@ def render(capture, manifest, output, source):
     manifest = Path(manifest).resolve()
     root = manifest.parent
     output = Path(output).resolve()
+    if not output.is_relative_to(root):
+        raise ValueError('Output note must stay inside the declared archive folder')
     media = {}
     for item in json.loads(manifest.read_text())['files']:
         if item.get('storage') == 'git' or not item.get('cache_path'):
@@ -116,7 +118,8 @@ def render(capture, manifest, output, source):
         raise ValueError('Output already exists; render to a new pilot path and review the diff')
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(front + converted, encoding='utf-8')
-    return {'output': str(output), 'media_references': len(used), 'actual_reader': 'not_verified'}
+    return {'output': str(output), 'media_references': len(used),
+            'status': 'converted_reader_pending', 'actual_reader': 'not_verified'}
 
 
 def main():

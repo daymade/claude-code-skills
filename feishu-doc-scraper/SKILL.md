@@ -33,7 +33,9 @@ Before filing an archive, declare this split in an artifact manifest and run the
 For local original media, failed media exports, or an Obsidian handoff, load
 [original media and reader handoff](references/original-media-and-reader.md).
 Use its verified-preview downloader and API-capture renderer before expanding
-the batch; complete its actual-reader check separately from byte/search checks.
+the batch. Its Delivery completion gate (`check_reader_delivery.py finalize`)
+is the local-archive completion entry; conversion, byte and search success do
+not replace a current actual-reader evidence record.
 For a user-selected personal favorites destination, its source catalog producer
 hands off to favorites-search without changing this Skill's filing ownership.
 
