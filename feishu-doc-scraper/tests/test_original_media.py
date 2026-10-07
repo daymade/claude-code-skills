@@ -144,7 +144,10 @@ class OriginalMediaTests(unittest.TestCase):
         result = render.render(capture, manifest, self.root / 'oss.md', 'https://example.feishu.cn/wiki/node')
         self.assertEqual(result['media_references'], 1)
         self.assertIn('![](<media/original.png>)', (self.root / 'oss.md').read_text())
-        entry['locator'] = {'system': 'feishu', 'token': 'DifferentCapturedToken'}
+        entry['storage'] = 'source'
+        entry['locator'] = {'system': 'feishu', 'source_url': 'https://example.feishu.cn/wiki/SyntheticNodeToken1234567890',
+                            'token': 'DifferentCapturedToken'}
+        self.assertEqual(check_archive_storage.validate_manifest({'files': [entry]}), [])
         manifest.write_text(json.dumps({'files': [entry]}))
         with self.assertRaisesRegex(ValueError, 'disagree'):
             render.render(capture, manifest, self.root / 'conflict.md', 'https://example.feishu.cn/wiki/node')
