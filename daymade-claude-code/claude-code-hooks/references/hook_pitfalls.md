@@ -3074,3 +3074,93 @@ this list and describe defects you reach by asking a different question):
   parse failure is the failure mode that turns one stray character into a dead
   fleet, and only a two-sided selftest sees a guard that dies in ways exit
   codes cannot show.
+
+## 58. A `mode=ro` open of a cleanly-checkpointed WAL database always fails — a read-only query that only works while someone else is writing
+
+- **Symptom:** a hook's read-only statistics command (`--status`, `--eval-queue`)
+  fails with `sqlite3.OperationalError: unable to open database file` — but
+  only *sometimes*. It worked fine during the busy hours and fails at 3am;
+  it fails under `env -i` and in launchd, then works again once any session
+  starts generating events. The same database opens fine with a plain
+  `sqlite3.connect(path)` in the same environment, so every minimal repro
+  you build looks healthy.
+- **Cause and fix:** the code opened the database with
+  `sqlite3.connect(f"file:{path}?mode=ro", uri=True)` on a WAL-mode database.
+  A WAL database whose last writer closed cleanly has no `-shm`/`-wal` files
+  left on disk; opening it `mode=ro` makes SQLite need to *create* the shm
+  file it is forbidden to create, and the open fails. While any writer is
+  active (or left a hot WAL behind), the read-only open succeeds — which is
+  exactly why the bug hides: the query works whenever the system is busy and
+  fails whenever it is quiet, and nobody runs the diagnostics until the
+  quiet hours. Do not reach for `mode=ro` on WAL state at all. Open a normal
+  connection, set `PRAGMA busy_timeout` and `PRAGMA query_only = ON` — the
+  read-only intent is preserved by the pragma, the open is not.
+- **Real case (2026-10-06):** `goal-reanchor`'s evaluation queue had carried
+  this since its first version. It was discovered only while automating the
+  outcome-evaluation loop that had silently never run: the manual eval flow
+  worked in the afternoon (hooks firing everywhere, hot WAL present), and
+  the first launchd run of the batch job failed at night with no writer
+  active. Two lessons stack here: the failure is *invisible to any test that
+  runs while the system under test is also active* — the fix was verified by
+  replaying the command under `env -i` after the writers stopped, not by the
+  unit suite; and an operations SOP whose steps all "work when tried
+  interactively" can sit on a time bomb for months because nobody runs them
+  on a quiet database.
+
+## 59. Adding a column without bumping the schema version makes the migration never run — and every writer fails open at once
+
+- **Symptom:** right after deploying a schema change, every hook invocation
+  across every session and host starts recording the *same* error
+  (`OperationalError: no such column: floor_at`), hundreds of receipts per
+  hour, while the hook "keeps working" (it fails open by design). The
+  migration code is present and correct; it simply never executes.
+- **Cause and fix:** the migration was gated on
+  `PRAGMA user_version < STATE_SCHEMA_VERSION`, and the deploy changed the
+  DDL and the queries but not the constant — the production database was
+  already stamped with the old version, so the gate evaluated to "nothing to
+  do" on every open. Any migration trigger (version pragma, sentinel file,
+  flag row) makes the version identifier *part of the schema change itself*:
+  adding a column without moving the identifier is an incomplete edit of the
+  same atomic change, the way changing a detector without its fixtures is.
+  Write the version bump into the same commit and assert it from the test
+  suite (a calibration test that pins the constant to its date-stamped value
+  caught the mismatch in the follow-up — but only after production had
+  already burned the receipts).
+- **Real case (2026-10-06, same deploy as #58's sibling work):** a cadence
+  hook added a `floor_at` column, bumped the policy version string but not
+  `STATE_SCHEMA_VERSION`. ~1100 error receipts accumulated in ~25 minutes of
+  double-registration concurrency before the constant was fixed; the first
+  post-fix open migrated the database and the receipts stopped. The failure
+  was loud in aggregate but invisible per-invocation — fail-open hooks need
+  an *error-receipt rate* in their health check, because "no crash" and
+  "healthy" diverge exactly here.
+
+## 60. `all([])` is True — an empty group's "all commands managed" check launders it into the privileged branch
+
+- **Symptom:** an alignment/authorization routine that treats "every command
+  in this group is known-good" as the condition for a trusted path starts
+  *refusing legitimate empty shell groups* (or, with the polarity flipped,
+  starts *trusting* them) — and the bug survives code review because the
+  one-liner reads correctly in English.
+- **Cause and fix:** `all(...)` over an empty iterable is vacuously True, so
+  `all(c in managed for c in [])` reports an empty group as "fully managed".
+  Shell groups with `hooks: []` are not rare leftovers here — a migration
+  that strips handlers from a group deliberately leaves the empty shell in
+  place (deleting it would change group order, which is execution order).
+  Decide the empty case **out loud** at the branch: name it in a comment and
+  make the code say it — `cur_managed = any(...)` when "empty means not
+  managed", `bool(cmds) and all(...)` when "empty means nothing to vouch
+  for". The general form: any predicate written as `all(...)` that gates a
+  trusted/allowed path needs an explicit answer for the empty input before it
+  needs a clever one for the hard inputs.
+- **Real case (2026-10-07):** a reconcile subcommand's ledger-alignment walk
+  classified current groups with `all(command in managed_commands)`. Empty
+  shell groups read as "managed", hit the "a managed group sitting out of
+  ledger order" refusal, and blocked a legitimate reconcile of six live
+  settings files. Found by a hand-driven replay of the alignment loop, not
+  by the first three read-throughs of the diff — the code reviewer's eye
+  slides over `all(...)` because the sentence it forms is grammatically
+  true. An adversarial review agent later found the *mirror* bug in the same
+  walk (a foreign handler riding inside a duplicate of a managed group),
+  which is why the fix also moved the predicate from `all` to `any` for the
+  "is this group managed at all" question.
