@@ -165,6 +165,24 @@ Validate before writing the live env/config tree or restarting the service. Prom
 passed; avoid overlay extraction that leaves deleted stale files behind. Enumerate every normal and
 recovery writer and route all of them through the shared validator.
 
+### Provider-native embedded expressions
+
+Identify the consumer and language of each embedded expression separately from Terraform,
+SQL queries, and notification templates. Validate with that consumer's parser or a documented
+provider validation interface when available. Translating an expression into Python and replaying
+numbers can test intended arithmetic or reject known bad tokens; it does not prove native parsing
+or semantic equivalence. For example, SLS evaluate expressions use `&&` and `||`; do not infer
+their grammar from Python or apply a token replacement to unrelated expression fields.
+
+If no native pre-deploy validator is available, record that check as unverified rather than
+inventing an endpoint or calling local replay a native pass. Keep existing publication and
+notification authorization boundaries. After an authorized deployment, inspect a new native
+evaluation for the exact deployed rule and expression identity. Missing or failed evaluations,
+including parse errors, leave runtime verification incomplete. Configuration equality, an old
+successful evaluation, and absence of notifications do not establish that the deployed expression
+ran successfully. Follow the provider's documented evaluation-history interface; a successful
+evaluation alone still does not prove an intended notification reached its recipient.
+
 ## 5. Review one executable plan
 
 Generate a saved plan, inspect it with `terraform show`, and bind it to:
@@ -218,6 +236,9 @@ Fail with the concrete mismatch and next action. Do not continue to apply merely
 expensive version of the same error.
 
 ## Primary contracts
+
+- Alibaba Cloud: SLS evaluate-expression operators and evaluation behavior:
+  <https://www.alibabacloud.com/help/en/sls/syntax-of-evaluate-expressions>
 
 - HashiCorp: provisioners are a last resort because their behavior is not predictably modeled:
   <https://developer.hashicorp.com/terraform/language/provisioners>

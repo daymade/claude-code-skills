@@ -82,7 +82,7 @@ handling, while the worker owns event identity and delivery state.
 
 For Terraform publication, approval, first mutation, expired plans, environment isolation or
 initialization-cache changes, enter [`terraform-skill`](terraform-skill/SKILL.md).
-Its pre-deploy and release references own publisher preparation and authorization;
+Its pre-deploy and release references own publisher preparation, native-expression verification and authorization;
 its isolation reference owns backend/workspace identity and fresh-state validation.
 
 For Deep Research or Kimi financial-research changes, enter the owning
