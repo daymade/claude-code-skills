@@ -14,13 +14,9 @@ whiteboard (`<whiteboard token=...>` — an inline diagram block, NOT a
 followable reference, see DISPATCH["whiteboard"]), lark-table, and
 cross-tenant / personal-space / Minutes / Tencent-Meeting URLs.
 
-Input : the fetched Feishu body. On lark-cli builds where `.data.markdown` is
-        non-null (<=1.0.32; unconfirmed whether still reachable on any
-        current build, see SKILL.md Path A step 3), that Markdown is a valid
-        input. Otherwise (`.data.markdown` is null -- the current default,
-        verified null in 11/11 real documents checked including the
-        currently-installed lark-cli 1.0.80) the body only reaches disk as
-        raw HTML via `.data.document.content`; run this script on THAT saved
+Input : the fetched Feishu body. Choose the field from the actual response.
+        A nonblank `.data.markdown` string is a valid Markdown input.
+        For HTML from `.data.document.content`, run this script on that saved
         `source.html`, never on the pandoc-converted `source.md` -- pandoc
         silently strips several of these tags with zero trace (whiteboard
         and mention-doc confirmed; see SKILL.md Path A step 3's callout).
