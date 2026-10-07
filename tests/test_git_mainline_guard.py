@@ -37,6 +37,13 @@ def run(
     return result
 
 
+def init_repo(repo: Path, *, bare: bool = False) -> None:
+    run(repo, "git", "init", "-q", *(["--bare"] if bare else []))
+    # Temporary fixtures must not leave maintenance writing during cleanup.
+    run(repo, "git", "config", "gc.auto", "0")
+    run(repo, "git", "config", "maintenance.auto", "false")
+
+
 class MainlineGuardTests(unittest.TestCase):
     def setUp(self) -> None:
         if shutil.which("node") is None:
@@ -47,7 +54,7 @@ class MainlineGuardTests(unittest.TestCase):
         self.repo = self.root / "repo"
         self.remote = self.root / "remote.git"
         self.repo.mkdir()
-        run(self.repo, "git", "init", "-q")
+        init_repo(self.repo)
         run(self.repo, "git", "config", "user.email", "test@example.invalid")
         run(self.repo, "git", "config", "user.name", "Test")
         run(self.repo, "git", "config", "core.hooksPath", "/dev/null")
@@ -92,7 +99,8 @@ class MainlineGuardTests(unittest.TestCase):
         )
         run(self.repo, "git", "add", ".")
         run(self.repo, "git", "commit", "-qm", "base")
-        run(self.root, "git", "init", "--bare", "-q", str(self.remote))
+        self.remote.mkdir()
+        init_repo(self.remote, bare=True)
         run(self.repo, "git", "remote", "add", "origin", str(self.remote))
         run(self.repo, "git", "push", "-qu", "origin", "main")
         self.env = os.environ.copy()

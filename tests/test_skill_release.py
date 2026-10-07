@@ -13,7 +13,7 @@ sys.path.insert(0, str(ROOT / "scripts/ci"))
 import release_readiness as rr
 from skill_read_plan import plan
 from check_skill_release import affected
-from test_git_mainline_guard import MainlineGuardTests, run
+from test_git_mainline_guard import MainlineGuardTests, init_repo, run
 
 
 class ReadPlanTests(unittest.TestCase):
@@ -47,7 +47,7 @@ class ReleaseTests(MainlineGuardTests):
         super().setUp()
         self.review = self.root / "private"
         self.review.mkdir()
-        run(self.review, "git", "init", "-q")
+        init_repo(self.review)
         run(self.review, "git", "config", "user.email", "test@example.invalid")
         run(self.review, "git", "config", "user.name", "Test")
         run(self.review, "git", "config", "core.hooksPath", "/dev/null")
