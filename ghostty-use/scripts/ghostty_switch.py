@@ -181,6 +181,28 @@ def current_manifest(gs, args):
     return Path(path).resolve(), doc
 
 
+def main_sessions(doc, gs):
+    """Read legacy manifests without replaying a misidentified spawned agent."""
+    main, children = [], []
+    for s in doc["sessions"]:
+        meta = gs._codex_first_meta(s["transcript"])
+        if not meta or meta.get("id") != s["sid"]:
+            raise ValueError("saved rollout is unavailable or has another identity: " + s["sid"])
+        if gs._codex_is_subagent(meta):
+            children.append((s, gs._codex_parent_thread_id(meta)))
+        else:
+            main.append(s)
+    main_ids = {s["sid"] for s in main}
+    for s, parent in children:
+        if parent not in main_ids:
+            raise ValueError("sub-agent " + s["sid"] + " cannot resume independently; "
+                             "capture its main parent first: " + str(parent or "unknown"))
+        print(f"SKIP SUBAGENT {s['sid']}; restore saved parent {parent}")
+    if not main:
+        raise ValueError("switch manifest contains no independently resumable main sessions")
+    return dict(doc, sessions=main)
+
+
 def prepare(args, gs):
     home = gs._codex_home().resolve()
     before = account_identity(home)
@@ -203,6 +225,9 @@ def prepare(args, gs):
             meta = gs._codex_first_meta(path)
             if not meta or meta.get("id") != s["sid"]:
                 raise ValueError("indexed rollout identity unavailable")
+            if gs._codex_is_subagent(meta):
+                raise ValueError("sub-agent rollout is not an independently resumable terminal session; "
+                                 "capture its main parent: " + str(gs._codex_parent_thread_id(meta) or "unknown"))
             argv = resume_argv(s, gs)
             saved.append(dict(s, transcript=str(path), resume_argv=argv,
                               cmdline=shlex.join(argv)))
@@ -273,6 +298,11 @@ def report(doc, live):
 
 def restore(args, gs):
     path, doc = current_manifest(gs, args)
+    selected = gs.select_sessions(doc["sessions"], args.only)
+    wanted = {s["sid"] for s in selected}
+    doc = main_sessions(doc, gs)
+    if args.only and not wanted.intersection(s["sid"] for s in doc["sessions"]):
+        raise ValueError("--only selected a sub-agent; select its saved main parent instead")
     gs.CODEX_HOME_OVERRIDE = doc["codex_home"]
     account = account_identity(doc["codex_home"])
     if account == doc["source_account"]:
@@ -292,8 +322,6 @@ def restore(args, gs):
     if args.check:
         return 1 if old or missing else 0
     # Never run a second copy alongside any old process in the fixed set.
-    selected = gs.select_sessions(doc["sessions"], args.only)
-    wanted = {s["sid"] for s in selected}
     pending = [s for s in missing if s["sid"] in wanted]
     if old:
         print("Readiness blocked: manually exit listed old/unverified TUIs; this command never terminates them.")

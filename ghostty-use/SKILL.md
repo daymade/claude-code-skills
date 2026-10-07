@@ -47,7 +47,7 @@ python3 <skill-dir>/scripts/ghostty_session.py switch-prepare
 python3 <skill-dir>/scripts/ghostty_session.py switch-restore
 ```
 
-Default to one independent window per session; use `--layout tabs` to open tabs.
+Default to tabs in one window; use `--layout windows` only when independent windows are requested.
 Keep the printed fixed manifest through the handoff. Treat unresolved capture,
 unchanged account or still-running old processes as an incomplete handoff. Never
 terminate processes or switch credentials through this route. Ask for a bounded

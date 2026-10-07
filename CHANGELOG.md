@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **ghostty-use** (v1.6.0 → v1.6.1): Restore Codex account-switch sessions as tabs by default; keep independent windows opt-in. Exclude spawned agents from fresh terminal matching, reject explicit sub-agent captures, and skip legacy child rows only when their main parent is saved. Change type: bug fix.
+
 - **github-ops** (v1.12.0): Clarify self-hosted runner capacity checks: distinguish registrations, hosts and job eligibility; reuse project deployment procedures; prepare tools on the actual runner; preserve production routing; verify the target job on the intended runner.
 
 - **report-with-html** (v1.2.0, visual evidence workflow): Select and source product photos, screenshots and explanatory diagrams before HTML authoring. Place visuals beside the decision they explain, preserve variant and evidence limitations, and ask readers what the images actually reveal. Extend provenance acceptance for media; retain existing geometry, interaction and bounded review contracts.

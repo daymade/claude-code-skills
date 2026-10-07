@@ -173,7 +173,7 @@ class SwitchTest(unittest.TestCase):
         self.saved()
         before = self.manifest.read_bytes()
         self.assertEqual(self.cli("--dry-run"), 0)
-        self.assertIn("WOULD OPEN windows", self.output.getvalue())
+        self.assertIn("WOULD OPEN tabs", self.output.getvalue())
         self.assertIn("--no-daemon", self.output.getvalue())
         self.assertEqual(self.manifest.read_bytes(), before)
         self.assertFalse(self.state.exists())
@@ -193,7 +193,7 @@ class SwitchTest(unittest.TestCase):
         cmd = self.active[3].call_args.args[0]
         self.assertIn(A, cmd)
         self.assertIn("CODEX_HOME=", cmd)
-        self.assertEqual(self.active[3].call_args.kwargs, {"layout": "windows"})
+        self.assertEqual(self.active[3].call_args.kwargs, {"layout": "tabs"})
         self.active[2].side_effect = None
         self.active[2].return_value = gs.SessionList([live])
         self.assertEqual(self.cli(), 0)
@@ -218,6 +218,75 @@ class SwitchTest(unittest.TestCase):
         self.assertEqual(self.cli("--only", B), 0)
         self.active[3].assert_called_once()
         self.assertIn(B, self.active[3].call_args.args[0])
+
+    def test_windows_remain_an_explicit_option(self):
+        self.saved()
+        self.assertEqual(self.cli("--layout", "windows", "--dry-run"), 0)
+        self.assertIn("WOULD OPEN windows", self.output.getvalue())
+
+    def child(self, s, parent=A):
+        meta = dict(id=s["sid"], cwd=s["cwd"], parent_thread_id=parent,
+                    session_id=parent, originator="codex-tui", thread_source="subagent",
+                    source={"subagent": {"thread_spawn": {"parent_thread_id": parent,
+                            "depth": 1, "agent_path": "/root/example"}}})
+        Path(s["transcript"]).write_text(json.dumps(dict(type="session_meta", payload=meta)) + "\n")
+
+    def test_legacy_child_is_skipped_and_saved_main_parent_is_restored(self):
+        parent, child = self.session(), self.session(B, pid=11)
+        self.child(child)
+        self.saved([parent, child])
+        self.active[2].side_effect = [gs.SessionList(), gs.SessionList(),
+                                    gs.SessionList([self.reopened(parent)])]
+        self.assertEqual(self.cli(), 0)
+        self.active[3].assert_called_once()
+        self.assertIn("resume " + A, self.active[3].call_args.args[0])
+        self.assertNotIn(B, self.active[3].call_args.args[0])
+        self.assertIn("SKIP SUBAGENT " + B, self.output.getvalue())
+
+    def test_child_without_saved_main_parent_fails_before_gui(self):
+        child = self.session(B)
+        self.child(child)
+        self.saved([child])
+        self.assertEqual(self.cli(), 2)
+        self.assertIn("capture its main parent first: " + A, self.output.getvalue())
+        self.active[3].assert_not_called()
+
+    def test_legacy_child_with_nested_only_parent(self):
+        parent, child = self.session(), self.session(B, pid=11)
+        self.child(child)
+        path = Path(child["transcript"])
+        record = json.loads(path.read_text())
+        del record["payload"]["parent_thread_id"]
+        path.write_text(json.dumps(record) + "\n")
+        self.saved([parent, child])
+        self.assertEqual(self.cli("--dry-run"), 0)
+        self.assertIn("WOULD OPEN tabs " + A, self.output.getvalue())
+        self.assertNotIn("WOULD OPEN tabs " + B, self.output.getvalue())
+        self.active[3].assert_not_called()
+
+    def test_only_child_is_rejected_with_parent_instruction(self):
+        parent, child = self.session(), self.session(B, pid=11)
+        self.child(child)
+        self.saved([parent, child])
+        self.assertEqual(self.cli("--only", B), 2)
+        self.assertIn("select its saved main parent", self.output.getvalue())
+        self.active[3].assert_not_called()
+
+    def test_prepare_rejects_explicit_child_and_preserves_complete_pointer(self):
+        child = self.session(B)
+        self.child(child)
+        folder = self.state / "switches"
+        folder.mkdir(parents=True)
+        (folder / "current.json").write_text('{"manifest":"previous-complete"}')
+        self.active[2].return_value = gs.SessionList([child])
+        with mock.patch.object(gs, "history_reader", return_value=(mock.Mock(), None)), \
+                mock.patch.object(gs, "_indexed_conversations", return_value=[mock.Mock(session_id=B)]), \
+                mock.patch.object(gs, "resolve_indexed_rollout", return_value=Path(child["transcript"])):
+            self.assertEqual(gs.main(["switch-prepare", "--out", str(self.manifest)]), 1)
+        doc = json.loads(self.manifest.read_text())
+        self.assertEqual(doc["sessions"], [])
+        self.assertIn("sub-agent rollout", doc["unresolved"][0]["reason"])
+        self.assertEqual(json.loads((folder / "current.json").read_text())["manifest"], "previous-complete")
 
     def test_auth_changes_during_restore_preflight_stop_before_gui(self):
         self.saved()
