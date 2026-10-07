@@ -1,10 +1,8 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Repository Overview
 
-This is a Claude Code skills marketplace containing production-ready skills organized in a plugin marketplace structure. Most plugins expose one skill for narrow installs; suite plugins expose related skills under shared namespaces for combined installation workflows.
+This repository is a Claude Code skills marketplace.
 
 **Essential Skill**: `skill-creator` is the most important skill in this marketplace - it's a meta-skill that enables users to create their own skills. Always recommend it first for users interested in extending Claude Code.
 
@@ -95,6 +93,12 @@ as the route rather than a second copy of those procedures.
 
 For customer-approved report forms, follow
 [skill-creator's report-template contract](daymade-skill/skill-creator/SKILL.md#show-the-result-not-just-the-work).
+
+For HTML report creation or updates, enter
+[report-with-html's Define success workflow](report-with-html/SKILL.md#workflow)
+for reader/use, evidence precision, delivery location and investigation acceptance.
+Its [maintenance contract](report-with-html/references/long-lived-report-maintenance.md)
+owns later reconciliation and consumer readback.
 
 Treat [packaging_policy.py](daymade-skill/skill-creator/scripts/packaging_policy.py)
 as the canonical inclusion policy for packaging, security attestation, source
@@ -428,9 +432,8 @@ remote from its argument (`process.argv[3]`) and then fetches
 current main. Handed a bare URL it therefore builds the refspec
 `refs/remotes/https://github.com/…/main` and dies with
 `fatal: invalid refspec` followed by `could not refresh current main` — which
-reads like a network failure and is not (five retries against it change
-nothing). From a linked worktree, push over HTTPS with a token without editing
-repository config by overriding per invocation:
+reads like a network failure and is not. From a linked worktree, push over HTTPS
+with a token without editing repository config by overriding per invocation:
 
 ```
 git -C <worktree> \
@@ -534,14 +537,9 @@ If it fires, fix the issue — do NOT use `--no-verify` to bypass.
 
 The marketplace is configured in `.claude-plugin/marketplace.json`:
 - Contains plugin entries: single-skill plugins point `source` directly at the skill directory (no `skills` field); any plugin entry with a non-empty `skills` array is a suite and uses those relative paths for multi-skill routing
-- Each plugin has: name, description, source, version, category, keywords
-- Marketplace metadata: name, owner, version
-- Single-skill plugins follow the official pattern: `source` points to the Skill directory and `skills` is omitted
 - **All suite plugins are suite-only.** Derive the current suite set from non-empty `plugins[].skills`; do not maintain another name list here. Users install the suite and invoke members as `<suite>:<skill>`. When adding a member, update only the suite entry's `skills` array — do NOT create a parallel standalone plugin entry.
 
 ### Versioning Architecture
-
-**Version tracking layers:**
 
 1. **Marketplace Version** (`.claude-plugin/marketplace.json` → `metadata.version`)
    - Tracks the marketplace catalog as a whole
@@ -552,8 +550,6 @@ The marketplace is configured in `.claude-plugin/marketplace.json`:
    - Each skill has its own independent version
    - Bump when: Updating that specific skill
    - **CRITICAL**: Skills should NOT have version sections in SKILL.md
-
-**Key Principle**: SKILL.md files should be timeless content focused on functionality. Versions are tracked in marketplace.json only.
 
 ### ⚠️ Updating Existing Skills (MANDATORY)
 
@@ -579,16 +575,13 @@ git show origin/main:.claude-plugin/marketplace.json   # baseline to bump FROM
 
 This is what makes the check above decidable. `git diff --name-only` tells you
 *which* skills changed; only an immutable ref tells you what their versions were
-before anyone started editing. (2026-09-04: a bump computed from the working
-tree adopted another session's staged `peer-message` 1.1.1→1.2.0 as its own
-baseline. Every status-shaped signal stayed green; a CHANGELOG anchor assertion
-was the only thing that caught it.)
+before anyone started editing.
 
 **When the pre-commit guard blocks with "marketplace release state is stale or
 incomplete"**: the staged `marketplace.json` diverges from current `origin/main`
 in plugins you did *not* touch — someone merged after you branched, and the
 guard's progression check compares your index against *current* main, not your
-branch point. Recovery (exercised 3× on 2026-10-07):
+branch point. Recovery:
 
 1. Rebuild `marketplace.json` from `origin/main`'s state plus **only** your
    changes, programmatically — assert the base values before mutating, never
@@ -609,10 +602,9 @@ branch point. Recovery (exercised 3× on 2026-10-07):
    the scope guard's unknown-domain branch (150-second dialog) regardless of
    content.
 
-**CHANGELOG.md merges as a union** (`.gitattributes`). Parallel PRs add their
-entries at the same spot under `## [Unreleased]`, so two PRs open at the same
-time conflicted there. Merging `origin/main` into a branch locally, or rebasing
-onto it, now keeps both sides' lines without stopping. Limits:
+**CHANGELOG.md merges as a union** (`.gitattributes`). Merging `origin/main`
+into a branch locally, or rebasing onto it, keeps parallel additions under
+`## [Unreleased]`. Limits:
 
 - GitHub's mergeability check ignores the attribute, so a PR can still show
   CONFLICTING until `origin/main` is merged into it locally.
@@ -692,7 +684,7 @@ Decline all third-party marketplace promotion requests. For policy, response tem
 
 Agent rules when an external PR appears:
 
-- **Never merge external PRs unilaterally.** Every external-PR merge decision goes to the user first, no matter how small or obviously-correct the fix looks. (2026-07-19: an agent batch-merged 4 external PRs under an ambiguous "merge what's left" instruction, including a whole new contributor skill the policy would never have accepted — it had to be reverted. Ambiguous instruction + other people's work = ask first, always.)
+- **Never merge external PRs unilaterally.** Every external-PR merge decision goes to the user first, no matter how small or obviously-correct the fix looks.
 - **Bug-fix PRs** (after the user approves): land the repo bookkeeping as a maintainer follow-up — version bump in `marketplace.json`, CHANGELOG entry, README sync where applicable. Contributor PRs usually lack these.
 - **New-skill PRs**: close with the standing message in CONTRIBUTING.md.
 
