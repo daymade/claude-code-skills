@@ -172,6 +172,13 @@ A real 2026-09-19 run followed the Phase 1 machinery to the letter and still shi
    ```
    Exit 0 is required. The checker verifies: the table exists and classifies the candidates; every governing-rule quote appears verbatim in the reference (this is what forces the reference open — a fabricated quote fails); every destructive command the checker recognizes has its stated target matched to a table row (commands in unrecognized forms are counted and reported, never silently passed); the action set obeys the class and unlock rules, including the preserve-by-default cross-check; no category-wide command sits in the action set; the lead row obeys the ranking rule; every destructive command carries its tool verification. A failing run names the violated rule — fix the plan; do not weaken the checker.
 
+   Five failure shapes the checker reliably catches, measured while getting a real 18-target plan to exit 0 — all five are plan-side fixes, never checker-side:
+   - **Path form mismatch** (`target_coverage`): the table must carry the same full absolute path the command uses; a `~/` shorthand row does not match a command that names `/Users/…`.
+   - **Two targets on one row**: a row naming two paired targets fails to parse — split into one row per target.
+   - **"du nominal" in the release column** reads as a nominal number and is rejected; state how the expected release was derived instead, or enter `unknown`.
+   - **A single-line osascript inside a table cell** gets cut into pipe-delimited chunks the command matcher cannot reassemble — put the canonical multi-line osascript in the plan's code block, not in a table row.
+   - **Naming the command in prose** (an intro sentence mentioning osascript) is parsed as a command start with no matching row — keep command names out of prose, and start table rows with a path, not a label (a row leading with `OrbStack` fails).
+
 Report observed values rather than inferred properties. Use `references/report_templates.md` for the long-form layout and include these fields for every proposed action:
 
 | Field | Required content |
@@ -221,7 +228,20 @@ For an exact ordinary file that is not user data, application state, a database,
   -e 'end run' -- "<exact-path>"
 ```
 
-Moving to Trash usually releases no physical space until Trash is emptied; state that in the plan. `scripts/safe_delete.py` is a legacy permanent-deletion helper with an interactive prompt and a limited system/credential denylist. It does not move to Trash, check every user-data root, detect open files, or independently prove reclaimed bytes. Use it only when the exact non-user-data target and irreversible deletion were explicitly approved:
+Moving to Trash usually releases no physical space until Trash is emptied; state that in the plan.
+
+**Remote and headless targets: the Finder channel needs Automation consent, and ssh-originated AppleEvents hang without it.** Measured 2026-10-07 on a headless worker: an ssh session driving the osascript Trash move above blocked indefinitely — nine targets in, target one still present, Trash unchanged, and even a harmless Finder probe (`count of items`) never returned. There is no error to catch; the tell is the silence. Before relying on the Finder channel over ssh, run a bounded probe first and treat a hang as the channel being closed, not as a slow Finder. Stock macOS has no `timeout(1)`, so bound it in AppleScript itself:
+
+```bash
+/usr/bin/osascript \
+  -e 'with timeout of 1 second' \
+  -e 'tell application "Finder" to count of items of trash' \
+  -e 'end timeout'
+```
+
+The same-volume fallback is a quarantine move, not Trash: `mv` each exact approved target to a directory on the same volume (`<approved-dir>/_quarantine-<date>/`), writing a MANIFEST (original path, size, timestamp) beside it — the original path is what an `mv`-back recovery needs. It shares Trash's safety properties — same-volume `mv` is metadata-only, fully recoverable, and releases no space until a separately approved permanent pass — and it needs no Automation consent. Keep the two phases split exactly as with Trash: the quarantine move and the later permanent deletion are separate approvals, and the plan must name the quarantine location and the MANIFEST. Note the Phase 2 plan checker does not recognize `mv` as a destructive form, so quarantine-mv commands take the checker's "command-shaped lines not recognized" reporting path rather than the osascript form's mechanical target-coverage binding — list each quarantine target explicitly in the plan so the recognition gap stays visible instead of silent.
+
+`scripts/safe_delete.py` is a legacy permanent-deletion helper with an interactive prompt and a limited system/credential denylist. It does not move to Trash, check every user-data root, detect open files, or independently prove reclaimed bytes. Use it only when the exact non-user-data target and irreversible deletion were explicitly approved:
 
 ```bash
 uv run scripts/safe_delete.py <exact-path> [<exact-path> ...]
