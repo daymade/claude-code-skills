@@ -66,6 +66,11 @@ ps -o pid,ppid,etime,command -p <pid>     # then repeat on its PPID
 launchctl list | awk '$2 != "-" && $2 != "0"'   # jobs with abnormal last-exit codes
 ```
 
+The `launchctl` filter also prints its header line, and many system daemons
+sit at status `-9` (SIGKILL) permanently — that is routine noise, not a crash
+loop. The respawn-loop signal is a job whose PID keeps *changing* between
+runs, not any single status value.
+
 Attribution answers three questions: which product/session owns it, is it
 supposed to be long-lived (a daemon) or short-lived (a helper that forgot to
 die), and who is allowed to stop it.
@@ -94,7 +99,10 @@ On a shared machine, **diagnosis is read-only; remediation has an owner**.
   processes, stop your own background jobs.
 - Everything else is a report: load reading, census output, the attributed
   parent chain, the classified shape, and the proposed remediation — handed to
-  the owner (the user, or the session that owns the parent).
+  the owner (the user, or the session that owns the parent). **Once the owner
+  explicitly authorizes the remediation, execute it** — an authorized action
+  handed back as another report is the opposite boundary violation. Verify
+  afterward as below.
 - After any remediation (yours or the owner's), **read back**: re-run
   `sysctl -n vm.loadavg` and the census. A command receipt is not recovery;
   the load and the child count are.
@@ -123,8 +131,10 @@ precedent for the report you are about to write.
 ## Troubleshooting
 
 - **Load is high but every reading looks normal**: the suspects are short-lived
-  — sample twice a few seconds apart and compare, or sort the census by etime
-  ascending to catch the storm front.
+  — measure the fork rate directly: two `ps -Ao pid=` snapshots a few seconds
+  apart, count the PIDs that appear only in the second
+  (`comm -13 <(sort old.txt) <(sort new.txt) | wc -l`, divided by the interval).
+  Dozens per second is a storm; a few is normal churn.
 - **The obvious big-CPU process is innocent**: WindowServer, a terminal, or a
   screen-sharing client at high CPU is often *downstream* of the real cause
   (hundreds of GUI app copies each needing window service). Keep tracing.
