@@ -3613,7 +3613,7 @@ skill's job is a correct, evidence-backed attribution, not process cleanup.
 - The fleet-wide rule — when independent apps/hooks/agents all time out at once, the machine is the suspect, not any of them: `vm.loadavg` before any individual debugging
 - Three-reading census (bundled `load_census.sh`) — children-per-parent (the leak that no orphan reaper will ever clean), cumulative CPU time (the busy loop %CPU dilutes), instantaneous %CPU (the active storm)
 - Shape classification that picks the right fix — leak / fork storm / busy loop / cascade — with a hard shared-machine boundary: agents diagnose read-only and report; the owner terminates (a "daemon restart" counts as terminating)
-- Incident playbook with four worked cases (per-thread MCP spawner leak at load 243, unthrottled replay fork storm, guard-fleet fork overhead, GUI busy loop) and the report-writing contract
+- Incident playbook with worked cases (per-thread MCP spawner leak at load 243, unthrottled replay fork storm, guard-fleet fork overhead, GUI busy loop) and the report-writing contract
 
 **Example usage:**
 ```text

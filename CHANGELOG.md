@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-load-doctor** (`daymade-macos` v1.20.0 → v1.20.1, documentation drift cleanup): Remove hand-maintained derived counts — the "four worked cases" tally in both READMEs and the playbook's intro, plus the playbook's heading-restating Contents block (the case list is computable from the section headings; the repo's documentation-governance rules treat persisted derived values as defects). Historical CHANGELOG entries keep their original wording by design.
 - **deep-research** (v2.11.1 → v2.12.0): Check requested provider modes independently of planned lanes; require actual-mode observations at submission/import and mark uncertain legacy coverage explicitly. Preserve provider exports through file channels before considering copied response text.
 - **kimi-use** (v1.7.0 → v1.8.0): Use attachment input and original-file collection when available. Missing plugin traces remain unverified until inspected; they no longer trigger an automatic duplicate request.
 - **tech-selection** (`daymade-claude-code` v4.24.0 → v4.25.0): Add representative ingestion/indexing probes for growth, incremental extraction, provenance, filtered search and recovery without an index.
