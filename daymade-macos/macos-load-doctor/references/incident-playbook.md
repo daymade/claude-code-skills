@@ -1,17 +1,9 @@
 # Incident playbook — worked macOS load cases
 
-Four real cases, each with the probe output that identified it and the
+Real cases, each with the probe output that identified it and the
 reasoning chain from symptom to attribution. Use them as precedents when
 writing your own diagnosis report: the report's job is to hand the owner
 enough evidence to act, not to act yourself.
-
-## Contents
-
-- Case 1 — per-thread MCP spawner leak: three fleets time out at once
-- Case 2 — unthrottled replay loop: a correct test that looks like a fork bomb
-- Case 3 — a fleet of guards: the irrelevant path's per-call cost
-- Case 4 — GUI busy loop: one core for days, invisible to %CPU
-- Writing the report
 
 ## Case 1 — per-thread MCP spawner leak: three fleets time out at once
 
