@@ -584,6 +584,31 @@ tree adopted another session's staged `peer-message` 1.1.1→1.2.0 as its own
 baseline. Every status-shaped signal stayed green; a CHANGELOG anchor assertion
 was the only thing that caught it.)
 
+**When the pre-commit guard blocks with "marketplace release state is stale or
+incomplete"**: the staged `marketplace.json` diverges from current `origin/main`
+in plugins you did *not* touch — someone merged after you branched, and the
+guard's progression check compares your index against *current* main, not your
+branch point. Recovery (exercised 3× on 2026-10-07):
+
+1. Rebuild `marketplace.json` from `origin/main`'s state plus **only** your
+   changes, programmatically — assert the base values before mutating, never
+   text-merge or hand-edit two versions:
+   ```bash
+   git show origin/main:.claude-plugin/marketplace.json   # the ONLY baseline
+   # then apply your bump(s)/skills-array addition onto THAT content,
+   # and preserve the file's trailing newline (json.dump drops it)
+   ```
+2. If the guard then reports a *foreign* plugin's "content changed but version
+   did not increase": your branch is missing that plugin's merge entirely —
+   bring the branch current with `origin/main`. On a contended shared checkout
+   where `git merge` (ort) refuses your staged files: merge in a temporary
+   worktree, copy the merged file back so staged content equals the merge
+   result byte-for-byte, then `git merge --ff-only <merge-sha>` — a
+   fast-forward accepts staged content that equals the target; ort never does.
+3. Commit as a standalone command — `git add … && git commit` in one line trips
+   the scope guard's unknown-domain branch (150-second dialog) regardless of
+   content.
+
 **CHANGELOG.md merges as a union** (`.gitattributes`). Parallel PRs add their
 entries at the same spot under `## [Unreleased]`, so two PRs open at the same
 time conflicted there. Merging `origin/main` into a branch locally, or rebasing
