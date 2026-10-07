@@ -83,6 +83,39 @@ records the exact project/source scope that built it, and incremental refresh
 refuses a different scope instead of treating everything outside the narrower
 view as deleted.
 
+When a registered source was deliberately retired, preserve its indexed prose
+with an explicit identity declaration instead of rebuilding or rewriting scope:
+
+```json
+{"version":1,"retired_sources":[{"provider":"claude","kind":"active","label":"retired-profile","home":"/absolute/old-profile-home"}]}
+```
+
+Pass this file once with `index --retired-sources /absolute/retirement.json`,
+using the same project selection and the actual current registered sources.
+Every removed provider/kind/label/home tuple must match the old scope exactly;
+unknown, duplicate, empty or partial declarations fail. The accepted declaration
+is persisted, so subsequent scheduled `index` invocations keep their original
+arguments. Additional retirements need a declaration containing all approved
+identities. A legitimate source addition remains supported.
+
+The database retains the full historical `index_scope` and separately records
+`active_scan_scope`. Existing records bearing retired-source labels retain their
+IDs, core content and old provenance; the original extractor can append actual
+current-source record keys and verified provenance members. A different payload
+under the same key fails atomically. Session removal, injected-record sweeps and
+old incremental writer cascades cannot delete retained records. The index
+transaction keeps their existing chunks/vectors; subsequent chunk/embed/dedup policies still work
+normally. Retired paths are neither recreated nor scanned, and their original
+`indexed_through` boundary does not advance with active-source refreshes.
+Retirement cannot change project scope or rebuild the existing database. Use a
+separate diagnostic database for rebuilds; preserve the retirement index when
+the retired originals are unavailable.
+
+Old releases' explicit `index --rebuild` replaces the entire database file and
+bypasses this protection. It is unsupported for retirement databases; never run
+it against one. Old read-only recall and the guarded incremental compatibility
+are separate from that destructive command.
+
 Build semantic chunks, then embed until `remaining` is zero:
 
 ```bash
@@ -93,6 +126,21 @@ uv run --with mlx-embeddings --with numpy --with sqlite-vec \
   python scripts/history_index.py embed --download-model --max-seconds 1800
 ```
 
+To change the installed model revision or repair an absent chunk-model binding,
+explicitly rebuild the model cache from existing indexed records:
+
+```bash
+uv run --with chonkie --with transformers --with sqlite-vec \
+  python scripts/history_index.py chunk --rebuild --model-path /absolute/model-snapshot
+```
+
+This resets chunks, vectors and their model binding, preserving records,
+provenance and retirement receipts. The vector dependency is required when an
+existing vector table must be removed. Tokenizer initialization or a failed
+cache-reset transaction leaves the old cache intact. After a committed reset,
+chunking failure leaves the new revision bound and incomplete; resume with the
+ordinary `chunk --model-path` command, then run `embed` for that revision.
+
 `chunk` records an explicit completeness marker. If one record cannot be
 chunked, it fails with that record ID instead of silently embedding a truncated
 whole-message fallback. `embed` refuses incomplete chunks and is incremental:
@@ -100,7 +148,7 @@ a bounded run commits completed vectors and exits normally, so re-run the same
 command to continue. The query path will not claim hybrid readiness while any
 message lacks chunks or any usable chunk lacks a vector. Chunks, vectors, and
 queries must all resolve the same recorded model revision; mixing revisions is
-an error that requires a rebuild.
+an error that requires `chunk --rebuild`.
 
 Embedding is memory-bounded by default: batch size 16, an 8 GiB MLX memory
 limit, and a 0.5 GiB Metal cache limit. Source rows are streamed from SQLite,
@@ -288,7 +336,8 @@ uv run --with sqlite-vec python scripts/history_index.py status --json
 Add `--check-sources` to compare every current session-copy fingerprint with the
 indexed frontier. This is slower because it enumerates and content-hashes the
 source corpus. The requested source/project scope must exactly match the stored
-database scope; a mismatch fails instead of calling healthy out-of-scope
+active scan scope (the full database scope when nothing is retired); a mismatch
+fails instead of calling healthy out-of-scope
 sessions stale:
 
 ```bash
@@ -362,10 +411,12 @@ The CLI reconfigures stdout/stderr as UTF-8 when the host permits it. Chinese
 history and emoji therefore remain printable under Windows or redirected
 non-UTF-8 environments instead of failing after a partial result.
 
-The index is rebuildable. The JSONL sources and their registered archives remain
+An index with all originals available is rebuildable. The JSONL sources and their registered archives remain
 authority. If status reports schema mismatch, incomplete build, stale sessions,
 or model-revision mismatch, rebuild or refresh from those sources; do not patch
 the SQLite schema by hand.
+An approved retirement index can contain prose absent from all current originals;
+keep its retained records instead of treating a rebuild as a recovery operation.
 
 Schema v3 adds `chunks.text_hash` and its index for the duplicate-chunk policy.
 The upgrade is an in-place `ALTER TABLE` plus a batch-committed backfill, run by

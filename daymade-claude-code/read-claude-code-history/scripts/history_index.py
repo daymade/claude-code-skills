@@ -764,7 +764,144 @@ def _stored_scope(connection: sqlite3.Connection) -> dict[str, Any]:
         raise IndexError("Index source/project scope receipt is invalid; rebuild") from error
     if not isinstance(payload, dict):
         raise IndexError("Index source/project scope receipt is invalid; rebuild")
+    retirement = _meta_get(connection, "source_retirement")
+    if retirement is not None:
+        try:
+            payload["retirement"] = json.loads(retirement)
+            payload["active_scan_scope"] = json.loads(_meta_get(connection, "active_scan_scope") or "null")
+        except json.JSONDecodeError as error:
+            raise IndexError("Invalid retirement/active scan scope receipt") from error
     return payload
+
+
+def _source_keys(payload: Any) -> dict[tuple[str, str, str, str], dict[str, str]]:
+    if not isinstance(payload, list) or not payload:
+        raise IndexError("Source identities must be a nonempty list")
+    result = {}
+    for item in payload:
+        if not isinstance(item, dict) or set(item) != {"provider", "kind", "label", "home"}:
+            raise IndexError("Source identity needs exactly provider/kind/label/home")
+        if any(not isinstance(value, str) or not value.strip() for value in item.values()):
+            raise IndexError("Source identity values must be nonempty strings")
+        if not Path(item["home"]).is_absolute():
+            raise IndexError("Source identity home must be absolute")
+        key = tuple(item[field] for field in ("provider", "kind", "label", "home"))
+        if key in result:
+            raise IndexError("Duplicate source identity")
+        result[key] = item
+    return result
+
+
+def _retirement_plan(connection: sqlite3.Connection, scope: IndexScope,
+                     declaration: Path | None) -> tuple[dict[str, Any] | None, str]:
+    """Authorize only exact source removals, retaining the historical scope."""
+    stored_raw = _meta_get(connection, "index_scope")
+    saved_raw = _meta_get(connection, "source_retirement")
+    if declaration is None and saved_raw is None:
+        if stored_raw != _scope_identity(scope):
+            widening = _scope_widening(stored_raw, scope)
+            if widening is None:
+                raise IndexError(
+                    "This database was built for a different source/project scope. "
+                    "Use a separate --db for diagnostics or rebuild this database for "
+                    "the requested scope; refusing to prune records outside the active scope.")
+            print(f"Widening indexed scope: adding {', '.join(widening)}", file=sys.stderr)
+        return None, _scope_identity(scope)
+    stored = _stored_scope(connection)
+    base_receipt = json.loads(stored_raw or "null")
+    if (not isinstance(base_receipt, dict) or set(base_receipt) != {"sources", "project_path", "all_projects"}
+            or type(base_receipt["all_projects"]) is not bool
+            or (base_receipt["project_path"] is not None and
+                (not isinstance(base_receipt["project_path"], str) or not base_receipt["project_path"].strip()))):
+        raise IndexError("Invalid original source/project scope receipt")
+    baseline = _source_keys(stored.get("sources"))
+    current = _source_keys(_source_payload(scope.sources))
+    if stored.get("all_projects") != scope.all_projects or stored.get("project_path") != scope.project_path:
+        raise IndexError("Retirement cannot change the project scope")
+    saved = None
+    if saved_raw is not None:
+        try:
+            saved = json.loads(saved_raw)
+        except (TypeError, json.JSONDecodeError) as error:
+            raise IndexError("Invalid saved source retirement") from error
+        if not isinstance(saved, dict) or set(saved) != {"version", "retired_sources", "indexed_through"} or type(saved.get("version")) is not int or saved["version"] != 1:
+            raise IndexError("Invalid saved source retirement")
+        if not isinstance(saved.get("indexed_through"), str) or not saved["indexed_through"]:
+            raise IndexError("Retirement needs the original indexing boundary")
+        try:
+            previous_active = json.loads(_meta_get(connection, "active_scan_scope") or "null")
+        except json.JSONDecodeError as error:
+            raise IndexError("Invalid active scan scope") from error
+        if not isinstance(previous_active, dict) or set(previous_active) != {"sources", "project_path", "all_projects"}:
+            raise IndexError("Retirement requires its active scan scope receipt")
+        prior = _source_keys(previous_active["sources"])
+        retired = _source_keys(saved["retired_sources"])
+        if (set(prior) | set(retired) != set(baseline) or set(prior) & set(retired)
+                or previous_active["project_path"] != stored.get("project_path")
+                or previous_active["all_projects"] != stored.get("all_projects")
+                or not _has_retained_records(connection)):
+            raise IndexError("Retirement receipts/protection do not match the retained scope")
+    approved = _source_keys(saved["retired_sources"]) if saved else {}
+    if declaration is not None:
+        try:
+            requested = json.loads(declaration.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise IndexError("Cannot read retirement declaration") from error
+        if not isinstance(requested, dict) or set(requested) != {"version", "retired_sources"} or type(requested.get("version")) is not int or requested["version"] != 1:
+            raise IndexError("Retirement declaration needs version=1 and retired_sources")
+        declared = _source_keys(requested["retired_sources"])
+        if not set(approved).issubset(declared):
+            raise IndexError("Retirement declaration cannot discard an approved identity")
+        approved = declared
+    if not approved or not set(approved).issubset(baseline) or set(approved) & set(current):
+        raise IndexError("Retirement identities must be known, absent sources")
+    if set(baseline) - set(current) != set(approved):
+        raise IndexError("Every removed source must match the explicit retirement declaration")
+    # Labels are record-level provenance. Refuse an ambiguous label-to-home
+    # mapping rather than freezing unrelated current records.
+    labels = {(key[0], key[1], key[2]) for key in approved}
+    if any(key[:3] in labels for key in current):
+        raise IndexError("Retired source label conflicts with a current identity")
+    retained = {**baseline, **current}
+    full = {"all_projects": scope.all_projects, "project_path": scope.project_path,
+            "sources": [retained[key] for key in sorted(retained)]}
+    receipt = {"version": 1, "retired_sources": [approved[key] for key in sorted(approved)],
+               "indexed_through": saved["indexed_through"] if saved else _meta_get(connection, "last_indexed_at")}
+    if not receipt["indexed_through"]:
+        raise IndexError("Retirement requires a completed original indexing boundary")
+    return receipt, json.dumps(full, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _has_retained_records(connection: sqlite3.Connection) -> bool:
+    return connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='retained_records'").fetchone() is not None
+
+
+def _mutable_records(connection: sqlite3.Connection, column: str = "record_id") -> str:
+    return f"{column} NOT IN (SELECT record_id FROM retained_records)" if _has_retained_records(connection) else "1=1"
+
+
+def _freeze_retired_records(connection: sqlite3.Connection, receipt: dict[str, Any]) -> None:
+    # The FK also rejects an old writer's DELETE/cascade. Its preceding vector
+    # deletes are rolled back in the same original index transaction.
+    connection.execute("CREATE TABLE IF NOT EXISTS retained_records(record_id INTEGER PRIMARY KEY REFERENCES records(id) ON DELETE RESTRICT)")
+    core = ("id", "session_id", "record_key", "seq", "role", "ts", "fts_text", "semantic_text", "noise", "agent_prompt", "segment_sources_json")
+    changed = " OR ".join(f"NEW.{field} IS NOT OLD.{field}" for field in core)
+    lost_provenance = " OR ".join(
+        f"json_type(NEW.{field}) IS NOT 'array' OR EXISTS (SELECT 1 FROM json_each(OLD.{field}) old "
+        f"WHERE old.value NOT IN (SELECT value FROM json_each(NEW.{field})))"
+        for field in ("copy_paths_json", "source_labels_json"))
+    connection.execute("CREATE TRIGGER IF NOT EXISTS retained_records_update BEFORE UPDATE ON records "
+                       f"WHEN OLD.id IN (SELECT record_id FROM retained_records) AND ({changed} OR {lost_provenance}) "
+                       "BEGIN SELECT RAISE(ABORT,'Retired record content/provenance cannot be removed'); END")
+    for item in receipt["retired_sources"]:
+        label = f"{item['kind']}:{item['label']}" if item["provider"] == "claude" else f"{item['provider']}:{item['kind']}:{item['label']}"
+        connection.execute("INSERT OR IGNORE INTO retained_records SELECT records.id FROM records, json_each(records.source_labels_json) WHERE json_each.value=?", (label,))
+
+
+def _retained_session(connection: sqlite3.Connection, session_id: str) -> bool:
+    return _has_retained_records(connection) and connection.execute(
+        "SELECT 1 FROM records JOIN retained_records ON record_id=records.id WHERE session_id=? LIMIT 1",
+        (session_id,)).fetchone() is not None
 
 
 def _scope_providers(scope_payload: dict[str, Any]) -> list[str]:
@@ -810,10 +947,14 @@ def _coverage_description(scope_payload: dict[str, Any]) -> str:
         if uncovered
         else ""
     )
+    retirement = scope_payload.get("retirement")
+    boundary = (f" Retired sources retain indexed records only through {retirement['indexed_through']}; "
+                "last_indexed_at/frontier describe the active scan, not retired-source freshness."
+                if isinstance(retirement, dict) else "")
     return (
         f"{covered} user/assistant prose for {scope_text}; sources={labels}; "
         f"ranked top-K, not absence proof.{gap} Use exact search for "
-        "thinking/tool/attachment/queue/file-history evidence."
+        f"thinking/tool/attachment/queue/file-history evidence.{boundary}"
     )
 
 
@@ -1175,7 +1316,7 @@ def _prune_injected_records(
     selection = (
         "SELECT records.id FROM records "
         "JOIN sessions ON sessions.session_id=records.session_id "
-        f"WHERE sessions.provider=? AND ({predicate})"
+        f"WHERE sessions.provider=? AND ({predicate}) AND {_mutable_records(connection, 'records.id')}"
     )
     # Vectors first: after the cascade there is no chunk row left to join
     # against, so the vector rows would become unreachable orphans. When the
@@ -1226,7 +1367,11 @@ def _insert_session(connection: sqlite3.Connection, ref: dict[str, Any]) -> int:
             _ref_provider(ref),
         ),
     )
-    records = _extract_records(ref)
+    return _insert_records(connection, session_id, _extract_records(ref))
+
+
+def _insert_records(connection: sqlite3.Connection, session_id: str,
+                    records: Sequence[dict[str, Any]]) -> int:
     connection.executemany(
         "INSERT INTO records(session_id,record_key,seq,role,ts,fts_text,semantic_text,"
         "noise,agent_prompt,segment_sources_json,copy_paths_json,source_labels_json) "
@@ -1250,6 +1395,37 @@ def _insert_session(connection: sqlite3.Connection, ref: dict[str, Any]) -> int:
         ],
     )
     return len(records)
+
+
+def _refresh_retained_session(connection: sqlite3.Connection, ref: dict[str, Any] | None,
+                              session_id: str) -> int:
+    frozen = {row["record_key"]: row for row in connection.execute(
+        "SELECT records.* FROM records JOIN retained_records ON record_id=records.id WHERE session_id=?", (session_id,))}
+    incoming = _extract_records(ref) if ref else []
+    # Copy labels/paths and sequence position can change after source removal.
+    # Content changes under the same logical key cannot be merged losslessly.
+    payload_fields = ("role", "ts", "fts_text", "semantic_text", "noise", "agent_prompt", "segment_sources_json")
+    for record in incoming:
+        old = frozen.get(record["record_key"])
+        if old is not None and any(old[field] != record[field] for field in payload_fields):
+            raise IndexError(f"Retired record payload conflict in session {session_id}; no records changed")
+        if old is not None:
+            merged = [json.dumps(sorted(set(json.loads(old[field])) | set(json.loads(record[field]))), ensure_ascii=False)
+                      for field in ("copy_paths_json", "source_labels_json")]
+            connection.execute("UPDATE records SET copy_paths_json=?,source_labels_json=? WHERE id=?", (*merged, old["id"]))
+    mutable = _mutable_records(connection, "records.id")
+    try:
+        connection.execute("DELETE FROM vec_chunks WHERE rowid IN (SELECT chunks.id FROM chunks JOIN records ON records.id=chunks.record_id "
+                           f"WHERE records.session_id=? AND {mutable})", (session_id,))
+    except sqlite3.OperationalError:
+        pass
+    connection.execute(f"DELETE FROM records WHERE session_id=? AND {_mutable_records(connection, 'id')}", (session_id,))
+    if ref:
+        old_labels = json.loads(connection.execute("SELECT sources_json FROM sessions WHERE session_id=?", (session_id,)).fetchone()[0])
+        labels = sorted(set(old_labels) | {source.display_label for source in ref.get("sources", [])})
+        connection.execute("UPDATE sessions SET primary_path=?,sources_json=?,fingerprint=?,ended=? WHERE session_id=?",
+                           (str(ref["path"]), json.dumps(labels, ensure_ascii=False), ref["_fingerprint"], ref.get("updated_at"), session_id))
+    return _insert_records(connection, session_id, [record for record in incoming if record["record_key"] not in frozen])
 
 
 def _scope_from_args(args: argparse.Namespace) -> IndexScope:
@@ -1480,7 +1656,24 @@ def update_index(
     *,
     rebuild: bool = False,
     simple_root: Path | None = None,
+    retired_sources: Path | None = None,
 ) -> dict[str, Any]:
+    if rebuild or not db_path.exists():
+        if retired_sources is not None:
+            raise IndexError("Retirement requires an existing index; rebuild cannot preserve old records")
+        if rebuild and db_path.exists():
+            previous = _connect(db_path, readonly=True, simple_root=simple_root)
+            try:
+                # An invalid old file is still replaceable through the original
+                # explicit rebuild path; a valid retirement index is not.
+                try:
+                    retired = _meta_get(previous, "source_retirement")
+                except sqlite3.DatabaseError:
+                    retired = None
+                if retired is not None:
+                    raise IndexError("Rebuild cannot preserve retired records; use a separate database")
+            finally:
+                previous.close()
     target = (
         db_path.with_name(db_path.name + BUILDING_SUFFIX)
         if rebuild or not db_path.exists()
@@ -1492,6 +1685,8 @@ def update_index(
         target, simple_root=simple_root
     )
     migration_note: str | None = None
+    retirement = None
+    retained_scope = _scope_identity(scope)
     if target == db_path:
         try:
             migration_note = _migrate_schema_if_needed(connection)
@@ -1499,21 +1694,11 @@ def update_index(
             connection.close()
             raise IndexError(f"Cannot migrate index schema in place: {error}") from error
         _validate_schema(connection)
-        stored_scope = _meta_get(connection, "index_scope")
-        current_scope = _scope_identity(scope)
-        if stored_scope != current_scope:
-            widening = _scope_widening(stored_scope, scope)
-            if widening is None:
-                connection.close()
-                raise IndexError(
-                    "This database was built for a different source/project scope. "
-                    "Use a separate --db for diagnostics or rebuild this database for "
-                    "the requested scope; refusing to prune records outside the active scope."
-                )
-            print(
-                f"Widening indexed scope: adding {', '.join(widening)}",
-                file=sys.stderr,
-            )
+        try:
+            retirement, retained_scope = _retirement_plan(connection, scope, retired_sources)
+        except Exception:
+            connection.close()
+            raise
     if migration_note:
         print(migration_note, file=sys.stderr)
 
@@ -1532,6 +1717,10 @@ def update_index(
     added = changed = unchanged = removed = records_added = records_pruned = 0
     started = time.time()
     try:
+        if retirement:
+            if not connection.in_transaction:
+                connection.execute("BEGIN")
+            _freeze_retired_records(connection, retirement)
         for index, ref in enumerate(refs, start=1):
             session_id = ref["session_id"]
             fingerprint = _session_fingerprint(ref)
@@ -1540,8 +1729,11 @@ def update_index(
                 unchanged += 1
                 continue
             if session_id in known:
-                _purge_session(connection, session_id)
                 changed += 1
+                if _retained_session(connection, session_id):
+                    records_added += _refresh_retained_session(connection, ref, session_id)
+                    continue
+                _purge_session(connection, session_id)
             else:
                 added += 1
             records_added += _insert_session(connection, ref)
@@ -1562,6 +1754,9 @@ def update_index(
                 )
 
         for session_id in sorted(set(known) - set(current)):
+            if _retained_session(connection, session_id):
+                _refresh_retained_session(connection, None, session_id)
+                continue
             _purge_session(connection, session_id)
             removed += 1
 
@@ -1578,8 +1773,11 @@ def update_index(
         if added or changed or removed:
             _meta_set(connection, "chunks_complete", "false")
             _meta_set(connection, "vectors_complete", "false")
-        _meta_set(connection, "index_scope", _scope_identity(scope))
-        _meta_set(connection, "sources", _source_payload(scope.sources))
+        _meta_set(connection, "index_scope", retained_scope)
+        _meta_set(connection, "sources", json.loads(retained_scope)["sources"])
+        if retirement:
+            _meta_set(connection, "source_retirement", retirement)
+            _meta_set(connection, "active_scan_scope", _scope_identity(scope))
         _meta_set(connection, "last_indexed_at", utc_now())
         _meta_set(connection, "last_indexed_sessions", str(len(refs)))
         _meta_set(
@@ -1615,6 +1813,8 @@ def update_index(
         "removed": removed,
         "records_added": records_added,
         "records_pruned": records_pruned,
+        **({"active_scan_scope": json.loads(_scope_identity(scope)), "retirement": retirement,
+            "retained_scope": json.loads(retained_scope)} if retirement else {}),
         "elapsed_seconds": round(time.time() - started, 3),
     }
 
@@ -1668,13 +1868,13 @@ def _bind_chunk_model(connection: sqlite3.Connection, resolved_model: Path) -> N
     stored_revision = _meta_get(connection, "embedding_model_revision")
     if existing_chunks and not stored_revision:
         raise IndexError(
-            "Existing chunks have no recorded model revision. Rebuild the versioned "
-            "index; refusing to guess which tokenizer produced them."
+            "Existing chunks have no recorded model revision. Run chunk --rebuild "
+            "with --model-path; refusing to guess which tokenizer produced them."
         )
     if existing_chunks and stored_revision != resolved_model.name:
         raise IndexError(
             f"Existing chunks use model revision {stored_revision}, but chunk resolved "
-            f"{resolved_model.name}. Rebuild the versioned index instead of mixing revisions."
+            f"{resolved_model.name}. Run chunk --rebuild with --model-path instead of mixing revisions."
         )
     _meta_set(connection, "embedding_model_id", EMBEDDING_MODEL_ID)
     _meta_set(connection, "embedding_model_path", str(resolved_model))
@@ -1793,6 +1993,7 @@ def build_chunks(
     *,
     model_path: Path | None,
     simple_root: Path | None = None,
+    rebuild: bool = False,
 ) -> dict[str, Any]:
     try:
         from chonkie import OverlapRefinery, RecursiveChunker
@@ -1805,19 +2006,42 @@ def build_chunks(
     resolved_model = _resolve_model_path(model_path, allow_download=False)
     connection = _connect(db_path, simple_root=simple_root)
     _validate_schema(connection)
-    try:
-        _bind_chunk_model(connection, resolved_model)
-    except IndexError:
-        connection.close()
-        raise
-    tokenizer = AutoTokenizer.from_pretrained(str(resolved_model))
-    chunker = RecursiveChunker(tokenizer=tokenizer, chunk_size=CHUNK_SIZE)
-    overlap = OverlapRefinery(
-        tokenizer=tokenizer,
-        context_size=OVERLAP,
-        method="prefix",
-        merge=True,
-    )
+    def pipeline():
+        tokenizer = AutoTokenizer.from_pretrained(str(resolved_model))
+        chunker = RecursiveChunker(tokenizer=tokenizer, chunk_size=CHUNK_SIZE)
+        overlap = OverlapRefinery(tokenizer=tokenizer, context_size=OVERLAP, method="prefix", merge=True)
+        return tokenizer, chunker, overlap
+
+    if rebuild:
+        # Validate the new tokenizer before discarding any existing cache.
+        try:
+            tokenizer, chunker, overlap = pipeline()
+            has_vectors = connection.execute("SELECT 1 FROM sqlite_master WHERE name='vec_chunks' AND type='table'").fetchone()
+            if has_vectors:
+                vector_connection = _connect(db_path, simple_root=simple_root, load_vectors=True)
+                connection.close()
+                connection = vector_connection
+                _validate_schema(connection)
+            connection.execute("BEGIN")
+            connection.execute("DROP TABLE IF EXISTS vec_chunks")
+            connection.execute("DELETE FROM chunks")
+            connection.execute("DELETE FROM meta WHERE key IN ('embedding_model_id','embedding_model_path',"
+                               "'embedding_model_revision','embedding_dimension','last_chunked_at',"
+                               "'last_embedded_at','embed_stop_reason')")
+            _bind_chunk_model(connection, resolved_model)
+        except Exception as error:
+            connection.rollback()
+            connection.close()
+            if isinstance(error, IndexError):
+                raise
+            raise IndexError(f"Chunk cache reset failed: {error}; cache transaction rolled back") from error
+    else:
+        try:
+            _bind_chunk_model(connection, resolved_model)
+        except IndexError:
+            connection.close()
+            raise
+        tokenizer, chunker, overlap = pipeline()
     rows = connection.execute(
         "SELECT id,semantic_text FROM records WHERE semantic_text IS NOT NULL "
         "AND id NOT IN (SELECT DISTINCT record_id FROM chunks) ORDER BY id"
@@ -1898,6 +2122,7 @@ def build_chunks(
         "missing_records": missing_records,
         **policy,
         "model_path": str(resolved_model),
+        **({"cache_rebuilt": True} if rebuild else {}),
         "elapsed_seconds": round(time.time() - started, 3),
     }
 
@@ -2082,7 +2307,7 @@ def embed_chunks(
         connection.close()
         raise IndexError(
             f"Chunks use model revision {stored_revision}, but embed resolved "
-            f"{resolved_model.name}; rebuild rather than mixing vector revisions."
+            f"{resolved_model.name}; run chunk --rebuild with --model-path rather than mixing vector revisions."
         )
     connection.execute(
         f"CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks USING vec0(embedding float[{EMBEDDING_DIM}])"
@@ -2725,7 +2950,7 @@ def index_status(
     current_sessions = None
     stale_sessions = None
     if inspect_sources and scope is not None:
-        stored_scope = _meta_get(connection, "index_scope")
+        stored_scope = _meta_get(connection, "active_scan_scope") if _meta_get(connection, "source_retirement") is not None else _meta_get(connection, "index_scope")
         requested_scope = _scope_identity(scope)
         if stored_scope != requested_scope:
             connection.close()
@@ -2742,7 +2967,7 @@ def index_status(
         current_sessions = len(current)
         stale_sessions = sum(
             1 for session_id, fingerprint in current.items() if indexed.get(session_id) != fingerprint
-        ) + len(set(indexed) - set(current))
+        ) + sum(not _retained_session(connection, sid) for sid in set(indexed) - set(current))
     payload = {
         "database": str(db_path),
         "schema_version": SCHEMA_VERSION,
@@ -2771,6 +2996,7 @@ def index_status(
             "performed": inspect_sources,
             "current_sessions": current_sessions,
             "stale_or_missing_sessions": stale_sessions,
+            **({"retired_sources_scanned": False} if _meta_get(connection, "source_retirement") is not None else {}),
         },
     }
     connection.close()
@@ -2850,10 +3076,13 @@ def build_parser() -> argparse.ArgumentParser:
     index_parser = subparsers.add_parser("index", help="Build/update lexical index")
     _add_source_scope(index_parser)
     index_parser.add_argument("--rebuild", action="store_true")
+    index_parser.add_argument("--retired-sources", type=Path,
+                              help="Explicit version=1 source-retirement JSON declaration; preserve existing records")
     index_parser.add_argument("--json", action="store_true")
 
     chunk_parser = subparsers.add_parser("chunk", help="Chunk semantic message text")
     chunk_parser.add_argument("--model-path", type=Path)
+    chunk_parser.add_argument("--rebuild", action="store_true", help="Explicitly reset chunks/vectors from retained records; preserve indexed history")
     chunk_parser.add_argument("--json", action="store_true")
 
     embed_parser = subparsers.add_parser("embed", help="Embed missing chunks (Apple Silicon)")
@@ -2998,6 +3227,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     scope,
                     rebuild=args.rebuild,
                     simple_root=args.simple_root,
+                    retired_sources=args.retired_sources,
                 )
             _print_payload(payload, json_output=args.json)
             return 0
@@ -3007,6 +3237,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     args.db.expanduser(),
                     model_path=args.model_path,
                     simple_root=args.simple_root,
+                    rebuild=args.rebuild,
                 )
             _print_payload(payload, json_output=args.json)
             return 0

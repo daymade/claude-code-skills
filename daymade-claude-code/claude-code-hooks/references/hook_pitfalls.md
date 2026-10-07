@@ -3182,32 +3182,3 @@ this list and describe defects you reach by asking a different question):
   walk (a foreign handler riding inside a duplicate of a managed group),
   which is why the fix also moved the predicate from `all` to `any` for the
   "is this group managed at all" question.
-
-## 61. A PreToolUse advisory's context arrives beside the tool result — diagnosing its timing from the conversation-surface label misreads it as post-hoc
-
-- **Symptom:** an advisory hook's message shows up on the conversation surface
-  labeled "PostToolUse:X hook additional context", even though the hook is
-  registered PreToolUse. The diagnostician concludes "the reminder only fires
-  after the fact" and proposes moving it to PreToolUse — where it has been
-  registered all along.
-- **Cause and fix:** the hook *run* and the *delivery* of its
-  `additionalContext` are two different records. The run is PreToolUse (it
-  evaluates before the tool executes); the injected context lands in the
-  transcript as a `hook_additional_context` attachment adjacent to the tool
-  result, and the surface label reflects that delivery position, not the
-  trigger event. Before diagnosing any hook-timing question, find the hook's
-  run record in the session transcript
-  (`~/.claude/projects/<encoded-cwd>/<session>.jsonl` — the attachment
-  carrying `durationMs` and the hook's command line) and read the event name
-  from there, never from the surface label. The adjacent design fact that
-  makes this matter: an advisory (exit 0 + context) structurally cannot
-  prevent the call it fires on — the model emitted that call before the hook
-  ran, so the reminder only teaches *subsequent* calls. If the rule must stop
-  the current call, it has to block (exit 2 / deny); choose that by
-  proportionality, not by habit.
-- **Real case (2026-10-07):** a branch-delete advisor fired PreToolUse
-  ("Checking repo policies", 155ms) with the trial-merge reminder ahead of a
-  `git branch -D` riding at the end of a compound command; the reminder
-  surfaced labeled PostToolUse, and the post-incident review came one step
-  from "fixing" a registration that was never missing. The transcript run
-  record, not the label, settled it.
