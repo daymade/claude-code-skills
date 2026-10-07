@@ -23,6 +23,11 @@ gh run view <run-id> -R <owner/repo> --json headSha,status,conclusion,jobs
 gh run view <run-id> -R <owner/repo> --job <job-id> --log
 ```
 
+Read the selected job's runner ID/name and labels through github-ops'
+[job metadata recipe](../github-ops/references/workflow_operations.md#viewing-job-details).
+The REST jobs response supplies those fields; `gh run view --json jobs` supplies
+step status but does not expose runner identity.
+
 Compare the same job on a recent main run. A missing live log leaves command-level
 progress unknown; step timestamps, a live PID or silence alone do not establish
 download progress, a dead runner, or a hung test. Read the job's workflow at its exact

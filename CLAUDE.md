@@ -568,7 +568,10 @@ Use [skill-creator](daymade-skill/skill-creator/SKILL.md) to classify the change
 [packaging_policy.py](daymade-skill/skill-creator/scripts/packaging_policy.py) to
 decide which changed files ship. Do not infer a separate member version from its directory.
 
-**Pre-commit check:** Before committing, run `git diff --name-only` and verify: for every `skill-name/` directory that appears, `marketplace.json` also has a version bump for that skill's `plugins[].version`.
+For pre-commit release progression, use the existing
+[version checker](scripts/ci/check_version_progression.py) through the
+[mainline guard](scripts/git-mainline-guard.mjs). Its registered-plugin mapping and
+the packaging owner above determine which release identity must advance.
 
 **Read the baseline version from an immutable ref, never from the working tree.**
 In a shared checkout `marketplace.json` may already carry a parallel session's
