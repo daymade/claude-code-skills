@@ -249,6 +249,97 @@ class CopiedSubagentContextTests(unittest.TestCase):
         reader.validate_selected_rollout_identity(data,SECOND)
         return data
 
+    def native_source(self):
+        # Synthetic values in the native SessionSource/SubAgentSource shape:
+        # openai/codex rust-v0.160.0 codex-rs/protocol/src/protocol.rs.
+        payload = self.rows[0]['payload']
+        for key in ('thread_source', 'parent_thread_id', 'forked_from_id'):
+            payload.pop(key)
+        payload['source'] = {'subagent': {'thread_spawn': {
+            'parent_thread_id': THREAD, 'depth': 1, 'agent_path': None,
+            'agent_nickname': 'synthetic-child', 'agent_role': 'worker'}}}
+        return payload
+
+    def test_native_thread_spawn_preserves_original_identity_bytes_and_descriptor(self):
+        import copy
+        expected = reader.copied_context_contract(self.rows[0]['payload'])
+        payload = self.native_source()
+        before = copy.deepcopy(payload)
+        self.write()
+        raw = self.path.read_bytes()
+        data = reader.parse_codex_rollout(self.path)
+        reader.validate_selected_rollout_identity(data, SECOND)
+        self.assertEqual(data['meta'], before)
+        self.assertEqual(data['copied_model_context'], expected)
+        self.assertEqual(data['user_messages'], ['CHILD TASK'])
+        self.assertEqual(len(data['copied_context_records']), 3)
+        self.assertEqual(self.path.read_bytes(), raw)
+        evidence = reader.extract_record_evidence(self.path, SECOND, records=[1], tools=False)
+        self.assertEqual(evidence['results'][0]['original'], self.rows[0])
+        tools = reader.extract_logical_record_evidence(self.path, SECOND, data, [])
+        self.assertEqual(tools['copied_model_context'], expected)
+        self.assertEqual(tools['matched_records'], 2)
+        self.assertEqual(tools['results'][1]['paired_call']['record'], 4)
+        with self.assertRaises(reader.LineageResolutionError):
+            reader.validate_selected_rollout_identity(data, THREAD)
+
+    def test_native_source_can_keep_consistent_top_level_declarations(self):
+        payload = self.native_source()
+        payload.update(thread_source='subagent', parent_thread_id=THREAD, forked_from_id=THREAD)
+        self.assertEqual(self.parse()['copied_model_context']['parent_id'], THREAD)
+
+    def test_native_source_with_canonical_family_needs_no_external_parent_file(self):
+        self.native_source()['session_id'] = SECOND
+        self.rows = [self.rows[0], self.rows[4]]
+        self.rows[0]['payload']['subagent_history_start_ordinal'] = 1
+        self.rows[1]['ordinal'] = 1
+        data = self.parse()
+        self.assertEqual(data['copied_model_context']['canonical_id'], SECOND)
+        self.assertEqual(data['copied_model_context']['family_id'], SECOND)
+        self.assertFalse(data['copied_model_context']['external_parent_bytes_verified'])
+
+    def test_malformed_or_ambiguous_native_sources_fail_even_with_top_level_fallback(self):
+        import copy
+        valid = copy.deepcopy(self.native_source()['source'])
+        bad_sources = [None, '', [], {}, 'cli',
+            {'subagent': None}, {'subagent': ''}, {'subagent': {}},
+            {'subagent': 'review'}, {'subagent': {'thread_spawn': None}},
+            {'subagent': {'thread_spawn': []}},
+            {'subagent': {'thread_spawn': valid['subagent']['thread_spawn'], 'review': {}}},
+            {**valid, 'cli': {}}, {'thread_spawn': valid['subagent']['thread_spawn']}]
+        payload = self.rows[0]['payload']
+        payload.update(thread_source='subagent', parent_thread_id=THREAD)
+        for source in bad_sources:
+            with self.subTest(source=source):
+                payload['source'] = source
+                with self.assertRaises(reader.LineageResolutionError):
+                    self.parse()
+
+    def test_native_parent_and_depth_missing_empty_null_invalid_or_conflicting_fail(self):
+        import copy
+        payload = self.native_source()
+        valid = copy.deepcopy(payload)
+        missing = object()
+        for key, values in (
+            ('parent_thread_id', [missing, None, '', 7, 'not-a-uuid', SECOND]),
+            ('depth', [missing, None, '', True, '1', 0, -1, 2147483648])):
+            for value in values:
+                self.rows[0]['payload'] = copy.deepcopy(valid)
+                spawn = self.rows[0]['payload']['source']['subagent']['thread_spawn']
+                if value is missing:
+                    spawn.pop(key)
+                else:
+                    spawn[key] = value
+                with self.subTest(key=key, value=value), self.assertRaises(reader.LineageResolutionError):
+                    self.parse()
+        for key, value in (('thread_source', None), ('thread_source', ''),
+                           ('thread_source', 'user'), ('thread_source', 'guardian_review'),
+                           ('parent_thread_id', None), ('parent_thread_id', ''),
+                           ('parent_thread_id', THIRD), ('forked_from_id', THIRD)):
+            self.rows[0]['payload'] = {**copy.deepcopy(valid), key: value}
+            with self.subTest(key=key, value=value), self.assertRaises(reader.LineageResolutionError):
+                self.parse()
+
     def test_copied_context_separate_from_child_inputs_and_visible_in_full_briefing(self):
         data=self.parse()
         self.assertEqual(data['session_meta_ids'],[SECOND])

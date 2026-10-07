@@ -286,7 +286,28 @@ def copied_context_contract(meta: dict[str, Any]) -> Optional[dict[str, Any]]:
     start = meta["subagent_history_start_ordinal"]
     if type(start) is not int or not 1 <= start < MAX_HISTORY_POSITION:
         raise LineageResolutionError("invalid subagent_history_start_ordinal")
-    if meta.get("thread_source") not in {"subagent", "guardian_review"}:
+    native_parent = None
+    if "source" in meta:
+        # SessionSource::SubAgent(SubAgentSource::ThreadSpawn) is externally
+        # tagged by serde. Read its declaration without rewriting the payload.
+        source = meta["source"]
+        if not isinstance(source, dict) or set(source) != {"subagent"}:
+            raise LineageResolutionError("invalid copied-context native source")
+        subagent = source["subagent"]
+        if not isinstance(subagent, dict) or set(subagent) != {"thread_spawn"}:
+            raise LineageResolutionError("invalid copied-context native subagent source")
+        spawn = subagent["thread_spawn"]
+        if not isinstance(spawn, dict):
+            raise LineageResolutionError("invalid copied-context native thread_spawn")
+        depth = spawn.get("depth")
+        if type(depth) is not int or not 1 <= depth <= 2147483647:
+            raise LineageResolutionError("invalid copied-context native depth")
+        native_parent = spawn.get("parent_thread_id")
+        if not isinstance(native_parent, str) or not re.fullmatch(_UUID, native_parent):
+            raise LineageResolutionError("invalid copied-context native parent identity")
+        if "thread_source" in meta and meta["thread_source"] != "subagent":
+            raise LineageResolutionError("copied-context source declarations conflict")
+    elif meta.get("thread_source") not in {"subagent", "guardian_review"}:
         raise LineageResolutionError("copied context requires a declared child thread source")
     if meta.get("history_base") is not None:
         raise LineageResolutionError("copied context combined with history_base is unsupported")
@@ -294,6 +315,10 @@ def copied_context_contract(meta: dict[str, Any]) -> Optional[dict[str, Any]]:
         if not isinstance(meta.get(key), str) or not re.fullmatch(_UUID, meta[key]):
             raise LineageResolutionError("copied context lacks a valid " + key)
     parents=[]
+    if native_parent is not None:
+        if native_parent == meta["id"]:
+            raise LineageResolutionError("invalid copied-context parent identity")
+        parents.append(native_parent)
     for key in ("parent_thread_id", "forked_from_id"):
         if key in meta:
             if not isinstance(meta[key],str) or not re.fullmatch(_UUID,meta[key]) or meta[key]==meta["id"]:
