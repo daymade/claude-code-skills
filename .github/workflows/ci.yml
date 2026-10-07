@@ -85,6 +85,9 @@ jobs:
       - name: Install validator dependency
         run: python3 -m pip install --quiet pyyaml
 
+      - name: Configured local Skill repository search
+        run: python3 -m unittest discover -s daymade-skill/skills-search/tests -v
+
       - name: Source ownership and initialization contract
         run: python3 -m unittest discover -s daymade-skill/skill-creator/tests -p test_source_contract.py
 

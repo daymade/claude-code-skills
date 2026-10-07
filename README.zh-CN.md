@@ -1120,9 +1120,9 @@ python3 scripts/analyze_sessions.py stats /path/to/session.jsonl --show-files
 
 ---
 
-### **skills-search** - CCPM 技能注册表搜索
+### **skills-search** - 本地仓库优先与 CCPM 搜索
 
-从 CCPM（Claude Code 插件管理器）注册表中搜索、发现、安装和管理 Claude Code 技能。
+优先检索可配置的本地 Skill 仓库，再逐层扩展至认可的来源和 CCPM 注册表；保留原有安装与管理命令。
 
 **使用场景：**
 - 为特定任务查找技能（例如"查找 PDF 技能"）
@@ -1132,6 +1132,8 @@ python3 scripts/analyze_sessions.py stats /path/to/session.jsonl --show-files
 - 管理你的 Claude Code 技能集合
 
 **主要功能：**
+- **本地优先**：仓库目录与可信层级持久化在用户目录；完整检索当前层的所有自有仓库
+- **渐进读取**：先查名称与描述缓存，再读取候选 Skill 的精确 Git 版本
 - **注册表搜索**：使用 `ccpm search <query>` 搜索 CCPM 注册表
 - **技能安装**：使用 `ccpm install <skill-name>` 安装技能
 - **版本支持**：使用 `@version` 语法安装特定版本
@@ -1141,7 +1143,10 @@ python3 scripts/analyze_sessions.py stats /path/to/session.jsonl --show-files
 
 **示例用法：**
 ```bash
-# 搜索技能
+# 先检索配置的本地仓库（<skill-dir> 是当前加载的 Skill）
+uv run --script <skill-dir>/scripts/local_sources.py search pdf --tier owned
+
+# 需要时再扩展到外部注册表
 ccpm search pdf              # 查找 PDF 相关技能
 ccpm search "code review"    # 查找代码审查技能
 
@@ -1163,9 +1168,9 @@ ccpm install-bundle web-dev  # 安装 Web 开发技能包
 
 *即将推出*
 
-📚 **文档**：参见 [daymade-skill/skills-search/SKILL.md](./daymade-skill/daymade-skill/skills-search/SKILL.md) 了解完整的命令参考
+📚 **文档**：参见 [daymade-skill/skills-search/SKILL.md](./daymade-skill/skills-search/SKILL.md) 了解配置、覆盖范围及命令
 
-**要求**：CCPM CLI（`npm install -g @daymade/ccpm`）
+**要求**：本地检索使用 Python 3.10+、Git 和 uv；外部注册表及安装管理才需要 CCPM CLI
 
 ---
 
@@ -4035,7 +4040,7 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 使用 **macos-cleaner** 以安全优先的方式诊断和恢复 macOS 磁盘空间。它会把 Apple 内容缓存等已知嫌疑源先路由到定向只读取证，区分逻辑量与物理占盘，说明影响和恢复方式，并在任何状态变更前要求明确确认；同时覆盖 Docker/OrbStack、Homebrew/npm/pip、应用残留、大文件和可选的 Mole 探索。
 
 ### 技能发现与管理
-使用 **skills-search** 从 CCPM 注册表中查找、安装和管理 Claude Code 技能。非常适合为特定任务发现新技能、为常见工作流安装技能包，以及保持技能集合的有序管理。
+使用 **skills-search** 优先发现并复用已配置本地仓库里的 Skill；必要时再进入 CCPM 注册表，保留外部检索、安装和管理能力。
 
 ### 技能质量与开源贡献
 使用 **skill-reviewer** 在发布前验证你的技能是否符合最佳实践，或审查并改进他人的技能仓库。与 **github-contributor** 结合使用，寻找高影响力的开源项目、创建专业的 PR，并系统性地建立贡献者声誉。非常适合希望为 Claude Code 生态系统或任何 GitHub 项目做出贡献的开发者。
