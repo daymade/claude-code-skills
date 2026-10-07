@@ -66,7 +66,17 @@ python3 "<skill-creator-path>/scripts/creator.py" delivery_identity check \
 Expect `prepared` with a nonzero examined count before sending. The checking
 caller supplies the host's actual final assistant text, not a second read of the
 candidate file. A valid result has `status: valid`, the same examined count and
-`actual_sha256`; mismatch exits 2 as `invalid`, absent/malformed evidence as
+raw `actual_sha256`. New receipts use schema 2 with the explicit comparison
+policy `crlf-terminal-lf-v1`: compare after converting CRLF to LF and removing at
+most one terminal LF from each side. Preserve leading indentation, Markdown
+trailing spaces, internal blank lines and any additional trailing blank line.
+Return both candidate and actual comparison hashes separately from raw hashes;
+this distinguishes transport line endings from changed body content. Schema-1
+receipts retain exact comparison and are not silently upgraded. Schema-2 receipts
+require this updated checker; an older checker returns unknown instead of
+interpreting them as exact receipts. Missing schema-2 policy or comparison
+evidence remains unknown; re-prepare a new receipt rather
+than editing an already consumed lifecycle state. A body mismatch exits 2 as `invalid`, absent/malformed evidence as
 `unknown`. Re-prepare after any candidate change. Keep receipts and real replay
 text private, outside the distributed Skill package.
 
