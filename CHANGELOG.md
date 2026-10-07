@@ -7,8 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **github-ops** (v1.12.0): Clarify self-hosted runner capacity checks: distinguish registrations, hosts and job eligibility; reuse project deployment procedures; prepare tools on the actual runner; preserve production routing; verify the target job on the intended runner.
+
 - **report-with-html** (v1.2.0, visual evidence workflow): Select and source product photos, screenshots and explanatory diagrams before HTML authoring. Place visuals beside the decision they explain, preserve variant and evidence limitations, and ask readers what the images actually reveal. Extend provenance acceptance for media; retain existing geometry, interaction and bounded review contracts.
 - **feishu-doc-scraper** (v1.7.0): Separate body-read, media-export, preview and transport failures. Add a direct, locked and resumable original-preview downloader, relative native-media API rendering, and a producer catalog for user-selected personal Feishu favorites. Keep actual-reader acceptance separate from byte and search checks; cover corrupt ranges, concurrent writers, broken media mappings and catalog identities.
+- **ghostty-use** (`ghostty-use` v1.6.0): add a Codex-only manual account-switch handoff: fixed complete snapshots, stable account identity hashes, original-process checks, independent-mode resume, windows/tabs, interruption-safe missing-only retries and separate authentication reporting. Preserve reboot and automatic-backup routes. Change types: capability addition / workflow redesign.
 
 - **skills-search** (suite `daymade-skill` v1.66.0, local-first discovery): Add configurable persistent repository sources and immutable-commit metadata caches. Search the entire owned tier before approved sources and CCPM; report failed coverage explicitly and open candidate bodies progressively. Keep registry/install/manage commands, and defer ecosystem setup until requested. Add offline configuration, cache and repository-boundary regressions.
 

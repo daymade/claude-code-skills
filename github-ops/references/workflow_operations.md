@@ -429,6 +429,62 @@ gh api repos/{owner}/{repo}/actions/runs/{run_id}/jobs | \
 4. **Log retention** - Configure appropriate retention policies
 5. **Dependency updates** - Automate with Dependabot
 
+## Self-Hosted Runner Capacity and Acceptance
+
+For a runner inventory, queued job or authorized capacity change, execute this
+sequence before creating registrations or changing workflow routing. This is an
+operator procedure; no bundled tool enforces its deployment or process boundaries.
+
+1. **Bind the scope and workload.** Read the target workflow at its exact commit,
+   including `runs-on`, runner groups and repository access. Inspect repository,
+   organization or enterprise registrations at their actual ownership scope.
+   Report registrations, physical hosts, online/busy state and job eligibility
+   separately. Multiple registrations or guests can share a host; label matching
+   does not prove independent CPU, memory or storage capacity. Match every required
+   label and group/access restriction ([GitHub routing rules](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/use-in-a-workflow)).
+2. **Reuse the deployment owner.** Locate the project's current IaC, runner
+   profiles and runbook, then read a successful run of the actual target job.
+   Preserve its supported OS, architecture, isolation, resource budget and network
+   configuration. A past success establishes that recorded job and runner only;
+   recheck current state before using it as available capacity. Keep private host
+   identities, paths and credentials in that project, outside this public Skill.
+3. **Prepare before registration.** Exercise required downloads, tool versions
+   and provider/package mirrors from the actual new runner environment and its
+   selected network path. A host-side request does not test a guest's path. Reuse
+   verified public binaries or images through the existing runbook, checking
+   digests/bytes and required completion markers; do not copy registration state,
+   job workspaces, cloud state or personal credentials. Missing downloads remain
+   failures; do not fabricate cache markers or add an unverified network fallback.
+4. **Keep checks and production routing separate.** Add capacity only to the
+   authorized workload. Preserve a production deployment's single-writer labels,
+   credentials and controller when expanding a checks pool. A new registration
+   does not authorize relabeling, stopping or restarting an existing listener,
+   another session's process or a shared service. Diagnose those read-only unless
+   the current task explicitly authorizes the exact affected process and impact.
+5. **Accept the actual job on the intended runner.** Read the run's exact SHA and
+   specific job's runner ID/name, labels, steps and terminal conclusion. Registration,
+   `online`, a network probe or another runner's successful job cannot establish
+   the new runner's capability. Reuse an existing matching run when available;
+   dispatch/rerun only within the task's authorization. For a parallel-capacity
+   claim, also verify overlapping actual job execution and host resource budgets.
+   On failure, read the failed job/step and that runner's current Worker diagnostics
+   before changing configuration. Report pending, offline, busy and failed states
+   separately; stop once the requested workload and capacity claim are evidenced.
+
+Use these read-only queries with verified repository/run identifiers:
+
+```bash
+gh api -X GET 'repos/OWNER/REPO/actions/runners?per_page=100' --paginate \
+  --jq '.runners[] | {id,name,status,busy,labels:[.labels[].name]}'
+gh run view RUN_ID -R OWNER/REPO --json status,conclusion,headSha,url
+gh api -X GET 'repos/OWNER/REPO/actions/runs/RUN_ID/jobs?per_page=100' --paginate \
+  --jq '.jobs[] | {id,name,conclusion,runner_id,runner_name,labels,steps}'
+```
+
+Expect explicit runner rows and the selected job's identity and result. An empty
+result does not establish available capacity; reconcile the scope/access and selector.
+Physical-host mapping and resource limits require the project's deployment inventory.
+
 ## Self-Hosted Runner Mechanisms (job hooks & background tasks)
 
 Hard facts that bite any task running a **job hook** (`ACTIONS_RUNNER_HOOK_JOB_STARTED` /
