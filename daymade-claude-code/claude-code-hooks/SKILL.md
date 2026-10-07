@@ -1178,6 +1178,12 @@ approval or “already reminded” flag.
    only for files invoked directly.
 3. **Detection** with shlex token-level matching (rule 1), keyed on a fact the
    world can answer rather than your own rendering or a naming convention (rule 6).
+   For repeated Skill-entry bypass, loading and compliant execution are separate
+   predicates. Detect the owned operation at its actual write/transport target;
+   a loaded marker, temporary directory or repeated request cannot release it.
+   Calibrate with the original bypass plus healthy source maintenance, fixtures
+   and read-only probes. If only some actions are inspectable, declare that
+   scope; installation and unit tests do not prove native interception.
    - **First check whether ShellCheck already decides it — then record the answer,
      because the next author will ask the same question.** It is the de-facto standard
      for shell anti-patterns, so "why didn't you just use shellcheck" is the first
