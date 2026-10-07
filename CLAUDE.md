@@ -97,6 +97,9 @@ For customer-approved report forms, follow
 For HTML report creation or updates, enter
 [report-with-html's Define success workflow](report-with-html/SKILL.md#workflow)
 for reader/use, evidence precision, delivery location and investigation acceptance.
+Its [technical comparison reading order](report-with-html/references/visualization-patterns.md)
+owns concrete plans, cost boundaries and next-verification choices; do not turn a research
+shortlist into purchase or deployment approval.
 Its [maintenance contract](report-with-html/references/long-lived-report-maintenance.md)
 owns later reconciliation and consumer readback.
 

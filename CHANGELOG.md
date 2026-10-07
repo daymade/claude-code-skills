@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **read-codex-history** (`daymade-claude-code` v4.25.3 → v4.25.4): Accept native `source.subagent.thread_spawn` declarations for existing copied model context, preserving original metadata, bytes and evidence coordinates. Keep top-level declarations compatible and reject malformed, ambiguous or conflicting sources and parent identities. Change type: bounded implementation repair.
 
 - **ghostty-use** (v1.6.0 → v1.6.1): Restore Codex account-switch sessions as tabs by default; keep independent windows opt-in. Exclude spawned agents from fresh terminal matching, reject explicit sub-agent captures, and skip legacy child rows only when their main parent is saved. Change type: bug fix.
+- **report-with-html** (v1.3.0): Present technical comparisons as concrete plans with scoped costs and adoption conditions; keep historical/current meaning visible in citation fragments and review their actual landing context.
+
 - **daymade-claude-code** (v4.25.2 → v4.25.3): Correct the hook design contract for repeated Skill-entry bypass: loading does not prove compliant execution; bind detection to the actual operation, calibrate healthy maintenance and read-only cases, and verify interception in the native host.
 
 - **terraform-skill** (v1.5.5 → v1.5.6, existing validation contract correction): Validate embedded expressions with their native consumer when supported, distinguish local arithmetic replay from native validation, and require a fresh evaluation of the deployed rule for runtime verification.
