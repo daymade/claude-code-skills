@@ -975,6 +975,400 @@ def kimi_session(home, session_id, cwd, main_turns, subagent_turns=()):
     return session_dir
 
 
+class SourceRetirementTests(unittest.TestCase):
+    setUp = HistoryIndexTests.setUp
+    tearDown = HistoryIndexTests.tearDown
+    scope = HistoryIndexTests.scope
+
+    def prepare(self):
+        self.sid = "71717171-7171-4171-8171-717171717171"
+        self.old = user_record(self.sid, self.workspace, "retired witness survives", "2026-08-01T00:00:00Z")
+        self.old["uuid"] = "old-key"
+        self.fresh = user_record(self.sid, self.workspace, "freshcurrent witness searchable", "2026-08-02T00:00:00Z")
+        self.fresh["uuid"] = "new-key"
+        self.active_path = project_dir(self.active, self.workspace) / f"{self.sid}.jsonl"
+        self.archive_path = project_dir(self.archive, self.workspace) / f"{self.sid}.jsonl"
+        write_jsonl(self.active_path, [self.old])
+        write_jsonl(self.archive_path, [self.old])
+        with portable_backend():
+            history_index.update_index(self.db, self.scope(self.active_source, self.archive_source))
+        conn = plain_connect(self.db)
+        rid = conn.execute("SELECT id FROM records").fetchone()[0]
+        conn.execute("INSERT INTO chunks(record_id,seq,ntok,text,usable,text_hash) VALUES(?,0,7,?,1,?)",
+                     (rid, self.old["message"]["content"], history_index._chunk_text_hash(self.old["message"]["content"])))
+        conn.execute("CREATE TABLE vec_chunks(embedding BLOB)")
+        conn.execute("INSERT INTO vec_chunks(rowid,embedding) SELECT id,? FROM chunks", (b"old-vector",))
+        conn.commit()
+        conn.close()
+        self.ids = [rid]
+        self.before = self.snapshot()
+        self.archive_path.unlink()
+        self.receipt = self.root / "retirement.json"
+        self.payload = {"version": 1, "retired_sources": history_index._source_payload([self.archive_source])}
+        self.receipt.write_text(json.dumps(self.payload))
+
+    def snapshot(self):
+        conn = plain_connect(self.db, readonly=True)
+        result = {}
+        for table, predicate in (("records", "id"), ("chunks", "record_id")):
+            result[table] = [tuple(row) for row in conn.execute(
+                f"SELECT * FROM {table} WHERE {predicate} IN ({','.join('?' for _ in self.ids)}) ORDER BY id", self.ids)]
+        result["vectors"] = [tuple(row) for row in conn.execute(
+            f"SELECT rowid,embedding FROM vec_chunks WHERE rowid IN (SELECT id FROM chunks WHERE record_id IN ({','.join('?' for _ in self.ids)})) ORDER BY rowid", self.ids)]
+        conn.close()
+        return result
+
+    def update(self, **kwargs):
+        with portable_backend():
+            return history_index.update_index(self.db, self.scope(self.active_source), **kwargs)
+
+    def test_shared_copy_append_retains_old_record_cache_and_current_provenance(self):
+        self.prepare()
+        write_jsonl(self.active_path, [self.old, self.fresh])
+        result = self.update(retired_sources=self.receipt)
+        self.assertEqual(self.snapshot(), self.before)
+        self.assertEqual(len(result["retained_scope"]["sources"]), 2)
+        self.assertEqual(len(result["active_scan_scope"]["sources"]), 1)
+        conn = plain_connect(self.db, readonly=True)
+        new = conn.execute("SELECT * FROM records WHERE id NOT IN (?)", self.ids).fetchone()
+        self.assertEqual(json.loads(new["source_labels_json"]), ["active:main"])
+        self.assertEqual(json.loads(new["copy_paths_json"]), [str(self.active_path)])
+        conn.close()
+        with portable_backend():
+            found = history_index.recall(self.db, "freshcurrent", mode="bm25", limit=10, project=None,
+                exclude_sessions=[], include_agent_prompts=False, model_path=None, simple_root=None)
+            status = history_index.index_status(self.db, simple_root=None, inspect_sources=True, scope=self.scope(self.active_source))
+        self.assertEqual(len(found["results"]), 1)
+        self.assertIn("Retired sources retain indexed records only", found["coverage"])
+        self.assertFalse(status["source_check"]["retired_sources_scanned"])
+        self.assertEqual(status["source_check"]["stale_or_missing_sessions"], 0)
+        self.assertEqual(self.update()["unchanged"], 1)
+        self.assertEqual(self.snapshot(), self.before)
+
+    def test_compacted_and_disappeared_shared_session_preserve_protected_rows(self):
+        self.prepare()
+        write_jsonl(self.active_path, [self.fresh])
+        self.update(retired_sources=self.receipt)
+        self.assertEqual(self.snapshot(), self.before)
+        self.active_path.unlink()
+        self.update()
+        self.assertEqual(self.snapshot(), self.before)
+        conn = plain_connect(self.db, readonly=True)
+        self.assertEqual(conn.execute("SELECT count(*) FROM records").fetchone()[0], 1)
+        conn.close()
+        with portable_backend():
+            status = history_index.index_status(self.db, simple_root=None, inspect_sources=True, scope=self.scope(self.active_source))
+        self.assertEqual(status["source_check"]["stale_or_missing_sessions"], 0)
+
+    def test_same_key_content_conflict_rolls_back_then_retry_adds_real_new_key(self):
+        self.prepare()
+        # Claude keys hash the entire source record. A stored payload conflict
+        # can still arise across extractor versions without changing that key.
+        conn = plain_connect(self.db)
+        conn.execute("UPDATE records SET fts_text='different prior extraction'")
+        conn.commit()
+        conn.close()
+        self.before = self.snapshot()
+        write_jsonl(self.active_path, [self.old, self.fresh])
+        with self.assertRaisesRegex(history_index.IndexError, "payload conflict"):
+            self.update(retired_sources=self.receipt)
+        self.assertEqual(self.snapshot(), self.before)
+        conn = plain_connect(self.db, readonly=True)
+        self.assertIsNone(history_index._meta_get(conn, "source_retirement"))
+        self.assertFalse(history_index._has_retained_records(conn))
+        conn.close()
+        conn = plain_connect(self.db)
+        conn.execute("UPDATE records SET fts_text=?", (self.old["message"]["content"],))
+        conn.commit()
+        conn.close()
+        self.assertEqual(self.update(retired_sources=self.receipt)["records_added"], 1)
+
+    def test_bad_declarations_and_scope_narrowing_are_not_retirement_authority(self):
+        self.prepare()
+        invalid = [None, {}, {"version": 1}, {"version": True, "retired_sources": self.payload["retired_sources"]},
+                   {"version": 1, "retired_sources": None}, {"version": 1, "retired_sources": []},
+                   {"version": 1, "retired_sources": self.payload["retired_sources"] * 2},
+                   {"version": 1, "retired_sources": [{**self.payload["retired_sources"][0], "home": "/unknown"}]},
+                   {"version": 1, "retired_sources": [{"provider": "claude", "kind": "archive", "label": "backup"}]}]
+        for payload in invalid:
+            with self.subTest(payload=payload):
+                self.receipt.write_text(json.dumps(payload))
+                with self.assertRaises(history_index.IndexError):
+                    self.update(retired_sources=self.receipt)
+                self.assertEqual(self.snapshot(), self.before)
+        with self.assertRaises(history_index.IndexError):
+            self.update()
+        with self.assertRaises(history_index.IndexError):
+            self.update(retired_sources=self.root / "missing.json")
+        self.receipt.write_text(json.dumps(self.payload))
+        narrowed = history_index.IndexScope(sources=[self.active_source], warnings=[], project_path=str(self.workspace), all_projects=False)
+        with portable_backend(), self.assertRaises(history_index.IndexError):
+            history_index.update_index(self.db, narrowed, retired_sources=self.receipt)
+        self.assertEqual(self.snapshot(), self.before)
+
+    def test_widening_copy_appends_verified_provenance_without_cache_replacement(self):
+        self.prepare()
+        self.update(retired_sources=self.receipt)
+        extra = history_index.HistorySource(provider="claude", kind="active", label="extra", home=self.root / "extra")
+        new_path = project_dir(extra.home, self.workspace) / f"{self.sid}.jsonl"
+        write_jsonl(new_path, [self.old])
+        with portable_backend():
+            history_index.update_index(self.db, self.scope(self.active_source, extra))
+        after = self.snapshot()
+        self.assertEqual(after["chunks"], self.before["chunks"])
+        self.assertEqual(after["vectors"], self.before["vectors"])
+        conn = plain_connect(self.db, readonly=True)
+        row = conn.execute("SELECT * FROM records WHERE id=?", self.ids).fetchone()
+        self.assertEqual(set(json.loads(row["source_labels_json"])), {"active:main", "archive:backup", "active:extra"})
+        self.assertEqual(set(json.loads(row["copy_paths_json"])), {str(self.active_path), str(self.archive_path), str(new_path)})
+        core = tuple(row[key] for key in row.keys() if key not in ("copy_paths_json", "source_labels_json"))
+        before = tuple(value for index, value in enumerate(self.before["records"][0]) if index not in (11, 12))
+        self.assertEqual(core, before)
+        conn.close()
+
+    def test_retirement_rebuild_and_corrupt_persisted_receipts_fail_closed(self):
+        self.prepare()
+        self.update(retired_sources=self.receipt)
+        for key in ("source_retirement", "active_scan_scope"):
+            for value in (None, "null", "{}", ""):
+                conn = plain_connect(self.db)
+                old = history_index._meta_get(conn, key)
+                if value is None:
+                    conn.execute("DELETE FROM meta WHERE key=?", (key,))
+                else:
+                    history_index._meta_set(conn, key, value)
+                conn.commit()
+                conn.close()
+                with self.subTest(key=key, value=value), self.assertRaises((history_index.IndexError, ValueError)):
+                    self.update()
+                self.assertEqual(self.snapshot(), self.before)
+                conn = plain_connect(self.db)
+                history_index._meta_set(conn, key, old)
+                conn.commit()
+                conn.close()
+        with self.assertRaisesRegex(history_index.IndexError, "Rebuild cannot preserve"):
+            self.update(rebuild=True)
+        self.assertEqual(self.snapshot(), self.before)
+
+    def test_cascade_sweep_and_update_guards_but_original_chunk_policy_remains(self):
+        self.prepare()
+        self.update(retired_sources=self.receipt)
+        conn = plain_connect(self.db)
+        for statement in ("DELETE FROM records", "DELETE FROM sessions", "UPDATE records SET seq=9"):
+            with self.subTest(statement=statement), self.assertRaises(sqlite3.IntegrityError):
+                conn.execute(statement)
+            conn.rollback()
+        self.assertEqual(history_index._prune_injected_records(conn, "claude", ["retired witness"]), 0)
+        conn.commit()
+        conn.close()
+        self.assertEqual(self.snapshot(), self.before)
+        # Retirement preserves records, not an eternal chunk-cache policy.
+        conn = plain_connect(self.db)
+        conn.execute("UPDATE chunks SET usable=0")
+        conn.commit()
+        history_index.apply_boilerplate_policy(conn)
+        conn.commit()
+        self.assertEqual(conn.execute("SELECT usable FROM chunks").fetchone()[0], 1)
+        conn.close()
+
+    def test_new_source_widening_and_later_active_removal_still_require_authority(self):
+        self.prepare()
+        self.update(retired_sources=self.receipt)
+        extra = history_index.HistorySource(provider="claude", kind="active", label="extra", home=self.root / "extra")
+        extra_path = project_dir(extra.home, self.workspace) / "72727272-7272-4272-8272-727272727272.jsonl"
+        write_jsonl(extra_path, [user_record("72727272-7272-4272-8272-727272727272", self.workspace, "newsource", "2026-08-03T00:00:00Z")])
+        with portable_backend():
+            result = history_index.update_index(self.db, self.scope(self.active_source, extra))
+        self.assertEqual(len(result["retained_scope"]["sources"]), 3)
+        with self.assertRaises(history_index.IndexError):
+            self.update()
+        self.assertEqual(self.snapshot(), self.before)
+
+    def test_first_retirement_fault_rolls_back_protection_and_new_records(self):
+        self.prepare()
+        write_jsonl(self.active_path, [self.old, self.fresh])
+        real_insert = history_index._insert_records
+        def partial_insert(conn, sid, records):
+            real_insert(conn, sid, records)
+            raise RuntimeError("injected after insert")
+        with mock.patch.object(history_index, "_insert_records", side_effect=partial_insert), self.assertRaisesRegex(RuntimeError, "after insert"):
+            self.update(retired_sources=self.receipt)
+        self.assertEqual(self.snapshot(), self.before)
+        conn = plain_connect(self.db, readonly=True)
+        self.assertEqual(conn.execute("SELECT count(*) FROM records").fetchone()[0], 1)
+        self.assertIsNone(history_index._meta_get(conn, "source_retirement"))
+        self.assertFalse(history_index._has_retained_records(conn))
+        conn.close()
+
+    def test_original_scope_missing_null_empty_keys_and_partial_retirement_fail(self):
+        self.prepare()
+        conn = plain_connect(self.db)
+        original = history_index._meta_get(conn, "index_scope")
+        conn.close()
+        base = json.loads(original)
+        for key in ("sources", "all_projects", "project_path"):
+            for value in ("missing", None, ""):
+                payload = dict(base)
+                if value == "missing": payload.pop(key)
+                else: payload[key] = value
+                if key == "project_path" and value is None: continue  # intentional full-project scope
+                conn = plain_connect(self.db)
+                history_index._meta_set(conn, "index_scope", payload)
+                conn.commit(); conn.close()
+                with self.subTest(key=key, value=value), self.assertRaises(history_index.IndexError):
+                    self.update(retired_sources=self.receipt)
+                self.assertEqual(self.snapshot(), self.before)
+        conn = plain_connect(self.db)
+        # A second absent identity cannot be implicitly retired by a partial declaration.
+        base["sources"].append({"provider": "claude", "kind": "active", "label": "another", "home": str(self.root / "another")})
+        history_index._meta_set(conn, "index_scope", base)
+        conn.commit(); conn.close()
+        with self.assertRaisesRegex(history_index.IndexError, "Every removed source"):
+            self.update(retired_sources=self.receipt)
+        self.assertEqual(self.snapshot(), self.before)
+
+
+class ChunkCacheResetTests(unittest.TestCase):
+    setUp = SourceRetirementTests.setUp
+    tearDown = SourceRetirementTests.tearDown
+    scope = SourceRetirementTests.scope
+    prepare = SourceRetirementTests.prepare
+    snapshot = SourceRetirementTests.snapshot
+    update = SourceRetirementTests.update
+
+    @contextmanager
+    def chunk_backend(self, *, bad_tokenizer=False, bad_chunk=False):
+        def tokenize(_path):
+            if bad_tokenizer:
+                raise ValueError("synthetic invalid tokenizer")
+            return types.SimpleNamespace(encode=lambda text, **kwargs: list(text))
+        class Chunker:
+            def __init__(self, **kwargs): pass
+            def __call__(self, text):
+                if bad_chunk:
+                    raise ValueError("synthetic chunk failure")
+                return [types.SimpleNamespace(text=text, token_count=len(text))]
+        fake = {"transformers": types.SimpleNamespace(AutoTokenizer=types.SimpleNamespace(from_pretrained=tokenize)),
+                "chonkie": types.SimpleNamespace(RecursiveChunker=Chunker, OverlapRefinery=lambda **kwargs: lambda pieces: pieces)}
+        with portable_backend(), mock.patch.dict(sys.modules, fake):
+            yield
+
+    def core(self):
+        conn = plain_connect(self.db, readonly=True)
+        result = {table: [tuple(row) for row in conn.execute(f"SELECT * FROM {table} ORDER BY rowid")]
+                  for table in ("records", "sessions", "retained_records")}
+        result["scope"] = [tuple(row) for row in conn.execute(
+            "SELECT key,value FROM meta WHERE key IN ('source_retirement','index_scope','active_scan_scope','last_indexed_at','complete_frontier') ORDER BY key")]
+        conn.close()
+        return result
+
+    def retired_cache(self):
+        self.prepare()
+        self.update(retired_sources=self.receipt)
+        self.model = self.root / "new-revision"
+        self.model.mkdir()
+        conn = plain_connect(self.db)
+        history_index._meta_set(conn, "embedding_model_revision", "old-revision")
+        conn.commit(); conn.close()
+
+    def test_explicit_cache_reset_rebinds_model_and_preserves_retired_history(self):
+        self.retired_cache()
+        before = self.core()
+        with self.chunk_backend(), self.assertRaisesRegex(history_index.IndexError, "mixing revisions"):
+            history_index.build_chunks(self.db, model_path=self.model)
+        with self.chunk_backend():
+            result = history_index.build_chunks(self.db, model_path=self.model, rebuild=True)
+        self.assertTrue(result["cache_rebuilt"])
+        self.assertEqual(result["missing_records"], 0)
+        self.assertEqual(self.core(), before)
+        conn = plain_connect(self.db)
+        self.assertEqual(history_index._meta_get(conn, "embedding_model_revision"), "new-revision")
+        self.assertEqual(history_index._meta_get(conn, "chunks_complete"), "true")
+        self.assertEqual(history_index._meta_get(conn, "vectors_complete"), "false")
+        self.assertIsNone(conn.execute("SELECT 1 FROM sqlite_master WHERE name='vec_chunks'").fetchone())
+        with self.assertRaises(sqlite3.IntegrityError): conn.execute("DELETE FROM records")
+        conn.rollback(); conn.close()
+        with self.chunk_backend():
+            resumed = history_index.build_chunks(self.db, model_path=self.model)
+        self.assertEqual(resumed["records_processed"], 0)
+        self.assertNotIn("cache_rebuilt", resumed)
+
+    def test_null_binding_and_empty_cache_have_explicit_valid_reset_path(self):
+        for empty in (False, True):
+            with self.subTest(empty=empty):
+                self.retired_cache()
+                conn = plain_connect(self.db)
+                conn.execute("DELETE FROM meta WHERE key='embedding_model_revision'")
+                if empty: conn.execute("DELETE FROM chunks")
+                conn.commit(); conn.close()
+                if not empty:
+                    with self.chunk_backend(), self.assertRaisesRegex(history_index.IndexError, "no recorded model revision"):
+                        history_index.build_chunks(self.db, model_path=self.model)
+                with self.chunk_backend():
+                    result = history_index.build_chunks(self.db, model_path=self.model, rebuild=True)
+                self.assertEqual(result["missing_records"], 0)
+                # Each subcase uses a fresh fixture database, not a formal index.
+                self.db.unlink()
+                self.model.rmdir()
+
+    def test_bad_tokenizer_and_missing_vector_backend_leave_old_cache_unchanged(self):
+        self.retired_cache()
+        before, core = self.snapshot(), self.core()
+        conn = plain_connect(self.db, readonly=True)
+        meta = [tuple(row) for row in conn.execute("SELECT * FROM meta ORDER BY key")]
+        conn.close()
+        with self.chunk_backend(bad_tokenizer=True), self.assertRaisesRegex(history_index.IndexError, "invalid tokenizer"):
+            history_index.build_chunks(self.db, model_path=self.model, rebuild=True)
+        def missing_vectors(path, **kwargs):
+            if kwargs.get("load_vectors"):
+                raise history_index.IndexError("Vector backend needs sqlite-vec")
+            return plain_connect(path, **kwargs)
+        with self.chunk_backend(), mock.patch.object(history_index, "_connect", side_effect=missing_vectors), self.assertRaisesRegex(history_index.IndexError, "needs sqlite-vec"):
+            history_index.build_chunks(self.db, model_path=self.model, rebuild=True)
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(self.core(), core)
+        conn = plain_connect(self.db, readonly=True)
+        self.assertEqual([tuple(row) for row in conn.execute("SELECT * FROM meta ORDER BY key")], meta)
+        conn.close()
+
+    def test_reset_sql_failure_rolls_back_cache_and_chunk_failure_can_resume(self):
+        self.retired_cache()
+        before, core = self.snapshot(), self.core()
+        conn = plain_connect(self.db)
+        conn.execute("CREATE TRIGGER cache_fault BEFORE DELETE ON chunks BEGIN SELECT RAISE(ABORT,'synthetic cache fault'); END")
+        conn.commit(); conn.close()
+        with self.chunk_backend(), self.assertRaisesRegex(history_index.IndexError, "cache fault"):
+            history_index.build_chunks(self.db, model_path=self.model, rebuild=True)
+        self.assertEqual(self.snapshot(), before)
+        conn = plain_connect(self.db)
+        conn.execute("DROP TRIGGER cache_fault"); conn.commit(); conn.close()
+        with self.chunk_backend(bad_chunk=True), self.assertRaisesRegex(history_index.IndexError, "No whole-message fallback"):
+            history_index.build_chunks(self.db, model_path=self.model, rebuild=True)
+        self.assertEqual(self.core(), core)
+
+        conn = plain_connect(self.db, readonly=True)
+        self.assertEqual(history_index._meta_get(conn, "embedding_model_revision"), "new-revision")
+        self.assertEqual(history_index._meta_get(conn, "chunks_complete"), "false")
+        self.assertEqual(conn.execute("SELECT count(*) FROM chunks").fetchone()[0], 0)
+        conn.close()
+        with self.chunk_backend():
+            result = history_index.build_chunks(self.db, model_path=self.model)
+        self.assertEqual(result["missing_records"], 0)
+        self.assertEqual(self.core(), core)
+
+    def test_cli_chunk_rebuild_is_explicit_and_uses_the_original_writer_lock(self):
+        model = self.root / "model"
+        def locked_build(*args, **kwargs):
+            with Path(str(self.db) + ".lock").open("a") as contender:
+                with self.assertRaises(BlockingIOError):
+                    fcntl.flock(contender.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return {"cache_rebuilt": True}
+        with mock.patch.object(history_index, "build_chunks", side_effect=locked_build) as build, redirect_stdout(io.StringIO()):
+            self.assertEqual(history_index.main(["--db", str(self.db), "chunk", "--rebuild", "--model-path", str(model), "--json"]), 0)
+        build.assert_called_once_with(self.db, model_path=model, simple_root=None, rebuild=True)
+        self.assertTrue(Path(str(self.db) + ".lock").exists())
+
+
 class MultiProviderIndexTests(unittest.TestCase):
     """Cover indexing providers other than Claude, and the v1 upgrade path."""
 
