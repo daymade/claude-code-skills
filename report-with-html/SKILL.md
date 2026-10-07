@@ -106,6 +106,10 @@ algorithm scores, and unexplained abbreviations do not belong on the page.
 Implementation state is a badge on that skeleton, not the skeleton itself. A missing
 dependency, unverified result, or unknown must remain visible.
 
+For technical selection or purchase comparisons, use the concrete-plan reading order
+in `references/visualization-patterns.md` before arranging sections. Distinguish choosing
+what to investigate next from authorizing a purchase or deployment.
+
 ### Geometry and real evidence
 
 Use position and length for important quantitative comparisons. Color carries category

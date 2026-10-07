@@ -97,6 +97,9 @@ For customer-approved report forms, follow
 For HTML report creation or updates, enter
 [report-with-html's Define success workflow](report-with-html/SKILL.md#workflow)
 for reader/use, evidence precision, delivery location and investigation acceptance.
+Its [technical comparison reading order](report-with-html/references/visualization-patterns.md)
+owns concrete plans, cost boundaries and next-verification choices; do not turn a research
+shortlist into purchase or deployment approval.
 Its [maintenance contract](report-with-html/references/long-lived-report-maintenance.md)
 owns later reconciliation and consumer readback.
 
@@ -112,10 +115,10 @@ when verifying an existing baseline; consult
 [source snapshot archives](daymade-skill/skill-creator/references/source-snapshot-archives.md)
 before archiving or restoring it.
 
-For hook creation, consolidation, registration or recovery, load
+For hook creation, consolidation, Skill-entry enforcement, registration or recovery, load
 [`daymade-claude-code:claude-code-hooks`](daymade-claude-code/claude-code-hooks/SKILL.md)
 and follow its Build order and installer-owned recovery contract. Follow that
-Skill's rule 7 for loop and reminder semantics; keep current thresholds in the
+Skill's loop and reminder contract; keep current thresholds in the
 owning implementation.
 
 Python entry points registered as synchronous Claude Code/Codex lifecycle hooks or
