@@ -125,6 +125,30 @@ class OriginalMediaTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'no verified local original'):
             render.prepare('<img src="missing"/>', {})
 
+    @unittest.skipUnless(shutil.which('pandoc'), 'pandoc required for actual conversion engine')
+    def test_oss_original_keeps_separate_source_token(self):
+        (self.root / 'media').mkdir()
+        body = b'synthetic-original'
+        (self.root / 'media/original.png').write_bytes(body)
+        entry = {'role': 'embedded_media_original', 'storage': 'oss',
+                 'locator': {'system': 'oss', 'uri': 'oss://synthetic-bucket/original.png'},
+                 'source_token': 'SyntheticMediaToken1234567890', 'cache_path': 'media/original.png',
+                 'bytes': len(body), 'sha256': download.digest(body), 'mime': 'image/png'}
+        import check_archive_storage
+        self.assertEqual(check_archive_storage.validate_manifest({'files': [entry]}), [])
+        manifest = self.root / 'manifest.json'
+        manifest.write_text(json.dumps({'files': [entry]}))
+        capture = self.root / 'capture.json'
+        capture.write_text(json.dumps({'data': {'document': {'title': 'Synthetic lesson',
+            'content': '<p>Body.</p><img src="SyntheticMediaToken1234567890"/>'}}}))
+        result = render.render(capture, manifest, self.root / 'oss.md', 'https://example.feishu.cn/wiki/node')
+        self.assertEqual(result['media_references'], 1)
+        self.assertIn('![](<media/original.png>)', (self.root / 'oss.md').read_text())
+        entry['locator'] = {'system': 'feishu', 'token': 'DifferentCapturedToken'}
+        manifest.write_text(json.dumps({'files': [entry]}))
+        with self.assertRaisesRegex(ValueError, 'disagree'):
+            render.render(capture, manifest, self.root / 'conflict.md', 'https://example.feishu.cn/wiki/node')
+
     def test_catalog_preserves_source_identity_and_does_not_classify(self):
         (self.root / 'lesson.md').write_text('---\ntitle: "Lesson"\nsource: "https://example.feishu.cn/wiki/node"\nqmd:\n  metadata:\n    platform: "feishu"\n    key: "node"\n    kind: "course"\n---\n\nOriginal body.\n')
         result = catalog.build(self.root, 'fav-feishu', 'Selected lessons')

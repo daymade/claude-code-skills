@@ -70,7 +70,13 @@ def render(capture, manifest, output, source):
         actual = (root / path).resolve()
         if not actual.is_relative_to(root) or not actual.is_file() or actual.stat().st_size != item['bytes']:
             raise ValueError('Local original is missing or has an unexpected byte count')
-        token = item.get('locator', {}).get('token')
+        source_token = item.get('source_token')
+        locator_token = item.get('locator', {}).get('token')
+        if source_token and locator_token and source_token != locator_token:
+            raise ValueError('Source token and Feishu locator token disagree')
+        token = source_token or locator_token
+        if not isinstance(token, str) or not token:
+            raise ValueError('Local original has no captured source token for rendering')
         relative = Path(os.path.relpath(actual, output.parent)).as_posix()
         media[token] = urllib.parse.quote(relative, safe='/')
     content, used = prepare(content, media)
