@@ -282,7 +282,8 @@ class SwitchTest(unittest.TestCase):
         with mock.patch.object(gs, "history_reader", return_value=(mock.Mock(), None)), \
                 mock.patch.object(gs, "_indexed_conversations", return_value=[mock.Mock(session_id=B)]), \
                 mock.patch.object(gs, "resolve_indexed_rollout", return_value=Path(child["transcript"])):
-            self.assertEqual(gs.main(["switch-prepare", "--out", str(self.manifest)]), 1)
+            self.assertEqual(gs.main(["switch-prepare", "--out", str(self.manifest),
+                                      "--codex-home", str(self.home)]), 1)
         doc = json.loads(self.manifest.read_text())
         self.assertEqual(doc["sessions"], [])
         self.assertIn("sub-agent rollout", doc["unresolved"][0]["reason"])
