@@ -100,6 +100,11 @@ for reader/use, evidence precision, delivery location and investigation acceptan
 Its [maintenance contract](report-with-html/references/long-lived-report-maintenance.md)
 owns later reconciliation and consumer readback.
 
+For HTML report images and explanatory diagrams, enter
+[report-with-html](report-with-html/SKILL.md); its
+[visual evidence workflow](report-with-html/references/visual-evidence.md) owns selection,
+source verification, placement and review. Keep report-specific assets with the report.
+
 Treat [packaging_policy.py](daymade-skill/skill-creator/scripts/packaging_policy.py)
 as the canonical inclusion policy for packaging, security attestation, source
 audits, and version checks. Keep consumers on this shared implementation. Preserve the recorded policy

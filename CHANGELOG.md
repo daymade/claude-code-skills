@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **report-with-html** (v1.2.0, visual evidence workflow): Select and source product photos, screenshots and explanatory diagrams before HTML authoring. Place visuals beside the decision they explain, preserve variant and evidence limitations, and ask readers what the images actually reveal. Extend provenance acceptance for media; retain existing geometry, interaction and bounded review contracts.
+
 - **skills-search** (suite `daymade-skill` v1.66.0, local-first discovery): Add configurable persistent repository sources and immutable-commit metadata caches. Search the entire owned tier before approved sources and CCPM; report failed coverage explicitly and open candidate bodies progressively. Keep registry/install/manage commands, and defer ecosystem setup until requested. Add offline configuration, cache and repository-boundary regressions.
 
 - **git-safety-net** (v1.22.3 → v1.22.4): prevention_practices.md adds a sibling subsection to Phantom-`D` triage — `git pull --ff-only` is not atomic: the half-applied fast-forward (working tree updated, ref not moved; signature is `M` on a file you didn't edit plus `git diff HEAD` showing the *incoming* changes; recover by hand-aligning to HEAD and re-running the ff) and the already-published working-tree copy (a pre-merge revision left as an uncommitted modification blocks any later ff because git compares paths, not content; recover by bringing it to the merged revision, and verify with a blob comparison when the copy predates review fixes). Both shapes fired within the 2026-10-07 delivery round. Change type: reference addition from measured incidents.
