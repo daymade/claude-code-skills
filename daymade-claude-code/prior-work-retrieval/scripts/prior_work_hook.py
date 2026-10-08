@@ -180,9 +180,9 @@ INCAPABLE_EXECUTOR = re.compile(
     r"工具(?=$|[\s，,、。.;；:：])",
     re.IGNORECASE,
 )
-BARE_CONTINUATION = re.compile(
-    r"\A\s*(?:继续(?:吧|啊|做)?|接着(?:做|来)?|做吧|continue|resume|go ahead)"
-    r"\s*[。.!！?？]*\s*\Z", re.IGNORECASE,
+CONTINUATION_PROMPT = re.compile(
+    r"\A\s*(?:继续|接着|做吧|continue\b|resume\b|keep going\b|go ahead\b)",
+    re.IGNORECASE,
 )
 SHELL_WRITE_SIGNAL = re.compile(
     r"(?:tools\.apply_patch|\bapply_patch\b|\.write_(?:text|bytes)\s*\(|"
@@ -829,8 +829,6 @@ def handle_user_prompt(event: dict[str, Any]) -> dict[str, Any] | None:
     # Internal deliveries are not a new user task or authority to lift a gate.
     if HOOK_GUIDANCE_MARKER in prompt or NON_USER_PROMPT.search(prompt.strip()):
         return None
-    if BARE_CONTINUATION.fullmatch(prompt):
-        return None
     if not isinstance(session_id, str) or not session_id:
         if classify_prompt(prompt) == "required_prior_signal":
             return _inject(
@@ -851,6 +849,10 @@ def handle_user_prompt(event: dict[str, Any]) -> dict[str, Any] | None:
     receipt_valid = current is not None and _receipt_error(manifest, session_id) is None
     classification = classify_prompt(prompt, receipt_valid)
     if classification == "none":
+        # An ambiguous continuation carries existing scope; it is not a new task.
+        # Explicit retrieval and user opt-out above still take precedence.
+        if CONTINUATION_PROMPT.search(prompt):
+            return None
         if current is not None:
             prior_work.set_prompt_scope(manifest, session_id, active=False)
         return None
@@ -911,6 +913,9 @@ def handle_stop(event: dict[str, Any]) -> dict[str, Any] | None:
         )
     if error is not None:
         return _stop_block(_guidance(f"final response; receipt: {error}", session_id))
+    # This batch completed its obligation. A notification or later continuation
+    # must not resurrect it when the old receipt ages out.
+    prior_work.set_prompt_scope(manifest, session_id, active=False)
     return None
 
 

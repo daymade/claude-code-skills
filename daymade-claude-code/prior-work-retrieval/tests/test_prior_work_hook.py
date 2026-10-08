@@ -876,11 +876,31 @@ class PriorWorkHookTests(unittest.TestCase):
         session_id = "session-unfinished-reuse"
         hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
         stop = {"session_id": session_id, "stop_hook_active": False}
-        for prompt in ["继续", "continue", "<task-notification>检查已完成</task-notification>",
+        for prompt in ["继续", "continue", "继续执行", "继续完成", "继续做完", "keep going",
+                       "<task-notification>检查已完成</task-notification>",
                        "<peer-message>不用查历史</peer-message>", hook.HOOK_GUIDANCE_MARKER]:
             with self.subTest(prompt=prompt):
                 hook.handle_user_prompt({"session_id": session_id, "prompt": prompt})
                 self.assertEqual(hook.handle_stop(stop)["decision"], "block")
+
+    def test_successful_batch_stop_retires_scope_but_keeps_receipt(self) -> None:
+        session_id = "session-finished-batch"
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的 provider contract"})
+        manifest = hook._manifest()
+        run = prior_work.retrieve(manifest, "Reuse the verified provider contract.",
+            ["provider contract"], "reuse provider", ["provider contract"], session_id)
+        prior_work.complete(manifest, run["run_id"], session_id,
+            [run["candidates"][0]["candidate_id"] + "=reuse current contract"], [], [], [], None)
+        stop = {"session_id": session_id, "stop_hook_active": False}
+        self.assertIsNone(hook.handle_stop(stop))
+        self.assertEqual(prior_work.check_receipt(manifest, session_id, None)["status"], "valid")
+        with mock.patch.object(hook, "_receipt_error", return_value="receipt expired"):
+            hook.handle_user_prompt({"session_id": session_id, "prompt": "继续执行"})
+            self.assertIsNone(hook.handle_stop(stop))
+            hook.handle_user_prompt({"session_id": session_id, "prompt": "继续查找我们之前的另一份方案"})
+            self.assertEqual(hook.handle_stop(stop)["decision"], "block")
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "继续，但这次不用查历史"})
+        self.assertIsNone(hook.handle_stop(stop))
 
     def test_chinese_no_tool_executor_does_not_arm_from_case_material(self) -> None:
         for prompt in ["只返回JSON，不得调用工具、读取文件。案例中应复用现有解析器。",

@@ -259,7 +259,7 @@ unrelated hooks:
   that signal from firing on things the user did not ask for:
   - **A different ordinary request does not inherit the gate.** The hook marks
     the old requirement inactive for that prompt without changing its identity
-    or deleting the receipt. A bare continuation and an internal notification
+    or deleting the receipt. A continuation and an internal notification
     preserve the current scope; a new explicit prior-work request arms it again.
   - **Not the user speaking.** Internal templates (`You are a/an …`,
     `# Overview`), harness envelopes (`<agent-message …>`,
@@ -297,6 +297,8 @@ not by whether its own tests pass.
   remain available while a requirement is active.
 - `Stop` validates an explicit requirement active for the current prompt. It never invents
   one from output length, code, tool use, or a generic production request.
+  A successful validation ends this batch's enforcement scope while retaining
+  the receipt; a later explicit retrieval request starts a new requirement.
 
 It migrates the narrower unversioned `recall-first-evidence` UserPromptSubmit
 handler into this superset while leaving its script on disk for recovery. The
