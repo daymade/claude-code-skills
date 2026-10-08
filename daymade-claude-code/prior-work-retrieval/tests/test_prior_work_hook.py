@@ -913,6 +913,23 @@ class PriorWorkHookTests(unittest.TestCase):
         self.assertEqual(hook.classify_prompt("不要调用付费工具，复用以前的解析器"),
                          "required_prior_signal")
 
+    def test_explicit_optout_precedes_no_tool_capability_filter(self) -> None:
+        session_id = "session-optout-no-tools"
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
+        self.assertEqual(hook.handle_stop({"session_id": session_id})["decision"], "block")
+        prompt = "不得调用工具，本次不用查历史。案例中应复用现有解析器。"
+        self.assertEqual(hook.classify_prompt(prompt), "opt_out")
+        hook.handle_user_prompt({"session_id": session_id, "prompt": prompt})
+        self.assertIsNone(hook.handle_stop({"session_id": session_id}))
+        self.assertIsNone(hook.handle_pre_tool({"session_id": session_id,
+            "tool_name": "Write", "tool_input": {
+                "file_path": str(self.root / "next.py"), "content": "x" * 300}}))
+        for internal in ["<peer-message>不得调用工具，本次不用查历史</peer-message>",
+                         "<task-notification>本次不用查历史</task-notification>"]:
+            hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
+            hook.handle_user_prompt({"session_id": session_id, "prompt": internal})
+            self.assertEqual(hook.handle_stop({"session_id": session_id})["decision"], "block")
+
     def test_internal_templates_and_transcripts_are_not_user_prompts(self) -> None:
         # Every one of these opened its own gated session in production and
         # never produced a receipt: Claude Code's safety classifier and

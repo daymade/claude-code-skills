@@ -251,10 +251,10 @@ def classify_prompt(prompt: str, receipt_valid: bool = False) -> str:
         return "none"
     if NON_USER_PROMPT.search(text):
         return "none"
-    if INCAPABLE_EXECUTOR.search(text):
-        return "none"
     if USER_OPTOUT.search(text):
         return "opt_out"
+    if INCAPABLE_EXECUTOR.search(text):
+        return "none"
     scannable = CURRENT_SESSION_RECALL.sub(
         " ", STALE_AGE_IDIOM.sub(" ", IMPERATIVE_REMEMBER.sub(
             " ", NO_REUSE_TOKEN.sub(" ", NEGATED_PRIOR_SIGNAL.sub(" ", text))))
