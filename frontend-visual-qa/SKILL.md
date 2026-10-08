@@ -394,7 +394,7 @@ Also verify, when applicable:
 Load
 [references/journey-and-page-contracts.md](references/journey-and-page-contracts.md)
 when the audit includes state transitions, authorization, modes,
-provider/model/runtime truth, routes, transient states, overlays, browser
+summary-to-detail disclosure, provider/model/runtime truth, routes, transient states, overlays, browser
 outputs, native shells, landing/deck/browser tool/game artifacts, dashboards,
 design-system artifacts, GIS/maps, or review tools.
 

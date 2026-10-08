@@ -2,12 +2,13 @@
 
 Load this reference only when the audit includes state transitions, routes,
 overlays, browser-owned output, native shells, complex page types, maps, or
-review/annotation workflows.
+review/annotation workflows, including summary-to-detail disclosure.
 
 ## Contents
 
 - Evidence Boundary
 - Journey And State Matrix
+- Summary-To-Detail Disclosure
 - Authorization, Mode, And Runtime Truth
 - Route And Addressability
 - Transient UI
@@ -69,6 +70,51 @@ Before closing a nontrivial journey audit, repeat the main path without
 developer context and ask what a tired or first-time user will misunderstand
 first. Check trigger ownership, return-to-default, recovery, runtime truth,
 internal language, manual burden, and which regression guard catches the miss.
+
+## Summary-To-Detail Disclosure
+
+When an affected control reveals an explanation, breakdown, inspector, or other
+detail, audit the questions each state lets the actor answer. The auditor executes
+this through the authorized Level A/B interaction and the project's independent
+reference; no bundled text-count or DOM-node metric decides whether detail is useful.
+
+1. Freeze the actor's question for the collapsed view and the question promised
+   by the expanded view from the user/task contract, before clicking. Keep facts
+   needed for the ordinary task visible initially; a concise disclosure label
+   should identify what the secondary view adds.
+2. Inspect the collapsed render and answer its question from that render alone.
+   Record the visible values, relationships, or evidence used. A correct grand
+   total cannot establish that a requested contribution breakdown is visible.
+3. Trigger the actual control, then read and extract the newly visible granular
+   rows, relationships, explanations, or supporting evidence. Answer the expanded
+   question using that evidence, naming what was unavailable while collapsed.
+   An open flag, changed text, extra nodes, or more pixels cannot supply the answer.
+   Nonfinancial detail may supply an explanation or source evidence rather than a table.
+4. Reconcile the observed answers against an independent project-authoritative
+   fixture, record, or calculation. For quantitative breakdowns, check component
+   identities, exact quantities, units, inclusion rules, and time ranges/cutoff,
+   as well as their relationship to the summary. Distinguish each period's value
+   from a cumulative value and an unfinished period from a complete one. Agreement
+   between two UI states is not independent evidence; unavailable reference
+   leaves that claim unverified.
+5. Close and reopen as relevant, and retain a compact evidence map:
+   `state -> actor question -> observed answer/evidence -> reference -> verdict`.
+   Fail the promised detail when it merely repeats the summary and leaves its
+   question unanswered. Retain a repeated summary/total when it anchors the new
+   breakdown or permits reconciliation; repetition alone is not a defect.
+
+For fix closure, exercise the rejected old state as a negative control and a
+healthy near-boundary case: a real breakdown that also repeats its total should
+pass. Use saved old evidence or an authorized isolated fixture when needed, label
+synthetic evidence, and do not mutate the live target to manufacture the defect.
+Stop after the affected questions and relevant existing journey regressions are
+resolved; do not turn this check into a whole-page redesign.
+
+The split and expectation checks apply
+[NN/g's progressive-disclosure guidance](https://www.nngroup.com/articles/progressive-disclosure/).
+The essential-content boundary follows
+[GOV.UK's details guidance](https://design-system.service.gov.uk/components/details/).
+These sources do not prescribe one detail format or prove this target's correctness.
 
 ## Authorization, Mode, And Runtime Truth
 
