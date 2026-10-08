@@ -312,6 +312,40 @@
         "Creates only a minimal redacted derivative when evidence must be handed off, preserving the visible defect while removing customer identifiers",
         "Keeps current-render, delivery, and fix-closure statuses separate; privacy redaction does not authorize substituting another target"
       ]
+    },
+    {
+      "id": 22,
+      "name": "late-save-reopened-same-object-draft",
+      "prompt": "Plan an audit of an editor changed to ignore late save responses. The current implementation compares only the selected object ID. A user submits draft one for synthetic object A, navigates A -> B -> A, reopens A, and enters draft two while the first response is pending. Another path uses browser Back to close the pending editor before reopening the same A. The handler test is green and storage contains draft two. No runnable project fixture or response-holding harness is supplied; audit only. Give the executable journey and verdict boundaries, including success, failure/conflict, normal-save, and React StrictMode controls. Do not invent clicks or writes.",
+      "expected_output": "A bounded partial/unverified journey audit that rejects same-ID, storage, or handler success as proof, specifies real response-held success and failure cases, and requires the actual current and reopened editor plus original server-target readback. It preserves an already submitted write without replay, and includes normal and StrictMode healthy controls so blocking every completion cannot count as a fix.",
+      "files": [],
+      "expectations": [
+        "States that the same object ID after A -> B -> A or Back/reopen does not establish ownership of the newer editor instance or draft",
+        "Requires an authorized isolated fixture and existing response-holding harness; leaves execution unverified because neither is supplied and does not simulate production writes or invent execution",
+        "Specifies submitting draft one once, holding its real success response, entering distinct draft two after A -> B -> A, then separately exercising actual browser Back and same-object reopen",
+        "Requires inspection of the actual selected object, route, editor, and draft after release, followed by closing and reopening through the draft-preserving path to verify draft two remains visible",
+        "Reads the fixture server independently to prove the original write may complete on A, never targets B, and is neither cancelled as proof of safety nor automatically replayed",
+        "Repeats with an actual fixture failure/conflict response and verifies stale errors neither steal navigation nor erase the newer draft; verifies a current failure retains usable input and recovery",
+        "Includes a normal current save that clears only its accepted draft and, where React StrictMode applies, a real setup-cleanup-setup healthy control proving the live setup can still save",
+        "Does not pass from handler tests, storage presence, DOM flags, or a static screenshot alone; keeps project-specific server period/version contracts outside the generic visual QA recipe"
+      ]
+    },
+    {
+      "id": 23,
+      "name": "retired-batch-preflight-does-not-resurrect-write",
+      "prompt": "Plan an audit of a batch-maintenance workflow. It performs a preparatory GET before allocating an identity and posting a batch. The user leaves while that GET is pending, reopens the workflow, enters a new synthetic batch, and sends a POST with a new request identity. The old GET then completes. The page still looks correct, but no request log or recovery readback has been checked. No runnable project fixture or response-holding harness is supplied; audit only. Give the executable race and normal-recovery checks, including lifecycle healthy controls and evidence needed before declaring the fix verified.",
+      "expected_output": "A partial/unverified audit that retires the old preparation before it can initiate POST, verifies both emitted requests and user-visible reopened batch state, and distinguishes that retired GET from the already submitted new POST whose identity must remain recoverable. It includes normal preparation/recovery and applicable StrictMode controls without claiming execution.",
+      "files": [],
+      "expectations": [
+        "Requires an authorized isolated synthetic fixture and existing response-holding harness, reports their absence as an execution prerequisite, and makes no production mutation or invented click claim",
+        "Specifies holding the old preparatory GET, leaving/reopening, entering a distinct new batch, and submitting its POST exactly once while recording its text and request identity",
+        "After releasing the old GET, checks emitted requests to prove the retired preparation initiated no POST; a visually unchanged page is insufficient to exclude a stray server write",
+        "Checks the actual current page retains the new batch text and pending request identity rather than accepting only in-memory flags or a green handler test",
+        "Leaves and reopens while the new POST is pending, releases its response, then uses the ordinary recovery control and independently reads back that original request identity and matching batch result",
+        "Preserves the identity of the already submitted POST and forbids cancelling or replaying that write merely to avoid stale completion; recovery does not create a new identity or duplicate POST",
+        "Includes ordinary preparation/recovery without delayed responses and, where React StrictMode applies, a setup-cleanup-setup healthy control proving current preparation remains usable",
+        "Separates retired preparation from accepted writes, requires the compact held-response/navigation/release/current-page/reopened-state/server-readback evidence map, and withholds fix closure until the negative and healthy controls have actual evidence"
+      ]
     }
   ]
 }
