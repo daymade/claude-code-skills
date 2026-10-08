@@ -71,6 +71,66 @@ developer context and ask what a tired or first-time user will misunderstand
 first. Check trigger ownership, return-to-default, recovery, runtime truth,
 internal language, manual burden, and which regression guard catches the miss.
 
+### Delayed Completion And Reopened Work
+
+Use these recipes when an affected editor or batch workflow can outlive a
+selection, navigation, or component instance. Cover the affected journey, not
+every asynchronous operation in the product. Use an authorized isolated project
+fixture with synthetic objects A and B and the existing response-holding harness.
+Hold delivery of a response without cancelling or replaying the submitted write;
+record its original target, request identity, and server result. If that harness
+or write authority is unavailable, specify the missing prerequisite and leave
+execution unverified. Do not manufacture races in production.
+
+**Editor save, leave, and reopen**
+
+1. Open A through the visible control, enter a recognizable first draft, and
+   submit once. Hold its success response after the fixture server accepts the
+   write. Record the original object target and submitted value.
+2. Before releasing it, navigate A -> B -> A, reopen the editor, and enter a
+   distinct second draft for the same A. Separately exercise browser Back out
+   of the pending editor and reopening that same object; matching object IDs
+   alone must not make the old editor own the new draft.
+3. Release the old response. Inspect the actual current page: its selected
+   object, route, editor, and second draft must remain the newer state. Close
+   and reopen through the product's draft-preserving path and verify the second
+   draft is still visible. Do not use an explicit discard action for this check.
+   Read the fixture server independently: the already submitted write may
+   finish on its original A, but must not target B or be submitted again.
+4. Repeat the late-response branch with a real fixture failure or conflict.
+   Its stale error must not replace the new editor or erase its draft. Confirm
+   a normal, still-current save succeeds and clears only its own accepted draft;
+   a current failure retains editable input and an actionable recovery path.
+
+**Batch preparation, leave, and recover**
+
+1. Start maintenance of a selected synthetic batch and hold its preparatory
+   GET. Leave that workflow, reopen it, and enter a new batch. Submit the new
+   batch once, capturing its text, request identity, and real server result;
+   hold its response as needed to keep recovery pending.
+2. Release the old GET. It must not initiate a POST for the retired preparation,
+   overwrite the new batch text, or replace the new pending request identity.
+   Observe emitted requests as well as the current page; an unchanged draft
+   can hide an unintended server write.
+3. Leave and reopen while the new POST is pending, then release its response.
+   Inspect the displayed batch and resume through the normal recovery control.
+   Read back the original request identity from the fixture server and verify
+   its result belongs to the submitted new batch. Recovery must not create a
+   fresh identity or duplicate an already submitted POST.
+4. Exercise ordinary batch preparation and recovery without delayed responses
+   as a healthy control. Where the component runs under React StrictMode,
+   also use its actual setup -> cleanup -> setup lifecycle and confirm the
+   second live setup still permits a current save or preparation. A permanently
+   retired guard that blocks all writes does not pass either recipe.
+
+Retain a compact map of `held response -> navigation/new input -> release ->
+current visible state -> reopened draft -> server readback`. Handler tests,
+storage contents, DOM flags, and request counts support this map; none alone
+proves that the user's reopened editor displays the correct work. For fix
+closure, use the same bounded recipe against saved old evidence or an isolated
+old implementation as a negative control. Keep server-side object-period/version
+write contracts in the project's own specification and tests.
+
 ## Summary-To-Detail Disclosure
 
 When an affected control reveals an explanation, breakdown, inspector, or other

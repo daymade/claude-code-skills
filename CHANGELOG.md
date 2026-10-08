@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.19.2 → v1.19.3): Add delayed-save and retired-batch-preflight journey recipes with current-page, reopened-draft and original-request readback. Preserve completed writes and include ordinary-flow and StrictMode controls. Add two bounded behavior cases. Change type: existing audit-contract clarification.
+- **data-visualization-discipline** (v1.1.1 → v1.1.2): Add a synthetic operational matrix case for current unknown, stale/source-failed observations, conflicting probes and certificate risk. Route it from data validation and retain project-owned state/threshold contracts and healthy controls. Change type: bounded reference addition.
+
 - **github-ops** (v1.14.0 → v1.14.1): Continue authorized self-hosted setup through the deployment owner when registrations do not match. Prepare persistent dependencies and caches, preserve required artifact handoff when hosted storage blocks it, avoid service-port collisions, account for inherited and Docker resource limits, and verify hook launchers in actual job logs. Change type: bounded workflow repair and factual clarification.
 - **transcript-fixer** (`daymade-audio` v1.45.0): Bind explicit answers to queue item, target, source citation and exact quote. Preview authority before acceptance and commit it with the verdict; optionally replace corrected prose and an existing ledger line together. Preserve prior citation paths and name guards; refusal writes nothing, and interrupted file/SQLite updates remain pending until an idempotent retry. Change types: bounded consistency repair and cited-answer workflow addition; targeted regressions and CLI readback cover refusal and recovery.
 
