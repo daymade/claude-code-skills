@@ -389,6 +389,11 @@ gh api repos/{owner}/{repo}/actions/runs/{run_id}/jobs | \
 
 ## Best Practices
 
+For overloaded CI email, exhausted allowance or unrelated/repeated jobs, first
+use [CI demand and notification delivery](ci-demand-and-notifications.md).
+The options below follow the repository's purpose and change risk; enabling
+every option is not a default operating policy.
+
 ### Workflow Organization
 
 1. **Use descriptive names** - Make workflow purpose clear

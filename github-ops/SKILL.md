@@ -28,6 +28,7 @@ Read only the reference required for the task:
 | Inspect or change collaborators, teams, base permissions, member privileges, or organization 2FA | [`references/organization_access_and_settings.md`](references/organization_access_and_settings.md) |
 | Protect a default branch while letting collaborators contribute through PRs; inventory protection gaps across an account, roll a baseline out to many repositories, and verify enforcement with a real push | [`references/branch_protection.md`](references/branch_protection.md) |
 | Trigger, inspect, rerun, cancel, or purge Actions; manage secrets or variables | [`references/workflow_operations.md`](references/workflow_operations.md) |
+| Reduce CI email overload, exhausted Actions allowance, unrelated checks or repeated runs; decide what a template or product actually needs | [`references/ci-demand-and-notifications.md`](references/ci-demand-and-notifications.md) before changing runners or notifications |
 | Build and publish a Docker/OCI image to GitHub Container Registry (GHCR) | [`references/ghcr_publishing.md`](references/ghcr_publishing.md) |
 | Use raw REST/GraphQL endpoints, pagination, rate limits, webhooks, or Enterprise hosts | [`references/api_reference.md`](references/api_reference.md) |
 | Build scripts, retries, bulk operations, or machine-readable output | [`references/best_practices.md`](references/best_practices.md) |
