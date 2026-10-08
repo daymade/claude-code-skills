@@ -83,13 +83,14 @@ At minimum, capture:
 /usr/sbin/scutil --get ComputerName
 /usr/sbin/scutil --get LocalHostName
 /usr/bin/sw_vers
+/usr/sbin/sysctl kern.boottime vm.swapusage
 /bin/df -k /System/Volumes/Data
 /bin/df -h /System/Volumes/Data
 ```
 
 Use `df -k` for calculations and `df -h` for the human-readable report. Treat an extension, label, or old report as a hint until the live command confirms it.
 
-Establish the success target before an unknown-source scan. Copy a user-supplied free-space or capacity target exactly. If the user supplied none, report the current values and ask for a target in GiB, capacity percentage, or both; do not invent one. A named-suspect diagnosis may continue without a cleanup target, but the ordered unknown-source scan cannot claim a stop condition until the target is explicit.
+Copy a user-supplied free-space or capacity target exactly. A read-only inventory can proceed without one: report the current values and locate the largest occupants within the authorized read scope. Do not delay that diagnosis to ask for a cleanup target. A cleanup without an explicit target cannot claim that the user's capacity goal has been met; report measured release and remaining candidates instead.
 
 Keep this first phase read-only. Do not run `scripts/cleanup_report.py` yet: it creates a local state directory and snapshot file. Preserve the command output in the report instead. On a remote target, always run the direct `df` commands on that host; the local helper must not measure the controller Mac by mistake.
 
@@ -106,7 +107,9 @@ If the known suspect alone can meet the user's free-space target, do not scan un
 
 ### General analysis when the source is unknown
 
-Run the smallest ordered sequence that can identify enough physical space to meet the target. Stop only when candidates with supported exact actions and defensible expected physical release can meet it. Raw allocation totals, logical cache sizes, shared Docker layers, Trash moves, and unverified “potential savings” do not satisfy the stop condition.
+First separate **occupancy discovery** from **cleanup selection**. Within each authorized root, obtain one shallow size breakdown (for example `du -x -k -d 1 "<approved-root>"`); include hidden children, record inaccessible paths as unknown, and reuse completed measurements. Show the largest occupants even when they must be preserved. Deepen the largest unexplained branches before spending another pass on small caches. Do not rescan completed siblings unless their state changed. This is read-only sizing, not permission to read file contents or delete anything; the approved-path contract below still governs content-bearing roots.
+
+Then run the smallest ordered sequence below that can classify the relevant occupants. For a cleanup target, candidates need supported exact actions and defensible expected physical release before they can satisfy it. Raw allocation totals, logical cache sizes, shared Docker layers, Trash moves, and unverified “potential savings” do not satisfy the stop condition. For an inventory-only request, stop when the authorized roots' largest occupants and coverage gaps are explained; keep deletion pending authorization.
 
 Do not make the physical-confidence ranking hide the user's largest visible
 hotspot. When a nominal/path-accounted candidate is larger than the recommended
@@ -144,7 +147,7 @@ Read `references/docker_analysis.md` before reporting Docker savings. List every
 
 A real 2026-09-19 run followed the Phase 1 machinery to the letter and still shipped three bad plans: it proposed preserve-by-default caches (npm `_cacache`, Playwright browsers, Homebrew) as a "low-risk combo" because the rule lives in `references/cleanup_targets.md` — a file the discovery workflow never opens; it proposed `uv cache prune` as zero-impact from a `--help` line plus size ratios, never verifying semantics or the installed version; and it led with 2 GB items beside a 91 GB candidate because no free-space target had been set. The rules that would have caught all three already existed in this skill — in a reference the procedure never opened, which makes them not rules in practice. A prose checklist is only one level better than the reference it summarizes: an independent review of the first draft of this gate found thirteen blocking defects, the deepest being that the gate itself had no mechanical enforcement. Step 4 is therefore a script, not a promise — run it, or the plan does not exist.
 
-1. **Confirm the free-space target.** A named-suspect diagnosis may continue without one (the Phase 1 exemption); an unknown-source scan may not — if the user supplied none, ask before ranking. A scan without a target has no stop condition and produces size-sorted noise.
+1. **State the outcome being reported.** For a cleanup target, use the user's exact value. Without one, deliver the occupancy inventory or ranked decision list; do not invent a capacity target or claim it has been met.
 2. **Open `references/cleanup_targets.md`** and classify every candidate the discovery produced into this table, written to a file (step 4 parses it):
 
    | Target | Nominal size | Physical confidence | Class | Governing rule (verbatim quote) | Expected physical release + basis | Restoration cost | Verdict |
@@ -170,7 +173,7 @@ A real 2026-09-19 run followed the Phase 1 machinery to the letter and still shi
    ```bash
    uv run scripts/check_gate_plan.py --table <gate-table.md> --plan <plan.md>
    ```
-   Exit 0 is required. The checker verifies: the table exists and classifies the candidates; every governing-rule quote appears verbatim in the reference (this is what forces the reference open — a fabricated quote fails); every destructive command the checker recognizes has its stated target matched to a table row (commands in unrecognized forms are counted and reported, never silently passed); the action set obeys the class and unlock rules, including the preserve-by-default cross-check; no category-wide command sits in the action set; the lead row obeys the ranking rule; every destructive command carries its tool verification. A failing run names the violated rule — fix the plan; do not weaken the checker.
+   Exit 0 is necessary, but does not certify an unrecognized command. Read the examined-command count and every coverage diagnostic: a proposed deletion with zero commands examined is unchecked. Use a recognized exact form or independently resolve that command's target coverage and semantics before execution; do not treat a PASS beside “coverage incomplete” as approval. The checker verifies table classification, verbatim rule quotes, recognized destructive-command targets, action classes and unlock rules, preserve-by-default protections, category-wide exclusions, release ranking, and tool verification. It recognizes `uv run` and Python calls to `safe_delete.py` with relative or absolute script paths and checks every literal target separately; unresolved batch files and shell expansions fail coverage. A failing run names the violated rule — fix the plan; do not weaken the checker.
 
    Five failure shapes the checker reliably catches, measured while getting a real 18-target plan to exit 0 — all five are plan-side fixes, never checker-side:
    - **Path form mismatch** (`target_coverage`): the table must carry the same full absolute path the command uses; a `~/` shorthand row does not match a command that names `/Users/…`.
@@ -208,6 +211,8 @@ Immediately before the first state-changing command:
 2. Re-query the objects or subsystem status; cleanup plans expire when live state changes.
 3. Recheck protected-service health.
 4. Compare the approved commands and exact target set with the commands about to run. Any wider or different target set requires new approval. A separately preserved item becoming inactive does not invalidate the plan when it remains explicitly excluded and the approved target-set hash still matches.
+
+Keep approvals and exclusions attached to the original inventory. “Delete these; keep the rest” approves only those targets; “continue looking” resumes read-only discovery. If some approved paths have disappeared, stop the batch and report original, remaining and missing counts. Proceed with a smaller set only after proving it is a subset of that inventory with unchanged identity/content and consequences; the existing authorization can cover that verified remainder. A newly generated replacement at the same path is a changed target. Do not substitute a peer's inactivity report for user approval, or report already-absent paths as deleted by this run. The legacy helper still stops on missing targets; reconcile the plan before invoking it again.
 
 If the approved plan includes creation of a local before/after report artifact, capture the before snapshot now, after approval and before the first cleanup command:
 
@@ -258,9 +263,9 @@ Two narrow Finder-Trash branches remain available without weakening those exclus
 
 Verification must cover all clauses of the approved plan:
 
-- Re-read `df -k` and `df -h`; calculate reclaimed space from before/after readings rather than from the deletion tool's claim.
+- Re-read `df -k` and `df -h`; report the net change over the measured window separately from the path-accounted size removed. Check timestamps and `kern.boottime`: a reboot, swap release or concurrent writer makes this a mixed window, not proof that deletion caused the full change. Report the unexplained remainder rather than forcing it onto a directory.
 - Re-query the cleaned subsystem's activation, configuration, and physical usage.
-- Re-resolve each protected service's PID, listeners, launch mechanism, and health probe. A healthy disk does not prove the service survived.
+- Re-resolve each protected service's PID, listeners, launch mechanism, and health probe. A healthy disk does not prove the service survived. Report a failed invariant and stop the affected action; disk cleanup does not authorize restarting services, terminating other sessions, or repairing an unrelated application.
 - Observe at bounded intervals when APFS accounting can lag or the source may refill. Record each timestamp and value.
 - If the free-space target is missed, stop all deletion. Begin a second read-only analysis and rank remaining sources by measured physical allocation.
 

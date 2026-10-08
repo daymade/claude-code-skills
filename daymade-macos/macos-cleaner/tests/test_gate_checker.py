@@ -57,6 +57,111 @@ def table_of(text):
     return CHECKER.parse_tables(text)[0]
 
 
+class PermanentHelperCoverageTests(unittest.TestCase):
+    """Replay the supported helper invocation that used to check zero targets.
+
+    Paths are synthetic; no deletion helper is executed by these tests.
+    """
+
+    def row(self, target):
+        return SimpleNamespace(target=target)
+
+    def coverage(self, plan, targets):
+        commands = CHECKER.find_destructive_commands(plan)
+        return commands, CHECKER.check_target_coverage(
+            commands, [self.row(target) for target in targets], [], plan)
+
+    def test_documented_and_absolute_launchers_cover_the_target(self):
+        for launcher in ('uv run scripts/safe_delete.py',
+                         'uv run /opt/skills/cleaner/scripts/safe_delete.py',
+                         '/opt/bin/uv run --script /opt/skills/safe_delete.py',
+                         'python3 /opt/skills/safe_delete.py',
+                         '/usr/bin/python3.12 /opt/skills/safe_delete.py',
+                         '"/opt/skill folder/safe_delete.py"'):
+            with self.subTest(launcher=launcher):
+                commands, result = self.coverage(
+                    f'```bash\n{launcher} "/tmp/approved item"\n```',
+                    ['/tmp/approved item'])
+                self.assertEqual(1, len(commands))
+                self.assertTrue(result.passed, result.details)
+                self.assertEqual('/tmp/approved item', commands[0].exact_target)
+
+    def test_every_argument_requires_its_own_exact_row(self):
+        plan = 'uv run /opt/skills/safe_delete.py /tmp/first /tmp/second'
+        commands, result = self.coverage(plan, ['/tmp/first'])
+        self.assertEqual(2, len(commands))
+        self.assertFalse(result.passed, result.details)
+        self.assertIn('/tmp/second', '\n'.join(result.details))
+        self.assertTrue(self.coverage(plan, ['/tmp/first', '/tmp/second'])[1].passed)
+
+    def test_same_basename_and_uv_cache_row_cannot_hide_a_target(self):
+        for rows in (['/tmp/other/item'], ['uv cache']):
+            self.assertFalse(self.coverage(
+                'uv run /opt/skills/safe_delete.py /tmp/private/item', rows)[1].passed)
+
+    def test_empty_missing_expanded_batch_or_compound_targets_fail(self):
+        for arguments in ('', '""', '--batch /tmp/list.txt', '$TARGET',
+                          '/tmp/*', '/tmp/item; echo done', '/tmp/item | cat'):
+            with self.subTest(arguments=arguments):
+                _, result = self.coverage(
+                    'uv run /opt/skills/safe_delete.py ' + arguments, ['uv cache'])
+                self.assertFalse(result.passed, result.details)
+
+    def test_helper_help_and_plain_mentions_are_not_deletion_commands(self):
+        for text in ('uv run /opt/skills/safe_delete.py --help',
+                     'Read safe_delete.py before choosing a cleanup target.',
+                     '`safe_delete.py` is a legacy helper.',
+                     'echo safe_delete.py /tmp/example'):
+            self.assertEqual([], CHECKER.find_destructive_commands(text), text)
+
+    def test_missing_semantics_is_checked(self):
+        commands = CHECKER.find_destructive_commands(
+            'uv run /opt/skills/safe_delete.py /tmp/item')
+        result = CHECKER.check_tool_verification(commands, '', [], [])
+        self.assertFalse(result.passed, result.details)
+        verified = CHECKER.check_tool_verification(
+            commands, 'Tool verification: safe_delete.py docs: permanent deletion.', [], [])
+        self.assertTrue(verified.passed, verified.details)
+
+    def test_unquoted_brace_expansion_is_unresolved(self):
+        plan = 'uv run /opt/skills/safe_delete.py /tmp/{first,second}'
+        commands, result = self.coverage(plan, ['/tmp/{first,second}'])
+        self.assertEqual(1, len(commands))
+        self.assertFalse(result.passed, result.details)
+
+    def test_quoted_and_escaped_filename_characters_are_literal(self):
+        for argument, target in (
+                ("'/tmp/approved [draft]'", '/tmp/approved [draft]'),
+                ('"/tmp/approved & final"', '/tmp/approved & final'),
+                ("'/tmp/{first,second}'", '/tmp/{first,second}'),
+                ("'/tmp/$literal'", '/tmp/$literal'),
+                (r'"/tmp/\$literal"', '/tmp/$literal'),
+                ("'/tmp/not used/item'", '/tmp/not used/item'),
+                (r'/tmp/approved\ \[draft\]', '/tmp/approved [draft]'),
+                ('"/tmp/approved "final', '/tmp/approved final')):
+            with self.subTest(argument=argument):
+                commands, result = self.coverage(
+                    'uv run /opt/skills/safe_delete.py ' + argument, [target])
+                self.assertEqual(1, len(commands))
+                self.assertTrue(result.passed, result.details)
+
+    def test_help_in_path_does_not_skip_any_target(self):
+        plan = 'uv run /opt/skills/safe_delete.py /tmp/help/first /tmp/second'
+        commands, result = self.coverage(plan, ['/tmp/help/first'])
+        self.assertEqual(2, len(commands))
+        self.assertFalse(result.passed, result.details)
+        self.assertEqual([], CHECKER.find_destructive_commands(
+            '本轮未执行 `uv run /opt/skills/safe_delete.py /tmp/help/first`。'))
+
+    def test_unsupported_preview_flag_is_not_a_read_only_exemption(self):
+        for arguments in ('--dry-run /tmp/item', '-- --help',
+                          '"/tmp/approved "[draft]'):
+            commands, result = self.coverage(
+                'uv run /opt/skills/safe_delete.py ' + arguments, ['/tmp/item'])
+            self.assertEqual(1, len(commands))
+            self.assertFalse(result.passed, result.details)
+
+
 class NormalizeTests(unittest.TestCase):
     def test_markdown_noise_is_stripped(self):
         self.assertEqual(
