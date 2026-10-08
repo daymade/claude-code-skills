@@ -192,6 +192,10 @@ keep the detailed procedure there.
 
 Before choosing or changing any periodic observer's cadence, follow
 [macos-watchdog's observation contract](daymade-macos/macos-watchdog/references/probe-cost.md).
+For named macOS load/runaway alerts, follow
+[macos-load-doctor's intervention and diagnosis-completion contract](daymade-macos/macos-load-doctor/SKILL.md#5-act-within-the-boundary).
+The observation contract above owns delayed-sampling acceptance; keep its tests
+and the diagnostic stop conditions in those Skills.
 For changed operating defaults or thresholds in an already-required review, use
 [skill-creator's independent-review protocol](daymade-skill/skill-creator/references/independent-review-protocol.md).
 Keep decision criteria and verification details in those owners.
