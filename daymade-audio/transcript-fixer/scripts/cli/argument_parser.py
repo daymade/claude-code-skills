@@ -545,8 +545,9 @@ def create_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--authority-record", metavar="JSON", dest="review_authority_record",
         help="JSON file citing an explicit user answer: kind=user_answer, item_id, "
-             "target, source_ref and verbatim quote; a short yes also requires the "
-             "verbatim question naming target. Checks citation shape and item scope, "
+             "target, source_ref and verbatim quote in the bounded affirmative syntax; "
+             "a short yes also requires a bounded positive verbatim question about target. "
+             "See the cited-answers reference for supported forms. Checks citation shape and item scope, "
              "not user authorship. Only with accepted/overridden; incompatible with --authority."
     )
     parser.add_argument(

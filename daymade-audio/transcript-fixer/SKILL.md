@@ -144,6 +144,9 @@ Use vocabulary and stakes as the primary tier signals; use length only as a tieb
     `question`. Inspect the actual user message first: the checker validates the
     citation's shape and scope, not its truth. A naked “用户明确回答” label, pending,
     denied, missing or empty evidence never substitutes for that source.
+    Use the reference's finite affirmative-answer shapes; mentioning a target
+    does not confirm it. Unsupported wording stays pending rather than being
+    rewritten into a supported answer.
     When updating an existing single-line `asr_note` correction ledger, add
     `--ledger-entry` to the same verdict call: the resolved text and ledger entry
     share one file replacement. It does not create or rewrite the whole note.

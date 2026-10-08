@@ -146,6 +146,30 @@ _DENIAL_OBJECT_PREFIX_RE = re.compile(r"(?:\s|任何|取得|获得|有效的?)*"
 
 USER_ANSWER_PREFIX = "[user_answer] "
 
+# This is a citation syntax, not an open-ended sentiment classifier. A target
+# mention (including a target followed by a rejection) cannot testify for itself.
+_ANSWER_AFFIRMATIONS = ("是", "是的", "对", "对的", "确认", "yes")
+_ANSWER_WORD_PATTERN = "|".join(
+    "(?i:yes)" if word == "yes" else re.escape(word)
+    for word in _ANSWER_AFFIRMATIONS
+)
+
+
+def _affirmative_question_matches(question: object, target: str) -> bool:
+    """Recognise only bounded positive yes/no questions about this target.
+
+    Do not infer a proposition from an arbitrary question mentioning target;
+    negative and multi-candidate questions need operator interpretation.
+    """
+    if not isinstance(question, str):
+        return False
+    subjects = "这里|这|这句|这个词|该词|你说的|录音里提到的"
+    prefix = rf"(?:(?:{subjects})\s*是|是|是不是)"
+    shape = rf"{prefix}\s*{re.escape(target)}\s*(?:吗[？?]?|[？?])"
+    english = rf"(?i:Is\s+(?:it|this|that))\s+{re.escape(target)}\s*\?"
+    return (re.fullmatch(shape, question.strip()) is not None
+            or re.fullmatch(english, question.strip()) is not None)
+
 
 def user_answer_citation(record: object, *, item_id: int, target: str) -> str:
     """Validate a cited answer's shape and scope, not its authorship or truth.
@@ -163,14 +187,17 @@ def user_answer_citation(record: object, *, item_id: int, target: str) -> str:
     if record["target"] != target:
         raise ValueError("authority record target does not match the resolved text")
     quote = record["quote"].strip()
-    if re.search(r"不是|没有|不确定|不清楚|待|需|未|尚|请确认|猜|可能|大概|应该|[？?]|\b(?:no|not|pending|unconfirmed|unknown|maybe|perhaps)\b", quote, re.I):
-        raise ValueError("authority quote denies or leaves the answer unresolved")
     question = record.get("question")
-    if target not in quote:
-        if not isinstance(question, str) or target not in question or quote not in {
-            "是", "是的", "对", "对的", "确认", "yes", "Yes", "YES",
-        }:
-            raise ValueError("quote must name the target, or affirm a quoted question naming it")
+    affirmative = re.fullmatch(rf"(?:{_ANSWER_WORD_PATTERN})[。.!！]?", quote) is not None
+    if affirmative:
+        if not _affirmative_question_matches(question, target):
+            raise ValueError("a bare affirmative answer requires a bounded positive question about target")
+    else:
+        # Exact affirmative word + optional citation separator + exact target;
+        # no extra clause is silently dropped. Keep the original quote in JSON.
+        shape = rf"(?:{_ANSWER_WORD_PATTERN})\s*[,，:：]?\s*{re.escape(target)}[。.!！]?"
+        if not re.fullmatch(shape, quote):
+            raise ValueError("quote is outside the bounded affirmative answer syntax")
     # One JSON line keeps quotes and source punctuation out of legacy clause
     # parsing. A new 明确回答 wording alone is deliberately not a gate bypass.
     return USER_ANSWER_PREFIX + json.dumps(record, ensure_ascii=False, separators=(",", ":"))

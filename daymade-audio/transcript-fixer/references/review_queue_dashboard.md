@@ -67,9 +67,35 @@ and its source before accepting the queued edit. A structured `answer.json` is:
 ```
 
 The item ID and target must match this verdict. `source_ref` and `quote` must
-be nonempty strings. If the answer only says `是` or `yes`, include a `question`
-containing the verbatim question that names the target. A pending, negative,
-uncertain, or question-shaped quote is refused; retain the raw occurrence.
+be nonempty strings. The new citation path recognises a bounded affirmative
+syntax, rather than treating a target mention as approval:
+
+- The whole quoted clause is `是` / `是的` / `对` / `对的` / `确认` / `yes`,
+  followed by the exact target, with optional whitespace and one comma or colon
+  between them; one final `。` / `.` / `!` / `！` is optional. Only `yes` is
+  case-insensitive; the target keeps its exact spelling. `是，Spec Kit` passes.
+- A standalone affirmative word from that list (with optional final punctuation)
+  also requires a verbatim `question` in the finite positive-question syntax:
+  `(这里|这|这句|这个词|该词|你说的|录音里提到的)是 TARGET 吗？`,
+  `是 TARGET 吗？`, `是不是 TARGET？`, or `Is (it|this|that) TARGET?`.
+  Whitespace is optional around the Chinese target; Chinese questions can end
+  in `吗` with optional `？`/`?`, or just `？`/`?`. English question words are
+  case-insensitive. `这里是Spec Kit吗？` + `是` and `Is it Spec Kit?` + `yes` pass.
+
+The whole clause/question must match; trailing denials or extra candidates are
+not discarded. `Spec Kit 不对`, `Spec Kit 是错的`, a bare `Spec Kit`, uncertain
+answers and answer clauses ending in a question mark do not qualify.
+`Spec Kit不对吗？` + `是` and `This is not Spec Kit?` + `yes` also refuse automatic
+adjudication. Unsupported wording leaves the occurrence pending.
+
+This deliberately excludes some legitimate natural answers, such as `我说的是
+Spec Kit` and `Spec Kit 是对的`, and longer questions outside the listed syntax.
+After reading the complete source message and question, an operator can quote a
+literal affirmative clause or positive question that is actually present, with
+the same source reference. Do not paraphrase, manufacture a supported answer, or
+strip words that reverse its meaning. If no supported literal clause exists,
+retain the full original wording and use the existing obtained-authority path
+with an accurate source citation, or keep the item pending for interpretation.
 The validator checks this record's shape and scope. It does not fetch the source
 or authenticate the speaker. Cite an answer actually received in the current
 conversation or a source you read; a repository's spelling proves vocabulary,
