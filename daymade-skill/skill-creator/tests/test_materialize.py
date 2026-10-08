@@ -250,7 +250,12 @@ class MaterializeTests(unittest.TestCase):
         try:
             deadline = time.monotonic() + 5
             while time.monotonic() < deadline:
-                record = self.read()
+                try:
+                    record = self.read()
+                except json.JSONDecodeError:
+                    # Readiness can overlap a child write; the final receipt stays strict.
+                    time.sleep(0.02)
+                    continue
                 if record.get("child_pgid"):
                     child_pgid = record["child_pgid"]
                     break
