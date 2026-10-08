@@ -447,6 +447,10 @@ operator procedure; no bundled tool enforces its deployment or process boundarie
    separately. Multiple registrations or guests can share a host; label matching
    does not prove independent CPU, memory or storage capacity. Match every required
    label and group/access restriction ([GitHub routing rules](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/use-in-a-workflow)).
+   When no registration matches, inspect authorized owned hosts through their
+   deployment inventory. Reuse a compatible profile or prepare a separate one
+   within existing setup authorization; do not treat missing registration as
+   unavailable hardware or borrow another repository's production listener.
 2. **Reuse the deployment owner.** Locate the project's current IaC, runner
    profiles and runbook, then read a successful run of the actual target job.
    Preserve its supported OS, architecture, isolation, resource budget and network
@@ -460,6 +464,40 @@ operator procedure; no bundled tool enforces its deployment or process boundarie
    digests/bytes and required completion markers; do not copy registration state,
    job workspaces, cloud state or personal credentials. Missing downloads remain
    failures; do not fabricate cache markers or add an unverified network fallback.
+   On persistent runners, provision system packages and browser OS dependencies
+   through the deployment owner before jobs, rather than running system APT
+   installation on every check. Keep tool/browser caches outside disposable job
+   workspaces and within the approved trust boundary; verify them as the service
+   account. A cache marker does not prove the matching executable works.
+
+   Check minutes and hosted artifact/storage budgets separately: changing
+   `runs-on` does not remove a workflow's GitHub upload/download dependencies
+   ([GitHub billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions)).
+   If storage blocks required build handoff or evidence, preserve those outputs
+   through an already-authorized deployment-owner store, outside disposable
+   workspaces. Bind producer and consumer to repository, run ID/attempt and full SHA,
+   verify content hashes and actual downstream tests, and retain the owner's
+   retention/access contract. Do not silently drop outputs, ignore upload failures
+   or delete historical artifacts to make the migration pass.
+
+   For jobs running directly on a shared Linux runner host, use per-job service
+   containers with free host ports and read the assigned port from
+   `job.services.<service>.ports[<container-port>]`;
+   fixed host ports can collide across listeners ([GitHub service networking](https://docs.github.com/en/actions/tutorials/use-containerized-services/use-docker-service-containers)).
+   Read effective CPU, memory and task limits through the cgroup ancestors, not
+   only the listener unit. Parent limits constrain children ([cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html)).
+   Budget service and build containers created by a shared Docker daemon separately;
+   a listener's limit does not automatically cap those containers. Read back the
+   container/builder limits and reconcile their combined demand with the physical
+   host budget ([Docker resource constraints](https://docs.docker.com/engine/containers/resource_constraints/)).
+
+   Configure job hooks with the supported `.sh` or `.ps1` entry point: GitHub runs
+   Bash with `-e <path>` or PowerShell with `-command ". '<path>'"`. A Python
+   shebang is not a supported hook launcher; use an owned shell wrapper invoking
+   the intended interpreter. Keep hooks outside job-writable directories, bound
+   their synchronous work, and verify execution in the actual job's **Set up runner**
+   or **Complete runner** log. A direct script smoke test cannot prove the runner
+   invokes it ([GitHub job hooks](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/run-scripts)).
 4. **Keep checks and production routing separate.** Add capacity only to the
    authorized workload. Preserve a production deployment's single-writer labels,
    credentials and controller when expanding a checks pool. A new registration

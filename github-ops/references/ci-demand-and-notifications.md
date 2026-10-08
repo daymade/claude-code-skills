@@ -115,6 +115,12 @@ must fit the actual job. A runner dedicated to another repository is not shared
 capacity. Preserve production listener/process ownership. Prove the intended job
 on its intended runner; an online row cannot establish the migration.
 
+No matching registration is a preparation gap, not proof that self-hosted execution
+is unavailable. If the user authorized using owned capacity, inspect other authorized
+hosts and prepare a compatible repository-scoped profile through the deployment owner.
+Continue to an actual check job; stop only at a demonstrated capacity, trust or
+authorization boundary, not merely an unmatched label or another repository's runner.
+
 ## 4. Allocate failure handling and human attention
 
 For an agent-owned change, the executing agent reads the exact checks before
