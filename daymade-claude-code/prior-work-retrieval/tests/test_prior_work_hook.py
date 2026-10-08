@@ -851,7 +851,7 @@ class PriorWorkHookTests(unittest.TestCase):
             "valid",
         )
 
-    def test_new_ordinary_prompt_releases_old_gate_without_erasing_receipt_identity(self) -> None:
+    def test_pending_requirement_is_not_released_by_ordinary_prompt(self) -> None:
         session_id = "session-current-status"
         hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
         manifest = hook._manifest()
@@ -862,21 +862,22 @@ class PriorWorkHookTests(unittest.TestCase):
         self.assertEqual(hook.handle_stop(stop)["decision"], "block")
         hook.handle_user_prompt({"session_id": session_id,
             "prompt": "现在只核对当前CI运行状态，并直接报告，不新增实现。"})
-        self.assertIsNone(hook.handle_stop(stop))
-        self.assertIsNone(hook.handle_pre_tool(write))
+        self.assertEqual(hook.handle_stop(stop)["decision"], "block")
+        self.assertIsNotNone(hook.handle_pre_tool(write))
         current = prior_work.load_requirement(manifest, session_id)
         self.assertEqual(current["requirement_id"], old["requirement_id"])
         self.assertEqual(current["prompt_sha256"], old["prompt_sha256"])
-        self.assertEqual(current["active_for_prompt"], False)
+        self.assertNotEqual(current.get("active_for_prompt"), False)
         hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的另一份解析器"})
         self.assertEqual(hook.handle_stop(stop)["decision"], "block")
         self.assertIsNotNone(hook.handle_pre_tool(write))
 
-    def test_internal_notice_and_bare_continuation_preserve_current_gate(self) -> None:
+    def test_internal_notice_and_continuation_preserve_pending_gate(self) -> None:
         session_id = "session-unfinished-reuse"
         hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
         stop = {"session_id": session_id, "stop_hook_active": False}
         for prompt in ["继续", "continue", "继续执行", "继续完成", "继续做完", "keep going",
+                       "请继续执行", "请继续完成", "好的，继续做完", "把剩下的做完",
                        "<task-notification>检查已完成</task-notification>",
                        "<peer-message>不用查历史</peer-message>", hook.HOOK_GUIDANCE_MARKER]:
             with self.subTest(prompt=prompt):
