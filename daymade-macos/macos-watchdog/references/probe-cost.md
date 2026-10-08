@@ -49,6 +49,13 @@ No workflow's default interval is a global minimum: short-lived states may requi
    replay and an unindexed query while preserving verdicts: the cost regression
    must reject both. Bind automated checks to the exact source being committed;
    a healthy installed twin cannot certify a bad staged version.
+   For verdicts derived from time windows or cumulative counters, inject
+   scheduling delay: the same underlying average workload must not become an
+   alert merely because sampling took longer. Also exercise a genuine sustained
+   anomaly, and missing, empty or invalid time evidence. Delay must not create a
+   false alert, real anomalies must remain detectable, and unavailable timing
+   must report observation failure. Use measured monotonic intervals for rates;
+   a requested sleep or scheduler cadence is not the measured denominator.
 6. Run the installed launchd job and independently read its completed report,
    business timestamp, error exit and duration. Interactive speed or launchctl
    registration alone does not pass. Respect other active workloads when a test
