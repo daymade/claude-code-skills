@@ -95,6 +95,11 @@ or protocol messages.
 
 ## Comparison With {Our Product}
 
+Include this section only when the request names our product or the current
+project's authoritative entry confirms it. Cite that scope source and distinguish
+product requirements from implemented behavior. Omit this section for a standalone
+request or unresolved our-product context; complete the repository profile anyway.
+
 | Dimension | Competitor | Source | Our product | Source |
 |---|---|---|---|---|
 | {dimension} | {value} | `{file}:{line}` | {value} | `{file}:{line}` |
