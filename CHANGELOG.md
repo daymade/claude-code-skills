@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **continue-codex-work** (`daymade-claude-code` v4.25.8): Reconcile the current delivery stage before choosing an action or reporting completion, including readonly decisions. Reuse independent completion evidence tied to unchanged identities and inputs, while refreshing volatile delivery state. Preserve the native-resume exclusion and ownership boundaries. Change type: bounded workflow correction.
+
 - **frontend-visual-qa** (v1.20.0 → v1.20.1): Add delayed-save and retired-batch-preflight journey recipes with current-page, reopened-draft and original-request readback. Preserve completed writes and include ordinary-flow and StrictMode controls. Add two bounded behavior cases. Change type: existing audit-contract clarification.
 - **data-visualization-discipline** (v1.1.1 → v1.1.2): Add a synthetic operational matrix case for current unknown, stale/source-failed observations, conflicting probes and certificate risk. Route it from data validation and retain project-owned state/threshold contracts and healthy controls. Change type: bounded reference addition.
 - **skill-creator** (`daymade-skill` v1.66.2): Wait for a parseable child readiness snapshot during the interruption regression. Preserve the bounded deadline and strict post-interruption receipt, exit-code and process checks. Change type: test-only concurrency correction; runtime contracts are unchanged.

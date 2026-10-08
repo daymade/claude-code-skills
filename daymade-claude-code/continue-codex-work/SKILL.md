@@ -45,15 +45,16 @@ objective. Never continue from the “closest” file.
 
 ## Step 2: Rebuild the continuation contract
 
-Before the first project-changing tool call, fill this internal contract from the
-read receipt and current-state verification:
+Before choosing the next action or reporting a stage complete, fill this internal
+contract from the verified read receipt and the project's current stage source.
+Use the latest human request when no project stage source exists.
 
 | Field | Evidence required |
 |---|---|
 | Original business outcome | Earliest still-governing human request across inherited and selected timelines |
 | Current explicit request | Latest human request that is not only a continuation cue |
 | Current delivery stage / non-goals | Latest human correction narrowing what to deliver now and what to defer; do not promote the original long-term ambition back above it |
-| Already completed | Current independent verification, not old Agent narration |
+| Already completed | Independent completion evidence, not Agent narration or an assistant final. Bind it to artifact/session identity and input conditions; reuse it while those conditions are unchanged. Read volatile runtime and delivery state fresh. |
 | Still unfulfilled | Requested result without completion evidence |
 | User corrections / do-not-repeat | Human messages rejecting a route, assumption, or output |
 | Proven assets and successful routes | Existing code, documents, Skills, outputs, commands, and prior successful experiments |
