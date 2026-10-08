@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **continue-codex-work** (`daymade-claude-code` v4.25.8): Reconcile the current delivery stage before choosing an action or reporting completion, including readonly decisions. Reuse independent completion evidence tied to unchanged identities and inputs, while refreshing volatile delivery state. Preserve the native-resume exclusion and ownership boundaries. Change type: bounded workflow correction.
+
 - **skill-creator** (`daymade-skill` v1.66.2): Wait for a parseable child readiness snapshot during the interruption regression. Preserve the bounded deadline and strict post-interruption receipt, exit-code and process checks. Change type: test-only concurrency correction; runtime contracts are unchanged.
 - **frontend-visual-qa** (v1.19.2 → v1.20.0): Route illustrated Markdown transcripts and notes to the existing actual-reader pilot. Add proportional display-width sizing for long and landscape images, preserve source bytes and original-image links, and keep browser diagnostics separate from native-reader and click verification. Change type: reader workflow and trigger-family expansion.
 
