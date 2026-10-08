@@ -67,6 +67,7 @@ description: >-
 | `references/visual-form-selection.md` | 阶段 3，且**内容不是现成数字**时：定性 / 抽象 / 过程内容该画成什么形状 |
 | `references/graphical-perception-science.md` | 被质疑"凭什么这么画"时：Cleveland & McGill / Bertin / Tufte / Few 的出处，以及这些理论互相冲突的地方 |
 | `references/transaction-status-colors.md` | 阶段 3–4，交易列表难以区分扣款、退款、待处理、取消/失败时：套用颜色语义与第二通道的合成案例，并按闸 4–5 验读者是否读对 |
+| `references/monthly-budget-disclosure.md` | 阶段 3，累计预算的概览与月度明细并存时：用合成案例区分月度贡献与精确查数；交互验收交给 frontend-visual-qa |
 
 **先读哪个**：动手画图 → 直接按下面五个阶段走；内容是定性的、不知道画成什么形状 → 阶段 3「内容不是数字时」+ `visual-form-selection.md`；被质疑"凭什么这么画" → `graphical-perception-science.md` 拿实证出处。
 
@@ -363,6 +364,8 @@ Anscombe / Datasaurus 证明统计量全同的数据可以长得完全不同：*
 - **多节并存** → 每节必须是**不同的分析问题**，不是同一问题换几何。
 
 **"同一批数字"的粒度**：只有**同指标 + 同口径 + 同时间范围**才算重复。矩阵的本周值与趋势图末点有交集但不算重复（一个横比指标、一个纵看变化）；真重复是"同一个指标画成柱又列成表"。
+
+累计预算与月度明细的边界案例见 [月度预算概览与详情](references/monthly-budget-disclosure.md)。
 
 #### 切成观众视角找重复（判据在此，产物由闸 3 收）
 

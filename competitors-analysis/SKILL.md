@@ -264,7 +264,7 @@ Before finishing, run the checks in `references/analysis_checklist.md`:
 - Each technical claim has a file:line citation.
 - Market facts have a source and retrieval date.
 - Landscape judgments explain a concrete choice, its trade-off and falsifier; facts and inference remain separate.
-- New understanding is saved in the existing project research entry before a stage ends or context handoff; unchanged evidence is reused on continuation.
+- For project-backed analysis, new understanding is saved in the existing project research entry before a stage ends or context handoff; unchanged evidence is reused on continuation.
 - The final answer names gaps, opportunities, and risks without pretending they
   are code facts.
 
