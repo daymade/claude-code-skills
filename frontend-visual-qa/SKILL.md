@@ -1,7 +1,7 @@
 ---
 name: frontend-visual-qa
 description: >-
-  Audits already-rendered UI — web app, deck/slide, dashboard, design-system, or Electron/native app
+  Audits already-rendered UI and Markdown/Obsidian image layout — web app, deck/slide, dashboard, design-system, or Electron/native app
   — via real-browser/native-app journeys and a Playwright sweep. Use after UI implementation to find
   typography, overflow, responsive, routing, data-viz, browser-output, or native-shell defects, or
   to compare a render against a reference. Not for greenfield UI design (use ui-designer) or
@@ -33,11 +33,13 @@ profile that covers the request:
 - **reference parity** — comparison with a named screenshot, product, or tier;
 - **data visualization** — chart hierarchy, tokens, semantics, and accessibility.
 
-For a website/document converted to Markdown and consumed in Obsidian or another
-named reader, load
+For a website/document converted to Markdown, or an illustrated transcript/note
+consumed in Obsidian or another named reader, load
 [references/markdown-reader-handoff.md](references/markdown-reader-handoff.md)
 before judging figure readability. Compare the complete source figure with its
 actual document reading canvas, including HTML captions and SVG/CSS dependencies.
+For oversized embedded images, use its display-size recipe and test a representative
+long image with the adjacent text before applying the same layout to the document.
 
 Combine profiles only when the changed surface or the user requests a broad
 release review. Do not force a local line-break review through unrelated auth,

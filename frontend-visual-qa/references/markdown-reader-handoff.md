@@ -1,8 +1,8 @@
 ---
 name: markdown-reader-handoff
 description: >-
-  Verify website figures handed off as Markdown in Obsidian or another named reader.
-  Read when a conversion contains SVG, HTML captions, CSS-dependent figures, or unreadable images.
+  Verify converted figures and illustrated transcripts/notes in Obsidian or another named reader.
+  Read for SVG/HTML/CSS-dependent figures, unreadable images, or oversized embedded source images.
 ---
 
 # Markdown reader handoff
@@ -54,6 +54,51 @@ the available diagnostics and mark this handoff **partial**, naming the missing
 consumer evidence. Do not substitute a browser Markdown preview and mark it green.
 
 ## 3. Repair only when authorized
+
+### Display size for embedded source images
+
+When the request concerns image size in a note or transcript, the executing agent
+changes the display dimensions first and keeps the source image bytes. Confirm the
+reader and its real text-column width before choosing syntax; do not apply a browser
+CSS preview as if it were an Obsidian acceptance result.
+
+For Obsidian, set only a width so the image keeps its proportions:
+
+```markdown
+![Reference image|480](<images/review/image.png>)
+
+[Open original](<images/review/image.png>)
+```
+
+The [Obsidian embed documentation](https://help.obsidian.md/embeds) specifies
+proportional scaling when only width is given. This recipe is reader-specific;
+other Markdown readers can ignore the width suffix. Use their supported display
+controls and test them in that reader instead of claiming portable sizing.
+
+Choose a width ceiling from the actual text column and a height ceiling from the
+reading viewport. For source dimensions `W × H`, use
+`floor(min(width_ceiling, height_ceiling * W / H, W))` as the display width.
+Do not set independent width and height that stretch the figure. A 560px width
+ceiling and 640px height ceiling are a reversible starting example for desktop
+reading, not a universal acceptance criterion. Keep low-resolution sources at or
+below native size and disclose any unreadable detail rather than enlarging it into
+a supposed original.
+
+Run the existing reader pilot on one long image and one landscape image before
+batch editing. Inspect the whole image together with its caption and adjacent
+remark; confirm important labels can be read for the task and the image does not
+push its explanation an excessive distance away. Adjust the ceilings if either
+fails. A source with dense detail may need its original-image link, which must
+actually open the intended source through the authorized reader. A present link
+alone is not a successful click test.
+
+Preserve existing narration, source captions, image-to-remark bindings and relative
+paths. After editing, reopen the note and distinguish tested original links and
+native reading regions from unexercised ones. Missing native access or a denied
+navigation operation remains partial; do not replace it with a browser simulation
+and label it verified.
+
+### Resolve figure-rendering dependencies
 
 If the actual reader cannot present the figure readably, produce a PNG from the
 complete rendered figure or resolve its dependencies before rasterizing. Include

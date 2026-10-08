@@ -3101,7 +3101,7 @@ claude plugin install frontend-visual-qa@daymade-skills
 - 实现后审计已经渲染的 Web 或桌面 UI
 - 排查字体、换行、裁切、溢出、响应式、route/state、overlay、地图或瞬时状态缺陷
 - 将渲染结果与指定参考图或设计系统 SSOT 做实证对比
-- 在 Obsidian 或其他实际接收方阅读器的正文视图中核对转换后的 Markdown 图文
+- 在 Obsidian 或其他实际接收方阅读器的正文视图中核对转换后的 Markdown 图文及会议逐字稿、笔记的图片显示尺寸
 - 按结论所需证据等级验证导出、下载、分享、popup、打印/PDF 或 Electron shell
 - 补足 `ui-designer`/设计阶段与 `qa-expert` 全局 QA 流程之间的渲染验收
 
