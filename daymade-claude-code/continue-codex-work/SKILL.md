@@ -54,7 +54,7 @@ Use the latest human request when no project stage source exists.
 | Original business outcome | Earliest still-governing human request across inherited and selected timelines |
 | Current explicit request | Latest human request that is not only a continuation cue |
 | Current delivery stage / non-goals | Latest human correction narrowing what to deliver now and what to defer; do not promote the original long-term ambition back above it |
-| Already completed | Independent completion evidence bound to its artifact/session identity and input conditions; reuse it while those conditions are unchanged. Read volatile runtime and delivery state fresh. |
+| Already completed | Independent completion evidence, not Agent narration or an assistant final. Bind it to artifact/session identity and input conditions; reuse it while those conditions are unchanged. Read volatile runtime and delivery state fresh. |
 | Still unfulfilled | Requested result without completion evidence |
 | User corrections / do-not-repeat | Human messages rejecting a route, assumption, or output |
 | Proven assets and successful routes | Existing code, documents, Skills, outputs, commands, and prior successful experiments |
