@@ -3100,7 +3100,7 @@ Audit the UI users can actually see, with explicit evidence levels and no source
 - Auditing an already-rendered web or desktop UI after implementation
 - Diagnosing typography, wrapping, clipping, overflow, responsive, route/state, overlay, map, or transient-state defects
 - Comparing a rendered artifact with a named visual reference or design-system SSOT
-- Checking converted Markdown figures inside the actual Obsidian or other recipient reading view
+- Checking converted Markdown figures and illustrated transcript/note image sizes inside the actual Obsidian or other recipient reading view
 - Verifying export, download, share, popup, print/PDF, or Electron-shell behavior at the evidence level the claim requires
 - Complementing `ui-designer`/design work and the broader process managed by `qa-expert`
 
