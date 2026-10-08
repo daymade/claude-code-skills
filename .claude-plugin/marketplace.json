@@ -109,7 +109,7 @@
       "description": "Discover, clone, update, and analyze competitor repositories with evidence-based competitive intelligence. Use when tracking competitors, reviewing competitor source code, adding a competitor repository, comparing product capabilities, building a competitor landscape, checking latest competitor code, or when the user says 竞品分析, competitor scan, analyze competitor, or compare with X. Repository-backed findings must come from local cloned code with file:line citations; market-landscape claims must cite their source and volatility.",
       "source": "./competitors-analysis",
       "strict": false,
-      "version": "1.4.1",
+      "version": "1.5.0",
       "category": "productivity",
       "keywords": [
         "competitors",
