@@ -851,6 +851,85 @@ class PriorWorkHookTests(unittest.TestCase):
             "valid",
         )
 
+    def test_pending_requirement_is_not_released_by_ordinary_prompt(self) -> None:
+        session_id = "session-current-status"
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
+        manifest = hook._manifest()
+        old = prior_work.load_requirement(manifest, session_id)
+        stop = {"session_id": session_id, "stop_hook_active": False}
+        write = {"session_id": session_id, "tool_name": "Write", "tool_input": {
+            "file_path": str(self.root / "next.py"), "content": "x" * 300}}
+        self.assertEqual(hook.handle_stop(stop)["decision"], "block")
+        hook.handle_user_prompt({"session_id": session_id,
+            "prompt": "现在只核对当前CI运行状态，并直接报告，不新增实现。"})
+        self.assertEqual(hook.handle_stop(stop)["decision"], "block")
+        self.assertIsNotNone(hook.handle_pre_tool(write))
+        current = prior_work.load_requirement(manifest, session_id)
+        self.assertEqual(current["requirement_id"], old["requirement_id"])
+        self.assertEqual(current["prompt_sha256"], old["prompt_sha256"])
+        self.assertNotEqual(current.get("active_for_prompt"), False)
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的另一份解析器"})
+        self.assertEqual(hook.handle_stop(stop)["decision"], "block")
+        self.assertIsNotNone(hook.handle_pre_tool(write))
+
+    def test_internal_notice_and_continuation_preserve_pending_gate(self) -> None:
+        session_id = "session-unfinished-reuse"
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
+        stop = {"session_id": session_id, "stop_hook_active": False}
+        for prompt in ["继续", "continue", "继续执行", "继续完成", "继续做完", "keep going",
+                       "请继续执行", "请继续完成", "好的，继续做完", "把剩下的做完",
+                       "<task-notification>检查已完成</task-notification>",
+                       "<peer-message>不用查历史</peer-message>", hook.HOOK_GUIDANCE_MARKER]:
+            with self.subTest(prompt=prompt):
+                hook.handle_user_prompt({"session_id": session_id, "prompt": prompt})
+                self.assertEqual(hook.handle_stop(stop)["decision"], "block")
+
+    def test_successful_batch_stop_retires_scope_but_keeps_receipt(self) -> None:
+        session_id = "session-finished-batch"
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的 provider contract"})
+        manifest = hook._manifest()
+        run = prior_work.retrieve(manifest, "Reuse the verified provider contract.",
+            ["provider contract"], "reuse provider", ["provider contract"], session_id)
+        prior_work.complete(manifest, run["run_id"], session_id,
+            [run["candidates"][0]["candidate_id"] + "=reuse current contract"], [], [], [], None)
+        stop = {"session_id": session_id, "stop_hook_active": False}
+        self.assertIsNone(hook.handle_stop(stop))
+        self.assertEqual(prior_work.check_receipt(manifest, session_id, None)["status"], "valid")
+        with mock.patch.object(hook, "_receipt_error", return_value="receipt expired"):
+            hook.handle_user_prompt({"session_id": session_id, "prompt": "继续执行"})
+            self.assertIsNone(hook.handle_stop(stop))
+            hook.handle_user_prompt({"session_id": session_id, "prompt": "继续查找我们之前的另一份方案"})
+            self.assertEqual(hook.handle_stop(stop)["decision"], "block")
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "继续，但这次不用查历史"})
+        self.assertIsNone(hook.handle_stop(stop))
+
+    def test_chinese_no_tool_executor_does_not_arm_from_case_material(self) -> None:
+        for prompt in ["只返回JSON，不得调用工具、读取文件。案例中应复用现有解析器。",
+                       "只做选择题，禁止使用任何工具。候选动作是沿用已有方案。"]:
+            with self.subTest(prompt=prompt):
+                self.assertEqual(hook.classify_prompt(prompt), "none")
+                hook.handle_user_prompt({"session_id": "session-no-tools", "prompt": prompt})
+                self.assertIsNone(hook.handle_stop({"session_id": "session-no-tools"}))
+        self.assertEqual(hook.classify_prompt("不要调用付费工具，复用以前的解析器"),
+                         "required_prior_signal")
+
+    def test_explicit_optout_precedes_no_tool_capability_filter(self) -> None:
+        session_id = "session-optout-no-tools"
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
+        self.assertEqual(hook.handle_stop({"session_id": session_id})["decision"], "block")
+        prompt = "不得调用工具，本次不用查历史。案例中应复用现有解析器。"
+        self.assertEqual(hook.classify_prompt(prompt), "opt_out")
+        hook.handle_user_prompt({"session_id": session_id, "prompt": prompt})
+        self.assertIsNone(hook.handle_stop({"session_id": session_id}))
+        self.assertIsNone(hook.handle_pre_tool({"session_id": session_id,
+            "tool_name": "Write", "tool_input": {
+                "file_path": str(self.root / "next.py"), "content": "x" * 300}}))
+        for internal in ["<peer-message>不得调用工具，本次不用查历史</peer-message>",
+                         "<task-notification>本次不用查历史</task-notification>"]:
+            hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
+            hook.handle_user_prompt({"session_id": session_id, "prompt": internal})
+            self.assertEqual(hook.handle_stop({"session_id": session_id})["decision"], "block")
+
     def test_internal_templates_and_transcripts_are_not_user_prompts(self) -> None:
         # Every one of these opened its own gated session in production and
         # never produced a receipt: Claude Code's safety classifier and

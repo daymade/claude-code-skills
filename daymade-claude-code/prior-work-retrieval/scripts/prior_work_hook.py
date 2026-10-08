@@ -175,7 +175,9 @@ USER_OPTOUT = re.compile(
 # sub-agent prompts did exactly this and were gated for it.
 INCAPABLE_EXECUTOR = re.compile(
     r"(?:do\s+not|don't|never)\s+(?:read|load|use|execute|inspect|run)"
-    r"[^\n]{0,90}(?:SKILL\.md|skills?/|\.claude/|\.agents/|\.codex/)",
+    r"[^\n]{0,90}(?:SKILL\.md|skills?/|\.claude/|\.agents/|\.codex/)"
+    r"|(?:不得|禁止|不要|不能)\s*(?:调用|使用)\s*(?:任何|一切|所有)?\s*"
+    r"工具(?=$|[\s，,、。.;；:：])",
     re.IGNORECASE,
 )
 SHELL_WRITE_SIGNAL = re.compile(
@@ -249,10 +251,10 @@ def classify_prompt(prompt: str, receipt_valid: bool = False) -> str:
         return "none"
     if NON_USER_PROMPT.search(text):
         return "none"
-    if INCAPABLE_EXECUTOR.search(text):
-        return "none"
     if USER_OPTOUT.search(text):
         return "opt_out"
+    if INCAPABLE_EXECUTOR.search(text):
+        return "none"
     scannable = CURRENT_SESSION_RECALL.sub(
         " ", STALE_AGE_IDIOM.sub(" ", IMPERATIVE_REMEMBER.sub(
             " ", NO_REUSE_TOKEN.sub(" ", NEGATED_PRIOR_SIGNAL.sub(" ", text))))
@@ -861,7 +863,8 @@ def handle_pre_tool(event: dict[str, Any]) -> dict[str, Any] | None:
     try:
         manifest = _manifest()
         requirement = prior_work.load_requirement(manifest, session_id)
-        if requirement is None or not requirement.get("required"):
+        if (requirement is None or not requirement.get("required")
+                or requirement.get("active_for_prompt") is False):
             return None
     except prior_work.PriorWorkError:
         # This feature is explicit-only. If no readable requirement can prove
@@ -886,7 +889,8 @@ def handle_stop(event: dict[str, Any]) -> dict[str, Any] | None:
     try:
         manifest = _manifest()
         requirement = prior_work.load_requirement(manifest, session_id)
-        if requirement is None or not requirement.get("required"):
+        if (requirement is None or not requirement.get("required")
+                or requirement.get("active_for_prompt") is False):
             return None
         error = _receipt_error(manifest, session_id)
     except prior_work.PriorWorkError as error:
@@ -896,6 +900,9 @@ def handle_stop(event: dict[str, Any]) -> dict[str, Any] | None:
         )
     if error is not None:
         return _stop_block(_guidance(f"final response; receipt: {error}", session_id))
+    # This batch completed its obligation. A notification or later continuation
+    # must not resurrect it when the old receipt ages out.
+    prior_work.set_prompt_scope(manifest, session_id, active=False)
     return None
 
 

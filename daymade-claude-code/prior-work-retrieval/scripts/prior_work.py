@@ -937,6 +937,17 @@ def mark_requirement(
     return payload
 
 
+def set_prompt_scope(
+    manifest: dict[str, Any], session_id: str, *, active: bool
+) -> None:
+    """Change enforcement scope without invalidating the retrieval receipt."""
+    requirement = load_requirement(manifest, session_id)
+    if requirement is None:
+        return
+    requirement["active_for_prompt"] = active
+    _atomic_json(requirement_path(manifest, session_id), requirement)
+
+
 def complete(
     manifest: dict[str, Any],
     run_id: str,

@@ -288,11 +288,15 @@ stranded receipts, non-user-input arms, and the matched token behind each
 still-arming entry. `--json` for machine output. Judge the gate by that number,
 not by whether its own tests pass.
 - `PreToolUse` blocks substantial writes only when that explicit requirement
-  already exists and lacks a valid receipt. It never turns an ordinary write
+  has not finished enforcement and lacks a valid receipt. It never turns an ordinary write
   into a retrieval obligation. Read-only discovery and small mechanical edits
   remain available while a requirement is active.
-- `Stop` validates an explicit requirement that already exists. It never invents
+- `Stop` validates an explicit requirement that has not finished enforcement. It never invents
   one from output length, code, tool use, or a generic production request.
+  A successful validation ends this batch's enforcement scope while retaining
+  the receipt; a later explicit retrieval request starts a new requirement.
+  Until then, ordinary follow-ups and continuation wording do not automatically
+  clear it; use the existing user opt-out for an explicit release.
 
 It migrates the narrower unversioned `recall-first-evidence` UserPromptSubmit
 handler into this superset while leaving its script on disk for recovery. The
