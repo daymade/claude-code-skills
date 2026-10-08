@@ -38,6 +38,15 @@ A measured baseline beats any estimate. In order:
    calibrated on that format.
 3. Earlier `du` output kept in a session's scratch files.
 
+For a claim such as “the last cleanup freed hundreds of GiB,” first recover the
+actual same-host, same-volume `df` readings and their timestamps. **Free after
+cleanup**, **net free-space increase**, and **sum of removed path sizes** are
+different values. A high after-reading alone cannot establish how much was freed.
+Compare all relevant measured checkpoints in the requested window rather than
+selecting the first convenient search hit. Keep estimates and missing readings
+unknown. For session evidence, use the owning history reader's index or a named,
+time-bounded session; never scan the full raw history to find a baseline.
+
 **Finding an export.** The app may not record where the user saved it. GrandPerspective
 is sandboxed, and its preferences and recent-documents list can hold nothing about
 exports. Locate exports by name (`*.gpscan*`, `*grandperspective*`) or by the header
@@ -104,6 +113,12 @@ and free almost nothing.
 The acceptance check is that attributed physical growth roughly matches the `df` change
 over the same window. Before calling the gap unexplained, check the consumers that are not
 directories:
+
+- **Measurement continuity.** Record `date` and `sysctl kern.boottime vm.swapusage`
+  with each live `df` checkpoint. Split the chronology at a reboot or other observed
+  discontinuity. A later free-space jump across that boundary cannot be credited
+  to an earlier deletion merely because the directory totals also fell. Without
+  intermediate readings, name the combined causes and leave their shares unknown.
 
 - **Swap.** `sysctl vm.swapusage`, and the VM volume's "Capacity Consumed" in
   `diskutil apfs list`. Heavy memory pressure can add tens of GB overnight and gives the
