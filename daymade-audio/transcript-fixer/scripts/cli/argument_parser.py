@@ -536,11 +536,25 @@ def create_argument_parser() -> argparse.ArgumentParser:
         "--authority",
         dest="review_authority",
         help="Authority source for THIS verdict, appended to the item's "
-             "evidence before the name-convergence guard reads it (roster 行 / "
+             "evidence only with a successful verdict; the guard previews it (roster 行 / "
              "群 displayName+nickName 双读 / 用户裁决 / 音证). Distinct from "
              "--note: --note is your reason, --authority is the citable source "
              "that lets a person-name write pass the gate. Must be an authority "
              "you HAVE — 「需名册确认」这类未取得的引用不算。"
+    )
+    parser.add_argument(
+        "--authority-record", metavar="JSON", dest="review_authority_record",
+        help="JSON file citing an explicit user answer: kind=user_answer, item_id, "
+             "target, source_ref and verbatim quote in the bounded affirmative syntax; "
+             "a short yes also requires a bounded positive verbatim question about target. "
+             "See the cited-answers reference for supported forms. Checks citation shape and item scope, "
+             "not user authorship. Only with accepted/overridden; incompatible with --authority."
+    )
+    parser.add_argument(
+        "--ledger-entry", dest="review_ledger_entry",
+        help="Append a confirmed entry beginning with the actual original→resolved pair to the anchored transcript's "
+             "single-line asr_note in the same file write as the accepted/overridden edit. "
+             "Refused for other decisions or an unanchored item."
     )
     parser.add_argument(
         "--by",

@@ -27,6 +27,7 @@ from core.name_convergence_guard import (  # noqa: E402
     evidence_names_authority,
     guard,
     is_person_name_shape,
+    user_answer_citation,
 )
 from utils.config import reset_config  # noqa: E402
 
@@ -796,3 +797,274 @@ class TestModifiedDeniedCitationObject:
     def test_modified_denial_keeps_independent_obtained_citation(self, denial):
         assert evidence_names_authority(denial + "但已取得roster 行 ### 合成条目")
         assert evidence_names_authority("roster 行 ### 合成条目；" + denial)
+
+
+class TestStructuredUserAnswer:
+    def record(self, item_id=7):
+        return {"kind": "user_answer", "item_id": item_id, "target": "Spec Kit",
+                "source_ref": "conversation:synthetic-session#message-9",
+                "quote": "是，Spec Kit"}
+
+    @pytest.mark.parametrize("key", ["kind", "item_id", "target", "source_ref", "quote"])
+    @pytest.mark.parametrize("form", ["missing", "null", "empty"])
+    def test_missing_null_empty_are_independent_refusals(self, key, form):
+        record = self.record()
+        if form == "missing":
+            del record[key]
+        else:
+            record[key] = None if form == "null" else ""
+        with pytest.raises(ValueError):
+            user_answer_citation(record, item_id=7, target="Spec Kit")
+
+    @pytest.mark.parametrize("quote", ["不是 Spec Kit", "未确认 Spec Kit", "不确定是 Spec Kit", "pending Spec Kit",
+                                       "待用户确认 Spec Kit", "需核对 Spec Kit", "Spec Kit？", "maybe Spec Kit",
+                                       "Spec Kit 不对", "Spec Kit 是错的", "Spec Kit 不正确", "Spec Kit 不行",
+                                       "Spec Kit 不是我要说的", "不是 Spec Kit，是 Other Kit", "Spec Kit",
+                                       "是，Spec Kit？", "是，Spec Kit，但我不确定", "Spec Kit 不对，是 Other Kit"])
+    def test_unobtained_or_negative_answer_is_not_authority(self, quote):
+        record = {**self.record(), "quote": quote}
+        with pytest.raises(ValueError):
+            user_answer_citation(record, item_id=7, target="Spec Kit")
+        # A previously persisted malformed citation must not bypass the actual
+        # entity guard by mentioning target or authority nouns in its JSON.
+        import json
+        citation = "[user_answer] " + json.dumps(record, ensure_ascii=False)
+        assert guard("sagakit", "Spec Kit", citation, "entity",
+                     lookup_fn=lambda _: _lookup()).code == "target_unknown"
+
+    @pytest.mark.parametrize("quote", ["是，Spec Kit", "是 Spec Kit", "是Spec Kit", "是的：Spec Kit。",
+                                       "对，Spec Kit", "对的，Spec Kit！", "确认：Spec Kit", "YES, Spec Kit"])
+    def test_bounded_affirmative_forms_pass_actual_entity_guard(self, quote):
+        record = {**self.record(), "quote": quote}
+        citation = user_answer_citation(record, item_id=7, target="Spec Kit")
+        assert guard("sagakit", "Spec Kit", citation, "entity", lookup_fn=lambda _: _lookup()) is None
+        assert record["quote"] in citation
+
+    def test_explicit_answer_has_traceable_quote_and_target(self):
+        citation = user_answer_citation(self.record(), item_id=7, target="Spec Kit")
+        assert evidence_names_authority(citation)
+        assert guard("sagakit", "Spec Kit", citation, "entity", lookup_fn=lambda _: _lookup()) is None
+        assert guard("sagakit", "Other Kit", citation, "entity", lookup_fn=lambda _: _lookup()).code == "target_unknown"
+
+    def test_bare_yes_requires_question_for_this_target(self):
+        record = {**self.record(), "quote": "是"}
+        with pytest.raises(ValueError):
+            user_answer_citation(record, item_id=7, target="Spec Kit")
+        record["question"] = "录音里提到的是 Spec Kit 吗？"
+        assert user_answer_citation(record, item_id=7, target="Spec Kit")
+        record["question"] = "录音里提到的是 Other Kit 吗？"
+        with pytest.raises(ValueError):
+            user_answer_citation(record, item_id=7, target="Spec Kit")
+
+    @pytest.mark.parametrize("question", ["这不是Spec Kit吗", "这不是 Spec Kit 吗？",
+                                          "Spec Kit 不对吗？", "是 Spec Kit 还是 Other Kit？",
+                                          "不是 Spec Kit，是 Other Kit 吗？", "可能是 Spec Kit 吗？",
+                                          "This is not Spec Kit?", "Is it not Spec Kit?"])
+    def test_bare_yes_cannot_affirm_a_negative_or_ambiguous_question(self, question):
+        record = {**self.record(), "quote": "是", "question": question}
+        with pytest.raises(ValueError):
+            user_answer_citation(record, item_id=7, target="Spec Kit")
+        import json
+        citation = "[user_answer] " + json.dumps(record, ensure_ascii=False)
+        assert guard("sagakit", "Spec Kit", citation, "entity",
+                     lookup_fn=lambda _: _lookup()).code == "target_unknown"
+
+    @pytest.mark.parametrize("question", ["这里是 Spec Kit 吗？", "录音里提到的是 Spec Kit 吗？", "是不是 Spec Kit？",
+                                          "这里是Spec Kit吗？", "Is it Spec Kit?"])
+    def test_bare_yes_bounded_positive_questions_pass(self, question):
+        citation = user_answer_citation({**self.record(), "quote": "是", "question": question},
+                                        item_id=7, target="Spec Kit")
+        assert guard("sagakit", "Spec Kit", citation, "entity", lookup_fn=lambda _: _lookup()) is None
+
+    @pytest.mark.parametrize("form", ["missing", "null", "empty"])
+    def test_bare_yes_missing_question_cannot_authorize_actual_guard(self, form):
+        import json
+        record = {**self.record(), "quote": "是"}
+        if form != "missing":
+            record["question"] = None if form == "null" else ""
+        with pytest.raises(ValueError):
+            user_answer_citation(record, item_id=7, target="Spec Kit")
+        citation = "[user_answer] " + json.dumps(record, ensure_ascii=False)
+        assert guard("sagakit", "Spec Kit", citation, "entity",
+                     lookup_fn=lambda _: _lookup()).code == "target_unknown"
+
+    @pytest.mark.parametrize("key,form", [(key, form) for key in ("source_ref", "quote", "target", "item_id", "kind")
+                                          for form in ("missing", "null", "empty")])
+    def test_malformed_record_is_not_authority_in_actual_guard(self, key, form):
+        import json
+        record = self.record()
+        if form == "missing":
+            del record[key]
+        else:
+            record[key] = None if form == "null" else ""
+        citation = "[user_answer] " + json.dumps(record, ensure_ascii=False)
+        assert guard("sagakit", "Spec Kit", citation, "entity",
+                     lookup_fn=lambda _: _lookup()).code == "target_unknown"
+
+    @pytest.mark.parametrize("field,value", [("item_id", 8), ("item_id", True), ("target", "Other Kit")])
+    def test_answer_cannot_settle_another_item_or_target(self, field, value):
+        with pytest.raises(ValueError):
+            user_answer_citation({**self.record(), field: value}, item_id=7, target="Spec Kit")
+
+    def test_new_wording_without_source_record_stays_refused(self):
+        assert not evidence_names_authority("用户2026-10-08当前会话明确回答：是，Spec Kit")
+
+    def test_cli_structured_answer_success_readback(self, isolated_config, tmp_path, monkeypatch):
+        import json
+        import core.review_queue
+        monkeypatch.setattr(core.review_queue, "is_temp_path", lambda _: False)
+        file = tmp_path / "meeting.md"
+        file.write_text('---\nasr_note: "raw transcript"\n---\n我们用 sagakit 开始。\n', encoding="utf-8")
+        queue = _get_review_queue()
+        item_id = queue.enqueue([{"original": "sagakit", "suggested": "Spec Kit", "kind": "entity",
+                                  "file": str(file), "line": 4, "context": "我们用 sagakit 开始。",
+                                  "evidence": "待用户裁定"}])["added"][0]
+        record = tmp_path / "answer.json"
+        record.write_text(json.dumps(self.record(item_id), ensure_ascii=False), encoding="utf-8")
+        cmd_resolve_review(_args(resolve_review=item_id, review_decision="accepted",
+                                review_authority_record=str(record), review_ledger_entry="sagakit→Spec Kit（用户明确回答）"))
+        after = queue.get(item_id)
+        assert after.status == "accepted"
+        assert "conversation:synthetic-session#message-9" in after.evidence
+        assert "我们用 Spec Kit 开始。" in file.read_text()
+        assert 'sagakit→Spec Kit' in file.read_text().splitlines()[1]
+
+    def test_cli_valid_authority_but_bad_anchor_changes_nothing(self, isolated_config, tmp_path, monkeypatch):
+        import json
+        import core.review_queue
+        monkeypatch.setattr(core.review_queue, "is_temp_path", lambda _: False)
+        file = tmp_path / "meeting.md"
+        file.write_text('---\nasr_note: "raw transcript"\n---\n我们用 sagakit 开始。\n', encoding="utf-8")
+        queue = _get_review_queue()
+        item_id = queue.enqueue([{"original": "sagakit", "suggested": "Spec Kit", "kind": "entity",
+                                  "file": str(file), "line": 4, "context": "我们用 sagakit 开始。",
+                                  "evidence": "待用户裁定"}])["added"][0]
+        file.write_text(file.read_text().replace("sagakit", "Other Kit"))
+        before = file.read_bytes()
+        evidence = queue.get(item_id).evidence
+        record = tmp_path / "answer.json"
+        record.write_text(json.dumps(self.record(item_id)), encoding="utf-8")
+        with pytest.raises(SystemExit) as exc:
+            cmd_resolve_review(_args(resolve_review=item_id, review_decision="accepted",
+                                    review_authority_record=str(record), review_ledger_entry="sagakit→Spec Kit"))
+        assert exc.value.code == 2
+        assert file.read_bytes() == before
+        assert queue.get(item_id).status == "pending"
+        assert queue.get(item_id).evidence == evidence
+
+
+@pytest.mark.parametrize("options", [
+    ["--authority-record", "answer.json"],
+    ["--ledger-entry", "old→new"],
+    ["--authority-record", "answer.json", "--resolve-review", "7", "--decision", "accepted", "--init"],
+    ["--ledger-entry", "old→new", "--resolve-review", "7", "--decision", "accepted", "--list-review"],
+])
+def test_new_verdict_options_cannot_be_swallowed_by_another_command(options, isolated_config, monkeypatch):
+    import fix_transcription
+    monkeypatch.setattr(sys, "argv", ["fix_transcription.py", *options])
+    with pytest.raises(SystemExit) as exc:
+        fix_transcription.main()
+    assert exc.value.code == 2
+
+
+def test_resolve_keeps_real_dictionary_action_connection_usable(isolated_config):
+    queue = _get_review_queue()
+    item_id = queue.enqueue([{
+        "original": "spce-kit", "suggested": "Spec Kit", "kind": "entity",
+        "evidence": "用户裁定：Spec Kit", "actions": [{
+            "type": "dict_add", "from": "spce-kit", "to": "Spec Kit", "domain": "synthetic",
+        }],
+    }])["added"][0]
+    cmd_resolve_review(_args(resolve_review=item_id, review_decision="accepted"))
+    assert queue.get(item_id).status == "accepted"
+    assert any(rule.from_text == "spce-kit" and rule.to_text == "Spec Kit"
+               for rule in _get_service().repository.get_all_corrections(active_only=False))
+
+
+_BAD_USER_ANSWER_CASES = [
+    {"quote": quote} for quote in (
+        "Spec Kit 不对", "Spec Kit 是错的", "Spec Kit 不正确", "Spec Kit 不是我要说的",
+        "不是 Spec Kit，是 Other Kit", "Spec Kit 不对，是 Other Kit", "是，Spec Kit？",
+        "是，Spec Kit，但我不确定", "Spec Kit", "Spec Kit is wrong", "Spec Kit is not correct",
+    )
+] + [
+    {"quote": answer, "question": question} for answer, question in (
+        ("是", "这不是Spec Kit吗"), ("是", "Spec Kit不对吗？"),
+        ("yes", "This is not Spec Kit?"), ("yes", "Is it not Spec Kit?"),
+        ("是", "是 Spec Kit 还是 Other Kit？"),
+    )
+] + [
+    {key: value} for key in ("source_ref", "quote", "target", "item_id", "kind")
+    for value in (None, "")
+] + [{"omit": key} for key in ("source_ref", "quote", "target", "item_id", "kind")]
+_BAD_USER_ANSWER_CASES += [{"quote": "是"}, {"quote": "是", "question": None}, {"quote": "是", "question": ""}]
+
+
+@pytest.mark.parametrize("patch", _BAD_USER_ANSWER_CASES)
+def test_rejected_citation_cli_changes_no_body_authority_or_verdict(
+    patch, isolated_config, tmp_path, monkeypatch, capsys
+):
+    import json
+    import sqlite3
+    import fix_transcription
+    import core.review_queue
+    from utils.config import get_config
+    monkeypatch.setattr(core.review_queue, "is_temp_path", lambda _: False)
+    file = tmp_path / "meeting.md"
+    file.write_text('---\nasr_note: "raw transcript"\n---\n我们用 sagakit 开始。\n', encoding="utf-8")
+    queue = _get_review_queue()
+    item_id = queue.enqueue([{"original": "sagakit", "suggested": "Spec Kit", "kind": "entity",
+                              "file": str(file), "line": 4, "context": "我们用 sagakit 开始。",
+                              "evidence": "待用户裁定"}])["added"][0]
+    record = {"kind": "user_answer", "item_id": item_id, "target": "Spec Kit",
+              "source_ref": "synthetic:message:1", "quote": "是，Spec Kit"}
+    record.update({key: value for key, value in patch.items() if key != "omit"})
+    if "omit" in patch:
+        del record[patch["omit"]]
+    source = tmp_path / "answer.json"
+    source.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+    before = file.read_bytes()
+    before_item = queue.get(item_id).to_dict()
+    monkeypatch.setattr(sys, "argv", ["fix_transcription.py", "--resolve-review", str(item_id),
+        "--decision", "accepted", "--authority-record", str(source), "--ledger-entry", "sagakit→Spec Kit", "--json"])
+    with pytest.raises(SystemExit) as exc:
+        fix_transcription.main()
+    assert exc.value.code == 2
+    assert json.loads(capsys.readouterr().out)["error"] == "invalid_authority_record"
+    assert file.read_bytes() == before
+    assert queue.get(item_id).to_dict() == before_item
+    with sqlite3.connect(get_config().database.path) as conn:
+        assert [row[0] for row in conn.execute("SELECT action FROM audit_log WHERE entity_id = ? ORDER BY id", (item_id,))] == ["review_enqueue"]
+
+
+@pytest.mark.parametrize("quote,question", [
+    ("是，Spec Kit", None), ("是的：Spec Kit。", None), ("YES, Spec Kit", None),
+    ("是", "这里是Spec Kit吗？"), ("yes", "Is it Spec Kit?"),
+])
+def test_bounded_affirmative_citation_cli_preserves_quote_and_commits(
+    quote, question, isolated_config, tmp_path, monkeypatch, capsys
+):
+    import json
+    import fix_transcription
+    import core.review_queue
+    monkeypatch.setattr(core.review_queue, "is_temp_path", lambda _: False)
+    file = tmp_path / "meeting.md"
+    file.write_text('---\nasr_note: "raw transcript"\n---\n我们用 sagakit 开始。\n', encoding="utf-8")
+    queue = _get_review_queue()
+    item_id = queue.enqueue([{"original": "sagakit", "suggested": "Spec Kit", "kind": "entity",
+                              "file": str(file), "line": 4, "context": "我们用 sagakit 开始。",
+                              "evidence": "待用户裁定"}])["added"][0]
+    record = {"kind": "user_answer", "item_id": item_id, "target": "Spec Kit",
+              "source_ref": "synthetic:message:1", "quote": quote}
+    if question is not None:
+        record["question"] = question
+    source = tmp_path / "answer.json"
+    source.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["fix_transcription.py", "--resolve-review", str(item_id),
+        "--decision", "accepted", "--authority-record", str(source), "--ledger-entry", "sagakit→Spec Kit", "--json"])
+    fix_transcription.main()
+    assert json.loads(capsys.readouterr().out)["item"]["status"] == "accepted"
+    item = queue.get(item_id)
+    assert item.status == "accepted" and "我们用 Spec Kit 开始。" in file.read_text()
+    assert source.read_text() == json.dumps(record, ensure_ascii=False)
+    assert item.evidence.split("[user_answer] ", 1)[1] == json.dumps(record, ensure_ascii=False, separators=(",", ":"))

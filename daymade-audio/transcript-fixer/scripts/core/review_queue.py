@@ -16,9 +16,10 @@ so confirmations compound into the dictionary instead of being lost.
 
 Design (borrowed from annotation-tool practice — Prodigy/Argilla):
   * every item carries a PRE-FILLED suggestion + evidence, so agreeing is one action
-  * decisions are atomic: validate ALL proposed actions first, then apply
+  * validate ALL proposed actions before writing, then apply
     (an item whose anchor text has drifted fails closed — "re-anchor needed" —
-    rather than editing the wrong text; a wrong auto-edit is worse than a missed one)
+    rather than editing the wrong text; a wrong auto-edit is worse than a missed one).
+    Files and SQLite are separate commit media; interrupted writes require readback.
   * the queue is CLI-first: the web dashboard shells out to the CLI for every
     write, so agent and human are equal writers and the DB stays the SSOT
 """
@@ -26,6 +27,7 @@ Design (borrowed from annotation-tool practice — Prodigy/Argilla):
 from __future__ import annotations
 
 import json
+import os
 import re
 import sqlite3
 import tempfile
@@ -770,12 +772,15 @@ class ReviewQueue:
         override_to: Optional[str] = None,
         note: Optional[str] = None,
         by: Optional[str] = None,
+        authority: Optional[str] = None,
+        ledger_entry: Optional[str] = None,
     ) -> dict[str, Any]:
         """Record a decision and (for accepted/overridden) execute the action pack.
 
-        Two-phase: every action is validated against the CURRENT state of its
-        target file first; only if all pass does anything get written. A failed
-        validation raises ReAnchorNeeded and records nothing.
+        Validate every action against its current file before writing. A bad
+        anchor raises ReAnchorNeeded and records nothing. Authority and verdict
+        share a SQLite transaction; files commit separately, so an abrupt exit
+        can leave a pending item whose anchored edit is already in place.
         """
         if decision not in VALID_DECISIONS:
             raise ReviewQueueError(f"invalid decision {decision!r} (valid: {VALID_DECISIONS})")
@@ -792,56 +797,70 @@ class ReviewQueue:
                 f"use --decision reopen first to change a recorded decision"
             )
 
+        if ledger_entry is not None and decision not in ("accepted", "overridden"):
+            raise ReviewQueueError("ledger entry requires accepted or overridden")
         resolved_text: Optional[str] = None
-        apply_log: list[dict[str, Any]] = []
-        applied_at: Optional[str] = None
-
         if decision == "accepted":
             if not item.suggested_text:
                 raise ReviewQueueError(
                     f"item {item_id} has no suggestion to accept — "
-                    f"use --decision overridden --override-to TEXT"
+                    "use --decision overridden --override-to TEXT"
                 )
             resolved_text = item.suggested_text
-            apply_log = self._apply_actions(item, resolved_text, override=False)
-            applied_at = _utcnow()
         elif decision == "overridden":
             if not override_to or not override_to.strip():
                 raise ReviewQueueError("--decision overridden requires --override-to TEXT")
             resolved_text = override_to.strip()
-            apply_log = self._apply_actions(item, resolved_text, override=True)
-            applied_at = _utcnow()
-        # kept_original / skipped: no actions to run
 
-        with self._connect() as conn:
-            cur = conn.execute(
-                """UPDATE review_items
-                   SET status = ?, decided_at = ?, decided_by = ?, decision_note = ?,
-                       resolved_text = ?, applied_at = ?, apply_log = ?
-                   WHERE id = ? AND status = 'pending'""",
-                (
-                    decision, _utcnow(), by, note, resolved_text, applied_at,
-                    json.dumps(apply_log, ensure_ascii=False) if apply_log else None,
-                    item_id,
-                ),
-            )
-            if cur.rowcount == 0:
-                # Another writer (dashboard vs CLI — they are equal writers)
-                # resolved this item between our read and this claim. Roll back
-                # anything we just applied, record nothing, fail loudly instead
-                # of silently overwriting their verdict.
-                conn.rollback()
-                revert_log = self._revert_applied(apply_log)
-                raise ReviewQueueError(
-                    f"item {item_id} was resolved by another writer meanwhile — "
-                    f"nothing recorded; applied edits rolled back "
-                    f"({sum(1 for r in revert_log if r.get('ok'))}/{len(revert_log)} reverted). "
-                    f"Reload and retry."
+        apply_log: list[dict[str, Any]] = []
+        applied_at: Optional[str] = None
+        try:
+            with self._connect() as conn:
+                # Do not hold a SQLite writer lock while dict_add uses its own
+                # repository connection. Claim pending status conditionally
+                # after action execution; authority shares that transaction.
+                # Abrupt exit after replacement leaves pending + applied text,
+                # which the same anchored resolve can recognise on retry.
+                current = conn.execute("SELECT status FROM review_items WHERE id = ?", (item_id,)).fetchone()
+                if current is None or current[0] != PENDING:
+                    raise ReviewQueueError(f"item {item_id} changed state meanwhile — reload and retry")
+                if resolved_text is not None:
+                    apply_log = self._apply_actions(item, resolved_text,
+                                                    override=decision == "overridden",
+                                                    ledger_entry=ledger_entry)
+                    applied_at = _utcnow()
+                claimed = conn.execute(
+                    """UPDATE review_items
+                       SET status = ?, decided_at = ?, decided_by = ?, decision_note = ?,
+                           resolved_text = ?, applied_at = ?, apply_log = ?
+                       WHERE id = ? AND status = 'pending'""",
+                    (decision, _utcnow(), by, note, resolved_text, applied_at,
+                     json.dumps(apply_log, ensure_ascii=False) if apply_log else None, item_id),
                 )
-            self._audit(conn, "review_resolve", item_id, by,
-                        {"decision": decision, "resolved_text": resolved_text,
-                         "actions_applied": len(apply_log)})
-            conn.commit()
+                if claimed.rowcount != 1:
+                    raise ReviewQueueError(f"item {item_id} was resolved by another writer meanwhile — reload and retry")
+                if authority:
+                    line = f"[authority {_utcnow()} by {by or 'unknown'}] {authority.strip()}"
+                    conn.execute("UPDATE review_items SET evidence = CASE WHEN evidence IS NULL "
+                                 "OR evidence = '' THEN ? ELSE evidence || char(10) || ? END "
+                                 "WHERE id = ?", (line, line, item_id))
+                    self._audit(conn, "review_evidence_attach", item_id, by, {"appended": line})
+                self._audit(conn, "review_resolve", item_id, by,
+                            {"decision": decision, "resolved_text": resolved_text,
+                             "actions_applied": len(apply_log)})
+                conn.commit()
+        except Exception as error:
+            # Validation failures have no apply log and changed no files.
+            # Ordinary DB failures roll back the logged edits where their exact
+            # state still matches; never erase concurrent changes to force clean.
+            if apply_log:
+                reverts = self._revert_applied(apply_log)
+                remaining = [r for r in reverts if not r.get("ok")]
+                raise ReviewQueueError(
+                    f"verdict not recorded: {error}; rollback incomplete={bool(remaining)}; "
+                    "read transcript and queue before retrying"
+                ) from error
+            raise
         result = self.get(item_id)
         assert result is not None
         return {"item": result.to_dict(), "apply_log": apply_log}
@@ -911,6 +930,19 @@ class ReviewQueue:
                                            "msg": "inserted note not found verbatim — remove manually"})
                 except (OSError, ReAnchorNeeded) as e:
                     revert_log.append({"action": action, "ok": False, "msg": f"not reverted: {e}"})
+            elif atype == "ledger_note":
+                path = Path(action["path"])
+                try:
+                    content = self._read_file(path)
+                    old_line, new_line = entry["old_line"], entry["new_line"]
+                    if content.count(new_line) != 1:
+                        revert_log.append({"action": action, "ok": False,
+                                           "msg": "ledger changed since acceptance — retained"})
+                    else:
+                        self._write_file(path, content.replace(new_line, old_line, 1))
+                        revert_log.append({"action": action, "ok": True, "msg": "ledger reverted"})
+                except (OSError, ReAnchorNeeded) as e:
+                    revert_log.append({"action": action, "ok": False, "msg": f"not reverted: {e}"})
             elif atype == "dict_add":
                 revert_log.append({
                     "action": action, "ok": False,
@@ -929,7 +961,8 @@ class ReviewQueue:
     # promise holds even for packs whose actions interact.
 
     def _apply_actions(
-        self, item: ReviewItem, resolved_text: str, override: bool
+        self, item: ReviewItem, resolved_text: str, override: bool,
+        ledger_entry: Optional[str] = None,
     ) -> list[dict[str, Any]]:
         """Plan ALL actions in memory, then write. Fail closed: any validation
         error leaves every file untouched.
@@ -973,6 +1006,7 @@ class ReviewQueue:
 
         # Phase 1: plan everything against in-memory content.
         contents: dict[Path, str] = {}
+        originals: dict[Path, str] = {}
         dirty: set[Path] = set()
         planned: list[dict[str, Any]] = []
         for action in actions:
@@ -980,6 +1014,7 @@ class ReviewQueue:
             if atype == "file_edit":
                 path = Path(action["path"]).resolve()
                 content = self._load(contents, path)
+                originals.setdefault(path, content)
                 new_content, applied_new = self._plan_file_edit(content, action, item)
                 if new_content is None:
                     planned.append({
@@ -994,6 +1029,7 @@ class ReviewQueue:
             elif atype == "append_note":
                 path = Path(action["path"]).resolve()
                 content = self._load(contents, path)
+                originals.setdefault(path, content)
                 new_content, inserted = self._plan_append_note(content, action)
                 if new_content is None:
                     planned.append({"action": action, "mode": "skip_already_present"})
@@ -1010,9 +1046,43 @@ class ReviewQueue:
                     )
                 planned.append({"action": action, "mode": "dict_add"})
 
+        if ledger_entry is not None:
+            if not item.file_path:
+                raise ReviewQueueError("--ledger-entry requires a transcript file anchor")
+            expected_pair = f"{item.original_text}→{resolved_text}"
+            if (not isinstance(ledger_entry, str) or not ledger_entry.startswith(expected_pair)
+                    or (ledger_entry[len(expected_pair):]
+                        and ledger_entry[len(expected_pair)] not in "（( [【；;")):
+                raise ReviewQueueError(f"ledger entry must start with the actual resolved pair: {expected_pair}")
+            path = Path(item.file_path).resolve()
+            content = self._load(contents, path)
+            originals.setdefault(path, content)
+            new_content, old_line, new_line = self._plan_ledger_entry(content, ledger_entry)
+            action = {"type": "ledger_note", "path": str(path)}
+            if new_content == content:
+                planned.append({"action": action, "mode": "skip_already_present"})
+            else:
+                contents[path] = new_content
+                dirty.add(path)
+                planned.append({"action": action, "mode": "ledger_note",
+                                "old_line": old_line, "new_line": new_line})
+
         # Phase 2: write each dirty file once, then run dictionary adds.
-        for path in dirty:
-            self._write_file(path, contents[path])
+        written: list[Path] = []
+        try:
+            for path in dirty:
+                self._write_file(path, contents[path])
+                written.append(path)
+                if self._read_file(path) != contents[path]:
+                    raise ReviewQueueError(f"file readback mismatch: {path}")
+        except Exception as error:
+            incomplete = []
+            for path in reversed(written):
+                if self._read_file(path) != contents[path]:
+                    incomplete.append(str(path))
+                    continue
+                self._write_file(path, originals[path])
+            raise ReviewQueueError(f"file write failed: {error}; rollback incomplete={incomplete}") from error
         log: list[dict[str, Any]] = []
         for plan in planned:
             action = plan["action"]
@@ -1028,6 +1098,9 @@ class ReviewQueue:
             elif mode == "append_note":
                 log.append({"action": action, "ok": True, "inserted_text": plan["inserted_text"],
                             "msg": f"note appended to {plan['path'].name}"})
+            elif mode == "ledger_note":
+                log.append({"action": action, "ok": True, "old_line": plan["old_line"],
+                            "new_line": plan["new_line"], "msg": "correction ledger updated"})
             elif mode == "dict_add":
                 assert self.dict_add_fn is not None
                 self.dict_add_fn(
@@ -1056,8 +1129,57 @@ class ReviewQueue:
 
     @staticmethod
     def _write_file(path: Path, content: str) -> None:
-        with open(path, "w", encoding="utf-8", newline="") as f:
-            f.write(content)
+        # Replace one complete file so body and its ledger cannot be torn into
+        # separate writes. SQLite still commits separately; see resolve recovery.
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="",
+                                             dir=path.parent, delete=False) as f:
+                temporary = Path(f.name)
+                os.chmod(temporary, path.stat().st_mode & 0o777)
+                f.write(content)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temporary, path)
+        finally:
+            if temporary is not None and temporary.exists():
+                temporary.unlink()
+
+    @staticmethod
+    def _plan_ledger_entry(content: str, entry: str) -> tuple[str, str, str]:
+        """Append to an existing single-line YAML asr_note, preserving body bytes."""
+        if not isinstance(entry, str) or not entry.strip() or "\n" in entry or "\r" in entry:
+            raise ReviewQueueError("ledger entry must be nonempty and single-line")
+        lines = content.splitlines(keepends=True)
+        if not lines or lines[0].strip() != "---":
+            raise ReviewQueueError("--ledger-entry requires leading YAML with a single-line asr_note")
+        for index in range(1, len(lines)):
+            if lines[index].strip() == "---":
+                break
+            match = re.match(r"^asr_note:\s*(.*?)\s*$", lines[index].rstrip("\r\n"))
+            if not match:
+                continue
+            value = match.group(1)
+            if value in {"|", ">", "|-", ">-", "|+", ">+"}:
+                raise ReviewQueueError("multi-line asr_note is not supported by --ledger-entry")
+            if value.startswith('"'):
+                try:
+                    value = json.loads(value)
+                except ValueError as e:
+                    raise ReviewQueueError("asr_note must use a valid JSON-compatible quoted scalar") from e
+            elif value.startswith("'") and value.endswith("'"):
+                value = value[1:-1].replace("''", "'")
+            if not isinstance(value, str):
+                raise ReviewQueueError("asr_note must be a string")
+            if entry.strip() in value.split("；"):
+                return content, lines[index], lines[index]
+            old_line = lines[index]
+            ending = "\r\n" if old_line.endswith("\r\n") else "\n" if old_line.endswith("\n") else ""
+            value = f"{value}；{entry.strip()}" if value else entry.strip()
+            new_line = "asr_note: " + json.dumps(value, ensure_ascii=False) + ending
+            lines[index] = new_line
+            return "".join(lines), old_line, new_line
+        raise ReviewQueueError("--ledger-entry requires an existing single-line asr_note")
 
     def _load(self, contents: dict[Path, str], path: Path) -> str:
         if path not in contents:

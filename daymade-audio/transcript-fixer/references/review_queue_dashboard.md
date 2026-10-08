@@ -51,6 +51,88 @@ produced, and an optional **action pack** executed on accept: `file_edit`
 `append_note` (add a trap line to a domain context file). No action pack + a
 file anchor = the default single `file_edit`.
 
+### Cited answers and ledger writes
+
+When the user answers an unresolved term or name question, preserve that answer
+and its source before accepting the queued edit. A structured `answer.json` is:
+
+```json
+{
+  "kind": "user_answer",
+  "item_id": 12,
+  "target": "Spec Kit",
+  "source_ref": "conversation:session-id#message-id",
+  "quote": "是，Spec Kit"
+}
+```
+
+The item ID and target must match this verdict. `source_ref` and `quote` must
+be nonempty strings. The new citation path recognises a bounded affirmative
+syntax, rather than treating a target mention as approval:
+
+- The whole quoted clause is `是` / `是的` / `对` / `对的` / `确认` / `yes`,
+  followed by the exact target, with optional whitespace and one comma or colon
+  between them; one final `。` / `.` / `!` / `！` is optional. Only `yes` is
+  case-insensitive; the target keeps its exact spelling. `是，Spec Kit` passes.
+- A standalone affirmative word from that list (with optional final punctuation)
+  also requires a verbatim `question` in the finite positive-question syntax:
+  `(这里|这|这句|这个词|该词|你说的|录音里提到的)是 TARGET 吗？`,
+  `是 TARGET 吗？`, `是不是 TARGET？`, or `Is (it|this|that) TARGET?`.
+  Whitespace is optional around the Chinese target; Chinese questions can end
+  in `吗` with optional `？`/`?`, or just `？`/`?`. English question words are
+  case-insensitive. `这里是Spec Kit吗？` + `是` and `Is it Spec Kit?` + `yes` pass.
+
+The whole clause/question must match; trailing denials or extra candidates are
+not discarded. `Spec Kit 不对`, `Spec Kit 是错的`, a bare `Spec Kit`, uncertain
+answers and answer clauses ending in a question mark do not qualify.
+`Spec Kit不对吗？` + `是` and `This is not Spec Kit?` + `yes` also refuse automatic
+adjudication. Unsupported wording leaves the occurrence pending.
+
+This deliberately excludes some legitimate natural answers, such as `我说的是
+Spec Kit` and `Spec Kit 是对的`, and longer questions outside the listed syntax.
+After reading the complete source message and question, an operator can quote a
+literal affirmative clause or positive question that is actually present, with
+the same source reference. Do not paraphrase, manufacture a supported answer, or
+strip words that reverse its meaning. If no supported literal clause exists,
+retain the full original wording and use the existing obtained-authority path
+with an accurate source citation, or keep the item pending for interpretation.
+The validator checks this record's shape and scope. It does not fetch the source
+or authenticate the speaker. Cite an answer actually received in the current
+conversation or a source you read; a repository's spelling proves vocabulary,
+not what the speaker meant. Bare `用户明确回答` text does not bypass the guard.
+Existing `--authority` roster/audio/user-ruling citations keep their contract.
+
+```bash
+uv run scripts/fix_transcription.py --resolve-review 12 --decision accepted \
+  --authority-record answer.json --ledger-entry 'sagakit→Spec Kit（用户明确回答）' --json
+```
+
+`--ledger-entry` is optional and requires the anchored transcript's existing
+single-line `asr_note` in leading YAML. The entry must start with this item's
+actual `original→resolved` pair. It appends a confirmed entry, preserving
+the ledger's old-form evidence. Multi-line ledgers are refused. The body edit
+and ledger update are planned before writing and replaced as one complete file;
+the exact resulting bytes are read back. An authority or anchor refusal changes
+neither file, evidence nor verdict. The evidence append and verdict share one
+SQLite transaction. `reopen` reverts the ledger line only if it still matches the
+line this action wrote, preserving subsequent changes.
+
+Files and SQLite are separate media. A process interruption after the file
+replacement but before the SQLite commit can leave corrected body/ledger with a
+pending queue item. Read both, then retry the same anchored resolve and ledger
+entry: an already-applied edit is recognised and the ledger entry is not repeated.
+If the anchor drifted, stop and re-anchor rather than treating a file's presence
+as success. Ordinary database errors attempt reversal of logged edits and report
+whether rollback was incomplete; dictionary additions and concurrent edits are
+not guaranteed reversible. Cross-file action packs do not form a filesystem
+transaction. A successful retry records prior text without taking ownership of
+its earlier write, so a later `reopen` need not remove that prior text.
+
+Stop dependent work on any nonzero exit or JSON `error`. A successful command
+after a shell newline can hide the resolve command's exit status. Chain dependent
+commands with `&&` or use a subprocess that checks the return code, then separately
+read the file and `--show-review ID --json` before claiming the correction landed.
+
 **Fail-closed anchor guard**: the whole action pack is planned in memory
 against the CURRENT file state (each edit validated against the content as the
 pack's previous actions left it), and only when every action plans successfully
