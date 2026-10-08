@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **frontend-visual-qa** (v1.19.1 → v1.19.2): Check the questions answered by collapsed and expanded views through real interaction and independent reference data. Reject details that only repeat a total; preserve repeated totals that reconcile a breakdown. Require a rejected-state control and a healthy near-boundary case. Change type: bounded audit-contract clarification.
 - **data-visualization-discipline** (v1.1.0 → v1.1.1): Add a synthetic monthly-budget case distinguishing overview contributions from precise month lookup, with a current-period cutoff. Keep interaction verification with frontend-visual-qa and retain existing analytical gates. Change type: bounded reference addition.
+- **macos-load-doctor / macos-watchdog** (`daymade-macos` v1.22.1): Keep authorized read-only diagnosis active while intervention awaits current-user approval; require named-alert trigger reconstruction and discriminating cause evidence before closure. Add delayed-sampling, real-anomaly and unavailable-time acceptance. Change types: workflow correction / verification correction.
 
 - **github-ops** (v1.13.2 → v1.14.0): Add a CI demand and notification workflow that binds repository purpose to necessary checks before runner migration. Separate budget-blocked runs from test failures, preserve required checks and manual/release behavior, assign failure handling, and verify targeted notification changes. Change type: workflow capability addition.
 

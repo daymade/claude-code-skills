@@ -97,12 +97,27 @@ On a shared machine, **diagnosis is read-only; remediation has an owner**.
   action in a nicer wrapper — it counts as terminating them.
 - What you may do yourself: throttle your own loops, renice your own
   processes, stop your own background jobs.
-- Everything else is a report: load reading, census output, the attributed
-  parent chain, the classified shape, and the proposed remediation — handed to
-  the owner (the user, or the session that owns the parent). **Once the owner
-  explicitly authorizes the remediation, execute it** — an authorized action
-  handed back as another report is the opposite boundary violation. Verify
-  afterward as below.
+- Terminating or restarting another session's, agent's, service's or user's
+  process requires the **current user's explicit authorization**. Coordinate
+  ownership with peers, but their agreement does not grant that authorization.
+  Pause only the intervention that needs approval; continue the authorized
+  read-only investigation that does not depend on it.
+- For a named alert, reconstruct its recorded window, measurement units and
+  trigger calculation before attributing the cause. Another process being
+  hotter does not explain why this alert fired. Keep alert validity and the
+  machine's actual workload as separate conclusions.
+- For a diagnosis or remediation request, progress reports do not end the task.
+  Do not send a closing answer with the cause unknown while an authorized probe
+  can still distinguish the competing explanations. Diagnosis completes when a
+  specific mechanism explains the requested symptom or alert and has evidence
+  that discriminates those explanations; an approved repair continues through
+  independent readback. A standalone snapshot-only request can end after that
+  snapshot; a status question during active diagnosis gets a progress update
+  while investigation continues. An explicit pause is honored. If an
+  external condition blocks all remaining probes, name it and the missing
+  evidence as unfinished, rather than claiming completion.
+- Once the current user authorizes an intervention, execute and verify it;
+  handing an already authorized action back as another report is not completion.
 - After any remediation (yours or the owner's), **read back**: re-run
   `sysctl -n vm.loadavg` and the census. A command receipt is not recovery;
   the load and the child count are.
