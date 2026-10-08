@@ -138,6 +138,12 @@ being copied here. An owning installer may support an already authorized
 launcher; that does not make a package-manager dispatcher the default for
 Python hooks.
 
+### Rendered UI delivery acceptance
+
+For rendered UI freshness or deployment acceptance, enter
+[frontend-visual-qa](frontend-visual-qa/SKILL.md). Keep its manifest, launcher,
+result semantics and rendered-journey procedure in that owner.
+
 ### Background Full Disk Access repair
 
 When a LaunchAgent cannot read protected data, enter
@@ -609,7 +615,7 @@ branch point. Recovery:
    result byte-for-byte, then `git merge --ff-only <merge-sha>` — a
    fast-forward accepts staged content that equals the target; ort never does.
 3. Commit as a standalone command — `git add … && git commit` in one line trips
-   the scope guard's unknown-domain branch (150-second dialog) regardless of
+   the scope guard's unknown-domain branch regardless of
    content.
 
 **CHANGELOG.md merges as a union** (`.gitattributes`). Merging `origin/main`
