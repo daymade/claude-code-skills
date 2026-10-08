@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.19.1 → v1.19.2): Check the questions answered by collapsed and expanded views through real interaction and independent reference data. Reject details that only repeat a total; preserve repeated totals that reconcile a breakdown. Require a rejected-state control and a healthy near-boundary case. Change type: bounded audit-contract clarification.
+- **data-visualization-discipline** (v1.1.0 → v1.1.1): Add a synthetic monthly-budget case distinguishing overview contributions from precise month lookup, with a current-period cutoff. Keep interaction verification with frontend-visual-qa and retain existing analytical gates. Change type: bounded reference addition.
+
 - **github-ops** (v1.13.2 → v1.14.0): Add a CI demand and notification workflow that binds repository purpose to necessary checks before runner migration. Separate budget-blocked runs from test failures, preserve required checks and manual/release behavior, assign failure handling, and verify targeted notification changes. Change type: workflow capability addition.
 
 - **competitors-analysis** (v1.4.0 → v1.4.1): Accept a repository URL as the analysis target, resolve comparison context from the current project's authoritative entry, and complete standalone profiles when that context is absent. Preserve the no-task stop boundary and prohibit selecting unrelated products from stored clones. Align the profile template and checklist. Change type: bounded routing correction.
