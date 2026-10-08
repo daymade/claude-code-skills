@@ -32,6 +32,10 @@ gh search repos "primary keywords" --limit 30 --archived=false \
 
 ## 3. Repository Preparation
 
+Use the fetch recipe for first ingestion or requested freshness. Synthesis and
+continuation reuse verified profiles at pinned commits; confirm remote/object
+availability locally and refresh only for changed inputs or unresolved evidence.
+
 ```bash
 repo="$COMPETITORS_BASE/{product-slug}/{owner-repo}"
 test -d "$repo/.git"
@@ -41,7 +45,7 @@ git -C "$repo" log -1 --format='%H%x09%cI%x09%s'
 ```
 
 - [ ] Remote URL is recorded.
-- [ ] Latest local commit hash is recorded.
+- [ ] Analyzed commit hash is recorded; distinguish it from current upstream.
 - [ ] Commit date is recorded.
 - [ ] Default branch or current branch is recorded.
 - [ ] Local changes, if any, are noted before pulling.
@@ -72,15 +76,12 @@ nl -ba src/main.ts | sed -n '1,220p'
 
 ## 6. Language Checks
 
-Search the final report for unsupported language:
+Check claims in context, not with a banned-word pass/fail rule:
 
-```bash
-rg -n "(推测|可能|应该|大概|似乎|或许|未知|未披露|未公开|assume|probably|maybe)" profile.md
-```
-
-- [ ] No unsupported inference is presented as fact.
-- [ ] Unknowns are written as `待验证` with a specific next check.
-- [ ] Judgment is separated from repository facts.
+- [ ] No unsupported implementation or market inference is presented as fact.
+- [ ] Strategic inference is labeled, tied to cited observations and scoped to the business.
+- [ ] Unknown facts are written as `待验证` with a specific next check.
+- [ ] Unverified assumptions do not become requirements or claims of advantage.
 
 ## 7. Landscape Checks
 
@@ -90,8 +91,14 @@ For multi-competitor reports:
 - [ ] Positioning table distinguishes user segment from technical implementation.
 - [ ] Strengths are tied to user-visible behavior or code evidence.
 - [ ] Weaknesses/gaps cite evidence or are labeled as `待验证`.
-- [ ] Opportunities cite the evidence rows they derive from.
-- [ ] Risks and assumptions include the next verification step.
+- [ ] Read `landscape_synthesis.md`; a correct feature table alone does not pass.
+- [ ] The baseline includes the user's actual adopted workflow or substitute, when evidenced.
+- [ ] Each material judgment connects evidence, causal explanation, a concrete choice and cost, a counterexample/alternative explanation, and a falsifying check.
+- [ ] Claims of differentiation include current native/platform capabilities when relevant; absence in our sample is not proof of market uniqueness.
+- [ ] Technical acknowledgement, delivery, adoption and qualified outcome are distinguished when relevant.
+- [ ] Risks and assumptions include the next check that could change the choice.
+- [ ] Update the existing project research entry when understanding changes; retain evidence versions, live conclusions, failure conditions and open questions.
+- [ ] Continuation reads that entry and latest user correction before acting; do not rerun a completed inventory without changed inputs or a specific gap.
 
 ## Common Fixes
 

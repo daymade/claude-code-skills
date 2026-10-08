@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **competitors-analysis** (v1.4.1 → v1.5.0): Make Landscape judgments connect evidence to causal explanation, concrete product choices and trade-offs, counterexamples and falsifying checks. Preserve new understanding in the existing project research entry and reuse pinned evidence on continuation. Allow labeled strategic inference while retaining the ban on invented implementation facts. Change type: methodology and output-contract expansion.
 - **frontend-visual-qa** (v1.19.1 → v1.19.2): Check the questions answered by collapsed and expanded views through real interaction and independent reference data. Reject details that only repeat a total; preserve repeated totals that reconcile a breakdown. Require a rejected-state control and a healthy near-boundary case. Change type: bounded audit-contract clarification.
 - **data-visualization-discipline** (v1.1.0 → v1.1.1): Add a synthetic monthly-budget case distinguishing overview contributions from precise month lookup, with a current-period cutoff. Keep interaction verification with frontend-visual-qa and retain existing analytical gates. Change type: bounded reference addition.
 
