@@ -1,0 +1,19 @@
+{
+  "skill_name": "data-visualization-discipline",
+  "evals": [
+    {
+      "id": 1,
+      "name": "operational-current-unknown-and-conflicting-probes",
+      "prompt": "Review a synthetic operational status matrix before implementation. T0 showed target A up; its authoritative T1 observation is unknown. The source for B failed and only an old up snapshot remains. Target C has two monitors at the same location, one up and one down. Target D is reachable with six certificate days left; this fixture's critical threshold is seven. No concurrent push events are present. State the reader-facing conclusions and the evidence needed before drawing. Include a healthy control where the declared coverage is complete, all current sources are fresh, all monitors are up and no configured risk threshold is reached. Do not access production, invent an aggregate score or claim a browser verification.",
+      "expected_output": "A scoped presentation plan that keeps current unknown and source failure distinct from historical up, shows both conflicting monitor identities, retains certificate risk beside reachability, and allows the declared healthy control. It identifies empty/unknown coverage as unable to support all-online and leaves rendering unverified.",
+      "files": [],
+      "assertions": [
+        "Does not carry T0 up into the authoritative T1 unknown state or turn B's source failure into monitor deletion",
+        "Shows both monitor identities for C instead of first-result or average aggregation",
+        "Makes D's configured certificate risk visible alongside its reachable state",
+        "Accepts the complete fresh all-up no-risk control and does not treat empty coverage as all-online",
+        "Keeps project observation/threshold ownership and reports that rendered/browser behavior has not been verified"
+      ]
+    }
+  ]
+}
