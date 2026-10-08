@@ -63,6 +63,14 @@ Use adjacent skills by stage:
 
 ## Required Outcome
 
+### Prepare before taking over the target
+
+The executing auditor resolves the latest user contract and stage-specific Skills before driving a shared browser or device. Load the Skills explicitly requested for this task from their actual entries. For numerical breakdowns or charts, also use data-visualization-discipline; for Android control, use android-automation alongside this visual audit. Add a design Skill only when the user requests it or the task changes design. Device control alone supplies no visual or business acceptance criterion.
+
+Read the selected current Skill text and affected references, then freeze the actor's question, canonical target, affected states and observable answer. A catalog entry, remembered section label or compaction summary is a locator, not the loaded instructions. Reuse unchanged text still present in context; after compaction, reload only the needed instructions rather than rerunning completed tests.
+
+Record this preparation in the existing scope contract: required capability, resolved owner/entry, and the acceptance evidence it supplies. Missing instructions leave the dependent judgement unverified; continue authorized independent read-only work. Finish tool/dependency preparation before a short shared-resource window, and follow the target-control owner's restoration contract when that window ends. These are auditor actions, not claims of an automatic Skill-loading guard.
+
 Produce all of the following:
 
 1. A scope contract naming the artifact, actor, job, target kind and canonical
