@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` v1.66.2): Wait for a parseable child readiness snapshot during the interruption regression. Preserve the bounded deadline and strict post-interruption receipt, exit-code and process checks. Change type: test-only concurrency correction; runtime contracts are unchanged.
+
 - **github-ops** (v1.14.0 → v1.14.1): Continue authorized self-hosted setup through the deployment owner when registrations do not match. Prepare persistent dependencies and caches, preserve required artifact handoff when hosted storage blocks it, avoid service-port collisions, account for inherited and Docker resource limits, and verify hook launchers in actual job logs. Change type: bounded workflow repair and factual clarification.
 - **transcript-fixer** (`daymade-audio` v1.45.0): Bind explicit answers to queue item, target, source citation and exact quote. Preview authority before acceptance and commit it with the verdict; optionally replace corrected prose and an existing ledger line together. Preserve prior citation paths and name guards; refusal writes nothing, and interrupted file/SQLite updates remain pending until an idempotent retry. Change types: bounded consistency repair and cited-answer workflow addition; targeted regressions and CLI readback cover refusal and recovery.
 
