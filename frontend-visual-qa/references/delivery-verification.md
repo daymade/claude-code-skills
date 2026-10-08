@@ -17,8 +17,8 @@ project's release owner; this probe cannot discover or authenticate that set.
 
 ## Manifest
 
-Use a private task file outside the Skill package. This synthetic example has
-two checks; replace its commit and expected values from the selected artifact.
+Use a private task file outside the Skill package. In this synthetic example,
+replace the commit and expected values from the selected artifact.
 
 ```json
 {
