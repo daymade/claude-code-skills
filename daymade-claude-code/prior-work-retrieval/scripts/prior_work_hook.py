@@ -175,8 +175,14 @@ USER_OPTOUT = re.compile(
 # sub-agent prompts did exactly this and were gated for it.
 INCAPABLE_EXECUTOR = re.compile(
     r"(?:do\s+not|don't|never)\s+(?:read|load|use|execute|inspect|run)"
-    r"[^\n]{0,90}(?:SKILL\.md|skills?/|\.claude/|\.agents/|\.codex/)",
+    r"[^\n]{0,90}(?:SKILL\.md|skills?/|\.claude/|\.agents/|\.codex/)"
+    r"|(?:不得|禁止|不要|不能)\s*(?:调用|使用)\s*(?:任何|一切|所有)?\s*"
+    r"工具(?=$|[\s，,、。.;；:：])",
     re.IGNORECASE,
+)
+BARE_CONTINUATION = re.compile(
+    r"\A\s*(?:继续(?:吧|啊|做)?|接着(?:做|来)?|做吧|continue|resume|go ahead)"
+    r"\s*[。.!！?？]*\s*\Z", re.IGNORECASE,
 )
 SHELL_WRITE_SIGNAL = re.compile(
     r"(?:tools\.apply_patch|\bapply_patch\b|\.write_(?:text|bytes)\s*\(|"
@@ -820,6 +826,11 @@ def handle_user_prompt(event: dict[str, Any]) -> dict[str, Any] | None:
     session_id = event.get("session_id")
     if not isinstance(prompt, str) or not prompt.strip():
         return None
+    # Internal deliveries are not a new user task or authority to lift a gate.
+    if HOOK_GUIDANCE_MARKER in prompt or NON_USER_PROMPT.search(prompt.strip()):
+        return None
+    if BARE_CONTINUATION.fullmatch(prompt):
+        return None
     if not isinstance(session_id, str) or not session_id:
         if classify_prompt(prompt) == "required_prior_signal":
             return _inject(
@@ -840,6 +851,8 @@ def handle_user_prompt(event: dict[str, Any]) -> dict[str, Any] | None:
     receipt_valid = current is not None and _receipt_error(manifest, session_id) is None
     classification = classify_prompt(prompt, receipt_valid)
     if classification == "none":
+        if current is not None:
+            prior_work.set_prompt_scope(manifest, session_id, active=False)
         return None
     required = classification != "opt_out"
     requirement = prior_work.mark_requirement(
@@ -861,7 +874,8 @@ def handle_pre_tool(event: dict[str, Any]) -> dict[str, Any] | None:
     try:
         manifest = _manifest()
         requirement = prior_work.load_requirement(manifest, session_id)
-        if requirement is None or not requirement.get("required"):
+        if (requirement is None or not requirement.get("required")
+                or requirement.get("active_for_prompt") is False):
             return None
     except prior_work.PriorWorkError:
         # This feature is explicit-only. If no readable requirement can prove
@@ -886,7 +900,8 @@ def handle_stop(event: dict[str, Any]) -> dict[str, Any] | None:
     try:
         manifest = _manifest()
         requirement = prior_work.load_requirement(manifest, session_id)
-        if requirement is None or not requirement.get("required"):
+        if (requirement is None or not requirement.get("required")
+                or requirement.get("active_for_prompt") is False):
             return None
         error = _receipt_error(manifest, session_id)
     except prior_work.PriorWorkError as error:

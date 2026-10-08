@@ -851,6 +851,47 @@ class PriorWorkHookTests(unittest.TestCase):
             "valid",
         )
 
+    def test_new_ordinary_prompt_releases_old_gate_without_erasing_receipt_identity(self) -> None:
+        session_id = "session-current-status"
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
+        manifest = hook._manifest()
+        old = prior_work.load_requirement(manifest, session_id)
+        stop = {"session_id": session_id, "stop_hook_active": False}
+        write = {"session_id": session_id, "tool_name": "Write", "tool_input": {
+            "file_path": str(self.root / "next.py"), "content": "x" * 300}}
+        self.assertEqual(hook.handle_stop(stop)["decision"], "block")
+        hook.handle_user_prompt({"session_id": session_id,
+            "prompt": "现在只核对当前CI运行状态，并直接报告，不新增实现。"})
+        self.assertIsNone(hook.handle_stop(stop))
+        self.assertIsNone(hook.handle_pre_tool(write))
+        current = prior_work.load_requirement(manifest, session_id)
+        self.assertEqual(current["requirement_id"], old["requirement_id"])
+        self.assertEqual(current["prompt_sha256"], old["prompt_sha256"])
+        self.assertEqual(current["active_for_prompt"], False)
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的另一份解析器"})
+        self.assertEqual(hook.handle_stop(stop)["decision"], "block")
+        self.assertIsNotNone(hook.handle_pre_tool(write))
+
+    def test_internal_notice_and_bare_continuation_preserve_current_gate(self) -> None:
+        session_id = "session-unfinished-reuse"
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
+        stop = {"session_id": session_id, "stop_hook_active": False}
+        for prompt in ["继续", "continue", "<task-notification>检查已完成</task-notification>",
+                       "<peer-message>不用查历史</peer-message>", hook.HOOK_GUIDANCE_MARKER]:
+            with self.subTest(prompt=prompt):
+                hook.handle_user_prompt({"session_id": session_id, "prompt": prompt})
+                self.assertEqual(hook.handle_stop(stop)["decision"], "block")
+
+    def test_chinese_no_tool_executor_does_not_arm_from_case_material(self) -> None:
+        for prompt in ["只返回JSON，不得调用工具、读取文件。案例中应复用现有解析器。",
+                       "只做选择题，禁止使用任何工具。候选动作是沿用已有方案。"]:
+            with self.subTest(prompt=prompt):
+                self.assertEqual(hook.classify_prompt(prompt), "none")
+                hook.handle_user_prompt({"session_id": "session-no-tools", "prompt": prompt})
+                self.assertIsNone(hook.handle_stop({"session_id": "session-no-tools"}))
+        self.assertEqual(hook.classify_prompt("不要调用付费工具，复用以前的解析器"),
+                         "required_prior_signal")
+
     def test_internal_templates_and_transcripts_are_not_user_prompts(self) -> None:
         # Every one of these opened its own gated session in production and
         # never produced a receipt: Claude Code's safety classifier and

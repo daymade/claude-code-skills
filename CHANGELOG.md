@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **prior-work-retrieval** (`daymade-claude-code` v4.25.7): Keep retrieval enforcement scoped to the current prompt; ordinary follow-ups no longer inherit an old write/Stop gate, while bare continuations and internal deliveries retain current scope. Preserve existing receipt identities and honor Chinese no-tool executor constraints. Change type: bounded implementation repair of the explicit-only contract.
+
 - **frontend-visual-qa** (v1.19.0 → v1.19.1): Mark the documented probe executable, remove the manifest example's derived item count, and route rendered UI acceptance from CLAUDE.md to its existing owner. Probe logic and result semantics are unchanged. Change type: documentation and executable metadata correction.
 - **macos-cleaner** (`daymade-macos` v1.22.0): Check every literal target in the documented permanent-deletion helper, including absolute script paths, and reject unresolved target sets. Start authorized read-only occupancy discovery without requiring a cleanup goal; retain exact approval/exclusion sets and separate path sizes, net free-space changes and reboot effects. Existing safety branches remain. Change types: bounded checker repair / workflow correction.
 
