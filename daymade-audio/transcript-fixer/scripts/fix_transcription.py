@@ -83,6 +83,20 @@ def main() -> None:
     parser = create_argument_parser()
     args = parser.parse_args()
 
+    if args.review_authority_record is not None or args.review_ledger_entry is not None:
+        other_commands = (
+            "init", "health", "metrics", "config_action", "migration_action",
+            "audit_retention_action", "validate", "add_correction", "add_context_rule",
+            "list_context_rules", "audit_dictionary", "list_corrections", "export_path",
+            "import_path", "review_learned", "approve", "report_false_positive",
+            "load_presets", "extract_uncertain", "enqueue_review", "list_review",
+            "reanchor_review", "scan_traps", "probe_term", "close_sidecars", "lookup_term",
+        )
+        if (args.resolve_review is None or args.attach_authority is not None
+                or args.show_review is not None
+                or any(getattr(args, name, None) for name in other_commands)):
+            parser.error("--authority-record/--ledger-entry require --resolve-review as the only command")
+
     # --review is a deprecated no-op kept only for backward compatibility (safe
     # mode is the Stage 1 default). Announce it on stderr instead of silently
     # swallowing it so callers can drop it; the run is otherwise unchanged.

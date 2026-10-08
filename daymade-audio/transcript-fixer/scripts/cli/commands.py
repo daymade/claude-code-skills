@@ -2613,6 +2613,7 @@ def cmd_enqueue_review(args: argparse.Namespace) -> None:
             it.setdefault("domain", default_domain)
 
     queue = _get_review_queue()
+
     try:
         result = queue.enqueue(items)
     except ReviewQueueError as e:
@@ -2801,6 +2802,16 @@ def cmd_resolve_review(args: argparse.Namespace) -> None:
 
     queue = _get_review_queue()
 
+    record_path = getattr(args, "review_authority_record", None)
+    authority = (getattr(args, "review_authority", None) or "").strip()
+    ledger_entry = getattr(args, "review_ledger_entry", None)
+    if (record_path is not None or ledger_entry is not None) and decision not in ("accepted", "overridden"):
+        _queue_cmd_error(args, "invalid_verdict_options",
+                         "--authority-record/--ledger-entry require accepted or overridden", code=2)
+    if record_path is not None and authority:
+        _queue_cmd_error(args, "conflicting_authority",
+                         "choose --authority or --authority-record, not both", code=2)
+
     # Name-convergence gate on the two decisions that WRITE (accepted applies
     # the suggestion, overridden applies --override-to). The 2026-09-16
     # incident pair (乙琳→乙林, 丙盛→丙胜) entered exactly here: a majority-
@@ -2828,7 +2839,13 @@ def cmd_resolve_review(args: argparse.Namespace) -> None:
         # of an authority that never got anything past the gate. Fail-closed
         # means the refusal leaves no side effects, so the append now happens
         # only after the guard has said the write may proceed.
-        authority = (getattr(args, "review_authority", None) or "").strip()
+        if record_path is not None:
+            from core.name_convergence_guard import user_answer_citation
+            try:
+                record = json.loads(Path(record_path).read_text(encoding="utf-8"))
+                authority = user_answer_citation(record, item_id=item.id, target=to_text)
+            except (OSError, ValueError, TypeError) as e:
+                _queue_cmd_error(args, "invalid_authority_record", str(e), code=2)
         # Empty target means the call is malformed; resolve() below raises its
         # own specific error for that, so the guard only judges real targets.
         if to_text:
@@ -2836,10 +2853,6 @@ def cmd_resolve_review(args: argparse.Namespace) -> None:
                 args, item.original_text, to_text,
                 _combined_evidence(item.evidence, authority), item.kind,
             )
-        if authority:
-            queue.attach_evidence(
-                args.resolve_review, authority,
-                by=getattr(args, "review_by", None))
 
     try:
         result = queue.resolve(
@@ -2848,6 +2861,8 @@ def cmd_resolve_review(args: argparse.Namespace) -> None:
             override_to=getattr(args, "review_override_to", None),
             note=getattr(args, "review_note", None),
             by=getattr(args, "review_by", None),
+            authority=authority,
+            ledger_entry=ledger_entry,
         )
     except ReAnchorNeeded as e:
         if getattr(args, "json_output", False):

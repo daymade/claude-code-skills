@@ -36,6 +36,7 @@ review queue).
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from typing import Callable, Optional
@@ -142,6 +143,54 @@ _DENIED_AUTHORITY_RE = re.compile(r"不声称|没有")
 # Punctuation, unrelated prose and independent obtained/contrast clauses are
 # not object modifiers. This is citation syntax, not general language inference.
 _DENIAL_OBJECT_PREFIX_RE = re.compile(r"(?:\s|任何|取得|获得|有效的?)*")
+
+USER_ANSWER_PREFIX = "[user_answer] "
+
+
+def user_answer_citation(record: object, *, item_id: int, target: str) -> str:
+    """Validate a cited answer's shape and scope, not its authorship or truth.
+
+    The operator must copy an actually received answer. A source reference and
+    verbatim quote make that claim traceable; they cannot authenticate it.
+    """
+    if not isinstance(record, dict) or record.get("kind") != "user_answer":
+        raise ValueError("authority record requires kind=user_answer")
+    for key in ("source_ref", "quote", "target"):
+        if not isinstance(record.get(key), str) or not record[key].strip():
+            raise ValueError(f"authority record requires nonempty {key}")
+    if type(record.get("item_id")) is not int or record["item_id"] != item_id:
+        raise ValueError("authority record item_id does not match this queue item")
+    if record["target"] != target:
+        raise ValueError("authority record target does not match the resolved text")
+    quote = record["quote"].strip()
+    if re.search(r"不是|没有|不确定|不清楚|待|需|未|尚|请确认|猜|可能|大概|应该|[？?]|\b(?:no|not|pending|unconfirmed|unknown|maybe|perhaps)\b", quote, re.I):
+        raise ValueError("authority quote denies or leaves the answer unresolved")
+    question = record.get("question")
+    if target not in quote:
+        if not isinstance(question, str) or target not in question or quote not in {
+            "是", "是的", "对", "对的", "确认", "yes", "Yes", "YES",
+        }:
+            raise ValueError("quote must name the target, or affirm a quoted question naming it")
+    # One JSON line keeps quotes and source punctuation out of legacy clause
+    # parsing. A new 明确回答 wording alone is deliberately not a gate bypass.
+    return USER_ANSWER_PREFIX + json.dumps(record, ensure_ascii=False, separators=(",", ":"))
+
+
+def _has_user_answer_citation(evidence: str, target: Optional[str] = None) -> bool:
+    for line in evidence.splitlines():
+        start = line.find(USER_ANSWER_PREFIX)
+        if start < 0:
+            continue
+        try:
+            record = json.loads(line[start + len(USER_ANSWER_PREFIX):])
+            if not isinstance(record, dict):
+                continue
+            user_answer_citation(record, item_id=record.get("item_id"),
+                                 target=target if target is not None else record.get("target"))
+            return True
+        except (TypeError, ValueError):
+            continue
+    return False
 
 def _ungoverned_authority_starts(clause: str) -> set[int]:
     """Start offsets of the authority nouns in ``clause`` no need-marker governs.
@@ -271,6 +320,8 @@ def evidence_names_authority(evidence: Optional[str]) -> bool:
     ``_UNOBTAINED_MARKER_RE``."""
     if not evidence:
         return False
+    if _has_user_answer_citation(evidence):
+        return True
     for clause in _CLAUSE_END_RE.split(evidence):
         if _ungoverned_authority_starts(clause):
             return True
@@ -318,7 +369,15 @@ def guard(
     # (c) Nothing anywhere claims the target AND the evidence names no
     # authority — the 2026-09-16 incident shape (多数派收敛 onto an unknown
     # spelling). Remediation is part of the refusal, not a separate step.
-    if not look.found_anywhere and not evidence_names_authority(evidence):
+    # A structured answer for another target must not qualify through the
+    # generic authority-class predicate. Legacy citations keep their contract.
+    legacy_evidence = "\n".join(
+        line for line in (evidence or "").splitlines()
+        if USER_ANSWER_PREFIX not in line
+    )
+    authority = (_has_user_answer_citation(evidence or "", to_text)
+                 or evidence_names_authority(legacy_evidence))
+    if not look.found_anywhere and not authority:
         return GuardRejection(
             "target_unknown",
             f"拒绝收敛 {from_text!r} → {to_text!r}：人名族内不一致或名册查无，"

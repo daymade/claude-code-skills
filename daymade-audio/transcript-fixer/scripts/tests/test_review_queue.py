@@ -1177,3 +1177,92 @@ class TestRevertLedgerIsTheAsrNoteKeyNotTheWholeFrontmatter:
         assert entry["ok"] is False
         assert "asr_note ledger" in entry["msg"]
         assert "title" not in entry["msg"], "不许把操作者引向无关的 frontmatter 键"
+
+
+def test_body_and_ledger_validate_before_any_write(queue, tmp_path):
+    file = tmp_path / "ledger.md"
+    file.write_text('---\nasr_note: |\n  raw\n---\n原稿是旧词。\n')
+    item_id = queue.enqueue([{"file": str(file), "original": "旧词", "suggested": "新词",
+                              "context": "原稿是旧词。", "line": 5}])["added"][0]
+    before = file.read_bytes()
+    with pytest.raises(ReviewQueueError, match="multi-line"):
+        queue.resolve(item_id, "accepted", authority="用户裁定：新词", ledger_entry="旧词→新词")
+    assert file.read_bytes() == before
+    assert queue.get(item_id).evidence is None
+    assert queue.get(item_id).status == "pending"
+
+
+def test_body_ledger_and_authority_readback_then_reopen(queue, tmp_path):
+    file = tmp_path / "ledger.md"
+    before = '---\r\nasr_note: "raw"\r\n---\r\n原稿是旧词。\r\n'.encode()
+    file.write_bytes(before)
+    item_id = queue.enqueue([{"file": str(file), "original": "旧词", "suggested": "新词",
+                              "context": "原稿是旧词。", "line": 4}])["added"][0]
+    queue.resolve(item_id, "accepted", authority="用户裁定：新词", ledger_entry="旧词→新词")
+    assert '原稿是新词。\r\n'.encode() in file.read_bytes()
+    assert '旧词→新词'.encode() in file.read_bytes()
+    assert queue.get(item_id).status == "accepted"
+    assert "用户裁定：新词" in queue.get(item_id).evidence
+    result = queue.resolve(item_id, "reopen")
+    assert all(entry["ok"] for entry in result["revert_log"])
+    assert file.read_bytes() == before
+
+
+def test_database_error_rolls_back_file_and_leaves_evidence_pending(queue, tmp_path, monkeypatch):
+    file = tmp_path / "ledger.md"
+    file.write_text('---\nasr_note: "raw"\n---\n原稿是旧词。\n')
+    item_id = queue.enqueue([{"file": str(file), "original": "旧词", "suggested": "新词",
+                              "context": "原稿是旧词。", "line": 4}])["added"][0]
+    before = file.read_bytes()
+    audit = queue._audit
+    def fail_resolve(conn, action, *args):
+        if action == "review_resolve":
+            raise sqlite3.OperationalError("synthetic commit failure")
+        return audit(conn, action, *args)
+    monkeypatch.setattr(queue, "_audit", fail_resolve)
+    with pytest.raises(ReviewQueueError, match="rollback incomplete=False"):
+        queue.resolve(item_id, "accepted", authority="用户裁定：新词", ledger_entry="旧词→新词")
+    assert file.read_bytes() == before
+    assert queue.get(item_id).status == "pending"
+    assert queue.get(item_id).evidence is None
+
+
+def test_abrupt_exit_after_file_replace_is_recoverable_by_same_resolve(queue, tmp_path):
+    import multiprocessing
+    import os
+    file = tmp_path / "ledger.md"
+    file.write_text('---\nasr_note: "raw"\n---\n原稿是旧词。\n')
+    item_id = queue.enqueue([{"file": str(file), "original": "旧词", "suggested": "新词",
+                              "context": "原稿是旧词。", "line": 4}])["added"][0]
+    def crash_after_write():
+        original_write = queue._write_file
+        def crash(path, content):
+            original_write(path, content)
+            os._exit(77)
+        queue._write_file = crash
+        queue.resolve(item_id, "accepted", authority="用户裁定：新词", ledger_entry="旧词→新词")
+    process = multiprocessing.get_context("fork").Process(target=crash_after_write)
+    process.start()
+    process.join(10)
+    assert process.exitcode == 77
+    assert queue.get(item_id).status == "pending"
+    assert queue.get(item_id).evidence is None
+    assert "原稿是新词。" in file.read_text()
+    assert "旧词→新词" in file.read_text()
+    result = queue.resolve(item_id, "accepted", authority="用户裁定：新词", ledger_entry="旧词→新词")
+    assert result["item"]["status"] == "accepted"
+    assert file.read_text().count("旧词→新词") == 1
+    assert "用户裁定：新词" in queue.get(item_id).evidence
+
+
+def test_ledger_cannot_claim_a_different_correction(queue, tmp_path):
+    file = tmp_path / "ledger.md"
+    file.write_text('---\nasr_note: "raw"\n---\n原稿是旧词。\n')
+    item_id = queue.enqueue([{"file": str(file), "original": "旧词", "suggested": "新词",
+                              "context": "原稿是旧词。", "line": 4}])["added"][0]
+    before = file.read_bytes()
+    with pytest.raises(ReviewQueueError, match="actual resolved pair"):
+        queue.resolve(item_id, "accepted", authority="用户裁定：新词", ledger_entry="旧词→另一词")
+    assert file.read_bytes() == before
+    assert queue.get(item_id).status == "pending"
+    assert queue.get(item_id).evidence is None
