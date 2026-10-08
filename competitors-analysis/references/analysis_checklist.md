@@ -5,10 +5,13 @@ is to keep repository evidence, market evidence, and judgment separate.
 
 ## 1. Scope And Storage
 
-- [ ] Product or market scope is explicit.
+- [ ] Analysis target comes from the request or the current project's authoritative entry.
+- [ ] A supplied repository URL proceeds as Profile even without our-product context.
+- [ ] Our-product comparison cites the confirmed project contract; omit it for a standalone request or unresolved context.
+- [ ] Missing comparison context does not block independent repository profiles; no-target/no-project requests stop without inventing a market.
 - [ ] Competitor base directory is explicit:
   `COMPETITORS_BASE="${COMPETITORS_BASE:-$HOME/workspace/competitors}"`.
-- [ ] Product directory exists under `$COMPETITORS_BASE/{product-slug}/`.
+- [ ] Product directory exists under `$COMPETITORS_BASE/{product-slug}/`; standalone profiles use the `standalone` namespace.
 - [ ] Repository directory uses the `owner-repo` convention.
 - [ ] Any existing local clone is reused instead of cloning into a second path.
 

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **competitors-analysis** (v1.4.0 → v1.4.1): Accept a repository URL as the analysis target, resolve comparison context from the current project's authoritative entry, and complete standalone profiles when that context is absent. Preserve the no-task stop boundary and prohibit selecting unrelated products from stored clones. Align the profile template and checklist. Change type: bounded routing correction.
+
 - **prior-work-retrieval** (`daymade-claude-code` v4.25.7): Honor Chinese no-tool executor constraints and retire enforcement after a successful batch Stop while preserving the receipt. Pending requirements remain enforced across ordinary follow-ups and continuation phrasing; no automatic task-switch inference. Change type: bounded implementation repair.
 
 - **frontend-visual-qa** (v1.19.0 → v1.19.1): Mark the documented probe executable, remove the manifest example's derived item count, and route rendered UI acceptance from CLAUDE.md to its existing owner. Probe logic and result semantics are unchanged. Change type: documentation and executable metadata correction.
