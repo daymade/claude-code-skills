@@ -967,24 +967,8 @@ Transform vague prompts into precise, well-structured specifications using EARS 
 
 > **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:local-conversation-history`)
 
-The entry point above the four provider-and-action-specific history skills. It
-routes a request to whichever one owns it — by platform (Claude Code, OpenAI
-Codex, Kimi CLI) and action (read evidence vs continue interrupted work) — and
-owns the one job none of them own alone: a single inventory spanning all three
-providers.
-
-**When to use:**
-- The provider is unknown or plural — "our history", "what have I been working on"
-- Listing Kimi CLI sessions, which has no dedicated skill of its own
-- It is unclear whether the need is evidence or resumption
-- You remember this entry point by name
-
-**When not to use:** the platform *and* the action are both already clear. Load
-that executor skill directly instead — this router adds a hop, not information.
-
-**Design**: a thin routing layer. It carries no parsing, no provider-specific
-flags beyond `--source`, and no copies of the executors' commands, so it cannot
-drift into teaching a stale invocation.
+See the [Skill's usage and routing contract](daymade-claude-code/local-conversation-history/SKILL.md)
+for history recall, interrupted work and conversation-backup health checks.
 
 ---
 

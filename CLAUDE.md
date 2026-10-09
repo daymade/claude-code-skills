@@ -270,7 +270,7 @@ the delivered artifact. Detailed retrieval mechanics remain in
 
 ### Local Conversation History Boundary
 
-For recent unfinished-request inventories, follow
+For conversation-backup health checks or recent unfinished-request inventories, follow
 [`local-conversation-history`](daymade-claude-code/local-conversation-history/SKILL.md).
 
 For remembered facts or a repeated search request, use that router's evidence
