@@ -89,6 +89,46 @@ Prove the regression detects the original failure using the frozen faulty code o
 an isolated mutation of the same write/read path. Use synthetic evidence URLs and
 account identifiers; do not copy live secrets into fixtures.
 
+## Operational route changes
+
+Use this recipe when replacing a provider, changing the normal route or disabling
+an optional leg. The author records the original user-visible result, the changed
+leg and its actual downstream consumer before editing. Approval to replace the
+means does not retire the result; a boundary change still follows the migration gate.
+
+Follow one exact object through the ordinary trigger, handoff and final consumer.
+Use the existing state and verification owners. Record what wakes the consumer,
+what input identity/profile crosses the seam, and what proves final delivery or
+the precise pending human action. A named downstream Skill, a file that exists,
+an empty upstream queue or a successful subprocess is insufficient.
+
+Select the affected controls; they extend the existing narrow evidence plan:
+
+| Case | Required observable result |
+|---|---|
+| Replacement route, optional leg disabled | The same user result is delivered, or a genuine review boundary is visible; no implicit restart of the optional leg |
+| Upstream succeeds, downstream is disconnected | Final-result check reports incomplete with the exact object; it cannot self-certify from upstream success |
+| Input device disappears before asynchronous completion | Durable downstream work continues without the device; completed upstream work is not repeated |
+| Human review remains unresolved | The exact pending action is retained; later authoritative resolution continues from that step |
+| Repeated trigger or interrupted worker | One object/attempt is active, completed side effects are reused, and failures remain observable |
+| Valid completed object | The normal consumer still recognizes its verified result without a false alarm |
+
+Run the deciding check first on a known incomplete state and on an independently
+verified completed state. Keep actual argv and examined-object counts in the
+existing evidence. A fixture must exercise the real consumer's command parser;
+a stub that accepts every argv can hide a broken handoff. Remove or isolate-mutate
+the handoff itself and confirm the affected regression fails, rather than mutating
+an unrelated helper. Synthetic controls prove logic; an authorized live object
+proves the deployed seam. Neither alone proves the other.
+
+For an agent-authored completion message, compare its claimed scope with the
+consumer's object-level result. Keep upload/backup/processing/review/delivery
+separate in the actual reply; do not promote one stage into a whole-flow result.
+The recipe is applied by the author and verified by the domain regression/runtime
+probe; prose itself does not enforce it. Stop when the changed cases have decisive
+evidence, and retain an unavailable live case as unverified rather than expanding
+into a generic monitoring framework.
+
 ## Execution identity and permission fixtures
 
 Before a permission-sensitive check, state which identity the tested behavior
