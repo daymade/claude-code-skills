@@ -229,6 +229,9 @@ audio verification may add evidence but never resolves a review row or proves
 whole-transcript completion.
 When changing these paths, update their owning instructions together; keep
 review coverage, unresolved verdicts, and repository publication distinct.
+For local correction tests and repository CI ownership, follow the
+[testing strategy](daymade-audio/transcript-fixer/references/architecture.md#testing-strategy);
+keep maintainer-only repository resources distinct from installed Skill paths.
 
 ### Feishu Document Capture
 
