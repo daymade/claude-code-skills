@@ -52,6 +52,10 @@ review, validation, initialization, and packaging.
 
 Operational or code-bearing Skill edits complete directly affected document alignment
 before the first candidate freeze; follow skill-creator's Edit workflow.
+For project instruction-entry maintenance, enter
+[claude-md-progressive-disclosurer](daymade-claude-code/claude-md-progressive-disclosurer/SKILL.md).
+Its verification reference owns dual-entry reconciliation and native-host readback;
+keep the detailed procedure there.
 For a valid check that emits warnings, follow its
 [warning interpretation](daymade-skill/skill-creator/references/knowledge-skill-grounding.md#interpret-validation-warnings).
 For local/remote ASR selection, speed comparison and speech-content acceptance, enter
