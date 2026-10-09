@@ -1011,21 +1011,8 @@ python3 scripts/calculate_metrics.py tests/TEST-EXECUTION-TRACKING.csv
 
 > **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:local-conversation-history`）
 
-四个「平台 × 动作」历史 Skill 之上的入口层。它按平台（Claude Code / OpenAI Codex /
-Kimi CLI）和动作（取证 vs 续做）把请求分流给真正拥有它的那一个，并独占一件谁都不单独
-拥有的事：**一次列出全部三家 provider 的会话清单**。
-
-**使用场景：**
-- provider 未知或不止一个——「我们的历史」「我最近都在忙什么」
-- 列 Kimi CLI 会话，它没有专属 Skill
-- 分不清要的是取证还是续做
-- 你记得的就是这个入口名
-
-**不适用**：平台和动作**都**已经明确时，直接加载对应的执行 Skill——此时路由只多一跳，
-不提供额外信息。
-
-**设计**：薄路由层。不含解析逻辑、不含 `--source` 以外的 provider 专属参数、不复制执行
-Skill 的命令，因此不会漂移成教一条过期的调用方式。
+历史检索、中断续做和对话备份体检的用法与路由，见
+[Skill 的执行合同](daymade-claude-code/local-conversation-history/SKILL.md)。
 
 ---
 
