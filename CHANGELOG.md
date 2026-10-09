@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` v1.67.3): Require actual conflicts, changed inputs or repository requirements before refreshing a PR; preserve pushed history with added commits by default. Rebase, amend and leased rewrites require exact authorization and recovery evidence; squash policy and a lease do not supply permission. Keep additive registry/changelog preservation and conflict-proof checks. Change type: bounded authorization-contract correction.
+
 - **github-ops** (v1.14.7): Separate current-base merge readiness from PR-to-merge validation reuse. Unrelated base advances do not alone require a new PR head or repeated CI; retain exact-head checks, protection/review requirements and normal validation for changed inputs. Reuse still requires matching tested trees and complete successful-run evidence. Change type: bounded execution-contract correction.
 - **peer-message** (v1.16.1 → v1.17.0): Add self-initializing local task/resource declarations and a shared coordination request ledger. Suppress repeated pending requests and expired replies, retain unknown transport outcomes, and support native preflight without a second send. Change type: executable coordination workflow expansion; no Fleet dependency or automatic ownership takeover.
 - **report-with-html** (v1.4.0): Add a candidate source-preview component with neutral text, original-image and PDF adapters; preserve preview dismissal and reading-position return. Candidate/pilot status does not imply user approval. Change type: reusable interaction addition.
