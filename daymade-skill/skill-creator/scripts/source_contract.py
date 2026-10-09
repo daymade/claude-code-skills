@@ -214,11 +214,10 @@ def check_source(path, repo=None, scope="auto", phase="delivery", inventory=None
             found, suites = registrations(root, manifest, directory, name)
             if found:
                 record = found[0]
-                if record["kind"] == "standalone" and record["entry"].get("name") != name:
-                    check("registration", "invalid", "Standalone plugin identity differs from Skill frontmatter name")
-                else:
-                    report["plugin_id"] = record["plugin_id"]
-                    check("registration", "valid", "Marketplace points at this exact source directory")
+                # Plugin namespace and Skill frontmatter are separate identities.
+                # Exact source containment/registration establishes their mapping.
+                report["plugin_id"] = record["plugin_id"]
+                check("registration", "valid", "Marketplace points at this exact source directory")
             elif phase == "create" and (directory.parent == root or directory.parent in suites):
                 check("registration", "valid", "New Skill source placement checked; registration is required before delivery")
                 report["registration_pending"] = True

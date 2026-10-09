@@ -440,10 +440,10 @@
     },
     {
       "name": "github-contributor",
-      "description": "End-to-end playbook for shipping high-quality pull requests to open-source projects you don't maintain — discovery, CONTRIBUTING compliance, PR-size check, minimal-diff implementation, PR description with AI-assisted disclosure, conflict resolution, and post-submission maintainer interaction. Use whenever creating, editing, or pushing a PR to a third-party GitHub repo — submit a PR, open a PR, fix this upstream, rebase against main, respond to the bot review, an owner/repo target, or 提 PR / 上游 PR / 贡献代码 / rebase 冲突 / 回应维护者.",
+      "description": "Ships pull requests to open-source projects you don't maintain — CONTRIBUTING compliance, PR-size/scope checks, minimal-diff implementation, AI-disclosure PR descriptions, and rebase or bot-review replies. Use for 提 PR / 上游 PR / 贡献代码, \"open a PR\", \"fix this upstream\", \"rebase against main\", \"respond to the bot review\". Not for reviewing PRs as maintainer (use github-review-pr) or general GitHub CRUD (use github-ops).",
       "source": "./github-contributor",
       "strict": false,
-      "version": "1.3.0",
+      "version": "1.3.1",
       "category": "developer-tools",
       "keywords": [
         "github",
@@ -481,10 +481,10 @@
     },
     {
       "name": "github-review-pr",
-      "description": "Reviews or re-reviews a contributor PR as repository maintainer — a closed PR reconsidered, or a sweep of open PRs — against the live base with immutable snapshots and three-way merges. Use for a PR URL/number, \"main changed, review again\", \"review all open PRs\", \"fix the rest ourselves?\", or merge readiness. Not for GitHub CRUD (use github-ops), your own PR (use github-contributor), or merging without fresh review.",
+      "description": "Reviews PRs against the live base with immutable objects and three-way merges. Use for PR review/merge readiness, main changed, closed-PR reconsideration, open-PR sweeps, review-led repair, or explicitly requested independent review of your own contribution. Not for GitHub CRUD (use github-ops), authoring/maintaining your PR (use github-contributor), or merging without fresh review.",
       "source": "./github-review-pr",
       "strict": false,
-      "version": "1.4.1",
+      "version": "1.4.2",
       "category": "developer-tools",
       "keywords": [
         "github",

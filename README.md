@@ -3288,6 +3288,8 @@ always against the live base rather than a stale PR snapshot.
 - Need to know what the actual three-way merge would land now
 - Need a newest-to-oldest decision ledger for the complete open-PR queue
 - Need a review-gated repair or merge, with every GitHub write explicitly authorized
+- Explicitly want an independent maintainer-style evaluation of your own contribution;
+  this remains a read-only recommendation, with no self-approval or merge authority
 - Want the opt-in personal policy to learn from prior closed-PR decisions, enforce the
   maintainer's curation bar, or decide whether worthy original contributor PRs should
   be repaired instead of recreated
@@ -3969,6 +3971,8 @@ operations.
 Use **github-review-pr** when a maintainer needs a current-base code review, ownership
 decision, or review-gated repair/landing for one contributor PR or the complete open
 PR queue.
+An author can explicitly request the same independent read-only lens for their own
+contribution; implementation and authorized fixes remain with **github-contributor**.
 
 ### For Documentation
 Combine **doc-to-markdown** for document conversion and **mermaid-tools** for diagram generation to create comprehensive documentation. Use **llm-icon-finder** to add brand icons.
