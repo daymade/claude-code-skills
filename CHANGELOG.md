@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **auto-repo-setup** (v2.1.2): Continue already-authorized shared-checkout delivery through repository-declared scoped tools instead of stopping on unrelated dirty or divergent state. Bound coordination waits, inspect partial results before retrying, and preserve unrelated work. Ordinary synchronization and existing publication/conflict gates remain unchanged. Change type: bounded workflow correction.
 - **asr-transcribe-to-text** (`daymade-audio` v1.46.1): Separate normalized text-check results from source-grounded semantic acceptance. Freeze minimal load-bearing actions, negations, numbers and entity relations before comparison; keep later diagnosis separate and inspect harmless exact-phrase misses. Change type: bounded evidence-selection clarification; ASR scripts are unchanged.
 
 - **github-ops** (v1.14.2 → v1.14.3): Select the freshest same-head CI execution and bind proof to its exact rerun attempt; retain checks when evidence is incomplete or an execution is unresolved, while allowing a later complete success to supersede an earlier completed failure. Keep persistent package stores outside setup-owned removal paths and require a later job's observed cache hit. Change type: bounded evidence-selection and cache-verification clarification.
