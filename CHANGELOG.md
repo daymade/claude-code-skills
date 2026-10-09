@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` v1.67.1): Redact Google `AIza` and `AQ.` API key shapes while preserving ordinary `Task-specific` and `Task-scoped` text. Clarify user-only TXT, role-preserving JSONL and Codex voice-history input boundaries; retain existing parsing and chunking. Change type: bounded implementation repair / factual documentation correction, covered by synthetic bidirectional and role-preservation regressions.
+
 - **devils-advocate** (`daymade-financial` v1.5.2): Preserve engineering failure preconditions, healthy controls and recovery evidence; separate thesis impact from occurrence evidence and narrow time-related findings to the tested input. Retain investment risk grading and allow probe-backed withdrawal. Change type: bounded evidence-selection clarification.
 - **local-conversation-history** (`daymade-claude-code` v4.26.0): Route conversation-backup health to the existing storage owner before history retrieval; keep coverage, actual archival rounds, recovery samples and alert health separate. Preserve read/continue routes and paused-writer boundaries. Change type: read-only routing expansion.
 - **skill-creator** (`daymade-skill` v1.67.1): Apply output-preservation controls when changing a provider, default route or enable switch. Exercise the actual downstream consumer, device removal, human review and known incomplete/completed objects; retain the existing migration and authorization boundaries. Change type: bounded verification-recipe correction.

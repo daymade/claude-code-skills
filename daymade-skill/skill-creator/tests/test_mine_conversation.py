@@ -42,6 +42,7 @@ def runtime_manifest(tmp_path: Path) -> Path:
     shutil.copytree(FIXTURES / "transcripts", transcripts)
 
     provider_key = "sk-" + "kimi-" + "runtimefixture1234567890"
+    google_keys = ["AIza" + "A1b_-" * 7, "AQ." + "A1b_-" * 24]
     bearer_token = "Bearer " + "runtime-token-12345"
     user_path = "/" + "Users" + "/fixture-person/workspace/examplehub"
     phone = "138" + "0013" + "8000"
@@ -52,7 +53,8 @@ def runtime_manifest(tmp_path: Path) -> Path:
             "content": (
                 "ExampleHub cache-first test data: "
                 f"key={provider_key}; auth={bearer_token}; "
-                f"path={user_path}; phone={phone}."
+                f"path={user_path}; phone={phone}; "
+                f"Google values: {' '.join(google_keys)}; Task-specific Task-scoped."
             ),
         },
         "timestamp": "2026-02-01T10:03:00Z",
@@ -117,6 +119,7 @@ def test_mine_conversation_end_to_end(enrich_dir: Path, runtime_manifest: Path) 
     assert redaction["total_replacements"] > 0
 
     provider_key = "sk-" + "kimi-" + "runtimefixture1234567890"
+    google_keys = ["AIza" + "A1b_-" * 7, "AQ." + "A1b_-" * 24]
     bearer_token = "Bearer " + "runtime-token-12345"
     user_path = "/" + "Users" + "/fixture-person/workspace/examplehub"
     phone = "138" + "0013" + "8000"
@@ -131,10 +134,13 @@ def test_mine_conversation_end_to_end(enrich_dir: Path, runtime_manifest: Path) 
         assert phone not in text
         assert user_path not in text
         assert bearer_token not in text
+        assert all(key not in text for key in google_keys)
         assert str(runtime_manifest.parent / "transcripts") not in text
         assert all(source.startswith("source-") for source in chunk["sources"])
         assert all(message["source"].startswith("source-") for message in chunk["messages"])
     assert "outside the declared time window" not in all_chunk_text
+    assert "Task-specific Task-scoped" in all_chunk_text
+    assert redaction["by_pattern"]["google_api_keys"] == 2
 
     for artifact in enrich_dir.rglob("*"):
         if artifact.is_file():
@@ -328,6 +334,80 @@ def test_redactor_allowlist() -> None:
     assert "sk-test-example" in redacted
     assert "sk-kimi-fakekey123" not in redacted
     assert redactor.counts["llm_provider_keys"] == 1
+
+
+@pytest.mark.parametrize("prefix,payload_length", [("AIza", 35), ("AQ.", 120)])
+@pytest.mark.parametrize("wrapper", ["{}", "key='{}'", "?key={}&format=json", "前缀{}后缀"])
+def test_redactor_google_key_shapes(prefix: str, payload_length: int, wrapper: str) -> None:
+    # Construct secret-shaped synthetic values at runtime, never real credentials.
+    payload = ("A1b_-" * 24)[:payload_length]
+    key = prefix + payload
+    redactor = mine_conversation.Redactor()
+
+    assert redactor.redact(wrapper.format(key), "source-001") == wrapper.format("<REDACTED-key>")
+    assert redactor.report() == {
+        "total_replacements": 1,
+        "by_pattern": {"google_api_keys": 1},
+        "by_file": {"source-001": {"google_api_keys": 1}},
+    }
+
+
+@pytest.mark.parametrize("text", [
+    "Task-specific", "Task-scoped", "Task-specific and Task-scoped evidence.",
+    "Video duration is 120 seconds.", "AQ.example is a short label.",
+    "AIza is a key prefix.", "This mask-specific setting is optional.",
+])
+def test_redactor_preserves_ordinary_context(text: str) -> None:
+    redactor = mine_conversation.Redactor()
+    assert redactor.redact(text) == text
+    assert redactor.report()["total_replacements"] == 0
+
+
+@pytest.mark.parametrize("prefix", ["sk-", "sk-or-", "sk-ant-", "sk-kimi-", "sk-proj-", "sk-svcacct-"])
+def test_redactor_provider_keys_at_text_boundaries(prefix: str) -> None:
+    key = prefix + "runtimefixture1234567890"
+    redactor = mine_conversation.Redactor()
+    text = f"Task-scoped key '{key}' belongs to Task-specific evidence."
+    assert redactor.redact(text) == "Task-scoped key '<REDACTED-key>' belongs to Task-specific evidence."
+    assert redactor.counts["llm_provider_keys"] == 1
+
+
+def test_manual_text_paragraphs_remain_user_messages(tmp_path: Path) -> None:
+    source = tmp_path / "user-only.txt"
+    source.write_text("First user note.\n\nSecond user note.", encoding="utf-8")
+    messages = list(mine_conversation._parse_manual_export(source))
+
+    assert [message["text"] for message in messages] == ["First user note.", "Second user note."]
+    assert [message["role"] for message in messages] == ["user", "user"]
+    assert [message["source_line"] for message in messages] == [1, 2]
+
+
+def test_manual_jsonl_preserves_roles_through_chunks(tmp_path: Path) -> None:
+    records = [
+        {"role": "user", "text": "ExampleHub user decision."},
+        {"role": "assistant", "text": "ExampleHub assistant interpretation."},
+        {"role": "tool", "text": "ExampleHub tool-derived observation."},
+        {"text": "ExampleHub legacy user note."},
+    ]
+    source = tmp_path / "role-preserving.jsonl"
+    source.write_text("".join(json.dumps(record) + "\n" for record in records), encoding="utf-8")
+    manifest = {
+        "target_skill": "fixture",
+        "topic_spec": {"keywords": ["examplehub"], "min_relevance_score": 0},
+        "sources": {"manual_exports": [str(source)]},
+        "partitioning": {"chunk_tokens": 1000, "encoding_model": "cl100k_base"},
+    }
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    output = tmp_path / ".enrich" / "run"
+
+    assert mine_conversation.main(["--manifest", str(manifest_path), "--output", str(output)]) == 0
+    messages = [message for chunk in sorted((output / "chunks").glob("chunk-*.json"))
+                for message in json.loads(chunk.read_text(encoding="utf-8"))["messages"]]
+    assert len(messages) == 4
+    assert [(message["role"], message["text"]) for message in messages] == [
+        (record.get("role", "user"), record["text"]) for record in records
+    ]
 
 
 def test_redactor_windows_path_placeholder_is_literal() -> None:
