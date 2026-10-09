@@ -9,6 +9,7 @@ Use the least stateful mechanism that meets the timing requirement.
 | User wants one action now | Natural-language Agent request | The Agent can inspect context and handle exceptions |
 | Every Agent should follow a stable repository rule | AGENTS.md and/or CLAUDE.md | Static context belongs in project instructions |
 | User wants an explicit, repeatable maintenance action | A documented command | It runs only when requested and is easy to verify |
+| Validate the staged artifact before any Agent or manual Git commit | Git pre-commit hook | The boundary is the commit, independent of the Agent runtime |
 | One-time preparation invoked from automation | Claude Code Setup hook | Setup is explicit rather than firing every session |
 | Dynamic context or environment must exist before the first prompt | SessionStart | This is the lifecycle boundary hooks are for |
 | A dangerous tool action must be blocked | PreToolUse | Enforcement must sit at the action boundary |
@@ -63,6 +64,10 @@ history. Automatic stash/pop is a separate stateful operation and can produce
 non-trivial conflicts, so never smuggle it into "safe pull".
 
 ## Hook gate
+
+Apply this gate to Agent lifecycle automation. For Git commit-time validation,
+use [Git safety's commit-time checks](git_safety.md#commit-time-checks) instead of
+requiring a before-first-prompt reason.
 
 Answer every question before installing:
 
