@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **asr-transcribe-to-text** (`daymade-audio` v1.46.1): Separate normalized text-check results from source-grounded semantic acceptance. Freeze minimal load-bearing actions, negations, numbers and entity relations before comparison; keep later diagnosis separate and inspect harmless exact-phrase misses. Change type: bounded evidence-selection clarification; ASR scripts are unchanged.
+
 - **github-ops** (v1.14.2 → v1.14.3): Select the freshest same-head CI execution and bind proof to its exact rerun attempt; retain checks when evidence is incomplete or an execution is unresolved, while allowing a later complete success to supersede an earlier completed failure. Keep persistent package stores outside setup-owned removal paths and require a later job's observed cache hit. Change type: bounded evidence-selection and cache-verification clarification.
 - **claude-md-progressive-disclosurer** (`daymade-claude-code` v4.25.9): Add an instruction-entry reconciliation recipe with full-content preservation, conditional relative symlinks, Git tree verification, native-host readback and bounded file reads. Keep loading evidence separate from task behavior. Change type: bounded workflow clarification.
 - **auto-repo-setup** (v2.1.1): Route instruction-entry drift to the reconciliation owner, distinguish pointers from conflicting rules, and preserve originals when that separately installed workflow is unavailable. Change type: bounded routing clarification.

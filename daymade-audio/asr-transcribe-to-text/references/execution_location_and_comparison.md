@@ -104,7 +104,8 @@ For each representative source, prepare:
   the short/medium Qwen route into an unsupported long-form guarantee.
 - An independently checked original-speech reference and, when needed, a JSON
   list of load-bearing utterances: negation, numbers, proper names and decisions.
-  Do not use one model's answer as the other model's ground truth.
+  Apply [speech-content acceptance](#accept-the-speech-content) before selecting
+  a route. Do not use one model's answer as the other model's ground truth.
 - An explicit task-specific maximum character error rate. No threshold is
   silently selected. The checker normalizes Unicode, case, punctuation and
   whitespace only; it preserves speech content and calculates edit distance.
@@ -136,8 +137,29 @@ part of a long video. For the long source, also verify the chosen production
 runner's beginning/middle/end and chunk seams under Step 4; a selected clip
 proves only that clip. Compare identical source/reference/utterance hashes and
 the same threshold. Without a checked reference and threshold, the tool reports
-`quality_not_established` and selects no route. Any missing required utterance
-or failed CER prevents a performance winner.
+`quality_not_established` and selects no route. A missing required utterance or
+failed CER blocks automatic selection; a passed check still needs the source
+adjudication below before it can support a performance decision.
+
+### Accept the speech content
+
+The executing agent checks the original-speech evidence: `passed_text_check`
+certifies normalized text tests, not meaning. Conversely, an exact-phrase miss
+can be harmless filler variation. Inspect the matched and missed original
+fragments before calling either a semantic success or a recognition error.
+Freeze the reference, threshold and minimal load-bearing actions, negations,
+numbers and entity relationships before either arm runs; avoid requiring
+nonessential particles in a diagnostic anchor. When original audio cannot be
+reviewed and no verified human transcript exists, keep the reference explicitly
+unverified. Continue authorized transcription and source collection, but do not
+declare semantic acceptance or a quality-qualified speed winner.
+
+Keep errors noticed afterward in a separately labeled post-hoc diagnosis. Run
+the existing checker on those anchors against the retained outputs, without new
+inference, and preserve the original scores. Do not replace the frozen anchors
+or present the later diagnosis as a blind result. Retain case-specific original
+media, utterances and reproduction commands in the owning private evidence;
+do not copy its running scores or case inventory into this reusable SOP.
 
 The comparison prints a measured text-leg choice, not a whole-pipeline winner.
 Speaker accuracy, timestamp accuracy, visual content and non-language sound
