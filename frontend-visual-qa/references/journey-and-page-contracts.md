@@ -74,6 +74,45 @@ developer context and ask what a tired or first-time user will misunderstand
 first. Check trigger ownership, return-to-default, recovery, runtime truth,
 internal language, manual burden, and which regression guard catches the miss.
 
+### Refactor Preservation
+
+Apply this recipe only to affected UI refactors, category splits, or navigation
+changes. The auditor performs it through the existing project harness and
+authorized Level A/B journeys; the bundled layout sweep does not inventory old
+capabilities or decide data preservation. A copy-only edit does not require it.
+
+1. Resolve a full immutable pre-change commit or release and read its relevant
+   routes, controls, and consumers, for example with `git show <commit>:<path>`.
+   List the original user operations and outputs in the existing audit contract.
+   Compare product names and labels with the latest approved naming authority
+   outside the refactor's write scope; neither old implementation labels nor new
+   defaults can overturn an approved rename. An unavailable baseline leaves
+   preservation unverified rather than letting the new UI define the old scope.
+2. For each affected consumer, name its inclusion rule and expected record IDs
+   from independent project data. A browsing list, source review, domain check,
+   and relationship lookup may consume different sets. Trace a changed shared
+   filter to each of those consumers; hiding a category from one list does not
+   authorize removing its records from every check or query. Verify default and
+   affected combined filters with a representative included/excluded record.
+3. Map each original operation to its current visible entry and exercise it.
+   Confirm the resulting answer or output and reconcile record identities,
+   relevant fields, relationships, and retained drafts through the ordinary
+   read/reopen path. Compare IDs and values, not only counts or label matches.
+   Mark approved retirements with their authority; an unreachable old action or
+   an omitted record remains a regression even when the new screen looks clean.
+4. For a confirmed regression, run the smallest project probe against saved old
+   evidence or an authorized isolated faulty version, then the repair. Include a
+   healthy near-boundary control. Inspect the same affected journey on the real
+   current page at Level A/B; source, build, and handler assertions alone cannot
+   close the rendered finding. Leave unavailable page or write evidence explicit.
+
+Retain a compact map in the existing report:
+`old operation -> current entry -> expected IDs/values -> observed result -> evidence/verdict`.
+Reuse unchanged passing checks bound to the same content and inputs; rerun only
+changed or failed checks, unresolved cases, and repository-required checks. Stop
+when the affected operations, consumer sets, and retained work are accounted for;
+this recipe does not require a full-product regression on every edit.
+
 ### Delayed Completion And Reopened Work
 
 Use these recipes when an affected editor or batch workflow can outlive a
