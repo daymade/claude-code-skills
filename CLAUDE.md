@@ -8,17 +8,6 @@ This repository is a Claude Code skills marketplace.
 
 ## Skills Architecture
 
-### Directory Structure
-
-Each skill follows a standard structure:
-```
-skill-name/
-├── SKILL.md (required)          # Core skill instructions with YAML frontmatter
-├── scripts/ (optional)          # Executable Python/Bash scripts
-├── references/ (optional)       # Documentation loaded as needed
-└── assets/ (optional)           # Update-owned templates and resources for output
-```
-
 ### Progressive Disclosure Pattern
 
 Skills use progressive loading:
@@ -201,6 +190,12 @@ A `tests/` directory under a Skill does **not** automatically run in CI.
 [The workflow](.github/workflows/ci.yml) owns job environments, dependency installation,
 timeouts and additional test steps. For required-check readback, installation stalls,
 test failures and temporary-Git cleanup, follow [CI operations](references/ci-operations.md).
+
+For CI demand, notification overload, exhausted allowance or repeated validation,
+enter [github-ops' CI demand workflow](github-ops/references/ci-demand-and-notifications.md).
+For self-hosted routing, resource limits or cache persistence, follow its
+[runner acceptance](github-ops/references/workflow_operations.md#self-hosted-runner-capacity-and-acceptance).
+Keep demand selection, validation-reuse and capacity acceptance in those owners.
 
 For browser-backed recurring jobs, enter
 [macos-watchdog](daymade-macos/macos-watchdog/SKILL.md) and apply its deployment
