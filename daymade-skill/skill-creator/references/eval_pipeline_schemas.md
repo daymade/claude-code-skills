@@ -138,6 +138,11 @@ Output from the grader agent. Located at `<run-dir>/grading.json`.
       "text": "The spreadsheet has a SUM formula in cell B10",
       "passed": false,
       "evidence": "No spreadsheet was created. The output was a text file."
+    },
+    {
+      "text": "The extracted names match the supplied source",
+      "passed": true,
+      "evidence": "Both extracted names match the supplied source records."
     }
   ],
   "summary": {
@@ -159,6 +164,9 @@ Output from the grader agent. Located at `<run-dir>/grading.json`.
     "transcript_chars": 3200
   },
   "timing": {
+    "total_tokens": 84852,
+    "time_scope": "executor_and_grader",
+    "token_scope": "executor",
     "executor_duration_seconds": 165.0,
     "grader_duration_seconds": 26.0,
     "total_duration_seconds": 191.0
@@ -196,6 +204,12 @@ Output from the grader agent. Located at `<run-dir>/grading.json`.
 - `claims`: Extracted and verified claims from the output
 - `user_notes_summary`: Issues flagged by the executor
 - `eval_feedback`: (optional) Improvement suggestions for the evals, only present when the grader identifies issues worth raising
+
+Recompute `passed`, `failed` and `total` from the non-empty expectations.
+Supply boolean verdicts and non-empty `text`/`evidence` strings. Keep `pass_rate`
+within 0–1 and equal to `passed/total` (two-decimal rounding is accepted).
+The aggregator treats missing, malformed, empty or inconsistent grades as unknown;
+it retains their run directories and withholds comparison deltas.
 
 ---
 
@@ -237,21 +251,40 @@ Output from the executor agent. Located at `<run-dir>/outputs/metrics.json`.
 
 Wall clock timing for a run. Located at `<run-dir>/timing.json`.
 
-**How to capture:** When a subagent task completes, the task notification includes `total_tokens` and `duration_ms`. Save these immediately — they are not persisted anywhere else and cannot be recovered after the fact.
+**How to capture:** Save actual host-reported usage and duration when the host exposes
+them. Do not assume every host emits the same task notification or can recover it
+later. Keep unavailable fields absent or null; an observed zero is a real measurement.
+Create the run directory before execution so an interrupted attempt remains visible.
 
 ```json
 {
   "total_tokens": 84852,
-  "duration_ms": 23332,
-  "total_duration_seconds": 23.3,
+  "duration_ms": 191000,
+  "total_duration_seconds": 191.0,
+  "time_scope": "executor_and_grader",
+  "token_scope": "executor",
   "executor_start": "2026-01-15T10:30:00Z",
   "executor_end": "2026-01-15T10:32:45Z",
   "executor_duration_seconds": 165.0,
-  "grader_start": "2026-01-15T10:32:46Z",
-  "grader_end": "2026-01-15T10:33:12Z",
+  "grader_start": "2026-01-15T10:32:45Z",
+  "grader_end": "2026-01-15T10:33:11Z",
   "grader_duration_seconds": 26.0
 }
 ```
+
+Use `time_scope` to name the measured boundary, for example `executor`,
+`executor_and_grader` or `end_to_end`; use `token_scope` for whose actual usage
+was counted. Omitted scopes remain `unspecified`, preserving legacy records.
+An unspecified duration is not evidence of user end-to-end delivery time.
+Record task receipt through the declared completed delivery when claiming that
+result; keep evaluation overhead separate. Do not sum overlapping durations or
+copy a subagent duration into an end-to-end scope.
+
+The aggregator reads `timing.json` and `grading.json.timing` independently for
+`total_tokens` and `total_duration_seconds`. Accept `duration_ms / 1000` only when
+that source lacks `total_duration_seconds`. Preserve each metric's source field
+and scope; conflicting duplicate observations or scopes become unknown.
+Never substitute `output_chars`, `tool_calls` or missing values for token usage.
 
 ---
 
@@ -333,7 +366,8 @@ Output from Benchmark mode. Located at `benchmarks/<timestamp>/benchmark.json`.
 - `runs[]`: Individual run results
   - `eval_id`: Numeric eval identifier
   - `eval_name`: Human-readable eval name (used as section header in the viewer)
-  - `configuration`: Must be `"with_skill"` or `"without_skill"` (the viewer uses this exact string for grouping and color coding)
+  - `configuration`: Configuration directory name. Use `with_skill` or `new_skill`
+    for the candidate and `old_skill` or `without_skill` for the baseline.
   - `run_number`: Integer run number (1, 2, 3...)
   - `result`: Nested object with `pass_rate`, `passed`, `total`, `time_seconds`, `tokens`, `errors`
 - `run_summary`: Statistical aggregates per configuration
@@ -342,6 +376,53 @@ Output from Benchmark mode. Located at `benchmarks/<timestamp>/benchmark.json`.
 - `notes`: Freeform observations from the analyzer
 
 **Important:** The viewer reads these field names exactly. Using `config` instead of `configuration`, or putting `pass_rate` at the top level of a run instead of nested under `result`, will cause the viewer to show empty/zero values. Always reference this schema when generating benchmark.json manually.
+
+### Coverage, roles and unknown values
+
+Retain the numeric legacy fields for healthy data. Use JSON `null` for unknown
+run metrics and empty statistical aggregates, not zero. The aggregator adds:
+
+- `runs[].run_id`: Observed run directory relative to the benchmark root.
+- `runs[].grading_status`: `graded`, `missing_grading` or `invalid_grading`.
+- `runs[].issues`: Missing/invalid input diagnoses; retain these when interpreting results.
+- `runs[].metric_sources` / `metric_scopes`: Source fields and boundaries for
+  `time_seconds` and `tokens`; use null when the value is unknown.
+- `runs[].result.output_chars`: Output characters as a separate measurement.
+- `run_summary.<configuration>.<metric>.count` / `total`: Observed values / observed
+  attempt directories. Means summarize known values only; report this coverage.
+- `metadata.attempts_per_configuration` / `runs_per_eval`: Actual observed directory
+  counts. Set `runs_per_configuration` to the common per-eval/configuration count
+  only when every observed eval has every configuration with that count; otherwise null.
+- `comparison`: Explicit `candidate`, `baseline`, `status` (`complete`, `incomplete`
+  or `unbound`), `paired_runs`, `unmatched_runs`, `issues`, and per-metric `status`,
+  `paired_count`, `total_pairs`, `scope`.
+
+Bind exactly one known candidate and one known baseline automatically. If role names
+are custom or ambiguous, supply both flags to the existing aggregator:
+
+```bash
+uv run --frozen python -m scripts.aggregate_benchmark <benchmark-dir> \
+  --candidate <candidate-config> --baseline <baseline-config>
+```
+
+Match runs by `(eval_id, run_number)`; reject duplicate/invalid identities for
+comparison. Compute candidate-minus-baseline deltas from those pairs, never from
+directory order or unmatched configuration means. Withhold all deltas when pairing
+or grading is incomplete. Withhold a cost delta when either side lacks that
+measurement or the comparison mixes scopes. A complete numerical comparison is
+not a verdict that the user's outcome or authorization boundary was satisfied.
+
+Keep missing/invalid grades in the attempt denominator and report unresolved
+outcomes separately. The aggregator inventories existing run directories, not an
+unwritten execution plan; directory counts alone cannot establish planned-task
+coverage. Do not exclude failed/interrupted attempts to claim lower total cost.
+The generic assertion pass rate is not whole-task success or an authorization gate.
+
+Use the updated viewer for nullable reports. It displays `unknown` and coverage;
+legacy numeric reports remain readable, but their saved deltas lack pairing
+evidence and are shown as unknown until reaggregated from the run inputs.
+Older viewers are not safe readers of new nullable reports. Regenerate the viewer
+with this version rather than opening the new JSON in an old template.
 
 ---
 

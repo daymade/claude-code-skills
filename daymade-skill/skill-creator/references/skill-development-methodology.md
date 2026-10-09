@@ -6,15 +6,15 @@
 
 - Phase 1 先手动解决问题 · Phase 2 最小充分调研 · Phase 3 真实数据验证（3.1 完整性 / 3.2 记录失败 / 3.3 隔离复现+反证+权威源）
 - Phase 4 写作补充（4.1 不能做什么 / 4.2 失败过什么 / 4.3 安全 / 4.4 console 示例 / 4.5 脚本健壮性 / 4.6 三资产分流）
-- Phase 5 测试迭代（5.0 风险分级 / 5.1 删竞争旧 skill / 5.2 量化对比 / 5.3 grep 断言误判 / 5.4 baseline 揭示事实错误 / 5.5 增量为 0 / 5.6 完整性两道闸）
+- Phase 5 测试迭代（5.0 风险分级 / 5.1 隔离竞争旧 skill / 5.2 量化对比 / 5.3 grep 断言误判 / 5.4 baseline 揭示事实错误 / 5.5 增量为 0 / 5.6 完整性两道闸）
 - Phase 6 Counter Review（6.1 按失败轴增配 reviewer / 6.2 final gate / 6.3 常见发现 / 6.4 findings 过滤 / 6.5 多层验证）
 - Phase 7 & 8 Description + Packaging · Phase 9 实战案例库 · 来源
 
-本文档只包含 SKILL.md 中**没有覆盖**的内容。SKILL.md 已经详细描述的流程（Prior Art 渠道表、决策矩阵、Inline vs Fork、测试用例格式、描述优化循环等）不在此重复——请直接参考 SKILL.md 对应章节。
+以 SKILL.md 的决策点为入口，按需读取其链接的执行指南；本文补充方法与战例，不另定义第二套流程。具体操作分别由 [authoring-and-reuse.md](authoring-and-reuse.md)、[change-verification.md](change-verification.md)、[existing-skill-migration.md](existing-skill-migration.md)、[paired-evaluation.md](paired-evaluation.md)、[description-triggering.md](description-triggering.md) 和 [publishing-and-packaging.md](publishing-and-packaging.md) 承载。
 
 ## Phase 1: 先手动解决问题，不要上来就建 skill
 
-SKILL.md 的 "Capture Intent" 章节覆盖了意图收集问题和 skill 类型分类。本节补充一个被忽略的前置步骤：
+[Authoring and reuse](authoring-and-reuse.md) 的 "Capture Intent" 章节覆盖了意图收集问题和 skill 类型分类。本节补充一个被忽略的前置步骤：
 
 **不要一开始就写 skill。** 先用 Claude Code 正常解决用户的问题，在过程中积累经验——哪些方案有效、哪些失败、最终的 working solution 是什么。如果你没有亲自失败过，你写不出能防止别人失败的 skill。
 
@@ -22,7 +22,7 @@ SKILL.md 的 "Capture Intent" 章节覆盖了意图收集问题和 skill 类型�
 
 ## Phase 2: 按未知轴选择最小充分调研
 
-SKILL.md 的 "Prior Art Research" 章节覆盖了搜索渠道、clone-and-verify 检查清单和 Adopt/Extend/Build 决策矩阵。本节补充如何控制调研预算：
+[Authoring and reuse](authoring-and-reuse.md) 的 "Prior Art Research" 章节覆盖了搜索渠道、clone-and-verify 检查清单和 Adopt/Extend/Build 决策矩阵。本节补充如何控制调研预算：
 
 遇到不确定的技术方案时，先在主上下文内查权威源与现有实现。下表是可选的未知轴，不是默认 Agent Team；一个问题能由一次检索或一个综合 pass 回答，就不拆 agent。只有多个轴彼此独立、答案会改变不同决策，而且用户已经同意 fan-out 数量时，才增配研究 agent：
 
@@ -73,7 +73,7 @@ SKILL.md 的完整 paired-eval 流程在另获重评测授权时，覆盖"先跑
 
 ## Phase 4: Skill 写作补充原则
 
-SKILL.md 的 "Skill Writing Guide" 已覆盖 frontmatter、progressive disclosure、bundled resources、命名规范等。本节补充 SKILL.md 未提及的内容层面原则：
+[Authoring and reuse](authoring-and-reuse.md) 的 "Skill Writing Guide" 已覆盖 frontmatter、progressive disclosure、bundled resources、命名规范等。本节补充 SKILL.md 未提及的内容层面原则：
 
 **知识型 skill(内容主体是外部系统的事实——API 端点/参数/字段/平台行为)先读 [knowledge-skill-grounding.md](knowledge-skill-grounding.md)**:权威源阶梯(实际观察 > 机器可读规范 > 已运行代码 > 官方文档 > 记忆)、证据边界标注、发布前文档示例冒烟、改事实 grep 全目录、受众环境声明、Windows 兼容清单、多角度审核菜单。未做 source-grounding 的抽象案例见 Phase 9 Case 9。
 
@@ -143,9 +143,9 @@ SKILL.md 的验证深度路由是层级选择的 SSOT；完整 A/B 测试、断�
 
 真实失效：一次现有 skill 的单段事实纠错已经有 GUI、配置和运行时三层直接证据，执行者仍按旧主循环为 3 个 case 启动 with-skill + baseline 共 6 个 agent。用户当场叫停，指出这不值得。问题不在 case 设计，而在流程把 Tier 3 当成所有编辑的默认值。此后以 SKILL.md 的路由为准：先选最低可证伪层级；再独立判断 paired baseline / grader / benchmark / viewer 是用户明确要求的交付物，还是会改变某个具体决策并已获同意。二者都不是就停在轻证据层。用户叫停重评测时立即中止，不用「流程要求」反驳；如实写明实际跑过什么、哪些失败轴未覆盖即可，禁把未运行的重套件包装成标签自带的「必需证据」。若规则、契约或数字已实质变化，discipline #5 要求的单个 fresh-context reviewer 仍保留；安全闸门同样不被「停评测」取消。
 
-### 5.1 删除竞争的旧 skill
+### 5.1 隔离竞争的旧 skill
 
-如果系统中存在旧版 skill（关键词冲突），eval agent 会被旧 skill 截胡，导致测试结果完全无效。必须在测试前删除旧 skill。
+如果系统中存在旧版 skill（关键词冲突），eval agent 可能加载错误版本。先核对实际加载身份，在隔离的评测环境固定所测版本，并按 [共存与优先级](skill-precedence-and-coexistence.md) 处理竞争；不能把测试需要当作删除用户已安装能力的授权。
 
 **信号**：eval agent 使用了不同于预期的脚本或方法 → 检查是否有同名/同领域的旧 skill 被加载。
 
@@ -266,7 +266,7 @@ Counter-review 的价值不是「列出所有风险」，而是 surface 你没�
 
 ## Phase 7 & 8: Description Optimization + Packaging
 
-SKILL.md 已完整覆盖描述优化循环和打包流程；本 reference 不复制这些会随实现变化的参数。无补充。
+[Description triggering](description-triggering.md) 与 [Publishing and packaging](publishing-and-packaging.md) 承载描述优化循环和打包流程；本 reference 不复制这些会随实现变化的参数。无补充。
 
 ## Phase 9: 实战案例库（每条规则背后的事故）
 
