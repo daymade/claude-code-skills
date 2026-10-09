@@ -103,6 +103,26 @@ standalone manual entry. Do not turn a check-only manual action into a deploymen
 PR validation and post-merge validation are not inherently equivalent: the latter
 can test an integrated tree. Remove repeated work only with matching input evidence.
 
+Immediately before merging, the executing agent rereads the hosted head/base SHAs,
+mergeability, required checks for that exact head, and current protection/review
+requirements. The current base is an observation at merge time, not a requirement
+to preserve the base SHA recorded when work began. Pin the reviewed head with
+`--match-head-commit`; an unknown or unsatisfied merge requirement remains a blocker.
+
+An unrelated base advance alone does not require updating the PR branch, creating
+a new head or rerunning CI. Keep the checked candidate when the advance leaves its
+relevant validation inputs unchanged and current repository rules permit merging.
+Required up-to-date checks, merge queues, review requirements and conflicts still
+govern readiness ([GitHub branch protection](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches#require-status-checks-before-merging)).
+When the candidate or its tested code, suites, workflow/tool/dependency inputs or
+environment actually changes, run the affected normal validation under that policy.
+
+Merge readiness does not establish PR-to-merge validation reuse. A required check
+accepted for the exact PR head does not prove the integrated tree was tested.
+For reuse, apply the full tree, execution-input and successful-run evidence checks
+below; a different integrated tree retains normal checks even if the base advance
+did not require updating the PR branch.
+
 For PR-to-merge reuse, have the repository's validation job record its actual
 checkout commit and `git rev-parse HEAD^{tree}` after checkout. A PR head SHA or
 run metadata alone does not identify the tested tree: the default PR checkout
