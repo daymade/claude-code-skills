@@ -131,7 +131,11 @@ class Board:
                 self.db.execute("""CREATE TABLE IF NOT EXISTS state_events(
                     revision INTEGER PRIMARY KEY, slot TEXT NOT NULL UNIQUE,
                     sender TEXT NOT NULL, target TEXT NOT NULL, topic TEXT NOT NULL,
-                    digest TEXT NOT NULL, message_id TEXT NOT NULL, effective INTEGER NOT NULL DEFAULT 0)""")
+                    digest TEXT NOT NULL, message_id TEXT NOT NULL, effective INTEGER NOT NULL DEFAULT 0,
+                    retired TEXT)""")
+                state_columns = {r[1] for r in self.db.execute("PRAGMA table_info(state_events)")}
+                if "retired" not in state_columns:
+                    self.db.execute("ALTER TABLE state_events ADD COLUMN retired TEXT")
                 self.db.execute("CREATE INDEX IF NOT EXISTS state_stream ON state_events(sender,target,topic,revision)")
                 if self.db.execute("""SELECT 1 FROM messages m WHERE m.kind='state' AND NOT EXISTS
                     (SELECT 1 FROM state_events e WHERE e.slot=m.slot) LIMIT 1""").fetchone():
@@ -140,8 +144,14 @@ class Board:
             os.chmod(self.path, 0o600)
             # Only closed transport records are disposable. Unknown sends and
             # stale ownership remain visible until explicitly reconciled.
-            self.db.execute("DELETE FROM messages WHERE created < ? AND (closed_at IS NOT NULL OR state='not_sent')",
-                            (self.clock() - 30 * 86400,))
+            with self.transaction():
+                cutoff = self.clock() - 30 * 86400
+                self.db.execute("""UPDATE state_events SET retired=(SELECT CASE WHEN m.state='not_sent'
+                    THEN 'not_sent' ELSE 'closed' END FROM messages m WHERE m.id=state_events.message_id)
+                    WHERE message_id IN (SELECT id FROM messages WHERE created < ? AND
+                    (closed_at IS NOT NULL OR state='not_sent'))""", (cutoff,))
+                self.db.execute("DELETE FROM messages WHERE created < ? AND (closed_at IS NOT NULL OR state='not_sent')",
+                                (cutoff,))
         except BaseException:
             self.db.close()
             raise
@@ -215,13 +225,21 @@ class Board:
         event = self.db.execute("SELECT * FROM state_events WHERE slot=?", (row["slot"],)).fetchone()
         if not event or not isinstance(event["message_id"], str) or not event["message_id"].strip():
             raise CoordinationError("state revision record unavailable; retain state and reconcile")
+        message = self.db.execute("SELECT slot FROM messages WHERE id=?", (event["message_id"],)).fetchone()
+        if event["retired"] not in (None, "closed", "not_sent") or (
+                message and (message["slot"] != event["slot"] or event["retired"] is not None)) or (
+                not message and event["retired"] is None):
+            raise CoordinationError("state revision identity is inconsistent; retain state and reconcile")
         return event
 
     def state_superseded(self, row):
         event = self.state_event(row)
-        return self.db.execute("""SELECT 1 FROM state_events WHERE sender=? AND target=?
-            AND topic=? AND effective=1 AND revision>? LIMIT 1""",
-            (row["sender"], row["target"], row["topic"], event["revision"])).fetchone() is not None
+        latest = self.db.execute("""SELECT * FROM state_events WHERE sender=? AND target=?
+            AND topic=? AND effective=1 AND revision>? ORDER BY revision DESC LIMIT 1""",
+            (row["sender"], row["target"], row["topic"], event["revision"])).fetchone()
+        if latest:
+            self.state_event(latest)
+        return latest is not None
 
     def prepare(self, sender, target, body, *, topic=None, kind="notice", expires=None,
                 event=None, reply_to=None):
@@ -264,9 +282,11 @@ class Board:
                         AND topic=? AND effective=1 AND revision>? ORDER BY revision DESC LIMIT 1""",
                         (sender, target, topic, revision["revision"])).fetchone()
                     if latest:
+                        self.state_event(latest)
                         return {"status": "suppressed_superseded", "message_id": latest["message_id"], "target": target}
                     prior = self.db.execute("SELECT state FROM messages WHERE id=?", (revision["message_id"],)).fetchone()
-                    if prior is None or prior["state"] != "not_sent":
+                    if (prior is None and revision["retired"] != "not_sent") or (
+                            prior is not None and prior["state"] != "not_sent"):
                         return {"status": "suppressed_state_revision", "message_id": revision["message_id"], "target": target}
                 else:
                     if self.db.execute("SELECT 1 FROM messages WHERE slot=? LIMIT 1", (slot,)).fetchone():
@@ -297,7 +317,7 @@ class Board:
                             (message_id, slot, sender, target, topic, kind, now, expires,
                              now + DEFAULT_DEDUP_SECONDS, "reserved", None, reply_to))
             if kind == "state":
-                self.db.execute("UPDATE state_events SET message_id=? WHERE slot=?", (message_id, slot))
+                self.db.execute("UPDATE state_events SET message_id=?,retired=NULL WHERE slot=?", (message_id, slot))
         metadata = {"v": 1, "id": message_id, "sender": sender, "target": target,
                     "kind": kind, "topic": topic, "created_at": iso(now),
                     "expires_at": iso(expires) if expires is not None else None}
@@ -343,14 +363,23 @@ class Board:
         with self.transaction():
             row = self.db.execute("SELECT * FROM messages WHERE id=?", (message_id,)).fetchone()
             if not row:
-                return {"status": "unknown", "next_action": "semantic triage; local record unavailable"}
+                retired = self.db.execute("SELECT * FROM state_events WHERE message_id=?", (message_id,)).fetchone()
+                if not retired:
+                    return {"status": "unknown", "next_action": "semantic triage; local record unavailable"}
+                self.state_event(retired)
+                if retired["target"] != actor or meta.get("target") != actor or meta.get("sender") != retired["sender"]:
+                    raise CoordinationError("coordination identity does not match local record")
+                action = "ignore_superseded" if self.state_superseded(retired) else "ignore_closed"
+                return {"status": action, "message_id": message_id,
+                        "authority": "coordination_only; verify current business facts before acting"}
             if row["target"] != actor or meta.get("target") != actor or meta.get("sender") != row["sender"]:
                 raise CoordinationError("coordination identity does not match local record")
             if row["kind"] == "state" and row["state"] != "not_sent":
                 self.state_event(row)
                 self.db.execute("UPDATE state_events SET effective=1 WHERE slot=?", (row["slot"],))
-            latest = self.db.execute("SELECT id FROM messages WHERE slot=? ORDER BY created DESC,rowid DESC LIMIT 1",
-                                     (row["slot"],)).fetchone()[0]
+            latest = (self.state_event(row)["message_id"] if row["kind"] == "state" else
+                      self.db.execute("SELECT id FROM messages WHERE slot=? ORDER BY created DESC,rowid DESC LIMIT 1",
+                                      (row["slot"],)).fetchone()[0])
             if row["expires"] is not None and row["expires"] <= self.clock():
                 action = "ignore_expired"
             elif latest != message_id or (row["kind"] == "state" and self.state_superseded(row)):

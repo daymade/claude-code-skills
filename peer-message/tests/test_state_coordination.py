@@ -199,6 +199,73 @@ class StateCoordinationTests(unittest.TestCase):
             self.board.receive(message['body'], 'b')
         self.assertEqual(self.board.db.execute('SELECT count(*) FROM messages').fetchone()[0], 1)
 
+    def test_pruned_states_remain_nonactionable_and_unknown_messages_remain_unknown(self):
+        messages = [self.state(), self.state('revision-two', 'snapshot two')]
+        for message in messages:
+            self.accept(message)
+            self.board.finish(message['message_id'], 'a')
+        self.now = 40 * 86400
+        reopened = coord.Board(self.root, clock=lambda: self.now)
+        try:
+            self.assertEqual(reopened.db.execute('SELECT count(*) FROM messages').fetchone()[0], 0)
+            self.assertEqual([reopened.receive(m['body'], 'b')['status'] for m in messages],
+                             ['ignore_superseded', 'ignore_closed'])
+            with self.assertRaises(coord.CoordinationError):
+                reopened.receive(messages[0]['body'], 'other')
+            envelope = messages[0]['body'].replace(messages[0]['message_id'], 'unknown-id')
+            self.assertEqual(reopened.receive(envelope, 'b')['status'], 'unknown')
+        finally:
+            reopened.close()
+
+    def test_extant_revision_identity_mismatch_fails_and_retains_records(self):
+        message = self.state()
+        self.accept(message)
+        self.board.db.execute("UPDATE state_events SET message_id='nonexistent-message-id'")
+        with self.assertRaises(coord.CoordinationError):
+            self.state()
+        with self.assertRaises(coord.CoordinationError):
+            self.board.receive(message['body'], 'b')
+        self.assertEqual(self.board.db.execute('SELECT count(*) FROM messages').fetchone()[0], 1)
+
+    def test_pruned_not_sent_revision_can_retry_without_reversing_order(self):
+        message = self.state()
+        self.board.commit(message['message_id'], 'a', 'not_sent')
+        self.now = 40 * 86400
+        reopened = coord.Board(self.root, clock=lambda: self.now)
+        try:
+            self.assertEqual(reopened.receive(message['body'], 'b')['status'], 'ignore_closed')
+            retry = reopened.prepare('a', 'b', 'snapshot one', kind='state',
+                topic='repo:publication-status', event='revision-one', expires=50 * 86400)
+            self.assertEqual(retry['status'], 'prepared')
+            self.assertNotEqual(retry['message_id'], message['message_id'])
+            self.assertEqual(reopened.db.execute('SELECT count(*) FROM state_events').fetchone()[0], 1)
+            reopened.commit(retry['message_id'], 'a', 'accepted')
+            self.assertEqual(reopened.receive(retry['body'], 'b')['status'], 'action_needed')
+        finally:
+            reopened.close()
+
+    def test_not_sent_retry_after_clock_rollback_uses_current_message_identity(self):
+        first = self.state()
+        self.board.commit(first['message_id'], 'a', 'not_sent')
+        self.now = 500
+        retry = self.state()
+        self.accept(retry)
+        self.assertEqual(self.board.receive(first['body'], 'b')['status'], 'ignore_superseded')
+        self.assertEqual(self.board.receive(retry['body'], 'b')['status'], 'action_needed')
+
+    def test_optional_revision_ledger_adds_retirement_without_rewriting_messages(self):
+        message = self.state()
+        self.accept(message)
+        self.board.db.execute('ALTER TABLE state_events DROP COLUMN retired')
+        reopened = coord.Board(self.root, clock=lambda: self.now)
+        try:
+            self.assertEqual(reopened.receive(message['body'], 'b')['status'], 'action_needed')
+            self.assertEqual(reopened.prepare('a', 'b', 'snapshot one', kind='state',
+                topic='repo:publication-status', event='revision-one', expires=2000)['status'],
+                'suppressed_state_revision')
+        finally:
+            reopened.close()
+
     def test_real_cli_parser_prepares_state_without_transport(self):
         with mock.patch.object(peer, 'current_address', return_value='a'), \
              mock.patch.object(peer, 'canonical_address', side_effect=lambda value, args: value), \
