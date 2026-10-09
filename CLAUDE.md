@@ -147,6 +147,9 @@ Python hooks.
 For rendered UI freshness, delayed editor/batch responses or deployment acceptance, enter
 [frontend-visual-qa](frontend-visual-qa/SKILL.md). Keep its manifest, launcher,
 result semantics and rendered-journey procedure in that owner.
+For nested zoomable workspaces, use its
+[mode-specific acceptance](frontend-visual-qa/references/journey-and-page-contracts.md#journey-and-state-matrix);
+ordinary and enlarged evidence remain separate.
 Before designing or judging monitoring, availability or certificate matrices, enter
 [data-visualization-discipline](data-visualization-discipline/SKILL.md).
 Keep observation and risk semantics in its data-validation route, not a second checklist here.
