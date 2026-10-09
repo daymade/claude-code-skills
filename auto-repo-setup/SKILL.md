@@ -214,6 +214,13 @@ conflict resolution, or history rewrite. The load-bearing rules are:
 Use [references/pii_guard.md](references/pii_guard.md) for public-distribution
 content review. A green scanner does not replace semantic review.
 
+For automatic artifact validation before ordinary Git commits, use the
+[commit-time check procedure](references/git_safety.md#commit-time-checks).
+It covers Git hooks across Agent and manual commits, staged-input verification
+and existing-hook preservation. Use the
+[isolated checkout preparation](references/git_safety.md#isolated-checkout-preparation)
+when task isolation must retain repository-specific LFS and security configuration.
+
 For a read-only history scan, the existing scripts/sanitize_history.sh remains
 available. It never rewrites history; treat its findings as candidates and do not
 execute rewrite commands without explicit approval.

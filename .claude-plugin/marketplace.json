@@ -484,7 +484,7 @@
       "description": "Reviews or re-reviews a contributor PR as repository maintainer — a closed PR reconsidered, or a sweep of open PRs — against the live base with immutable snapshots and three-way merges. Use for a PR URL/number, \"main changed, review again\", \"review all open PRs\", \"fix the rest ourselves?\", or merge readiness. Not for GitHub CRUD (use github-ops), your own PR (use github-contributor), or merging without fresh review.",
       "source": "./github-review-pr",
       "strict": false,
-      "version": "1.4.0",
+      "version": "1.4.1",
       "category": "developer-tools",
       "keywords": [
         "github",
@@ -944,7 +944,7 @@
       "description": "Evidence-driven repository setup, repair, handoff, and safe Git workflow for Claude Code or Codex. Detects the actual stack from project instructions and manifests instead of assuming Python, ffmpeg, uv, or .env; preserves local work during sync/conflict handling; diagnoses repeated SessionStart output before editing config; and defaults routine startup behavior to AGENTS.md/CLAUDE.md or a normal Agent request. Lifecycle hooks are an explicit pre-prompt exception with guarded, idempotent Claude Code setup and runtime-specific Codex verification.",
       "source": "./auto-repo-setup",
       "strict": false,
-      "version": "2.1.5",
+      "version": "2.1.6",
       "category": "developer-tools",
       "keywords": [
         "repo-setup",
