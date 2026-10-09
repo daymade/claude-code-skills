@@ -42,6 +42,15 @@ Bubble-busting is the act of moving a claim *down* from its self-asserted level.
 
 ## Verdicts
 
+### Bind the grade to the exact claim
+
+Source authority and claim coverage are separate. A checkable artifact earns L4 only for what it directly establishes; it does not promote adjacent marketing claims to L4.
+
+- **Code exists → behavior enforced → measured effectiveness** are separate claims. A planner or evidence store proves an implementation exists. Autonomous completion, reproducible findings, false-positive rates and superiority require evidence for those outcomes under stated conditions.
+- For a status such as `confirmed` or `verified`, identify the object/table, schema default, write path and consuming validation path before interpreting it. A workflow node's state is not automatically the finding's disposition; a label, hash or stored trace does not establish semantic correctness.
+- Compare benchmark results only with their task set, exclusions, black-box/white-box access, human intervention and scoring criteria attached. An award's official record establishes that award; its judging rules determine which capability it supports. Third-party observed use establishes use within the report's attribution limits, not the product's overall autonomous success rate.
+- Missing public tests or logs leave a coverage gap. They do not prove that no private evaluation occurred. State the narrower supported conclusion and keep the stronger claim unverified.
+
 - `坐实` (confirmed) — L3/L4 backs it
 - `大体可信` (largely credible) — plausible, partially corroborated, minor gaps
 - `存疑` (doubtful) — single-source / unfalsifiable / internal contradictions
