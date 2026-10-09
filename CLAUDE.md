@@ -147,6 +147,11 @@ Before designing or judging monitoring, availability or certificate matrices, en
 [data-visualization-discipline](data-visualization-discipline/SKILL.md).
 Keep observation and risk semantics in its data-validation route, not a second checklist here.
 
+For oversized images or figure readability in a Markdown note or transcript, enter
+that Skill's [actual-reader handoff](frontend-visual-qa/references/markdown-reader-handoff.md).
+It owns reader-specific sizing and the representative pilot; keep display values
+and verification details there.
+
 ### Background Full Disk Access repair
 
 When a LaunchAgent cannot read protected data, enter
