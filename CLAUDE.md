@@ -144,6 +144,11 @@ For rendered UI freshness or deployment acceptance, enter
 [frontend-visual-qa](frontend-visual-qa/SKILL.md). Keep its manifest, launcher,
 result semantics and rendered-journey procedure in that owner.
 
+For oversized images or figure readability in a Markdown note or transcript, enter
+that Skill's [actual-reader handoff](frontend-visual-qa/references/markdown-reader-handoff.md).
+It owns reader-specific sizing and the representative pilot; keep display values
+and verification details there.
+
 ### Background Full Disk Access repair
 
 When a LaunchAgent cannot read protected data, enter
