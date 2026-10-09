@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **peer-message** (v1.18.0): Deliver fallback Codex coordination through active-turn App Server tool output instead of waiting for a new queued user turn. Keep explicit queued delivery and unloaded-thread queues, label the route, and never requeue an uncertain live write. Extend verification and reply lookup to the adapter's persisted tool output. Change type: user-authorized transport workflow redesign; native messaging remains first.
+
 - **frontend-visual-qa** (v1.20.6): Separate original PDF byte identity from native viewer paint, and re-position decoded lazy images before inspecting the complete message and uncertainty labels. Change type: bounded verification recipe clarification.
 
 - **skill-creator** (`daymade-skill` v1.67.3): Require actual conflicts, changed inputs or repository requirements before refreshing a PR; preserve pushed history with added commits by default. Rebase, amend and leased rewrites require exact authorization and recovery evidence; squash policy and a lease do not supply permission. Keep additive registry/changelog preservation and conflict-proof checks. Change type: bounded authorization-contract correction.

@@ -491,6 +491,7 @@ class PeerMessageTests(unittest.TestCase):
                 "claude:coordinator",
                 "55555555-5555-4555-8555-555555555555",
                 home,
+                delivery="queued",
             )
             command = run.call_args.args[0]
             self.assertEqual(command[:4], ["codex", "queue", "--thread", receipt["target_id"]])
@@ -587,6 +588,29 @@ class PeerMessageTests(unittest.TestCase):
                 "codex_thread_history",
             )
             self.assertIn("advisory metadata", result["trust_boundary"])
+
+    def test_live_tool_output_verification_and_reply_lookup(self):
+        with tempfile.TemporaryDirectory() as raw:
+            home = self.make_codex_state(Path(raw))
+            thread_id = "22222222-2222-4222-8222-222222222222"
+            original_id = "11111111-aaaa-4111-8111-111111111111"
+            reply_id = "22222222-aaaa-4222-8222-222222222222"
+            envelope = self.codex_reply_envelope(reply_id, original_id)
+            rows = []
+            for index, namespace in enumerate(("another_tool", "peer_message")):
+                payload = json.dumps({"type": "functionCallOutput", "name": "delivery",
+                                      "namespace": namespace, "output": envelope})
+                rows.append((thread_id, "active-turn", f"output-{index}", index + 1,
+                             100 + index, payload, "functionCallOutput", index + 1))
+            self.make_codex_reply_stores(home, history_rows=rows)
+            self.assertIsNone(peer.verify_codex(f"codex:{thread_id}", "absent", home))
+            verified = peer.verify_codex(f"codex:{thread_id}", reply_id, home)
+            self.assertEqual(verified["item_id"], "output-1")
+            self.assertEqual(verified["delivery_status"], "verified_in_thread_history")
+            result = peer.codex_replies(f"codex:{thread_id}", original_id, 20, home)
+            self.assertEqual(result["reply_count"], 1)
+            self.assertEqual(result["replies"][0]["envelope"], envelope)
+            self.assertEqual(result["evidence_stores"][1]["candidate_records_examined"], 1)
 
     def test_replies_scope_to_named_inbox_and_ignore_quoted_correlation(self):
         with tempfile.TemporaryDirectory() as raw:

@@ -39,6 +39,12 @@ description: >-
 
 运行 `scripts/peer.py` 需要 Python 3.10+。Claude/Codex 的当前版本、平台与通道可用性属于会变化的产品事实；执行前按 `references/official-feature.md` 判断，不把这些门槛复制到 README 或仓库级说明。
 
+Codex 实时补缺还需要 `uv` 和已有的本机 App Server。`peer.py` 通过
+`scripts/codex_live.py` 的锁定依赖自动准备 WebSocket 客户端；不要启动第二个服务或重开 Tab。
+已加载 thread 使用实时 tool output；未加载 thread 保留 queue，并在 receipt 标明原因。
+服务不可用、拒绝或结果不明时停止，不自动改走 queue；确需旧排队行为时显式选择
+`--codex-delivery queued`。协议、状态与恢复判据见 `references/protocol-and-discovery.md` §3。
+
 ## 路由表
 
 | 场景 | 路由 |
@@ -104,6 +110,6 @@ description: >-
 
 ## 详细协议
 
-- `references/protocol-and-discovery.md` — 地址、Claude UDS 线格式、Codex queue/thread store、统一 envelope、独立读回与一次性关联回复查询。
+- `references/protocol-and-discovery.md` — 地址、Claude UDS 线格式、Codex 实时/queue transport 与 thread store、统一 envelope、独立读回与一次性关联回复查询。
 - `references/official-feature.md` — 当前官方 Claude/Codex 通道、可用性判断、权限边界与协议漂移处理。
 - `references/coordination-and-learning-loop.md` — parent/worker 回传、长消息、状态措辞与证据驱动的 Skill 演进。
