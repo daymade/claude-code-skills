@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **transcript-fixer** (`daymade-audio` v1.45.1): Route received user answers and correction-ledger updates from the repository instructions to the existing cited-answer SOP; remove its hand-maintained heading summary. Execution behavior is unchanged.
+
 - **continue-codex-work** (`daymade-claude-code` v4.25.8): Reconcile the current delivery stage before choosing an action or reporting completion, including readonly decisions. Reuse independent completion evidence tied to unchanged identities and inputs, while refreshing volatile delivery state. Preserve the native-resume exclusion and ownership boundaries. Change type: bounded workflow correction.
 
 - **frontend-visual-qa** (v1.20.0 → v1.20.1): Add delayed-save and retired-batch-preflight journey recipes with current-page, reopened-draft and original-request readback. Preserve completed writes and include ordinary-flow and StrictMode controls. Add two bounded behavior cases. Change type: existing audit-contract clarification.
