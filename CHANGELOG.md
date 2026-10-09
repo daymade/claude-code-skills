@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **report-with-html** (v1.4.1): Consolidate interaction admission and source-preview wiring into their existing owners; remove the derived example count and retain DOM prerequisites and real activation checks. Change type: documentation consolidation; runtime components are unchanged.
+
 - **frontend-visual-qa** (v1.20.6): Separate original PDF byte identity from native viewer paint, and re-position decoded lazy images before inspecting the complete message and uncertainty labels. Change type: bounded verification recipe clarification.
 
 - **skill-creator** (`daymade-skill` v1.67.3): Require actual conflicts, changed inputs or repository requirements before refreshing a PR; preserve pushed history with added commits by default. Rebase, amend and leased rewrites require exact authorization and recovery evidence; squash policy and a lease do not supply permission. Keep additive registry/changelog preservation and conflict-proof checks. Change type: bounded authorization-contract correction.
