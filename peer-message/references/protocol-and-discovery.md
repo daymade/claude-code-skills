@@ -92,7 +92,9 @@ UDS 连接写两行 NDJSON 后关闭：
 </cross-session-message>
 ```
 
-`from` 是接收方回信要用的地址，`from-name` 是显示来源。**`from` 必须是官方工具也能解析的形式**（当前实现发 `uds:<socket>`，见 §1）——收信的那个 session 可能根本没装本 Skill，它手上只有 host 那句「回信就把 `from` 抄进 `to`」和官方工具；`from` 若是 `claude:<session-uuid>`，它会得到 `No agent named ...`，而且**没有任何接收侧的补救路径**（官方列表的 `[ref]` 不是 UUID 前缀，对不上）。这类缺陷只能由信封的产生者修。
+`from` 是回信地址，`from-name` 是显示来源。同产品 Claude 回信按 §1 的兼容形式归一化；
+跨产品回信按下文的 Codex 路径。不将脚本 UUID 直接当成官方工具可解析的地址，
+也不删除仍可由脚本解析的跨产品地址。信封产生者负责提供可用的回信入口。
 
 **Codex 发送方：保留本脚本可解析的回信地址 `codex:<thread-id>`。**
 地址解析不决定使用哪一种 transport；发送流程按本文件 §3 执行。
