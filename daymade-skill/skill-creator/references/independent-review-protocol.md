@@ -179,9 +179,9 @@ each genuine finding becomes permission to inspect a wider subsystem, and “ver
 quietly turns into “redesign everything the artifact has ever done.” That is not rigor; it is
 an unapproved scope change whose completion condition moves after every pass.
 
-Freeze these five fields before dispatch and include all five in the reviewer prompt. The first
-two are evidence-bearing inputs; the last three are review-control metadata, not evidence for
-the author's conclusion:
+Freeze these fields before dispatch and include them in the reviewer prompt. The artifact
+and reader specification are evidence-bearing inputs; blast radius, failure axes and terminal
+condition control the review rather than supplying evidence for the author's conclusion:
 
 1. **Immutable artifact** — exact file set or commit/ref being judged.
 2. **Reader spec** — who must execute it and what they already know.
@@ -253,7 +253,7 @@ load-bearing operational mechanism the skill kept referencing but never showed h
 
 Write `independent-review.md` under `skill-reviews/<skill-name>/` in your private, git-tracked knowledge repo, **and commit it there in the same turn** — a file sitting uncommitted in a git working directory carries none of the "git-tracked" guarantee this rule exists for; `ls`/`test -f` confirms it's on disk, not that it survives to the next session. If you don't know which repo that is (or don't have one), say so and ask the user — do not guess a location that lands in either forbidden zone. That repo's own commit hook may also restrict where such files may live (a structure guard may reject the path and name the directory it allows); read the hook's message and move the file there rather than bypassing the hook. Two forbidden locations: **NOT** in `<skill-name>-workspace/` (gitignored scratch dirs that get wiped — this file is cross-session review evidence and must survive them) and **NOT** in any repo that is or may become public or distributed — which normally rules out the reviewed skill's own repo (review content inherently quotes private paths, real names, and project details):
 
-**When the reviewed change ships in the public `claude-code-skills` repo, the archive carries one more receipt.** That repo's pre-push gate (its `scripts/ci/check_skill_release.py`, outside this skill) only lets the push through when the review archive contains exactly one `<!-- skill-release-review` block holding a passed JSON receipt for the exact published head (40-char `candidate`) and skill scope — write it as `{"schema": 1, "result": "passed", "candidate": "<head>", "skill_paths": ["<skill-dir>"]}` and keep the authoritative field list with `release_readiness.py`'s validation, not this example. Amend or rebase the release commit and the block's `candidate` must be refreshed before `release_readiness.py attest` will bind it. Learning this from the gate's error at push time costs two extra round-trips (2026-10-06: attest refused, gate source read, block added, archive re-committed, attest re-run); write the block when the archive is drafted and update the candidate at attest time.
+**When the reviewed change ships in the public `claude-code-skills` repo, the archive carries one more receipt.** Its repository-owned [pre-push release gate](https://github.com/daymade/claude-code-skills/blob/main/scripts/ci/check_skill_release.py) only lets the push through when the review archive contains exactly one `<!-- skill-release-review` block holding a passed JSON receipt for the exact published head (40-char `candidate`) and skill scope — write it as `{"schema": 1, "result": "passed", "candidate": "<head>", "skill_paths": ["<skill-dir>"]}` and keep the authoritative field list with `release_readiness.py`'s validation, not this example. Amend or rebase the release commit and the block's `candidate` must be refreshed before `release_readiness.py attest` will bind it. Write the block when the archive is drafted and update the candidate at attest time.
 
 ```markdown
 # Independent review — <artifact>, <date>
@@ -274,7 +274,7 @@ Write `independent-review.md` under `skill-reviews/<skill-name>/` in your privat
 <anything you could not anchor — greenfield gaps, missing sources>
 ```
 
-Three properties earn their keep: the **verbatim prompt** exposes a leading question; the
+The **verbatim prompt** exposes a leading question; the
 **disposition column** makes filtering auditable; the **not-checked section** stops an
 incomplete pass from being reported as a clean one.
 
