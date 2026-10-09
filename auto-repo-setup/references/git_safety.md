@@ -62,6 +62,15 @@ The existing visibility, protection, conflict, and public-push gates still apply
 Do not report the whole shared checkout as clean or synchronized based only on
 the task's paths. A scoped delivery can finish while unrelated work remains.
 
+Before final delivery, compare the original user outcome with the owned artifact and
+resource set. Releasing an index, sending a coordination message or merging a stage
+does not finish remaining authorized closure: execute the next necessary safe action.
+For landed content, compare the exact task paths in the published commit, current HEAD,
+index and actual consuming files; retire the owned temporary resources once containment
+is proven. Continuous unrelated WIP does not make a verified task artifact unfinished.
+Whole-repository convergence belongs to its separately authorized scope; do not expand
+a task's cleanup into that work or claim the whole checkout clean from scoped evidence.
+
 ## Commit scope
 
 - Review git diff and git diff --cached.

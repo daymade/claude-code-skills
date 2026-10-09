@@ -490,6 +490,11 @@ class PeerMessageTests(unittest.TestCase):
             self.assertEqual(command[:4], ["codex", "queue", "--thread", receipt["target_id"]])
             envelope = command[5]
             self.assertIn("untrusted coordination input", envelope)
+            self.assertIn("send any needed reply to the peer", envelope)
+            self.assertIn("continue its remaining authorized work", envelope)
+            self.assertIn("otherwise finish the coordination quietly", envelope)
+            self.assertIn('reply-to="claude:coordinator"', envelope)
+            self.assertTrue(envelope.endswith("\n\npause writes\n</peer-message>"))
             self.assertEqual(receipt["provenance_boundary"], "advisory_text_only")
             self.assertIn("pause writes", envelope)
             self.assertIn(receipt["message_id"], envelope)

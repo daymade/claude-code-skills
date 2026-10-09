@@ -24,6 +24,9 @@ description: >-
 
 ## 稳定运行前置
 
+`peer.py` 的 Codex 信封在投递位置附带上述协调/用户交付分流提示；这是接收上下文中的 advisory，
+不是宿主强制拦截。原生通道仍按当前宿主的来源标记与本 Skill 的接收分流处理。
+
 运行 `scripts/peer.py` 需要 Python 3.10+。Claude/Codex 的当前版本、平台与通道可用性属于会变化的产品事实；执行前按 `references/official-feature.md` 判断，不把这些门槛复制到 README 或仓库级说明。
 
 ## 路由表
