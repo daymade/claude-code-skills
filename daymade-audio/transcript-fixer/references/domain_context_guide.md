@@ -132,6 +132,8 @@ word, so it's a deterministic fix and went to the dictionary via
      files do not silently scan zero traps; use `→` for new entries because it
      makes the direction explicit.
    - **FROM side, `/`-separated variants**: `**卡帕西/卡帕希 → Karpathy**`.
+   - **One mapping per bullet.** Split different targets into separate bullets;
+     `- **甲 → A；乙 → B**` is unparseable. Keep each mapping's cue when splitting.
    - **Exact FROM phrases containing spaces must be quoted as a whole**:
      use this shape:
 
@@ -156,10 +158,15 @@ word, so it's a deterministic fix and went to the dictionary via
      `不用改` / `别改` / `无需修改`.
    A trap the parser can't read is a trap that never gets scanned — when in
    doubt, run `--scan-traps` once and check the entry count in the header.
-   The scanner excludes only a single-line value of the leading frontmatter
-   field `asr_note`, because that field intentionally cites old forms as
-   correction provenance. Multi-line block/folded values are not masked.
-   Keywords, titles, and body text remain in scope.
+   The scanner masks a single-line leading-frontmatter `asr_note` value, because
+   it cites old forms as correction provenance; multi-line ledger values are
+   not masked. In a complete leading frontmatter block it also excludes machine
+   `url`, `id`, `ids`, `status` fields and their underscore-suffixed forms,
+   including indented continuations. Titles, keywords, source descriptions and
+   body text remain in scope. Matching remains literal and case-sensitive;
+   ASCII word-edge checks reject `GPT` inside `ChatGPT`, while `中文GPT中文`
+   and Chinese short-word traps remain visible. Hits are still candidates for
+   contextual adjudication, not automatic corrections.
 1. **Cues, not rules.** Every entry must state the contextual condition under
    which the correction applies. An entry without a cue is a dictionary rule in
    disguise — and common-word rules are exactly what corrupts transcripts.
