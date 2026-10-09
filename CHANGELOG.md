@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **local-conversation-history** (`daymade-claude-code` v4.26.0): Route conversation-backup health to the existing storage owner before history retrieval; keep coverage, actual archival rounds, recovery samples and alert health separate. Preserve read/continue routes and paused-writer boundaries. Change type: read-only routing expansion.
+
 - **github-ops** (v1.14.6): Bug fix / factual correction — align merge-adjacent branch cleanup with exact-tip retirement and independent absence checks; preserve history when refreshing a PR under strict protection.
 - **peer-message** (v1.16.0 → v1.16.1): Add advisory coordination routing at Codex message ingress; preserve provenance and permission boundaries, peer replies and quiet completion without turning partial progress into final user delivery. Change type: existing routing correction.
 - **auto-repo-setup** (v2.1.3 → v2.1.4): Continue authorized artifact and resource closure after a stage is published; distinguish verified task completion from unrelated shared-checkout WIP. Preserve scoped tools and authorization boundaries. Change type: completion-boundary clarification.
