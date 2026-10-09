@@ -4,23 +4,6 @@ Load this reference only when the audit includes state transitions, routes,
 overlays, browser-owned output, native shells, complex page types, maps, or
 review/annotation workflows, including summary-to-detail disclosure.
 
-## Contents
-
-- Evidence Boundary
-- Journey And State Matrix
-- Summary-To-Detail Disclosure
-- Authorization, Mode, And Runtime Truth
-- Route And Addressability
-- Transient UI
-- Drawers, Modals, Popovers, And Focus
-- Browser-Integrated Outputs
-- Electron And Native Shells
-- Landing, Deck, And Browser Tool/Game Artifacts
-- Dashboard And Enterprise Admin
-- Design-System Artifacts
-- Map And GIS Workbenches
-- Review And Annotation Tools
-
 ## Evidence Boundary
 
 Use the visible surface that owns the behavior.
@@ -58,6 +41,26 @@ For each relevant state, verify:
 
 Do not require every possible state for a local visual-only change. Cover the
 states affected by the implementation or explicitly requested by the user.
+
+For nested zoomable workspaces, the executing auditor treats the ordinary entry,
+enlarged mode, affected zoom levels and return-to-ordinary as separate states.
+An enlarged canvas cannot certify the shallow ordinary pane. Record its rendered
+node set, pane dimensions and settled viewport before judging fit; an empty or
+transient canvas leaves that state unobserved. When sizing or fit changed, resize
+the pane itself, including a resize that keeps the same column count.
+
+For fixed cards with inverse-scaled text, inspect every visible title, date and
+preview field. A contained box can still paint half a line. The sweep's
+`paintedText` observation detects substantial vertical fragment clipping; whole
+omitted lines, horizontal ellipsis, scroll windows and clip-paths need separate
+pixel/journey judgement. Transparent captions can cover control icons while
+clicks succeed: compare painted bounds, inspect the crop, then trigger the real
+control. These checks support geometry, not comprehension or semantic fidelity.
+
+Keep each state's verdict and limitations when composing the result. A passed
+child return or enlarged view does not upgrade another state's partial verdict.
+No automatic tool enforces this scope comparison; the executing auditor must
+apply SKILL.md's completion gate to the original user contract.
 
 Treat these as Major unless the project taxonomy says otherwise:
 

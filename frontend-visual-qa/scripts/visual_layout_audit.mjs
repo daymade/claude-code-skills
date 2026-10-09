@@ -7,6 +7,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { collectAttentionInventory } from "./attention_inventory.mjs";
+import { collectPaintedText } from "./painted_text_probe.mjs";
 
 function loadPlaywright() {
   // Resolve a Playwright browser driver across install layouts. Under a pnpm workspace,
@@ -271,6 +272,9 @@ for (const viewport of viewports) {
   result.meta.href = targetEvidence(result.meta.href);
   result.meta.mediaPreparation = mediaPreparation;
   result.meta.attentionInventory = await page.evaluate(collectAttentionInventory);
+  const paintedText = await page.evaluate(collectPaintedText);
+  result.meta.paintedText = { ...paintedText, issues: undefined };
+  result.issues.push(...paintedText.issues.map(issue => ({ ...issue, viewport: viewport.name })));
   if (mediaPreparation?.truncated) {
     result.issues.push({
       viewport: viewport.name,
