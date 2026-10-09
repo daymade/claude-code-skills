@@ -250,7 +250,7 @@
       "description": "Financial data and investment-research suite covering the full China A-share and global equity data pipeline: Bigdata.com (RavenPack) structured financials and news sentiment, US equity fundamentals via yfinance, Gangtise (岗底斯) OpenAPI research suite installation and orchestration, A-share news and policy aggregation, A-share pharmaceutical sector daily reporting, structured devil's-advocate pressure-testing of investment theses, and adversarial due diligence on inflated benchmark claims with replicability mapping. Install once for the complete financial research workflow.",
       "source": "./daymade-financial",
       "strict": false,
-      "version": "1.5.1",
+      "version": "1.5.2",
       "category": "suite",
       "keywords": [
         "suite",
