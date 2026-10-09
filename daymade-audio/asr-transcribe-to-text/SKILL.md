@@ -467,8 +467,8 @@ Before using the Qwen3 route, smoke-test its leg once:
 uv run ${CLAUDE_SKILL_DIR}/scripts/transcribe_local_mlx.py --smoke-test
 ```
 
-Expected output includes `Dependency stack: mlx-audio 0.3.1, mlx-lm 0.30.5,
-transformers 5.0.0rc3` and `Smoke test OK`. For performance, per-chunk token
+Expect the bundled script's dependency validation and `Smoke test OK`; pins are
+defined by `scripts/transcribe_local_mlx.py`. For performance, per-chunk token
 semantics, resource bounds, and recovery, read `references/local_mlx_guide.md`.
 
 **How it works (and why):** session-wide Qwen3-ASR text + mlx-whisper word
@@ -912,15 +912,9 @@ If model loading fails with an error like:
 AttributeError: 'str' object has no attribute '__module__'
 ```
 
-the agent is probably using an unpinned or stale copy of the local MLX script. The known-good stack is:
-
-```text
-mlx-audio 0.3.1
-mlx-lm 0.30.5
-transformers 5.0.0rc3
-```
-
-Run the bundled `--smoke-test` command and confirm the dependency stack line matches. Do not start a long transcription until the smoke test succeeds.
+check whether the agent is using the current bundled script. Its PEP 723 declaration
+and runtime dependency check own the version pins. Run its `--smoke-test` and read
+the validation result; do not start a long transcription until it succeeds.
 
 ### A self-hosted remote endpoint rejects the audio
 
