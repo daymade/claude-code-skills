@@ -1156,6 +1156,9 @@ def print_receipt(receipt: dict[str, Any], as_json: bool) -> None:
             f"{receipt.get('delivery_status')}: {receipt.get('target')}{target_id} "
             f"message_id={receipt.get('message_id')}"
         )
+        if receipt.get("route"):
+            reason = f" reason={receipt['queue_reason']}" if receipt.get("queue_reason") else ""
+            print(f"route: {receipt['route']}{reason}")
         if receipt.get("evidence"):
             suffix = f":{receipt['line']}" if receipt.get("line") else ""
             print(f"evidence: {receipt['evidence']}{suffix}")

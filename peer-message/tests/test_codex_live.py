@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Live delivery controls without starting or interrupting another user's thread."""
 import importlib.util
+import contextlib
+import io
 import json
 from pathlib import Path
 import subprocess
@@ -51,6 +53,21 @@ class Connection:
 
 
 class LiveTransportTests(unittest.TestCase):
+    def test_text_and_json_receipts_expose_route_and_unloaded_reason(self):
+        for route, reason in (("queue", "target_not_loaded"),
+                              ("app_server_tool_output", None)):
+            receipt = {"target": "codex:" + THREAD, "message_id": "synthetic-id",
+                       "delivery_status": "not_checked", "route": route}
+            if reason:
+                receipt["queue_reason"] = reason
+            for as_json in (False, True):
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    peer.print_receipt(receipt, as_json)
+                self.assertIn(route, out.getvalue())
+                if reason:
+                    self.assertIn(reason, out.getvalue())
+
     def test_active_and_idle_use_tool_output_without_settings_overrides(self):
         for state in ("active", "idle"):
             with self.subTest(state=state):
