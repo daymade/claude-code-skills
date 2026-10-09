@@ -415,8 +415,12 @@ validation.
 
 For already-authorized delivery in a shared checkout, enter
 [auto-repo-setup's scoped delivery route](auto-repo-setup/references/git_safety.md#authorized-shared-checkout-delivery).
-It owns the authorization/tool gate, bounded coordination and partial-result recovery;
+It owns the authorization/tool gate, bounded coordination, partial-result recovery and final closure;
 keep ordinary sync, publication and recovery boundaries with their existing owners.
+
+For inbound coordination during delivery or closeout, use
+[peer-message's receiving route](peer-message/SKILL.md#收到消息先分流).
+Keep the receiving and user-delivery procedure with that owner rather than duplicating it here.
 
 This repository uses standard git workflow, but **always stage files by name**,
 never `git add -A` / `git add .`. Multiple agents may have unstaged changes in
