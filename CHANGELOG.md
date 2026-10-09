@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **github-ops** (v1.14.1 → v1.14.2): Reuse CI validation only with successful run evidence for the actual checkout tree, covered suites and matching execution inputs; retain normal checks on missing evidence and keep publication separate. Bound test workers by effective runner CPU allocation and distinguish optional remote caches from required artifacts. Change type: bounded CI evidence and resource-selection clarification.
+
 - **transcript-fixer** (`daymade-audio` v1.45.1): Route received user answers and correction-ledger updates from the repository instructions to the existing cited-answer SOP; remove its hand-maintained heading summary. Execution behavior is unchanged.
 
 - **continue-codex-work** (`daymade-claude-code` v4.25.8): Reconcile the current delivery stage before choosing an action or reporting completion, including readonly decisions. Reuse independent completion evidence tied to unchanged identities and inputs, while refreshing volatile delivery state. Preserve the native-resume exclusion and ownership boundaries. Change type: bounded workflow correction.

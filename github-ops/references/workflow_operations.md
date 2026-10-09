@@ -480,6 +480,18 @@ operator procedure; no bundled tool enforces its deployment or process boundarie
    retention/access contract. Do not silently drop outputs, ignore upload failures
    or delete historical artifacts to make the migration pass.
 
+   Inventory optional cache backends separately from required artifacts.
+   `actions/cache` and BuildKit `type=gha` still call remote cache services on a
+   self-hosted runner ([Docker GitHub cache backend](https://docs.docker.com/build/cache/backends/gha/)).
+   Compare measured restore/export cost, hit rate and storage/network limits
+   with the existing persistent runner cache. Prefer that existing cache when
+   its ownership, keying and cleanup contract fit; do not add a second cache
+   merely because an action supports it. Preserve cold-cache correctness.
+   Only an explicitly optional cache may degrade on cache-only failure, with a
+   visible diagnostic; installation, tests, builds and required artifact handoff
+   retain their failure behavior. The deployment owner and job logs verify this
+   distinction; no bundled tool in this Skill chooses a cache backend.
+
    For jobs running directly on a shared Linux runner host, use per-job service
    containers with free host ports and read the assigned port from
    `job.services.<service>.ports[<container-port>]`;
@@ -490,6 +502,16 @@ operator procedure; no bundled tool enforces its deployment or process boundarie
    a listener's limit does not automatically cap those containers. Read back the
    container/builder limits and reconcile their combined demand with the physical
    host budget ([Docker resource constraints](https://docs.docker.com/engine/containers/resource_constraints/)).
+
+   Set test-worker concurrency from the effective CPU allocation, including
+   ancestor quota/period and cpuset/affinity bounds, rather than the host's
+   advertised core count or a runtime's parallelism default. Shared-parent
+   capacity is an upper bound, not an exclusive reservation. Use the existing
+   test runner's worker controls and verify the original suite under the real
+   service limits before increasing timeouts. Keep assertions and timeout
+   failure semantics; a lower worker count cannot excuse a genuine regression.
+   The repository executor owns worker settings; read cgroup/runtime observations
+   and actual suite results to accept the change.
 
    Configure job hooks with the supported `.sh` or `.ps1` entry point: GitHub runs
    Bash with `-e <path>` or PowerShell with `-command ". '<path>'"`. A Python
