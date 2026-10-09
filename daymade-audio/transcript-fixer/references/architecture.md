@@ -2,44 +2,6 @@
 
 Technical implementation details of the transcript-fixer system.
 
-## Table of Contents
-
-- [Module Structure](#module-structure)
-- [Design Principles](#design-principles)
-  - [SOLID Compliance](#solid-compliance)
-  - [File Length Limits](#file-length-limits)
-- [Module Architecture](#module-architecture)
-  - [Layer Diagram](#layer-diagram)
-  - [Correction Workflow](#correction-workflow)
-  - [Learning Cycle](#learning-cycle)
-- [Data Flow](#data-flow)
-- [SQLite Architecture (v2.0)](#sqlite-architecture-v20)
-  - [Two-Layer Data Access](#two-layer-data-access-simplified)
-  - [Database Schema](#database-schema-schemasql)
-  - [ACID Guarantees](#acid-guarantees)
-  - [Thread Safety](#thread-safety)
-  - [Migration from JSON](#migration-from-json)
-- [Module Details](#module-details)
-  - [fix_transcription.py](#fix_transcriptionpy-orchestrator)
-  - [correction_repository.py](#correction_repositorypy-data-access-layer)
-  - [correction_service.py](#correction_servicepy-business-logic-layer)
-  - [CLI Integration](#cli-integration-commandspy)
-  - [dictionary_processor.py](#dictionary_processorpy-stage-1)
-  - [ai_processor.py](#ai_processorpy-stage-2)
-  - [learning_engine.py](#learning_enginepy-pattern-detection)
-  - [diff_generator.py](#diff_generatorpy-stage-3)
-- [State Management](#state-management)
-  - [Database-Backed State](#database-backed-state)
-  - [Thread-Safe Access](#thread-safe-access)
-- [Error Handling Strategy](#error-handling-strategy)
-- [Testing Strategy](#testing-strategy)
-- [Performance Considerations](#performance-considerations)
-- [Security Architecture](#security-architecture)
-- [Extensibility Points](#extensibility-points)
-- [Dependencies](#dependencies)
-- [Deployment](#deployment)
-- [Further Reading](#further-reading)
-
 ## Module Structure
 
 The codebase follows a modular package structure for maintainability:
@@ -106,16 +68,6 @@ Every module follows SOLID principles for maintainability:
    - CLI depends on Service interface
    - Not tied to concrete implementations
 
-### File Length Limits
-
-All business-logic modules are kept small and single-purpose. The authoritative source for current file sizes is the repository itself; this document does not duplicate those derived counts.
-
-| Layer | Files | Status |
-|-------|-------|--------|
-| CLI / utilities | `commands.py`, `argument_parser.py`, `validation.py`, `logging_config.py`, `diff_generator.py`, `config.py`, `path_validator.py` | ✅ |
-| Core processors | `dictionary_processor.py`, `ai_processor.py`, `ai_processor_async.py`, `ai_utils.py`, `learning_engine.py` | ✅ |
-| Data access | `correction_repository.py`, `correction_service.py`, `schema.sql` | ✅ |
-
 ## Module Architecture
 
 ### Layer Diagram
@@ -166,7 +118,7 @@ All business-logic modules are kept small and single-purpose. The authoritative 
 │   Storage Layer                         │
 │   ~/.transcript-fixer/corrections.db    │
 │   - SQLite database (ACID compliant)    │
-│   - 8 normalized tables + 3 views       │
+│   - Normalized tables and query views   │
 │   - Comprehensive indexes               │
 │   - Foreign key constraints             │
 └─────────────────────────────────────────┘
@@ -229,7 +181,7 @@ Run 3: meeting3.md
    ↓
    LearningEngine queries patterns:
    - SELECT ... GROUP BY from_text, to_text
-   - Frequency: 3, Confidence: 100%
+   - Repeated pattern selected for review
    ↓
    INSERT INTO learned_suggestions (status='pending')
    ↓
@@ -245,11 +197,9 @@ Run 3: meeting3.md
 
 ## SQLite Architecture (v2.0)
 
-### Two-Layer Data Access (Simplified)
+### Data Access
 
-**Design Principle**: No users = no backward compatibility overhead.
-
-The system uses a clean 2-layer architecture:
+Separate business validation from database operations:
 
 ```
 ┌──────────────────────────────────────────┐
@@ -277,10 +227,10 @@ The system uses a clean 2-layer architecture:
                │
 ┌──────────────▼───────────────────────────┐
 │ SQLite Database (corrections.db)         │
-│ - 8 normalized tables                    │
+│ - Normalized tables                      │
 │ - Foreign key constraints                │
 │ - Comprehensive indexes                  │
-│ - 3 views for common queries             │
+│ - Views for common queries               │
 └───────────────────────────────────────────┘
 ```
 
@@ -373,7 +323,7 @@ def _get_connection(self):
 ### Clean Architecture (No Legacy)
 
 **Design Philosophy**:
-- Clean 2-layer architecture (Service → Repository)
+- Service → Repository data access
 - No backward compatibility overhead
 - Direct API design without legacy constraints
 - YAGNI principle: Build for current needs, not hypothetical migrations
@@ -610,8 +560,6 @@ list_pending()           # Get all suggestions
 3. HTML side-by-side (visual comparison)
 4. Inline marked ([-old-] [+new+])
 
-**Not Modified**: Kept original 338-line file as-is (working well)
-
 ## State Management
 
 ### Database-Backed State
@@ -674,18 +622,15 @@ uv run scripts/run_tests.py -k roster -q          # arguments pass through
 python3 -m unittest discover -s tests             # the stdlib suite CI runs
 ```
 
-There are two, and they are not interchangeable. `tests/` is standard-library
-unittest and is registered in the repo's CI (`scripts/ci/test-suites.txt`).
-`scripts/tests/` is pytest and needs jieba, httpx, filelock, rapidfuzz and
-pytest-asyncio, which is exactly why that registry does not admit it — see its
-header for the reasoning. `scripts/run_tests.py` declares those dependencies
-inline so the local suite has one correct invocation instead of a `--with` list
-nobody remembers.
+Run these commands from the Skill directory. `tests/` uses standard-library
+unittest; `scripts/tests/` uses pytest. The local
+[pytest runner](../scripts/run_tests.py) declares its dependencies and forwards
+arguments. Use it rather than a bare pytest invocation with an incomplete environment.
 
-**Running it without them does not look like a missing dependency.** A bare
-`pytest scripts/tests/` reports 16 failures and 3 collection errors, several of
-them in the word-boundary guard's own tests — which reads as "this safety check
-is broken" when the only thing absent is jieba.
+The repository's [CI suite registry](https://github.com/daymade/claude-code-skills/blob/main/scripts/ci/test-suites.txt)
+defines admission and registered suites; its
+[dispatcher](https://github.com/daymade/claude-code-skills/blob/main/scripts/ci/run_registered_tests.sh)
+owns execution. These are maintainer resources outside the installed Skill bundle.
 
 ### Unit Testing (Recommended)
 

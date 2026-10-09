@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **github-ops** (v1.14.1 → v1.14.2): Reuse CI validation only with successful run evidence for the actual checkout tree, covered suites and matching execution inputs; retain normal checks on missing evidence and keep publication separate. Bound test workers by effective runner CPU allocation and distinguish optional remote caches from required artifacts. Change type: bounded CI evidence and resource-selection clarification.
+- **transcript-fixer** (`daymade-audio` v1.45.2): Link architecture testing guidance to the actual repository CI registry and dispatcher instead of a nonexistent bundled path. Keep local runners unchanged; remove hand-maintained navigation, derived schema counts and file-length/status commentary from that reference.
 
 - **transcript-fixer** (`daymade-audio` v1.45.1): Route received user answers and correction-ledger updates from the repository instructions to the existing cited-answer SOP; remove its hand-maintained heading summary. Execution behavior is unchanged.
 
