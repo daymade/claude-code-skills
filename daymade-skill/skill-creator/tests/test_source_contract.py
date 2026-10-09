@@ -118,6 +118,21 @@ class SourceContractTests(unittest.TestCase):
         self.assertEqual(result["status"], "valid")
         self.assertEqual(result["checks"]["installation"]["status"], "unknown")
 
+    def test_standalone_plugin_namespace_can_differ_from_skill_name(self):
+        target = self.repo / "seed"
+        self.skill(target, "formal-helper")
+        self.write_manifest([{"name": "legacy-plugin", "source": "./seed"}])
+        report = source.check_source(target, repo=self.repo)
+        self.assertEqual(report["status"], "valid")
+        self.assertEqual(report["skill_name"], "formal-helper")
+        self.assertEqual(report["plugin_id"], "legacy-plugin@test-market")
+        for entry in ({"source": "./seed"}, {"name": None, "source": "./seed"},
+                      {"name": "", "source": "./seed"},
+                      {"name": "legacy-plugin", "source": "./other"}):
+            with self.subTest(entry=entry):
+                self.write_manifest([entry])
+                self.assertNotEqual(source.check_source(target, repo=self.repo)["status"], "valid")
+
     def test_install_copy_is_not_source_backed_link(self):
         self.skill(self.root / "installed-copy", "seed")
         report = source.check_source(self.repo / "seed", repo=self.repo, install_path=self.root / "installed-copy")
@@ -235,6 +250,16 @@ class DeliveryIdentityTests(unittest.TestCase):
 
     def candidate(self):
         return "Updated the requested Skill.\n\n" + self.delivery.render_entry(self.identity)
+
+    def test_standalone_alias_keeps_formal_name_and_plugin_version_owner(self):
+        self.identity["plugin_name"] = "legacy-plugin"
+        text = self.candidate()
+        self.assertIn("`chart-judgment`", text)
+        self.assertIn("plugin `legacy-plugin` v1.2.0", text)
+        receipt = self.delivery.prepare_receipt("alias-task", [self.identity], text)
+        self.assertEqual(self.delivery.check_receipt(receipt, "alias-task", text)["status"], "valid")
+        for actual in (text.replace("legacy-plugin", "wrong-plugin"), text.replace("v1.2.0", "v9.9.9")):
+            self.assertEqual(self.delivery.check_receipt(receipt, "alias-task", actual)["status"], "invalid")
 
     def test_generated_entry_and_actual_reply_not_merely_json_are_checked(self):
         text = self.candidate()
