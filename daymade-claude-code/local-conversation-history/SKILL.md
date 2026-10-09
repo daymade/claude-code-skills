@@ -17,6 +17,16 @@ the wrong skill — hand off and stop.
 
 ## Route by platform × action
 
+For a backup-health request ("are our conversation backups working?" / "历史备份是否正常"),
+read the owning backup configuration and storage SOP before selecting a history reader.
+Use `git-large-files-storage-setup`'s backup-health workflow when that Skill is installed;
+otherwise use the existing storage owner's procedure and report any missing dependency.
+Keep this route read-only. Verify provider/source coverage, the actual backup round,
+destination originals, recovery samples and the alert job separately. Do not resume a
+paused collector or rebuild an index to check a backup. Use provider readers only for
+selected original/session identity checks, not conversation-body searches to discover
+backup jobs. Keep account, machine and credential paths in the user's owning configuration.
+
 Establish two things before routing: **which platform** the conversation lived
 on, and whether the user wants **evidence** (what was said/done) or
 **resumption** (take the work forward).
@@ -78,6 +88,7 @@ and output format. This skill names which providers are in scope.
 
 | The user's requested result | Route |
 |---|---|
+| Whether conversation backups are current and recoverable | The backup-health route above; return separate provider/source and destination verdicts, with coverage and recovery limits |
 | A list of conversations: titles, dates, session IDs | The indexed inventory row under **Provider scope**; if unavailable, state the gap |
 | The conversation where a topic, quote, file, or tool result appeared — "find that old chat", "did we ever discuss X" | The **indexed content search** row under **Provider scope**; use supplied clues to narrow candidates first. Listing titles alone is not evidence the content exists |
 | Their own raw inputs in chronological order, verbatim | The matching reader's verbatim-input path. Preserve duplicates and session boundaries; duplicates are part of the ledger, not noise |
