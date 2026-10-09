@@ -60,6 +60,39 @@
 或派生值已清完,后者仍由执行者逐项对照实际权威源。不要把绿灯当内容审核。
 后续候选只有改动、失败或未解决疑点才重复相关验证;未变的代码与样例复用结果。
 
+### Interpret validation warnings
+
+Run `quick_validate` from this Skill's locked project. Preserve its default text
+output for interactive checks; request JSON when an execution plan must read the
+result without treating a successful exit as a clean diagnostic report:
+
+```bash
+uv run --frozen python -m scripts.quick_validate "<absolute-skill-directory>" \
+  --audience public --format json
+```
+
+The existing validity decision still owns exit 0/1. JSON reports `valid`, the
+original `message`, advisory `warnings`, and full captured `diagnostics` separately.
+Private portability notes remain diagnostics rather than public warnings. Parser
+or missing-runtime failures can exit before JSON exists; inspect stderr and retain
+an unknown result instead of inventing `valid=false` or an empty warning list.
+
+For each warning, the executor identifies the actual consumer and defining root
+before deciding its disposition. A bundled reference resolves inside the distributed
+Skill; a repository CI registry belongs to the maintainer repository; an external
+source requires its own source check. When prose presents a repository file as a
+bundled path, point to its actual owner instead of copying it into the package or
+weakening the validator. Record unresolved or deliberately retained cases with
+their scope. Warnings do not create a universal zero-warning publication requirement.
+
+Replay the affected old input and its repaired form with the same validator:
+the old input must still emit the intended warning, and the repaired form must
+resolve it for the actual consumer. Both may legitimately be structurally valid
+and exit 0. That comparison establishes the warning's disposition, not document
+truth, complete test execution, publication or installation. Check affected
+project-entry navigation with `docs-cleaner`'s delivery-entry replay; keep the
+link-checking procedure with that owner.
+
 **skill 文档里每一条可执行示例,发布前至少真跑一次**(或明确标注为什么跑不了)。这比 eval 便宜一个数量级,却能抓住最伤人的错误——一条看似合理的参数示例可能在第一次真实调用时就被 schema 拒绝,即使它此前在多份文档里互相"印证"。
 
 - 付费 API 的冒烟成本可控:挑每类端点最便宜的一次真调;免费端点(余额/health)全跑。记录调用次数和实际费用,但不要把私人账单数据写进公开 skill。

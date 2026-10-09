@@ -1411,6 +1411,10 @@ before the first candidate is frozen for review. Keep the affected-file inventor
 document dispositions and authorities in the existing plan; finish their updates
 with the implementation rather than scheduling a documentation release afterward.
 
+For a valid result that still emits diagnostics, use that reference's
+[warning interpretation](references/knowledge-skill-grounding.md#interpret-validation-warnings)
+and the validator's JSON result; validity and a warning's disposition are separate.
+
 When editing, remember that the skill is being created for another instance of Claude to use. Focus on information that would be beneficial and non-obvious to Claude.
 
 **Existing-skill migration gate — required before the first edit:**

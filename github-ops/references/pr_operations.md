@@ -206,6 +206,44 @@ GitHub retains who edited and when after revision-content deletion. See the
 for permissions and the current interface. This workflow covers PR body revisions; do not
 assume the same query or object identifiers cover issue, review or commit comments.
 
+### Coordinate publication before expensive checks
+
+Use this when concurrent sessions target the same base, especially when they share
+a registry or changelog. The publishing agent owns the sequence; communication
+does not lock the repository or freeze another writer.
+
+1. Fetch the current base and read its full SHA before freezing the candidate or
+   starting expensive checks. Compare the owned path set and known open changes.
+   Integrate an already-known base update first, preserving additive registry and
+   changelog changes; an isolated worktree prevents shared-HEAD changes, not base drift.
+2. With active peer publishers, request a bounded publication window through the
+   available coordination channel: identify the repository, intended base, shared
+   paths and completion condition. Proceed within an agreed window when possible.
+   Silence grants no exclusive ownership; without agreement, keep work isolated,
+   reread the base and account for another integration/check cycle. Never stop a
+   peer's process or discard their work to obtain the window.
+3. Run the repository's required checks against the final candidate. A rebase or
+   conflict resolution changes their input. Reuse evidence only under the
+   [CI input-matching procedure](ci-demand-and-notifications.md#3-remove-unnecessary-demand-before-moving-execution),
+   which distinguishes the actual tested checkout tree from a PR head SHA.
+   Coordination alone cannot establish test equivalence or reduce required checks.
+4. Immediately before landing, reread the hosted head/base, mergeability and check
+   results. Use the exact head match in the merge command below. If the base moved,
+   reconcile under the repository's update/check policy before claiming readiness.
+   Read back the landed commit and owned paths, then release the agreed window.
+
+Check repository capability before choosing automatic merge:
+
+```bash
+gh api -X GET repos/OWNER/REPO --jq '{allow_auto_merge,default_branch}'
+```
+
+An absent or failed response leaves capability unknown. If automatic merge is
+disabled, use the authorized normal merge path after checks and exact-head
+verification; do not change repository settings or repeatedly retry `--auto`.
+The acting agent and repository protection enforce this sequence's executable
+checks. A peer window remains a coordination agreement, not a mechanical mutex.
+
 ### Merging PRs
 
 ```bash
@@ -214,7 +252,7 @@ gh pr merge 123 -R OWNER/REPO --merge --match-head-commit HEAD_SHA
 gh pr merge 123 -R OWNER/REPO --squash --match-head-commit HEAD_SHA
 gh pr merge 123 -R OWNER/REPO --rebase --match-head-commit HEAD_SHA
 
-# Auto-merge after checks pass
+# Auto-merge after checks pass (only when repository capability permits)
 gh pr merge 123 -R OWNER/REPO --auto --squash --match-head-commit HEAD_SHA
 ```
 
@@ -491,4 +529,4 @@ is an externally visible attestation about that exact revision.
 2. **Auto-assign** - Set up CODEOWNERS for automatic reviewers
 3. **Branch protection** - Require reviews before merging
 4. **CI/CD integration** - Ensure checks pass before merge
-5. **Auto-merge** - Use `--auto` flag for trusted changes
+5. **Auto-merge** - Use `--auto` only when repository capability and its merge policy permit it

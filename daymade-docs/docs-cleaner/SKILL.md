@@ -153,6 +153,12 @@ turns into an unreviewable refactor.
 Which file *defines* this port / path / procedure — as opposed to mentioning it? Update
 that first. Everything downstream either points at it or is derived from it.
 
+When a procedure moves from a Skill entry into a reference, include its consuming
+`CLAUDE.md` / `AGENTS.md` pointer in this scope. Use the
+[delivery-entry replay](references/delivery-entry-replay.md) to check the old and repaired
+navigation against the actual destination; reachability alone does not establish that
+the destination still defines the required procedure.
+
 The practical test for "defines" is **where a change has to be made for reality to
 change**: the file the deployment actually reads, the schema the code loads, the runbook a
 human follows step by step. A file that recites the value while explaining something else
@@ -599,6 +605,11 @@ for f in sys.argv[2:]:
 ```
 
 ### Updating references to a file you moved or deleted
+
+For a split entry or renamed section, the
+[delivery-entry replay](references/delivery-entry-replay.md) supplies a bounded stale-anchor
+control and repaired-entry check. Read bare prose section references against the actual
+heading; link-checker success does not validate prose that it never parsed as a link.
 
 Searching the bare filename finds some inbound links and misses the rest, then reports
 "verified". A file is referenced in more shapes than one:
