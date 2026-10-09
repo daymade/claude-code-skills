@@ -2,15 +2,6 @@
 
 Read this file when uncertain items must survive the session, when resolving or re-anchoring a queued item, or when wiring audio playback for human review.
 
-## Contents
-
-- Queue CLI and action-pack semantics
-- Decision-note promotion
-- One-occurrence verdicts and sibling sweeps
-- Anchor guards and re-anchoring
-- Dashboard controls and audio playback
-- Feishu/Lark minute-audio wiring
-
 ## Review Queue & Dashboard (uncertain items → one-keystroke verdicts)
 
 Confirmed corrections compound through the dictionary; **uncertain** ones used to
