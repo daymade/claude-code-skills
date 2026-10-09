@@ -7,8 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **report-with-html** (v1.4.1): Consolidate interaction admission and source-preview wiring into their existing owners; remove the derived example count and retain DOM prerequisites and real activation checks. Change type: documentation consolidation; runtime components are unchanged.
+
 - **peer-message** (v1.19.0): Bound discovery title previews and UTF-8 stdout size, preserve exact routing identities, and export complete titles only to an explicitly selected new private file. Add synthetic prompt-shaped and output-boundary regressions. Change type: bounded discovery/export workflow addition.
 - **macos-load-doctor** (`daymade-macos` v1.22.3): Treat child fan-out as a candidate rather than proof of leakage; distinguish RSS, footprint and interval swap activity. Verify the original capability and non-target helper changes after remediation/reload. Change type: diagnostic and completion-contract correction.
+- **peer-message** (v1.18.0): Deliver fallback Codex coordination through active-turn App Server tool output instead of waiting for a new queued user turn. Keep explicit queued delivery and unloaded-thread queues, label the route, and never requeue an uncertain live write. Extend verification and reply lookup to the adapter's persisted tool output. Change type: user-authorized transport workflow redesign; native messaging remains first.
 
 - **frontend-visual-qa** (v1.20.6): Separate original PDF byte identity from native viewer paint, and re-position decoded lazy images before inspecting the complete message and uncertainty labels. Change type: bounded verification recipe clarification.
 
