@@ -338,3 +338,7 @@ lineage, or evidence contract. The older combined command contract remains in
 [references/legacy_multi_provider_inventory.md](references/legacy_multi_provider_inventory.md)
 so its Kimi branch and historical flags are not silently erased. Provider-specific
 Claude requests route to `daymade-claude-code:read-claude-code-history`.
+
+## Bounded current-thread direct input cursor
+
+Use [prompt_cursor.py](scripts/prompt_cursor.py) when an operation needs original direct user input appended after a current-thread request. Run `snapshot` before presenting the request, then `tail --cursor <snapshot.json>`; the adapter reads only new bytes from the account-owned canonical prompt ledger and selects the current runtime thread before decoding text. Preserve inode/device/offset and reject rotation, truncation, partial records, changed thread, non-default source or unsupported host. No caller ledger/root override is accepted. The ledger schema does not establish human authorship; absence of known peer records is only bounded evidence. The adapter returns source records with authorship explicitly unestablished, never approval; the consuming operation owns content binding, confirmation syntax, invalidation and single-attempt consumption. Use the existing reader for historical input retrieval.

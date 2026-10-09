@@ -3327,6 +3327,7 @@ never silently substituted for one another.
 **Key features:**
 - Lists Codex sessions with internal time ranges and active/archive provenance
 - Extracts exact prompt-ledger inputs newest-first and groups them only by Session
+- Reads bounded current-thread inputs appended after a fixed canonical-source cursor; returns original input, never an approval
 - Reconciles whole-conversation input counts and literal quotations across exact inherited snapshots; reports unresolved membership and accepts only record-bound reviewed injection exclusions
 - Reconstructs one rollout as a chronological user/assistant timeline with exact fork byte boundaries and compacted context
 - Searches Codex rollouts only; it cannot silently mix Claude matches into a Codex request
