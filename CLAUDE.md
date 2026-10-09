@@ -52,7 +52,7 @@ review, validation, initialization, and packaging.
 
 Operational or code-bearing Skill edits complete directly affected document alignment
 before the first candidate freeze; follow skill-creator's Edit workflow.
-For local/remote ASR selection and comparisons, enter
+For local/remote ASR selection, speed comparison and speech-content acceptance, enter
 [asr-transcribe-to-text](daymade-audio/asr-transcribe-to-text/SKILL.md) and its
 [execution SOP](daymade-audio/asr-transcribe-to-text/references/execution_location_and_comparison.md).
 For competitor claims, citations and existing-product learning, enter
