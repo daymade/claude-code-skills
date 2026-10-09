@@ -107,6 +107,10 @@ shortlist into purchase or deployment approval.
 Its [maintenance contract](report-with-html/references/long-lived-report-maintenance.md)
 owns later reconciliation and consumer readback.
 
+For citation previews and in-place source inspection, enter
+[report-with-html's interaction owner](report-with-html/references/interaction-components.md)
+and [frontend-visual-qa's source-inspection route](frontend-visual-qa/references/journey-and-page-contracts.md#cited-source-inspection).
+
 For HTML report images and explanatory diagrams, enter
 [report-with-html](report-with-html/SKILL.md); its
 [visual evidence workflow](report-with-html/references/visual-evidence.md) owns selection,

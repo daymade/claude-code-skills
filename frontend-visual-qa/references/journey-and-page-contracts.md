@@ -327,6 +327,33 @@ notifications, and non-modal dialogs must not entirely hide focused controls.
 
 ## Browser-Integrated Outputs
 
+### Cited Source Inspection
+
+When a citation marker promises original evidence, inspect what the reader can
+actually read after opening it. Compare the displayed source with the citation's
+bound identity and locator; a visible surface or loaded frame alone is insufficient.
+
+- Text: read the cited original wording and surrounding context at the promised
+  speaker, timestamp, clause or message locator.
+- Image: inspect the bound original or explicitly named quality variant, original
+  message/batch/ordinal and proportions. A filtered gallery's first item must not
+  silently become the original's first image.
+- PDF: read the actual cited document and page, including the relevant words or
+  marks at usable size. A filename, iframe chrome, matching bytes or a page-count
+  label does not prove the page content is readable. Exercise the preview's scroll
+  or zoom when the whole page does not fit.
+
+Close the source and verify focus returns to its marker and the page and scrolling
+ancestors retain the reading position. For hover/focus previews, exercise pointer
+movement into the card, Escape dismissal without immediate reopening, activation
+that hides the preview, and a fresh focus that can reopen it. If an adapter partly
+opens and fails, verify its surface and background lock are cleaned up before
+reporting the failure.
+
+Use a synthetic empty or wrong source to prove this inspection can reject a
+misbinding. Run only affected source types. Mark unavailable original-content or
+native-viewer evidence unverified; a successful DOM sweep cannot replace it.
+
 Review the recipient artifact, not only the event handler.
 Unless the product explicitly promises a technical audit artifact, the exported
 HTML, PDF, or share page should preserve a human-readable path comparable to the

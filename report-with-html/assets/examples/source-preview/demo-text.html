@@ -1,0 +1,489 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Source preview text synthetic demo</title><style>:root{--paper:#fbf9f4;--paper-2:#f4efe4;--card:#fff;--ink:#211d17;--ink-2:#5b5349;--ink-3:#8a8073;--line:#e7dfcf;--line-2:#d8cdb6;--blue:#33566e;--blue-bg:#e7eef2;--red:#a62b1f;--red-bg:#fbedea;--green:#3f6b4a;--green-bg:#e9f0e9;--gold:#8a6d3b;--gold-bg:#f6efdf;--sans:"PingFang SC",sans-serif;--serif:Georgia,serif;--mono:monospace}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.7 var(--sans)}main{max-width:1000px;margin:0 auto;padding:50px 35px}h1{font-size:26px;margin:0 0 12px}.fixture{font-size:13px;color:var(--ink-2);border-bottom:1px solid var(--line);padding-bottom:15px;margin-bottom:45px}p{max-width:780px}.reading{min-height:1150px;padding-top:40px}.reading p{margin:35px 0}.lead{color:var(--ink-2)}button{font:inherit}dialog.pdf-surface{border:1px solid var(--line-2);padding:20px;width:min(780px,90vw);max-height:86vh;background:var(--card)}dialog.pdf-surface::backdrop{background:rgba(33,29,23,.35)}.pdf-surface header{display:flex;justify-content:space-between;align-items:center}.pdf-surface img{display:block;height:55vh;max-width:100%;object-fit:contain;margin:14px auto}.pdf-surface a{color:var(--blue)}[hidden]{display:none!important}:focus-visible{outline:3px solid var(--gold);outline-offset:3px}</style></head><body><main><h1>来源引用 · text 合成样例</h1><p class="fixture">SYNTHETIC FIXTURE · 独立合成数据 · 候选组件，尚未获批准</p><p class="lead">悬浮辨认来源，点击句末数字查看完整内容。</p><section class="reading nocite" id="demo-root"><p>问题 B 的复核日期需要对照原会议记录。<sup><button type="button" id="reference" data-source-id="synthetic-text">1</button></sup></p><p>键盘聚焦同一角标，可直接查看来源提示；关闭完整内容后回到这处引用。</p><p>后续阅读区：用于验证关闭前后的阅读位置。</p></section></main><section id="s9" hidden class="nocite"><div class="docwrap"><div class="dnav"><button class="dtab" data-i="0"><span class="dt-t">合成会议原记录</span><span class="dt-s">独立文本来源</span></button></div><div class="dbody"><div class="dpane" data-i="0"><div class="dsrc">合成会议原记录</div><article class="doc"><h2 id="d0-c1">指定发言 00:02:10</h2><p>先核对原记录，再决定这一项是否需要继续讨论。完整合成原句还包括：问题 B 的负责人将在 14 October 复核结果；本记录为独立样例，不是私人会议转录。</p></article></div></div></div></section><button id="drawer-proxy" class="cite" data-doc="0" data-c="1" hidden aria-label="适配内部入口">1</button><!-- BEGIN citation-drawer -->
+<style>
+  /* ── 源文档展示壳（多 tab 全文） ── */
+  .docwrap{display:grid;grid-template-columns:270px 1fr;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--card);}
+  .dnav{background:var(--paper-2);border-right:1px solid var(--line);padding:10px;display:flex;flex-direction:column;gap:5px;}
+  .dtab{text-align:left;background:transparent;border:1px solid transparent;border-radius:6px;padding:9px 10px;cursor:pointer;font-family:var(--sans);display:block;width:100%;transition:.12s;}
+  .dtab:hover{background:#fff;border-color:var(--line);}
+  .dtab:focus-visible,.cite:focus-visible,.dwx:focus-visible{outline:2px solid var(--red);outline-offset:2px;border-radius:4px;}
+  .dtab.active{background:#fff;border-color:var(--red);box-shadow:0 1px 3px rgba(166,43,31,.10);}
+  .dtab .dt-t{display:block;min-width:0;font-size:13px;font-weight:600;color:var(--ink);line-height:1.4;overflow-wrap:anywhere;}
+  .dtab.active .dt-t{color:var(--red);}
+  .dtab .dt-s{display:block;font-size:11px;color:var(--ink-3);margin-top:2px;line-height:1.45;}
+  .dk{display:inline-block;font-style:normal;font-size:10px;padding:1px 5px;border-radius:3px;margin-right:5px;vertical-align:1px;font-weight:700;}
+  .dk-sign{background:var(--red-bg);color:var(--red);}
+  .dk-read{background:var(--green-bg);color:var(--green);}
+  .dk-int{background:var(--gold-bg);color:var(--gold);}
+  .dpane{display:none;padding:26px 34px 34px;max-height:78vh;overflow-y:auto;position:relative;scrollbar-width:thin;scrollbar-color:var(--line-2) transparent;}
+  .dpane::-webkit-scrollbar,.dwbody::-webkit-scrollbar{width:9px;}
+  .dpane::-webkit-scrollbar-thumb,.dwbody::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:5px;border:2px solid var(--card);}
+  .dpane::-webkit-scrollbar-thumb:hover,.dwbody::-webkit-scrollbar-thumb:hover{background:var(--ink-3);}
+  .dpane::-webkit-scrollbar-track,.dwbody::-webkit-scrollbar-track{background:transparent;}
+  .dpane.active{display:block;}
+  .dsrc{font-family:var(--mono);font-size:11px;color:var(--ink-3);border-bottom:1px dashed var(--line);padding-bottom:8px;margin-bottom:18px;}
+  .dwarn{background:var(--gold-bg);border-left:3px solid var(--gold);padding:10px 14px;border-radius:0 5px 5px 0;font-size:12.5px;line-height:1.7;color:var(--ink-2);margin-bottom:16px;}
+  /* .doc 正文排版（默认皮，可按 register 覆盖） */
+  .doc{font-family:var(--serif);font-size:14.5px;line-height:1.85;color:var(--ink);}
+  .doc h1{font-size:21px;margin:0 0 6px;letter-spacing:.02em;border-bottom:2px solid var(--ink);padding-bottom:9px;}
+  .doc h2{font-size:15.5px;margin:26px 0 9px;color:var(--red);border:0;padding:0;}
+  .doc h3{font-size:14px;margin:18px 0 7px;color:var(--gold);}
+  .doc p{margin:0 0 11px;}
+  .doc ul,.doc ol{margin:0 0 12px;padding-left:22px;}
+  .doc li{margin-bottom:5px;}
+  .doc strong{color:var(--red);font-weight:700;}
+  .doc hr{border:0;border-top:1px solid var(--line);margin:22px 0;}
+  .doc table{width:100%;border-collapse:collapse;margin:12px 0 16px;font-family:var(--sans);font-size:12.5px;}
+  .doc th{background:var(--paper-2);text-align:left;padding:7px 10px;border:1px solid var(--line);font-weight:600;}
+  .doc td{padding:7px 10px;border:1px solid var(--line);vertical-align:top;}
+  .doc code{font-family:var(--mono);font-size:12px;background:var(--paper-2);padding:1px 5px;border-radius:3px;}
+  /* ── 条款引用 + 抽屉 ── */
+  .cite{appearance:none;background:transparent;border:0;border-bottom:1px dashed var(--red);padding:0;color:var(--red);cursor:pointer;font:inherit;line-height:inherit;font-weight:600;white-space:nowrap;border-radius:2px;}
+  .cite:hover{background:var(--red-bg);border-bottom-style:solid;}
+  .cite::after{content:"⧉";font-size:9px;vertical-align:3px;margin-left:2px;opacity:.65;}
+  #dwmask{position:fixed;inset:0;background:rgba(33,29,23,.34);opacity:0;pointer-events:none;transition:opacity .18s;z-index:90;}
+  #dwmask.on{opacity:1;pointer-events:auto;}
+  #drawer{position:fixed;top:0;right:0;height:100vh;width:min(760px,56vw);background:var(--card);border-left:1px solid var(--line-2);
+          box-shadow:-8px 0 32px rgba(33,29,23,.13);transform:translateX(102%);transition:transform .22s cubic-bezier(.4,0,.2,1);z-index:91;display:flex;flex-direction:column;}
+  #drawer.on{transform:translateX(0);}
+  #drawer[inert]{pointer-events:none;}
+  .dwhead{padding:15px 22px;border-bottom:1px solid var(--line);background:var(--paper-2);display:flex;align-items:center;gap:12px;flex-shrink:0;}
+  .dwhead .t{font-size:14px;font-weight:700;color:var(--ink);flex:1;line-height:1.4;}
+  .dwhead .f{font-family:var(--mono);font-size:11px;color:var(--ink-3);display:block;font-weight:400;margin-top:2px;}
+  .dwx{background:transparent;border:1px solid var(--line-2);border-radius:5px;width:30px;height:30px;cursor:pointer;font-size:17px;color:var(--ink-2);line-height:1;flex-shrink:0;}
+  .dwx:hover{background:var(--red-bg);color:var(--red);border-color:var(--red);}
+  .dwbody{overflow-y:auto;padding:24px 30px 40px;flex:1;position:relative;scrollbar-width:thin;scrollbar-color:var(--line-2) transparent;}
+  .dwjump{padding:8px 22px;background:var(--blue-bg);border-bottom:1px solid var(--line);font-size:11.5px;color:var(--ink-2);flex-shrink:0;}
+  .citation-drawer-error{margin:12px;padding:10px 12px;border:2px solid var(--red);background:var(--red-bg);color:var(--red);font:600 13px/1.5 var(--sans);}
+  @keyframes hlfade{0%,55%{background:#FDF0C8;box-shadow:0 0 0 6px #FDF0C8;}100%{background:transparent;box-shadow:none;}}
+  .hl-clause{animation:hlfade 2.6s ease-out;border-radius:3px;}
+  @media(max-width:860px){
+    .docwrap{grid-template-columns:1fr;}
+    .dnav{min-width:0;flex-direction:row;flex-wrap:wrap;border-right:0;border-bottom:1px solid var(--line);gap:6px;}
+    .dtab{width:auto;max-width:100%;flex:1 1 auto;min-width:150px;border-color:var(--line);background:#fff;display:flex;align-items:center;gap:2px;}
+    .dtab .dt-s{display:none;}
+    .dtab .dt-t{white-space:normal;}
+    .dpane{padding:20px;max-height:none;}
+    #drawer{width:100vw;}
+  }
+  @media(prefers-reduced-motion:reduce){
+    #drawer{transition:none;}
+    #dwmask{transition:none;}
+    .hl-clause{animation:none;background:#FDF0C8;box-shadow:0 0 0 6px #FDF0C8;}
+    .dtab{transition:none;}
+  }
+</style>
+<div id="dwmask" aria-hidden="true"></div>
+<aside id="drawer" role="dialog" aria-modal="true" aria-labelledby="dwtitle" aria-hidden="true" inert>
+  <div class="dwhead"><div class="t" id="dwtitle">条款原文<span class="f" id="dwfile"></span></div><button type="button" class="dwx" id="dwclose" aria-label="关闭条款原文" title="关闭 (Esc)">×</button></div>
+  <div class="dwjump" id="dwjump"></div>
+  <div class="dwbody" id="dwbody"></div>
+</aside>
+<script>
+  // 源文档 tab 切换
+  (function(){
+    function fail(message, roots){
+      console.error('[citation-drawer] '+message);
+      document.documentElement.setAttribute('data-citation-drawer-error',message);
+      if(!document.getElementById('citation-drawer-error')){
+        var alert=document.createElement('p');
+        alert.id='citation-drawer-error'; alert.className='citation-drawer-error';
+        alert.setAttribute('role','alert');
+        alert.textContent='引用组件初始化失败：'+message;
+        (roots[0]||document.body).prepend(alert);
+      }
+    }
+    var roots=Array.prototype.slice.call(document.querySelectorAll('#s9'));
+    if(roots.length!==1){ fail('页面必须且只能有一个 #s9，实际为 '+roots.length+' 个。',roots); return; }
+    var root=roots[0];
+    var wraps=Array.prototype.slice.call(root.querySelectorAll(':scope > .docwrap'));
+    var navs=Array.prototype.slice.call(root.querySelectorAll(':scope > .docwrap > .dnav'));
+    var bodies=Array.prototype.slice.call(root.querySelectorAll(':scope > .docwrap > .dbody'));
+    if(wraps.length!==1||navs.length!==1||bodies.length!==1){ fail('#s9 必须有唯一 .docwrap，且其直属一个 .dnav 与 .dbody。',roots); return; }
+    var tablist=navs[0], paneContainer=bodies[0];
+    var tabs=Array.prototype.slice.call(tablist.children).filter(function(item){ return item.classList.contains('dtab'); });
+    var panes=Array.prototype.slice.call(paneContainer.children).filter(function(item){ return item.classList.contains('dpane'); });
+    var tabKeys=tabs.map(function(tab){ return tab.getAttribute('data-i'); });
+    var paneKeys=panes.map(function(pane){ return pane.getAttribute('data-i'); });
+    var uniqueTabs=new Set(tabKeys), uniquePanes=new Set(paneKeys);
+    var validKeys=tabs.length>0
+      && tabs.length===panes.length
+      && tabKeys.every(function(key){ return key!==null&&key!==''&&paneKeys.indexOf(key)>=0; })
+      && paneKeys.every(function(key){ return key!==null&&key!==''&&tabKeys.indexOf(key)>=0; })
+      && uniqueTabs.size===tabs.length
+      && uniquePanes.size===panes.length;
+    if(!validKeys){ fail('.dtab/.dpane 的 data-i 必须非空、唯一且一一对应。',roots); return; }
+    tablist.setAttribute('role','tablist');
+    if(!tablist.getAttribute('aria-label')) tablist.setAttribute('aria-label','源文档');
+
+    function activate(tab, moveFocus){
+      var k=tab.getAttribute('data-i');
+      tabs.forEach(function(item){
+        var active=item===tab;
+        item.classList.toggle('active',active);
+        item.setAttribute('aria-selected',active?'true':'false');
+        item.tabIndex=active?0:-1;
+      });
+      panes.forEach(function(pane){
+        var active=pane.getAttribute('data-i')===k;
+        pane.classList.toggle('active',active);
+        pane.setAttribute('aria-hidden',active?'false':'true');
+        if(active) pane.scrollTop=0;
+      });
+      if(moveFocus) tab.focus();
+    }
+
+    tabs.forEach(function(tab,index){
+      var k=tab.getAttribute('data-i');
+      tab.type='button';
+      tab.id=tab.id||('doc-tab-'+k);
+      tab.setAttribute('role','tab');
+      tab.setAttribute('aria-controls','doc-panel-'+k);
+      var pane=panes.find(function(item){ return item.getAttribute('data-i')===k; });
+      pane.id=pane.id||('doc-panel-'+k);
+      tab.setAttribute('aria-controls',pane.id);
+      pane.setAttribute('role','tabpanel');
+      pane.setAttribute('aria-labelledby',tab.id);
+      tab.addEventListener('click',function(){ activate(tab,false); });
+      tab.addEventListener('keydown',function(event){
+        var next=index;
+        if(event.key==='ArrowRight'||event.key==='ArrowDown') next=(index+1)%tabs.length;
+        else if(event.key==='ArrowLeft'||event.key==='ArrowUp') next=(index-1+tabs.length)%tabs.length;
+        else if(event.key==='Home') next=0;
+        else if(event.key==='End') next=tabs.length-1;
+        else return;
+        event.preventDefault();
+        activate(tabs[next],true);
+      });
+    });
+    var initial=tabs.find(function(tab){ return tab.classList.contains('active'); })||tabs[0];
+    activate(initial,false);
+  })();
+
+  // 条款引用 → 抽屉预览（文档名/文件名从 DOM 自读，无需注入数据数组）
+  (function(){
+    var roots=Array.prototype.slice.call(document.querySelectorAll('#s9'));
+    if(roots.length!==1||document.documentElement.hasAttribute('data-citation-drawer-error')) return;
+    var sourceRoot=roots[0];
+    var mask=document.getElementById('dwmask'), dw=document.getElementById('drawer');
+    var body=document.getElementById('dwbody'), title=document.getElementById('dwtitle');
+    var fileEl=document.getElementById('dwfile'), jump=document.getElementById('dwjump');
+    var closeButton=document.getElementById('dwclose');
+    var opener=null, inerted=[];
+    if(!dw) return;
+
+    function setBackgroundInert(on){
+      if(on){
+        inerted=[];
+        Array.prototype.forEach.call(document.body.children,function(element){
+          if(element===mask||element===dw||element.tagName==='SCRIPT'||element.tagName==='STYLE') return;
+          if(!element.inert){ element.inert=true; inerted.push(element); }
+        });
+      }else{
+        inerted.forEach(function(element){ if(element.isConnected) element.inert=false; });
+        inerted=[];
+      }
+    }
+
+    function paneOf(i){ var ps=sourceRoot.querySelectorAll(':scope > .docwrap > .dbody > .dpane'); for(var k=0;k<ps.length;k++){ if(ps[k].getAttribute('data-i')===String(i)) return ps[k]; } return null; }
+    // 从 DOM 读某文档的「文件名 · 文档名」——tab 的 .dt-t 是文档名，pane 的 .dsrc 是文件名
+    function docMeta(i){
+      var tab=null, candidates=sourceRoot.querySelectorAll(':scope > .docwrap > .dnav > .dtab'), pane=paneOf(i);
+      for(var k=0;k<candidates.length;k++){ if(candidates[k].getAttribute('data-i')===String(i)){ tab=candidates[k]; break; } }
+      var nameEl=tab?tab.querySelector('.dt-t'):null, srcEl=pane?pane.querySelector('.dsrc'):null;
+      return { name: nameEl?nameEl.textContent.trim():'', file: srcEl?srcEl.textContent.trim():'' };
+    }
+
+    function highlight(root,cid){
+      var el=root.querySelector('[id="'+cid+'"]');
+      if(!el){ root.scrollTop=0; return false; }
+      el.classList.remove('hl-clause'); void el.offsetWidth; el.classList.add('hl-clause');
+      // 用 rect 差值算滚动位移：offsetTop 相对的是最近 positioned 祖先，不是滚动容器，会偏
+      var delta=el.getBoundingClientRect().top-root.getBoundingClientRect().top;
+      root.scrollTop=root.scrollTop+delta-16;
+      return true;
+    }
+
+    function open(di,cn,sub,trigger){
+      var pane=paneOf(di); if(!pane) return;
+      var art=pane.querySelector('.doc'); if(!art) return;
+      var meta=docMeta(di);
+      var wasOpen=dw.classList.contains('on');
+      if(!wasOpen) opener=trigger||document.activeElement;
+      var copy=art.cloneNode(true), idMap={};
+      var copyElements=[copy].concat(Array.prototype.slice.call(copy.querySelectorAll('*')));
+      copyElements.filter(function(element){ return element.id; }).forEach(function(element){
+        var sourceId=element.id, candidate='dwcopy-'+sourceId, suffix=1;
+        while(document.getElementById(candidate)||Object.values(idMap).indexOf(candidate)>=0){
+          candidate='dwcopy-'+sourceId+'-'+suffix; suffix+=1;
+        }
+        idMap[sourceId]=candidate;
+        element.setAttribute('data-source-id',sourceId);
+        element.id=candidate;
+      });
+      copyElements.forEach(function(element){
+        ['aria-labelledby','aria-describedby','aria-controls','aria-owns','headers'].forEach(function(attribute){
+          if(!element.hasAttribute(attribute)) return;
+          var remapped=element.getAttribute(attribute).split(/\s+/).map(function(id){ return idMap[id]||id; });
+          element.setAttribute(attribute,remapped.join(' '));
+        });
+        if(element.hasAttribute('for')&&idMap[element.getAttribute('for')]){
+          element.setAttribute('for',idMap[element.getAttribute('for')]);
+        }
+        var href=element.getAttribute('href');
+        if(href&&href.charAt(0)==='#'&&idMap[href.slice(1)]) element.setAttribute('href','#'+idMap[href.slice(1)]);
+      });
+      // 清掉从页面克隆进来的残留高亮：页内点过引用会在原文留 .hl-clause，不清的话
+      // 抽屉里会同时出现两块高亮，「高亮＝我刚点的那条」这个语义就坏了；
+      // prefers-reduced-motion 下 .hl-clause 是常驻底色，每点一次就多积一块。
+      copy.querySelectorAll('.hl-clause').forEach(function(el){ el.classList.remove('hl-clause'); });
+      body.replaceChildren(copy);
+      var label=cn?('第 '+cn+(sub?('.'+sub):'')+' 条'):'全文';
+      title.firstChild.nodeValue=label;
+      fileEl.textContent=meta.file+'　·　'+meta.name;
+      // exact=false 表示「带了子号但只落到母节开头」——这一定要说出来，否则读者以为
+      // 眼前就是他点的那一条，而真正的子条可能在一屏多以下。旧版对子条也照报「已定位
+      // 并高亮该条」，那个分支永远不会失败，因为母节锚点总是存在。
+      var ok=true, exact=true;
+      if(cn){
+        var base='d'+di+'-c'+cn;
+        if(sub&&highlight(body,idMap[base+'-'+sub]||(base+'-'+sub))){ ok=true; exact=true; }
+        else { exact=!sub; ok=highlight(body,idMap[base]||base); }
+      } else { body.scrollTop=0; }
+      jump.innerHTML = !ok
+        ? '⚠️ 未在该文件中找到 '+label+'，已打开全文 · <b>Esc</b> 关闭'
+        : exact
+          ? '已定位并高亮 '+label+' · 可上下滚动看前后文 · <b>Esc</b> 关闭'
+          : '⚠️ '+label+' 没有单独锚点，已定位到第 '+cn+' 条开头，请往下找 · <b>Esc</b> 关闭';
+      if(!wasOpen) setBackgroundInert(true);
+      mask.classList.add('on'); mask.setAttribute('aria-hidden','false');
+      dw.removeAttribute('inert'); dw.classList.add('on'); dw.setAttribute('aria-hidden','false');
+      closeButton.focus();
+    }
+    function close(){
+      if(!dw.classList.contains('on')) return;
+      mask.classList.remove('on'); mask.setAttribute('aria-hidden','true');
+      dw.classList.remove('on'); dw.setAttribute('aria-hidden','true'); dw.setAttribute('inert','');
+      setBackgroundInert(false);
+      if(opener&&opener.isConnected) opener.focus();
+    }
+    mask.addEventListener('click',close);
+    closeButton.addEventListener('click',close);
+    document.addEventListener('keydown',function(e){
+      if(!dw.classList.contains('on')) return;
+      if(e.key==='Escape'){ e.preventDefault(); close(); return; }
+      if(e.key!=='Tab') return;
+      var focusable=Array.prototype.slice.call(dw.querySelectorAll(
+        'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+      )).filter(function(element){ return !element.hidden&&!element.closest('[hidden],[inert]'); });
+      if(!focusable.length){ e.preventDefault(); dw.focus(); return; }
+      var first=focusable[0], last=focusable[focusable.length-1];
+      if(e.shiftKey&&document.activeElement===first){ e.preventDefault(); last.focus(); }
+      else if(!e.shiftKey&&document.activeElement===last){ e.preventDefault(); first.focus(); }
+    });
+
+    // 把正文里的「第 N 条」变成可点引用
+    // 子号必须捕获并保留：引用密集的审阅页里近半是子条（「第 8.3 条」），只定位到母节
+    // 会把读者扔在目标上方一屏多，而状态栏还会照报「已定位并高亮该条」——错得看不出来。
+    // 生成器（regen-docs-template.py）配套给子条打 c{N}-{M} 锚点。
+    var RE=/第\s?(\d{1,2})(?:\.(\d+)([a-z]?))?\s?条/g;
+    function linkify(scope, defaultDoc){
+      var walker=document.createTreeWalker(scope,NodeFilter.SHOW_TEXT,{acceptNode:function(n){
+        if(!n.nodeValue||n.nodeValue.indexOf('条')<0) return NodeFilter.FILTER_REJECT;
+        var p=n.parentNode;
+        // .nocite = 指向外部法条／外部文件的引用（生成器负责标注）。不排除的话它会被
+        // 链到本文档的同号条款——踩过一个自我演示的例子：正文写着「这是架构 SSOT §3.1
+        // （不是本协议的 §3.1）」，而这两个 §3.1 都被做成链接、点下去正好落到本协议 §3.1。
+        if(!p||p.closest('a,button,code,.cite,.nocite,.dwhead,.dwjump,h1,h2')) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      }});
+      var nodes=[],n; while(n=walker.nextNode()) nodes.push(n);
+      nodes.forEach(function(node){
+        var txt=node.nodeValue; RE.lastIndex=0; if(!RE.test(txt)) return; RE.lastIndex=0;
+        var frag=document.createDocumentFragment(), last=0, m;
+        while((m=RE.exec(txt))!==null){
+          if(m.index>last) frag.appendChild(document.createTextNode(txt.slice(last,m.index)));
+          var a=document.createElement('button');
+          a.type='button';
+          a.className='cite'; a.setAttribute('data-doc',defaultDoc); a.setAttribute('data-c',m[1]);
+          if(m[2]) a.setAttribute('data-sub',m[2]+(m[3]||''));
+          a.title='点开看原文'; a.setAttribute('aria-label',m[0]+'，打开原文');
+          a.textContent=m[0];
+          frag.appendChild(a); last=m.index+m[0].length;
+        }
+        if(last<txt.length) frag.appendChild(document.createTextNode(txt.slice(last)));
+        node.parentNode.replaceChild(frag,node);
+      });
+    }
+    // 正文（s9 之外）「第 N 条」默认指向哪份文档：读 body 的 data-cite-default-doc；
+    // 缺省取第一个「含条款锚点」的文档——自动跳过没有编号条款的说明/一页纸类文档
+    function firstDocWithClauses(){
+      var ps=sourceRoot.querySelectorAll(':scope > .docwrap > .dbody > .dpane');
+      for(var k=0;k<ps.length;k++){ if(ps[k].querySelector('[id*="-c"]')) return ps[k].getAttribute('data-i'); }
+      return '0';
+    }
+    var defAttr=document.body.getAttribute('data-cite-default-doc');
+    var DEFAULT_DOC=(defAttr!==null && defAttr!=='')?defAttr:firstDocWithClauses();
+    document.querySelectorAll('section').forEach(function(sec){ if(sec.id!=='s9') linkify(sec,DEFAULT_DOC); });
+    // 每份文档正文内的交叉引用：指向它自己
+    sourceRoot.querySelectorAll(':scope > .docwrap > .dbody > .dpane').forEach(function(pane){ linkify(pane, pane.getAttribute('data-i')); });
+
+    document.addEventListener('click',function(e){
+      var c=e.target.closest ? e.target.closest('.cite') : null; if(!c) return;
+      e.preventDefault();
+      var di=c.getAttribute('data-doc'), cn=c.getAttribute('data-c'), sub=c.getAttribute('data-sub');
+      var host=c.closest('#s9 .dpane');
+      if(host && !c.closest('#drawer')){        // 已在全文里读 → 就地滚动，不弹抽屉
+        var hbase='d'+host.getAttribute('data-i')+'-c'+cn;
+        if(!(sub&&highlight(host,hbase+'-'+sub))) highlight(host,hbase);
+      } else { open(di,cn,sub,c); }
+    });
+  })();
+</script>
+<!-- END citation-drawer --><!-- BEGIN source-preview -->
+<style>
+.source-ref{vertical-align:super;font-size:11px;line-height:0;margin-left:3px;white-space:nowrap}.source-ref button{font:500 11px/1.2 var(--sans,sans-serif);border:0;padding:0 2px;color:var(--blue,#33566e);background:transparent;cursor:pointer}.source-ref button:focus-visible{outline:2px solid var(--blue,#33566e);outline-offset:3px;border-radius:2px}
+.source-preview-tip{position:fixed;z-index:89;width:min(350px,calc(100vw - 24px));max-height:calc(100vh - 24px);overflow:auto;padding:12px 14px;background:var(--card,#fff);border:1px solid var(--line-2,#d8cdb6);border-radius:4px;box-shadow:0 5px 18px rgba(33,29,23,.12);font:14px/1.6 var(--sans,sans-serif);color:var(--ink-2,#5b5349);overflow-wrap:anywhere}.source-preview-tip[hidden]{display:none!important}.source-preview-tip p{margin:0 0 7px}.source-preview-tip p:last-child{margin:0}.source-preview-title{font-weight:600;color:var(--ink,#211d17)}.source-preview-quote{white-space:pre-wrap}.source-preview-action{color:var(--blue,#33566e);border-top:1px solid var(--line,#e7dfcf);padding-top:7px}.source-preview-error{border:1px solid #a62b1f;padding:9px 12px;background:#fbedea;color:#7a2119;font:14px/1.5 var(--sans,sans-serif)}@media print{.source-preview-tip{display:none!important}}
+</style>
+<script>
+(() => {
+'use strict';
+if(window.SourcePreview)throw new Error('source-preview: component already loaded');
+const mounted=new WeakSet();let instance=0;
+const nonempty=v=>typeof v==='string'&&v.trim().length>0;
+const compact=v=>{const t=String(v||'').replace(/\s+/g,' ').trim();return t.length>140?t.slice(0,140)+'…':t;};
+const present=(obj,key)=>Object.prototype.hasOwnProperty.call(obj,key);
+function mount({root,sources,openSource,rollbackSource}={}){
+  const target=root instanceof Element?root:document.body;
+  function fail(code,sourceId='',message=''){
+    const error=new Error('source-preview: '+code+(sourceId?' ('+sourceId+')':'')+(message?' · '+message:''));
+    const alert=document.createElement('p');alert.className='source-preview-error';alert.setAttribute('role','alert');alert.textContent='来源引用不可用：'+code+(sourceId?' · '+sourceId:'');const reference=[...target.querySelectorAll('button[data-source-id]')].find(b=>!sourceId||b.dataset.sourceId===sourceId),anchor=reference?.closest('p,li');
+    if(anchor&&target.contains(anchor))anchor.insertAdjacentElement('afterend',alert);else target.prepend(alert);
+    target.dispatchEvent(new CustomEvent('source-preview:error',{bubbles:true,detail:{code,sourceId,message}}));return error;
+  }
+  if(!(root instanceof Element))throw fail('missing-root');
+  if(mounted.has(root))throw fail('duplicate-mount');
+  if(!sources||typeof sources!=='object')throw fail('missing-sources');
+  if(typeof openSource!=='function')throw fail('missing-adapter');
+  if(typeof rollbackSource!=='function')throw fail('missing-rollback-adapter');
+  const buttons=[...root.querySelectorAll('button[data-source-id]')];
+  if(!buttons.length)throw fail('missing-triggers');
+  const records=new Map();
+  for(const b of buttons){
+    const id=b.dataset.sourceId;
+    if(!nonempty(id)||!present(sources,id))throw fail('missing-source',id);
+    const s=sources[id];if(!s||typeof s!=='object')throw fail('empty-source',id);
+    if(s.id!==id)throw fail('source-id-mismatch',id);
+    if(!/^\d+$/.test(b.textContent.trim())||b.parentElement.tagName!=='SUP')throw fail('invalid-numbered-trigger',id);
+    if(!['text','image','pdf'].includes(s.kind))throw fail('invalid-source-kind',id);
+    if(!nonempty(s.type))throw fail(present(s,'type')?'empty-source-type':'missing-source-type',id);
+    for(const key of ['date','author','locator'])if(s[key]!=null&&!nonempty(s[key]))throw fail('empty-'+key,id);
+    if(!s.original||typeof s.original!=='object')throw fail('missing-original',id);
+    const o=s.original;
+    if(s.kind==='text'&&(!nonempty(o.text)||o.text.trim()==='[图片]'))throw fail(present(o,'text')?'empty-original-text':'missing-original-text',id);
+    if(s.kind==='image'){
+      if(!nonempty(o.url))throw fail(present(o,'url')?'empty-image-url':'missing-image-url',id);
+      if(o.group!=null&&!nonempty(o.group))throw fail('empty-original-group',id);
+      if(o.index!=null&&(!Number.isInteger(o.index)||o.index<1))throw fail('invalid-original-index',id);
+    }
+    if(s.kind==='pdf'){
+      if(!nonempty(o.url))throw fail(present(o,'url')?'empty-pdf-url':'missing-pdf-url',id);
+      if(!Number.isInteger(o.page)||o.page<1)throw fail(present(o,'page')?'invalid-pdf-page':'missing-pdf-page',id);
+      if(!nonempty(o.previewUrl))throw fail(present(o,'previewUrl')?'empty-pdf-preview':'missing-pdf-preview',id);
+    }
+    records.set(b,structuredClone(s));
+  }
+  mounted.add(root);const controller=new AbortController(),signal=controller.signal,prefix='source-preview-'+(++instance)+'-';
+  const host=document.createElement('div');host.className='nocite';document.body.appendChild(host);
+  const tips=new Map(),saved=new Map(),suppressed=new Map();let active=null,hover=null,timer=null,closeTimer=null,suspended=false,opened=false;
+  const listen=(el,event,fn,opts={})=>el.addEventListener(event,fn,{...opts,signal});
+  for(const [b,s] of records){
+    const tip=document.createElement('div');tip.id=prefix+tips.size;tip.className='source-preview-tip';tip.setAttribute('role','tooltip');tip.hidden=true;
+    const action='点击角标查看'+({text:'完整原文',image:'完整原图',pdf:'引用页与原附件'}[s.kind]);
+    const details=[s.author||'作者或说话人未提供',s.locator||'来源定位未提供'];
+    if(s.kind==='image')details.push(s.original.group==null?'原组号未核实':'原组 '+s.original.group,s.original.index==null?'原序号未核实':'原第 '+s.original.index+' 张');
+    if(s.kind==='pdf')details.push('原附件第 '+s.original.page+' 页');
+    const heading=s.type+' · '+(s.date||'日期未提供');
+    const lines=[['source-preview-title',heading],['source-preview-details',details.join(' · ')],['source-preview-quote',s.kind==='image'?'':compact(s.excerpt||s.original.text)],['source-preview-action',action]];
+    for(const [cls,text] of lines)if(text){const p=document.createElement('p');p.className=cls;p.textContent=text;tip.appendChild(p);}
+    host.appendChild(tip);tips.set(b,tip);saved.set(b,{title:b.getAttribute('title'),label:b.getAttribute('aria-label'),description:b.getAttribute('aria-describedby'),className:b.parentElement.className});
+    b.parentElement.classList.add('source-ref');b.removeAttribute('title');b.setAttribute('aria-label',heading+'，'+details.join('，')+'，'+action);b.setAttribute('aria-describedby',[b.getAttribute('aria-describedby'),tip.id].filter(Boolean).join(' '));
+  }
+  const hide=()=>{clearTimeout(timer);clearTimeout(closeTimer);timer=null;if(active)tips.get(active).hidden=true;active=null;};
+  const position=()=>{if(!active)return;const tip=tips.get(active),r=active.getBoundingClientRect(),margin=12,gap=6,w=tip.offsetWidth,h=tip.offsetHeight;let top=r.bottom+gap;if(top+h>innerHeight-margin)top=r.top-h-gap;tip.style.left=Math.max(margin,Math.min(r.left,innerWidth-w-margin))+'px';tip.style.top=Math.max(margin,Math.min(top,innerHeight-h-margin))+'px';};
+  const show=(b,immediate)=>{clearTimeout(closeTimer);clearTimeout(timer);timer=null;if(suspended||suppressed.has(b))return;if(active===b)return;hide();const open=()=>{timer=null;if(suspended||suppressed.has(b)||(!b.matches(':hover')&&document.activeElement!==b))return;active=b;tips.get(b).hidden=false;position();};if(immediate)open();else timer=setTimeout(open,180);};
+  const leave=()=>{clearTimeout(timer);timer=null;clearTimeout(closeTimer);closeTimer=setTimeout(()=>{if(active&&document.activeElement!==active&&hover!==active&&!tips.get(active).matches(':hover'))hide();},120);};
+  for(const b of buttons){
+    listen(b,'pointerenter',()=>{hover=b;if(!suspended)suppressed.delete(b);show(b,false);});
+    listen(b,'pointerleave',()=>{if(hover===b)hover=null;if(document.activeElement!==b&&!suspended)suppressed.delete(b);leave();});
+    listen(b,'focus',()=>{const blocked=suppressed.get(b);if(blocked==='dismissed')suppressed.delete(b);else if(blocked==='modal')suppressed.set(b,'returned');show(b,true);});
+    listen(b,'blur',()=>{if(!suspended&&suppressed.get(b)!=='modal'&&hover!==b)suppressed.delete(b);leave();});
+    listen(b,'click',async e=>{
+      e.preventDefault();if(suspended)return;const s=records.get(b);suppressed.set(b,'modal');hide();suspended=true;
+      const scrolls=[];for(let el=b.parentElement;el;el=el.parentElement)scrolls.push([el,el.scrollLeft,el.scrollTop]);const x=scrollX,y=scrollY;let finished=false,rollingBack=false;
+      const closed=()=>{if(finished||rollingBack)return;finished=true;opened=false;suspended=false;root.dataset.sourcePreviewState='ready';queueMicrotask(()=>{if(!b.isConnected)return;b.focus({preventScroll:true});for(const [el,left,top] of scrolls){el.scrollLeft=left;el.scrollTop=top;}window.scrollTo(x,y);});};
+      try{
+        const result=await openSource({source:s,trigger:b,closed});
+        if(finished)throw new Error('adapter closed before opening');
+        if(!result||!(result.surface instanceof Element)||typeof result.modal!=='boolean')throw new Error('adapter must return surface/modal');
+        const surface=result.surface;
+        if(!surface.isConnected||!surface.getClientRects().length||!surface.checkVisibility({visibilityProperty:true,opacityProperty:true}))throw new Error('source surface is not visible');
+        if(result.modal&&!(surface instanceof HTMLDialogElement&&surface.matches(':modal'))&&!(surface.getAttribute('role')==='dialog'&&surface.getAttribute('aria-modal')==='true'))throw new Error('modal semantics missing');
+        if(!result.modal&&surface.getAttribute('aria-modal')==='true')throw new Error('nonmodal surface claims aria-modal');
+        opened=true;root.dataset.sourcePreviewState='open';root.dispatchEvent(new CustomEvent('source-preview:opened',{bubbles:true,detail:{sourceId:s.id,kind:s.kind,modal:result.modal}}));
+      }catch(error){
+        rollingBack=true;root.dataset.sourcePreviewState='rolling-back';
+        try{await rollbackSource({source:s,trigger:b,error});}
+        catch(cleanupError){rollingBack=false;root.dataset.sourcePreviewState='rollback-failed';fail('rollback-failed',s.id,error.message+'; cleanup: '+cleanupError.message);return;}
+        rollingBack=false;closed();root.dataset.sourcePreviewState='recovered-error';fail('adapter-failed',s.id,error.message);
+      }
+    });
+  }
+  for(const tip of tips.values()){listen(tip,'pointerenter',()=>clearTimeout(closeTimer));listen(tip,'pointerleave',leave);}
+  listen(document,'click',e=>{if(!records.has(e.target.closest?.('button[data-source-id]')))hide();},{capture:true});
+  listen(document,'keydown',e=>{if(e.key!=='Escape'||suspended||(!active&&!timer))return;const b=active||hover||document.activeElement;if(records.has(b))suppressed.set(b,'dismissed');hide();e.preventDefault();e.stopImmediatePropagation();},{capture:true});
+  listen(window,'resize',position);listen(window,'scroll',position,{capture:true});listen(window,'hashchange',hide);listen(window,'popstate',hide);
+  return Object.freeze({hide,destroy(){if(suspended||opened)throw fail('close-source-before-destroy');hide();controller.abort();host.remove();for(const [b,old] of saved){for(const [attr,value] of [['title',old.title],['aria-label',old.label],['aria-describedby',old.description]])if(value==null)b.removeAttribute(attr);else b.setAttribute(attr,value);b.parentElement.className=old.className;}mounted.delete(root);}});
+}
+window.SourcePreview=Object.freeze({mount});
+})();
+</script>
+<!-- END source-preview -->
+
+
+<script>
+const fixture={"id": "synthetic-text", "kind": "text", "type": "合成会议发言", "date": "2030-10-08", "author": "示例说话人 A", "locator": "发言 00:02:10", "excerpt": "先核对原记录，再决定这一项是否需要继续讨论。", "original": {"text": "先核对原记录，再决定这一项是否需要继续讨论。完整合成原句还包括：问题 B 的负责人将在 14 October 复核结果；本记录为独立样例，不是私人会议转录。"}};window.fixture=fixture;window.demoErrors=[];window.demoOpened=[];
+document.addEventListener('source-preview:error',e=>demoErrors.push(e.detail));document.addEventListener('source-preview:opened',e=>demoOpened.push(e.detail));
+const kind=fixture.kind;let activeCleanup=null;
+const openSource=async({source,trigger,closed})=>{
+ if(kind==='text'){
+   const doc=document.querySelector('#s9 article.doc');if(!doc.textContent.includes(source.original.text))throw Error('text source identity mismatch');
+   const drawer=document.getElementById('drawer');let everOpen=false;
+   const observer=new MutationObserver(()=>{if(drawer.classList.contains('on'))everOpen=true;else if(everOpen){observer.disconnect();closed();}});observer.observe(drawer,{attributes:true,attributeFilter:['class']});activeCleanup=()=>observer.disconnect();
+   document.getElementById('drawer-proxy').click();return {surface:drawer,modal:true};
+ }
+ if(kind==='image'){
+   const img=document.getElementById('original-image');if(new URL(source.original.url,location.href).href!==img.src)throw Error('image identity mismatch');await img.decode();if(!img.naturalWidth)throw Error('image not decoded');
+   const dlg=document.querySelector('dialog.lbg');dlg.addEventListener('close',closed,{once:true});activeCleanup=()=>dlg.removeEventListener('close',closed);img.click();return {surface:dlg,modal:true};
+ }
+ const img=document.getElementById('pdf-page-preview');
+ if(Number(img.dataset.originalPage)!==source.original.page||new URL(source.original.previewUrl,location.href).href!==img.src)throw Error('PDF page identity mismatch');
+ await img.decode();if(!img.naturalWidth)throw Error('PDF preview not decoded');
+ const pdf=document.getElementById('pdf-dialog');pdf.addEventListener('close',closed,{once:true});activeCleanup=()=>pdf.removeEventListener('close',closed);pdf.showModal();document.getElementById('pdf-close').focus();return {surface:pdf,modal:true};
+};
+if(kind==='pdf')document.getElementById('pdf-close').addEventListener('click',()=>document.getElementById('pdf-dialog').close());
+const rollbackSource=({source})=>{
+ activeCleanup?.();activeCleanup=null;
+ if(source.kind==='text'){
+   const drawer=document.getElementById('drawer');if(drawer.classList.contains('on'))document.getElementById('dwclose').click();
+   if(drawer.classList.contains('on')||document.getElementById('demo-root').closest('[inert]'))throw Error('drawer rollback did not release source/background');
+ }else if(source.kind==='image'){
+   const dlg=document.querySelector('dialog.lbg');if(dlg?.open)dlg.close();
+   if(dlg?.matches(':modal'))throw Error('image rollback did not close modal');
+ }else{
+   const pdf=document.getElementById('pdf-dialog');if(pdf.open)pdf.close();
+   if(pdf.matches(':modal'))throw Error('PDF rollback did not close modal');
+ }
+};
+window.mountDemo=()=>SourcePreview.mount({root:document.getElementById('demo-root'),sources:{[fixture.id]:fixture},openSource,rollbackSource});
+window.demo=mountDemo();
+</script></body></html>

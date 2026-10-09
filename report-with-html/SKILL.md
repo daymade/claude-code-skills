@@ -55,6 +55,8 @@ contract, interaction contracts, and browser verification.
   `references/approved-examples.md`
 - Reusable interactions and their keyboard contracts:
   `references/interaction-components.md`
+- Numbered hover/focus source previews and original-content adapters:
+  `references/citation-source-preview.md` (candidate/pilot; load when citations use previews).
 - Photos, screenshots and explanatory diagrams: `references/visual-evidence.md`.
   Load before authoring when objects, physical choices, visual defects or relationships
   need to be seen; do not wait until images have already been selected.
