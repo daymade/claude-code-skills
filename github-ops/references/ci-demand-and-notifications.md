@@ -114,6 +114,15 @@ terminal success and required jobs; a skipped, failed, cancelled or partial run
 cannot supply success for an unexecuted suite. Evidence must come from the
 authorized repository/workflow and trust boundary, not arbitrary PR-written data.
 
+Inspect the complete relevant same-head workflow run listing, including failures,
+queued/in-progress runs and reruns, before choosing success evidence. Resolve the
+freshest execution from validated run/attempt metadata; run ID or creation time
+alone can hide a later rerun. Bind its jobs and log evidence to that exact attempt.
+If the latest execution failed, was cancelled or remains unfinished, do not pick
+an older green run. Incomplete history, unknown ordering or any unresolved parallel
+execution retains normal checks. A newer complete success may supersede an earlier
+completed failure when all the other tree, environment and scope proofs match.
+
 On a merge push, reuse only the covered validation scopes. Missing, expired,
 ambiguous or unreadable evidence, changed inputs, and direct pushes without a
 matching successful validation retain the normal checks. Keep a visible decision
