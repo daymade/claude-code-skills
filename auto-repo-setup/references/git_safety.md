@@ -55,21 +55,18 @@ The existing visibility, protection, conflict, and public-push gates still apply
 5. Publish the exact candidate through the normal repository workflow, then verify
    the hosted commit independently. Synchronize only known landed content through
    the declared safe route, preserving unrelated staged and unstaged work.
+   Compare the task's exact paths in the published commit, current HEAD, index and
+   actual consuming files; a successful write receipt alone does not prove delivery.
 6. Retire only this task's temporary resources under the existing recovery rules
-   (use git-safety-net for branch/worktree retirement). Stop when the authorized
-   stage has its delivery evidence; report any remaining blocker explicitly.
+   (use git-safety-net for branch/worktree retirement) once containment is proven.
+   Before final delivery, compare the original authorized outcome with the artifact
+   and resource set. If necessary safe work remains, execute it; only a genuine
+   dependency justifies returning an incomplete result and recovery condition.
 
 Do not report the whole shared checkout as clean or synchronized based only on
 the task's paths. A scoped delivery can finish while unrelated work remains.
-
-Before final delivery, compare the original user outcome with the owned artifact and
-resource set. Releasing an index, sending a coordination message or merging a stage
-does not finish remaining authorized closure: execute the next necessary safe action.
-For landed content, compare the exact task paths in the published commit, current HEAD,
-index and actual consuming files; retire the owned temporary resources once containment
-is proven. Continuous unrelated WIP does not make a verified task artifact unfinished.
-Whole-repository convergence belongs to its separately authorized scope; do not expand
-a task's cleanup into that work or claim the whole checkout clean from scoped evidence.
+If the original authorized outcome includes whole-repository convergence, verify
+that result too. Otherwise do not expand scoped cleanup into unrelated work.
 
 ## Commit scope
 
