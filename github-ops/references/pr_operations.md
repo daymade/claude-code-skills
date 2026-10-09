@@ -369,7 +369,7 @@ re-verified a bundle, query each remote deletion target immediately before delet
 
 ```bash
 bundle_recorded_sha='RECORDED_SHA_FROM_VERIFIED_BUNDLE'
-expected_sha=$(gh api repos/{owner}/{repo}/git/ref/heads/{branch/path} --jq '.object.sha')
+expected_sha=$(gh api repos/{owner}/{repo}/git/ref/heads/{branch/path} --jq '.object.sha') || exit 1
 test "$expected_sha" = "$bundle_recorded_sha" || {
   printf 'Remote branch moved after preservation; rebuild the audit and backup.\n' >&2
   exit 1
@@ -377,16 +377,25 @@ test "$expected_sha" = "$bundle_recorded_sha" || {
 git push \
   --force-with-lease="refs/heads/{branch/path}:$expected_sha" \
   origin \
-  ":refs/heads/{branch/path}"
-gh api 'repos/{owner}/{repo}/branches?per_page=100' --paginate --jq '.[].name'
+  ":refs/heads/{branch/path}" || exit 1
+gh api 'repos/{owner}/{repo}/branches?per_page=100' --paginate --jq '.[].name' || exit 1
+# Interpret the query status before using its output.
+query_status=0
+git ls-remote --exit-code origin "refs/heads/{branch/path}" || query_status=$?
+case "$query_status" in
+  2) printf 'ABSENT: approved remote branch is no longer present.\n' ;;
+  0) printf 'Branch still exists; retirement is incomplete.\n' >&2; exit 1 ;;
+  *) printf 'UNKNOWN: remote query failed; retirement is unverified.\n' >&2; exit 1 ;;
+esac
 git remote prune origin
 ```
 
 Set `bundle_recorded_sha` from the verified preservation receipt. The explicit expected-SHA lease
 closes the race between the last GET and the deletion push: if a parallel writer moves the branch,
 Git rejects the deletion. Never use an unspecified `--force-with-lease` or unconditional
-`--delete` for this path. After deletion, verify both the hosted branch list and local
-remote-tracking refs; success in one does not prove the other converged.
+`--delete` for this path. After deletion, require an independent successful absence query before pruning local
+remote-tracking refs. Empty output without a checked query status cannot establish absence.
+Verify the local refs separately; hosted absence does not prove local convergence.
 
 When the user's existing Git publishing tools provide `push-and-verify.sh`, resolve
 that approved helper and verify its help/header supports explicit leases. The
@@ -405,27 +414,27 @@ failed or unknown probes remain failures. If this helper is unavailable or its
 interface lacks leases, use the native Git sequence above. Plain legacy
 `--delete` is not the exact-tip retirement form.
 
-#### 5. `--delete-branch` can fail on BOTH ends; strict protection queues later PRs for rebase
+#### 5. Read back merge-adjacent cleanup and strict protection
 
-Two merge-adjacent behaviors observed repeatedly, both invisible unless you read back:
+- **A merged PR can still leave its head branch behind.** When a local branch is checked out
+  in a linked worktree, `gh pr merge --delete-branch` can report a local deletion failure after
+  the merge succeeded; the hosted branch can also remain. Read the PR state and remote ref
+  independently before retrying anything. Retire a surviving hosted branch through the
+  [exact-tip workflow above](#4-retire-remote-branches-only-against-an-exact-saved-tip),
+  preserving its current tip first. A failed query remains unknown; local worktree retirement
+  stays with `git-safety-net`.
 
-- **`gh pr merge --delete-branch` reports failure when the local half fails, and the remote
-  branch can survive too.** If the local branch is checked out in a linked worktree, the merge
-  succeeds but the command exits non-zero ("failed to delete local branch … used by worktree"),
-  and the hosted branch may remain. After every merge with `--delete-branch`, independently
-  verify the hosted ref is gone — never trust the command receipt:
-
-  ```bash
-  git ls-remote origin "refs/heads/<branch>"   # empty output = deleted; a ref line = residue
-  git push origin --delete <branch>            # retire residue explicitly, then re-verify
-  ```
-
-- **Under a strict (require-up-to-date) ruleset, landing one PR moves every other open PR to
-  BEHIND.** The next `gh pr merge` is refused with "the head branch is not up to date with the
-  base branch" even when GitHub reports `MERGEABLE`. The expected loop is: rebase onto the new
-  base, `git push --force-with-lease`, wait for checks on the new head SHA, re-verify the exact
-  head before merging. Do not reach for `--admin` to skip the queue without separate
-  authorization — the strict rule is the repository's chosen invariant.
+- **A strict require-up-to-date ruleset can leave the next PR behind after another lands.**
+  Read the current base and head, then integrate the new base under the repository's history
+  policy. Use a history-preserving merge when permitted. Rebase only when the repository
+  requires it and the exact history rewrite is already authorized; preserve the old head
+  first and push with an explicit `--force-with-lease=refs/heads/<branch>:<saved-full-sha>`.
+  A moved remote head requires a fresh preservation audit, not an implicit lease or a force
+  retry. Wait for checks on the updated candidate and reverify the exact hosted head/base
+  before merging. Follow the publication coordination and CI input-matching procedure above
+  when deciding whether earlier evidence is reusable. `MERGEABLE` alone does not satisfy
+  required up-to-date checks. Do not use `--admin` or another protection bypass without
+  separate authorization.
 
 #### 6. Terminal state
 
