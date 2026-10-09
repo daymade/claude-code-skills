@@ -1,11 +1,10 @@
 ---
 name: github-review-pr
 description: >-
-  Reviews or re-reviews a contributor PR as repository maintainer — a closed PR reconsidered, or a
-  sweep of open PRs — against the live base with immutable snapshots and three-way merges. Use for a
-  PR URL/number, "main changed, review again", "review all open PRs", "fix the rest ourselves?", or
-  merge readiness. Not for GitHub CRUD (use github-ops), your own PR (use github-contributor), or
-  merging without fresh review.
+  Reviews PRs against the live base with immutable objects and three-way merges. Use for PR
+  review/merge readiness, main changed, closed-PR reconsideration, open-PR sweeps, review-led repair,
+  or explicitly requested independent review of your own contribution. Not for GitHub CRUD
+  (use github-ops), authoring/maintaining your PR (use github-contributor), or merging without fresh review.
 argument-hint: "[--personal-maintainer] [--all-open | PR URL or owner/repo#number]"
 ---
 
@@ -37,6 +36,11 @@ Use this workflow for any of these:
 - All currently open contributor PRs in one repository when the user explicitly asks
   for an open-PR queue review. Process them by `createdAt` from newest to oldest and
   issue one evidence ledger and decision per PR.
+- An author's own contribution only when the user explicitly requests an independent
+  maintainer-style evaluation. Apply the same immutable-object and counter-review
+  method in read-only mode; do not switch to personal-maintainer mode, post a formal
+  approval, or acquire merge authority. Return the verdict to the author; authorized
+  repairs remain with `github-contributor:github-contributor`.
 
 Use a narrower workflow instead when the request is only one of these:
 

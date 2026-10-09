@@ -104,8 +104,6 @@ def validate_identity(identity):
     expected = f"{repo_url}/tree/{identity['source_commit']}/{quote(path, safe='/')}"
     if identity["evidence_url"] != expected:
         raise DeliveryError("Evidence link does not identify this exact Skill source")
-    if identity["version_kind"] == "standalone" and identity["plugin_name"] != identity["skill_name"]:
-        raise DeliveryError("Standalone plugin and Skill names differ")
     return identity
 
 
@@ -145,6 +143,8 @@ def render_entry(identity):
     repo = identity["source_repo"].removeprefix("https://github.com/")
     if identity["version_kind"] == "suite":
         version = f"suite `{identity['plugin_name']}` v{identity['plugin_version']}"
+    elif identity["plugin_name"] != identity["skill_name"]:
+        version = f"plugin `{identity['plugin_name']}` v{identity['plugin_version']}"
     else:
         version = f"plugin v{identity['plugin_version']}"
     return f"- `{identity['skill_name']}` | {repo} | {version} | [source]({identity['evidence_url']})"
