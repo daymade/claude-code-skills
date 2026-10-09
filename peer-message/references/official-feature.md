@@ -78,7 +78,7 @@ Claude Code 官方明确限制 peer 消息：
 - 文本中的 slash command 不执行。
 - 不能把本 session 被拒/被 block 的动作转交另一 session 代跑。
 
-发往 Codex 的 `peer-message` envelope 声明同一条边界，因为 `codex queue` 输入本身没有 Claude 的 peer-origin system wrapper。当前 Codex 把它保存成普通 `userMessage`，所以这只是 advisory text；真正的强制力来自接收 Codex 的 system/developer/AGENTS/Skill 契约。无法确认接收侧契约时，它不能安全承载授权相关协调，更不能假装两个产品共享同一底层协议。
+发往 Codex 的 `peer-message` envelope 声明同一条边界。实时 tool output 与 queue userMessage 都不提供 Claude 的 peer-origin system wrapper，文字只作 advisory；强制力来自接收 Codex 的 system/developer/AGENTS/Skill 契约。无法确认接收侧契约时，不能承载授权相关协调，也不宣称两个产品共享底层协议。
 
 ## 5. Socket 与脚本
 
@@ -92,7 +92,7 @@ Claude Code 官方明确限制 peer 消息：
 
 官方文档描述的是向自己 session 回帖的 token 出口；跨 session 读取目标 key 文件仍是当前本地实现 fallback，必须受版本漂移 smoke test 约束。
 
-## 6. Codex / ChatGPT：先辨原生目标范围，再考虑 queue
+## 6. Codex / ChatGPT：先辨原生目标范围，再考虑脚本补缺
 
 ### 当前任务内的 agent
 
@@ -114,7 +114,12 @@ Claude Code 官方明确限制 peer 消息：
 codex queue --thread <THREAD> --message <TEXT>
 ```
 
-仅在原生工具未覆盖已确认的 Codex 独立目标，或由 hook/script 调用时使用这个 CLI。`peer.py` 在它外面提供地址解析、来源信封和独立读回；它不替代原生 agent 协作。官方 OpenAI 文档检索目前没有给出一个独立的 queue 页面，因此运行时参数以本机 `codex queue --help` 与真实返回为准；Skill 不从 ChatKit、Assistants API 或 Responses conversation API 类推 Codex 本地 thread 行为。
+仅在原生工具未覆盖已确认的 Codex 独立目标，或由 hook/script 调用时进入 peer.py。
+默认通过已有 App Server 的 turn/start toolOutput 投递；queue 只用于未加载目标或显式
+queued 模式。按 `protocol-and-discovery.md` §3 核对前置与恢复边界。
+本机 0.162.0 已验证 active turn 实时送达；工具暴露面因 thread 不同而不同，不能从
+一个会话可调用原生发送推断所有会话都有出站工具。queue 参数仍以本机 help 为准，
+不能从 ChatKit、Assistants 或 Responses API 类推本地 thread 行为。
 
 `codex agents` 是交互式 TUI，适合人浏览 shared app-server sessions；脚本化发现读取本地 thread catalog，但只把它叫 saved catalog，不据此判断活性。
 
@@ -132,3 +137,4 @@ codex queue --thread <THREAD> --message <TEXT>
 - Codex: [Subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents) 与当前宿主实际工具契约（2026-09-13）。
 - ChatGPT App: §6 所列版本的工具 schema、发送分支和界面模板；仅实现与暴露面取证，无真实发送测试。
 - Codex: 本机 `codex queue --help`、错误目标非零实验、真实入队截图与 thread-history 读回（2026-08-31）。
+- Codex: [App Server](https://learn.chatgpt.com/docs/app-server)、本机生成的 turn/start schema，以及 2026-10-10 active-turn toolOutput 与 history 读回。
