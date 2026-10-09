@@ -414,6 +414,9 @@ summary-to-detail disclosure, provider/model/runtime truth, routes, transient st
 outputs, native shells, landing/deck/browser tool/game artifacts, dashboards,
 design-system artifacts, GIS/maps, or review tools.
 
+For citation markers that promise original evidence, run that reference's
+**Cited Source Inspection** against the actual text, image or PDF and its return path.
+
 Load
 [references/data_viz_tier_and_token_audit.md](references/data_viz_tier_and_token_audit.md)
 only for reporting-grade data pages, named tier/reference comparisons, chart

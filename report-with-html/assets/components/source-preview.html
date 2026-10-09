@@ -1,0 +1,144 @@
+<!-- source-preview · candidate/pilot, not an approved shelf asset.
+     Copy BEGIN…END unchanged before </body>, then call SourcePreview.mount.
+     No dependency; optional inherited tokens: --card --ink --ink-2 --line --line-2 --blue --sans.
+     DOM: root contains sentence-end <sup><button type="button" data-source-id="ID">1</button></sup>.
+     Each button is a numeric source reference; tooltip text is never an interactive control.
+     mount({root: Element, sources: object keyed by ID, openSource, rollbackSource}) returns {hide,destroy}.
+     A root can be mounted once. Close its full source before destroy; remounting is then supported.
+     sources[ID] = {id,kind:'text'|'image'|'pdf',type,date,author,locator,excerpt,original}.
+     null date/author/locator means unknown, rendered explicitly; no identity or ordinal inference.
+     text original={text}; image original={url,group,index}; PDF original={url,page,previewUrl}.
+     Image group/index are ORIGINAL identity from the evidence owner, never subset/gallery position.
+     group/index may be null if genuinely unknown. Text needs actual nonempty original text;
+     '[图片]' alone is not original text. Image URL and PDF URL/positive page/previewURL are required.
+     openSource({source,trigger,closed}) opens the existing page-owned surface and returns
+       {surface: Element, modal: boolean}, synchronously or as a Promise.
+     The adapter proves correct text/image/PDF identity, decoding and exact PDF page BEFORE return;
+     visible modal state alone does not prove correct content. Approved drawer/gallery remain unchanged.
+     A modal surface must be a native showModal() dialog or role=dialog + aria-modal=true with
+     background inert and trapped focus. A nonmodal surface must not claim aria-modal=true.
+     rollbackSource({source,trigger,error}) is REQUIRED before opening can run. It must be idempotent,
+     close any partially opened page-owned surface and release its inert/scroll/listener changes.
+     On open failure the component awaits rollback BEFORE closed() and visible error reporting.
+     A missing rollback rejects initialization without calling openSource. A throwing rollback emits
+     rollback-failed and keeps the session suspended; it is not claimed recovered. The page owner
+     remains responsible for recovery and an available close path; generic lookup cannot certify
+     arbitrary adapter cleanup.
+     Call closed() AFTER closing the complete source and releasing background inert. Exactly once.
+     This restores the original button focus and page/ancestor scroll, without reopening the tooltip.
+     Adapter errors/missing IDs/empty sources are visible role=alert + source-preview:error events;
+     initialization errors also throw. Missing data and empty/invalid data have distinct error codes.
+     Native PDF-tab inspection and the report's rendered PDF-page preview are separate acceptance axes.
+     State derived from a previously used source-preview interaction; 180/120ms timing is a local
+     reversible default, not a WCAG requirement. Tooltip: hover/focus, Esc, hoverable, persistent.
+     APG tooltip is work in progress; no approved date or universal accessibility certification claimed.
+-->
+<!-- BEGIN source-preview -->
+<style>
+.source-ref{vertical-align:super;font-size:11px;line-height:0;margin-left:3px;white-space:nowrap}.source-ref button{font:500 11px/1.2 var(--sans,sans-serif);border:0;padding:0 2px;color:var(--blue,#33566e);background:transparent;cursor:pointer}.source-ref button:focus-visible{outline:2px solid var(--blue,#33566e);outline-offset:3px;border-radius:2px}
+.source-preview-tip{position:fixed;z-index:89;width:min(350px,calc(100vw - 24px));max-height:calc(100vh - 24px);overflow:auto;padding:12px 14px;background:var(--card,#fff);border:1px solid var(--line-2,#d8cdb6);border-radius:4px;box-shadow:0 5px 18px rgba(33,29,23,.12);font:14px/1.6 var(--sans,sans-serif);color:var(--ink-2,#5b5349);overflow-wrap:anywhere}.source-preview-tip[hidden]{display:none!important}.source-preview-tip p{margin:0 0 7px}.source-preview-tip p:last-child{margin:0}.source-preview-title{font-weight:600;color:var(--ink,#211d17)}.source-preview-quote{white-space:pre-wrap}.source-preview-action{color:var(--blue,#33566e);border-top:1px solid var(--line,#e7dfcf);padding-top:7px}.source-preview-error{border:1px solid #a62b1f;padding:9px 12px;background:#fbedea;color:#7a2119;font:14px/1.5 var(--sans,sans-serif)}@media print{.source-preview-tip{display:none!important}}
+</style>
+<script>
+(() => {
+'use strict';
+if(window.SourcePreview)throw new Error('source-preview: component already loaded');
+const mounted=new WeakSet();let instance=0;
+const nonempty=v=>typeof v==='string'&&v.trim().length>0;
+const compact=v=>{const t=String(v||'').replace(/\s+/g,' ').trim();return t.length>140?t.slice(0,140)+'…':t;};
+const present=(obj,key)=>Object.prototype.hasOwnProperty.call(obj,key);
+function mount({root,sources,openSource,rollbackSource}={}){
+  const target=root instanceof Element?root:document.body;
+  function fail(code,sourceId='',message=''){
+    const error=new Error('source-preview: '+code+(sourceId?' ('+sourceId+')':'')+(message?' · '+message:''));
+    const alert=document.createElement('p');alert.className='source-preview-error';alert.setAttribute('role','alert');alert.textContent='来源引用不可用：'+code+(sourceId?' · '+sourceId:'');const reference=[...target.querySelectorAll('button[data-source-id]')].find(b=>!sourceId||b.dataset.sourceId===sourceId),anchor=reference?.closest('p,li');
+    if(anchor&&target.contains(anchor))anchor.insertAdjacentElement('afterend',alert);else target.prepend(alert);
+    target.dispatchEvent(new CustomEvent('source-preview:error',{bubbles:true,detail:{code,sourceId,message}}));return error;
+  }
+  if(!(root instanceof Element))throw fail('missing-root');
+  if(mounted.has(root))throw fail('duplicate-mount');
+  if(!sources||typeof sources!=='object')throw fail('missing-sources');
+  if(typeof openSource!=='function')throw fail('missing-adapter');
+  if(typeof rollbackSource!=='function')throw fail('missing-rollback-adapter');
+  const buttons=[...root.querySelectorAll('button[data-source-id]')];
+  if(!buttons.length)throw fail('missing-triggers');
+  const records=new Map();
+  for(const b of buttons){
+    const id=b.dataset.sourceId;
+    if(!nonempty(id)||!present(sources,id))throw fail('missing-source',id);
+    const s=sources[id];if(!s||typeof s!=='object')throw fail('empty-source',id);
+    if(s.id!==id)throw fail('source-id-mismatch',id);
+    if(!/^\d+$/.test(b.textContent.trim())||b.parentElement.tagName!=='SUP')throw fail('invalid-numbered-trigger',id);
+    if(!['text','image','pdf'].includes(s.kind))throw fail('invalid-source-kind',id);
+    if(!nonempty(s.type))throw fail(present(s,'type')?'empty-source-type':'missing-source-type',id);
+    for(const key of ['date','author','locator'])if(s[key]!=null&&!nonempty(s[key]))throw fail('empty-'+key,id);
+    if(!s.original||typeof s.original!=='object')throw fail('missing-original',id);
+    const o=s.original;
+    if(s.kind==='text'&&(!nonempty(o.text)||o.text.trim()==='[图片]'))throw fail(present(o,'text')?'empty-original-text':'missing-original-text',id);
+    if(s.kind==='image'){
+      if(!nonempty(o.url))throw fail(present(o,'url')?'empty-image-url':'missing-image-url',id);
+      if(o.group!=null&&!nonempty(o.group))throw fail('empty-original-group',id);
+      if(o.index!=null&&(!Number.isInteger(o.index)||o.index<1))throw fail('invalid-original-index',id);
+    }
+    if(s.kind==='pdf'){
+      if(!nonempty(o.url))throw fail(present(o,'url')?'empty-pdf-url':'missing-pdf-url',id);
+      if(!Number.isInteger(o.page)||o.page<1)throw fail(present(o,'page')?'invalid-pdf-page':'missing-pdf-page',id);
+      if(!nonempty(o.previewUrl))throw fail(present(o,'previewUrl')?'empty-pdf-preview':'missing-pdf-preview',id);
+    }
+    records.set(b,structuredClone(s));
+  }
+  mounted.add(root);const controller=new AbortController(),signal=controller.signal,prefix='source-preview-'+(++instance)+'-';
+  const host=document.createElement('div');host.className='nocite';document.body.appendChild(host);
+  const tips=new Map(),saved=new Map(),suppressed=new Map();let active=null,hover=null,timer=null,closeTimer=null,suspended=false,opened=false;
+  const listen=(el,event,fn,opts={})=>el.addEventListener(event,fn,{...opts,signal});
+  for(const [b,s] of records){
+    const tip=document.createElement('div');tip.id=prefix+tips.size;tip.className='source-preview-tip';tip.setAttribute('role','tooltip');tip.hidden=true;
+    const action='点击角标查看'+({text:'完整原文',image:'完整原图',pdf:'引用页与原附件'}[s.kind]);
+    const details=[s.author||'作者或说话人未提供',s.locator||'来源定位未提供'];
+    if(s.kind==='image')details.push(s.original.group==null?'原组号未核实':'原组 '+s.original.group,s.original.index==null?'原序号未核实':'原第 '+s.original.index+' 张');
+    if(s.kind==='pdf')details.push('原附件第 '+s.original.page+' 页');
+    const heading=s.type+' · '+(s.date||'日期未提供');
+    const lines=[['source-preview-title',heading],['source-preview-details',details.join(' · ')],['source-preview-quote',s.kind==='image'?'':compact(s.excerpt||s.original.text)],['source-preview-action',action]];
+    for(const [cls,text] of lines)if(text){const p=document.createElement('p');p.className=cls;p.textContent=text;tip.appendChild(p);}
+    host.appendChild(tip);tips.set(b,tip);saved.set(b,{title:b.getAttribute('title'),label:b.getAttribute('aria-label'),description:b.getAttribute('aria-describedby'),className:b.parentElement.className});
+    b.parentElement.classList.add('source-ref');b.removeAttribute('title');b.setAttribute('aria-label',heading+'，'+details.join('，')+'，'+action);b.setAttribute('aria-describedby',[b.getAttribute('aria-describedby'),tip.id].filter(Boolean).join(' '));
+  }
+  const hide=()=>{clearTimeout(timer);clearTimeout(closeTimer);timer=null;if(active)tips.get(active).hidden=true;active=null;};
+  const position=()=>{if(!active)return;const tip=tips.get(active),r=active.getBoundingClientRect(),margin=12,gap=6,w=tip.offsetWidth,h=tip.offsetHeight;let top=r.bottom+gap;if(top+h>innerHeight-margin)top=r.top-h-gap;tip.style.left=Math.max(margin,Math.min(r.left,innerWidth-w-margin))+'px';tip.style.top=Math.max(margin,Math.min(top,innerHeight-h-margin))+'px';};
+  const show=(b,immediate)=>{clearTimeout(closeTimer);clearTimeout(timer);timer=null;if(suspended||suppressed.has(b))return;if(active===b)return;hide();const open=()=>{timer=null;if(suspended||suppressed.has(b)||(!b.matches(':hover')&&document.activeElement!==b))return;active=b;tips.get(b).hidden=false;position();};if(immediate)open();else timer=setTimeout(open,180);};
+  const leave=()=>{clearTimeout(timer);timer=null;clearTimeout(closeTimer);closeTimer=setTimeout(()=>{if(active&&document.activeElement!==active&&hover!==active&&!tips.get(active).matches(':hover'))hide();},120);};
+  for(const b of buttons){
+    listen(b,'pointerenter',()=>{hover=b;if(!suspended)suppressed.delete(b);show(b,false);});
+    listen(b,'pointerleave',()=>{if(hover===b)hover=null;if(document.activeElement!==b&&!suspended)suppressed.delete(b);leave();});
+    listen(b,'focus',()=>{const blocked=suppressed.get(b);if(blocked==='dismissed')suppressed.delete(b);else if(blocked==='modal')suppressed.set(b,'returned');show(b,true);});
+    listen(b,'blur',()=>{if(!suspended&&suppressed.get(b)!=='modal'&&hover!==b)suppressed.delete(b);leave();});
+    listen(b,'click',async e=>{
+      e.preventDefault();if(suspended)return;const s=records.get(b);suppressed.set(b,'modal');hide();suspended=true;
+      const scrolls=[];for(let el=b.parentElement;el;el=el.parentElement)scrolls.push([el,el.scrollLeft,el.scrollTop]);const x=scrollX,y=scrollY;let finished=false,rollingBack=false;
+      const closed=()=>{if(finished||rollingBack)return;finished=true;opened=false;suspended=false;root.dataset.sourcePreviewState='ready';queueMicrotask(()=>{if(!b.isConnected)return;b.focus({preventScroll:true});for(const [el,left,top] of scrolls){el.scrollLeft=left;el.scrollTop=top;}window.scrollTo(x,y);});};
+      try{
+        const result=await openSource({source:s,trigger:b,closed});
+        if(finished)throw new Error('adapter closed before opening');
+        if(!result||!(result.surface instanceof Element)||typeof result.modal!=='boolean')throw new Error('adapter must return surface/modal');
+        const surface=result.surface;
+        if(!surface.isConnected||!surface.getClientRects().length||!surface.checkVisibility({visibilityProperty:true,opacityProperty:true}))throw new Error('source surface is not visible');
+        if(result.modal&&!(surface instanceof HTMLDialogElement&&surface.matches(':modal'))&&!(surface.getAttribute('role')==='dialog'&&surface.getAttribute('aria-modal')==='true'))throw new Error('modal semantics missing');
+        if(!result.modal&&surface.getAttribute('aria-modal')==='true')throw new Error('nonmodal surface claims aria-modal');
+        opened=true;root.dataset.sourcePreviewState='open';root.dispatchEvent(new CustomEvent('source-preview:opened',{bubbles:true,detail:{sourceId:s.id,kind:s.kind,modal:result.modal}}));
+      }catch(error){
+        rollingBack=true;root.dataset.sourcePreviewState='rolling-back';
+        try{await rollbackSource({source:s,trigger:b,error});}
+        catch(cleanupError){rollingBack=false;root.dataset.sourcePreviewState='rollback-failed';fail('rollback-failed',s.id,error.message+'; cleanup: '+cleanupError.message);return;}
+        rollingBack=false;closed();root.dataset.sourcePreviewState='recovered-error';fail('adapter-failed',s.id,error.message);
+      }
+    });
+  }
+  for(const tip of tips.values()){listen(tip,'pointerenter',()=>clearTimeout(closeTimer));listen(tip,'pointerleave',leave);}
+  listen(document,'click',e=>{if(!records.has(e.target.closest?.('button[data-source-id]')))hide();},{capture:true});
+  listen(document,'keydown',e=>{if(e.key!=='Escape'||suspended||(!active&&!timer))return;const b=active||hover||document.activeElement;if(records.has(b))suppressed.set(b,'dismissed');hide();e.preventDefault();e.stopImmediatePropagation();},{capture:true});
+  listen(window,'resize',position);listen(window,'scroll',position,{capture:true});listen(window,'hashchange',hide);listen(window,'popstate',hide);
+  return Object.freeze({hide,destroy(){if(suspended||opened)throw fail('close-source-before-destroy');hide();controller.abort();host.remove();for(const [b,old] of saved){for(const [attr,value] of [['title',old.title],['aria-label',old.label],['aria-describedby',old.description]])if(value==null)b.removeAttribute(attr);else b.setAttribute(attr,value);b.parentElement.className=old.className;}mounted.delete(root);}});
+}
+window.SourcePreview=Object.freeze({mount});
+})();
+</script>
+<!-- END source-preview -->
