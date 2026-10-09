@@ -1175,6 +1175,10 @@ def print_receipt(receipt: dict[str, Any], as_json: bool) -> None:
 
 
 def cmd_list(args: argparse.Namespace) -> int:
+    full_titles = getattr(args, "full_titles", False)
+    output = getattr(args, "output", None)
+    if full_titles and output is None:
+        raise PeerError("--full-titles requires --output; do not dump full prompts into discovery")
     rows = []
     if args.provider in ("all", "claude"):
         for entry in claude_registry(args.claude_home):
@@ -1203,7 +1207,11 @@ def cmd_list(args: argparse.Namespace) -> int:
                     "address": f"codex:{entry['id']}",
                     "id": entry["id"],
                     "name": entry.get("name"),
-                    "title": entry.get("title"),
+                    "title": entry.get("title") if full_titles else (
+                        entry["title"][:160] if isinstance(entry.get("title"), str) else entry.get("title")
+                    ),
+                    "title_chars": len(entry["title"]) if isinstance(entry.get("title"), str) else 0,
+                    "title_truncated": not full_titles and isinstance(entry.get("title"), str) and len(entry["title"]) > 160,
                     "status": "saved",
                     "alive": None,
                     "reachable": None,
@@ -1217,19 +1225,34 @@ def cmd_list(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
     if args.json:
-        print(json.dumps(rows, ensure_ascii=False, sort_keys=True))
-        return 0
-    for row in rows:
-        if row["provider"] == "claude":
-            print(
-                f"{row['address']:<36} status={str(row['status']):<8} "
-                f"alive={row['alive']} reachable={row['reachable']} cwd={row['cwd']}"
-            )
-        else:
-            print(
-                f"{row['address']:<44} status=saved name={row.get('name')!r} "
-                f"title={row.get('title')!r} cwd={row['cwd']}"
-            )
+        rendered = json.dumps(rows, ensure_ascii=False, sort_keys=True) + "\n"
+    else:
+        lines = []
+        for row in rows:
+            if row["provider"] == "claude":
+                lines.append(
+                    f"{row['address']:<36} status={str(row['status']):<8} "
+                    f"alive={row['alive']} reachable={row['reachable']} cwd={row['cwd']}"
+                )
+            else:
+                lines.append(
+                    f"{row['address']:<44} status=saved name={row.get('name')!r} "
+                    f"title={row.get('title')!r} cwd={row['cwd']}"
+                    + (f" title_truncated=True title_chars={row['title_chars']}" if row["title_truncated"] else "")
+                )
+        rendered = "\n".join(lines) + ("\n" if lines else "")
+    size = len(rendered.encode("utf-8"))
+    if output is not None:
+        # Explicit export retains identity fields and never overwrites an artifact.
+        fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            stream.write(rendered)
+        print(json.dumps({"output": str(Path(output).resolve()), "bytes": size,
+                          "rows": len(rows), "codex_truncated": codex_truncated}))
+    elif size > 65536:
+        raise PeerError("discovery exceeds 65536 UTF-8 bytes; narrow --provider/--limit or export with --output")
+    else:
+        print(rendered, end="")
     return 0
 
 
@@ -1540,6 +1563,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="max Codex threads to list (default 30); Claude sessions are never truncated",
     )
     list_parser.add_argument("--json", action="store_true")
+    list_parser.add_argument("--full-titles", action="store_true", help="export complete Codex titles; requires --output")
+    list_parser.add_argument("--output", type=Path, help="write selected format to a new file; stdout returns a small receipt")
     list_parser.set_defaults(handler=cmd_list)
 
     whoami_parser = subparsers.add_parser(

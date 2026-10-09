@@ -132,6 +132,27 @@ sandbox 或 approval，不回复服务审批请求。消息在宿主下一次接
 
 thread 出现在 `state` 只能说明它已保存；不能据此断言活跃、空闲或立即处理。多目标广播因此只接受调用者显式列出的 Codex UUID，不从“最近 threads”自动扩张。
 
+### 发现输出的范围
+
+`list` 默认只展示 Codex 标题的短预览，并返回 `title_chars` 和
+`title_truncated`。标题可能是完整首条输入，行数限制不限制其长度。地址、ID、
+精确 name 和 cwd 不截短；不能根据预览补全名称或猜收件人。默认 stdout 还有
+UTF-8 字节上限，超限会明确失败，不返回看似完整的半份清单。长度与字节阈值
+以当前 help/实现为准；Claude 不按条数截断的合同保留。
+
+确需完整标题时显式导出到新的私有临时文件，再按需读取；不在普通发现调用
+里倾倒全文。`--output` 保留所选 JSON/文本格式，stdout 只返回文件、字节数、
+行数及 Codex 条数是否截断。已有输出文件会拒绝覆盖。
+
+```bash
+python3 scripts/peer.py list --provider codex --limit 12 --json
+python3 scripts/peer.py list --provider codex --limit 12 --json \
+  --full-titles --output '<new private scratch file>'
+```
+
+JSON 条数截断提示仍写 stderr；字段预览与清单截断是两种不同边界。仅导出
+目录元数据，不检索完整历史、不发送消息；导出的内容不进入公开仓或消息正文。
+
 ### Codex 包装
 
 对实时与 queue 路径均附显式 envelope；不要冒充宿主原生来源或权限证明：
