@@ -223,6 +223,109 @@ class TestScanText:
         assert [hit.line for hit in hits] == [5]
 
 
+class TestScanScopeCalibration:
+    """Synthetic values exercise the healthy/dangerous production shapes."""
+
+    @staticmethod
+    def entries():
+        return extract_trap_entries(
+            "- **GP/GPT → GDP**\n- **V → Model**\n- **cri → cli**\n"
+            "- **减 → 剪**\n- **`Cloud ops 5` → Claude Opus 5**\n"
+            "- **tob → ToB**\n"
+        )
+
+    def test_ascii_identifier_noise_is_not_a_residual(self):
+        hits = scan_text(
+            "ChatGPT GPTs xGP GPx GP_ _GP GP2 2GP 1V1 cri_status transcription",
+            self.entries(),
+        )
+        assert hits == []
+
+    def test_ascii_tokens_and_chinese_adjacent_residuals_are_found(self):
+        text = "GP GPT V cri\n人均GPT达到三万；用V做模型；改cri工具。\n先减一条。"
+        hits = scan_text(text, self.entries())
+        assert [(h.variant, h.line) for h in hits] == [
+            ("GP", 1), ("GPT", 1), ("GPT", 2), ("V", 1), ("V", 2),
+            ("cri", 1), ("cri", 2), ("减", 3),
+        ]
+
+    def test_case_sensitive_matching_and_literal_phrases_are_preserved(self):
+        text = "gp gpt v CRI ToB cloud ops 5\nGPT tob Cloud ops 5\n"
+        hits = scan_text(text, self.entries())
+        assert [(h.variant, h.line) for h in hits] == [
+            ("GPT", 2), ("Cloud ops 5", 2), ("tob", 2),
+        ]
+
+    def test_mixed_literal_only_filters_its_ascii_edge(self):
+        entries = extract_trap_entries("- **`CC 思维链`/`人均 GP` → 目标术语**\n")
+        hits = scan_text("XCC 思维链 人均 GP2\n中文CC 思维链；人均 GP达到三万。", entries)
+        assert [(h.variant, h.line) for h in hits] == [
+            ("CC 思维链", 2), ("人均 GP", 2),
+        ]
+
+    def test_machine_fields_are_excluded_but_asr_metadata_and_body_are_live(self):
+        text = (
+            "---\n"
+            'record_url: "https://example.invalid/record/V"\n'
+            'source_url: "https://example.invalid/cri"\n'
+            'meeting_id: "GP"\n'
+            'record_file_id: "GPT"\n'
+            'opaque_ids: ["V", "cri"]\n'
+            "transcript_status: available\n"
+            "status: cri\n"
+            'title: "人均GPT达到三万"\n'
+            "keywords: [GP, cri]\n"
+            "source: GPT 转写\n"
+            'asr_note: "GP → GDP, V → Model, cri → cli"\n'
+            "---\n"
+            "正文仍有 V；讨论 transcript_status 也提到 cri。\n"
+        )
+        hits = scan_text(text, self.entries())
+        assert [(h.variant, h.line) for h in hits] == [
+            ("GP", 10), ("GPT", 9), ("GPT", 11), ("V", 14),
+            ("cri", 10), ("cri", 14),
+        ]
+
+    def test_body_machine_shaped_lines_and_urls_remain_live(self):
+        text = "---\ntitle: clean\n---\nrecord_url: https://example.invalid/V\nstatus: cri\n"
+        hits = scan_text(text, self.entries())
+        assert [(h.variant, h.line) for h in hits] == [("V", 4), ("cri", 5)]
+
+    def test_multiline_machine_fields_are_excluded_without_hiding_next_field(self):
+        text = (
+            "---\nrecord_ids:\n  - GP\n  - GPT\n"
+            "record_url: >-\n  https://example.invalid/V\n"
+            "keywords:\n  - cri\n  - GPT\n---\n正文 V。\n"
+        )
+        hits = scan_text(text, self.entries())
+        assert [(h.variant, h.line) for h in hits] == [
+            ("GPT", 9), ("V", 11), ("cri", 8),
+        ]
+
+    def test_blank_or_missing_machine_values_do_not_swallow_live_fields(self):
+        for field in ("record_url:", "record_url: ", "record_url: ''", ""):
+            text = f"---\n{field}\ntitle: GPT\nkeywords: [cri]\n---\n正文 V。"
+            hits = scan_text(text, self.entries())
+            assert [(h.variant, h.line) for h in hits] == [
+                ("GPT", 3), ("V", 6), ("cri", 4),
+            ]
+
+    def test_no_or_blank_frontmatter_and_incomplete_block_remain_scannable(self):
+        for text, expected in (
+            ("GPT V cri", [("GPT", 1), ("V", 1), ("cri", 1)]),
+            ("---\n---\nGPT V cri", [("GPT", 3), ("V", 3), ("cri", 3)]),
+            ("---\nrecord_url: https://example.invalid/V\nGPT cri",
+             [("GPT", 3), ("V", 2), ("cri", 3)]),
+            ("record_url: https://example.invalid/V\nstatus: cri",
+             [("V", 1), ("cri", 2)]),
+        ):
+            assert [(h.variant, h.line) for h in scan_text(text, self.entries())] == expected
+
+    def test_bom_frontmatter_preserves_body_line_numbers(self):
+        text = "\ufeff---\nrecord_url: https://example.invalid/V\n---\nGPT"
+        assert [(h.variant, h.line) for h in scan_text(text, self.entries())] == [("GPT", 4)]
+
+
 class TestReport:
     def test_report_separates_hits_from_no_hits(self):
         entries = extract_trap_entries(CONTEXT)

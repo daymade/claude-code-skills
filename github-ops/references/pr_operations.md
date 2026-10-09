@@ -388,6 +388,23 @@ Git rejects the deletion. Never use an unspecified `--force-with-lease` or uncon
 `--delete` for this path. After deletion, verify both the hosted branch list and local
 remote-tracking refs; success in one does not prove the other converged.
 
+When the user's existing Git publishing tools provide `push-and-verify.sh`, resolve
+that approved helper and verify its help/header supports explicit leases. The
+leased deletion form keeps the same exact-tip precheck and independently requires
+`ABSENT` after the push:
+
+```bash
+<absolute-push-and-verify-helper> <repo> origin \
+  "--force-with-lease=refs/heads/{branch/path}:$expected_sha" \
+  --delete "{branch/path}"
+```
+
+Supply one complete 40-hex expected SHA per branch; a remote-only SHA is valid.
+An absent branch is complete only after an authoritative `ABSENT` readback;
+failed or unknown probes remain failures. If this helper is unavailable or its
+interface lacks leases, use the native Git sequence above. Plain legacy
+`--delete` is not the exact-tip retirement form.
+
 #### 5. `--delete-branch` can fail on BOTH ends; strict protection queues later PRs for rebase
 
 Two merge-adjacent behaviors observed repeatedly, both invisible unless you read back:

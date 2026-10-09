@@ -452,6 +452,60 @@ def extract_trap_entries(context_text: str,
     return entries
 
 
+# Only these syntactic metadata families carry machine values. Other fields,
+# including title, keywords, participants and source descriptions, remain live.
+_MACHINE_FRONTMATTER_KEY = re.compile(r"(?:url|id|ids|status|.+_(?:url|id|ids|status))\Z")
+_FRONTMATTER_FIELD = re.compile(r"^([A-Za-z_][\w-]*):(?:[ \t]|$)")
+
+
+def _project_without_machine_fields(text: str) -> str:
+    """Remove machine fields from a complete leading frontmatter block.
+
+    Remove keys as well as values: a key such as transcript_status can itself
+    contain a short trap. Indented continuations belong to the excluded field;
+    the next top-level line ends it. Preserve newlines and leave an incomplete
+    block or an ordinary TXT document unchanged.
+    """
+    lines = text.split("\n")
+    if not lines or lines[0].lstrip("\ufeff").strip() != "---":
+        return text
+    close = next((i for i in range(1, len(lines))
+                  if lines[i].strip() == "---"), None)
+    if close is None:
+        return text
+    excluding = False
+    for i in range(1, close):
+        line = lines[i]
+        field = _FRONTMATTER_FIELD.match(line)
+        if field:
+            excluding = bool(_MACHINE_FRONTMATTER_KEY.fullmatch(field.group(1)))
+        elif line and not line[0].isspace() and not line.startswith("#"):
+            excluding = False
+        if excluding:
+            lines[i] = ""
+    return "\n".join(lines)
+
+
+def _is_ascii_word_char(char: str) -> bool:
+    return char.isascii() and (char.isalnum() or char == "_")
+
+
+def _has_ascii_token_edges(line: str, variant: str, start: int) -> bool:
+    """Reject ASCII edges embedded in a longer ASCII identifier.
+
+    Unicode \\b would lose GPT in 中文GPT中文 and one-character Chinese
+    traps. Check only ASCII word edges; literal punctuation and CJK substring
+    matching keep their existing behavior.
+    """
+    end = start + len(variant)
+    return not (
+        (_is_ascii_word_char(variant[0]) and start > 0
+         and _is_ascii_word_char(line[start - 1]))
+        or (_is_ascii_word_char(variant[-1]) and end < len(line)
+            and _is_ascii_word_char(line[end]))
+    )
+
+
 def scan_text(
     text: str,
     entries: List[TrapEntry],
@@ -460,11 +514,10 @@ def scan_text(
 ) -> List[TrapHit]:
     """Locate every entry's variants in `text`, line by line.
 
-    Substring matching (not regex): trap variants are literal ASR
-    misrecognitions, and a regex would both risk metacharacter surprises and
-    drift from what Stage 1's own matcher does. Every occurrence is reported
-    — the adjudicator decides per the trap's documented cue; suppressing
-    repeats would hide exactly the recurrence signal that matters.
+    Literal, case-sensitive matching with ASCII token-edge filtering: GP/GPT
+    must not match inside ChatGPT, while 中文GPT中文 and Chinese short traps
+    remain visible. Every eligible occurrence is reported for adjudication
+    against the trap's documented cue.
     """
     hits: List[TrapHit] = []
     # Single-line correction provenance deliberately quotes old forms as evidence
@@ -472,7 +525,8 @@ def scan_text(
     # consume the same projection or every completed correction reappears as a
     # residual. Other frontmatter (keywords/title) remains live because it is an
     # ASR-derived search surface. The shared helper preserves line numbers.
-    projected_text = project_without_ledger_values(text)
+    projected_text = _project_without_machine_fields(
+        project_without_ledger_values(text))
     lines = projected_text.splitlines()
     for entry in entries:
         for variant in entry.from_variants:
@@ -482,6 +536,9 @@ def scan_text(
                     idx = line.find(variant, start)
                     if idx < 0:
                         break
+                    start = idx + len(variant)
+                    if not _has_ascii_token_edges(line, variant, idx):
+                        continue
                     lo = max(0, idx - window)
                     hi = idx + len(variant) + window
                     hits.append(
@@ -493,7 +550,6 @@ def scan_text(
                             context=line[lo:hi],
                         )
                     )
-                    start = idx + len(variant)
     return hits
 
 
