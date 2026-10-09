@@ -1,17 +1,5 @@
 # Startup automation decision and verification
 
-## Contents
-
-- Choose the mechanism from the outcome
-- Default: project instructions
-- Safe repository sync contract
-- Hook gate
-- Claude Code lifecycle details
-- Codex lifecycle boundary
-- Diagnose repeated output
-- Install and verify a Claude startup nudge
-- Sources
-
 ## Choose the mechanism from the outcome
 
 Use the least stateful mechanism that meets the timing requirement.
