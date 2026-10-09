@@ -1,7 +1,14 @@
 # CI operations
 
 Use this procedure when a marketplace PR check is pending or red, or when extending
-its temporary-Git tests. Keep runtime definitions in their executable owners:
+its temporary-Git tests.
+
+For CI demand, allowance/storage blocks, notification noise or repeated checks,
+start with [github-ops' CI demand workflow](../github-ops/references/ci-demand-and-notifications.md).
+For runner eligibility, resource limits or persistent-cache acceptance, use its
+[runner acceptance](../github-ops/references/workflow_operations.md#self-hosted-runner-capacity-and-acceptance).
+
+Keep runtime definitions in their executable owners:
 
 - [ci.yml](../.github/workflows/ci.yml): jobs, environments, installation commands,
   conditions and job deadlines. Inspect any command-specific timeout there before
