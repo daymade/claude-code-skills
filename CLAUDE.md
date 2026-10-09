@@ -451,6 +451,9 @@ use the [identity-source contract](tibo-reset-codex/references/account-usage.md#
 **Closing a PR unmerged (declined, or superseded by another PR) → delete its head
 branch in the same action.** `gh pr merge --delete-branch` only covers merged PRs.
 Use `github-ops`'s [exact-tip branch retirement workflow](github-ops/references/pr_operations.md#converging-parallel-prs-and-retiring-remote-branches).
+Apply that same owning workflow after merge-adjacent cleanup failures or a strict
+up-to-date refusal; it owns exact-tip preservation, independent absence readback
+and history-policy recovery.
 For sensitive publication residuals, first enter `github-sensitive-data-cleanup`'s
 [surface selection](github-sensitive-data-cleanup/SKILL.md#step-05-bind-each-exposed-surface);
 approved PR body revision removal follows `github-ops`'s
