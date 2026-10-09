@@ -240,6 +240,7 @@ class StateCoordinationTests(unittest.TestCase):
             self.assertNotEqual(retry['message_id'], message['message_id'])
             self.assertEqual(reopened.db.execute('SELECT count(*) FROM state_events').fetchone()[0], 1)
             reopened.commit(retry['message_id'], 'a', 'accepted')
+            self.assertEqual(reopened.receive(message['body'], 'b')['status'], 'ignore_closed')
             self.assertEqual(reopened.receive(retry['body'], 'b')['status'], 'action_needed')
         finally:
             reopened.close()
@@ -263,6 +264,25 @@ class StateCoordinationTests(unittest.TestCase):
             self.assertEqual(reopened.prepare('a', 'b', 'snapshot one', kind='state',
                 topic='repo:publication-status', event='revision-one', expires=2000)['status'],
                 'suppressed_state_revision')
+        finally:
+            reopened.close()
+
+    def test_pruned_earlier_retry_keeps_its_terminal_identity(self):
+        first = self.state()
+        self.board.commit(first['message_id'], 'a', 'not_sent')
+        retry = self.state(expires=50 * 86400)
+        self.accept(retry)
+        self.now = 40 * 86400
+        reopened = coord.Board(self.root, clock=lambda: self.now)
+        try:
+            self.assertEqual(reopened.receive(first['body'], 'b')['status'], 'ignore_closed')
+            self.assertEqual(reopened.receive(retry['body'], 'b')['status'], 'action_needed')
+            self.assertEqual(reopened.db.execute('SELECT count(*) FROM state_events').fetchone()[0], 1)
+            self.assertEqual(reopened.db.execute('SELECT count(*) FROM state_retired').fetchone()[0], 1)
+            reopened.db.execute("UPDATE state_retired SET terminal='invalid'")
+            with self.assertRaises(coord.CoordinationError):
+                reopened.receive(first['body'], 'b')
+            self.assertEqual(reopened.db.execute('SELECT count(*) FROM state_retired').fetchone()[0], 1)
         finally:
             reopened.close()
 

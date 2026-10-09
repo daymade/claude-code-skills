@@ -137,6 +137,8 @@ class Board:
                 if "retired" not in state_columns:
                     self.db.execute("ALTER TABLE state_events ADD COLUMN retired TEXT")
                 self.db.execute("CREATE INDEX IF NOT EXISTS state_stream ON state_events(sender,target,topic,revision)")
+                self.db.execute("""CREATE TABLE IF NOT EXISTS state_retired(
+                    message_id TEXT PRIMARY KEY, slot TEXT NOT NULL, terminal TEXT NOT NULL)""")
                 if self.db.execute("""SELECT 1 FROM messages m WHERE m.kind='state' AND NOT EXISTS
                     (SELECT 1 FROM state_events e WHERE e.slot=m.slot) LIMIT 1""").fetchone():
                     raise CoordinationError("state revision ledger is incomplete; retain state and reconcile")
@@ -146,6 +148,10 @@ class Board:
             # stale ownership remain visible until explicitly reconciled.
             with self.transaction():
                 cutoff = self.clock() - 30 * 86400
+                self.db.execute("""INSERT OR IGNORE INTO state_retired(message_id,slot,terminal)
+                    SELECT id,slot,CASE WHEN state='not_sent' THEN 'not_sent' ELSE 'closed' END
+                    FROM messages WHERE kind='state' AND created < ? AND
+                    (closed_at IS NOT NULL OR state='not_sent')""", (cutoff,))
                 self.db.execute("""UPDATE state_events SET retired=(SELECT CASE WHEN m.state='not_sent'
                     THEN 'not_sent' ELSE 'closed' END FROM messages m WHERE m.id=state_events.message_id)
                     WHERE message_id IN (SELECT id FROM messages WHERE created < ? AND
@@ -363,9 +369,16 @@ class Board:
         with self.transaction():
             row = self.db.execute("SELECT * FROM messages WHERE id=?", (message_id,)).fetchone()
             if not row:
-                retired = self.db.execute("SELECT * FROM state_events WHERE message_id=?", (message_id,)).fetchone()
+                history = self.db.execute("SELECT * FROM state_retired WHERE message_id=?", (message_id,)).fetchone()
+                retired = (self.db.execute("SELECT * FROM state_events WHERE slot=?", (history["slot"],)).fetchone()
+                           if history else self.db.execute("SELECT * FROM state_events WHERE message_id=?",
+                                                          (message_id,)).fetchone())
                 if not retired:
+                    if history:
+                        raise CoordinationError("retired state revision is missing; retain state and reconcile")
                     return {"status": "unknown", "next_action": "semantic triage; local record unavailable"}
+                if history and history["terminal"] not in ("closed", "not_sent"):
+                    raise CoordinationError("retired state outcome is invalid; retain state and reconcile")
                 self.state_event(retired)
                 if retired["target"] != actor or meta.get("target") != actor or meta.get("sender") != retired["sender"]:
                     raise CoordinationError("coordination identity does not match local record")
