@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-watchdog** (`daymade-macos` v1.22.2): Add a read-only native job inspector that compares an explicit plist with loaded arguments, explicit job environment and configured paths. Return JSON flags without configuration values; reject default/inherited environment substitution and ambiguous output. Add synthetic native-shape regression tests. Change types: read-only capability addition / verification clarification.
 - **auto-repo-setup** (v2.1.3): Remove the hand-maintained startup-reference contents list; retain every procedure and the instruction-entry owner route. Add the repository instruction-maintenance entry without duplicating its verification recipe. Change type: navigation formatting and documentation alignment.
 - **benchmark-due-diligence** (`daymade-financial` v1.5.1): Bind evidence grades to the exact object and outcome supported. Separate implementation, enforced validation and measured effectiveness; keep benchmark conditions, award criteria and unavailable evidence explicit. Change type: bounded evidence-grading clarification.
 

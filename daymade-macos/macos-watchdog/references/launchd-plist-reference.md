@@ -98,6 +98,11 @@ Deprecated: `load`/`unload`. `unload` on Ventura+ leaves the job re-loadable by 
 
 ## Verification commands
 
+Before declaring a plist edit active, run `scripts/inspect_native_job.py` with
+the exact expected plist and follow `native-job-readback.md`. Require explicit
+job ENV and configured argv/path matches; do not use a first-match regex over
+the whole `launchctl print` output. Verify completed work separately.
+
 ```bash
 plutil -lint <plist>                        # syntax
 plutil -p <plist>                           # effective contents (catches type errors)
