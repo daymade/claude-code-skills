@@ -45,6 +45,15 @@ is Claude Code-specific. If both tools must follow the same rule and the reposit
 keeps two files, update both or use the repository's established single-source
 mechanism.
 
+For an AGENTS.md / CLAUDE.md drift warning, inspect both complete files before
+changing either. A pointer and its full target can differ without conflicting
+rules. When available, invoke `claude-md-progressive-disclosurer` and read the
+“双入口修复与宿主读回” section of its verification reference; it owns
+reconciliation, single-source selection and actual-host verification. That Skill
+is a separately installed capability, not a bundled file in this plugin. If it
+is unavailable, report the missing workflow and preserve both originals rather
+than silently overwriting one or claiming the warning proves a conflict.
+
 Do not make the user change how they open the project. A normal opening sentence is
 also sufficient when persistence is unnecessary:
 

@@ -126,7 +126,7 @@
       "description": "Claude Code operations suite that bundles cross-project prior-work retrieval across code, docs, Skills, meetings, WeChat archives, and conversation history; provider-separated Claude Code and Codex history readers; identity- and lineage-gated continuation workflows; plugin/skill troubleshooting; CLAUDE.md progressive disclosure optimization; version-synced Lark CLI routing; statusline configuration; exported .txt repair; full claude.ai conversation extraction with tool-call rendering and file download; plugin marketplace development and suite consolidation; writing/testing/debugging Claude Code hooks; multi-provider profile isolation; personal-memory migration into tool-agnostic AGENTS.md reference docs; one-shot local timers that ping Claude right after subscription quota reset to start a fresh 5-hour usage window; working web search installed on an agent whose relayed model backend cannot execute the built-in one; and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
       "source": "./daymade-claude-code",
       "strict": false,
-      "version": "4.25.8",
+      "version": "4.25.9",
       "category": "suite",
       "keywords": [
         "suite",
@@ -944,7 +944,7 @@
       "description": "Evidence-driven repository setup, repair, handoff, and safe Git workflow for Claude Code or Codex. Detects the actual stack from project instructions and manifests instead of assuming Python, ffmpeg, uv, or .env; preserves local work during sync/conflict handling; diagnoses repeated SessionStart output before editing config; and defaults routine startup behavior to AGENTS.md/CLAUDE.md or a normal Agent request. Lifecycle hooks are an explicit pre-prompt exception with guarded, idempotent Claude Code setup and runtime-specific Codex verification.",
       "source": "./auto-repo-setup",
       "strict": false,
-      "version": "2.1.0",
+      "version": "2.1.1",
       "category": "developer-tools",
       "keywords": [
         "repo-setup",
