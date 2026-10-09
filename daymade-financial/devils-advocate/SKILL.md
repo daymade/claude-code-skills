@@ -22,7 +22,7 @@ description: >-
 2. **没有证据的唱反调不但没用，还会帮倒忙。** 社会心理学的经典结果：角色扮演式的「指派反方」效果不如真实异议（Nemeth et al., 2001）；后续研究进一步指出，不真实的异见反而让人更固守原判断（Nemeth, 2018）。所以本 skill 的每一条反方论证都必须锚定到具体材料的具体位置——证据锚定是「真实异议」的代理，自由发挥的抬杠被禁止。
 3. **显式反方人设的多 agent 结构有量化增益。**「批评者」角色相对此前最优评估方法（G-Eval）有 6.4-12.5 个百分点的相关系数提升（DEBATE, ACL Findings 2024）；论文另以定性结论指出反方人设显著优于中立多 agent 基线；多个「中立」agent 互评反而可能互相强化错误共识。
 
-两个 references 常规执行不需要读：需要向使用者解释设计依据、或对某一步的做法产生疑问时才加载——完整谱系与逐字步骤见 [references/structured_analytic_techniques.md](references/structured_analytic_techniques.md)；被复刻产品的原始 prompt 与 schema 见 [references/linqalpha_reference_implementation.md](references/linqalpha_reference_implementation.md)。
+投资论点的常规执行无需加载两个 references；需要解释设计依据、对某一步产生疑问，或压力测试工程机制时，读 [方法论谱系与工程适用边界](references/structured_analytic_techniques.md)。工程机制先读其中「工程机制的反证边界」，再沿下文流程检验；被复刻产品的原始 prompt 与 schema 见 [references/linqalpha_reference_implementation.md](references/linqalpha_reference_implementation.md)。
 
 ## 入口判断
 
