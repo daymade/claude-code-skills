@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **github-ops** (v1.14.7): Separate current-base merge readiness from PR-to-merge validation reuse. Unrelated base advances do not alone require a new PR head or repeated CI; retain exact-head checks, protection/review requirements and normal validation for changed inputs. Reuse still requires matching tested trees and complete successful-run evidence. Change type: bounded execution-contract correction.
+
 - **skill-creator** (`daymade-skill` v1.67.1): Redact Google `AIza` and `AQ.` API key shapes while preserving ordinary `Task-specific` and `Task-scoped` text. Clarify user-only TXT, role-preserving JSONL and Codex voice-history input boundaries; retain existing parsing and chunking. Change type: bounded implementation repair / factual documentation correction, covered by synthetic bidirectional and role-preservation regressions.
 
 - **devils-advocate** (`daymade-financial` v1.5.2): Preserve engineering failure preconditions, healthy controls and recovery evidence; separate thesis impact from occurrence evidence and narrow time-related findings to the tested input. Retain investment risk grading and allow probe-backed withdrawal. Change type: bounded evidence-selection clarification.
