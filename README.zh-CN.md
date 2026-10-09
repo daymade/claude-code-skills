@@ -547,6 +547,10 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 ### **peer-message** - 本机 Claude/Codex Agent 通讯
 
+内置本机共享协调记录，维护任务与资源声明、重复请求抑制和短时窗口有效期。
+首次调用自动初始化，不依赖 Agent Fleet 或常驻进程；原生通信仍走原生工具，
+按[协调流程](peer-message/references/local-coordination.md)执行发送前检查与收件分流。
+
 实验性的[配对网络入口](peer-message/references/network-preview.md)支持邀请、联系人和获准文档问答，通过现有 Claude/Codex 宿主返回带引用的答案。预览需要操作者提供 relay，不代表公共托管网络已经上线或用户采用已获验证。
 
 > **安装**：`claude plugin install peer-message@daymade-skills`

@@ -21,6 +21,12 @@ SPEC.loader.exec_module(peer)
 
 
 class PeerMessageTests(unittest.TestCase):
+    def setUp(self):
+        state = tempfile.TemporaryDirectory()
+        self.addCleanup(state.cleanup)
+        env = mock.patch.dict(peer.os.environ, {"XDG_STATE_HOME": state.name})
+        env.start()
+        self.addCleanup(env.stop)
     def test_reply_lookup_rejects_blank_correlation_before_reading(self):
         for value in ("", " ", "id with spaces", "id\n"):
             with self.subTest(value=value), mock.patch.object(peer, "replies") as read:
@@ -1167,7 +1173,7 @@ class PeerMessageTests(unittest.TestCase):
             root = Path(raw)
             with mock.patch.object(
                 peer, "send_one", side_effect=lambda target, *a, **k: self.stub_receipt(target)
-            ) as send:
+            ) as send, mock.patch.object(peer, "canonical_address", side_effect=lambda value, args: value):
                 exit_code = peer.main(
                     self.broadcast_argv(
                         root,
@@ -1181,7 +1187,7 @@ class PeerMessageTests(unittest.TestCase):
             self.assertEqual(send.call_count, 2)
             for call in send.call_args_list:
                 body = call.args[1]
-                self.assertTrue(body.startswith("[fan-out:"))
+                self.assertIn("[fan-out:", body)
                 self.assertIn("2 个 session", body)
                 self.assertIn("不是你的无需回复", body)
                 self.assertTrue(body.rstrip().endswith("谁的锁？"))
@@ -1191,7 +1197,7 @@ class PeerMessageTests(unittest.TestCase):
             root = Path(raw)
             with mock.patch.object(
                 peer, "send_one", return_value=self.stub_receipt("claude:a")
-            ) as send:
+            ) as send, mock.patch.object(peer, "canonical_address", side_effect=lambda value, args: value):
                 exit_code = peer.main(
                     [
                         "--claude-home", str(root / ".claude"),
@@ -1200,7 +1206,8 @@ class PeerMessageTests(unittest.TestCase):
                     ]
                 )
             self.assertEqual(exit_code, 0)
-            self.assertEqual(send.call_args.args[1], "定向问题")
+            self.assertTrue(send.call_args.args[1].rstrip().endswith("定向问题"))
+            self.assertNotIn("[fan-out:", send.call_args.args[1])
 
     def test_broadcast_over_cap_refused_without_contract_sends_nothing(self):
         with tempfile.TemporaryDirectory() as raw:
@@ -1230,7 +1237,7 @@ class PeerMessageTests(unittest.TestCase):
             stderr = io.StringIO()
             with mock.patch.object(
                 peer, "send_one", side_effect=lambda target, *a, **k: self.stub_receipt(target)
-            ) as send:
+            ) as send, mock.patch.object(peer, "canonical_address", side_effect=lambda value, args: value):
                 with contextlib.redirect_stderr(stderr):
                     exit_code = peer.main(
                         self.broadcast_argv(

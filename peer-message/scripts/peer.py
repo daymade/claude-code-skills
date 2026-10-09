@@ -13,6 +13,7 @@ peer-message CLI and means Claude. Python standard library only.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import glob
 import hashlib
 import html
@@ -28,6 +29,12 @@ import sys
 import time
 import uuid
 from typing import Any
+
+_coord_spec = importlib.util.spec_from_file_location(
+    "peer_coordination", Path(__file__).with_name("coordination.py")
+)
+coordination = importlib.util.module_from_spec(_coord_spec)
+_coord_spec.loader.exec_module(coordination)
 
 
 EXIT_USAGE = 2
@@ -223,40 +230,7 @@ def codex_content_texts(value: Any, label: str) -> list[str]:
 
 def standalone_in_reply_to(body: str) -> str | None:
     """Read one exact field line, ignoring quoted, fenced and commented examples."""
-    matches: list[str] = []
-    fence_character: str | None = None
-    fence_length = 0
-    in_comment = False
-    for line in body.splitlines():
-        if fence_character is not None:
-            closing = re.fullmatch(
-                rf" {{0,3}}{re.escape(fence_character)}{{{fence_length},}}[ \t]*",
-                line,
-            )
-            if closing:
-                fence_character = None
-                fence_length = 0
-            continue
-        comment_line = in_comment
-        offset = 0
-        while True:
-            marker = "-->" if in_comment else "<!--"
-            position = line.find(marker, offset)
-            if position < 0:
-                break
-            comment_line = True
-            in_comment = not in_comment
-            offset = position + len(marker)
-        if comment_line:
-            continue
-        fence = re.match(r" {0,3}(`{3,}|~{3,})(.*)", line)
-        if fence:
-            fence_character = fence.group(1)[0]
-            fence_length = len(fence.group(1))
-            continue
-        match = re.fullmatch(r"in_reply_to:[ \t]*([^\s]+)[ \t]*", line)
-        if match:
-            matches.append(match.group(1))
+    matches = coordination.reply_correlations(body)
     return matches[0] if len(matches) == 1 else None
 
 
@@ -1092,8 +1066,9 @@ def send_one(
     wait_seconds: float,
     claude_home: Path,
     codex_home: Path,
+    message_id: str | None = None,
 ) -> dict[str, Any]:
-    message_id = str(uuid.uuid4())
+    message_id = message_id or str(uuid.uuid4())
     if target.startswith("codex:"):
         receipt = send_codex(target, body, sender, reply_to, message_id, codex_home)
         target = receipt["target"]
@@ -1211,15 +1186,7 @@ def cmd_whoami(args: argparse.Namespace) -> int:
 def cmd_send(args: argparse.Namespace) -> int:
     sender = args.sender or auto_sender()
     reply_to = args.reply_to or auto_reply_address(sender)
-    receipt = send_one(
-        args.target,
-        message_text(args),
-        sender,
-        reply_to,
-        args.wait,
-        args.claude_home,
-        args.codex_home,
-    )
+    receipt = managed_send(args, args.target, message_text(args), sender, reply_to)
     print_receipt(receipt, args.json)
     return EXIT_UNVERIFIED if receipt["delivery_status"] == "accepted_unverified" else 0
 
@@ -1262,11 +1229,7 @@ def cmd_broadcast(args: argparse.Namespace) -> int:
     failures = []
     for target in targets:
         try:
-            receipts.append(
-                send_one(
-                    target, body, sender, reply_to, args.wait, args.claude_home, args.codex_home
-                )
-            )
+            receipts.append(managed_send(args, target, body, sender, reply_to))
         except PeerError as exc:
             failures.append({"target": target, "error": str(exc)})
     if args.json:
@@ -1344,6 +1307,87 @@ def common_message_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--reply-to", help="address the receiver should use to reply")
     parser.add_argument("--wait", type=wait_seconds, default=0, metavar="SECONDS")
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--topic", help="stable coordination issue/resource key")
+    parser.add_argument("--kind", choices=("request", "notice", "reply"), default="notice")
+    parser.add_argument("--expires-at", help="ISO timestamp with timezone; required for request")
+    parser.add_argument("--expires-in", type=wait_seconds, metavar="SECONDS",
+                        help="explicit relative lifetime instead of expires-at")
+    parser.add_argument("--event", help="explicit new evidence/revision, not a retry counter")
+    parser.add_argument("--in-reply-to", help="original coordination message id for reply")
+
+
+def canonical_address(value: str, args) -> str:
+    if value == "local-script":
+        return value
+    if value.startswith("codex:"):
+        return "codex:" + resolve_codex(value, args.codex_home)
+    entry = resolve_claude(value, args.claude_home)
+    return "claude:" + str(entry.get("sessionId") or entry["pid"])
+
+
+def prepare_coordination(board, args, target, body, sender):
+    validate_body(body)
+    if args.expires_at is not None and args.expires_in is not None:
+        raise PeerError("use expires-at or expires-in, not both", EXIT_USAGE)
+    if args.expires_in is not None and args.expires_in <= 0:
+        raise PeerError("expires-in must be positive", EXIT_USAGE)
+    expires = (board.clock() + args.expires_in if args.expires_in is not None
+               else coordination.deadline(args.expires_at))
+    return board.prepare(canonical_address(sender, args), canonical_address(target, args), body,
+                         topic=args.topic, kind=args.kind,
+                         expires=expires,
+                         event=args.event, reply_to=args.in_reply_to)
+
+
+def managed_send(args, target, body, sender, reply_to):
+    board = coordination.Board(args.state_dir)
+    try:
+        prepared = prepare_coordination(board, args, target, body, sender)
+        if prepared["status"] != "prepared":
+            return {**prepared, "delivery_status": prepared["status"],
+                    "transport_status": "not_sent"}
+        message_id = prepared["message_id"]
+        actor = prepared["metadata"]["sender"]
+        try:
+            receipt = send_one(target, prepared["body"], sender, reply_to, args.wait,
+                               args.claude_home, args.codex_home, message_id=message_id)
+        except PeerError as exc:
+            # Resolution failures are known pre-send failures. Transport errors
+            # can occur after bytes were accepted: retain unknown, never retry.
+            outcome = "not_sent" if exc.exit_code in (EXIT_TARGET, EXIT_USAGE) else "unknown"
+            board.commit(message_id, actor, outcome)
+            raise
+        board.commit(message_id, actor, "accepted", receipt)
+        return receipt
+    finally:
+        board.close()
+
+
+def cmd_coord(args):
+    board = coordination.Board(args.state_dir)
+    try:
+        if args.operation == "status":
+            result = board.status(args.scope)
+        else:
+            actor = current_address(args.claude_home, args.codex_home)
+            if args.operation == "claim":
+                result = board.claim(args.scope, args.task, actor, args.resource)
+            elif args.operation == "release":
+                result = board.release(args.scope, args.task, actor)
+            elif args.operation == "prepare":
+                result = prepare_coordination(board, args, args.target, message_text(args), actor)
+            elif args.operation == "commit":
+                result = board.commit(args.message_id, actor, args.outcome)
+            elif args.operation == "receive":
+                envelope = (sys.stdin.read() if args.envelope_file == "-" else
+                            Path(args.envelope_file).read_text(encoding="utf-8"))
+                result = board.receive(envelope, actor)
+            elif args.operation == "finish":
+                result = board.finish(args.message_id, actor)
+        print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+        return EXIT_TARGET if result["status"] == "conflict" else 0
+    finally:
+        board.close()
 
 
 def wait_seconds(value: str) -> float:
@@ -1395,7 +1439,33 @@ def build_parser() -> argparse.ArgumentParser:
         help="primary Claude config root; standard sibling profiles are scanned too",
     )
     parser.add_argument("--codex-home", type=Path, default=default_codex_home())
+    parser.add_argument("--state-dir", type=Path, default=coordination.default_root(),
+                        help="shared local coordination state, auto-initialized on use")
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    coord_parser = subparsers.add_parser("coord", help="maintain local ownership and message lifecycle")
+    operations = coord_parser.add_subparsers(dest="operation", required=True)
+    status_parser = operations.add_parser("status")
+    status_parser.add_argument("--scope")
+    for operation in ("claim", "release"):
+        entry = operations.add_parser(operation)
+        entry.add_argument("--scope", required=True)
+        entry.add_argument("--task", required=True)
+        if operation == "claim":
+            entry.add_argument("--resource", action="append", default=[])
+    prepare_parser = operations.add_parser("prepare", help="preflight native transport without sending")
+    prepare_parser.add_argument("target")
+    common_message_arguments(prepare_parser)
+    commit_parser = operations.add_parser("commit")
+    commit_parser.add_argument("--message-id", required=True)
+    commit_parser.add_argument("--outcome", choices=("accepted", "not_sent", "unknown"), required=True)
+    receive_parser = operations.add_parser("receive")
+    receive_parser.add_argument("envelope_file", help="original received envelope, or - for stdin")
+    finish_parser = operations.add_parser("finish")
+    finish_parser.add_argument("--message-id", required=True)
+    for entry in (status_parser, prepare_parser, commit_parser, receive_parser, finish_parser,
+                  *[operations.choices[n] for n in ("claim", "release")]):
+        entry.set_defaults(handler=cmd_coord)
 
     list_parser = subparsers.add_parser("list", help="list local peer targets")
     list_parser.add_argument("--provider", choices=("all", "claude", "codex"), default="all")
@@ -1463,6 +1533,9 @@ def main(argv: list[str] | None = None) -> int:
     except PeerError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return exc.exit_code
+    except (coordination.CoordinationError, sqlite3.Error, OSError) as exc:
+        print(f"error: coordination state/input unavailable: {exc}; retain state", file=sys.stderr)
+        return EXIT_USAGE
 
 
 if __name__ == "__main__":
