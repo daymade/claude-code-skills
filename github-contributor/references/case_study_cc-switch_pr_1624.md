@@ -1,6 +1,6 @@
 # Case Study: cc-switch PR #1624 (protect conversation history)
 
-A companion to the PR #2634 case study. This PR adds a "keep conversation history" setting to `farion1231/cc-switch` that, when enabled, applies transcript-protection settings in Claude's `settings_config.json`. Like PR #2634, it required a long rebase to stay merge-ready; unlike #2634, the hardest problems were in frontend state management and test coupling rather than in Rust parsing.
+A companion to the PR #2634 case study. The historical PR added a "keep conversation history" toggle to `farion1231/cc-switch`, writing `cleanupPeriodDays` in Claude's `settings.json`. The toggle and its earlier fixes below are historical context, not the current implementation recipe. The [successor PR #8035](https://github.com/farion1231/cc-switch/pull/8035) proposes an explicit numeric editor preserving existing policies; proposal and verified behavior do not imply maintainer acceptance.
 
 PR URL: https://github.com/farion1231/cc-switch/pull/1624
 
@@ -12,7 +12,7 @@ The project's `CONTRIBUTING.md` AI-Assisted clause applied (same five rules as P
 
 ### Scope contract
 
-> Goal: add a UI toggle that protects or unprotects Claude conversation history by writing/removing `cleanupPeriod: 99999` in `~/.claude/settings.json`.
+> Historical goal: add a UI toggle that writes/removes `cleanupPeriodDays: 99999` in `~/.claude/settings.json`.
 >
 > In scope: the settings toggle, Tauri commands to read/apply/clear protection, frontend state sync, i18n strings.
 >
@@ -67,7 +67,7 @@ const baseline = lastSyncedKeepConversationHistoryRef.current ?? persistedValue;
 if (baseline === nextValue) return;
 ```
 
-This made the tests pass because most test cases did not change the toggle, so the API was never invoked. More importantly, it made the production behavior correct: no spurious writes to `settings.json`.
+This prevented redundant calls in the covered unchanged-toggle cases. It did not establish that every unrelated save preserved the user's policy: a hand-written 730 days could be read as "enabled" and later normalized to 99999. A boolean equality check loses the original numeric choice even when its component tests pass.
 
 **Lesson**: when a refactor breaks tests, first ask whether the refactor introduced unnecessary side effects. Fixing the side effect is usually better than adding mocks.
 
@@ -95,5 +95,24 @@ cargo clippy --all-targets && cargo test
 1. **Async initialization needs a "user touched" guard** to prevent late-arriving state from overwriting user input.
 2. **Refactor-induced test failures often signal a real bug** — prefer removing the spurious side effect over adding mocks.
 3. **i18n conflicts from unrelated additions** resolve by keeping both blocks in file order.
-4. **Re-run the full suite after every rebase**, even when the conflicts are "just" in TypeScript locale files.
+4. **Bind validation to the resulting content after integration**; reuse exact-content CI evidence, and rerun affected checks when their inputs change.
 5. **Multi-language PRs** must keep frontend state and backend persisted state consistent; the bug usually appears at the boundary.
+
+## Successor: preserve the policy and verify its consumer
+
+The successor reads actual days, saves only on an explicit action, and removes only
+`cleanupPeriodDays` to restore the default. Native isolated-file acceptance covered
+save, an unrelated settings change with byte-identical retention data, and reset.
+It did not exercise Claude's cleanup sweep or prove permanent history preservation.
+
+Independent review found a separate boundary: using the base branch's legacy-path
+resolver could return success while updating only `claude.json`. The new editor
+instead targets the standard `settings.json` and preserves the legacy file.
+The same standard-file assertion failed on the earlier head and passed on the fix.
+
+Configuration-editor acceptance should exercise its public read/save entry, not
+only a patch helper: standard file missing with a legacy file present; stale path
+after a directory change; unrelated fields intact; and a real parent component
+rejecting late reads/save results from the old directory. Compare the resulting
+file with the consumer's documented configuration contract. Green writes to the
+wrong file cannot satisfy it.

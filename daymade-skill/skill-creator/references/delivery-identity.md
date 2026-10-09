@@ -41,6 +41,11 @@ version; label a suite version with `suite <plugin-name> v<version>`. For multip
 Skills, retain the generated rows so names, owners and versions cannot cross.
 Quoted old shorthand and explanatory Chinese text remain allowed.
 
+A single-Skill plugin may retain a namespace different from the Skill's formal
+name. Resolve that mapping from the exact registered source; report the formal
+Skill name and label the version with its owning plugin name. Do not rename either
+identity to make them equal.
+
 ## Check the final candidate and the actual output
 
 Apply this preparation to the first delivery and each later user-facing release
