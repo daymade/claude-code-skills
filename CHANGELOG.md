@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **devils-advocate** (`daymade-financial` v1.5.2): Preserve engineering failure preconditions, healthy controls and recovery evidence; separate thesis impact from occurrence evidence and narrow time-related findings to the tested input. Retain investment risk grading and allow probe-backed withdrawal. Change type: bounded evidence-selection clarification.
+
 - **github-ops** (v1.14.6): Bug fix / factual correction — align merge-adjacent branch cleanup with exact-tip retirement and independent absence checks; preserve history when refreshing a PR under strict protection.
 - **peer-message** (v1.16.0 → v1.16.1): Add advisory coordination routing at Codex message ingress; preserve provenance and permission boundaries, peer replies and quiet completion without turning partial progress into final user delivery. Change type: existing routing correction.
 - **auto-repo-setup** (v2.1.3 → v2.1.4): Continue authorized artifact and resource closure after a stage is published; distinguish verified task completion from unrelated shared-checkout WIP. Preserve scoped tools and authorization boundaries. Change type: completion-boundary clarification.
