@@ -264,6 +264,25 @@ scripting (e.g. AppleScript's application object) may not see the automation
 window at all when it belongs to another profile/instance — don't burn rounds
 trying to raise it; and per trap 9, don't verify the escape under virtual time.
 
+### Lazy images can move after you scroll
+
+For a long reader, wait for the target image to be attached, scroll its message
+into view, then wait for `complete && naturalWidth > 0` before calling `decode()`.
+Waiting for visibility before scrolling can time out on healthy deferred media;
+decoding before its lazy request starts can raise `EncodingError`.
+
+After decoding, re-position the message: neighboring lazy images can change its
+vertical position after the first scroll. Check the final geometry, capture,
+and inspect the whole image together with its message identity, speaker/time
+and uncertainty notice. A loaded image or passing bounds assertion cannot
+substitute for that inspected frame. If the group cannot fit, use overlapping
+normal-viewport captures that preserve the association.
+
+Trigger the actual enlargement control and bind the resulting request bytes to
+the selected image. Enlarging a thumbnail does not establish that the original
+was obtained. Preserve visible thumbnail/original-unverified/low-confidence
+labels; an image description is not a verified fact about its contents.
+
 ## 9. Virtual time fast-forwards timers, not I/O
 
 `--virtual-time-budget=N` makes `setTimeout`-based test scripts complete
@@ -327,6 +346,37 @@ curl — expect `206` and a `Content-Range`), or `file://` for pure rendering
 checks (native random access, no server), or serving faststart-remuxed copies.
 Keep the original files untouched; remux copies are a serving concern, not an
 asset edit.
+
+### Native PDF: original bytes and painted pages are separate evidence
+
+When testing a PDF link, arm the popup and actual clicked-request response
+observers before the click; use the selected link's resolved URL rather than a
+guessed attachment path. Bind the response to the intended original's identity,
+status, byte length, `%PDF-` signature and SHA. Separately inspect a screenshot
+showing painted document content, its visible title and page count. An embed,
+toolbar or gray viewer shell alone proves no readable page.
+
+For an isolated Playwright Chromium check, the full browser launched with
+`chromium.launch({headless: true, channel: 'chromium'})` has rendered the native
+viewer where the default headless shell stalled. Record the actual executable
+and launch mode; do not turn a harness timeout into a serving defect. Use bounded
+`response.finished()` and paint observation rather than waiting indefinitely
+for the viewer's `load` event. This check does not certify another browser or
+the user's visible OS/browser chrome.
+
+Native PDF navigation can expose viewer HTML through `response.body()` even
+after HTTP 200 and completion: a 345-byte shell has been observed while the
+original PDF was megabytes. Inspect the returned content before comparing its
+hash; shell bytes neither prove a corrupt original nor establish its identity.
+If that ambiguity remains, an authorized diagnostic context can capture the
+exact clicked GET with `route.fetch()`, inspect that upstream body, and fulfill
+with the unmodified upstream response. Keep this byte proof distinct from an
+ordinary direct-click screenshot, since interception changes the driving path.
+Keep read-only probes GET-only and close their own browser/resources.
+
+Stop at the named representative's byte identity and visible reading result.
+Neither proves every page's extraction fidelity, OCR, chart understanding or
+availability of missing originals; retain the reader's partial/missing notices.
 
 ## 12. Calibrate capture and inspect the minimum surface
 

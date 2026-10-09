@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.20.6): Separate original PDF byte identity from native viewer paint, and re-position decoded lazy images before inspecting the complete message and uncertainty labels. Change type: bounded verification recipe clarification.
+
 - **skill-creator** (`daymade-skill` v1.67.3): Require actual conflicts, changed inputs or repository requirements before refreshing a PR; preserve pushed history with added commits by default. Rebase, amend and leased rewrites require exact authorization and recovery evidence; squash policy and a lease do not supply permission. Keep additive registry/changelog preservation and conflict-proof checks. Change type: bounded authorization-contract correction.
 
 - **github-ops** (v1.14.7): Separate current-base merge readiness from PR-to-merge validation reuse. Unrelated base advances do not alone require a new PR head or repeated CI; retain exact-head checks, protection/review requirements and normal validation for changed inputs. Reuse still requires matching tested trees and complete successful-run evidence. Change type: bounded execution-contract correction.
