@@ -86,16 +86,16 @@ When a review prompts a fix, use `git commit --fixup=<sha>` and squash with `git
 
 Maintainers' trust is built by evidence, not by claims. The point of this phase is to produce evidence you can paste into the PR.
 
-### Step 3.1 — Run the project's full lint + test suite locally
+### Step 3.1 — Establish the project's required checks
 
-Read the exact commands from CONTRIBUTING.md. Typical examples (use what your project specifies):
+Read CONTRIBUTING.md and the current CI workflow for the required commands and platform matrix. Reuse successful checks on the exact same content when their inputs remain applicable; otherwise run the missing or affected checks. Typical examples (use what your project specifies):
 
 ```bash
 pnpm typecheck && pnpm format:check && pnpm test:unit
 cargo fmt --check && cargo clippy --all-targets && cargo test
 ```
 
-If any check fails, fix it before continuing. Do not push a PR with red local checks expecting CI to clarify — that wastes maintainer time.
+For a failure, compare the same command against the immutable current base in an isolated worktree before attributing it to the PR. Preserve failed results and distinguish a regression from an existing defect or environment blockage; never stop another session's service to make a test pass. Complete the repository's required checks before claiming merge readiness.
 
 ### Step 3.2 — For GUI / desktop apps: run real end-to-end with isolation
 
@@ -114,6 +114,13 @@ The full isolation recipe, including how to trigger deeplinks via Tauri's single
 Before writing the PR description, list every "I tested…" / "I verified…" / "I ran…" statement you intend to make. For each one, ask: "What's my evidence?" If the answer is "I think I did" or "it should work", you have not actually done it. Write only what you can defend.
 
 This rule prevents the most damaging trust failure: a maintainer running your "tested" command and finding it doesn't work.
+
+When the user explicitly asks for an independent maintainer-style evaluation of their
+own contribution, invoke `github-review-pr:github-review-pr` for its read-only review
+method. Give fresh-context reviewers the original issue/review discussion and immutable
+head/base objects. Keep the requester in the author role: this produces a recommendation,
+not a formal approval or permission to merge. Continue repairs through this contributor
+workflow only within existing authorization. Ordinary self-audits do not trigger it.
 
 ### Step 3.4 — Push-time verification
 

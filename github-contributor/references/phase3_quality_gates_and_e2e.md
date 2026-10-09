@@ -4,7 +4,7 @@ Detailed playbook for proving your change works before asking a maintainer to tr
 
 ## 1. Automated checks (every PR)
 
-Run the project's full lint + test suite locally. The exact commands come from CONTRIBUTING.md. Examples from real projects:
+Read CONTRIBUTING.md and the current CI workflow for the required commands and matrix. Bind results to the tested commit/tree and environment. Reuse successful checks on unchanged inputs rather than repeating the same suite locally after exact-content CI passed. Run missing or affected checks after a change. Examples from real projects:
 
 ```bash
 # Node / TypeScript projects
@@ -37,16 +37,16 @@ pnpm test:unit 2>&1 | tee /tmp/test-unit.log
 
 ### 1.1 If a check fails
 
-Do not push. Fix the failure locally. Common categories:
+Preserve the command, exit status and first relevant error. Establish whether the failure is introduced by this PR before choosing the repair. Common categories:
 
 - **Format failure**: run the formatter (`pnpm format`, `cargo fmt`, `ruff format`). Re-run `--check`.
 - **Lint failure**: fix the lint or, if the project allows, add a documented ignore at the call site. Avoid global ignore unless the project's own config does it.
 - **Type failure**: fix the type. Avoid `// @ts-ignore`, `// nolint`, `// type: ignore` unless the project uses them elsewhere for the same pattern.
-- **Test failure**: if the failing test is one you didn't touch, suspect your change broke something unrelated. Run `git stash && <test command>` to confirm whether `main` is also broken.
+- **Test failure**: run the same command on the immutable current-base commit in a separate worktree, with the same relevant environment. Do not stash, reset or switch a shared checkout to manufacture the control. If a port is held by another session, identify its owner and keep it running; use an authorized isolated runner. Record base failures and environment blocks separately from PR regressions.
 
 ### 1.2 If CI runs additional checks the project's CONTRIBUTING.md doesn't list
 
-Inspect `.github/workflows/` for the project's actual CI matrix. Some projects only document the headline checks in CONTRIBUTING.md but enforce additional ones in CI (e.g., integration tests, Docker builds, security scans). Running these locally is optional but increases first-push success.
+Inspect `.github/workflows/` for the project's actual CI matrix. Its required integration tests, builds and platform checks still need evidence even when CONTRIBUTING.md lists only headline checks. A fork run on the exact head supplies separate evidence; it does not turn upstream `action_required` or pending review into approval.
 
 ## 2. The isolated-home pattern for desktop apps
 
@@ -109,9 +109,9 @@ mkdir -p /tmp/cc-switch-e2e/.cc-switch
 CC_SWITCH_TEST_HOME=/tmp/cc-switch-e2e pnpm tauri dev
 ```
 
-The dev binary now reads/writes `/tmp/cc-switch-e2e/.cc-switch/cc-switch.db`, never touching `~/.cc-switch/`.
+With the override honored by the actual launched instance, its database is `/tmp/cc-switch-e2e/.cc-switch/cc-switch.db`. Before input, identify the binary, bundle and PID, then verify the resolved data paths. Give the test bundle a separate identity so an existing production instance cannot receive its single-instance messages.
 
-Confirm isolation worked by reading the dev log on startup:
+Fresh-start logs can corroborate isolation:
 
 ```
 [INFO] MCP table empty, importing from live configurations...
@@ -119,7 +119,7 @@ Confirm isolation worked by reading the dev log on startup:
 [INFO] No Claude MCP servers found to import
 ```
 
-These "empty" / "no servers found" messages indicate a fresh database. If you see "imported 47 sessions from existing data", isolation failed — kill the binary and investigate.
+These messages prove neither which instance received input nor which paths it uses; a real installation may also be empty. Unexpected imported data is a reason to stop input and inspect the exact instance and paths. Quit only the task-owned test instance through its normal lifecycle; never terminate a name-matched production process.
 
 ## 3. Triggering features without polluting the system
 
@@ -134,7 +134,7 @@ CC_SWITCH_TEST_HOME=/tmp/cc-switch-e2e \
   ./src-tauri/target/debug/cc-switch "ccswitch://v1/import?resource=provider&app=claude&..."
 ```
 
-This bypasses LaunchServices entirely and routes the URL to your specific dev binary instance.
+This avoids LaunchServices. Verify the single-instance scope and receiving PID/data path from the current implementation and logs; the binary path alone does not prove which running instance received the URL.
 
 Watch the dev log for confirmation:
 
@@ -207,19 +207,27 @@ screencapture -s /tmp/screenshot.png
 screencapture -l <window-id> /tmp/screenshot.png
 ```
 
-To get the window ID for your dev app:
+Use `capture-screen:capture-screen` to obtain the Quartz window ID. Match its owner PID
+to the verified test executable before using `screencapture -l`; an AX element/index
+or application display name is not a Quartz window ID.
 
-```bash
-osascript -e 'tell application "System Events" to get id of front window of (first process whose name is "<app-name>")'
-```
+### 5.2 Verify target and focus before input
 
-### 5.2 Bring the app to the front before capturing
+Check user activity and coordinate exclusive access before any foreground action,
+within the task's existing authorization. A visible screenshot or successful
+activation call does not prove keyboard focus. With multiple copies, bind every
+action to the test PID, bundle and executable; do not select the first same-named process.
 
-```bash
-osascript -e 'tell application "System Events" to set frontmost of (first process whose name is "<app-name>") to true'
-```
+For macOS local native acceptance, use `macos-app-developer:developing-macos-apps`
+and its local-native-acceptance reference when available. It owns the PID-bound
+semantic AX recipe. If unavailable, retain the unverified step rather than assume
+a driver exists. Prefer a named control action over a global Return; observe the
+rendered transition and resulting file/database independently. A blocked action
+does not authorize changing tools to evade its restriction.
 
-In some setups osascript focus calls are unreliable (the terminal can steal focus back). A more reliable trigger is the app's own focus call — e.g., for cc-switch, re-running the binary triggers the single-instance callback which calls `window.set_focus()` internally.
+Inside an authorized foreground interval, the app's own focus path may help: for
+cc-switch, re-running the same isolated binary invokes `single_instance` and
+`window.set_focus()`. Verify the receiver and actual frontmost PID afterward.
 
 ### 5.3 Crop after capturing
 
@@ -244,7 +252,7 @@ Claims I plan to make in the PR body:
 - "All unit tests pass" → evidence: `pnpm test:unit` output in /tmp/test-unit.log
 - "Lint clean" → evidence: `cargo clippy --all-targets` exited 0
 - "Tested end-to-end with isolated home" → evidence: dev log + SQLite dump in /tmp/cc-switch-e2e/
-- "No production data was touched" → evidence: I used CC_SWITCH_TEST_HOME the entire time
+- "Test actions targeted isolated data" → evidence: exact receiving PID/bundle/executable and resolved paths, plus isolated file/database readback
 - "Screenshot 1: import dialog" → evidence: /tmp/e2e/screenshot_1_import_dialog.png
 - "Screenshot 2: env block" → evidence: /tmp/e2e/screenshot_2_env_block.png
 ```
