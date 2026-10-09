@@ -171,6 +171,51 @@ class SourceContractTests(unittest.TestCase):
         self.assertIsNone(init.init_skill("../escape", self.repo, repo=self.repo))
         self.assertFalse((self.root / "escape").exists())
 
+    def test_matching_owner_stops_git_probes_after_all_fields_validate(self):
+        identity = source.git_identity(self.repo)
+        entries = {"seed": {"source_dir": str(self.repo / "seed")},
+                   "sibling": {"source_dir": str(self.repo / "not-yet-created")}}
+        with patch.object(source, "git_identity", wraps=source.git_identity) as git:
+            self.assertTrue(source.owned_repository(identity, "test-market", {"marketplaces": {"test-market": entries}}))
+        self.assertEqual(git.call_count, 1)
+
+    def test_post_match_malformed_fields_are_rejected_before_git(self):
+        identity = source.git_identity(self.repo)
+        for bad in ({}, {"source_dir": None}, {"source_dir": ""}, {"source_dir": "   "},
+                    {"source_dir": "."}, [], None, "not-an-object"):
+            with self.subTest(candidate=bad):
+                # A list is an existing supported group, so nest an empty list
+                # as its invalid candidate rather than changing that contract.
+                entries = {"seed": {"source_dir": str(self.repo / "seed")}, "later": [bad]}
+                inventory = {"marketplaces": {"test-market": entries}}
+                with patch.object(source, "git_identity", wraps=source.git_identity) as git:
+                    with self.assertRaises(source.EvidenceError):
+                        source.owned_repository(identity, "test-market", inventory)
+                self.assertEqual(git.call_count, 0)
+
+    def test_unmatched_owner_checks_all_git_candidates_and_stays_false(self):
+        wrong = self.root / "other"
+        wrong.mkdir()
+        subprocess.run(["git", "-C", str(wrong), "init", "-q"], check=True)
+        inventory = {"marketplaces": {"test-market": {
+            "first": {"source_dir": str(self.repo / "seed")},
+            "second": [{"source_dir": str(self.repo / "another")},
+                       {"source_dir": str(self.root / "non-repository")}]}}}
+        identity = source.git_identity(wrong)
+        with patch.object(source, "git_identity", wraps=source.git_identity) as git:
+            self.assertFalse(source.owned_repository(identity, "test-market", inventory))
+        self.assertEqual(git.call_count, 3)
+
+    def test_later_matching_candidate_is_still_examined(self):
+        identity = source.git_identity(self.repo)
+        inventory = {"marketplaces": {"test-market": {
+            "not-git": {"source_dir": str(self.root / "not-git")},
+            "match": [{"source_dir": str(self.repo / "seed")}],
+            "remaining": {"source_dir": str(self.repo / "remaining")}}}}
+        with patch.object(source, "git_identity", wraps=source.git_identity) as git:
+            self.assertTrue(source.owned_repository(identity, "test-market", inventory))
+        self.assertEqual(git.call_count, 2)
+
 
 class DeliveryIdentityTests(unittest.TestCase):
     """Run under the existing source-contract CI suite; no host/network needed."""

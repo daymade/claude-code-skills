@@ -4,6 +4,9 @@ Quick validation script for skills - minimal version
 """
 
 import argparse
+from contextlib import redirect_stdout
+import io
+import json
 import sys
 import os
 import re
@@ -522,9 +525,37 @@ def validate_skill(skill_path, audience=None):
     return True, "Skill is valid!"
 
 
+def validation_report(skill_path, audience=None):
+    """Expose the existing result and emitted diagnostics without changing policy.
+
+    A valid Skill may still have warnings. Keep their original wording and the
+    complete captured diagnostics; callers must interpret scope before acting.
+    """
+    captured = io.StringIO()
+    with redirect_stdout(captured):
+        valid, message = validate_skill(skill_path, audience=audience)
+    diagnostics = captured.getvalue().splitlines()
+    warnings = [
+        line for line in [*diagnostics, *message.splitlines()]
+        if "WARNING:" in line or line.lstrip().startswith("\u26a0")
+    ]
+    return {
+        "schema_version": 1,
+        "valid": valid,
+        "message": message,
+        "warnings": warnings,
+        "diagnostics": diagnostics,
+    }
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Validate a skill directory.")
     parser.add_argument("skill_directory")
+    parser.add_argument(
+        "--format", choices=("text", "json"), default="text",
+        help="Text preserves the existing output; JSON separates valid, warnings "
+             "and full diagnostics. Warnings do not change the validity exit code.",
+    )
     parser.add_argument(
         "--audience",
         choices=("public", "private", "auto"),
@@ -537,10 +568,20 @@ def main(argv=None):
     )
     args = parser.parse_args(argv)
     audience = args.audience
+    audience_note = None
     if audience == "auto":
         audience, how = detect_audience(Path(args.skill_directory))
         if audience == "private":
-            print(f"{chr(128274)} audience: private ({how}) — portability/identifier findings are notes, not defects")
+            audience_note = f"{chr(128274)} audience: private ({how}) — portability/identifier findings are notes, not defects"
+    if args.format == "json":
+        report = validation_report(args.skill_directory, audience=audience)
+        report["audience"] = audience
+        if audience_note:
+            report["diagnostics"].insert(0, audience_note)
+        print(json.dumps(report, ensure_ascii=False))
+        return 0 if report["valid"] else 1
+    if audience_note:
+        print(audience_note)
     valid, message = validate_skill(args.skill_directory, audience=audience)
     print(message)
     return 0 if valid else 1
