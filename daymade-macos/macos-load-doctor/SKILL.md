@@ -45,13 +45,13 @@ bash scripts/load_census.sh
 
 It prints three readings, each answering a different question:
 
-- **By parent (PPID aggregation)** — *who is accumulating children?* One parent
-  holding hundreds of children is a leak, and it is self-sustaining: no
-  automatic mechanism ever terminates a live process somebody else spawned
-  (launchd reaps zombies; it never kills live adoptees), so unless the
-  spawner or the user kills them, they accumulate for days. This is the
-  signature of per-session/per-thread spawners (MCP servers, per-tab
-  helpers) that never reap.
+- **By parent (PPID aggregation)** — *who owns many children?* A large count
+  identifies fan-out and resource overhead, not a proven leak. Compare births,
+  exits and counts across a bounded window with the owner's active workload and
+  intended lifecycle. A stable pool or helpers for active sessions can be valid;
+  a leak claim needs evidence that children outlive the work they serve or that
+  retained counts grow after equivalent work completes. Do not terminate sessions
+  to manufacture that evidence; use existing lifecycle records or your own test.
 - **By cumulative CPU time** — *who has been burning for hours?* A GUI app or
   helper with days of CPU time at ~100% is a busy loop, not a spike.
 - **By instantaneous %CPU** — *who is burning right now?* Catches the active
@@ -79,12 +79,13 @@ die), and who is allowed to stop it.
 
 | Shape | Signature | Typical cause |
 |---|---|---|
-| **Leak** | child count of one parent grows monotonically over hours | spawner never reaps (per-thread MCP servers, per-session helpers) |
+| **Leak candidate** | retained child count grows after comparable work finishes, or helpers outlive their documented lifecycle | missing cleanup; confirm workload and lifecycle before calling it a leak |
+| **Fan-out / pool** | many children correlate with active sessions or a stable configured pool | per-thread ownership can be expensive without being a leak |
 | **Storm** | many processes with seconds-short etimes, high fork rate | unthrottled loop (test replay, batch scan, retry without backoff) |
 | **Busy loop** | one process at ~100% with days of cumulative time | app polling without sleep |
 | **Cascade** | load high but suspects scattered | a system service amplifying each new process (security scans, file-sync, Spotlight) |
 
-The fix is different for each: a leak wants the spawner fixed or restarted, a
+The fix is different for each: a confirmed leak wants the spawner fixed or restarted, a
 storm wants throttling at the loop, a busy loop wants the app relaunched or its
 scan disabled, a cascade wants fewer new processes, not faster ones.
 
@@ -119,8 +120,36 @@ On a shared machine, **diagnosis is read-only; remediation has an owner**.
 - Once the current user authorizes an intervention, execute and verify it;
   handing an already authorized action back as another report is not completion.
 - After any remediation (yours or the owner's), **read back**: re-run
-  `sysctl -n vm.loadavg` and the census. A command receipt is not recovery;
-  the load and the child count are.
+  `sysctl -n vm.loadavg` and the census, then exercise the user's original
+  capability through its actual consumer. Disabling a service can relieve load
+  while removing that capability: report mitigation until it works again.
+  Before a configuration reload, establish whether its scope includes other
+  threads/services. Compare target and non-target helpers before/after; an
+  unchanged master PID does not prove that other helpers were unaffected.
+
+## Memory evidence
+
+For a memory complaint, measure pressure and activity alongside process counts:
+
+```bash
+sysctl vm.swapusage
+vm_stat -c 4 2
+ps -axo pid,ppid,rss,command
+```
+
+Read the page size printed by `vm_stat`; its first row is cumulative and later
+rows show interval activity. Existing swap allocation does not establish current
+thrashing: inspect swap-in/out activity over the sampled window and report that
+window. RSS totals can count shared resident pages repeatedly and are not unique
+physical memory. For a suspect, use `vmmap -summary <pid>` to distinguish its
+reported physical footprint from RSS; retain separately reported GPU/IOKit
+allocations instead of silently adding unlike counters. A large allocation or
+compressed-memory snapshot alone does not identify retained objects or a leak.
+
+[Apple's memory guide](https://support.apple.com/guide/activity-monitor/view-memory-usage-actmntr1004/mac)
+defines memory pressure using free memory, swap rate, wired memory and cached
+files. The executing agent interprets those signals and the observed workload;
+the census does not mechanically classify a leak.
 
 ## Common leak patterns
 
