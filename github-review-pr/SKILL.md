@@ -294,6 +294,24 @@ State the intended behavioral change in one or two sentences. Flag unrelated cha
 missing promised changes, generated artifacts without their source changes, and
 dependency or lockfile drift. Do not infer intent from filenames alone.
 
+For document ingestion, first retrieve the original request and the corresponding
+source text or attachment. Separate source-material quality, changes introduced by
+ingestion, and integration conflicts. A request to archive an existing text does
+not require rewriting its narrative or adding an implementation plan. Report a
+material source error or misleading claim explicitly; preserve approved originals
+and distinguish any correction or annotation from them.
+
+Check changed citations by their destination and purpose: a link opening successfully
+does not prove it reaches the named evidence. Compare text and diagrams when fidelity
+is part of the request; do not discard link destinations from the comparison and
+then claim the evidence chain is preserved. Keep unavailable originals or unverified
+versions explicit rather than treating their absence as a contributor failure.
+
+Choose review depth from the affected claims and behavior. A mechanical link repair
+needs verification of the target and retained content, not a new content rewrite,
+general validator or CI workflow. Create automation only within separate user
+authorization and keep its stated coverage distinct from document correctness.
+
 When the head contains broad unrelated history, separate **branch state** from
 **contribution merit**. Use the GitHub PR commit list, title/body, exact commit patches,
 and patch-equivalence as cross-checks:
