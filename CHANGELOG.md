@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **skill-creator** (`daymade-skill` v1.67.4): Organize the existing creation, migration, evaluation and publication contracts behind action-time entry routes. Preserve supported workflows and authorization/recovery boundaries. Report missing measurements and incomplete evaluation pairs explicitly instead of substituting zeros or character counts. Change types: behavior-preserving reorganization and measurement repairs.
+- **peer-message** (v1.18.0): Deliver fallback Codex coordination through active-turn App Server tool output instead of waiting for a new queued user turn. Keep explicit queued delivery and unloaded-thread queues, label the route, and never requeue an uncertain live write. Extend verification and reply lookup to the adapter's persisted tool output. Change type: user-authorized transport workflow redesign; native messaging remains first.
 
 - **frontend-visual-qa** (v1.20.6): Separate original PDF byte identity from native viewer paint, and re-position decoded lazy images before inspecting the complete message and uncertainty labels. Change type: bounded verification recipe clarification.
 
