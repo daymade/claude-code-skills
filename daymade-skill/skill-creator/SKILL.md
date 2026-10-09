@@ -294,6 +294,10 @@ For changes to persisted formats or partial state updates, permission-sensitive
 checks, and commands whose output may exceed the tool response, load
 [stateful-script-verification.md](references/stateful-script-verification.md).
 Select its affected recipes as narrow deterministic evidence within the chosen tier.
+For a provider, default route or enable-switch change, use its
+**Operational route changes** recipe: preserve the original user result and
+exercise the actual downstream consumer, including asynchronous/device removal
+and human-review exits. A reachable pointer alone does not prove the handoff runs.
 
 For an operational Skill whose changed workflow needs installation, account
 configuration, a live service or human cooperation, read
