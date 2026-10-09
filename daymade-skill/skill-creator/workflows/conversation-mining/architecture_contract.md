@@ -8,9 +8,9 @@ The workflow reads from the user's local machine only:
 
 - Claude Code project sessions: `~/.claude/projects/<project-key>/*.jsonl`
 - Claude Code command history: `~/.claude/history.jsonl` (declared in `claude_command_history`)
-- Codex transcripts: `~/.codex/transcription-history.jsonl` (declared in `codex_transcripts`)
+- Codex voice transcripts: `~/.codex/transcription-history.jsonl` (declared in `codex_transcripts`; not native session rollouts)
 - Codex command history: `~/.codex/history.jsonl` (declared in `manual_exports`)
-- Optional: user-provided transcript exports or session JSONL files (declared in `manual_exports`)
+- Optional: user-only TXT notes or flat role-preserving JSONL exports from the owning history-reader Skill (declared in `manual_exports`; see `workflow.md` Step 1)
 
 These sources are **read-only**. No script writes back to them, renames them, or marks them as processed.
 
@@ -42,6 +42,7 @@ Every extracted snippet is redacted before it is:
 Redaction targets:
 
 - LLM provider keys: `sk-or-...`, `sk-ant-...`, `sk-kimi-...`, `sk-proj-...`, `sk-svcacct-...`, `sk-...` (generic)
+- Google API key shapes beginning with `AIza` or `AQ.` and a payload of at least 20 URL-safe characters
 - Bearer / Authorization tokens and cookies
 - High-entropy API tokens in `Authorization` headers or query parameters
 - Email addresses, phone numbers, Chinese mobile numbers
@@ -75,6 +76,7 @@ These are **dropped entirely**. The workflow only retains:
 
 - `user` messages (role: user)
 - `assistant` messages (role: assistant)
+- Explicit `tool` records in flat role-preserving manual JSONL exports; their text remains tool evidence, not user approval
 - High-value attachments that carry real content (pasted files, images with captions, tool outputs with user-facing results)
 
 When in doubt, drop.

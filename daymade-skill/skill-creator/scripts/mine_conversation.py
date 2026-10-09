@@ -64,7 +64,12 @@ def get_token_counter(encoding_model: str):
 DEFAULT_REDACTION_PATTERNS = [
     {
         "id": "llm_provider_keys",
-        "pattern": r"(?:sk-or-|sk-ant-|sk-kimi-|sk-proj-|sk-svcacct-|sk-)[A-Za-z0-9_-]+",
+        "pattern": r"(?<![A-Za-z0-9_])(?:sk-or-|sk-ant-|sk-kimi-|sk-proj-|sk-svcacct-|sk-)[A-Za-z0-9_-]+",
+        "placeholder": "<REDACTED-key>",
+    },
+    {
+        "id": "google_api_keys",
+        "pattern": r"(?<![A-Za-z0-9_])(?:AIza|AQ\.)[A-Za-z0-9_-]{20,}",
         "placeholder": "<REDACTED-key>",
     },
     {
@@ -348,7 +353,7 @@ def _parse_codex_history_jsonl(path: Path) -> Iterator[dict]:
 
 
 def _parse_manual_export(path: Path) -> Iterator[dict]:
-    """Best-effort parser for a user-provided JSONL or text file."""
+    """Parse flat JSONL roles; text paragraphs and missing roles default to user."""
     if path.suffix == ".jsonl":
         text = path.read_text(encoding="utf-8", errors="replace")
         for line_no, raw_line in enumerate(text.splitlines(), start=1):
