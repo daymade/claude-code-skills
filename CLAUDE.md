@@ -407,6 +407,11 @@ validation.
 
 ### Git Operations
 
+For already-authorized delivery in a shared checkout, enter
+[auto-repo-setup's scoped delivery route](auto-repo-setup/references/git_safety.md#authorized-shared-checkout-delivery).
+It owns the authorization/tool gate, bounded coordination and partial-result recovery;
+keep ordinary sync, publication and recovery boundaries with their existing owners.
+
 This repository uses standard git workflow, but **always stage files by name**,
 never `git add -A` / `git add .`. Multiple agents may have unstaged changes in
 the same worktree — a blanket stage piggybacks their work into your commit:
@@ -513,6 +518,11 @@ git -C <worktree> \
    yours and is still being written, leave it alone and report the baseline
    SHA, who was asked, and that the ff is still outstanding — do not stash,
    `checkout --`, or `restore` it.
+
+For an already-authorized task with declared scoped tools, use the scoped delivery
+route above before treating another writer's unrelated changes as a reason to
+leave the task waiting. This does not permit overwriting that writer's files or
+claiming the whole checkout is current.
 
 For divergent local `main` or branch/worktree retirement, follow
 [git-safety-net](git-safety-net/SKILL.md) and its

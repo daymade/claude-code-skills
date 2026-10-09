@@ -1,15 +1,5 @@
 # Git safety gates
 
-## Contents
-
-- Inspect before mutation
-- Routine synchronization
-- Commit scope
-- Push safety
-- Conflict handling
-- Hook bypass
-- Secret or PII history cleanup
-
 ## Inspect before mutation
 
 Before pull, commit, merge, rebase, push, or history rewrite, record:
@@ -26,14 +16,51 @@ URL, directory name, or previous report does not prove those properties.
 ## Routine synchronization
 
 1. Verify the current branch has the intended upstream.
-2. If the working tree is clean, run git pull --ff-only.
-3. If local changes exist, do not auto-stash or pull; report the changed paths.
-4. If histories diverged, show the graph and ask how the local commits should be
+2. Check the gate in [Authorized shared-checkout delivery](#authorized-shared-checkout-delivery)
+   when the task includes delivery, before treating dirty or divergent state as a stop.
+3. Outside that gate, if the working tree is clean, run git pull --ff-only.
+4. If local changes exist, do not auto-stash or pull; report the changed paths.
+5. If histories diverged, show the graph and ask how the local commits should be
    handled. Do not choose merge/rebase/force by habit.
-5. On network failure, distinguish "remote not checked" from "already current".
+6. On network failure, distinguish "remote not checked" from "already current".
 
 git pull --ff-only only accepts a fast-forward update. Automatic stash/pop is a
 separate operation and can create non-trivial conflicts.
+
+## Authorized shared-checkout delivery
+
+Enter only when current user or project instructions already authorize the named
+delivery stage, including any commit or push, and the repository declares usable
+scoped tools that preserve unrelated shared HEAD, index, and WIP. Read their actual
+contracts before use. This Skill supplies no such tools or additional permission;
+missing authority or a usable scoped route leaves the conservative routine in effect.
+The existing visibility, protection, conflict, and public-push gates still apply.
+
+1. Bind the task's exact paths and a full immutable base commit. Use an isolated
+   task checkout or the declared scoped tools; never absorb unrelated local commits.
+2. Verify whether affected paths have an active writer, then coordinate once with
+   a bounded deadline. On expiry, reassess the actual overlap or blocker; a new ETA
+   alone does not restart the wait. Continue independently when the declared route
+   preserves the other writer's work. Explicit objections to touching the affected
+   target, overlapping edits, locks, or an unavailable safe route pause that part.
+3. Commit only the owned task changes through the declared workflow. If a tool
+   returns a notice or nonzero result, read its documented stage contract and
+   independently inspect whether it created the commit or completed landing before
+   retrying. Reuse an unchanged candidate; a concurrent-state notice alone is not
+   a reason to rebuild it.
+4. On remote-ref drift, refresh the immutable remote base and integrate only this
+   task's isolated change through the authorized repository workflow, preserving
+   both sides. Unresolved semantic conflicts or product choices remain blockers;
+   do not force a ref, bypass a lock, or merge unrelated shared local history.
+5. Publish the exact candidate through the normal repository workflow, then verify
+   the hosted commit independently. Synchronize only known landed content through
+   the declared safe route, preserving unrelated staged and unstaged work.
+6. Retire only this task's temporary resources under the existing recovery rules
+   (use git-safety-net for branch/worktree retirement). Stop when the authorized
+   stage has its delivery evidence; report any remaining blocker explicitly.
+
+Do not report the whole shared checkout as clean or synchronized based only on
+the task's paths. A scoped delivery can finish while unrelated work remains.
 
 ## Commit scope
 
