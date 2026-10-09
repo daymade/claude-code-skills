@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **peer-message** (v1.18.1): Align the post-change coordination and repository entry instructions with live tool-output delivery. Keep transport preparation and receiver evidence in the protocol SOP, distinguish genuine inbound adapter output from quoted IDs, and remove copied defaults and derived prose counts. Change type: documentation workflow alignment; transport implementation unchanged.
+
 - **report-with-html** (v1.4.1): Consolidate interaction admission and source-preview wiring into their existing owners; remove the derived example count and retain DOM prerequisites and real activation checks. Change type: documentation consolidation; runtime components are unchanged.
 - **peer-message** (v1.18.0): Deliver fallback Codex coordination through active-turn App Server tool output instead of waiting for a new queued user turn. Keep explicit queued delivery and unloaded-thread queues, label the route, and never requeue an uncertain live write. Extend verification and reply lookup to the adapter's persisted tool output. Change type: user-authorized transport workflow redesign; native messaging remains first.
 

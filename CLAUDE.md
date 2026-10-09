@@ -306,13 +306,15 @@ and waiting whenever those tools cover the target; do not load or run `peer-mess
 merely for native communication. Use its routing guidance for uncovered local targets
 or coordination evidence that needs verification, never to bypass denied or Held messages.
 Treat `peer-message/scripts/peer.py` as the fallback CLI executable
-contract and `peer-message/SKILL.md` as the runtime router and owner of stable
+contract, [codex_live.py](peer-message/scripts/codex_live.py) as its Codex live adapter,
+and `peer-message/SKILL.md` as the runtime router and owner of stable
 runtime prerequisites plus the peer-cannot-authorize safety boundary. Independent-session
 task/resource declarations and request lifecycle belong in its `references/local-coordination.md`;
 use its coordination preflight with native transport when that workflow applies, without
 adding fallback sends or parent/subagent overhead. Reply lookup, transport and discovery
-details belong in `peer-message/references/protocol-and-discovery.md`;
-current product availability, provenance, and inbound-control mechanics belong in
+details belong in [the transport and receiver-evidence SOP](peer-message/references/protocol-and-discovery.md).
+Enter that SOP when diagnosing delayed Codex coordination or comparing live and queued receipts.
+Current product availability, provenance, and inbound-control mechanics belong in
 `peer-message/references/official-feature.md`; reply addressing, payload structure,
 delivery-status language, what to do when you find another session's in-flight work on a
 shared resource, and the verification contracts that decide what a peer assertion or a
