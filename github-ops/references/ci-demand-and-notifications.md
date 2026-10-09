@@ -103,6 +103,27 @@ standalone manual entry. Do not turn a check-only manual action into a deploymen
 PR validation and post-merge validation are not inherently equivalent: the latter
 can test an integrated tree. Remove repeated work only with matching input evidence.
 
+For PR-to-merge reuse, have the repository's validation job record its actual
+checkout commit and `git rev-parse HEAD^{tree}` after checkout. A PR head SHA or
+run metadata alone does not identify the tested tree: the default PR checkout
+is the synthetic merge result ([GitHub PR checkout](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#how-the-merge-branch-affects-your-workflow)).
+Use the repository-owned selector/evidence reader to match that tree against the
+integrated checkout, together with the required suites, workflow/tool/dependency
+inputs and environment contract. Record the source run ID/attempt and verify its
+terminal success and required jobs; a skipped, failed, cancelled or partial run
+cannot supply success for an unexecuted suite. Evidence must come from the
+authorized repository/workflow and trust boundary, not arbitrary PR-written data.
+
+On a merge push, reuse only the covered validation scopes. Missing, expired,
+ambiguous or unreadable evidence, changed inputs, and direct pushes without a
+matching successful validation retain the normal checks. Keep a visible decision
+with the source run and reason; do not manufacture fresh test results or hide an
+evidence-reader failure. Keep publishing, deployment and release-specific image
+builds independently eligible. Before claiming deduplication, observe an actual
+matching merge push that avoids heavy validation and a nonmatching case that
+still selects it. This Skill supplies the operator procedure; the repository's
+CI implementation must enforce the comparison and fallback.
+
 Cancel superseded validation within the same relevant branch/PR when its existing
 contract permits; preserve release single-writer behavior and do not cancel a
 deployment to save minutes. Use the repository's deployment owner and the
