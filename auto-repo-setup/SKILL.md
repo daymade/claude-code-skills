@@ -42,7 +42,10 @@ they all contain the word "setup".
    command output. Do not make ONBOARDING.md, Python, uv, ffmpeg, or .env mandatory
    for repositories that do not declare them.
 4. **Preserve user work.** Never auto-stash, merge, rebase, force, discard, or
-   overwrite local changes to make setup look successful.
+   overwrite local changes to make setup look successful. Already-authorized
+   delivery of this task's isolated changes may use the repository's declared
+   scoped workflow under [Authorized shared-checkout delivery](references/git_safety.md#authorized-shared-checkout-delivery);
+   this does not authorize integrating unrelated local commits or shared WIP.
 5. **Define a falsifiable success state.** "Dependencies installed" is not enough;
    run the project's real smoke test or startup command and verify the observable
    result.
@@ -123,11 +126,15 @@ For "sync before work", prefer a short project instruction shared by the agents
 that use the repository. The routine is:
 
 1. Inspect branch, upstream, and working-tree state.
-2. If the working tree is clean, run git pull --ff-only.
-3. If there are local changes, do not auto-stash or pull; explain the state.
-4. If local and remote histories diverged, do not auto-merge, rebase, or force;
+2. If the task includes already-authorized delivery and the repository declares
+   usable scoped tools that preserve unrelated shared HEAD, index, and WIP, use
+   [Authorized shared-checkout delivery](references/git_safety.md#authorized-shared-checkout-delivery).
+   Dirty or divergent state alone is not a reason to leave that delivery waiting.
+3. Otherwise, if the working tree is clean, run git pull --ff-only.
+4. If there are local changes, do not auto-stash or pull; explain the state.
+5. If local and remote histories diverged, do not auto-merge, rebase, or force;
    explain the state.
-5. If the network fails, say so and continue locally only when the user's task can
+6. If the network fails, say so and continue locally only when the user's task can
    safely proceed on the local version.
 
 A collaborator may also simply say:
