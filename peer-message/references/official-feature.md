@@ -115,8 +115,8 @@ codex queue --thread <THREAD> --message <TEXT>
 ```
 
 仅在原生工具未覆盖已确认的 Codex 独立目标，或由 hook/script 调用时进入 peer.py。
-默认通过已有 App Server 的 turn/start toolOutput 投递；queue 只用于未加载目标或显式
-queued 模式。按 `protocol-and-discovery.md` §3 核对前置与恢复边界。
+发送前按 [Codex 传输 SOP](protocol-and-discovery.md#3-codex-发现与实时投递)
+准备依赖并选择路径；本文件只记录产品可用性与验证范围，不另维护路径默认值。
 本机 0.162.0 已验证 active turn 实时送达；工具暴露面因 thread 不同而不同，不能从
 一个会话可调用原生发送推断所有会话都有出站工具。queue 参数仍以本机 help 为准，
 不能从 ChatKit、Assistants 或 Responses API 类推本地 thread 行为。

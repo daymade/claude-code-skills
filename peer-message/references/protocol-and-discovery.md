@@ -1,6 +1,6 @@
 ---
 name: peer-message-protocol-and-discovery
-description: Transport-neutral addressing, Claude UDS and Codex queue contracts, message envelopes, and receiver-side verification.
+description: Transport-neutral addressing, Claude UDS and Codex live/queued delivery, message envelopes, and receiver-side verification.
 ---
 
 # 协议与发现
@@ -21,7 +21,7 @@ description: Transport-neutral addressing, Claude UDS and Codex queue contracts,
 
 ### 两个 route 的地址空间
 
-上表是 `scripts/peer.py` 的地址空间。官方 Claude peer tools 是另一套，两者只在一处相交：
+上表是 `scripts/peer.py` 的地址空间。官方 Claude peer tools 支持的地址与它并不相同：
 
 | 地址形式 | 官方 peer tools | `peer.py` |
 |---|---|---|
@@ -31,9 +31,8 @@ description: Transport-neutral addressing, Claude UDS and Codex queue contracts,
 | `claude:<pid>` / `claude:<session-uuid>` | **不认** | 认 |
 | `codex:<thread-id>` / `codex:<exact-name>` | **不认**（官方 Claude 工具到不了 Codex） | 认 |
 
-`uds:<socket-path>` 是唯一两边都认的形式，所以本 Skill 发出的信封 `from` 用它。
-
-**回信**：把信封的 `from` 抄进官方工具的 `to`——这就是官方工具自己给的指示，对本 Skill 发出的信封成立，对 host 自己发的信封也成立。
+**回信**：先按上表核对目标通道是否支持信封的 `from`。发往 Claude 的包装与归一化见本文件 §2；
+Codex 目标按 §3 发送。不要把任一种地址当成所有宿主原生工具都能解析的形式。
 
 信封没有 `from` 时，用同一行的 `from-name`：host 发的信封里它就是官方要的裸名。**但这条退路只对 host 发的信封有效**——一个产生者若两个字段同源，坏起来会一起坏，所以正解永远是产生者归一化（本 Skill 在 `send_claude` 里做），不是接收方补救。两个字段都不可用时，先用当前原生发现消歧；仅当目标身份已确认且原生工具未覆盖它时，才按主路由考虑 `peer.py send`，不要靠切换地址空间猜人。
 
@@ -93,9 +92,13 @@ UDS 连接写两行 NDJSON 后关闭：
 </cross-session-message>
 ```
 
-`from` 是接收方回信要用的地址，`from-name` 是显示来源。**`from` 必须是官方工具也能解析的形式**（当前实现发 `uds:<socket>`，见 §1）——收信的那个 session 可能根本没装本 Skill，它手上只有 host 那句「回信就把 `from` 抄进 `to`」和官方工具；`from` 若是 `claude:<session-uuid>`，它会得到 `No agent named ...`，而且**没有任何接收侧的补救路径**（官方列表的 `[ref]` 不是 UUID 前缀，对不上）。这类缺陷只能由信封的产生者修。
+`from` 是回信地址，`from-name` 是显示来源。同产品 Claude 回信按 §1 的兼容形式归一化；
+跨产品回信按下文的 Codex 路径。不将脚本 UUID 直接当成官方工具可解析的地址，
+也不删除仍可由脚本解析的跨产品地址。信封产生者负责提供可用的回信入口。
 
-**Codex 发送方：标识符是好的，缺的是官方工具能解析的形式。** `codex:<thread-id>` 是本脚本可解析的回信地址——`resolve_codex` 去掉前缀、解析目标后，把 thread UUID 传给 `codex queue --thread`（help 逐字："Session UUID or exact session name"）；只是官方 Claude 工具用任何地址都到不了 Codex thread，这是两个产品之间的事实、不是缺陷。
+**Codex 发送方：保留本脚本可解析的回信地址 `codex:<thread-id>`。**
+地址解析不决定使用哪一种 transport；发送流程按本文件 §3 执行。
+官方 Claude peer 工具不能用这个地址寻址 Codex thread，接收者仍须先检查当前宿主的原生覆盖范围。
 
 所以 `from` **保持** `codex:<thread-id>`，同时在正文首行补 `[reply: peer.py send codex:<id>]`（这是跨产品脚本补缺提示，接收者仍先按主路由检查原生工具是否覆盖目标）——属性集合是固定的，正文首行是唯一还能说话的地方。**两个一起走**：删掉地址只为了让一类接收方少踩一次可恢复的失败，会同时夺走另一类接收方手里能用的东西，还让路由脱离了它所路由的对象。
 
@@ -105,7 +108,10 @@ UDS 连接写两行 NDJSON 后关闭：
 
 当前 Codex CLI 的入口、参数与可用性按 `references/official-feature.md` 判断。本协议只定义 Skill 如何解析目标、包装消息与读取 evidence，不复制外部 CLI 语法或版本门槛。
 
-使用 `peer.py` 的默认实时路径：由 `scripts/codex_live.py` 连接 Codex home 下
+准备 Python 运行环境、`uv` 和已有的本机 App Server；先读 `peer.py send --help`。
+`peer.py` 用 uv 按 `scripts/codex_live.py` 的 PEP 723 声明自动准备锁定依赖。
+不要为投递启动第二个 App Server 或重开目标 Tab；环境修复仍受当前用户的进程与前台授权约束。
+使用默认实时路径，由该 adapter 连接 Codex home 下
 `app-server-control/app-server-control.sock` 的 Unix WebSocket。先 initialize，再
 thread/read 核对精确 ID、status 与 canAcceptDirectInput；active/idle 使用
 turn/start 的 toolOutput（namespace=peer_message、name=delivery），不覆盖模型、cwd、
@@ -113,7 +119,7 @@ sandbox 或 approval，不回复服务审批请求。消息在宿主下一次接
 不强行中断工具调用。notLoaded 才保留官方 queue，receipt 标明 target_not_loaded；
 不自动 resume。需要旧排队行为时显式传 `--codex-delivery queued`，它可能等长回合结束。
 
-实时依赖由 uv 按 helper 的 PEP 723 声明准备。缺 uv、socket 不可用或只读前置失败时
+缺 uv、socket 不可用或只读前置失败时
 报告 not_sent；写入后超时、断连、拒绝或 receipt 无法解析时保留 unknown。禁止自动
 转 queue 或重发。核对原 message ID 的接收证据后决定下一步；先修复已确认的环境缺口，
 不能把错误当成换通道授权。helper 本身不启动服务、不杀进程、不修改权限。
@@ -240,6 +246,9 @@ queue 项与已消费的 history 项可能是同一条回复。用 reply envelop
 退出码由脚本绑定：0 表示请求完成——请求了验证时已命中，未请求时只表示 transport 接受且没有检查 evidence；2 表示参数错误、broadcast 确认错误或超过无契约目标数上限；3 表示目标不存在、歧义、Claude 无 inbox，或 **Codex thread 已归档**（归档 thread 永远不再消费 queue，send 默认拒绝；verify/replies 读路径不受影响）；4 表示 transport、证据读取或证据一致性失败；5 表示 broadcast 部分失败；10 表示 transport 接受但等待窗口内未验证，或只读回复查询没有适用 evidence store；11 表示只读回复查询成功读取了适用 store 但没有匹配记录。
 
 发送 receipt 带 `resolved` 对象（目标字符串实际解析出的地址/name/id/cwd/status）——最后一英里的寻址可观测性：认错的目录在它回答之前先在 resolved 里可见。非 JSON 输出与 `send --json` 时另打印一行到 stderr；`broadcast --json` 不打 stderr，resolved 随每条 receipt 在聚合 JSON 内携带。
+
+同时读取 `route` 与适用时的 `queue_reason`，辨别实时投递、未加载目标排队和显式排队。
+这些字段在普通文本与 JSON 回执中均可见；route 不证明接收方已读。
 
 ## 5. Broadcast 语义
 

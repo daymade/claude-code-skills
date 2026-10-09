@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **peer-message** (v1.18.1): Align the post-change coordination and repository entry instructions with live tool-output delivery. Keep transport preparation and receiver evidence in the protocol SOP, distinguish genuine inbound adapter output from quoted IDs, and remove copied defaults and derived prose counts. Change type: documentation workflow alignment; transport implementation unchanged.
+- **github-contributor** (v1.3.0 → v1.3.1): Replace name-based GUI targeting, empty-log isolation claims and shared-checkout stash controls with exact instance/data verification and immutable-base comparison. Correct the historical #1624 case and route explicitly requested independent author-side reviews to the existing maintainer lens. Change type: evidence-backed workflow correction.
+- **github-review-pr** (v1.4.1 → v1.4.2): Accept explicitly requested independent evaluations of the author's own contribution in read-only mode, preserving author identity and keeping formal approval/merge authority separate. Change type: bounded routing clarification.
+- **skill-creator** (`daymade-skill` v1.67.3 → v1.67.4): Preserve distinct standalone plugin namespaces and formal Skill names in source checks and generated delivery rows. Exact source/owner, missing-identity and wrong-path controls remain enforced; the alias regression fails before the fix. Change type: bounded identity-validator repair.
+
 - **report-with-html** (v1.4.1): Consolidate interaction admission and source-preview wiring into their existing owners; remove the derived example count and retain DOM prerequisites and real activation checks. Change type: documentation consolidation; runtime components are unchanged.
 
 - **peer-message** (v1.19.0): Bound discovery title previews and UTF-8 stdout size, preserve exact routing identities, and export complete titles only to an explicitly selected new private file. Add synthetic prompt-shaped and output-boundary regressions. Change type: bounded discovery/export workflow addition.
