@@ -68,19 +68,26 @@ def owned_repository(identity, market, inventory):
     entries = inventory["marketplaces"].get(market)
     if not isinstance(entries, dict) or not entries:
         raise EvidenceError(f"Marketplace {market!r} has no registered source evidence")
-    identities = set()
+    paths = []
     for entry in entries.values():
         candidates = entry if isinstance(entry, list) else [entry]
         for candidate in candidates:
             if (not isinstance(candidate, dict) or not isinstance(candidate.get("source_dir"), str)
                     or not candidate["source_dir"].strip()):
                 raise EvidenceError("Source inventory candidate requires a non-empty source_dir")
-            if not Path(candidate["source_dir"]).is_absolute():
+            path = Path(candidate["source_dir"])
+            if not path.is_absolute():
                 raise EvidenceError("Source inventory source_dir must be absolute; caller cwd is not ownership evidence")
-            other = git_identity(Path(candidate["source_dir"]))
-            if other is not None:
-                identities.add(str(other["common"]))
-    return str(identity["common"]) in identities
+            paths.append(path)
+    # Validate every declaration before accepting any identity: a malformed
+    # later candidate must not be hidden by an earlier matching source.
+    # Ownership is existential; one matching Git common directory is proof.
+    # Do not spawn one Git process per remaining sibling Skill after a match.
+    for path in paths:
+        other = git_identity(path)
+        if other is not None and str(other["common"]) == str(identity["common"]):
+            return True
+    return False
 
 
 def skill_name(directory):

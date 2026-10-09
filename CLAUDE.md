@@ -56,6 +56,8 @@ For project instruction-entry maintenance, enter
 [claude-md-progressive-disclosurer](daymade-claude-code/claude-md-progressive-disclosurer/SKILL.md).
 Its verification reference owns dual-entry reconciliation and native-host readback;
 keep the detailed procedure there.
+For a valid check that emits warnings, follow its
+[warning interpretation](daymade-skill/skill-creator/references/knowledge-skill-grounding.md#interpret-validation-warnings).
 For local/remote ASR selection, speed comparison and speech-content acceptance, enter
 [asr-transcribe-to-text](daymade-audio/asr-transcribe-to-text/SKILL.md) and its
 [execution SOP](daymade-audio/asr-transcribe-to-text/references/execution_location_and_comparison.md).
@@ -439,6 +441,8 @@ For GitHub-hosted state — PRs, issues, Actions, repository or organization set
 and API/UI mutations — treat `github-ops/SKILL.md` as the canonical operating contract. A command
 receipt is not completion; use that Skill's operation-specific independent readback. Keep detailed
 GitHub SOPs there rather than copying them into this repository-level instruction file.
+Before expensive checks on a concurrently edited base, follow its
+[publication coordination](github-ops/references/pr_operations.md#coordinate-publication-before-expensive-checks).
 For hosted-state writes through `gh`, follow its
 [identity, host and target binding](github-ops/SKILL.md#2-bind-identity-host-and-target)
 before using an operation recipe. For historical account or connector attribution,
@@ -531,6 +535,9 @@ claiming the whole checkout is current.
 For divergent local `main` or branch/worktree retirement, follow
 [git-safety-net](git-safety-net/SKILL.md) and its
 [content-containment proof](git-safety-net/references/merge_verification.md).
+When current content differs from an older published review, use that reference's
+[historical publication example](git-safety-net/references/merge_verification.md#worked-example--old-review-content-landed-through-another-ref)
+before deciding supersession; historical equality alone does not establish current intent.
 Resolving conflicts toward upstream can erase the very delta being checked;
 an empty result after that resolution does not prove it shipped.
 
@@ -697,6 +704,9 @@ For changes to scripts, configuration, or operating procedures, use
 [docs-cleaner](daymade-docs/docs-cleaner/SKILL.md) for scoped documentation delivery:
 resolve implementation intent and authorization before updating the owning SOP,
 and validate the delivered command examples. Keep detailed governance in that Skill.
+After moving a procedure or renaming an anchor, use its
+[delivery-entry replay](daymade-docs/docs-cleaner/references/delivery-entry-replay.md)
+against the consuming instruction-file entry.
 When a changed workflow affects stable rules or entry routes, update this file's
 rules and indices; retain implementation values and detailed procedures in their SSOT.
 

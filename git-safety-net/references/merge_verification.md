@@ -356,6 +356,42 @@ most likely to be restored on instinct.
 
 Same safety bias as everywhere else in this skill: prove supersession per item, or keep the item.
 
+### Worked example — old review content landed through another ref
+
+A leftover single-parent commit changes only `reviews/check.md`. Its parent is already an
+ancestor of the maintained base. The file at its tip is byte-identical, with the same Git mode,
+to the file at a separately verified published commit. The current base has since revised that
+file's release-binding metadata. A current-base trial merge that returns NEEDS REVIEW does not
+settle whether this older review should be restored; apply rung 2 to the complete unique delta:
+
+```bash
+# Synthetic names: replace each with a verified full commit SHA; REPO is the target repository.
+OLD='<leftover-tip>'
+PUBLISHED='<verified-published-commit>'
+BASE='<fresh-maintained-base>'
+PATH_IN_REPO=reviews/check.md
+git -C "$REPO" rev-list --parents -n 1 "$OLD"       # require exactly one parent
+git -C "$REPO" merge-base --is-ancestor "$OLD^" "$BASE"
+git -C "$REPO" merge-base --is-ancestor "$PUBLISHED" "$BASE"
+git -C "$REPO" diff --raw --no-abbrev "$OLD^" "$OLD" --
+git -C "$REPO" ls-tree "$OLD" -- "$PATH_IN_REPO"
+git -C "$REPO" ls-tree "$PUBLISHED" -- "$PATH_IN_REPO"
+git -C "$REPO" diff "$PUBLISHED" "$BASE" -- "$PATH_IN_REPO"
+```
+
+Inspect every raw-diff entry: this example applies only when the entire unique delta is the
+named file. Equal `ls-tree` entries prove historical path, mode, and blob equality. Then read
+the current-file diff and the authoritative reason for its revision. If the review remains and
+only its obsolete binding was intentionally replaced, restoring the old binding would regress
+the maintained record. If the review was removed, its substantive findings changed without an
+explained successor, or any unique delta remains unaccounted for, keep the ref for further triage.
+Historical equality alone never proves current completeness or intent.
+
+This is manual supersession evidence, not a MERGED verdict or permission to delete. A published
+commit belonging to another ref must not be presented as this leftover's PR merge commit.
+Retirement still follows Mode E: explicit authority for the exact target, a verified narrow
+backup, current ref equality and occupancy checks, plus the worktree checks below when applicable.
+
 ## Converging many branches to one main through single-writer windows
 
 Use this READ-DO sequence when the outcome is not one deletion but a repository-wide convergence:
