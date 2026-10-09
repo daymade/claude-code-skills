@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **read-codex-history** (`daymade-claude-code` v4.27.0): Add a read-only bounded canonical prompt cursor for current-thread inputs appended after a request; reject changed source identity, unsupported source, incomplete rows and schema declarations. Consumers own approval; preserve historical reader behavior. Change type: read-only source adapter expansion.
+
 - **skill-creator** (`daymade-skill` v1.67.1): Redact Google `AIza` and `AQ.` API key shapes while preserving ordinary `Task-specific` and `Task-scoped` text. Clarify user-only TXT, role-preserving JSONL and Codex voice-history input boundaries; retain existing parsing and chunking. Change type: bounded implementation repair / factual documentation correction, covered by synthetic bidirectional and role-preservation regressions.
 
 - **devils-advocate** (`daymade-financial` v1.5.2): Preserve engineering failure preconditions, healthy controls and recovery evidence; separate thesis impact from occurrence evidence and narrow time-related findings to the tested input. Retain investment risk grading and allow probe-backed withdrawal. Change type: bounded evidence-selection clarification.
