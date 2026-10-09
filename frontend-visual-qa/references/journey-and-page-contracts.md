@@ -4,23 +4,6 @@ Load this reference only when the audit includes state transitions, routes,
 overlays, browser-owned output, native shells, complex page types, maps, or
 review/annotation workflows, including summary-to-detail disclosure.
 
-## Contents
-
-- Evidence Boundary
-- Journey And State Matrix
-- Summary-To-Detail Disclosure
-- Authorization, Mode, And Runtime Truth
-- Route And Addressability
-- Transient UI
-- Drawers, Modals, Popovers, And Focus
-- Browser-Integrated Outputs
-- Electron And Native Shells
-- Landing, Deck, And Browser Tool/Game Artifacts
-- Dashboard And Enterprise Admin
-- Design-System Artifacts
-- Map And GIS Workbenches
-- Review And Annotation Tools
-
 ## Evidence Boundary
 
 Use the visible surface that owns the behavior.
