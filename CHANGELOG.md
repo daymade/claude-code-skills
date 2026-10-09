@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **github-ops** (v1.14.1 → v1.14.2): Reuse CI validation only with successful run evidence for the actual checkout tree, covered suites and matching execution inputs; retain normal checks on missing evidence and keep publication separate. Bound test workers by effective runner CPU allocation and distinguish optional remote caches from required artifacts. Change type: bounded CI evidence and resource-selection clarification.
 - **transcript-fixer** (`daymade-audio` v1.45.2): Link architecture testing guidance to the actual repository CI registry and dispatcher instead of a nonexistent bundled path. Keep local runners unchanged; remove hand-maintained navigation, derived schema counts and file-length/status commentary from that reference.
+- **asr-transcribe-to-text** (`daymade-audio` v1.46.0): Add source-bound remote text receipts and reuse, observed GPU identity, and same-source measurement with quality recomputed from independent references; refuse local CPU fallback. Select execution from source placement and eligible existing resources rather than fixed speed claims.
+- **skill-creator** (`daymade-skill` v1.66.3): Align directly affected documents before freezing the first candidate; add persisted old/new receipt roundtrip and mixed-list laundering regression cases.
+- **competitors-analysis** (v1.5.1): Read original claims with adjacent counterevidence, distinguish current availability from private archive permission, and compare opportunities with existing product requirements and assets.
 
 - **transcript-fixer** (`daymade-audio` v1.45.1): Route received user answers and correction-ledger updates from the repository instructions to the existing cited-answer SOP; remove its hand-maintained heading summary. Execution behavior is unchanged.
 

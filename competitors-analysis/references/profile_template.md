@@ -66,6 +66,18 @@ find "$repo" -maxdepth 2 -mindepth 1 -print | sort
 | {capability} | {how it works} | `{file}:{start}-{end}` | {notes} |
 | {capability} | {how it works} | `{file}:{start}-{end}` | {notes} |
 
+## Citation Readback
+
+Use this section when a judgment depends on retrieved content or a product's
+answer/citation behavior. Follow the worked check in
+[analysis_checklist.md](analysis_checklist.md#citation-readback-and-counterevidence).
+Record the source version once in the source register or snapshot authority and
+reference it here.
+
+| Claim / citation | Evidence version reference | Locator | Original and surrounding context read back | Availability observation |
+|---|---|---|---|---|
+| {claim} | {source-register row or snapshot identity} | {file lines / segment / timestamp; omit unavailable coordinates} | {short excerpt supporting or challenging the claim, or exact read failure} | {checked date, route and readable / inaccessible / not checked} |
+
 ## Data Model / Input Format
 
 Use this section when the competitor parses structured data, session logs, exports,
@@ -100,6 +112,10 @@ project's authoritative entry confirms it. Cite that scope source and distinguis
 product requirements from implemented behavior. Omit this section for a standalone
 request or unresolved our-product context; complete the repository profile anyway.
 
+Comparison baseline: {link to our product's contract and named acceptance
+scenario}; {link to the existing artifact/workflow that could meet it};
+{evidence of implemented and actually used behavior, or explicit unknown}.
+
 | Dimension | Competitor | Source | Our product | Source |
 |---|---|---|---|---|
 | {dimension} | {value} | `{file}:{line}` | {value} | `{file}:{line}` |
@@ -108,24 +124,23 @@ request or unresolved our-product context; complete the repository profile anywa
 
 | Signal | Value | Source |
 |---|---|---|
-| Latest commit | `{hash} {date} {subject}` | `git log -1` |
 | Recent release | {value or 待验证} | {source or next check} |
 | Active issues | {value or 待验证} | {GitHub API, retrieved YYYY-MM-DD} |
 
 ## Opportunities
 
-| Opportunity | Evidence base | Confidence | Next action |
-|---|---|---|---|
-| {opportunity} | {source rows} | High/Medium/Low | {specific action} |
+For each material opportunity, fill the decision chain in
+[landscape_synthesis.md](landscape_synthesis.md#build-a-small-number-of-decision-bearing-judgments):
+
+- **Observation:** {reference evidence rows, including citation readback when relevant}.
+- **Explanation:** {labeled inference, scope and confidence}.
+- **Choice and consequence:** {preserve / reuse / defer / change, linked to the
+  baseline acceptance scenario and existing assets; concrete value and cost}.
+- **Challenge:** {counterevidence or alternative explanation, and the observable
+  result that would overturn the choice; cheapest next check if undecidable}.
 
 ## Risks And Assumptions
 
 | Item | What is known | What still needs verification | Next check |
 |---|---|---|---|
 | {risk/assumption} | {evidence} | {unknown} | {command/source to check} |
-
-## Source Reading Log
-
-| File | Why read | Key finding | Citation |
-|---|---|---|---|
-| `{file}` | {reason} | {finding} | `{file}:{start}-{end}` |

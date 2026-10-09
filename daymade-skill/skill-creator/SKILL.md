@@ -1405,6 +1405,12 @@ The script creates a template skill directory with proper frontmatter, resource 
 
 Before writing, retrieve Anthropic's best-practices doc (linked in "Skill Creation Best Practice" above) and the methodology reference — do this even when you feel you already know them: the doc updates, training-data versions go stale, and "I basically know it" is exactly the state in which editors skip it and miss the newest guidance.
 
+When this edit changes code, configuration or an operating workflow, use
+[documentation and example alignment](references/knowledge-skill-grounding.md#3-首个候选冻结前文档与示例对齐)
+before the first candidate is frozen for review. Keep the affected-file inventory,
+document dispositions and authorities in the existing plan; finish their updates
+with the implementation rather than scheduling a documentation release afterward.
+
 When editing, remember that the skill is being created for another instance of Claude to use. Focus on information that would be beneficial and non-obvious to Claude.
 
 **Existing-skill migration gate — required before the first edit:**
