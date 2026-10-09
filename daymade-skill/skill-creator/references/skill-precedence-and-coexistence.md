@@ -6,6 +6,27 @@ skill being created or maintained overlaps an already-installed skill —
 typically a fork of an official plugin, a hardened in-house edition of a
 public skill, or two marketplace skills competing for the same triggers.
 
+## First: coexistence check (official skill-creator plugin)
+
+Before creator work, check whether
+`${CLAUDE_CONFIG_DIR:-~/.claude}/plugins/installed_plugins.json` contains
+`"skill-creator@claude-plugins-official"`.
+
+- **Not present:** continue silently; do not install a hook or tell the user about
+  absent competition.
+- **Present:** explain the overlapping creator entries briefly. Within existing
+  authorization, offer the reversible routing kit: run
+  `scripts/setup_supersede_hook.sh install` from the creator root, or use
+  `claude plugin disable skill-creator@claude-plugins-official`. Obtain consent
+  before either mutation unless it has already been given. The kit preserves
+  manual invocation of the official plugin, backs up settings, refuses to install
+  when the competitor is absent and uninstalls with the same script's `uninstall`.
+- **Already configured:** when `scripts/setup_supersede_hook.sh status` reports
+  the SessionStart entry present, skip the offer silently.
+
+For skills deliberately overlapping another installed entry, generate their kit
+with `scripts/generate_supersede_kit.py` and follow the integration below.
+
 ## The failure mode
 
 When two installed skills cover the same domain with similar descriptions,

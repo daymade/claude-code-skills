@@ -869,6 +869,13 @@
       // Reset to collapsed
       content.classList.remove("open");
       document.getElementById("grades-arrow").classList.remove("open");
+      const measured = ((EMBEDDED_DATA.benchmark || {}).runs || []).find(r =>
+        r.run_id && r.run_id.replaceAll("/", "-") === run.id);
+      if (measured && measured.grading_status && measured.grading_status !== "graded") {
+        content.innerHTML = '<div style="padding: 1rem;">Grading unknown: ' +
+          escapeHtml(measured.grading_status) + '</div>';
+        return;
+      }
 
       const summary = grading.summary || {};
       const expectations = grading.expectations || [];
@@ -878,11 +885,11 @@
       // Summary line
       const passRate = summary.pass_rate != null
         ? Math.round(summary.pass_rate * 100) + "%"
-        : "?";
-      const badgeClass = summary.pass_rate >= 0.8 ? "grade-pass" : summary.pass_rate >= 0.5 ? "" : "grade-fail";
+        : "unknown";
+      const badgeClass = summary.pass_rate == null ? "" : summary.pass_rate >= 0.8 ? "grade-pass" : summary.pass_rate >= 0.5 ? "" : "grade-fail";
       html += '<div class="grades-summary">';
       html += '<span class="grade-badge ' + badgeClass + '">' + passRate + '</span>';
-      html += '<span>' + (summary.passed || 0) + ' passed, ' + (summary.failed || 0) + ' failed of ' + (summary.total || 0) + '</span>';
+      html += '<span>' + (summary.passed ?? "unknown") + ' passed, ' + (summary.failed ?? "unknown") + ' failed of ' + (summary.total ?? "unknown") + '</span>';
       html += '</div>';
 
       // Assertions list
@@ -1121,7 +1128,10 @@
       const container = document.getElementById("benchmark-content");
       const summary = data.run_summary || {};
       const metadata = data.metadata || {};
-      const notes = data.notes || [];
+      const comparison = data.comparison || {};
+      const runIssues = (data.runs || []).flatMap(r => (r.issues || []).map(issue =>
+        r.run_id + ": " + issue));
+      const notes = [...(comparison.issues || []), ...runIssues, ...(data.notes || [])];
 
       let html = "";
 
@@ -1131,18 +1141,23 @@
       if (metadata.skill_name) html += "<strong>" + escapeHtml(metadata.skill_name) + "</strong> &mdash; ";
       if (metadata.timestamp) html += metadata.timestamp + " &mdash; ";
       if (metadata.evals_run) html += "Evals: " + metadata.evals_run.join(", ") + " &mdash; ";
-      html += (metadata.runs_per_configuration || "?") + " runs per configuration";
+      html += (metadata.runs_per_configuration ?? "unknown") + " observed runs per eval/configuration";
       html += "</p>";
+      if (metadata.attempts_per_configuration) {
+        html += "<p>Observed attempts: " + escapeHtml(JSON.stringify(metadata.attempts_per_configuration)) + "</p>";
+      }
+      html += "<p>Comparison: " + escapeHtml(comparison.status || "legacy; pairing not recorded") + "</p>";
 
       // Summary table
       html += '<table class="benchmark-table">';
 
       function fmtStat(stat, pct) {
-        if (!stat) return "—";
+        if (!stat || !Number.isFinite(stat.mean) || !Number.isFinite(stat.stddev)) return "unknown";
         const suffix = pct ? "%" : "";
         const m = pct ? (stat.mean * 100).toFixed(0) : stat.mean.toFixed(1);
         const s = pct ? (stat.stddev * 100).toFixed(0) : stat.stddev.toFixed(1);
-        return m + suffix + " ± " + s + suffix;
+        const coverage = stat.count != null ? " (" + stat.count + "/" + stat.total + " observed)" : "";
+        return m + suffix + " ± " + s + suffix + coverage;
       }
 
       function deltaClass(val) {
@@ -1153,38 +1168,37 @@
         return "";
       }
 
-      // Discover config names dynamically (everything except "delta")
+      // Role binding controls deltas and ordering, never which observations exist.
       const configs = Object.keys(summary).filter(k => k !== "delta");
-      const configA = configs[0] || "config_a";
-      const configB = configs[1] || "config_b";
-      const labelA = configA.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
-      const labelB = configB.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
-      const a = summary[configA] || {};
-      const b = summary[configB] || {};
-      const delta = summary.delta || {};
+      const candidates = configs.filter(c => c === "with_skill" || c === "new_skill");
+      const baselines = configs.filter(c => c === "old_skill" || c === "without_skill");
+      const configA = data.comparison ? comparison.candidate : (candidates.length === 1 ? candidates[0] : null);
+      const configB = data.comparison ? comparison.baseline : (baselines.length === 1 ? baselines[0] : null);
+      const rolesBound = configs.includes(configA) && configs.includes(configB) && configA !== configB;
+      const displayedConfigs = rolesBound
+        ? [configA, configB, ...configs.filter(c => c !== configA && c !== configB)] : configs;
+      const label = config => config.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      // Legacy deltas have no pairing/coverage evidence; keep their numeric stats readable.
+      const delta = data.comparison && rolesBound && comparison.status !== "unbound" ? (summary.delta || {}) : {};
+      const deltaLabel = rolesBound
+        ? "Candidate − baseline (" + label(configA) + " − " + label(configB) + ")"
+        : "Candidate − baseline (unbound)";
 
-      html += "<thead><tr><th>Metric</th><th>" + escapeHtml(labelA) + "</th><th>" + escapeHtml(labelB) + "</th><th>Delta</th></tr></thead>";
+      html += "<thead><tr><th>Metric</th>";
+      html += displayedConfigs.map(config => "<th>" + escapeHtml(label(config)) + "</th>").join("");
+      html += "<th>" + escapeHtml(deltaLabel) + "</th></tr></thead>";
       html += "<tbody>";
 
-      html += "<tr><td><strong>Pass Rate</strong></td>";
-      html += "<td>" + fmtStat(a.pass_rate, true) + "</td>";
-      html += "<td>" + fmtStat(b.pass_rate, true) + "</td>";
-      html += '<td class="' + deltaClass(delta.pass_rate) + '">' + (delta.pass_rate || "—") + "</td></tr>";
-
-      // Time (only show row if data exists)
-      if (a.time_seconds || b.time_seconds) {
-        html += "<tr><td><strong>Time (s)</strong></td>";
-        html += "<td>" + fmtStat(a.time_seconds, false) + "</td>";
-        html += "<td>" + fmtStat(b.time_seconds, false) + "</td>";
-        html += '<td class="' + deltaClass(delta.time_seconds) + '">' + (delta.time_seconds ? delta.time_seconds + "s" : "—") + "</td></tr>";
-      }
-
-      // Tokens (only show row if data exists)
-      if (a.tokens || b.tokens) {
-        html += "<tr><td><strong>Tokens</strong></td>";
-        html += "<td>" + fmtStat(a.tokens, false) + "</td>";
-        html += "<td>" + fmtStat(b.tokens, false) + "</td>";
-        html += '<td class="' + deltaClass(delta.tokens) + '">' + (delta.tokens || "—") + "</td></tr>";
+      for (const [metric, metricLabel, pct, unit] of [
+        ["pass_rate", "Pass Rate", true, ""],
+        ["time_seconds", "Time (s)", false, "s"],
+        ["tokens", "Tokens", false, ""],
+      ]) {
+        if (metric !== "pass_rate" && !displayedConfigs.some(config => summary[config][metric])) continue;
+        html += "<tr><td><strong>" + metricLabel + "</strong></td>";
+        html += displayedConfigs.map(config => "<td>" + fmtStat(summary[config][metric], pct) + "</td>").join("");
+        const value = delta[metric];
+        html += '<td class="' + deltaClass(value) + '">' + (value != null ? escapeHtml(value) + unit : "unknown") + "</td></tr>";
       }
 
       html += "</tbody></table>";
@@ -1196,7 +1210,7 @@
 
         html += "<h3 style='font-family: Poppins, sans-serif; margin-bottom: 0.75rem;'>Per-Eval Breakdown</h3>";
 
-        const hasTime = runs.some(r => r.result && r.result.time_seconds != null);
+        const hasTime = runs.some(r => r.result && "time_seconds" in r.result);
         const hasErrors = runs.some(r => r.result && r.result.errors > 0);
 
         for (const evalId of evalIds) {
@@ -1218,32 +1232,32 @@
             const configRuns = evalRuns.filter(r => r.configuration === config);
             if (configRuns.length === 0) continue;
 
-            const rowClass = ci === 0 ? "benchmark-row-with" : "benchmark-row-without";
+            const rowClass = config === configA ? "benchmark-row-with" : config === configB ? "benchmark-row-without" : "";
             const configLabel = config.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 
             for (const run of configRuns) {
               const r = run.result || {};
-              const prClass = r.pass_rate >= 0.8 ? "benchmark-delta-positive" : r.pass_rate < 0.5 ? "benchmark-delta-negative" : "";
+              const prClass = r.pass_rate == null ? "" : r.pass_rate >= 0.8 ? "benchmark-delta-positive" : r.pass_rate < 0.5 ? "benchmark-delta-negative" : "";
               html += '<tr class="' + rowClass + '">';
               html += "<td>" + configLabel + "</td>";
               html += "<td>" + run.run_number + "</td>";
-              html += '<td class="' + prClass + '">' + ((r.pass_rate || 0) * 100).toFixed(0) + "% (" + (r.passed || 0) + "/" + (r.total || 0) + ")</td>";
-              if (hasTime) html += "<td>" + (r.time_seconds != null ? r.time_seconds.toFixed(1) : "—") + "</td>";
-              if (hasErrors) html += "<td>" + (r.errors || 0) + "</td>";
+              html += '<td class="' + prClass + '">' + (r.pass_rate != null ? (r.pass_rate * 100).toFixed(0) + "% (" + r.passed + "/" + r.total + ")" : "unknown") + "</td>";
+              if (hasTime) html += "<td>" + (r.time_seconds != null ? r.time_seconds.toFixed(1) : "unknown") + "</td>";
+              if (hasErrors) html += "<td>" + (r.errors ?? "unknown") + "</td>";
               html += "</tr>";
             }
 
             // Average row
-            const rates = configRuns.map(r => (r.result || {}).pass_rate || 0);
-            const avgRate = rates.reduce((a, b) => a + b, 0) / rates.length;
-            const avgPrClass = avgRate >= 0.8 ? "benchmark-delta-positive" : avgRate < 0.5 ? "benchmark-delta-negative" : "";
+            const rates = configRuns.map(r => (r.result || {}).pass_rate).filter(r => r != null);
+            const avgRate = rates.length ? rates.reduce((a, b) => a + b, 0) / rates.length : null;
+            const avgPrClass = avgRate == null ? "" : avgRate >= 0.8 ? "benchmark-delta-positive" : avgRate < 0.5 ? "benchmark-delta-negative" : "";
             html += '<tr class="benchmark-row-avg ' + rowClass + '">';
             html += "<td>" + configLabel + "</td>";
             html += "<td>Avg</td>";
-            html += '<td class="' + avgPrClass + '">' + (avgRate * 100).toFixed(0) + "%</td>";
+            html += '<td class="' + avgPrClass + '">' + (avgRate != null ? (avgRate * 100).toFixed(0) + "% (" + rates.length + "/" + configRuns.length + " observed)" : "unknown") + "</td>";
             if (hasTime) {
               const times = configRuns.map(r => (r.result || {}).time_seconds).filter(t => t != null);
-              html += "<td>" + (times.length ? (times.reduce((a, b) => a + b, 0) / times.length).toFixed(1) : "—") + "</td>";
+              html += "<td>" + (times.length ? (times.reduce((a, b) => a + b, 0) / times.length).toFixed(1) + " (" + times.length + "/" + configRuns.length + " observed)" : "unknown") + "</td>";
             }
             if (hasErrors) html += "<td></td>";
             html += "</tr>";
@@ -1253,7 +1267,7 @@
           // Per-assertion detail for this eval
           const runsWithExpectations = {};
           for (const config of configGroups) {
-            runsWithExpectations[config] = evalRuns.filter(r => r.configuration === config && r.expectations && r.expectations.length > 0);
+            runsWithExpectations[config] = evalRuns.filter(r => r.configuration === config && (!r.grading_status || r.grading_status === "graded") && r.expectations && r.expectations.length > 0);
           }
           const hasAnyExpectations = Object.values(runsWithExpectations).some(runs => runs.length > 0);
           if (hasAnyExpectations) {

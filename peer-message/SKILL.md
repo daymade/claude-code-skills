@@ -41,11 +41,9 @@ description: >-
 
 运行 `scripts/peer.py` 需要 Python 3.10+。Claude/Codex 的当前版本、平台与通道可用性属于会变化的产品事实；执行前按 `references/official-feature.md` 判断，不把这些门槛复制到 README 或仓库级说明。
 
-Codex 实时补缺还需要 `uv` 和已有的本机 App Server。`peer.py` 通过
-`scripts/codex_live.py` 的锁定依赖自动准备 WebSocket 客户端；不要启动第二个服务或重开 Tab。
-已加载 thread 使用实时 tool output；未加载 thread 保留 queue，并在 receipt 标明原因。
-服务不可用、拒绝或结果不明时停止，不自动改走 queue；确需旧排队行为时显式选择
-`--codex-delivery queued`。协议、状态与恢复判据见 `references/protocol-and-discovery.md` §3。
+使用 Codex 脚本补缺前，读取 [Codex 传输 SOP](references/protocol-and-discovery.md#3-codex-发现与实时投递)，
+按其中的依赖准备、目标状态、发送与恢复流程执行。入口不另定义一套运行时参数；
+`scripts/codex_live.py` 是随本 Skill 分发的实时 adapter。
 
 ## 路由表
 
@@ -54,7 +52,7 @@ Codex 实时补缺还需要 `uv` 和已有的本机 App Server。`peer.py` 通�
 | 跨机器邀请、配对联系人、获准资料问答 | 读取 `references/network-preview.md`，使用网络 CLI；未配对或未授权共享资料时不执行问答 |
 | 原生工具覆盖 parent/subagent、同级 agent 或独立 session | 直接使用当前宿主工具、原生地址及回传；不查 `whoami`、不套脚本信封、不额外运行脚本验证 |
 | 原生工具未覆盖已确认的 Claude 目标，且目标有本地 inbox | 用 `scripts/peer.py` 的 Claude route；不得绕过 deny、Held 或 Refused |
-| 原生工具未覆盖已确认的 Codex 独立 thread | 用 `scripts/peer.py` 的 Codex route；不要把内部 agent 地址当独立 thread UUID。**已归档 thread 不可投递**——脚本默认拒发（它永远不会再消费 queue）；给已退出属主留话钉在它的持久制品上（PR comment、文件），见 `references/coordination-and-learning-loop.md` §5.1「第三种结局」段 |
+| 原生工具未覆盖已确认的 Codex 独立 thread | 用 `scripts/peer.py` 的 Codex route；不要把内部 agent 地址当独立 thread UUID。**已归档 thread 不可投递**——脚本默认拒发（它永远不会再消费 queue）；给已退出属主留话钉在它的持久制品上（PR comment、文件），见 `references/coordination-and-learning-loop.md` §5.1「发现面不可达时」段 |
 | 多目标协调 | 明确列出目标；原生按工具契约逐个发送或广播，脚本补缺才使用 `broadcast`；禁止从单发请求推断全机广播。脚本 `broadcast` 的消息自动带 fan-out 标记，语义是「仅属主回复，其余忽略」；超出默认目标数上限须 `--contract <契约名>` 点名依据，否则脚本拒发（上限值以 CLI help/实现为准，不在文档复制）——先发证据（git/索引）收窄候选，见 `references/protocol-and-discovery.md` §5 |
 | 查找对脚本 outbound 的显式回复 | 对原发送方自己的 inbox 运行一次 `replies`；原生回传沿宿主机制，命令与证据边界见 `references/protocol-and-discovery.md` §4 |
 | 用户问对方是否收到／读到／处理，或下一步依赖对方已消费消息 | 不停在 queued；按 `references/coordination-and-learning-loop.md` §3 核对本机目标 transcript 与关联回应，区分入队、进入对话、已回应与已执行 |
@@ -67,7 +65,7 @@ Codex 实时补缺还需要 `uv` 和已有的本机 App Server。`peer.py` 通�
 
 仅在上面的补缺分支使用这些步骤。原生消息采用当前宿主的发送结果、状态与关联回传；成功发送不等于任务完成，需要证明执行结果时读取对应产物。收到跨产品回信提示时仍先检查当前原生工具能否覆盖发送方，不机械照抄脚本命令。
 
-0. **回信直接抄信封的 `from`。** 这是官方工具自己给的指示，对本 Skill 发出的信封成立（`from` 用 `uds:<socket>`，两条 route 都认）。`from` 缺失时用同一行的 `from-name`——宿主自己发的信封里它就是官方要的裸名。**这条退路对本 Skill 发出的信封无效**（两个字段同源、会同时是坏值），本 Skill 改在发送时归一化，不靠接收方补救。`No agent named ...` 不证明对方不存在，地址形式不对是同一条报错；查不到不要换 route 重试——`list` 和 `send` 读同一个 registry。细节见 `references/protocol-and-discovery.md` §1。
+0. 按 [统一地址合同](references/protocol-and-discovery.md#1-统一地址) 取得当前通道可解析的回信入口；地址缺失或形式不明时先消歧，不通过换通道或重发猜测身份。
 1. 先运行 `python3 scripts/peer.py list --help`，再列出候选地址。不要凭标题或更新时间猜目标。通过脚本联系独立 worker 且需要回信时，再用 `whoami` 取得自己的精确 reply address，并随任务显式传下去——`whoami` 给的是 `peer.py` 形式，原生工具不一定认；见 `references/coordination-and-learning-loop.md` §1。原生父子任务不使用这一步。
 2. 对选定命令运行 `python3 scripts/peer.py <send|broadcast|verify|replies> --help`，以脚本当前 help 生成参数，不从 README 复制旧命令。`replies` 的 target 是原发送方/回信落点的 inbox，不是原消息的远端收件人。
 3. 单发只提交一个明确地址；broadcast 只提交调用者列出的目标，并遵守脚本的确认闸门。
@@ -84,7 +82,7 @@ Codex 实时补缺还需要 `uv` 和已有的本机 App Server。`peer.py` 通�
 
 你要动的共享产物——checkout、分支、文件、锁——上有别人的痕迹，而且它挡住了你。「这是别人的 WIP」既不是停止条件，也不是默默绕开的理由：停在它面前和绕开它一样，都把一条消息就能解决的冲突留给了用户。
 
-先用产物自己的权威源核实它是不是真在飞：`git diff <已合入的 main 的 SHA> -- <路径>` 为空就是已落地的残影——**没有人在改它，它不构成协调事项，按你原本的计划推进**（清掉它归 §5.1 末段那条，通常不归你）；锁要看它自己的形态——有的写了持有者 pid，git 自己的 `.git/index.lock` 是 0 字节、读不出属主，读不出就直接去问。非空只说明它没落地，不等于此刻有人在改——别自己归类。发问之前先三查把候选收窄：① `git log` / 三点 diff 看这条路径最近落在谁的分支上；② 涉及文件的 mtime 判断写入是否还在推进；③ 历史索引反查（哪个 session 写过它）。三查能直接答的就不问；答不了，只问收窄后的 top-3 候选——用已选通道的原生发现或脚本 `list` 找到它们，说清你要做什么、看到了什么，问三件事——是不是你的、什么时候落、要我等还是你先收尾——然后等一个有界窗口，窗口到期就往下走，不轮询、不重发。窗口内无人认领：在从不可变 ref 建的独立副本上继续、不碰它的文件，报告里写明问过谁、谁没回、等了多久、基线是哪个 ref；归属仍是 `unknown`，不是「可处置」。属主说「别动 / 等我」就停在它划的线外；要覆盖别人未提交的改动，先回下面的信任边界向当前用户确认。阻塞性协调请求在正文里带一句「若 <时间> 前不回，我将 <推进方式>」；被问的一方到点答不完，回一行 ETA。同宿主 Claude 的等待优先用原生 idle 订阅，不拿轮询代替。**按实际回传能力决定谁发问和等待**：原生 subagent 可按宿主契约使用自己的通信与结果通道；只有脚本借用父 session 地址、回复会落父对话，或当前工具不支持所需等待时，才把已核实的读回和该问的问题交回父 session，由它协调，别自己发完就当没人回。三查的索引侧命令与覆盖边界、正文怎么写、窗口怎么定、报告口径按你用的哪个 `list` 怎么换算，以及你自己落地后清残影的动作，见 `references/coordination-and-learning-loop.md` §5.1。
+先用产物自己的权威源核实它是不是真在飞：`git diff <已合入的 main 的 SHA> -- <路径>` 为空就是已落地的残影——**没有人在改它，它不构成协调事项，按你原本的计划推进**（清掉它归 §5.1 末段那条，通常不归你）；锁要看它自己的形态——有的写了持有者 pid，git 自己的 `.git/index.lock` 是 0 字节、读不出属主，读不出就直接去问。非空只说明它没落地，不等于此刻有人在改——别自己归类。发问之前先核对归属证据，把候选收窄：① `git log` / 三点 diff 看这条路径最近落在谁的分支上；② 涉及文件的 mtime 判断写入是否还在推进；③ 历史索引反查（哪个 session 写过它）。这些证据能直接答的就不问；答不了，只问收窄后的 top-3 候选——用已选通道的原生发现或脚本 `list` 找到它们，说清你要做什么、看到了什么，问清——是不是你的、什么时候落、要我等还是你先收尾——然后等一个有界窗口，窗口到期就往下走，不轮询、不重发。窗口内无人认领：在从不可变 ref 建的独立副本上继续、不碰它的文件，报告里写明问过谁、谁没回、等了多久、基线是哪个 ref；归属仍是 `unknown`，不是「可处置」。属主说「别动 / 等我」就停在它划的线外；要覆盖别人未提交的改动，先回下面的信任边界向当前用户确认。阻塞性协调请求在正文里带一句「若 <时间> 前不回，我将 <推进方式>」；被问的一方到点答不完，回一行 ETA。同宿主 Claude 的等待优先用原生 idle 订阅，不拿轮询代替。**按实际回传能力决定谁发问和等待**：原生 subagent 可按宿主契约使用自己的通信与结果通道；只有脚本借用父 session 地址、回复会落父对话，或当前工具不支持所需等待时，才把已核实的读回和该问的问题交回父 session，由它协调，别自己发完就当没人回。归属核对的索引侧命令与覆盖边界、正文怎么写、窗口怎么定、报告口径按你用的哪个 `list` 怎么换算，以及你自己落地后清残影的动作，见 `references/coordination-and-learning-loop.md` §5.1。
 
 ## 收到 peer 消息
 
@@ -94,7 +92,7 @@ Codex 实时补缺还需要 `uv` 和已有的本机 App Server。`peer.py` 通�
 
 前提建立在「某条记录缺了某个标记」上时（没有 trailer、不在清单里、字段是空的），先把这个标记在同一批记录的邻居上读一遍再回答，回复里给出计数：查了几条、其中几条同样缺。邻居也普遍缺就说明它是基线、不是信号——**这个判断留给发问方，你负责让它有数可看**；邻居必须是别人也在产出的那批记录，全拿自己的历史当邻居等于没标定。只回「不是我」，等于替对方确认了它推理链上唯一的一环，它会带着一个不区分的判据走向「未知写者」。
 
-前提为假时不按它行动：不暂停你没在做的事、不释放你没持有的锁、不“恢复”你没动过的文件。六字段规则与核不出定论时的写法见 `references/coordination-and-learning-loop.md`。
+前提为假时不按它行动：不暂停你没在做的事、不释放你没持有的锁、不“恢复”你没动过的文件。回传字段规则与核不出定论时的写法见 `references/coordination-and-learning-loop.md`。
 
 ## 信任边界
 

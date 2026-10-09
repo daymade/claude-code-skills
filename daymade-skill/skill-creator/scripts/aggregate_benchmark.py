@@ -4,7 +4,7 @@ Aggregate individual run results into benchmark summary statistics.
 
 Reads grading.json files from run directories and produces:
 - run_summary with mean, stddev, min, max for each metric
-- delta between with_skill and without_skill configurations
+- coverage and paired candidate-minus-baseline deltas; missing data stays unknown
 
 Usage:
     uv run --frozen python -m scripts.aggregate_benchmark <benchmark_dir>
@@ -37,301 +37,354 @@ The script supports two directory layouts:
 import argparse
 import json
 import math
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 
-def calculate_stats(values: list[float]) -> dict:
-    """Calculate mean, stddev, min, max for a list of values."""
-    if not values:
-        return {"mean": 0.0, "stddev": 0.0, "min": 0.0, "max": 0.0}
+METRICS = ("pass_rate", "time_seconds", "tokens")
 
+
+def calculate_stats(values: list[float], total: int | None = None) -> dict:
+    """Summarize observed values; retain missing coverage instead of imputing zero."""
     n = len(values)
-    mean = sum(values) / n
+    stats = {"mean": None, "stddev": None, "min": None, "max": None,
+             "count": n, "total": n if total is None else total}
+    if n:
+        mean = sum(values) / n
+        variance = sum((x - mean) ** 2 for x in values) / (n - 1) if n > 1 else 0
+        stats.update(mean=round(mean, 4), stddev=round(math.sqrt(variance), 4),
+                     min=round(min(values), 4), max=round(max(values), 4))
+    return stats
 
-    if n > 1:
-        variance = sum((x - mean) ** 2 for x in values) / (n - 1)
-        stddev = math.sqrt(variance)
-    else:
-        stddev = 0.0
 
-    return {
-        "mean": round(mean, 4),
-        "stddev": round(stddev, 4),
-        "min": round(min(values), 4),
-        "max": round(max(values), 4)
-    }
+def _number(value, integer: bool = False) -> bool:
+    return (isinstance(value, (int, float)) and not isinstance(value, bool)
+            and math.isfinite(value) and value >= 0
+            and (not integer or isinstance(value, int)))
+
+
+def _read_object(path: Path, issues: list[str]) -> dict | None:
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text())
+        if not isinstance(data, dict):
+            raise ValueError("expected a JSON object")
+        return data
+    except (OSError, ValueError) as exc:
+        issues.append(f"{path.name}: {exc}")
+        return None
+
+
+def _summary(grading: dict, issues: list[str]) -> dict | None:
+    summary = grading.get("summary")
+    expectations = grading.get("expectations")
+    if not isinstance(summary, dict) or not isinstance(expectations, list) or not expectations:
+        issues.append("grading requires a summary and non-empty expectations")
+        return None
+    if any(not isinstance(exp, dict) or not isinstance(exp.get("passed"), bool)
+           or not isinstance(exp.get("text"), str) or not exp["text"].strip()
+           or not isinstance(exp.get("evidence"), str) or not exp["evidence"].strip()
+           for exp in expectations):
+        issues.append("expectations require text, boolean passed and evidence")
+        return None
+    passed = sum(exp["passed"] for exp in expectations)
+    total = len(expectations)
+    counts = {"passed": passed, "failed": total - passed, "total": total}
+    if any(not _number(summary.get(k), integer=True) or summary[k] != v
+           for k, v in counts.items()):
+        issues.append("summary counts disagree with expectations")
+        return None
+    rate = summary.get("pass_rate")
+    # Preserve healthy historical summaries rounded to two decimal places.
+    if not _number(rate) or rate > 1 or abs(rate - passed / total) > 0.005001:
+        issues.append("summary pass_rate disagrees with expectations")
+        return None
+    return {**counts, "pass_rate": rate}
+
+
+def _measurement(sources: list[tuple[str, dict]], field: str,
+                 issues: list[str], integer: bool = False) -> tuple:
+    observations = []
+    for label, data in sources:
+        value = data.get(field)
+        if value is None and field == "total_duration_seconds":
+            millis = data.get("duration_ms")
+            if millis is not None:
+                if _number(millis):
+                    value = millis / 1000
+                    label += ".duration_ms/1000"
+                else:
+                    issues.append(f"{label}.duration_ms is invalid")
+        else:
+            label += "." + field
+        if value is None:
+            continue
+        if not _number(value, integer):
+            issues.append(f"{label} is invalid")
+            continue
+        scope_field = "time_scope" if field == "total_duration_seconds" else "token_scope"
+        scope = data.get(scope_field, "unspecified")
+        if not isinstance(scope, str) or not scope.strip():
+            issues.append(f"{label}: invalid {scope_field}")
+            continue
+        observations.append((value, label, scope))
+    if not observations:
+        return None, None, None
+    first = observations[0]
+    if any(value != first[0] or scope != first[2] for value, _, scope in observations[1:]):
+        issues.append(f"conflicting {field} observations or scopes")
+        return None, None, None
+    return first
 
 
 def load_run_results(benchmark_dir: Path) -> dict:
-    """
-    Load all run results from a benchmark directory.
-
-    Returns dict keyed by config name (e.g. "with_skill"/"without_skill",
-    or "new_skill"/"old_skill"), each containing a list of run results.
-    """
-    # Support both layouts: eval dirs directly under benchmark_dir, or under runs/
+    """Load every observed run directory, including missing or invalid grades."""
     runs_dir = benchmark_dir / "runs"
-    if runs_dir.exists():
-        search_dir = runs_dir
-    elif list(benchmark_dir.glob("eval-*")):
-        search_dir = benchmark_dir
-    else:
-        print(f"No eval directories found in {benchmark_dir} or {benchmark_dir / 'runs'}")
-        return {}
-
+    search_dir = runs_dir if runs_dir.is_dir() else benchmark_dir
     results: dict[str, list] = {}
-
     for eval_idx, eval_dir in enumerate(sorted(search_dir.glob("eval-*"))):
-        metadata_path = eval_dir / "eval_metadata.json"
-        if metadata_path.exists():
-            try:
-                with open(metadata_path) as mf:
-                    eval_id = json.load(mf).get("eval_id", eval_idx)
-            except (json.JSONDecodeError, OSError):
-                eval_id = eval_idx
-        else:
-            try:
-                eval_id = int(eval_dir.name.split("-")[1])
-            except ValueError:
-                eval_id = eval_idx
-
-        # Discover config directories dynamically rather than hardcoding names
+        if not eval_dir.is_dir():
+            continue
+        eval_issues: list[str] = []
+        metadata = _read_object(eval_dir / "eval_metadata.json", eval_issues) or {}
+        match = re.fullmatch(r"eval-(\d+)", eval_dir.name)
+        fallback_id = int(match[1]) if match else eval_idx
+        eval_id = metadata.get("eval_id", fallback_id)
+        if not isinstance(eval_id, int) or isinstance(eval_id, bool):
+            eval_issues.append("eval_metadata.json: invalid eval_id")
+            eval_id = fallback_id
         for config_dir in sorted(eval_dir.iterdir()):
             if not config_dir.is_dir():
                 continue
-            # Skip non-config directories (inputs, outputs, etc.)
-            if not list(config_dir.glob("run-*")):
-                continue
-            config = config_dir.name
-            if config not in results:
-                results[config] = []
-
             for run_dir in sorted(config_dir.glob("run-*")):
-                run_number = int(run_dir.name.split("-")[1])
+                if not run_dir.is_dir():
+                    continue
+                issues = list(eval_issues)
+                run_match = re.fullmatch(r"run-(\d+)", run_dir.name)
+                run_number = int(run_match[1]) if run_match else None
+                if run_number is None:
+                    issues.append("invalid run directory number")
                 grading_file = run_dir / "grading.json"
-
-                if not grading_file.exists():
-                    print(f"Warning: grading.json not found in {run_dir}")
-                    continue
-
-                try:
-                    with open(grading_file) as f:
-                        grading = json.load(f)
-                except json.JSONDecodeError as e:
-                    print(f"Warning: Invalid JSON in {grading_file}: {e}")
-                    continue
-
-                # Extract metrics
+                grading = _read_object(grading_file, issues)
+                summary = _summary(grading, issues) if grading is not None else None
+                status = ("graded" if summary is not None else
+                          "invalid_grading" if grading_file.exists() else "missing_grading")
+                if status == "missing_grading":
+                    issues.append("grading.json is missing; outcome is unknown")
+                sources = []
+                timing = _read_object(run_dir / "timing.json", issues)
+                if timing is not None:
+                    sources.append(("timing.json", timing))
+                grading = grading or {}
+                if isinstance(grading.get("timing"), dict):
+                    sources.append(("grading.json.timing", grading["timing"]))
+                seconds, time_source, time_scope = _measurement(
+                    sources, "total_duration_seconds", issues)
+                tokens, token_source, token_scope = _measurement(
+                    sources, "total_tokens", issues, integer=True)
+                metrics = grading.get("execution_metrics")
+                metrics = metrics if isinstance(metrics, dict) else {}
                 result = {
                     "eval_id": eval_id,
+                    "eval_name": metadata.get("eval_name", eval_dir.name),
                     "run_number": run_number,
-                    "pass_rate": grading.get("summary", {}).get("pass_rate", 0.0),
-                    "passed": grading.get("summary", {}).get("passed", 0),
-                    "failed": grading.get("summary", {}).get("failed", 0),
-                    "total": grading.get("summary", {}).get("total", 0),
+                    "run_id": run_dir.relative_to(benchmark_dir).as_posix(),
+                    "grading_status": status,
+                    "identity_valid": not eval_issues and run_number is not None,
+                    **{key: summary[key] if summary else None
+                       for key in ("pass_rate", "passed", "failed", "total")},
+                    "time_seconds": seconds, "tokens": tokens,
+                    "metric_sources": {"time_seconds": time_source, "tokens": token_source},
+                    "metric_scopes": {"time_seconds": time_scope, "tokens": token_scope},
+                    "expectations": [{key: exp[key] for key in ("text", "passed", "evidence")}
+                                     for exp in grading["expectations"]] if summary else [],
+                    "issues": issues,
+                    "notes": [],
                 }
-
-                # Extract timing — check grading.json first, then sibling timing.json
-                timing = grading.get("timing", {})
-                result["time_seconds"] = timing.get("total_duration_seconds", 0.0)
-                timing_file = run_dir / "timing.json"
-                if result["time_seconds"] == 0.0 and timing_file.exists():
-                    try:
-                        with open(timing_file) as tf:
-                            timing_data = json.load(tf)
-                        result["time_seconds"] = timing_data.get("total_duration_seconds", 0.0)
-                        result["tokens"] = timing_data.get("total_tokens", 0)
-                    except json.JSONDecodeError:
-                        pass
-
-                # Extract metrics if available
-                metrics = grading.get("execution_metrics", {})
-                result["tool_calls"] = metrics.get("total_tool_calls", 0)
-                if not result.get("tokens"):
-                    result["tokens"] = metrics.get("output_chars", 0)
-                result["errors"] = metrics.get("errors_encountered", 0)
-
-                # Extract expectations — viewer requires fields: text, passed, evidence
-                raw_expectations = grading.get("expectations", [])
-                for exp in raw_expectations:
-                    if "text" not in exp or "passed" not in exp:
-                        print(f"Warning: expectation in {grading_file} missing required fields (text, passed, evidence): {exp}")
-                result["expectations"] = raw_expectations
-
-                # Extract notes from user_notes_summary
-                notes_summary = grading.get("user_notes_summary", {})
-                notes = []
-                notes.extend(notes_summary.get("uncertainties", []))
-                notes.extend(notes_summary.get("needs_review", []))
-                notes.extend(notes_summary.get("workarounds", []))
-                result["notes"] = notes
-
-                results[config].append(result)
-
+                if not isinstance(result["expectations"], list):
+                    result["expectations"] = []
+                for target, source in (("tool_calls", "total_tool_calls"),
+                                       ("errors", "errors_encountered"),
+                                       ("output_chars", "output_chars")):
+                    value = metrics.get(source)
+                    result[target] = value if _number(value, integer=True) else None
+                notes = grading.get("user_notes_summary")
+                if isinstance(notes, dict):
+                    for key in ("uncertainties", "needs_review", "workarounds"):
+                        if isinstance(notes.get(key), list):
+                            result["notes"].extend(n for n in notes[key] if isinstance(n, str))
+                results.setdefault(config_dir.name, []).append(result)
     return results
 
 
-def aggregate_results(results: dict) -> dict:
-    """
-    Aggregate run results into summary statistics.
+def _bind_configs(results: dict, candidate: str | None, baseline: str | None) -> tuple:
+    if (candidate is None) != (baseline is None):
+        raise ValueError("supply both --candidate and --baseline")
+    if candidate is not None:
+        if candidate == baseline or candidate not in results or baseline not in results:
+            raise ValueError("candidate and baseline must name distinct observed configurations")
+        return candidate, baseline
+    candidates = [c for c in ("with_skill", "new_skill") if c in results]
+    baselines = [c for c in ("old_skill", "without_skill") if c in results]
+    if len(candidates) == len(baselines) == 1:
+        return candidates[0], baselines[0]
+    return None, None
 
-    Returns run_summary with stats for each configuration and delta.
-    """
-    run_summary = {}
-    configs = list(results.keys())
 
-    for config in configs:
-        runs = results.get(config, [])
-
-        if not runs:
-            run_summary[config] = {
-                "pass_rate": {"mean": 0.0, "stddev": 0.0, "min": 0.0, "max": 0.0},
-                "time_seconds": {"mean": 0.0, "stddev": 0.0, "min": 0.0, "max": 0.0},
-                "tokens": {"mean": 0, "stddev": 0, "min": 0, "max": 0}
-            }
-            continue
-
-        pass_rates = [r["pass_rate"] for r in runs]
-        times = [r["time_seconds"] for r in runs]
-        tokens = [r.get("tokens", 0) for r in runs]
-
-        run_summary[config] = {
-            "pass_rate": calculate_stats(pass_rates),
-            "time_seconds": calculate_stats(times),
-            "tokens": calculate_stats(tokens)
+def compare_results(results: dict, candidate: str | None = None,
+                    baseline: str | None = None) -> tuple[dict, dict]:
+    """Calculate deltas only for explicitly bound, complete, graded run pairs."""
+    candidate, baseline = _bind_configs(results, candidate, baseline)
+    delta = {metric: None for metric in METRICS}
+    comparison = {"candidate": candidate, "baseline": baseline,
+                  "status": "unbound", "paired_runs": 0, "unmatched_runs": [],
+                  "issues": [], "metrics": {}}
+    if candidate is None:
+        comparison["issues"].append("comparison roles are missing or ambiguous; supply both role flags")
+        return delta, comparison
+    indexes = []
+    identity_ok = True
+    for config in (candidate, baseline):
+        index = {}
+        for run in results[config]:
+            key = (run["eval_id"], run["run_number"])
+            if key in index or not run.get("identity_valid", True):
+                identity_ok = False
+                comparison["issues"].append(f"{config}: duplicate or invalid run identity {key}")
+            index[key] = run
+        indexes.append(index)
+    left, right = indexes
+    common = left.keys() & right.keys()
+    comparison["paired_runs"] = len(common)
+    comparison["unmatched_runs"] = [
+        run["run_id"] for index, other in ((left, right), (right, left))
+        for key, run in index.items() if key not in other]
+    pair_gate = (identity_ok and bool(common) and left.keys() == right.keys()
+                 and all(left[k]["pass_rate"] is not None
+                         and right[k]["pass_rate"] is not None for k in common))
+    if not pair_gate:
+        comparison["issues"].append("incomplete identities, pairing or grading; deltas withheld")
+    for metric in METRICS:
+        pairs = [(left[k], right[k]) for k in common]
+        known = [(a, b) for a, b in pairs
+                 if a.get(metric) is not None and b.get(metric) is not None]
+        scopes = {r.get("metric_scopes", {}).get(metric, "unspecified")
+                  for pair in known for r in pair} if metric != "pass_rate" else set()
+        complete = pair_gate and len(known) == len(pairs) and len(scopes) <= 1
+        comparison["metrics"][metric] = {
+            "status": "complete" if complete else "unknown",
+            "paired_count": len(known), "total_pairs": len(pairs),
+            "scope": next(iter(scopes)) if len(scopes) == 1 else None,
         }
+        if complete:
+            value = sum(a[metric] - b[metric] for a, b in known) / len(known)
+            precision = {"pass_rate": 2, "time_seconds": 1, "tokens": 0}[metric]
+            delta[metric] = f"{value:+.{precision}f}"
+        elif len(scopes) > 1:
+            comparison["issues"].append(f"{metric}: mixed measurement scopes; delta withheld")
+    comparison["status"] = ("complete" if all(v["status"] == "complete"
+                                             for v in comparison["metrics"].values())
+                            else "incomplete")
+    return delta, comparison
 
-    # Calculate delta between the first two configs (if two exist)
-    if len(configs) >= 2:
-        primary = run_summary.get(configs[0], {})
-        baseline = run_summary.get(configs[1], {})
-    else:
-        primary = run_summary.get(configs[0], {}) if configs else {}
-        baseline = {}
 
-    delta_pass_rate = primary.get("pass_rate", {}).get("mean", 0) - baseline.get("pass_rate", {}).get("mean", 0)
-    delta_time = primary.get("time_seconds", {}).get("mean", 0) - baseline.get("time_seconds", {}).get("mean", 0)
-    delta_tokens = primary.get("tokens", {}).get("mean", 0) - baseline.get("tokens", {}).get("mean", 0)
-
-    run_summary["delta"] = {
-        "pass_rate": f"{delta_pass_rate:+.2f}",
-        "time_seconds": f"{delta_time:+.1f}",
-        "tokens": f"{delta_tokens:+.0f}"
+def aggregate_results(results: dict, candidate: str | None = None,
+                      baseline: str | None = None) -> dict:
+    """Summarize observed values with coverage and a bound paired delta."""
+    summary = {
+        config: {metric: calculate_stats([r[metric] for r in runs if r.get(metric) is not None],
+                                        len(runs)) for metric in METRICS}
+        for config, runs in results.items()
     }
+    summary["delta"] = compare_results(results, candidate, baseline)[0]
+    return summary
 
-    return run_summary
 
-
-def generate_benchmark(benchmark_dir: Path, skill_name: str = "", skill_path: str = "") -> dict:
-    """
-    Generate complete benchmark.json from run results.
-    """
+def generate_benchmark(benchmark_dir: Path, skill_name: str = "", skill_path: str = "",
+                       candidate: str | None = None, baseline: str | None = None) -> dict:
     results = load_run_results(benchmark_dir)
-    run_summary = aggregate_results(results)
-
-    # Build runs array for benchmark.json
+    summary = aggregate_results(results, candidate, baseline)
+    _, comparison = compare_results(results, candidate, baseline)
     runs = []
-    for config in results:
-        for result in results[config]:
+    counts: dict[int, dict] = {}
+    for config, config_runs in results.items():
+        for run in config_runs:
+            counts.setdefault(run["eval_id"], {}).setdefault(config, 0)
+            counts[run["eval_id"]][config] += 1
             runs.append({
-                "eval_id": result["eval_id"],
+                **{key: run[key] for key in ("eval_id", "eval_name", "run_number", "run_id",
+                                            "grading_status", "metric_sources", "metric_scopes",
+                                            "issues", "expectations", "notes")},
                 "configuration": config,
-                "run_number": result["run_number"],
-                "result": {
-                    "pass_rate": result["pass_rate"],
-                    "passed": result["passed"],
-                    "failed": result["failed"],
-                    "total": result["total"],
-                    "time_seconds": result["time_seconds"],
-                    "tokens": result.get("tokens", 0),
-                    "tool_calls": result.get("tool_calls", 0),
-                    "errors": result.get("errors", 0)
-                },
-                "expectations": result["expectations"],
-                "notes": result["notes"]
+                "result": {key: run[key] for key in (*METRICS, "passed", "failed", "total",
+                                                     "tool_calls", "errors", "output_chars")},
             })
-
-    # Determine eval IDs from results
-    eval_ids = sorted(set(
-        r["eval_id"]
-        for config in results.values()
-        for r in config
-    ))
-
-    benchmark = {
+    observed_counts = {n for groups in counts.values() for n in groups.values()}
+    uniform = (len(observed_counts) == 1
+               and all(set(groups) == set(results) for groups in counts.values()))
+    return {
         "metadata": {
             "skill_name": skill_name or "<skill-name>",
             "skill_path": skill_path or "<path/to/skill>",
-            "executor_model": "<model-name>",
-            "analyzer_model": "<model-name>",
+            "executor_model": "<model-name>", "analyzer_model": "<model-name>",
             "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "evals_run": eval_ids,
-            "runs_per_configuration": 3
+            "evals_run": sorted(counts),
+            "runs_per_configuration": next(iter(observed_counts)) if uniform else None,
+            "attempts_per_configuration": {c: len(rs) for c, rs in results.items()},
+            "runs_per_eval": counts,
         },
-        "runs": runs,
-        "run_summary": run_summary,
-        "notes": []  # To be filled by analyzer
+        "runs": runs, "run_summary": summary, "comparison": comparison,
+        "notes": [],
     }
 
-    return benchmark
+
+def _format_stat(stat: dict | None, metric: str) -> str:
+    if not stat or stat.get("mean") is None:
+        return "unknown"
+    mean, stddev = stat["mean"], stat["stddev"]
+    if metric == "pass_rate":
+        value = f"{mean * 100:.0f}% ± {stddev * 100:.0f}%"
+    elif metric == "time_seconds":
+        value = f"{mean:.1f}s ± {stddev:.1f}s"
+    else:
+        value = f"{mean:.0f} ± {stddev:.0f}"
+    if "count" in stat:
+        value += f" ({stat['count']}/{stat['total']} observed)"
+    return value
 
 
 def generate_markdown(benchmark: dict) -> str:
-    """Generate human-readable benchmark.md from benchmark data."""
-    metadata = benchmark["metadata"]
-    run_summary = benchmark["run_summary"]
-
-    # Determine config names (excluding "delta")
-    configs = [k for k in run_summary if k != "delta"]
-    config_a = configs[0] if len(configs) >= 1 else "config_a"
-    config_b = configs[1] if len(configs) >= 2 else "config_b"
-    label_a = config_a.replace("_", " ").title()
-    label_b = config_b.replace("_", " ").title()
-
-    lines = [
-        f"# Skill Benchmark: {metadata['skill_name']}",
-        "",
-        f"**Model**: {metadata['executor_model']}",
-        f"**Date**: {metadata['timestamp']}",
-        f"**Evals**: {', '.join(map(str, metadata['evals_run']))} ({metadata['runs_per_configuration']} runs each per configuration)",
-        "",
-        "## Summary",
-        "",
-        f"| Metric | {label_a} | {label_b} | Delta |",
-        "|--------|------------|---------------|-------|",
-    ]
-
-    a_summary = run_summary.get(config_a, {})
-    b_summary = run_summary.get(config_b, {})
-    delta = run_summary.get("delta", {})
-
-    # Format pass rate
-    a_pr = a_summary.get("pass_rate", {})
-    b_pr = b_summary.get("pass_rate", {})
-    lines.append(f"| Pass Rate | {a_pr.get('mean', 0)*100:.0f}% ± {a_pr.get('stddev', 0)*100:.0f}% | {b_pr.get('mean', 0)*100:.0f}% ± {b_pr.get('stddev', 0)*100:.0f}% | {delta.get('pass_rate', '—')} |")
-
-    # Format time
-    a_time = a_summary.get("time_seconds", {})
-    b_time = b_summary.get("time_seconds", {})
-    lines.append(f"| Time | {a_time.get('mean', 0):.1f}s ± {a_time.get('stddev', 0):.1f}s | {b_time.get('mean', 0):.1f}s ± {b_time.get('stddev', 0):.1f}s | {delta.get('time_seconds', '—')}s |")
-
-    # Format tokens
-    a_tokens = a_summary.get("tokens", {})
-    b_tokens = b_summary.get("tokens", {})
-    lines.append(f"| Tokens | {a_tokens.get('mean', 0):.0f} ± {a_tokens.get('stddev', 0):.0f} | {b_tokens.get('mean', 0):.0f} ± {b_tokens.get('stddev', 0):.0f} | {delta.get('tokens', '—')} |")
-
-    # Notes section
-    if benchmark.get("notes"):
-        lines.extend([
-            "",
-            "## Notes",
-            ""
-        ])
-        for note in benchmark["notes"]:
-            lines.append(f"- {note}")
-
+    """Render unknown values and coverage without presenting missing data as gains."""
+    metadata, summary = benchmark["metadata"], benchmark["run_summary"]
+    comparison = benchmark.get("comparison", {})
+    candidate, baseline = comparison.get("candidate"), comparison.get("baseline")
+    if not comparison:
+        candidate, baseline = _bind_configs(summary, None, None)
+    configs = [c for c in summary if c != "delta"]
+    # Show all groups when roles cannot be bound; withhold the unlabeled delta.
+    displayed = [candidate, baseline] if candidate and baseline else configs
+    lines = [f"# Skill Benchmark: {metadata['skill_name']}", "",
+             f"**Model**: {metadata['executor_model']}",
+             f"**Date**: {metadata['timestamp']}",
+             f"**Evals**: {', '.join(map(str, metadata['evals_run']))}",
+             f"**Observed attempts**: {metadata.get('attempts_per_configuration', 'unknown')}",
+             f"**Comparison**: {comparison.get('status', 'legacy; coverage not recorded')}", "",
+             "## Summary", "",
+             "| Metric | " + " | ".join(c.replace("_", " ").title() for c in displayed)
+             + " | Candidate − baseline |",
+             "|---|" + "---|" * (len(displayed) + 1)]
+    for metric, label in (("pass_rate", "Pass Rate"), ("time_seconds", "Time"), ("tokens", "Tokens")):
+        stats = [_format_stat(summary[c].get(metric), metric) for c in displayed]
+        delta = summary.get("delta", {}).get(metric) if comparison else None
+        lines.append("| " + label + " | " + " | ".join(stats) + " | "
+                     + (delta if delta is not None else "unknown") + " |")
+    issues = comparison.get("issues", [])
+    if issues or benchmark.get("notes"):
+        lines.extend(["", "## Notes", ""])
+        lines.extend("- " + note for note in [*issues, *benchmark.get("notes", [])])
     return "\n".join(lines)
 
 
@@ -359,6 +412,8 @@ def main():
         type=Path,
         help="Output path for benchmark.json (default: <benchmark_dir>/benchmark.json)"
     )
+    parser.add_argument("--candidate", help="Candidate configuration (requires --baseline)")
+    parser.add_argument("--baseline", help="Baseline configuration (requires --candidate)")
 
     args = parser.parse_args()
 
@@ -367,7 +422,11 @@ def main():
         sys.exit(1)
 
     # Generate benchmark
-    benchmark = generate_benchmark(args.benchmark_dir, args.skill_name, args.skill_path)
+    try:
+        benchmark = generate_benchmark(args.benchmark_dir, args.skill_name, args.skill_path,
+                                       args.candidate, args.baseline)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     # Determine output paths
     output_json = args.output or (args.benchmark_dir / "benchmark.json")
@@ -375,7 +434,7 @@ def main():
 
     # Write benchmark.json
     with open(output_json, "w") as f:
-        json.dump(benchmark, f, indent=2)
+        json.dump(benchmark, f, indent=2, allow_nan=False)
     print(f"Generated: {output_json}")
 
     # Write benchmark.md
@@ -391,10 +450,10 @@ def main():
 
     print(f"\nSummary:")
     for config in configs:
-        pr = run_summary[config]["pass_rate"]["mean"]
         label = config.replace("_", " ").title()
-        print(f"  {label}: {pr*100:.1f}% pass rate")
-    print(f"  Delta:         {delta.get('pass_rate', '—')}")
+        print(f"  {label}: {_format_stat(run_summary[config]['pass_rate'], 'pass_rate')}")
+    print(f"  Comparison:    {benchmark['comparison']['status']}")
+    print(f"  Delta:         {delta.get('pass_rate') or 'unknown'}")
 
 
 if __name__ == "__main__":
