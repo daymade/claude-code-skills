@@ -46,24 +46,12 @@ When no canonical transcript exists:
 
 Do not run local ASR merely to make a two-route process look complete.
 
-| Mode | When | Speed | Cost |
-|------|------|-------|------|
-| **Local MLX** | macOS Apple Silicon | 15-27x realtime | Free |
-| **Remote API** | Any platform, or when local unavailable | Depends on GPU | API/self-hosted |
-
-**Choosing between them is usually not about speed — it's about where the audio already
-is.** A remote GPU can be several times faster (a 4090 running vLLM measured ~61x realtime
-against ~15x for local MLX), but that gap is small change next to moving the files:
-transcription output is text, and text is ~10,000× smaller than the audio it came from
-(18.5 h of speech ≈ 330 K characters ≈ 1 MB, from ~2.6 GB of WAV). So:
-
-> **Transcribe where the audio already lives, and move only the transcript.**
-
-Pulling a few hundred MB across a slow link to reach a faster GPU routinely costs more
-wall-clock than the entire transcription — measured once at 63 KB/s, which is over two
-hours for 500 MB, to save minutes of compute. If the recording is already on the remote
-box (it was recorded there, downloaded there, or lives in a share mounted there), run the
-ASR there and bring back the `.txt`.
+Before choosing local versus remote execution, read
+[execution location and comparison](references/execution_location_and_comparison.md).
+Use existing text and validated checkpoints first, then compare source placement,
+processing permission, actual GPU/model identity and end-to-end quality evidence.
+When measurements are missing, prefer an eligible route next to the audio and
+state that this avoids a transfer; do not claim it is faster.
 
 Configuration persists in `${CLAUDE_PLUGIN_DATA}/config.json`.
 
@@ -106,10 +94,10 @@ Then use **AskUserQuestion** with platform-aware defaults:
 
 For **macOS Apple Silicon** (recommended: local):
 ```
-ASR setup — your Mac has Apple Silicon, so local transcription is recommended.
+ASR setup — your Mac supports local MLX; choose from data location and the execution SOP.
 
 Q1: Transcription mode?
-  A) Local MLX — runs on your Mac's GPU, no API key needed, 15-27x realtime (Recommended)
+  A) Local MLX — runs on your Mac's GPU, no API key needed
   B) Remote API — send audio to a server (vLLM, Tailscale workstation, etc.)
 
 Q2: Does your network have an HTTP proxy that might intercept traffic?
@@ -479,8 +467,8 @@ Before using the Qwen3 route, smoke-test its leg once:
 uv run ${CLAUDE_SKILL_DIR}/scripts/transcribe_local_mlx.py --smoke-test
 ```
 
-Expected output includes `Dependency stack: mlx-audio 0.3.1, mlx-lm 0.30.5,
-transformers 5.0.0rc3` and `Smoke test OK`. For performance, per-chunk token
+Expect the bundled script's dependency validation and `Smoke test OK`; pins are
+defined by `scripts/transcribe_local_mlx.py`. For performance, per-chunk token
 semantics, resource bounds, and recovery, read `references/local_mlx_guide.md`.
 
 **How it works (and why):** session-wide Qwen3-ASR text + mlx-whisper word
@@ -547,57 +535,19 @@ The remote endpoint returns plain text only — speakers are added locally by
 aligning that text (leg 1) with the local timing + diarization legs. So Path B
 = fetch text remotely, then run Path A's pipeline with `--text-file`.
 
-**Health check first** (skip if already verified this session):
-```bash
-python3 -c "
-import json, subprocess, sys
-with open('${CLAUDE_PLUGIN_DATA}/config.json') as f:
-    cfg = json.load(f)
-base = cfg['endpoint'].rsplit('/audio/', 1)[0]
-noproxy = ['--noproxy', '*'] if cfg.get('noproxy', True) else []
-result = subprocess.run(
-    ['curl', '-s', '--max-time', '10'] + noproxy + [f'{base}/models'],
-    capture_output=True, text=True
-)
-if result.returncode != 0 or not result.stdout.strip():
-    print(f'HEALTH CHECK FAILED: {base}/models', file=sys.stderr)
-    sys.exit(1)
-print(f'Service healthy: {base}')
-"
-```
-
-Read config and send via curl:
+Use the bundled remote runner with the existing configuration. It checks
+response semantics, binds source and result bytes, and records observed producer
+identity when the configured service exposes it; it never switches a shared model.
+For self-hosted GPU evidence and performance comparison, follow
+[execution location and comparison](references/execution_location_and_comparison.md).
 
 ```bash
-python3 -c "
-import json, subprocess, sys, os, tempfile
-with open('${CLAUDE_PLUGIN_DATA}/config.json') as f:
-    cfg = json.load(f)
-noproxy = ['--noproxy', '*'] if cfg.get('noproxy', True) else []
-timeout = str(cfg.get('max_timeout', 900))
-audio_file = 'AUDIO_FILE_PATH'
-output_json = tempfile.mktemp(suffix='.json', prefix='asr_')
-
-result = subprocess.run(
-    ['curl', '-s', '--max-time', timeout] + noproxy + [
-        cfg['endpoint'],
-        '-F', f'file=@{audio_file}',
-        '-F', f'model={cfg[\"model\"]}',
-        '-o', output_json
-    ], capture_output=True, text=True
-)
-
-with open(output_json) as f:
-    data = json.load(f)
-if 'text' not in data:
-    print(f'ERROR: {json.dumps(data)[:300]}', file=sys.stderr)
-    sys.exit(1)
-text = data['text']
-print(f'Transcribed: {len(text)} chars', file=sys.stderr)
-print(text)
-os.unlink(output_json)
-" > OUTPUT.txt
+python3 ${CLAUDE_SKILL_DIR}/scripts/transcribe_remote.py \
+  INPUT_AUDIO OUTPUT.txt --config "${CLAUDE_PLUGIN_DATA}/config.json"
 ```
+
+Expect `OUTPUT.txt` and `OUTPUT.txt.asr.json`; the receipt represents the plain-text
+leg, not a recognition-quality or speaker-completion claim.
 
 Then attach speakers locally (Apple Silicon + pyannote token required):
 
@@ -738,27 +688,18 @@ tailscale ssh USER@HOST "ss -ltn | grep -E ':(8000|8001|8002)'; \
   docker ps --format '{{.Names}}\t{{.Ports}}\t{{.Status}}'"
 ```
 
-**5. "Is the GPU free?"** — before starting another server, check whether one is really
-holding VRAM. An **empty** compute-apps list means nothing is using it, regardless of what
-an older note may claim about which service "has" the GPU:
+**5. "Is the GPU available for this task?"** — inspect memory and declared service
+ownership before starting another model. An empty compute-apps list alone does
+not prove an idle GPU, especially under WSL:
 
 ```bash
 tailscale ssh USER@HOST "nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv"
 # under WSL nvidia-smi is often off PATH: /usr/lib/wsl/lib/nvidia-smi
 ```
 
-**6. Restarting it? `pkill -f 'vllm serve'` kills the command that issued it.** `-f`
-matches against the whole command line — and the command line you just typed contains that
-exact string, so pkill matches your own shell. Symptom: the old process dies, the new one
-never starts, and **nothing reports an error**. Wrap the first letter in a character class
-so the pattern cannot match itself:
-
-```bash
-tailscale ssh USER@HOST "pgrep -f '[v]llm serve'"   # check
-tailscale ssh USER@HOST "pkill -f '[v]llm serve'"   # kill
-```
-
-The same trap applies to any `pkill -f` whose pattern you also typed on that line.
+Do not restart or unload another session's service to free a GPU or test a cold
+path. Inspect current ownership and use an existing compatible route; keep an
+unavailable execution identity explicit instead of silently falling back to CPU.
 
 ## Step 4: Verify Output
 
@@ -971,15 +912,9 @@ If model loading fails with an error like:
 AttributeError: 'str' object has no attribute '__module__'
 ```
 
-the agent is probably using an unpinned or stale copy of the local MLX script. The known-good stack is:
-
-```text
-mlx-audio 0.3.1
-mlx-lm 0.30.5
-transformers 5.0.0rc3
-```
-
-Run the bundled `--smoke-test` command and confirm the dependency stack line matches. Do not start a long transcription until the smoke test succeeds.
+check whether the agent is using the current bundled script. Its PEP 723 declaration
+and runtime dependency check own the version pins. Run its `--smoke-test` and read
+the validation result; do not start a long transcription until it succeeds.
 
 ### A self-hosted remote endpoint rejects the audio
 
@@ -1017,6 +952,8 @@ Substitute the resolved absolute path for `${CLAUDE_SKILL_DIR}` everywhere in th
 ## Bundled Resources
 
 **Scripts:**
+- `transcribe_remote.py` — Existing remote plain-text ASR with source/result/producer receipt and optional observed runtime GPU identity
+- `measure_asr.py` — Measure an explicit existing ASR command, check original-speech quality, and compare observations on demand
 - `resolve_media_input.py` — Resolve local paths, direct media URLs, and podcast/web pages into validated local media files
 - `prepare_asr_input.py` — Merge multi-segment recordings + normalize for ASR (16 kHz mono), optional pitch-preserved speedup for metered uploads; self-verifies duration math and splice boundaries
 - `transcribe_local_mlx.py` — Local MLX transcription (macOS ARM64, PEP 723 deps), bounded low-energy chunks, atomic checkpoints/resume, owner-liveness binding
@@ -1032,6 +969,7 @@ Substitute the resolved absolute path for `${CLAUDE_SKILL_DIR}` everywhere in th
 - `generate_audit_html.py` — Build a self-contained HTML audit/review page from speaker-transcribe CSV outputs
 
 **References:**
+- `execution_location_and_comparison.md` — Conditional local/remote choice, existing transcript/cache reuse, safe runtime identity and same-source comparison
 - `decoupled_speaker_alignment.md` — The default architecture: why decouple, alignment algorithm, trust signals, failure modes
 - `speaker_diarization.md` — Production pitfalls: over-segmentation, mic-domain effects, when to distrust labels; legacy cascade notes
 - `voiceprint_speaker_id.md` — CAM++ speaker ID: enroll/match, threshold+margin gates, the acoustic-domain caveat, bootstrap

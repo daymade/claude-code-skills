@@ -25,6 +25,30 @@ record identities and decisions, not only successful parsing. Exercise the new
 record type and an existing resolved record. Compare the old reader's result
 before and after the new write.
 
+When removing persisted derived fields or normalizing evidence, include malformed
+lists in that same round trip. A filter that drops non-string members can turn
+`[1]` into `[]`, or `["manual_gap", null]` into `["manual_gap"]`; a returned
+validation error is insufficient if the writer saves the cleaned result and the
+next reader interprets it as valid or complete. Validate evidence before cleaning
+it, or preserve an explicit invalid/unknown diagnosis according to the owning
+format. Missing, empty, null, scalar and mixed-list inputs need separate controls;
+their meanings come from that format, not from this recipe. On rejection, verify
+that the last valid record remains intact.
+
+The runnable example is `tests/test_persisted_receipt_roundtrip.py`: it exercises
+this Skill's actual `release_readiness.attest` writer and `verify` reader, with an
+exact old implementation frozen under `tests/fixtures/persisted-receipt/`. Its
+mixed-list control fails when the reader's deciding predicate is mutated to
+filter malformed members. Run from the locked Skill project:
+
+```bash
+uv run --frozen python -m pytest tests/test_persisted_receipt_roundtrip.py -q
+```
+
+This proves the receipt-format control, not another Skill's media completeness.
+Apply the recipe to that capability's actual writer and consumer to establish
+its business decisions after persistence.
+
 The last row covers the declared compatibility surface, not features the old
 reader never supported. A new sidecar file may be ignored by the old reader;
 verify that the shared journal still works. If old readers cannot safely consume

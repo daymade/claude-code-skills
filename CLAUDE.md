@@ -61,6 +61,15 @@ Use [skill-creator](daymade-skill/skill-creator/SKILL.md) before creating or
 changing a skill. It owns change classification, evidence selection, regression
 review, validation, initialization, and packaging.
 
+Operational or code-bearing Skill edits complete directly affected document alignment
+before the first candidate freeze; follow skill-creator's Edit workflow.
+For local/remote ASR selection and comparisons, enter
+[asr-transcribe-to-text](daymade-audio/asr-transcribe-to-text/SKILL.md) and its
+[execution SOP](daymade-audio/asr-transcribe-to-text/references/execution_location_and_comparison.md).
+For competitor claims, citations and existing-product learning, enter
+[competitors-analysis](competitors-analysis/SKILL.md) and its
+[citation readback checklist](competitors-analysis/references/analysis_checklist.md#citation-readback-and-counterevidence).
+
 For permission-sensitive fixtures, use its
 [execution-context verification recipe](daymade-skill/skill-creator/references/stateful-script-verification.md#execution-identity-and-permission-fixtures).
 

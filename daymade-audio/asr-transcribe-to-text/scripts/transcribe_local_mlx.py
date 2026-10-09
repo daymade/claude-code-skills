@@ -453,6 +453,7 @@ def _checkpoint_identity(
     sample_rate,
     dependency_versions,
     producer_sha256=None,
+    execution_device=None,
 ):
     source = Path(audio_path).resolve()
     state = source.stat()
@@ -466,6 +467,7 @@ def _checkpoint_identity(
         "source_sha256": _sha256_file(source),
         "model": model_name,
         "model_revision": model_revision,
+        "execution_device": execution_device,
         "language": language,
         "chunk_duration_s": chunk_duration,
         "max_tokens_per_chunk": max_tokens,
@@ -737,6 +739,17 @@ def check_platform():
         sys.exit(1)
 
 
+def require_metal(mx):
+    """Select this worker's GPU explicitly; refuse an unavailable Metal runtime."""
+    if not mx.metal.is_available():
+        raise RuntimeError("Metal GPU is unavailable; CPU inference is refused")
+    mx.set_default_device(mx.gpu)
+    device = str(mx.default_device())
+    if "gpu" not in device.lower():
+        raise RuntimeError("MLX did not select its GPU; CPU inference is refused")
+    return device
+
+
 def main():
     parser = build_parser()
     args = parser.parse_args()
@@ -746,6 +759,9 @@ def main():
     start_owner_watchdog(args.owner_pid)
     running_producer_sha256 = _sha256_file(Path(__file__))
 
+    import mlx.core as mx
+    execution_device = require_metal(mx)
+    print(f"Execution device: {execution_device} (Metal)", file=sys.stderr, flush=True)
     from mlx_audio.stt.utils import load_model
 
     dependency_versions = _runtime_dependency_versions()
@@ -810,6 +826,7 @@ def main():
             sample_rate,
             dependency_versions,
             producer_sha256=running_producer_sha256,
+            execution_device=execution_device,
         )
         checkpoint_root = Path(args.checkpoint_dir) if args.checkpoint_dir else Path(out_dir) / "_mlx_checkpoints"
         checkpoint_dir = checkpoint_root / f"{name}-{digest[:16]}"

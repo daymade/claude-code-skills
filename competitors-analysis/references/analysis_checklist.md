@@ -73,6 +73,8 @@ nl -ba src/main.ts | sed -n '1,220p'
 - [ ] Parser/export/storage claims cite code lines.
 - [ ] Market data cites GitHub/API/web source plus retrieval date.
 - [ ] Each comparison-table value has a source cell.
+- [ ] Answer/citation judgments include the [source readback and counterevidence
+  check](#citation-readback-and-counterevidence), not just a returned schema or link.
 
 ## 6. Language Checks
 
@@ -101,6 +103,57 @@ For multi-competitor reports:
 - [ ] Continuation reads that entry and latest user correction before acting; do not rerun a completed inventory without changed inputs or a specific gap.
 
 ## Common Fixes
+
+### Citation Readback And Counterevidence
+
+For a claim that an answer is faithful, or that a citation lets the consumer
+continue reading, use the already-authorized reader for that source:
+
+1. Resolve the citation against its recorded source version and location. Read
+   the original passage and enough surrounding context to decide whether it
+   supports, limits or contradicts the answer. If the citation cannot resolve,
+   retain the answer as unverified and record the exact failed read.
+2. Inspect the same question's relevant counterpassage, if one is present in the
+   bounded source. Do not select only supportive snippets or treat lack of a
+   counterexample in that sample as proof of general quality.
+3. Record a later source-access check separately from the original observation.
+   A payload's `available` field is not a consumer readback. A stopped public
+   source does not establish that an existing private archive's permission was
+   revoked; permission comes from its own authority. Preserve unknown when that
+   authority does not decide the question.
+4. For a product recommendation, use the profile's comparison baseline and the
+   Landscape decision chain: compare the named acceptance scenario with existing
+   assets and the evidenced adopted workflow before proposing a new feature.
+   A public client proves only its exposed contract and exercised client behavior;
+   it does not reveal the server's architecture or establish answer quality.
+
+The following is a **synthetic report fragment**, not an API schema or a claim
+about a real product. Its source version is defined once in the source register:
+
+```markdown
+Source register: demo-source-a = frozen demonstration transcript.
+
+| Claim / citation | Evidence version reference | Locator | Original and surrounding context read back | Availability observation |
+|---|---|---|---|---|
+| "The extractor never misses a frame" / demo-7 | demo-source-a | segment 7 | Original: "Each sampled frame was processed." Next sentence: "Frames between samples were not inspected." The answer overstates the source. | Authorized local snapshot readable at this check; public endpoint no longer readable at a separate later check. |
+
+Comparison baseline: the product authority's existing passage-reading acceptance;
+existing asset: its already-authorized transcript archive; actual reuse in the
+target reader untested.
+
+Choice: reuse the existing transcript and expose its passages for that acceptance
+scenario. This avoids another transcription, but needs a consumer readback.
+Counterevidence: the client has a citation contract, yet the target reader may
+fail to resolve it. Next check: open the cited passage in that reader, including
+the limiting next sentence. If it fails, the reuse path remains unverified.
+```
+
+A second narrow check catches client/server overreach: if the only evidence is
+a client posting `/chat` and a `Citation` type containing `quote`, the supported
+finding is “the client accepts this response shape.” Server retrieval strategy,
+model choice and faithful answers remain `待验证`; a returned type is no substitute
+for the readback above. Having a CLI is an interface fact, not differentiation
+without the comparative acceptance result.
 
 ### Unsupported Architecture Claim
 
