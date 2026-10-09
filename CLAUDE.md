@@ -140,12 +140,15 @@ Python hooks.
 
 ### Rendered UI delivery acceptance
 
-For rendered UI freshness or deployment acceptance, enter
+For rendered UI freshness, delayed editor/batch responses or deployment acceptance, enter
 [frontend-visual-qa](frontend-visual-qa/SKILL.md). Keep its manifest, launcher,
 result semantics and rendered-journey procedure in that owner.
+Before designing or judging monitoring, availability or certificate matrices, enter
+[data-visualization-discipline](data-visualization-discipline/SKILL.md).
+Keep observation and risk semantics in its data-validation route, not a second checklist here.
 
-For oversized images or figure readability in a Markdown note or transcript, enter
-that Skill's [actual-reader handoff](frontend-visual-qa/references/markdown-reader-handoff.md).
+For oversized images or figure readability in a Markdown note or transcript, use
+[frontend-visual-qa's actual-reader handoff](frontend-visual-qa/references/markdown-reader-handoff.md).
 It owns reader-specific sizing and the representative pilot; keep display values
 and verification details there.
 

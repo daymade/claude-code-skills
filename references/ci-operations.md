@@ -43,6 +43,7 @@ For GitHub readback and authorized reruns, use
 | Dependency-install step is active or failed; suite step never started | Tests are unrun. Read the installation command, download/retry output and deadline; do not call this an assertion failure or assume a runner fault. |
 | A test traceback points to an assertion or implementation exception | Preserve the exact failing input and compare main. Reproduce the affected suite before changing its implementation; do not weaken the assertion to obtain green. |
 | Test body completed, but traceback ends in `TemporaryDirectory.cleanup` / `rmtree` | Fixture lifecycle failed. Inspect the fixture's subprocess ownership and cleanup; a passed assertion does not make the suite pass. |
+| A readiness poll reads partially written subprocess state | Inspect the producer's write contract before interpreting malformed input. Only a bounded readiness wait may retry a transient parse error; the deadline, terminal receipt and lifecycle assertions must still reject missing or corrupt evidence. The interruption regression is owned by [test_materialize.py](../daymade-skill/skill-creator/tests/test_materialize.py). |
 
 When evidence establishes an installation/environment failure, keep that result and
 the unrun steps visible. An authorized retry must bind the same candidate and unchanged
