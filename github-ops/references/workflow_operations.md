@@ -492,6 +492,14 @@ operator procedure; no bundled tool enforces its deployment or process boundarie
    retain their failure behavior. The deployment owner and job logs verify this
    distinction; no bundled tool in this Skill chooses a cache backend.
 
+   Resolve the actual package-store directory as the job's service account after
+   setup, and keep the persistent store outside installation directories that
+   the selected setup action removes ([pnpm setup installer](https://github.com/pnpm/action-setup/blob/v4/src/install-pnpm/run.ts)).
+   Configure the same explicit store location in each consuming job. Accept
+   persistence from a later job's positive cache-hit evidence while preserving
+   installation and test checks; a configured path or existing directory alone
+   is not proof. A cold-cache miss still performs normal installation and checks.
+
    For jobs running directly on a shared Linux runner host, use per-job service
    containers with free host ports and read the assigned port from
    `job.services.<service>.ports[<container-port>]`;

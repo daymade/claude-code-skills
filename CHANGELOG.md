@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **github-ops** (v1.14.2 → v1.14.3): Select the freshest same-head CI execution and bind proof to its exact rerun attempt; retain checks when evidence is incomplete or an execution is unresolved, while allowing a later complete success to supersede an earlier completed failure. Keep persistent package stores outside setup-owned removal paths and require a later job's observed cache hit. Change type: bounded evidence-selection and cache-verification clarification.
+
 - **github-ops** (v1.14.1 → v1.14.2): Reuse CI validation only with successful run evidence for the actual checkout tree, covered suites and matching execution inputs; retain normal checks on missing evidence and keep publication separate. Bound test workers by effective runner CPU allocation and distinguish optional remote caches from required artifacts. Change type: bounded CI evidence and resource-selection clarification.
 - **transcript-fixer** (`daymade-audio` v1.45.2): Link architecture testing guidance to the actual repository CI registry and dispatcher instead of a nonexistent bundled path. Keep local runners unchanged; remove hand-maintained navigation, derived schema counts and file-length/status commentary from that reference.
 - **asr-transcribe-to-text** (`daymade-audio` v1.46.0): Add source-bound remote text receipts and reuse, observed GPU identity, and same-source measurement with quality recomputed from independent references; refuse local CPU fallback. Select execution from source placement and eligible existing resources rather than fixed speed claims.
