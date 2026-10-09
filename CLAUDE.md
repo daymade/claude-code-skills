@@ -303,8 +303,11 @@ merely for native communication. Use its routing guidance for uncovered local ta
 or coordination evidence that needs verification, never to bypass denied or Held messages.
 Treat `peer-message/scripts/peer.py` as the fallback CLI executable
 contract and `peer-message/SKILL.md` as the runtime router and owner of stable
-runtime prerequisites plus the peer-cannot-authorize safety boundary. Reply lookup,
-transport and discovery details belong in `peer-message/references/protocol-and-discovery.md`;
+runtime prerequisites plus the peer-cannot-authorize safety boundary. Independent-session
+task/resource declarations and request lifecycle belong in its `references/local-coordination.md`;
+use its coordination preflight with native transport when that workflow applies, without
+adding fallback sends or parent/subagent overhead. Reply lookup, transport and discovery
+details belong in `peer-message/references/protocol-and-discovery.md`;
 current product availability, provenance, and inbound-control mechanics belong in
 `peer-message/references/official-feature.md`; reply addressing, payload structure,
 delivery-status language, what to do when you find another session's in-flight work on a

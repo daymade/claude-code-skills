@@ -534,6 +534,11 @@ Creates educational Teams channel posts for internal knowledge sharing.
 
 ### **peer-message** - Local Claude/Codex Agent Communication
 
+Includes a shared local coordination board for task/resource declarations, duplicate-request
+suppression, and expiring write-window requests. It initializes on use without Agent Fleet
+or a daemon. Native transport remains native; follow the [coordination workflow](peer-message/references/local-coordination.md)
+for its preflight and receiver checks.
+
 An experimental [paired-network route](peer-message/references/network-preview.md) adds invitations and cited answers from owner-selected documents through existing Claude/Codex hosts. It requires an operator-provided relay; the public hosted network and user-adoption claims are not part of this preview.
 
 > **Install**: `claude plugin install peer-message@daymade-skills`
