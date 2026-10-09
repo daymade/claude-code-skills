@@ -1,6 +1,79 @@
 # 验证操作与已知陷阱
 
-按需读取：评估替代机制时看第一节；执行内容迁移或引用验证时看第二节。主文 `SKILL.md` 是当前决策与授权入口，本文件提供操作细节，不自行创建新检查或写权限。
+按需读取：修复 `AGENTS.md` / `CLAUDE.md` 双入口时看“双入口修复与宿主读回”；评估替代机制时看“替代机制探针”；执行内容迁移或引用验证时看“验证器校准与引用检查”。主文 `SKILL.md` 是当前决策与授权入口，本文件提供操作细节，不自行创建新检查或写权限。
+
+## 双入口修复与宿主读回
+
+由已获授权的执行 agent 操作。验收分别回答：有效规则有没有丢失、目标宿主实际加载了什么、对应任务是否按规则执行。文件相同只回答第一项的一部分；告警消失不能替代其余证据。
+
+### 核对后再选择单一来源
+
+1. 固定仓库、目标宿主、精确 Git 基线及修改范围。读取两个入口的文件类型、链接目标和完整正文；另查目标宿主适用的 override、上层指令与加载预算。告警只提供调查线索，不证明两套契约冲突。
+2. 区分同文副本、纯指针、各有有效规则、宿主专用规则及失效链接。纯指针没有独有规则时，保留被指向的完整正文；两份各有有效规则时先按当前权威合并，再考虑软链；有效宿主专用规则保持各自作用域，不为了字节相同强行共享。
+3. 选择现有权威正文，不预设必须由某个文件名担任。建立相对软链前，核对被替换入口没有尚未保存或未纳入正文的内容，且目标平台和 Git checkout 支持所选链接形式。Git 基线只保存已提交字节；未提交内容须另行保存。路径身份或授权未明时保留原件并停止替换，禁止直接强制覆盖。
+4. 通过已授权的文件编辑替换冗余入口；写后从两个消费入口独立读回。确认相对目标可解析、有效正文完整、Git 提交记录链接类型。相对软链适用于同一作用域且平台支持的入口；它不证明 Windows checkout 或其他宿主也能消费，须在实际目标环境读回。
+
+同目录 `AGENTS.md` 指向 `CLAUDE.md` 时，在仓根执行下面的只读检查。其他布局先按实际入口与权威文件修改路径；正文曾经合并时，把保真检查与原始基线 diff 分开完成。
+
+```bash
+python3 - <<'PY'
+from pathlib import Path
+
+entry = Path('AGENTS.md')
+canonical = Path('CLAUDE.md')
+assert entry.is_symlink(), '入口没有保留为软链'
+assert str(entry.readlink()) == 'CLAUDE.md', '相对目标不符合本例布局'
+assert entry.resolve(strict=True) == canonical.resolve(strict=True), '目标身份不一致'
+assert entry.read_bytes() == canonical.read_bytes(), '消费入口正文不同'
+print('PASS: 相对链接可解析，两个入口读取同一正文')
+PY
+git diff --check
+git ls-files -s -- AGENTS.md CLAUDE.md
+```
+
+`git ls-files` 读的是索引：暂存后链接应为 `120000`；提交后再用 `git ls-tree HEAD -- AGENTS.md CLAUDE.md` 检查提交树。未暂存的旧索引、断链、循环链接或把目标字符串检出成普通文件，都不能报修复完成。发布后还须独立查询远端精确提交；不要用 push 回执代替远端读回。
+
+### 检查真实宿主加载面
+
+从实际消费的 cwd 检查，保留宿主版本、入口与观察边界。Codex 先运行 `codex debug prompt-input --help` 确认当前版本提供原生渲染器；支持时，以下只读配方检查完整正文是否进入模型可见输入，不打印其他私有指令。
+
+```bash
+python3 - <<'PY'
+import json
+import subprocess
+from pathlib import Path
+
+expected = Path('CLAUDE.md').read_text()
+assert expected.strip(), '权威正文为空，不能用空串通过检查'
+result = subprocess.run(
+    ['codex', 'debug', 'prompt-input', 'instruction-entry-audit'],
+    check=True, stdout=subprocess.PIPE, text=True,
+)
+items = json.loads(result.stdout)
+matches = []
+for index, item in enumerate(items):
+    content = item.get('content', [])
+    if not isinstance(content, list):
+        continue
+    body = '\n'.join(part.get('text', '') for part in content if isinstance(part, dict))
+    if expected in body:
+        matches.append(index)
+assert matches, '完整正文未出现在原生输入；检查 override、cwd、入口和预算'
+print('PASS: 完整项目正文在原生加载面可见；行为遵循尚未由本检查证明')
+PY
+```
+
+先在已知未加载的隔离 cwd 上确认这项检查失败，再在正确 cwd 上确认通过；另以空正文确认它不能假通过。渲染器不可用、格式变化或正文未命中时报告未验证，不改成文件哈希检查冒充宿主证据。Claude Code 用当前 `/memory` 与 `/context` 核对来源和加载面；这些检查不建立模型行为结论。各宿主的入口与限额以当前官方合同及本机观测为准，不互相外推。
+
+加载面通过后，选择一项受本次规则影响的真实任务，检验应该遵循和不应触发的结果；未运行模型时明确记录行为未验证。只初始化或渲染输入不能宣称遵循率提高。达到已声明验收边界后停止，不因为这次成功新增通用 hook 或扩展到未授权平台。
+
+宿主入口依据：[Codex 自定义指令](https://learn.chatgpt.com/docs/agent-configuration/agents-md)、[Claude Code 项目指令](https://code.claude.com/docs/en/memory)。原生调试命令的支持和输出结构仍须用当前安装版本实测。
+
+### 有界读取与证据完整性
+
+先解析入口的真实路径，再按当前问题读相关节；需要核对两份是否有独有规则或整体重写时，完整读取目标文件。大文件先取得行数、字节数和哈希，再按工具内外层预算分段读取，不把多份长文拼进一次有上限的响应。记录已读范围；截断后只补未收到的范围，文件变化时重取基线。不能把“命令已运行”或文件长度当成全文已加载。
+
+上述读取由执行 agent 按当前工具预算完成，不新增 hook、工具安装或跨 Skill 文件依赖。
 
 ## 替代机制探针
 
