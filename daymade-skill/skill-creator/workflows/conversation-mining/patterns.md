@@ -113,7 +113,8 @@ Apply these in order. Replace each match with the corresponding placeholder.
 | Pattern | Placeholder | Notes |
 |---------|-------------|-------|
 | `Bearer\s+[A-Za-z0-9_\-.]+` | `Bearer <REDACTED-token>` | Authorization headers and similar |
-| `(sk-or-\|sk-ant-\|sk-kimi-\|sk-proj-\|sk-svcacct-\|sk-)[A-Za-z0-9_-]+` | `<REDACTED-key>` | LLM provider keys |
+| `(?<![A-Za-z0-9_])(?:sk-or-\|sk-ant-\|sk-kimi-\|sk-proj-\|sk-svcacct-\|sk-)[A-Za-z0-9_-]+` | `<REDACTED-key>` | LLM provider keys; preserve ordinary words such as `Task-specific` |
+| `(?<![A-Za-z0-9_])(?:AIza\|AQ\.)[A-Za-z0-9_-]{20,}` | `<REDACTED-key>` | Google API key shapes; short labels remain unchanged |
 | `[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z\|a-z]{2,}` | `<REDACTED-email>` | Email addresses |
 | `1[3-9]\d{9}` | `<REDACTED-phone>` | Chinese mobile numbers |
 | `/Users/[A-Za-z][A-Za-z0-9_-]+/[^\s,;"'\)]*` | `/Users/<REDACTED-USER>/...` | macOS home paths |

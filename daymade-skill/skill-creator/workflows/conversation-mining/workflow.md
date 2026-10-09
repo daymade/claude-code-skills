@@ -31,6 +31,17 @@ this run. Use the bundled example as a template, but never commit a real run
 manifest: it contains local transcript locations. Put it outside the
 repository or below the target skill's `.enrich/` directory.
 
+Choose a source that preserves the evidence roles. `manual_exports` accepts
+plain `.txt` paragraphs, each labeled `user`, or flat `.jsonl` records with
+`role`, `text` and an optional `timestamp`; a missing role defaults to `user`.
+Keep TXT for user-only notes. For mixed user, assistant and tool-derived
+evidence, use the owning `read-codex-history` or `read-claude-code-history`
+Skill to export the explicitly scoped records with their roles, then provide
+that role-preserving JSONL to `manual_exports`. Do not flatten a mixed
+conversation into TXT or infer user approval from assistant/tool text.
+`codex_transcripts` reads voice transcription-history records; it does not parse
+native Codex session rollouts.
+
 ## Step 2: Discover sources
 
 Run the discovery phase:
@@ -76,7 +87,7 @@ This writes:
 
 ### What happens inside the script
 
-1. **Parse**: reads each JSONL file and extracts role=user / role=assistant messages.
+1. **Parse**: extracts native Claude user/assistant messages and preserves explicit roles in flat manual JSONL exports; TXT paragraphs default to user.
 2. **Filter**: drops system/injection noise (skill listings, tool listings, permission-mode events).
 3. **Redact**: replaces secrets, tokens, emails, paths, and high-entropy identifiers.
 4. **Score**: computes a simple relevance score against the topic keywords.
