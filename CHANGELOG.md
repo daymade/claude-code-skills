@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **github-ops** (v1.14.6): Bug fix / factual correction — align merge-adjacent branch cleanup with exact-tip retirement and independent absence checks; preserve history when refreshing a PR under strict protection.
+- **peer-message** (v1.16.0 → v1.16.1): Add advisory coordination routing at Codex message ingress; preserve provenance and permission boundaries, peer replies and quiet completion without turning partial progress into final user delivery. Change type: existing routing correction.
+- **auto-repo-setup** (v2.1.3 → v2.1.4): Continue authorized artifact and resource closure after a stage is published; distinguish verified task completion from unrelated shared-checkout WIP. Preserve scoped tools and authorization boundaries. Change type: completion-boundary clarification.
 
 - **macos-watchdog** (`daymade-macos` v1.22.2): Add a read-only native job inspector that compares an explicit plist with loaded arguments, explicit job environment and configured paths. Return JSON flags without configuration values; reject default/inherited environment substitution and ambiguous output. Add synthetic native-shape regression tests. Change types: read-only capability addition / verification clarification.
 - **auto-repo-setup** (v2.1.3): Remove the hand-maintained startup-reference contents list; retain every procedure and the instruction-entry owner route. Add the repository instruction-maintenance entry without duplicating its verification recipe. Change type: navigation formatting and documentation alignment.
