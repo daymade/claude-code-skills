@@ -373,6 +373,12 @@ node --test <skill-root>/tests/test_silent_degradation_probe.mjs
 
 ### 5. Exercise Journeys And Outputs
 
+For UI refactors, category splits, or navigation changes, first apply the
+**Refactor Preservation** recipe in
+[references/journey-and-page-contracts.md](references/journey-and-page-contracts.md).
+Derive affected journeys from the immutable pre-change version, then verify them
+on the current target; the new navigation alone cannot define what survived.
+
 **A visible signifier is not proof of behavior — trigger every relevant control
 whose side effects fit the explicit action authority, confirm the response, and
 mark the rest unverified.** Pointer/hover/button styling can be a false affordance:
