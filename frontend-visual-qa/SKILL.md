@@ -540,6 +540,8 @@ check the available agent tools can perform.
   layout, and media-state sweep with screenshots and JSON evidence.
 - scripts/attention_inventory.mjs — observed text/geometry, repetition and label
   echo inventory used by the sweep; it never certifies necessity.
+- scripts/painted_text_probe.mjs — vertical text-fragment clipping used by the
+  sweep; reports examined coverage and unsupported clipping/scroll windows.
 - references/history-derived-checklist.md — core visual/responsive defect
   catalog plus standards-backed checks.
 - references/journey-and-page-contracts.md — state, route, overlay,
