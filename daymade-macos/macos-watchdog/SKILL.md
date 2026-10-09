@@ -22,6 +22,7 @@ The governing principle, learned the expensive way: **a watchdog's lifecycle is 
 | An existing watchdog misbehaves (spam, re-launches apps, hammers) | § The quiet-watchdog contract, diagnose which clause it violates |
 | Stopping / disabling / restarting a job | § Stop semantics |
 | plist key details (KeepAlive forms, domains, logging, resource limits) | `references/launchd-plist-reference.md` |
+| Checking whether a plist edit is active, or comparing job argv / explicit ENV / configured paths | Run `scripts/inspect_native_job.py` with the exact expected plist; read `references/native-job-readback.md` for result and source-selection rules |
 | Cooldown/backoff/notification-throttle patterns + sanitized war stories | `references/quiet-watchdog-patterns.md` |
 | SRE alert layering (page vs ticket, fatigue numbers) | `references/alert-discipline.md` |
 | A watchdog alert appears under Script Editor or its sender is unclear | `references/alert-discipline.md` § Message content; inspect the delivered card |
@@ -69,6 +70,11 @@ Gate every such action: check the target process is alive before invoking its sc
 Before deploying or integrating an existing periodic observer, apply
 `references/probe-cost.md`. Require bounded observation work and a completed native
 launchd round; importing an existing script does not certify its cost or verdict.
+
+Before declaring configuration active, use the native readback helper through
+`references/native-job-readback.md`. Read explicit ENV from the job's own block;
+do not take the first matching key from default or inherited environment sections.
+Verify the completed business round separately from registration or process state.
 
 1. **Location**: user agent → `~/Library/LaunchAgents/` (GUI session context: can `open` apps, show notifications); system daemon → `/Library/LaunchDaemons/` (root, no GUI access). Choose by whether the job needs the user's GUI session, not by habit.
 2. **plist**: start from `assets/launchagent.template.plist` (annotated: Label, ProgramArguments, StartInterval, StandardOutPath/StandardErrorPath, ThrottleInterval, Nice). Validate with `plutil -lint`. `ProgramArguments` element 0 = absolute path; never rely on PATH inheritance.
