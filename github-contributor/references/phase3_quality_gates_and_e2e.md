@@ -207,7 +207,7 @@ screencapture -s /tmp/screenshot.png
 screencapture -l <window-id> /tmp/screenshot.png
 ```
 
-Use `capture-screen:capture-screen` to obtain the Quartz window ID. Match its owner PID
+Use `daymade-macos:capture-screen` to obtain the Quartz window ID. Match its owner PID
 to the verified test executable before using `screencapture -l`; an AX element/index
 or application display name is not a Quartz window ID.
 
