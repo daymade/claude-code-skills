@@ -62,6 +62,32 @@ python3 scripts/peer.py send '<exact-target>' request.txt \
 过期或“无需回复”。新阻塞、不同收件人和不同事项仍可发送。默认去重与声明新鲜度
 窗口在实现常量维护；它们是可逆运行默认值，不是用户授权或全局业务阈值。
 
+## 可被新版本替代的状态
+
+发送者确认消息是同一事项的当前快照、后续版本可整体替代它时，使用 `--kind state`：
+
+```bash
+python3 scripts/peer.py send '<exact-target>' status.txt \
+  --kind state --topic '<project>:publication-status' --event '<actual-revision>' \
+  --expires-at '<actual-deadline-with-timezone>' --json
+```
+
+原生发送用同样参数执行 `coord prepare`，随后沿原生工具发送并 `coord commit`。
+state 必须有稳定 topic、真实 event 和明确有效期；普通 notice、累计完成证据和
+尚需答复的新阻塞继续用 notice/request，不按标题或正文相似度改成 state。
+同一 sender/recipient/topic 构成状态流。新版本在 transport 接受或实际收件后生效，
+旧版本收件返回 `ignore_superseded`；reserved/unknown/确定未发送的新版本不凭空撤销旧状态。
+先后按首次登记版本的顺序，不比较 SHA 大小或接收顺序，也不因重试或时钟回拨倒序。
+旧版本重发返回 `suppressed_superseded`，同版本重复返回 `suppressed_state_revision`，
+均不调用 transport。同 event 的正文不能改变；发生真实新阻塞时用 notice/request
+保留它，不换随机 event 绕过检查。只有已核定 `not_sent`、且尚未被较新生效状态替代的
+版本可再次准备发送。
+
+版本身份保存在独立的本地 state_events 表，消息关闭或常规清理后仍保留。
+现有 messages 表、旧消息身份及旧模式不改写。发送与接收端必须使用支持 state 的
+CLI；旧 CLI 能继续处理原 notice/request/reply，但不提供新状态模式的替代判断。
+旧的无 topic/有效期通知仍走语义分流，不给它猜截止时间，不删除已有宿主队列。
+
 ## 原生跨会话通信
 
 原生工具覆盖收件人时只发送原生消息。本 Skill 维护同一状态，不换 transport：
@@ -119,6 +145,9 @@ python3 scripts/peer.py coord finish --message-id '<original-id>'
 回应、不同任务不误杀、陈旧负责人不被接管，分别验收。先在隔离 state-dir 运行
 `python3 -m unittest discover -s tests -p 'test_*.py'`，再独立读回安装副本的命令面。
 合成检查不替代实际消息量和协调成本的长期观察。
+
+state 模式还须核对跨 event 替代、同版本重复、未知发送、旧读写接口与消息清理后的
+版本记忆；用累计通知和真实新阻塞作健康控制，不能只测旧状态被过滤。
 
 本机制不依赖 Fleet，但原生发送绕过 prepare/commit、接收者不执行 receive、
 未登记会话或跨机器调用不受本机记录强制控制；安装不修改宿主权限或安装全局 hook。

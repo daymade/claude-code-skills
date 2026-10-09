@@ -1393,8 +1393,8 @@ def common_message_arguments(parser: argparse.ArgumentParser) -> None:
                         help="live tool output for loaded Codex threads (default); "
                         "queue only for unloaded threads or explicit queued delivery")
     parser.add_argument("--topic", help="stable coordination issue/resource key")
-    parser.add_argument("--kind", choices=("request", "notice", "reply"), default="notice")
-    parser.add_argument("--expires-at", help="ISO timestamp with timezone; required for request")
+    parser.add_argument("--kind", choices=("request", "notice", "reply", "state"), default="notice")
+    parser.add_argument("--expires-at", help="ISO timestamp with timezone; required for request/state")
     parser.add_argument("--expires-in", type=wait_seconds, metavar="SECONDS",
                         help="explicit relative lifetime instead of expires-at")
     parser.add_argument("--event", help="explicit new evidence/revision, not a retry counter")

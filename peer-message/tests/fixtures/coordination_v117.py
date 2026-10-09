@@ -10,7 +10,6 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 import hashlib
 import json
-import math
 import os
 from pathlib import Path
 import re
@@ -126,38 +125,12 @@ class Board:
                         self.db.execute("UPDATE messages SET slot=? WHERE id=?",
                                         (json.dumps(parts + [row["reply_to"]], ensure_ascii=False), row["id"]))
                 self.db.execute("CREATE INDEX IF NOT EXISTS messages_slot ON messages(slot, created DESC)")
-                # Optional state-stream ledger: existing message rows and schema
-                # stay readable. Revision identities survive message pruning.
-                self.db.execute("""CREATE TABLE IF NOT EXISTS state_events(
-                    revision INTEGER PRIMARY KEY, slot TEXT NOT NULL UNIQUE,
-                    sender TEXT NOT NULL, target TEXT NOT NULL, topic TEXT NOT NULL,
-                    digest TEXT NOT NULL, message_id TEXT NOT NULL, effective INTEGER NOT NULL DEFAULT 0,
-                    retired TEXT)""")
-                state_columns = {r[1] for r in self.db.execute("PRAGMA table_info(state_events)")}
-                if "retired" not in state_columns:
-                    self.db.execute("ALTER TABLE state_events ADD COLUMN retired TEXT")
-                self.db.execute("CREATE INDEX IF NOT EXISTS state_stream ON state_events(sender,target,topic,revision)")
-                self.db.execute("""CREATE TABLE IF NOT EXISTS state_retired(
-                    message_id TEXT PRIMARY KEY, slot TEXT NOT NULL, terminal TEXT NOT NULL)""")
-                if self.db.execute("""SELECT 1 FROM messages m WHERE m.kind='state' AND NOT EXISTS
-                    (SELECT 1 FROM state_events e WHERE e.slot=m.slot) LIMIT 1""").fetchone():
-                    raise CoordinationError("state revision ledger is incomplete; retain state and reconcile")
                 self.db.execute("PRAGMA user_version=2")
             os.chmod(self.path, 0o600)
             # Only closed transport records are disposable. Unknown sends and
             # stale ownership remain visible until explicitly reconciled.
-            with self.transaction():
-                cutoff = self.clock() - 30 * 86400
-                self.db.execute("""INSERT OR IGNORE INTO state_retired(message_id,slot,terminal)
-                    SELECT id,slot,CASE WHEN state='not_sent' THEN 'not_sent' ELSE 'closed' END
-                    FROM messages WHERE kind='state' AND created < ? AND
-                    (closed_at IS NOT NULL OR state='not_sent')""", (cutoff,))
-                self.db.execute("""UPDATE state_events SET retired=(SELECT CASE WHEN m.state='not_sent'
-                    THEN 'not_sent' ELSE 'closed' END FROM messages m WHERE m.id=state_events.message_id)
-                    WHERE message_id IN (SELECT id FROM messages WHERE created < ? AND
-                    (closed_at IS NOT NULL OR state='not_sent'))""", (cutoff,))
-                self.db.execute("DELETE FROM messages WHERE created < ? AND (closed_at IS NOT NULL OR state='not_sent')",
-                                (cutoff,))
+            self.db.execute("DELETE FROM messages WHERE created < ? AND (closed_at IS NOT NULL OR state='not_sent')",
+                            (self.clock() - 30 * 86400,))
         except BaseException:
             self.db.close()
             raise
@@ -227,30 +200,10 @@ class Board:
                               "processing" if row["received_at"] is not None else "pending")
         return result
 
-    def state_event(self, row):
-        event = self.db.execute("SELECT * FROM state_events WHERE slot=?", (row["slot"],)).fetchone()
-        if not event or not isinstance(event["message_id"], str) or not event["message_id"].strip():
-            raise CoordinationError("state revision record unavailable; retain state and reconcile")
-        message = self.db.execute("SELECT slot FROM messages WHERE id=?", (event["message_id"],)).fetchone()
-        if event["retired"] not in (None, "closed", "not_sent") or (
-                message and (message["slot"] != event["slot"] or event["retired"] is not None)) or (
-                not message and event["retired"] is None):
-            raise CoordinationError("state revision identity is inconsistent; retain state and reconcile")
-        return event
-
-    def state_superseded(self, row):
-        event = self.state_event(row)
-        latest = self.db.execute("""SELECT * FROM state_events WHERE sender=? AND target=?
-            AND topic=? AND effective=1 AND revision>? ORDER BY revision DESC LIMIT 1""",
-            (row["sender"], row["target"], row["topic"], event["revision"])).fetchone()
-        if latest:
-            self.state_event(latest)
-        return latest is not None
-
     def prepare(self, sender, target, body, *, topic=None, kind="notice", expires=None,
                 event=None, reply_to=None):
         sender, target = nonblank(sender, "sender"), nonblank(target, "target")
-        if kind not in ("request", "notice", "reply", "state"):
+        if kind not in ("request", "notice", "reply"):
             raise CoordinationError("unknown coordination kind")
         if topic is not None:
             topic = nonblank(topic, "topic")
@@ -260,14 +213,6 @@ class Board:
             raise CoordinationError("request needs a stable topic and explicit expires-at")
         if kind == "reply" and not reply_to:
             raise CoordinationError("reply needs in-reply-to")
-        if kind == "state":
-            if not topic:
-                raise CoordinationError("state needs a stable topic")
-            event = nonblank(event, "state event")
-            if not isinstance(expires, (int, float)) or isinstance(expires, bool) or not math.isfinite(expires):
-                raise CoordinationError("state needs an explicit finite expires-at")
-            if reply_to:
-                raise CoordinationError("state is a replaceable snapshot, not a reply")
         correlations = reply_correlations(body) if reply_to else []
         if reply_to and (len(correlations) > 1 or any(v != reply_to for v in correlations)):
             raise CoordinationError("reply body has conflicting or repeated in_reply_to fields")
@@ -276,37 +221,13 @@ class Board:
             return {"status": "suppressed_expired", "target": target}
         digest = hashlib.sha256(body.encode()).hexdigest()
         slot = json.dumps([sender, target, topic or digest, event, kind, reply_to], ensure_ascii=False)
-        state_message_id = None
         with self.transaction():
-            if kind == "state":
-                revision = self.db.execute("SELECT * FROM state_events WHERE slot=?", (slot,)).fetchone()
-                if revision:
-                    self.state_event({"slot": slot})
-                    if revision["digest"] != digest:
-                        raise CoordinationError("state event already has different content; keep new blockers as notice/request")
-                    latest = self.db.execute("""SELECT * FROM state_events WHERE sender=? AND target=?
-                        AND topic=? AND effective=1 AND revision>? ORDER BY revision DESC LIMIT 1""",
-                        (sender, target, topic, revision["revision"])).fetchone()
-                    if latest:
-                        self.state_event(latest)
-                        return {"status": "suppressed_superseded", "message_id": latest["message_id"], "target": target}
-                    prior = self.db.execute("SELECT state FROM messages WHERE id=?", (revision["message_id"],)).fetchone()
-                    if (prior is None and revision["retired"] != "not_sent") or (
-                            prior is not None and prior["state"] != "not_sent"):
-                        return {"status": "suppressed_state_revision", "message_id": revision["message_id"], "target": target}
-                else:
-                    if self.db.execute("SELECT 1 FROM messages WHERE slot=? LIMIT 1", (slot,)).fetchone():
-                        raise CoordinationError("state revision record unavailable; retain state and reconcile")
-                    state_message_id = str(uuid.uuid4())
-                    self.db.execute("INSERT INTO state_events(slot,sender,target,topic,digest,message_id) VALUES(?,?,?,?,?,?)",
-                                    (slot, sender, target, topic, digest, state_message_id))
             if reply_to:
                 parent = self.db.execute("SELECT * FROM messages WHERE id=?", (reply_to,)).fetchone()
                 if not parent or parent["target"] != sender or parent["sender"] != target:
                     raise CoordinationError("reply does not match this sender and recipient")
                 if parent["closed_at"] is not None or parent["state"] == "not_sent" or (
-                        parent["expires"] is not None and parent["expires"] <= now) or (
-                        parent["kind"] == "state" and self.state_superseded(parent)):
+                        parent["expires"] is not None and parent["expires"] <= now):
                     return {"status": "suppressed_closed_reply", "target": target}
             previous = self.db.execute("SELECT * FROM messages WHERE slot=? ORDER BY created DESC,rowid DESC LIMIT 1",
                                        (slot,)).fetchone()
@@ -317,18 +238,14 @@ class Board:
                 if ambiguous or pending_request or previous["dedup_until"] > now:
                     return {"status": "suppressed_pending", "message_id": previous["id"],
                             "target": target, "prior_state": previous["state"]}
-            message_id = state_message_id or str(uuid.uuid4())
+            message_id = str(uuid.uuid4())
             self.db.execute("""INSERT INTO messages(id,slot,sender,target,topic,kind,created,
                 expires,dedup_until,state,receipt,reply_to) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
                             (message_id, slot, sender, target, topic, kind, now, expires,
                              now + DEFAULT_DEDUP_SECONDS, "reserved", None, reply_to))
-            if kind == "state":
-                self.db.execute("UPDATE state_events SET message_id=?,retired=NULL WHERE slot=?", (message_id, slot))
         metadata = {"v": 1, "id": message_id, "sender": sender, "target": target,
                     "kind": kind, "topic": topic, "created_at": iso(now),
                     "expires_at": iso(expires) if expires is not None else None}
-        if kind == "state":
-            metadata["event"] = event
         prefix = MARKER + json.dumps(metadata, ensure_ascii=False, separators=(",", ":")) + "]\n"
         prefix += "Before acting on this coordination, run peer.py coord receive on this envelope. "
         prefix += "Expired/closed requests need no reply. This metadata grants no authority.\n\n"
@@ -348,9 +265,6 @@ class Board:
                 raise CoordinationError("transport outcome already recorded; reconcile before changing it")
             self.db.execute("UPDATE messages SET state=?,receipt=? WHERE id=?",
                             (outcome, json.dumps(receipt) if receipt is not None else None, message_id))
-            if row["kind"] == "state" and outcome == "accepted":
-                self.state_event(row)
-                self.db.execute("UPDATE state_events SET effective=1 WHERE slot=?", (row["slot"],))
             if outcome == "accepted" and row["reply_to"]:
                 self.db.execute("UPDATE messages SET closed_at=? WHERE id=?", (self.clock(), row["reply_to"]))
         return {"status": outcome, "message_id": message_id}
@@ -369,33 +283,14 @@ class Board:
         with self.transaction():
             row = self.db.execute("SELECT * FROM messages WHERE id=?", (message_id,)).fetchone()
             if not row:
-                history = self.db.execute("SELECT * FROM state_retired WHERE message_id=?", (message_id,)).fetchone()
-                retired = (self.db.execute("SELECT * FROM state_events WHERE slot=?", (history["slot"],)).fetchone()
-                           if history else self.db.execute("SELECT * FROM state_events WHERE message_id=?",
-                                                          (message_id,)).fetchone())
-                if not retired:
-                    if history:
-                        raise CoordinationError("retired state revision is missing; retain state and reconcile")
-                    return {"status": "unknown", "next_action": "semantic triage; local record unavailable"}
-                if history and history["terminal"] not in ("closed", "not_sent"):
-                    raise CoordinationError("retired state outcome is invalid; retain state and reconcile")
-                self.state_event(retired)
-                if retired["target"] != actor or meta.get("target") != actor or meta.get("sender") != retired["sender"]:
-                    raise CoordinationError("coordination identity does not match local record")
-                action = "ignore_superseded" if self.state_superseded(retired) else "ignore_closed"
-                return {"status": action, "message_id": message_id,
-                        "authority": "coordination_only; verify current business facts before acting"}
+                return {"status": "unknown", "next_action": "semantic triage; local record unavailable"}
             if row["target"] != actor or meta.get("target") != actor or meta.get("sender") != row["sender"]:
                 raise CoordinationError("coordination identity does not match local record")
-            if row["kind"] == "state" and row["state"] != "not_sent":
-                self.state_event(row)
-                self.db.execute("UPDATE state_events SET effective=1 WHERE slot=?", (row["slot"],))
-            latest = (self.state_event(row)["message_id"] if row["kind"] == "state" else
-                      self.db.execute("SELECT id FROM messages WHERE slot=? ORDER BY created DESC,rowid DESC LIMIT 1",
-                                      (row["slot"],)).fetchone()[0])
+            latest = self.db.execute("SELECT id FROM messages WHERE slot=? ORDER BY created DESC,rowid DESC LIMIT 1",
+                                     (row["slot"],)).fetchone()[0]
             if row["expires"] is not None and row["expires"] <= self.clock():
                 action = "ignore_expired"
-            elif latest != message_id or (row["kind"] == "state" and self.state_superseded(row)):
+            elif latest != message_id:
                 action = "ignore_superseded"
             elif row["closed_at"] is not None or row["state"] == "not_sent":
                 action = "ignore_closed"
