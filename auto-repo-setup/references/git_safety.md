@@ -13,6 +13,32 @@ git log --oneline --decorate -5
 Use the hosting service as the authority for visibility and permissions. A remote
 URL, directory name, or previous report does not prove those properties.
 
+## Isolated checkout preparation
+
+Before the first mutation in a task copy, bind its origin and immutable starting
+commit to the authorized repository. Read that repository's setup and hook owners;
+an independent clone can have different local configuration even with identical
+tracked files. Keep unrelated working-tree and index content outside the task.
+
+- For Git LFS or custom storage, use the repository's declared setup and transfer
+  adapter. A generic batch request failing does not establish that a referenced
+  object is absent. If binary bytes are required, verify them through that owner.
+  For a text-only task whose changed paths contain no binary changes, standard
+  skip-smudge may retain pointers only when the applicable check accepts that
+  representation; disclose that it did not inspect the underlying media.
+- For security baselines, verify the guard's actual repository-identity lookup.
+  A temporary directory name may select a different baseline. Use the guard
+  owner's supported binding to the same repository's already-approved findings;
+  do not introduce unrelated allowlists, suppress new findings, or bypass hooks.
+- Read a failure's actual output before attributing it to the candidate. Separate
+  missing environment setup, inherited findings and newly introduced defects.
+  Existing full-tree security work remains separate from an added narrow check;
+  preserve its result and any genuine blocker.
+
+Finish preparation once the named task can use its normal guarded workflow.
+Do not turn it into a whole-machine setup, new security policy or repeated
+installation at every commit.
+
 ## Routine synchronization
 
 1. Verify the current branch has the intended upstream.
@@ -75,6 +101,37 @@ that result too. Otherwise do not expand scoped cleanup into unrelated work.
 - Preserve pre-existing staged work that is outside the approved task.
 - Verify the resulting commit and remaining working tree before reporting success.
 - Follow the repository's commit-message and attribution policy; do not invent one.
+
+## Commit-time checks
+
+Use a Git pre-commit hook when the authorized outcome is automatic validation
+of what any person or Agent is about to commit. Use an Agent lifecycle hook for
+that runtime's tool/session behavior. Cheap deterministic checks with no hosted
+environment requirement can run locally; retain CI or later checks where the
+repository's integration, release or trust contract requires them.
+
+1. Inspect the repository's existing check command, configured hooks path and
+   effective pre-commit dispatcher. Reuse its installation and chaining protocol;
+   preserve existing hooks and their failure propagation.
+2. Make the check consume the index that Git will commit, including an explicit
+   `GIT_INDEX_FILE` when the repository's workflow uses one. Working-tree files
+   can differ from the staged content. Scope the added check to its relevant
+   changed inputs; a narrow rule passing does not certify the whole artifact.
+3. Connect installation through the existing repository setup or onboarding.
+   Tracked hook files alone do not establish that a fresh clone runs them.
+   Verify executable/runtime prerequisites and the actual consuming hook entry.
+4. In an isolated fixture, stage a known-bad input and leave a corrected version
+   unstaged: commit must still fail. Stage a known-good input and leave a bad
+   version unstaged: the content check must accept the staged input, with the
+   remaining hook chain still running. Preserve shared index and WIP.
+5. Read the real hook's result and failure message. A new finding must identify
+   the file and actionable correction; an unavailable check remains incomplete.
+
+For different task types, keep the common hook entry and call their existing
+checks rather than building a universal semantic checker. Stop once the required
+automatic check is installed and the two staged-input controls work. Do not add
+a dedicated hosted workflow, model call or broad audit without a demonstrated
+requirement and authorization.
 
 ## Push safety
 

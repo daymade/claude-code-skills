@@ -35,6 +35,13 @@ Interpret "fix and merge" as authorization to push the necessary repair and merg
 after all gates pass. Do not infer permission to comment, force-push, auto-merge,
 admin-bypass, or delete a branch.
 
+Keep PR authorship and bypass authority separate. A maintainer repair or branch
+takeover does not change the original PR author and does not make a collaborator
+PR eligible for a standing grant limited to the maintainer's own submissions.
+Match any bypass grant to this PR, actor and action before using it. Otherwise
+satisfy the required reviews through the authorized review workflow; a normal
+comment or local agent review is not itself a GitHub approval.
+
 The personal-maintainer profile narrows this rule. When a repair changes the head,
 merge authorization bound to the old head expires; finish the repair, re-review, and
 obtain a fresh per-PR confirmation under the personal-context rules. Never carry a
@@ -85,6 +92,25 @@ correction only when the user authorizes public correction; do not erase history
 pretend the old statement was never published.
 
 ## Repair the Contributor Branch
+
+### Expose an authorized small repair
+
+When the user authorizes comments and a bounded maintainer repair, group the
+verified problems in a PR comment with their impact and the intended correction.
+Fix unambiguous links or additive bookkeeping conflicts directly within that
+scope; do not require the contributor to perform the same mechanical edits.
+Retain contributor intent and ask only for an unresolved product choice or
+authority boundary.
+
+After the repair, add or update the comment with the repair commit, what changed,
+and the relevant verification before merging. Preserve useful review history.
+Reuse unchanged source/content evidence and focus new inspection on the repair,
+while still rechecking the exact head, current base, three-way result and required
+checks. Stop when those gates and the authorized repair are complete; do not make
+an optional source-document polish or new checking system a landing prerequisite.
+
+This path grants no comment, push, review, bypass or merge authority beyond the
+user's current request and applicable standing contract.
 
 ### Establish push authority
 
