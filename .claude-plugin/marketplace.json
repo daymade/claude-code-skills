@@ -484,7 +484,7 @@
       "description": "Reviews PRs against the live base with immutable objects and three-way merges. Use for PR review/merge readiness, main changed, closed-PR reconsideration, open-PR sweeps, review-led repair, or explicitly requested independent review of your own contribution. Not for GitHub CRUD (use github-ops), authoring/maintaining your PR (use github-contributor), or merging without fresh review.",
       "source": "./github-review-pr",
       "strict": false,
-      "version": "1.4.2",
+      "version": "1.4.3",
       "category": "developer-tools",
       "keywords": [
         "github",

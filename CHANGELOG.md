@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **github-review-pr** (v1.4.3): Align post-repair review instructions with the existing unchanged-evidence reuse contract, remove the hand-maintained section list, and add repository entry routes for document-ingestion repair and local Git checks. Change type: bounded SOP and documentation alignment.
 - **github-contributor** (v1.3.2): Preserve test failure status in captured logs, require genuine data isolation, and defer resolver behavior to the tested implementation. Align repository entry routes and remove hand-maintained inventory counts. Change type: bounded SOP and documentation alignment.
 - **macos-load-doctor** (`daymade-macos` v1.22.4): Resolve the census helper from the loaded Skill directory so diagnosis works from another project. Align the helper's output and comments with the existing lifecycle-based leak criterion; retain historical observations without unsupported leak or recovery conclusions and remove derived estimates. Change type: evidence correction, existing-contract repair and lossless deduplication.
 - **peer-message** (v1.20.1): Make discovery/export examples use the loaded Skill's absolute directory; add the existing output-contract route to repository instructions. Change type: factual command correction.

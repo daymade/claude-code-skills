@@ -436,6 +436,12 @@ validation.
 
 ### Git Operations
 
+For document-ingestion reviews and authorized small maintainer repairs, enter
+[github-review-pr](github-review-pr/SKILL.md) and its
+[small-repair workflow](github-review-pr/references/remediation_and_landing.md#expose-an-authorized-small-repair).
+For cross-runtime staged-content validation or isolated task-copy setup, enter
+[auto-repo-setup's Git safety reference](auto-repo-setup/references/git_safety.md).
+
 For already-authorized delivery in a shared checkout, enter
 [auto-repo-setup's scoped delivery route](auto-repo-setup/references/git_safety.md#authorized-shared-checkout-delivery).
 It owns the authorization/tool gate, bounded coordination, partial-result recovery and final closure;
