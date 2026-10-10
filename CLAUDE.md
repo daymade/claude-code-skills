@@ -71,7 +71,7 @@ build-vs-buy or architecture — including 用哪个 / 选什么框架 / 要不�
 这个方案行不行 — enter [tech-selection](daymade-claude-code/tech-selection/SKILL.md).
 Follow its full or lightweight route and linked execution owners.
 
-For permission-sensitive fixtures, use its
+For permission-sensitive fixtures, use Skill Creator's
 [execution-context verification recipe](daymade-skill/skill-creator/references/stateful-script-verification.md#execution-identity-and-permission-fixtures).
 
 For its audit, release, source-contract or materialization commands from another
