@@ -47,8 +47,9 @@ claude plugin install daymade-skill@daymade-skills
 ### Skill Validation and Packaging
 
 Use [skill-creator](daymade-skill/skill-creator/SKILL.md) before creating or
-changing a skill. It owns change classification, evidence selection, regression
-review, validation, initialization, and packaging.
+changing a skill. Before selecting evidence or reporting completion, follow its
+[required-acceptance owner](daymade-skill/skill-creator/references/change-verification.md#fix-required-acceptance-before-selecting-evidence).
+Use its selected workflow for regression review, validation, initialization, and packaging.
 
 Operational or code-bearing Skill edits complete directly affected document alignment
 before the first candidate freeze; follow skill-creator's Edit workflow.
@@ -61,7 +62,7 @@ For a valid check that emits warnings, follow its
 For local/remote ASR selection, speed comparison and speech-content acceptance, enter
 [asr-transcribe-to-text](daymade-audio/asr-transcribe-to-text/SKILL.md) and its
 [execution SOP](daymade-audio/asr-transcribe-to-text/references/execution_location_and_comparison.md).
-For competitor claims, citations and existing-product learning, enter
+For competitor source-carrier/edition binding, claims, citations and existing-product learning, enter
 [competitors-analysis](competitors-analysis/SKILL.md) and its
 [citation readback checklist](competitors-analysis/references/analysis_checklist.md#citation-readback-and-counterevidence).
 

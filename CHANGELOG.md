@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` v1.67.7): align Wrapper provenance and completion with their canonical workflows; remove duplicated validator facts and manual heading summaries, and expose required acceptance from the project entry.
+
 - **daymade-skill** (v1.67.6): Separate static preservation from original required task-result acceptance; expose the audit CLI's static scope. Correct wrapper creation/validation paths and suite-aware publication checks. Change type: bounded verification and recipe repair.
 - **competitors-analysis** (v1.5.2): Bind requested editions to Git or supplied package sources before comparison; keep missing editions and unevidenced versions unresolved. Change type: source-identity clarification.
 
