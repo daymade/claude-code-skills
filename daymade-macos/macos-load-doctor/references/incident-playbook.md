@@ -101,4 +101,3 @@ Hand the owner a self-contained bundle:
 4. The proposed remediation and its authorized executor.
 5. What you could not verify (probe blind spots, like Case 1's empty
    client-side log) — named, not smoothed over.
-
