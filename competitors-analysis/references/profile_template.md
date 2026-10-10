@@ -30,6 +30,11 @@ This profile separates:
 - **Market facts**: sourced from GitHub/API/official pages with retrieval date.
 - **Judgment**: synthesis based on cited evidence, labeled with confidence.
 
+For material mechanisms, record the bound source, implementation reading scope,
+exercised behavior and actual consumption/adoption separately, with evidence or
+`unknown` for each. Follow [mechanism evidence](mechanism_evidence.md) during
+source reading; note unread lifecycle paths and the next decision-bearing check.
+
 ## Positioning
 
 > "{README or official description quote}"
@@ -122,7 +127,9 @@ request or unresolved our-product context; complete the repository profile anywa
 
 Comparison baseline: {link to our product's contract and named acceptance
 scenario}; {link to the existing artifact/workflow that could meet it};
-{evidence of implemented and actually used behavior, or explicit unknown}.
+{actual entry point and source/runtime version, or explicit unknown};
+{evidence of intended, implemented and actually used behavior, kept separate}.
+Trace that entry before using a helper or legacy path to declare a product gap.
 
 | Dimension | Competitor | Source | Our product | Source |
 |---|---|---|---|---|

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` v1.68.0): Add an authorized cross-task history improvement route that distinguishes missing methods from loading, execution and acceptance failures, tests causal limits, and updates the existing capability owner. Resolve conflicting confirmation, paired-evaluation, persistence and destination-specific release guidance. Change type: methodology extension and bounded contract repair.
+- **competitors-analysis** (v1.5.3): Bind comparisons to actual execution entries, trace decisive normal and recovery paths before borrowing mechanisms, and separate source reading, exercised behavior and adoption evidence. Change type: bounded analysis-method clarification.
+- **deep-research** (v2.12.1): Carry resolved questions, corrections, unknowns and reopening conditions into incremental follow-ups; preserve stage and decision authority at handoff. Align phase labels and conditional report/review instructions. Change type: bounded continuity and contract repair.
+
 - **daymade-skill** (v1.67.6): Separate static preservation from original required task-result acceptance; expose the audit CLI's static scope. Correct wrapper creation/validation paths and suite-aware publication checks. Change type: bounded verification and recipe repair.
 - **competitors-analysis** (v1.5.2): Bind requested editions to Git or supplied package sources before comparison; keep missing editions and unevidenced versions unresolved. Change type: source-identity clarification.
 

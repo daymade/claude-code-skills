@@ -109,7 +109,7 @@
       "description": "Discover, clone, update, and analyze competitor repositories with evidence-based competitive intelligence. Use when tracking competitors, reviewing competitor source code, adding a competitor repository, comparing product capabilities, building a competitor landscape, checking latest competitor code, or when the user says 竞品分析, competitor scan, analyze competitor, or compare with X. Repository-backed findings must come from local cloned code with file:line citations; market-landscape claims must cite their source and volatility.",
       "source": "./competitors-analysis",
       "strict": false,
-      "version": "1.5.2",
+      "version": "1.5.3",
       "category": "productivity",
       "keywords": [
         "competitors",
@@ -339,7 +339,7 @@
       "description": "Daymade skills core suite. Bundles skill creation, quality review, real Claude/Codex Skill-surface governance, suite-migration reconciliation, and marketplace development tooling under one shared namespace. Skill governance separates canonical source, installed inventory, discovery policy, the fresh model-visible catalog, and router-resolved cold resources instead of optimizing cache counts; it preserves Claude's official versioned-cache lifecycle and verifies selected entries in the real host prompt. Skill verification separates risk classification from evaluation spend: bounded fixes use targeted checks, narrow behavior changes use sampled replays, and paired baselines, graders, benchmarks, or a viewer run only after explicit user authorization or a decision-bearing evidence plan plus opt-in; that authorization does not change the risk tier. Existing-skill edits retain an old-vs-new capability audit and content-bound packaging attestation so prompt compression cannot silently delete runtime contracts. When the official skill-creator plugin is also installed, skill-creator detects the coexistence and offers a consent-based, reversible SessionStart routing hook so the daymade edition wins deterministically; on machines without the official plugin nothing is ever installed.",
       "source": "./daymade-skill",
       "strict": false,
-      "version": "1.67.6",
+      "version": "1.68.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -362,7 +362,7 @@
       "description": "Generate evidence-tracked research reports with reusable source and claim records, original-source verification, and evidence-family tracking. Coordinate provider-specific Skills across selected modes, retain original artifacts, and synthesize by decision; select depth and routes by the question.",
       "source": "./deep-research",
       "strict": false,
-      "version": "2.12.0",
+      "version": "2.12.1",
       "category": "documentation",
       "keywords": [
         "research",
