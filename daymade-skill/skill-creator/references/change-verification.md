@@ -6,14 +6,53 @@ description: >-
 
 # Choose verification by the actual change
 
-Read the verification-depth section before choosing a workflow. Read the heavy-eval gate only when planning that evidence or multiple execution units; classification does not authorize it. Return to the selected authoring or specialized workflow once the evidence plan is fixed. Re-enter when a concrete delta or contradictory evidence changes the plan.
+Fix required acceptance and read the verification-depth section before choosing a workflow. Read the heavy-eval gate only when planning that evidence or multiple execution units; classification does not authorize it. Return to the selected authoring or specialized workflow once the evidence plan is fixed. Re-enter when a concrete delta or contradictory evidence changes the plan.
 
 ## Contents
 
+- [Fix required acceptance before selecting evidence](#fix-required-acceptance-before-selecting-evidence)
 - [Verification depth router (run before choosing any workflow)](#verification-depth-router-run-before-choosing-any-workflow)
 - [Heavy-eval authorization gate — separate from tier classification](#heavy-eval-authorization-gate--separate-from-tier-classification)
 - [Calibrate checks before writing or trusting them](#calibrate-checks-before-writing-or-trusting-them)
 - [Shared discipline names](#shared-discipline-names)
+
+## Fix required acceptance before selecting evidence
+
+Before selecting a tier or tuning an existing Skill, fix the original user's
+required result in the existing task plan or outcome worksheet. Name the important
+affected jobs, their output-level acceptance criteria and the observations needed
+to decide each criterion. Include required functionality or performance
+preservation when the user requested it; distinguish those observations from
+optional benefit claims. For an existing Skill, use the frozen old bundle to identify affected branches,
+interfaces, failure/recovery cases and loading routes. Do not derive acceptance
+only from the examples the candidate already passes.
+
+Keep two completion gates separate:
+
+- **Static preservation:** clear the current
+  [migration review](existing-skill-migration.md#existing-skill-migration-gate),
+  including every unmatched old unit and its semantic disposition.
+- **Required task results:** obtain the named output and performance evidence
+  against the original acceptance. Static audit, validation, CI and review success
+  do not establish these results by themselves. Use a direct authority or
+  deterministic check when it decides a narrow correction; use actual task
+  outputs and appropriate old/new observations when it does not.
+
+Select 1–2 replays only when they exercise the entire changed behavior **and**
+required preservation scope. For a broad loading or routing change, cover each
+important affected job rather than treating a successful correction, recovery or
+creation example as evidence for all jobs. Choose further evidence by the remaining
+failure axes; this does not impose repeated trials or multi-model benchmarks on
+every edit. Keep the tier and heavy-eval authorization boundaries below.
+
+Execute this acceptance check as the task owner, with the independent evidence
+required by the selected tier. The audit CLI cannot decide whether the plan covers
+the user's intent or whether the task outputs meet it. Keep a required criterion
+unresolved when its observations are missing; a limitation statement does not waive
+it. Continue available authorized work, or report the unmet criterion and exact
+authorization/environment needed to resume. Treat only a later user instruction
+as a scope change. Finish after both gates clear; omit optional unmeasured claims
+without adding work that cannot change the acceptance decision.
 
 ## Verification depth router (run before choosing any workflow)
 
@@ -50,7 +89,13 @@ A tier describes **risk and uncertainty**; it does not authorize token spend or 
 - the user explicitly asks for A/B, baselines, benchmarking, repeated trials, a viewer, or multi-agent evaluation; or
 - the executor can name at least three distinct prompt classes, competing plausible outcomes, and the decision that paired comparison would change, then obtains the user's explicit opt-in.
 
-For an existing-skill optimization, default to zero eval agents: run deterministic checks first, then at most one or two with-skill replays if behavior remains uncertain. Discipline #5's one fresh-context reviewer is a release gate, not permission to create a reviewer team. A token/cost-sensitivity instruction blocks the heavy pipeline until the user explicitly reverses it.
+For an existing-skill optimization, default to zero eval agents: run deterministic
+checks first, then one or two with-skill replays only when they cover the entire
+changed behavior and required preservation scope. If they cannot, select evidence
+for the remaining required criteria under the gate above rather than narrowing
+acceptance to fit the sample. Discipline #5's one fresh-context reviewer is a release
+gate, not permission to create a reviewer team. A token/cost-sensitivity instruction
+blocks the heavy pipeline until the user explicitly reverses it.
 
 Before spawning more than one research, mining, eval, or grading agent, separate **roles** from **execution units**:
 

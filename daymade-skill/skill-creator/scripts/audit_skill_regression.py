@@ -5,6 +5,8 @@ The tool is intentionally conservative. It can prove exact text/code movement
 and exact interface preservation, but it never treats paraphrase similarity as
 semantic equivalence. Unmatched old capability units require an explicit human
 or agent disposition before the review can pass.
+Treat a passing review as static preservation evidence only; this tool does not
+execute task outcomes or assess behavior and performance.
 
 Typical flow:
 
@@ -1600,7 +1602,9 @@ def _parser() -> argparse.ArgumentParser:
         ),
     )
     compare.add_argument("--json", action="store_true", help="also print the report JSON")
-    verify = subparsers.add_parser("verify", help="verify a completed regression review")
+    verify = subparsers.add_parser(
+        "verify", help="verify static preservation review; behavior/performance are not assessed"
+    )
     verify.add_argument("--before", required=True, type=Path)
     verify.add_argument("--after", required=True, type=Path)
     verify.add_argument("--review", required=True, type=Path)
@@ -1675,7 +1679,13 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"- {item}")
             return 1 if unclassified else 0
         ok, errors = verify_review(args.before, args.after, args.review)
-        result = {"status": "pass" if ok else "fail", "errors": errors}
+        result = {
+            "status": "pass" if ok else "fail",
+            "errors": errors,
+            "scope": "static_preservation",
+            "behavior": "not_assessed",
+            "performance": "not_assessed",
+        }
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         elif ok:
@@ -1684,6 +1694,8 @@ def main(argv: list[str] | None = None) -> int:
             print("Skill regression review failed:")
             for error in errors:
                 print(f"- {error}")
+        if not args.json:
+            print("Scope: static preservation; behavior and performance were not assessed.")
         if ok:
             marker = create_regression_marker(args.after, args.review)
             if not args.json:

@@ -6,7 +6,7 @@ description: >-
 
 # Preserve an existing Skill through edits
 
-Before the first existing-Skill edit, read preservation and the migration gate. After editing, execute compare/classify/verify from that gate. Read the concurrent-session section when another writer shares the source. Read reference-and-self-application only when the edit writes a pointer or normative rule. Finish on a cleared current review and resolved in-scope gaps, then return to the selected evidence and delivery path.
+Before the first existing-Skill edit, read preservation and the migration gate. After editing, execute compare/classify/verify from that gate. Read the concurrent-session section when another writer shares the source. Read reference-and-self-application only when the edit writes a pointer or normative rule. Clear this static review, then complete the required task-result gate defined in [change verification](change-verification.md#fix-required-acceptance-before-selecting-evidence) before claiming the edit complete.
 
 ## Contents
 
@@ -199,8 +199,14 @@ What success looks like at each gate step (real output, so silent failure is rec
    Classified 8 candidate(s).                                    # exit 1 = some still unclassified
    $ … verify …
    Skill regression review passed.
-   Regression attestation created: .skill-regression-reviewed    # exit 0 = gate cleared
+   Scope: static preservation; behavior and performance were not assessed.
+   Regression attestation created: .skill-regression-reviewed    # exit 0 = static review cleared
    ```
+
+Treat this receipt as static preservation evidence, not completion of the
+[required task-result gate](change-verification.md#fix-required-acceptance-before-selecting-evidence).
+The verify CLI reports `scope: static_preservation`, `behavior: not_assessed` and
+`performance: not_assessed` in JSON; the default output states the same boundary.
 
 `compare` returning 1 means review candidates exist, not that the tool failed;
 2 means invocation/runtime failure. The tool proves exact movement and interface

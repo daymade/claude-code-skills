@@ -151,13 +151,15 @@ What **not** to put in the distilled skill:
 
 ## Step 3 — Scaffold the skeleton
 
-Run the scaffolding script:
+Substitute the absolute creator owner and canonical wrapper parent verified by
+the source preflight, then run the scaffolding script:
 
 ```bash
-uv run --project skill-creator --frozen python skill-creator/workflows/wrapper-skill/scripts/init_wrapper_skill.py \
+uv run --project "<skill-creator-path>" --frozen python \
+  "<skill-creator-path>/workflows/wrapper-skill/scripts/init_wrapper_skill.py" \
   <wrapper-skill-name> \
   --tool "<tool-display-name>" \
-  --target-dir <path/to/repo>
+  --target-dir "<canonical-wrapper-parent>"
 ```
 
 This creates the directory layout and writes stub files with `<!-- FILL FROM STEP 2X -->` placeholders. The layout matches `ima-copilot/` for consistency and to take advantage of the shared validation tooling.
@@ -298,8 +300,9 @@ See `verification_protocol.md` for the full verification procedure. The short ve
 1. Run `quick_validate.py` against the generated directory
 2. Run `security_scan.py` against the generated directory
 3. Run the generated `diagnose.sh` against the actual state the session left you in, and confirm it reports the issues that were present and the fixes that were applied — this closes the loop between the session's real work and the skill's description of that work
-4. Update the relevant marketplace `marketplace.json` with a new plugin entry and bump versions
-5. Update `CHANGELOG.md` / `README.md` / `README.zh-CN.md` / repo `CLAUDE.md` per the hosting repo's release guide
+4. Complete the authorized release through
+   [publishing and packaging](../../references/publishing-and-packaging.md#step-8-update-marketplace)
+   and the verification protocol's exact-source registration check.
 
 ## Step 11 — Commit
 

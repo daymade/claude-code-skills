@@ -51,13 +51,15 @@ Most wrappers are ~70% Track 1, ~30% Track 2. The ima-copilot reference is about
 
 ### Step 1 — Structural validity (both tracks)
 
-Run the repo's standard validation from the repo root. Use the `git rev-parse --show-toplevel` trick to avoid CWD surprises:
+Use the absolute creator owner and wrapper source directory verified by the source
+preflight. Run validation from the creator's locked project; the target Skill may
+be in another repository or a suite directory:
 
 ```bash
-REPO_ROOT=$(git -C . rev-parse --show-toplevel)
-cd "$REPO_ROOT/skill-creator"
-uv run --frozen python -m scripts.quick_validate "$REPO_ROOT/<wrapper-skill-name>"
-uv run --frozen python -m scripts.security_scan "$REPO_ROOT/<wrapper-skill-name>"
+WRAPPER_SKILL_DIR="<absolute-wrapper-skill-directory>"
+cd "<skill-creator-path>"
+uv run --frozen python -m scripts.quick_validate "$WRAPPER_SKILL_DIR"
+uv run --frozen python -m scripts.security_scan "$WRAPPER_SKILL_DIR"
 ```
 
 Both should pass. `quick_validate` enforces SKILL.md frontmatter shape, the 1024-char description cap (and warns above 420), and path reference integrity. `security_scan` catches committed credentials, personal directories, and company names.
@@ -98,22 +100,27 @@ If any of these breaks, the wrapper is not yet shippable. The usual fix is addin
 
 ### Step 5 — Release metadata consistency
 
-Before commit, confirm the marketplace and release docs are consistent with the new skill:
+Follow [publishing and packaging](../../references/publishing-and-packaging.md)
+for security, release metadata and authorized delivery. Use its
+[marketplace step](../../references/publishing-and-packaging.md#step-8-update-marketplace)
+to select suite membership or standalone registration; do not create a parallel
+standalone entry for a suite member or persist catalog counts in instruction files.
+Do not use marker existence as scan/review authority.
 
-- `marketplace.json`: new `plugins[]` entry exists, `metadata.version` bumped, description list mentions the new skill.
-- `CHANGELOG.md`: entry under the new version with a summary of what was added.
-- `README.md` and `README.zh-CN.md`: if the repo has a skill index, the new skill is listed with accurate description.
-- Repo-level `CLAUDE.md`: if it counts skills, the count is incremented.
-- `.security-scan-passed` file exists in the wrapper directory (created by `security_scan.py`).
-
-A common slip is committing the wrapper skill but forgetting to add it to `marketplace.json`. Run a quick guard before `git add`:
+Before release, verify exact-source registration through the
+[source owner](../../references/source-location-and-activation.md), using the
+resolved absolute paths:
 
 ```bash
-grep -q '"<wrapper-skill-name>"' "$REPO_ROOT/.claude-plugin/marketplace.json" \
-  || echo "MISSING: add wrapper to marketplace.json plugins[] and bump metadata.version"
+python3 "<skill-creator-path>/scripts/creator.py" source_contract check-path \
+  "<absolute-wrapper-skill-directory>" --phase delivery \
+  --repo "<canonical-source-repo>" --scope marketplace
 ```
 
-The grep must print nothing before you proceed to commit.
+Require exit 0, `status: valid` and the expected owning `plugin_id`. Inspect any
+nonzero result: missing or duplicate registration cannot pass. This check proves
+source ownership and registration, not installed-host consumption or a working
+upstream installation; retain those separate delivery checks when requested.
 
 ## When verification surfaces a problem
 
