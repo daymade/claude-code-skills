@@ -526,10 +526,22 @@ def _file_fingerprint(path: Path) -> str:
 def _reachable_runtime_files(root: Path, inclusion_policy: Any | None = None) -> set[Path]:
     """Return files reachable through explicit pointers starting at SKILL.md."""
     root = root.resolve()
-    available = {rel for rel, _path in _iter_files(root, inclusion_policy)}
+    policy = _normalize_audit_policy(inclusion_policy or _current_audit_policy())
+
+    def contained_path(path: Path) -> Path | None:
+        try:
+            relative = path.resolve().relative_to(root)
+        except (OSError, RuntimeError, ValueError):
+            return None
+        return relative if _included_in_audit(relative, policy) else None
+
+    available = {
+        rel for rel, path in _iter_files(root, policy)
+        if contained_path(path) is not None
+    }
     reachable: set[Path] = {Path("SKILL.md")}
-    queue = [Path("SKILL.md")]
-    markdown_link = re.compile(r"\]\(([^)\s]+)\)")
+    queue = [Path("SKILL.md")] if Path("SKILL.md") in available else []
+    markdown_link = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
     bare_path = re.compile(r"(?<![A-Za-z0-9_/])(?:references|scripts|assets|workflows)/[\w./-]+")
     python_module = re.compile(
         r"^(?:from|import)\s+((?:scripts|references|assets|workflows)(?:\.[A-Za-z_][\w]*)+)",
@@ -546,29 +558,39 @@ def _reachable_runtime_files(root: Path, inclusion_policy: Any | None = None) ->
         content = _read_text(source_path)
         if content is None:
             continue
-        raw_targets = [match.group(1) for match in markdown_link.finditer(content)]
-        raw_targets.extend(match.group(0) for match in bare_path.finditer(content))
+        markdown_matches = list(markdown_link.finditer(content))
+        raw_targets = [(match.group(1), True) for match in markdown_matches]
+        # A href has document-relative semantics; its substrings are not
+        # additional skill-root execution pointers.
         raw_targets.extend(
-            match.group(1).replace(".", "/") + ".py"
+            (match.group(0), False) for match in bare_path.finditer(content)
+            if not any(link.start() <= match.start() < link.end() for link in markdown_matches)
+        )
+        raw_targets.extend(
+            (match.group(1).replace(".", "/") + ".py", False)
             for match in python_module.finditer(content)
         )
-        raw_targets.extend(match.group(1) for match in javascript_import.finditer(content))
-        raw_targets.extend(match.group(1) for match in shell_source.finditer(content))
-        for raw in raw_targets:
+        raw_targets.extend((match.group(1), False) for match in javascript_import.finditer(content))
+        raw_targets.extend((match.group(1), False) for match in shell_source.finditer(content))
+        for raw, is_markdown in raw_targets:
             value = raw.strip("<>`'\"").split("#", 1)[0].split("?", 1)[0]
             if not value or re.match(r"^[a-z][a-z0-9+.-]*:", value, re.IGNORECASE):
                 continue
             candidate = Path(value)
             if candidate.is_absolute():
                 continue
-            if candidate.parts and candidate.parts[0] in {"references", "scripts", "assets", "workflows"}:
+            if is_markdown:
+                resolved = contained_path(source_path.parent / candidate)
+                if resolved is None:
+                    continue
+            elif candidate.parts and candidate.parts[0] in {"references", "scripts", "assets", "workflows"}:
                 resolved = candidate
             else:
                 resolved = source.parent / candidate
             if ".." in resolved.parts:
                 continue
             resolved_candidates = [resolved]
-            if not resolved.suffix:
+            if not is_markdown and not resolved.suffix:
                 resolved_candidates.extend(
                     Path(f"{resolved}{suffix}")
                     for suffix in (".py", ".js", ".mjs", ".cjs", ".sh")
@@ -576,14 +598,18 @@ def _reachable_runtime_files(root: Path, inclusion_policy: Any | None = None) ->
                 resolved_candidates.extend((resolved / "__init__.py", resolved / "index.js"))
             matched_file = False
             for resolved_file in resolved_candidates:
-                if resolved_file in available and resolved_file not in reachable:
+                if (
+                    resolved_file in available
+                    and resolved_file not in reachable
+                    and contained_path(root / resolved_file) is not None
+                ):
                     reachable.add(resolved_file)
                     queue.append(resolved_file)
                     matched_file = True
             if matched_file:
                 continue
             target_dir = root / resolved
-            if target_dir.is_dir():
+            if target_dir.is_dir() and contained_path(target_dir) is not None:
                 for child in sorted(available):
                     if child != resolved and resolved in child.parents and child not in reachable:
                         reachable.add(child)

@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from scripts.audit_skill_regression import (
+    _reachable_runtime_files,
     archive_baseline_snapshot,
     build_report,
     create_baseline_snapshot,
@@ -690,6 +691,149 @@ def test_runtime_reachability_follows_imported_python_dependencies(tmp_path):
         if item["kind"].endswith("file_changed") and "runtime_policy.py" in item["text"]
     )
     assert changed["scope"] == "runtime"
+
+
+@pytest.mark.parametrize("href", [
+    "references/case.md", "./references/case.md",
+    "../example/references/case.md", "references/case.md#case",
+    "references/case.md?view=plain#case",
+])
+def test_runtime_markdown_links_use_the_containing_document(tmp_path, href):
+    skill = _make_skill(tmp_path / "skill", "[Workflow](workflows/example/workflow.md)")
+    workflow = skill / "workflows/example/workflow.md"
+    target = workflow.parent / "references/case.md"
+    target.parent.mkdir(parents=True)
+    target.write_text("# Case\n\n- Preserve the nested case recovery contract.\n", encoding="utf-8")
+    workflow.write_text(f"[Case]({href})\n", encoding="utf-8")
+    decoy = skill / "references/case.md"
+    decoy.parent.mkdir()
+    decoy.write_text("# Root-path decoy\n", encoding="utf-8")
+
+    assert (workflow.parent / href.split("?", 1)[0].split("#", 1)[0]).resolve() == target
+    assert _reachable_runtime_files(skill) == {
+        Path("SKILL.md"), Path("workflows/example/workflow.md"),
+        Path("workflows/example/references/case.md"),
+    }
+
+
+@pytest.mark.parametrize("href", [
+    "", "#case", "?view=plain", "../missing.md", "references/missing",
+    "../../../references/case.md", "/references/case.md",
+    "https://example.test/references/case.md", "//example.test/references/case.md",
+    "file:references/case.md", "../../.authorization", "../../dist/case.md",
+    "../../.venv/references/case.md",
+])
+def test_runtime_markdown_links_do_not_admit_missing_external_or_excluded_targets(tmp_path, href):
+    skill = _make_skill(tmp_path / "skill", "[Workflow](workflows/example/workflow.md)")
+    workflow = skill / "workflows/example/workflow.md"
+    workflow.parent.mkdir(parents=True)
+    workflow.write_text(f"[Case]({href})\n[Missing href]\n", encoding="utf-8")
+    for root in (skill, tmp_path):
+        decoy = root / "references/case.md"
+        decoy.parent.mkdir(exist_ok=True)
+        decoy.write_text("# Root-path decoy\n", encoding="utf-8")
+    for rel in (".authorization", "dist/case.md", ".venv/references/case.md",
+                "workflows/example/references/missing.py"):
+        path = skill / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("excluded or not the named target\n", encoding="utf-8")
+
+    assert _reachable_runtime_files(skill) == {
+        Path("SKILL.md"), Path("workflows/example/workflow.md"),
+    }
+
+
+@pytest.mark.parametrize("pointer", [
+    "[Escape](references/escape.md)", "Run references/escape.md",
+    "[Escape](references/escape/)", "Run references/escape/",
+    "[Excluded alias](references/excluded.md)",
+])
+def test_runtime_pointers_do_not_follow_symlinks_outside_the_inclusion_boundary(tmp_path, pointer):
+    skill = _make_skill(tmp_path / "skill", pointer)
+    (skill / "references").mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "case.md").write_text("# Outside contract\n", encoding="utf-8")
+    (skill / "references/escape.md").symlink_to(outside / "case.md")
+    (skill / "references/escape").symlink_to(outside, target_is_directory=True)
+    excluded = skill / ".authorization"
+    excluded.write_text("not auditable\n", encoding="utf-8")
+    (skill / "references/excluded.md").symlink_to(excluded)
+
+    assert _reachable_runtime_files(skill) == {Path("SKILL.md")}
+
+
+def test_runtime_markdown_labels_do_not_create_root_execution_pointers(tmp_path):
+    skill = _make_skill(tmp_path / "skill", "[references/case.md](https://example.test/case.md)")
+    decoy = skill / "references/case.md"
+    decoy.parent.mkdir()
+    decoy.write_text("# Label-only decoy\n", encoding="utf-8")
+
+    assert _reachable_runtime_files(skill) == {Path("SKILL.md")}
+
+
+def test_runtime_graph_does_not_read_a_skill_entry_symlink_outside_the_root(tmp_path):
+    skill = tmp_path / "skill"
+    (skill / "references").mkdir(parents=True)
+    outside = tmp_path / "outside.md"
+    outside.write_text("[Case](references/case.md)\n", encoding="utf-8")
+    (skill / "SKILL.md").symlink_to(outside)
+    (skill / "references/case.md").write_text("# Unreachable case\n", encoding="utf-8")
+
+    assert _reachable_runtime_files(skill) == {Path("SKILL.md")}
+
+
+def test_runtime_execution_pointers_keep_root_paths_and_dependency_resolution(tmp_path):
+    skill = _make_skill(tmp_path / "skill", "[Workflow](workflows/example/workflow.md)")
+    files = {
+        "workflows/example/workflow.md": "Run scripts/entry.py and scripts/entry.js and scripts/runner.sh\n",
+        "scripts/entry.py": "from scripts.policy import POLICY\nimport scripts.extra\n",
+        "scripts/policy.py": "POLICY = 'strict'\n",
+        "scripts/extra.py": "EXTRA = True\n",
+        "scripts/entry.js": "import {policy} from './js-policy';\nconst extra = require('./extra-js');\n",
+        "scripts/js-policy.js": "export const policy = 'strict';\n",
+        "scripts/extra-js/index.js": "module.exports = true;\n",
+        "scripts/runner.sh": "source scripts/shell-policy.sh\n. ./shell-extra.sh\n",
+        "scripts/shell-policy.sh": "echo strict\n",
+        "scripts/shell-extra.sh": "echo extra\n",
+    }
+    for rel, content in files.items():
+        path = skill / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+
+    assert _reachable_runtime_files(skill) == {Path("SKILL.md"), *(Path(rel) for rel in files)}
+
+
+def test_nested_markdown_contract_is_runtime_evidence_in_the_report(tmp_path):
+    skill = _make_skill(tmp_path / "skill", "[Workflow](workflows/example/workflow.md)")
+    workflow = skill / "workflows/example/workflow.md"
+    target = workflow.parent / "references/case.md"
+    target.parent.mkdir(parents=True)
+    workflow.write_text("[Case](references/case.md)\n", encoding="utf-8")
+    contract = "Preserve the role-less account recovery path before continuing."
+    target.write_text(f"# Case\n\n- {contract}\n", encoding="utf-8")
+    before = tmp_path / "before"
+    create_baseline_snapshot(skill, before)
+    workflow.write_text("[Case](references/missing.md)\n", encoding="utf-8")
+
+    report = build_report(before, skill, baseline_origin="pre-edit-snapshot")
+    candidate = next(item for item in report["candidates"] if item["text"] == contract)
+    assert candidate["scope"] == "runtime"
+    assert candidate["only_outside_runtime"] is True
+
+
+def test_runtime_reachability_on_the_creators_actual_workflow_chain():
+    skill = Path(__file__).resolve().parents[1]
+    reached = _reachable_runtime_files(skill)
+    expected_chain = {
+        Path("SKILL.md"), Path("workflows/conversation-mining/workflow.md"),
+        Path("workflows/conversation-mining/references/cross-task-improvement.md"),
+        Path("references/authoring-and-reuse.md"), Path("references/change-verification.md"),
+        Path("references/existing-skill-migration.md"),
+    }
+    assert len(expected_chain) == 6
+    assert expected_chain <= reached
 
 
 def test_runtime_file_moved_to_tests_is_not_auto_preserved(tmp_path):

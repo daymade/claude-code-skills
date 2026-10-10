@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` v1.69.0): Add a positive-opportunity branch to authorized cross-task improvement without requiring a prior failure. Resolve nested Markdown pointers within the Skill boundary in migration audits while preserving execution-path handling. Change type: methodology extension and audit implementation repair.
+- **competitors-analysis** (v1.6.0): Trace material advantages to adoption, validation or rejection decisions. Add a scoped read-only tool that reconciles independently frozen candidate keys with decisions and checks declared evidence stages while preserving standalone profiles. Change type: methodology and verification-tool extension.
+
 - **peer-message** (`peer-message` v1.21.1 → v1.21.2): Route-table boundary for Claude-hosted sends to `codex:` targets — SendMessage is always blocked by the native guard there, so use `scripts/peer.py send` directly; a bare attempt blocked this way never reaches the coordination board — it is the `coord prepare` the guard's own text leads you to run that leaves the reserved row, and a later `suppressed_pending` clears with `coord commit --outcome not_sent` before resending. Change type: documentation correction from a measured 2026-10-10 run.
 
 - **skill-creator** (`daymade-skill` v1.68.2): Repair trigger probes to inspect complete exact tool inputs and retain failed measurements as unknown through optimization and reports. Bind populated canonical assertions to grades in aggregation and standalone review; preserve healthy legacy observations and actual measured costs. Change type: evaluation implementation repair and explicit incomplete-measurement contract.

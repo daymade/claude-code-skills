@@ -221,7 +221,7 @@ A green scan does **not** mean the content is clean. The manual read-through is 
 
 Once the outline is clean, promote the authorized increment:
 
-For cross-task improvement, first apply its owner and failure classification.
+For cross-task improvement, first apply its owner and finding classification.
 Update the smallest existing maintenance point when it owns the finding; link
 and execute existing coverage instead of copying it into a new reference.
 Use the new-reference sequence below only for knowledge that needs that resource.

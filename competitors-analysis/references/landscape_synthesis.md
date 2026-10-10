@@ -61,6 +61,43 @@ Strategy and Competitiveness's account of customer value and strategic positioni
 [Business Strategy](https://www.isc.hbs.edu/strategy/business-strategy/Pages/default.aspx).
 It is a reasoning method, not evidence that this product has a market advantage.
 
+## Account for material opportunities
+
+Bind the opportunity set to the original objective, explicitly named objects and
+the frozen Source Register before selecting recommendations. Extract mechanisms
+from those inputs, not only the author's shortlisted findings or our current
+failures. An evidenced positive opportunity does not require an earlier accident.
+Keep stable keys or source/claim locators and request-key associations. Preserve
+merged mechanisms' source mappings; retain non-material items' reasons or groups
+so removing them cannot silently change the input set.
+
+Use the existing current-analysis entry for each material mechanism's source,
+business-increment hypothesis, conditions and costs, owner, minimum falsifier and
+disposition. Keep source facts in Strengths; they do not establish adoption.
+Split a useful submechanism from an unsafe default path when their choices differ.
+
+- **Adopted:** state the evidenced scope separately for implementation, exercised
+  behavior and actual outcome. Narrow implementation adoption may coexist with
+  unverified business benefit; it is not verified outcome adoption.
+- **Pending:** name the cheapest decision-bearing check, responsible owner and
+  exact blocker/reopening condition or authorized next action. Run checks that
+  are executable within this stage's authorization instead of restating defer.
+  After a stage without new evidence, reassess priority against the original
+  objective or explicitly decline adoption; a real blocker leaves only that item
+  unresolved. Do not impose periodic retesting or exceed authorization.
+- **Not adopted:** record the evidence and trade-off, plus what would reopen the
+  choice. Equivalent existing behavior is a valid reason to preserve the owner.
+
+Before closing, reconcile original request keys, discovered keys and decisions;
+inspect missing/duplicate keys and evidence scope. For an existing JSON projection,
+read [opportunity reconciliation](opportunity_disposition.md) and run its scoped
+helper against independently frozen inputs. Then check the original sources and
+objective independently of the disposition author's shortlist for omitted material
+mechanisms, relevant increments and real blockers. Structural completeness cannot
+prove semantic materiality or evidence truth; an independent finding still needs
+source readback. Explain an empty relevant set with its bounded-source evidence.
+A standalone Profile without an our-product objective needs no adoption table.
+
 ## Save understanding where the next session will read it
 
 When a material conclusion changes, update the project's existing research

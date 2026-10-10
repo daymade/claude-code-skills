@@ -2,17 +2,23 @@
 name: cross-task-improvement
 description: >-
   Derive minimal improvements to existing Skills from authorized historical
-  successes, failures and user corrections across task types. Read after bounded
-  history retrieval and before selecting owners or changes.
+  successes, failures, user corrections and sourced positive opportunities across
+  task types. Read within authorized cross-task improvement before selecting changes.
 ---
 
-# Improve existing methods from matched historical cases
+# Improve existing methods from failures and positive opportunities
 
 Use this route when the user authorizes earlier-history research to improve how
 work is done across task types, including Skill edits, competitor research,
 deep research, code analysis or work that never named a Skill. A task label is a
 search lead, not evidence that every case shares a method. For a correction whose
 evidence is already in the live conversation, use the ordinary update path.
+
+Within that authorized improvement, distinguish remedies for observed deviations
+from positive opportunities found in successful cases or supplied domain research.
+An ordinary profile, one-time transform or spelling correction does not trigger
+this route. External research stays with its domain owner; this route grants no
+additional history access, comparison, implementation or publication authority.
 
 The task owner executes this route with the existing history readers and source
 Skills. The semantic comparisons below have no automatic enforcement; preserve
@@ -39,11 +45,21 @@ without adding approval rounds or repeating extraction.
 
 ## Match successful and failed decisions
 
-For each proposed improvement, find a successful case and a failure or user
+For a proposed failure remedy, find a successful case and a failure or user
 correction with comparable decision conditions. Identify the original user result,
 the decisive action, its actual receiver and the observation that distinguishes
 success from merely completing a procedure. If only one side is available, keep
 the causal explanation provisional and choose a probe that could disprove it.
+
+A positive opportunity does not require an earlier failure. Start from an approved
+successful case or a verified external mechanism relevant to the authorized result;
+do not invent a failure when the current baseline meets its contract. State the
+business increment as a hypothesis, its conditions and costs, and the smallest
+outcome probe that could support or overturn it. For competitor mechanisms, use
+`competitors-analysis` and its `references/landscape_synthesis.md` decision chain
+and continuation entry for coverage and disposition; non-code source research
+stays with `deep-research`. Reuse an equivalent current mechanism when no relevant
+gain is supported rather than adopting a different implementation for its novelty.
 
 Label evidence by what it proves:
 
@@ -61,12 +77,18 @@ using them as implementation premises.
 
 ## Extract conditions and counterexamples
 
-Compare what changed between the matched cases: evidence available at the decision,
-loaded owner, chosen execution path, authorization, receiver and success criterion.
+For failure remedies, compare what changed between the matched cases: evidence
+available at the decision, loaded owner, chosen execution path, authorization,
+receiver and success criterion.
 State the smallest causal condition that explains the difference, then find a
 case where the proposed rule should **not** apply. Distinguish a supported
 mechanism from a plausible explanation; do not turn an untested transfer into a
 new domain's mandatory workflow.
+
+For a positive opportunity, compare the proposed increment with the current
+adopted baseline and a case where that increment should not apply. Keep untested
+business benefit provisional; source evidence alone does not establish adoption
+or measured improvement.
 
 Synthetic example: an export reached its requested records after the executor
 checked the source's total, while an earlier export stopped on a short page. The
@@ -79,7 +101,7 @@ for technical and domain claims and the existing
 [check-calibration contract](../../../references/change-verification.md#calibrate-checks-before-writing-or-trusting-them)
 for healthy/failing controls. Those contracts remain under their owners.
 
-## Find the current owner and classify the failure
+## Find the current owner and classify the finding
 
 Before writing, use `skills-search` with capability and action vocabulary across
 the configured public, team and personal-private source repositories. Discover
@@ -90,13 +112,14 @@ to resolve entry, execution, increment and update ownership.
 
 Classify each finding before choosing a maintenance point:
 
-| Failure | Minimal next action |
+| Finding | Minimal next action |
 |---|---|
 | Missing mechanism | Add the supported decision or helper under the existing owner |
 | Existing owner was not loaded, or its action was bypassed | Repair the action-time route or execute the maintained helper; retain its canonical rule |
 | Success criterion measured the wrong result | Replace the proxy with an observation of the original receiver's result |
 | Implementation violated the existing contract | Reproduce and repair that implementation under its owner |
 | Constraint no longer fits current authority or an explicit user decision | Verify that authority, then update or retire only the affected constraint |
+| Positive opportunity without a current failure | Name the mechanism, business increment hypothesis, conditions and costs; choose the smallest falsifying probe and follow the existing owner's disposition contract |
 
 An existing rule is not missing merely because a session failed to follow it.
 If a named Skill already covers the remedy, link and execute it. Do not build a
@@ -105,9 +128,10 @@ universal improvement Skill, global hook or parallel SOP from the case collectio
 ## Change the next decision and verify the original result
 
 For each retained change, put the following in the existing task plan or research
-handoff: the user result to improve, matched evidence and its limits, causal
-conditions and counterexample, current owner, failure class, exact maintenance
-point, next choice changed, and decisive probe. Reuse the existing plan or evidence
+handoff: the user result to improve, source evidence and any matched comparison,
+its limits, conditions and counterexample, current owner, finding type and, for a
+failure remedy, its failure class, exact maintenance point, next choice changed,
+and decisive probe. Reuse the existing plan or evidence
 ledger; do not create a second status system. If removing a sentence would not
 change a future choice, leave it in the private research archive or omit it.
 
@@ -118,9 +142,13 @@ unchanged jobs through the [migration gate](../../../references/existing-skill-m
 Return to ordinary editing, validation and delivery; history research is not the
 final deliverable when the user also authorized implementation.
 
-Use the original failed task and a healthy counterexample to check the affected
-behavior. The observation must be able to catch doing the wrong work even when
-static checks pass. Synthetic probes test the rule's shape; they do not establish
+For a failure remedy, use the original failed task and a healthy counterexample.
+For a positive opportunity, check the named original user result and a case where
+the proposed increment should not apply. Execute an authorized decision-bearing
+probe instead of repeatedly deferring it; retain the exact blocker and recovery
+condition when it cannot run. Record the resulting choice under the existing
+owner's contract. The observation must be able to catch doing the wrong work even
+when static checks pass. Synthetic probes test the rule's shape; they do not establish
 live service or device success. Fix the authorized original artifact as well as
 its reusable maintenance point when both are in scope.
 
