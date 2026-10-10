@@ -92,6 +92,8 @@ authority boundary.
 
 After the repair, add or update the comment with the repair commit, what changed,
 and the relevant verification before merging. Preserve useful review history.
+Use [behavioral impact review](behavioral-impact-review.md#reopen-affected-relationships-after-a-repair)
+to check the repair's consumers and preservation contract before closing the finding.
 Reuse unchanged source/content evidence and focus new inspection on the repair,
 while still rechecking the exact head, current base, three-way result and required
 checks. Stop when those gates and the authorized repair are complete; do not make

@@ -355,6 +355,11 @@ capability) from a software defect; do not inflate a curation decision into a fa
 
 ### 5. Inspect the Full Landing or Conflict Surface
 
+Before accepting proposed tests as sufficient, load
+[behavioral impact review](references/behavioral-impact-review.md). Derive the
+intended result and preservation contract, then trace changed relationships to
+their actual selectors and consumers, including consumers with no source diff.
+
 For a clean merge, inspect every file in the prospective landing diff. For a conflicted
 merge, inspect every file in the isolated intended contribution plus every conflict
 stage and message; state that no prospective landing tree exists. Then follow each
@@ -452,6 +457,11 @@ review onto new code.
 
 For a re-review, mark each earlier finding `OPEN`, `FIXED`, `OBSOLETE`, or
 `REATTRIBUTED`. Explain base-drift effects explicitly.
+
+A fixed finding is not a renewed landing verdict. Apply the repair section of
+[behavioral impact review](references/behavioral-impact-review.md#reopen-affected-relationships-after-a-repair)
+before concluding; retain unaffected evidence and recheck the repair's affected
+consumer behavior against the original contract.
 
 Report findings first, highest severity first:
 

@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **github-review-pr** (v1.4.4), **github-contributor** (v1.3.3): Trace behavioral changes and repairs through actual selectors and downstream consumers; require separate result and preservation evidence before renewing a landing recommendation. Retain unchanged evidence and existing review/authorization boundaries. Change type: bounded review-method correction.
 - **frontend-visual-qa** (v1.20.7): Verify required records beyond the newest window, readable contributions and per-item failure recovery through the authorized project harness. Preserve uncertain-write boundaries and keep actual journey evidence separate from generic sweep results. Change type: bounded acceptance clarification.
 - **peer-message** (v1.21.1): Align native coordination entry routes with the existing guard, use loaded-Skill absolute paths in the owning SOP, and distinguish installer binding from host trust and enforcement. Runtime behavior is unchanged.
 
