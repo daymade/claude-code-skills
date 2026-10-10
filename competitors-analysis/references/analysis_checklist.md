@@ -11,9 +11,10 @@ is to keep repository evidence, market evidence, and judgment separate.
 - [ ] Missing comparison context does not block independent repository profiles; no-target/no-project requests stop without inventing a market.
 - [ ] Competitor base directory is explicit:
   `COMPETITORS_BASE="${COMPETITORS_BASE:-$HOME/workspace/competitors}"`.
-- [ ] Product directory exists under `$COMPETITORS_BASE/{product-slug}/`; standalone profiles use the `standalone` namespace.
-- [ ] Repository directory uses the `owner-repo` convention.
+- [ ] Git product directory exists under `$COMPETITORS_BASE/{product-slug}/`; standalone profiles use the `standalone` namespace.
+- [ ] Git repository directory uses the `owner-repo` convention; supplied packages retain their bound location.
 - [ ] Any existing local clone is reused instead of cloning into a second path.
+- [ ] Carrier and edition match the request; separately distributed editions are individually found or unresolved, following the entry's Preflight.
 
 ## 2. Discovery Checks
 
@@ -32,7 +33,7 @@ gh search repos "primary keywords" --limit 30 --archived=false \
 
 ## 3. Repository Preparation
 
-Use the fetch recipe for first ingestion or requested freshness. Synthesis and
+Apply this recipe only to Git sources. Use it for first ingestion or requested freshness. Synthesis and
 continuation reuse verified profiles at pinned commits; confirm remote/object
 availability locally and refresh only for changed inputs or unresolved evidence.
 
@@ -89,7 +90,7 @@ Check claims in context, not with a banned-word pass/fail rule:
 
 For multi-competitor reports:
 
-- [ ] Source register lists local path, remote, commit, and retrieval date.
+- [ ] Source register lists carrier, edition and retrieval date, with Git local path/remote/commit or package origin/member/digest; unknown version or origin stays unknown.
 - [ ] Positioning table distinguishes user segment from technical implementation.
 - [ ] Strengths are tied to user-visible behavior or code evidence.
 - [ ] Weaknesses/gaps cite evidence or are labeled as `待验证`.

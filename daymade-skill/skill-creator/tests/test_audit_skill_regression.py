@@ -2,6 +2,7 @@ import json
 import hashlib
 import os
 import subprocess
+import sys
 import zipfile
 from pathlib import Path
 
@@ -45,6 +46,76 @@ def _write_review(path: Path, report: dict) -> Path:
 
 def _candidate_texts(report: dict) -> list[str]:
     return [candidate["text"] for candidate in report["candidates"]]
+
+
+@pytest.mark.parametrize("as_json", [False, True])
+@pytest.mark.parametrize("classified", [False, True])
+def test_verify_cli_reports_static_scope_without_changing_gate(tmp_path, as_json, classified):
+    """Exercise real CLI pass/fail controls; no task behavior is inferred."""
+    from scripts.audit_skill_regression import classify_review
+
+    skill = _make_skill(
+        tmp_path / "skill",
+        "- Verify the signed-in unauthorized branch with a genuinely role-less account.",
+    )
+    before = tmp_path / "before"
+    create_baseline_snapshot(skill, before)
+    _make_skill(
+        skill,
+        "- Reworded: verify the signed-in unauthorized branch using a genuinely role-less account.",
+    )
+    report = build_report(before, skill, baseline_origin="pre-edit-snapshot")
+    assert report["summary"]["candidates"] == 1
+    assert len(report["candidates"]) == 1
+    assert report["candidates"][0]["scope"] == "runtime"
+    review = _write_review(tmp_path / "review.json", report)
+    if classified:
+        disposition_map = tmp_path / "map.json"
+        disposition_map.write_text(json.dumps({
+            "0": {
+                "destination": "SKILL.md",
+                "needle": "genuinely role-less account",
+                "reason": "Reword the instruction while retaining the signed-in unauthorized branch and role-less account.",
+            }
+        }), encoding="utf-8")
+        count, unresolved = classify_review(review, skill, disposition_map, "fixture-reviewer")
+        assert count == 1 and unresolved == []
+
+    command = [
+        sys.executable, "-m", "scripts.audit_skill_regression", "verify",
+        "--before", str(before), "--after", str(skill), "--review", str(review),
+    ]
+    if as_json:
+        command.append("--json")
+    result = subprocess.run(
+        command, cwd=Path(__file__).resolve().parents[1],
+        capture_output=True, text=True, check=False,
+    )
+
+    assert result.returncode == (0 if classified else 1), result.stderr
+    assert result.stderr == ""
+    if as_json:
+        payload = json.loads(result.stdout)
+        assert payload["status"] == ("pass" if classified else "fail")
+        assert payload["scope"] == "static_preservation"
+        assert payload["behavior"] == "not_assessed"
+        assert payload["performance"] == "not_assessed"
+        assert bool(payload["errors"]) is not classified
+    else:
+        assert "Scope: static preservation; behavior and performance were not assessed." in result.stdout
+        if classified:
+            assert "Skill regression review passed." in result.stdout
+            assert "Regression attestation created: .skill-regression-reviewed" in result.stdout
+        else:
+            assert "Skill regression review failed:" in result.stdout
+            assert "is unclassified" in result.stdout
+            assert "Regression attestation created" not in result.stdout
+    assert (skill / ".skill-regression-reviewed").exists() is classified
+    if classified:
+        assert validate_regression_marker(skill)[0] is True
+    ok, errors = verify_review(before, skill, review)
+    assert ok is classified
+    assert bool(errors) is not classified
 
 
 def test_snapshot_records_replayable_policy_and_excludes_only_runtime_authorization(tmp_path):

@@ -171,9 +171,21 @@ If validation fails, the script reports errors and exits without creating a pack
 
 ### Step 8: Update Marketplace
 
-After packaging, update the marketplace registry to include the new or updated skill.
+For authorized marketplace publication, update `.claude-plugin/marketplace.json`
+using the hosting repository's registration and release guide. Resolve the owning
+plugin from its exact source directory before editing:
 
-**For new skills**, add an entry to `.claude-plugin/marketplace.json`:
+- **New member of an existing suite:** append the member's path relative to the
+  suite's `source` to that plugin's nonempty `skills` array and bump the owning
+  suite version. Do not add a parallel standalone plugin entry.
+- **New standalone plugin:** add an entry pointing directly at the Skill source
+  directory, using the shape below.
+
+Advance `metadata.version` for catalog additions, removals or restructuring under
+the hosting repository's policy. Verify exact-source registration through
+[the source owner](source-location-and-activation.md), not a name grep.
+
+Use this example only for a new standalone plugin:
 
 ```json
 {
@@ -187,7 +199,9 @@ After packaging, update the marketplace registry to include the new or updated s
 }
 ```
 
-**For updated skills**, bump the version in `plugins[].version` following semver. Any change to a skill's **shipped** files — even a one-line typo fix — needs a bump: without it, `marketplace update` sees no new version, so **already-installed copies never refresh** and users keep running the old skill while your fix sits unshipped. Files that never ship are the one exception, and it is not a judgement call: `scripts/packaging_policy.py` defines that set and the repository's version gate consumes the same module, so a change confined to those paths is not a content change and needs no bump. Without that exception, retiring one local artifact would demand a release from every plugin that happened to carry one.
+**For updated skills**, bump only the owning registered plugin's `version`
+following semver; suite members share the suite release identity and have no
+separate member bump. Any change to a skill's **shipped** files — even a one-line typo fix — needs a bump: without it, `marketplace update` sees no new version, so **already-installed copies never refresh** and users keep running the old skill while your fix sits unshipped. Files that never ship are the one exception, and it is not a judgement call: `scripts/packaging_policy.py` defines that set and the repository's version gate consumes the same module, so a change confined to those paths is not a content change and needs no bump. Without that exception, retiring one local artifact would demand a release from every plugin that happened to carry one.
 
 **Then record it in the changelog — this is the step that gets skipped.** The bump makes the
 update *installable*; the entry is what makes it *findable* six months later, when someone

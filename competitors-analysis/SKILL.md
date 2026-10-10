@@ -27,7 +27,7 @@ is useful for the landscape table, but it is not enough for technical conclusion
 
 ## Resolve the analysis target (read this first)
 
-The executing agent resolves two separate inputs: the **repository to analyze**
+The executing agent resolves two separate inputs: the **code source to analyze**
 and the **our-product context used for comparison**. A repository URL identifies
 the first; a separately typed product name is not required to profile it.
 
@@ -67,7 +67,7 @@ Use the user's wording to choose the path:
 |---|---|---|
 | "find competitors", "竞品有哪些", broad market query | Discover | Search GitHub and web sources, shortlist candidates, clone only relevant repositories |
 | "add competitor <url>" | Ingest | Clone the repository, record remote + commit, then produce a first profile |
-| A repository URL, "analyze competitor", "review this repo" | Profile | Update or clone locally, read code, write a cited technical profile; compare with the confirmed current product when applicable |
+| A repository URL or supplied code package, "analyze competitor", "review this repo" | Profile | Bind the source, read code, write a cited technical profile; compare with the confirmed current product when applicable |
 | "compare", "landscape", "opportunities" | Landscape | Ensure each competitor has a profile, then synthesize gaps and opportunities |
 | "latest code", "有没有更新" | Update | Pull/fetch existing competitors and report changed commits before analysis |
 
@@ -97,6 +97,17 @@ Do not browse other product directories to manufacture the analysis scope.
 
 ## Preflight
 
+Bind the requested edition to the supplied source before comparing capabilities.
+For Git, record the remote and immutable analyzed commit. For an archive or app
+bundle, record its origin (or `unknown`), exact package/member path, content digest,
+and evidenced edition/version (or `unknown`). Keep separately distributed editions
+separate; mark each requested edition as found or unresolved. A digest identifies
+bytes, not the requested edition, latest release, or completeness of the collection.
+Reuse the bound local package; do not clone a substitute repository or copy an
+archive merely to satisfy the Git storage convention. Consult prior analysis only
+when the request calls for history or reuse.
+
+Apply the following commands to Git sources only.
 For first ingestion or an explicit freshness/update request, establish these
 facts from commands, not memory:
 
@@ -196,7 +207,7 @@ Link the existing project research entry; retain accepted/rejected judgments,
 their evidence versions and failure conditions, and the next decision-bearing check.
 
 ## Source Register
-| Competitor | Local path | Remote | Commit | Retrieved |
+| Competitor / edition | Carrier | Local source / member | Git remote + commit or package origin + digest | Retrieved / freshness |
 |---|---|---|---|---|
 
 ## Positioning
@@ -259,8 +270,8 @@ into a requirement, claimed competitive advantage, or implementation authorizati
 
 Before finishing, run the checks in `references/analysis_checklist.md`:
 
-- Local repository exists under `$COMPETITORS_BASE/{product-slug}/`.
-- Remote URL and analyzed commit are recorded; freshness is explicit.
+- Git clones exist under `$COMPETITORS_BASE/{product-slug}/`; supplied packages retain their bound location.
+- Source register identifies the carrier and requested edition; Git remote/commit or package/member/digest is recorded, with freshness and unresolved editions explicit.
 - Each technical claim has a file:line citation.
 - Market facts have a source and retrieval date.
 - Landscape judgments explain a concrete choice, its trade-off and falsifier; facts and inference remain separate.

@@ -27,6 +27,13 @@ Read cases and pipeline execution only after [the heavy-eval gate](change-verifi
 
 Enter this section only when the heavy-eval authorization gate passes. Risk tier alone neither authorizes nor forbids this evidence; an explicit full-pipeline request does not reclassify the underlying change. Do not use it merely because a SKILL.md changed. A specialized workflow follows its substitution contract declared above.
 
+For an existing-Skill preservation request, retain the
+[required acceptance fixed before evidence selection](change-verification.md#fix-required-acceptance-before-selecting-evidence)
+before choosing prompts or tuning the candidate. Bind the approved cases to those
+affected jobs and output/performance criteria. Add newly discovered diagnostic
+cases as needed; do not replace the original acceptance with easier development
+cases or the candidate's successful examples.
+
 After writing the skill draft, come up with 2-3 realistic test prompts — the kind of thing a real user would actually say. **For skills that act on live systems (a running service, a logged-in client, production data), give each test prompt an explicit side-effect budget** — e.g. "probe read-only and conclude; do NOT execute the download / drive the UI." An eval that mutates a live environment while "just testing" is a real action, not a test. Present them via **AskUserQuestion**:
 
 ```

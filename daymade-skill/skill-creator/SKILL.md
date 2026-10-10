@@ -176,6 +176,9 @@ evals or an unreachable reference is a gap. Regenerate stale reviews after edits
 Inspect changed prose pointers and adjacent rule clauses with the migration
 guide's reference/self-application procedure; text survival alone does not prove
 the section's behavior survived.
+Finish this edit only after the
+[static preservation and required task-result gates](references/change-verification.md#fix-required-acceptance-before-selecting-evidence)
+both clear.
 
 Validate each entry edit immediately:
 

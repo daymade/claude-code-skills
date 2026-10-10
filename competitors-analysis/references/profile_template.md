@@ -2,14 +2,22 @@
 
 ## Source Register
 
+Keep the applicable carrier's fields. Omit Git-only fields for supplied packages
+and package-only fields for Git; retain `unknown` for unevidenced origin, edition
+or version. Bind each requested edition separately using the entry's Preflight.
+
 | Field | Value |
 |---|---|
+| Carrier / edition | {Git repository / archive / app bundle; evidenced edition and version, or unknown} |
 | Repository | {GitHub URL} |
 | Local path | `$COMPETITORS_BASE/{product-slug}/{owner-repo}` |
 | Remote | `{git remote get-url origin}` |
 | Branch | `{git branch --show-current}` |
 | Commit | `{git log -1 --format='%H'}` |
 | Commit date | `{git log -1 --format='%cI'}` |
+| Package origin | {download/source authority, or unknown} |
+| Package / member path | {exact archive or bundle path and analyzed member path} |
+| Content digest | {digest of analyzed package/member; identify which bytes were hashed} |
 | Retrieved | {YYYY-MM-DD} |
 | License | {license source} |
 
@@ -17,7 +25,7 @@
 
 This profile separates:
 
-- **Repository facts**: verified from local cloned source code and cited as
+- **Code facts**: verified from the bound local source and cited as
   `file:line`.
 - **Market facts**: sourced from GitHub/API/official pages with retrieval date.
 - **Judgment**: synthesis based on cited evidence, labeled with confidence.
