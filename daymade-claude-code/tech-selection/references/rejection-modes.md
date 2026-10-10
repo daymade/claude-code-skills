@@ -119,7 +119,7 @@ Anything that cannot be patched after release — telemetry and events, field
 and export formats, external contracts, irreversible external actions — must
 exist from v0. Revertible local changes do not trigger this.
 
-> 自检：输出里显式列出了本次涉及的不可逆面，或显式写了「无」吗？两者都没有 = 没检查。
+> 自检：完整协议列出了不可逆面或「无」吗？轻量路径确认是可逆本地且无外部契约吗？对应路径缺这项 = 没检查。
 
 ### 12 · 间歇通道写成唯一路径 — An intermittent channel as the sole path
 
@@ -136,7 +136,7 @@ Reviewability is the precondition for a decision to exist at all. A compressed
 decision document cannot be reviewed, which is the same as the decision never
 happening.
 
-> 自检：你的决策文档 / 对比表被摘要、截断或压成结论句了吗？是 → 展开回原始对比。
+> 自检：当前路径需要的候选、取舍或证据被截断成结论句了吗？是 → 恢复这些信息；轻量路径不补无关矩阵。
 
 ### 14 · 手动维护索引 / 记忆 / 规则集 — Hand-maintained indexes and memory
 
@@ -149,10 +149,11 @@ output changes unknowable — the maintenance act itself is self-deception.
 
 ### 15 · 文档 / README / 厂商声明当证据 — Docs, READMEs, vendor claims as evidence
 
-「文档不准，接口不准」 — all of it is downgraded below what you ran and
-observed. One call plus observation is the only admissible evidence.
+「文档不准，接口不准」 warns against treating a declaration as a usable result.
+Current official docs or inspected source may establish a contract or exclude a
+mismatch; runtime and business-result claims require their own observations.
 
-> 自检：输出里每条承重主张后面跟的是探针（跑了什么、观察到什么），还是链接 / README / 厂商页？后者 → 标 unknown，不是 pass。
+> 自检：每条承重主张的证据能证明它声称的那一层吗？源码契约不证明运行可用，技术通过不证明业务增量；缺对应观察 → 标 unknown，不是 pass。
 
 ### 16 · 不自测就问 — Asking without probing first
 
@@ -173,11 +174,13 @@ Searching by a name from memory, getting zero hits, and asserting absence.
 
 ### 18 · 甩锅 / 兜底 — Pushing the decision back
 
-Pushing back a decision you could make is 「偷懒，让我给你兜底」. Only four
-categories may be asked: business/domain judgment, feature scope, genuine
-multi-candidate human tradeoff, completion claims not yet verified.
+Pushing back an authorized implementation decision is 「偷懒，让我给你兜底」.
+Ask for genuinely missing information, unresolved business/product/preferences or
+an uncovered authorization boundary. Candidate count alone does not create a
+human trade-off. Run authorized verification first; present human acceptance
+separately instead of returning an executable probe to the user.
 
-> 自检：你推回给用户的这个决策，属于那四类吗？不属于 → 自己做，结论带自辩位。
+> 自检：这次回问缺的是用户独有信息、真实取舍还是授权？若已有答案/授权覆盖，或能自行实测 → 先执行，结论带证据与自辩位。
 
 ### 19 · 反复确认 — Asking again and again
 
@@ -253,8 +256,9 @@ the human only sees above-threshold results, not every routine step.
 
 ### 28 · AI 出的架构 / 选型当结论 — AI-produced architecture or selection as conclusion
 
-The only category explicitly carved out of delegation: AI writing code is
-freely delegated, AI choosing the stack is not — 「让 AI 给你出这些架构图、
-或者是架构决策、技术选型的时候。他出的还是垃圾」.
+The historical objection was to trusting AI-produced architecture or selection:
+「让 AI 给你出这些架构图、或者是架构决策、技术选型的时候。他出的还是垃圾」.
+Apply current authorization to who chooses; an authorized choice still needs
+independently checkable evidence and cannot certify its own correctness.
 
-> 自检：你的架构/选型结论带「为什么这不是垃圾」自辩位了吗，且自辩里每句话追得到一个探针或轴判词？都没有 → 补上，或显式标「待用户验证」。
+> 自检：完整协议的自辩位或轻量路径的理由能追到证据或轴判词吗？缺哪条就补哪条；未观察到的人类验收单列「未确认」。
