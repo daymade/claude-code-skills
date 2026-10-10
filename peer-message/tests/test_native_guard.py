@@ -165,6 +165,34 @@ class NativeGuardTests(unittest.TestCase):
         missing = subprocess.run(["/bin/bash",bound["entry"]],input=json.dumps(event),text=True,capture_output=True,env=env)
         self.assertEqual(missing.returncode,2)
 
+    def test_send_message_to_codex_target_gets_script_send_guidance(self):
+        home = Path(self.tmp.name)
+        env = dict(os.environ, HOME=str(home), XDG_CONFIG_HOME=str(home/"config"),
+                   XDG_STATE_HOME=str(home/"state"))
+        with patch.dict(os.environ, env):
+            installer.install(sys.executable)
+        def run(event):
+            return subprocess.run([sys.executable, str(SCRIPTS/"native_guard.py")],
+                                  input=json.dumps(event), text=True, capture_output=True, env=env)
+        codex = run({"hook_event_name":"PreToolUse","session_id":SENDER,"tool_use_id":"call-codex",
+                     "tool_name":"SendMessage",
+                     "tool_input":{"to":"codex:"+TARGET,"message":"window request"}})
+        self.assertEqual(codex.returncode, 2)
+        self.assertIn("has no prepare-then-native-send path", codex.stderr)
+        self.assertIn("suppressed_pending", codex.stderr)
+        unknown = run({"hook_event_name":"PreToolUse","session_id":SENDER,"tool_name":"SendMessage",
+                       "tool_input":{"to":"no-such-agent-guard-000","message":"hi"}})
+        self.assertEqual(unknown.returncode, 2)
+        self.assertIn("native coordination is unprepared", unknown.stderr)
+        self.assertNotIn("prepare-then-native-send", unknown.stderr)
+        empty = run({"hook_event_name":"PreToolUse","session_id":SENDER,
+                     "tool_name":"SendMessage","tool_input":{}})
+        self.assertEqual(empty.returncode, 2)
+        self.assertIn("native coordination is unprepared", empty.stderr)
+        parent = run({"hook_event_name":"PreToolUse","session_id":SENDER,"tool_name":"SendMessage",
+                      "tool_input":{"to":"main","message":"internal"}})
+        self.assertEqual(parent.returncode, 0)
+
     def test_plugin_shell_blocks_a_managed_interpreter_lost_after_install(self):
         home = Path(self.tmp.name)
         env = dict(os.environ, XDG_CONFIG_HOME=str(home/"config"), XDG_STATE_HOME=str(home/"state"))

@@ -96,14 +96,31 @@ def installed_check(event):
 
 
 def main():
+    event = None
     try:
-        installed_check(json.load(sys.stdin))
+        event = json.load(sys.stdin)
+        installed_check(event)
     except Exception:
         # Fixed text: never leak private content, recipient paths or hook inputs.
-        print("BLOCKED (PeerMessage): native coordination is unprepared, expired, changed, repeated, "
-              "or unavailable. Run this installed Skill's scripts/peer.py coord prepare with the exact "
-              "recipient and original deadline, send its body unchanged once, then coord commit. "
-              "Reconcile an earlier reserved/unknown attempt before retry; do not switch transport.", file=sys.stderr)
+        target = ""
+        if isinstance(event, dict) and event.get("tool_name") == "SendMessage" \
+                and isinstance(event.get("tool_input"), dict):
+            target = str(event["tool_input"].get("to") or event["tool_input"].get("recipient") or "")
+        if target.startswith("codex:"):
+            # SendMessage resolves Claude sessions only, so a codex: target has no
+            # prepare-then-native-send path; preparing would only orphan a reserved row.
+            print("BLOCKED (PeerMessage): SendMessage resolves Claude sessions only; a codex: target "
+                  "is unreachable this way and has no prepare-then-native-send path. Do not run coord "
+                  "prepare for it — the reserved row it creates would later suppress this Skill's "
+                  "scripts/peer.py send as suppressed_pending. Send directly: scripts/peer.py send "
+                  "'codex:<thread-id>' <body-file>. If coord prepare already ran for this target, "
+                  "close the orphan row first: coord commit --message-id <id> --outcome not_sent.",
+                  file=sys.stderr)
+        else:
+            print("BLOCKED (PeerMessage): native coordination is unprepared, expired, changed, repeated, "
+                  "or unavailable. Run this installed Skill's scripts/peer.py coord prepare with the exact "
+                  "recipient and original deadline, send its body unchanged once, then coord commit. "
+                  "Reconcile an earlier reserved/unknown attempt before retry; do not switch transport.", file=sys.stderr)
         return 2
     return 0  # no permissionDecision=allow; preserve every other permission/deny
 
