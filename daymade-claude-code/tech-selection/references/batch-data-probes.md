@@ -21,6 +21,6 @@ Choose correctness answers without reading the implementation: a rare term at th
 | Empty or unavailable index | Recover an original from its archive manifest and content hash without consulting the index that is being rebuilt. Test a missing index, not merely a working index with a restore flag. |
 | Long record and filtered search | Verify the known tail term and source-filtered result after the complete extraction/search/consumer path. A parser unit test or unfiltered top-K result alone is insufficient. |
 
-Use healthy controls and an actually observed failure shape. For example, a stream with four/eight/sixteen chunks must visit each required chunk once rather than walking ten/thirty-six/one-hundred-thirty-six chunk headers. The values demonstrate a diagnostic input, not a production throughput promise.
+Use healthy controls and an actually observed failure shape. For example, a stream with four/eight/sixteen chunks must visit each required chunk once rather than repeatedly walking the preceding chunk headers. The values demonstrate a diagnostic input, not a production throughput promise.
 
 For each result retain the exact command, candidate version, corpus identity, expected answer, observed answer and coverage boundary. Do not silently replace an unavailable engine probe with documentation claims. Keep implementation-only tests separate from evidence that the consumer receives the right answer. Do not activate production rebuilds to gather these measurements when migration is stopped.

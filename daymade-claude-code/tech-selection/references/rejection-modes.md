@@ -1,22 +1,13 @@
 ---
 name: rejection-modes
 description: >-
-  28 rejection modes and agent anti-patterns distilled from the decision
-  corpus — 16 rejection patterns and 18 anti-patterns, deduplicated and merged,
-  grouped into five categories (cognitive bias, execution discipline, evidence
-  and verification, communication and delegation, architecture and vendor).
-  Every entry carries a one-line mechanical self-test answerable by inspecting
+  Rejection modes and agent anti-patterns distilled from the decision corpus.
+  Every entry carries a mechanical self-test answerable by inspecting
   your own draft, so you catch the failure without re-reading the decision
   axes. Read before proposing candidates and as a final pass over the draft.
 ---
 
 # Rejection Modes · 拒绝模式
-
-The 16 rejection patterns and 18 agent anti-patterns from the decision corpus,
-deduplicated into 28 entries. Three entries are exact cross-list duplicates
-(让 agent 审自己, AI 出的架构/选型当结论, 甩锅/兜底), folded into single entries.
-Three are same-root neighbors merged with both names kept (闭门造车 + 不先盘点
-内部资产, 临时绕过 + 症状修补, 过度工程 + 未要求的 scope).
 
 **How to use.** Each self-test is answerable by reading your own draft — if
 answering it requires re-deriving the principle, the test is not doing its job.

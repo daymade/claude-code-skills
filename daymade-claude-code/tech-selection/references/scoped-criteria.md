@@ -1,7 +1,7 @@
 ---
 name: scoped-criteria
 description: >-
-  13 narrower tech-selection criteria (items 14-26), each tagged with evidence
+  Narrower tech-selection criteria, each tagged with evidence
   scope (cross-scenario / single-scenario / teaching-scenario) and class
   (A common sense / B preference / C paranoid). Load at Step 3 as a supplement
   to decision-axes.md, and before quoting any of these as settled truth:
@@ -13,20 +13,17 @@ description: >-
   not paraphrase them into stronger claims.
 ---
 
-# Scoped Criteria — 13 Narrower Filters (Items 14–26)
+# Scoped Criteria — Narrower Filters
 
 ## How to Read This File
 
-The 13 axes in `references/decision-axes.md` are cross-scenario decision spines and
-work as default gates. The 13 criteria here are narrower: most come from a teaching
+The [core axes](decision-axes.md) are cross-scenario decision spines and
+work as default gates. The criteria here are narrower: most come from a teaching
 moment (he was teaching a client, not selecting for himself) or from a single
 project. Mixing the two files promotes a situational preference into a universal
 law — that is the failure mode this file exists to prevent.
 
-Distribution in this file: **A=1 / B=6 / C=6**. Across the full 26 (this file plus
-`decision-axes.md`) it is A=6 / B=11 / C=9.
-
-Every item carries two leading labels.
+Read each item's leading labels.
 
 **Scope — what evidence supports it.**
 
@@ -36,7 +33,7 @@ Every item carries two leading labels.
 | `[单场景]` single-scenario | Evidence from one project only | Scenario-specific branch; the branch must name its scenario |
 | `[教学场景]` teaching-scenario | From a workshop, course, or onboarding session — he was teaching someone else, not selecting for himself | **Cannot be used as his selection constant** |
 
-Two items (18, 24) carry `+` after the tag: a second source where he was stating his
+The `+` after a tag marks corroboration from a source where he was stating his
 own practice rather than teaching. That corroboration lifts them above pure teaching
 evidence, but they remain C-class — the class label, not the scope label, decides
 whether the item is a default gate.
@@ -49,19 +46,17 @@ whether the item is a default gate.
 | `B` preference | His stated preference | Default gate, but attributed to him |
 | `C` paranoid | Uniquely his, narrow evidence | **Not a default gate.** Attribute and name the scenario; reuse applicable confirmation or ask if applicability remains unresolved |
 
-The review's meta-finding: uniqueness and evidence width are negatively correlated
-— the cross-scenario items are almost all A/B, the single-scenario ones almost all
-C. A C-class tag combined with a `[单场景]` or `[教学场景]` tag is the combination
+A C-class tag combined with a `[单场景]` or `[教学场景]` tag is the combination
 that must never be applied silently.
 
-Three rules that follow:
+Apply these rules:
 
 1. Never quote a C-class item as settled truth, not even in prose that reads decisively.
 2. Never use a `[教学场景]` item as his personal constant — the audience was being taught; he was not choosing.
 3. A `[单场景]` branch must name the scenario it came from, or it becomes untraceable.
 
-Use these as **supplementary axes at Step 3**: apply them after the 13 core axes,
-give the same three-value verdict (`pass` / `fail` / `unknown`), and let their
+Use these as **supplementary axes at Step 3**: apply them after the core axes,
+give the same verdict (`pass` / `fail` / `unknown`), and let their
 verdicts feed Step 4's survivor triage. C-class failures are preference notes, not
 candidate elimination; core failures retain their gate.
 
@@ -99,11 +94,11 @@ ceiling he adds thinking before upgrading tier.
 
 **Use.** Default gate — the selection unit is the scenario, so "the best model" is
 not an admissible answer without a named task shape. Budget sets tier only; it
-never decides whether the work happens (Boundary Quick Reference row 3).
+never decides whether the work happens; see [budget and resources](delegation-contract.md#budget-and-resources).
 Underperformance at a tier → raise the thinking budget at that tier before
 escalating tier.
 
-**Source.** 2026-08-30 workshop line 1365, line 1158; personal curated notes (~2025) (~2025); 2026-05-29 team sharing session line 226.
+**Source.** 2026-08-30 workshop line 1365, line 1158; personal curated notes (~2025); 2026-05-29 team sharing session line 226.
 
 ---
 
@@ -146,8 +141,8 @@ it. Carry it as an unverified hypothesis, not as a settled criterion.
 
 ### 18 · `[教学场景]` `+ his own retro` · `C` — Skill-building criteria: 没它不行 + 会重复 + 你每天在用
 
-Publicly he states two: the agent does the task poorly without it, and the skill's
-run frequency and business value are high. His own retrospective adds a third — it
+He states that the agent does the task poorly without it, and the skill's
+run frequency and business value are high. His own retrospective adds that it
 must be something you use every day, because the optimization loop comes from usage
 frequency.
 
@@ -162,6 +157,8 @@ answered with "write a skill for it."
 
 ---
 
+<a id="probe-stop-loss"></a>
+
 ### 19 · `[教学场景]` · `C` — Two attempts, then stop-loss
 
 Two attempts across models and it still does not work → declare "this can't be
@@ -170,9 +167,8 @@ as an infinite debugging budget.
 
 > 「只要我们想去做某一个事情，要试了两个还都不行的话，那就说明这个事真的干不了。」
 
-**Use.** Teaching scenario, C-class. This skill already adopts it as the Step 2
-termination clause, bounded to **evidence probes**: two attempts across methods per
-candidate, then `unknown`. Do not extend it to abort work already in flight on his
+**Use.** Teaching scenario, C-class. Follow the [Step 2 termination clause](../SKILL.md#step-2--probe-for-evidence),
+bounded to **evidence probes**. Do not extend it to abort work already in flight on his
 behalf — that is the escalation branch ("declared preference + needs his
 confirmation"), not a silent stop.
 
@@ -243,10 +239,10 @@ into a dead end while the docs still claim no auth is needed.
 
 > 「intermittent, never load-bearing」
 
-**Use.** Single scenario, C-class → branch; apply the confirmation rule above. Two mechanical
+**Use.** Single scenario, C-class → branch; apply the confirmation rule above. Mechanical
 rules: (1) a fallback is allowed and must never be the only path; (2) every
 load-bearing claim must name the probe that measured it. Bypass and fallback are
-different acts — see Boundary Quick Reference row 1.
+different acts — see [bypass and fallback](delegation-contract.md#bypass-and-fallback).
 
 **Evidence note.** This sentence comes from a skill audit record (twitter-reader
 v1.2.0 fix log), authored by an agent and adopted by him. Cite it as his
@@ -260,7 +256,7 @@ engineering norm, not as his spoken judgment.
 
 His objection to 1M → 256K is epistemological, not economic: compression is lossy
 and you cannot see what was lost, so a guarantee that was declared silently becomes
-false. The three acceptance properties are 短、完整、精确.
+false. The acceptance properties are 短、完整、精确.
 
 > 「要不要把 100 万降到 256 K？不要，因为我们现在大部分的人，他的业务复杂度已经是 256K 完全承载不了的一个东西了。而如果我们把它降到256K，它就会不停地在压缩，而一旦压缩就会失去了我们一开始说的那个短、完整、精确，因为它一压缩就丢了。」
 > 「如果你获取不到足够的，完整的，精确的，不腐烂的上下文。那么你就没有办法去完整的理解我们的业务背景和我们当前要做的事」
@@ -269,7 +265,7 @@ false. The three acceptance properties are 短、完整、精确.
 proposes trimming context to save budget: surface the epistemological objection (the
 declared property 完整 goes silently false) rather than compressing quietly. This
 skill governs "don't compress during selection"; host auto-compaction is a different
-actor — see Boundary Quick Reference row 4.
+actor — see [selection context and host compaction](delegation-contract.md#selection-context-and-host-compaction).
 
 **Source.** 2026-09-06 client onboarding session (teaching) line 982 (teaching); 2026-09-02 acceptance-mechanism onboarding session line 344 (his own working contract).
 

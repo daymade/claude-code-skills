@@ -66,6 +66,11 @@ For competitor source-carrier/edition binding, claims, citations and existing-pr
 [competitors-analysis](competitors-analysis/SKILL.md) and its
 [citation readback checklist](competitors-analysis/references/analysis_checklist.md#citation-readback-and-counterevidence).
 
+For choosing or reviewing a library, framework, storage, data format, model,
+build-vs-buy or architecture — including 用哪个 / 选什么框架 / 要不要自建 / A 还是 B /
+这个方案行不行 — enter [tech-selection](daymade-claude-code/tech-selection/SKILL.md).
+Follow its full or lightweight route and linked execution owners.
+
 For permission-sensitive fixtures, use its
 [execution-context verification recipe](daymade-skill/skill-creator/references/stateful-script-verification.md#execution-identity-and-permission-fixtures).
 
