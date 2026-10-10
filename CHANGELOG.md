@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **macos-load-doctor** (`daymade-macos` v1.22.4): Resolve the census helper from the loaded Skill directory so diagnosis works from another project. Align the helper's output and comments with the existing lifecycle-based leak criterion; remove list-derived prose counts. Change type: existing-contract repair and lossless deduplication.
+- **macos-load-doctor** (`daymade-macos` v1.22.4): Resolve the census helper from the loaded Skill directory so diagnosis works from another project. Align the helper's output and comments with the existing lifecycle-based leak criterion; retain historical observations without unsupported leak or recovery conclusions and remove derived estimates. Change type: evidence correction, existing-contract repair and lossless deduplication.
 - **peer-message** (v1.20.1): Make discovery/export examples use the loaded Skill's absolute directory; add the existing output-contract route to repository instructions. Change type: factual command correction.
 
 - **skill-creator** (`daymade-skill` v1.67.5): Organize the existing creation, migration, evaluation and publication contracts behind action-time entry routes. Preserve supported workflows and authorization/recovery boundaries. Report missing measurements and incomplete evaluation pairs explicitly instead of substituting zeros or character counts. Change types: behavior-preserving reorganization and measurement repairs.
