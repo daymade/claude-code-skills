@@ -19,11 +19,8 @@ Read each axis's fields:
 An axis never ranks. It returns `pass` / `fail` (named failure mode) / `unknown`
 (needs probe), and `unknown` is not `pass`.
 
-**Scope legend** — read this before treating an axis as a default gate:
-
-- **Cross-scenario** — reproduced in ≥2 independent scenarios. Usable as a default gate.
-- **Single-scenario** — one scenario only. Use as a scoped branch; never let it raise the global standard.
-- **Teaching-scenario** — said while teaching or coaching someone else. He was instructing, not selecting for himself. Cannot be treated as his own selection constant.
+Read the [evidence scope definitions](scoped-criteria.md#how-to-read-this-file)
+before treating an axis as a default gate.
 
 The axes in this file are decision spines and work as default gates. Read
 [scoped criteria](scoped-criteria.md#how-to-read-this-file) for class handling and
