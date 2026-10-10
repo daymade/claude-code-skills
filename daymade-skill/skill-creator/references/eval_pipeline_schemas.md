@@ -9,6 +9,8 @@ This document defines the JSON schemas used by skill-creator's evaluation pipeli
 - **evals.json** — test case definitions (prompts, expected output, assertions)
 - **eval_metadata.json** — per-eval-case prompt/metadata consumed by both the aggregator and the viewer
 - **history.json** — description optimization loop history
+- **Trigger evaluation results** — invocation observations, attempts and incomplete queries
+- **Description loop output** — complete-iteration selection and final nullable best result
 - **grading.json** — per-run assertion results (viewer depends on exact field names)
 - **metrics.json** — per-run quantitative metrics
 - **timing.json** — token/duration data captured from task notifications
@@ -56,7 +58,7 @@ Per-test-case prompt and metadata for one eval directory. Located at `<workspace
 
 **Consumers (which script reads it where):**
 - `scripts/aggregate_benchmark.py` reads it at the eval-directory level only (`eval_dir / "eval_metadata.json"`).
-- `eval-viewer/generate_review.py` probes `<run-dir>/eval_metadata.json`, then `<run-dir>/../eval_metadata.json`, then the eval-directory level, using the first candidate that yields a prompt. The documented paired-pipeline layout needs only the eval-directory copy; a run whose prompt shows `(No prompt found)` got no prompt from any of the three levels (and its `transcript.md` fallback also came up empty).
+- `eval-viewer/generate_review.py` reads assertion targets at the eval-directory level only, matching the aggregator. For display prompts it probes `<run-dir>/eval_metadata.json`, then `<run-dir>/../eval_metadata.json`, then the eval-directory level, using the first candidate that yields a prompt. The documented paired-pipeline layout needs only the eval-directory copy; a run whose prompt shows `(No prompt found)` got no prompt from any of the three levels (and its `transcript.md` fallback also came up empty).
 
 ```json
 {
@@ -71,7 +73,7 @@ Per-test-case prompt and metadata for one eval directory. Located at `<workspace
 - `eval_id`: Integer identifier. When the file or field is missing, the aggregator derives an id from the `eval-<N>` directory name or enumeration order, and the viewer sorts such runs last
 - `eval_name`: Descriptive name for the eval directory and viewer labels
 - `prompt`: The task prompt shown in the viewer
-- `assertions`: List of verifiable statements; may be written empty at run time and filled in while runs are in progress
+- `assertions`: List of nonblank assertion strings; may be written empty at run time and filled in while runs are in progress. Preserve original text and duplicate multiplicity when grading. Treat a missing key or `[]` as unbound preparation/legacy data; reject present null, scalar/object values or invalid list items. Keep display-only run/config metadata separate from this canonical target.
 
 ---
 
@@ -119,6 +121,85 @@ Tracks version progression in Improve mode. Located at workspace root.
 - `iterations[].expectation_pass_rate`: Pass rate from grading
 - `iterations[].grading_result`: "baseline", "won", "lost", or "tie"
 - `iterations[].is_current_best`: Whether this is the current best version
+
+---
+
+## Trigger evaluation results
+
+Read the JSON returned by `scripts/run_eval.py` or printed by its CLI on stdout.
+Keep it separate from output grading and generic version history.
+Consume its query results in `scripts/run_loop.py` and
+`scripts/improve_description.py` without imputing failed probes as false.
+
+```json
+{
+  "skill_name": "example-skill",
+  "description": "Description under evaluation",
+  "results": [
+    {
+      "query": "An unrelated task",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "errors": 1,
+      "attempted_runs": 2,
+      "attempts": [
+        {"run_index": 0, "triggered": false, "error": null},
+        {"run_index": 1, "triggered": null, "error": "Probe failed before observation"}
+      ],
+      "pass": null
+    }
+  ],
+  "error_count": 1,
+  "summary": {"total": 1, "passed": 0, "failed": 0, "incomplete": 1}
+}
+```
+
+- `results[].runs`: Count valid Boolean invocation observations, including false.
+- `results[].attempted_runs`: Count all attempts, including probe exceptions.
+- `results[].triggers`: Count true observations; calculate `trigger_rate` over
+  `runs` only. Preserve a real zero; use null when no Boolean was observed.
+- `results[].errors`: Count exceptions; retain the diagnostic in the matching
+  attempt. Do not interpret it as an observed non-invocation.
+- `results[].attempts`: Retain every attempt sorted by zero-based `run_index`,
+  with Boolean-or-null `triggered` and string-or-null `error`.
+- `results[].pass`: Use Boolean only when the query has complete measurements;
+  use null for any exception or zero observations, even when observed negatives
+  alone meet the trigger threshold.
+- `error_count`: Count exceptions across queries. Partition `summary.total` into
+  `passed`, `failed` and `incomplete` using true, false and null query verdicts.
+
+Treat an exact committed target tool call as invocation selection, not successful
+loading or task completion. A later tool failure does not erase that selection.
+Keep the measurement's invocation meaning separate from output correctness.
+
+---
+
+## Description loop output
+
+Read the final JSON returned by `scripts/run_loop.py` and its `history` array.
+Read CLI output on stdout, or `<results-dir>/<timestamp>/results.json` when
+`--results-dir` is supplied.
+Retain each iteration's `train_results` and optional `test_results` in the trigger
+result shape above. Keep `train_passed`, `train_failed`, `train_total` and
+`train_incomplete`; retain the corresponding `test_*` fields, using null when no
+holdout is configured. Count unknown or errored queries as incomplete.
+
+Select `best_iteration` only among nonempty train iterations with zero train and
+test incompleteness. Select by holdout passes when a holdout exists, otherwise by
+train passes. Use null for every final `best_*` field when no complete iteration
+exists: `best_description`, `best_iteration`, `best_score`, `best_train_score` and
+`best_test_score`. Preserve `original_description`, `final_description` and
+`iterations_run` without calling the last attempted description a verified winner.
+
+Stop with `exit_reason` beginning `measurement_incomplete` when measurement
+coverage prevents improvement or successful termination; retain the existing
+first-iteration `infra_error` and `degenerate_harness` diagnostic exits when those
+more specific conditions fire first. Refuse incomplete measurements in
+`scripts/improve_description.py` rather than sending them to the improvement
+model. Keep a live report's in-progress score placeholder separate from the final
+nullable best-result contract.
 
 ---
 
@@ -208,8 +289,19 @@ Output from the grader agent. Located at `<run-dir>/grading.json`.
 Recompute `passed`, `failed` and `total` from the non-empty expectations.
 Supply boolean verdicts and non-empty `text`/`evidence` strings. Keep `pass_rate`
 within 0–1 and equal to `passed/total` (two-decimal rounding is accepted).
-The aggregator treats missing, malformed, empty or inconsistent grades as unknown;
-it retains their run directories and withholds comparison deltas.
+Use `scripts/grading_validation.py` in both the aggregator and the standalone viewer.
+Bind a nonempty canonical assertion list to the grade's original texts with exact
+multiplicity-aware matching; allow reordered results, but reject missing, extra,
+replaced or other-case assertions. Return no numeric summary for an invalid target
+or mismatch. Treat missing, malformed, empty or inconsistent grades as unknown;
+retain their run directories and actual cost observations, and withhold comparison
+deltas under the existing pairing/grading gate.
+
+Carry `grading_status`, `assertion_binding` and issues into viewer runs even without
+a benchmark. Render only the builder's accepted grade; prioritize its current
+invalid/missing status over a stale benchmark. Preserve numeric legacy observations
+with a visible unbound label. Assertion binding validates the measured target, not
+the truth of its evidence or whole-task success.
 
 ---
 
@@ -384,6 +476,7 @@ run metrics and empty statistical aggregates, not zero. The aggregator adds:
 
 - `runs[].run_id`: Observed run directory relative to the benchmark root.
 - `runs[].grading_status`: `graded`, `missing_grading` or `invalid_grading`.
+- `runs[].assertion_binding`: `bound`, `unbound`, `mismatch` or `invalid_expected`. Preserve healthy unbound legacy numbers; do not describe numeric completeness as verified canonical assertion coverage.
 - `runs[].issues`: Missing/invalid input diagnoses; retain these when interpreting results.
 - `runs[].metric_sources` / `metric_scopes`: Source fields and boundaries for
   `time_seconds` and `tokens`; use null when the value is unknown.

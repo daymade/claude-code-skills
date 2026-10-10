@@ -104,15 +104,19 @@ def run_loop(
         train_result_list = [r for r in all_results["results"] if r["query"] in train_queries_set]
         test_result_list = [r for r in all_results["results"] if r["query"] not in train_queries_set]
 
-        train_passed = sum(1 for r in train_result_list if r["pass"])
+        train_passed = sum(1 for r in train_result_list if r["pass"] is True)
+        train_failed = sum(1 for r in train_result_list if r["pass"] is False)
+        train_incomplete = sum(1 for r in train_result_list if r["pass"] is None or r.get("errors", 0))
         train_total = len(train_result_list)
-        train_summary = {"passed": train_passed, "failed": train_total - train_passed, "total": train_total}
+        train_summary = {"passed": train_passed, "failed": train_failed, "incomplete": train_incomplete, "total": train_total}
         train_results = {"results": train_result_list, "summary": train_summary}
 
         if test_set:
-            test_passed = sum(1 for r in test_result_list if r["pass"])
+            test_passed = sum(1 for r in test_result_list if r["pass"] is True)
+            test_failed = sum(1 for r in test_result_list if r["pass"] is False)
+            test_incomplete = sum(1 for r in test_result_list if r["pass"] is None or r.get("errors", 0))
             test_total = len(test_result_list)
-            test_summary = {"passed": test_passed, "failed": test_total - test_passed, "total": test_total}
+            test_summary = {"passed": test_passed, "failed": test_failed, "incomplete": test_incomplete, "total": test_total}
             test_results = {"results": test_result_list, "summary": test_summary}
         else:
             test_results = None
@@ -124,10 +128,12 @@ def run_loop(
             "train_passed": train_summary["passed"],
             "train_failed": train_summary["failed"],
             "train_total": train_summary["total"],
+            "train_incomplete": train_summary["incomplete"],
             "train_results": train_results["results"],
             "test_passed": test_summary["passed"] if test_summary else None,
             "test_failed": test_summary["failed"] if test_summary else None,
             "test_total": test_summary["total"] if test_summary else None,
+            "test_incomplete": test_summary["incomplete"] if test_summary else None,
             "test_results": test_results["results"] if test_results else None,
             # For backward compat with report generator
             "passed": train_summary["passed"],
@@ -138,9 +144,13 @@ def run_loop(
 
         # Write live report if path provided
         if live_report_path:
+            complete_history = [h for h in history if h["train_total"] > 0
+                                and not h["train_incomplete"] and not h["test_incomplete"]]
+            live_best = max(complete_history, key=lambda h: h["test_passed"] if test_set else h["train_passed"]) if complete_history else None
             partial_output = {
                 "original_description": original_description,
-                "best_description": current_description,
+                "best_description": live_best["description"] if live_best else None,
+                "best_iteration": live_best["iteration"] if live_best else None,
                 "best_score": "in progress",
                 "iterations_run": len(history),
                 "holdout": holdout,
@@ -166,7 +176,7 @@ def run_loop(
                 accuracy = (tp + tn) / total if total > 0 else 0.0
                 print(f"{label}: {tp+tn}/{total} correct, precision={precision:.0%} recall={recall:.0%} accuracy={accuracy:.0%} ({elapsed:.1f}s)", file=sys.stderr)
                 for r in results:
-                    status = "PASS" if r["pass"] else "FAIL"
+                    status = "INCOMPLETE" if r["pass"] is None else ("PASS" if r["pass"] else "FAIL")
                     rate_str = f"{r['triggers']}/{r['runs']}"
                     print(f"  [{status}] rate={rate_str} expected={r['should_trigger']}: {r['query'][:60]}", file=sys.stderr)
 
@@ -202,7 +212,7 @@ def run_loop(
                 # ratio in the message: 1 error alongside many clean 0-trigger
                 # runs may mean BOTH causes are worth checking, not just infra.
                 exit_reason = (
-                    f"infra_error: {total_errors}/{total_pos_runs + sum(r['runs'] for r in negative_results)} "
+                    f"infra_error: {total_errors}/{sum(r.get('attempted_runs', r['runs']) for r in all_iter1_results)} "
                     "query runs raised an exception on iteration 1 (see stderr for 'Warning: "
                     "query failed') and zero should-trigger queries triggered. This is not "
                     "necessarily a description problem — fix the execution environment "
@@ -213,7 +223,8 @@ def run_loop(
                     print(f"\n{exit_reason}", file=sys.stderr)
                 break
 
-            if positive_results and total_pos_triggers == 0 and total_neg_triggers == 0:
+            if (positive_results and total_pos_triggers == 0 and total_neg_triggers == 0
+                    and all(r["runs"] > 0 and r["pass"] is not None for r in all_iter1_results)):
                 # Nothing fired for ANY query, positive or negative, AND every one
                 # of those runs actually executed (the branch above already ruled
                 # out errors) — the probe genuinely measures nothing (this is what
@@ -232,6 +243,16 @@ def run_loop(
                 if verbose:
                     print(f"\n{exit_reason}", file=sys.stderr)
                 break
+
+        incomplete = train_summary["incomplete"] + (test_summary["incomplete"] if test_summary else 0)
+        if incomplete or not all_results["results"]:
+            exit_reason = (
+                f"measurement_incomplete: {incomplete} queries lack complete measurements "
+                f"on iteration {iteration}; fix probe errors before description improvement."
+            )
+            if verbose:
+                print(f"\n{exit_reason}", file=sys.stderr)
+            break
 
         if train_summary["failed"] == 0:
             exit_reason = f"all_passed (iteration {iteration})"
@@ -272,25 +293,26 @@ def run_loop(
 
         current_description = new_description
 
-    # Find the best iteration by TEST score (or train if no test set)
-    if test_set:
-        best = max(history, key=lambda h: h["test_passed"] or 0)
-        best_score = f"{best['test_passed']}/{best['test_total']}"
-    else:
-        best = max(history, key=lambda h: h["train_passed"])
-        best_score = f"{best['train_passed']}/{best['train_total']}"
+    # Only complete iterations are eligible; missing observations are not
+    # evidence for a winning description, even when all observed negatives pass.
+    eligible = [h for h in history if h["train_total"] > 0
+                and not h["train_incomplete"] and not h["test_incomplete"]]
+    best = max(eligible, key=lambda h: h["test_passed"] if test_set else h["train_passed"]) if eligible else None
+    best_score = (f"{best['test_passed']}/{best['test_total']}" if test_set
+                  else f"{best['train_passed']}/{best['train_total']}") if best else None
 
     if verbose:
         print(f"\nExit reason: {exit_reason}", file=sys.stderr)
-        print(f"Best score: {best_score} (iteration {best['iteration']})", file=sys.stderr)
+        print(f"Best score: {best_score or 'unavailable'}", file=sys.stderr)
 
     return {
         "exit_reason": exit_reason,
         "original_description": original_description,
-        "best_description": best["description"],
+        "best_description": best["description"] if best else None,
+        "best_iteration": best["iteration"] if best else None,
         "best_score": best_score,
-        "best_train_score": f"{best['train_passed']}/{best['train_total']}",
-        "best_test_score": f"{best['test_passed']}/{best['test_total']}" if test_set else None,
+        "best_train_score": f"{best['train_passed']}/{best['train_total']}" if best else None,
+        "best_test_score": f"{best['test_passed']}/{best['test_total']}" if best and test_set else None,
         "final_description": current_description,
         "iterations_run": len(history),
         "holdout": holdout,

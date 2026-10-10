@@ -859,24 +859,23 @@
       const section = document.getElementById("grades-section");
       const content = document.getElementById("grades-content");
 
-      if (!run.grading) {
-        section.style.display = "none";
-        return;
-      }
-
-      const grading = run.grading;
       section.style.display = "block";
-      // Reset to collapsed
       content.classList.remove("open");
       document.getElementById("grades-arrow").classList.remove("open");
       const measured = ((EMBEDDED_DATA.benchmark || {}).runs || []).find(r =>
         r.run_id && r.run_id.replaceAll("/", "-") === run.id);
-      if (measured && measured.grading_status && measured.grading_status !== "graded") {
+      // Only build_run's accepted grade is a numeric observation. A stale
+      // benchmark cannot rehabilitate a currently invalid or missing receipt.
+      const status = run.grading_status || "unknown";
+      const rejected = status !== "graded" ? status :
+        measured && measured.grading_status && measured.grading_status !== "graded"
+          ? measured.grading_status : null;
+      if (rejected || !run.grading) {
         content.innerHTML = '<div style="padding: 1rem;">Grading unknown: ' +
-          escapeHtml(measured.grading_status) + '</div>';
+          escapeHtml(rejected || "invalid_grading") + '</div>';
         return;
       }
-
+      const grading = run.grading;
       const summary = grading.summary || {};
       const expectations = grading.expectations || [];
 
@@ -891,6 +890,9 @@
       html += '<span class="grade-badge ' + badgeClass + '">' + passRate + '</span>';
       html += '<span>' + (summary.passed ?? "unknown") + ' passed, ' + (summary.failed ?? "unknown") + ' failed of ' + (summary.total ?? "unknown") + '</span>';
       html += '</div>';
+      if (run.assertion_binding === "unbound") {
+        html += '<div>Unbound assertions: legacy or preparation observation</div>';
+      }
 
       // Assertions list
       html += '<ul class="assertion-list">';
@@ -1147,6 +1149,12 @@
         html += "<p>Observed attempts: " + escapeHtml(JSON.stringify(metadata.attempts_per_configuration)) + "</p>";
       }
       html += "<p>Comparison: " + escapeHtml(comparison.status || "legacy; pairing not recorded") + "</p>";
+
+      const unbound = (data.runs || []).filter(r => r.assertion_binding === "unbound").length;
+      if (unbound) {
+        html += "<p>Unbound assertions: " + unbound +
+          " attempt(s); numeric legacy/preparation observations are not canonical assertion coverage.</p>";
+      }
 
       // Summary table
       html += '<table class="benchmark-table">';

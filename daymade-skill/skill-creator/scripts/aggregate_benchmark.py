@@ -43,6 +43,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
+# Resolve the bundled validator independently of the caller's cwd/PYTHONPATH.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from scripts.grading_validation import ASSERTIONS_ABSENT, validate_grading
+
+
 METRICS = ("pass_rate", "time_seconds", "tokens")
 
 
@@ -76,33 +81,6 @@ def _read_object(path: Path, issues: list[str]) -> dict | None:
     except (OSError, ValueError) as exc:
         issues.append(f"{path.name}: {exc}")
         return None
-
-
-def _summary(grading: dict, issues: list[str]) -> dict | None:
-    summary = grading.get("summary")
-    expectations = grading.get("expectations")
-    if not isinstance(summary, dict) or not isinstance(expectations, list) or not expectations:
-        issues.append("grading requires a summary and non-empty expectations")
-        return None
-    if any(not isinstance(exp, dict) or not isinstance(exp.get("passed"), bool)
-           or not isinstance(exp.get("text"), str) or not exp["text"].strip()
-           or not isinstance(exp.get("evidence"), str) or not exp["evidence"].strip()
-           for exp in expectations):
-        issues.append("expectations require text, boolean passed and evidence")
-        return None
-    passed = sum(exp["passed"] for exp in expectations)
-    total = len(expectations)
-    counts = {"passed": passed, "failed": total - passed, "total": total}
-    if any(not _number(summary.get(k), integer=True) or summary[k] != v
-           for k, v in counts.items()):
-        issues.append("summary counts disagree with expectations")
-        return None
-    rate = summary.get("pass_rate")
-    # Preserve healthy historical summaries rounded to two decimal places.
-    if not _number(rate) or rate > 1 or abs(rate - passed / total) > 0.005001:
-        issues.append("summary pass_rate disagrees with expectations")
-        return None
-    return {**counts, "pass_rate": rate}
 
 
 def _measurement(sources: list[tuple[str, dict]], field: str,
@@ -149,7 +127,12 @@ def load_run_results(benchmark_dir: Path) -> dict:
         if not eval_dir.is_dir():
             continue
         eval_issues: list[str] = []
-        metadata = _read_object(eval_dir / "eval_metadata.json", eval_issues) or {}
+        metadata_path = eval_dir / "eval_metadata.json"
+        metadata_data = _read_object(metadata_path, eval_issues)
+        metadata = metadata_data or {}
+        assertions = (metadata_data.get("assertions", ASSERTIONS_ABSENT)
+                      if metadata_data is not None else
+                      None if metadata_path.exists() else ASSERTIONS_ABSENT)
         match = re.fullmatch(r"eval-(\d+)", eval_dir.name)
         fallback_id = int(match[1]) if match else eval_idx
         eval_id = metadata.get("eval_id", fallback_id)
@@ -169,7 +152,9 @@ def load_run_results(benchmark_dir: Path) -> dict:
                     issues.append("invalid run directory number")
                 grading_file = run_dir / "grading.json"
                 grading = _read_object(grading_file, issues)
-                summary = _summary(grading, issues) if grading is not None else None
+                validated = validate_grading(grading, assertions=assertions)
+                issues.extend(validated.issues)
+                summary = validated.summary
                 status = ("graded" if summary is not None else
                           "invalid_grading" if grading_file.exists() else "missing_grading")
                 if status == "missing_grading":
@@ -193,14 +178,14 @@ def load_run_results(benchmark_dir: Path) -> dict:
                     "run_number": run_number,
                     "run_id": run_dir.relative_to(benchmark_dir).as_posix(),
                     "grading_status": status,
+                    "assertion_binding": validated.assertion_binding,
                     "identity_valid": not eval_issues and run_number is not None,
                     **{key: summary[key] if summary else None
                        for key in ("pass_rate", "passed", "failed", "total")},
                     "time_seconds": seconds, "tokens": tokens,
                     "metric_sources": {"time_seconds": time_source, "tokens": token_source},
                     "metric_scopes": {"time_seconds": time_scope, "tokens": token_scope},
-                    "expectations": [{key: exp[key] for key in ("text", "passed", "evidence")}
-                                     for exp in grading["expectations"]] if summary else [],
+                    "expectations": validated.expectations,
                     "issues": issues,
                     "notes": [],
                 }
@@ -316,7 +301,8 @@ def generate_benchmark(benchmark_dir: Path, skill_name: str = "", skill_path: st
             counts[run["eval_id"]][config] += 1
             runs.append({
                 **{key: run[key] for key in ("eval_id", "eval_name", "run_number", "run_id",
-                                            "grading_status", "metric_sources", "metric_scopes",
+                                            "grading_status", "assertion_binding", "metric_sources",
+                                            "metric_scopes",
                                             "issues", "expectations", "notes")},
                 "configuration": config,
                 "result": {key: run[key] for key in (*METRICS, "passed", "failed", "total",
@@ -381,6 +367,10 @@ def generate_markdown(benchmark: dict) -> str:
         delta = summary.get("delta", {}).get(metric) if comparison else None
         lines.append("| " + label + " | " + " | ".join(stats) + " | "
                      + (delta if delta is not None else "unknown") + " |")
+    unbound = sum(run.get("assertion_binding") == "unbound"
+                  for run in benchmark.get("runs", []))
+    if unbound:
+        lines.extend(["", f"**Unbound assertions**: {unbound} attempt(s); numeric legacy/preparation observations are not canonical assertion coverage."])
     issues = comparison.get("issues", [])
     if issues or benchmark.get("notes"):
         lines.extend(["", "## Notes", ""])

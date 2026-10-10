@@ -200,3 +200,75 @@ def test_report_does_not_crash_when_holdout_zero_disables_test_split():
     assert output["exit_reason"].startswith("degenerate_harness")
     html = generate_html(output, skill_name="fake-skill")  # must not raise
     assert "Loop aborted early" in html
+
+
+def _unknown_eval(eval_set, **kwargs):
+    results = [{"query": item["query"], "should_trigger": item["should_trigger"],
+                "pass": None, "triggers": 0, "runs": 0, "attempted_runs": 3,
+                "errors": 3, "trigger_rate": None,
+                "attempts": [{"run_index": 0, "triggered": None, "error": "synthetic <failure>"}]}
+               for item in eval_set]
+    return {"results": results, "error_count": 3 * len(results),
+            "summary": {"passed": 0, "failed": 0, "incomplete": len(results), "total": len(results)}}
+
+
+def test_unknown_measurements_are_not_best_or_all_passed():
+    output, calls = _run(_unknown_eval, holdout=0, expect_improve_calls=0)
+    assert output["exit_reason"].startswith("infra_error")
+    assert "15/15" in output["exit_reason"]
+    assert output["best_description"] is None
+    assert output["best_score"] is None
+    assert output["best_iteration"] is None
+    html = generate_html(output)
+    assert "INCOMPLETE (3 errors)" in html
+    assert "synthetic &lt;failure&gt;" in html
+    assert '<tr class="best-row">' not in html
+    assert "Unavailable: no complete measurement" in html
+
+
+def test_all_negative_unknowns_stop_without_improvement():
+    with patch.object(rl, "run_eval", _unknown_eval), \
+         patch.object(rl, "improve_description", lambda **kw: (_ for _ in ()).throw(AssertionError("unknown is no gradient"))), \
+         patch.object(rl, "find_project_root", lambda: Path(".")), \
+         patch.object(rl, "parse_skill_md", lambda p: ("synthetic", "original", "body")):
+        output = rl.run_loop([{"query":"negative","should_trigger":False}], Path("."), None,
+                             1, 1, 3, 3, .5, 0, "synthetic-model", False)
+    assert output["exit_reason"].startswith("measurement_incomplete")
+    assert output["best_description"] is None
+
+
+def test_later_unknown_iteration_cannot_replace_complete_best():
+    first = _fake_run_eval(pos_triggers=1)
+    count = 0
+    def evaluate(*args, **kwargs):
+        nonlocal count
+        count += 1
+        return first(*args, **kwargs) if count == 1 else _unknown_eval(kwargs["eval_set"])
+    output, calls = _run(evaluate, max_iterations=3, expect_improve_calls=1)
+    assert output["exit_reason"].startswith("measurement_incomplete")
+    assert output["iterations_run"] == 2
+    assert output["best_iteration"] == 1
+    assert output["best_description"] == "original description"
+
+
+def test_partial_positive_signal_with_errors_is_not_description_gradient():
+    base = _fake_run_eval(pos_triggers=1)
+    def partial(*args, **kwargs):
+        output = base(*args, **kwargs)
+        output["results"][0].update({"pass":None,"errors":1,"attempted_runs":3})
+        return output
+    output, calls = _run(partial, expect_improve_calls=0)
+    assert output["exit_reason"].startswith("measurement_incomplete")
+    assert output["best_description"] is None
+
+
+def test_live_report_does_not_advertise_unmeasured_best(tmp_path):
+    report = tmp_path / "live.html"
+    with patch.object(rl, "run_eval", _unknown_eval), \
+         patch.object(rl, "find_project_root", lambda: Path(".")), \
+         patch.object(rl, "parse_skill_md", lambda p: ("synthetic", "original", "body")):
+        output = rl.run_loop(EVAL_SET, Path("."), None, 1, 1, 3, 3, .5, 0,
+                             "synthetic-model", False, live_report_path=report)
+    assert output["best_description"] is None
+    assert "Unavailable: no complete measurement" in report.read_text()
+    assert '<tr class="best-row">' not in report.read_text()

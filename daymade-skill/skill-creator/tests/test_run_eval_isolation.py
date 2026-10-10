@@ -31,10 +31,8 @@ import pytest
 
 from scripts.run_eval import run_single_query
 
-# A single stream-json "result" event is the earliest thing run_single_query()
-# accepts as a terminal, non-triggering signal (see the `elif event.get("type")
-# == "result": return triggered` branch) — cheapest possible fake response.
-_FAKE_RESULT_LINE = json.dumps({"type": "result"})
+# Accept a negative observation only after success result, EOF and exit zero.
+_FAKE_RESULT_LINE = json.dumps({"type": "result", "subtype": "success"})
 
 
 def _install_fake_claude(bin_dir: Path, on_invoke_dir_file: Path) -> None:
@@ -54,7 +52,7 @@ def _install_fake_claude(bin_dir: Path, on_invoke_dir_file: Path) -> None:
         commands_dir = Path(cwd) / ".claude" / "commands"
         names = sorted(p.name for p in commands_dir.glob("*.md")) if commands_dir.is_dir() else []
         Path({str(on_invoke_dir_file)!r}).write_text(json.dumps({{"cwd": cwd, "command_files": names}}))
-        print(json.dumps({{"type": "result"}}))
+        print(json.dumps({{"type": "result", "subtype": "success"}}))
         """)
     fake_claude.write_text(script)
     fake_claude.chmod(fake_claude.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)

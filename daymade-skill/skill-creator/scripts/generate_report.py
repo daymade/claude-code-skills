@@ -122,6 +122,7 @@ def generate_html(data: dict, auto_refresh: bool = False, skill_name: str = "") 
         }
         .pass { color: #788c5d; }
         .fail { color: #c44; }
+        .incomplete { color: #d97706; }
         .rate {
             font-size: 9px;
             color: #b0aea5;
@@ -157,8 +158,8 @@ def generate_html(data: dict, auto_refresh: bool = False, skill_name: str = "") 
 <body>
     <h1>""" + title_prefix + """Skill Description Optimization</h1>
 """ + (f"""    <div class="abort-banner">⚠ Loop aborted early — {html.escape(str(data.get('exit_reason', '')))}</div>
-""" if str(data.get('exit_reason', '')).startswith(('degenerate_harness', 'infra_error')) else "") + """    <div class="explainer">
-        <strong>Optimizing your skill's description.</strong> This page updates automatically as Claude tests different versions of your skill's description. Each row is an iteration — a new description attempt. The columns show test queries: green checkmarks mean the skill triggered correctly (or correctly didn't trigger), red crosses mean it got it wrong. The "Train" score shows performance on queries used to improve the description; the "Test" score shows performance on held-out queries the optimizer hasn't seen. When it's done, Claude will apply the best-performing description to your skill.
+""" if str(data.get('exit_reason', '')).startswith(('degenerate_harness', 'infra_error', 'measurement_incomplete')) else "") + """    <div class="explainer">
+        <strong>Optimizing your skill's description.</strong> This page updates automatically as Claude tests different versions of your skill's description. Each row is an iteration — a new description attempt. The columns show test queries: green checkmarks mean the skill triggered correctly (or correctly didn't trigger), red crosses mean a measured mismatch, and question marks mean incomplete execution. Invocation checks do not prove tool or task success. The "Train" score shows performance on queries used to improve the description; the "Test" score shows performance on held-out queries the optimizer hasn't seen. Use a complete, accepted measurement before applying a selected description to your skill.
     </div>
 """]
 
@@ -168,8 +169,8 @@ def generate_html(data: dict, auto_refresh: bool = False, skill_name: str = "") 
     html_parts.append(f"""
     <div class="summary">
         <p><strong>Original:</strong> {html.escape(data.get('original_description', 'N/A'))}</p>
-        <p class="best"><strong>Best:</strong> {html.escape(data.get('best_description', 'N/A'))}</p>
-        <p><strong>Best Score:</strong> {data.get('best_score', 'N/A')} {'(test)' if best_test_score else '(train)'}</p>
+        <p class="best"><strong>Best:</strong> {html.escape(data.get('best_description') or 'Unavailable: no complete measurement')}</p>
+        <p><strong>Best Score:</strong> {html.escape(str(data.get('best_score') or 'Unavailable'))} {'(test)' if best_test_score else '(train)'}</p>
         <p><strong>Iterations:</strong> {data.get('iterations_run', 0)} | <strong>Train:</strong> {data.get('train_size', '?')} | <strong>Test:</strong> {data.get('test_size', '?')}</p>
     </div>
 """)
@@ -212,11 +213,31 @@ def generate_html(data: dict, auto_refresh: bool = False, skill_name: str = "") 
         <tbody>
 """)
 
-    # Find best iteration for highlighting
-    if test_queries:
-        best_iter = max(history, key=lambda h: h.get("test_passed") or 0).get("iteration")
+    # Match loop eligibility, including older reports without explicit counts.
+    eligible = [h for h in history if (h.get("train_results", h.get("results", [])))
+                and not any(r.get("pass") is None or r.get("errors", 0)
+                            for r in (h.get("train_results", h.get("results", []))
+                                      + (h.get("test_results") or [])))]
+    if "best_iteration" in data:
+        best_iter = data["best_iteration"]
+    elif eligible:
+        best_iter = max(eligible, key=lambda h: (h.get("test_passed") or 0) if test_queries
+                        else h.get("train_passed", h.get("passed", 0))).get("iteration")
     else:
-        best_iter = max(history, key=lambda h: h.get("train_passed", h.get("passed", 0))).get("iteration")
+        best_iter = None
+
+    def result_cell(result, test=False):
+        did_pass = result.get("pass")
+        incomplete = did_pass is None or result.get("errors", 0)
+        icon = "?" if incomplete else ("✓" if did_pass is True else "✗")
+        css_class = "incomplete" if incomplete else ("pass" if did_pass is True else "fail")
+        rate = f"{result.get('triggers', 0)}/{result.get('runs', 0)} observed"
+        if incomplete:
+            rate += f"; INCOMPLETE ({result.get('errors', 0)} errors)"
+        diagnostics = "; ".join(str(a["error"]) for a in result.get("attempts", []) if a.get("error"))
+        extra = " test-result" if test else ""
+        return (f'<td class="result{extra} {css_class}" title="{html.escape(diagnostics, quote=True)}">'
+                f'{icon}<span class="rate">{html.escape(rate)}</span></td>\n')
 
     # Add rows for each iteration
     for h in history:
@@ -268,38 +289,27 @@ def generate_html(data: dict, auto_refresh: bool = False, skill_name: str = "") 
         train_class = score_class(train_correct, train_runs)
         test_class = score_class(test_correct, test_runs)
 
+        train_incomplete = sum(1 for r in train_results if r.get("pass") is None or r.get("errors", 0))
+        test_incomplete = sum(1 for r in test_results if r.get("pass") is None or r.get("errors", 0))
+        train_label = f"{train_correct}/{train_runs}" + (f" observed; {train_incomplete} incomplete" if train_incomplete else "")
+        test_label = f"{test_correct}/{test_runs}" + (f" observed; {test_incomplete} incomplete" if test_incomplete else "")
+        if train_incomplete:
+            train_class = "score-ok"
+        if test_incomplete:
+            test_class = "score-ok"
         row_class = "best-row" if iteration == best_iter else ""
 
         html_parts.append(f"""            <tr class="{row_class}">
                 <td>{iteration}</td>
-                <td><span class="score {train_class}">{train_correct}/{train_runs}</span></td>
-                <td><span class="score {test_class}">{test_correct}/{test_runs}</span></td>
+                <td><span class="score {train_class}">{train_label}</span></td>
+                <td><span class="score {test_class}">{test_label}</span></td>
                 <td class="description">{html.escape(description)}</td>
 """)
 
-        # Add result for each train query
         for qinfo in train_queries:
-            r = train_by_query.get(qinfo["query"], {})
-            did_pass = r.get("pass", False)
-            triggers = r.get("triggers", 0)
-            runs = r.get("runs", 0)
-
-            icon = "✓" if did_pass else "✗"
-            css_class = "pass" if did_pass else "fail"
-
-            html_parts.append(f'                <td class="result {css_class}">{icon}<span class="rate">{triggers}/{runs}</span></td>\n')
-
-        # Add result for each test query (with different background)
+            html_parts.append(result_cell(train_by_query.get(qinfo["query"], {})))
         for qinfo in test_queries:
-            r = test_by_query.get(qinfo["query"], {})
-            did_pass = r.get("pass", False)
-            triggers = r.get("triggers", 0)
-            runs = r.get("runs", 0)
-
-            icon = "✓" if did_pass else "✗"
-            css_class = "pass" if did_pass else "fail"
-
-            html_parts.append(f'                <td class="result test-result {css_class}">{icon}<span class="rate">{triggers}/{runs}</span></td>\n')
+            html_parts.append(result_cell(test_by_query.get(qinfo["query"], {}), test=True))
 
         html_parts.append("            </tr>\n")
 

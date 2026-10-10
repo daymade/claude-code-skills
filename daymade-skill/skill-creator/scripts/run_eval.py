@@ -6,6 +6,7 @@ for a set of queries. Outputs results as JSON.
 """
 
 import argparse
+import codecs
 import json
 import os
 import select
@@ -57,8 +58,10 @@ def run_single_query(
     `project_root` is accepted for backward compatibility with existing callers
     and tests but is intentionally unused here now that probes are self-contained.
     Uses --include-partial-messages to detect triggering early from
-    stream events (content_block_start) rather than waiting for the
-    full assistant message, which only arrives after tool execution.
+    complete tool-input blocks rather than waiting for the full assistant
+    message, which only arrives after tool execution. True proves invocation
+    only; False requires a successful result, complete EOF and exit code zero.
+    Raise on incomplete or failed measurements with a bounded stderr diagnostic.
     """
     unique_id = uuid.uuid4().hex[:8]
     clean_name = f"{skill_name}-skill-{unique_id}"
@@ -95,100 +98,154 @@ def run_single_query(
         # programmatic subprocess usage is safe.
         env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
 
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            cwd=probe_dir,
-            env=env,
-        )
+        # A file cannot fill a stderr pipe and deadlock the child. Read its
+        # bounded tail on failure, after cleaning up only this probe's child.
+        with tempfile.TemporaryFile() as stderr_file:
+            process = None
+            try:
+                process = subprocess.Popen(
+                    cmd, stdout=subprocess.PIPE, stderr=stderr_file,
+                    cwd=probe_dir, env=env,
+                )
+                deadline = time.monotonic() + timeout
+                decoder = codecs.getincrementaldecoder("utf-8")()
+                buffer = ""
+                pending = {}
+                protocol_errors = []
+                success_result = False
+                eof = False
 
-        triggered = False
-        start_time = time.time()
-        buffer = ""
-        # Track state for stream event detection
-        pending_tool_name = None
-        accumulated_json = ""
+                def matches(tool_name, tool_input):
+                    if not isinstance(tool_name, str) or not isinstance(tool_input, dict):
+                        raise ValueError("tool name/input has invalid type")
+                    if tool_name == "Skill":
+                        if not isinstance(tool_input.get("skill"), str):
+                            raise ValueError("Skill input has no string skill identity")
+                        return tool_input["skill"] == clean_name
+                    if tool_name == "Read":
+                        path = tool_input.get("file_path")
+                        if not isinstance(path, str) or not path:
+                            raise ValueError("Read input has no string file_path identity")
+                        if path:
+                            candidate = Path(path)
+                            if not candidate.is_absolute():
+                                candidate = probe_dir / candidate
+                            return candidate.resolve() == command_file.resolve()
+                    return False
 
-        try:
-            while time.time() - start_time < timeout:
-                if process.poll() is not None:
-                    remaining = process.stdout.read()
-                    if remaining:
-                        buffer += remaining.decode("utf-8", errors="replace")
-                    break
-
-                ready, _, _ = select.select([process.stdout], [], [], 1.0)
-                if not ready:
-                    continue
-
-                chunk = os.read(process.stdout.fileno(), 8192)
-                if not chunk:
-                    break
-                buffer += chunk.decode("utf-8", errors="replace")
-
-                while "\n" in buffer:
-                    line, buffer = buffer.split("\n", 1)
-                    line = line.strip()
-                    if not line:
-                        continue
-
+                def consume(line):
+                    nonlocal success_result
+                    if not line.strip():
+                        return False
                     try:
                         event = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-
-                    # Early detection via stream events
-                    if event.get("type") == "stream_event":
-                        se = event.get("event", {})
-                        se_type = se.get("type", "")
-
-                        if se_type == "content_block_start":
-                            cb = se.get("content_block", {})
-                            if cb.get("type") == "tool_use":
-                                tool_name = cb.get("name", "")
-                                if tool_name in ("Skill", "Read"):
-                                    pending_tool_name = tool_name
-                                    accumulated_json = ""
-                                else:
-                                    return False
-
-                        elif se_type == "content_block_delta" and pending_tool_name:
-                            delta = se.get("delta", {})
-                            if delta.get("type") == "input_json_delta":
-                                accumulated_json += delta.get("partial_json", "")
-                                if clean_name in accumulated_json:
+                        if not isinstance(event, dict):
+                            raise ValueError("stream record is not an object")
+                        kind = event.get("type")
+                        if not isinstance(kind, str) or not kind:
+                            raise ValueError("stream record has no type")
+                        if kind == "stream_event":
+                            se = event["event"]
+                            event_type = se.get("type")
+                            index = se.get("index")
+                            if event_type in ("content_block_start", "content_block_delta", "content_block_stop") and type(index) is not int:
+                                raise ValueError("content block has no integer index")
+                            if event_type == "content_block_start":
+                                cb = se["content_block"]
+                                if cb.get("type") == "tool_use":
+                                    if index in pending:
+                                        raise ValueError("tool index restarted before block stop")
+                                    pending[index] = {"name": cb.get("name"),
+                                                      "input": cb.get("input", {}), "json": ""}
+                            elif event_type == "content_block_delta":
+                                delta = se["delta"]
+                                if delta.get("type") == "input_json_delta":
+                                    if index not in pending:
+                                        raise ValueError("tool input delta has no block start")
+                                    pending[index]["json"] += delta["partial_json"]
+                            elif event_type == "content_block_stop" and index in pending:
+                                block = pending.pop(index)
+                                tool_input = (json.loads(block["json"]) if block["json"]
+                                              else block["input"])
+                                if not isinstance(tool_input, dict):
+                                    raise ValueError("tool input is not an object")
+                                return matches(block["name"], tool_input)
+                        elif kind == "assistant":
+                            for item in event["message"]["content"]:
+                                if item.get("type") == "tool_use" and matches(
+                                    item.get("name"), item.get("input")
+                                ):
                                     return True
+                        elif kind == "result":
+                            if (event.get("subtype") == "success" and event.get("is_error", False) is False
+                                    and not event.get("errors")):
+                                success_result = True
+                            else:
+                                protocol_errors.append("unsuccessful result: " + json.dumps(event))
+                    except (ValueError, KeyError, TypeError, AttributeError) as exc:
+                        protocol_errors.append(f"malformed stream record: {exc}")
+                    return False
 
-                        elif se_type in ("content_block_stop", "message_stop"):
-                            if pending_tool_name:
-                                return clean_name in accumulated_json
-                            if se_type == "message_stop":
-                                return False
+                while True:
+                    while "\n" in buffer:
+                        line, buffer = buffer.split("\n", 1)
+                        if consume(line):
+                            # Invocation is now proven. Do not pay for the tool
+                            # or task to finish; cleanup termination is expected.
+                            return True
+                    if eof:
+                        if buffer:
+                            if consume(buffer):
+                                return True
+                            buffer = ""
+                        returncode = process.poll()
+                        if returncode is not None:
+                            if pending:
+                                protocol_errors.append("unfinished tool input at EOF")
+                            if returncode != 0:
+                                protocol_errors.append(f"claude exited {returncode}")
+                            if not success_result:
+                                protocol_errors.append("missing successful result")
+                            if protocol_errors:
+                                raise RuntimeError("; ".join(protocol_errors))
+                            return False
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise TimeoutError(f"claude trigger probe timed out after {timeout}s")
+                    if eof:
+                        # stdout may close before process exit. Keep the same
+                        # deadline rather than accepting result or resetting it.
+                        try:
+                            process.wait(timeout=remaining)
+                        except subprocess.TimeoutExpired as exc:
+                            raise TimeoutError(f"claude trigger probe timed out after {timeout}s") from exc
+                        continue
+                    ready, _, _ = select.select([process.stdout], [], [], min(remaining, 0.1))
+                    if ready:
+                        chunk = os.read(process.stdout.fileno(), 8192)
+                        if chunk:
+                            buffer += decoder.decode(chunk)
+                        else:
+                            buffer += decoder.decode(b"", final=True)
+                            eof = True
+            except Exception as exc:
+                if process is not None and process.poll() is None:
+                    process.kill()
+                    process.wait()
+                stderr_file.seek(0, os.SEEK_END)
+                stderr_file.seek(max(0, stderr_file.tell() - 8192))
+                diagnostic = stderr_file.read().decode("utf-8", errors="replace").strip()
+                detail = f"{type(exc).__name__}: {exc}"
+                if diagnostic:
+                    detail += f"\nstderr (tail): {diagnostic}"
+                raise RuntimeError(detail) from exc
+            finally:
+                if process is not None:
+                    if process.poll() is None:
+                        process.kill()
+                    process.wait()
+                    process.stdout.close()
 
-                    # Fallback: full assistant message
-                    elif event.get("type") == "assistant":
-                        message = event.get("message", {})
-                        for content_item in message.get("content", []):
-                            if content_item.get("type") != "tool_use":
-                                continue
-                            tool_name = content_item.get("name", "")
-                            tool_input = content_item.get("input", {})
-                            if tool_name == "Skill" and clean_name in tool_input.get("skill", ""):
-                                triggered = True
-                            elif tool_name == "Read" and clean_name in tool_input.get("file_path", ""):
-                                triggered = True
-                            return triggered
-
-                    elif event.get("type") == "result":
-                        return triggered
-        finally:
-            # Clean up process on any exit path (return, exception, timeout)
-            if process.poll() is None:
-                process.kill()
-                process.wait()
-
-        return triggered
     finally:
         shutil.rmtree(probe_dir, ignore_errors=True)
 
@@ -222,30 +279,33 @@ def run_eval(
                 )
                 future_to_info[future] = (item, run_idx)
 
-        query_triggers: dict[str, list[bool]] = {}
-        query_errors: dict[str, int] = {}
-        query_items: dict[str, dict] = {}
+        query_triggers: dict[str, list[bool]] = {item["query"]: [] for item in eval_set}
+        query_errors: dict[str, int] = {item["query"]: 0 for item in eval_set}
+        query_attempts: dict[str, list[dict]] = {item["query"]: [] for item in eval_set}
+        query_items: dict[str, dict] = {item["query"]: item for item in eval_set}
         error_count = 0
         for future in as_completed(future_to_info):
-            item, _ = future_to_info[future]
+            item, run_idx = future_to_info[future]
             query = item["query"]
-            query_items[query] = item
-            if query not in query_triggers:
-                query_triggers[query] = []
-                query_errors[query] = 0
             try:
-                query_triggers[query].append(future.result())
+                observed = future.result()
+                if type(observed) is not bool:
+                    raise ValueError("trigger probe returned no boolean observation")
+                query_triggers[query].append(observed)
+                query_attempts[query].append({"run_index": run_idx, "triggered": observed, "error": None})
             except Exception as e:
                 print(f"Warning: query failed: {e}", file=sys.stderr)
-                query_triggers[query].append(False)
+                query_attempts[query].append({"run_index": run_idx, "triggered": None, "error": str(e)})
                 query_errors[query] += 1
                 error_count += 1
 
     for query, triggers in query_triggers.items():
         item = query_items[query]
-        trigger_rate = sum(triggers) / len(triggers)
+        trigger_rate = sum(triggers) / len(triggers) if triggers else None
         should_trigger = item["should_trigger"]
-        if should_trigger:
+        if query_errors[query] or trigger_rate is None:
+            did_pass = None
+        elif should_trigger:
             did_pass = trigger_rate >= trigger_threshold
         else:
             did_pass = trigger_rate < trigger_threshold
@@ -256,10 +316,14 @@ def run_eval(
             "triggers": sum(triggers),
             "runs": len(triggers),
             "errors": query_errors[query],
+            "attempted_runs": len(query_attempts[query]),
+            "attempts": sorted(query_attempts[query], key=lambda a: a["run_index"]),
             "pass": did_pass,
         })
 
-    passed = sum(1 for r in results if r["pass"])
+    passed = sum(1 for r in results if r["pass"] is True)
+    failed = sum(1 for r in results if r["pass"] is False)
+    incomplete = sum(1 for r in results if r["pass"] is None)
     total = len(results)
 
     return {
@@ -270,7 +334,8 @@ def run_eval(
         "summary": {
             "total": total,
             "passed": passed,
-            "failed": total - passed,
+            "failed": failed,
+            "incomplete": incomplete,
         },
     }
 
@@ -318,7 +383,7 @@ def main():
         summary = output["summary"]
         print(f"Results: {summary['passed']}/{summary['total']} passed", file=sys.stderr)
         for r in output["results"]:
-            status = "PASS" if r["pass"] else "FAIL"
+            status = "INCOMPLETE" if r["pass"] is None else ("PASS" if r["pass"] else "FAIL")
             rate_str = f"{r['triggers']}/{r['runs']}"
             print(f"  [{status}] rate={rate_str} expected={r['should_trigger']}: {r['query'][:70]}", file=sys.stderr)
 
