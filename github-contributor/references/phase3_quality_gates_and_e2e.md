@@ -97,7 +97,7 @@ mkdir -p /tmp/cc-switch-e2e/.cc-switch
 CC_SWITCH_TEST_HOME=/tmp/cc-switch-e2e pnpm tauri dev
 ```
 
-With the override honored by the actual launched instance, its database is `/tmp/cc-switch-e2e/.cc-switch/cc-switch.db`. Before input, identify the binary, bundle and PID, then verify the resolved data paths. Give the test bundle a separate identity so an existing production instance cannot receive its single-instance messages.
+Before input, identify the binary, bundle and PID, then derive and verify its effective database and consumer-data paths from the tested resolver. A home override alone does not prove the effective application-data path. Give the test bundle a separate identity so an existing production instance cannot receive its single-instance messages.
 
 Fresh-start logs can corroborate isolation:
 
