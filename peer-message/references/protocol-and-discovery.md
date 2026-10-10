@@ -5,7 +5,7 @@ description: Transport-neutral addressing, Claude UDS and Codex live/queued deli
 
 # 协议与发现
 
-仅在 `SKILL.md` 已选定脚本补缺，或需要排查脚本信封与接收证据时加载本文件。原生通信沿宿主地址、包装和结果通道；不为兼容本文件改写原生 agent/thread 标识，也不在原生消息之后追加脚本发送或验证。
+仅在 `SKILL.md` 已选定脚本补缺，或需要排查脚本信封与接收证据时加载本文件。原生通信沿宿主地址、包装和结果通道；不为兼容本文件改写原生 agent/thread 标识，也不在原生消息之后追加脚本发送或验证。本机独立会话的协调记录按 [本地协调机制](local-coordination.md#原生跨会话通信)处理，与本文件的 transport 包装分开。
 
 ## 1. 统一地址
 
@@ -205,10 +205,11 @@ queue 项可能很快被消费，所以只查 queue 会产生假阴性；必须�
 
 ### 一次性关联回复查询
 
-在本 Skill 目录运行当前 help 确认参数，设置 `INBOX_TARGET` 和 `ORIGINAL_MESSAGE_ID`，再查询原发送方自己的回信落点：
+按上文的已加载 Skill 定位方式设置 `PEER_SKILL_DIR`，运行当前 help 确认参数，
+设置 `INBOX_TARGET` 和 `ORIGINAL_MESSAGE_ID`，再查询原发送方自己的回信落点：
 
 ```bash
-python3 scripts/peer.py replies \
+python3 "$PEER_SKILL_DIR/scripts/peer.py" replies \
   "${INBOX_TARGET:?Set INBOX_TARGET to the original sender inbox}" \
   --message-id "${ORIGINAL_MESSAGE_ID:?Set ORIGINAL_MESSAGE_ID to the outbound id}" --json
 ```

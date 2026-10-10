@@ -8,8 +8,17 @@ description: >-
 
 # 本地协调机制
 
-执行者是使用本 Skill 的 Agent。使用包内 `scripts/peer.py` 和
-`scripts/coordination.py`；仅需 Python 标准库。首次 `coord` 或发送调用自动创建
+执行者是使用本 Skill 的 Agent。先从本次加载的 Skill 路径取得绝对目录，
+将下文的 `PEER_SKILL_ROOT` 设置为该目录；不要使用当前项目的 `scripts/`：
+
+```bash
+PEER_SKILL_ROOT='<absolute-directory-of-loaded-peer-message>'
+test -f "$PEER_SKILL_ROOT/SKILL.md"
+test -f "$PEER_SKILL_ROOT/scripts/peer.py"
+```
+
+使用包内 `scripts/peer.py` 和 `scripts/coordination.py`；仅需 Python 标准库。
+首次 `coord` 或发送调用自动创建
 `$XDG_STATE_HOME/peer-message/coordination.sqlite3`，未设置时用
 `~/.local/state/peer-message/coordination.sqlite3`。所有本机安装副本共用此位置。
 不额外安装服务，不让用户建立或维护记录；调用时更新和检查，不做后台广播。
@@ -22,8 +31,8 @@ description: >-
 不从相似标题推断同一任务，不把每个 clone 都命名成不同的共享发布资源。
 
 ```bash
-python3 scripts/peer.py coord status --scope '<project>'
-python3 scripts/peer.py coord claim --scope '<project>' --task '<issue-or-deliverable>' \
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord status --scope '<project>'
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord claim --scope '<project>' --task '<issue-or-deliverable>' \
   --resource '<shared-repository>:publish'
 ```
 
@@ -36,7 +45,7 @@ python3 scripts/peer.py coord claim --scope '<project>' --task '<issue-or-delive
 新鲜度；陈旧声明保留并返回 stale，不自动换负责人。完成或已核实交接后由本人释放：
 
 ```bash
-python3 scripts/peer.py coord release --scope '<project>' --task '<issue-or-deliverable>'
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord release --scope '<project>' --task '<issue-or-deliverable>'
 ```
 
 返回 `released`。未释放的陈旧项定向核对，不能通过删库、假身份、超时或重启绕过。
@@ -49,7 +58,7 @@ python3 scripts/peer.py coord release --scope '<project>' --task '<issue-or-deli
 两者不能同时给，不把已过去的窗口换成“从现在再等五分钟”。
 
 ```bash
-python3 scripts/peer.py send '<exact-target>' request.txt \
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" send '<exact-target>' request.txt \
   --kind request --topic '<project>:publish-window' --expires-in 300 --json
 ```
 
@@ -67,7 +76,7 @@ python3 scripts/peer.py send '<exact-target>' request.txt \
 发送者确认消息是同一事项的当前快照、后续版本可整体替代它时，使用 `--kind state`：
 
 ```bash
-python3 scripts/peer.py send '<exact-target>' status.txt \
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" send '<exact-target>' status.txt \
   --kind state --topic '<project>:publication-status' --event '<actual-revision>' \
   --expires-at '<actual-deadline-with-timezone>' --json
 ```
@@ -90,9 +99,19 @@ CLI；旧 CLI 能继续处理原 notice/request/reply，但不提供新状态模
 
 ## 原生跨会话通信
 
-在安装或升级时执行包内 `scripts/install_native_guard.py --python '<installer-owned-fixed-python>'`，
-选用现有宿主 hook 安装器管理的 Python 3.11+ 固定入口，不从 PATH 或其他产品的
-版本目录猜解释器。将解释器绑定保存在包外；保持本机各安装副本共用协调库。
+在安装或源路径、解释器绑定变化时，从实际安装入口运行：
+
+```bash
+python3 "$PEER_SKILL_ROOT/scripts/install_native_guard.py" \
+  --python '<absolute-fixed-python-owned-by-the-host-installer>'
+```
+
+选用现有宿主 hook 安装器管理且通过安装器版本检查的固定入口，不从 PATH 或其他
+产品的版本目录猜运行时解释器；命令中的 `python3` 只用于这次显式安装。
+读回返回的 `config` 与 `entry`：前者记录所选模块与解释器，后者是固定启动入口。
+安装器使用 `XDG_CONFIG_HOME`、`XDG_STATE_HOME`，未设置时采用其实现的默认目录；
+不要手写绑定路径或将它们误当共享协调库。绑定位于包外，同机各安装副本共用协调库。
+`bound` 只证明绑定已写入，不表示 hook 已注册、已获信任或实际执行。
 插件的 `hooks/hooks.json` 只注册独立会话发送的 PreToolUse 检查。已有宿主统一入口时，
 在原入口调用 `scripts/native_guard.py` 的 `installed_check(event)`；保留其他拒绝与权限检查，
 不要再注册第二套相同入口。Codex 新增或改变 hook 定义时让用户在 `/hooks` 信任精确
@@ -110,7 +129,7 @@ CLI；旧 CLI 能继续处理原 notice/request/reply，但不提供新状态模
 原生工具覆盖收件人时只发送原生消息。本 Skill 维护同一状态，不换 transport：
 
 ```bash
-python3 scripts/peer.py coord prepare '<exact-target>' request.txt \
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord prepare '<exact-target>' request.txt \
   --kind request --topic '<project>:publish-window' --expires-in 300
 ```
 
@@ -122,7 +141,7 @@ body 和 tool-use id；缺失记录、过期、正文改写、已收件/关闭/�
 前置检查只记录尝试，不记录送达，也不授予权限。随后按原生回执记录结果：
 
 ```bash
-python3 scripts/peer.py coord commit --message-id '<prepared-id>' --outcome accepted
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord commit --message-id '<prepared-id>' --outcome accepted
 ```
 
 确定未发送用 `not_sent`，结果不明用 `unknown`。accepted 只证明 transport 层。
@@ -135,7 +154,7 @@ python3 scripts/peer.py coord commit --message-id '<prepared-id>' --outcome acce
 新信封含 `[peer-coordination: ...]`。先保存实际信封并读取：
 
 ```bash
-python3 scripts/peer.py coord receive received.txt
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord receive received.txt
 ```
 
 也可从 stdin 读取（`coord receive -`）。`action_needed` 原子领取该记录一次，随后只
@@ -146,9 +165,9 @@ python3 scripts/peer.py coord receive received.txt
 确需回信时关联原 id；短时请求已过期/关闭时回信也会被发送前抑制：
 
 ```bash
-python3 scripts/peer.py send '<original-sender>' reply.txt \
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" send '<original-sender>' reply.txt \
   --kind reply --in-reply-to '<original-id>' --json
-python3 scripts/peer.py coord finish --message-id '<original-id>'
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord finish --message-id '<original-id>'
 ```
 
 正常收件处理完或问题已有后续证据解决时 finish；返回 `closed`，不证明业务完成。
@@ -164,7 +183,8 @@ python3 scripts/peer.py coord finish --message-id '<original-id>'
 
 新装可初始化、重复调用使用同一状态、并发同事项只 reserve 一条、过期请求不引发
 回应、不同任务不误杀、陈旧负责人不被接管，分别验收。先在隔离 state-dir 运行
-`python3 -m unittest discover -s tests -p 'test_*.py'`，再独立读回安装副本的命令面。
+`python3 -m unittest discover -s "$PEER_SKILL_ROOT/tests" -p 'test_*.py'`，
+再独立读回安装副本的命令面。
 合成检查不替代实际消息量和协调成本的长期观察。
 
 state 模式还须核对跨 event 替代、同版本重复、未知发送、旧读写接口与消息清理后的

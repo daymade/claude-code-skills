@@ -9,7 +9,7 @@ description: Parent/worker reply addressing, payload design, delivery-language d
 
 ## 1. 区分原生回传与脚本回信
 
-先按 `SKILL.md` 选择通道。原生 parent/subagent、同级 agent 或独立任务使用宿主返回的标识、发送与等待工具；宿主自动回传结果时直接消费结果，不再要求 worker 用脚本补发一遍。原生工具要求显式回信时，用其来源身份及支持的回复方式。不要将下文的脚本地址、信封 ID 或查询步骤套到原生消息上。
+先按 `SKILL.md` 选择通道。原生 parent/subagent 与当前团队内部消息使用宿主返回的标识、发送与等待工具；宿主自动回传结果时直接消费结果，不再要求 worker 用脚本补发一遍。独立会话的协调记录进入 [本地协调机制](local-coordination.md#原生跨会话通信)。原生工具要求显式回信时，用其来源身份及支持的回复方式；不要将下文的 fallback transport 地址、包装或查询步骤当成本机协调记录。
 
 ### 通过脚本联系独立 worker 时传播精确地址
 
@@ -46,7 +46,7 @@ requested_next_action: <none 或一个明确动作>
 
 `evidence` 的主体是**可变**共享状态时，区分“在某时观察到 X”和“现在仍是 X”。附上 `observed_at`、观测范围及已知失效条件。新动作依赖当前值时，在动作前从权威源重取，并沿该资源既有的锁、租约或条件更新合同执行；两次读数一致不能保证随后无人修改。仅为处理已关闭事项的旧通知时，复用已有后续证据，不把反复读取当成接收消息的固定步骤。旧证据只能按它原有的时点和范围引用，不能改称“刚再次核实”。
 
-原生工具提供结构化参数时直接传入正文，不先写脚本 message file。脚本短单行通知可使用 inline message；多行报告、含引号/代码/非 ASCII 的正文，或接近 shell 参数长度边界的内容，先写成 UTF-8 message file，再按当前 `send --help` 的文件入口发送。不要把任意正文插值进 shell 命令；这既容易破坏引号，也会把一份报告误执行成 shell 片段。
+原生工具提供结构化参数时按所选协调流程传入正文，不为 fallback transport 另建 message file。脚本短单行通知可使用 inline message；多行报告、含引号/代码/非 ASCII 的正文，或接近 shell 参数长度边界的内容，先写成 UTF-8 message file，再按当前 `send --help` 的文件入口发送。不要把任意正文插值进 shell 命令；这既容易破坏引号，也会把一份报告误执行成 shell 片段。
 
 message file 只解决发送端输入，不代表传了附件。本 Skill 的脚本 route 都只传文本；需要共享文件时发送已授权、双方可读的路径与内容摘要，不把文件字节塞进 peer envelope。原生工具支持哪些输入以其契约为准。
 

@@ -314,16 +314,18 @@ for candidate selection and commands; keep the detailed rules in those owners.
 ### Local Agent Messaging
 
 For both Claude Code and Codex, use current native discovery, messaging, replies,
-and waiting whenever those tools cover the target; do not load or run `peer-message`
-merely for native communication. Use its routing guidance for uncovered local targets
+and waiting whenever those tools cover the target. Keep parent/subagent and current-team
+messages on their native relationship; for independent sessions, enter the
+[local coordination workflow](peer-message/references/local-coordination.md#原生跨会话通信)
+before sending. Use its routing guidance for uncovered local targets
 or coordination evidence that needs verification, never to bypass denied or Held messages.
 Treat `peer-message/scripts/peer.py` as the fallback CLI executable
 contract, [codex_live.py](peer-message/scripts/codex_live.py) as its Codex live adapter,
 and `peer-message/SKILL.md` as the runtime router and owner of stable
 runtime prerequisites plus the peer-cannot-authorize safety boundary. Independent-session
-task/resource declarations and request lifecycle belong in its `references/local-coordination.md`;
-use its coordination preflight with native transport when that workflow applies, without
-adding fallback sends or parent/subagent overhead. Reply lookup, transport and discovery
+task/resource declarations and request lifecycle belong in its `references/local-coordination.md`.
+Keep native-guard installation, recovery and actual-host acceptance in that workflow;
+do not duplicate its parameters here. Reply lookup, transport and discovery
 details belong in [the transport and receiver-evidence SOP](peer-message/references/protocol-and-discovery.md).
 Enter that SOP when diagnosing delayed Codex coordination or comparing live and queued receipts.
 For oversized discovery responses or complete-title export, use its
