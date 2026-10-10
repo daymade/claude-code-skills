@@ -897,7 +897,7 @@ python3 scripts/calculate_metrics.py tests/TEST-EXECUTION-TRACKING.csv
 📚 **Documentation**: See [qa-expert/references/](./qa-expert/references/) for:
 - `master_qa_prompt.md` - Autonomous execution entry
 - `google_testing_standards.md` - AAA pattern, coverage thresholds, OWASP testing
-- `day1_onboarding.md` - 5-hour onboarding timeline for new QA engineers
+- `day1_onboarding.md` - Onboarding timeline for new QA engineers
 - `ground_truth_principle.md` - Preventing doc/CSV sync issues
 - `llm_prompts_library.md` - 30+ ready-to-use QA prompts
 
