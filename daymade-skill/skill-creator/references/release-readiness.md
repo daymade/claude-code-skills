@@ -1,6 +1,34 @@
 # Local release readiness
 
 Use this after the required independent review and before a Git publication step.
+
+## Select the publication contract before attesting
+
+Verify the destination's current visibility and read its repository-owned review
+and push contract before choosing an archive location or checker. Unknown
+visibility remains unresolved; do not assume either public isolation or a private
+same-repository allowance.
+
+- **Public distribution:** keep private review evidence in an externally committed
+  private archive and use the helper procedure below. Never ship the archive with
+  the public Skill.
+- **Private repository with a same-repository archive contract:** keep the review
+  in its permitted location and follow that repository's own candidate binding,
+  archive-commit and publication gate. Keep the archive out of the distributed
+  package. Do not require the public helper to attest this layout.
+- **Private repository using an external archive:** the helper below can bind that
+  external evidence when it matches the repository's publication contract.
+
+The executor selects and reads back the applicable gate. `release_readiness.py`
+supports external archives only: both attest and verify reject an archive sharing
+the published repository's Git common directory, regardless of visibility.
+Choosing a private repository's own gate does not relax or bypass that helper.
+Report which gate actually passed; a same-repository release is not a successful
+helper attestation. If no applicable gate is defined, resolve the publication
+contract before pushing rather than inventing a readiness claim.
+
+## External-archive helper and dispatcher
+
 This marketplace's existing pre-push dispatcher checks changed shipped Skill roots
 against the exact pushed commit. Both branch and tag pushes are checked; annotated
 tags bind to their target commit. Tags pointing to a commit already reachable from
@@ -66,7 +94,9 @@ reviewer independence, private visibility or whether the exemption is truthful;
 those remain the review and operator contracts. Do not use an exemption to bypass
 a substantive change or move the private artifact into a distributed repository.
 
-For another repository, its existing push dispatcher must call the verifier for
-its exact candidate and affected Skill roots. Merely installing this Skill does
-not install a global hook. Until that integration exists, invoke the checker
-explicitly and inspect its result before push.
+For another repository using this external-archive helper, its push dispatcher
+must call the matching verifier for its exact candidate and affected Skill roots.
+Merely installing this Skill does not install a global hook. Until that integration
+exists, invoke its compatible checker explicitly and inspect the result before
+push. A repository-owned same-repository archive gate remains under that
+repository's contract; this helper does not implement it.

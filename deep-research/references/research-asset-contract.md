@@ -37,6 +37,35 @@ python3 <skill>/scripts/provider_runs.py plan <study-dir>
 
 If a previous task is already running, preserve its original task ID and query that task. `start` refuses to overwrite an existing study directory; resume it through `plan` and inspect its source records.
 
+## Incremental follow-up
+
+When the user continues the same research question, the lead agent restores the latest accepted
+question and relevant prior originals before dispatch. Read the existing claims, report and
+project state to separate supported conclusions, resolved questions, corrections, remaining
+unknowns and the evidence or user correction that would reopen a closed question. Carry this
+context into the exact follow-up prompt, with its source locators and dates. Use the existing
+study records or owning project state; do not create a second cumulative ledger or change
+the asset schema to satisfy this instruction.
+
+Do not repeat a resolved search without new evidence, a freshness need or a user correction
+that could change its answer. Preserve unresolved claims as unknown; one neighboring question
+being resolved does not settle them. For example, a documented explanation for a closed bug
+does not prove that a separate performance issue is fixed. New contradictory evidence or an
+expired freshness horizon can reopen the relevant conclusion while the other resolved questions stay closed.
+
+In the follow-up report, lead with new evidence, corrected conclusions, unchanged conclusions
+and remaining unknowns, each with the decisive source or access limit and its effect on the
+question. Keep the full original report and prior conclusions available through the existing
+archive. A failed or inaccessible retrieval is not evidence of no change. If nothing changed,
+say which questions were checked and which were not; do not repeat the entire background
+as if it were a new finding. One-off research retains the requested report format and does not
+need a cumulative-state artifact.
+
+Before closing the follow-up, the lead agent compares its prompt and result with the prior
+originals: were applicable corrections carried forward, were resolved and unknown questions
+kept distinct, and is every claimed change supported? The local scripts check file and record
+consistency; they do not establish this semantic continuity or a reduction in the user's work.
+
 ## Capture sources and claims during the run
 
 For a public or authorized original that can be retained, pass its actual downloaded file to `source`. The command copies bytes to `sources/originals/`, hashes the copy and appends a source event. It never promotes a model report to an original source. When an original cannot be retained, use `--no-snapshot-reason` and preserve the stable URL, date and exact locator. A rejected or unavailable source requires a reason.

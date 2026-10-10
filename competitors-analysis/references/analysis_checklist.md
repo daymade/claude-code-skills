@@ -57,6 +57,12 @@ git -C "$repo" log -1 --format='%H%x09%cI%x09%s'
 - [ ] Config files are read for language, framework, scripts, and dependencies.
 - [ ] Entry points are identified from config or file layout.
 - [ ] Core implementation files are read directly.
+- [ ] Apply [mechanism evidence](mechanism_evidence.md): trace the decisive entry
+  through relevant normal, failure, cancellation, recovery and cleanup paths;
+  unresolved paths have a decision-bearing next check. Before execution, identify
+  its effects under the current authorization, including status/observe commands.
+- [ ] Bound source, implementation reading scope, exercised behavior and actual
+  consumption/adoption are distinct; untested outcomes are not promoted from code.
 - [ ] Tests or fixtures are checked when the competitor handles structured data.
 - [ ] Changelog/releases are checked when the user asks for "latest".
 
@@ -96,6 +102,9 @@ For multi-competitor reports:
 - [ ] Weaknesses/gaps cite evidence or are labeled as `待验证`.
 - [ ] Read `landscape_synthesis.md`; a correct feature table alone does not pass.
 - [ ] The baseline includes the user's actual adopted workflow or substitute, when evidenced.
+- [ ] The comparison scenario's actual entry and version are bound or unknown;
+  a helper/legacy path alone does not establish a whole-product gap. Missing
+  our-product evidence does not block a standalone Profile.
 - [ ] Each material judgment connects evidence, causal explanation, a concrete choice and cost, a counterexample/alternative explanation, and a falsifying check.
 - [ ] Claims of differentiation include current native/platform capabilities when relevant; absence in our sample is not proof of market uniqueness.
 - [ ] Technical acknowledgement, delivery, adoption and qualified outcome are distinguished when relevant.
@@ -139,8 +148,8 @@ Source register: demo-source-a = frozen demonstration transcript.
 | "The extractor never misses a frame" / demo-7 | demo-source-a | segment 7 | Original: "Each sampled frame was processed." Next sentence: "Frames between samples were not inspected." The answer overstates the source. | Authorized local snapshot readable at this check; public endpoint no longer readable at a separate later check. |
 
 Comparison baseline: the product authority's existing passage-reading acceptance;
-existing asset: its already-authorized transcript archive; actual reuse in the
-target reader untested.
+existing asset: its already-authorized transcript archive; target reader entry
+and runtime version unknown; actual reuse in that reader untested.
 
 Choice: reuse the existing transcript and expose its passages for that acceptance
 scenario. This avoids another transcription, but needs a consumer readback.
