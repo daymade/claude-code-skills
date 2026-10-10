@@ -7,9 +7,9 @@ description: Current Claude Code and Codex messaging surfaces, availability chec
 
 ## 0. 两个产品使用同一套选择流程
 
-先读当前宿主工具契约；有工具发现入口时先查询原生通信工具。使用能覆盖目标的原生发现、发送、回传与等待机制，不先执行 `peer.py list`、`whoami` 或 `verify`。只有已确认的目标不在原生能力范围内，才按 `SKILL.md` 进入脚本补缺。
+先读当前宿主工具契约；有工具发现入口时先查询原生通信工具。使用能覆盖目标的原生发现、发送、回传与等待机制，不先执行 `peer.py list`、`whoami` 或 `verify`。独立会话发送的准备与前置检查按 [本地协调机制](local-coordination.md#原生跨会话通信)执行；这不改变 transport。只有已确认的目标不在原生能力范围内，才按 `SKILL.md` 进入脚本补缺。
 
-区分三层证据：安装包含有实现、当前会话暴露了可调用工具、消息真实送达。前一层不能证明后一层。原生工具拒绝、Held、超时或返回不明确时，在原通道核查，不换脚本重发；无可确认的目标身份时保持 unknown。
+区分证据层：安装包含有实现、当前会话暴露了可调用工具、消息真实送达。前一层不能证明后一层。原生工具拒绝、Held、超时或返回不明确时，在原通道核查，不换脚本重发；无可确认的目标身份时保持 unknown。
 
 ## 1. Claude Code：先用官方 cross-session messaging
 
@@ -102,7 +102,7 @@ Claude Code 官方明确限制 peer 消息：
 
 ### App 的独立任务
 
-当当前会话暴露 `list_threads`、`send_message_to_thread`、`wait_threads` 等 App 原生工具时，直接用工具返回的 thread/host 标识，沿其状态与回传机制协调，不执行 `peer.py`。工具参数、可见目标和等待行为以当前 schema 为准。
+当当前会话暴露 `list_threads`、`send_message_to_thread`、`wait_threads` 等 App 原生工具时，使用工具返回的 thread/host 标识，沿其状态与回传机制协调。发送前的本机协调检查进入 [本地协调机制](local-coordination.md#原生跨会话通信)，不追加脚本 transport。工具参数、可见目标和等待行为以当前 schema 为准。
 
 证据范围（2026-09-13）：本机 ChatGPT App 26.908.40834 的程序包包含上述工具定义及发送执行分支，并包含 “Sent by ChatGPT from another task” 对应的产品名模板和携带来源 thread ID 的 `codex_delegation` 包装。该检查证明实现存在，未验证发送成功；同次被检查的模型工具目录没有暴露这些 App 线程工具。不要仅凭界面提示或安装包定义宣称任意会话都能调用它们，也不要手写原生包装冒充宿主来源。
 
@@ -114,7 +114,7 @@ Claude Code 官方明确限制 peer 消息：
 codex queue --thread <THREAD> --message <TEXT>
 ```
 
-仅在原生工具未覆盖已确认的 Codex 独立目标，或由 hook/script 调用时进入 peer.py。
+仅在原生工具未覆盖已确认的 Codex 独立目标，或由 hook/script 调用时使用 peer.py transport。
 发送前按 [Codex 传输 SOP](protocol-and-discovery.md#3-codex-发现与实时投递)
 准备依赖并选择路径；本文件只记录产品可用性与验证范围，不另维护路径默认值。
 本机 0.162.0 已验证 active turn 实时送达；工具暴露面因 thread 不同而不同，不能从

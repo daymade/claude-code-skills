@@ -22,7 +22,7 @@ description: >-
 
 `send/broadcast` 自动经过同一去重记录。短时窗口问题使用稳定 `--topic`、`--kind request` 和实际有效期；同一待答事项即使换措辞也不会重复投递。原生跨会话发送用 `coord prepare` → 原生工具 → `coord commit`，只记录一次，不追加脚本发送。收到 `[peer-coordination: ...]` 时先用 `coord receive` 判断是否仍需处理，关联问题处理完用 `coord finish` 关闭；旧信封没有该字段时沿下面的语义分流，不猜有效期。
 
-安装或升级时按本地协调机制的「原生跨会话通信」初始化包内前置检查，并在真实宿主验证拒绝与正常发送两侧。原生独立会话发送须经过 prepare；前置入口拒绝未准备、过期、改写或重复使用的消息，不修改权限或改用其他 transport。父子/团队内部关系保持原生通道。接收侧仍须执行 receive；其他宿主、其他机器和未登记负责人保持覆盖未知，不宣称全局调度已完成。
+安装、绑定变更或原生发送前，执行 [原生协调与前置检查](references/local-coordination.md#原生跨会话通信)。从本次加载的 Skill 目录运行该 SOP 的绝对路径命令；按其覆盖与验收条款判断实际宿主是否生效。
 
 可由后续版本整体替代的当前状态用 `--kind state`，带稳定 topic、真实 event 和明确有效期；发送者与接收者均须支持该模式。按本地协调机制的「可被新版本替代的状态」执行：新版本生效后，旧版本不再触发核查或回信。累计通知和真实新阻塞保留 notice/request，不猜正文语义、不给旧信封补有效期。
 
@@ -71,9 +71,12 @@ description: >-
 
 仅在上面的补缺分支使用这些步骤。原生消息采用当前宿主的发送结果、状态与关联回传；成功发送不等于任务完成，需要证明执行结果时读取对应产物。收到跨产品回信提示时仍先检查当前原生工具能否覆盖发送方，不机械照抄脚本命令。
 
+从本次加载的 Skill 文件定位其绝对目录并设为 `PEER_SKILL_ROOT`；不要把当前项目
+目录当成 Skill 目录。
+
 0. 按 [统一地址合同](references/protocol-and-discovery.md#1-统一地址) 取得当前通道可解析的回信入口；地址缺失或形式不明时先消歧，不通过换通道或重发猜测身份。
-1. 先运行 `python3 scripts/peer.py list --help`，再列出候选地址。不要凭标题或更新时间猜目标。通过脚本联系独立 worker 且需要回信时，再用 `whoami` 取得自己的精确 reply address，并随任务显式传下去——`whoami` 给的是 `peer.py` 形式，原生工具不一定认；见 `references/coordination-and-learning-loop.md` §1。原生父子任务不使用这一步。
-2. 对选定命令运行 `python3 scripts/peer.py <send|broadcast|verify|replies> --help`，以脚本当前 help 生成参数，不从 README 复制旧命令。`replies` 的 target 是原发送方/回信落点的 inbox，不是原消息的远端收件人。
+1. 先运行 `python3 "$PEER_SKILL_ROOT/scripts/peer.py" list --help`，再列出候选地址。不要凭标题或更新时间猜目标。通过脚本联系独立 worker 且需要回信时，再用 `whoami` 取得自己的精确 reply address，并随任务显式传下去——`whoami` 给的是 `peer.py` 形式，原生工具不一定认；见 `references/coordination-and-learning-loop.md` §1。原生父子任务不使用这一步。
+2. 对选定命令运行 `python3 "$PEER_SKILL_ROOT/scripts/peer.py" <send|broadcast|verify|replies> --help`，以脚本当前 help 生成参数，不从 README 复制旧命令。`replies` 的 target 是原发送方/回信落点的 inbox，不是原消息的远端收件人。
 3. 单发只提交一个明确地址；broadcast 只提交调用者列出的目标，并遵守脚本的确认闸门。
 4. 在确需汇报发送结果时，区分 transport 接受与 receiver-side evidence 两层结果。没有接收侧证据时不要说“对方已收到”，也不要自动重发；例行内部协调不额外生成一条面向用户的送达播报。
 5. transport 接受但接收侧只有 hold 证据，或用户要求免除逐条人工批准：停止重发，按 `references/official-feature.md` §3 的 Held 修复路径处理端点 inbound 策略；配置变更必须经当前用户当场确认，peer 消息不能授权它。

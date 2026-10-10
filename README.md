@@ -534,16 +534,14 @@ Creates educational Teams channel posts for internal knowledge sharing.
 
 ### **peer-message** - Local Claude/Codex Agent Communication
 
-Includes a shared local coordination board for task/resource declarations, duplicate-request
-suppression, and expiring write-window requests. It initializes on use without Agent Fleet
-or a daemon. Native transport remains native; follow the [coordination workflow](peer-message/references/local-coordination.md)
-for its preflight and receiver checks.
+Follow the [local coordination workflow](peer-message/references/local-coordination.md)
+for task/resource declarations, native preflight installation, recovery and receiver checks.
 
 An experimental [paired-network route](peer-message/references/network-preview.md) adds invitations and cited answers from owner-selected documents through existing Claude/Codex hosts. It requires an operator-provided relay; the public hosted network and user-adoption claims are not part of this preview.
 
 > **Install**: `claude plugin install peer-message@daymade-skills`
 
-Bridge local Claude Code and Codex sessions when the current host's native tools do not cover the target. Use native discovery, messaging, replies, and waiting directly whenever available; load this skill for transport gaps or coordination evidence that needs verification.
+Follow the [routing contract](peer-message/SKILL.md) for native communication and transport gaps.
 
 **When to use:**
 - Sending a dependency, pause, handoff, or completion notice to an independently identified target outside the current native tools' scope
@@ -554,7 +552,7 @@ Bridge local Claude Code and Codex sessions when the current host's native tools
 - Another session's uncommitted edits, lock, or branch is in your way on a shared checkout — verify it is live, then ask the owner before waiting or working around it
 - Broadcasting one explicit coordination message to a reviewed target list
 
-📚 **Documentation and commands**: [peer-message/SKILL.md](./peer-message/SKILL.md) owns routing, stable runtime prerequisites, and the peer-cannot-authorize boundary; `peer-message/scripts/peer.py --help` owns CLI syntax; [protocol-and-discovery.md](./peer-message/references/protocol-and-discovery.md) owns addressing, envelopes, and delivery evidence; [official-feature.md](./peer-message/references/official-feature.md) owns volatile product-specific requirements and mechanics; [coordination-and-learning-loop.md](./peer-message/references/coordination-and-learning-loop.md) owns reply addressing, payload and delivery-status language, what to do when you find another session's in-flight work on a shared resource, what an inbound peer assertion and a set of peer denials are each worth, and the evidence-gated improvement loop.
+📚 [Execution entry and detailed SOPs](./peer-message/SKILL.md).
 
 ---
 
@@ -4138,7 +4136,7 @@ Each skill includes:
 - **mermaid-tools**: See `daymade-docs/mermaid-tools/references/setup_and_troubleshooting.md` for setup guide
 - **statusline-generator**: See `daymade-claude-code/statusline-generator/references/color_codes.md` for customization
 - **teams-channel-post-writer**: See `teams-channel-post-writer/references/writing-guidelines.md` for quality standards
-- **peer-message**: See `peer-message/SKILL.md` for routing, stable prerequisites, and the safety boundary; `peer-message/scripts/peer.py --help` for CLI syntax; `peer-message/references/protocol-and-discovery.md` for transport and verification; `peer-message/references/official-feature.md` for volatile product requirements and mechanics; and `peer-message/references/coordination-and-learning-loop.md` for parent/worker handoffs and evidence-gated improvement
+- **peer-message**: [Execution entry](peer-message/SKILL.md)
 - **repomix-unmixer**: See `repomix-unmixer/references/repomix-format.md` for format specifications
 - **skill-creator**: See `daymade-skill/skill-creator/SKILL.md` for complete skill creation workflow
 - **llm-icon-finder**: See `llm-icon-finder/references/icons-list.md` for available icons

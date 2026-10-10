@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **frontend-visual-qa** (v1.20.7): Verify required records beyond the newest window, readable contributions and per-item failure recovery through the authorized project harness. Preserve uncertain-write boundaries and keep actual journey evidence separate from generic sweep results. Change type: bounded acceptance clarification.
+- **peer-message** (v1.21.1): Align native coordination entry routes with the existing guard, use loaded-Skill absolute paths in the owning SOP, and distinguish installer binding from host trust and enforcement. Runtime behavior is unchanged.
 
 - **github-review-pr** (v1.4.3): Align post-repair review instructions with the existing unchanged-evidence reuse contract, remove the hand-maintained section list, and add repository entry routes for document-ingestion repair and local Git checks. Change type: bounded SOP and documentation alignment.
 - **peer-message** (v1.21.0): Require native independent-session sends to pass the bundled PreToolUse guard with a prepared sender, recipient, unchanged body and single invocation. Preserve parent/team messaging and existing permission checks; initialize the fixed interpreter binding through the owning installer.
