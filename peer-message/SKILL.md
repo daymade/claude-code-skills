@@ -22,7 +22,7 @@ description: >-
 
 `send/broadcast` 自动经过同一去重记录。短时窗口问题使用稳定 `--topic`、`--kind request` 和实际有效期；同一待答事项即使换措辞也不会重复投递。原生跨会话发送用 `coord prepare` → 原生工具 → `coord commit`，只记录一次，不追加脚本发送。收到 `[peer-coordination: ...]` 时先用 `coord receive` 判断是否仍需处理，关联问题处理完用 `coord finish` 关闭；旧信封没有该字段时沿下面的语义分流，不猜有效期。
 
-脚本入口能机械抑制重复发送；原生入口须按上述 preflight 执行，接收侧须执行 receive。安装不改变宿主权限或截获任意原生消息，覆盖不包含绕过此流程的调用、其他机器和未登记会话。不要将这层本机协调宣称为全局任务调度已经完成。
+安装或升级时按本地协调机制的「原生跨会话通信」初始化包内前置检查，并在真实宿主验证拒绝与正常发送两侧。原生独立会话发送须经过 prepare；前置入口拒绝未准备、过期、改写或重复使用的消息，不修改权限或改用其他 transport。父子/团队内部关系保持原生通道。接收侧仍须执行 receive；其他宿主、其他机器和未登记负责人保持覆盖未知，不宣称全局调度已完成。
 
 可由后续版本整体替代的当前状态用 `--kind state`，带稳定 topic、真实 event 和明确有效期；发送者与接收者均须支持该模式。按本地协调机制的「可被新版本替代的状态」执行：新版本生效后，旧版本不再触发核查或回信。累计通知和真实新阻塞保留 notice/request，不猜正文语义、不给旧信封补有效期。
 
@@ -50,7 +50,8 @@ description: >-
 | 场景 | 路由 |
 |---|---|
 | 跨机器邀请、配对联系人、获准资料问答 | 读取 `references/network-preview.md`，使用网络 CLI；未配对或未授权共享资料时不执行问答 |
-| 原生工具覆盖 parent/subagent、同级 agent 或独立 session | 直接使用当前宿主工具、原生地址及回传；不查 `whoami`、不套脚本信封、不额外运行脚本验证 |
+| 原生工具覆盖 parent/subagent 或当前团队内部成员 | 直接使用当前宿主工具、原生地址及回传；不查 `whoami`、不套脚本信封、不额外运行脚本验证 |
+| 原生工具覆盖独立 session | 按本地协调机制执行 `coord prepare` → 原生工具原样发送 `body` → `coord commit`；不追加 fallback 发送 |
 | 原生工具未覆盖已确认的 Claude 目标，且目标有本地 inbox | 用 `scripts/peer.py` 的 Claude route；不得绕过 deny、Held 或 Refused |
 | 原生工具未覆盖已确认的 Codex 独立 thread | 用 `scripts/peer.py` 的 Codex route；不要把内部 agent 地址当独立 thread UUID。**已归档 thread 不可投递**——脚本默认拒发（它永远不会再消费 queue）；给已退出属主留话钉在它的持久制品上（PR comment、文件），见 `references/coordination-and-learning-loop.md` §5.1「发现面不可达时」段 |
 | 多目标协调 | 明确列出目标；原生按工具契约逐个发送或广播，脚本补缺才使用 `broadcast`；禁止从单发请求推断全机广播。脚本 `broadcast` 的消息自动带 fan-out 标记，语义是「仅属主回复，其余忽略」；超出默认目标数上限须 `--contract <契约名>` 点名依据，否则脚本拒发（上限值以 CLI help/实现为准，不在文档复制）——先发证据（git/索引）收窄候选，见 `references/protocol-and-discovery.md` §5 |
