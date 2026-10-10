@@ -48,6 +48,9 @@ choice; not every claim needs every depth or a live test. If source evidence alr
 decides a defer/reuse judgment, stop gathering. For an opportunity, use
 [the Landscape decision chain](landscape_synthesis.md#build-a-small-number-of-decision-bearing-judgments)
 and retain its cost, counterexample and falsifier.
+For project-backed opportunities, follow its
+[coverage and disposition contract](landscape_synthesis.md#account-for-material-opportunities)
+before selecting and closing the material set.
 
 ## Synthetic worked example
 

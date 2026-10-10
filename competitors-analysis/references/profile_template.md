@@ -108,6 +108,9 @@ or protocol messages.
 
 ## Strengths
 
+Record sourced strengths even when no current failure needs repair. Their presence
+does not prove that every material opportunity has been considered or adopted.
+
 | Strength | Evidence | Why it matters |
 |---|---|---|
 | {strength} | `{file}:{line}` | {product implication} |
@@ -143,6 +146,12 @@ Trace that entry before using a helper or legacy path to declare a product gap.
 | Active issues | {value or 待验证} | {GitHub API, retrieved YYYY-MM-DD} |
 
 ## Opportunities
+
+Give each material mechanism a stable key or existing source/claim locator and
+link its disposition in the existing current-analysis entry. Follow
+[opportunity coverage and disposition](landscape_synthesis.md#account-for-material-opportunities).
+For a standalone Profile, keep repository-specific judgments and omit our-product
+adoption decisions rather than requiring missing comparison context.
 
 For each material opportunity, fill the decision chain in
 [landscape_synthesis.md](landscape_synthesis.md#build-a-small-number-of-decision-bearing-judgments):
