@@ -18,8 +18,14 @@ use `local-conversation-history` or the identified provider's history Skill for
 its authoritative index and exact reader. Limit queries to the authorized scope;
 before reading bodies, select known sessions or a bounded physical time/source
 set. Verify the exact reader's session identity and keep user, assistant and tool
-roles distinct. Use its supported export that omits hidden reasoning, not a raw
-transcript dump or a new parser. An unavailable or incomplete index leaves a
+roles distinct. Prefer a reader export that omits hidden reasoning. If the reader
+exports explicitly marked thinking blocks, create a prose/tool projection from
+that bounded export before reading or handing it to agents: remove only those
+marked blocks, retain record IDs, roles and source coordinates, and record the
+omitted-block boundary. This is a projection of the owning reader's output,
+not a replacement parser for raw transcripts. If the blocks cannot be separated
+reliably, retain the evidence gap instead of passing the mixed export onward.
+An unavailable or incomplete index leaves a
 coverage gap; do not replace it with a whole-library scan. Keywords and result
 limits rank candidates but do not bound a raw scan.
 
