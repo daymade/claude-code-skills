@@ -1,6 +1,7 @@
 """Calibrate the actual benchmark writer and its shipped JS reader."""
 
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -364,7 +365,8 @@ def test_output_grades_honor_unknown_aggregator_verdict(tmp_path):
     g["summary"]["pass_rate"] = 1
     write_run(tmp_path, grading=g)
     data = generate_benchmark(tmp_path)
-    html = render_benchmark(data, run={"id": "eval-1-with_skill-run-1", "grading": g})
+    html = render_benchmark(data, run={"id": "eval-1-with_skill-run-1", "grading": g,
+                                       "grading_status": "graded", "assertion_binding": "unbound"})
     assert "Grading unknown: invalid_grading" in html
     assert "100%" not in html and "0 passed" not in html
 
@@ -373,10 +375,11 @@ def test_output_grades_keep_healthy_zero_and_missing_counts_distinct(tmp_path):
     g = grade((False,))
     write_run(tmp_path, grading=g)
     data = generate_benchmark(tmp_path)
-    html = render_benchmark(data, run={"id": "eval-1-with_skill-run-1", "grading": g})
+    html = render_benchmark(data, run={"id": "eval-1-with_skill-run-1", "grading": g,
+                                       "grading_status": "graded", "assertion_binding": "unbound"})
     assert "0%" in html and "0 passed, 1 failed of 1" in html
     html = render_benchmark({}, run={"id": "legacy", "grading": {"summary": {}}})
-    assert "unknown passed" in html and "0 passed" not in html
+    assert "Grading unknown: unknown" in html and "0 passed" not in html
 
 
 def test_cli_writes_reopenable_unknown_report_and_validates_role_flags(tmp_path):
@@ -407,3 +410,93 @@ def test_documented_cli_role_flags_write_complete_custom_comparison(tmp_path):
     assert data["comparison"]["status"] == "complete"
     assert data["run_summary"]["delta"]["tokens"] == "-300"
     assert "Comparison:    complete" in actual.stdout
+
+
+@pytest.mark.parametrize("target", [None, "assertion", {}, [""], [None]])
+def test_malformed_canonical_target_retains_cost_and_attempts(tmp_path, target):
+    healthy_pair(tmp_path)
+    (tmp_path / "eval-1/eval_metadata.json").write_text(json.dumps({"assertions": target}))
+    data = generate_benchmark(tmp_path)
+    assert len(data["runs"]) == 2
+    assert all(r["assertion_binding"] == "invalid_expected" for r in data["runs"])
+    assert all(r["result"]["pass_rate"] is None for r in data["runs"])
+    assert all(r["result"]["tokens"] is not None for r in data["runs"])
+    assert all(v is None for v in data["run_summary"]["delta"].values())
+
+
+@pytest.mark.parametrize("target", [[], "absent"])
+def test_legacy_target_binding_is_reported_without_losing_numeric_comparison(tmp_path, target):
+    healthy_pair(tmp_path)
+    metadata = {} if target == "absent" else {"assertions": target}
+    (tmp_path / "eval-1/eval_metadata.json").write_text(json.dumps(metadata))
+    data = generate_benchmark(tmp_path)
+    assert all(r["assertion_binding"] == "unbound" for r in data["runs"])
+    assert data["comparison"]["status"] == "complete"
+    assert "Unbound assertions" in generate_markdown(data)
+    assert "Unbound assertions" in render_benchmark(data)
+
+
+@pytest.mark.parametrize("variant", ["exact", "reordered", "wrong_case", "subset", "duplicate", "extra"])
+def test_canonical_assertion_identity_controls_rate_but_preserves_cost(tmp_path, variant):
+    evals = json.loads((ROOT / "evals/evals.json").read_text())["evals"]
+    target = evals[1]["expectations"]
+    texts = {"exact": target, "reordered": target[::-1],
+             "wrong_case": evals[2]["expectations"], "subset": target[:1],
+             "duplicate": [target[0]] * len(target), "extra": [*target, "Extra"]}[variant]
+    def graded(texts, verdict):
+        g = grade([verdict] * len(texts))
+        for item, text in zip(g["expectations"], texts):
+            item["text"] = text
+        return g
+    write_run(tmp_path, grading=graded(texts, True),
+              timing={"total_tokens": 700, "total_duration_seconds": 9})
+    write_run(tmp_path, "old_skill", grading=graded(target, False),
+              timing={"total_tokens": 1000, "total_duration_seconds": 12})
+    (tmp_path / "eval-1/eval_metadata.json").write_text(json.dumps({"assertions": target}))
+    data = generate_benchmark(tmp_path)
+    candidate = next(r for r in data["runs"] if r["configuration"] == "with_skill")
+    assert len(data["runs"]) == 2 and candidate["result"]["tokens"] == 700
+    assert candidate["result"]["time_seconds"] == 9
+    if variant in {"exact", "reordered"}:
+        assert candidate["assertion_binding"] == "bound"
+        assert candidate["result"]["pass_rate"] == 1
+        assert data["run_summary"]["delta"]["pass_rate"] == "+1.00"
+    else:
+        assert candidate["assertion_binding"] == "mismatch"
+        assert candidate["grading_status"] == "invalid_grading" and candidate["issues"]
+        assert candidate["result"]["pass_rate"] is None
+        assert data["comparison"]["status"] == "incomplete"
+        assert all(v is None for v in data["run_summary"]["delta"].values())
+
+
+@pytest.mark.parametrize("valid", [True, False])
+def test_absolute_aggregate_cli_and_dynamic_import_are_bundle_bound(tmp_path, valid):
+    workspace = tmp_path / "workspace"
+    healthy_pair(workspace)
+    target = ["Outcome 0"] if valid else ["Different outcome"]
+    (workspace / "eval-1/eval_metadata.json").write_text(json.dumps({"assertions": target}))
+    cwd = tmp_path / "unrelated"
+    cwd.mkdir()
+    env = dict(os.environ)
+    env.pop("PYTHONPATH", None)
+    entry = ROOT / "scripts/aggregate_benchmark.py"
+    cli = subprocess.run([sys.executable, str(entry), str(workspace)], cwd=cwd,
+                         env=env, text=True, capture_output=True)
+    assert cli.returncode == 0, cli.stderr
+    script = """
+import importlib.util, json, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location('external_aggregate', sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+print(json.dumps(module.generate_benchmark(Path(sys.argv[2]))))
+"""
+    dynamic = subprocess.run([sys.executable, "-c", script, str(entry), str(workspace)],
+                             cwd=cwd, env=env, text=True, capture_output=True)
+    assert dynamic.returncode == 0, dynamic.stderr
+    for data in [json.loads((workspace / "benchmark.json").read_text()), json.loads(dynamic.stdout)]:
+        candidate = next(r for r in data["runs"] if r["configuration"] == "with_skill")
+        assert candidate["grading_status"] == ("graded" if valid else "invalid_grading")
+        assert candidate["assertion_binding"] == ("bound" if valid else "mismatch")
+        assert candidate["result"]["pass_rate"] == (1 if valid else None)
+        assert candidate["result"]["tokens"] == 700

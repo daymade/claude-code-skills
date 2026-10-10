@@ -32,6 +32,13 @@ You receive these parameters in your prompt:
 
 ### Step 3: Evaluate Each Assertion
 
+Grade exactly the canonical eval-directory `eval_metadata.json.assertions` once it
+is populated. Preserve every original text and its multiplicity; do not replace,
+omit or add assertions in the grade. Keep proposed improvements in `eval_feedback`.
+Do not let run/config prompt metadata override that target. Missing or empty
+canonical assertions remain unbound preparation/legacy data; reject malformed
+present targets instead of treating them as absent.
+
 For each expectation:
 
 1. **Search for evidence** in the transcript and outputs
@@ -107,7 +114,9 @@ Save results to `{outputs_dir}/../grading.json` (sibling to outputs_dir).
 4. Recompute summary counts from the non-empty expectations and check that `pass_rate`
    agrees (two-decimal rounding is accepted). Record a failed assertion as false; do not
    turn an interrupted execution or missing evidence into an empty successful grade.
-   The aggregator retains a missing or invalid grading file as an unknown attempt.
+   The shared validator rejects mismatched canonical assertion coverage as well as
+   inconsistent grades. Both readers show missing/invalid grades as unknown. The
+   aggregator keeps measured costs and attempt coverage.
 
 ## Output Format
 

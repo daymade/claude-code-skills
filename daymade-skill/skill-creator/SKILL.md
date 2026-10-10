@@ -201,6 +201,11 @@ checks require different probes. Deterministic criteria use code; subjective
 outputs use appropriately calibrated independent/human judgment. Read actual
 outputs and traces before trusting a benchmark or reviewer finding.
 
+Validate aggregate and standalone viewer grades through the shared
+[grading validator](scripts/grading_validation.py). Bind populated canonical
+eval-directory assertions by original text and multiplicity; keep missing or
+empty targets explicitly unbound for legacy/preparation observations.
+
 Before shipping a new skill or a changed rule/contract/number, follow
 [independent review](references/independent-review-protocol.md). Freeze the exact
 artifact, reader spec, blast radius, failure axes and terminal condition. Use

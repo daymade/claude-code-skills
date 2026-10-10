@@ -79,14 +79,48 @@ Use the model ID from your system prompt (the one powering the current session) 
 
 While it runs, periodically tail the output to give the user updates on which iteration it's on and what the scores look like.
 
-This handles the full optimization loop automatically. It splits the eval set into 60% train and 40% held-out test, evaluates the current description (running each query 3 times to get a reliable trigger rate), then calls Claude to propose improvements based on what failed. It re-evaluates each new description on both train and test, iterating up to 5 times. When it's done, it opens an HTML report in the browser showing the results per iteration and returns JSON with `best_description` — selected by test score rather than train score to avoid overfitting.
+This handles the full optimization loop automatically. It splits the eval set into 60% train and 40% held-out test, evaluates the current description (running each query 3 times to get a reliable trigger rate), then calls Claude to propose improvements based on what failed. It re-evaluates each new description on both train and test, iterating up to 5 times. When it's done, it opens an HTML report in the browser showing the results per iteration and returns JSON with `best_description` — selected from complete iterations by test score rather than train score to avoid overfitting. Keep it `null` when no complete iteration is available.
 
 **The loop self-aborts after iteration 1 if it detects total silence — you don't have to catch this by hand.** This is a code-level guard in `run_loop.py`, not just advice, and it distinguishes two causes of "iteration 1 came back with zero triggers on every should-trigger query":
 
 - `exit_reason: "infra_error: ..."` — some query executions (should-trigger *or* not-should-trigger) raised exceptions (claude CLI not on PATH, timeout too short, network down) rather than cleanly returning "no trigger." Checked *first*, and deliberately fires on any nonzero error count, even a single flaky run out of dozens — a crash, however rare, is a more specific and actionable lead than "nothing fired," and the fix is environmental, not a description rewrite. The ratio in the message (e.g. `3/15`) is the read on severity: a large fraction means "stop, fix your environment"; a small fraction alongside a lot of clean 0-trigger runs means the environment probably has a minor flake worth checking *and* the description may genuinely be bad — check both. Check stderr for `Warning: query failed` lines either way.
 - `exit_reason: "degenerate_harness: ..."` — checked only once the branch above rules out any execution errors, so this means every should-trigger *and* not-should-trigger query *actually ran* and *still* fired zero times (this is what "precision=100%" via a zero-denominator default actually means: not "perfect," but "nothing to divide"). The probe genuinely measures nothing — go diagnose competitor collision or a low-threshold domain (below) before touching the description at all.
 
-Both checks run **only against iteration 1**, and **only when zero should-trigger queries fired** — a weak-but-nonzero iteration 1 (say 1/9 triggers) is a different, potentially-recoverable case and is deliberately left to iterate. `degenerate_harness` additionally requires not-should-trigger queries to have fired zero times too: if the description is merely polarity-inverted — missing every positive while accidentally matching several negatives — the probe is proven to work and `improve_description` has real gradient to act on, so the guard does not abort that case (only a genuinely dead probe does). And it requires zero execution errors on *either* side — a not-should-trigger query that raised an exception never actually ran, so its "0 triggers" can't be used as evidence the probe is dead; that's exactly what routes to `infra_error` instead. Either way it breaks immediately and skips `improve_description` entirely — the JSON and HTML still report `best_description`/`best_score` normally (nothing is suppressed), the exit reason is the signal that this particular run's numbers shouldn't be read as "this is a good description." (Real case, 2026-08: a full 5-iteration loop was launched with no pre-check; two complete iterations — each a full eval batch, minutes of wall time and dozens of `claude -p` subprocess calls — came back precision=100%/recall=0%/identical scores before anyone looked at the numbers, and every should-trigger *and* not-should-trigger query alike had fired zero times. The failure was diagnosable from iteration 1 alone; nothing in iterations 2+ added information.) The HTML report also renders a banner when either exit reason fires, so the browser view carries the same signal as the JSON/stderr, not just the two lower-visibility channels. (An earlier draft of this guard checked should-trigger triggers alone; two rounds of independent review — a fresh agent each round, the second checking the first round's fixes rather than re-covering old ground — constructed the polarity-inverted counter-example, the infra-vs-description ambiguity, the negative-side-errors gap, and a pre-existing `--holdout 0` report crash it surfaced along the way, all fixed before shipping.)
+Both checks run **only against iteration 1**, and **only when zero should-trigger queries fired** — a weak-but-nonzero iteration 1 (say 1/9 triggers) with complete measurements is a different, potentially-recoverable case and is deliberately left to iterate. `degenerate_harness` additionally requires not-should-trigger queries to have fired zero times too: if the description is merely polarity-inverted — missing every positive while accidentally matching several negatives — the probe is proven to work and `improve_description` has real gradient to act on, so the guard does not abort that case (only a genuinely dead probe does). And it requires zero execution errors on *either* side — a not-should-trigger query that raised an exception never actually ran, so its "0 triggers" can't be used as evidence the probe is dead; that's exactly what routes to `infra_error` instead. Either way it breaks immediately and skips `improve_description` entirely. Treat a complete but silent result as a harness diagnosis rather than a good description; keep `best_description`/`best_score` null for an incomplete result with no eligible iteration. (Real case, 2026-08: a full 5-iteration loop was launched with no pre-check; two complete iterations — each a full eval batch, minutes of wall time and dozens of `claude -p` subprocess calls — came back precision=100%/recall=0%/identical scores before anyone looked at the numbers, and every should-trigger *and* not-should-trigger query alike had fired zero times. The failure was diagnosable from iteration 1 alone; nothing in iterations 2+ added information.) The HTML report also renders a banner when either exit reason fires, so the browser view carries the same signal as the JSON/stderr, not just the two lower-visibility channels. (An earlier draft of this guard checked should-trigger triggers alone; two rounds of independent review — a fresh agent each round, the second checking the first round's fixes rather than re-covering old ground — constructed the polarity-inverted counter-example, the infra-vs-description ambiguity, the negative-side-errors gap, and a pre-existing `--holdout 0` report crash it surfaced along the way, all fixed before shipping.)
+
+**Separate invocation, completed non-invocation and missing measurement.** Use
+`run_single_query`'s early `True` only after a complete tool-use input is committed
+by its block stop, or appears in a complete assistant message. Match decoded
+`Skill.skill` exactly to the isolated candidate's invocation name, or resolve
+`Read.file_path` against the probe directory and match the actual candidate file.
+Track interleaved tool blocks separately by index, retain initial input and JSON
+escapes, and continue past unrelated tools and message stops. Do not match names
+in notes, another candidate's prefix or unfinished JSON.
+
+Treat that `True` as an invocation observation only: stop the probe's own process
+without waiting for tool execution or task completion. Later execution errors do
+not erase an already committed invocation, and cleanup termination is expected.
+Require a successful result, complete stdout consumption including the final
+unterminated line, and process exit zero for `False`. Keep the original deadline
+through result, EOF and process exit. Treat timeout, nonzero exit, error result,
+missing successful result, malformed records and unfinished inputs as execution
+errors when no valid invocation was observed. Retain the original exception and
+a bounded stderr tail; drain stderr to a temporary file so diagnostics cannot
+block the child.
+
+Read `run_eval`'s `attempted_runs`, valid-observation `runs`, `errors` and per-run
+`attempts` separately. Calculate `trigger_rate` only from valid observations;
+leave it null when there are none. Set query `pass` to null when any attempt
+failed, even if its valid observations would meet the threshold. Count `passed`,
+`failed` and `incomplete` separately. Do not count an error as a correct negative.
+
+Stop an incomplete iteration before improvement with `measurement_incomplete`
+unless the iteration-1 zero-positive `infra_error` guard already explains it.
+Preserve the existing silence guards' iteration-1 and zero-positive scope. Do not
+feed incomplete queries or historical attempts to description improvement,
+declare them `all_passed`, or select an incomplete iteration as best. Display
+question marks, incomplete counts and available error diagnostics in the report;
+keep partial valid observations as diagnostics rather than verified scores.
 
 One caveat this guard can't cover: with `--runs-per-query 1` (the default is 3), a single should-trigger query with a genuinely-50%-ish trigger rate has a real chance of reading 0/1 by chance alone and tripping the guard on noise, not on a dead probe. The default `runs_per_query=3` is what makes "zero across every repeat of every positive query" a strong signal — if you override it down, this guard's false-positive risk goes up with it.
 
@@ -106,7 +140,7 @@ Diagnose it before you burn an optimization loop: run one realistic query throug
 
 ### Step 4: Apply the result
 
-Take `best_description` from the JSON output and update the skill's SKILL.md frontmatter. Show the user before/after and report the scores.
+Require a non-null `best_description` from a complete, accepted measurement before updating the skill's SKILL.md frontmatter. Show the user before/after and report the scores.
 
 For ordinary frontmatter shortening, use [the authoring rule](authoring-and-reuse.md#write-the-skillmd); preserve each distinct trigger job through [existing-skill-migration.md](existing-skill-migration.md). A failed trigger probe is not automatically evidence that the description needs rewriting.
 

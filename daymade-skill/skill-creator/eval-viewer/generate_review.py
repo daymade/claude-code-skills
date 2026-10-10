@@ -27,6 +27,11 @@ from functools import partial
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
+# Resolve the shared validator from this bundle, including absolute CLI and dynamic imports.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from scripts.grading_validation import ASSERTIONS_ABSENT, validate_grading
+
+
 # Files to exclude from output listings
 METADATA_FILES = {"transcript.md", "user_notes.md", "metrics.json"}
 
@@ -86,6 +91,8 @@ def build_run(root: Path, run_dir: Path) -> dict | None:
     """Build a run dict with prompt, outputs, and grading data."""
     prompt = ""
     eval_id = None
+    issues = []
+    assertions = ASSERTIONS_ABSENT
 
     # Try eval_metadata.json at the run dir, config dir, and eval dir levels
     # (the eval dir level matches aggregate_benchmark.py's convention, which is
@@ -94,10 +101,25 @@ def build_run(root: Path, run_dir: Path) -> dict | None:
     eval_dir = run_dir.parent.parent
     if eval_dir == root or root in eval_dir.parents:
         candidates.append(eval_dir / "eval_metadata.json")
+    # Assertion identity belongs only to the canonical eval-directory record.
+    # Display prompt fallbacks must not shadow that target with a local empty list.
+    if eval_dir == root or root in eval_dir.parents:
+        canonical = eval_dir / "eval_metadata.json"
+        if canonical.exists():
+            try:
+                metadata = json.loads(canonical.read_text())
+                if not isinstance(metadata, dict):
+                    raise ValueError("expected a JSON object")
+                assertions = metadata.get("assertions", ASSERTIONS_ABSENT)
+            except (ValueError, OSError) as exc:
+                assertions = None
+                issues.append(f"eval_metadata.json: {exc}")
     for candidate in candidates:
         if candidate.exists():
             try:
                 metadata = json.loads(candidate.read_text())
+                if not isinstance(metadata, dict):
+                    continue
                 prompt = metadata.get("prompt", "")
                 eval_id = metadata.get("eval_id")
             except (json.JSONDecodeError, OSError):
@@ -132,23 +154,36 @@ def build_run(root: Path, run_dir: Path) -> dict | None:
             if f.is_file() and f.name not in METADATA_FILES:
                 output_files.append(embed_file(f))
 
-    # Load grading if present
+    # Prefer the current run receipt; malformed present data cannot fall back to
+    # an older configuration-level grade. Preserve the legacy parent location.
     grading = None
+    grading_path = None
     for candidate in [run_dir / "grading.json", run_dir.parent / "grading.json"]:
         if candidate.exists():
+            grading_path = candidate
             try:
                 grading = json.loads(candidate.read_text())
-            except (json.JSONDecodeError, OSError):
-                pass
-            if grading:
-                break
+            except (ValueError, OSError) as exc:
+                issues.append(f"grading.json: {exc}")
+            break
+    validated = validate_grading(grading, assertions=assertions)
+    issues.extend(validated.issues)
+    status = ("graded" if validated.summary is not None else
+              "invalid_grading" if grading_path is not None else "missing_grading")
+    if status == "missing_grading":
+        issues.append("grading.json is missing; outcome is unknown")
+    accepted = ({"summary": validated.summary, "expectations": validated.expectations}
+                if validated.summary is not None else None)
 
     return {
         "id": run_id,
         "prompt": prompt,
         "eval_id": eval_id,
         "outputs": output_files,
-        "grading": grading,
+        "grading": accepted,
+        "grading_status": status,
+        "assertion_binding": validated.assertion_binding,
+        "issues": issues,
     }
 
 
