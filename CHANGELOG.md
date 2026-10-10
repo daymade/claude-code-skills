@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tech-selection** (`daymade-claude-code` v4.27.3): Choose and verify authorized reversible implementations while retaining candidates and trade-offs. Reserve confirmation for unresolved user-owned choices and actual authorization boundaries; keep completion claims tied to observed results. Apply explicit team instructions to their current task. Change type: bounded authorization-contract repair.
+
 - **skill-creator** (`daymade-skill` v1.69.0): Add a positive-opportunity branch to authorized cross-task improvement without requiring a prior failure. Resolve nested Markdown pointers within the Skill boundary in migration audits while preserving execution-path handling. Change type: methodology extension and audit implementation repair.
 - **competitors-analysis** (v1.6.0): Trace material advantages to adoption, validation or rejection decisions. Add a scoped read-only tool that reconciles independently frozen candidate keys with decisions and checks declared evidence stages while preserving standalone profiles. Change type: methodology and verification-tool extension.
 

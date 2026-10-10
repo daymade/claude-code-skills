@@ -1,11 +1,11 @@
 ---
 name: tech-selection
 description: >-
-  Gated checklist for choosing a technology (library, framework, storage, data format, model,
-  build-vs-buy, architecture) or reviewing a proposed one. If favorites-search is installed, MUST
-  run it before external research. Returns surviving candidates with trade-offs, not a single pick.
-  Use for 用哪个 / 选什么框架 / 要不要自建 / A 还是 B / 这个方案行不行, and before the agent commits to one. Not for
-  research reports (use deep-research).
+  Gated checklist to choose or review a library, framework, storage, data format, model,
+  build-vs-buy or architecture. Run favorites-search before external research when installed.
+  Compare candidates and trade-offs; select within authorization or return user-owned choices.
+  Use for 用哪个 / 选什么框架 / 要不要自建 / A 还是 B / 这个方案行不行 and before committing to one.
+  Research reports → deep-research.
 argument-hint: "<decision to make>"
 ---
 
@@ -13,13 +13,16 @@ argument-hint: "<decision to make>"
 
 A checklist for choosing between technologies, not a scoring rubric. The core
 insight: these criteria are **filters, not sorters** — they kill candidates that
-violate a principle. Which candidate to adopt is not the agent's decision: when
-two or more candidates survive, return candidates + trade-offs + a recommendation
-to the user. Never a single pick.
+violate a principle. Keep the candidates and trade-offs visible, then apply the
+current authorization: choose and verify an authorized reversible implementation;
+return unresolved business, product or preference trade-offs to the user.
+Candidate count, duration and confidence language do not determine who decides.
 
 Two outcomes end the protocol early:
-1. **Multi-candidate human tradeoff** — ≥2 survivors after filtering. Stop and return.
-2. **Unverified completion claim** — the artifact claims done but has not been probed. Stop and return.
+1. **User-owned choice** — missing authorization or a genuine unresolved business,
+   product or preference trade-off. Return the evidence and recommendation.
+2. **Unverified completion claim** — withhold the claim, execute authorized
+   verification, and report any remaining acceptance gap.
 
 ## Not This
 
@@ -33,7 +36,13 @@ Two outcomes end the protocol early:
 
 ## Execution Protocol
 
-**Lightweight path.** A choice is reversible, local, under 10 minutes, and has no external contract → run Steps 0, 1, and 3 only, record the business result and the prior-art layer, and proceed. Skip Steps 2, 4, 5, 6, and 7. Choosing a JSON library inside a bug fix is this path; choosing the project's storage engine is not. When unsure which path applies, take the full protocol.
+**Lightweight path.** For a small reversible local implementation with no external
+contract, run Steps 0, 1 and the applicable Step 3 axes. Use the short output below;
+run the necessary authorized probe before claiming the result works. A JSON library
+inside a bug fix fits; the project's storage engine or external field contract
+requires the full protocol even if the change takes under 10 minutes. Duration
+estimates effort, not authorization. When unsure which path applies, take the full
+protocol. Both paths obey the two stops and any explicit current-task instruction.
 
 ### Step 0 · Frame
 
@@ -61,9 +70,16 @@ Layer 2 has a minimum coverage requirement: use a search tool to enumerate what 
 
 For ingestion, indexing, storage or batch-data choices, load `references/batch-data-probes.md` and derive the representative cases from the actual consumer contract before comparing engines.
 
-The only admissible evidence is behavior you ran and observed. READMEs, vendor pages, docs, and source-code claims are all downgraded. Termination clause: max two attempts across methods per candidate; two failures → "this cannot be done now."
+Label evidence by what it establishes: observed execution proves the measured
+behavior; current official API docs or inspected source can establish a contract
+or exclude an incompatible candidate, but cannot prove runtime usability or
+business benefit. README/vendor claims alone leave those claims `unknown`.
+Termination clause: max two attempts across methods per candidate; two failures
+→ "this cannot be done now," with the unmeasured claim left `unknown`.
 
-> Checkpoint: Every load-bearing claim must name its probe. A claim sourced only from a README → mark `unknown`, not `pass`.
+> Checkpoint: Every load-bearing claim names its evidence and scope. Runtime and
+> business-result claims need the corresponding observation; source-contract
+> evidence must not be relabeled as an observed result.
 
 ### Step 3 · Filter Each Candidate
 
@@ -75,17 +91,28 @@ A `fail` on a core axis kills the candidate. A `fail` on a C-class criterion fro
 
 ### Step 4 · Triage Survivors — The Core Gate
 
-- **0 survivors**: Report which axis killed which candidate, and whether the axis was wrong or the candidate set was incomplete. If candidates died from `unknown` rather than `fail`, the honest output is: each candidate, the probe it stalled on, and what input the user could supply to unblock it. Do not fabricate a verdict to escape the zero.
-- **1 survivor**: May declare only if all three autonomy conditions hold: long-term maintainable, industry best practice, 100% confidence. If any is missing → treat as ≥2 survivors and stop. Must also carry the Step 5 self-defense.
-- **≥2 survivors**: **STOP.** Return candidates + trade-offs + one recommendation. Do not single-pick. Do not silently drop rejected candidates.
+- **0 survivors**: Report which axis killed which candidate, and whether the axis
+  was wrong or the candidate set incomplete. Distinguish `unknown` from `fail`;
+  name the stalled probe and recovery condition. Run available authorized probes
+  before asking for information only the user can supply. Never invent a survivor.
+- **1 or more survivors**: Read `references/delegation-contract.md`. Check current
+  authorization and consequences, including maintainability and relevant industry
+  practice. For an authorized reversible implementation, choose with evidence,
+  retain alternatives and trade-offs, and execute necessary verification. For an
+  unresolved user-owned choice, return candidates + trade-offs + one recommendation
+  and stop only the dependent action. Do not silently drop rejected candidates.
 
 > Checkpoint: Can the output name which candidate was demoted and by which axis? If not, the gate was hollowed out.
 
 ### Step 5 · Self-Defense Slot
 
-Any conclusion produced by this skill carries a "why this isn't garbage" paragraph, and it must **not be self-certified** by this skill alone.
+A full-protocol conclusion carries a "why this isn't garbage" paragraph, and it
+must **not be self-certified** by this skill alone. The lightweight route carries
+its named reason and evidence in the short output instead.
 
-> Checkpoint: Every sentence in the self-defense traces to a probe or an axis verdict. Generic principles (e.g. "it's a mature library") = invalid.
+> Checkpoint: Every sentence in the self-defense traces to evidence or an axis
+> verdict within that evidence's scope. Generic principles (e.g. "it's a mature
+> library") = invalid.
 
 ### Step 6 · Saturate Irreversible Surfaces
 
@@ -97,68 +124,82 @@ Scan for surfaces that cannot be patched after release: telemetry/events, field 
 
 Distinguish "I verified" from "I claim." Every done statement is followed by what was actually executed and observed.
 
-> Checkpoint: Go to the second stop — artifacts claiming done but unverified stop here.
+> Checkpoint: Run the authorized checks the agent can perform. Label human
+> acceptance separately; unobserved acceptance stays unconfirmed and must not
+> become a completion claim or block already-authorized verification and delivery.
 
 ## Output Shape
 
-Every run of this skill produces all six fields below, in this order. Omitting
-a field is a protocol failure — the checkpoints audit the output against these
-fields.
+**Lightweight output:** business result + falsifier; prior-art layer; chosen local
+implementation + reason and authorization; necessary probe result or `unknown`.
+Keep relevant alternatives visible without requiring the full matrix or unused
+Steps 4–6 fields.
+
+**Full-protocol output:** produce the six fields below. Include actual verification
+and human-acceptance status with the decision branch.
 
 1. **Business result + failure mode** (Step 0) — the two lines.
 2. **Candidate table** (Steps 1–3) — each candidate with its layer tag, its
    per-axis verdict (`pass`/`fail`/`unknown`), and the probe name behind each
-   `pass`. A candidate carrying `unknown` is marked, not hidden.
+   `pass`, or authoritative source evidence for a source-contract verdict. A
+   candidate carrying `unknown` is marked, not hidden.
 3. **Survivor demotion record** (Step 4) — for each demoted candidate, which
    axis killed it and the named failure mode. If no candidate was demoted, say
    "no candidate eliminated" and list the axes that passed everything.
 4. **Decision branch** (Step 4) — declare exactly one of:
-   - `≥2 survivors → STOP` with candidates + trade-offs + one recommendation
-   - `1 survivor, autonomy met` with the Step 5 self-defense
+   - `authorized implementation` with chosen survivor, alternatives, trade-offs,
+     authorization and the Step 5 self-defense
+   - `user-owned choice → STOP` with candidates + trade-offs + one recommendation,
+     the missing decision/authorization and the dependent action withheld
    - `0 survivors` with the diagnosis (axis wrong vs candidate set incomplete)
 5. **Self-defense** (Step 5) — each sentence traces to a probe or an axis
-   verdict. Write only for branch 2; branches 1 and 3 defer to the user.
+   verdict. Write for the chosen implementation or recommendation; for zero
+   survivors, carry the diagnosis instead of defending an invented winner.
 6. **Irreversible surface list** (Step 6) — the surfaces found, or the word
    "none." Never omit.
 
-## Two Stops That Return to the User
+## Two Stops
 
 ### Stop 1 · Multi-candidate human tradeoff
 
-When ≥2 candidates survive filtering, the output is:
+When current authorization leaves a business, product or preference choice to the
+user, the output is:
 - Each surviving candidate
 - Its trade-offs (what it costs, what it gives up)
 - One recommendation with reasoning
 
-Never a single pick. Never a ranked list. Never silently dropping rejected candidates.
-
-The autonomy threshold for a tech selection is three-part, all three required or stop:
-1. Long-term maintainable
-2. Industry best practice
-3. 100% confidence
+Do not execute that dependent choice before the user resolves it. Keep rejected
+candidates and their reasons visible; do not fabricate a ranking. Multiple
+survivors alone do not reopen authorization for a local reversible implementation.
+New scope, external commitments and irreversible actions require their actual
+authorization even when only one candidate survives. Reuse prior answers unless
+later facts or instructions change their applicability.
 
 ### Stop 2 · Unverified completion claim
 
-Any artifact that claims done but has not been probed by the user stops here. "Tests pass" is not the same as "you verified it works."
+The agent executes authorized probes and observes the actual consumer/result;
+tests passing cannot substitute for that result. If the artifact requires human
+acceptance, present the concrete result and evidence for acceptance and mark that
+status unconfirmed until observed. Withhold unsupported completion claims, continue
+independent authorized work, and identify the exact missing condition when blocked.
 
 ## Agent Orchestration — Four Questions
 
 Agent count is not preset here. Run the four questions from
 `daymade-agent-discipline` and let them decide.
 
-**In tech selection the answer is already fixed by a standing instruction for this
-task: agent-team discussion is mandatory, and picking a direction unilaterally is
-forbidden.** That instruction outranks any general delegation rule, and Stop 1 is
-where it is enforced — when two or more candidates survive, return candidates +
-trade-offs + a recommendation, never a single pick. It is scoped to this task, not a
-preference about how all work is delegated.
+An explicit instruction in the current task to use team discussion or avoid a
+unilateral direction takes precedence for that task. A historical task instruction
+does not make every later selection a team task; apply the current delegation
+discipline where no explicit instruction governs.
 
 1. **Estimated time?** < 10 min → do it yourself. > 30 min → spawn *candidate* only; duration alone never licenses a spawn. 10–30 min → check other dimensions.
 2. **Need main-session context (user preferences, multi-round feedback, nuanced decisions)?** Yes → do it yourself. No → spawn *candidate*, not automatic.
 3. **Need an unbiased third party (evaluator/reviewer)?** Yes → must spawn (even if fast) — for high-risk, complex work lacking an independent mechanical referee. Ordinary tasks and small changes never auto-spawn one.
 4. **Truly parallel (independent streams)?** Yes → may spawn, if current rules allow; implementation work, exclusive resources (browser, Computer Use, single-writer checkout) and private-context judgment never enter the fan-out pool. Otherwise doing it yourself is faster.
 
-Concurrency ceiling: 8–10 (measured, not theoretical). Exceeding it risks quota truncation of the entire batch.
+Set concurrency within the actual host limit and current delegation discipline;
+a historical measured ceiling is not a portable fan-out default.
 
 ## References
 
@@ -168,15 +209,15 @@ Concurrency ceiling: 8–10 (measured, not theoretical). Exceeding it risks quot
 | `references/batch-data-probes.md` | Step 2 — ingestion/indexing/storage correctness, growth, incremental work and recovery probes |
 | `references/scoped-criteria.md` | Step 3 supplementary — 13 narrower criteria with scope labels; C-class items are preferences, not default gates |
 | `references/rejection-modes.md` | Before proposing — 28 entries (16 rejection patterns + 18 anti-patterns, deduplicated) with self-test sentences |
-| `references/delegation-contract.md` | Step 4 — domain ownership table, autonomy threshold, the 6 resolved scope boundaries |
+| `references/delegation-contract.md` | Step 4 — domain ownership, current authorization and the 6 resolved scope boundaries |
 
 ## Boundary Quick Reference
 
 | Boundary | Resolution |
 |---|---|
 | 禁绕过 vs fallback | Bypass = replacing the main path (fix scenario). Fallback = supplementary path (runtime channel). Different scenarios. |
-| 不看 README vs 官方文档优先 | READMEs = vendor marketing/capability claims. Official API docs/source code = authoritative. Different information sources. |
+| 不看 README vs 官方文档优先 | README/vendor claims do not prove usability. Official docs/source can establish a source contract; runtime and business-result claims require their own observations. |
 | 预算定档 vs 资源无限 | Budget sets execution tier (which model runs). It never decides whether to do it. Different axes. |
 | 不主动压缩 vs 宿主自动压缩 | During Steps 0–6, do not drop source material to save context — the candidate table and probe records stay complete. Host auto-compaction is outside this skill's control and is not a reason to pre-emptively thin the output. Different actors. |
 | 饱和上报 vs 拒绝过度工程 | Saturation applies to irreversible telemetry (events, export formats, external contracts), not feature surface. Different surfaces. |
-| 单次任务强制要求 vs 通用委派判据 | In tech selection, agent-team discussion is mandatory and picking a direction unilaterally is forbidden. That instruction is scoped to this task and outranks any general delegation rule — the four questions fill the gaps it leaves, they do not override it. Stop 1 is where it is enforced. |
+| 单次任务强制要求 vs 通用委派判据 | An explicit team/no-unilateral-direction instruction governs its task. Otherwise use current authorization and delegation discipline; do not promote a past task instruction into a standing requirement. |

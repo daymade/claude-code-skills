@@ -2,11 +2,11 @@
 name: delegation-contract
 description: >-
   Who decides what during tech selection: the domain ownership table (agent vs.
-  user, split by knowledge domain rather than difficulty), the three-part
-  autonomy threshold, the requirement-vs-method split line, the six resolved
+  user, split by knowledge domain rather than difficulty), current authorization,
+  the requirement-vs-method split line, the six resolved
   scope boundaries that look like contradictions but are not, and the four
-  agent-orchestration questions — overridden in this skill by a standing
-  instruction to use an agent team. Read at Step 4
+  agent-orchestration questions — overridden by explicit current-task
+  instructions. Read at Step 4
   (survivor triage), before Stop 1, and before escalating any question to the
   user.
 ---
@@ -25,20 +25,21 @@ is authorized to make are both violations.
 
 | Domain | Owner |
 |---|---|
-| Implementation path, technical framework, storage medium, model/tool choice, code formatting | agent |
+| Implementation path, technical framework, storage medium, model/tool choice, code formatting within the authorized result and side-effect boundary | agent |
 | Domain/business judgment, which features to include, and the adjudication of real vs. fake requirements | user |
-| True multi-candidate tradeoffs — return candidates + trade-offs + recommendation, never a single pick | user |
-| Any artifact that claims done but has not been verified by the user | user |
-| External / irreversible / commercial / genuine disagreement | stop and ask |
+| Unresolved business, product or genuine preference trade-offs — return candidates + trade-offs + recommendation | user |
+| Technical/consumer verification the agent can run within authorization | agent; execute and report observations |
+| Human acceptance of a concrete artifact | user; keep unobserved acceptance unconfirmed |
+| New scope, external commitments, irreversible actions or genuine disagreement not covered by existing authorization | stop the dependent action and ask |
 
 The direction of the split is not "hard things go up." Storage-medium choice is
-deep and delegated; a library shortlist is shallow and returned. The axis is
+deep and may be delegated; a library choice may require a genuine user preference. The axis is
 **whose knowledge the decision runs on**: expertise-heavy technical choices are
 delegated, preference- and consequence-bearing choices are not.
 
-## Autonomy Threshold — three parts, all three required
+## Autonomy Threshold — apply current authorization
 
-Decide a technical selection alone **only** when all three hold:
+The earlier restriction required all three conditions:
 
 > 「除非你是百分百确认这种技术选型是长期的、可维护的，是业界的最佳实践」（2026-07-21）
 
@@ -46,8 +47,18 @@ Decide a technical selection alone **only** when all three hold:
 2. Industry best practice
 3. 100% confidence
 
-Any one missing → stop. The stop output is the Stop 1 format: candidates +
-trade-offs + one recommendation — not a silent pick, and not a bare question.
+Preserve that restriction when it remains the current instruction for the task.
+Later autonomous-delivery authorization changes its applicability: necessary
+local reversible implementation choices are made by the agent, with evidence,
+maintainability and relevant industry practice checked. Do not invent “100%
+confidence,” turn an unknown into a survivor or manufacture a second survivor to
+force a question. Candidate count and elapsed time do not grant or revoke authority.
+
+Before deciding, check the current instruction and existing authorization for this
+action, its scope, consequences and recovery path. Reuse an applicable prior answer;
+ask only when information is truly missing or a user-owned choice/authorization
+boundary remains. Execute available authorized probes before escalating unknowns.
+This is agent judgment, not a mechanically enforced permission check.
 
 ## Requirement vs. Method — the split line
 
@@ -97,23 +108,21 @@ surfaces:
 | Boundary | Resolution |
 |---|---|
 | 禁绕过 vs fallback | Bypass = swapping out the main path (root-cause fix scenario). Fallback = a supplementary runtime channel, kept but marked never load-bearing. Different scenarios — the ban is on fix work, not on channel design. |
-| 不看 README vs 官方文档优先 | READMEs = vendor marketing and capability claims. Official API docs and source code = authoritative. Different information sources — one is distrusted, the other is evidence-graded. |
+| 不看 README vs 官方文档优先 | README/vendor claims do not prove usability. Official docs/source can establish a source contract; runtime and business-result claims require their own observations. |
 | 预算定档 vs 资源无限 | Budget sets the execution tier (which model runs); it never decides whether to do the work. Different axes — cost answers "how," not "whether," and is never a rejection reason on the user's own projects. |
 | 不主动压缩 vs 宿主自动压缩 | 不主动压缩 is a discipline this selection process imposes on itself; host auto-compaction is the runtime acting on its own. Different actors — a self-imposed rule and an external event must not be conflated in either direction. |
 | 饱和上报 vs 拒绝过度工程 | Saturation applies to irreversible observation surfaces (events, field and export formats, external contracts); the anti-overengineering ban applies to feature surface. Different surfaces — saturating telemetry is not adding features. |
-| 单次任务强制要求 vs 通用委派判据 | In tech selection, agent-team discussion is mandatory and picking a direction unilaterally is forbidden. That instruction is scoped to this task and outranks any general delegation rule — the four questions fill the gaps it leaves, they do not override it. Stop 1 is where it is enforced. |
+| 单次任务强制要求 vs 通用委派判据 | An explicit team/no-unilateral-direction instruction governs its task. Otherwise use current authorization and delegation discipline; do not promote a past task instruction into a standing requirement. |
 
 ## Agent Orchestration — Four Questions
 
 Agent count is not preset here. Run the four questions from
 `daymade-agent-discipline` and let them decide.
 
-**In tech selection the answer is already fixed by a standing instruction for this
-task: agent-team discussion is mandatory, and picking a direction unilaterally is
-forbidden.** That instruction outranks any general delegation rule, and Stop 1 is
-where it is enforced — when two or more candidates survive, return candidates +
-trade-offs + a recommendation, never a single pick. It is scoped to this task, not a
-preference about how all work is delegated.
+An explicit instruction in the current task to use team discussion or avoid a
+unilateral direction takes precedence for that task. A historical task instruction
+does not make every later selection a team task; apply the current delegation
+discipline where no explicit instruction governs.
 
 1. **How long will it take?** < 10 min → do it yourself. > 30 min → spawn
    *candidate*; duration alone never licenses a spawn. 10–30 min → weigh the
@@ -135,8 +144,9 @@ preference about how all work is delegated.
 - Returning a decision the agent is authorized to make — asking is a cost, not
   a safety move.
 - Treating 「别问 X」 as permission to 「做 Y」 — autonomy does not migrate across
-  risk categories (external, irreversible, commercial, genuine disagreement
-  always stop).
-- Adopting an AI-produced architecture or selection conclusion as a deliverable
-  — the only category the user explicitly removed from delegation; conclusions
-  carry the Step 5 self-defense slot and are not self-certified.
+  risk categories; external, irreversible or commercial actions still require
+  their own authorization, and unresolved business/preferences remain user-owned.
+- Adopting an AI-produced architecture or selection assertion as verified without
+  evidence. Full-protocol conclusions carry the Step 5 self-defense; lightweight
+  conclusions carry their named reason and evidence. Both require independently
+  checkable observations; agent verification does not establish unobserved human acceptance.
