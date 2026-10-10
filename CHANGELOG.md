@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-load-doctor** (`daymade-macos` v1.22.4): Resolve the census helper from the loaded Skill directory so diagnosis works from another project. Align the helper's output and comments with the existing lifecycle-based leak criterion; remove list-derived prose counts. Change type: existing-contract repair and lossless deduplication.
+- **peer-message** (v1.20.1): Make discovery/export examples use the loaded Skill's absolute directory; add the existing output-contract route to repository instructions. Change type: factual command correction.
+
 - **skill-creator** (`daymade-skill` v1.67.5): Organize the existing creation, migration, evaluation and publication contracts behind action-time entry routes. Preserve supported workflows and authorization/recovery boundaries. Report missing measurements and incomplete evaluation pairs explicitly instead of substituting zeros or character counts. Change types: behavior-preserving reorganization and measurement repairs.
 - **peer-message** (v1.18.1): Align the post-change coordination and repository entry instructions with live tool-output delivery. Keep transport preparation and receiver evidence in the protocol SOP, distinguish genuine inbound adapter output from quoted IDs, and remove copied defaults and derived prose counts. Change type: documentation workflow alignment; transport implementation unchanged.
 - **github-contributor** (v1.3.0 → v1.3.1): Replace name-based GUI targeting, empty-log isolation claims and shared-checkout stash controls with exact instance/data verification and immutable-base comparison. Correct the historical #1624 case and route explicitly requested independent author-side reviews to the existing maintainer lens. Change type: evidence-backed workflow correction.

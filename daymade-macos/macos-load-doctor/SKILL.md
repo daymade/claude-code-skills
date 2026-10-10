@@ -40,10 +40,12 @@ hundreds of small processes, not one big one.
 ### 2. Process census — run the bundled script
 
 ```bash
-bash scripts/load_census.sh
+LOAD_DOCTOR_DIR='<absolute directory containing this SKILL.md>'
+bash "$LOAD_DOCTOR_DIR/scripts/load_census.sh"
 ```
 
-It prints three readings, each answering a different question:
+Resolve that directory from the loaded Skill entry; the caller's project directory
+is not the Skill directory. The census readings answer different questions:
 
 - **By parent (PPID aggregation)** — *who owns many children?* A large count
   identifies fan-out and resource overhead, not a proven leak. Compare births,
@@ -71,7 +73,7 @@ sit at status `-9` (SIGKILL) permanently — that is routine noise, not a crash
 loop. The respawn-loop signal is a job whose PID keeps *changing* between
 runs, not any single status value.
 
-Attribution answers three questions: which product/session owns it, is it
+Attribution determines which product/session owns it, whether it is
 supposed to be long-lived (a daemon) or short-lived (a helper that forgot to
 die), and who is allowed to stop it.
 
@@ -153,8 +155,7 @@ the census does not mechanically classify a leak.
 
 ## Common leak patterns
 
-Short table in this file for the shapes seen repeatedly; worked cases with
-real probe outputs and the reasoning chain live in
+Worked cases with real probe outputs live in
 [references/incident-playbook.md](references/incident-playbook.md) — read it
 when the census shows something you have not seen before, or when you need a
 precedent for the report you are about to write.

@@ -145,8 +145,9 @@ UTF-8 字节上限，超限会明确失败，不返回看似完整的半份清�
 行数及 Codex 条数是否截断。已有输出文件会拒绝覆盖。
 
 ```bash
-python3 scripts/peer.py list --provider codex --limit 12 --json
-python3 scripts/peer.py list --provider codex --limit 12 --json \
+PEER_SKILL_DIR='<absolute directory containing the loaded peer-message SKILL.md>'
+python3 "$PEER_SKILL_DIR/scripts/peer.py" list --provider codex --limit 12 --json
+python3 "$PEER_SKILL_DIR/scripts/peer.py" list --provider codex --limit 12 --json \
   --full-titles --output '<new private scratch file>'
 ```
 
