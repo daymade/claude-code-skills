@@ -6,7 +6,9 @@ PR URL: https://github.com/farion1231/cc-switch/pull/1624
 
 ## Phase 1 — Scope and baseline
 
-The project's `CONTRIBUTING.md` AI-Assisted clause applied (same five rules as PR #2634). The PR-size baseline was already known from PR #2634; this change was intentionally smaller (+~300/-~50 lines), mostly TypeScript and two small Rust commands.
+The project's `CONTRIBUTING.md` AI-Assisted clause applied. The PR-size baseline was
+already known from PR #2634; this change was intentionally smaller, mostly TypeScript
+and Rust command wiring.
 
 ## Phase 2 — Implementation notes
 
@@ -49,7 +51,7 @@ These are small but worth fixing because maintainers notice red CI more than the
 
 `useSettingsForm` loads server settings via React Query, then asynchronously reads the real transcript-protection state from `~/.claude/settings.json`. If the user toggles the switch before that async read returns, the async result must not overwrite the user's explicit choice.
 
-The fix uses two refs:
+The fix uses refs:
 
 1. `hasSyncedTranscriptProtectionRef` — ensures the async read happens only once (on initial data load), not on every refetch.
 2. `userTouchedTranscriptRef` — if the user has manually changed the toggle, the async result is ignored.
@@ -58,7 +60,7 @@ This pattern generalizes: **any async initialization that can return after user 
 
 ### Test coupling after refactoring
 
-`useSettings.ts` was refactored to extract a shared `syncTranscriptProtection` helper used by both auto-save and explicit save. After the refactor, three SettingsDialog tests failed because the helper called `settingsApi.applyTranscriptProtection()` / `clearTranscriptProtection()` on every save, but the tests only mocked `settingsApi.save()`.
+`useSettings.ts` was refactored to extract a shared `syncTranscriptProtection` helper used by both auto-save and explicit save. After the refactor, SettingsDialog tests failed because the helper called `settingsApi.applyTranscriptProtection()` / `clearTranscriptProtection()` on every save, but the tests only mocked `settingsApi.save()`.
 
 The fix was not to add more mocks. It was to make the helper compare the new value against the **last known persisted value** and only call the protection API when the value actually changed:
 

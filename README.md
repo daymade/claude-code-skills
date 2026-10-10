@@ -865,19 +865,17 @@ Establish world-class QA testing processes with autonomous LLM execution, Google
 - Executing comprehensive test plans with automatic progress tracking
 - Filing bugs with proper P0-P4 severity classification
 - Calculating quality metrics and enforcing quality gates
-- Enabling autonomous LLM-driven test execution (100x speedup)
+- Enabling autonomous LLM-driven test execution
 - Preparing QA documentation for third-party team handoffs
 
 **Key features:**
 - **One-command initialization**: Complete QA infrastructure with templates, CSVs, and documentation
 - **Autonomous execution**: Master prompt enables LLM to auto-execute all tests, auto-track results, auto-file bugs
-- **Google Testing Standards**: AAA pattern compliance, 90% coverage targets, fail-fast validation
-- **OWASP security testing**: 90% Top 10 coverage with specific attack vectors
-- **Quality gates enforcement**: 100% execution, ≥80% pass rate, 0 P0 bugs, ≥80% code coverage
+- **Testing standards and quality gates**: Follow [qa-expert](./qa-expert/SKILL.md) for the canonical policy
 - **Ground Truth Principle**: Prevents doc/CSV sync issues (test docs = authoritative source)
 - **Bug tracking**: P0-P4 classification with detailed repro steps and environment info
-- **Day 1 onboarding**: 5-hour guide for new QA engineers
-- **30+ LLM prompts**: Ready-to-use prompts for specific QA tasks
+- **Onboarding**: Guide for new QA engineers
+- **LLM prompts**: Ready-to-use prompts for specific QA tasks
 - **Metrics dashboard**: Test execution progress, pass rate, bug analysis, quality gates status
 
 **Example usage:**
@@ -889,7 +887,7 @@ python3 scripts/init_qa_project.py my-app ./
 python3 scripts/calculate_metrics.py tests/TEST-EXECUTION-TRACKING.csv
 
 # For autonomous execution, copy master prompt from:
-# references/master_qa_prompt.md → paste to LLM → auto-executes 342 tests over 5 weeks
+# references/master_qa_prompt.md → paste to LLM → execute the project's approved test plan
 ```
 
 **🎬 Live Demo**
@@ -897,9 +895,9 @@ python3 scripts/calculate_metrics.py tests/TEST-EXECUTION-TRACKING.csv
 *Coming soon*
 
 📚 **Documentation**: See [qa-expert/references/](./qa-expert/references/) for:
-- `master_qa_prompt.md` - Single command for autonomous execution (100x speedup)
+- `master_qa_prompt.md` - Autonomous execution entry
 - `google_testing_standards.md` - AAA pattern, coverage thresholds, OWASP testing
-- `day1_onboarding.md` - 5-hour onboarding timeline for new QA engineers
+- `day1_onboarding.md` - Onboarding timeline for new QA engineers
 - `ground_truth_principle.md` - Preventing doc/CSV sync issues
 - `llm_prompts_library.md` - 30+ ready-to-use QA prompts
 
@@ -2680,7 +2678,7 @@ export BIGDATA_API_KEY=bd_v2_xxxxxxxx
 
 > **Install**: `claude plugin install daymade-financial@daymade-skills` (suite-only — invoked as `daymade-financial:gangtise-copilot`)
 
-One-command installer, credential configurator, and diagnostic layer for the full Gangtise (岗底斯投研) OpenAPI skill suite. Installs all 19 official Gangtise skills (data, research, utility), configures accessKey/secretAccessKey with a live auth check, and runs a read-only health diagnostic — solving the suite's core discoverability problem (no public manifest, listing-disabled OBS bucket, two parallel naming lines).
+One-command installer, credential configurator, and diagnostic layer for the full Gangtise (岗底斯投研) OpenAPI skill suite. Installs the official Gangtise skills (data, research, utility), configures accessKey/secretAccessKey with a live auth check, and runs a read-only health diagnostic — solving the suite's core discoverability problem (no public manifest, listing-disabled OBS bucket, parallel naming lines).
 
 **When to use:**
 - The user mentions Gangtise / 岗底斯, or any `gangtise-*` skill
@@ -2689,10 +2687,10 @@ One-command installer, credential configurator, and diagnostic layer for the ful
 - Routing a data question (research reports, chief-analyst opinions, OHLC, valuation) to the right Gangtise skill
 
 **Key features:**
-- `install_gangtise.sh` downloads 4 OBS bundles → extracts 19 skill directories → symlinks them into detected agent skills dirs (Claude Code, OpenClaw, Codex), with `minimal`/`workshop`/`full`/`--only` presets
-- `configure_auth.sh` writes one shared XDG credential file (mode 600), runs a live auth call, and symlinks every skill's `.authorization` to it (rotate one file, not 19)
+- `install_gangtise.sh` downloads the declared OBS bundles → extracts skill directories → symlinks them into detected agent skills dirs (Claude Code, OpenClaw, Codex), with `minimal`/`workshop`/`full`/`--only` presets
+- `configure_auth.sh` writes a shared XDG credential file (mode 600), runs a live auth call, and symlinks every skill's `.authorization` to it
 - Read-only `diagnose.sh` reports install state, credential validity, and scoped capability tiers (auth scope vs RAG scope)
-- Skill registry routing a data question across the two-dimensional (data tier × operation type) matrix of 19 skills
+- Skill registry routing a data question by data tier and operation type
 - Wrapper contract: never vendors/forks upstream files, always re-downloads the canonical OBS artifact, and asks before touching any installed skill
 
 **Example usage:**
@@ -4152,7 +4150,7 @@ Each skill includes:
 - **repomix-safe-mixer**: See `repomix-safe-mixer/references/common_secrets.md` for detected credential patterns
 - **video-comparer**: See `video-comparer/references/video_metrics.md` for quality metrics interpretation and `video-comparer/references/configuration.md` for customization options
 - **transcript-fixer**: See `daymade-audio/transcript-fixer/references/workflow_guide.md` for step-by-step workflows and `daymade-audio/transcript-fixer/references/team_collaboration.md` for collaboration patterns
-- **qa-expert**: See `qa-expert/references/master_qa_prompt.md` for autonomous execution (100x speedup) and `qa-expert/references/google_testing_standards.md` for AAA pattern and OWASP testing
+- **qa-expert**: See [qa-expert](./qa-expert/SKILL.md) for autonomous execution and testing standards
 - **prompt-optimizer**: See `prompt-optimizer/references/ears_syntax.md` for EARS transformation patterns, `prompt-optimizer/references/domain_theories.md` for theory catalog, and `prompt-optimizer/references/examples.md` for complete transformations
 - **read-codex-history**: See `daymade-claude-code/read-codex-history/references/storage_and_portability.md` for local-store selection, cross-platform paths, privacy boundaries, and diagnostics
 - **read-claude-code-history**: See `daymade-claude-code/read-claude-code-history/references/session_file_format.md` for JSONL structure and `daymade-claude-code/read-claude-code-history/references/workflow_examples.md` for recovery workflows

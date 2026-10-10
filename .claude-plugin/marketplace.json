@@ -443,7 +443,7 @@
       "description": "Ships pull requests to open-source projects you don't maintain — CONTRIBUTING compliance, PR-size/scope checks, minimal-diff implementation, AI-disclosure PR descriptions, and rebase or bot-review replies. Use for 提 PR / 上游 PR / 贡献代码, \"open a PR\", \"fix this upstream\", \"rebase against main\", \"respond to the bot review\". Not for reviewing PRs as maintainer (use github-review-pr) or general GitHub CRUD (use github-ops).",
       "source": "./github-contributor",
       "strict": false,
-      "version": "1.3.1",
+      "version": "1.3.2",
       "category": "developer-tools",
       "keywords": [
         "github",

@@ -32,6 +32,7 @@ go test ./...
 Run each command individually and **capture the output**. If a command takes more than ~30 seconds, save the output to a file so you can paste it into the PR body later:
 
 ```bash
+set -o pipefail
 pnpm test:unit 2>&1 | tee /tmp/test-unit.log
 ```
 
@@ -77,30 +78,17 @@ rg 'process\.env\.' src/    # Node: env reads
 
 If you find a function like `get_home_dir()` that reads an environment variable as an override, that's your hook.
 
-If the project has **no** test hook, the safest path is:
-
-- Back up your real data first (`cp -a ~/.appname ~/.appname.bak`).
-- Open an issue suggesting adding a test hook (it costs the maintainer ~5 lines).
-- Use a pre-built isolated VM/container if the project provides one (less common).
+If the project has **no** test hook, use an already authorized isolated VM/container
+and verify its consumer-data paths before input. A backup does not isolate a test
+from production data. Propose an isolation hook only within the contribution's scope.
 
 Never attempt to "just be careful" with your real data. You will eventually clobber it.
 
 ### 2.2 Real example: cc-switch
 
-cc-switch hardcodes its data directory but provides `CC_SWITCH_TEST_HOME`:
-
-```rust
-// src-tauri/src/config.rs (paraphrased)
-pub fn get_home_dir() -> PathBuf {
-    if let Ok(home) = std::env::var("CC_SWITCH_TEST_HOME") {
-        let trimmed = home.trim();
-        if !trimmed.is_empty() {
-            return PathBuf::from(trimmed);
-        }
-    }
-    dirs::home_dir().unwrap_or_default()
-}
-```
+For cc-switch, inspect `src-tauri/src/config.rs` in the tested commit for
+`CC_SWITCH_TEST_HOME` and its current path-resolution behavior. Use the executable
+implementation rather than a copied resolver as the isolation authority.
 
 Usage:
 
@@ -109,7 +97,7 @@ mkdir -p /tmp/cc-switch-e2e/.cc-switch
 CC_SWITCH_TEST_HOME=/tmp/cc-switch-e2e pnpm tauri dev
 ```
 
-With the override honored by the actual launched instance, its database is `/tmp/cc-switch-e2e/.cc-switch/cc-switch.db`. Before input, identify the binary, bundle and PID, then verify the resolved data paths. Give the test bundle a separate identity so an existing production instance cannot receive its single-instance messages.
+Before input, identify the binary, bundle and PID, then derive and verify its effective database and consumer-data paths from the tested resolver. A home override alone does not prove the effective application-data path. Give the test bundle a separate identity so an existing production instance cannot receive its single-instance messages.
 
 Fresh-start logs can corroborate isolation:
 
