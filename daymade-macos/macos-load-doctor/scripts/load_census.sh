@@ -1,10 +1,9 @@
 #!/bin/bash
-# load_census.sh — three-readings process census for macOS load triage.
+# load_census.sh — process census for macOS load triage.
 # Read-only. BSD ps (macOS stock) only; no GNU flags, no third-party tools.
 #
-# Reading 1 (PPID aggregation): who is accumulating children — a leak hides
-#   here; while the parent lives, the children never orphan, so nothing else
-#   will ever clean them.
+# Reading 1 (PPID aggregation): who owns many children. Counts identify fan-out
+#   or a pool; workload and lifecycle evidence decide whether retention is a leak.
 # Reading 2 (cumulative CPU time): who has been burning for hours/days — the
 #   busy loop that instantaneous %CPU dilutes.
 # Reading 3 (instantaneous %CPU): who is burning right now — the active storm.
@@ -22,7 +21,7 @@ echo '=== load average ==='
 sysctl -n vm.loadavg
 echo
 
-echo "=== reading 1: children per parent (top $N) — one parent, hundreds of children = leak ==="
+echo "=== reading 1: children per parent (top $N) — fan-out candidate; counts alone do not prove a leak ==="
 echo "(ppid=1 is launchd and always large — that row is normal)"
 awk 'NR>1 {c[$2]++; cmd[$1]=substr($0, index($0,$6))} END {for (p in c) if (c[p]>1) printf "%6d  ppid=%-8s parent=%s\n", c[p], p, (p in cmd ? cmd[p] : "?")}' "$TMP" | sort -rn | head -"$N"
 echo

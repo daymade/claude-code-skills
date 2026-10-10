@@ -223,6 +223,9 @@ Before choosing or changing any periodic observer's cadence, follow
 [macos-watchdog's observation contract](daymade-macos/macos-watchdog/references/probe-cost.md).
 For named macOS load/runaway alerts, follow
 [macos-load-doctor's intervention and diagnosis-completion contract](daymade-macos/macos-load-doctor/SKILL.md#5-act-within-the-boundary).
+For memory pressure or suspected child-process leaks, enter that Skill's
+[triage](daymade-macos/macos-load-doctor/SKILL.md#triage-read-do-in-order) and
+[memory evidence](daymade-macos/macos-load-doctor/SKILL.md#memory-evidence) before attributing the cause.
 The observation contract above owns delayed-sampling acceptance; keep its tests
 and the diagnostic stop conditions in those Skills.
 For changed operating defaults or thresholds in an already-required review, use
@@ -320,6 +323,8 @@ use its coordination preflight with native transport when that workflow applies,
 adding fallback sends or parent/subagent overhead. Reply lookup, transport and discovery
 details belong in [the transport and receiver-evidence SOP](peer-message/references/protocol-and-discovery.md).
 Enter that SOP when diagnosing delayed Codex coordination or comparing live and queued receipts.
+For oversized discovery responses or complete-title export, use its
+[discovery-output contract](peer-message/references/protocol-and-discovery.md#发现输出的范围).
 Current product availability, provenance, and inbound-control mechanics belong in
 `peer-message/references/official-feature.md`; reply addressing, payload structure,
 delivery-status language, what to do when you find another session's in-flight work on a
