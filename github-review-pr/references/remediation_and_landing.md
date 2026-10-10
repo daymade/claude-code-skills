@@ -3,18 +3,6 @@
 Load this reference only after the user explicitly authorizes an external write. Keep
 the review workflow's immutable snapshot ledger active throughout every mutation.
 
-## Contents
-
-- [Interpret Authorization Narrowly](#interpret-authorization-narrowly)
-- [Revalidate Before Every Write](#revalidate-before-every-write)
-- [Submit a Commit-Anchored Formal Review](#submit-a-commit-anchored-formal-review)
-- [Repair the Contributor Branch](#repair-the-contributor-branch)
-- [Update the PR Branch Only When Requested](#update-the-pr-branch-only-when-requested)
-- [Close a Superseded PR Safely](#close-a-superseded-pr-safely)
-- [Close a Declined PR Safely](#close-a-declined-pr-safely)
-- [Land the PR](#land-the-pr)
-- [Complete an Authorized Maintainer Follow-Up](#complete-an-authorized-maintainer-follow-up)
-
 ## Interpret Authorization Narrowly
 
 Treat these as separate actions:
@@ -149,7 +137,10 @@ After pushing:
 1. Verify the remote head ref equals the new local commit.
 2. Verify the PR now reports that same head SHA.
 3. Wait for required checks or report their pending state accurately.
-4. Re-run the entire review against the new head and current base.
+4. Re-evaluate the review against the new head and current base. For a bounded
+   repair, follow [Expose an authorized small repair](#expose-an-authorized-small-repair)
+   to reuse unchanged evidence; inspect new or affected claims and the fresh
+   three-way result.
 5. Reclassify all previous findings before considering merge.
 6. Compare the live-base/head OIDs directly. If the PR files endpoint still uses a
    stale recorded base, report that discrepancy and keep the OID-bound comparison as
