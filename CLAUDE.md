@@ -71,6 +71,10 @@ For permission-sensitive fixtures, use its
 For its audit, release, source-contract or materialization commands from another
 working directory, use the [fixed command entry](daymade-skill/skill-creator/references/fixed-command-entry.md).
 
+For plugin/Skill naming, source registration or release labels, use
+[source location and activation](daymade-skill/skill-creator/references/source-location-and-activation.md)
+and [delivery identity](daymade-skill/skill-creator/references/delivery-identity.md).
+
 For saved HTML batches, follow [the conversion owner](daymade-docs/doc-to-markdown/references/html-conversion.md#gate-a-batch-through-the-existing-recipe)
 and its actual-reader pilot before expansion. Keep conversion evidence and reader
 observations separate; this file does not define another batch recipe.
@@ -459,6 +463,11 @@ For GitHub-hosted state — PRs, issues, Actions, repository or organization set
 and API/UI mutations — treat `github-ops/SKILL.md` as the canonical operating contract. A command
 receipt is not completion; use that Skill's operation-specific independent readback. Keep detailed
 GitHub SOPs there rather than copying them into this repository-level instruction file.
+For upstream contributions and desktop E2E acceptance, enter
+[github-contributor](github-contributor/SKILL.md) and its
+[quality/E2E workflow](github-contributor/references/phase3_quality_gates_and_e2e.md).
+For an explicitly requested independent evaluation of your own contribution,
+follow the contributor entry's route to [github-review-pr](github-review-pr/SKILL.md).
 Before expensive checks on a concurrently edited base, follow its
 [publication coordination](github-ops/references/pr_operations.md#coordinate-publication-before-expensive-checks).
 For hosted-state writes through `gh`, follow its
