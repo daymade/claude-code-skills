@@ -42,6 +42,18 @@ For each relevant state, verify:
 Do not require every possible state for a local visual-only change. Cover the
 states affected by the implementation or explicitly requested by the user.
 
+For a changed multi-item read or batch result, the executing auditor uses the
+authorized project harness to fail one known item while the enclosing request
+succeeds. Reconcile the expected identities with the visible successes, failures
+and unread items; failed items must not disappear or be labelled complete. Read
+the failure and its safe next action from the ordinary render, not a hidden DOM
+node. If the product permits retry, trigger it and verify it targets the original
+failed selection, replaces the failure with the correct content, and preserves
+successful work. Keep uncertain writes behind the project's existing recovery
+contract; this recipe does not authorize resubmission. Exercise an all-success
+control as well. No generic sweep determines per-item completeness or safe retry;
+retain the exact selection, visible outcome and recovery observations in the audit.
+
 For nested zoomable workspaces, the executing auditor treats the ordinary entry,
 enlarged mode, affected zoom levels and return-to-ordinary as separate states.
 An enlarged canvas cannot certify the shallow ordinary pane. Record its rendered
@@ -94,6 +106,11 @@ capabilities or decide data preservation. A copy-only edit does not require it.
    filter to each of those consumers; hiding a category from one list does not
    authorize removing its records from every check or query. Verify default and
    affected combined filters with a representative included/excluded record.
+   For paginated or bounded views, include a known required record outside the
+   initial or newest window and exercise its normal read path. Derive the expected
+   set from the selected scope's authoritative record, not the returned page or
+   visible list. A missing body may remain unknown only after its read coverage is
+   established; inability to read is not evidence that the body does not exist.
 3. Map each original operation to its current visible entry and exercise it.
    Confirm the resulting answer or output and reconcile record identities,
    relevant fields, relationships, and retained drafts through the ordinary
@@ -187,6 +204,10 @@ reference; no bundled text-count or DOM-node metric decides whether detail is us
 2. Inspect the collapsed render and answer its question from that render alone.
    Record the visible values, relationships, or evidence used. A correct grand
    total cannot establish that a requested contribution breakdown is visible.
+   For contribution views, quote the visible work or result that answers who did
+   what. Names, lifecycle events and repeated missing-content warnings cannot
+   establish that answer. A verified source gap may be shown with an actionable
+   coverage state; record the unanswered question rather than granting a pass.
 3. Trigger the actual control, then read and extract the newly visible granular
    rows, relationships, explanations, or supporting evidence. Answer the expanded
    question using that evidence, naming what was unavailable while collapsed.
