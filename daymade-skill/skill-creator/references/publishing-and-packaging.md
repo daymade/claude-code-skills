@@ -18,11 +18,9 @@ Choose sections by the requested delivery: public sanitization before public dis
 
 **Scope the pass by destination, not by topic.** Only the artifact that ships publicly — the skill bundle itself — gets sanitized. Companion documents that stay in a private repo (the incident report the skill was distilled from, internal runbooks, the project's CLAUDE.md) keep their real hostnames, paths, and timestamps: redacting those destroys their audit value, and you will end up reverting it. One distillation session went through three rounds of rework precisely because the redaction pass was applied to everything the source material touched instead of just the public skill.
 
-**Check the destination first, and let it pre-fill the recommendation.** Run
+**Check the destination first.** Run
 `gh repo view --json isPrivate` on the repo the skill will live in (or read the note
-`quick_validate` already printed). A private destination makes option C the default
-recommendation rather than an afterthought — "assume public unless told otherwise" is
-what turns a private skill's working paths into placeholders nobody asked for.
+`quick_validate` already printed).
 
 **The trigger for sanitizing is the destination's `isPrivate`, not how much the task
 feels like publishing.** These come apart, and when they do the feeling wins unless you
