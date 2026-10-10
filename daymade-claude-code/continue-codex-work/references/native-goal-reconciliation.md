@@ -20,7 +20,23 @@ the governing contract; a reminder or an unfinished objective adds no authority.
    If using an existing verified protocol transport, bind it to the exact target
    thread and endpoint; do not guess sockets or edit the runtime database.
 
-Codex 0.160.1's installed App Server schema exposed `thread/goal/get` and
+### Recover through the host that owns the loaded thread
+
+As the continuation executor, distinguish a successful read through an independent
+stdio App Server from permission to update a thread another live host owns. If the
+setter reports an active writer, discover the existing host's verified control
+transport and confirm it has the exact target thread loaded before using its
+recovery control. Do not kill the writer, restart its service, edit the database or
+unregister it to obtain access. If that host cannot be bound, report the recovery
+path unresolved and continue other authorized work.
+
+Inspect the current setter schema for mutation provenance. When it defines an
+explicit-user origin, supply it only for a verified user recovery instruction;
+missing provenance does not supply authorization. Do not omit or change provenance
+to bypass a rejected update. The runtime enforces its write guards; the executor
+must verify the authorization and host binding before applying recovery.
+
+Historical example: Codex 0.160.1's installed App Server schema exposed `thread/goal/get` and
 `thread/goal/set` without requiring the experimental schema flag. Its live Unix
 WebSocket transport accepted the following setter shape after initialization:
 
