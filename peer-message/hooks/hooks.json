@@ -1,0 +1,12 @@
+{
+  "hooks": {
+    "PreToolUse": [{
+      "matcher": "^(SendMessage|mcp__codex_tui__send_message_to_thread|codex_tui\\.send_message_to_thread|send_message_to_thread)$",
+      "hooks": [{
+        "type": "command",
+        "command": "/bin/bash \"${CLAUDE_PLUGIN_ROOT}/scripts/native-guard.sh\"",
+        "timeout": 10
+      }]
+    }]
+  }
+}

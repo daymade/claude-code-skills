@@ -90,6 +90,20 @@ CLI；旧 CLI 能继续处理原 notice/request/reply，但不提供新状态模
 
 ## 原生跨会话通信
 
+在安装或升级时执行包内 `scripts/install_native_guard.py --python '<installer-owned-fixed-python>'`，
+选用现有宿主 hook 安装器管理的 Python 3.11+ 固定入口，不从 PATH 或其他产品的
+版本目录猜解释器。将解释器绑定保存在包外；保持本机各安装副本共用协调库。
+插件的 `hooks/hooks.json` 只注册独立会话发送的 PreToolUse 检查。已有宿主统一入口时，
+在原入口调用 `scripts/native_guard.py` 的 `installed_check(event)`；保留其他拒绝与权限检查，
+不要再注册第二套相同入口。Codex 新增或改变 hook 定义时让用户在 `/hooks` 信任精确
+定义，不写信任回执、不重启其他会话。源路径由当前插件入口或已选安装入口取得；
+源支持更新时继续读取同一路径，不复制另一份规则。
+
+用实际宿主调用验收：未 prepare 的原生发送须在 transport 前被拒绝，正常 prepare
+后须能进入原 transport；再验证过期、改写正文和另一个调用重复使用同一 id 被拒绝。
+只运行脚本夹具不声称宿主已生效。宿主缺少匹配的可信前置入口时报告缺口，保持
+原通道与权限，不以 Skill 被加载或配置文件存在作为强制拦截的证据。
+
 原生工具覆盖收件人时只发送原生消息。本 Skill 维护同一状态，不换 transport：
 
 ```bash
@@ -98,7 +112,11 @@ python3 scripts/peer.py coord prepare '<exact-target>' request.txt \
 ```
 
 只有 `prepared` 才将输出的 `body` 原样交给原生工具；记录其 `message_id`。
-其他 suppression 状态安静结束。随后按原生回执记录结果：
+其他 suppression 状态安静结束。前置检查绑定宿主的发送 session、实际收件人、完整
+body 和 tool-use id；缺失记录、过期、正文改写、已收件/关闭/结果未知、被新状态替代
+或同一 id 用于另一个调用均拒绝。同一宿主调用的 hook 重入不另发消息。
+旧安装生成的无正文校验记录保留，但不能假定它尚未发送；先核对旧结果再准备。
+前置检查只记录尝试，不记录送达，也不授予权限。随后按原生回执记录结果：
 
 ```bash
 python3 scripts/peer.py coord commit --message-id '<prepared-id>' --outcome accepted
@@ -149,8 +167,10 @@ python3 scripts/peer.py coord finish --message-id '<original-id>'
 state 模式还须核对跨 event 替代、同版本重复、未知发送、旧读写接口与消息清理后的
 版本记忆；用累计通知和真实新阻塞作健康控制，不能只测旧状态被过滤。
 
-本机制不依赖 Fleet，但原生发送绕过 prepare/commit、接收者不执行 receive、
-未登记会话或跨机器调用不受本机记录强制控制；安装不修改宿主权限或安装全局 hook。
+分别验收 Codex 独立线程发送与 Claude SendMessage 的本机独立会话发送；保留原生
+父子/团队关系及无正文 idle 订阅，不将模型提供的 recipient_kind 当成内部关系证明。
+本机未覆盖的宿主、未执行 receive 的接收者、未登记负责人和跨机器调用仍报告覆盖缺口。
+不把出站强制检查宣称为整机消息量已下降，也不修改宿主 inbound/Held/用户权限。
 基础原则参考 [Idempotent Receiver](https://www.enterpriseintegrationpatterns.com/patterns/messaging/IdempotentReceiver.html)
 和 [Message Expiration](https://www.enterpriseintegrationpatterns.com/patterns/messaging/MessageExpiration.html)：
 重复投递不重复产生协作动作，时效性请求在处理前判断有效期。

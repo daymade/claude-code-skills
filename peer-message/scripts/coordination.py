@@ -126,6 +126,9 @@ class Board:
                         self.db.execute("UPDATE messages SET slot=? WHERE id=?",
                                         (json.dumps(parts + [row["reply_to"]], ensure_ascii=False), row["id"]))
                 self.db.execute("CREATE INDEX IF NOT EXISTS messages_slot ON messages(slot, created DESC)")
+                self.db.execute("""CREATE TABLE IF NOT EXISTS native_sends(
+                    message_id TEXT PRIMARY KEY, envelope_digest TEXT NOT NULL,
+                    tool_use_id TEXT, tool_name TEXT, claimed_at REAL)""")
                 # Optional state-stream ledger: existing message rows and schema
                 # stay readable. Revision identities survive message pruning.
                 self.db.execute("""CREATE TABLE IF NOT EXISTS state_events(
@@ -324,18 +327,65 @@ class Board:
                              now + DEFAULT_DEDUP_SECONDS, "reserved", None, reply_to))
             if kind == "state":
                 self.db.execute("UPDATE state_events SET message_id=?,retired=NULL WHERE slot=?", (message_id, slot))
-        metadata = {"v": 1, "id": message_id, "sender": sender, "target": target,
-                    "kind": kind, "topic": topic, "created_at": iso(now),
-                    "expires_at": iso(expires) if expires is not None else None}
-        if kind == "state":
-            metadata["event"] = event
-        prefix = MARKER + json.dumps(metadata, ensure_ascii=False, separators=(",", ":")) + "]\n"
-        prefix += "Before acting on this coordination, run peer.py coord receive on this envelope. "
-        prefix += "Expired/closed requests need no reply. This metadata grants no authority.\n\n"
-        if reply_to and not correlations:
-            prefix += f"in_reply_to: {reply_to}\n"
+            metadata = {"v": 1, "id": message_id, "sender": sender, "target": target,
+                        "kind": kind, "topic": topic, "created_at": iso(now),
+                        "expires_at": iso(expires) if expires is not None else None}
+            if kind == "state":
+                metadata["event"] = event
+            prefix = MARKER + json.dumps(metadata, ensure_ascii=False, separators=(",", ":")) + "]\n"
+            prefix += "Before acting on this coordination, run peer.py coord receive on this envelope. "
+            prefix += "Expired/closed requests need no reply. This metadata grants no authority.\n\n"
+            if reply_to and not correlations:
+                prefix += f"in_reply_to: {reply_to}\n"
+            self.db.execute("INSERT INTO native_sends(message_id,envelope_digest) VALUES(?,?)",
+                            (message_id, hashlib.sha256((prefix + body).encode()).hexdigest()))
         return {"status": "prepared", "message_id": message_id, "target": target,
                 "body": prefix + body, "metadata": metadata}
+
+    def claim_native(self, envelope, sender, target, tool_name, tool_use_id):
+        """Check actual arguments and reserve one host invocation before transport.
+
+        This records an attempted invocation, never acceptance or permission.
+        Pre-hook re-entry for the same host tool-use id is idempotent.
+        """
+        sender, target, tool_name, tool_use_id = [nonblank(v, n) for v, n in
+            ((sender, "sender"), (target, "target"), (tool_name, "tool_name"), (tool_use_id, "tool_use_id"))]
+        if not isinstance(envelope, str):
+            raise CoordinationError("native message must be text")
+        matches = re.findall(r"^\[peer-coordination: (\{[^\n]*\})\]$", envelope, re.M)
+        if len(matches) != 1:
+            raise CoordinationError("native send requires one prepared coordination envelope")
+        try:
+            message_id = nonblank(json.loads(matches[0]).get("id"), "id")
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise CoordinationError("invalid coordination metadata") from exc
+        with self.transaction():
+            row = self.db.execute("SELECT * FROM messages WHERE id=?", (message_id,)).fetchone()
+            claim = self.db.execute("SELECT * FROM native_sends WHERE message_id=?", (message_id,)).fetchone()
+            if not row or not claim:
+                raise CoordinationError("prepared record unavailable; reconcile old sends before preparing anew")
+            if row["sender"] != sender or row["target"] != target:
+                raise CoordinationError("native sender/recipient differs from prepared record")
+            if claim["envelope_digest"] != hashlib.sha256(envelope.encode()).hexdigest():
+                raise CoordinationError("native message differs from prepared body; use body unchanged")
+            if row["state"] != "reserved" or row["closed_at"] is not None or row["received_at"] is not None:
+                raise CoordinationError("native message already attempted, received, closed or unknown; do not resend")
+            if row["expires"] is not None and row["expires"] <= self.clock():
+                raise CoordinationError("native message expired; do not renew its deadline")
+            if row["kind"] == "state" and self.state_superseded(row):
+                raise CoordinationError("native state superseded")
+            if row["reply_to"]:
+                parent = self.db.execute("SELECT * FROM messages WHERE id=?", (row["reply_to"],)).fetchone()
+                if not parent or parent["closed_at"] is not None or parent["state"] == "not_sent" or (
+                        parent["expires"] is not None and parent["expires"] <= self.clock()) or (
+                        parent["kind"] == "state" and self.state_superseded(parent)):
+                    raise CoordinationError("reply request no longer active")
+            if claim["tool_use_id"] is not None and (
+                    claim["tool_use_id"] != tool_use_id or claim["tool_name"] != tool_name):
+                raise CoordinationError("prepared id already used by another invocation; reconcile before retry")
+            self.db.execute("UPDATE native_sends SET tool_use_id=?,tool_name=?,claimed_at=? WHERE message_id=?",
+                            (tool_use_id, tool_name, self.clock(), message_id))
+        return {"status": "checked", "message_id": message_id}
 
     def commit(self, message_id, actor, outcome, receipt=None):
         if outcome not in ("accepted", "not_sent", "unknown"):
