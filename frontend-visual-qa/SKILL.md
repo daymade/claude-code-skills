@@ -373,6 +373,11 @@ node --test <skill-root>/tests/test_silent_degradation_probe.mjs
 
 ### 5. Exercise Journeys And Outputs
 
+For changed data-bound contribution views or multi-item reads, apply the linked
+journey contract's bounded-window coverage, visible contribution and mixed-result
+recovery checks before granting a pass. These are auditor actions through the
+authorized project harness, not predicates enforced by the generic sweep.
+
 For UI refactors, category splits, or navigation changes, first apply the
 **Refactor Preservation** recipe in
 [references/journey-and-page-contracts.md](references/journey-and-page-contracts.md).

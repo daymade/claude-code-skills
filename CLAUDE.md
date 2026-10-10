@@ -158,6 +158,9 @@ result semantics and rendered-journey procedure in that owner.
 For nested zoomable workspaces, use its
 [mode-specific acceptance](frontend-visual-qa/references/journey-and-page-contracts.md#journey-and-state-matrix);
 ordinary and enlarged evidence remain separate.
+For changed contribution views or multi-item reads, use that same journey contract
+for source-derived coverage and partial-result recovery; keep the detailed recipe
+with the Skill.
 Before designing or judging monitoring, availability or certificate matrices, enter
 [data-visualization-discipline](data-visualization-discipline/SKILL.md).
 Keep observation and risk semantics in its data-validation route, not a second checklist here.
