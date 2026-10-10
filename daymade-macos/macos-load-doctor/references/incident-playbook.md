@@ -1,11 +1,10 @@
 # Incident playbook — worked macOS load cases
 
-Real cases, each with the probe output that identified it and the
-reasoning chain from symptom to attribution. Use them as precedents when
-writing your own diagnosis report: the report's job is to hand the owner
-enough evidence to act, not to act yourself.
+Historical probe observations and their evidence limits. For current intervention
+authorization and recovery acceptance, follow the
+[owning Skill's boundary](../SKILL.md#5-act-within-the-boundary).
 
-## Case 1 — per-thread MCP spawner leak: three fleets time out at once
+## Case 1 — historical MCP fan-out with unverified lifecycle attribution
 
 **Symptom (2026-10-07):** hooks on three independent agent fleets start
 timing out simultaneously — PreToolUse guards blowing 60-second budgets, a
@@ -16,34 +15,28 @@ hook reporting "protection check deadline exceeded".
 
 ```
 $ sysctl -n vm.loadavg
-{ 243.88 268.10 231.08 }          # run queue ~10-20× oversubscribed
+{ 243.88 268.10 231.08 }
 $ ps -Ao pid,ppid,command         # aggregated by PPID:
   304 children of one pid — an agent runtime's app-server daemon:
   141 copies of an stdio↔SSE MCP proxy, 123 copies of a GUI
   desktop-automation app, 23 computer-use helpers
 $ lsof -p <daemon-pid> | grep -c unix
-  24                              # ~24 live clients for 304 children
+  24                              # matching unix lines, not a live-client census
 ```
 
-**Reasoning:** every hook is a victim — none changed, all starved. The
-daemon spawned the full enabled-MCP set per conversation thread and never
-reaped them when threads ended; the ~280 excess children are the leak. The
-GUI-app copies additionally hammered WindowServer (107% CPU), which made
-the window server look like a second culprit — it was downstream. And no
-automatic mechanism would ever clean the excess up: launchd reaps zombies,
-it never terminates live processes somebody else spawned.
+**Evidence boundary:** the recorded probes establish many children and high
+load. They do not establish the number of live clients, ended-thread cleanup,
+or children retained beyond their intended lifecycle. Do not infer an excess
+child count by subtracting socket matches from children, or reuse this case
+as a confirmed leak. Lifecycle attribution remains unverified by these probes.
 
 **Remediation (owner-authorized):** the daemon's official
-`daemon restart` command. Load fell 243 → 22 within minutes; every
-"failing" hook passed untouched. CLI sessions were unaffected (independent
-processes, state on disk); whether any desktop-app thread was mid-stream at
-the restart second could not be determined — the app-server's client-side
-log directory was empty, a probe blind spot worth naming in the report
-rather than papering over with "no side effects".
-
-**Standing rule born here:** on a shared machine, agents diagnose read-only
-and report; the user terminates. A "daemon restart" counts as terminating —
-its documented effect includes the children.
+`daemon restart` command. The recorded post-restart load was 22; every
+"failing" hook passed untouched. Independent CLI processes and state on disk
+do not establish that every task or non-target helper was unaffected. Whether
+any desktop-app thread was mid-stream could not be determined: the recorded
+client-side log directory was empty. Reduced load supports mitigation;
+capability restoration and side effects require their own consumer evidence.
 
 ## Case 2 — unthrottled replay loop: a correct test that looks like a fork bomb
 
@@ -69,8 +62,7 @@ as a runaway.
 **Symptom:** all-day elevated CPU with no runaway process anywhere; the
 security-scan subsystem tops the CPU ranking.
 
-**Reasoning:** ~13 command-matching guards × many parallel sessions ×
-sub-second tool cadence = a sustained 40–200 forks/second of pure overhead.
+**Reasoning:** repeated irrelevant hook paths paid process-startup overhead.
 The fleet was fine; the *irrelevant path's* per-call cost was the bug —
 each guard paid full process-startup price even for calls it had nothing to
 say about. The fix was structural (zero-fork fast paths before paying for
@@ -103,12 +95,9 @@ Hand the owner a self-contained bundle:
 2. The census excerpt that indicts (children-per-parent, cumulative time,
    or instantaneous — whichever fired), with the suspect's full parent
    chain up to something ownable.
-3. The classified shape (leak / storm / busy loop / cascade) and the
+3. The classified shape (fan-out / pool / leak candidate / confirmed leak /
+   storm / busy loop / cascade) and the
    one-line mechanism.
-4. The proposed remediation *and who may run it* — on a shared machine the
-   terminator is the owner, and the report says so.
+4. The proposed remediation and its authorized executor.
 5. What you could not verify (probe blind spots, like Case 1's empty
    client-side log) — named, not smoothed over.
-
-After any remediation, read back: `vm.loadavg` again and the census again.
-A command receipt is not recovery; the numbers are.
