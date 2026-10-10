@@ -25,12 +25,12 @@ Lead Agent (coordinator — minimizes raw search context)
   |                                               |
   |     research-notes/  <────────────────────────┘
   |
-  P2: Build evidence packets + citation registry
-  P3: Evidence-mapped outline with counter-evidence and unknowns
-  P4: Draft from evidence packets; reopen decisive originals
-  P5: Counter-review (claims, confidence, alternatives)
-  P6: Verify every load-bearing claim and exact fact
-  P7: Polish → final report with confidence markers
+  P2: Dispatch + investigate → evidence packets
+  P3: Citation registry + source governance
+  P4: Evidence-mapped outline with counter-evidence and unknowns
+  P5: Draft from evidence packets; reopen decisive originals
+  P6: Counter-review (claims, confidence, alternatives)
+  P7: Verify → asset check and catalog registration
 ```
 
 **Context discipline:** Keep raw search-result noise in task workspaces. Pass evidence packets to the lead agent, including locators and short source excerpts. Notes are routing aids, not authorities: the lead agent must open the original source for every load-bearing claim, conflicting claim, and exact figure/date/quotation used in the report.
@@ -143,11 +143,16 @@ Enterprise Research Progress:
 - [ ] E3: Optional analysis framework selected for the decision (or none)
 - [ ] E4: Claim/evidence/unknown checks at each stage transition
 - [ ] E5: Draft in the user's requested structure
-- [ ] E6: Multi-pass drafting + UNION merge (same as general Step 6-7)
+- [ ] E6: Counter-review and verification (same as general P6–P7)
 - [ ] E7: Present draft for human review and iterate
 ```
 
 ## P1: Research Task Board
+
+When continuing an existing question, first restore its supported conclusions, resolved questions,
+corrections, remaining unknowns and reopening conditions under
+[incremental follow-up](references/research-asset-contract.md#incremental-follow-up).
+Passing one previous report to an executor does not by itself establish that this state was carried forward.
 
 For every study, use the portable [provider-run contract](references/provider-run-contract.md):
 one question map, exact prompts, and a distinct `lane_id` per provider × actual mode, including a
@@ -284,8 +289,8 @@ Plus appendices: Data Source Index, Glossary, Disclaimer.
 
 - **E3: Structured Analysis** — Select a framework from [references/enterprise_analysis_frameworks.md](references/enterprise_analysis_frameworks.md) only when it improves the decision and its inputs are defensible; otherwise use a claim-evidence table
 - **E4: Quality Control** — Run L1/L2/L3 checks per [references/enterprise_quality_checklist.md](references/enterprise_quality_checklist.md)
-- **E5: Draft** — Use 7-chapter enterprise template
-- **E6-E7: Multi-Pass Drafting and Review** — Same as P4-P7 below
+- **E5: Draft** — Follow the selected question-led structure and the user's format contract; use the enterprise template only when it fits
+- **E6-E7: Draft Review and Verification** — Apply P4–P7's evidence checks and the requested human review; additional drafting passes depend on unresolved findings
 
 ---
 
@@ -541,8 +546,8 @@ Run the study's final asset check and catalog registration after P7. If a select
 
 ## Anti-Patterns
 
-- Single-pass drafting without parallel complete passes
-- Splitting passes by section instead of full report drafts
+- Treating a first draft as verified without P6–P7 evidence checks
+- Repeating complete drafts or parallel passes without a decision-bearing evidence gap
 - Ignoring the format contract or user template
 - Claims without citations or evidence table mapping
 - Mixing conflicting dates without calling out discrepancies
@@ -557,6 +562,24 @@ Run the study's final asset check and catalog registration after P7. If a select
 - **IGNORING EXCLUSIVE SOURCES** — when user provides Crunchbase Pro etc. for competitor research, USE IT
 
 ## Next Step: Verify and Deliver
+
+### Conditional downstream handoff
+
+Apply this only when the user requests a handoff or the authorized workflow actually transfers
+research to another executor. The lead agent checks the latest original request and accepted
+decisions before preparing the receiving prompt. Keep the user's goal, current stage,
+authorized deliverables, original-source locators and next falsifiable probe in that prompt;
+label observations, recommendations, chosen constraints and untested assumptions separately.
+An available implementation or an earlier proposal is not a chosen constraint without that authority.
+For example, a methods-research handoff may ask the next executor to compare approaches;
+it must not silently instruct them to implement an existing engine or deliver a finished skill.
+
+Resolve the current `handover` Skill from the installed catalog when a session or task-context
+handoff is needed; retain its ownership of the handover artifact and recovery procedure.
+If that owner is unavailable, report the gap and supply the bounded research context above
+without claiming its recovery procedure ran. This does not authorize implementation or publication.
+The lead agent judges stage and authority against the originals; the local asset validators
+check record integrity, not whether the receiving prompt preserves those boundaries.
 
 After completing research, suggest verification and output:
 

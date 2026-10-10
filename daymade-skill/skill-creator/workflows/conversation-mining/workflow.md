@@ -11,15 +11,48 @@ Use this only when the user explicitly asks to read local/past conversation hist
 
 It is **not** a generic skill-creation flow and is not implied by a long live conversation. When the relevant evidence is already in the current context, use the normal existing-skill update path without history discovery, chunking, or mining agents. After an explicitly requested mining run completes, return to the normal skill-creator steps (edit `SKILL.md`, validate, scan, package).
 
+## Choose retrieval or selected-corpus distillation
+
+History retrieval and distillation are different stages. To find earlier work,
+use `local-conversation-history` or the identified provider's history Skill for
+its authoritative index and exact reader. Limit queries to the authorized scope;
+before reading bodies, select known sessions or a bounded physical time/source
+set. Verify the exact reader's session identity and keep user, assistant and tool
+roles distinct. Prefer a reader export that omits hidden reasoning. If the reader
+exports explicitly marked thinking blocks, create a prose/tool projection from
+that bounded export before reading or handing it to agents: remove only those
+marked blocks, retain record IDs, roles and source coordinates, and record the
+omitted-block boundary. This is a projection of the owning reader's output,
+not a replacement parser for raw transcripts. If the blocks cannot be separated
+reliably, retain the evidence gap instead of passing the mixed export onward.
+An unavailable or incomplete index leaves a
+coverage gap; do not replace it with a whole-library scan. Keywords and result
+limits rank candidates but do not bound a raw scan.
+
+For authorized improvement across task types, read
+[cross-task improvement](references/cross-task-improvement.md) before choosing
+maintenance points. This route uses matched successes, failures and user
+corrections to improve existing owners; it does not require a new universal Skill.
+
+Steps 1–3 below prepare **selected content** for reusable corpus distillation.
+They remain the manifest, role-preserving redaction and chunking route; they are
+not a required whole-library search engine. Evidence already prepared by an
+authorized research pass can be reused with its source and coverage limits.
+Do not re-export or re-mine it just to reproduce these steps.
+
 ## Prerequisites
 
-- The target skill exists and has a valid `SKILL.md`.
-- You can read local conversation history files (`~/.claude/projects/...`, `~/.claude/history.jsonl`, `~/.codex/...`).
-- The user is okay with you reading their local transcripts. If they hesitate, stop and use the manual fallback in `patterns.md`.
+- The target skill exists and has a valid `SKILL.md`; for cross-task research,
+  resolve the existing owner before promoting a finding.
+- The owning history reader can locate the authorized sources and export the
+  selected records. A missing source remains an evidence gap.
+- The user authorized those history sources. A refusal stops that source route;
+  the manual fallback in `patterns.md` still requires authorized material.
 
 ## Step 1: Confirm the target skill and topic
 
-Infer the target skill/topic when unambiguous, but obtain explicit user scope for the history sources:
+Infer the target skill/topic when unambiguous and reuse explicit history scope.
+Ask only for missing boundaries that change which sources may be read:
 
 1. Which skill should receive the mined knowledge?
 2. What topic / knowledge gap are we mining for? (e.g., "API cost control", "Debian packaging pitfalls", "Astro SSR edge cases")
@@ -59,7 +92,10 @@ target/topic configuration, and the configured message time window. Redaction
 counts and token totals are available only after Step 3 actually parses the
 messages.
 
-Review the discovery output. If too many files are selected, narrow the manifest's `since`/`until` or keywords. If too few, broaden them.
+Review the discovery output against the selected sessions or physical source
+window. If too many files are selected, narrow that set before preparation;
+`since`/`until` and keywords alone do not make an unbounded file set safe to parse.
+Broaden retrieval only within the user's authorized scope.
 
 ## Step 3: Clean, redact, and chunk
 
@@ -101,7 +137,10 @@ The available prompt types are a menu, not a mandatory agent package. Inspect th
 - For one or two small chunks and one bounded topic, read the **redacted** chunk in the main context and produce the candidate outline inline. Default agent count: zero.
 - If one specialist view is genuinely useful, choose the single matching prompt below.
 - Add another role only when it owns a distinct output that the first pass cannot produce. Do not split one coherent question across roles merely because templates exist.
-- Multi-role fan-out requires the main SKILL.md heavy-eval/agent-budget gate. A request to "optimize a skill" is not authorization.
+- Multi-role fan-out follows the shared authorization and agent-budget gate.
+  Reuse an explicitly approved role/unit plan without asking again; a request to
+  "optimize a skill" alone is not authorization. A research team does not authorize
+  paired baseline, grader or benchmark work.
 
 Role count and execution-unit count are different. One selected role may emit one prompt per chunk; those same-role prompts are necessary corpus shards, not new specialist roles. Process shards serially by default. If bounded concurrency is useful, first state the exact shard count, maximum concurrent units, and why recombining them would exceed the declared chunk budget. Same-role sharding never justifies adding another role.
 
@@ -180,7 +219,12 @@ A green scan does **not** mean the content is clean. The manual read-through is 
 
 ## Step 7: Promote the candidate to `references/`
 
-Once the outline is clean, create the real reference file:
+Once the outline is clean, promote the authorized increment:
+
+For cross-task improvement, first apply its owner and failure classification.
+Update the smallest existing maintenance point when it owns the finding; link
+and execute existing coverage instead of copying it into a new reference.
+Use the new-reference sequence below only for knowledge that needs that resource.
 
 1. Choose a unique kebab-case `name:` for the frontmatter.
 2. Copy the sanitized outline into `references/<name>.md`.
@@ -225,6 +269,11 @@ Run `quick_validate` again after the edit.
 
 After the workflow completes, the following must be true:
 
+Apply this corpus checklist to a new Steps 1–8 mining run. Reused prepared
+evidence retains its original provenance and coverage; cross-task changes still
+pass the shared preservation and task-result gates. Do not fabricate a new
+`.enrich/` run for retrieval-only work or an existing prepared corpus.
+
 - [ ] The `.enrich/` directory exists and is reproducible from the manifest and source hashes.
 - [ ] `.enrich/.gitignore` contains `*`, and neither `.enrich/` nor root `tests/` appears in the packaged archive.
 - [ ] The redaction report lists every replacement made.
@@ -250,4 +299,7 @@ After the workflow completes, the following must be true:
 - The conversation is mostly private (family, health, legal).
 - The skill is brand-new and there is no prior conversation to mine.
 - The user wants a fully automated skill from a single prompt. Use the generic skill-creation flow instead.
-- The mined content would be better as a one-time note in `memory/` rather than a reusable reference file.
+- The content is a one-time note with no reusable decision or helper. Keep it out
+  of the Skill; record it only in an existing canonical project document when the
+  user's storage contract authorizes that. Do not create a memory file contrary
+  to that contract.

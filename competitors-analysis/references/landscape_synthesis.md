@@ -12,6 +12,11 @@ workflow can be a stronger adoption baseline than a named competitor. A historic
 self-report describes that time, not current adoption or the whole market.
 If adoption evidence is absent, preserve that unknown rather than guessing it.
 
+For mechanism comparisons, apply [mechanism evidence](mechanism_evidence.md) to
+the scenario's actual entries and evidence depth before deriving a product gap
+or borrowing judgment. Keep source-only findings distinct from exercised behavior
+and actual outcomes.
+
 Use existing profiles at their verified evidence versions. Expand the source set
 only for a question whose answer could change the judgment. Stop collecting when
 the evidence decides the next choice; a missing private preference remains unknown.

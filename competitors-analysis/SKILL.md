@@ -163,6 +163,12 @@ strongest set.
 
 ## Repository Fact Gathering
 
+Before making mechanism-level claims or our-product gap judgments, read
+[`references/mechanism_evidence.md`](references/mechanism_evidence.md). Follow its
+entry-path, lifecycle and evidence-depth checks while reading the bound source;
+apply its execution boundary before running competitor code. A standalone Profile
+continues without an our-product baseline.
+
 Read files in this order and capture exact sources:
 
 1. Project metadata: `package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`, or

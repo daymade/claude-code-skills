@@ -65,9 +65,13 @@ It's OK to briefly explain terms if you're in doubt, and feel free to clarify te
 
 ### Using AskUserQuestion (Critical — Read This)
 
-**Use the AskUserQuestion tool aggressively at every decision point.** Do not ask open-ended text questions in conversation when structured choices exist. This is the single biggest UX improvement you can make — users juggle multiple windows and may not have looked at this conversation in 20 minutes.
+Ask only when missing information, a mutually exclusive product choice or an
+authorization boundary changes the work. Reuse answers and existing authorization;
+routine implementation choices within that scope do not need another approval.
+Use the host's structured question tool when available and suitable; its actual
+permission and option limits take precedence over the format below.
 
-**Every AskUserQuestion MUST follow this structure:**
+**When a question is needed, supply this context:**
 
 1. **Re-ground**: State the skill name, current phase, and what just happened (1-2 sentences). The user may have context-switched away.
 2. **Simplify**: Explain the decision in plain language. No function names or internal jargon. Say what it DOES, not what it's called.
@@ -79,19 +83,25 @@ It's OK to briefly explain terms if you're in doubt, and feel free to clarify te
 - Provide an escape hatch ("Other" is always implicit in AskUserQuestion)
 - Accept the user's choice — nudge on tradeoffs but never refuse to proceed
 - Skip the question if there's an obvious answer with no tradeoffs (just state what you'll do)
-- **If a question times out with no answer (user away from keyboard), neither stall nor barrel through the taste/scope decisions.** Do the side-effect-free groundwork first — pre-edit snapshot, inventory, eval-case collection, read-only audits/health checks — and hold the judgment calls (restructure direction, what to delete, go/no-go) for when they're back. Then say plainly which you did and what is waiting on them.
+- Silence does not authorize a required product or permission decision. Continue
+  independent authorized work and hold only the dependent action. For an optional
+  preference, follow the host's unanswered-question contract and state any default.
 
 ### Capture Intent
 
 Before the first write, follow [Edit Skills at Source Location](../SKILL.md#critical-edit-skills-at-source-location).
 
-Start by understanding the user's intent. The current conversation might already contain a workflow the user wants to capture (e.g., they say "turn this into a skill"). If so, extract answers from the live conversation first — the tools used, the sequence of steps, corrections the user made, input/output formats observed. The user may need to fill the gaps, and should confirm before proceeding to the next step.
+Start by understanding the user's intent. The current conversation might already contain a workflow the user wants to capture (e.g., they say "turn this into a skill"). If so, extract answers from the live conversation first — the tools used, the sequence of steps, corrections the user made, input/output formats observed. Ask only for a remaining gap that changes the task; complete intent and existing authorization permit the next step.
 
-**Source inventory — always before drafting, with consent boundaries.** Inventory the live conversation and existing docs/skills that overlap (see Prior Art Research below). Earlier local session JSONL files are a separate private source: do not open or parse them unless the user explicitly asks to mine history or affirmatively approves that source after you explain what will be read. If approved, fold only relevant prior sessions in through the conversation-mining workflow's redacted extraction; never load raw transcripts into your own context. If not approved, continue from the live conversation and existing project sources without treating the missing history as a blocker.
+**Source inventory — always before drafting, with consent boundaries.** Inventory the live conversation and existing docs/skills that overlap (see Prior Art Research below). Earlier local sessions are a separate private source: use them only with explicit history authorization. Reuse known source boundaries rather than requesting them again. If approved, retrieve bounded evidence through the owning history reader and follow the conversation-mining workflow's preparation route for selected corpus distillation; never load raw transcript files into your own context. If not approved, continue from the live conversation and existing project sources without treating the missing history as a blocker.
 
 When mining a conversation (or session transcripts), inventory **both asset classes — they land in different places**. *Knowledge* — endpoints, parameters, pitfalls, decision rules — becomes SKILL.md guidance or `references/`. *Code the session had to write* — helper scripts, injected snippets, renderers, one-off templates — is a `scripts/` candidate: first check whether an existing/upstream tool already owns that execution. Parameterize and bundle only the still-needed local helper or adapter; do not preserve a temporary reimplementation merely because this session wrote it. A prior distillation captured polished prose but omitted the reusable helpers; the general lesson is to keep both knowledge→references and code→scripts channels in frame.
 
-When the source material is *past* session transcripts (the JSONL files under the Claude Code projects directory) rather than the live conversation, enter the conversation-mining workflow. Do not open raw transcripts in the main context or hand raw paths/content to subagents. Its deterministic manifest → discover → redact → chunk sequence must finish before any agent sees content; only redacted chunks may enter the minimum role/shard plan, with the exact unit count and concurrency cap declared under the budget gate.
+When the source material is *past* sessions rather than the live conversation,
+enter the conversation-mining workflow. Its bounded retrieval route locates
+evidence before its manifest → discover → redact → chunk route prepares selected
+content for distillation. Do not give agents raw transcript files or hidden
+reasoning; retain roles, source anchors and the declared role/shard budget.
 
 **First, resolve which DIRECTION this is — before the questions below.** The request may be one of several *opposite* things: build a NEW skill / edit an EXISTING skill / optimize skill-creator itself / or it's not-a-skill-at-all (a one-off task). Guessing wrong wastes the whole session — the research you'd do for "new skill" is the wrong research for "optimize the meta-tool." When the phrasing is ambiguous (e.g. "make me a skill" while pointing at skill-creator's own path), one AskUserQuestion here costs 30 seconds. The wrapper-skill fork below is one special case of this; the direction check is general.
 
@@ -101,12 +111,14 @@ When the source material is *past* session transcripts (the JSONL files under th
 2. When should this skill trigger? (what user phrases/contexts)
 3. What's the expected output format?
 4. Should we set up test cases to verify the skill works? Skills with objectively verifiable outputs (file transforms, data extraction, code generation, fixed workflow steps) benefit from test cases. Skills with subjective outputs (writing style, art, taste-calibrated reports) often can't use assertions — but "no assertions" is not "no verification". Their verification paths, in order of cost:
-   - **Historical-task replay**: re-run one real prompt the skill has served before, old vs new skill, and compare outputs against the specific rules that changed ("does the new output actually follow the tokens / title grammar this update introduced?"). Cheap, catches "the rule was written but nothing reads it".
+   - **Historical-task replay**: when it covers the changed behavior, run one named real prompt with the candidate and check its output against the changed rules ("does the new output actually follow the tokens / title grammar this update introduced?"). This can catch "the rule was written but nothing reads it". An old/new comparison is paired evaluation and requires its separate authorization; permission to research history or use a team does not authorize a benchmark pipeline.
    - **Production-as-eval**: acknowledge that the real test is the user's next actual use — then make the loop explicit: every user correction afterward is an incident to fold back (the skill's own "迭代/活文档" section), every approval is corpus material. A taste skill that ships without this write-back habit doesn't improve; one that has it converges without ever running a formal eval. **And when the skill's output is something that keeps running — a guard, a monitor, a scheduled job, a hook — its own telemetry is eval data, and the highest-signal record in it is the first false alarm.** A user correction requires a user to notice and bother; a deployed mechanism reports on itself unprompted, often within a day, and a false positive is the sharpest form of that report because it proves a rule you wrote is wrong in a way no amount of re-reading would have shown. Treat the first one as a scheduled eval result rather than an annoyance: check it before assuming the mechanism misbehaved, because the more likely finding is that the *instruction* was too absolute. (Real instance: a skill prescribed a fail-loud check, the deployed check fired once overnight on a perfectly healthy condition, and the fix was to correct the over-absolute sentence in the skill — nobody complained; the telemetry did.)
    - **Render + human review** for visual outputs (the skill's own visual-QA gates), never a grep assertion pretending to measure aesthetics. **And the renderer you verify with must be the same engine the deliverable will be consumed in** — whatever previewer is conveniently installed is not a substitute. A thumbnailer whose layout engine differs from the target application will silently *hide* the exact defects you are looking for, and a green verification on the wrong engine is worse than no verification, because it buys false confidence. Real case (2026-07): a .docx was "visually verified" through macOS Quick Look thumbnails, which do not reproduce justified-text stretching; Word showed the document's info blocks blown apart the moment the user opened it. The fix was to install the Word-compatible engine (LibreOffice), convert to PDF, rasterize per page, and read every page. Match the engine, or the verification is theater. **This generalizes past renderers to every verification tool** — parser, linter, validator: it must share an implementation with production, or its green is meaningless. Second case, same shape: an author tried to catch a markup pattern that corrupts the final document by checking at the source stage with a *different* markdown implementation than the production toolchain used — it parsed all three known-bad inputs as perfectly fine, so any pre-check built on it would have silently passed everything. The honest conclusion was that this particular defect is only detectable after the production tool has run, and the check belongs there. **When no available tool shares the production implementation, say the check cannot be done at that stage — do not build the one that can only produce false green.**
-   Suggest the appropriate default based on the skill type, but let the user decide.
+   Select the evidence required by the shared verification router. Ask only for an
+   unresolved result preference or evidence work outside existing authorization.
 
-After extracting answers from conversation history (or asking questions 1-3), use **AskUserQuestion** to confirm the skill type and testing strategy:
+After extracting the answers, state the skill type and selected evidence path.
+Use the following question only if an unresolved user choice changes them:
 
 ```
 Creating skill "[name]" — here's what I understand so far:
@@ -123,7 +135,8 @@ C) Hybrid — automated checks for structure, human review for quality
 D) Skip testing for now — just build the skill and iterate by feel
 ```
 
-This upfront classification drives the entire evaluation strategy downstream. Get it right here to avoid wasted effort later.
+Apply the verification router before choosing downstream evidence; this example
+does not waive required checks or authorize paired evaluation.
 
 ### The extend-vs-create check — runs BEFORE any specialized branch
 
@@ -852,10 +865,13 @@ Signals it does **not** apply (use the generic workflow above instead):
 - The relevant corrections and evidence are already present in the live conversation.
 - The user wants a wrapper around a third-party CLI tool they just installed (use the wrapper-skill workflow above).
 - There is no local conversation history to mine and no transcript exports to process.
-- The mined content is one-time personal notes that should live in `memory/` rather than a reusable reference file.
+- The mined content is a one-time personal note with no reusable decision or
+  helper. Keep it out of the Skill; when the target project's contract authorizes
+  recording it, use that project's existing canonical document. Follow the user's
+  storage contract rather than creating a memory file.
 - The source material is a batch of finished artifacts the user has endorsed, rather than dialogue — use the artifact-corpus-distillation workflow below.
 
-When the conversation-mining workflow applies, preserve the verification tier selected above. A new mined skill is Tier 3; enriching an existing skill stays at the selected tier only if it satisfies that tier's capability boundary. **Do not** continue reading the generic authoring sections; jump to [`workflows/conversation-mining/workflow.md`](../workflows/conversation-mining/workflow.md) and follow that workflow end-to-end, including its verification protocol. It is a **retrospective distillation** workflow: it discovers approved local histories, redacts and partitions them, runs only the mining pass(es) justified by the corpus, and promotes reviewed candidates after validation.
+When the conversation-mining workflow applies, preserve the verification tier selected above. A new mined skill is Tier 3; enriching an existing skill stays at the selected tier only if it satisfies that tier's capability boundary. **Do not** continue reading the generic authoring sections; jump to [`workflows/conversation-mining/workflow.md`](../workflows/conversation-mining/workflow.md) and follow its applicable retrieval or selected-corpus route, including verification. It retrieves bounded approved histories through their owners, redacts and partitions selected content when mining a corpus, runs only the justified pass(es), and promotes reviewed changes after validation. For improvement across task types, use that workflow's matched-case route before choosing maintenance points.
 
 The conversation-mining workflow has its own architecture contract, agent prompts, templates, and verification protocol. That protocol implements the selected tier's specialized mechanics; run the compatible generic steps selected by the evidence plan, keep heavy generic steps behind their authorization gate, and record any substitution. It is the canonical way to turn explicitly approved conversation history into a skill's reusable knowledge base.
 
