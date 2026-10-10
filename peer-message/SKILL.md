@@ -54,6 +54,7 @@ description: >-
 | 原生工具覆盖独立 session | 按本地协调机制执行 `coord prepare` → 原生工具原样发送 `body` → `coord commit`；不追加 fallback 发送 |
 | 原生工具未覆盖已确认的 Claude 目标，且目标有本地 inbox | 用 `scripts/peer.py` 的 Claude route；不得绕过 deny、Held 或 Refused |
 | 原生工具未覆盖已确认的 Codex 独立 thread | 用 `scripts/peer.py` 的 Codex route；不要把内部 agent 地址当独立 thread UUID。**已归档 thread 不可投递**——脚本默认拒发（它永远不会再消费 queue）；给已退出属主留话钉在它的持久制品上（PR comment、文件），见 `references/coordination-and-learning-loop.md` §5.1「发现面不可达时」段 |
+| Claude 宿主内回复/发送给 `codex:` 目标 | **不走 SendMessage**——native guard 的 SendMessage 分支只对能解析成 Claude session 的目标放行，`codex:` 前缀必被拦，且其错误文案指向的「prepare→原生发送」路径对 Codex 目标不存在；直接 `scripts/peer.py send`。注意连坐：裸发被拦本身不落板（拦截早于 Board 打开），但按 guard 文案跑 `coord prepare` 会留下 reserved 孤行，随后 `peer.py send` 同内容报 `suppressed_pending`——先 `coord commit --message-id <id> --outcome not_sent` 结清再重发（2026-10-10 实测，独立审阅修正归因） |
 | 多目标协调 | 明确列出目标；原生按工具契约逐个发送或广播，脚本补缺才使用 `broadcast`；禁止从单发请求推断全机广播。脚本 `broadcast` 的消息自动带 fan-out 标记，语义是「仅属主回复，其余忽略」；超出默认目标数上限须 `--contract <契约名>` 点名依据，否则脚本拒发（上限值以 CLI help/实现为准，不在文档复制）——先发证据（git/索引）收窄候选，见 `references/protocol-and-discovery.md` §5 |
 | 查找对脚本 outbound 的显式回复 | 对原发送方自己的 inbox 运行一次 `replies`；原生回传沿宿主机制，命令与证据边界见 `references/protocol-and-discovery.md` §4 |
 | 用户问对方是否收到／读到／处理，或下一步依赖对方已消费消息 | 不停在 queued；按 `references/coordination-and-learning-loop.md` §3 核对本机目标 transcript 与关联回应，区分入队、进入对话、已回应与已执行 |
