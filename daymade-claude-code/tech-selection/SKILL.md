@@ -18,7 +18,7 @@ current authorization: choose and verify an authorized reversible implementation
 return unresolved business, product or preference trade-offs to the user.
 Candidate count, duration and confidence language do not determine who decides.
 
-Two outcomes end the protocol early:
+These outcomes end the protocol early:
 1. **User-owned choice** — missing authorization or a genuine unresolved business,
    product or preference trade-off. Return the evidence and recommendation.
 2. **Unverified completion claim** — withhold the claim, execute authorized
@@ -42,11 +42,11 @@ run the necessary authorized probe before claiming the result works. A JSON libr
 inside a bug fix fits; the project's storage engine or external field contract
 requires the full protocol even if the change takes under 10 minutes. Duration
 estimates effort, not authorization. When unsure which path applies, take the full
-protocol. Both paths obey the two stops and any explicit current-task instruction.
+protocol. Both paths obey the stops and any explicit current-task instruction.
 
 ### Step 0 · Frame
 
-Write two things before comparing any candidate:
+Write these before comparing any candidate:
 1. The **named business result** this choice serves.
 2. The **named failure mode** — what observable phenomenon would prove the choice wrong.
 
@@ -64,7 +64,7 @@ Layer 2 has a minimum coverage requirement: use a search tool to enumerate what 
 
 > Checkpoint: If the final recommendation falls to layer 3 (build) with no recorded reason from layers 1–2 → flag as 闭门造车. Zero hits from layer 1 must distinguish "searched by structural token" from "searched by remembered name" — the latter's zero hit does not mean absence.
 
-**User-named candidates.** When the user names a specific option ("use Redis or Postgres?", "should we add a vector store?"), that option enters the candidate set like any other — it is subject to the same axes and the same three-value verdict. It is neither exempt from filtering (a named candidate is not a requirement) nor disposable (killing a user-named candidate requires naming the axis and the failure mode, exactly like any other). If the user named exactly two options, they are the minimum candidate set; add any layer-1 or layer-2 candidates the inventory surfaced, and say so.
+**User-named candidates.** When the user names a specific option ("use Redis or Postgres?", "should we add a vector store?"), that option enters the candidate set like any other — it is subject to the same axes and verdict. It is neither exempt from filtering (a named candidate is not a requirement) nor disposable (killing a user-named candidate requires naming the axis and the failure mode, exactly like any other). If the user named exactly two options, they are the minimum candidate set; add any layer-1 or layer-2 candidates the inventory surfaced, and say so.
 
 ### Step 2 · Probe for Evidence
 
@@ -83,7 +83,7 @@ Termination clause: max two attempts across methods per candidate; two failures
 
 ### Step 3 · Filter Each Candidate
 
-Read `references/decision-axes.md`. For each candidate, give a three-value verdict per axis: `pass` / `fail` (name the failure mode) / `unknown` (needs probe).
+Read [decision axes](references/decision-axes.md). For each candidate, give a verdict per axis: `pass` / `fail` (name the failure mode) / `unknown` (needs probe).
 
 A `fail` on a core axis kills the candidate. A `fail` on a C-class criterion from `references/scoped-criteria.md` **does not kill** — record it as a "declared preference against" note on that candidate and continue. Only core-axis failures remove a candidate from the survivor set.
 
@@ -135,10 +135,10 @@ implementation + reason and authorization; necessary probe result or `unknown`.
 Keep relevant alternatives visible without requiring the full matrix or unused
 Steps 4–6 fields.
 
-**Full-protocol output:** produce the six fields below. Include actual verification
+**Full-protocol output:** produce the fields below. Include actual verification
 and human-acceptance status with the decision branch.
 
-1. **Business result + failure mode** (Step 0) — the two lines.
+1. **Business result + failure mode** (Step 0).
 2. **Candidate table** (Steps 1–3) — each candidate with its layer tag, its
    per-axis verdict (`pass`/`fail`/`unknown`), and the probe name behind each
    `pass`, or authoritative source evidence for a source-contract verdict. A
@@ -158,7 +158,7 @@ and human-acceptance status with the decision branch.
 6. **Irreversible surface list** (Step 6) — the surfaces found, or the word
    "none." Never omit.
 
-## Two Stops
+## Stops
 
 ### Stop 1 · Multi-candidate human tradeoff
 
@@ -183,41 +183,20 @@ acceptance, present the concrete result and evidence for acceptance and mark tha
 status unconfirmed until observed. Withhold unsupported completion claims, continue
 independent authorized work, and identify the exact missing condition when blocked.
 
-## Agent Orchestration — Four Questions
+## Agent Orchestration
 
-Agent count is not preset here. Run the four questions from
-`daymade-agent-discipline` and let them decide.
-
-An explicit instruction in the current task to use team discussion or avoid a
-unilateral direction takes precedence for that task. A historical task instruction
-does not make every later selection a team task; apply the current delegation
-discipline where no explicit instruction governs.
-
-1. **Estimated time?** < 10 min → do it yourself. > 30 min → spawn *candidate* only; duration alone never licenses a spawn. 10–30 min → check other dimensions.
-2. **Need main-session context (user preferences, multi-round feedback, nuanced decisions)?** Yes → do it yourself. No → spawn *candidate*, not automatic.
-3. **Need an unbiased third party (evaluator/reviewer)?** Yes → must spawn (even if fast) — for high-risk, complex work lacking an independent mechanical referee. Ordinary tasks and small changes never auto-spawn one.
-4. **Truly parallel (independent streams)?** Yes → may spawn, if current rules allow; implementation work, exclusive resources (browser, Computer Use, single-writer checkout) and private-context judgment never enter the fan-out pool. Otherwise doing it yourself is faster.
-
-Set concurrency within the actual host limit and current delegation discipline;
-a historical measured ceiling is not a portable fan-out default.
+Before delegating, read [the orchestration contract](references/delegation-contract.md#agent-orchestration).
 
 ## References
 
 | File | Read when |
 |---|---|
-| `references/decision-axes.md` | Step 3 — the 13 core filter axes with mechanical criteria |
-| `references/batch-data-probes.md` | Step 2 — ingestion/indexing/storage correctness, growth, incremental work and recovery probes |
-| `references/scoped-criteria.md` | Step 3 supplementary — 13 narrower criteria with scope labels; C-class items are preferences, not default gates |
-| `references/rejection-modes.md` | Before proposing — 28 entries (16 rejection patterns + 18 anti-patterns, deduplicated) with self-test sentences |
-| `references/delegation-contract.md` | Step 4 — domain ownership, current authorization and the 6 resolved scope boundaries |
+| [Decision axes](references/decision-axes.md) | Step 3 — core filters |
+| [Batch-data probes](references/batch-data-probes.md) | Step 2 — ingestion/indexing/storage correctness, growth, incremental work and recovery |
+| [Scoped criteria](references/scoped-criteria.md) | Step 3 — supplementary criteria and class handling |
+| [Rejection modes](references/rejection-modes.md) | Before proposing — inspect the draft with the self-tests |
+| [Delegation contract](references/delegation-contract.md) | Step 4 — decision ownership; before delegation or resolving a scope boundary |
 
 ## Boundary Quick Reference
 
-| Boundary | Resolution |
-|---|---|
-| 禁绕过 vs fallback | Bypass = replacing the main path (fix scenario). Fallback = supplementary path (runtime channel). Different scenarios. |
-| 不看 README vs 官方文档优先 | README/vendor claims do not prove usability. Official docs/source can establish a source contract; runtime and business-result claims require their own observations. |
-| 预算定档 vs 资源无限 | Budget sets execution tier (which model runs). It never decides whether to do it. Different axes. |
-| 不主动压缩 vs 宿主自动压缩 | During Steps 0–6, do not drop source material to save context — the candidate table and probe records stay complete. Host auto-compaction is outside this skill's control and is not a reason to pre-emptively thin the output. Different actors. |
-| 饱和上报 vs 拒绝过度工程 | Saturation applies to irreversible telemetry (events, export formats, external contracts), not feature surface. Different surfaces. |
-| 单次任务强制要求 vs 通用委派判据 | An explicit team/no-unilateral-direction instruction governs its task. Otherwise use current authorization and delegation discipline; do not promote a past task instruction into a standing requirement. |
+Before resolving these apparent conflicts, read [resolved scope boundaries](references/delegation-contract.md#resolved-scope-boundaries).

@@ -3,8 +3,8 @@ name: delegation-contract
 description: >-
   Who decides what during tech selection: the domain ownership table (agent vs.
   user, split by knowledge domain rather than difficulty), current authorization,
-  the requirement-vs-method split line, the six resolved
-  scope boundaries that look like contradictions but are not, and the four
+  the requirement-vs-method split line, resolved
+  scope boundaries that look like contradictions but are not, and
   agent-orchestration questions — overridden by explicit current-task
   instructions. Read at Step 4
   (survivor triage), before Stop 1, and before escalating any question to the
@@ -39,13 +39,9 @@ delegated, preference- and consequence-bearing choices are not.
 
 ## Autonomy Threshold — apply current authorization
 
-The earlier restriction required all three conditions:
+The earlier restriction was:
 
 > 「除非你是百分百确认这种技术选型是长期的、可维护的，是业界的最佳实践」（2026-07-21）
-
-1. Long-term maintainable
-2. Industry best practice
-3. 100% confidence
 
 Preserve that restriction when it remains the current instruction for the task.
 Later autonomous-delivery authorization changes its applicability: necessary
@@ -63,7 +59,7 @@ This is agent judgment, not a mechanically enforced permission check.
 ## Requirement vs. Method — the split line
 
 **The agent may overturn the user's approach; it may not replace the user's
-requirement.** Two quotes from opposite ends of the time axis, one contract:
+requirement.** The source statements are:
 
 > 「但是你要以我的需求为准，因为这些东西都是我想做的，你可以跟我讨论……」（2026-04-29）
 
@@ -100,23 +96,23 @@ layer is fully surrendered, while end-to-end usability, no half-delivery, and
 nothing valuable lost stay non-negotiable. So "the user is increasingly
 hands-off" is a misreading: what is demanded has changed form, not quantity.
 
-## Six Resolved Scope Boundaries
+## Resolved Scope Boundaries
 
 Not contradictions — different scenarios, information sources, axes, actors, or
 surfaces:
 
 | Boundary | Resolution |
 |---|---|
-| 禁绕过 vs fallback | Bypass = swapping out the main path (root-cause fix scenario). Fallback = a supplementary runtime channel, kept but marked never load-bearing. Different scenarios — the ban is on fix work, not on channel design. |
-| 不看 README vs 官方文档优先 | README/vendor claims do not prove usability. Official docs/source can establish a source contract; runtime and business-result claims require their own observations. |
-| 预算定档 vs 资源无限 | Budget sets the execution tier (which model runs); it never decides whether to do the work. Different axes — cost answers "how," not "whether," and is never a rejection reason on the user's own projects. |
-| 不主动压缩 vs 宿主自动压缩 | 不主动压缩 is a discipline this selection process imposes on itself; host auto-compaction is the runtime acting on its own. Different actors — a self-imposed rule and an external event must not be conflated in either direction. |
-| 饱和上报 vs 拒绝过度工程 | Saturation applies to irreversible observation surfaces (events, field and export formats, external contracts); the anti-overengineering ban applies to feature surface. Different surfaces — saturating telemetry is not adding features. |
-| 单次任务强制要求 vs 通用委派判据 | An explicit team/no-unilateral-direction instruction governs its task. Otherwise use current authorization and delegation discipline; do not promote a past task instruction into a standing requirement. |
+| <a id="bypass-and-fallback"></a>禁绕过 vs fallback | Bypass = swapping out the main path (root-cause fix scenario). Fallback = a supplementary runtime channel, kept but marked never load-bearing. Different scenarios — the ban is on fix work, not on channel design. |
+| <a id="official-docs-and-readmes"></a>不看 README vs 官方文档优先 | README/vendor claims do not prove usability. Official docs/source can establish a source contract; runtime and business-result claims require their own observations. |
+| <a id="budget-and-resources"></a>预算定档 vs 资源无限 | Budget sets the execution tier (which model runs); it never decides whether to do the work. Different axes — cost answers "how," not "whether," and is never a rejection reason on the user's own projects. |
+| <a id="selection-context-and-host-compaction"></a>不主动压缩 vs 宿主自动压缩 | During Steps 0–6, do not drop source material to save context — the candidate table and probe records stay complete. Host auto-compaction is outside this skill's control and is not a reason to pre-emptively thin the output. 不主动压缩 is the selection process's discipline; host auto-compaction is the runtime acting on its own. Different actors — do not conflate them. |
+| <a id="irreversible-surfaces-and-overengineering"></a>饱和上报 vs 拒绝过度工程 | Saturation applies to irreversible observation surfaces (events, field and export formats, external contracts); the anti-overengineering ban applies to feature surface. Different surfaces — saturating telemetry is not adding features. |
+| <a id="current-task-delegation"></a>单次任务强制要求 vs 通用委派判据 | Read [Agent Orchestration](#agent-orchestration) for the current-task instruction boundary. |
 
-## Agent Orchestration — Four Questions
+## Agent Orchestration
 
-Agent count is not preset here. Run the four questions from
+Agent count is not preset here. Run the delegation questions from
 `daymade-agent-discipline` and let them decide.
 
 An explicit instruction in the current task to use team discussion or avoid a
@@ -126,7 +122,7 @@ discipline where no explicit instruction governs.
 
 1. **How long will it take?** < 10 min → do it yourself. > 30 min → spawn
    *candidate*; duration alone never licenses a spawn. 10–30 min → weigh the
-   remaining three questions.
+   remaining questions.
 2. **Does it need main-conversation context** (user preferences, multi-round
    feedback, nuanced decisions)? Yes → do it yourself. No → spawn *candidate*,
    not automatic.
@@ -138,6 +134,9 @@ discipline where no explicit instruction governs.
    single-writer checkout) and private-context judgment never enter the fan-out
    pool — exclusive-resource work is not "un-fanned-out", it is un-fanout-able.
    Otherwise doing it yourself is faster.
+
+Set concurrency within the actual host limit and current delegation discipline;
+a historical measured ceiling is not a portable fan-out default.
 
 ## What This Contract Never Authorizes
 

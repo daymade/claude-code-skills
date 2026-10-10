@@ -1,15 +1,15 @@
 ---
 name: decision-axes
 description: >-
-  The 13 core filter axes for tech-selection Step 3, each with a trigger, an
+  Core filter axes for tech-selection Step 3, each with a trigger, an
   executable criterion, the failure mode it kills, and its evidence scope. Read
   when filtering candidates — never when ranking them, and never before Step 0
   has named a business result.
 ---
 
-# Decision Axes — 13 Core Filters
+# Decision Axes — Core Filters
 
-Every axis carries four fields:
+Read each axis's fields:
 
 - **Trigger** — the moment the axis activates
 - **Criterion** — how to decide, mechanically
@@ -19,19 +19,13 @@ Every axis carries four fields:
 An axis never ranks. It returns `pass` / `fail` (named failure mode) / `unknown`
 (needs probe), and `unknown` is not `pass`.
 
-**Scope legend** — read this before treating an axis as a default gate:
+Read the [evidence scope definitions](scoped-criteria.md#how-to-read-this-file)
+before treating an axis as a default gate.
 
-- **Cross-scenario** — reproduced in ≥2 independent scenarios. Usable as a default gate.
-- **Single-scenario** — one scenario only. Use as a scoped branch; never let it raise the global standard.
-- **Teaching-scenario** — said while teaching or coaching someone else. He was instructing, not selecting for himself. Cannot be treated as his own selection constant.
-
-All 13 axes in this file are decision spines and work as default gates. The
-Class dimension (A common sense / B preference / C paranoid) is applied in
-`references/scoped-criteria.md`, not here — that file decides which of the
-narrower criteria may serve as default gates by class, and which must be
-output as an attributed scenario-specific preference; reuse applicable confirmation
-and ask only if applicability remains unresolved. Do not apply a class
-label to these 13; doing so demotes a cross-scenario spine to a branch.
+The axes in this file are decision spines and work as default gates. Read
+[scoped criteria](scoped-criteria.md#how-to-read-this-file) for class handling and
+confirmation of narrower preferences. Do not apply those class labels to the core
+axes; doing so demotes a cross-scenario spine to a branch.
 
 Criteria are written as imperatives with decidable steps. "Keep it simple" and
 "industry best practice" are not criteria — they are the shape this file refuses.
@@ -41,7 +35,7 @@ Criteria are written as imperatives with decidable steps. "Keep it simple" and
 ### Axis 1 · Business result first; proxy metrics are a silent substitution
 
 - **Trigger**: Any candidate is proposed, and any statement of "done" is judged.
-- **Criterion**: Before comparing candidates, write two lines: ① the **named business result** this choice serves; ② the **falsifiable failure phenomenon** that would prove it wrong. Then audit every completion claim: does the thing being measured equal line ①, or is it an easier-to-measure neighbour (tests green, coverage, pipeline complete, link works)? Measured object ≠ line ① → `fail`; rewrite line ①. "Tests pass" offered as evidence of "the business got better" is the one unacceptable substitution form.
+- **Criterion**: Before comparing candidates, write: ① the **named business result** this choice serves; ② the **falsifiable failure phenomenon** that would prove it wrong. Then audit every completion claim: does the thing being measured equal line ①, or is it an easier-to-measure neighbour (tests green, coverage, pipeline complete, link works)? Measured object ≠ line ① → `fail`; rewrite line ①. "Tests pass" offered as evidence of "the business got better" is the unacceptable substitution form.
 - **Kills**: Candidates whose acceptance is process completeness, test-green, or artifact count. Any acceptance plan whose metric is a proxy for the real goal.
 - **Scope**: Cross-scenario.
 
@@ -54,7 +48,7 @@ Criteria are written as imperatives with decidable steps. "Keep it simple" and
 ### Axis 2 · Inventory what exists before building anything
 
 - **Trigger**: Every "should we build this" need — including the moment before hand-rolling a tool, script, format, or framework.
-- **Criterion**: Inventory three layers in fixed order, and tag each candidate with the layer it came from: ① internal/paid assets (existing credentials, paid-service capability catalogues, existing skills, existing pipelines in this repo) → ② external world-class + community solutions → ③ build from scratch. If the final recommendation lands on layer ③, state what was searched in layers ①–② **and** whether it was searched by structural token or by remembered name — a zero hit by remembered name does not mean absence. An adequate existing solution wins without a head-to-head comparison; "adequate" means it covers the current need, not that it is the performance ceiling. An internal asset wins by being owned.
+- **Criterion**: Inventory layers in fixed order, and tag each candidate with the layer it came from: ① internal/paid assets (existing credentials, paid-service capability catalogues, existing skills, existing pipelines in this repo) → ② external world-class + community solutions → ③ build from scratch. If the final recommendation lands on layer ③, state what was searched in layers ①–② **and** whether it was searched by structural token or by remembered name — a zero hit by remembered name does not mean absence. An adequate existing solution wins without a head-to-head comparison; "adequate" means it covers the current need, not that it is the performance ceiling. An internal asset wins by being owned.
 - **Kills**: A layer-③ recommendation with no search record for layers ①–② (闭门造车). Skipping the inventory because "I'd control it better." Treating a single name-recall search as proof an asset does not exist.
 - **Scope**: Cross-scenario.
 
@@ -79,7 +73,7 @@ Criteria are written as imperatives with decidable steps. "Keep it simple" and
 ### Axis 4 · Long-term maintainability is a second, independent gate
 
 - **Trigger**: After any "it works / it's fixed" verdict, and whenever a temporary solution is on the table.
-- **Criterion**: Decide two gates separately and never merge them. Gate A — "does it work now" (end-to-end probe passes). Gate B — "will it stay correct", decided by counting: ① how many new concepts, configuration surfaces, or state locations the solution adds (locations where new entropy lands); ② whether the same class of problem can recur — is the prevention encoded in a mechanism or does it depend on someone remembering; ③ does anyone have to hand-maintain an index, inventory, or rule set (yes → not maintainable). A passing with B undecided is not a delivery.
+- **Criterion**: Decide these gates separately and never merge them. Gate A — "does it work now" (end-to-end probe passes). Gate B — "will it stay correct", decided by counting: ① how many new concepts, configuration surfaces, or state locations the solution adds (locations where new entropy lands); ② whether the same class of problem can recur — is the prevention encoded in a mechanism or does it depend on someone remembering; ③ does anyone have to hand-maintain an index, inventory, or rule set (yes → not maintainable). A passing with B undecided is not a delivery.
 - **Kills**: Candidates that clear A with B never judged. Solutions that add configuration surface, state locations, or hand-maintained indexes. Prevention that lives in human memory instead of a mechanism.
 - **Scope**: Cross-scenario.
 
@@ -104,7 +98,7 @@ Criteria are written as imperatives with decidable steps. "Keep it simple" and
 ### Axis 6 · End-to-end usable beats polishing one link
 
 - **Trigger**: Any multi-stage solution, and any progress claim of the form "this stage is done."
-- **Criterion**: Acceptance requires one run of the complete link, observed — not each stage passing separately. Three checks: ① does a single execution record exist from entry to user-visible result; ② does every stage appear inside that one record (not "each was tested on its own"); ③ is half-delivery named as such — "done halfway" is a forbidden delivery form, not a progress state.
+- **Criterion**: Acceptance requires one run of the complete link, observed — not each stage passing separately. Check: ① does a single execution record exist from entry to user-visible result; ② does every stage appear inside that one record (not "each was tested on its own"); ③ is half-delivery named as such — "done halfway" is a forbidden delivery form, not a progress state.
 - **Kills**: Candidates whose stages pass individually but were never chained into one execution. Deliveries shaped as "core done, periphery pending." Candidates with no complete-link run record.
 - **Scope**: Cross-scenario.
 
@@ -143,7 +137,7 @@ Criteria are written as imperatives with decidable steps. "Keep it simple" and
 ### Axis 9 · Implementation choice ≠ product justification
 
 - **Trigger**: Any "why this one" argument, and any conclusion that reads technical acceptance as business acceptance.
-- **Criterion**: Split the argument into two independent axes and evidence each separately. Axis A — implementation path (is it technically feasible and stable — proven by probe). Axis B — product reason (did the business result improve — proven by a business measurement). Evidence for A may never be cited for B. Decidable form: if the argument contains "it passed technical verification, therefore it is better for the business" → `fail`. This is the mirror of Axis 1 — Axis 1 forbids swapping the measured object; Axis 9 forbids borrowing evidence across axes.
+- **Criterion**: Split the argument into independent axes and evidence each separately. Axis A — implementation path (is it technically feasible and stable — proven by probe). Axis B — product reason (did the business result improve — proven by a business measurement). Evidence for A may never be cited for B. Decidable form: if the argument contains "it passed technical verification, therefore it is better for the business" → `fail`. This is the mirror of Axis 1 — Axis 1 forbids swapping the measured object; Axis 9 forbids borrowing evidence across axes.
 - **Kills**: Candidates justified by technical feasibility, benchmark numbers, or green tests when the claim is business value. "More advanced / more mature" offered as a business reason.
 - **Scope**: Cross-scenario.
 
@@ -156,7 +150,7 @@ Criteria are written as imperatives with decidable steps. "Keep it simple" and
 - **Trigger**: Any decision about where knowledge or data lands — hosted wiki vs local file, managed store vs local store, API retrieval vs file-greppable text.
 - **Criterion**: Derive the storage location from the retrieval primitive the actual consumer owns. ① Who or what reads this data, and what retrieval primitive does it have (an agent has only ctrl-F, grep, and filename matching; a human has a UI search box). ② If the consumer is an agent, can it reach the full text by ctrl-F? No → `fail` — "he only reads the filename" is the named failure form. ③ Cloud or hosted convenience never outranks grep-ability unless you name the retrieval channel that consumer actually has. **Caveat**: most of this axis's evidence is teaching- or coaching-scenario. Before using it as a default gate, confirm the consumer really is an agent.
 - **Kills**: Data placed where the consumer cannot full-text search it (hosted knowledge bases, cloud docs with UI-only search). Semantic search offered as a replacement for greppable local full text, with no parallel keyword channel.
-- **Scope**: Cross-scenario (2 teaching/coaching + 1 self-use). Default gate only when the consumer is an agent.
+- **Scope**: Cross-scenario. Default gate only when the consumer is an agent.
 
 > 「所有的知识库都应该是本地优先的」
 > 「ai 没有办法在本地去直接 ctrl F 去搜到你的飞书里的这些……他没有办法搜」
@@ -183,7 +177,7 @@ Criteria are written as imperatives with decidable steps. "Keep it simple" and
 - **Trigger**: Only when the decision touches a surface that cannot be back-filled after release — telemetry and events, field and export formats, external contracts, irreversible external actions.
 - **Criterion**: ① Enumerate the irreversible surfaces and list them explicitly (or write "none" — silence is not a check). ② For those surfaces the criterion is "is anything valuable being silently dropped" — saturate rather than miss. ③ **Does not apply** to revertible, re-issuable local changes: there the delegation threshold governs, and this axis must not be used to raise the overall standard by a notch.
 - **Kills**: Ship-now-patch-later on telemetry, fields, or external contracts that cannot be added post-release. The inverse error — invoking this axis on revertible local work to justify inflating the global bar.
-- **Scope**: Single-scenario. One main thread (a telemetry requirement); no second independent scenario in the corpus reproduces "irreversible → raise the standard."
+- **Scope**: Single-scenario (a telemetry requirement).
 
 > 「我们一旦发布了以后，我们就没有办法再给它加这个功能了，所以我们从第 0 天第一个版本就需要支持完善的数据统计……宁可全方位地覆盖饱和式地上报，也不要去漏掉某些日志或者是事件」
 > 「我不想有任何有价值的代码被静默地丢弃」（触发条件是「会丢东西」，与「不可逆」形状相邻但不同，不构成第二个独立场景）
@@ -193,9 +187,9 @@ Criteria are written as imperatives with decidable steps. "Keep it simple" and
 ### Axis 13 · Sufficiency is a dose with an explicit termination clause
 
 - **Trigger**: Every "should we keep polishing / add one more / try another round" node, and any retrieval or quality standard drifting upward without a stop.
-- **Criterion**: Every polishing decision carries a decidable stop of the form "reach X, then end." Three executable forms: ① Feature sufficiency — a new capability is added only when without it the task cannot be done; otherwise "a little is enough" is a legitimate termination. ② Cost sufficiency — the number of conversation rounds plus human pick-and-feedback rounds needed to finish one task is itself an evaluation standard, so it is measured and reported. ③ Attempt sufficiency — two failures across methods for one candidate ends it. The per-attempt form lives in `references/scoped-criteria.md`.
+- **Criterion**: Every polishing decision carries a decidable stop of the form "reach X, then end." Executable forms: ① Feature sufficiency — a new capability is added only when without it the task cannot be done; otherwise "a little is enough" is a legitimate termination. ② Cost sufficiency — the number of conversation rounds plus human pick-and-feedback rounds needed to finish one task is itself an evaluation standard, so it is measured and reported. ③ Attempt sufficiency — two failures across methods for one candidate ends it. Read [scoped stop-loss](scoped-criteria.md#probe-stop-loss) for the per-attempt boundary.
 - **Kills**: Infinite iteration with no termination condition. Volume-for-quality output whose per-item quality falls below threshold. A third hard attempt after two.
-- **Scope**: Cross-scenario (1 self-use + 1 coaching).
+- **Scope**: Cross-scenario.
 
 > 「加上那个搜索做的好，用一丢丢，我觉得就够了，就是这整个这个事情就结尾了」
 > 「你花多少轮的对话，加上你自己的挑选和反馈，才能完成一次任务。这个东西是一个很重要的评估标准」
