@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **continue-codex-work** (`daymade-claude-code` v4.27.2): Bind Goal recovery to the live host that owns the loaded thread and preserve verified user provenance; keep budget and automatic-turn readback separate. Change type: bounded recovery clarification.
 - **skill-creator** (`daymade-skill` v1.68.1): align Wrapper provenance and completion with their canonical workflows; remove duplicated validator facts and manual heading summaries, and expose required acceptance from the project entry.
 - **skill-creator** (`daymade-skill` v1.68.0): Add an authorized cross-task history improvement route that distinguishes missing methods from loading, execution and acceptance failures, tests causal limits, and updates the existing capability owner. Resolve conflicting confirmation, paired-evaluation, persistence and destination-specific release guidance. Change type: methodology extension and bounded contract repair.
 - **competitors-analysis** (v1.5.3): Bind comparisons to actual execution entries, trace decisive normal and recovery paths before borrowing mechanisms, and separate source reading, exercised behavior and adoption evidence. Change type: bounded analysis-method clarification.
