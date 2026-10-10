@@ -479,6 +479,9 @@ For upstream contributions and desktop E2E acceptance, enter
 [quality/E2E workflow](github-contributor/references/phase3_quality_gates_and_e2e.md).
 For an explicitly requested independent evaluation of your own contribution,
 follow the contributor entry's route to [github-review-pr](github-review-pr/SKILL.md).
+For behavioral changes and review-led repairs, the review Skill's
+[impact procedure](github-review-pr/references/behavioral-impact-review.md) owns
+consumer tracing, preservation evidence and finding closure.
 Before expensive checks on a concurrently edited base, follow its
 [publication coordination](github-ops/references/pr_operations.md#coordinate-publication-before-expensive-checks).
 For hosted-state writes through `gh`, follow its

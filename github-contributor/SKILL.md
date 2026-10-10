@@ -111,6 +111,15 @@ The full isolation recipe, including how to trigger deeplinks via Tauri's single
 
 ### Step 3.3 — Self-audit: did you actually do what you're about to claim?
 
+For changes with downstream behavior, use
+[behavioral impact review](../github-review-pr/references/behavioral-impact-review.md)
+to select preservation tests before accepting a local pass, and again after a
+review-led repair. Resolve that reference through the installed `github-review-pr`
+Skill when contributing outside this marketplace; if it is unavailable, require
+actual consumer checks against the original result/preservation contract and
+report the missing reference. This does not invoke an independent review or grant
+maintainer authority.
+
 Before writing the PR description, list every "I tested…" / "I verified…" / "I ran…" statement you intend to make. For each one, ask: "What's my evidence?" If the answer is "I think I did" or "it should work", you have not actually done it. Write only what you can defend.
 
 This rule prevents the most damaging trust failure: a maintainer running your "tested" command and finding it doesn't work.
