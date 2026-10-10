@@ -1,11 +1,18 @@
 """Execute the standalone builder and shipped JavaScript grade renderer."""
 
+import ast
+from contextlib import contextmanager
 import importlib.util
 import json
 import os
+import re
+import signal
 from pathlib import Path
 import subprocess
 import sys
+import time
+from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 
 import pytest
 
@@ -169,3 +176,153 @@ def test_legacy_parent_grade_is_still_accepted_when_run_grade_is_absent(tmp_path
     (target.parent / "grading.json").write_text(json.dumps(receipt()))
     run = viewer.build_run(tmp_path, target)
     assert run["grading_status"] == "graded" and run["assertion_binding"] == "bound"
+
+
+@contextmanager
+def _own_http_process(command, log_path, handoff=None):
+    """Retain exact own-child handles; never discover or terminate listeners."""
+    with log_path.open("w+") as log:
+        process = subprocess.Popen(command, stdout=log, stderr=log, text=True)
+        try:
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                output = log_path.read_text()
+                match = re.search(r"URL:\s+(http://localhost:\d+)", output)
+                if match and (handoff is None or handoff.exists()):
+                    yield process, match.group(1)
+                    return
+                assert process.poll() is None, output
+                time.sleep(.01)
+            pytest.fail(f"Own viewer startup timed out: {log_path.read_text()}")
+        finally:
+            if process.poll() is None:
+                process.send_signal(signal.SIGINT)
+                try:
+                    process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait(timeout=2)
+            assert process.poll() is not None
+
+
+def _viewer_command(workspace, port, handoff):
+    # Replace only browser handoff; actual main, binding, HTTP and writes run.
+    wrapper = """
+import importlib.util, sys
+from pathlib import Path
+builder, handoff, *args = sys.argv[1:]
+spec = importlib.util.spec_from_file_location('own_viewer', builder)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+module.webbrowser.open = lambda url: Path(handoff).write_text(url)
+sys.argv = [builder, *args]
+module.main()
+"""
+    return [sys.executable, "-u", "-c", wrapper, str(BUILDER), str(handoff),
+            str(workspace), "--port", str(port)]
+
+
+def _http_get(url):
+    with urlopen(url, timeout=2) as response:
+        assert response.status == 200
+        return response.read()
+
+
+def _check_own_viewer(url, handoff, workspace, output_path, marker):
+    assert url == handoff.read_text()
+    assert urlparse(url).port > 0
+    assert marker.encode() in _http_get(url)
+    payload = {"reviews": [{"run_id":"own-run", "feedback":"own feedback marker"}]}
+    request = Request(url + "/api/feedback", data=json.dumps(payload).encode(),
+                      headers={"Content-Type":"application/json"}, method="POST")
+    with urlopen(request, timeout=2) as response:
+        assert response.status == 200
+        assert json.loads(response.read()) == {"ok":True}
+    assert json.loads((workspace / "feedback.json").read_text()) == payload
+    assert json.loads(_http_get(url + "/api/feedback")) == payload
+    output_path.write_text(marker + " refreshed")
+    assert (marker + " refreshed").encode() in _http_get(url)
+
+
+def test_busy_port_preserves_incumbent_and_routes_own_feedback_and_refresh(tmp_path):
+    incumbent = tmp_path / "incumbent"
+    incumbent.mkdir()
+    marker = incumbent / "marker.txt"
+    marker.write_text("unique incumbent listener marker")
+    old_feedback = incumbent / "feedback.json"
+    old_feedback.write_text('{"reviews":[{"feedback":"incumbent untouched"}]}')
+    original = {p.name:p.read_bytes() for p in incumbent.iterdir()}
+    server = """
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from pathlib import Path
+import sys
+marker = Path(sys.argv[1])
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        body = marker.read_bytes()
+        self.send_response(200)
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+    def log_message(self, *args): pass
+server = HTTPServer(('127.0.0.1', 0), Handler)
+print(f'URL: http://localhost:{server.server_address[1]}', flush=True)
+try: server.serve_forever()
+except KeyboardInterrupt: pass
+finally: server.server_close()
+"""
+    with _own_http_process([sys.executable,"-u","-c",server,str(marker)],
+                           tmp_path / "incumbent.log") as (old_process, old_url):
+        assert _http_get(old_url) == marker.read_bytes()
+        workspace = tmp_path / "reviewer"
+        target = run_fixture(workspace, receipt())
+        output = target / "outputs/result.txt"
+        output.write_text("unique new reviewer marker")
+        handoff = tmp_path / "viewer-handoff.txt"
+        with _own_http_process(_viewer_command(workspace, urlparse(old_url).port, handoff),
+                               tmp_path / "viewer.log", handoff) as (process, url):
+            assert urlparse(url).port != urlparse(old_url).port
+            assert old_process.poll() is None
+            assert _http_get(old_url) == original["marker.txt"]
+            _check_own_viewer(url, handoff, workspace, output, "unique new reviewer marker")
+            assert process.poll() is None and old_process.poll() is None
+            assert _http_get(old_url) == original["marker.txt"]
+            assert {p.name:p.read_bytes() for p in incumbent.iterdir()} == original
+
+
+def test_port_zero_advertises_and_hands_off_actual_usable_endpoint(tmp_path):
+    workspace = tmp_path / "reviewer"
+    target = run_fixture(workspace, receipt())
+    output = target / "outputs/result.txt"
+    output.write_text("unique zero-port reviewer marker")
+    handoff = tmp_path / "handoff.txt"
+    with _own_http_process(_viewer_command(workspace, 0, handoff),
+                           tmp_path / "viewer.log", handoff) as (process, url):
+        _check_own_viewer(url, handoff, workspace, output, "unique zero-port reviewer marker")
+        assert process.poll() is None
+
+
+def test_static_viewer_does_not_bind_or_open_browser_and_default_stays_3117(tmp_path, monkeypatch):
+    workspace = tmp_path / "workspace"
+    target = run_fixture(workspace, receipt())
+    (target / "outputs/result.txt").write_text("unique static marker")
+    output = tmp_path / "static.html"
+    def forbidden(*args, **kwargs):
+        pytest.fail("static generation must not bind or open a browser")
+    monkeypatch.setattr(viewer, "HTTPServer", forbidden)
+    monkeypatch.setattr(viewer.webbrowser, "open", forbidden)
+    monkeypatch.setattr(sys, "argv", [str(BUILDER), str(workspace), "--static", str(output)])
+    with pytest.raises(SystemExit) as exit_info:
+        viewer.main()
+    assert exit_info.value.code == 0
+    assert "unique static marker" in output.read_text()
+    # Read the declaration without occupying the user's shared default port.
+    port_call = next(node for node in ast.walk(ast.parse(BUILDER.read_text()))
+                     if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                     and node.func.attr == "add_argument"
+                     and any(isinstance(arg, ast.Constant) and arg.value == "--port" for arg in node.args))
+    assert next(keyword.value.value for keyword in port_call.keywords if keyword.arg == "default") == 3117
