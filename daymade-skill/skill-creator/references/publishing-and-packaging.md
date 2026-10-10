@@ -8,15 +8,6 @@ description: >-
 
 Choose sections by the requested delivery: public sanitization before public distribution, security before packaging/distribution, packaging for an archive request, marketplace for registered publication, and Ship or Iterate for requested consumption. Complete required independent review before the release boundary even when packaging is skipped. Package-only and source-only requests retain their scope; stop at verified requested delivery or report the exact unresolved consumption boundary.
 
-## Contents
-
-  - [Step 5: Sanitization Review (mandatory for any public skill)](#step-5-sanitization-review-mandatory-for-any-public-skill)
-  - [Step 6: Security Review](#step-6-security-review)
-  - [Step 7: Packaging a Skill](#step-7-packaging-a-skill)
-  - [Step 8: Update Marketplace](#step-8-update-marketplace)
-  - [Step 9: Ship or Iterate](#step-9-ship-or-iterate)
-  - [Package and Present (only if `present_files` tool is available)](#package-and-present-only-if-present_files-tool-is-available)
-
 ### Step 5: Sanitization Review (mandatory for any public skill)
 
 **Before this gate, when discipline #5 is due, its independent pass must have run**, and the current change's `independent-review.md` (in your private git-tracked knowledge repo — not the wiped workspace, not any repo that is or may become public or distributed) must exist **and be committed**. It is always due for a new skill; for an existing skill use the threshold in the next paragraph. A file sitting uncommitted in a git working directory is not meaningfully different from a file that was never written; `ls`/`test -f` confirms it is on disk, not that it survives. For a **new** skill this is the first step where anything leaves your hands, so it is where that discipline is actually enforced rather than merely stated — a rule that lives 1000 lines above the point of use, with nothing checking it, loses to completion-drive every time.
@@ -27,11 +18,9 @@ Choose sections by the requested delivery: public sanitization before public dis
 
 **Scope the pass by destination, not by topic.** Only the artifact that ships publicly — the skill bundle itself — gets sanitized. Companion documents that stay in a private repo (the incident report the skill was distilled from, internal runbooks, the project's CLAUDE.md) keep their real hostnames, paths, and timestamps: redacting those destroys their audit value, and you will end up reverting it. One distillation session went through three rounds of rework precisely because the redaction pass was applied to everything the source material touched instead of just the public skill.
 
-**Check the destination first, and let it pre-fill the recommendation.** Run
+**Check the destination first.** Run
 `gh repo view --json isPrivate` on the repo the skill will live in (or read the note
-`quick_validate` already printed). A private destination makes option C the default
-recommendation rather than an afterthought — "assume public unless told otherwise" is
-what turns a private skill's working paths into placeholders nobody asked for.
+`quick_validate` already printed).
 
 **The trigger for sanitizing is the destination's `isPrivate`, not how much the task
 feels like publishing.** These come apart, and when they do the feeling wins unless you
@@ -55,19 +44,8 @@ sitting in a private repo on its way to release gets its sanitization pass on th
 that publishes it, not on this one. If you find yourself reasoning about whether something "should"
 be generalized in a private destination, that reasoning is the tell.
 
-Use **AskUserQuestion** to confirm the depth (for a public destination, confirm the depth,
-not whether to do it; for a private one, confirm whether it is wanted at all):
-
-```
-This skill will be public. I'll do a sanitization pass — the core of it is
-me reading the whole skill and judging each name/example/snippet, because
-scanners miss real content that has no keyword to match.
-
-Options:
-A) Full — I replace everything that looks lifted from a real project/person
-B) Selective — I show you each finding and you decide (Recommended)
-C) This skill is genuinely internal-only — skip
-```
+Resolve a missing sanitization-scope decision through
+[Resolve the task before acting](../SKILL.md#resolve-the-task-before-acting).
 
 **Sanitization process — the read-through is the method, the scan is a helper:**
 
@@ -105,12 +83,8 @@ brew install gitleaks
 # Linux/Windows - see script output for installation instructions
 ```
 
-**Exit codes:**
-- `0` - Clean (safe to package)
-- `1` - High severity issues
-- `2` - Critical issues (MUST fix before distribution)
-- `3` - gitleaks not installed
-- `4` - Scan error
+Read the [security scanner](../scripts/security_scan.py) for executable exit
+semantics; resolve findings and scan/runtime failures before distribution.
 
 **In a private skill, a finding is information, not a work order.** The scanner cannot
 tell a leaked credential from a credential that is *supposed* to be there — a template whose
@@ -160,14 +134,8 @@ cd <skill-creator-path>
 uv run --frozen python -m scripts.package_skill <path/to/skill-folder> ./dist --include-evals
 ```
 
-The packaging script will:
-
-1. **Validate** the skill automatically (YAML frontmatter, naming conventions, path reference integrity)
-2. **Re-verify the completed existing-skill regression review** whenever Git HEAD already contains the skill; a marker alone never authorizes packaging
-3. **Verify security scan** (content hash must match last scan)
-4. **Package** the skill into a distributable archive
-
-If validation fails, the script reports errors and exits without creating a package.
+Treat the [packager](../scripts/package_skill.py) as the executable owner of its
+validation, regression-review and security prerequisites and archive creation.
 
 ### Step 8: Update Marketplace
 
@@ -282,23 +250,8 @@ Do not infer Claude availability from a Codex link, or installation from a
 marketplace entry. A failed or unavailable host probe leaves local delivery
 incomplete. Package-only and source-only requests retain their narrower scope.
 
-After completing the skill, use **AskUserQuestion** to determine next steps:
-
-```
-Skill "[name]" is complete. Security scan passed, marketplace updated.
-
-RECOMMENDATION: [pick based on state — e.g. "B) optimize the description" if triggering was never verified, else "D) done for now"] because [one-line reason].
-
-Options:
-A) Package and export as .skill file for distribution
-B) Run description optimization — improve auto-triggering accuracy (~5 min)
-C) Expand test set and iterate more — add edge cases before shipping
-D) Done for now — I'll test it manually and come back if needed
-```
-
-After testing the skill, users may request improvements. Often this happens right after using the skill, with fresh context of how the skill performed.
-
-**Refinement filter:** Only add what solves observed problems. If best practices already cover it, don't duplicate.
+After the requested delivery, follow [Show the result, not just the work](../SKILL.md#show-the-result-not-just-the-work)
+for completion and any later refinement.
 
 ---
 

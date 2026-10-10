@@ -45,8 +45,6 @@ Ask: **"If I deleted this file and regenerated it from the session transcript al
 - **Yes** → Track 1. The file is a literal transcription and cross-reference verification is sufficient.
 - **No** → Track 2. The file contains original code or decisions not in the transcript, and needs smoke testing in addition to cross-reference.
 
-Most wrappers are ~70% Track 1, ~30% Track 2. The ima-copilot reference is about 60/40 — `install_ima_skill.sh`, `known_issues.md`, and `references/installation_flow.md` are Track 1; `search_fanout.py`, `diagnose.sh` (glue code), and the symlink-dedup logic are Track 2. Both tracks got appropriate treatment in the canonical example.
-
 ## The full verification checklist
 
 ### Step 1 — Structural validity (both tracks)
@@ -62,18 +60,27 @@ uv run --frozen python -m scripts.quick_validate "$WRAPPER_SKILL_DIR"
 uv run --frozen python -m scripts.security_scan "$WRAPPER_SKILL_DIR"
 ```
 
-Both should pass. `quick_validate` enforces SKILL.md frontmatter shape, the 1024-char description cap (and warns above 420), and path reference integrity. `security_scan` catches committed credentials, personal directories, and company names.
+Require both commands to succeed. Interpret diagnostics through the owning
+[validation-warning contract](../../references/knowledge-skill-grounding.md#interpret-validation-warnings)
+and [security scanner](../../scripts/security_scan.py); do not maintain a second
+set of validator limits here.
 
 ### Step 2 — Track 1 verification: session cross-reference
 
 Walk through every Track 1 file and confirm each non-trivial line traces to the session:
 
-- **`install_<tool>.sh`**: for each shell command, grep the session history for the literal command text. Paraphrases don't count — the script should match the commands that actually ran in the session, not commands that would have been *equivalent*. If a command in the script has no grep hit, either delete it or replace it with the actual command that ran.
+Select the source through [How to access the conversation](workflow.md#how-to-access-the-conversation).
+Search only that authorized source: current messages or the approved redacted
+chunks. Keep an unavailable source unresolved; an empty search over unavailable
+material does not prove a command never ran.
+
+- **`install_<tool>.sh`**: locate each literal command in the selected source. Paraphrases don't count — the script should match the commands that actually ran in the session, not commands that would have been *equivalent*. If the available source does not support a command, delete it or replace it with the actual command that ran.
 - **`known_issues.md` ISSUE entries**: for each entry, locate the session moment where the literal error message first appeared, and the session moment where the fix was applied. The error message in the entry should be byte-identical to what was observed. The fix commands should be byte-identical to what was run.
 - **`diagnose.sh` detection states**: each state returned by a check function should correspond to a state the session actually worked through. If `check_submodule` returns code 5 for a state nobody encountered, that's speculative — remove it unless there's a grounded reason (like the Step A5 dual-state fix, which was added because the session explicitly considered and closed the conflict case).
 - **`installation_flow.md` prose**: each section should paraphrase something that happened in the session. Sections about "what to do if X fails" are legitimate only if X was observed in the session, even briefly, or is a trivially-obvious failure mode.
 
-When in doubt, grep the conversation history. If grep finds nothing and you can't justify why the content should exist, the content is unsupported — delete it.
+Resolve uncertain provenance through that source-selection owner before changing
+the artifact. Do not broaden the history search or invent a replacement command.
 
 ### Step 3 — Track 2 verification: smoke test
 
