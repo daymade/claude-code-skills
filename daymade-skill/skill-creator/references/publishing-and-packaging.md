@@ -46,19 +46,8 @@ sitting in a private repo on its way to release gets its sanitization pass on th
 that publishes it, not on this one. If you find yourself reasoning about whether something "should"
 be generalized in a private destination, that reasoning is the tell.
 
-Use **AskUserQuestion** to confirm the depth (for a public destination, confirm the depth,
-not whether to do it; for a private one, confirm whether it is wanted at all):
-
-```
-This skill will be public. I'll do a sanitization pass — the core of it is
-me reading the whole skill and judging each name/example/snippet, because
-scanners miss real content that has no keyword to match.
-
-Options:
-A) Full — I replace everything that looks lifted from a real project/person
-B) Selective — I show you each finding and you decide (Recommended)
-C) This skill is genuinely internal-only — skip
-```
+Resolve a missing sanitization-scope decision through
+[Resolve the task before acting](../SKILL.md#resolve-the-task-before-acting).
 
 **Sanitization process — the read-through is the method, the scan is a helper:**
 
@@ -264,7 +253,7 @@ marketplace entry. A failed or unavailable host probe leaves local delivery
 incomplete. Package-only and source-only requests retain their narrower scope.
 
 After the requested delivery, follow [Show the result, not just the work](../SKILL.md#show-the-result-not-just-the-work)
-for completion and any later refinement; do not start a generic next-step menu.
+for completion and any later refinement.
 
 ---
 
