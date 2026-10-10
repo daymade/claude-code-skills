@@ -50,7 +50,8 @@ description: >-
 | 场景 | 路由 |
 |---|---|
 | 跨机器邀请、配对联系人、获准资料问答 | 读取 `references/network-preview.md`，使用网络 CLI；未配对或未授权共享资料时不执行问答 |
-| 原生工具覆盖 parent/subagent、同级 agent 或独立 session | 直接使用当前宿主工具、原生地址及回传；不查 `whoami`、不套脚本信封、不额外运行脚本验证 |
+| 原生工具覆盖 parent/subagent 或当前团队内部成员 | 直接使用当前宿主工具、原生地址及回传；不查 `whoami`、不套脚本信封、不额外运行脚本验证 |
+| 原生工具覆盖独立 session | 按本地协调机制执行 `coord prepare` → 原生工具原样发送 `body` → `coord commit`；不追加 fallback 发送 |
 | 原生工具未覆盖已确认的 Claude 目标，且目标有本地 inbox | 用 `scripts/peer.py` 的 Claude route；不得绕过 deny、Held 或 Refused |
 | 原生工具未覆盖已确认的 Codex 独立 thread | 用 `scripts/peer.py` 的 Codex route；不要把内部 agent 地址当独立 thread UUID。**已归档 thread 不可投递**——脚本默认拒发（它永远不会再消费 queue）；给已退出属主留话钉在它的持久制品上（PR comment、文件），见 `references/coordination-and-learning-loop.md` §5.1「发现面不可达时」段 |
 | 多目标协调 | 明确列出目标；原生按工具契约逐个发送或广播，脚本补缺才使用 `broadcast`；禁止从单发请求推断全机广播。脚本 `broadcast` 的消息自动带 fan-out 标记，语义是「仅属主回复，其余忽略」；超出默认目标数上限须 `--contract <契约名>` 点名依据，否则脚本拒发（上限值以 CLI help/实现为准，不在文档复制）——先发证据（git/索引）收窄候选，见 `references/protocol-and-discovery.md` §5 |

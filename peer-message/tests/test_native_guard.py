@@ -165,6 +165,22 @@ class NativeGuardTests(unittest.TestCase):
         missing = subprocess.run(["/bin/bash",bound["entry"]],input=json.dumps(event),text=True,capture_output=True,env=env)
         self.assertEqual(missing.returncode,2)
 
+    def test_plugin_shell_blocks_a_managed_interpreter_lost_after_install(self):
+        home = Path(self.tmp.name)
+        env = dict(os.environ, XDG_CONFIG_HOME=str(home/"config"), XDG_STATE_HOME=str(home/"state"))
+        launcher = home/"managed-python"
+        launcher.symlink_to(sys.executable)
+        with patch.dict(os.environ,env):
+            installer.install(str(launcher))
+        launcher.unlink()
+        result = subprocess.run(["/bin/bash",str(SCRIPTS/"native-guard.sh")],
+                                input=json.dumps(self.event({"body":"raw bypass"})),text=True,
+                                capture_output=True,env=env)
+        self.assertEqual(result.returncode,2)
+        self.assertIn("native guard failed",result.stderr)
+        hooks = json.loads((SCRIPTS.parent/"hooks/hooks.json").read_text())
+        self.assertEqual(hooks["hooks"]["PreToolUse"][0]["hooks"][0]["onFailure"],"block")
+
 
 if __name__ == "__main__":
     unittest.main()

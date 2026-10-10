@@ -5,6 +5,7 @@
       "hooks": [{
         "type": "command",
         "command": "/bin/bash \"${CLAUDE_PLUGIN_ROOT}/scripts/native-guard.sh\"",
+        "onFailure": "block",
         "timeout": 10
       }]
     }]

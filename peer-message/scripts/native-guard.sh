@@ -7,4 +7,5 @@ if [ ! -f "$entry" ]; then
   echo 'BLOCKED (PeerMessage): native guard not initialized. Run scripts/install_native_guard.py with the installer-owned fixed Python entry; do not switch transport.' >&2
   exit 2
 fi
-exec /bin/bash "$entry" "$(cd "$(dirname "$0")" && pwd)/native_guard.py"
+/bin/bash "$entry" "$(cd "$(dirname "$0")" && pwd)/native_guard.py"
+exit $?
