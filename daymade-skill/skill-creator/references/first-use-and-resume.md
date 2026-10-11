@@ -8,10 +8,16 @@ description: >-
 
 # First use and interrupted-task recovery
 
-Apply this contract when the changed Skill depends on installation, account
-configuration, a running service or a human step. Skip it for reference-only
-Skills and self-sufficient file transforms. The author applies it to the affected
-workflow; it is not a reason to build a generic installer or add setup to every Skill.
+Apply this contract when the affected job depends on another Skill/tool, required
+data or permission, installation, account configuration, a running service or a
+human step. This includes instruction-only routers and handoffs across owners.
+Skip it for reference-only work or self-sufficient file transforms only when no
+execution prerequisite is affected. The author applies it to the affected workflow;
+it is not a reason to build a generic installer or add setup to every Skill.
+
+Before planning readiness checks, bind the
+[intended consumer](change-verification.md#bind-the-intended-consumer-before-verification).
+Use that same boundary through initialization, continuation and task acceptance.
 
 ## Define the first successful task
 

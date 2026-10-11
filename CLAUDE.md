@@ -49,6 +49,9 @@ claude plugin install daymade-skill@daymade-skills
 Use [skill-creator](daymade-skill/skill-creator/SKILL.md) before creating or
 changing a skill. Before selecting evidence or reporting completion, follow its
 [required-acceptance owner](daymade-skill/skill-creator/references/change-verification.md#fix-required-acceptance-before-selecting-evidence).
+For executable handoffs, including instruction-only cross-owner workflows, bind its
+[intended-consumer boundary](daymade-skill/skill-creator/references/change-verification.md#bind-the-intended-consumer-before-verification)
+and follow its [first-use route](daymade-skill/skill-creator/references/first-use-and-resume.md).
 Use its selected workflow for regression review, validation, initialization, and packaging.
 
 Operational or code-bearing Skill edits complete directly affected document alignment

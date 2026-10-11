@@ -86,6 +86,11 @@ buries the findings which hold for the real reader.
 Ask an agent-reader which **instructions it could not act on**, not which words it did not
 recognize.
 
+For an executing Skill, carry the previously frozen
+[intended-consumer boundary](change-verification.md#bind-the-intended-consumer-before-verification)
+into this reader spec. Judge affected handoffs and results within that boundary;
+the review harness's capabilities do not establish the consumer's readiness.
+
 **State the reader spec before the run and never use it afterwards to explain findings away.**
 Post-hoc "my reader already knows that" is precisely how an author discards the findings that
 hurt.

@@ -19,6 +19,31 @@ optional benefit claims. For an existing Skill, use the frozen old bundle to ide
 interfaces, failure/recovery cases and loading routes. Do not derive acceptance
 only from the examples the candidate already passes.
 
+### Bind the intended consumer before verification
+
+In the existing acceptance plan, bind the intended consumer and distribution
+boundary before selecting evidence: the tools/Skills it can actually use, the
+affected downstream branches and their required data, account/permissions,
+disabled-entry policy and installation/preparation authorization. Distinguish
+shipped resources from separately resolved dependencies. Keep unobserved access
+unknown; do not substitute the author's installed ecosystem or privileges.
+
+For a controlled task, separate the outer preparation/review harness from the
+consumer's declared capabilities. A harness may supply artifacts or inspect
+outputs; its extra owners, data or permission are not available to the consumer
+unless the task explicitly supplies them. Exercise the affected handoff and
+inspect the actual consumer result under that boundary. A filled capability
+description or a helper's presence does not prove that operation succeeded.
+
+Apply [first use and recovery](first-use-and-resume.md) when the affected job needs
+another owner or prerequisite, including instruction-only orchestration. Verify
+the relevant missing and valid states through that existing workflow; an
+unavailable optional helper and missing required data are different cases.
+Retain the exact dependent gap and continue independent authorized work; do not
+report an unobserved required result as complete or widen the consumer boundary
+after seeing the candidate's output. Pass this same boundary to the required
+independent reader; do not create a second environment ledger or generic detector.
+
 Keep two completion gates separate:
 
 - **Static preservation:** clear the current
@@ -65,14 +90,16 @@ For a provider, default route or enable-switch change, use its
 exercise the actual downstream consumer, including asynchronous/device removal
 and human-review exits. A reachable pointer alone does not prove the handoff runs.
 
-For an operational Skill whose changed workflow needs installation, account
-configuration, a live service or human cooperation, read
+For a changed job that needs another Skill/tool, required data or permission,
+installation, account configuration, a live service or human cooperation, read
 [first use and recovery](first-use-and-resume.md) before drafting that
-workflow. Put automatic preparation and continuation in the ordinary entry,
+workflow, including instruction-only handoffs across owners. Put authorized
+preparation and continuation in the ordinary entry,
 reuse existing execution owners, and test the affected missing-state, valid-state
 and interrupted-state paths against the original task. A written setup guide,
 healthy process or loaded model alone does not establish first-use success.
-Skip this route for reference-only Skills and self-sufficient file transforms.
+Skip this route for reference-only work or self-sufficient file transforms only
+when no execution prerequisite is affected.
 
 ## Heavy-eval authorization gate — separate from tier classification
 
