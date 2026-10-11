@@ -271,6 +271,9 @@ claude plugin install daymade-financial@daymade-skills
 
 **安装其他技能：**
 ```bash
+# 研究驱动地优化指定现有 Skill
+claude plugin install skill-evolver@daymade-skills
+
 # GitHub 操作
 claude plugin install github-ops@daymade-skills
 
@@ -3916,6 +3919,30 @@ build or buy — evaluate the options
 
 ---
 
+### **skill-evolver** - 研究驱动的 Skill 优化
+
+> **安装**：`claude plugin install skill-evolver@daymade-skills`
+
+Daymade Skill Evolver 完成指定现有 Skill 的一轮取证、机制取舍和授权实施。
+复用成功与失败经验，核对相关竞品源码，通过目标的真实消费者验证改动；证据支持
+保持现状时，可以不改。
+
+**适用场景**：根据工作历史、收藏资料或竞品机制优化指定 Skill。普通创建和编辑
+使用 Skill Creator。
+
+**使用示例：**
+```text
+用 skill-evolver 优化我的批量导出 Skill。保留已成功的导出能力，调查批次中断问题，
+实施有依据的修复。
+```
+
+**运行要求**：宿主能读取目标源码，并具备编辑和验证所需工具。专用 Skill 可选；
+必需证据不可用时，保留明确缺口。
+
+📚 **文档**：[skill-evolver](./skill-evolver/SKILL.md)。
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -3953,6 +3980,8 @@ review 后修复/落地时，使用 **github-review-pr**。
 
 ### 技能开发
 使用 **skill-creator**（参见上面的[必备技能](#-必备技能skill-creator)部分）构建、验证和打包你自己的 Claude Code 技能，遵循最佳实践。
+使用 **skill-evolver** 完成指定现有 Skill 的研究驱动优化，从相关证据和机制取舍
+推进到授权改动与实际结果验证。
 
 ### 演示文稿与商务沟通
 使用 **ppt-creator** 生成具有数据可视化、结构化叙事和完整 PPTX 输出的专业幻灯片，用于推介、评审和主题演讲。使用 **slides-creator** 进行叙事优先的幻灯片设计——它引导你完成 ABCDEFG 叙事框架，优先收集你的原始内容，然后将视觉生成委托给 baoyu-slide-deck。非常适合需要将现有文章、转录稿或演讲转化为视觉幻灯片的场景。
@@ -4094,6 +4123,7 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 - **peer-message**：参见 `peer-message/SKILL.md` 了解路由、稳定运行前置与安全边界；运行 `peer-message/scripts/peer.py --help` 查看 CLI 语法；参见 `peer-message/references/protocol-and-discovery.md` 了解传输与验证；参见 `peer-message/references/official-feature.md` 了解会变化的产品要求与机制；参见 `peer-message/references/coordination-and-learning-loop.md` 了解 parent/worker 回传与证据闸门下的改进循环
 - **repomix-unmixer**：参见 `repomix-unmixer/references/repomix-format.md` 了解格式规范
 - **skill-creator**：参见 `daymade-skill/skill-creator/SKILL.md` 了解完整的技能创建工作流
+- **skill-evolver**：参见 [skill-evolver/SKILL.md](./skill-evolver/SKILL.md) 了解针对指定目标的研究、实施与结果验证
 - **llm-icon-finder**：参见 `llm-icon-finder/references/icons-list.md` 了解可用图标
 - **cli-demo-generator**：参见 `cli-demo-generator/references/vhs_syntax.md` 了解 VHS 语法和 `cli-demo-generator/references/best_practices.md` 了解演示指南
 - **cloudflare-troubleshooting**：参见 `cloudflare-troubleshooting/references/api_overview.md` 了解 API 文档
