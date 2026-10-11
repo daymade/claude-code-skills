@@ -346,6 +346,34 @@
         "Includes ordinary preparation/recovery without delayed responses and, where React StrictMode applies, a setup-cleanup-setup healthy control proving current preparation remains usable",
         "Separates retired preparation from accepted writes, requires the compact held-response/navigation/release/current-page/reopened-state/server-readback evidence map, and withholds fix closure until the negative and healthy controls have actual evidence"
       ]
+    },
+    {
+      "id": 24,
+      "name": "hidden-headless-and-jsonl-driver",
+      "prompt": "Audit an animated workspace using an owned Chromium headless harness. A second Escape appears to leave the camera halfway back. The observation says document.visibilityState is hidden and no animation frames arrived, although a timer fired. Long JSON commands pasted into the PTY were also truncated. The user authorizes read-only navigation in this isolated harness only. Explain the next executable actions and verdict boundaries; do not claim a product defect from these observations.",
+      "expected_output": "An observation-first plan that rejects headless mode as visibility proof, restores only the owned target when supported, verifies visible state and actual frame/state progress, and replays complete JSONL through non-TTY input using the existing authorized adapter. Failed input and hidden unfinished captures remain harness evidence, not product findings.",
+      "files": [],
+      "expectations": [
+        "Checks observed visibility and frame/state progress before diagnosing the camera; does not say every headless page is visible",
+        "Uses supported focus emulation or bring-to-front only on the owned isolated target, then independently reads the actual state",
+        "Uses file JSONL and non-TTY stdin for the selected harness; does not invent a universal PTY byte limit",
+        "Keeps input/response traces private and makes the adapter check errors and required observations before later dependent actions",
+        "Leaves actual product closure and physical device feel unverified until the corresponding real journey is exercised"
+      ]
+    },
+    {
+      "id": 25,
+      "name": "embedded-reader-filter-and-return",
+      "prompt": "Plan the affected read-only acceptance of a workspace whose card zoom opens a same-origin embedded conversation. A selected synthetic task is hidden by a no-match search, but its Read action stays enabled. Parent-window Escape and a handler unit test pass. A new entry can be reversed during its animation, and switching objects can leave a delayed completion. No project fixture is supplied. Describe the smallest real journey and healthy controls that could falsify the change without clearing the user's search or inventing execution.",
+      "expected_output": "A bounded partial journey recipe using actual iframe focus and key down/up, visible information gain, retained source/filter/range/body scroll, return focus, reentry, filtered-out Read, and input reversal/late completion controls. It preserves existing camera/reader ownership and does not promote parent-key tests or static DOM to a pass.",
+      "files": [],
+      "expectations": [
+        "Focuses inside the iframe before actual Escape events, then checks the visible parent layer and usable focus target",
+        "Triggers the retained selected-task Read action while the same no-match query remains; does not clear the filter or disable the action to obtain a pass",
+        "Checks the same source identity, promised reader/document retention, loaded range, actual scroll owner and reentry position",
+        "Checks reversal and object-switch late completion cannot reopen or steal focus, alongside normal and repeated-entry healthy controls",
+        "Reports missing fixture/runtime evidence as unverified and keeps gesture emulation separate from hardware identity or physical feel"
+      ]
     }
   ]
 }

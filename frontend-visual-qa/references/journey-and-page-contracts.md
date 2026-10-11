@@ -74,6 +74,39 @@ child return or enlarged view does not upgrade another state's partial verdict.
 No automatic tool enforces this scope comparison; the executing auditor must
 apply SKILL.md's completion gate to the original user contract.
 
+### Embedded readers and semantic zoom
+
+Use this bounded recipe when an affected workspace moves from cards or summaries
+into an embedded reader. Load the browser-observation traps before running it;
+this is a journey through the existing harness, not a replacement camera or parser.
+
+- Record the selected object's source identity, filter/query, loaded range,
+  actual body scroll position and focus before entering. Assert the visible new
+  information at each semantic layer; larger empty geometry is not disclosure.
+- Put real keyboard focus inside the iframe and deliver actual key down/up for
+  Escape. Check the visible upper layer and its usable focus target. Testing only
+  the parent document misses keyboard ownership across documents.
+- Return and reenter the same object; compare reader/document identity where
+  retention is promised, range, scroll, expanded content and current find state.
+  Use the actual scroll owner, not a guessed body/document scroll property.
+- Hide the selected object with an authorized filter or no-match query, then
+  trigger its retained reading action. Check that it reads the same object and
+  preserves the filter; disabling the action or clearing the query cannot certify
+  a contract that promises reading outside the filtered list. While reading,
+  change the affected filter/layout and check the promised viewport preservation.
+- Reverse input during entry/exit, then select another object and wait for the
+  old completion. It must not reopen the retired layer, bind the old source or
+  steal focus. Include ordinary current input and repeated entry as healthy
+  controls; blocking every completion is not a fix.
+- If gesture policy changed, exercise the relevant mouse/continuous/pinch
+  sequence and a zero-input control. Check both hint and viewport. Plain reader
+  scrolling stays with the reader when promised. Synthetic wheel events or CDP
+  modifier gestures do not prove physical trackpad feel or hardware identity.
+
+Record only affected states and the actual results. Missing source, unavailable
+body or a hidden/throttled test target keeps the dependent verdict unverified;
+preserve the product's own unknown/read-only boundary.
+
 Treat these as Major unless the project taxonomy says otherwise:
 
 - a primary action blocks indefinitely with no recovery;
