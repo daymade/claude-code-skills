@@ -23,6 +23,12 @@ Several common traps need different fixes:
 
 ## The attribution trap
 
+### Reproduce the reported denial first
+
+The executing agent repeats the named protected read through the actual failing requester and execution context before changing permissions. A file listing, another terminal, SSH access or a foreground run cannot substitute for the denied file read or background job. Record the path/resource, requester, context and result; this is a diagnostic step, not a mechanical permission classifier.
+
+If that read now succeeds, report **currently accessible; earlier cause unknown** and stop permission changes unless a specific required read still fails. Do not call the cause repaired without evidence of the cause and its correction, or add Full Disk Access, change ACLs, reconnect shared mounts or restart a shared host merely to clear a historical error. If it still fails, follow the attribution checks below; `Operation not permitted` alone does not establish TCC as the cause.
+
 **The name in the dialog does not prove who to grant.** macOS attributes a request to the *responsible*
 process in the process tree, but displays the name of the *accessing* executable — and for an
 unsigned binary with no bundle (uv-managed python, per-version CLI, node helpers) that display

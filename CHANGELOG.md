@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-permissions** (`daymade-macos` v1.22.5): Reproduce a reported denial in its actual reader context before changing permissions. Stop when the required read succeeds, preserving an unknown historical cause instead of claiming a root-cause repair. Keep existing attribution and repair routes. Change type: bounded diagnostic clarification.
+
 - **tech-selection** (`daymade-claude-code` v4.27.5): Use the public delegation questions under the current user/host contract, loading an applicable local adapter when available. Preserve explicit team and adapter requirements; a missing required adapter blocks only its dependent action. Change type: public delegation dependency repair.
 
 - **deep-research** (v2.13.0): Search current study, source and claim records without reregistering metadata edits. Persist explicit registration facts while preserving legacy rows and predecessor bindings. Report discovery as recorded-only or unknown; final integrity checks remain required. Change type: research catalog format and output redesign.
