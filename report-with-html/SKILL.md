@@ -479,8 +479,9 @@ Every interaction must work without a pointer:
    for this lineage and something is about to dispatch another step 9/10 round anyway,
    that crossing — by itself, before judging whether the new finding is real — is the
    signal to stop and ask the user, not to silently reopen.
-10. **Independent acceptance.** Hand the acceptance checklist below, plus the page and its
-   sources, to a *second* fresh-context agent — separate from the reader in step 9,
+10. **Independent acceptance.** Hand the acceptance checklist below, the page and its
+   sources, and the original request, later corrections, output contract and required
+   acceptance criteria to a *second* fresh-context agent — separate from the reader in step 9,
    because they answer different questions (see the table under that list). It returns a
    verdict and evidence per item. Its FAILs are findings you reproduce and fix, exactly
    like step 9's; its PASSes are the only thing that closes an item.
@@ -514,10 +515,10 @@ exactly one of them, so there is nothing for them to drift apart on.
 
 | | step 9 · reader review | step 10 · acceptance |
 |---|---|---|
-| gets | **the page and nothing else** (screenshots count as the page) | the page **plus** your sources, your commands, your review file, **and the gate artifacts** |
-| asks | can you read it? can you decide from it? | does what is off the page agree with what is on it? |
+| gets | **the page and nothing else** (screenshots count as the page) | the page **plus** the original request and corrections, output contract and required acceptance, your sources, commands, review file, **and the gate artifacts** |
+| asks | can you read it? can you decide from it? | does it deliver the requested result, and does what is off the page agree with what is on it? |
 | its questions live in | `references/independent-review-prompt.md` — all of them, used verbatim | the items below |
-| authority | everything visible on the page | provenance and process |
+| authority | everything visible on the page | original task requirements, provenance and process |
 
 **The split rule, so a future addition lands in one place instead of both:** does answering
 it require something *outside* the page? **No → it is a reader question**; add it to the
@@ -527,8 +528,9 @@ argument — all visible on the page, all the reader's. The checks below need wh
 reader does not have.
 
 Hand this list, the page **and its gate artifacts** (`page.html.gate.md`, `page--masked.png`),
-the sources behind its load-bearing facts, the commands you ran, and the step 9 review file to a
-fresh-context agent (non-fork). You may walk it yourself first — it catches the
+the original request and later corrections with their source coordinates, the existing output
+contract and required acceptance criteria, the sources behind load-bearing facts, the commands
+you ran, and the step 9 review file to a fresh-context agent (non-fork). You may walk it yourself first — it catches the
 obvious misses cheaply — but *you do not get to declare the items passed.*
 
 Why it cannot be a self-check, stated plainly because the urge to skip it peaks exactly
@@ -545,6 +547,13 @@ Ask for: item number, PASS / FAIL / CANNOT-CHECK, and the specific evidence — 
 line, a count, a command's output. An item that cannot be checked is reported as such,
 never as a pass.
 
+0. **Requested result** — the existing acceptance agent first maps each required reader
+   question or output to its answer and evidence in the delivered page, quoting the requirement
+   and the page location. Missing answers or a sample/prototype substituted for a required
+   report are FAILs even when interactions, rendering and gates pass. A sample-only request is
+   judged against that scope; do not require a full report it never requested. Missing original
+   requirements are CANNOT-CHECK; do not infer them from the author's narrower contract.
+   This is semantic acceptance, not something the delivery-gate script establishes.
 1. **Provenance** — every load-bearing fact traces to a source *outside* the page, with an
    as-of date: not only numbers, but quoted clauses, claims about what someone agreed to,
    statements about a dependency's status. The reader can check a page against itself;
