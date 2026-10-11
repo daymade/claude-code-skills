@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **skill-evolver** v1.0.0: Add a standalone entry for research-driven improvement of a specified existing Skill. Reuse successful/failed work and relevant competitor evidence, disposition important mechanisms, implement authorized changes and verify the original consumer result. Keep existing execution owners and explicit partial blockers. Change type: new capability.
+- **skill-creator** (`daymade-skill` v1.69.2): Correct the viewer's previous-iteration example to use the supported `--previous-workspace` directory argument. Change type: factual CLI documentation correction.
 
 - **tech-selection** (`daymade-claude-code` v4.27.4): Remove derived inventory counts, consolidate delegation and scope definitions, and route trigger maintenance to the current Skill Creator procedure. Retain existing triggers, decision checks and dated observations; add repository entry routing. Change type: bounded documentation alignment.
 
