@@ -556,6 +556,8 @@ check the available agent tools can perform.
   echo inventory used by the sweep; it never certifies necessity.
 - scripts/painted_text_probe.mjs — vertical text-fragment clipping used by the
   sweep; reports examined coverage and unsupported clipping/scroll windows.
+- scripts/journey_input.mjs — non-TTY JSONL input for an already-authorized
+  browser adapter; preserves full commands and stops dependent steps on failure.
 - references/history-derived-checklist.md — core visual/responsive defect
   catalog plus standards-backed checks.
 - references/journey-and-page-contracts.md — state, route, overlay,

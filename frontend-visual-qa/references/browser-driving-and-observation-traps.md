@@ -257,12 +257,45 @@ page-context `fetch()` of the same URL succeeds instantly. Every component of th
 stack is healthy; the scheduler simply hasn't started the load.
 
 Order of investigation: check `document.visibilityState` **first**, before any
-server-side or codec theory. If it is `hidden`, verify media in a context that is
-visible — a headless run (headless pages count as visible to the scheduler) or a
-tab actually brought to the foreground. Two sub-traps while escaping: OS-level
+server-side or codec theory. If it is `hidden`, verify media in a context actually
+observed as visible. Headless mode alone does not establish visibility: a headless
+Chrome page can become hidden and defer animation frames too. For an owned,
+isolated Chromium CDP target, supported focus emulation
+(`Emulation.setFocusEmulationEnabled`, `enabled: true`) and `Page.bringToFront`
+can restore its active state; read visibility and actual frame/state progress
+again before judging the product. Do not activate a user's window or another
+agent's target without its existing control authority. Record visibility before
+the action and at the settled observation; an unfinished hidden capture is not
+evidence that an animation is stuck. Two sub-traps while escaping: OS-level
 scripting (e.g. AppleScript's application object) may not see the automation
 window at all when it belongs to another profile/instance — don't burn rounds
 trying to raise it; and per trap 9, don't verify the escape under virtual time.
+
+### Long commands through a terminal can be truncated
+
+When a selected browser harness accepts JSONL, drive it from a file through
+non-TTY stdin rather than pasting long command lines into an interactive PTY.
+Truncation, altered fields or terminal overflow are harness failures; they do
+not prove that a button or camera failed. Preserve the complete input and its
+paired response. Do not assume a portable terminal byte limit.
+Keep command/response traces in private scratch; apply the Skill's existing
+redaction contract before sharing a derivative.
+
+The Node helper [journey_input.mjs](../scripts/journey_input.mjs) feeds complete
+JSON objects to the existing authorized adapter, serially, and stops on parsing,
+adapter or evidence-recording errors. It opens no browser, executes no commands
+itself and grants no action authority. The adapter must check protocol errors
+and required observations and throw before a later dependent action can run.
+
+```js
+import { runJsonlJourney } from '<resolved-skill-root>/scripts/journey_input.mjs';
+// dispatch and saveEvidence belong to the already-selected browser harness.
+await runJsonlJourney(process.stdin, dispatch, saveEvidence);
+```
+
+Run that harness as `node "$journey_harness" < "$journey_steps"`, with both
+variables set to the owned harness and private JSONL file, through a
+non-TTY command runner. A zero-step result is empty coverage, not a passed journey.
 
 ### Lazy images can move after you scroll
 

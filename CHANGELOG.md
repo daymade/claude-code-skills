@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.20.7 → v1.20.8): Measure headless visibility and frame progress before judging animation; add a non-TTY JSONL journey input helper with fail-fast dispatch and recording. Cover embedded-reader focus, filtered selection, reversible zoom and stale completion in journey guidance and additive evals. Change type: bounded verification workflow repair.
+- **peer-message** (v1.21.4 → v1.21.5): Add eval-only cases for discovery-before-routing and avoiding duplicate delivery after an accepted fallback; shipped runtime unchanged. Version advances under the repository content-change gate.
+
 - **macos-permissions** (`daymade-macos` v1.22.5): Reproduce a reported denial in its actual reader context before changing permissions. Stop when the required read succeeds, preserving an unknown historical cause instead of claiming a root-cause repair. Keep existing attribution and repair routes. Change type: bounded diagnostic clarification.
 
 - **tech-selection** (`daymade-claude-code` v4.27.5): Use the public delegation questions under the current user/host contract, loading an applicable local adapter when available. Preserve explicit team and adapter requirements; a missing required adapter blocks only its dependent action. Change type: public delegation dependency repair.

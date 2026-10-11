@@ -1,0 +1,31 @@
+{
+  "skill_name": "peer-message",
+  "evals": [
+    {
+      "id": 1,
+      "name": "discover-read-then-native-route",
+      "prompt": "A shared-repository owner must be asked for an integration window. Current runtime tool discovery has not yet returned. The executing agent proposes a single exec cell that prints ALL_TOOLS filtered by the current Codex namespace and immediately calls peer.py send. After the cell, discovery would show a native send_message_to_thread tool covering the exact known independent target. What should the agent do? No message has been sent; no installation or permission change is authorized.",
+      "expected_output": "Separate discovery from the dependent route decision, read the actual tool contract and target coverage, then use coord prepare -> the native tool with the exact prepared body -> coord commit. Do not preselect fallback, install a guard or grant mutation permission through a coordination reply.",
+      "files": [],
+      "expectations": [
+        "Waits for and reads current discovery before choosing the sender; printing discovery and sending fallback in the same cell does not satisfy native-first",
+        "Uses the native tool when it covers the exact target, without also sending a script duplicate",
+        "Keeps coordination preparation and accepted/unknown/not_sent handling on the existing board contract",
+        "Makes no hook, receive-policy, service or authentication change"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "accepted-fallback-is-not-replayed-after-discovery",
+      "prompt": "An agent prematurely used peer.py send while native discovery was still pending. The transport accepted the coordination, but receiver-side consumption is unverified. Discovery now returns a native tool covering that exact target. The user did not authorize a duplicate request. Describe recovery and the route for a future distinct coordination.",
+      "expected_output": "Retain the original message identity and accepted/unverified status, inspect its evidence through the applicable existing contract, and do not resend it through the newly discovered native tool. A future distinct coordination uses native prepare/send/commit after inspecting coverage.",
+      "files": [],
+      "expectations": [
+        "Does not replay the same accepted or uncertain request through native transport",
+        "Distinguishes transport acceptance from consumption and business completion",
+        "Preserves the original message identity and does not delete queue state, resume a thread or change permissions",
+        "Uses native-first only for the future distinct request rather than retroactively duplicating this one"
+      ]
+    }
+  ]
+}
