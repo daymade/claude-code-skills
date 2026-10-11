@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **skill-creator** (`daymade-skill` v1.69.2): Correct the viewer's previous-iteration example to use the supported `--previous-workspace` directory argument. Change type: factual CLI documentation correction.
+- **tibo-reset-codex** (`tibo-reset-codex` v1.22.1 → v1.22.2): Record the 2026-10-11 Day 6 monitoring findings — banked redemption gated on weekly-window exhaustion (`applicable_available_count` read in both directions on one account), credits decline around window exhaustion consistent with auto-cover, global resets re-anchor the natural +7d window later, Day 6 reset was announced directly without a poll, revision windows must start in the future, `reset_at` back-calculation narrows landing time to ~33s of the confirmation post, and banked should not be redeemed while an official global reset is pending. Change type: bounded factual updates from a live monitoring round.
 
 - **tech-selection** (`daymade-claude-code` v4.27.4): Remove derived inventory counts, consolidate delegation and scope definitions, and route trigger maintenance to the current Skill Creator procedure. Retain existing triggers, decision checks and dated observations; add repository entry routing. Change type: bounded documentation alignment.
 
