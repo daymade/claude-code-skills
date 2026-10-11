@@ -514,6 +514,8 @@ For behavioral changes and review-led repairs, the review Skill's
 consumer tracing, preservation evidence and finding closure.
 Before expensive checks on a concurrently edited base, follow its
 [publication coordination](github-ops/references/pr_operations.md#coordinate-publication-before-expensive-checks).
+Before a merge or selecting `--auto`, enter its
+[merge preflight](github-ops/references/pr_operations.md#merging-prs).
 For hosted-state writes through `gh`, follow its
 [identity, host and target binding](github-ops/SKILL.md#2-bind-identity-host-and-target)
 before using an operation recipe. For historical account or connector attribution,
