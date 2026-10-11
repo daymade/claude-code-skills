@@ -241,6 +241,40 @@ reader continues accepting schema 1/2 without preferences; older readers reject
 schema 3 instead of silently ignoring the choice. This is host-local policy:
 never put a maintainer's source choices in the empty installation template.
 
+### Leased Fleet authoring clones
+
+For an approved Fleet pool, the operator enrolls its exact physical root in
+`~/.config/claude-switch-models-setup/authoring-pools.json`. Keep machine values
+outside the Skill bundle. The owner reads this separate file only for
+`--print-source-inventory`; an absent file preserves the canonical inventory.
+Use schema 1 with a `pools` array. Each entry has exactly `marketplace`,
+`canonical_repo`, `origin`, and `pool_root`: the marketplace must be a discovered
+managed source, the canonical repository must be its exact registered checkout,
+and origin must equal that checkout's configured Git origin. Matching origin
+alone never enrolls another clone. `--authoring-pools-manifest <absolute-path>`
+selects another operator-owned enrollment file for a bounded read-only probe.
+
+The owner validates Fleet's matching `pool.json` and `init.json`, its configured
+slot count, and `leases.json`. Only a configured slot with a non-empty token,
+owner, task, branch and base, on that exact task branch with its own physical
+`.git` directory and exact origin, contributes authoring candidates. The lease
+base must be an ancestor of its current HEAD. Registered Skill names, plugin
+identities and relative source paths must match the canonical marketplace.
+Dirty authoring content is allowed. Missing, null, malformed, foreign-origin,
+symlinked or changed evidence rejects the entire inventory call; repair the
+specific enrollment or Fleet state before retrying. Unleased slots and the
+integration clone contribute no authoring authority.
+
+For a leased source, `marketplaces[marketplace][skill]` becomes a candidate array,
+retaining the canonical entry first. Skill Creator's source contract accepts
+these owner-emitted candidates. `selected_skills`, source preferences, sync,
+cache installation and host links continue using only canonical sources.
+Printing inventory never writes enrollment, leases, Git state or install state.
+After deploying the owner reader, verify the ordinary source-contract check from
+the leased Skill directory without supplying an independent inventory override;
+also check an unleased sibling remains invalid. A pinned runtime must advance
+through the existing pin-update procedure before this readback proves activation.
+
 ### Third-party cold inventory
 
 The activation manifest controls only Skills registered by the managed local

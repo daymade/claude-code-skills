@@ -36,6 +36,7 @@ import os
 import re
 import shutil
 import stat
+import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
@@ -48,6 +49,9 @@ DEFAULT_CODEX_SKILLS = HOME / ".codex" / "skills"
 DEFAULT_AGENTS_SKILLS = HOME / ".agents" / "skills"
 DEFAULT_ACTIVE_SKILLS_MANIFEST = (
     HOME / ".config" / "claude-switch-models-setup" / "codex-active-skills.json"
+)
+DEFAULT_AUTHORING_POOLS_MANIFEST = (
+    HOME / ".config" / "claude-switch-models-setup" / "authoring-pools.json"
 )
 ACTIVE_SKILLS_SCHEMA_VERSION = 3
 SKILL_NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -2079,6 +2083,130 @@ def validate_skill_root_topology(agents_root: Path, codex_root: Path) -> tuple[P
     return agents_resolved, codex_resolved
 
 
+def authoring_git(repo: Path, *args: str) -> str:
+    """Read exact local Git identity without fetching or changing Git state."""
+    result = subprocess.run(
+        ["git", "--no-optional-locks", "-C", str(repo), *args],
+        text=True, capture_output=True, timeout=10,
+    )
+    if result.returncode:
+        raise ValueError(f"authoring pool: Git identity check failed at {repo}")
+    return result.stdout.strip()
+
+
+def authoring_real_path(raw: object, context: str) -> Path:
+    if not isinstance(raw, str) or not raw or raw.strip() != raw:
+        raise ValueError(f"{context}: expected an absolute physical path")
+    path = Path(raw)
+    if not path.is_absolute() or ".." in path.parts or path.resolve(strict=True) != path:
+        raise ValueError(f"{context}: expected an absolute physical path without symlinks")
+    # resolve() equality alone misses a symlink pointing at its own lexical path.
+    if any(part.is_symlink() for part in (path, *path.parents)):
+        raise ValueError(f"{context}: symlinks are not authoring authority")
+    return path
+
+
+def authoring_object(path: Path) -> dict:
+    authoring_real_path(str(path), "authoring evidence")
+    with path.open(encoding="utf-8") as fh:
+        data = json.load(fh, object_pairs_hook=_unique_policy_keys)
+    if not isinstance(data, dict):
+        raise ValueError(f"{path}: expected an object")
+    return data
+
+
+def authoring_inventory(sources: list[MarketplaceSource], path: Path) -> dict:
+    """Add only explicitly enrolled, currently leased independent clones.
+
+    This inventory is authoring evidence. Canonical selection and installation
+    never consume the additional candidates.
+    """
+    inventory = {
+        src.name: {name: {"source_dir": str(skill.source_dir), "plugin_id": skill.plugin_id}
+                   for name, skill in src.skills.items()} for src in sources
+    }
+    if not path.exists() and not path.is_symlink():
+        return inventory
+    data = authoring_object(path)
+    if set(data) != {"schema_version", "pools"} or type(data["schema_version"]) is not int or data["schema_version"] != 1 or not isinstance(data["pools"], list):
+        raise ValueError(f"{path}: expected authoring schema 1 and pools array")
+    registered = {src.name: src for src in sources}
+    seen = set()
+    for enrollment in data["pools"]:
+        if not isinstance(enrollment, dict) or set(enrollment) != {"marketplace", "canonical_repo", "origin", "pool_root"}:
+            raise ValueError(f"{path}: malformed authoring pool enrollment")
+        market = enrollment["marketplace"]
+        if not isinstance(market, str) or market not in registered or market not in LOCAL_MARKETPLACE_NAMES:
+            raise ValueError(f"{path}: authoring marketplace is not a registered managed source")
+        src = registered[market]
+        canonical = authoring_real_path(enrollment["canonical_repo"], "canonical repo")
+        root = authoring_real_path(enrollment["pool_root"], "pool root")
+        origin = enrollment["origin"]
+        if not isinstance(origin, str) or not origin or origin.strip() != origin:
+            raise ValueError(f"{path}: authoring origin must be non-empty and exact")
+        if root in seen:
+            raise ValueError(f"{path}: duplicate authoring pool")
+        seen.add(root)
+        if canonical != src.repo or authoring_git(canonical, "rev-parse", "--show-toplevel") != str(canonical) or authoring_git(canonical, "remote", "get-url", "origin") != origin:
+            raise ValueError(f"{path}: canonical registered repo/origin mismatch")
+        authoring_real_path(str(canonical / ".git"), "canonical Git metadata")
+        authoring_real_path(str(canonical / ".claude-plugin" / "marketplace.json"), "canonical marketplace manifest")
+        for skill in src.skills.values():
+            authoring_real_path(str(skill.source_dir), "canonical Skill source")
+            authoring_real_path(str(skill.source_dir / "SKILL.md"), "canonical Skill entry")
+        config = authoring_object(root / "pool.json")
+        allowed = {"version", "origin", "main", "slots", "skip_lfs_smudge"}
+        if (set(config) - allowed or not {"version", "origin", "main", "slots"} <= set(config)
+                or type(config["version"]) is not int or config["version"] != 1
+                or type(config["slots"]) is not int or not 1 <= config["slots"] <= 20
+                or config["origin"] != origin or not isinstance(config["main"], str) or not config["main"].strip() or config["main"].strip() != config["main"]
+                or ("skip_lfs_smudge" in config and type(config["skip_lfs_smudge"]) is not bool)):
+            raise ValueError(f"{root}: malformed or mismatched pool configuration")
+        if authoring_git(canonical, "check-ref-format", "--branch", config["main"]) != config["main"]:
+            raise ValueError(f"{root}: main must be a literal Git branch name")
+        encoded_config = json.dumps(config, sort_keys=True)
+        if json.dumps(authoring_object(root / "init.json"), sort_keys=True) != encoded_config:
+            raise ValueError(f"{root}: initialization ownership differs from pool configuration")
+        leases = authoring_object(root / "leases.json")
+        slots = {f"slot-{i}" for i in range(1, config["slots"] + 1)}
+        if set(leases) - slots:
+            raise ValueError(f"{root}: lease outside configured slots")
+        for slot, lease in leases.items():
+            if not isinstance(lease, dict) or any(not isinstance(lease.get(k), str) or not lease[k].strip() or lease[k].strip() != lease[k] for k in ("token", "owner", "task", "branch", "base")):
+                raise ValueError(f"{root}: malformed active lease")
+            if lease["branch"] == config["main"] or not re.fullmatch(r"[0-9a-f]{40}", lease["base"]):
+                raise ValueError(f"{root}: invalid task branch/base")
+            clone = authoring_real_path(str(root / slot), "leased clone")
+            git_dir = authoring_real_path(str(clone / ".git"), "independent Git directory")
+            if not git_dir.is_dir() or authoring_git(clone, "rev-parse", "--absolute-git-dir") != str(git_dir) or authoring_git(clone, "rev-parse", "--show-toplevel") != str(clone):
+                raise ValueError(f"{clone}: expected an independent clone")
+            if authoring_git(clone, "remote", "get-url", "origin") != origin or authoring_git(clone, "branch", "--show-current") != lease["branch"]:
+                raise ValueError(f"{clone}: active lease branch/origin mismatch")
+            authoring_git(clone, "merge-base", "--is-ancestor", lease["base"], "HEAD")
+            authoring_real_path(str(clone / ".claude-plugin" / "marketplace.json"), "leased marketplace manifest")
+            clone_source = load_marketplace(clone)
+            if clone_source.name != market:
+                raise ValueError(f"{clone}: marketplace identity mismatch")
+            for name, skill in src.skills.items():
+                relative = skill.source_dir.relative_to(canonical)
+                candidate = clone_source.skills.get(name)
+                expected = authoring_real_path(str(clone / relative), "leased Skill source")
+                authoring_real_path(str(expected / "SKILL.md"), "leased Skill entry")
+                if candidate is None or candidate.plugin_id != skill.plugin_id or candidate.source_dir != expected:
+                    raise ValueError(f"{clone}: registered Skill source mismatch: {name}")
+                entry = inventory[market][name]
+                if isinstance(entry, dict):
+                    entry = inventory[market][name] = [entry]
+                entry.append({"source_dir": str(expected), "plugin_id": skill.plugin_id})
+            if authoring_git(clone, "branch", "--show-current") != lease["branch"] or authoring_git(clone, "remote", "get-url", "origin") != origin:
+                raise ValueError(f"{clone}: lease identity changed during inventory")
+        if authoring_object(root / "leases.json") != leases or json.dumps(authoring_object(root / "pool.json"), sort_keys=True) != encoded_config or json.dumps(authoring_object(root / "init.json"), sort_keys=True) != encoded_config:
+            raise ValueError(f"{root}: authoring evidence changed during inventory")
+    if authoring_object(path) != data:
+        raise ValueError(f"{path}: authoring enrollment changed during inventory")
+    return inventory
+
+
 def main(argv: list[str]) -> int:
     global QUIET
     parser = argparse.ArgumentParser()
@@ -2089,6 +2217,8 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--claude-skills", type=Path, help="Personal root; defaults to <claude-dir>/skills")
     parser.add_argument("--skip-claude-skills", action="store_true", help="Leave the Claude personal Skill root unchanged; plugin cache sync is independent")
     parser.add_argument("--print-source-inventory", action="store_true", help="Print registered source identities as JSON, without syncing")
+    parser.add_argument("--authoring-pools-manifest", type=Path, default=DEFAULT_AUTHORING_POOLS_MANIFEST,
+                        help="Owner enrollment for leased Fleet authoring clones; only print-source-inventory reads it")
     parser.add_argument(
         "--active-skills-manifest",
         type=Path,
@@ -2133,10 +2263,7 @@ def main(argv: list[str]) -> int:
     if args.print_source_inventory:
         print(json.dumps({
             "schema_version": 2,
-            "marketplaces": {
-                src.name: {name: {"source_dir": str(skill.source_dir), "plugin_id": skill.plugin_id}
-                           for name, skill in src.skills.items()} for src in sources
-            },
+            "marketplaces": authoring_inventory(sources, args.authoring_pools_manifest.expanduser()),
             "selected_skills": {
                 name: {"source_dir": str(skill.source_dir), "plugin_id": skill.plugin_id}
                 for name, skill in skills.items()
