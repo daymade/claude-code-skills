@@ -246,13 +246,19 @@ checks. A peer window remains a coordination agreement, not a mechanical mutex.
 
 ### Merging PRs
 
+Before merging, observe the checks required by the task/repository at the exact
+candidate; use `gh pr checks NUMBER -R OWNER/REPO --watch` and inspect its exit
+status. `--auto` follows the requirements actually configured on GitHub. If none
+block the merge, it can merge immediately while other CI is still queued. It is
+not a replacement for this check or a way to satisfy a stricter task contract.
+
 ```bash
 # Merge PR (various strategies)
 gh pr merge 123 -R OWNER/REPO --merge --match-head-commit HEAD_SHA
 gh pr merge 123 -R OWNER/REPO --squash --match-head-commit HEAD_SHA
 gh pr merge 123 -R OWNER/REPO --rebase --match-head-commit HEAD_SHA
 
-# Auto-merge after checks pass (only when repository capability permits)
+# Request server auto-merge only under its verified configured requirements
 gh pr merge 123 -R OWNER/REPO --auto --squash --match-head-commit HEAD_SHA
 ```
 

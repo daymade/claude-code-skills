@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **github-ops** (v1.14.8): Clarify that server auto-merge follows configured requirements and can merge immediately while other CI is queued. Preserve exact-candidate check verification and route the repository entry to the merge preflight. Change type: factual operating-procedure correction.
+
 - **claude-switch-models-setup** (`daymade-claude-code` v4.27.6): Emit authoring candidates for explicitly enrolled Fleet pools with verified active leases and exact registered repository identities. Preserve canonical source selection and installation. Change type: bounded source-ownership repair.
 
 - **frontend-visual-qa** (v1.20.7 → v1.20.8): Measure headless visibility and frame progress before judging animation; add a non-TTY JSONL journey input helper with fail-fast dispatch and recording. Cover embedded-reader focus, filtered selection, reversible zoom and stale completion in journey guidance and additive evals. Change type: bounded verification workflow repair.
