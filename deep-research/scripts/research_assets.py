@@ -188,6 +188,12 @@ def registration_kind(row):
     return kind
 
 
+def search_text(value, field):
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"invalid current search text: {field}")
+    return value
+
+
 def legacy_evidence(directory):
     sources = {}
     claims = []
@@ -198,12 +204,15 @@ def legacy_evidence(directory):
         if not isinstance(row, dict):
             raise ValueError("invalid legacy evidence row")
         url = row.get("source")
+        if "source" in row:
+            search_text(url, "legacy source")
         if isinstance(url, str) and url.startswith(("https://", "http://")):
             sources[source_id(url)] = {
                 "source_id": source_id(url), "title": row.get("source_type", "source"),
                 "url": normalize_url(url), "status": "legacy_unverified_for_reuse",
             }
-        if row.get("claim"):
+        if "claim" in row:
+            search_text(row["claim"], "legacy claim")
             claims.append({"claim_id": row.get("id", ""), "text": row["claim"],
                            "status": row.get("status", "unknown")})
     return list(sources.values()), claims
@@ -219,6 +228,7 @@ def current_catalog_assets(catalog, row):
         study, lanes = provider_runs.load_study(directory)
         if study["study_id"] != row["study_id"]:
             raise ValueError("catalog locator has a different study identity")
+        search_text(study["business_outcome"], "business_outcome")
         result.update(as_of=study["as_of"], business_outcome=study["business_outcome"])
         states = recorded_event_states(directory, lanes)
         if registration_kind(row) == "legacy":
@@ -250,8 +260,17 @@ def current_catalog_assets(catalog, row):
                 recorded = provider_runs.completion_coverage(study, states,
                     row.get("bounded_reason", row.get("reason", "")))
             result["recorded_lane_coverage"] = recorded
+        for source in result["source_index"]:
+            for field in ("source_id", "title", "url", "status"):
+                search_text(source.get(field), f"source {field}")
+        for claim in result["claim_index"]:
+            for field in ("text", "status"):
+                search_text(claim.get(field), f"claim {field}")
         result["coverage"] = "recorded-only"
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+        result["source_index"] = []
+        result["claim_index"] = []
+        result.pop("recorded_lane_coverage", None)
         result["coverage"] = "unknown"
         result["current_gaps"].append(str(exc))
     return result

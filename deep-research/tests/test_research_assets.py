@@ -608,6 +608,79 @@ class ResearchAssetsTest(unittest.TestCase):
                 finally:
                     path.write_bytes(content)
 
+    def test_typed_current_text_is_a_study_gap_without_hiding_healthy_studies(self):
+        self.register_valid()
+        healthy = self.root / "healthy"
+        shutil.copytree(self.study, healthy)
+        spec = json.loads((healthy / "study.json").read_text())
+        spec["study_id"] = "healthy-study"
+        (healthy / "study.json").write_text(json.dumps(spec))
+        row = json.loads(self.catalog.read_text())
+        row.update(study_id="healthy-study", path="healthy")
+        with self.catalog.open("a") as stream:
+            stream.write(json.dumps(row) + "\n")
+        before = self.catalog.read_bytes()
+        healthy_control = self.search("filing")
+        self.assertEqual(len(healthy_control), 2)
+        self.assertTrue(all(hit["coverage"] == "recorded-only" for hit in healthy_control))
+        for name, field in (("claims.jsonl", "text"),
+                            ("source-ledger.jsonl", "title"),
+                            ("source-ledger.jsonl", "url")):
+            path = self.study / name
+            original = path.read_bytes()
+            for kind, value in (("typed", 42), ("null", None),
+                                ("empty", ""), ("missing", None)):
+                with self.subTest(name=name, field=field, kind=kind):
+                    item = json.loads(original)
+                    if kind == "missing":
+                        item.pop(field)
+                    else:
+                        item[field] = value
+                    try:
+                        path.write_text(json.dumps(item) + "\n")
+                        hits = {hit["study_id"]: hit for hit in self.search("filing")}
+                        gap = hits["filing-study"]
+                        self.assertEqual(gap["coverage"], "unknown")
+                        self.assertTrue(gap["current_gaps"])
+                        self.assertEqual(gap["source_matches"], [])
+                        self.assertEqual(gap["claim_matches"], [])
+                        self.assertNotIn("recorded_lane_coverage", gap)
+                        self.assertEqual(hits["healthy-study"]["coverage"], "recorded-only")
+                        self.assertEqual(self.catalog.read_bytes(), before)
+                    finally:
+                        path.write_bytes(original)
+        self.assertTrue(all(hit["coverage"] == "recorded-only" for hit in self.search("filing")))
+
+    def test_typed_legacy_text_returns_gap_but_optional_defaults_remain_searchable(self):
+        self.start()
+        self.collect("Provider report with selected evidence")
+        path = self.study / "evidence.jsonl"
+        item = {"claim": "Legacy filing observation", "source": "https://example.org/legacy"}
+        path.write_text(json.dumps(item) + "\n")
+        imported = self.cli(ASSETS, "import-legacy", self.study, "--catalog", self.catalog,
+                            "--reason", "Selected evidence only", "--term", "filing")
+        self.assertEqual(imported.returncode, 0, imported.stderr)
+        before = self.catalog.read_bytes()
+        control = self.search("Legacy filing")[0]
+        self.assertEqual(control["coverage"], "recorded-only")
+        self.assertEqual(control["claim_matches"][0]["claim_id"], "")
+        self.assertEqual(self.search("example.org/legacy")[0]["source_matches"][0]["title"], "source")
+        for field in ("claim", "source_type", "source"):
+            for value in (42, None, ""):
+                with self.subTest(field=field, value=value):
+                    path.write_text(json.dumps({**item, field: value}) + "\n")
+                    gap = self.search("filing")[0]
+                    self.assertEqual(gap["coverage"], "unknown")
+                    self.assertTrue(gap["current_gaps"])
+                    self.assertEqual(gap["source_matches"], [])
+                    self.assertEqual(gap["claim_matches"], [])
+                    self.assertNotIn("recorded_lane_coverage", gap)
+                    self.assertEqual(self.catalog.read_bytes(), before)
+        path.write_text(json.dumps({"source": item["source"]}) + "\n")
+        source_only = self.search("example.org/legacy")[0]
+        self.assertEqual(source_only["coverage"], "recorded-only")
+        self.assertEqual(source_only["claim_matches"], [])
+
     def test_search_does_not_validate_large_artifacts_or_claim_completion(self):
         report = self.register_valid()
         export = self.study / "sources" / "official.md"
