@@ -9,13 +9,14 @@ argument-hint: "<target Skill> [desired result or evidence]"
 
 # Daymade Skill Evolver
 
-Run a research-driven improvement round for a named existing Skill: identify what
-would improve its actual task results, evaluate relevant mechanisms, implement
-within authorization, and verify the resulting consumer behavior. An unchanged
-Skill is a valid outcome when the evidence supports keeping it.
+Orchestrate a research-driven improvement round for a named existing Skill through
+the current specialist Skills. Keep the original result, stage inputs, dependencies
+and returned evidence bound together. An unchanged Skill is a valid outcome when
+the evidence supports keeping it.
 
-Keep optimization decisions here. Use Skill Creator for making and validating
-selected changes; it does not choose this round's business goal or research plan.
+Keep orchestration here; execute specialist work through its current owner. Skill
+Creator makes and validates selected changes; it does not choose this round's
+business goal or research plan.
 When the request is diagnosis-only, remain read-only.
 
 ## Resolve the target and result
@@ -40,54 +41,60 @@ goal to whichever output the candidate already produces.
 
 Start with current implementation, project decisions, existing tools/Skills,
 provided examples, and previously verified work. Reuse evidence whose source and
-conditions still apply. Load [evidence to change](references/evidence-to-change.md)
-before interpreting historical cases or positive opportunities.
+conditions still apply under the current owner's contract. Before executing a
+selected stage, load [stage handoffs](references/evidence-to-change.md) and follow
+its applicable owner route; this reference specifies inputs and returned results,
+not a second specialist procedure.
 
-For authorized history, use the owning index and exact reader. Bound the sessions,
-time window or candidate set before reading content. Distinguish user instructions,
-observed outputs and an author's later report. Omit hidden reasoning and prepare
-redacted, source-anchored inputs before delegation. Missing index coverage is a
-specific evidence gap; do not replace it with an unbounded raw-history scan.
+Select stages from the user's explicit request, accepted route and unresolved
+questions. A narrow repair with decisive existing evidence need not run unrelated
+research, but its simplicity does not waive a requested history, favorites,
+competitor or Deep Research lane. Mark reused, executed, unnecessary and blocked
+work accurately; do not describe skipped research as completed.
 
-Include successful work and user corrections as well as errors. A positive
-opportunity does not require an earlier failure in our Skill. Use the reference's
-matched-case route for a diagnosed deviation and its opportunity route for a
-successful or external mechanism.
+For each selected stage, resolve and load the current owning Skill and its relevant
+branch before doing the work. Pass the original user goal, target source/ref, old
+successful jobs, authorization, prepared evidence and question to resolve. Execute
+that workflow and inspect its actual evidence or result before continuing; an owner
+list or a load receipt alone is not a completed stage. Keep gaps attached to the
+dependent decision rather than rebuilding an evidence list from the recommendation.
+
+Use the history-reader and Skill Creator handoffs for authorized history and
+prepared cases, including successes, failures and user corrections. A positive
+opportunity does not require an earlier failure in our Skill. A request to audit a
+whole session and route its lessons uses the optional session-retrospective handoff;
+ordinary target improvement does not require a separate retrospective receipt.
 
 ## Research the target's task capabilities
 
-Choose sources by the business result and the target's actual task surface,
-including important input, error, recovery and downstream-consumer paths. Search
-existing assets and supplied/configured favorites before external tool or method
-selection. Discover relevant competitors by capability, not only by the current
-Skill name. Include a candidate that could disprove the preferred approach.
+Bind research questions to the business result and target's input, error, recovery
+and downstream-consumer paths. Execute the favorites-search handoff before external
+tool or method selection, then the competitors-analysis source and synthesis routes
+for relevant capabilities. Return their source-bound mechanisms and counterevidence
+to this round; do not substitute a feature list for the owner's decision chain.
 
-Bind repository-backed comparisons to an immutable source ref and the relevant
-edition or shipped artifact. Trace the real execution entry through normal,
-failure, recovery and consumer paths before borrowing a mechanism. Cite the
-source location and distinguish source-contract facts from exercised behavior
-and unmeasured business benefits. Use current first-party material for external
-contracts. Use Deep Research when unresolved breadth or synthesis needs it; do
-not force a provider, paid mode or report length.
-
-Keep the research questions and discovered mechanisms before constructing the
-final comparison. Stop retrieval when remaining answers cannot change selection
-or required acceptance. A narrow repair decided by an existing contract and
-reproducible probe does not need unrelated research lanes.
+Execute deep-research for requested research lanes or unresolved breadth/synthesis,
+using its current asset, mode and source contracts. Reuse accepted routes and
+existing original exports; do not force a provider, paid mode or report length.
+Stop retrieval when remaining answers cannot change selection or required
+acceptance. Keep source-contract facts, exercised behavior and unmeasured business
+benefits separate when joining the returned evidence.
 
 ## Decide every important mechanism
 
-Give each important discovered mechanism an explicit disposition: adopt, do not
-adopt, or needs verification. Attach its evidence, fit conditions, expected
-increment over the current owner, cost, falsifier and reopening condition. Read
-counterevidence before treating repeated endorsements as causal proof. Preserve
-useful existing mechanisms; do not manufacture changes to fill a comparison.
+Use Skill Creator's applicable ordinary-update or cross-task-improvement handoff
+to classify evidence-backed findings and identify the smallest maintenance point.
+Use competitors-analysis's
+Landscape handoff to account for every important discovered mechanism as adopt,
+do not adopt or needs verification under its existing disposition contract. Check
+the returned coverage against the original questions and sources, including
+positive opportunities and existing equivalents; do not manufacture changes.
 
-Use the reference to distinguish a missing mechanism, a correct mechanism not
-loaded or bypassed, a wrong acceptance criterion, an implementation defect, and
-a stale constraint. Fix the smallest maintenance point that changes the next
-execution. If an existing owner already covers the need, repair its loading or
-invocation instead of duplicating it. Combine compatible improvements; leave
+When a technical alternative must be chosen, execute tech-selection's applicable
+full or lightweight route with the joined evidence and current authorization.
+Carry its actual choice or unresolved user-owned decision into implementation.
+If an existing owner already covers the need, repair its loading or invocation
+instead of duplicating it. Combine compatible improvements; leave
 major direction, new product scope, real preferences and irreversible/external
 choices at their existing authorization boundary. Choose and execute necessary
 local reversible implementation details within the authorized target work.
@@ -106,8 +113,12 @@ Preserve them unless the authorized improvement explicitly changes them and its
 acceptance checks cover that change. Do not infer a new requirement from a
 general security preference.
 
-Use the repository's normal change workflow and the available Skill Creator
-making/verification tools. Classify changes by their actual failure surface;
+Execute the Skill Creator making, migration and verification handoff for the
+selected change under the repository's normal workflow. Pass the frozen business
+criterion, old jobs and defaults/side effects as preservation requirements. Use
+the target's execution owner for its actual consumer and recovery check; do not
+delegate away responsibility for whether the joined result meets the request.
+Classify changes by their actual failure surface;
 new capability or methodology does not automatically authorize paired evaluation,
 benchmarking, repeated trials, a viewer, or extra agents.
 
@@ -125,11 +136,15 @@ has not been observed; still finish the authorized implementation and checks.
 
 ## Use available executors without losing the result
 
-Discover installed specialist Skills by capability when useful: history readers,
-favorites-search, competitors-analysis, deep-research, tech-selection and
-skill-creator. Resolve their installed identity and load their current contract;
-do not copy their engines or assume a sibling file ships in this standalone
-plugin. Delegate only under current authorization and host capabilities.
+Resolve selected owners by capability through skills-search and current configured
+source/installed entries. Do not assume every owner ships in this standalone plugin
+or guess a public path for a team/private Skill. The same agent may load and execute
+Skills sequentially. Before authorized delegation or parallel independent lanes,
+load daymade-agent-discipline; dependent stages wait for the evidence they need.
+Do not assign one agent per Skill by default or copy an owner's engine here.
+
+An absent invocation tool does not make a resolved Skill absent: read its current
+entry and execute the applicable workflow with available tools.
 
 If a specialist is absent, use available tools for the same substantive work:
 read bounded supplied records, inspect fixed source objects, run the needed

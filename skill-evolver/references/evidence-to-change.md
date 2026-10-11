@@ -1,116 +1,146 @@
-# Turn evidence into a target improvement
+# Execute stages through their current owners
 
-Read this before interpreting historical work or proposing a positive mechanism.
-The entry owns execution and delivery; this reference owns the inference that
-makes a change worth doing.
+Read this before a selected evidence, research, decision or implementation stage.
+The Evolver executor resolves and loads the named current owner, executes its
+applicable workflow, then joins the returned evidence to the original result.
+These are action-time routes, not packaged sibling dependencies or replacement
+SOPs. No mechanical hook enforces these semantic handoffs; actual stage outputs
+and consumer observations are the evidence that they ran.
 
-## Bind the observation
+## Bind the handoff and inspect the return
 
-Record the source identity, task, user requirement, relevant constraints, action,
-observed result and evidence location. Mark whether the evidence is a direct
-observation, an author's report, or a newly reproduced result. Preserve role and
-record coordinates when using prepared historical extracts. A success in one
-environment supports that environment's claim, not all future tasks.
+Pass the original user request and corrections, target source/ref and affected
+jobs, successful behavior to preserve, authorization, prepared source-anchored
+evidence, unresolved question and required output. Keep affected runtime defaults
+and side effects under the entry's preservation condition. Include source scope
+and unknowns; a summary or author's report is not an observed result.
 
-Prefer the user's actual acceptance and consumer records over a later summary.
-Keep source-contract, runtime and business-effect claims separate. Do not turn an
-unknown into a negative finding or treat multiple summaries of one event as
-independent corroboration.
+On return, inspect the actual artifacts, source locations, decisions and gaps.
+Distinguish observed history, author reports, current source, exercised runtime
+and consumer results. Repeated summaries of one observation are not independent
+evidence. Join only supported conclusions; name the next dependent decision and
+what remains missing. Do not accept a specialist's completion message alone.
 
-Retain the input, execution/consumer observations and failed constraints that
-explain a result, rather than diagnosing from an aggregate score alone. Use the
-[GEPA adapter contract](https://github.com/gepa-ai/gepa/blob/462e437a09be67d2acb59564cc0ea59132f5777c/src/gepa/api.py#L121-L131)
-as a concrete separation of execution and reflective evidence, not a requirement
-to install its optimizer or a claim about this target's benefit.
+Reuse still-valid prepared evidence and accepted routes under the current owner
+contract. Reopen only for changed inputs/authority, requested freshness or a
+decisive missing observation. Record reuse separately from fresh execution.
 
-## Diagnose a deviation with matched cases
+## Existing assets and bounded history
 
-Select a successful case and a failure or user correction with comparable task,
-input, environment and authorization. Vary only what the evidence can justify;
-note differences that could explain the result instead of attributing everything
-to the Skill. When no usable counterpart exists, retain the uncertainty and use a
-bounded probe; do not invent a historical success or failure.
+**Load and execute:** `skills-search` for capability discovery and its configured
+source roots. Use `prior-work-retrieval` when the user explicitly requests earlier
+work or reuse; reuse an applicable prepared retrieval result rather than opening
+a second search. Do not infer source ownership from an installed cache.
 
-Extract the shared causal conditions and a counterexample: when did the method
-help, and when would the same instruction be wrong? Check the current target and
-other maintained owners before calling the method missing.
+**For requested history:** load `local-conversation-history` when the provider is
+unknown or mixed, then its selected exact reader (`read-codex-history` or
+`read-claude-code-history`). Pass the approved query/time/session scope and required
+request, action, success/failure and correction records. Execute the owning indexed
+retrieval and exact-reader workflow; missing coverage stays unknown, with no
+unbounded raw-history fallback.
 
-| Finding | Maintenance point to inspect |
-|---|---|
-| Necessary mechanism is absent | The affected target workflow or existing execution owner |
-| Correct mechanism was not loaded or was bypassed | Trigger, action-time pointer, dependency resolution or caller |
-| Acceptance measures a proxy or the wrong object | The original result criterion and its actual consumer observation |
-| Implementation violates an existing contract | The executing code and a regression for that exact violation |
-| An old constraint no longer applies | Its original scope and the later authority that supersedes it |
+**For selected-corpus preparation:** load `skill-creator`, its Conversation mining
+workflow, and the branch **Choose retrieval or selected-corpus distillation**.
+Execute its role-preserving, hidden-reasoning-free preparation/redaction route when
+needed. Pass only the selected authorized corpus; agents receive prepared safe
+inputs, not raw history. Already prepared cases need no new extraction.
 
-These diagnoses are conditional on an actual deviation. A positive opportunity
-does not need a failure label.
+**Return to Evolver:** original role/source-anchored evidence, coverage and limits,
+plus reusable successes, failures and user corrections. Keep private coordinates
+out of public target source. Retrieval locators alone do not establish acceptance.
 
-## Evaluate a positive opportunity
+## Interpret prepared cases and locate the improvement
 
-Use a successful historical method, a saved source, competitor code or first-party
-research to propose an increment. State what the target's user could do better,
-which conditions make the mechanism useful, what it costs, and the smallest
-observation that would reject the proposal. A healthy current baseline is
-compatible with an improvement hypothesis.
+**Load and execute:** `skill-creator` → Conversation mining →
+`references/cross-task-improvement.md`. Use its **Match successful and failed
+decisions**, **Extract conditions and counterexamples**, **Find the current owner
+and classify the finding**, and **Change the next decision and verify the original
+result** branches as applicable. Prepared cases can enter directly; this does not
+authorize new history access. Follow that owner's applicability boundary: a
+correction evidenced entirely in the live conversation uses Creator's ordinary
+update path, not historical retrieval or an invented matched-case exercise.
 
-Trace the mechanism to the source's actual entry and consumer. Compare its
-preconditions and failure/recovery behavior with the target, including differences
-in permissions, lifecycle, data and workload. An attractive README or benchmark
-is a locator; it does not demonstrate that the mechanism works in this task.
+**Input:** the bound target result and prepared evidence, current source/owners,
+preservation requirements and the proposed remedy or positive opportunity.
 
-Check whether the target or another owner already provides an equivalent. Existing
-coverage can justify no change, a better invocation or a narrow adaptation. Avoid
-importing a larger engine, weaker recovery or unapproved side effect to obtain a
-minor convenience.
+**Return to Evolver:** supported conditions/counterexamples, finding classification,
+current owner, smallest maintenance point, next choice changed and decisive probe,
+with provenance and causal uncertainty intact. This owner supplies matched-case
+diagnosis and the positive-opportunity branch: a healthy baseline requires no
+invented failure. Its external-research routes remain with their domain owners.
 
-Test business relevance separately from whether the historical pattern is real.
-Choose the smallest existing carrier that fits: an executable owner for stable
-actions, a reference for conditional knowledge, or the project's canonical record
-for task facts. The [pattern-to-component relevance check](https://github.com/CosmosMind-ai/RSI-Harness/blob/7bf09774bbe205956ec5a46e5f934602224cc437/config/genomes/harness-rsi/skills/genome-authoring/pattern-to-component.md#L60-L79)
-illustrates that distinction; its runtime, memory and resource-isolation choices
-are separate decisions and are not imported here.
+## Favorites, competitor mechanisms and further research
 
-For example, an external exporter may checkpoint processed records. If the target
-must resume an interrupted batch and does not already do so, test interruption,
-resumption and exact consumer output before adopting it. If the target already
-has equivalent recovery, keep the owner. If checkpointing would persist sensitive
-inputs outside the approved storage boundary, reject that form or leave the new
-storage decision at its authorization boundary. This is a synthetic example,
-not a measured improvement.
+**Favorites — load and execute:** resolve `favorites-search` from current capability
+discovery; do not assume a public-repository path. Follow its **查询怎么发**,
+**结果怎么判：三信号** and **结果怎么报** routes before external tool/method selection.
+Pass capability vocabulary and fit conditions, not just the target Skill's name.
+Return relevant original sources/locators, applicability and coverage gaps into
+the research questions; a zero-hit result does not block subsequent research.
 
-## Keep the disposition traceable
+**Competitors — load and execute:** `competitors-analysis` → **Entry Router** for
+the applicable Discover/Ingest/Profile/Landscape/Update work. For mechanism claims,
+load its Repository Fact Gathering route and `references/mechanism_evidence.md`:
+bind the comparison baseline, trace the decisive mechanism lifecycle and state
+evidence depth. Pass the actual task surface, fixed source candidates/edition,
+adopted baseline and question that could overturn the preferred mechanism.
 
-Maintain the important mechanisms found during research, including counterevidence
-and rejected candidates. Do not reverse-engineer an evidence list from the final
-recommendation. Reuse competitors-analysis's current evidence and mechanism
-disposition workflow when available; do not introduce a second rigid schema.
+For target-directed choices, execute Landscape with
+`references/landscape_synthesis.md`, especially **Build a small number of
+decision-bearing judgments**, **Account for material opportunities** and **Save
+understanding where the next session will read it**. This owner defines the
+decision chain, mechanism coverage and adopted/pending/not-adopted contract.
+Return source-bound normal/error/recovery/consumer evidence and material choices
+with increment hypothesis, conditions, cost, counterevidence, falsifier and
+reopening condition. Keep existing-equivalent and unsafe-default rejections;
+reconcile against the original questions/source set, not the final shortlist.
+No attractive README, aggregate score or source trace establishes business benefit.
 
-For each mechanism, retain:
+**Deep Research — load and execute:** `deep-research` → **Run and asset contract —
+every invocation** and **Mode Selection**, then its applicable current asset and
+provider-run contracts. Pass unresolved questions, original request, accepted
+mode/route, available original sources and current study entry. Execute requested
+lanes or decision-bearing breadth/synthesis; no default provider, paid route or
+fixed report length. Return source-traced conclusions, original exports/research
+entry and decisive unknowns. If no such question or requested lane remains, record
+that this stage was unnecessary rather than claiming a research run.
 
-- **Adopt:** the supported increment, conditions/cost, authorized minimum change,
-  falsifier and result observation. Distinguish selected, implemented and verified.
-- **Do not adopt:** existing equivalent, unmet fit condition, cost or side effect,
-  with evidence and what new fact could reopen it.
-- **Needs verification:** the decisive unknown, bounded probe, required source or
-  authorization, and what can proceed independently.
+## Select, make, verify and deliver
 
-Name a target-local change rather than a universal rule. Generalize only across
-conditions supported by the evidence and keep counterexamples visible. If the
-change would alter supported jobs or authorization, surface that boundary instead
-of describing it as compression.
+**Technical choice — load and execute:** `tech-selection` → **Execution Protocol**
+and its applicable full or lightweight route, including current
+`references/delegation-contract.md` when delegating. Pass joined evidence,
+candidates and current authorization. Return the supported choice/trade-offs,
+probe evidence or genuine user-owned decision. No technical alternatives means
+no artificial selection gate; existing user choices and authorization remain bound.
 
-## Reuse evidence at continuation
+**Implementation — load and execute:** `skill-creator` → **Resolve the task before
+acting**, source-location gate and **Step 4: Edit the Skill**, with its current
+change-verification and existing-skill-migration contracts. Pass the selected
+minimal delta, target ref, frozen business criterion, supported jobs and runtime
+defaults/side effects. Return the exact source/diff, preservation dispositions,
+affected task-result checks and remaining gaps. Do not infer heavy evaluation
+authorization from the tier or substitute a made artifact for the original result.
 
-Keep settled decisions, source refs and failed approaches with their current
-owners. Reopen only when the source, environment, user goal or a decisive
-observation changes. Do not rerun a failed route without a new condition that
-could change its outcome, and do not repeat passed checks on unchanged content.
+Use the target's actual execution Skill for consumer and recovery validation
+within authorization. For authorized publication or local availability, execute
+Creator's delivery branch and the current repository/`skill-governance` owner.
+Return exact published/consumed-object readback when required. Keep source,
+installation, native loading, prepared-task evidence and business result distinct;
+human acceptance remains unconfirmed until observed.
 
-Before stopping, reconcile the original requirements with actual results and
-specific gaps. An implementation receipt, completed comparison or prepared-task
-pass leaves any unobserved consumer result unresolved.
+## Optional whole-session retrospective and blocked stages
 
-Use the [skills-refiner source/consumption/result distinction](https://github.com/yknothing/skills-refiner/blob/4d8a196e44c1fa06cb786c06c2aaf24028664c01/skills/skills-refiner/SKILL.md#L124-L145)
-when choosing the observation for an acceptance claim: a correct source change,
-installed bytes, native loading and task benefit each need their own evidence.
+When the user requests a whole-session recap or routing of successes/lessons,
+load and execute `session-retrospective` with the authorized session scope. Return
+its evidenced findings and routing receipt; target edits still go through Creator.
+Do not require this receipt for prepared target cases or ordinary continuation.
+
+If a resolved Skill lacks an invocation tool, read its entry and execute it inline.
+Only when the owner is unavailable use available tools for equivalent substantive
+work under the same source, privacy and authorization boundaries, stating the
+fallback and evidence limits. Do not silently waive a required lane or claim a
+missing owner's gate passed. Missing source, permission, runtime or consumer pauses
+only dependent work; return the exact gap and resume condition while independent
+authorized work continues. Leave settled evidence and next unmet action in the
+existing canonical task context; create no parallel ledger or automatic loop.

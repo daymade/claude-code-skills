@@ -3923,9 +3923,9 @@ build or buy — evaluate the options
 
 > **安装**：`claude plugin install skill-evolver@daymade-skills`
 
-Daymade Skill Evolver 完成指定现有 Skill 的一轮取证、机制取舍和授权实施。
-复用成功与失败经验，核对相关竞品源码，通过目标的真实消费者验证改动；证据支持
-保持现状时，可以不改。
+Daymade Skill Evolver 组装已有 Skills，为指定现有 Skill 完成一轮取证、机制取舍
+和授权实施。复用成功与失败经验，核对相关竞品源码，通过目标的真实消费者验证
+改动；证据支持保持现状时，可以不改。
 
 **适用场景**：根据工作历史、收藏资料或竞品机制优化指定 Skill。普通创建和编辑
 使用 Skill Creator。
@@ -3936,8 +3936,8 @@ Daymade Skill Evolver 完成指定现有 Skill 的一轮取证、机制取舍和
 实施有依据的修复。
 ```
 
-**运行要求**：宿主能读取目标源码，并具备编辑和验证所需工具。专用 Skill 可选；
-必需证据不可用时，保留明确缺口。
+**运行要求**：宿主能读取目标源码，并具备编辑和验证所需工具。每个阶段开始时，
+查找、加载并执行负责该阶段的已有 Skill；必需能力或证据不可用时，保留明确缺口。
 
 📚 **文档**：[skill-evolver](./skill-evolver/SKILL.md)。
 

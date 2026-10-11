@@ -72,7 +72,8 @@ build-vs-buy or architecture — including 用哪个 / 选什么框架 / 要不�
 Follow its full or lightweight route and linked execution owners.
 
 For research-driven evolution of a specified existing Skill, start at
-[skill-evolver](skill-evolver/SKILL.md).
+[skill-evolver](skill-evolver/SKILL.md) and execute its existing stage Skills as
+each stage begins.
 
 For permission-sensitive fixtures, use Skill Creator's
 [execution-context verification recipe](daymade-skill/skill-creator/references/stateful-script-verification.md#execution-identity-and-permission-fixtures).
