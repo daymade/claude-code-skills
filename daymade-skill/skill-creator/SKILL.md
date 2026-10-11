@@ -107,11 +107,17 @@ Treat “unsupported” as a hypothesis and investigate alternative documented p
   [knowledge grounding and document alignment](references/knowledge-skill-grounding.md).
   Update directly affected examples/help/docstrings before the first freeze;
   live, replay and synthetic evidence support different claims.
-- For operational first-use/setup/recovery, follow
+- When an affected job depends on another Skill/tool, required data or permission,
+  installation, account setup, a service or a human step, follow
   [first use and recovery](references/first-use-and-resume.md) before drafting.
+  This includes instruction-only handoffs across owners; classify by the executed
+  job, not whether the bundle contains scripts. Use the
+  [intended-consumer boundary](references/change-verification.md#bind-the-intended-consumer-before-verification)
+  when choosing readiness and result evidence.
   Probe readiness, execute authorized preparation, resume from the first unmet
   condition and verify the original usable result. Skip this route for
-  self-sufficient transforms and reference-only skills.
+  reference-only work or self-sufficient transforms only when no execution
+  prerequisite is affected.
 - For persisted formats/partial updates, permission-sensitive checks or large
   command output, follow the affected [stateful verification recipe](references/stateful-script-verification.md).
   A truncated response is not a complete read; use its complete-read recipe.

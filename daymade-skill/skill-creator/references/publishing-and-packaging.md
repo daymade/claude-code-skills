@@ -219,10 +219,21 @@ specific authorization/recovery path is missing.
 separate plugins, how to lay out `source`/`skills`, and whether users can toggle
 skills individually all belong to the packaging/distribution domain — the SSOT is
 the `marketplace-dev` skill, not here. When a task actually needs those decisions:
-ensure `marketplace-dev` is available (auto-install it if missing — the same way
-`skill-reviewer` pulls in `skill-creator` when it needs its scripts), then read
-marketplace-dev's cache-and-source-patterns reference and follow it. Don't restate
-its rules here; a copy would drift.
+resolve its current source/installed entry and read its applicable
+`cache_and_source_patterns.md` reference. Follow the current host's invocation
+and disabled-entry contract; a readable source or an omitted model-catalog name
+does not prove invocation readiness or source absence. Do not enable or claim a
+Skill invocation merely because its guide is readable.
+
+If needed preparation is covered by existing authorization, execute it and read
+back the usable result; do not re-ask an already authorized setup decision.
+For a missing install, resolve the actual owning package from the public catalog:
+`marketplace-dev` ships in `daymade-claude-code@daymade-skills`, not a same-name
+standalone plugin. Do not auto-install or override disabled policy without
+authorization. Use accessible guidance and applicable tools within the declared
+consumer boundary, or keep only the dependent step unresolved with its exact
+access/authorization condition. Do not claim a missing owner's gate passed.
+Don't restate its rules here; a copy would drift.
 
 **Renaming, relocating, or removing a marketplace entry is a breaking change** for
 every user who already installed it — Claude Code does not clean up installed copies
