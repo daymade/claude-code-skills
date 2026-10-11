@@ -212,7 +212,10 @@ review 并保留事件确认事实，不编辑旧行；账号送达后退出该�
 
 修改已发出的预测时再追加一条 `record`，不能编辑历史行。同类型且 `anchor_event_url` 相同
 会自动标为 `revision_of`；必须沿用同一规范原帖 URL，不用不同镜像伪造不同轮次。
-官宣与判断预测各自建立修订链，不互相算作同一类记录；官宣修订追加另一条 `announce`。
+收窄一条仍在进行中的窗口时，新窗口起点必须在未来（脚本约束
+`new forecast window must start in the future`，2026-10-11 实测被拒一次）——把官宣原窗口
+起算点写进 rationale，`window_start` 改取当前时刻。官宣与判断预测各自建立修订链，不互相算作
+同一类记录；官宣修订追加另一条 `announce`。
 完全相同的输入重试返回原记录。脚本记录真实写入时刻，不为以前的口头预测伪造精确发出时间。
 
 **`pending` 按 `recorded_at` 递增排序，`recent_resolved` 与 `recent_withdrawn` 分别按核验、
