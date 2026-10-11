@@ -274,6 +274,9 @@ Installed names render as `daymade-financial:<skill>` under a single shared name
 
 **Install Other Skills:**
 ```bash
+# Research-driven improvement of a specified existing Skill
+claude plugin install skill-evolver@daymade-skills
+
 # GitHub operations
 claude plugin install github-ops@daymade-skills
 
@@ -3955,6 +3958,32 @@ Produces the reader-facing HTML artifact — report, dashboard, architecture or 
 
 ---
 
+### **skill-evolver** - Research-Driven Skill Improvement
+
+> **Install**: `claude plugin install skill-evolver@daymade-skills`
+
+Daymade Skill Evolver takes a specified existing Skill through evidence gathering,
+mechanism trade-offs and authorized implementation. Reuse successful and failed
+work, inspect relevant competitor source, and verify changes through the target's
+actual consumer. Keep the current design when the evidence supports no change.
+
+**When to use:** Improve a named Skill from work history, saved research or
+competitor mechanisms. Use Skill Creator for routine creation and editing.
+
+**Example usage:**
+```text
+Use skill-evolver to improve my batch-export Skill. Preserve successful exports,
+investigate the interrupted-batch failure, and implement the justified repair.
+```
+
+**Requirements:** A host with access to the target source and the tools needed to
+edit and verify it. Specialist Skills are optional; required unavailable evidence
+remains an explicit gap.
+
+📚 **Documentation**: [skill-evolver](./skill-evolver/SKILL.md).
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -3996,6 +4025,8 @@ Use **repomix-unmixer** to extract and validate repomix-packed skills or reposit
 
 ### For Skill Development
 Use **skill-creator** (see [Essential Skill](#-essential-skill-skill-creator) section above) to build, validate, and package your own Claude Code skills following best practices.
+Use **skill-evolver** for a research-driven improvement round on a specified existing
+Skill, from relevant evidence and trade-offs to authorized changes and result verification.
 
 ### For Presentations & Business Communication
 Use **ppt-creator** to generate professional slide decks with data visualizations, structured storytelling, and complete PPTX output for pitches, reviews, and keynotes. Use **slides-creator** for narrative-first slide design — it guides you through the ABCDEFG storytelling framework, collects your original content first, then delegates visual generation to baoyu-slide-deck. Perfect when you have existing articles, transcripts, or talks that need to become visual slides.
@@ -4139,6 +4170,7 @@ Each skill includes:
 - **peer-message**: [Execution entry](peer-message/SKILL.md)
 - **repomix-unmixer**: See `repomix-unmixer/references/repomix-format.md` for format specifications
 - **skill-creator**: See `daymade-skill/skill-creator/SKILL.md` for complete skill creation workflow
+- **skill-evolver**: See [skill-evolver/SKILL.md](./skill-evolver/SKILL.md) for target-specific research, implementation and result verification
 - **llm-icon-finder**: See `llm-icon-finder/references/icons-list.md` for available icons
 - **cli-demo-generator**: See `cli-demo-generator/references/vhs_syntax.md` for VHS syntax and `cli-demo-generator/references/best_practices.md` for demo guidelines
 - **cloudflare-troubleshooting**: See `cloudflare-troubleshooting/references/api_overview.md` for API documentation
