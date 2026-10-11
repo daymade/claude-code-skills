@@ -71,6 +71,13 @@ Use the user's wording to choose the path:
 | "compare", "landscape", "opportunities" | Landscape | Ensure each competitor has a profile, then synthesize gaps and opportunities |
 | "latest code", "有没有更新" | Update | Pull/fetch existing competitors and report changed commits before analysis |
 
+Before saving source profiles, resolve the user's selected destination. When the
+request explicitly selects a team collection, read
+[collection destination routing](references/collection_destination.md) and use
+its existing producer/review entry. Keep project-specific adoption judgments in
+the existing project research entry. Without that selection, retain the current
+project-backed learning and durable source layout below.
+
 ## Durable Source Layout
 
 Use a durable workspace, not `/tmp`. The default base is:
@@ -287,6 +294,7 @@ Before finishing, run the checks in `references/analysis_checklist.md`:
 - Market facts have a source and retrieval date.
 - Landscape judgments explain a concrete choice, its trade-off and falsifier; facts and inference remain separate.
 - For project-backed analysis, new understanding is saved in the existing project research entry before a stage ends or context handoff; unchanged evidence is reused on continuation.
+- For an explicitly selected team collection, follow [collection destination routing](references/collection_destination.md): verify the producer/review result or report the exact unresolved handoff; retain project judgments and stable source links.
 - The final answer names gaps, opportunities, and risks without pretending they
   are code facts.
 

@@ -23,7 +23,7 @@ Use a two-phase loop:
 - Skip Native AI only when the human explicitly limits this run to the dictionary pass or a dated artifact proves Native AI already ran on this exact transcript.
 - In Claude Code or Codex, do not run Stage 3. Use Stage 1 plus the native workflow.
 - Never rewrite speech for fluency. A correction must explain a plausible ASR error and preserve who said what.
-- Never infer or reassign speaker identities. Preserve speaker-label lines; human-confirmed labels and user verdicts are authoritative.
+- By default, never infer or reassign speaker identities. Preserve speaker-label lines; human-confirmed labels and user verdicts are authoritative. Only an explicit, task-scoped user grant to infer identities opens the separate derived-reader branch: read [scoped speaker inference](references/scoped_speaker_inference.md) before acting. That grant is permission to infer, not an identity confirmation or permission for other transcripts.
 - When comparing two transcripts of the same session (a 1.3x-sped Feishu 妙记 vs a full-speed one, DJI vs 录音豆, two devices, or any duplicate/overlapping capture), do NOT let an alignment script's output stand in for reading. Script diffs (`difflib`, normalize-and-compare, per-turn speaker-label counts) are locators for *candidate* divergent segments only — their similarity ratios, "identical turn counts", and "speaker-divergence counts" are never the conclusion. Read both transcripts turn by turn yourself and decide from that. Real case 2026-09-18: a per-line regex that missed continuation lines reported "150 speaker divergences, all empty" then flipped to "1" once multi-line bodies were parsed — the whole numeric range was parser noise, and a canonical swap was nearly made on it. Corroboration that is genuinely independent requires a different recognizer over the source audio (rung 7), not a re-segmentation of the same recognition.
 - Parsing a Feishu 妙记 `.txt` (or any `speaker HH:MM:SS.mmm` transcript): the spoken text lives on the lines AFTER the speaker-label line, up to the next label — not on the label line itself. A single-line regex (`group(3)` of the label) reads every multi-line turn's body as empty. Counting speakers or turns: use UTF-8-safe tooling (Python), never `sort | uniq -c` or `awk '{print $1}'` — both silently collapse distinct CJK speaker labels into one (2026-08-29 `sort|uniq` folded 5 speakers' 106 turns into "说话人A 106"; 2026-09-18 `awk $1` reported "说话人A 373" for a file whose real distribution was 说话人A17/说话人B287/说话人C60/说话人D9).
 - Before correcting any person name, directly read both the configured global people roster and the owning project's explicit identity roster or alias ledger. Stage 1 auto-loads only global `ASR 变体` entries; it does not load project rosters or expose suppressed, disabled, and unlisted entries. If an expected source is missing or the sources conflict, leave the name unchanged and enqueue or ask once. Never use occurrence frequency as identity evidence. Read [references/dictionary_identity_and_context.md](references/dictionary_identity_and_context.md) before settling the name.
@@ -96,6 +96,7 @@ For a native end-to-end example, read [references/example_session_dji_minutes.md
 |---|---|---|
 | Fast native | Short/plain transcript, known speakers, low stakes | This file + [native_ai_full_workflow.md](references/native_ai_full_workflow.md) |
 | Full native | Domain-heavy, unfamiliar entities, 3+ speakers, long or decision-bearing transcript | [native_ai_full_workflow.md](references/native_ai_full_workflow.md), plus queue and evidence references below |
+| Scoped speaker inference | User explicitly authorizes identity inference for this transcript/task | [scoped_speaker_inference.md](references/scoped_speaker_inference.md); keep ordinary ASR correction on the native route |
 | Caller integration | Another skill or ingest pipeline invokes Stage 1 | `Cross-skill caller contract` below |
 | Review queue/dashboard | Any item is uncertain or needs audio | [review_queue_dashboard.md](references/review_queue_dashboard.md) |
 | Agent-less API | CI/batch automation with no agent available | [glm_api_setup.md](references/glm_api_setup.md) and [workflow_guide.md](references/workflow_guide.md) |
@@ -413,6 +414,7 @@ All references are one level from this file.
 | Need | Read |
 |---|---|
 | Full native correction sequence | [native_ai_full_workflow.md](references/native_ai_full_workflow.md) |
+| Explicit one-task speaker inference in a separate reader copy | [scoped_speaker_inference.md](references/scoped_speaker_inference.md) |
 | Split/batch cold-review packets, result validation, and interruption recovery | [native_review_packets.md](references/native_review_packets.md) |
 | Dictionary, people roster, domain contexts | [dictionary_identity_and_context.md](references/dictionary_identity_and_context.md) |
 | False-positive policy | [false_positive_guide.md](references/false_positive_guide.md) |
