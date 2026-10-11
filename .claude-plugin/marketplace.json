@@ -6,9 +6,18 @@
   },
   "metadata": {
     "description": "Professional Claude Code and Codex skills marketplace — production-ready skills spanning GitHub and git operations (including current-base contributor PR review), document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, evidence-backed HTML reports and data-visualization judgment, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, local inter-agent messaging, Claude Code operations, technology selection and build-vs-buy decisions, and model-aware Codex workstation setup. Suite plugins bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
-    "version": "3.22.0"
+    "version": "3.23.0"
   },
   "plugins": [
+    {
+      "name": "app-evolver",
+      "description": "Improves an existing application using its code, product contract, authorized work history and competitor evidence. Use for 取长补短、取其精华去其糟粕、参考竞品优化应用 or evolving an app from successful and failed work. Carries authorized changes through implementation and user-result verification; use skill-evolver for Skills.",
+      "source": "./app-evolver",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "developer-tools",
+      "keywords": ["app-improvement", "competitor-analysis", "work-history", "product-contract", "取长补短", "应用优化"]
+    },
     {
       "name": "skill-evolver",
       "description": "Researches and improves a specified existing Skill using successful/failed work and competitor evidence. Use for 优化这个Skill, 从成功和失败经验改进Skill, or 研究竞品后优化指定技能. Routine creation and editing use skill-creator.",
