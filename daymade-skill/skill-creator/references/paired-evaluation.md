@@ -218,7 +218,7 @@ When the user tells you they're done, read `feedback.json`:
 }
 ```
 
-Empty feedback means the user thought it was fine. Focus your improvements on the test cases where the user had specific complaints.
+Treat empty feedback as no recorded comment, not evidence of satisfaction or task acceptance. Use the user's explicit judgment and actual result when deciding whether to iterate; address specific complaints where provided.
 
 When finished, confirm `$VIEWER_PID` still belongs to this invocation's viewer before stopping it; leave an unfamiliar or reused PID untouched:
 

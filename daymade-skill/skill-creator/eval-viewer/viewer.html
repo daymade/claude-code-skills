@@ -1043,7 +1043,8 @@
       }
 
       // POST once with status: complete — include ALL runs so the model
-      // can distinguish "no feedback" (looks good) from "not reviewed"
+      // can distinguish submitted empty comments from an unsubmitted review.
+      // Neither an empty comment nor submission records satisfaction or acceptance.
       const reviews = [];
       const ts = new Date().toISOString();
       for (const r of EMBEDDED_DATA.runs) {
