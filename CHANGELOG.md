@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **app-evolver** (v1.0.0; catalog v3.23.0): Add an application improvement orchestrator that binds current product contracts, authorized work history and competitor mechanisms to engineering changes and consumer-level acceptance. Keep analysis-only scope, protected behavior and evidence limits explicit.
+
 - **github-ops** (v1.14.8): Clarify that server auto-merge follows configured requirements and can merge immediately while other CI is queued. Preserve exact-candidate check verification and route the repository entry to the merge preflight. Change type: factual operating-procedure correction.
 
 - **report-with-html** (v1.4.1 → v1.4.2): Give the existing acceptance reviewer original requirements and corrections; verify requested answers before closing delivery. Preserve sample-only scope and report missing original requirements as unknown. Change type: bounded acceptance repair.

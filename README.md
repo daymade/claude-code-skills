@@ -3990,6 +3990,32 @@ or an explicit fallback with its evidence limits.
 
 ---
 
+### **app-evolver** - Evidence-Based Application Improvement
+
+> **Install**: `claude plugin install app-evolver@daymade-skills`
+
+Improve an existing application from its current code and product contract,
+authorized successful/failed work, and competitor mechanisms. Decide what fits,
+implement the authorized increment and verify the actual user result.
+
+**When to use:** Take the useful parts of a competitor, improve an app from past
+experience, or coordinate improvements across apps with separate contracts.
+Use `skill-evolver` when the target is a Skill.
+
+```text
+Use app-evolver to improve my document app from this competitor. Preserve source
+provenance, implement the justified improvement and verify failure recovery.
+```
+
+**Requirements:** Access to the application source/contract and the tools needed
+for its declared delivery. This plugin ships the orchestrator; research/history
+Skills and project engineering workflows remain separate owners. Private
+integrations are optional; missing required inputs pause only dependent work.
+
+📚 **Documentation**: [app-evolver](./app-evolver/SKILL.md).
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
