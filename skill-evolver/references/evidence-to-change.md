@@ -9,6 +9,17 @@ and consumer observations are the evidence that they ran.
 
 ## Bind the handoff and inspect the return
 
+Before each selected stage, inspect the current host catalog or available
+skills-search and user-declared accessible sources. Verify a capability-matched
+owner can be read/executed, its applicable branch, required permissions and input
+data. A public source is not an installed Skill; an installed Skill does not prove
+data access. Respect disabled-Skill policy. If a public owner is not installed,
+point to the public repository's current catalog/installation instructions, use an
+available equivalent owner or execute equivalent substantive work with current
+tools. Do not auto-install, clone private repositories or request private credentials
+to make this public workflow usable. Distinguish an unavailable optional adapter
+from missing evidence that the requested result actually requires.
+
 Pass the original user request and corrections, target source/ref and affected
 jobs, successful behavior to preserve, authorization, prepared source-anchored
 evidence, unresolved question and required output. Keep affected runtime defaults
@@ -27,8 +38,10 @@ decisive missing observation. Record reuse separately from fresh execution.
 
 ## Existing assets and bounded history
 
-**Load and execute:** `skills-search` for capability discovery and its configured
-source roots. Use `prior-work-retrieval` when the user explicitly requests earlier
+**Load and execute when available:** `skills-search` for capability discovery and
+its declared accessible source roots. If absent, use the current host catalog and
+user-declared sources directly; do not require our private-repository configuration.
+Use `prior-work-retrieval` when the user explicitly requests earlier
 work or reuse; reuse an applicable prepared retrieval result rather than opening
 a second search. Do not infer source ownership from an installed cache.
 
@@ -71,12 +84,16 @@ invented failure. Its external-research routes remain with their domain owners.
 
 ## Favorites, competitor mechanisms and further research
 
-**Favorites — load and execute:** resolve `favorites-search` from current capability
-discovery; do not assume a public-repository path. Follow its **查询怎么发**,
-**结果怎么判：三信号** and **结果怎么报** routes before external tool/method selection.
-Pass capability vocabulary and fit conditions, not just the target Skill's name.
-Return relevant original sources/locators, applicability and coverage gaps into
-the research questions; a zero-hit result does not block subsequent research.
+**Curation — execute with available inputs:** if `favorites-search` is already
+present and accessible, load it as an optional local adapter and execute its
+applicable current query/result workflow. Otherwise inspect user-supplied curated
+links or exports and pass their original sources, applicability and gaps to the
+public research owner below. Do not build a second favorites-search engine or claim
+the user's favorites were searched when only supplied links were read. Missing
+this private adapter alone does not block public research. If the user explicitly
+requires inaccessible favorites/data, keep that item unresolved with its access
+condition and continue independent public work; zero accessible hits are not proof
+that the unavailable collection is empty.
 
 **Competitors — load and execute:** `competitors-analysis` → **Entry Router** for
 the applicable Discover/Ingest/Profile/Landscape/Update work. For mechanism claims,
@@ -129,11 +146,15 @@ Return exact published/consumed-object readback when required. Keep source,
 installation, native loading, prepared-task evidence and business result distinct;
 human acceptance remains unconfirmed until observed.
 
-## Optional whole-session retrospective and blocked stages
+## Whole-session lessons, optional local adapters and blocked stages
 
 When the user requests a whole-session recap or routing of successes/lessons,
-load and execute `session-retrospective` with the authorized session scope. Return
-its evidenced findings and routing receipt; target edits still go through Creator.
+use available public history readers and Creator's selected-corpus distillation
+route for the authorized supplied/retrievable corpus. An already accessible
+`session-retrospective` is an optional local adapter: load its current entry only
+then and return its evidenced findings/routing receipt. Without it, return the
+public owners' actual case evidence and maintenance destinations, not a claimed
+private workflow or fabricated receipt. Target edits still go through Creator.
 Do not require this receipt for prepared target cases or ordinary continuation.
 
 If a resolved Skill lacks an invocation tool, read its entry and execute it inline.

@@ -52,8 +52,10 @@ research, but its simplicity does not waive a requested history, favorites,
 competitor or Deep Research lane. Mark reused, executed, unnecessary and blocked
 work accurately; do not describe skipped research as completed.
 
-For each selected stage, resolve and load the current owning Skill and its relevant
-branch before doing the work. Pass the original user goal, target source/ref, old
+For each selected stage, preflight an available, capability-matched owner, its
+relevant branch, permissions and required data; then load and execute it. Prefer
+available public owners for the public workflow. Pass the original user goal,
+target source/ref, old
 successful jobs, authorization, prepared evidence and question to resolve. Execute
 that workflow and inspect its actual evidence or result before continuing; an owner
 list or a load receipt alone is not a completed stage. Keep gaps attached to the
@@ -62,14 +64,16 @@ dependent decision rather than rebuilding an evidence list from the recommendati
 Use the history-reader and Skill Creator handoffs for authorized history and
 prepared cases, including successes, failures and user corrections. A positive
 opportunity does not require an earlier failure in our Skill. A request to audit a
-whole session and route its lessons uses the optional session-retrospective handoff;
+whole session and route its lessons uses the public history/Creator handoff, with
+session-retrospective only as an accessible optional local adapter;
 ordinary target improvement does not require a separate retrospective receipt.
 
 ## Research the target's task capabilities
 
 Bind research questions to the business result and target's input, error, recovery
-and downstream-consumer paths. Execute the favorites-search handoff before external
-tool or method selection, then the competitors-analysis source and synthesis routes
+and downstream-consumer paths. Use accessible favorites-search or supplied curated
+links/exports through the reference's curation handoff before external tool or
+method selection, then execute competitors-analysis's source and synthesis routes
 for relevant capabilities. Return their source-bound mechanisms and counterevidence
 to this round; do not substitute a feature list for the owner's decision chain.
 
@@ -136,11 +140,21 @@ has not been observed; still finish the authorized implementation and checks.
 
 ## Use available executors without losing the result
 
-Resolve selected owners by capability through skills-search and current configured
-source/installed entries. Do not assume every owner ships in this standalone plugin
-or guess a public path for a team/private Skill. The same agent may load and execute
-Skills sequentially. Before authorized delegation or parallel independent lanes,
-load daymade-agent-discipline; dependent stages wait for the evidence they need.
+Resolve selected owners by capability through available skills-search; if it is
+absent, inspect the current host catalog and user-declared accessible sources.
+Evolver ships only its own bundle, not companion Skills. Public availability does
+not prove installation, branch readiness or access to required data. Do not require
+our private repositories, credentials or local configuration. Do not automatically
+install/clone an owner or override a host's disabled-Skill policy. For a public owner
+not installed, use the [public catalog and installation guide](https://github.com/daymade/claude-code-skills/blob/main/README.md)
+to identify its actual plugin package, or use an
+available equivalent owner or tools; do not invent a successful invocation.
+
+The same agent may load and execute Skills sequentially. Before authorized
+delegation or parallel independent lanes, follow the current user/host contract
+and public owner's delegation/verification workflow. Apply daymade-agent-discipline
+only when that optional local adapter is already present and accessible;
+dependent stages wait for the evidence they need.
 Do not assign one agent per Skill by default or copy an owner's engine here.
 
 An absent invocation tool does not make a resolved Skill absent: read its current
