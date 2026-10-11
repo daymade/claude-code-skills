@@ -201,6 +201,11 @@ uv run --frozen python -m scripts.quick_validate <skill-path> --audience public
 
 ### Review and evaluation input preparation
 
+For Skill eval grading, aggregation or previous-iteration review, follow
+[the eval schemas](daymade-skill/skill-creator/references/eval_pipeline_schemas.md)
+and [the viewer workflow](daymade-skill/skill-creator/references/paired-evaluation.md#step-4-grade-aggregate-and-launch-the-viewer).
+Keep assertion identity, missing-data semantics and viewer startup instructions in those owners.
+
 When review, replay or evaluation needs input copies, follow
 [the materialization SOP](daymade-skill/skill-creator/references/materialization-budget.md)
 from the locked skill-creator project above. Its

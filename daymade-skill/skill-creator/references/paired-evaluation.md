@@ -8,21 +8,6 @@ description: >-
 
 Read cases and pipeline execution only after [the heavy-eval gate](change-verification.md#heavy-eval-authorization-gate--separate-from-tier-classification) passes. Read Improving the skill when applying feedback under any selected tier; it does not authorize paired execution. Read iteration or blind comparison only when that evidence is part of the authorized plan. Honor cancellations throughout, stop when the named uncertainty or deliverable is resolved, then return to ordinary migration verification and delivery.
 
-## Contents
-
-  - [Full-eval test cases (separately authorized paired plan only)](#full-eval-test-cases-separately-authorized-paired-plan-only)
-- [Full paired evaluation pipeline (separately authorized only)](#full-paired-evaluation-pipeline-separately-authorized-only)
-  - [Step 1: Run the approved with-skill / baseline pairs](#step-1-run-the-approved-with-skill--baseline-pairs)
-  - [Step 2: While runs are in progress, draft assertions](#step-2-while-runs-are-in-progress-draft-assertions)
-  - [Step 3: As runs complete, capture timing data](#step-3-as-runs-complete-capture-timing-data)
-  - [Step 4: Grade, aggregate, and launch the viewer](#step-4-grade-aggregate-and-launch-the-viewer)
-  - [What the user sees in the viewer](#what-the-user-sees-in-the-viewer)
-  - [Step 5: Read the feedback](#step-5-read-the-feedback)
-- [Improving the skill](#improving-the-skill)
-  - [How to think about improvements](#how-to-think-about-improvements)
-  - [The iteration loop](#the-iteration-loop)
-- [Advanced: Blind comparison](#advanced-blind-comparison)
-
 ### Full-eval test cases (separately authorized paired plan only)
 
 Enter this section only when the heavy-eval authorization gate passes. Risk tier alone neither authorizes nor forbids this evidence; an explicit full-pipeline request does not reclassify the underlying change. Do not use it merely because a SKILL.md changed. A specialized workflow follows its substitution contract declared above.
@@ -165,16 +150,19 @@ or task outcomes are unresolved.
 4. **Launch the viewer** with both qualitative outputs and quantitative data:
    ```bash
    cd <skill-creator-path>
-   nohup uv run --frozen python eval-viewer/generate_review.py \
+   VIEWER_LOG="<workspace>/iteration-N/viewer.log"
+   nohup uv run --frozen python -u eval-viewer/generate_review.py \
      <workspace>/iteration-N \
      --skill-name "my-skill" \
      --benchmark <workspace>/iteration-N/benchmark.json \
-     > /dev/null 2>&1 &
+     > "$VIEWER_LOG" 2>&1 &
    VIEWER_PID=$!
    ```
    For iteration 2+, also pass `--previous-workspace <workspace>/iteration-<N-1>`.
 
-   **If the backgrounded viewer strands itself**: the process stays alive but nothing is listening — check with `lsof -a -p $VIEWER_PID -iTCP -sTCP:LISTEN` (empty) or curl the URL (fails); "no log output" is NOT a usable signal here because the launch line above redirects it to `/dev/null`. Kill it and fall back to `--static` rather than re-launching the same way.
+   Wait for the log's `URL:` line or a launcher exit; inspect the log for startup errors. Use the reported URL: the [generator](../eval-viewer/generate_review.py) selects a free port when the requested port is occupied, and resolves `--port 0` to an actual port. Leave existing listeners untouched. Unbuffered Python output makes startup information available while the server runs.
+
+   **If the backgrounded viewer strands itself**: inspect the captured log and probe the reported URL. Stop only the viewer process launched by this invocation, after confirming its ownership, and fall back to `--static` rather than repeating the same failed launch.
 
    **Cowork / headless environments:** If `webbrowser.open()` is not available or the environment has no display, use `--static <output_path>` to write a standalone HTML file instead of starting a server. Feedback will be downloaded as a `feedback.json` file when the user clicks "Submit All Reviews". After download, copy `feedback.json` into the workspace directory for the next iteration to pick up.
 
@@ -230,9 +218,9 @@ When the user tells you they're done, read `feedback.json`:
 }
 ```
 
-Empty feedback means the user thought it was fine. Focus your improvements on the test cases where the user had specific complaints.
+Treat empty feedback as no recorded comment, not evidence of satisfaction or task acceptance. Use the user's explicit judgment and actual result when deciding whether to iterate; address specific complaints where provided.
 
-Kill the viewer server when you're done with it:
+When finished, confirm `$VIEWER_PID` still belongs to this invocation's viewer before stopping it; leave an unfamiliar or reused PID untouched:
 
 ```bash
 kill $VIEWER_PID 2>/dev/null
