@@ -174,8 +174,12 @@ For rendered UI freshness, delayed editor/batch responses or deployment acceptan
 [frontend-visual-qa](frontend-visual-qa/SKILL.md). Keep its manifest, launcher,
 result semantics and rendered-journey procedure in that owner.
 For nested zoomable workspaces, use its
-[mode-specific acceptance](frontend-visual-qa/references/journey-and-page-contracts.md#journey-and-state-matrix);
-ordinary and enlarged evidence remain separate.
+[journey and state matrix](frontend-visual-qa/references/journey-and-page-contracts.md#journey-and-state-matrix).
+For embedded-reader zoom, return, focus or filtered-selection changes, use its
+[reader journey](frontend-visual-qa/references/journey-and-page-contracts.md#embedded-readers-and-semantic-zoom).
+For browser visibility or long JSONL input problems, load its
+[browser-driving and observation traps](frontend-visual-qa/references/browser-driving-and-observation-traps.md);
+keep adapter requirements and invocation examples in that reference.
 For changed contribution views or multi-item reads, use that same journey contract
 for source-derived coverage and partial-result recovery; keep the detailed recipe
 with the Skill.
@@ -335,9 +339,8 @@ for candidate selection and commands; keep the detailed rules in those owners.
 
 ### Local Agent Messaging
 
-For both Claude Code and Codex, use current native discovery, messaging, replies,
-and waiting whenever those tools cover the target. Keep parent/subagent and current-team
-messages on their native relationship; for independent sessions, enter the
+For local transport selection or accepted/consumed delivery interpretation, enter
+[peer-message](peer-message/SKILL.md). For independent sessions, enter the
 [local coordination workflow](peer-message/references/local-coordination.md#原生跨会话通信)
 before sending. Use its routing guidance for uncovered local targets
 or coordination evidence that needs verification, never to bypass denied or Held messages.
