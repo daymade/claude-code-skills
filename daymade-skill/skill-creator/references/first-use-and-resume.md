@@ -13,8 +13,7 @@ data or permission, installation, account configuration, a running service or a
 human step. This includes instruction-only routers and handoffs across owners.
 Skip it for reference-only work or self-sufficient file transforms only when no
 execution prerequisite is affected. The author applies it to the affected workflow;
-it is not
-a reason to build a generic installer or add setup to every Skill.
+it is not a reason to build a generic installer or add setup to every Skill.
 
 Before planning readiness checks, bind the
 [intended consumer](change-verification.md#bind-the-intended-consumer-before-verification).
