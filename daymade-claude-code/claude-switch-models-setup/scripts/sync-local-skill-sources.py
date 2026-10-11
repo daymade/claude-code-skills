@@ -2154,10 +2154,12 @@ def authoring_inventory(sources: list[MarketplaceSource], path: Path) -> dict:
         if (set(config) - allowed or not {"version", "origin", "main", "slots"} <= set(config)
                 or type(config["version"]) is not int or config["version"] != 1
                 or type(config["slots"]) is not int or not 1 <= config["slots"] <= 20
-                or config["origin"] != origin or not isinstance(config["main"], str) or not config["main"]
+                or config["origin"] != origin or not isinstance(config["main"], str) or not config["main"].strip() or config["main"].strip() != config["main"]
                 or ("skip_lfs_smudge" in config and type(config["skip_lfs_smudge"]) is not bool)):
             raise ValueError(f"{root}: malformed or mismatched pool configuration")
-        if authoring_object(root / "init.json") != config:
+        authoring_git(canonical, "check-ref-format", "--branch", config["main"])
+        encoded_config = json.dumps(config, sort_keys=True)
+        if json.dumps(authoring_object(root / "init.json"), sort_keys=True) != encoded_config:
             raise ValueError(f"{root}: initialization ownership differs from pool configuration")
         leases = authoring_object(root / "leases.json")
         slots = {f"slot-{i}" for i in range(1, config["slots"] + 1)}
@@ -2192,7 +2194,7 @@ def authoring_inventory(sources: list[MarketplaceSource], path: Path) -> dict:
                 entry.append({"source_dir": str(expected), "plugin_id": skill.plugin_id})
             if authoring_git(clone, "branch", "--show-current") != lease["branch"] or authoring_git(clone, "remote", "get-url", "origin") != origin:
                 raise ValueError(f"{clone}: lease identity changed during inventory")
-        if authoring_object(root / "leases.json") != leases or authoring_object(root / "pool.json") != config or authoring_object(root / "init.json") != config:
+        if authoring_object(root / "leases.json") != leases or json.dumps(authoring_object(root / "pool.json"), sort_keys=True) != encoded_config or json.dumps(authoring_object(root / "init.json"), sort_keys=True) != encoded_config:
             raise ValueError(f"{root}: authoring evidence changed during inventory")
     if authoring_object(path) != data:
         raise ValueError(f"{path}: authoring enrollment changed during inventory")

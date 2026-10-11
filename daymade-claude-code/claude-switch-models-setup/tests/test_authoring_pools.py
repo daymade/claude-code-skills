@@ -130,12 +130,20 @@ class AuthoringPoolsTests(unittest.TestCase):
             self.write()
             with self.assertRaises(ValueError): self.inventory()
         self.leases = valid
-        for key, value in (("slots", True), ("slots", 0), ("slots", 21), ("version", True), ("origin", "foreign"), ("main", None)):
+        for key, value in (("slots", True), ("slots", 0), ("slots", 21), ("version", True), ("origin", "foreign"), ("main", None), ("main", " "), ("main", "bad..ref")):
             original = self.config[key]
             self.config[key] = value
             self.write()
             with self.subTest(key=key, value=value), self.assertRaises(ValueError): self.inventory()
             self.config[key] = original
+
+    def test_init_configuration_cannot_borrow_boolean_or_float_equality(self):
+        for key, value in (("version", True), ("version", 1.0), ("slots", 2.0)):
+            bad = dict(self.config)
+            bad[key] = value
+            (self.pool / "init.json").write_text(json.dumps(bad))
+            with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                self.inventory()
 
     def test_branch_origin_registration_and_symlinks_do_not_grant(self):
         for args in (("remote", "set-url", "origin", "foreign"), ("switch", "main")):
