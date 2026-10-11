@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tech-selection** (`daymade-claude-code` v4.27.5): Use the public delegation questions under the current user/host contract, loading an applicable local adapter when available. Preserve explicit team and adapter requirements; a missing required adapter blocks only its dependent action. Change type: public delegation dependency repair.
+
+- **deep-research** (v2.13.0): Search current study, source and claim records without reregistering metadata edits. Persist explicit registration facts while preserving legacy rows and predecessor bindings. Report discovery as recorded-only or unknown; final integrity checks remain required. Change type: research catalog format and output redesign.
 - **skill-creator** (`daymade-skill` v1.69.4): Bind verification to the intended consumer's available Skills, data and permissions; include instruction-only handoffs in early first-use checks and keep installation within existing authorization. Keep review-harness capabilities outside consumer execution. Change type: consumer-boundary and first-use routing repair.
 - **skill-creator** (`daymade-skill` v1.69.3): Align the viewer launch SOP with actual port selection, retain unbuffered startup logs, distinguish empty comments from task acceptance, and route project eval instructions to their canonical owners. Remove the hand-maintained paired-evaluation contents list. Change type: operational documentation alignment.
 
