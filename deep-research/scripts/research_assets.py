@@ -147,21 +147,154 @@ def catalog_has_start_snapshot(catalog, start_hash):
 def catalog_rows(catalog):
     latest = {}
     order = []
+    counts = {}
     for row in read_jsonl(catalog):
-        study_id = row.get("study_id")
-        if not study_id or not row.get("path"):
+        if not isinstance(row, dict):
             raise ValueError(f"{catalog}: invalid catalog study")
+        study_id = row.get("study_id")
+        if any(not isinstance(row.get(field), str) or not row[field].strip()
+               for field in ("study_id", "path")):
+            raise ValueError(f"{catalog}: invalid catalog study")
+        if not isinstance(row.get("terms", []), list) or any(
+            not isinstance(term, str) or not term.strip() for term in row.get("terms", [])
+        ):
+            raise ValueError(f"{catalog}: invalid catalog terms")
+        counts[study_id] = counts.get(study_id, 0) + 1
+        # Old revision numbers remain historical evidence. New events use the
+        # predecessor binding; the event count is computed, not persisted.
+        if "revision" in row and (type(row["revision"]) is not int
+                                  or row["revision"] != counts[study_id]):
+            raise ValueError(f"{catalog}: invalid catalog revision for {study_id}")
         previous = latest.get(study_id)
         if previous is None:
-            if row.get("revision", 1) != 1 or row.get("supersedes_sha256"):
+            if row.get("supersedes_sha256"):
                 raise ValueError(f"{catalog}: first catalog revision must be 1")
             order.append(study_id)
         elif (row["path"] != previous["path"]
-              or row.get("revision") != previous.get("revision", 1) + 1
               or row.get("supersedes_sha256") != row_sha256(previous)):
             raise ValueError(f"{catalog}: invalid catalog revision for {study_id}")
         latest[study_id] = row
     return [latest[study_id] for study_id in order]
+
+
+def registration_kind(row):
+    kind = row.get("registration_kind")
+    if kind is None:
+        # Legacy projections classify the historical registration only; their
+        # cached metadata/indices never supply current search evidence.
+        return "legacy" if row.get("coverage") == "legacy_selected_sources" else "checked"
+    if kind not in {"checked", "legacy"}:
+        raise ValueError("invalid catalog registration kind")
+    return kind
+
+
+def search_text(value, field):
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"invalid current search text: {field}")
+    return value
+
+
+def legacy_evidence(directory):
+    sources = {}
+    claims = []
+    evidence = directory / "evidence.jsonl"
+    if not evidence.is_file():
+        raise ValueError("legacy evidence.jsonl is missing")
+    for row in read_jsonl(evidence):
+        if not isinstance(row, dict):
+            raise ValueError("invalid legacy evidence row")
+        url = row.get("source")
+        if "source" in row:
+            search_text(url, "legacy source")
+        if isinstance(url, str) and url.startswith(("https://", "http://")):
+            sources[source_id(url)] = {
+                "source_id": source_id(url), "title": row.get("source_type", "source"),
+                "url": normalize_url(url), "status": "legacy_unverified_for_reuse",
+            }
+        if "claim" in row:
+            search_text(row["claim"], "legacy claim")
+            claims.append({"claim_id": row.get("id", ""), "text": row["claim"],
+                           "status": row.get("status", "unknown")})
+    return list(sources.values()), claims
+
+
+def current_catalog_assets(catalog, row):
+    """Read only this explicit locator; never scan a study/workspace tree."""
+    directory = (catalog.parent / row["path"]).resolve()
+    result = {"source_index": [], "claim_index": [], "coverage": "unknown",
+              "artifact_report_integrity": "not-checked",
+              "current_gaps": []}
+    try:
+        study, lanes = provider_runs.load_study(directory)
+        if study["study_id"] != row["study_id"]:
+            raise ValueError("catalog locator has a different study identity")
+        search_text(study["business_outcome"], "business_outcome")
+        result.update(as_of=study["as_of"], business_outcome=study["business_outcome"])
+        states = recorded_event_states(directory, lanes)
+        if registration_kind(row) == "legacy":
+            if not any(state == "collected" for state in states.values()):
+                raise ValueError("legacy study has no collected provider output")
+            result["source_index"], result["claim_index"] = legacy_evidence(directory)
+            result["recorded_lane_coverage"] = {"coverage": "legacy_selected_sources"}
+        else:
+            for name in ("source-ledger.jsonl", "claims.jsonl"):
+                if not (directory / name).is_file():
+                    raise ValueError(f"{name} is missing")
+            sources = latest_sources(directory)
+            result["source_index"] = [{key: source[key] for key in
+                                      ("source_id", "title", "url", "status")}
+                                     for source in sources.values()]
+            if not any(source["status"] == "approved" for source in sources.values()):
+                raise ValueError("no current approved source records")
+            claims = load_claims(directory, sources)
+            if not claims:
+                raise ValueError("current claim registry is empty")
+            result["claim_index"] = [{key: claim[key] for key in
+                                     ("claim_id", "text", "status")}
+                                    for claim in claims.values()]
+            if any(states.get(lane) not in {"collected", "deferred", "failed_unknown"}
+                   for lane in lanes):
+                recorded = {"coverage": "in-progress",
+                            "request_mode_coverage": provider_runs.mode_coverage(study, states)}
+            else:
+                recorded = provider_runs.completion_coverage(study, states,
+                    row.get("bounded_reason", row.get("reason", "")))
+            result["recorded_lane_coverage"] = recorded
+        for source in result["source_index"]:
+            for field in ("source_id", "title", "url", "status"):
+                search_text(source.get(field), f"source {field}")
+        for claim in result["claim_index"]:
+            for field in ("text", "status"):
+                search_text(claim.get(field), f"claim {field}")
+        result["coverage"] = "recorded-only"
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+        result["source_index"] = []
+        result["claim_index"] = []
+        result.pop("recorded_lane_coverage", None)
+        result["coverage"] = "unknown"
+        result["current_gaps"].append(str(exc))
+    return result
+
+
+def recorded_event_states(directory, lanes):
+    """Project event metadata, not validate provider artifacts or actual mode."""
+    path = directory / "run-events.jsonl"
+    if not path.is_file():
+        raise ValueError("run-events.jsonl is missing")
+    states = {}
+    for event in read_jsonl(path):
+        if not isinstance(event, dict) or event.get("lane_id") not in lanes:
+            raise ValueError("invalid recorded event lane")
+        lane, state = event["lane_id"], event.get("state")
+        if state not in provider_runs.STATES or state not in provider_runs.NEXT[states.get(lane)]:
+            raise ValueError("invalid recorded event state/transition")
+        provider_runs.timestamp(event.get("at"))
+        if not isinstance(event.get("note"), str) or (
+            state in {"deferred", "failed_unknown"} and not event["note"].strip()
+        ):
+            raise ValueError("invalid recorded event note")
+        states[lane] = state
+    return states
 
 
 def find_prior(catalog, query, include_leads=False):
@@ -170,10 +303,11 @@ def find_prior(catalog, query, include_leads=False):
         raise ValueError("prior query must contain a specific entity or subject")
     matches = []
     for row in catalog_rows(catalog):
-        source_index = [source for source in row.get("source_index", [])
+        current = current_catalog_assets(catalog, row)
+        source_index = [source for source in current["source_index"]
                         if include_leads or source.get("status") in DISCOVERABLE_SOURCE_STATES]
-        claim_index = row.get("claim_index", [])
-        study_text = " ".join([row.get("study_id", ""), row.get("business_outcome", ""),
+        claim_index = current["claim_index"]
+        study_text = " ".join([row["study_id"], current.get("business_outcome", ""),
                                *row.get("terms", []),
                                *(source.get("title", "") + " " + source.get("url", "") for source in source_index),
                                *(claim.get("text", "") for claim in claim_index)]).casefold()
@@ -186,12 +320,12 @@ def find_prior(catalog, query, include_leads=False):
             claim for claim in claim_index
             if any(term in claim.get("text", "").casefold() for term in terms)
         ]
-        if all(term in study_text for term in terms):
-            coverage = row.get("coverage", "unknown")
-            if coverage in {"finalized", "finalized-with-deferred-modes"} and "request_mode_coverage" not in row:
-                coverage = "legacy-request-mode-unverified"
+        matched = all(term in study_text for term in terms)
+        if matched or current["current_gaps"]:
             matches.append({"study_id": row["study_id"], "path": row["path"],
-                            "coverage": coverage,
+                            **{key: value for key, value in current.items()
+                               if key not in {"source_index", "claim_index"}},
+                            "query_match": "matched" if matched else "unknown",
                             "source_matches": source_matches[:10],
                             "claim_matches": claim_matches[:10],
                             "match_truncated": len(source_matches) > 10 or len(claim_matches) > 10})
@@ -493,40 +627,35 @@ def cmd_check(args):
 
 
 def cmd_register(args):
-    study, _, _, coverage = check(args.study, args.report, args.bounded_reason)
+    study, _, _, _ = check(args.study, args.report, args.bounded_reason)
     prior = read_json(args.study.resolve() / "prior-research.json")
     if prior_catalog_path(args.study.resolve(), prior) != args.catalog.resolve():
         raise ValueError("registration catalog differs from the one searched at start")
-    sources = latest_sources(args.study.resolve())
-    claims = load_claims(args.study.resolve(), sources)
     catalog = args.catalog.resolve()
     rows = catalog_rows(catalog)
     path = os.path.relpath(args.study.resolve(), catalog.parent)
     existing = next((row for row in rows if row["study_id"] == study["study_id"]), None)
-    if existing and existing["path"] != path:
+    if existing and (catalog.parent / existing["path"]).resolve() != args.study.resolve():
         raise ValueError("study ID already registered at another path")
+    if existing:
+        path = existing["path"]
     terms = list(dict.fromkeys([*(existing.get("terms", []) if existing else []), *args.term]))
     indexed = {
-        "study_id": study["study_id"], "path": path, "as_of": study["as_of"],
-        "business_outcome": study["business_outcome"],
-        "terms": terms, **coverage,
-        "source_index": [{"source_id": row["source_id"], "title": row["title"],
-                          "url": row["url"], "status": row["status"]}
-                         for row in sources.values()],
-        "claim_index": [{"claim_id": row["claim_id"], "text": row["text"],
-                         "status": row["status"]}
-                        for row in claims.values()],
+        "study_id": study["study_id"], "path": path, "terms": terms,
+        "registration_kind": "checked",
+        "report_path": str(args.report.resolve().relative_to(args.study.resolve())),
+        "bounded_reason": args.bounded_reason,
     }
     if existing:
         comparable = {key: existing.get(key) for key in indexed}
         if comparable == indexed:
             print(f"already registered: {study['study_id']}")
             return
-        indexed["revision"] = existing.get("revision", 1) + 1
         indexed["supersedes_sha256"] = row_sha256(existing)
     indexed["registered_at"] = now()
     append_jsonl(catalog, indexed)
-    print(f"registered: {study['study_id']} revision {indexed.get('revision', 1)}")
+    count = sum(row["study_id"] == study["study_id"] for row in read_jsonl(catalog))
+    print(f"registered: {study['study_id']} revision {count}")
 
 
 def cmd_relink_catalog(args):
@@ -540,24 +669,14 @@ def cmd_relink_catalog(args):
     rows = catalog_rows(catalog)
     registered = next((row for row in rows if row["study_id"] == study["study_id"]), None)
     expected_path = os.path.relpath(directory, catalog.parent)
-    if registered and registered["path"] != expected_path:
+    if registered and (catalog.parent / registered["path"]).resolve() != directory:
         raise ValueError("target catalog registers the study at a different path")
     if registered:
-        if (registered.get("as_of") != study["as_of"]
-                or registered.get("business_outcome") != study["business_outcome"]):
+        # Registration is a locator/provenance event, not a frozen copy of the
+        # study's current metadata. Preserve the search-time catalog prefix below.
+        located_study, _ = provider_runs.load_study((catalog.parent / registered["path"]).resolve())
+        if located_study["study_id"] != registered["study_id"]:
             raise ValueError("target catalog entry does not match the study")
-        sources = latest_sources(directory)
-        claims = load_claims(directory, sources)
-        source_rows = registered.get("source_index", [])
-        claim_rows = registered.get("claim_index", [])
-        if not source_rows or not claim_rows or any(
-            item.get("source_id") not in sources
-            or sources[item["source_id"]]["url"] != item.get("url") for item in source_rows
-        ) or any(
-            item.get("claim_id") not in claims
-            or claims[item["claim_id"]]["text"] != item.get("text") for item in claim_rows
-        ):
-            raise ValueError("target catalog entry does not match the study evidence")
     if not catalog_has_start_snapshot(catalog, prior.get("catalog_sha256")):
         # An empty catalog at start has no identifying prefix. A matching
         # registered study is then the only available continuity evidence.
@@ -604,26 +723,10 @@ def cmd_import_legacy(args):
             raise ValueError("study ID already registered at another path")
         print(f"already registered: {study['study_id']}")
         return
-    evidence = directory / "evidence.jsonl"
-    source_index = {}
-    claim_index = []
-    if evidence.exists():
-        for row in read_jsonl(evidence):
-            url = row.get("source")
-            if isinstance(url, str) and url.startswith(("https://", "http://")):
-                source_index[source_id(url)] = {
-                    "source_id": source_id(url), "title": row.get("source_type", "source"),
-                    "url": normalize_url(url), "status": "legacy_unverified_for_reuse",
-                }
-            if row.get("claim"):
-                claim_index.append({"claim_id": row.get("id", ""), "text": row["claim"],
-                                    "status": row.get("status", "unknown")})
     append_jsonl(catalog, {
-        "study_id": study["study_id"], "path": path, "as_of": study["as_of"],
-        "business_outcome": study["business_outcome"], "terms": args.term,
-        "coverage": "legacy_selected_sources", "coverage_reason": args.reason,
-        "registered_at": now(), "source_index": list(source_index.values()),
-        "claim_index": claim_index,
+        "study_id": study["study_id"], "path": path, "terms": args.term,
+        "registration_kind": "legacy", "coverage_reason": args.reason,
+        "registered_at": now(),
     })
     print(f"registered legacy study: {study['study_id']}")
 

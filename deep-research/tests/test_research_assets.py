@@ -287,26 +287,30 @@ class ResearchAssetsTest(unittest.TestCase):
         self.assertEqual(self.cli(ASSETS, "check", self.study, "--report", report).returncode, 0)
 
     def test_prior_search_combines_entity_and_question_across_study_fields(self):
-        self.catalog.write_text(json.dumps({
-            "study_id": "acme-study", "path": "acme", "terms": ["Acme"],
-            "business_outcome": "Review the company",
-            "source_index": [],
-            "claim_index": [{"claim_id": "C1", "text": "Margin improved", "status": "supported"}],
-        }) + "\n", encoding="utf-8")
+        spec = json.loads(self.spec.read_text())
+        spec["study_id"] = "acme-study"
+        self.spec.write_text(json.dumps(spec))
+        report = self.finish_valid()
+        sid = hashlib.sha256(b"https://example.org/report.pdf").hexdigest()[:20]
+        self.assertEqual(self.cli(ASSETS, "claim", self.study, "--claim-id", "C2",
+                                  "--text", "Margin improved", "--status", "supported",
+                                  "--source-id", sid, "--locator", "page 1",
+                                  "--boundary", "Synthetic company only").returncode, 0)
+        self.assertEqual(self.cli(ASSETS, "register", self.study, "--catalog", self.catalog,
+                                  "--report", report, "--term", "Acme").returncode, 0)
         found = self.cli(ASSETS, "search", "--catalog", self.catalog,
                          "--query", "Acme margin")
         self.assertEqual(found.returncode, 0, found.stderr)
         self.assertEqual(json.loads(found.stdout)[0]["study_id"], "acme-study")
 
     def test_prior_search_excludes_unverified_leads_unless_requested(self):
-        self.catalog.write_text(json.dumps({
-            "study_id": "acme-study", "path": "acme", "terms": ["Acme"],
-            "business_outcome": "Review company filings",
-            "source_index": [
-                {"source_id": "a", "title": "Acme filing", "url": "https://example.org/filing", "status": "approved"},
-                {"source_id": "b", "title": "Noise favicon", "url": "https://assets.example/favicon", "status": "candidate"},
-            ], "claim_index": [],
-        }) + "\n", encoding="utf-8")
+        spec = json.loads(self.spec.read_text())
+        spec["study_id"] = "acme-study"
+        self.spec.write_text(json.dumps(spec))
+        report = self.finish_valid()
+        self.assertEqual(self.source(url="https://assets.example/favicon", status="candidate").returncode, 0)
+        self.assertEqual(self.cli(ASSETS, "register", self.study, "--catalog", self.catalog,
+                                  "--report", report, "--term", "Acme").returncode, 0)
         normal = self.cli(ASSETS, "search", "--catalog", self.catalog, "--query", "Acme favicon")
         self.assertEqual(json.loads(normal.stdout), [])
         leads = self.cli(ASSETS, "search", "--catalog", self.catalog,
@@ -315,7 +319,7 @@ class ResearchAssetsTest(unittest.TestCase):
         approved = self.cli(ASSETS, "search", "--catalog", self.catalog, "--query", "Acme filing")
         self.assertEqual(json.loads(approved.stdout)[0]["study_id"], "acme-study")
 
-    def test_catalog_refresh_appends_a_verifiable_revision(self):
+    def test_only_registration_changes_append_a_verifiable_event(self):
         self.start()
         self.collect("https://example.org/report.pdf")
         original = self.root / "report.pdf"
@@ -331,11 +335,15 @@ class ResearchAssetsTest(unittest.TestCase):
         self.assertEqual(self.source(url="https://example.org/lead", status="candidate").returncode, 0)
         refreshed = self.cli(ASSETS, *register)
         self.assertEqual(refreshed.returncode, 0, refreshed.stderr)
-        self.assertIn("revision 2", refreshed.stdout)
+        self.assertIn("already registered", refreshed.stdout)
+        self.assertEqual(len(self.catalog.read_text().splitlines()), 1)
+        registered = self.cli(ASSETS, *register, "--term", "alias")
+        self.assertEqual(registered.returncode, 0, registered.stderr)
+        self.assertIn("revision 2", registered.stdout)
         rows = [json.loads(line) for line in self.catalog.read_text().splitlines()]
         self.assertEqual(len(rows), 2)
-        self.assertEqual(rows[1]["revision"], 2)
-        self.assertEqual(rows[1]["terms"], ["fund"])
+        self.assertNotIn("revision", rows[1])
+        self.assertEqual(rows[1]["terms"], ["fund", "alias"])
         found = self.cli(ASSETS, "search", "--catalog", self.catalog, "--query", "fund")
         self.assertEqual(len(json.loads(found.stdout)), 1)
         rows[1]["supersedes_sha256"] = "0" * 64
@@ -392,13 +400,13 @@ class ResearchAssetsTest(unittest.TestCase):
         self.assertEqual(rejected.returncode, 2)
         self.assertIn("does not preserve the searched catalog snapshot", rejected.stderr)
         unrelated = self.root / "unrelated.jsonl"
-        unrelated.write_text(json.dumps({"study_id": "filing-study", "path": "study",
+        unrelated.write_text(json.dumps({"study_id": "filing-study", "path": "other-study",
                                          "as_of": "2026-01-01",
                                          "business_outcome": "Wrong unrelated study"}) + "\n")
         rejected = self.cli(ASSETS, "relink-catalog", self.study, "--catalog", unrelated,
                             "--reason", "moved the project checkout")
         self.assertEqual(rejected.returncode, 2)
-        self.assertIn("entry does not match the study", rejected.stderr)
+        self.assertIn("different path", rejected.stderr)
         relinked = self.cli(ASSETS, "relink-catalog", self.study, "--catalog", self.catalog,
                             "--reason", "moved the project checkout")
         self.assertEqual(relinked.returncode, 0, relinked.stderr)
@@ -481,7 +489,8 @@ class ResearchAssetsTest(unittest.TestCase):
                          "--query", "versioned research")
         self.assertEqual(found.returncode, 0, found.stderr)
         result = json.loads(found.stdout)
-        self.assertEqual(result[0]["coverage"], "legacy_selected_sources")
+        self.assertEqual(result[0]["coverage"], "recorded-only")
+        self.assertEqual(result[0]["recorded_lane_coverage"]["coverage"], "legacy_selected_sources")
         self.assertEqual(result[0]["claim_matches"][0]["claim_id"], "E01")
         unrelated = self.cli(ASSETS, "search", "--catalog", self.catalog,
                              "--query", "unrelated research")
@@ -508,6 +517,214 @@ class ResearchAssetsTest(unittest.TestCase):
         report.write_text("[C1] https://example.org/report.pdf", encoding="utf-8")
         return report
 
+    def register_valid(self):
+        report = self.finish_valid()
+        registered = self.cli(ASSETS, "register", self.study, "--catalog", self.catalog,
+                              "--report", report, "--term", "filing")
+        self.assertEqual(registered.returncode, 0, registered.stderr)
+        return report
+
+    def search(self, query):
+        result = self.cli(ASSETS, "search", "--catalog", self.catalog, "--query", query)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return json.loads(result.stdout)
+
+    def test_current_source_claim_and_study_changes_need_no_reregistration(self):
+        report = self.register_valid()
+        before = self.catalog.read_bytes()
+        row = json.loads(before)
+        for derived in ("source_index", "claim_index", "as_of", "business_outcome",
+                        "coverage", "request_mode_coverage", "revision", "deferred_lanes"):
+            self.assertNotIn(derived, row)
+        source = json.loads((self.study / "source-ledger.jsonl").read_text())
+        source["title"] = "only-current-title-after-change"
+        with (self.study / "source-ledger.jsonl").open("a") as stream:
+            stream.write(json.dumps(source) + "\n")
+        self.assertEqual(self.cli(ASSETS, "claim", self.study, "--claim-id", "C2",
+                                  "--text", "only-current-claim-after-change", "--status", "supported",
+                                  "--source-id", source["source_id"], "--locator", "page 1",
+                                  "--boundary", "Synthetic current record").returncode, 0)
+        spec = json.loads((self.study / "study.json").read_text())
+        spec.update(as_of="2026-10-11", business_outcome="only-current-outcome")
+        (self.study / "study.json").write_text(json.dumps(spec))
+        for query in (source["title"], "only-current-claim-after-change", "only-current-outcome"):
+            match = self.search(query)[0]
+            self.assertEqual(match["query_match"], "matched")
+            self.assertEqual(match["coverage"], "recorded-only")
+            self.assertEqual(match["as_of"], "2026-10-11")
+        self.assertEqual(self.search("Official filing"), [])
+        self.assertEqual(self.catalog.read_bytes(), before)
+        self.assertEqual(self.cli(ASSETS, "register", self.study, "--catalog", self.catalog,
+                                  "--report", report).returncode, 0)
+        self.assertEqual(self.catalog.read_bytes(), before)
+
+    def test_legacy_copied_indices_and_numbered_chain_are_not_current_truth(self):
+        report = self.register_valid()
+        row = json.loads(self.catalog.read_text())
+        row.pop("registration_kind")
+        row.pop("report_path")
+        row.pop("bounded_reason")
+        row.update(revision=1, as_of="2000-01-01", business_outcome="stale-outcome",
+                   coverage="finalized", source_index=[{"title": "stale-only-title"}],
+                   claim_index=[{"text": "stale-only-claim"}])
+        digest = hashlib.sha256(json.dumps(row, ensure_ascii=False, sort_keys=True,
+                                          separators=(",", ":")).encode()).hexdigest()
+        second = {**row, "revision": 2, "supersedes_sha256": digest, "terms": ["filing", "alias"]}
+        original = "".join(json.dumps(item) + "\n" for item in (row, second))
+        self.catalog.write_text(original)
+        self.assertEqual(self.search("stale-only-title"), [])
+        self.assertEqual(self.search("stale-only-claim"), [])
+        self.assertEqual(self.search("Official filing")[0]["source_matches"][0]["title"], "Official filing")
+        self.assertEqual(self.catalog.read_text(), original)
+        self.assertEqual(self.cli(ASSETS, "register", self.study, "--catalog", self.catalog,
+                                  "--report", report).returncode, 0)
+        rows = [json.loads(line) for line in self.catalog.read_text().splitlines()]
+        self.assertEqual(rows[:2], [row, second])
+        self.assertNotIn("revision", rows[2])
+        self.assertEqual(self.search("alias")[0]["coverage"], "recorded-only")
+
+    def test_missing_empty_and_invalid_current_metadata_return_gaps(self):
+        self.register_valid()
+        before = self.catalog.read_bytes()
+        cases = [("study.json", None), ("study.json", "[]"),
+                 ("source-ledger.jsonl", None), ("source-ledger.jsonl", ""),
+                 ("source-ledger.jsonl", "null\n"), ("claims.jsonl", None),
+                 ("claims.jsonl", ""), ("claims.jsonl", "{invalid\n"),
+                 ("run-events.jsonl", None), ("run-events.jsonl", "null\n")]
+        for name, invalid in cases:
+            with self.subTest(name=name, invalid=invalid):
+                path = self.study / name
+                content = path.read_bytes()
+                try:
+                    if invalid is None:
+                        path.unlink()
+                    else:
+                        path.write_text(invalid)
+                    result = self.search("filing")[0]
+                    self.assertEqual(result["coverage"], "unknown")
+                    self.assertTrue(result["current_gaps"])
+                    self.assertEqual(result["artifact_report_integrity"], "not-checked")
+                    self.assertEqual(self.catalog.read_bytes(), before)
+                finally:
+                    path.write_bytes(content)
+
+    def test_typed_current_text_is_a_study_gap_without_hiding_healthy_studies(self):
+        self.register_valid()
+        healthy = self.root / "healthy"
+        shutil.copytree(self.study, healthy)
+        spec = json.loads((healthy / "study.json").read_text())
+        spec["study_id"] = "healthy-study"
+        (healthy / "study.json").write_text(json.dumps(spec))
+        row = json.loads(self.catalog.read_text())
+        row.update(study_id="healthy-study", path="healthy")
+        with self.catalog.open("a") as stream:
+            stream.write(json.dumps(row) + "\n")
+        before = self.catalog.read_bytes()
+        healthy_control = self.search("filing")
+        self.assertEqual(len(healthy_control), 2)
+        self.assertTrue(all(hit["coverage"] == "recorded-only" for hit in healthy_control))
+        for name, field in (("claims.jsonl", "text"),
+                            ("source-ledger.jsonl", "title"),
+                            ("source-ledger.jsonl", "url")):
+            path = self.study / name
+            original = path.read_bytes()
+            for kind, value in (("typed", 42), ("null", None),
+                                ("empty", ""), ("missing", None)):
+                with self.subTest(name=name, field=field, kind=kind):
+                    item = json.loads(original)
+                    if kind == "missing":
+                        item.pop(field)
+                    else:
+                        item[field] = value
+                    try:
+                        path.write_text(json.dumps(item) + "\n")
+                        hits = {hit["study_id"]: hit for hit in self.search("filing")}
+                        gap = hits["filing-study"]
+                        self.assertEqual(gap["coverage"], "unknown")
+                        self.assertTrue(gap["current_gaps"])
+                        self.assertEqual(gap["source_matches"], [])
+                        self.assertEqual(gap["claim_matches"], [])
+                        self.assertNotIn("recorded_lane_coverage", gap)
+                        self.assertEqual(hits["healthy-study"]["coverage"], "recorded-only")
+                        self.assertEqual(self.catalog.read_bytes(), before)
+                    finally:
+                        path.write_bytes(original)
+        self.assertTrue(all(hit["coverage"] == "recorded-only" for hit in self.search("filing")))
+
+    def test_typed_legacy_text_returns_gap_but_optional_defaults_remain_searchable(self):
+        self.start()
+        self.collect("Provider report with selected evidence")
+        path = self.study / "evidence.jsonl"
+        item = {"claim": "Legacy filing observation", "source": "https://example.org/legacy"}
+        path.write_text(json.dumps(item) + "\n")
+        imported = self.cli(ASSETS, "import-legacy", self.study, "--catalog", self.catalog,
+                            "--reason", "Selected evidence only", "--term", "filing")
+        self.assertEqual(imported.returncode, 0, imported.stderr)
+        before = self.catalog.read_bytes()
+        control = self.search("Legacy filing")[0]
+        self.assertEqual(control["coverage"], "recorded-only")
+        self.assertEqual(control["claim_matches"][0]["claim_id"], "")
+        self.assertEqual(self.search("example.org/legacy")[0]["source_matches"][0]["title"], "source")
+        for field in ("claim", "source_type", "source"):
+            for value in (42, None, ""):
+                with self.subTest(field=field, value=value):
+                    path.write_text(json.dumps({**item, field: value}) + "\n")
+                    gap = self.search("filing")[0]
+                    self.assertEqual(gap["coverage"], "unknown")
+                    self.assertTrue(gap["current_gaps"])
+                    self.assertEqual(gap["source_matches"], [])
+                    self.assertEqual(gap["claim_matches"], [])
+                    self.assertNotIn("recorded_lane_coverage", gap)
+                    self.assertEqual(self.catalog.read_bytes(), before)
+        path.write_text(json.dumps({"source": item["source"]}) + "\n")
+        source_only = self.search("example.org/legacy")[0]
+        self.assertEqual(source_only["coverage"], "recorded-only")
+        self.assertEqual(source_only["claim_matches"], [])
+
+    def test_search_does_not_validate_large_artifacts_or_claim_completion(self):
+        report = self.register_valid()
+        export = self.study / "sources" / "official.md"
+        export.write_text("Changed provider artifact; the stored hash no longer matches")
+        result = self.search("filing")[0]
+        self.assertEqual(result["coverage"], "recorded-only")
+        self.assertEqual(result["recorded_lane_coverage"]["coverage"], "finalized")
+        self.assertEqual(result["artifact_report_integrity"], "not-checked")
+        check = self.cli(ASSETS, "check", self.study, "--report", report)
+        self.assertEqual(check.returncode, 2)
+        self.assertIn("SHA-256 mismatch", check.stderr)
+
+    def test_catalog_locator_identity_alias_and_no_directory_scan(self):
+        report = self.register_valid()
+        alias = self.root / "alias-study"
+        alias.symlink_to(self.study, target_is_directory=True)
+        row = json.loads(self.catalog.read_text())
+        row["path"] = alias.name
+        self.catalog.write_text(json.dumps(row) + "\n")
+        before = self.catalog.read_bytes()
+        self.assertEqual(self.search("filing")[0]["coverage"], "recorded-only")
+        self.assertEqual(self.cli(ASSETS, "register", alias, "--catalog", self.catalog,
+                                  "--report", report).returncode, 0)
+        self.assertEqual(self.catalog.read_bytes(), before)
+        hidden = self.root / "not-registered"
+        hidden.mkdir()
+        (hidden / "study.json").write_text('{"study_id":"unlisted-only-token"}')
+        self.assertEqual(self.search("unlisted-only-token"), [])
+        spec = json.loads((self.study / "study.json").read_text())
+        spec["study_id"] = "different-study"
+        (self.study / "study.json").write_text(json.dumps(spec))
+        found = self.search("filing")[0]
+        self.assertEqual(found["coverage"], "unknown")
+        self.assertIn("different study identity", found["current_gaps"][0])
+
+    def test_invalid_catalog_is_not_an_empty_search(self):
+        for row in ({"study_id": "seed"}, {"study_id": "seed", "path": ""},
+                    {"study_id": "seed", "path": "study", "terms": None}, []):
+            with self.subTest(row=row):
+                self.catalog.write_text(json.dumps(row) + "\n")
+                found = self.cli(ASSETS, "search", "--catalog", self.catalog, "--query", "filing")
+                self.assertEqual(found.returncode, 2)
+                self.assertIn("invalid catalog", found.stderr)
+
     def test_new_study_rejects_legacy_format_without_modifying_existing_catalog(self):
         spec = json.loads(self.spec.read_text())
         spec["schema_version"] = 1
@@ -519,14 +736,17 @@ class ResearchAssetsTest(unittest.TestCase):
         self.assertFalse(self.study.exists())
         self.assertFalse(self.catalog.exists())
 
-    def test_old_finalized_catalog_entry_is_readable_but_mode_coverage_unverified(self):
+    def test_old_copied_finalized_entry_missing_details_is_unknown(self):
         original = json.dumps({"study_id": "old-study", "path": "old",
             "business_outcome": "Compare old filing", "coverage": "finalized",
             "source_index": [], "claim_index": []}) + "\n"
         self.catalog.write_text(original)
         result = self.cli(ASSETS, "search", "--catalog", self.catalog, "--query", "filing")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout)[0]["coverage"], "legacy-request-mode-unverified")
+        found = json.loads(result.stdout)[0]
+        self.assertEqual(found["coverage"], "unknown")
+        self.assertTrue(found["current_gaps"])
+        self.assertEqual(found["artifact_report_integrity"], "not-checked")
         self.assertEqual(self.catalog.read_text(), original)
 
     def test_missing_required_mode_blocks_start_and_preserves_request_original(self):
@@ -567,7 +787,8 @@ class ResearchAssetsTest(unittest.TestCase):
                               "--report", report, "--term", "filing", "--bounded-reason", "Missing native result")
         self.assertEqual(registered.returncode, 0, registered.stderr)
         found = json.loads(self.cli(ASSETS, "search", "--catalog", self.catalog, "--query", "filing").stdout)
-        self.assertEqual(found[0]["coverage"], "bounded")
+        self.assertEqual(found[0]["coverage"], "recorded-only")
+        self.assertEqual(found[0]["recorded_lane_coverage"]["coverage"], "bounded")
         # Existing schema-1 bytes remain readable and searchable without inventing mode proofs.
         spec["schema_version"] = 1
         spec.pop("request_mode_contract")
@@ -595,7 +816,12 @@ class ResearchAssetsTest(unittest.TestCase):
         self.assertEqual(json.loads(checked.stdout)["coverage"], "finalized-with-deferred-modes")
         self.assertEqual(self.cli(ASSETS, "register", self.study, "--catalog", self.catalog,
                                   "--report", report).returncode, 0)
-        self.assertEqual(json.loads(self.catalog.read_text())["coverage"], "finalized-with-deferred-modes")
+        row = json.loads(self.catalog.read_text())
+        self.assertNotIn("coverage", row)
+        found = json.loads(self.cli(ASSETS, "search", "--catalog", self.catalog,
+                                   "--query", "filing").stdout)[0]
+        self.assertEqual(found["coverage"], "recorded-only")
+        self.assertEqual(found["recorded_lane_coverage"]["coverage"], "finalized-with-deferred-modes")
 
 
 if __name__ == "__main__":

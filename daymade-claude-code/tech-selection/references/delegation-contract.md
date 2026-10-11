@@ -112,8 +112,13 @@ surfaces:
 
 ## Agent Orchestration
 
-Agent count is not preset here. Run the delegation questions from
-`daymade-agent-discipline` and let them decide.
+Agent count is not preset here. Apply the current user/host contract and the
+questions below. When an applicable local `daymade-agent-discipline` adapter is
+available, load it; obey a current host/user requirement to use it. Without such
+a requirement, its absence does not block this public branch. If a required
+adapter is unavailable, name only the affected delegation gap and continue
+independent permitted selection/probes. Do not install/borrow private resources
+or claim an unavailable adapter was executed.
 
 An explicit instruction in the current task to use team discussion or avoid a
 unilateral direction takes precedence for that task. A historical task instruction

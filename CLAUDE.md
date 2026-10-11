@@ -73,6 +73,11 @@ For choosing or reviewing a library, framework, storage, data format, model,
 build-vs-buy or architecture — including 用哪个 / 选什么框架 / 要不要自建 / A 还是 B /
 这个方案行不行 — enter [tech-selection](daymade-claude-code/tech-selection/SKILL.md).
 Follow its full or lightweight route and linked execution owners.
+Before delegation, follow its [public orchestration route](daymade-claude-code/tech-selection/references/delegation-contract.md#agent-orchestration)
+within the current user/host contract.
+
+For research asset discovery, follow [deep-research's catalog contract](deep-research/references/research-asset-contract.md#start-before-external-retrieval);
+keep discovery observations separate from final result checks.
 
 For research-driven evolution of a specified existing Skill, start at
 [skill-evolver](skill-evolver/SKILL.md) and follow its public stage routes; use

@@ -142,7 +142,7 @@
       "description": "Claude Code operations suite that bundles cross-project prior-work retrieval across code, docs, Skills, meetings, WeChat archives, and conversation history; provider-separated Claude Code and Codex history readers; identity- and lineage-gated continuation workflows; plugin/skill troubleshooting; CLAUDE.md progressive disclosure optimization; version-synced Lark CLI routing; statusline configuration; exported .txt repair; full claude.ai conversation extraction with tool-call rendering and file download; plugin marketplace development and suite consolidation; writing/testing/debugging Claude Code hooks; multi-provider profile isolation; personal-memory migration into tool-agnostic AGENTS.md reference docs; one-shot local timers that ping Claude right after subscription quota reset to start a fresh 5-hour usage window; working web search installed on an agent whose relayed model backend cannot execute the built-in one; and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
       "source": "./daymade-claude-code",
       "strict": false,
-      "version": "4.27.4",
+      "version": "4.27.5",
       "category": "suite",
       "keywords": [
         "suite",
@@ -378,7 +378,7 @@
       "description": "Generate evidence-tracked research reports with reusable source and claim records, original-source verification, and evidence-family tracking. Coordinate provider-specific Skills across selected modes, retain original artifacts, and synthesize by decision; select depth and routes by the question.",
       "source": "./deep-research",
       "strict": false,
-      "version": "2.12.1",
+      "version": "2.13.0",
       "category": "documentation",
       "keywords": [
         "research",
