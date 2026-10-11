@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **app-evolver** (v1.0.0; catalog v3.23.0): Add an application improvement orchestrator that binds current product contracts, authorized work history and competitor mechanisms to engineering changes and consumer-level acceptance. Keep analysis-only scope, protected behavior and evidence limits explicit.
+- **transcript-fixer** (`daymade-audio` v1.47.0): Add speaker inference for an explicitly authorized single task in a separately labeled reader copy. Preserve raw speaker lines, human mappings, ASR name-correction gates and final quality checks. Change type: conditional workflow addition.
+- **competitors-analysis** (v1.6.1): Route explicitly selected team-collection sources and profiles through the existing producer and human review. Keep product adoption judgments in the project entry and preserve captured material when collection access is unavailable. Change type: bounded destination-routing clarification.
 
 - **github-ops** (v1.14.8): Clarify that server auto-merge follows configured requirements and can merge immediately while other CI is queued. Preserve exact-candidate check verification and route the repository entry to the merge preflight. Change type: factual operating-procedure correction.
 
