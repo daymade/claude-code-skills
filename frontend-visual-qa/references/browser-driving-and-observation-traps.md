@@ -10,8 +10,7 @@ surprises you.
 
 ## 1. "Clicked, nothing happened" is not evidence of a broken feature
 
-The most expensive mistake in this list. A click that produces no visible change
-has at least four causes, and only one of them is "the feature is broken":
+When a click produces no visible change, check the following causes:
 
 1. **The click missed.** Inline targets (a `<span>` inside a paragraph, an icon,
    a short link) are a few pixels tall. A coordinate derived from a screenshot is
@@ -136,19 +135,20 @@ Extension-based browser automation generally cannot navigate to `file://` URLs
 When an audit needs real interaction on a local file, serve it only under
 explicit isolated-diagnostic authority:
 
+Set `preview_port` to a caller-selected available port for the owned preview.
+
 ```bash
 # from the artifact's directory
-python3 -m http.server <port> --bind 127.0.0.1
-# then drive http://127.0.0.1:<port>/<artifact>.html
+python3 -m http.server "$preview_port" --bind 127.0.0.1
+# Drive the selected artifact's URL under this same origin.
 ```
 
 One caveat: this server is fine for pages, scripts, and images, but it does **not**
 support HTTP Range requests — a page containing `<video>` can stall on it while
 everything else loads (see trap 11 before concluding the player is broken).
 
-Serving over HTTP also removes a second class of confusion: `file://` has
-distinct CORS behavior, so a page that fetches anything at runtime behaves
-differently under the two schemes. State which scheme the evidence came from.
+`file://` has distinct CORS behavior, so a page that fetches anything at runtime behaves
+differently under these schemes. State which scheme the evidence came from.
 
 ## 4. A headless screenshot is a viewport, not the page
 
@@ -201,8 +201,8 @@ preferences. Defects living in the *other* states survive every visual pass:
 | Long-content scroll containers | Scrollbar styling that clashes with the surface; scroll affordance invisible | View at a height that forces the container to scroll |
 | Hover | Hover-only affordances unreachable by keyboard/touch | Inspect the rule, not just the rendering |
 
-The bundled sweep automates the first two (`focus-indicator-suppressed`,
-`focus-indicator-default-only`, `motion-without-reduced-motion-fallback`). The
+The bundled sweep automates `focus-indicator-suppressed`,
+`focus-indicator-default-only` and `motion-without-reduced-motion-fallback`. The
 rest still need a deliberately constructed state — the point is to *know that
 default-state evidence is partial* and say so, rather than reporting "audited"
 after one screenshot.
@@ -249,7 +249,7 @@ can restore its active state; read visibility and actual frame/state progress
 again before judging the product. Do not activate a user's window or another
 agent's target without its existing control authority. Record visibility before
 the action and at the settled observation; an unfinished hidden capture is not
-evidence that an animation is stuck. Two sub-traps while escaping: OS-level
+evidence that an animation is stuck. While escaping, OS-level
 scripting (e.g. AppleScript's application object) may not see the automation
 window at all when it belongs to another profile/instance — don't burn rounds
 trying to raise it; and per trap 9, don't verify the escape under virtual time.
@@ -323,7 +323,7 @@ common pattern: `document.title = "RESULT:" + JSON.stringify(state)`) finishes
 for the marker happily matches the marker inside your own `<script>` text. The
 output looks like a result and is nothing of the sort.
 
-Two mechanics fix it, chosen by trap 9's rule: a virtual-time budget (DOM-only
+Choose the observation method using trap 9's rule: a virtual-time budget (DOM-only
 tests), or arranging the test to finish inside the load window (real-time tests —
 lazy-loading assets conveniently extend it). And make the grep match something
 only the **executed** result can contain — `RESULT:{"` with the opening brace —
@@ -354,10 +354,20 @@ header), and a full GET downloads fine — every probe short of the media stack
 itself says the server is healthy. The page gets blamed; nothing on the page is
 wrong.
 
-Diagnose in two commands: `curl -sI -H "Range: bytes=0-100" <url>` — a `200`
-with full `Content-Length` instead of `206` means no Range support; and locate
-`moov` vs `mdat` byte offsets in the file (tail-moov + no-Range = guaranteed
-stall). Escapes: a range-capable static server (many exist; verify with the same
+Set `media_url` to the exact media request URL and probe a GET response:
+
+```bash
+curl -sS -D - -o /dev/null -H 'Range: bytes=0-100' "$media_url"
+```
+
+Check the actual response status and `Content-Range`: `206` with the requested
+range demonstrates partial delivery; `200` means this request returned the full
+representation. Other statuses or an unexpected range leave support unconfirmed.
+Do not use `curl -I` for this verdict: servers ignore Range on non-GET methods
+under [RFC 9110 §14.2](https://www.rfc-editor.org/rfc/rfc9110.html#section-14.2).
+Then locate `moov` vs `mdat` byte offsets in the file; tail-moov without partial
+delivery can delay playback and is not proof that every browser will stall.
+Escapes: a range-capable static server (many exist; verify with the same
 curl — expect `206` and a `Content-Range`), or `file://` for pure rendering
 checks (native random access, no server), or serving faststart-remuxed copies.
 Keep the original files untouched; remux copies are a serving concern, not an
