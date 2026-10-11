@@ -100,6 +100,12 @@ paths and user-owned data. Work in an isolated source checkout when the shared
 checkout carries other work. Keep the target's source and directly affected
 instructions, examples, help and caller routes aligned.
 
+Inventory affected runtime defaults and side effects before replacing a mechanism,
+including read/write behavior, access permissions and generated-output locations.
+Preserve them unless the authorized improvement explicitly changes them and its
+acceptance checks cover that change. Do not infer a new requirement from a
+general security preference.
+
 Use the repository's normal change workflow and the available Skill Creator
 making/verification tools. Classify changes by their actual failure surface;
 new capability or methodology does not automatically authorize paired evaluation,
