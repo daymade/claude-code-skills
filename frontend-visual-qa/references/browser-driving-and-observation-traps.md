@@ -8,23 +8,6 @@ code that was already correct.
 Read this before driving a real browser, and again whenever an observation
 surprises you.
 
-## Contents
-
-- [1. "Clicked, nothing happened" is not evidence of a broken feature](#1-clicked-nothing-happened-is-not-evidence-of-a-broken-feature)
-- [2. The page you are looking at may not be the page you just changed](#2-the-page-you-are-looking-at-may-not-be-the-page-you-just-changed)
-- [3. `file://` is not drivable by browser-extension tooling](#3-file-is-not-drivable-by-browser-extension-tooling)
-- [4. A headless screenshot is a viewport, not the page](#4-a-headless-screenshot-is-a-viewport-not-the-page)
-- [5. Resizing a headless window is not device emulation](#5-resizing-a-headless-window-is-not-device-emulation)
-- [6. Default state hides whole categories of defect](#6-default-state-hides-whole-categories-of-defect)
-- [7. Mid-run state is not final state](#7-mid-run-state-is-not-final-state)
-- [8. A hidden tab defers media loads — the request is never sent](#8-a-hidden-tab-defers-media-loads--the-request-is-never-sent)
-- [9. Virtual time fast-forwards timers, not I/O](#9-virtual-time-fast-forwards-timers-not-io)
-- [10. `--dump-dom` captures at load, not after your injected test](#10---dump-dom-captures-at-load-not-after-your-injected-test)
-- [11. A media stall may be the test server: Range support × moov position](#11-a-media-stall-may-be-the-test-server-range-support--moov-position)
-- [12. Calibrate capture and inspect the minimum surface](#12-calibrate-capture-and-inspect-the-minimum-surface)
-
----
-
 ## 1. "Clicked, nothing happened" is not evidence of a broken feature
 
 The most expensive mistake in this list. A click that produces no visible change
