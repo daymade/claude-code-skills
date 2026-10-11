@@ -3978,9 +3978,13 @@ investigate the interrupted-batch failure, and implement the justified repair.
 ```
 
 **Requirements:** A host with access to the target source and the tools needed to
-edit and verify it. Resolve, load and execute the relevant existing Skill when
-its stage begins; required unavailable capabilities or evidence remain explicit
-gaps.
+edit and verify it. Resolve, load and execute available public stage Skills;
+local private integrations are optional. Missing required sources or data pause
+only dependent work.
+
+**Dependencies:** This plugin ships only the orchestrator. For a missing executor,
+report its supported install package from the [public catalog](#-other-available-skills)
+or an explicit fallback with its evidence limits.
 
 📚 **Documentation**: [skill-evolver](./skill-evolver/SKILL.md).
 
