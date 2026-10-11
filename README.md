@@ -3962,10 +3962,11 @@ Produces the reader-facing HTML artifact — report, dashboard, architecture or 
 
 > **Install**: `claude plugin install skill-evolver@daymade-skills`
 
-Daymade Skill Evolver takes a specified existing Skill through evidence gathering,
-mechanism trade-offs and authorized implementation. Reuse successful and failed
-work, inspect relevant competitor source, and verify changes through the target's
-actual consumer. Keep the current design when the evidence supports no change.
+Daymade Skill Evolver assembles an improvement workflow for a specified existing
+Skill, using existing Skills for evidence gathering, mechanism trade-offs and
+authorized implementation. Reuse successful and failed work, inspect relevant
+competitor source, and verify changes through the target's actual consumer.
+Keep the current design when the evidence supports no change.
 
 **When to use:** Improve a named Skill from work history, saved research or
 competitor mechanisms. Use Skill Creator for routine creation and editing.
@@ -3977,8 +3978,9 @@ investigate the interrupted-batch failure, and implement the justified repair.
 ```
 
 **Requirements:** A host with access to the target source and the tools needed to
-edit and verify it. Specialist Skills are optional; required unavailable evidence
-remains an explicit gap.
+edit and verify it. Resolve, load and execute the relevant existing Skill when
+its stage begins; required unavailable capabilities or evidence remain explicit
+gaps.
 
 📚 **Documentation**: [skill-evolver](./skill-evolver/SKILL.md).
 
