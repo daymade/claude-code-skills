@@ -82,6 +82,11 @@
 
 **挑战期 poll 的完整形态（2026-10-07 replay 补全）**：roundup 帖后**另有一条独立 poll 帖**（Day 2 实况：roundup 20:56 → "Vote" 帖 20:58 以 reply 挂在 roundup 下、带顶层 `poll`；21:07 又有顶层帖 "Four updates or a reset. Or both. How was day 2." quote 了 Vote 帖、数据在 `quote.poll.choices`），roundup 正文本身不一定含投票框——**判据在 poll 帖，不在 roundup 正文**。监测动作：roundup 出现 → 找同日的 poll 帖（顶层包装帖与 roundup 下的 reply 都算；fxtwitter 的 `poll` 字段直接给选项与百分比）→ 读 poll 帖的 `poll.choices`（命中 quote 包装帖则在 `quote.poll.choices`）里 reset 选项是否领先。从复盘帖（如 "the vote is clear"）反推当日 poll 存在；无复盘帖时主动找 poll 帖，找不到记 unknown，不把「roundup 无投票框」当「当日无 poll」。
 
+**无 poll 直接官宣的变体（2026-10-10 Day 6 实测）**：挑战期日也可能不发 roundup/poll——Tibo
+直接发「Day 6/ Reset」+「Global reset by EOD」两条短帖官宣。监测判据因此是「Day N 帖正文含
+Reset 宣告」，不是「poll 出现」——只盯 poll 会漏掉直接官宣。Day 1-6 形态分布：poll-vote 兑现
+仅 Day 2，直接官宣 Day 6，其余日只 ship；两种兑现形态都要覆盖。
+
 把历史基线和本次判断分开写。追踪站预测只能作同源信号解读，不是独立证据；
 多个站转同一条推文不增加信心。当前状态页正常只代表该页未公告问题，不能抹掉产品实测。
 
