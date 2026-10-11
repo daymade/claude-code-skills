@@ -2149,6 +2149,11 @@ def authoring_inventory(sources: list[MarketplaceSource], path: Path) -> dict:
         seen.add(root)
         if canonical != src.repo or authoring_git(canonical, "rev-parse", "--show-toplevel") != str(canonical) or authoring_git(canonical, "remote", "get-url", "origin") != origin:
             raise ValueError(f"{path}: canonical registered repo/origin mismatch")
+        authoring_real_path(str(canonical / ".git"), "canonical Git metadata")
+        authoring_real_path(str(canonical / ".claude-plugin" / "marketplace.json"), "canonical marketplace manifest")
+        for skill in src.skills.values():
+            authoring_real_path(str(skill.source_dir), "canonical Skill source")
+            authoring_real_path(str(skill.source_dir / "SKILL.md"), "canonical Skill entry")
         config = authoring_object(root / "pool.json")
         allowed = {"version", "origin", "main", "slots", "skip_lfs_smudge"}
         if (set(config) - allowed or not {"version", "origin", "main", "slots"} <= set(config)
@@ -2157,7 +2162,8 @@ def authoring_inventory(sources: list[MarketplaceSource], path: Path) -> dict:
                 or config["origin"] != origin or not isinstance(config["main"], str) or not config["main"].strip() or config["main"].strip() != config["main"]
                 or ("skip_lfs_smudge" in config and type(config["skip_lfs_smudge"]) is not bool)):
             raise ValueError(f"{root}: malformed or mismatched pool configuration")
-        authoring_git(canonical, "check-ref-format", "--branch", config["main"])
+        if authoring_git(canonical, "check-ref-format", "--branch", config["main"]) != config["main"]:
+            raise ValueError(f"{root}: main must be a literal Git branch name")
         encoded_config = json.dumps(config, sort_keys=True)
         if json.dumps(authoring_object(root / "init.json"), sort_keys=True) != encoded_config:
             raise ValueError(f"{root}: initialization ownership differs from pool configuration")

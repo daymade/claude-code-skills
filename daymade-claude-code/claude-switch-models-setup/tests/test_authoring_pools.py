@@ -145,6 +145,28 @@ class AuthoringPoolsTests(unittest.TestCase):
             with self.subTest(key=key, value=value), self.assertRaises(ValueError):
                 self.inventory()
 
+    def test_main_reflog_expression_is_not_a_literal_branch(self):
+        self.git(self.repo, "switch", "-c", "previous")
+        self.git(self.repo, "switch", "main")
+        self.config["main"] = "@{-1}"
+        self.write()
+        with self.assertRaises(ValueError):
+            self.inventory()
+
+    def test_canonical_and_clone_metadata_and_skill_symlinks_reject(self):
+        for repo in (self.repo, self.clone):
+            for relative in (".git", ".claude-plugin/marketplace.json", "bundle/member/SKILL.md"):
+                original = repo / relative
+                physical = original.with_name(original.name + "-physical")
+                original.rename(physical)
+                original.symlink_to(physical, target_is_directory=physical.is_dir())
+                try:
+                    with self.subTest(repo=repo.name, path=relative), self.assertRaises(ValueError):
+                        self.inventory()
+                finally:
+                    original.unlink()
+                    physical.rename(original)
+
     def test_branch_origin_registration_and_symlinks_do_not_grant(self):
         for args in (("remote", "set-url", "origin", "foreign"), ("switch", "main")):
             self.git(self.clone, *args)
