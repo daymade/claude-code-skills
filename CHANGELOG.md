@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **transcript-fixer** (`daymade-audio` v1.48.1 → v1.48.2): Document that deferral adjudication must first locate the exact in-text match, because a queue row's context snippet can mask a cross-word-boundary substring hit; deferrals whose only verbatim matches sit inside larger words resolve as kept_original instead of accepting the suggested direction. Change type: reviewer guidance hardening; runtime unchanged.
+
 - **transcript-fixer** (`daymade-audio` v1.48.1): Preserve separate occurrences of the same word on one line in the review queue, support explicit offsets inside ambiguous context, and retain existing decisions during anchor repair. Change type: occurrence-level correction repair.
 
 - **prior-work-retrieval** (`daymade-claude-code` v4.27.10): Ignore explicit declarations that no asset needs reuse while preserving reuse questions, uncertain statements and later positive recall clauses. Retain pending requirements and the existing read-only and prompt-scope boundaries. Change type: bounded false-trigger repair.
