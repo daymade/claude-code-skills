@@ -49,9 +49,38 @@ def parse_turns(lines):
     return turns
 
 
-def token_offset(turns, line_no, original):
-    """行号→turn→token 字符比例偏移（转写轴秒）。turn 时长=下一 turn 起点差。"""
-    idx = max(j for j, t in enumerate(turns) if t[0] <= line_no)
+def _selected_position(text, original, context, context_offset):
+    """Identify one verbatim slot; an offset is relative to its recorded context."""
+    if not original:
+        raise ValueError("empty original cannot identify an audio anchor")
+    if context_offset is not None:
+        if not isinstance(context, str) or not context \
+                or not isinstance(context_offset, int) or isinstance(context_offset, bool) \
+                or context_offset < 0 \
+                or context[context_offset:context_offset + len(original)] != original:
+            raise ValueError("recorded context_offset does not identify the original token")
+
+    def positions(needle, haystack):
+        return [m.start() for m in re.finditer(f"(?={re.escape(needle)})", haystack)]
+
+    if context:
+        if not isinstance(context, str):
+            raise ValueError("recorded context must be text")
+        slots = [context_offset] if context_offset is not None else positions(original, context)
+        candidates = {start + slot for start in positions(context, text) for slot in slots}
+    else:
+        candidates = set(positions(original, text))
+    if len(candidates) != 1:
+        raise ValueError("audio anchor is missing or ambiguous; re-anchor the queue item first")
+    return candidates.pop()
+
+
+def token_offset(turns, line_no, original, *, context=None, context_offset=None, lines=None):
+    """Estimate the selected slot's time; never choose the first repeated token."""
+    indices = [j for j, t in enumerate(turns) if t[0] < line_no]
+    if not indices:
+        raise ValueError("audio anchor does not point into a speaker turn")
+    idx = indices[-1]
     start_line, ts, spk, text = turns[idx]
     if idx + 1 < len(turns):
         dur = turns[idx + 1][1] - ts
@@ -59,9 +88,17 @@ def token_offset(turns, line_no, original):
         dur = 120.0
     if dur <= 0 or dur > 600:
         dur = min(max(dur, 10), 600)
-    pos = text.find(original)
-    if pos < 0:
-        pos = 0
+    if lines is None:
+        pos = _selected_position(text, original, context, context_offset)
+    else:
+        if line_no > len(lines) or not lines[line_no - 1].strip() \
+                or TS_RE.match(lines[line_no - 1]):
+            raise ValueError("audio anchor is not a transcript body line")
+        line = lines[line_no - 1]
+        local = _selected_position(line, original, context, context_offset)
+        prefix = sum(len(value.strip()) + 1 for value in lines[start_line:line_no - 1]
+                     if value.strip())
+        pos = prefix + local - (len(line) - len(line.lstrip()))
     return ts + (pos / max(len(text), 1)) * dur
 
 
@@ -149,8 +186,21 @@ def main():
 
     results = []
     for it in items:
-        tok_t = token_offset(turns, it["line_number"], it["original_text"]) * a.speed
         tid = it["id"]
+        try:
+            tok_t = token_offset(
+                turns, it["line_number"], it["original_text"],
+                context=it.get("context_snippet"), context_offset=it.get("context_offset"),
+                lines=lines) * a.speed
+        except ValueError as exc:
+            results.append({
+                "id": tid, "line": it["line_number"], "original": it["original_text"],
+                "suggested": it.get("suggested_text") or "", "token_wav_time": None,
+                "tight": "", "medium": "", "tight_exit": -1, "medium_exit": -1,
+                "same_clip": False, "anchor_error": str(exc), "err": str(exc),
+            })
+            print(f"done {tid}: {exc}; pending", flush=True)
+            continue
         tight = os.path.join(a.outdir, f"{tid}-tight.wav")
         med = os.path.join(a.outdir, f"{tid}-med.wav")
         for clip, start, dur in ((tight, tok_t - a.tight, a.tight * 2),
@@ -176,7 +226,7 @@ def main():
             "id": tid, "line": it["line_number"],
             "original": it["original_text"], "suggested": it.get("suggested_text") or "",
             "token_wav_time": round(tok_t, 2),
-            "tight": r1.stdout.strip()[:300], "medium": r2.stdout.strip()[:500],
+            "tight": r1.stdout.strip(), "medium": r2.stdout.strip(),
             "tight_exit": r1.returncode, "medium_exit": r2.returncode,
             "same_clip": False,
             "err": (r1.stderr + r2.stderr)[:200],
