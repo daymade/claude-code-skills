@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **transcript-fixer** (`daymade-audio` v1.48.1): Preserve separate occurrences of the same word on one line in the review queue, support explicit offsets inside ambiguous context, and retain existing decisions during anchor repair. Change type: occurrence-level correction repair.
+
 - **prior-work-retrieval** (`daymade-claude-code` v4.27.10): Ignore explicit declarations that no asset needs reuse while preserving reuse questions, uncertain statements and later positive recall clauses. Retain pending requirements and the existing read-only and prompt-scope boundaries. Change type: bounded false-trigger repair.
 
 - **asr-transcribe-to-text** (`daymade-audio` v1.48.0): Restore GPU-only VAD and ASR with a pinned isolated Metal runtime, reject unsupported CPU/DTW paths before inference, and preserve source-time chunks and verified checkpoint recovery. Fix speech-checkpoint reopening and subprocess pipe draining.

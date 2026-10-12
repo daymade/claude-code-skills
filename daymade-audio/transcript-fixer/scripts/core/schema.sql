@@ -148,6 +148,7 @@ CREATE TABLE IF NOT EXISTS review_items (
     file_path TEXT,
     line_number INTEGER,
     context_snippet TEXT,
+    context_offset INTEGER,
     original_text TEXT NOT NULL,
     suggested_text TEXT,
     kind TEXT NOT NULL DEFAULT 'wording' CHECK(kind IN ('entity', 'homophone', 'wording', 'unknown')),
