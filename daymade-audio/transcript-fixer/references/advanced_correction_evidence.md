@@ -331,17 +331,36 @@ evidence; re-anchor that queue row before retrying. If the rendered clips have i
 recognition for that row. A supported suggestion may gain an `音证` citation in
 the review queue; this is evidence, not a verdict or a transcript edit. The
 exact automatic-attachment gate lives in `verify_queue_audio.py`, with the
-executable options available through that script's `--help`.
+operator-facing CLI contract in [script_parameters.md](script_parameters.md#verify_queue_audiopy)
+and executable options available through that script's `--help`.
 
-The final turn uses the media duration reported by `ffprobe`, converted to the
-transcript clock through the observed speed factor. If that duration is missing,
-invalid or ends at or before the final turn, affected rows stay pending without clips,
-recognition or evidence attachment. Nonpositive/nonfinite `--speed` values are
-rejected before processing; clip widths must also be finite and ordered. Other
-turns use the next speaker timestamp without an invented duration cap. These are
-position estimates; verify neighbouring
-speech before treating a reading as evidence.
+The first character estimate is exploratory: without checked neighbouring words,
+the result is `coverage_unknown` and cannot attach authority. After locating the
+utterance, supply `--time-overrides /abs/times.json`, keyed by this file's selected
+pending queue IDs:
 
+```json
+{"42": {"seconds": 12.25, "anchors": ["请带两份资料"]}}
+```
+
+This example is synthetic. `seconds` is on the source media clock and is not
+multiplied by `--speed`. Choose audible, distinguishing neighbouring words that
+exclude the disputed token and its suggestion; the override records the operator's
+checked anchor, not independent proof that the operator chose correctly.
+Both recognised windows must contain those anchors before they can support a
+reading. `needs_reanchor` means that coverage check failed; it does not decide
+whether the recognizer misheard or the cut missed the utterance. Re-cut within the
+existing two-retry limit. Only covered windows can report
+`recognizer_disagreement`, `original_supported`, `suggestion_supported` or
+`unsettled_reading`; all remain pending until the separate verdict command.
+The final turn uses `ffprobe` duration converted to the transcript clock by the
+observed speed factor. Missing/invalid duration or an end at/before that turn,
+without a verified override, is `timestamp_unknown`: no cut, recognition or
+authority append. Other turns use the next speaker timestamp without an invented
+duration cap. Nonpositive/nonfinite speed and invalid clip widths are rejected
+before processing.
+The command exits 1 for missing position/coverage, failed engines, identical
+clips or a failed authority append, while retaining the result for recovery.
 The executing agent can group several doubts in one utterance and reuse two
 distinct windows covering that utterance and its surrounding speech. Use an
 already available, authorized second recognizer; local GPU execution follows

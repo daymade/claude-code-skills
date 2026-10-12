@@ -94,6 +94,7 @@ For a native end-to-end example, read [references/example_session_dji_minutes.md
 
 | Route | Use when | Required reading |
 |---|---|---|
+| Pending continuation | Dated Native/review evidence covers this exact file; only uncertain rows remain, or the user supplies a verdict | [pending-continuation.md](references/pending-continuation.md); reuse unchanged completed coverage |
 | Fast native | Short/plain transcript, known speakers, low stakes | This file + [native_ai_full_workflow.md](references/native_ai_full_workflow.md) |
 | Full native | Domain-heavy, unfamiliar entities, 3+ speakers, long or decision-bearing transcript | [native_ai_full_workflow.md](references/native_ai_full_workflow.md), plus queue and evidence references below |
 | Scoped speaker inference | User explicitly authorizes identity inference for this transcript/task | [scoped_speaker_inference.md](references/scoped_speaker_inference.md); keep ordinary ASR correction on the native route |
@@ -419,6 +420,7 @@ All references are one level from this file.
 | Dictionary, people roster, domain contexts | [dictionary_identity_and_context.md](references/dictionary_identity_and_context.md) |
 | False-positive policy | [false_positive_guide.md](references/false_positive_guide.md) |
 | Queue, dashboard, audio, re-anchor | [review_queue_dashboard.md](references/review_queue_dashboard.md) |
+| Resume pending evidence or apply an explicit human verdict | [pending-continuation.md](references/pending-continuation.md) |
 | Numbers, photos, multi-recording, clip cross-check, batches, batch pending-queue audio adjudication | [advanced_correction_evidence.md](references/advanced_correction_evidence.md) |
 | Context-file grammar/template | [domain_context_guide.md](references/domain_context_guide.md) |
 | CLI flags and review-item schema | [script_parameters.md](references/script_parameters.md) |
