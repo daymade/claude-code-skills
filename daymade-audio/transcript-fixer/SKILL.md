@@ -82,7 +82,8 @@ The Stage 1 JSON contract is:
   "stage2_total_chunks": 0,
   "stage2_failed_chunks": 0,
   "stage2_degraded": false,
-  "boundary_refused": 0
+  "boundary_refused": 0,
+  "boundary_check_active": true
 }
 ~~~
 

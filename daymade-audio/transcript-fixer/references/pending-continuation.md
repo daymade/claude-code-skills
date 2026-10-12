@@ -26,8 +26,9 @@ Leave conflicting names pending; recognizer agreement never establishes identity
    recovery. For dashboard answers, read back the existing queue state first.
 2. Resolve that row through the existing CLI with the cited authority. Use
    `accepted` for the stored suggestion, `overridden` for a different confirmed
-   form, or `kept_original` when the original was right. Append `--ledger-entry`
-   in the same verdict transaction when the file has a correction ledger.
+   form, or `kept_original` when the original was right. For `accepted` or
+   `overridden`, append `--ledger-entry` in the same verdict transaction when
+   the file has a correction ledger. Use `kept_original` without that option.
    Preserve historical entries rather than rewriting old pending wording.
 3. Inspect the command's exit status and exact row/file readback. On refusal,
    follow the stated re-anchor or recovery path; do not bypass it with a separate
