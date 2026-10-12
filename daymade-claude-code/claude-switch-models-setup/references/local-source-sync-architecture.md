@@ -47,15 +47,6 @@ global prompt. The sync scripts exist for topology repair, not day-to-day editin
 | Launch Kimi/GLM/DeepSeek/Step profile | `claude-profile` runs source sync, then mirrors enabled plugins |
 | Watcher missing or non-macOS machine | Run `sync-local-skill-sources.py --apply` as a repair command |
 
-## Components
-
-| Component | Role |
-|---|---|
-| `sync-local-skill-sources.py` | Idempotent repair primitive. Finds local source repos, resolves explicitly qualified source preferences and rejects undeclared duplicate names, validates the activation manifest, points Claude marketplaces/caches at source, reconciles the Codex set in `~/.agents/skills` and eligible Claude personal links in `~/.claude/skills`, then creates/confirms the explicit legacy compatibility subset and reports other managed legacy links without deleting them. |
-| `sync-local-skill-sources-daemon.sh` | macOS LaunchAgent runner. Installs or removes the watcher and runs one locked sync pass. |
-| `claude-plugins-sync.py` | Per-profile Claude Code sync. Builds profile-local `known_marketplaces.json`, shares installed plugin state, and mirrors `enabledPlugins`. |
-| `claude-profiles.sh` | Shell integration. Runs local source sync on profile init/launch before profile plugin sync. |
-
 Both Python sync scripts take the same cross-process lock — a lock directory kept in the Claude config dir, deliberately OUTSIDE the plugins directory so the sync never mirrors the lock itself into profiles — before changing marketplace JSON, installed plugin metadata, or cache symlinks. This matters because power users may open several tmux panes or terminal windows at once; without one shared lock, simultaneous `claude-profile ...` launches can race on cache symlink creation or `known_marketplaces.json` temp-file replacement.
 
 Profile state uses `.claude.json` inside each `CLAUDE_CONFIG_DIR`. Older `claude.json` files may still exist as harmless legacy files, but modern Claude Code will not use them as the profile state file.
@@ -81,16 +72,15 @@ A repo is identified by `.claude-plugin/marketplace.json`, read by `marketplace_
 | The manifest path exists but cannot even be looked at (`EACCES` on `.claude-plugin`) | Same `UnreadableMarketplaceManifest`. `Path.is_file()` raises `PermissionError` here; `os.path.lexists()` would return False, which is the "no manifest" answer, so a checkout with drifted ownership would silently drop out of discovery. Ask `os.lstat` directly and treat everything except `FileNotFoundError`/`NotADirectoryError` as "exists but unusable". |
 | It reads whole, but declares no usable non-empty string `name` | Raises `InvalidMarketplaceManifest`, naming the manifest path and that the file itself is malformed in that checkout, so retrying will not help. |
 
-Every state but the first used to return the same `None` as "no manifest". That mattered: a repo whose manifest was momentarily unreadable dropped out of discovery, and a later hard check against the activation manifest reported `marketplace activation fields name repos not discovered: <name>` — an error pointing at the wrong cause, sending the reader to look for a repo that had never moved.
+An unreadable manifest is not a missing repository. Git branch switches can
+unlink and rewrite working-tree files: a concurrent-reader experiment on a
+160 KB CJK manifest observed torn reads and momentary `FileNotFoundError`s;
+its no-writer control observed neither. A changed inode does not establish
+atomicity. This demonstrates a possible writer class, not the cause of a
+particular failed read. `git commit` does not rewrite the working-tree file.
+Retry once after the writer finishes; a malformed complete file needs repair.
 
-**On the cause of the incident that prompted this.** The failure record supports only two facts: it happened at 21:39:05, and it self-cleared. That is "some writer was writing that file at the time" — not *which* writer. Two hypotheses were each mechanically tested, and both readings were wrong before the measurement:
-
-- *"git cannot be the writer, because checkout replaces a changed file whole"* — wrong. A changed inode does not imply atomicity. Measured on a 160 KB CJK manifest with branch switches in flight, a concurrent reader saw **43 torn reads and 232 momentary `FileNotFoundError`s** out of ~20k reads (baseline: zero of each). A rename-based atomic swap could never make the file *absent* to a reader; git unlinks and rewrites in place, so it can.
-- *"the usual cause is a shared checkout being rewritten by git"* — right as a **class** of writer (this file is touched by all of the last 8 commits in that checkout, and it is one of the sync daemon's WatchPaths), never established as the cause of *that* read. `git commit` genuinely does not touch the working-tree file at all.
-
-So the message names the class and the measurement, and claims no specific cause. The corrective action is the same either way: one retry after the writer finishes.
-
-A manifest that names a marketplace outside `LOCAL_MARKETPLACE_NAMES` is a normal answer, not a failure: `add_repo()` skips it and keeps the others. A name padded with whitespace falls into that same silent path by design — `marketplace_name()` does not know the activation manifest, so it cannot tell "an unmanaged foreign marketplace" from "our marketplace with a typo'd name". The activation-aware split is deliberately not implemented, which is why the blanket claim "every input that fed this bug is now caught" does not hold. Note also that `skill-install-audit.py` still decides "does this repo have a manifest" with `.is_file()`, so a dangling-symlink or directory manifest is silently skipped there exactly as it used to be here; that is pre-existing behaviour outside this change.
+A manifest that names a marketplace outside `LOCAL_MARKETPLACE_NAMES` is a normal answer, not a failure: `add_repo()` skips it and keeps the others. A name padded with whitespace falls into that same silent path by design — `marketplace_name()` does not know the activation manifest, so it cannot tell "an unmanaged foreign marketplace" from "our marketplace with a typo'd name". `skill-install-audit.py` checks manifest presence with `.is_file()`, so a dangling-symlink or directory manifest is silently skipped there; the audit and discovery reader have distinct error coverage.
 
 ## Host-Specific User-Skill Activation
 
@@ -411,10 +401,8 @@ If a `claude-profile <name> -p ...` probe starts successfully, debug logs should
   target is inside a managed source repo and its name is outside the
   active set. Pruning atomically moves that exact entry into
   `.source-sync-backups/`; it does not delete the object. The background pass does not clean those
-  buckets. They can look like disposable cache from the outside, but a 2026-09-05
-  survey found most of them holding files present in no repository's object store,
-  one carrying a 75-file variant of a skill whose shipped version has 13. Judge them
-  with `prune-source-sync-backups.py`, which hashes every entry and keeps any bucket
+  buckets. A backup can contain source variants absent from every repository's
+  object store. Judge it with `prune-source-sync-backups.py`, which hashes every entry and keeps any bucket
   it cannot prove reproducible; never clear the directory wholesale. Classification and
   identity come from one entry snapshot, and the move uses the platform's
   no-replace rename primitive. If an unrelated writer replaces the entry after
