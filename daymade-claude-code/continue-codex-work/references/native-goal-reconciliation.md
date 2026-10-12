@@ -13,8 +13,13 @@ the governing contract; a reminder or an unfinished objective adds no authority.
    `complete`, `usageLimited` and `budgetLimited` do not establish an active run.
    Even `active` is a state, not evidence that a later automatic turn occurred.
 3. Check current user authorization and budget boundaries before recovery. Do not
-   revive a cancelled task, undo an explicit pause, reset usage or increase a budget.
-   If only one route is blocked, continue the other necessary authorized work.
+   revive a cancelled task, undo an explicit pause without a later explicit user
+   continuation, reset usage or increase a budget.
+   A current user continuation instruction may authorize resuming this same existing
+   paused/blocked Goal; a scheduled status reminder or peer message does not.
+   `usageLimited` and `budgetLimited` are not recovery-by-reset cases: do not change
+   their counters/budget or create a substitute Goal. If only one route is blocked,
+   continue the other necessary authorized work.
 4. Inspect the installed host's official help, generated protocol schema and live
    connection contract. Prefer its purpose-built recovery control when available.
    If using an existing verified protocol transport, bind it to the exact target
@@ -36,17 +41,25 @@ missing provenance does not supply authorization. Do not omit or change provenan
 to bypass a rejected update. The runtime enforces its write guards; the executor
 must verify the authorization and host binding before applying recovery.
 
-Historical example: Codex 0.160.1's installed App Server schema exposed `thread/goal/get` and
-`thread/goal/set` without requiring the experimental schema flag. Its live Unix
-WebSocket transport accepted the following setter shape after initialization:
+When the current generated schema exposes `thread/goal/get` and `thread/goal/set`,
+an already-running owner's verified Unix WebSocket can supply the control even
+when a model tool such as `update_goal` cannot request `active`. Resolve its endpoint
+from the current `CODEX_HOME` and live host contract, verify the loaded thread,
+and initialize that existing connection; do not start or restart a server. A
+reusable transport's read-only RPC helper may be reused without changing its peer
+sender's no-resume boundary. In a schema defining explicit-user provenance, the
+minimal authorized setter shape is:
 
 ```json
-{"method":"thread/goal/set","params":{"threadId":"<verified-thread-id>","status":"active"}}
+{"method":"thread/goal/set","params":{"threadId":"<verified-thread-id>","status":"active","origin":"user"}}
 ```
 
 This is a version-specific protocol shape, not a universal shell command or a
 claim that every host exposes this endpoint. Discover support on the current host
-first. Omitting `objective` and `tokenBudget` avoids requesting their replacement;
+first; confirm the getter/setter methods and accepted status/provenance values
+from the installed CLI-generated schema. Try a newly verified route only when
+new interface/connection evidence changes the prior failure diagnosis; do not
+loop an unresponsive or uncertain request. Omitting `objective` and `tokenBudget` avoids requesting their replacement;
 whether the runtime preserved them must still be read back.
 
 ## Recover and verify without resetting the task
