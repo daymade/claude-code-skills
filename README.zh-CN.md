@@ -3962,15 +3962,9 @@ Daymade Skill Evolver 组装已有 Skills，为指定现有 Skill 完成一轮�
 验证失败后的恢复路径。
 ```
 
-**运行要求**：能读取应用源码和产品合同，并具备所声明交付所需的工具。插件只
-包含流程编排；调研、历史读取和项目工程流程仍由各自模块负责。私有集成可选，
-必需输入缺失时只暂停依赖它的工作。
-
 📚 **文档**：[app-evolver](./app-evolver/SKILL.md)。
 
-**逆向 Skill 组合**：按[公开专项入口](./app-evolver/references/skill-composition.md)
-调用 REA 或 reverse-skill 获取证据，私人收藏检索可选。这里只引用外部 Skill，
-不打包其副本、不安装逆向引擎、不注册 MCP。
+**逆向 Skill 组合**：[专项选择与交接](./app-evolver/references/skill-composition.md)。
 
 ---
 

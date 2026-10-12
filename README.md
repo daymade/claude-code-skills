@@ -4007,16 +4007,9 @@ Use app-evolver to improve my document app from this competitor. Preserve source
 provenance, implement the justified improvement and verify failure recovery.
 ```
 
-**Requirements:** Access to the application source/contract and the tools needed
-for its declared delivery. This plugin ships the orchestrator; research/history
-Skills and project engineering workflows remain separate owners. Private
-integrations are optional; missing required inputs pause only dependent work.
-
 📚 **Documentation**: [app-evolver](./app-evolver/SKILL.md).
 
-**Reverse Skill composition:** Follow [public specialist routes](./app-evolver/references/skill-composition.md)
-for REA or reverse-skill evidence. Personal favorites are optional. References do
-not bundle external Skills, install engines or register MCP servers.
+**Reverse Skill composition:** [Specialist selection and handoff](./app-evolver/references/skill-composition.md).
 
 ---
 
