@@ -4,13 +4,9 @@ Read this file when uncertain items must survive the session, when resolving or 
 
 ## Review Queue & Dashboard (uncertain items → one-keystroke verdicts)
 
-Confirmed corrections compound through the dictionary; **uncertain** ones used to
-evaporate — the native pass listed them in chat (gone when the session ends),
-safe-mode deferrals sat in a `*_needs_review.md` sidecar (discarded by temp-dir
-callers), and learned suggestions waited behind a CLI nobody ran. The review
-queue gives all three one persistent home in `corrections.db` (`review_items`),
-and the dashboard makes deciding them nearly free — that friction is what stood
-between "AI suspects an error" and "the dictionary learns the answer."
+Store unresolved occurrences in `corrections.db` (`review_items`) so their
+anchors and evidence survive the session. Use the CLI or dashboard for verdicts;
+route confirmed reusable corrections through the dictionary policy below.
 
 A pending row records an unresolved occurrence; it does not assign the work to
 the user. Before asking for a verdict, follow [evidence selection and escalation](native_ai_full_workflow.md#evidence-selection-and-escalation).
@@ -167,7 +163,7 @@ uv run scripts/fix_transcription.py --reanchor-review <id> [<id>...]
 uv run scripts/fix_transcription.py --reanchor-review <id> --reanchor-root <dir-with-transcripts>
 ```
 
-Two drift shapes are repaired against current disk state, both fail-closed:
+Drift repair checks current disk state and fails closed:
 **context/line drift** (file edited since enqueue — re-locates `original` in
 the file, preferring lines that still match the RECORDED context snippet over
 mere distance, refreshes line + verbatim context) and **file gone** (searches
@@ -177,10 +173,7 @@ and multiple asks for `--reanchor-to FILE` — the explicit-target form, which
 is itself refused if `original` is not in it). After a successful re-anchor,
 the guard's context check passes and `A`/`W`/CLI resolve proceed normally
 (explicit action packs get their `file_edit` path rewritten to the new file).
-The refusal messages themselves name this command. (Root-caused 2026-08-03: an item
-enqueued with a PARAPHRASED context could never be verdicted — the human's
-override died at the guard and the file got hand-edited around the queue
-before this command existed.)
+The refusal messages themselves name this command.
 
 **Promote each `decision_note`; the queue only stores it.** The dashboard's
 备注 field and the CLI's `--note` record the reviewer's reason, but neither
@@ -303,8 +296,7 @@ like it** — this is the entity carve-out in [native_ai_full_workflow.md](nativ
 enqueue it on its own. A verdict the human reached **by listening to one clip**
 deserves the same caution — those seconds of audio settle that utterance, and a
 second occurrence is a second utterance. Sweep the occurrences that are plainly
-the same entity in the same sense; that is the ordinary case, and the one the
-measurement above counted.
+the same entity in the same sense.
 
 **Sweep after the whole batch is resolved, not between verdicts.** A swept
 occurrence that a still-pending item is anchored to is recognised by that item's
@@ -355,6 +347,8 @@ uv run scripts/fix_transcription.py \
 the dashboard merely being open, or the human's chat message without this
 readback does not.
 
+### Source audio and timeline pairing
+
 **Audio playback (`Q`)** — often the reviewer can't judge a garbled utterance
 from text alone; hearing the original second settles it. A transcript opts in
 by declaring its recording EXPLICITLY in frontmatter (no implicit directory
@@ -367,11 +361,6 @@ minute_token: abc123
 audio: /absolute/path/to/recording.m4a
 ---
 ```
-
-The `audio:` line is the one you add; the others stand for whatever the
-transcript already carries. It is written **bare on purpose** — see below, and
-note that this example is copied verbatim often enough that a trailing `#`
-annotation on that line has shipped as a real bug more than once.
 
 **Add the line to the block the transcript already has — do not append a second
 one.** A synced transcript normally arrives with frontmatter (`date`,
@@ -416,9 +405,10 @@ uv run scripts/fetch_minute_audio.py \
 `minute_token:` field in the transcript's own frontmatter (a minutes-sync
 pipeline writes it there; if it is absent, the minute URL's last path segment is
 the same value). `--profile` is a lark-cli profile name — list them with
-`lark-cli profile list` and pick the one belonging to the account that owns the
-recording; the transcript does not record it, so if the owner is not obvious,
-ask rather than guess (a wrong profile fails in the silent way described below).
+`lark-cli profile list` and select an account already authorized for the
+recording; the transcript does not record it, so if the source account is unknown,
+ask rather than guess. Preserve a profile already established by the source
+workflow; diagnose its actual CLI/API error before changing the account.
 
 The executing agent preserves both the known profile and source identity:
 `--as user` is the helper's default; use `--as bot` only when the source workflow
@@ -434,7 +424,7 @@ usable-looking line.
 
 | code | meaning |
 |---|---|
-| `0` | verified — audio and transcript share a timeline |
+| `0` | duration comparison passed; still verify the source identity and one spoken anchor before relying on clip offsets |
 | `1` | timeline mismatch: a file downloaded, but do **not** wire it |
 | `2` | downloaded, pairing unverified — `ffprobe` absent or its output unusable, no `--transcript`, the transcript has no `<speaker> HH:MM:SS.mmm` lines, or every one of them is `00:00:00` (argparse also exits 2 on a malformed invocation; its message says so) |
 | `3` | nothing usable produced — bad `--transcript` path (checked before any network work), CLI/API export failure, malformed/missing URL, curl failure or undersized download. The diagnostic preserves the observed error; it does not infer missing permissions. |
@@ -443,57 +433,14 @@ A `2` caused by missing speaker-timestamp lines is worth stopping for rather tha
 working around: the dashboard builds its clip windows from those same lines, so
 audio wired to such a transcript has nothing to play.
 
-**The by-hand route**, when the CLI's file-download host validation fails:
-
-Use the CLI-returned signed URL for this validation error only; an API export
-denial does not authorize a different account or download channel. Preserve the
-source identity in both commands below (`<source-identity>` is `user` or `bot`).
-
-```bash
-mkdir -p ~/.transcript-fixer/cache/audio && cd $_   # --output below accepts only
-                                                    # a relative path inside the
-                                                    # CURRENT dir ("../" refused)
-LARK_CLI_NO_PROXY=1 lark-cli minutes +download \
-  --minute-tokens <token> --profile <profile> --as <source-identity> --output ./audio.m4a
-# If that trips the SSRF guard, take the signed URL and fetch it yourself.
-# Parse the envelope as JSON — a regex scrape leaves escapes literal and
-# truncates the URL at its first parameter:
-URL=$(LARK_CLI_NO_PROXY=1 lark-cli minutes +download \
-        --minute-tokens <token> --profile <profile> --as <source-identity> --url-only \
-      | python3 -c 'import sys,json
-raw = sys.stdin.read()                      # the CLI may print prose around the
-s, e = raw.find("{"), raw.rfind("}")        # JSON, so isolate the object first
-result = json.loads(raw[s:e+1])
-if result.get("ok") is not True:
-    raise SystemExit("export failed: " + str(result.get("error")))
-print(result["data"]["download_url"])')
-[ -n "$URL" ] || { echo "no download_url — read the CLI/API error"; exit 3; }
-curl --fail -sSL --noproxy '*' -o audio.m4a "$URL"
-# Verify the pairing yourself: compare the duration against the transcript's
-# LAST speaker timestamp. Treat a gap over max(60s, 5% of that timestamp) as a
-# mismatch — recordings usually run a minute or two past the last utterance,
-# but a speed-rate mismatch shows up as a large proportional gap.
-ffprobe -v quiet -show_entries format=duration -of csv=p=0 audio.m4a
-```
-
-Three things the script encodes, each of which is a real failure by hand:
-
-- **lark-cli's own SSRF guard refuses its own download host.** The error is
-  `blocked download URL: local/internal host is not allowed` — Feishu's
-  signed-download domain is literally named `internal-api-drive-stream.…` and
-  the `internal-` prefix trips the guard. The fallback is `--url-only` plus your
-  own `curl -L`, which is what the script runs.
-- **The `--url-only` envelope is real JSON — parse it, don't pattern-match it.**
-  The URL lives at `data.download_url` (nested, not top level), and a regex
-  scrape leaves JSON escapes such as `&` literal, producing a URL that
-  truncates at its first parameter and downloads a redirect stub instead of
-  audio. `json.loads` handles this natively and a hand-rolled extraction is
-  where the escaping bug comes from.
-- **A minute is a per-tenant, per-user resource, so the `--profile` is the part
-  that usually fails, not the token.** A profile from another tenant — or one
-  the minute was never shared with — authenticates fine and still returns no
-  `download_url`. Pass the profile belonging to the account that owns the
-  recording.
+**Export and download failure recovery.** If the CLI's direct file-download
+route reports `blocked download URL: local/internal host is not allowed`, use
+the bundled helper above with the same authorized profile and identity. It owns
+the `--url-only` request, JSON-envelope validation, URL extraction, download and
+duration comparison; do not maintain a second shell parser or copied tolerance.
+An explicit API export denial stops that export route. A malformed result leaves
+export status unknown; read the actual diagnostic and correct that cause without
+switching accounts or inferring a permission denial from an absent URL.
 
 Wire the audio **before** enqueueing items you intend to have judged by ear
 ([native_ai_full_workflow.md](native_ai_full_workflow.md) routes cross-language proper nouns there) — otherwise the reviewer opens

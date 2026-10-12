@@ -5,7 +5,7 @@
 """verify_queue_audio.py — 批量 pending 音频交叉核验（第二引擎双窗口识别）。
 
 对某转写文件在 review queue 里的 pending 项，逐项从源音频剪 tight/medium
-双片段，送第二识别引擎（默认 StepFun）交叉识别，输出对照表供裁决。
+双片段，送已授权的第二识别引擎交叉识别，输出对照表供裁决。
 
 典型场景：Native pass 后积压的 pending（实体/疑词）——本地检索阶梯已尽，
 用第二引擎的耳朵裁决，而不是把队列推给用户。
@@ -14,9 +14,9 @@
   uv run scripts/verify_queue_audio.py \
     --transcript /abs/path/meeting.md \
     --audio /abs/path/source.wav \
-    [--speed 1.3]            # 转写时间轴→音频轴倍速（加速上传的妙记=原始/加速比；反推法：源音频时长/妙记时长）
+    [--speed <observed-factor>]  # 源音频时长/平台时长；同一时间轴不传此参数
     [--queue-ids 1817,1818]  # 默认该文件全部 pending
-    --engine-script /abs/stepfun-asr/scripts/asr_transcribe.py
+    --engine-script /abs/authorized-stdout-engine.py
     [--outdir /tmp/asr-verify]
 
 输出：<outdir>/results.json；相同音频片段不调用 ASR，结果标记 same_clip。
@@ -26,10 +26,14 @@
 依赖：ffmpeg/ffprobe；识别引擎脚本（音频路径作为位置参数，识别文本写 stdout）。
 """
 import argparse, datetime, hashlib, json, math, os, re, subprocess, sys, tempfile
+from pathlib import Path
 
 TS_RE = re.compile(r'^(\S+) (\d{2}):(\d{2}):(\d{2})\.(\d{3})\s*$')
 SKILL_DIR = os.path.dirname(os.path.abspath(__file__))
 FIX = os.path.join(SKILL_DIR, "fix_transcription.py")
+if SKILL_DIR not in sys.path:
+    sys.path.insert(0, SKILL_DIR)
+from fetch_minute_audio import audio_duration_seconds
 
 
 def parse_turns(lines):
@@ -101,22 +105,15 @@ def token_offset(turns, line_no, original, transcript_duration=None, *, context=
         if transcript_duration is None:
             return None
         dur = transcript_duration - ts
-    if dur <= 0:
+    if not math.isfinite(dur) or dur <= 0:
         return None
     return ts + (pos / max(len(text), 1)) * dur
 
 
 def media_duration(audio):
     """Read the media clock; unavailable duration remains unknown."""
-    try:
-        result = subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-             "-of", "default=noprint_wrappers=1:nokey=1", audio],
-            capture_output=True, text=True)
-        duration = float(result.stdout.strip())
-        return duration if result.returncode == 0 and math.isfinite(duration) and duration > 0 else None
-    except (OSError, ValueError):
-        return None
+    duration, _ = audio_duration_seconds(Path(audio))
+    return duration
 
 
 def load_time_overrides(path):
@@ -227,10 +224,10 @@ def main():
     ap.add_argument("--transcript", required=True)
     ap.add_argument("--audio", required=True)
     ap.add_argument("--speed", type=float, default=1.0,
-                    help="转写时间轴→音频轴倍速（加速上传的妙记=源时长/妙记时长，如 1.3）")
+                    help="转写时间轴→音频轴倍速；经证据核准的源时长/平台时长，同一时间轴默认 1")
     ap.add_argument("--queue-ids", default="", help="逗号分隔；默认该文件全部 pending")
     ap.add_argument("--engine-script", required=True,
-                    help="第二识别引擎脚本（音频路径位置参数，stdout 文本），如 stepfun-asr/scripts/asr_transcribe.py")
+                    help="已授权的第二识别引擎脚本（音频路径位置参数，识别文本写 stdout）")
     ap.add_argument("--outdir", default="/tmp/asr-verify")
     ap.add_argument("--tight", type=float, default=5.0, help="tight 窗 ±秒（默认 5）")
     ap.add_argument("--medium", type=float, default=20.0, help="medium 窗 ±秒（默认 20）")

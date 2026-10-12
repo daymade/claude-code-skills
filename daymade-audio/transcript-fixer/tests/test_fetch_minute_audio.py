@@ -3,6 +3,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import tempfile
 from pathlib import Path
 from subprocess import CompletedProcess
 import unittest
@@ -70,6 +71,41 @@ class MediaURLTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 fetch.fetch_signed_url("minute-token", "owner-profile", "unknown")
         run.assert_not_called()
+
+
+class MediaDurationTests(unittest.TestCase):
+    def test_invalid_or_failed_probe_remains_unknown(self):
+        for value, code in (("nan", 0), ("inf", 0), ("0", 0), ("-1", 0), ("12", 1)):
+            with self.subTest(value=value, code=code), \
+                    patch.object(fetch.shutil, "which", return_value="ffprobe"), \
+                    patch.object(fetch, "run", return_value=CompletedProcess([], code, value, "")):
+                duration, why = fetch.audio_duration_seconds(Path("source.wav"))
+                self.assertIsNone(duration)
+                self.assertTrue(why)
+
+    def test_observed_positive_duration_is_preserved(self):
+        with patch.object(fetch.shutil, "which", return_value="ffprobe"), \
+                patch.object(fetch, "run", return_value=CompletedProcess([], 0, "12.5", "")):
+            self.assertEqual(fetch.audio_duration_seconds(Path("source.wav")), (12.5, ""))
+
+
+class DownloadStatusTests(unittest.TestCase):
+    def test_http_failure_cannot_be_accepted_as_large_media(self):
+        with tempfile.TemporaryDirectory() as work:
+            output = Path(work) / "source.wav"
+
+            def failed_http(command, **kwargs):
+                if "--fail" in command:
+                    return CompletedProcess(command, 22, "", "HTTP 500")
+                output.write_bytes(b"error page" * 2000)
+                return CompletedProcess(command, 0, "", "")
+
+            with patch.object(fetch, "run", side_effect=failed_http), \
+                    contextlib.redirect_stderr(io.StringIO()) as err:
+                with self.assertRaises(SystemExit) as stopped:
+                    fetch.download(URL, output)
+                self.assertEqual(stopped.exception.code, 3)
+                self.assertIn("HTTP 500", err.getvalue())
 
 
 if __name__ == "__main__":
