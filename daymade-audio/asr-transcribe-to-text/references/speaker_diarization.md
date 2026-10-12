@@ -73,9 +73,11 @@ Official references: [whisper.cpp VAD](https://github.com/ggml-org/whisper.cpp),
 
 ## Key facts & pitfalls (from production)
 
-- **All on accelerated paths; no silent CPU fallback.** whisper.cpp uses Metal
-  on Apple Silicon; pyannote uses explicit MPS. Runtime failures propagate
-  instead of turning a minutes-long job into an unattended many-hour CPU run.
+- **No silent CPU model inference.** Path L requires the isolated GPU-only
+  runtime described in [whispercpp_gpu_runtime.md](whispercpp_gpu_runtime.md),
+  with successful VAD/ASR graph evidence; ordinary upstream binaries are not
+  sufficient. Pyannote uses explicit MPS. Runtime failures propagate instead
+  of turning a minutes-long job into an unattended many-hour CPU run.
 - **HF token required** — pyannote models are gated. Accept the terms at
   `hf.co/pyannote/speaker-diarization-3.1` and `huggingface-cli login` once.
   The Step 3 state machine in SKILL.md handles the no-token case: fail the

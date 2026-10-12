@@ -15,7 +15,9 @@ import argparse
 import difflib
 import hashlib
 import json
+import math
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -26,6 +28,9 @@ from pathlib import Path
 
 SCHEMA = "whispercpp-long-audio-v1"
 MANIFEST_SCHEMA = "whispercpp-long-audio-checkpoint-v1"
+GPU_SCHEMA = "whispercpp-gpu-only-v1"
+GPU_UPSTREAM_COMMIT = "f049fff95a089aa9969deb009cdd4892b3e74916"
+GPU_PATCH = Path(__file__).with_name("whispercpp-gpu-only-v1.9.1.patch")
 
 
 class CheckpointIntegrityError(RuntimeError):
@@ -118,6 +123,68 @@ def file_contract(path):
         "size": path.stat().st_size,
         "sha256": sha256_file(path),
     }
+
+
+def validate_gpu_runtime(whisper_bin, manifest_path):
+    """Bind the isolated build and native fail-closed policy before model load."""
+    try:
+        manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+        contract = manifest["contract"]
+        binary = manifest["binaries"]["whisper-cli"]
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise DeterministicTranscriptionError("GPU build manifest missing or malformed") from exc
+    if (contract != {"schema": GPU_SCHEMA, "upstream_commit": GPU_UPSTREAM_COMMIT,
+                     "version": "1.9.1"}
+            or manifest.get("patch_sha256") != sha256_file(GPU_PATCH)
+            or binary != file_contract(whisper_bin)):
+        raise DeterministicTranscriptionError("GPU build identity/patch/binary mismatch")
+    observed = run_checked([str(whisper_bin), "--asr-gpu-contract"], 15, "GPU policy probe")
+    try:
+        actual = json.loads(observed.stdout)
+    except (ValueError, TypeError) as exc:
+        raise DeterministicTranscriptionError("native GPU contract is unknown") from exc
+    if actual != contract:
+        raise DeterministicTranscriptionError("native GPU contract does not match build manifest")
+    return {"contract": contract, "patch_sha256": manifest["patch_sha256"],
+            "manifest": file_contract(manifest_path)}
+
+
+def gpu_execution_evidence(stderr, transcription):
+    """Initialization logs are not compute evidence and CPU registration is normal."""
+    text = stderr.decode("utf-8", errors="replace")
+    if "ASR_GPU_BLOCKED" in text:
+        raise DeterministicTranscriptionError("native GPU computation was blocked")
+    evidence = {}
+    for match in re.finditer(
+        r"ASR_GPU_GRAPH role=(asr|vad) device=(\S+) compute_nodes=([1-9][0-9]*) "
+        r"cpu_compute=0 status=complete", text
+    ):
+        role, device, count = match.groups()
+        if device.casefold() in {"cpu", "unknown", "none"}:
+            raise DeterministicTranscriptionError("GPU graph device is not identified")
+        evidence[role] = {"device": device, "compute_nodes": int(count), "cpu_compute": 0}
+    if "vad" not in evidence or (transcription and "asr" not in evidence):
+        raise DeterministicTranscriptionError("missing successful GPU VAD/ASR graph evidence")
+    # A verified all-silence block legitimately executes VAD only.
+    if not transcription and "asr" not in evidence and "ASR_GPU_NO_SPEECH status=complete" not in text:
+        raise DeterministicTranscriptionError("empty result lacks an explicit no-speech observation")
+    return evidence
+
+
+def validate_gpu_records(records, has_speech):
+    required = {"vad", "asr"} if has_speech else {"vad"}
+    if (not isinstance(records, dict) or not required.issubset(records)
+            or not set(records).issubset({"vad", "asr"})):
+        raise CheckpointIntegrityError("completed block is missing GPU computation evidence")
+    for role, record in records.items():
+        if not isinstance(record, dict):
+            raise CheckpointIntegrityError(f"completed block has invalid {role} GPU evidence")
+        device, count, cpu = record.get("device"), record.get("compute_nodes"), record.get("cpu_compute")
+        if (not isinstance(device, str) or not device.strip()
+                or device.casefold() in {"cpu", "unknown", "none"}
+                or type(count) is not int or count <= 0
+                or type(cpu) is not int or cpu != 0):
+            raise CheckpointIntegrityError(f"completed block has invalid {role} GPU evidence")
 
 
 def plan_blocks(duration_s, processing_end_s, chunk_duration_s, overlap_s):
@@ -360,6 +427,7 @@ def validate_done_block(checkpoint_dir, entry):
         raise CheckpointIntegrityError(
             f"completed block {entry['index']} artifact contract is invalid"
         )
+    validate_gpu_records(payload.get("gpu_execution"), bool(transcription))
     for field in (
         "base_start_s",
         "base_end_s",
@@ -449,7 +517,7 @@ def run_checked(command, timeout, label, owner_pid=None):
         stderr=subprocess.PIPE,
     )
     started = time.monotonic()
-    while process.poll() is None:
+    while True:
         if not owner_is_alive(owner_pid):
             terminate_child(process)
             raise OwnerProcessLost(
@@ -460,8 +528,11 @@ def run_checked(command, timeout, label, owner_pid=None):
             raise DeterministicTranscriptionError(
                 f"{label} timed out after {timeout}s"
             )
-        time.sleep(0.25)
-    stdout, stderr = process.communicate()
+        try:
+            stdout, stderr = process.communicate(timeout=0.25)
+            break
+        except subprocess.TimeoutExpired:
+            continue
     completed = subprocess.CompletedProcess(
         command, process.returncode, stdout, stderr
     )
@@ -594,7 +665,7 @@ def process_block(args, block, checkpoint_dir):
             "-of",
             str(output_prefix),
         ]
-        run_checked(
+        observed = run_checked(
             command,
             args.block_timeout,
             f"whisper.cpp block {index}",
@@ -606,6 +677,10 @@ def process_block(args, block, checkpoint_dir):
                 f"whisper.cpp block {index} produced no JSON"
             )
         transcription, replacements = normalize_whisper_json(raw_json, block)
+        # Check the unfiltered raw result too: overlap ownership can discard ASR
+        # text from this block, but that does not make it an all-silence run.
+        raw_payload = json.loads(raw_json.read_bytes().decode("utf-8", errors="replace"))
+        gpu_evidence = gpu_execution_evidence(observed.stderr, raw_payload["transcription"])
     artifact = checkpoint_dir / f"block-{index:04d}.json"
     payload = {
         "schema": SCHEMA,
@@ -615,6 +690,7 @@ def process_block(args, block, checkpoint_dir):
         "extract_start_s": block["extract_start_s"],
         "extract_end_s": block["extract_end_s"],
         "utf8_replacement_count": replacements,
+        "gpu_execution": gpu_evidence,
         "transcription": transcription,
     }
     atomic_write_json(artifact, payload)
@@ -633,6 +709,7 @@ def main():
     parser.add_argument("out_dir", type=Path)
     parser.add_argument("--ffmpeg-path", type=Path, required=True)
     parser.add_argument("--whisper-bin", type=Path, required=True)
+    parser.add_argument("--gpu-runtime-manifest", type=Path, required=True)
     parser.add_argument("--whisper-model", type=Path, required=True)
     parser.add_argument("--vad-model", type=Path, required=True)
     parser.add_argument("--chunk-duration", type=float, default=1200.0)
@@ -654,12 +731,14 @@ def main():
     args.out_dir = args.out_dir.resolve()
     args.ffmpeg_path = args.ffmpeg_path.resolve()
     args.whisper_bin = args.whisper_bin.resolve()
+    args.gpu_runtime_manifest = args.gpu_runtime_manifest.resolve()
     args.whisper_model = args.whisper_model.resolve()
     args.vad_model = args.vad_model.resolve()
     if args.owner_pid is not None and args.owner_pid <= 1:
         parser.error("--owner-pid must be greater than 1")
     if not owner_is_alive(args.owner_pid):
         raise OwnerProcessLost(f"owner process {args.owner_pid} is not alive")
+    gpu_runtime = validate_gpu_runtime(args.whisper_bin, args.gpu_runtime_manifest)
     source = wav_contract(args.audio)
     processing_end_s = args.end_at if args.end_at is not None else source["duration_s"]
     runtime = {
@@ -667,6 +746,7 @@ def main():
         "whisper_bin": file_contract(args.whisper_bin),
         "whisper_model": file_contract(args.whisper_model),
         "vad_model": file_contract(args.vad_model),
+        "gpu_runtime": gpu_runtime,
     }
     blocks = plan_blocks(
         source["duration_s"], processing_end_s, args.chunk_duration, args.overlap

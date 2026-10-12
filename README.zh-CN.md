@@ -754,6 +754,8 @@ claude plugin install ghostty-use@daymade-skills
 
 使用 yt-dlp 下载 YouTube 视频和音频，具有强大的错误处理功能。
 
+要视频文字时，先复用现成稿，再取原字幕；已检查的文字路线未取得结果时才下载音轨转录。原视频文件下载仍沿原流程。
+
 **使用场景：**
 - 下载 YouTube 视频和播放列表
 - 提取音频并转换为 MP3

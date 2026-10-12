@@ -1,0 +1,153 @@
+diff --git a/examples/cli/cli.cpp b/examples/cli/cli.cpp
+index e505bf0..47644d2 100644
+--- a/examples/cli/cli.cpp
++++ b/examples/cli/cli.cpp
+@@ -962,0 +963,4 @@ int main(int argc, char ** argv) {
++    if (argc == 2 && strcmp(argv[1], "--asr-gpu-contract") == 0) {
++        puts("{\"schema\":\"whispercpp-gpu-only-v1\",\"upstream_commit\":\"f049fff95a089aa9969deb009cdd4892b3e74916\",\"version\":\"1.9.1\"}");
++        return 0;
++    }
+@@ -1006,0 +1011,19 @@ int main(int argc, char ** argv) {
++    if (!params.dtw.empty()) {
++        fprintf(stderr, "ASR_GPU_BLOCKED reason=dtw-cpu-unsupported\n");
++        return 5;
++    }
++    if (!params.use_gpu) {
++        fprintf(stderr, "ASR_GPU_BLOCKED reason=cpu-requested\n");
++        return 5;
++    }
++    int gpu_count = 0;
++    for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
++        const auto type = ggml_backend_dev_type(ggml_backend_dev_get(i));
++        if (type == GGML_BACKEND_DEVICE_TYPE_GPU || type == GGML_BACKEND_DEVICE_TYPE_IGPU) {
++            ++gpu_count;
++        }
++    }
++    if (params.gpu_device < 0 || params.gpu_device >= gpu_count) {
++        fprintf(stderr, "ASR_GPU_BLOCKED reason=gpu-device-unavailable\n");
++        return 5;
++    }
+diff --git a/examples/vad-speech-segments/speech.cpp b/examples/vad-speech-segments/speech.cpp
+index a22425c..1018f3b 100644
+--- a/examples/vad-speech-segments/speech.cpp
++++ b/examples/vad-speech-segments/speech.cpp
+@@ -85,0 +86,4 @@ int main(int argc, char ** argv) {
++    if (argc == 2 && std::string(argv[1]) == "--asr-gpu-contract") {
++        puts("{\"schema\":\"whispercpp-gpu-only-v1\",\"upstream_commit\":\"f049fff95a089aa9969deb009cdd4892b3e74916\",\"version\":\"1.9.1\"}");
++        return 0;
++    }
+@@ -93,0 +98,4 @@ int main(int argc, char ** argv) {
++    if (!cli_params.use_gpu) {
++        fprintf(stderr, "ASR_GPU_BLOCKED role=vad reason=cpu-requested\n");
++        return 5;
++    }
+diff --git a/src/whisper.cpp b/src/whisper.cpp
+index 5ffc70a..851788a 100644
+--- a/src/whisper.cpp
++++ b/src/whisper.cpp
+@@ -173,15 +173,7 @@ static bool ggml_graph_compute_helper(
+-    ggml_backend_ptr backend { ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_CPU, nullptr) };
+-
+-    auto * reg = ggml_backend_dev_backend_reg(ggml_backend_get_device(backend.get()));
+-
+-    auto * set_abort_callback_fn = (ggml_backend_set_abort_callback_t) ggml_backend_reg_get_proc_address(reg, "ggml_backend_set_abort_callback");
+-    if (set_abort_callback_fn) {
+-        set_abort_callback_fn(backend.get(), abort_callback, abort_callback_data);
+-    }
+-
+-    auto ggml_backend_set_n_threads_fn = (ggml_backend_set_n_threads_t) ggml_backend_reg_get_proc_address(reg, "ggml_backend_set_n_threads");
+-    if (ggml_backend_set_n_threads_fn) {
+-        ggml_backend_set_n_threads_fn(backend.get(), n_threads);
+-    }
+-
+-    return ggml_backend_graph_compute(backend.get(), graph) == GGML_STATUS_SUCCESS;
++    // This overload executes a direct CPU auxiliary graph.
++    // The isolated GPU-only build must not execute it as a fallback.
++    (void) graph;
++    (void) n_threads;
++    (void) abort_callback;
++    (void) abort_callback_data;
++    throw std::runtime_error("ASR_GPU_BLOCKED reason=direct-cpu-graph");
+@@ -194 +186,29 @@ static bool ggml_graph_compute_helper(
+-                      bool   sched_reset = true) {
++                      bool   sched_reset = true,
++                const char * gpu_role = "asr") {
++    // Validate scheduled compute nodes before executing any model operation.
++    int gpu_nodes = 0;
++    const char * gpu_name = nullptr;
++    for (int i = 0; i < ggml_graph_n_nodes(graph); ++i) {
++        auto * node = ggml_graph_node(graph, i);
++        if (node->op == GGML_OP_NONE || node->op == GGML_OP_RESHAPE ||
++            node->op == GGML_OP_VIEW || node->op == GGML_OP_PERMUTE ||
++            node->op == GGML_OP_TRANSPOSE) {
++            continue; // metadata-only operations do not execute a model kernel
++        }
++        auto * backend = ggml_backend_sched_get_tensor_backend(sched, node);
++        auto * dev = backend ? ggml_backend_get_device(backend) : nullptr;
++        if (!dev || (ggml_backend_dev_type(dev) != GGML_BACKEND_DEVICE_TYPE_GPU &&
++                     ggml_backend_dev_type(dev) != GGML_BACKEND_DEVICE_TYPE_IGPU)) {
++            WHISPER_LOG_ERROR("ASR_GPU_BLOCKED role=%s op=%s backend=%s\n",
++                gpu_role, ggml_op_name(node->op), backend ? ggml_backend_name(backend) : "unknown");
++            ggml_backend_sched_reset(sched);
++            return false;
++        }
++        gpu_name = ggml_backend_dev_name(dev);
++        ++gpu_nodes;
++    }
++    if (gpu_nodes == 0) {
++        WHISPER_LOG_ERROR("ASR_GPU_BLOCKED role=%s reason=no-compute-nodes\n", gpu_role);
++        ggml_backend_sched_reset(sched);
++        return false;
++    }
+@@ -207,0 +228,10 @@ static bool ggml_graph_compute_helper(
++    // One successful graph per role is logged; every later graph is still checked.
++    static thread_local bool asr_observed = false;
++    static thread_local bool vad_observed = false;
++    bool & observed = strcmp(gpu_role, "vad") == 0 ? vad_observed : asr_observed;
++    if (t && !observed) {
++        WHISPER_LOG_INFO("ASR_GPU_GRAPH role=%s device=%s compute_nodes=%d cpu_compute=0 status=complete\n",
++            gpu_role, gpu_name, gpu_nodes);
++        observed = true;
++    }
++
+@@ -1333,0 +1364,5 @@ static std::vector<ggml_backend_t> whisper_backend_init(const whisper_context_pa
++    if (!backend_gpu) {
++        WHISPER_LOG_ERROR("ASR_GPU_BLOCKED reason=no-gpu-backend\n");
++        return result;
++    }
++
+@@ -3624,0 +3660,4 @@ struct whisper_context * whisper_init_from_file_with_params_no_state(const char
++    if (params.dtw_token_timestamps) {
++        WHISPER_LOG_ERROR("ASR_GPU_BLOCKED reason=dtw-cpu-unsupported\n");
++        return nullptr;
++    }
+@@ -3705,0 +3745,7 @@ struct whisper_context * whisper_init_with_params_no_state(struct whisper_model_
++    if (params.dtw_token_timestamps) {
++        WHISPER_LOG_ERROR("ASR_GPU_BLOCKED reason=dtw-cpu-unsupported\n");
++        if (loader && loader->close) {
++            loader->close(loader->context);
++        }
++        return nullptr;
++    }
+@@ -4672,3 +4718 @@ static bool whisper_vad_init_context(whisper_vad_context * vctx) {
+-    // TODO: GPU VAD is forced disabled until the performance is improved
+-    //whisper_context_params.use_gpu    = vctx->params.use_gpu;
+-    whisper_context_params.use_gpu    = false;
++    whisper_context_params.use_gpu    = vctx->params.use_gpu;
+@@ -5164 +5208 @@ bool whisper_vad_detect_speech_no_reset(
+-        if (!ggml_graph_compute_helper(sched, gf, vctx->n_threads, false)) {
++        if (!ggml_graph_compute_helper(sched, gf, vctx->n_threads, false, "vad")) {
+@@ -5166 +5210 @@ bool whisper_vad_detect_speech_no_reset(
+-            break;
++            return false;
+@@ -6666,0 +6711,2 @@ static bool whisper_vad(
++        vad_ctx_params.use_gpu = ctx->params.use_gpu;
++        vad_ctx_params.gpu_device = ctx->params.gpu_device;
+@@ -6808,0 +6855,3 @@ static bool whisper_vad(
++    if (vad_segments->data.empty()) {
++        WHISPER_LOG_INFO("ASR_GPU_NO_SPEECH status=complete\n");
++    }
+@@ -8847,0 +8897,3 @@ static void whisper_exp_compute_token_level_timestamps_dtw(
++    // This function has its own direct CPU graph, outside the scheduler helper.
++    // Reject at entry, before decoding, allocating or computing that graph.
++    throw std::runtime_error("ASR_GPU_BLOCKED reason=dtw-cpu-unsupported");

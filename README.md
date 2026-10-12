@@ -713,6 +713,8 @@ Create persuasive, audience-ready slide decks from topics or documents with data
 
 Download YouTube videos and audio using yt-dlp with robust error handling and automatic workarounds for common issues.
 
+For spoken-content text, reuse existing transcripts first, then fetch original subtitles; download audio for ASR only when those checked routes miss. File-download requests keep the existing workflow.
+
 **When to use:**
 - Downloading YouTube videos or playlists
 - Extracting audio from YouTube videos as MP3
