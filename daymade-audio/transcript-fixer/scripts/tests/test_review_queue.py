@@ -289,6 +289,53 @@ def test_context_offset_drift_refuses_without_writing(queue, tmp_path):
     assert queue.get(item_id).status == "pending"
 
 
+def test_long_context_selected_slot_drift_never_retargets_first(queue, tmp_path):
+    target = tmp_path / "long-drift.txt"
+    text = "先读 actor，" + "中" * 90 + "再校对 actor。"
+    target.write_text(text, encoding="utf-8")
+    item_id = queue.enqueue([{"file": str(target), "line": 1, "original": "actor",
+                              "suggested": "agent", "context": text,
+                              "context_offset": text.rindex("actor")}])["added"][0]
+    drifted = text[:text.rindex("actor")] + "other。"
+    target.write_text(drifted, encoding="utf-8")
+    with pytest.raises(ReAnchorNeeded):
+        queue.resolve(item_id, "accepted")
+    assert target.read_text(encoding="utf-8") == drifted
+    assert queue.get(item_id).status == "pending"
+
+
+def test_long_context_selected_slot_keeps_healthy_sibling_independent(queue, tmp_path):
+    target = tmp_path / "long-healthy.txt"
+    text = "先读 actor，" + "中" * 90 + "再校对 actor。"
+    target.write_text(text, encoding="utf-8")
+    ids = queue.enqueue([{"file": str(target), "line": 1, "original": "actor",
+                          "suggested": "agentic", "context": text, "context_offset": offset}
+                         for offset in (text.index("actor"), text.rindex("actor"))])["added"]
+    assert len(ids) == 2
+    queue.resolve(ids[1], "accepted")
+    assert target.read_text(encoding="utf-8") == text[:text.rindex("actor")] + "agentic。"
+    assert queue.get(ids[0]).status == "pending"
+    queue.resolve(ids[0], "accepted")
+    assert target.read_text(encoding="utf-8") == text.replace("actor", "agentic")
+
+
+def test_long_context_drift_cannot_reanchor_or_dedupe_survivor(queue, tmp_path):
+    target = tmp_path / "long-reanchor.txt"
+    text = "先读 actor，" + "中" * 90 + "再校对 actor。"
+    target.write_text(text, encoding="utf-8")
+    raw = {"file": str(target), "line": 1, "original": "actor", "suggested": "agent"}
+    item_id = queue.enqueue([{**raw, "context": text,
+                              "context_offset": text.rindex("actor")}])["added"][0]
+    before = queue.get(item_id).to_dict()
+    drifted = text[:text.rindex("actor")] + "other。"
+    target.write_text(drifted, encoding="utf-8")
+    with pytest.raises(ReAnchorNeeded):
+        queue.reanchor(item_id)
+    assert queue.get(item_id).to_dict() == before
+    assert len(queue.enqueue([{**raw, "context": "先读 actor，"}])["added"]) == 1
+    assert target.read_text(encoding="utf-8") == drifted
+
+
 @pytest.fixture
 def fake_tempdir(tmp_path: Path, monkeypatch) -> Path:
     """Redirect the temp-dir boundary is_temp_path() checks against.

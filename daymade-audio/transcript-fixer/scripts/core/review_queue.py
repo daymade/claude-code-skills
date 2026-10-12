@@ -331,7 +331,8 @@ class ReviewQueue:
             positions = [ReviewQueue._locate_anchor(
                 masked, anchor["original_text"], anchor["line_number"],
                 ReviewQueue._focused_context(anchor["original_text"],
-                                             anchor["context_snippet"], anchor["context_offset"]))
+                                             anchor["context_snippet"], anchor["context_offset"]),
+                require_exact_context=anchor["context_offset"] is not None)
                 for anchor in (item, row)]
         except ReAnchorNeeded:
             return False
@@ -534,7 +535,9 @@ class ReviewQueue:
         # Retain within-line identity when replacing a snippet with the current
         # whole line. Never reset a selected second slot to the first one.
         try:
-            position = self._locate_anchor(masked, item.original_text, line_no, focused, window=0)
+            position = self._locate_anchor(
+                masked, item.original_text, line_no, focused, window=0,
+                require_exact_context=item.context_offset is not None)
         except ReAnchorNeeded:
             if item.context_offset is not None:
                 raise
@@ -1343,7 +1346,9 @@ class ReviewQueue:
             # line entirely and the careful ladder below never ran. "CONTENT
             # outranks POSITION" has to hold at every count, not just >1.
             try:
-                idx = self._locate_anchor(masked, old, line_no, snippet)
+                idx = self._locate_anchor(
+                    masked, old, line_no, snippet,
+                    require_exact_context=offset is not None)
             except ReAnchorNeeded as exc:
                 if verdict.hit_lines:
                     # The recorded context already reads with the suggestion,
@@ -1512,6 +1517,7 @@ class ReviewQueue:
     def _locate_anchor(
         content: str, needle: str, line_no: Optional[int],
         snippet: Optional[str], window: int = RESOLVE_WINDOW_LINES,
+        *, require_exact_context: bool = False,
     ) -> int:
         """Choose ONE occurrence of `needle` when several exist.
 
@@ -1525,6 +1531,9 @@ class ReviewQueue:
              than edit a look-alike: a wrong auto-edit is worse than none);
           3. among the survivors, an occurrence ON the hinted line wins;
           4. otherwise the uniquely nearest line wins; a distance tie refuses.
+
+        Explicit selected slots require the complete focused context to match
+        their exact span; a shared line prefix is not occurrence identity.
         """
         if not line_no:
             raise ReAnchorNeeded(
@@ -1551,6 +1560,8 @@ class ReviewQueue:
                 f"with the suggestion in its slot and no look-alike near the hint still "
                 f"carries the original; occurrences elsewhere are separate decisions)"
             )
+        if require_exact_context and (not snippet or not snippet.strip()):
+            raise ReAnchorNeeded("selected occurrence has no exact context anchor")
         if snippet and snippet.strip():
             probe = snippet.strip()[:80]
             candidates = [
@@ -1579,8 +1590,15 @@ class ReviewQueue:
                             contextual.append((line_number, offset))
                             break
                         start = line.find(exact, start + 1)
+                if require_exact_context and not contextual:
+                    raise ReAnchorNeeded(
+                        "selected occurrence's exact context no longer matches — "
+                        "refusing to edit another occurrence on the same line"
+                    )
                 if contextual:
                     candidates = contextual
+            elif require_exact_context:
+                raise ReAnchorNeeded("selected occurrence's context does not identify one exact span")
         on_hint = [c for c in candidates if c[0] == line_no]
         if len(on_hint) == 1:
             return on_hint[0][1]
