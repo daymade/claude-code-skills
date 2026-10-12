@@ -51,13 +51,50 @@ def parse_turns(lines):
     return turns
 
 
-def token_offset(turns, line_no, original, transcript_duration=None):
-    """行号→turn→token 字符比例偏移（转写轴秒）。turn 时长=下一 turn 起点差。"""
-    candidates = [j for j, t in enumerate(turns) if t[0] <= line_no]
-    if not candidates:
-        return None
-    idx = candidates[-1]
+def _selected_position(text, original, context, context_offset):
+    """Identify one verbatim slot; an offset is relative to its recorded context."""
+    if not original:
+        raise ValueError("empty original cannot identify an audio anchor")
+    if context_offset is not None:
+        if not isinstance(context, str) or not context \
+                or not isinstance(context_offset, int) or isinstance(context_offset, bool) \
+                or context_offset < 0 \
+                or context[context_offset:context_offset + len(original)] != original:
+            raise ValueError("recorded context_offset does not identify the original token")
+
+    def positions(needle, haystack):
+        return [m.start() for m in re.finditer(f"(?={re.escape(needle)})", haystack)]
+
+    if context:
+        if not isinstance(context, str):
+            raise ValueError("recorded context must be text")
+        slots = [context_offset] if context_offset is not None else positions(original, context)
+        candidates = {start + slot for start in positions(context, text) for slot in slots}
+    else:
+        candidates = set(positions(original, text))
+    if len(candidates) != 1:
+        raise ValueError("audio anchor is missing or ambiguous; re-anchor the queue item first")
+    return candidates.pop()
+
+
+def token_offset(turns, line_no, original, transcript_duration=None, *, context=None, context_offset=None, lines=None):
+    """Estimate the selected slot's time; never choose the first repeated token."""
+    indices = [j for j, t in enumerate(turns) if t[0] < line_no]
+    if not indices:
+        raise ValueError("audio anchor does not point into a speaker turn")
+    idx = indices[-1]
     start_line, ts, spk, text = turns[idx]
+    if lines is None:
+        pos = _selected_position(text, original, context, context_offset)
+    else:
+        if line_no > len(lines) or not lines[line_no - 1].strip() \
+                or TS_RE.match(lines[line_no - 1]):
+            raise ValueError("audio anchor is not a transcript body line")
+        line = lines[line_no - 1]
+        local = _selected_position(line, original, context, context_offset)
+        prefix = sum(len(value.strip()) + 1 for value in lines[start_line:line_no - 1]
+                     if value.strip())
+        pos = prefix + local - (len(line) - len(line.lstrip()))
     if idx + 1 < len(turns):
         dur = turns[idx + 1][1] - ts
     else:
@@ -65,9 +102,6 @@ def token_offset(turns, line_no, original, transcript_duration=None):
             return None
         dur = transcript_duration - ts
     if dur <= 0:
-        return None
-    pos = text.find(original)
-    if pos < 0:
         return None
     return ts + (pos / max(len(text), 1)) * dur
 
@@ -223,7 +257,7 @@ def main():
         sys.exit("no pending items for this file")
     if set(overrides) - {str(item["id"]) for item in items}:
         ap.error("time overrides contain rows outside this file's selected pending items")
-    duration = media_duration(a.audio)
+    duration, duration_probed = None, False
 
     results = []
     for it in items:
@@ -234,16 +268,31 @@ def main():
                 for anchor in override["anchors"]
                 for token in (it["original_text"], it.get("suggested_text") or "")):
             ap.error(f"override {tid}: anchors must exclude the disputed original/suggestion")
-        estimate = token_offset(turns, it["line_number"], it["original_text"],
-                                duration / a.speed if duration is not None else None)
-        tok_t = override["seconds"] if override else (estimate * a.speed if estimate is not None else None)
         common = {
             "id": tid, "line": it["line_number"], "original": it["original_text"],
-            "suggested": it.get("suggested_text") or "",
-            "token_wav_time": round(tok_t, 3) if tok_t is not None else None,
+            "suggested": it.get("suggested_text") or "", "token_wav_time": None,
             "position_source": "verified_override" if override else "character_estimate",
             "anchors": override["anchors"] if override else [],
         }
+        location = {"context": it.get("context_snippet"),
+                    "context_offset": it.get("context_offset"), "lines": lines}
+        try:
+            # Validate the recorded occurrence before probing/cutting any media.
+            token_offset(turns, it["line_number"], it["original_text"], **location)
+            if not duration_probed:
+                duration = media_duration(a.audio)
+                duration_probed = True
+            estimate = token_offset(
+                turns, it["line_number"], it["original_text"],
+                duration / a.speed if duration is not None else None, **location)
+        except ValueError as exc:
+            results.append({**common, "status": "anchor_error", "tight": "", "medium": "",
+                            "tight_exit": -1, "medium_exit": -1, "same_clip": False,
+                            "anchor_error": str(exc), "err": str(exc)})
+            print(f"{tid}: anchor_error, pending", flush=True)
+            continue
+        tok_t = override["seconds"] if override else (estimate * a.speed if estimate is not None else None)
+        common["token_wav_time"] = round(tok_t, 3) if tok_t is not None else None
         if tok_t is None or (duration is not None and tok_t >= duration):
             results.append({**common, "status": "timestamp_unknown", "tight": "", "medium": "",
                             "tight_exit": -1, "medium_exit": -1, "same_clip": False,
@@ -273,7 +322,7 @@ def main():
         r2 = subprocess.run(["python3", a.engine_script, med], capture_output=True, text=True)
         result = {
             **common, "clip_ranges": ranges,
-            "tight": r1.stdout.strip()[:300], "medium": r2.stdout.strip()[:500],
+            "tight": r1.stdout.strip(), "medium": r2.stdout.strip(),
             "tight_exit": r1.returncode, "medium_exit": r2.returncode,
             "same_clip": False,
             "err": (r1.stderr + r2.stderr)[:200],
@@ -321,7 +370,7 @@ def main():
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=a.outdir, delete=False) as f:
             json.dump(results, f, ensure_ascii=False, indent=1)
         os.replace(f.name, out)
-    if any(r["status"] in {"timestamp_unknown", "same_clip", "engine_failed",
+    if any(r["status"] in {"anchor_error", "timestamp_unknown", "same_clip", "engine_failed",
                            "coverage_unknown", "needs_reanchor"} or r.get("authority_attach_failed")
            for r in results):
         return 1

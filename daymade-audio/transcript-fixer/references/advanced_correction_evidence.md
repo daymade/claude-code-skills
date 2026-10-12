@@ -325,10 +325,13 @@ uv run scripts/verify_queue_audio.py \
   --speed 1.3 --engine-script /abs/stepfun-asr/scripts/asr_transcribe.py
 ```
 
-It parses speaker turns, maps each pending row to its turn, estimates the token
-offset by character position inside the turn, scales by `--speed`, cuts
+It parses speaker turns, maps each pending row to its recorded body line and
+verbatim context/`context_offset`, estimates that selected slot's character
+position inside the turn, scales by `--speed`, cuts
 tight+medium windows, and writes `<outdir>/results.json` with both windows'
-recognized text per row. If the rendered clips have identical bytes, it skips
+complete recognized text per row. Missing or ambiguous anchors produce an
+`anchor_error` result without cutting clips, running recognition or attaching
+evidence; re-anchor that queue row before retrying. If the rendered clips have identical bytes, it skips
 recognition for that row. A supported suggestion may gain an `音证` citation in
 the review queue; this is evidence, not a verdict or a transcript edit. The
 exact automatic-attachment gate lives in `verify_queue_audio.py`, with the
@@ -357,6 +360,16 @@ The final turn uses `ffprobe` duration on the correct clock; unavailable duratio
 without a verified override is `timestamp_unknown`, never a guessed turn length.
 The command exits 1 for missing position/coverage, failed engines, identical
 clips or a failed authority append, while retaining the result for recovery.
+The executing agent can group several doubts in one utterance and reuse two
+distinct windows covering that utterance and its surrounding speech. Use an
+already available, authorized second recognizer; local GPU execution follows
+`asr-transcribe-to-text`. Keep each window's full output, source-time range and
+source identity before adjudicating each occurrence. A file-output local runner
+is not directly compatible with this script's `--engine-script` stdout interface;
+run it through its owning ASR workflow and inspect the retained results instead.
+Written sources settle spelling; acoustic agreement supports a reading, while
+conflicts retain the original and pending state. Do not report a clip-only check
+as complete independent transcription of the recording.
 
 **Know the timestamp-to-audio mapping before cutting anything.** `ffmpeg -ss`
 counts from the start of the media file; the transcript's clock may be

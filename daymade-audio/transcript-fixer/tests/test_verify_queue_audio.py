@@ -16,6 +16,60 @@ verify_queue_audio = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(verify_queue_audio)
 
 
+class OccurrenceLocationTests(unittest.TestCase):
+    def setUp(self):
+        self.lines = ["甲 00:00:01.000", "actor，随后 actor。",
+                      "第二行 actual，随后 actual。", "乙 00:00:21.000", "好。"]
+        self.turns = verify_queue_audio.parse_turns(self.lines)
+
+    def test_selected_same_line_occurrences_have_distinct_times(self):
+        positions = [self.lines[1].index("actor"), self.lines[1].rindex("actor")]
+        times = [verify_queue_audio.token_offset(
+            self.turns, 2, "actor", context=self.lines[1],
+            context_offset=pos, lines=self.lines) for pos in positions]
+        self.assertLess(times[0], times[1])
+        for time, pos in zip(times, positions):
+            self.assertAlmostEqual(time, 1 + pos / len(self.turns[0][3]) * 20)
+
+    def test_second_body_line_maps_into_its_own_part_of_turn(self):
+        time = verify_queue_audio.token_offset(
+            self.turns, 3, "actual", context="随后 actual。", lines=self.lines)
+        pos = len(self.lines[1]) + 1 + self.lines[2].rindex("actual")
+        self.assertAlmostEqual(time, 1 + pos / len(self.turns[0][3]) * 20)
+
+    def test_unique_legacy_anchor_still_works(self):
+        turns = verify_queue_audio.parse_turns(
+            ["甲 00:00:01.000", "只出现一次词。", "乙 00:00:11.000", "好。"])
+        self.assertAlmostEqual(verify_queue_audio.token_offset(turns, 2, "词"), 1 + 5 / 7 * 10)
+
+    def test_ambiguous_missing_and_invalid_offsets_refuse(self):
+        for kwargs in ({}, {"context": self.lines[1]},
+                       {"context": "已改写 actor。"},
+                       {"context": self.lines[1], "context_offset": 1},
+                       {"context": self.lines[1], "context_offset": True},
+                       {"context_offset": 0}):
+            with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                verify_queue_audio.token_offset(self.turns, 2, "actor", **kwargs)
+
+    def test_ambiguous_anchor_does_not_cut_recognize_or_attach(self):
+        with tempfile.TemporaryDirectory() as work:
+            root = Path(work)
+            target = root / "meeting.md"
+            target.write_text("\n".join(self.lines), encoding="utf-8")
+            item = {"id": 1, "line_number": 2, "original_text": "actor",
+                    "suggested_text": "agent", "context_snippet": self.lines[1]}
+            argv = [str(SCRIPT), "--transcript", str(target), "--audio", "source.wav",
+                    "--engine-script", "engine.py", "--outdir", str(root / "out")]
+            with patch.object(verify_queue_audio, "list_pending", return_value=[item]), \
+                    patch.object(verify_queue_audio.subprocess, "run") as run, \
+                    patch.object(sys, "argv", argv):
+                verify_queue_audio.main()
+            run.assert_not_called()
+            result = json.loads((root / "out/results.json").read_text())[0]
+            self.assertTrue(result["anchor_error"])
+            self.assertEqual(result["id"], 1)
+
+
 class WindowEvidenceTests(unittest.TestCase):
     def test_identical_windows_are_rejected(self):
         with patch.object(sys, "argv", [str(SCRIPT), "--transcript", "t",
@@ -162,8 +216,10 @@ class WindowEvidenceTests(unittest.TestCase):
         turns = [(1, 10.0, "甲", "前半目标")]
         self.assertEqual(verify_queue_audio.token_offset(turns, 2, "目标", 20), 15)
         self.assertIsNone(verify_queue_audio.token_offset(turns, 2, "目标"))
-        self.assertIsNone(verify_queue_audio.token_offset(turns, 2, "不在正文", 20))
-        self.assertIsNone(verify_queue_audio.token_offset(turns, 0, "目标", 20))
+        with self.assertRaises(ValueError):
+            verify_queue_audio.token_offset(turns, 2, "不在正文", 20)
+        with self.assertRaises(ValueError):
+            verify_queue_audio.token_offset(turns, 0, "目标", 20)
 
     def test_overrides_reject_missing_empty_null_and_invalid_fields(self):
         with tempfile.TemporaryDirectory() as work:
@@ -188,6 +244,14 @@ class WindowEvidenceTests(unittest.TestCase):
                     verify_queue_audio.subprocess, "run",
                     return_value=CompletedProcess([], code, stdout=value)):
                 self.assertIsNone(verify_queue_audio.media_duration("audio"))
+
+    def test_complete_readings_survive_and_late_conflict_blocks_authority(self):
+        tight = "李甲乙，这件事，" + "背景" * 200 + "你讲话"
+        medium = "李甲乙，这件事，" + "背景" * 300 + "你讲话"
+        result, calls = self._run_case(tight, medium)
+        self.assertEqual(result["tight"], tight)
+        self.assertEqual(result["medium"], medium)
+        self.assertFalse(any(args[0] == "uv" for args in calls))
 
 
 if __name__ == "__main__":

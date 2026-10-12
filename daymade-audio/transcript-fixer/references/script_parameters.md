@@ -314,7 +314,7 @@ unknown. See [batch evidence](advanced_correction_evidence.md#batch-pending-adju
 for positioning and bounded re-cuts.
 
 Each result preserves both recognizer outputs/exit codes, position source,
-anchors and clip ranges. Status distinguishes `timestamp_unknown`, `same_clip`,
+anchors and clip ranges. Status distinguishes `anchor_error`, `timestamp_unknown`, `same_clip`,
 `engine_failed`, `coverage_unknown`, `needs_reanchor`, `original_supported`,
 `suggestion_supported`, `recognizer_disagreement` and `unsettled_reading`.
 Exit 1 means position/coverage, engine, clip independence or authority append

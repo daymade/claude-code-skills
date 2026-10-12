@@ -407,7 +407,7 @@ does the download, the timeline check, and prints the frontmatter line:
 
 ```bash
 uv run scripts/fetch_minute_audio.py \
-  --token <minute-token> --profile <lark-cli-profile> \
+  --token <minute-token> --profile <lark-cli-profile> --as user \
   --output ~/.transcript-fixer/cache/audio/<name>.m4a \
   --transcript <path/to/transcript.md>
 ```
@@ -420,6 +420,12 @@ the same value). `--profile` is a lark-cli profile name — list them with
 recording; the transcript does not record it, so if the owner is not obvious,
 ask rather than guess (a wrong profile fails in the silent way described below).
 
+The executing agent preserves both the known profile and source identity:
+`--as user` is the helper's default; use `--as bot` only when the source workflow
+used the application identity. A missing URL is an unknown/malformed result,
+not proof of a permission denial. Read the reported CLI/API error before choosing
+a recovery path; an explicit export refusal stops that export route.
+
 Keep the audio outside the docs repo — a media blob should not ride into its git.
 
 **Exit codes** — check the status, not the output: diagnostics go to stderr while
@@ -431,31 +437,38 @@ usable-looking line.
 | `0` | verified — audio and transcript share a timeline |
 | `1` | timeline mismatch: a file downloaded, but do **not** wire it |
 | `2` | downloaded, pairing unverified — `ffprobe` absent or its output unusable, no `--transcript`, the transcript has no `<speaker> HH:MM:SS.mmm` lines, or every one of them is `00:00:00` (argparse also exits 2 on a malformed invocation; its message says so) |
-| `3` | nothing usable produced — bad `--transcript` path (checked before any network work), or the fetch failed: lark-cli errored, curl failed, the download was too small, or **the `--profile` cannot read this minute**, which is the most common cause and is not a bad token |
+| `3` | nothing usable produced — bad `--transcript` path (checked before any network work), CLI/API export failure, malformed/missing URL, curl failure or undersized download. The diagnostic preserves the observed error; it does not infer missing permissions. |
 
 A `2` caused by missing speaker-timestamp lines is worth stopping for rather than
 working around: the dashboard builds its clip windows from those same lines, so
 audio wired to such a transcript has nothing to play.
 
-**The by-hand route**, for when lark-cli is unavailable or the script fails:
+**The by-hand route**, when the CLI's file-download host validation fails:
+
+Use the CLI-returned signed URL for this validation error only; an API export
+denial does not authorize a different account or download channel. Preserve the
+source identity in both commands below (`<source-identity>` is `user` or `bot`).
 
 ```bash
 mkdir -p ~/.transcript-fixer/cache/audio && cd $_   # --output below accepts only
                                                     # a relative path inside the
                                                     # CURRENT dir ("../" refused)
 LARK_CLI_NO_PROXY=1 lark-cli minutes +download \
-  --minute-tokens <token> --profile <profile> --output ./audio.m4a
+  --minute-tokens <token> --profile <profile> --as <source-identity> --output ./audio.m4a
 # If that trips the SSRF guard, take the signed URL and fetch it yourself.
 # Parse the envelope as JSON — a regex scrape leaves escapes literal and
 # truncates the URL at its first parameter:
 URL=$(LARK_CLI_NO_PROXY=1 lark-cli minutes +download \
-        --minute-tokens <token> --profile <profile> --url-only \
+        --minute-tokens <token> --profile <profile> --as <source-identity> --url-only \
       | python3 -c 'import sys,json
 raw = sys.stdin.read()                      # the CLI may print prose around the
 s, e = raw.find("{"), raw.rfind("}")        # JSON, so isolate the object first
-print(json.loads(raw[s:e+1])["data"]["download_url"])')
-[ -n "$URL" ] || { echo "no download_url — check the profile"; exit 3; }
-curl -sSL --noproxy '*' -o audio.m4a "$URL"
+result = json.loads(raw[s:e+1])
+if result.get("ok") is not True:
+    raise SystemExit("export failed: " + str(result.get("error")))
+print(result["data"]["download_url"])')
+[ -n "$URL" ] || { echo "no download_url — read the CLI/API error"; exit 3; }
+curl --fail -sSL --noproxy '*' -o audio.m4a "$URL"
 # Verify the pairing yourself: compare the duration against the transcript's
 # LAST speaker timestamp. Treat a gap over max(60s, 5% of that timestamp) as a
 # mismatch — recordings usually run a minute or two past the last utterance,
