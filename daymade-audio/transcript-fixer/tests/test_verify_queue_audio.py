@@ -42,6 +42,24 @@ class OccurrenceLocationTests(unittest.TestCase):
             ["甲 00:00:01.000", "只出现一次词。", "乙 00:00:11.000", "好。"])
         self.assertAlmostEqual(verify_queue_audio.token_offset(turns, 2, "词"), 1 + 5 / 7 * 10)
 
+    def test_final_turn_requires_observed_end(self):
+        lines = ["甲 00:00:01.000", "前言 actor"]
+        turns = verify_queue_audio.parse_turns(lines)
+        self.assertIsNone(verify_queue_audio.token_offset(turns, 2, "actor", lines=lines))
+        time = verify_queue_audio.token_offset(turns, 2, "actor", lines=lines,
+                                               transcript_duration=10)
+        self.assertAlmostEqual(time, 1 + 3 / 8 * 9)
+        for end in (0, 1, float("nan"), float("inf")):
+            with self.subTest(end=end):
+                self.assertIsNone(verify_queue_audio.token_offset(
+                    turns, 2, "actor", lines=lines, transcript_duration=end))
+
+    def test_long_turn_uses_observed_duration_without_capping(self):
+        lines = ["甲 00:00:01.000", "前言 actor", "乙 00:20:01.000", "好。"]
+        turns = verify_queue_audio.parse_turns(lines)
+        self.assertAlmostEqual(verify_queue_audio.token_offset(turns, 2, "actor", lines=lines),
+                               1 + 3 / 8 * 1200)
+
     def test_ambiguous_missing_and_invalid_offsets_refuse(self):
         for kwargs in ({}, {"context": self.lines[1]},
                        {"context": "已改写 actor。"},
@@ -71,6 +89,25 @@ class OccurrenceLocationTests(unittest.TestCase):
 
 
 class WindowEvidenceTests(unittest.TestCase):
+    def test_nonfinite_windows_are_rejected_before_input_or_recognition(self):
+        for option in ("--tight", "--medium"):
+            for value in ("nan", "inf"):
+                with self.subTest(option=option, value=value), patch.object(sys, "argv", [
+                        str(SCRIPT), "--transcript", "t", "--audio", "a",
+                        "--engine-script", "e", option, value]):
+                    with self.assertRaises(SystemExit) as stopped:
+                        verify_queue_audio.main()
+                    self.assertEqual(stopped.exception.code, 2)
+
+    def test_invalid_speed_is_rejected_before_input_or_recognition(self):
+        for speed in ("0", "-1", "nan", "inf"):
+            with self.subTest(speed=speed), patch.object(sys, "argv", [
+                    str(SCRIPT), "--transcript", "t", "--audio", "a",
+                    "--engine-script", "e", "--speed", speed]):
+                with self.assertRaises(SystemExit) as stopped:
+                    verify_queue_audio.main()
+                self.assertEqual(stopped.exception.code, 2)
+
     def test_identical_windows_are_rejected(self):
         with patch.object(sys, "argv", [str(SCRIPT), "--transcript", "t",
                                         "--audio", "a", "--engine-script", "e",
@@ -107,12 +144,14 @@ class WindowEvidenceTests(unittest.TestCase):
                     {**base, **changed}))
 
     def _run_case(self, tight_text, medium_text, same_clips=False,
-                  tight_seconds=5, medium_seconds=20, override=True):
+                  tight_seconds=5, medium_seconds=20, override=True, final_turn=False,
+                  observed_duration=60, speed=1.0, prefix=""):
         with tempfile.TemporaryDirectory() as work:
             root = Path(work)
             transcript = root / "meeting.md"
             transcript.write_text(
-                "甲 00:00:01.000\n你讲话这件事。\n乙 00:00:10.000\n好。\n",
+                "甲 00:00:01.000\n" + prefix + "你讲话这件事。\n" +
+                ("" if final_turn else "乙 00:00:10.000\n好。\n"),
                 encoding="utf-8",
             )
             calls = []
@@ -145,17 +184,33 @@ class WindowEvidenceTests(unittest.TestCase):
                 "--engine-script", str(root / "engine.py"),
                 "--outdir", str(root / "results"),
                 "--tight", str(tight_seconds), "--medium", str(medium_seconds),
+                "--speed", str(speed),
             ]
             if override:
                 argv += ["--time-overrides", str(overrides)]
             with patch.object(verify_queue_audio, "list_pending", return_value=[item]), \
-                    patch.object(verify_queue_audio, "media_duration", return_value=60), \
+                    patch.object(verify_queue_audio, "media_duration", return_value=observed_duration), \
                     patch.object(verify_queue_audio.subprocess, "run", side_effect=run), \
                     patch.object(sys, "argv", argv):
                 exit_code = verify_queue_audio.main()
 
             result = json.loads((root / "results" / "results.json").read_text())
             return {**result[0], "_exit_code": exit_code}, calls
+
+    def test_unknown_final_duration_does_not_cut_recognize_or_attach(self):
+        result, calls = self._run_case("李甲乙，这件事", "李甲乙，这件事", final_turn=True,
+                                       observed_duration=None, override=False)
+        self.assertEqual(result["status"], "timestamp_unknown")
+        self.assertEqual(result["_exit_code"], 1)
+        self.assertEqual(calls, [])
+
+    def test_final_turn_observed_duration_uses_transcript_clock_then_source_speed(self):
+        result, calls = self._run_case(
+            "李甲乙，这件事", "刚才李甲乙，这件事", final_turn=True,
+            observed_duration=20, speed=2, prefix="前言 ", override=False)
+        self.assertAlmostEqual(result["token_wav_time"], 7.4)
+        ffmpeg_calls = [args for args in calls if args[0] == "ffmpeg"]
+        self.assertEqual(ffmpeg_calls[0][ffmpeg_calls[0].index("-ss") + 1], "2.400")
 
     def test_disagreement_does_not_attach_authority(self):
         result, calls = self._run_case("李甲丙这件事", "李甲乙这件事")

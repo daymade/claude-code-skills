@@ -386,6 +386,7 @@ uv run scripts/harvest_corrections.py raw.md corrected.md \
   --context-file ~/.transcript-fixer/contexts/myproject.md --write
 
 # Collect clip evidence at operator-verified media positions; resolve rows separately
+# Read references/advanced_correction_evidence.md before selecting the engine or clock mapping.
 uv run scripts/verify_queue_audio.py \
   --transcript /abs/meeting.md --audio /abs/source.wav \
   --time-overrides /abs/verified-times.json \

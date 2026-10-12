@@ -284,6 +284,8 @@ Run through `uv run` with `--transcript`, `--audio` and `--engine-script`.
 Optional `--queue-ids` limits the exact file's pending rows; `--speed` maps the
 transcript clock to media seconds. `--tight`/`--medium` are positive half-widths,
 with medium strictly larger. `--outdir` contains clips and `results.json`.
+Speed must be finite and positive; obtain the mapping from independent source
+evidence before using transcript offsets.
 
 For a located utterance, `--time-overrides <JSON>` accepts
 `{"42": {"seconds": 12.25, "anchors": ["请带两份资料"]}}` (synthetic example).
@@ -294,8 +296,11 @@ Every supplied anchor must appear in each window's recognized output before
 those readings can support a verdict.
 Without overrides, character estimates can generate exploratory clips but
 cannot append authority until the operator checks and supplies those anchors.
-The final turn uses probed media duration; missing duration leaves its estimate
-unknown. See [batch evidence](advanced_correction_evidence.md#batch-pending-adjudication--queue-level-clip-cross-check)
+The final turn uses finite probed media duration converted to the transcript
+clock. Missing or invalid duration, or an end at/before that turn, leaves its
+estimate unknown; a checked override remains a separate media-clock input.
+Other turns use the next speaker timestamp without an invented duration cap.
+See [batch evidence](advanced_correction_evidence.md#batch-pending-adjudication--queue-level-clip-cross-check)
 for positioning and bounded re-cuts.
 
 Each result preserves both recognizer outputs/exit codes, position source,
