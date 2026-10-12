@@ -22,12 +22,12 @@ The result: you can open one terminal with Kimi, another with DeepSeek, another 
 - `CLAUDE_CONFIG_DIR` tells Claude Code CLI which directory to use as its config root.
 - Each profile lives in `~/.claude-profiles/<name>/` with an isolated `.claude.json`.
 - Content directories (`skills/`, `projects/`, `hooks/`, `agents/`, `settings/`) are symlinked back to the main `~/.claude/` directory so you only maintain one copy. Note this shares hook **scripts**, not hook **registration** — registration lives in each profile's own `settings.json` (next bullet).
-- **Config layer — `settings.json`:** each profile has its own `settings.json` (Claude Code treats it as config-dir-local), so everything stored there — hook registration, `extraKnownMarketplaces`, `enabledPlugins`, `env` feature flags, `permissions`, behavior preferences — silently drifts the moment it changes in the default profile (measured 2026-07-18: 9/9 real profiles had zero hook registrations). `sync-profile-settings.py` is the converger: registered as a SessionStart hook, it copies every key from the default profile's `settings.json` into **every** profile's, except identity keys (top-level `model` and `advisorModel` — the latter is Anthropic-model routing a third-party endpoint can't serve; and env vars that carry provider routing or Anthropic-native isolation — `ANTHROPIC_*`, `CLAUDE_CODE_SUBAGENT_MODEL`, `ENABLE_TOOL_SEARCH`, `DISABLE_GROWTHBOOK/TELEMETRY/AUTOUPDATER` — which the provider settings file deliberately sets differently). Within `env`, convergence is two-way for non-identity keys: main's keys overwrite the profile's, and a non-identity key main no longer carries is **deleted** from the profile and reported (identity keys are exempt — main never carries them, so their absence is not deletion evidence; landed v3.60.1). Profile-only **top-level** keys are preserved; nested collections inside a key main also has (e.g. `permissions.allow`, `enabledPlugins`) converge wholesale to main's value, and any profile-only nested entries dropped that way are listed (count on write, detail under `--check`) so the loss is visible rather than silent. This is what makes "everything except the model works in every profile" actually hold.
+- **Config layer — `settings.json`:** each profile has its own `settings.json` (Claude Code treats it as config-dir-local), so everything stored there — hook registration, `extraKnownMarketplaces`, `enabledPlugins`, `env` feature flags, `permissions`, behavior preferences — silently drifts the moment it changes in the default profile (measured 2026-07-18: 9/9 real profiles had zero hook registrations). `sync-profile-settings.py` is the converger: registered as a SessionStart hook, it copies every key from the default profile's `settings.json` into **every** profile's, except identity keys (top-level `model` and `advisorModel` — the latter is Anthropic-model routing a third-party endpoint can't serve; and env vars that carry provider routing or Anthropic-native isolation — `ANTHROPIC_*`, `CLAUDE_CODE_SUBAGENT_MODEL`, `ENABLE_TOOL_SEARCH`, `DISABLE_GROWTHBOOK/TELEMETRY/AUTOUPDATER` — which the provider settings file deliberately sets differently). Within `env`, convergence is two-way for non-identity keys: main's keys overwrite the profile's, and a non-identity key main no longer carries is **deleted** from the profile and reported (identity keys are exempt — main never carries them, so their absence is not deletion evidence). Profile-only **top-level** keys are preserved; nested collections inside a key main also has (e.g. `permissions.allow`, `enabledPlugins`) converge wholesale to main's value, and any profile-only nested entries dropped that way are listed (count on write, detail under `--check`) so the loss is visible rather than silent. This is what makes "everything except the model works in every profile" actually hold.
   - **Scope is every profile, in every invocation.** No argument-free, `--all`, or `--check` run ever covers a subset: all of `~/.claude-profiles/*` plus `$CLAUDE_CONFIG_DIR`, every time. A run prints one line **per profile it actually changed** and nothing when there is no drift — so drift shows up in the session-start output instead of hiding, and a silent session start means converged. A `$CLAUDE_CONFIG_DIR` that is unset, empty, or not a profile directory is skipped, never created.
   - **Exit codes:** the argument-free run exits 0 unconditionally — it is a session-start hook and never blocks a session, including when a main file is corrupt (it warns, converges nothing, and exits 0, because a corrupt main reads as empty and converging toward empty would strip hooks from every profile). `--check` exits 1 on drift and 2 on a corrupt main file or a profile it could not read; `--all` writes and exits 2 on those same two failures — the difference between them is that `--check` writes nothing, not which failures return 2. `--check --all` is the same audit as `--check`. One unreadable profile is reported and skipped — it never cancels convergence for the others.
 - **State layer — `.claude.json` behavior keys:** `settings.json` is not the only per-profile config file. Claude Code also keeps a per-profile state file (the main profile's is `~/.claude.json`; each third-party profile's is `<profile>/.claude.json` — asymmetric paths, verified on disk), and a few **behavior** settings live only there (`workflowSizeGuideline`, notification/UI preferences). On 2026-08-17 `workflowSizeGuideline: small` existed only on the main profile and 10/11 third-party profiles had no copy — a Kimi session fanned one Dynamic Workflow out to 30+ agents with no size guidance in its system prompt. The same converger therefore also syncs an **allowlist of behavior keys** into each profile's `.claude.json`. The safety mechanism is a three-way classifier in the script, not a hand-maintained key list: allowlisted behavior keys sync; state/cache/counter/migration/credential keys (matched by name patterns) are never touched; anything unknown-and-different is **reported — one line per drifted key per run, until a human classifies it** (the tripwire that surfaces the next behavior key the day it appears). Writes are backup + atomic-replace; measured safe against a live harness rewriting the file (a marker key survived 30+ minutes of an active session). Applies next session — the harness reads this file at startup.
 - **Exception — `plugins/`:** marketplace content and install state are shared, but each profile keeps its **own** `known_marketplaces.json`. Claude validates a marketplace's `installLocation` with `path.resolve()` (which does NOT resolve symlinks), so a single shared file would make every non-writing profile report "corrupted installLocation". `claude-plugins-sync.py` builds and maintains this per-profile structure.
-- `claude-plugins-sync.py` also mirrors `enabledPlugins` from the default `~/.claude/settings.json` into each profile's `settings.json` (sharing cache files is not enough; Claude Code treats "enabled" state as config-dir-local). It runs at profile launch and reactively — the LaunchAgent in the next bullet re-runs it on every write to the default profile's `settings.json`, so `claude plugin enable`/`disable --scope user` typically propagates to every profile within seconds without a relaunch (verified 2026-08-22). The mirror **adopts first**: enabledPlugins keys that exist only in some profile's settings.json (the way `claude plugin install` writes them) are written back into the default profile before mirroring — consistent values only; cross-profile conflicts stay per-profile behind a standing warning instead of being silently overwritten (added 2026-09-03, after adopt-less mirroring was confirmed as the mechanical root cause of recurring skill-visibility losses). The SessionStart converger above covers the same key as part of its whole-settings sync; `claude-plugins-sync.py` remains the owner of the per-profile `known_marketplaces.json` structure. `skill-install-audit.py` reconciles the registry / installed / enabled / Codex-manifest / `~/.agents/skills` layers read-only, plus the daemon's pinned runtime version and whether the checkouts it judged everything against are themselves behind. `prune-source-sync-backups.py` removes only the `.source-sync-backups/` buckets git can reproduce; a bucket holding even one blob no repository has is reported and left alone.
+- `claude-plugins-sync.py` also mirrors `enabledPlugins` from the default `~/.claude/settings.json` into each profile's `settings.json` (sharing cache files is not enough; Claude Code treats "enabled" state as config-dir-local). It runs at profile launch and reactively — the LaunchAgent in the next bullet re-runs it on every write to the default profile's `settings.json`, so `claude plugin enable`/`disable --scope user` typically propagates to every profile within seconds without a relaunch (verified 2026-08-22). The mirror **adopts first**: enabledPlugins keys that exist only in some profile's settings.json (the way `claude plugin install` writes them) are written back into the default profile before mirroring — consistent values only; cross-profile conflicts stay per-profile behind a standing warning instead of being silently overwritten. The SessionStart converger above covers the same key as part of its whole-settings sync; `claude-plugins-sync.py` remains the owner of the per-profile `known_marketplaces.json` structure. `skill-install-audit.py` reconciles the registry / installed / enabled / Codex-manifest / `~/.agents/skills` layers read-only, plus the daemon's pinned runtime version and whether the checkouts it judged everything against are themselves behind. `prune-source-sync-backups.py` removes only the `.source-sync-backups/` buckets git can reproduce; a bucket holding even one blob no repository has is reported and left alone.
 - Local source sync keeps approved source-backed routes aligned for each host.
   Before selecting or repairing entries, read the
   [host-specific activation contract](references/local-source-sync-architecture.md#host-specific-user-skill-activation).
@@ -37,7 +37,9 @@ The result: you can open one terminal with Kimi, another with DeepSeek, another 
   links or repurpose the manifest to manage third-party inventory.
 - Sync scripts use a shared cross-process lock. This is required because users often open several provider windows from tmux or multiple terminals at once; concurrent launches must serialize marketplace/cache rewrites while still allowing all profiles to start.
 - For the full local-source architecture, read `references/local-source-sync-architecture.md` before changing these scripts.
-- Provider routing is done via `~/.claude/settings/<name>.json`, which sets `ANTHROPIC_MODEL`, `ANTHROPIC_BASE_URL`, and `ANTHROPIC_AUTH_TOKEN` for that window. **That file is a full settings file rather than an env file, and it is the one layer the converger never touches** — `claude-profile` launches with `claude --settings ~/.claude/settings/<name>.json`, while the converger only ever writes `<profile>/settings.json`. So anything that has to be per-profile *and* has to survive every session start belongs here; put it in the profile's own `settings.json` and the next convergence takes it back. Measured 2026-09-15 on `permissions.deny`: one `claude -p` run listed 50 tools with an empty `--settings` file and 48 with `{"permissions":{"deny":["WebSearch","WebFetch"]}}`, the two named tools being the difference. The cost of not knowing this is a detour: the session that worked it out had already forked the converger to add a per-profile exception before noticing that one key in the provider file did the same job with no code change.
+- For Skill authoring in an approved independent Fleet clone, use the
+  [leased-authoring owner procedure](references/local-source-sync-architecture.md#leased-fleet-authoring-clones).
+- Provider routing is done via `~/.claude/settings/<name>.json`, which sets `ANTHROPIC_MODEL`, `ANTHROPIC_BASE_URL`, and `ANTHROPIC_AUTH_TOKEN` for that window. **That file is a full settings file rather than an env file, and it is the one layer the converger never touches** — `claude-profile` launches with `claude --settings ~/.claude/settings/<name>.json`, while the converger only ever writes `<profile>/settings.json`. So anything that has to be per-profile *and* has to survive every session start belongs here; put it in the profile's own `settings.json` and the next convergence takes it back. This includes per-profile `permissions.deny`, such as denying `WebSearch` and `WebFetch`.
 - **Per-profile thinking effort lives in that provider file too.** The default profile sets effort per Anthropic model via `modelSettings` in `~/.claude/settings.json`; a third-party profile that needs a *different* effort pins `CLAUDE_CODE_EFFORT_LEVEL` (e.g. `"max"`) in its `~/.claude/settings/<name>.json` env instead. The provider file is the only layer that can hold that pin: put it in the profile's own `settings.json` env and the converger deletes it at the next session start (a non-identity env key the default profile doesn't carry is deletion-propagated away); put it in the default profile's env and it applies there *and* converges into every third-party profile's `settings.json` — usually wrong, because weaker third-party models benefit from forced max effort exactly when the default flagship no longer does (verified end-to-end 2026-10-06: a session launched via `claude-profile` reads the pinned value back from its own environment).
 - **Credentials ride in that same file, so anything scripting a profile has to pass `--settings` as well.** `CLAUDE_CONFIG_DIR=<profile> claude -p ...` on its own answers `Not logged in · Please run /login`, because the token lives in the provider file and nothing else loads it. The message names login; the cause is the missing flag.
 - The converger has no single-profile mode: every invocation covers all of `~/.claude-profiles/*` plus `$CLAUDE_CONFIG_DIR`, and no flag narrows that. To converge one profile on demand, point `CLAUDE_PROFILES_ROOT` at a directory holding only it, or run `--check` and read the per-profile lines. The default profile's own files are the source and are never written.
@@ -120,12 +122,8 @@ When the user says something like "set up Claude Code profiles" or "I want to us
    **Why symlinks and not `cp`:** `~/.config/…` is what actually runs — the
    LaunchAgent and `claude-profile` invoke scripts by that path — while this
    repo holds their source. Copies drift, and nothing about a deployed copy
-   looks different from its source, so "am I editing the SSOT?" is not a
-   judgement anyone reliably makes. Measured on one machine before the switch:
-   a lock-placement fix sat in the repo for 26 days while the deployed copy kept
-   running the bug it fixed, and two cleanup routines written straight into the
-   deployed copy never reached version control at all — **drift in both
-   directions, silently.** A link removes both, *for as long as it stays a
+   looks different from its source. A link prevents independent edits and
+   source updates from silently diverging, *for as long as it stays a
    link* — an atomic-save editor, an `rsync` or a stray `cp` turns one back into
    a real file without saying so, which is why this is worth re-checking rather
    than declaring solved. It also lets `sync-local-skill-sources.py` locate its
@@ -257,7 +255,7 @@ python3 ~/.config/claude-switch-models-setup/sync-local-skill-sources.py --apply
                                # Maintainers: install automatic macOS watcher
 ```
 
-These are not day-to-day commands. Normal source edits are live through symlinks. The one-shot commands are for repair, bootstrap, or non-macOS environments without the LaunchAgent watcher.
+These are not day-to-day commands. Edits to activated canonical sources are live through symlinks. The one-shot commands are for repair, bootstrap, or non-macOS environments without the LaunchAgent watcher.
 
 ## Provider Templates
 
@@ -267,12 +265,9 @@ do not infer those values from a hand-maintained template summary.
 
 Every template uses the `<API_KEY>` placeholder. Templates for configurable gateways also use `<BASE_URL>`; the MiniMax templates pin the documented regional endpoint. Ask the user for every real placeholder value; do not guess or reuse values from the current machine unless the user explicitly provides them.
 
-### MiniMax model behavior
-
-| Templates | Model | Context configuration | Thinking behavior |
-|---|---|---|---|
-| `minimax.json`, `minimax-cn.json` | `MiniMax-M3` | Append `[1m]` to every routed model value and set `CLAUDE_CODE_AUTO_COMPACT_WINDOW` to `1000000`. | Supports adaptive or disabled thinking. Keep `ANTHROPIC_REASONING_MODEL` on the same model. |
-| `minimax-m2-7.json`, `minimax-m2-7-cn.json` | `MiniMax-M2.7` | Set `CLAUDE_CODE_MAX_CONTEXT_TOKENS` and `CLAUDE_CODE_AUTO_COMPACT_WINDOW` to `204800`; do not append `[1m]`. | Thinking is always on; do not claim a template-level disable path. |
+MiniMax-M3 supports adaptive or disabled thinking; keep `ANTHROPIC_REASONING_MODEL`
+on the same model. MiniMax-M2.7 thinking is always on; do not claim a
+template-level disable path. Read model and context values from the chosen template.
 
 ## Configuring Context Window Size
 
@@ -291,25 +286,15 @@ When writing a new provider's `settings/<name>.json`, pick based on the provider
 | Provider's real context window | What to set | Example template |
 |---|---|---|
 | ~1M tokens, explicitly confirmed (not assumed from the model's tier/name) | `[1m]` suffix on every `ANTHROPIC_MODEL` / `ANTHROPIC_DEFAULT_*_MODEL` / `CLAUDE_CODE_SUBAGENT_MODEL` value. Must be the exact 4 characters `[1m]` — Claude Code matches this literal string, not a made-up marker like `[1million]` or `[max]`. | `kimi.json` |
-| A known, smaller size (e.g. 200K) | Explicit `CLAUDE_CODE_MAX_CONTEXT_TOKENS` and/or `CLAUDE_CODE_AUTO_COMPACT_WINDOW` set to the real number — no `[1m]`. | `kimi-highspeed.json` (`200000`) |
+| A known, smaller size (e.g. 200K) | Explicit `CLAUDE_CODE_MAX_CONTEXT_TOKENS` and/or `CLAUDE_CODE_AUTO_COMPACT_WINDOW` set to the real number — no `[1m]`. | `kimi-highspeed.json` |
 | Unknown / not yet verified | Don't guess, and don't copy another provider's number just because a template needs *something* there. Ask the user to check the provider's own docs/console first. An unverified `[1m]` or an unverified large `CLAUDE_CODE_AUTO_COMPACT_WINDOW` just moves the failure from "compacts too early" to "doesn't compact until well past the real limit" — worse, because it's silent until a request actually fails. |
 
-`deepseek.json` and `glm.json` set **both** `[1m]` and an explicit `CLAUDE_CODE_AUTO_COMPACT_WINDOW: "1000000"`. That's belt-and-suspenders, not redundant filler to strip out — the exact precedence between the marker and the explicit override hasn't been independently reverse-engineered, so if you're copying one of those two templates, keep both rather than dropping one.
+When a template supplies both a context marker and an explicit limit, retain
+both unless their precedence has been verified. Read the actual values from
+the selected template rather than maintaining a model summary here.
 
-The MiniMax-M3 templates use the same 1M marker plus an explicit `1000000` auto-compact value. The MiniMax-M2.7 templates use explicit `204800` limits with no marker.
-
-The full step-2-16k template-correctness war-story (why an internally-consistent-looking context value is not the same as a currently-correct one — cross-check the model name against the provider's live docs, not just the numbers around it), plus a reusable recipe to verify whether any env var actually changes the bytes sent over the wire (a local `http.server` capture, since `--debug api` only shows internal state), live in `references/context-window-config.md`.
-
-### Common base URLs (verify with your provider)
-
-| Provider | Typical base URL |
-|----------|------------------|
-| Kimi     | `https://api.moonshot.cn` or OpenRouter-compatible endpoint |
-| GLM      | `https://open.bigmodel.cn/api/paas/v4` or OpenRouter-compatible endpoint |
-| DeepSeek | `https://api.deepseek.com` or OpenRouter-compatible endpoint |
-| StepFun  | `https://api.stepfun.com` or OpenRouter-compatible endpoint |
-| MiniMax  | Global: `https://api.minimax.io/anthropic`; China: `https://api.minimaxi.com/anthropic` |
-| Anthropic| `https://api.anthropic.com` |
+For checking provider model identity and whether an environment variable changes
+the request sent over the wire, read `references/context-window-config.md`.
 
 **Important:** The exact endpoint depends on whether the user is calling the provider directly or through a compatibility gateway (e.g., OpenRouter). Always ask.
 
@@ -363,10 +348,8 @@ Cause: the profile was created before the symlink-convergence design landed (or
 was hand-created), so a shared content directory ended up as a real per-profile
 directory instead of a symlink. That profile's copy now silently diverges from the
 main `~/.claude/` copy — its skills/projects/hooks/agents are not the same as every
-other profile's. The broken-symlink check cannot see this (a real directory is not
-a broken link); on a real machine this drift went undetected for months until the
-dedicated real-directory check was added (2026-07-21: legacy profiles created
-before this check existed carried real `projects/` dirs for months, undetected).
+other profile's. A real directory is not a broken link; the directory-type check in
+`claude-profiles-doctor` detects this drift.
 
 Fix (reversible — data is archived, never deleted):
 
@@ -429,7 +412,7 @@ reports from successful synchronization and fresh-host discovery.
 Source sync also manages derived cache artifacts:
 
 
-- **Version-alias symlinks.** Each cache link is named after the marketplace's current version, so every version bump left the previous link behind pointing at the very same source directory. The pass now removes sibling links that resolve to the same source; real directories are never touched, since Claude Code installs those and a live session may still hold them through `.in_use`.
+- **Version-alias symlinks.** Each cache link is named after the marketplace's current version. The pass removes sibling links that resolve to the same source; real directories are never touched, since Claude Code installs those and a live session may still hold them through `.in_use`.
 - **`installed_plugins.json` backups.** Each run that changes the JSON writes a backup. The `KEEP_JSON_BACKUPS` constant in the script caps the retained set; the names end in a `YYYYMMDD-HHMMSS` stamp, so lexical order is chronological.
 
 Both are visible in a dry run before `--apply` touches anything.
@@ -438,7 +421,7 @@ Both are visible in a dry run before `--apply` touches anything.
 
 Symptom: the default profile has hook guards, marketplaces, or feature flags configured, but a third-party profile behaves as if they don't exist (no PreToolUse guards fire, `claude plugin marketplace list` is empty, a feature enabled in the default profile is off).
 
-**Sibling symptom, different layer (2026-08-17):** a behavior preference set on the default profile — e.g. the workflow size guideline — has no effect in third-party profiles (a Kimi session fanned a Dynamic Workflow out to 30+ agents despite `small` being set on main). That key lives in the per-profile `.claude.json`, which symlinks and the settings.json sync both miss. See "Default-profile behavior settings don't reach third-party profiles" in `references/troubleshooting.md`.
+**Sibling symptom, different layer:** a behavior preference set on the default profile — e.g. the workflow size guideline — has no effect in third-party profiles. That key lives in the per-profile `.claude.json`, which symlinks and the settings.json sync both miss. See "Default-profile behavior settings don't reach third-party profiles" in `references/troubleshooting.md`.
 
 Cause: those live in each profile's own `settings.json`, which is config-dir-local — symlinking directories does not cover the config layer, and it drifts silently the moment the default profile changes.
 

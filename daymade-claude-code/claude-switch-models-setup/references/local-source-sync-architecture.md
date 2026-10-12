@@ -8,7 +8,9 @@ Local source repos are the single source of truth. Installed runtime locations s
 
 ## Runtime Model
 
-Normal source edits require no sync command:
+Edits to an already activated canonical source require no sync command.
+Authoring checkouts have a separate ownership boundary; for independent Fleet
+clones, use [Leased Fleet authoring clones](#leased-fleet-authoring-clones).
 
 - Claude Code plugin cache version directories are symlinks to source plugin directories.
 - Codex user Skills selected by the expanded activation policy are symlinks from
@@ -32,7 +34,7 @@ global prompt. The sync scripts exist for topology repair, not day-to-day editin
 
 | Change | Mechanism |
 |---|---|
-| Edit an existing `SKILL.md`, script, reference, or asset | Live through symlink; restart running agent session if needed |
+| Edit an existing `SKILL.md`, script, reference, or asset in an activated canonical source | Live through symlink; restart running agent session if needed |
 | Install/uninstall, or `claude plugin enable`/`disable --scope user`, a plugin in the default Claude profile | Default `settings.json` / `installed_plugins.json` changes; LaunchAgent watcher mirrors state to every profile within seconds (verified 2026-08-22: launchd run counter incremented within 5s of a `settings.json` touch) |
 | Add a new skill/plugin entry | Marketplace manifest changes; LaunchAgent watcher runs source sync |
 | Remove or rename a skill entry | Marketplace manifest changes; the watcher prunes stale managed links from `.agents/skills` but only reports legacy `.codex/skills` links for reviewed cleanup |
@@ -45,30 +47,20 @@ global prompt. The sync scripts exist for topology repair, not day-to-day editin
 | Launch Kimi/GLM/DeepSeek/Step profile | `claude-profile` runs source sync, then mirrors enabled plugins |
 | Watcher missing or non-macOS machine | Run `sync-local-skill-sources.py --apply` as a repair command |
 
-## Components
-
-| Component | Role |
-|---|---|
-| `sync-local-skill-sources.py` | Idempotent repair primitive. Finds local source repos, resolves explicitly qualified source preferences and rejects undeclared duplicate names, validates the activation manifest, points Claude marketplaces/caches at source, reconciles the Codex set in `~/.agents/skills` and eligible Claude personal links in `~/.claude/skills`, then creates/confirms the explicit legacy compatibility subset and reports other managed legacy links without deleting them. |
-| `sync-local-skill-sources-daemon.sh` | macOS LaunchAgent runner. Installs or removes the watcher and runs one locked sync pass. |
-| `claude-plugins-sync.py` | Per-profile Claude Code sync. Builds profile-local `known_marketplaces.json`, shares installed plugin state, and mirrors `enabledPlugins`. |
-| `claude-profiles.sh` | Shell integration. Runs local source sync on profile init/launch before profile plugin sync. |
-
 Both Python sync scripts take the same cross-process lock — a lock directory kept in the Claude config dir, deliberately OUTSIDE the plugins directory so the sync never mirrors the lock itself into profiles — before changing marketplace JSON, installed plugin metadata, or cache symlinks. This matters because power users may open several tmux panes or terminal windows at once; without one shared lock, simultaneous `claude-profile ...` launches can race on cache symlink creation or `known_marketplaces.json` temp-file replacement.
 
 Profile state uses `.claude.json` inside each `CLAUDE_CONFIG_DIR`. Older `claude.json` files may still exist as harmless legacy files, but modern Claude Code will not use them as the profile state file.
 
 ## Source Repo Discovery
 
-`sync-local-skill-sources.py` locates source repos in this order:
+The discovery inputs and accepted marketplace identities are owned by
+[`sync-local-skill-sources.py`](../scripts/sync-local-skill-sources.py), in
+`main()`, `infer_repos()` and `LOCAL_MARKETPLACE_NAMES`. Do not maintain a second
+discovery order or candidate list. Inspect the deployed owner's read-only output:
 
-1. `--repo <path>` arguments.
-2. `DAYMADE_SKILL_SOURCE_REPOS` as a colon-separated list.
-3. The script's ancestor directories, when run from a source checkout.
-4. Directory-source entries in `~/.claude/plugins/known_marketplaces.json`.
-5. Common local worktree candidates under `~/workspace` and `~/Workspace`.
-
-Accepted marketplace identities are defined only by `LOCAL_MARKETPLACE_NAMES`, and conventional workspace candidates only by `infer_repos()` in `scripts/sync-local-skill-sources.py`. Do not copy either current set into documentation. The script's default dry-run prints the resolved source inventory; if none qualify, it fails fast instead of guessing. Non-conventional checkout paths require `--repo`, `DAYMADE_SKILL_SOURCE_REPOS`, or a registered directory-source marketplace.
+```bash
+python3 ~/.config/claude-switch-models-setup/sync-local-skill-sources.py --print-source-inventory
+```
 
 A repo is identified by `.claude-plugin/marketplace.json`, read by `marketplace_name()`. Only one state is silent; the rest raise, so a repo stops vanishing from discovery because of a manifest it does have:
 
@@ -80,16 +72,15 @@ A repo is identified by `.claude-plugin/marketplace.json`, read by `marketplace_
 | The manifest path exists but cannot even be looked at (`EACCES` on `.claude-plugin`) | Same `UnreadableMarketplaceManifest`. `Path.is_file()` raises `PermissionError` here; `os.path.lexists()` would return False, which is the "no manifest" answer, so a checkout with drifted ownership would silently drop out of discovery. Ask `os.lstat` directly and treat everything except `FileNotFoundError`/`NotADirectoryError` as "exists but unusable". |
 | It reads whole, but declares no usable non-empty string `name` | Raises `InvalidMarketplaceManifest`, naming the manifest path and that the file itself is malformed in that checkout, so retrying will not help. |
 
-Every state but the first used to return the same `None` as "no manifest". That mattered: a repo whose manifest was momentarily unreadable dropped out of discovery, and a later hard check against the activation manifest reported `marketplace activation fields name repos not discovered: <name>` — an error pointing at the wrong cause, sending the reader to look for a repo that had never moved.
+An unreadable manifest is not a missing repository. Git branch switches can
+unlink and rewrite working-tree files: a concurrent-reader experiment on a
+160 KB CJK manifest observed torn reads and momentary `FileNotFoundError`s;
+its no-writer control observed neither. A changed inode does not establish
+atomicity. This demonstrates a possible writer class, not the cause of a
+particular failed read. `git commit` does not rewrite the working-tree file.
+Retry once after the writer finishes; a malformed complete file needs repair.
 
-**On the cause of the incident that prompted this.** The failure record supports only two facts: it happened at 21:39:05, and it self-cleared. That is "some writer was writing that file at the time" — not *which* writer. Two hypotheses were each mechanically tested, and both readings were wrong before the measurement:
-
-- *"git cannot be the writer, because checkout replaces a changed file whole"* — wrong. A changed inode does not imply atomicity. Measured on a 160 KB CJK manifest with branch switches in flight, a concurrent reader saw **43 torn reads and 232 momentary `FileNotFoundError`s** out of ~20k reads (baseline: zero of each). A rename-based atomic swap could never make the file *absent* to a reader; git unlinks and rewrites in place, so it can.
-- *"the usual cause is a shared checkout being rewritten by git"* — right as a **class** of writer (this file is touched by all of the last 8 commits in that checkout, and it is one of the sync daemon's WatchPaths), never established as the cause of *that* read. `git commit` genuinely does not touch the working-tree file at all.
-
-So the message names the class and the measurement, and claims no specific cause. The corrective action is the same either way: one retry after the writer finishes.
-
-A manifest that names a marketplace outside `LOCAL_MARKETPLACE_NAMES` is a normal answer, not a failure: `add_repo()` skips it and keeps the others. A name padded with whitespace falls into that same silent path by design — `marketplace_name()` does not know the activation manifest, so it cannot tell "an unmanaged foreign marketplace" from "our marketplace with a typo'd name". The activation-aware split is deliberately not implemented, which is why the blanket claim "every input that fed this bug is now caught" does not hold. Note also that `skill-install-audit.py` still decides "does this repo have a manifest" with `.is_file()`, so a dangling-symlink or directory manifest is silently skipped there exactly as it used to be here; that is pre-existing behaviour outside this change.
+A manifest that names a marketplace outside `LOCAL_MARKETPLACE_NAMES` is a normal answer, not a failure: `add_repo()` skips it and keeps the others. A name padded with whitespace falls into that same silent path by design — `marketplace_name()` does not know the activation manifest, so it cannot tell "an unmanaged foreign marketplace" from "our marketplace with a typo'd name". `skill-install-audit.py` checks manifest presence with `.is_file()`, so a dangling-symlink or directory manifest is silently skipped there; the audit and discovery reader have distinct error coverage.
 
 ## Host-Specific User-Skill Activation
 
@@ -177,13 +168,6 @@ Rules:
   states are reported. A scoped install conflict fails. User-owned directories
   and foreign links are not replaced. A pre-existing direct Skill remains
   independent of a disabled plugin with the same source.
-- `--print-source-inventory --active-skills-manifest <manifest>` returns inventory
-  schema 2 without changing either host. `marketplaces[marketplace][skill]` retains
-  every registered candidate; `selected_skills[skill]` holds the resolved source.
-  Both entry types contain `plugin_id` and absolute `source_dir`. The output also
-  includes normalized `source_preferences`. Selected sources include cold Skills;
-  auditors expand activation names separately, then look up their expected paths
-  in `selected_skills`, never by overwriting entries while traversing marketplaces.
 - The background daemon executes a **pinned plugin copy**, installed into its own
   `CLAUDE_CONFIG_DIR` under `~/.local/share/`, not the live checkout. That isolation is
   deliberate: editing a source repo must not change what an already-running daemon does.
@@ -254,6 +238,12 @@ and origin must equal that checkout's configured Git origin. Matching origin
 alone never enrolls another clone. `--authoring-pools-manifest <absolute-path>`
 selects another operator-owned enrollment file for a bounded read-only probe.
 
+Take the canonical repository from that host's deployed source owner, and compare
+the enrollment's origin with the approved pool's `pool.json` and the configured
+Git origins of the canonical repository and leased clone. These strings must
+match exactly; equivalent SSH and HTTPS URLs do not substitute for one another.
+Pool configuration alone is not owner enrollment.
+
 The owner validates Fleet's matching `pool.json` and `init.json`, its configured
 slot count, and `leases.json`. Only a configured slot with a non-empty token,
 owner, task, branch and base, on that exact task branch with its own physical
@@ -274,6 +264,13 @@ After deploying the owner reader, verify the ordinary source-contract check from
 the leased Skill directory without supplying an independent inventory override;
 also check an unleased sibling remains invalid. A pinned runtime must advance
 through the existing pin-update procedure before this readback proves activation.
+
+Installation auditors use `selected_skills` after resolving the host's activation
+policy, not the authoring candidates in `marketplaces`.
+Lease ownership authorizes the task's source checkout; it does not make that
+checkout the installed Skill identity. Keep installation and fresh-host acceptance
+on the canonical source route. A returned lease's earlier positive check is
+historical evidence, not current authoring authority.
 
 ### Third-party cold inventory
 
@@ -404,10 +401,8 @@ If a `claude-profile <name> -p ...` probe starts successfully, debug logs should
   target is inside a managed source repo and its name is outside the
   active set. Pruning atomically moves that exact entry into
   `.source-sync-backups/`; it does not delete the object. The background pass does not clean those
-  buckets. They can look like disposable cache from the outside, but a 2026-09-05
-  survey found most of them holding files present in no repository's object store,
-  one carrying a 75-file variant of a skill whose shipped version has 13. Judge them
-  with `prune-source-sync-backups.py`, which hashes every entry and keeps any bucket
+  buckets. A backup can contain source variants absent from every repository's
+  object store. Judge it with `prune-source-sync-backups.py`, which hashes every entry and keeps any bucket
   it cannot prove reproducible; never clear the directory wholesale. Classification and
   identity come from one entry snapshot, and the move uses the platform's
   no-replace rename primitive. If an unrelated writer replaces the entry after

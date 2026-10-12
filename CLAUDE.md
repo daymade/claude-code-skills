@@ -412,7 +412,7 @@ receipt, and an automatic outbox path gets one non-retrying HTTP attempt.
 
 ### Testing Skills Locally
 
-Test from the canonical checkout, not from a mutable direct copy. Use the current
+For installed-Skill and fresh-host acceptance, test the canonical source route. Use the current
 `claude-switch-models-setup` local-source workflow for this maintainer machine,
 and use `daymade-skill:skill-governance` to verify source, installed state,
 discovery policy, and the fresh model-visible catalog. Do not blindly remove and
@@ -429,6 +429,8 @@ not establish that policy. Do not hand-create user Skill links.
 For intentional same-name source variants, use the owner's explicit source-selection
 contract; retain every candidate and reject undeclared collisions. Audit tools must
 consume the owner's selected inventory rather than choose a source independently.
+For Skill authoring in an approved independent Fleet clone, follow the
+[leased-authoring owner procedure](daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md#leased-fleet-authoring-clones).
 
 When delivery includes local availability, finish the source owner's dry-run/apply
 and the [newly registered Skill gate](daymade-skill/skill-governance/references/skill-surface-governance.md#14-verify-a-newly-registered-skill).
