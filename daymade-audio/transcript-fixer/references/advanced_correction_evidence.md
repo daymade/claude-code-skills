@@ -322,12 +322,13 @@ audio, one second recognizer. The tool is
 ```bash
 uv run scripts/verify_queue_audio.py \
   --transcript /abs/path/meeting.md --audio /abs/path/source.wav \
-  --speed 1.3 --engine-script /abs/stepfun-asr/scripts/asr_transcribe.py
+  --time-overrides /abs/path/verified-times.json \
+  --engine-script /abs/path/stdout_recognizer.py --outdir /abs/path/audio-evidence
 ```
 
 It parses speaker turns, maps each pending row to its recorded body line and
-verbatim context/`context_offset`, estimates that selected slot's character
-position inside the turn, scales by `--speed`, cuts
+verbatim context/`context_offset`, validates the selected occurrence, then uses
+its checked media position or an exploratory character estimate. It cuts
 tight+medium windows, and writes `<outdir>/results.json` with both windows'
 complete recognized text per row. Missing or ambiguous anchors produce an
 `anchor_error` result without cutting clips, running recognition or attaching
@@ -337,29 +338,15 @@ the review queue; this is evidence, not a verdict or a transcript edit. The
 exact automatic-attachment gate lives in `verify_queue_audio.py`, with the
 operator-facing CLI contract in [script_parameters.md](script_parameters.md).
 
-The first character estimate is exploratory: without checked neighbouring words,
-the result is `coverage_unknown` and cannot attach authority. After locating the
-utterance, supply `--time-overrides /abs/times.json`, keyed by this file's selected
-pending queue IDs:
-
-```json
-{"42": {"seconds": 12.25, "anchors": ["请带两份资料"]}}
-```
-
-This example is synthetic. `seconds` is on the source media clock and is not
-multiplied by `--speed`. Choose audible, distinguishing neighbouring words that
-exclude the disputed token and its suggestion; the override records the operator's
-checked anchor, not independent proof that the operator chose correctly.
-Both recognised windows must contain those anchors before they can support a
-reading. `needs_reanchor` means that coverage check failed; it does not decide
-whether the recognizer misheard or the cut missed the utterance. Re-cut within the
-existing two-retry limit. Only covered windows can report
-`recognizer_disagreement`, `original_supported`, `suggestion_supported` or
-`unsettled_reading`; all remain pending until the separate verdict command.
-The final turn uses `ffprobe` duration on the correct clock; unavailable duration
-without a verified override is `timestamp_unknown`, never a guessed turn length.
-The command exits 1 for missing position/coverage, failed engines, identical
-clips or a failed authority append, while retaining the result for recovery.
+The first character estimate is exploratory. Locate the utterance in the source
+audio and supply checked neighbouring words before collecting evidence for a
+verdict. Use the [CLI contract](script_parameters.md#verify_queue_audiopy) for
+the override schema, clock mapping, result statuses and exit codes. The override
+records the operator's checked anchor, not independent proof that the operator
+chose correctly. Inspect coverage before comparing readings; failed coverage
+cannot distinguish a recognizer miss from an off-target cut. Re-cut only within
+the bounded rule below. Evidence collection leaves every row pending until the
+separate verdict command.
 The executing agent can group several doubts in one utterance and reuse two
 distinct windows covering that utterance and its surrounding speech. Use an
 already available, authorized second recognizer; local GPU execution follows

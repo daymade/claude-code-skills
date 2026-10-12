@@ -5,19 +5,18 @@
 """verify_queue_audio.py — 批量 pending 音频交叉核验（第二引擎双窗口识别）。
 
 对某转写文件在 review queue 里的 pending 项，逐项从源音频剪 tight/medium
-双片段，送第二识别引擎（默认 StepFun）交叉识别，输出对照表供裁决。
+双片段，送已指定的第二识别引擎交叉识别，输出对照表供裁决。
 
 典型场景：Native pass 后积压的 pending（实体/疑词）——本地检索阶梯已尽，
-用第二引擎的耳朵裁决，而不是把队列推给用户。
+用第二引擎补充音证，再通过独立的裁定路径处理队列。
 
-用法：
+用法（已核准媒体位置和邻接词）：
   uv run scripts/verify_queue_audio.py \
     --transcript /abs/path/meeting.md \
     --audio /abs/path/source.wav \
-    [--speed 1.3]            # 转写时间轴→音频轴倍速（加速上传的妙记=原始/加速比；反推法：源音频时长/妙记时长）
-    [--queue-ids 1817,1818]  # 默认该文件全部 pending
-    --engine-script /abs/stepfun-asr/scripts/asr_transcribe.py
-    [--outdir /tmp/asr-verify]
+    --time-overrides /abs/path/verified-times.json \
+    --engine-script /abs/path/stdout_recognizer.py \
+    --outdir /abs/path/audio-evidence
 
 输出：<outdir>/results.json；相同音频片段不调用 ASR，结果标记 same_clip。
 未核准邻接词或切片未覆盖它们时不附音证，退出 1；核准位置通过

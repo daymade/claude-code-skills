@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **transcript-fixer** (`daymade-audio` v1.48.5): Align audio examples with verified media positions and the required stdout engine interface. Route reviewed-file continuation from project instructions and remove derived CLI navigation and counts.
 - **transcript-fixer** (`daymade-audio` v1.48.4): Support verified media-time overrides for queue clips, separate missing neighbour coverage from recognizer disagreement, and use real media duration for final-turn estimates. Add a pending/human-verdict continuation entry while preserving occurrence selection, complete readings, identity and verdict boundaries. Change type: bounded audio-evidence repair and continuation routing.
 - **transcript-fixer** (`daymade-audio` v1.48.3): preserve selected occurrence anchors during audio checks, retain complete recognizer output, and pass explicit Feishu export identity with accurate error reporting.
 

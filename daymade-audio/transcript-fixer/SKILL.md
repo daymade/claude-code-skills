@@ -384,11 +384,11 @@ uv run scripts/generate_word_diff.py original.md corrected.md output.html
 uv run scripts/harvest_corrections.py raw.md corrected.md \
   --context-file ~/.transcript-fixer/contexts/myproject.md --write
 
-# Batch-adjudicate a transcript's pending queue rows via clip-level
-# cross-recognition (one source audio, one second engine, both windows)
+# Collect clip evidence at operator-verified media positions; resolve rows separately
 uv run scripts/verify_queue_audio.py \
   --transcript /abs/meeting.md --audio /abs/source.wav \
-  --speed 1.0 --engine-script /abs/stepfun-asr/scripts/asr_transcribe.py
+  --time-overrides /abs/verified-times.json \
+  --engine-script /abs/stdout_recognizer.py --outdir /abs/audio-evidence
 
 # Multi-format Stage 1/API comparison report
 uv run scripts/generate_diff_report.py \
