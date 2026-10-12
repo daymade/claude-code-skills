@@ -4,7 +4,8 @@ description: >-
   Improves an existing application using its code, product contract, authorized
   work history and competitor evidence. Use for 取长补短、取其精华去其糟粕、参考竞品优化应用
   or evolving an app from successful and failed work. Carries authorized changes
-  through implementation and user-result verification; use skill-evolver for Skills.
+  through implementation and user-result verification, including REA and reverse
+  Skill composition; use skill-evolver for Skills.
 ---
 
 # App Evolver
@@ -69,6 +70,20 @@ research owner for non-repository products. Resolve revisions and distinguish
 observed behavior from claims. Treat source access, architectural inspiration,
 code reuse and distribution permission as separate questions; reading a repository
 does not authorize copying its implementation.
+
+### Compose reverse-analysis Skills when the target needs them
+
+Read [Skill composition](references/skill-composition.md) when investigating a
+released app, package, binary or runtime behavior. Select a specialist by the
+missing evidence, return its findings to this workflow, and retain the current
+product contract, mechanism decision and engineering/acceptance owners.
+
+Use the public Skill routes directly when no personal collection is available.
+If an authorized personal favorites integration exists, use it to find additional
+mechanisms or framework candidates; verify their actual Skill sources before
+adoption. Its absence does not block public routes. This is reference composition:
+it bundles no third-party Skill or engine and grants no installation, MCP setup
+or target-execution permission.
 
 ## 3. Decide what transfers
 

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **app-evolver** (v1.1.0): Compose public REA and reverse-skill instructions for evidence gaps while preserving the existing source-analysis, product-fit, implementation and acceptance workflow. Personal favorites and local recovery Skills remain optional. Reference-only integration neither bundles external frameworks nor configures MCP or installs engines. Change type: bounded workflow extension.
+
 - **continue-codex-work** (`daymade-claude-code` v4.27.7): reconcile explicit user recovery with the current native Goal schema and existing host transport, preserving task identity and budget boundaries.
 
 - **app-evolver** (v1.0.0; catalog v3.23.0): Add an application improvement orchestrator that binds current product contracts, authorized work history and competitor mechanisms to engineering changes and consumer-level acceptance. Keep analysis-only scope, protected behavior and evidence limits explicit.
