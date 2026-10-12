@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **prior-work-retrieval** (`daymade-claude-code` v4.27.10): Ignore explicit declarations that no asset needs reuse while preserving reuse questions, uncertain statements and later positive recall clauses. Retain pending requirements and the existing read-only and prompt-scope boundaries. Change type: bounded false-trigger repair.
+
 - **asr-transcribe-to-text** (`daymade-audio` v1.48.0): Restore GPU-only VAD and ASR with a pinned isolated Metal runtime, reject unsupported CPU/DTW paths before inference, and preserve source-time chunks and verified checkpoint recovery. Fix speech-checkpoint reopening and subprocess pipe draining.
 - **youtube-downloader** (v1.2.0): Route transcript requests through existing drafts and original subtitles before strict audio-only ASR; retain file downloads and distinguish uploaded tracks from reviewed text.
 - **lark-cli-router** (`daymade-claude-code` v4.27.9) and **feishu-doc-scraper** (v1.8.2): Reconcile linked archive materials from roots and complete thread replies, and replace a missing comments reference with current read-side guides.
