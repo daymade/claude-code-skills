@@ -9,7 +9,7 @@ timeline check nobody remembers to run. Doing it by hand once per transcript
 re-pays all three costs; this script pays them once.
 
 Usage:
-    fetch_minute_audio.py --token <minute-token> --profile <lark-cli-profile> \
+    fetch_minute_audio.py --token <minute-token> --profile <lark-cli-profile> --as user \
         --output <path/to/audio.m4a> [--transcript <path/to/transcript.md>]
 
 With --transcript it also compares the audio duration against the transcript's
@@ -25,8 +25,7 @@ status is what tells you whether anything was actually verified):
        argparse also exits 2 for a malformed invocation — its message says so.
     3  operational failure, nothing usable produced (bad --transcript path or an
        unreadable one, an un-writable --output directory, lark-cli failed, curl
-       failed, the download was too small, or the profile cannot read this
-       minute — that last one is the most common and is not a bad token).
+       failed, the download was too small, or the API refused export).
 
 Requires: lark-cli (authenticated for the profile that OWNS the minute), curl,
 and optionally ffprobe for the duration check.
@@ -69,7 +68,7 @@ def fail(message: str) -> "typing.NoReturn":
     raise SystemExit(3)
 
 
-def fetch_signed_url(token: str, profile: str) -> str:
+def fetch_signed_url(token: str, profile: str, identity: str = "user") -> str:
     """Ask lark-cli for the signed download URL.
 
     Two things this gets right that a hand-rolled version usually doesn't:
@@ -79,41 +78,49 @@ def fetch_signed_url(token: str, profile: str) -> str:
     service, so any HTTP proxy in the environment is disabled for the call —
     a proxy both breaks the request and would carry credentials outbound.
     """
+    if identity not in ("user", "bot"):
+        fail("--as must be user or bot; preserve the source identity")
     env = dict(os.environ)
     env["LARK_CLI_NO_PROXY"] = "1"
+    env["LARKSUITE_CLI_NO_UPDATE_NOTIFIER"] = "1"
+    env["LARKSUITE_CLI_NO_SKILLS_NOTIFIER"] = "1"
     proc = run(
         [
             "lark-cli", "minutes", "+download",
             "--minute-tokens", token,
             "--profile", profile,
+            "--as", identity,
             "--url-only",
         ],
         env=env,
     )
-    if proc.returncode != 0:
-        fail(f"lark-cli failed (exit {proc.returncode}):\n{proc.stderr.strip()[:800]}")
-
     # The CLI may prepend/append human-readable lines; isolate the JSON object.
     raw = proc.stdout
     start = raw.find("{")
     end = raw.rfind("}")
     if start == -1 or end == -1:
+        if proc.returncode != 0:
+            fail(f"lark-cli failed (exit {proc.returncode}):\n{proc.stderr.strip()[:800]}")
         fail(f"No JSON object in lark-cli output:\n{raw[:800]}")
     try:
         payload = json.loads(raw[start : end + 1])
     except json.JSONDecodeError as exc:
         fail(f"Could not parse lark-cli JSON: {exc}\n{raw[:800]}")
 
-    url = (payload.get("data") or {}).get("download_url")
-    if not url:
-        # A permission failure surfaces here, and the cause is almost always the
-        # profile rather than the token: a minute is a per-tenant, per-user
-        # resource, so a profile from another tenant (or one the minute was
-        # never shared with) authenticates fine and still cannot read it.
-        fail(
-            "No data.download_url in the response — the profile likely cannot "
-            f"read this minute. Envelope:\n{json.dumps(payload, ensure_ascii=False)[:800]}"
-        )
+    if not isinstance(payload, dict):
+        fail("lark-cli result is not an object; export status is unknown")
+    error = payload.get("error")
+    if proc.returncode != 0 or error or ("ok" in payload and payload["ok"] is not True):
+        detail = json.dumps(error, ensure_ascii=False) if error else proc.stderr.strip()
+        # Preserve the actual refusal/error; never infer missing permissions from
+        # an absent URL or echo a signed success payload into a diagnostic.
+        fail(f"lark-cli export failed (exit {proc.returncode}): {detail[:800] or 'invalid success status'}")
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        fail("lark-cli result has no data object; export status is unknown")
+    url = data.get("download_url")
+    if not isinstance(url, str) or not url.strip():
+        fail("lark-cli result has no nonblank data.download_url; export status is unknown")
     return url
 
 
@@ -181,6 +188,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--token", required=True, help="Minute token (from the transcript's frontmatter)")
     ap.add_argument("--profile", required=True, help="lark-cli profile that OWNS the minute")
+    ap.add_argument("--as", dest="identity", choices=("user", "bot"), default="user",
+                    help="source identity; defaults to user, pass bot only for a bot-sourced workflow")
     ap.add_argument("--output", required=True, type=Path, help="Where to save the audio")
     ap.add_argument("--transcript", type=Path, help="Transcript to verify the timeline against")
     args = ap.parse_args()
@@ -191,7 +200,7 @@ def main() -> int:
         fail(f"--transcript path does not exist: {args.transcript}")
 
     print(f"→ Requesting signed URL for {args.token} …", file=sys.stderr)
-    url = fetch_signed_url(args.token, args.profile)
+    url = fetch_signed_url(args.token, args.profile, args.identity)
     print(f"→ Downloading to {args.output} …", file=sys.stderr)
     download(url, args.output)
     size_mb = args.output.stat().st_size / 1_048_576
