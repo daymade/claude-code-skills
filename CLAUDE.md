@@ -85,6 +85,11 @@ For research-driven evolution of a specified existing Skill, start at
 [skill-evolver](skill-evolver/SKILL.md) and follow its public stage routes; use
 local private adapters only when available.
 
+For evidence-based improvement of an existing application, enter
+[app-evolver](app-evolver/SKILL.md). For released-artifact or runtime evidence,
+load its [Skill composition route](app-evolver/references/skill-composition.md);
+keep specialist selection and handoff boundaries in that owner.
+
 For permission-sensitive fixtures, use Skill Creator's
 [execution-context verification recipe](daymade-skill/skill-creator/references/stateful-script-verification.md#execution-identity-and-permission-fixtures).
 
