@@ -153,9 +153,8 @@ field rather than the bare return code (argparse usage errors also exit 2). On
 `overridden`, only
 retargeted `file_edit`s run — suggestion-specific `dict_add`/`append_note`
 actions are dropped (they were planned for a suggestion the human rejected).
-(One scope note: the context check only runs when the original occurs MORE
-THAN ONCE — a unique occurrence has no look-alike to refuse, so a
-single-occurrence edit applies without consulting the snippet.)
+The context guard also checks a unique occurrence when a line hint exists;
+its uniqueness alone does not prove it is this row's utterance.
 
 **When the guard refuses: `--reanchor-review` repairs the item.** A refusal is
 not a dead end and NOT a cue to hand-edit the file around the queue — that
@@ -241,7 +240,34 @@ resolved, four of them left six more occurrences behind, two of those on a line 
 verdict had already touched. So a verdict batch has a second half:
 
 
-When the same token occurs twice on one line, supply a verbatim context that contains only the intended occurrence. A context covering both occurrences stays ambiguous and acceptance refuses; do not silently choose the first match or replace both.
+When the same token occurs twice on one line, supply a verbatim context that
+contains only the intended occurrence, or include `context_offset`: the zero-based
+Unicode character index of the intended token inside that context (Python string
+indexing, not byte offsets or UTF-16 units). Supply the line hint as well. For
+`先读 actor，再校对 actor。`, the second `actor` starts at `13`.
+The queue checks that this slice equals `original`; it never guesses a position
+from which occurrence was enqueued first. Omitted/null offsets retain legacy
+behavior: a context covering both occurrences stays ambiguous and acceptance
+refuses. Different contexts/offsets preserve separate questions; re-running an
+identical anchor skips it even after a verdict.
+
+For an explicit slot, the guard uses its surrounding context without sibling
+occurrences of the old token. Accepting one slot therefore leaves the other row
+independently reviewable even when the replacement changes the line's length.
+An already-corrected selected slot can be recorded without editing a surviving
+sibling. Missing, overlapping or indistinguishable neighbours still refuse; an
+offset is not permission to edit whatever now occupies that character index.
+The legacy no-offset already-applied guard retains its broader nearby-survivor
+check described above.
+
+Repair a pending legacy row through the Python API
+`ReviewQueue.reanchor(item_id, context_offset=N)` when independent source evidence
+identifies the intended slot. `N` refers to the row's recorded context, not the
+current whole line. The method validates that slot against the current file,
+refreshes its context/offset under the same row ID and writes `review_reanchor`
+audit evidence; it does not change the verdict or transcript. Re-read the row and
+file before enqueuing missing siblings. The CLI's ordinary `--reanchor-review`
+preserves an existing offset but does not choose one for an ambiguous legacy row.
 
 ```bash
 # 1. See what was actually decided. The default listing shows PENDING only —

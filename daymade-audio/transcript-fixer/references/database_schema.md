@@ -157,6 +157,7 @@ is the storage shape.
 | file_path | TEXT | Anchored transcript file (nullable) |
 | line_number | INTEGER | 1-based line hint for anchor disambiguation |
 | context_snippet | TEXT | Line content recorded at enqueue time (content check on resolve) |
+| context_offset | INTEGER | Nullable zero-based Unicode character offset of the selected original inside context_snippet |
 | original_text | TEXT | Text as it stands in the transcript (NOT NULL) |
 | suggested_text | TEXT | Pre-filled suggestion (nullable — unknown-entity questions) |
 | kind | TEXT | 'entity', 'homophone', 'wording', 'unknown' (CHECK; drives priority) |
@@ -171,9 +172,12 @@ is the storage shape.
 | applied_at | TIMESTAMP | When the action pack executed |
 | apply_log | TEXT | JSON per-action execution log |
 
-**No UNIQUE constraint** — dedupe is enforced at enqueue time on
-(file_path, original_text, suggested_text, domain, line_number) across ALL
-statuses, so an answered question is never re-asked. `reopen` is a decision
+**No UNIQUE constraint** — enqueue groups by
+(file_path, original_text, suggested_text, domain, line_number), then compares
+context and selected position across ALL statuses. A different same-line position
+is a separate question. Opening an older queue adds the nullable `context_offset`
+column idempotently; existing rows and verdicts are retained without inventing a
+position. `reopen` is a decision
 verb, not a status: it reverts applied edits and sets the row back to 'pending'.
 
 Indexes: `status`, `domain`, `priority DESC`, `file_path`.

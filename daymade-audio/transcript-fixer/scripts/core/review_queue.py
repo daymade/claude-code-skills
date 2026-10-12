@@ -109,6 +109,7 @@ class ReviewItem:
     resolved_text: Optional[str] = None
     applied_at: Optional[str] = None
     apply_log: Optional[list[dict[str, Any]]] = None
+    context_offset: Optional[int] = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -119,6 +120,7 @@ class ReviewItem:
             "file_path": self.file_path,
             "line_number": self.line_number,
             "context_snippet": self.context_snippet,
+            "context_offset": self.context_offset,
             "original_text": self.original_text,
             "suggested_text": self.suggested_text,
             "kind": self.kind,
@@ -208,13 +210,20 @@ class ReviewQueue:
                 "review_items table missing — run any transcript-fixer command "
                 "once (e.g. --list) to apply the schema, or --init"
             )
+        # Additive migration: preserve every historical verdict and its anchor.
+        # Serialize the check and ALTER so two CLI writers cannot race it.
+        if "context_offset" not in {r[1] for r in conn.execute("PRAGMA table_info(review_items)")}:
+            conn.execute("BEGIN IMMEDIATE")
+            if "context_offset" not in {r[1] for r in conn.execute("PRAGMA table_info(review_items)")}:
+                conn.execute("ALTER TABLE review_items ADD COLUMN context_offset INTEGER")
+            conn.commit()
         return conn
 
     # ==================== Enqueue ====================
 
     def enqueue(self, items: list[dict[str, Any]]) -> dict[str, Any]:
-        """Insert items; duplicates (same file/original/suggested/domain/line in ANY
-        status) are skipped so re-runs never re-ask an answered question.
+        """Insert items; duplicates (same file/pair/domain/line and occurrence in
+        ANY status) are skipped so re-runs never re-ask an answered question.
         Returns {added: [ids], skipped_duplicates: int, skipped_temp: int,
         rejected_unanchored: [{original, file, reason}], repaired_hints:
         [{original, from, to}]}. Anchor-verbatim validation applies to all
@@ -244,35 +253,34 @@ class ReviewQueue:
                 # their from_text is the engine's EVOLVING text (earlier rules
                 # already applied in-memory), which legitimately need not appear
                 # verbatim in the input file — the guard owns their fate.
+                reason = None
                 if item["file_path"] and item["source"] != "stage1_deferred":
                     fp = item["file_path"]
                     if fp not in anchor_cache:
                         anchor_cache[fp] = self._read_anchor_source(fp)
                     reason = self._check_anchor_verbatim(item, anchor_cache[fp])
-                    if reason:
-                        rejected_unanchored.append({
-                            "original": item["original_text"][:80],
-                            "file": item["file_path"],
-                            "reason": reason,
-                        })
-                        continue
-                # Dedup key includes the line: two occurrences of the same
-                # correction on different lines are DISTINCT review questions —
-                # collapsing them would silently drop coverage of the second
-                # occurrence (each gets its own window-scoped file edit).
-                dup = conn.execute(
-                    """SELECT 1 FROM review_items
+                # Keep the historical pair/line bucket, then compare occurrence
+                # anchors. Different snippets on one line are not one question.
+                candidates = conn.execute(
+                    """SELECT * FROM review_items
                        WHERE COALESCE(file_path,'') = COALESCE(?,'')
                          AND original_text = ?
                          AND COALESCE(suggested_text,'') = COALESCE(?,'')
                          AND domain = ?
                          AND COALESCE(line_number,-1) = COALESCE(?,-1)
-                       LIMIT 1""",
+                       """,
                     (item["file_path"], item["original_text"], item["suggested_text"],
                      item["domain"], item["line_number"]),
-                ).fetchone()
-                if dup:
+                ).fetchall()
+                if any(self._same_occurrence(item, row, anchor_cache.get(item["file_path"]))
+                       for row in candidates):
                     skipped_dup += 1
+                    continue
+                if reason:
+                    rejected_unanchored.append({
+                        "original": item["original_text"][:80],
+                        "file": item["file_path"], "reason": reason,
+                    })
                     continue
                 if item.get("_hint_repaired_to") is not None:
                     # Report only for items actually enqueued — a dedup-skipped
@@ -285,14 +293,15 @@ class ReviewQueue:
                 cur = conn.execute(
                     """INSERT INTO review_items
                        (source, domain, file_path, line_number, context_snippet,
-                        original_text, suggested_text, kind, evidence, actions_json, priority)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        original_text, suggested_text, kind, evidence, actions_json, priority,
+                        context_offset)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         item["source"], item["domain"], item["file_path"],
                         item["line_number"], item["context_snippet"],
                         item["original_text"], item["suggested_text"], item["kind"],
                         item["evidence"], json.dumps(item["actions"], ensure_ascii=False),
-                        item["priority"],
+                        item["priority"], item["context_offset"],
                     ),
                 )
                 item_id = cur.lastrowid
@@ -303,6 +312,51 @@ class ReviewQueue:
             conn.commit()
         return {"added": added, "skipped_duplicates": skipped_dup, "skipped_temp": skipped_temp,
                 "rejected_unanchored": rejected_unanchored, "repaired_hints": repaired_hints}
+
+    @staticmethod
+    def _same_occurrence(item: dict[str, Any], row: sqlite3.Row,
+                         content: Optional[str]) -> bool:
+        """Compare recorded identity first, including decided rows after edits.
+
+        A legacy anchor lacking context is not a wildcard over all same-line
+        occurrences. Only merge differing contexts when both locate one span.
+        """
+        if ((item["context_snippet"] or "") == (row["context_snippet"] or "")
+                and item["context_offset"] == row["context_offset"]):
+            return True
+        if content is None:
+            return False
+        masked, _ = _mask_ledger_spans(content)
+        try:
+            positions = [ReviewQueue._locate_anchor(
+                masked, anchor["original_text"], anchor["line_number"],
+                ReviewQueue._focused_context(anchor["original_text"],
+                                             anchor["context_snippet"], anchor["context_offset"]),
+                require_exact_context=anchor["context_offset"] is not None)
+                for anchor in (item, row)]
+        except ReAnchorNeeded:
+            return False
+        return positions[0] == positions[1]
+
+    @staticmethod
+    def _focused_context(old: str, snippet: Optional[str], offset: Optional[int]) -> Optional[str]:
+        """Keep the selected slot's neighbours without any sibling old token.
+
+        This lets independently queued same-line edits survive one another.
+        Repeated/overlapping neighbourhoods remain ambiguous at the locator.
+        """
+        if offset is None or not snippet:
+            return snippet
+        positions = [m.start() for m in re.finditer("(?=" + re.escape(old) + ")", snippet)]
+        before = [p + len(old) for p in positions if p < offset]
+        after = [p for p in positions if p > offset]
+        lo, hi = max(before, default=0), min(after, default=len(snippet))
+        if lo > offset or hi < offset + len(old):
+            raise ReAnchorNeeded("overlapping context_offset anchors need a non-overlapping context")
+        focused = snippet[lo:hi]
+        if focused.strip() == old:
+            raise ReAnchorNeeded("context_offset has no surviving neighbours to identify this occurrence")
+        return focused
 
     @staticmethod
     def _read_anchor_source(path_str: str) -> Optional[str]:
@@ -350,7 +404,8 @@ class ReviewQueue:
     # ==================== Re-anchor ====================
 
     def reanchor(self, item_id: int, search_roots: Optional[list[str]] = None,
-                 reanchor_to: Optional[str] = None) -> dict[str, Any]:
+                 reanchor_to: Optional[str] = None,
+                 context_offset: Optional[int] = None) -> dict[str, Any]:
         """Repair a pending item's anchor after its transcript drifted or moved.
 
         Two drift shapes, both repaired against CURRENT disk state:
@@ -373,6 +428,12 @@ class ReviewQueue:
                 f"item {item_id} is {item.status} — only pending items can be re-anchored")
         if not item.file_path:
             raise ReviewQueueError(f"item {item_id} has no file anchor")
+        if context_offset is not None:
+            # Repair an ambiguous legacy row without replacing its identity or
+            # verdict history. The supplied slot is relative to its RECORDED
+            # snippet, and must survive the normal current-file anchor checks.
+            self._validate_context_offset(item.original_text, item.context_snippet, context_offset)
+            item.context_offset = context_offset
 
         path = Path(item.file_path)
         repointed = False
@@ -416,9 +477,10 @@ class ReviewQueue:
         masked_lines = masked.splitlines()
         lines = content.splitlines()
         matches = [i + 1 for i, ln in enumerate(masked_lines) if item.original_text in ln]
+        focused = self._focused_context(item.original_text, item.context_snippet, item.context_offset)
         verdict = self._already_applied_verdict(
             masked, item.original_text, item.suggested_text or "",
-            item.context_snippet, item.line_number)
+            focused, item.line_number, selected_slot=item.context_offset is not None)
         if verdict.hit_lines:
             # The recorded context already reads with the suggestion: this
             # row's fix is in place. Re-locating the ORIGINAL would re-point
@@ -447,7 +509,7 @@ class ReviewQueue:
         # for WHICH occurrence the item meant) — picking purely by distance and
         # then overwriting context_snippet with the chosen line would feed the
         # resolve-time guard a fabricated right answer for the wrong occurrence.
-        old_snippet = (item.context_snippet or "").strip()
+        old_snippet = (focused or "").strip()
         if old_snippet and len(matches) > 1:
             probe = old_snippet[:80]
             ctx_matches = [
@@ -470,32 +532,50 @@ class ReviewQueue:
                 f"re-enqueue with a discriminating context")
         line_no = ordered[0]
         new_context = lines[line_no - 1].strip()
+        # Retain within-line identity when replacing a snippet with the current
+        # whole line. Never reset a selected second slot to the first one.
+        try:
+            position = self._locate_anchor(
+                masked, item.original_text, line_no, focused, window=0,
+                require_exact_context=item.context_offset is not None)
+        except ReAnchorNeeded:
+            if item.context_offset is not None:
+                raise
+            # Legacy re-anchor may repair drifted context, but only if the
+            # selected line has one occurrence; repeated tokens need evidence.
+            position = self._locate_anchor(masked, item.original_text, line_no, None, window=0)
+        line_start = sum(len(ln) for ln in masked.splitlines(keepends=True)[:line_no - 1])
+        new_offset = position - line_start - (len(lines[line_no - 1]) - len(lines[line_no - 1].lstrip()))
+        proposed = {"original_text": item.original_text, "line_number": line_no,
+                    "context_snippet": new_context, "context_offset": new_offset}
         # A re-point must not collide with another pending item's dedup key —
         # that would strand a permanently unresolvable duplicate in the queue.
         with self._connect() as conn:
-            collision = conn.execute(
-                """SELECT id FROM review_items
+            collisions = conn.execute(
+                """SELECT * FROM review_items
                    WHERE id != ?
                      AND COALESCE(file_path,'') = ?
                      AND original_text = ?
                      AND COALESCE(suggested_text,'') = COALESCE(?, '')
                      AND domain = ?
                      AND COALESCE(line_number,-1) = ?
-                   LIMIT 1""",
+                   """,
                 (item_id, str(path), item.original_text, item.suggested_text,
                  item.domain, line_no),
-            ).fetchone()
+            ).fetchall()
+            collision = next((row for row in collisions
+                              if self._same_occurrence(proposed, row, content)), None)
             if collision:
                 raise ReviewQueueError(
                     f"re-anchor would collide with item #{collision['id']} "
-                    f"(same file/original/suggested/domain/line) — resolve or skip "
+                    f"(same file/original/suggested/domain/occurrence) — resolve or skip "
                     f"that one first")
             # Mirror resolve's concurrency guard: never overwrite an anchor of
             # an item whose verdict landed between our get() and now.
             cur = conn.execute(
-                """UPDATE review_items SET file_path=?, line_number=?, context_snippet=?
+                """UPDATE review_items SET file_path=?, line_number=?, context_snippet=?, context_offset=?
                    WHERE id=? AND status='pending'""",
-                (str(path), line_no, new_context, item_id))
+                (str(path), line_no, new_context, new_offset, item_id))
             if cur.rowcount != 1:
                 raise ReviewQueueError(
                     f"item {item_id} changed status while re-anchoring — re-read and retry")
@@ -522,7 +602,8 @@ class ReviewQueue:
                         {"file": str(path), "line": line_no, "repointed": repointed})
             conn.commit()
         return {"id": item_id, "file_path": str(path), "line_number": line_no,
-                "context_snippet": new_context, "file_repointed": repointed}
+                "context_snippet": new_context, "context_offset": new_offset,
+                "file_repointed": repointed}
 
     def attach_evidence(self, item_id: int, text: str,
                         by: Optional[str] = None) -> str:
@@ -627,12 +708,16 @@ class ReviewQueue:
                 line_number = int(line_number)
             except (TypeError, ValueError):
                 raise ReviewQueueError(f"line must be an integer, got {line_number!r}")
+        snippet = raw.get("context") or raw.get("context_snippet")
+        offset = raw.get("context_offset")
+        self._validate_context_offset(original, snippet, offset)
         return {
             "source": source,
             "domain": raw.get("domain", "general"),
             "file_path": str(Path(file_path).resolve()) if file_path else None,
             "line_number": line_number,
-            "context_snippet": raw.get("context") or raw.get("context_snippet"),
+            "context_snippet": snippet,
+            "context_offset": offset,
             "original_text": original,
             "suggested_text": suggested,
             "kind": kind,
@@ -640,6 +725,14 @@ class ReviewQueue:
             "actions": actions,
             "priority": int(priority),
         }
+
+    @staticmethod
+    def _validate_context_offset(original: str, snippet: Optional[str], offset: Optional[int]) -> None:
+        if offset is not None and (
+            type(offset) is not int or offset < 0 or not isinstance(snippet, str)
+            or snippet[offset:offset + len(original)] != original
+        ):
+            raise ReviewQueueError("context_offset must be a nonnegative integer pointing at original inside context")
 
     # ==================== Read ====================
 
@@ -748,6 +841,7 @@ class ReviewQueue:
             file_path=row["file_path"],
             line_number=row["line_number"],
             context_snippet=row["context_snippet"],
+            context_offset=row["context_offset"],
             original_text=row["original_text"],
             suggested_text=row["suggested_text"],
             kind=row["kind"],
@@ -1206,8 +1300,15 @@ class ReviewQueue:
         masked, ledger_spans = _mask_ledger_spans(content)
         count = sum(1 for _ in re.finditer("(?=" + re.escape(old) + ")", masked))
         line_no = action.get("expect_line") or item.line_number
+        # An item locator applies only to its own old token/file. Explicit packs
+        # may also edit unrelated files or other tokens under the legacy guard.
+        offset = item.context_offset if (
+            old == item.original_text and item.file_path
+            and Path(action["path"]).resolve() == Path(item.file_path).resolve()
+        ) else None
+        snippet = self._focused_context(old, item.context_snippet, offset)
         verdict = self._already_applied_verdict(
-            masked, old, new, item.context_snippet, line_no)
+            masked, old, new, snippet, line_no, selected_slot=offset is not None)
         if verdict.kind == "applied":
             # A hand edit landed the suggestion before the verdict. The
             # verdict is still "accepted" — recording it as kept_original
@@ -1235,7 +1336,7 @@ class ReviewQueue:
                 f"nothing was modified (if the utterance is gone, close the row "
                 f"with --decision skipped --note <why>)"
             )
-        if count == 1 and not line_no:
+        if count == 1 and not line_no and offset is None:
             # No hint to validate against; a sole occurrence is all we have.
             idx = masked.find(old)
         else:
@@ -1245,7 +1346,9 @@ class ReviewQueue:
             # line entirely and the careful ladder below never ran. "CONTENT
             # outranks POSITION" has to hold at every count, not just >1.
             try:
-                idx = self._locate_anchor(masked, old, line_no, item.context_snippet)
+                idx = self._locate_anchor(
+                    masked, old, line_no, snippet,
+                    require_exact_context=offset is not None)
             except ReAnchorNeeded as exc:
                 if verdict.hit_lines:
                     # The recorded context already reads with the suggestion,
@@ -1282,6 +1385,7 @@ class ReviewQueue:
     def _already_applied_verdict(
         content: str, old: str, new: str, snippet: Optional[str],
         line_no: Optional[int] = None, window: int = RESOLVE_WINDOW_LINES,
+        *, selected_slot: bool = False,
     ) -> "AppliedVerdict":
         """Is the suggestion already sitting where the anchor was?
 
@@ -1363,7 +1467,7 @@ class ReviewQueue:
         if line_no:
             survivors = [
                 i + 1 for i in range(lo, hi)
-                if old in lines[i].replace(new, "\x00")
+                if (snip if selected_slot else old) in lines[i].replace(new, "\x00")
             ]
             if survivors:
                 return AppliedVerdict("survivor", hit_lines, survivors)
@@ -1413,6 +1517,7 @@ class ReviewQueue:
     def _locate_anchor(
         content: str, needle: str, line_no: Optional[int],
         snippet: Optional[str], window: int = RESOLVE_WINDOW_LINES,
+        *, require_exact_context: bool = False,
     ) -> int:
         """Choose ONE occurrence of `needle` when several exist.
 
@@ -1426,6 +1531,9 @@ class ReviewQueue:
              than edit a look-alike: a wrong auto-edit is worse than none);
           3. among the survivors, an occurrence ON the hinted line wins;
           4. otherwise the uniquely nearest line wins; a distance tie refuses.
+
+        Explicit selected slots require the complete focused context to match
+        their exact span; a shared line prefix is not occurrence identity.
         """
         if not line_no:
             raise ReAnchorNeeded(
@@ -1452,6 +1560,8 @@ class ReviewQueue:
                 f"with the suggestion in its slot and no look-alike near the hint still "
                 f"carries the original; occurrences elsewhere are separate decisions)"
             )
+        if require_exact_context and (not snippet or not snippet.strip()):
+            raise ReAnchorNeeded("selected occurrence has no exact context anchor")
         if snippet and snippet.strip():
             probe = snippet.strip()[:80]
             candidates = [
@@ -1480,8 +1590,15 @@ class ReviewQueue:
                             contextual.append((line_number, offset))
                             break
                         start = line.find(exact, start + 1)
+                if require_exact_context and not contextual:
+                    raise ReAnchorNeeded(
+                        "selected occurrence's exact context no longer matches — "
+                        "refusing to edit another occurrence on the same line"
+                    )
                 if contextual:
                     candidates = contextual
+            elif require_exact_context:
+                raise ReAnchorNeeded("selected occurrence's context does not identify one exact span")
         on_hint = [c for c in candidates if c[0] == line_no]
         if len(on_hint) == 1:
             return on_hint[0][1]

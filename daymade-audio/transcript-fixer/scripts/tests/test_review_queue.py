@@ -96,6 +96,246 @@ def test_unique_context_verdict_changes_only_the_selected_same_line_occurrence(q
     assert queue.get(item_id).status == "accepted"
 
 
+def test_same_line_distinct_contexts_survive_and_reruns_dedupe(queue, tmp_path):
+    target = tmp_path / "occurrences.txt"
+    target.write_text("先读 actor，再校对 actor；查看 actual，再解释 actual。", encoding="utf-8")
+    items = [
+        {"file": str(target), "line": 1, "original": old, "suggested": new,
+         "context": context}
+        for old, new, context in [
+            ("actor", "agent", "先读 actor"), ("actor", "agent", "校对 actor"),
+            ("actual", "action", "查看 actual"), ("actual", "action", "解释 actual"),
+        ]
+    ]
+    result = queue.enqueue(items)
+    assert len(result["added"]) == 4
+    assert queue.enqueue(items)["skipped_duplicates"] == 4
+    for item_id in result["added"]:
+        queue.resolve(item_id, "accepted")
+    assert target.read_text(encoding="utf-8") == "先读 agent，再校对 agent；查看 action，再解释 action。"
+    assert queue.enqueue(items)["skipped_duplicates"] == 4
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_context_offset_selects_each_span_and_survives_sibling_edit(queue, tmp_path, reverse):
+    target = tmp_path / "offsets.txt"
+    text = "先读 actor，再校对 actor。"
+    target.write_bytes((text + "\r\n").encode())
+    items = [{"file": str(target), "line": 1, "original": "actor", "suggested": "agentic",
+              "context": text, "context_offset": p}
+             for p in (text.index("actor"), text.rindex("actor"))]
+    result = queue.enqueue(items)
+    assert len(result["added"]) == 2
+    assert queue.enqueue(items)["skipped_duplicates"] == 2
+    order = result["added"][::-1] if reverse else result["added"]
+    queue.resolve(order[0], "accepted")
+    expected = "先读 actor，再校对 agentic。" if reverse else "先读 agentic，再校对 actor。"
+    assert target.read_bytes() == (expected + "\r\n").encode()
+    assert queue.get(order[1]).status == "pending"
+    queue.resolve(order[1], "accepted")
+    assert target.read_bytes() == "先读 agentic，再校对 agentic。\r\n".encode()
+
+
+@pytest.mark.parametrize("offset", [-1, True, "3", 999, 0, "", [], {}])
+def test_invalid_context_offset_is_not_silently_ignored(queue, transcript, offset):
+    with pytest.raises(ReviewQueueError, match="context_offset"):
+        queue.enqueue([_item(transcript, context="今天我们请到了王晓明老师来讲课。", context_offset=offset)])
+    assert queue.list_items() == []
+
+
+def test_legacy_missing_and_null_offsets_keep_decisions(queue, transcript):
+    raw = _item(transcript)
+    item_id = queue.enqueue([raw])["added"][0]
+    queue.resolve(item_id, "kept_original", note="keep this utterance")
+    assert queue.enqueue([{**raw, "context_offset": None}])["skipped_duplicates"] == 1
+    item = queue.get(item_id)
+    assert item.status == "kept_original"
+    assert item.decision_note == "keep this utterance"
+
+
+def test_offset_schema_upgrade_preserves_historical_row(db_path, fake_tempdir):
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("ALTER TABLE review_items DROP COLUMN context_offset")
+        conn.execute("INSERT INTO review_items (source, original_text, status, decision_note) "
+                     "VALUES ('manual', 'actor', 'kept_original', 'keep this utterance')")
+    upgraded = ReviewQueue(db_path)
+    assert upgraded.get(1).context_offset is None
+    assert upgraded.get(1).status == "kept_original"
+    assert upgraded.get(1).decision_note == "keep this utterance"
+    assert upgraded.enqueue([{"original": "actor"}])["skipped_duplicates"] == 1
+    assert ReviewQueue(db_path).get(1).decision_note == "keep this utterance"
+
+
+def test_legacy_ambiguous_row_does_not_swallow_distinct_context(queue, tmp_path):
+    target = tmp_path / "legacy.txt"
+    target.write_text("先读 actor，再校对 actor。", encoding="utf-8")
+    raw = {"file": str(target), "line": 1, "original": "actor", "suggested": "agent"}
+    old_id = queue.enqueue([raw])["added"][0]
+    queue.resolve(old_id, "kept_original")
+    added = queue.enqueue([{**raw, "context": "再校对 actor。"}])["added"]
+    assert len(added) == 1
+    assert queue.get(old_id).status == "kept_original"
+    queue.resolve(added[0], "accepted")
+    assert target.read_text(encoding="utf-8") == "先读 actor，再校对 agent。"
+
+
+def test_different_contexts_for_same_occurrence_dedupe(queue, tmp_path):
+    target = tmp_path / "same-slot.txt"
+    target.write_text("先读 actor，再校对 actor。", encoding="utf-8")
+    raw = {"file": str(target), "line": 1, "original": "actor", "suggested": "agent"}
+    assert len(queue.enqueue([{**raw, "context": "再校对 actor。"}])["added"]) == 1
+    assert queue.enqueue([{**raw, "context": "校对 actor"}])["skipped_duplicates"] == 1
+
+
+def test_selected_slot_hand_edit_does_not_consume_sibling(queue, tmp_path):
+    target = tmp_path / "hand-edit.txt"
+    text = "先读 actor，再校对 actor。"
+    target.write_text(text, encoding="utf-8")
+    item_id = queue.enqueue([{"file": str(target), "line": 1, "original": "actor",
+                              "suggested": "agent", "context": text,
+                              "context_offset": text.index("actor")}])["added"][0]
+    edited = text.replace("actor", "agent", 1)
+    target.write_text(edited, encoding="utf-8")
+    queue.resolve(item_id, "accepted")
+    assert queue.get(item_id).apply_log[0]["skipped"]
+    assert target.read_text(encoding="utf-8") == edited
+
+
+def test_reanchor_keeps_selected_same_line_slot_and_does_not_collide_with_sibling(queue, tmp_path):
+    target = tmp_path / "reanchor-slot.txt"
+    text = "先读 actor，再校对 actor。"
+    target.write_text(text, encoding="utf-8")
+    items = [{"file": str(target), "line": 1, "original": "actor", "suggested": "agent",
+              "context": text, "context_offset": p}
+             for p in (text.index("actor"), text.rindex("actor"))]
+    first, second = queue.enqueue(items)["added"]
+    target.write_text("标题\n" * 5 + text, encoding="utf-8")
+    queue.reanchor(second)
+    assert queue.get(second).line_number == 6
+    assert queue.get(second).context_offset == text.rindex("actor")
+    queue.reanchor(first)
+    queue.resolve(second, "accepted")
+    assert target.read_text(encoding="utf-8") == "标题\n" * 5 + "先读 actor，再校对 agent。"
+    queue.resolve(first, "accepted")
+    assert target.read_text(encoding="utf-8") == "标题\n" * 5 + "先读 agent，再校对 agent。"
+
+
+def test_legacy_row_can_gain_a_verified_slot_without_changing_verdict(queue, tmp_path):
+    target = tmp_path / "legacy-repair.txt"
+    text = "先读 actor，再校对 actor。"
+    target.write_text(text, encoding="utf-8")
+    raw = {"file": str(target), "line": 1, "original": "actor", "suggested": "agent", "context": text}
+    item_id = queue.enqueue([raw])["added"][0]
+    with pytest.raises(ReAnchorNeeded):
+        queue.resolve(item_id, "accepted")
+    queue.reanchor(item_id, context_offset=text.rindex("actor"))
+    assert queue.get(item_id).status == "pending"
+    assert queue.get(item_id).context_offset == text.rindex("actor")
+    assert target.read_text(encoding="utf-8") == text
+    assert queue.enqueue([{**raw, "context_offset": text.rindex("actor")}])["skipped_duplicates"] == 1
+    assert len(queue.enqueue([{**raw, "context_offset": text.index("actor")}])["added"]) == 1
+    queue.resolve(item_id, "accepted")
+    assert target.read_text(encoding="utf-8") == "先读 actor，再校对 agent。"
+
+
+def test_invalid_reanchor_slot_preserves_row_and_file(queue, tmp_path):
+    target = tmp_path / "bad-repair.txt"
+    text = "先读 actor，再校对 actor。"
+    target.write_text(text, encoding="utf-8")
+    item_id = queue.enqueue([{"file": str(target), "line": 1, "original": "actor",
+                              "suggested": "agent", "context": text}])["added"][0]
+    before = queue.get(item_id).to_dict()
+    with pytest.raises(ReviewQueueError, match="context_offset"):
+        queue.reanchor(item_id, context_offset=0)
+    assert queue.get(item_id).to_dict() == before
+    assert target.read_text(encoding="utf-8") == text
+
+
+def test_selected_slot_without_neighbours_never_retargets_survivor(queue, tmp_path):
+    target = tmp_path / "neighbours.txt"
+    target.write_text("actor actor", encoding="utf-8")
+    item_id = queue.enqueue([{"file": str(target), "line": 1, "original": "actor",
+                              "suggested": "agent", "context": "actor actor", "context_offset": 0}])["added"][0]
+    target.write_text("agent actor", encoding="utf-8")
+    with pytest.raises(ReAnchorNeeded, match="neighbours"):
+        queue.resolve(item_id, "accepted")
+    assert target.read_text(encoding="utf-8") == "agent actor"
+    assert queue.get(item_id).status == "pending"
+
+
+def test_offset_zero_and_override_keep_other_occurrence(queue, tmp_path):
+    target = tmp_path / "zero.txt"
+    text = "actor 是开头，另一个 actor 是结尾。"
+    target.write_text(text, encoding="utf-8")
+    item_id = queue.enqueue([{"file": str(target), "line": 1, "original": "actor",
+                              "suggested": "agent", "context": text,
+                              "context_offset": 0}])["added"][0]
+    queue.resolve(item_id, "overridden", override_to="agentic")
+    assert target.read_text(encoding="utf-8") == "agentic 是开头，另一个 actor 是结尾。"
+
+
+def test_context_offset_drift_refuses_without_writing(queue, tmp_path):
+    target = tmp_path / "drifted.txt"
+    text = "先读 actor，再校对 actor。"
+    target.write_text(text, encoding="utf-8")
+    item_id = queue.enqueue([{"file": str(target), "line": 1, "original": "actor",
+                              "suggested": "agent", "context": text,
+                              "context_offset": text.rindex("actor")}])["added"][0]
+    drifted = "先读 actor，段落已经重写。"
+    target.write_text(drifted, encoding="utf-8")
+    with pytest.raises(ReAnchorNeeded):
+        queue.resolve(item_id, "accepted")
+    assert target.read_text(encoding="utf-8") == drifted
+    assert queue.get(item_id).status == "pending"
+
+
+def test_long_context_selected_slot_drift_never_retargets_first(queue, tmp_path):
+    target = tmp_path / "long-drift.txt"
+    text = "先读 actor，" + "中" * 90 + "再校对 actor。"
+    target.write_text(text, encoding="utf-8")
+    item_id = queue.enqueue([{"file": str(target), "line": 1, "original": "actor",
+                              "suggested": "agent", "context": text,
+                              "context_offset": text.rindex("actor")}])["added"][0]
+    drifted = text[:text.rindex("actor")] + "other。"
+    target.write_text(drifted, encoding="utf-8")
+    with pytest.raises(ReAnchorNeeded):
+        queue.resolve(item_id, "accepted")
+    assert target.read_text(encoding="utf-8") == drifted
+    assert queue.get(item_id).status == "pending"
+
+
+def test_long_context_selected_slot_keeps_healthy_sibling_independent(queue, tmp_path):
+    target = tmp_path / "long-healthy.txt"
+    text = "先读 actor，" + "中" * 90 + "再校对 actor。"
+    target.write_text(text, encoding="utf-8")
+    ids = queue.enqueue([{"file": str(target), "line": 1, "original": "actor",
+                          "suggested": "agentic", "context": text, "context_offset": offset}
+                         for offset in (text.index("actor"), text.rindex("actor"))])["added"]
+    assert len(ids) == 2
+    queue.resolve(ids[1], "accepted")
+    assert target.read_text(encoding="utf-8") == text[:text.rindex("actor")] + "agentic。"
+    assert queue.get(ids[0]).status == "pending"
+    queue.resolve(ids[0], "accepted")
+    assert target.read_text(encoding="utf-8") == text.replace("actor", "agentic")
+
+
+def test_long_context_drift_cannot_reanchor_or_dedupe_survivor(queue, tmp_path):
+    target = tmp_path / "long-reanchor.txt"
+    text = "先读 actor，" + "中" * 90 + "再校对 actor。"
+    target.write_text(text, encoding="utf-8")
+    raw = {"file": str(target), "line": 1, "original": "actor", "suggested": "agent"}
+    item_id = queue.enqueue([{**raw, "context": text,
+                              "context_offset": text.rindex("actor")}])["added"][0]
+    before = queue.get(item_id).to_dict()
+    drifted = text[:text.rindex("actor")] + "other。"
+    target.write_text(drifted, encoding="utf-8")
+    with pytest.raises(ReAnchorNeeded):
+        queue.reanchor(item_id)
+    assert queue.get(item_id).to_dict() == before
+    assert len(queue.enqueue([{**raw, "context": "先读 actor，"}])["added"]) == 1
+    assert target.read_text(encoding="utf-8") == drifted
+
+
 @pytest.fixture
 def fake_tempdir(tmp_path: Path, monkeypatch) -> Path:
     """Redirect the temp-dir boundary is_temp_path() checks against.
