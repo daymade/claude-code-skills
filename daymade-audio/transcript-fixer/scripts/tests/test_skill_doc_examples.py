@@ -20,6 +20,7 @@ rule encoded here and turn this test into one that fails healthy examples.
 
 from __future__ import annotations
 
+import json
 import re
 import runpy
 from pathlib import Path
@@ -227,17 +228,32 @@ def test_public_json_contract_lists_the_complete_always_present_shape():
         '"stage2_failed_chunks"',
         '"stage2_degraded"',
         '"boundary_refused"',
+        '"boundary_check_active"',
     )
-    for field in fields:
-        assert field in stage1_contract
-    assert "All twelve fields are always present" in parameters
+    example = re.search(r"~~~json\s*(\{.*?\})\s*~~~", stage1_contract, re.S)
+    assert example is not None, "Stage 1 contract must include its JSON example"
+    names = {field.strip('"') for field in fields}
+    assert set(json.loads(example.group(1))) == names
+    assert "- `--json` (optional):" in parameters
+    parameter_contract = parameters.split("- `--json` (optional):", 1)[1].split("\n\n", 1)[0]
+    for name in names:
+        assert f"`{name}`" in parameter_contract
+    assert re.search(
+        r"(?:^|(?<=[.!?]))\s*(?:the\s+)?(?:all|listed) fields are always present\b",
+        parameter_contract,
+        re.I,
+    )
     assert "Stage 2/3 runs add" not in parameters
 
     parser = runpy.run_path(str(ARGUMENT_PARSER_PY))["create_argument_parser"]()
-    help_text = parser.format_help()
-    for field in fields:
-        assert field.strip('"') in help_text
-    assert "All twelve status fields are always present" in " ".join(help_text.split())
+    json_help = next(action.help for action in parser._actions if action.dest == "json_output")
+    for name in names:
+        assert name in json_help
+    assert re.search(
+        r"(?:^|(?<=[.!?]))\s*(?:the\s+)?(?:all|listed) status fields are always present\b",
+        " ".join(json_help.split()),
+        re.I,
+    )
 
 
 def test_multi_recording_completion_is_not_satisfied_by_sampled_clips():

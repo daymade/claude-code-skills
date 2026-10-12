@@ -278,10 +278,8 @@ validation behavior in
 [native_review.py](daymade-audio/transcript-fixer/scripts/native_review.py), and
 queue anchor behavior in
 [review_queue.py](daymade-audio/transcript-fixer/scripts/core/review_queue.py).
-For a received user answer or an existing correction-ledger update, follow
-[cited answers and ledger writes](daymade-audio/transcript-fixer/references/review_queue_dashboard.md#cited-answers-and-ledger-writes).
-That guide owns source binding, supported answer syntax and interrupted-write recovery;
-keep its schema and commands there.
+For remaining pending rows or a received human verdict on an already reviewed file, enter
+[pending continuation](daymade-audio/transcript-fixer/references/pending-continuation.md).
 For source-audio export, identity and timeline pairing, follow
 [the audio setup SOP](daymade-audio/transcript-fixer/references/review_queue_dashboard.md#source-audio-and-timeline-pairing)
 and its [download helper](daymade-audio/transcript-fixer/scripts/fetch_minute_audio.py).

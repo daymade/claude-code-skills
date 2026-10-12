@@ -82,7 +82,8 @@ The Stage 1 JSON contract is:
   "stage2_total_chunks": 0,
   "stage2_failed_chunks": 0,
   "stage2_degraded": false,
-  "boundary_refused": 0
+  "boundary_refused": 0,
+  "boundary_check_active": true
 }
 ~~~
 
@@ -384,11 +385,12 @@ uv run scripts/generate_word_diff.py original.md corrected.md output.html
 uv run scripts/harvest_corrections.py raw.md corrected.md \
   --context-file ~/.transcript-fixer/contexts/myproject.md --write
 
-# Gather clip-level evidence for this transcript's pending queue; adjudicate separately.
+# Collect clip evidence at operator-verified media positions; resolve rows separately
 # Read references/advanced_correction_evidence.md before selecting the engine or clock mapping.
 uv run scripts/verify_queue_audio.py \
   --transcript /abs/meeting.md --audio /abs/source.wav \
-  --engine-script /abs/authorized-stdout-engine.py
+  --time-overrides /abs/verified-times.json \
+  --engine-script /abs/stdout_recognizer.py --outdir /abs/audio-evidence
 
 # Multi-format Stage 1/API comparison report
 uv run scripts/generate_diff_report.py \

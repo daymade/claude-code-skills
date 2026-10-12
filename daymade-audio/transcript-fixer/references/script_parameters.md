@@ -8,26 +8,9 @@ Detailed command-line parameters and usage examples for transcript-fixer Python 
 > CLI behavior, not the recommended skill route. Stage 3 is for automation that
 > has no Claude/Codex agent available.
 
-## Table of Contents
-
-- [fix_transcription.py](#fixtranscriptionpy) - Main correction pipeline
-  - [Syntax](#syntax)
-  - [Parameters](#parameters)
-  - [Review Queue Item Schema](#review-queue-item-schema)
-  - [Usage Examples](#usage-examples)
-- [fix_transcript_timestamps.py](#fix_transcript_timestampspy) - Normalize/repair speaker timestamps
-- [split_transcript_sections.py](#split_transcript_sectionspy) - Split transcript into named sections
-- [generate_word_diff.py](#generate_word_diffpy) - Generate word-level HTML diff
-- [generate_diff_report.py](#generate_diff_reportpy) - Generate multi-format comparison report
-- [Common Workflows](#common-workflows)
-- [Exit Codes](#exit-codes)
-- [Environment Variables](#environment-variables)
-
----
-
 ## fix_transcription.py
 
-Main correction pipeline script supporting three processing stages.
+Main correction pipeline for dictionary and API correction.
 
 ### Syntax
 
@@ -42,19 +25,19 @@ uv run scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <di
   - `1` = Dictionary corrections only
   - `2` = Stage 1 dictionary pass followed by API AI correction
   - `3` = Stage 1 + API AI correction + diff report
-- `--output, -o` (optional): Where results are written — accepts either a **directory** (the sidecars `<stem>_stage1.md` / `_changes.md` / `_needs_review.md` are written into it) **or a file path** ending in `.md`/`.markdown`/`.txt` that is not an existing directory (the corrected Stage 1 output is written directly to that exact file). Defaults to the input file's directory. Every "Saved" / report line prints the full resolved path, so a misdirected output is visible immediately. (Passing a file path used to silently `mkdir` a directory of that name and hide the output inside it — fixed.)
-- `--domain, -d` (optional): Restrict to one correction domain (default: all domains). Accepts a comma-separated list (`--domain myproject,myproject-alt`): every listed domain's rules load as one union for Stage 1, and `--apply-domain` trusts the whole union. Write commands (`--add`, `--approve`, `--add-context-rule`) still require exactly one domain and fail fast on a list. Domain naming also scopes two more things at Stage 1: context rules (global rules always load; a domain-named rule loads only when its domain is active) and **trap demotion** — when `~/.transcript-fixer/contexts/<domain>.md` exists, traps annotated `禁裸词`/`禁入词典` and confirmed-correct （勿修） records demote any same-FROM dictionary rule to safe-mode deferral (beating `--apply-domain` trust-flattening; `--apply-all` still overrides). Without `--domain` no veto fires (a whole-library run has no owner to veto with); in a multi-domain union the veto applies by FROM across the whole union, regardless of which named domain owns the rule or the context file. Demotions are printed on stderr (`🛡️ Trap demotion: N rule(s)…`), never silent.
+- `--output, -o` (optional): Where results are written — accepts either a **directory** (the sidecars `<stem>_stage1.md` / `_changes.md` / `_needs_review.md` are written into it) **or a file path** ending in `.md`/`.markdown`/`.txt` that is not an existing directory (the corrected Stage 1 output is written directly to that exact file). Defaults to the input file's directory. Every "Saved" / report line prints the full resolved path, so a misdirected output is visible immediately.
+- `--domain, -d` (optional): Restrict to one correction domain (default: all domains). Accepts a comma-separated list (`--domain myproject,myproject-alt`): every listed domain's rules load as one union for Stage 1, and `--apply-domain` trusts the whole union. Write commands (`--add`, `--approve`, `--add-context-rule`) still require exactly one domain and fail fast on a list. Domain naming also scopes Stage 1: context rules (global rules always load; a domain-named rule loads only when its domain is active) and **trap demotion** — when `~/.transcript-fixer/contexts/<domain>.md` exists, traps annotated `禁裸词`/`禁入词典` and confirmed-correct （勿修） records demote any same-FROM dictionary rule to safe-mode deferral (beating `--apply-domain` trust-flattening; `--apply-all` still overrides). Without `--domain` no veto fires (a whole-library run has no owner to veto with); in a multi-domain union the veto applies by FROM across the whole union, regardless of which named domain owns the rule or the context file. Demotions are printed on stderr (`🛡️ Trap demotion: N rule(s)…`), never silent.
 - `--apply-all` (optional): Opt out of the default safe mode and apply every risk level (low/medium/high). Higher false-positive risk — see false_positive_guide.md.
 - `--review` (deprecated): No-op kept for backward compatibility; safe mode is now the default.
 - `--dry-run` (optional): Preview Stage 1 changes to `*_dryrun.md` without writing `*_stage1.md`.
 - `--changes-file` (optional): Always write `*_changes.md` (already on by default in safe mode).
-- `--json` (optional): Emit the original six fields (`applied`, `deferred`, `output_path`, `needs_review_path`, `input_unchanged`, `review_enqueued`) plus `stage1_only_incomplete`, `stage2_total_chunks`, `stage2_failed_chunks`, `stage2_degraded`, `boundary_refused` (dictionary matches the word-boundary check refused — neither applied nor deferred; `0` under `--apply-all`, which switches the check off), and `boundary_check_active` (whether the check could run at all — `false` when jieba is not importable, which makes `boundary_refused=0` mean "never checked" rather than "nothing straddled"). All twelve fields are always present. Stage 1 reports `stage1_only_incomplete=true`, both Stage 2 counters as `0`, and `stage2_degraded=false`; the caller must run Native AI or explicitly choose the agent-less Stage 2/3 route before claiming end-to-end completion. Stage 2/3 replace the telemetry defaults with the actual API outcome. Any failed chunk is retained from source and makes `stage2_degraded` true, so automation must not equate exit 0 with a fully corrected API pass.
+- `--json` (optional): Emit the original fields (`applied`, `deferred`, `output_path`, `needs_review_path`, `input_unchanged`, `review_enqueued`) plus `stage1_only_incomplete`, `stage2_total_chunks`, `stage2_failed_chunks`, `stage2_degraded`, `boundary_refused` (dictionary matches the word-boundary check refused — neither applied nor deferred; `0` under `--apply-all`, which switches the check off), and `boundary_check_active` (whether the check could run at all — `false` when jieba is not importable, which makes `boundary_refused=0` mean "never checked" rather than "nothing straddled"). The listed fields are always present. Stage 1 reports `stage1_only_incomplete=true`, both Stage 2 counters as `0`, and `stage2_degraded=false`; the caller must run Native AI or explicitly choose the agent-less Stage 2/3 route before claiming end-to-end completion. Stage 2/3 replace the telemetry defaults with the actual API outcome. Any failed chunk is retained from source and makes `stage2_degraded` true, so automation must not equate exit 0 with a fully corrected API pass.
 
 **Evidence commands** (read-only; turn the native pass's manual grep loops into single invocations — semantics in [native_ai_full_workflow.md](native_ai_full_workflow.md) steps 4-6):
 
 - `--scan-traps --context-file <domain-context.md> -i <transcript>`: parse every `**误识 → 正确**` entry out of a domain context file and locate each variant in the transcript (line number + context window), grouped by entry. Legacy `≈` entries use the same left-observed/right-intended convention. Wrap an exact multi-word FROM variant in backticks (for example `` `CC 思维链` ``); bare whitespace remains unparseable. `**X = …勿修…**` confirmed-correct records are reported as keep-as-is. A single-line leading-frontmatter value under `asr_note` is excluded because it intentionally quotes old forms as correction provenance; multi-line YAML ledger values are not masked. Keywords, titles, and body text remain in scope. Entries with zero hits are listed so "scanned and absent" is distinguishable from "never scanned". Bullets the parser could not turn into a scannable entry at all are reported **first**, under `⚠️ N documented trap(s) NOT scanned` — one line per bullet, so the count is bullets rather than internal reasons. With `--json` the same information is the `unparsed` key: a list of `{raw, fragment, reason}`. A machine caller reading only `hits`/`no_hit` concludes "no traps here" from a scan that never looked at some of them, which is exactly the coverage gap this key exists to close. Shapes that stay deliberately silent (they are not coverage gaps): a rejected variant sitting beside a good one, Han-only prose split by a space, and an annotation parenthesis that cites or exemplifies the same rule
 - `--probe <term> --corpus <dir>`: the term's real-meaning frequency across every `*.md` under the corpus dir (recursive) — per-file counts + sampled context windows + the verdict criterion (all-error → bare rule safe / any real meaning → anchored or do-not-add / zero → safe but compounds nothing)
-- `--check-corpus` (with `--add`): run the same probe on the FROM term before the rule is written. Requires `--corpus`. Advisory for an ordinary FROM; **mandatory for a real-word-shaped FROM** (common word / ≤2 chars / substring of common words / jieba-decomposable phrase) — the add-time gate refuses those without the probe on the record, and `--force` does not substitute (the missing piece is corpus evidence, not confidence). Two sibling write gates shipped with it (semantics in [dictionary_identity_and_context.md](dictionary_identity_and_context.md)): an OPEN review-queue row touching either text refuses the add, and a person-name-shaped mapping (2-4 char CJK, one edit apart) must converge onto a claimed target — a roster entry / active rule's TO — or carry the authority in `--note`.
+- `--check-corpus` (with `--add`): run the same probe on the FROM term before the rule is written. Requires `--corpus`. Advisory for an ordinary FROM; **mandatory for a real-word-shaped FROM** (common word / ≤2 chars / substring of common words / jieba-decomposable phrase) — the add-time gate refuses those without the probe on the record, and `--force` does not substitute (the missing piece is corpus evidence, not confidence). Sibling write gates (semantics in [dictionary_identity_and_context.md](dictionary_identity_and_context.md)): an OPEN review-queue row touching either text refuses the add, and a person-name-shaped mapping (2-4 char CJK, one edit apart) must converge onto a claimed target — a roster entry / active rule's TO — or carry the authority in `--note`.
 - `--json` works with both: one machine-readable result line on stdout
 
 **Context rules** (regex rules applied before the dictionary at Stage 1; domain-scoped since schema v2.4 — run pending migrations first or `--add-context-rule` fails with the direction):
@@ -70,7 +53,7 @@ uv run scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <di
 - `--show-review ID`: One item in full (evidence + proposed action pack)
 - `--reanchor-review ID [ID...]`: Re-anchor pending item(s) whose transcript drifted or moved since enqueue (refresh line/context verbatim from the current file; when the file is gone, search `--reanchor-root DIR` + the recorded parent dir for `*.md` containing the original text — unique candidate re-points the anchor, ambiguous asks for `--reanchor-to FILE` which names the target explicitly and is refused if the original is not in it)
 - `--attach-authority ID --authority-text TEXT`: Append an audited authority citation to a queue item's `evidence`; it does not record a verdict. For the automatic audio-attachment gate and how to adjudicate its result, read [Batch pending adjudication](advanced_correction_evidence.md). A citation is one possible authority for a later `--resolve-review accepted/overridden`; the other name-convergence checks still apply.
-- `--resolve-review ID --decision accepted|overridden|kept_original|skipped|reopen`: Record a verdict and execute the action pack (`overridden` requires `--override-to TEXT`; `--authority` is the citable authority source the name-convergence gate reads — the guard previews it, then it is appended to the item's `evidence` (audited) with a successful verdict; `--note` is the free-text reason and never feeds the gate; `--by` reviewer name; `reopen` reverts applied edits and re-pends the item). The two decisions that write a target form pass the name-convergence gate first: for a person-name item (`kind` `entity`/`homophone`, or a 2-4 char CJK one-edit pair) a target that is ONLY someone's roster variant is refused pointing at the canonical, and a target nothing claims (dictionary / roster / context rules / decided queue rows — a PENDING row never testifies for itself) is refused unless the item's `evidence` names an authority (roster line / group displayName / 用户裁决 / 音证 …); the item stays `pending` on a refusal. When the resolved text is already in place — a hand edit landed before the verdict and the recorded context reappears with the text in its slot — `accepted` and `overridden` record the verdict without writing and log `already in place at the anchor — recorded without writing`; for legacy no-offset anchors, the original still within the resolve window of the hint outside the suggestion, a third form in that slot (anywhere at the matched neighbour width, or near the hint at any width down to two characters a side), or an edit touching the slot's neighbours still exits 2 with `re_anchor_needed`, and the message names which
+- `--resolve-review ID --decision accepted|overridden|kept_original|skipped|reopen`: Record a verdict and execute the action pack (`overridden` requires `--override-to TEXT`; `--authority` is the citable authority source the name-convergence gate reads — the guard previews it, then it is appended to the item's `evidence` (audited) with a successful verdict; `--note` is the free-text reason and never feeds the gate; `--by` reviewer name; `reopen` reverts applied edits and re-pends the item). The decisions that write a target form pass the name-convergence gate first: for a person-name item (`kind` `entity`/`homophone`, or a 2-4 char CJK one-edit pair) a target that is ONLY someone's roster variant is refused pointing at the canonical, and a target nothing claims (dictionary / roster / context rules / decided queue rows — a PENDING row never testifies for itself) is refused unless the item's `evidence` names an authority (roster line / group displayName / 用户裁决 / 音证 …); the item stays `pending` on a refusal. When the resolved text is already in place — a hand edit landed before the verdict and the recorded context reappears with the text in its slot — `accepted` and `overridden` record the verdict without writing and log `already in place at the anchor — recorded without writing`; for legacy no-offset anchors, the original still within the resolve window of the hint outside the suggestion, a third form in that slot (anywhere at the matched neighbour width, or near the hint at any width down to two characters a side), or an edit touching the slot's neighbours still exits 2 with `re_anchor_needed`, and the message names which
 - `--authority-record JSON_PATH`: With `--resolve-review accepted/overridden`, cite an explicit user answer bound to this item's ID and resolved target. Its whole quote must use the bounded affirmative syntax; a bare yes also needs a bounded positive question about that exact target. Mentioning the target, rejecting it, or affirming a negative/ambiguous question does not qualify. Read [cited answers and ledger writes](review_queue_dashboard.md#cited-answers-and-ledger-writes) for the supported forms, original-quote/source requirements, unsupported natural-language routes and verification boundary. Choose this or `--authority`, not both.
 - `--ledger-entry TEXT`: With `--resolve-review accepted/overridden`, append a confirmed entry starting with this item's actual `original→resolved` pair to the anchored transcript's existing single-line leading-frontmatter `asr_note`, in the same file replacement as the body edit. A mismatched pair, absent/multi-line ledger, or empty/multi-line entry refuses the entire action before writing.
 - `--json` gives one machine-readable result line on stdout for review queue commands.
@@ -84,7 +67,7 @@ uv run scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <di
 
 ### Review Queue Item Schema
 
-`--enqueue-review` accepts a JSON array of items (or `{"items": [...]}`). Only `original` is required. **Unknown keys are silently ignored** — a typo'd field name (e.g. `line_hint` instead of `line`) drops the value with no warning, and the item enqueues without that anchor. If the anchor matters, spot-check with `--show-review <id>` after enqueueing (real incident: an item enqueued with `line_hint` lost its line anchor silently).
+`--enqueue-review` accepts a JSON array of items (or `{"items": [...]}`). Only `original` is required. **Unknown keys are silently ignored** — a typo'd field name (e.g. `line_hint` instead of `line`) drops the value with no warning, and the item enqueues without that anchor. If the anchor matters, spot-check with `--show-review <id>` after enqueueing.
 
 | Canonical field | Alias | Required | Notes |
 |---|---|---|---|
@@ -255,7 +238,7 @@ Generates an HTML file with color-coded word-level additions/deletions. Recommen
 
 ## generate_diff_report.py
 
-Generate a comprehensive comparison report across four formats: Markdown summary, unified diff, HTML side-by-side comparison, and inline marked text.
+Generate comparison reports for the supplied transcripts.
 
 ### Syntax
 
@@ -283,7 +266,7 @@ uv run scripts/generate_diff_report.py \
 
 ### Output
 
-Generates four files in the output directory:
+Generates these files in the output directory:
 
 - `<name>_对比报告.md` — Markdown summary report with change statistics
 - `<name>_unified.diff` — Git-style unified diff
@@ -301,16 +284,23 @@ Run through `uv run` with `--transcript`, `--audio` and `--engine-script`.
 Optional `--queue-ids` limits the exact file's pending rows; `--speed` maps the
 transcript clock to media seconds. `--tight`/`--medium` are positive half-widths,
 with medium strictly larger. `--outdir` contains clips and `results.json`.
+Speed must be finite and positive; obtain the mapping from independent source
+evidence before using transcript offsets.
 
 For a located utterance, `--time-overrides <JSON>` accepts
 `{"42": {"seconds": 12.25, "anchors": ["请带两份资料"]}}` (synthetic example).
 IDs must belong to the selected pending rows. Seconds are finite nonnegative
 source-media offsets, not rescaled by speed; anchors are nonempty neighbouring
 words excluding the disputed forms.
+Every supplied anchor must appear in each window's recognized output before
+those readings can support a verdict.
 Without overrides, character estimates can generate exploratory clips but
 cannot append authority until the operator checks and supplies those anchors.
-The final turn uses probed media duration; missing duration leaves its estimate
-unknown. See [batch evidence](advanced_correction_evidence.md#batch-pending-adjudication--queue-level-clip-cross-check)
+The final turn uses finite probed media duration converted to the transcript
+clock. Missing or invalid duration, or an end at/before that turn, leaves its
+estimate unknown; a checked override remains a separate media-clock input.
+Other turns use the next speaker timestamp without an invented duration cap.
+See [batch evidence](advanced_correction_evidence.md#batch-pending-adjudication--queue-level-clip-cross-check)
 for positioning and bounded re-cuts.
 
 Each result preserves both recognizer outputs/exit codes, position source,

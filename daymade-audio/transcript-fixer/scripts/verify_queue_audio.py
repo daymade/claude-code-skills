@@ -8,16 +8,15 @@
 双片段，送已授权的第二识别引擎交叉识别，输出对照表供裁决。
 
 典型场景：Native pass 后积压的 pending（实体/疑词）——本地检索阶梯已尽，
-用第二引擎的耳朵裁决，而不是把队列推给用户。
+用第二引擎补充音证，再通过独立的裁定路径处理队列。
 
-用法：
+用法（已核准媒体位置和邻接词）：
   uv run scripts/verify_queue_audio.py \
     --transcript /abs/path/meeting.md \
     --audio /abs/path/source.wav \
-    [--speed <observed-factor>]  # 源音频时长/平台时长；同一时间轴不传此参数
-    [--queue-ids 1817,1818]  # 默认该文件全部 pending
-    --engine-script /abs/authorized-stdout-engine.py
-    [--outdir /tmp/asr-verify]
+    --time-overrides /abs/path/verified-times.json \
+    --engine-script /abs/path/stdout_recognizer.py \
+    --outdir /abs/path/audio-evidence
 
 输出：<outdir>/results.json；相同音频片段不调用 ASR，结果标记 same_clip。
 未核准邻接词或切片未覆盖它们时不附音证，退出 1；核准位置通过
