@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **transcript-fixer** (`daymade-audio` v1.48.3): Support verified media-time overrides for queue clips, separate missing neighbour coverage from recognizer disagreement, and use real media duration for final-turn estimates. Add a pending/human-verdict continuation entry while preserving identity and verdict boundaries. Change type: bounded audio-evidence repair and continuation routing.
+
 - **transcript-fixer** (`daymade-audio` v1.48.1 → v1.48.2): Document that deferral adjudication must first locate the exact in-text match, because a queue row's context snippet can mask a cross-word-boundary substring hit; deferrals whose only verbatim matches sit inside larger words resolve as kept_original instead of accepting the suggested direction. Change type: reviewer guidance hardening; runtime unchanged.
 
 - **transcript-fixer** (`daymade-audio` v1.48.1): Preserve separate occurrences of the same word on one line in the review queue, support explicit offsets inside ambiguous context, and retain existing decisions during anchor repair. Change type: occurrence-level correction repair.

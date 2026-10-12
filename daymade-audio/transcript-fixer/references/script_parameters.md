@@ -295,6 +295,34 @@ Generates four files in the output directory:
 - `0` - Success
 - `1` - Missing required parameters or file not found
 
+## verify_queue_audio.py
+
+Run through `uv run` with `--transcript`, `--audio` and `--engine-script`.
+Optional `--queue-ids` limits the exact file's pending rows; `--speed` maps the
+transcript clock to media seconds. `--tight`/`--medium` are positive half-widths,
+with medium strictly larger. `--outdir` contains clips and `results.json`.
+
+For a located utterance, `--time-overrides <JSON>` accepts
+`{"42": {"seconds": 12.25, "anchors": ["请带两份资料"]}}` (synthetic example).
+IDs must belong to the selected pending rows. Seconds are finite nonnegative
+source-media offsets, not rescaled by speed; anchors are nonempty neighbouring
+words excluding the disputed forms.
+Without overrides, character estimates can generate exploratory clips but
+cannot append authority until the operator checks and supplies those anchors.
+The final turn uses probed media duration; missing duration leaves its estimate
+unknown. See [batch evidence](advanced_correction_evidence.md#batch-pending-adjudication--queue-level-clip-cross-check)
+for positioning and bounded re-cuts.
+
+Each result preserves both recognizer outputs/exit codes, position source,
+anchors and clip ranges. Status distinguishes `timestamp_unknown`, `same_clip`,
+`engine_failed`, `coverage_unknown`, `needs_reanchor`, `original_supported`,
+`suggestion_supported`, `recognizer_disagreement` and `unsettled_reading`.
+Exit 1 means position/coverage, engine, clip independence or authority append
+was incomplete; inspect saved results. Exit 2 reports invalid arguments.
+Exit 0 means evidence collection completed, never that pending rows were resolved.
+Only covered, independently cut windows passing the existing suggestion-boundary
+gate can append authority. No path writes a verdict or transcript correction.
+
 ## Common Workflows
 
 ### Testing dictionary changes inside an agent session

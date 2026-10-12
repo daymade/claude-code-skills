@@ -334,6 +334,30 @@ the review queue; this is evidence, not a verdict or a transcript edit. The
 exact automatic-attachment gate lives in `verify_queue_audio.py`, with the
 operator-facing CLI contract in [script_parameters.md](script_parameters.md).
 
+The first character estimate is exploratory: without checked neighbouring words,
+the result is `coverage_unknown` and cannot attach authority. After locating the
+utterance, supply `--time-overrides /abs/times.json`, keyed by this file's selected
+pending queue IDs:
+
+```json
+{"42": {"seconds": 12.25, "anchors": ["请带两份资料"]}}
+```
+
+This example is synthetic. `seconds` is on the source media clock and is not
+multiplied by `--speed`. Choose audible, distinguishing neighbouring words that
+exclude the disputed token and its suggestion; the override records the operator's
+checked anchor, not independent proof that the operator chose correctly.
+Both recognised windows must contain those anchors before they can support a
+reading. `needs_reanchor` means that coverage check failed; it does not decide
+whether the recognizer misheard or the cut missed the utterance. Re-cut within the
+existing two-retry limit. Only covered windows can report
+`recognizer_disagreement`, `original_supported`, `suggestion_supported` or
+`unsettled_reading`; all remain pending until the separate verdict command.
+The final turn uses `ffprobe` duration on the correct clock; unavailable duration
+without a verified override is `timestamp_unknown`, never a guessed turn length.
+The command exits 1 for missing position/coverage, failed engines, identical
+clips or a failed authority append, while retaining the result for recovery.
+
 **Know the timestamp-to-audio mapping before cutting anything.** `ffmpeg -ss`
 counts from the start of the media file; the transcript's clock may be
 different. The recurring shapes:

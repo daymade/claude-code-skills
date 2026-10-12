@@ -20,10 +20,12 @@
     [--outdir /tmp/asr-verify]
 
 输出：<outdir>/results.json；相同音频片段不调用 ASR，结果标记 same_clip。
+未核准邻接词或切片未覆盖它们时不附音证，退出 1；核准位置通过
+--time-overrides JSON 指定，seconds 使用源媒体轴，不再乘 --speed。
 脚本只附加符合条件的音证，不写裁决；逐项裁决见 references/advanced_correction_evidence.md。
-依赖：ffmpeg；识别引擎脚本（音频路径作为位置参数，识别文本写 stdout）。
+依赖：ffmpeg/ffprobe；识别引擎脚本（音频路径作为位置参数，识别文本写 stdout）。
 """
-import argparse, datetime, hashlib, json, os, re, subprocess, sys
+import argparse, datetime, hashlib, json, math, os, re, subprocess, sys, tempfile
 
 TS_RE = re.compile(r'^(\S+) (\d{2}):(\d{2}):(\d{2})\.(\d{3})\s*$')
 SKILL_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -49,20 +51,86 @@ def parse_turns(lines):
     return turns
 
 
-def token_offset(turns, line_no, original):
+def token_offset(turns, line_no, original, transcript_duration=None):
     """行号→turn→token 字符比例偏移（转写轴秒）。turn 时长=下一 turn 起点差。"""
-    idx = max(j for j, t in enumerate(turns) if t[0] <= line_no)
+    candidates = [j for j, t in enumerate(turns) if t[0] <= line_no]
+    if not candidates:
+        return None
+    idx = candidates[-1]
     start_line, ts, spk, text = turns[idx]
     if idx + 1 < len(turns):
         dur = turns[idx + 1][1] - ts
     else:
-        dur = 120.0
-    if dur <= 0 or dur > 600:
-        dur = min(max(dur, 10), 600)
+        if transcript_duration is None:
+            return None
+        dur = transcript_duration - ts
+    if dur <= 0:
+        return None
     pos = text.find(original)
     if pos < 0:
-        pos = 0
+        return None
     return ts + (pos / max(len(text), 1)) * dur
+
+
+def media_duration(audio):
+    """Read the media clock; unavailable duration remains unknown."""
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", audio],
+            capture_output=True, text=True)
+        duration = float(result.stdout.strip())
+        return duration if result.returncode == 0 and math.isfinite(duration) and duration > 0 else None
+    except (OSError, ValueError):
+        return None
+
+
+def load_time_overrides(path):
+    """Media seconds and independently checked neighbouring words, keyed by row ID."""
+    if not path:
+        return {}
+    with open(path, encoding="utf-8") as stream:
+        records = json.load(stream)
+    if not isinstance(records, dict):
+        raise ValueError("time overrides must be an object keyed by queue ID")
+    for key, value in records.items():
+        if not key.isdecimal() or not isinstance(value, dict):
+            raise ValueError("each override must bind a queue ID to an object")
+        seconds, anchors = value.get("seconds"), value.get("anchors")
+        if (isinstance(seconds, bool) or not isinstance(seconds, (float, int))
+                or not math.isfinite(seconds) or seconds < 0):
+            raise ValueError(f"override {key}: seconds must be finite media seconds >= 0")
+        if (not isinstance(anchors, list) or not anchors
+                or any(not isinstance(word, str) or not normalize(word) for word in anchors)):
+            raise ValueError(f"override {key}: nonempty neighbouring-word anchors are required")
+    return records
+
+
+def normalize(value):
+    return "".join(char for char in (value or "") if char.isalnum())
+
+
+def evidence_status(result):
+    """Observe coverage separately from disagreements; never record a verdict."""
+    if result.get("same_clip"):
+        return "same_clip"
+    if result.get("tight_exit") or result.get("medium_exit"):
+        return "engine_failed"
+    anchors = result.get("anchors") or []
+    if not anchors:
+        return "coverage_unknown"
+    texts = [normalize(result.get(window)) for window in ("tight", "medium")]
+    if any(not all(normalize(anchor) in text for anchor in anchors) for text in texts):
+        return "needs_reanchor"
+    if both_windows_support_suggestion(result):
+        return "suggestion_supported"
+    original = normalize(result.get("original"))
+    if original and all(original in text for text in texts):
+        return "original_supported"
+    suggestion = normalize(result.get("suggested"))
+    readings = [(bool(original and original in text), bool(suggestion and suggestion in text))
+                for text in texts]
+    return "recognizer_disagreement" if readings[0] != readings[1] else "unsettled_reading"
 
 
 def list_pending(transcript, queue_ids):
@@ -132,9 +200,16 @@ def main():
     ap.add_argument("--outdir", default="/tmp/asr-verify")
     ap.add_argument("--tight", type=float, default=5.0, help="tight 窗 ±秒（默认 5）")
     ap.add_argument("--medium", type=float, default=20.0, help="medium 窗 ±秒（默认 20）")
+    ap.add_argument("--time-overrides", help="JSON: queue ID -> {seconds: 媒体轴秒, anchors: [已核准邻接词]}；不再乘 --speed")
     a = ap.parse_args()
+    if not all(math.isfinite(x) for x in (a.tight, a.medium, a.speed)) or a.speed <= 0:
+        ap.error("speed and window sizes must be finite; --speed must be positive")
     if a.tight <= 0 or a.medium <= a.tight:
         ap.error("--medium must be greater than positive --tight")
+    try:
+        overrides = load_time_overrides(a.time_overrides)
+    except (OSError, ValueError) as error:
+        ap.error(str(error))
 
     os.makedirs(a.outdir, exist_ok=True)
     with open(a.transcript, encoding="utf-8") as transcript_file:
@@ -146,46 +221,71 @@ def main():
     items = list_pending(a.transcript, ids)
     if not items:
         sys.exit("no pending items for this file")
+    if set(overrides) - {str(item["id"]) for item in items}:
+        ap.error("time overrides contain rows outside this file's selected pending items")
+    duration = media_duration(a.audio)
 
     results = []
     for it in items:
-        tok_t = token_offset(turns, it["line_number"], it["original_text"]) * a.speed
         tid = it["id"]
+        override = overrides.get(str(tid))
+        if override and any(
+                normalize(token) and normalize(token) in normalize(anchor)
+                for anchor in override["anchors"]
+                for token in (it["original_text"], it.get("suggested_text") or "")):
+            ap.error(f"override {tid}: anchors must exclude the disputed original/suggestion")
+        estimate = token_offset(turns, it["line_number"], it["original_text"],
+                                duration / a.speed if duration is not None else None)
+        tok_t = override["seconds"] if override else (estimate * a.speed if estimate is not None else None)
+        common = {
+            "id": tid, "line": it["line_number"], "original": it["original_text"],
+            "suggested": it.get("suggested_text") or "",
+            "token_wav_time": round(tok_t, 3) if tok_t is not None else None,
+            "position_source": "verified_override" if override else "character_estimate",
+            "anchors": override["anchors"] if override else [],
+        }
+        if tok_t is None or (duration is not None and tok_t >= duration):
+            results.append({**common, "status": "timestamp_unknown", "tight": "", "medium": "",
+                            "tight_exit": -1, "medium_exit": -1, "same_clip": False,
+                            "err": "no valid media position; provide a verified time override"})
+            print(f"{tid}: timestamp_unknown, pending", flush=True)
+            continue
         tight = os.path.join(a.outdir, f"{tid}-tight.wav")
         med = os.path.join(a.outdir, f"{tid}-med.wav")
-        for clip, start, dur in ((tight, tok_t - a.tight, a.tight * 2),
-                                 (med, tok_t - a.medium, a.medium * 2)):
-            subprocess.run(["ffmpeg", "-y", "-ss", f"{max(start, 0):.3f}", "-t", f"{dur:.0f}",
+        ranges = {}
+        for window, clip, radius in (("tight", tight, a.tight), ("medium", med, a.medium)):
+            start = max(tok_t - radius, 0)
+            end = min(tok_t + radius, duration) if duration is not None else tok_t + radius
+            ranges[window] = [round(start, 3), round(end, 3)]
+            subprocess.run(["ffmpeg", "-y", "-ss", f"{start:.3f}", "-t", f"{end - start:.3f}",
                             "-i", a.audio, "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", clip],
                            capture_output=True, check=True)
         if same_clip_bytes(tight, med):
             results.append({
-                "id": tid, "line": it["line_number"],
-                "original": it["original_text"],
-                "suggested": it.get("suggested_text") or "",
-                "token_wav_time": round(tok_t, 2),
+                **common, "clip_ranges": ranges, "status": "same_clip",
                 "tight": "", "medium": "", "tight_exit": -1, "medium_exit": -1,
                 "err": "tight and medium clips have identical bytes; no independent audio evidence",
                 "same_clip": True,
             })
-            print(f"done {tid}: identical clips, pending", flush=True)
+            print(f"{tid}: same_clip, pending", flush=True)
             continue
         r1 = subprocess.run(["python3", a.engine_script, tight], capture_output=True, text=True)
         r2 = subprocess.run(["python3", a.engine_script, med], capture_output=True, text=True)
-        results.append({
-            "id": tid, "line": it["line_number"],
-            "original": it["original_text"], "suggested": it.get("suggested_text") or "",
-            "token_wav_time": round(tok_t, 2),
+        result = {
+            **common, "clip_ranges": ranges,
             "tight": r1.stdout.strip()[:300], "medium": r2.stdout.strip()[:500],
             "tight_exit": r1.returncode, "medium_exit": r2.returncode,
             "same_clip": False,
             "err": (r1.stderr + r2.stderr)[:200],
-        })
-        print(f"done {tid}: {it['original_text']}", flush=True)
+        }
+        result["status"] = evidence_status(result)
+        results.append(result)
+        print(f"{tid}: {result['status']}, pending verdict", flush=True)
 
     out = os.path.join(a.outdir, "results.json")
-    with open(out, "w", encoding="utf-8") as f:
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=a.outdir, delete=False) as f:
         json.dump(results, f, ensure_ascii=False, indent=1)
+    os.replace(f.name, out)
     print(f"\n{len(results)} items -> {out}")
 
     # Different clip bytes and an explicit CJK word boundary are required before
@@ -196,11 +296,12 @@ def main():
         sug = (r.get("suggested") or "").strip()
         if not sug:
             continue
-        if both_windows_support_suggestion(r):
+        if r["status"] == "suggestion_supported":
             text = (f"音证 {datetime.date.today().isoformat()}：token≈{r['token_wav_time']}s，"
                     f"tight 窗识别「{(r.get('tight') or '')[:80]}」"
                     f"/ medium 窗「{(r.get('medium') or '')[:80]}」均含建议词「{sug[:40]}」"
-                    f"（verify_queue_audio 双窗口及右边界一致）")
+                    f"（verify_queue_audio 双窗口、邻接词及右边界一致；"
+                    f"邻接词：{r['anchors']}；范围：{r['clip_ranges']}）")
             cp = subprocess.run(
                 ["uv", "run", FIX, "--attach-authority", str(r["id"]),
                  "--authority-text", text, "--by", "verify_queue_audio", "--json"],
@@ -209,13 +310,23 @@ def main():
                 attached.append(r["id"])
             else:
                 print(f"⚠ attach {r['id']} failed: {cp.stderr[:200]}", file=sys.stderr)
+                r["authority_attach_failed"] = True
         else:
             unsupported.append(r["id"])
     if attached:
         print(f"音证已回写 evidence（作为后续裁决的权威源）: {attached}")
     if unsupported:
         print(f"双窗口未一致支持建议词、未回写权威（请读 results.json 自行裁决）: {unsupported}")
+    if any(r.get("authority_attach_failed") for r in results):
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=a.outdir, delete=False) as f:
+            json.dump(results, f, ensure_ascii=False, indent=1)
+        os.replace(f.name, out)
+    if any(r["status"] in {"timestamp_unknown", "same_clip", "engine_failed",
+                           "coverage_unknown", "needs_reanchor"} or r.get("authority_attach_failed")
+           for r in results):
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
