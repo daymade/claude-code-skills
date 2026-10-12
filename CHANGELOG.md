@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **claude-switch-models-setup** (`daymade-claude-code` v4.27.8) and **skill-creator** (`daymade-skill` v1.69.5): Align leased Fleet authoring routes with the existing source owner, distinguish authoring from canonical installation, and remove derived discovery and inventory summaries. Change type: factual documentation alignment; runtime unchanged.
+
 - **continue-codex-work** (`daymade-claude-code` v4.27.7): reconcile explicit user recovery with the current native Goal schema and existing host transport, preserving task identity and budget boundaries.
 
 - **app-evolver** (v1.0.0; catalog v3.23.0): Add an application improvement orchestrator that binds current product contracts, authorized work history and competitor mechanisms to engineering changes and consumer-level acceptance. Keep analysis-only scope, protected behavior and evidence limits explicit.

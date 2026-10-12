@@ -8,7 +8,9 @@ Local source repos are the single source of truth. Installed runtime locations s
 
 ## Runtime Model
 
-Normal source edits require no sync command:
+Edits to an already activated canonical source require no sync command.
+Authoring checkouts have a separate ownership boundary; for independent Fleet
+clones, use [Leased Fleet authoring clones](#leased-fleet-authoring-clones).
 
 - Claude Code plugin cache version directories are symlinks to source plugin directories.
 - Codex user Skills selected by the expanded activation policy are symlinks from
@@ -32,7 +34,7 @@ global prompt. The sync scripts exist for topology repair, not day-to-day editin
 
 | Change | Mechanism |
 |---|---|
-| Edit an existing `SKILL.md`, script, reference, or asset | Live through symlink; restart running agent session if needed |
+| Edit an existing `SKILL.md`, script, reference, or asset in an activated canonical source | Live through symlink; restart running agent session if needed |
 | Install/uninstall, or `claude plugin enable`/`disable --scope user`, a plugin in the default Claude profile | Default `settings.json` / `installed_plugins.json` changes; LaunchAgent watcher mirrors state to every profile within seconds (verified 2026-08-22: launchd run counter incremented within 5s of a `settings.json` touch) |
 | Add a new skill/plugin entry | Marketplace manifest changes; LaunchAgent watcher runs source sync |
 | Remove or rename a skill entry | Marketplace manifest changes; the watcher prunes stale managed links from `.agents/skills` but only reports legacy `.codex/skills` links for reviewed cleanup |
@@ -60,15 +62,14 @@ Profile state uses `.claude.json` inside each `CLAUDE_CONFIG_DIR`. Older `claude
 
 ## Source Repo Discovery
 
-`sync-local-skill-sources.py` locates source repos in this order:
+The discovery inputs and accepted marketplace identities are owned by
+[`sync-local-skill-sources.py`](../scripts/sync-local-skill-sources.py), in
+`main()`, `infer_repos()` and `LOCAL_MARKETPLACE_NAMES`. Do not maintain a second
+discovery order or candidate list. Inspect the deployed owner's read-only output:
 
-1. `--repo <path>` arguments.
-2. `DAYMADE_SKILL_SOURCE_REPOS` as a colon-separated list.
-3. The script's ancestor directories, when run from a source checkout.
-4. Directory-source entries in `~/.claude/plugins/known_marketplaces.json`.
-5. Common local worktree candidates under `~/workspace` and `~/Workspace`.
-
-Accepted marketplace identities are defined only by `LOCAL_MARKETPLACE_NAMES`, and conventional workspace candidates only by `infer_repos()` in `scripts/sync-local-skill-sources.py`. Do not copy either current set into documentation. The script's default dry-run prints the resolved source inventory; if none qualify, it fails fast instead of guessing. Non-conventional checkout paths require `--repo`, `DAYMADE_SKILL_SOURCE_REPOS`, or a registered directory-source marketplace.
+```bash
+python3 ~/.config/claude-switch-models-setup/sync-local-skill-sources.py --print-source-inventory
+```
 
 A repo is identified by `.claude-plugin/marketplace.json`, read by `marketplace_name()`. Only one state is silent; the rest raise, so a repo stops vanishing from discovery because of a manifest it does have:
 
@@ -177,13 +178,6 @@ Rules:
   states are reported. A scoped install conflict fails. User-owned directories
   and foreign links are not replaced. A pre-existing direct Skill remains
   independent of a disabled plugin with the same source.
-- `--print-source-inventory --active-skills-manifest <manifest>` returns inventory
-  schema 2 without changing either host. `marketplaces[marketplace][skill]` retains
-  every registered candidate; `selected_skills[skill]` holds the resolved source.
-  Both entry types contain `plugin_id` and absolute `source_dir`. The output also
-  includes normalized `source_preferences`. Selected sources include cold Skills;
-  auditors expand activation names separately, then look up their expected paths
-  in `selected_skills`, never by overwriting entries while traversing marketplaces.
 - The background daemon executes a **pinned plugin copy**, installed into its own
   `CLAUDE_CONFIG_DIR` under `~/.local/share/`, not the live checkout. That isolation is
   deliberate: editing a source repo must not change what an already-running daemon does.
@@ -254,6 +248,12 @@ and origin must equal that checkout's configured Git origin. Matching origin
 alone never enrolls another clone. `--authoring-pools-manifest <absolute-path>`
 selects another operator-owned enrollment file for a bounded read-only probe.
 
+Take the canonical repository from that host's deployed source owner, and compare
+the enrollment's origin with the approved pool's `pool.json` and the configured
+Git origins of the canonical repository and leased clone. These strings must
+match exactly; equivalent SSH and HTTPS URLs do not substitute for one another.
+Pool configuration alone is not owner enrollment.
+
 The owner validates Fleet's matching `pool.json` and `init.json`, its configured
 slot count, and `leases.json`. Only a configured slot with a non-empty token,
 owner, task, branch and base, on that exact task branch with its own physical
@@ -274,6 +274,13 @@ After deploying the owner reader, verify the ordinary source-contract check from
 the leased Skill directory without supplying an independent inventory override;
 also check an unleased sibling remains invalid. A pinned runtime must advance
 through the existing pin-update procedure before this readback proves activation.
+
+Installation auditors use `selected_skills` after resolving the host's activation
+policy, not the authoring candidates in `marketplaces`.
+Lease ownership authorizes the task's source checkout; it does not make that
+checkout the installed Skill identity. Keep installation and fresh-host acceptance
+on the canonical source route. A returned lease's earlier positive check is
+historical evidence, not current authoring authority.
 
 ### Third-party cold inventory
 

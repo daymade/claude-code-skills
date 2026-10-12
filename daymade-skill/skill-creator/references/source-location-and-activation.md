@@ -47,6 +47,11 @@ Stop on `invalid` or `unknown` before writing. An explicit `--repo` cannot overr
 
 For managed local sources, omit `--repo` only when the source-sync owner's inventory can establish the repository identity. An unavailable inventory is `unknown`, not permission to guess. Inventory source paths must be qualified absolute paths; missing, null or blank paths cannot borrow the caller's current directory. Linked worktrees are checked by their Git common directory. Project-local Skills use `--scope project`; reviewing or installing third-party packages does not make their cache an authored source.
 
+For an approved independent Fleet clone, follow the source owner's
+[leased-authoring procedure](https://github.com/daymade/claude-code-skills/blob/main/daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md#leased-fleet-authoring-clones).
+Its ordinary online check uses the deployed owner inventory without `--inventory`;
+the exported-evidence option above remains for offline evidence checks.
+
 At delivery, run the read-only check against the requested Skill name and declared source owner, not merely whatever happens to appear in a catalog:
 
 ```bash
