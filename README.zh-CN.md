@@ -3968,6 +3968,10 @@ Daymade Skill Evolver 组装已有 Skills，为指定现有 Skill 完成一轮�
 
 📚 **文档**：[app-evolver](./app-evolver/SKILL.md)。
 
+**逆向 Skill 组合**：按[公开专项入口](./app-evolver/references/skill-composition.md)
+调用 REA 或 reverse-skill 获取证据，私人收藏检索可选。这里只引用外部 Skill，
+不打包其副本、不安装逆向引擎、不注册 MCP。
+
 ---
 
 ## 🎬 交互式演示画廊

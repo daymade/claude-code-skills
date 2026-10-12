@@ -68,6 +68,8 @@ For local/remote ASR selection, speed comparison and speech-content acceptance, 
 For competitor source-carrier/edition binding, claims, citations and existing-product learning, enter
 [competitors-analysis](competitors-analysis/SKILL.md) and its
 [citation readback checklist](competitors-analysis/references/analysis_checklist.md#citation-readback-and-counterevidence).
+For user-selected collection destinations, load the
+[collection destination route](competitors-analysis/references/collection_destination.md).
 
 For choosing or reviewing a library, framework, storage, data format, model,
 build-vs-buy or architecture — including 用哪个 / 选什么框架 / 要不要自建 / A 还是 B /
@@ -96,10 +98,6 @@ and [delivery identity](daymade-skill/skill-creator/references/delivery-identity
 For saved HTML batches, follow [the conversion owner](daymade-docs/doc-to-markdown/references/html-conversion.md#gate-a-batch-through-the-existing-recipe)
 and its actual-reader pilot before expansion. Keep conversion evidence and reader
 observations separate; this file does not define another batch recipe.
-
-When creating or changing an operational Skill's first-use setup or recovery
-workflow, enter `skill-creator` and load its
-[first-use and recovery contract](daymade-skill/skill-creator/references/first-use-and-resume.md).
 
 For proxy-selection or disruptive VPN recovery changes, enter `tunnel-doctor` and its
 proxy-conflict and network-recovery references. For automatic WeCom integration,
@@ -262,6 +260,9 @@ For changed operating defaults or thresholds in an already-required review, use
 Keep decision criteria and verification details in those owners.
 
 ### Transcript Correction
+
+For explicit single-task speaker-inference requests, load
+[scoped speaker inference](daymade-audio/transcript-fixer/references/scoped_speaker_inference.md).
 
 Use [transcript-fixer](daymade-audio/transcript-fixer/SKILL.md) for transcript
 correction. Its Native workflow owns evidence selection, selective human escalation,
