@@ -4014,6 +4014,10 @@ integrations are optional; missing required inputs pause only dependent work.
 
 📚 **Documentation**: [app-evolver](./app-evolver/SKILL.md).
 
+**Reverse Skill composition:** Follow [public specialist routes](./app-evolver/references/skill-composition.md)
+for REA or reverse-skill evidence. Personal favorites are optional. References do
+not bundle external Skills, install engines or register MCP servers.
+
 ---
 
 ## 🎬 Interactive Demo Gallery
