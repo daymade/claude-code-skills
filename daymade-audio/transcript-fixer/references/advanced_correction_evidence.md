@@ -2,15 +2,6 @@
 
 Read the matching section when the transcript contains load-bearing numbers, a second recording, an authorized clip-level recognizer cross-check, in-room written artifacts, or a multi-file batch.
 
-## Contents
-
-- Common ASR error families
-- Numeric consistency and audio verification
-- One recording, two engines (clip-level cross-check)
-- Whiteboard and slide-photo evidence
-- Efficient batch correction
-- Large-batch agent constraints
-
 ### Common ASR Error Patterns
 
 AI product names are frequently garbled. These patterns recur across transcripts:
@@ -48,7 +39,7 @@ are not reproduced here because they were not verified against the primary
 sources. Search "ASR named entity error rate" / "entity-preserved ASR" if you
 want the numbers with their datasets attached.)
 
-Three sub-classes, each needing a different check. None can be auto-applied —
+Each numeric error class needs a different check. None can be auto-applied —
 a number can only be resolved by evidence, never by pattern:
 
 | Sub-class | What it looks like | How to settle it |
@@ -176,14 +167,19 @@ task, or require someone to enable exports before other items can be adjudicated
   meeting platform's API, the local file the transcript came from, the
   recorder's export. `fetch_minute_audio.py` implements one such platform; the
   method is not limited to it. For a Feishu/Lark minute, run the bundled helper
-  only under the already-authorized owning profile and require its timeline
-  verification before using the file:
+  only under the already-authorized source profile and read its pairing status:
 
   ~~~bash
   uv run scripts/fetch_minute_audio.py --token <minute-token> \
-    --profile <authorized-profile> --output <session.m4a> \
+    --profile <authorized-profile> --as <source-identity> --output <session.m4a> \
     --transcript <transcript.md>
   ~~~
+
+  Follow [source audio and timeline pairing](review_queue_dashboard.md#source-audio-and-timeline-pairing)
+  for source identity, exit handling and frontmatter setup. A duration mismatch
+  prevents dashboard wiring. A batch check against an original-speed master
+  requires independently verified clock mapping, as described below; a mismatch
+  alone does not establish a speed factor.
 
   `ffmpeg -ss` counts from the start of the media file. Before trusting a
   transcript timestamp, calibrate one timestamp whose neighbouring words you can
@@ -199,7 +195,7 @@ task, or require someone to enable exports before other items can be adjudicated
   from the line's timestamp on a multi-minute turn and the clip can end tens of
   seconds before the word ever arrives. You then read "the engine didn't produce
   that token" as evidence, when you simply never played the right audio.
-  Three things make this tractable:
+  Use the following steps:
   - **Estimate the offset by position in the turn**, since speech rate within one
     turn is roughly constant: `token_start ≈ turn_start + (characters before the
     token ÷ characters in the turn) × turn_duration`, where `turn_duration` is the
@@ -322,7 +318,7 @@ audio, one second recognizer. The tool is
 ```bash
 uv run scripts/verify_queue_audio.py \
   --transcript /abs/path/meeting.md --audio /abs/path/source.wav \
-  --speed 1.3 --engine-script /abs/stepfun-asr/scripts/asr_transcribe.py
+  --engine-script /abs/path/authorized-stdout-engine.py --outdir /abs/path/clip-evidence
 ```
 
 It parses speaker turns, maps each pending row to its recorded body line and
@@ -335,7 +331,16 @@ evidence; re-anchor that queue row before retrying. If the rendered clips have i
 recognition for that row. A supported suggestion may gain an `音证` citation in
 the review queue; this is evidence, not a verdict or a transcript edit. The
 exact automatic-attachment gate lives in `verify_queue_audio.py`, with the
-operator-facing CLI contract in [script_parameters.md](script_parameters.md).
+executable options available through that script's `--help`.
+
+The final turn uses the media duration reported by `ffprobe`, converted to the
+transcript clock through the observed speed factor. If that duration is missing,
+invalid or ends at or before the final turn, affected rows stay pending without clips,
+recognition or evidence attachment. Nonpositive/nonfinite `--speed` values are
+rejected before processing; clip widths must also be finite and ordered. Other
+turns use the next speaker timestamp without an invented duration cap. These are
+position estimates; verify neighbouring
+speech before treating a reading as evidence.
 
 The executing agent can group several doubts in one utterance and reuse two
 distinct windows covering that utterance and its surrounding speech. Use an
@@ -449,7 +454,7 @@ noise.** For each board token, find the moment it was written and ask what in
 that utterance corresponds to it. The ASR side of a name garble is usually a
 fluent, semantically unrelated phrase sitting in the right slot (a latin
 company name arriving as an ordinary two-word Chinese phrase) — so test the
-slot; scanning for gibberish finds nothing. Four outcomes:
+slot; scanning for gibberish finds nothing. Use the following outcomes:
 
 - **Speech garbled, board legible** — the board spelling wins *only when the
   writer plausibly knows the canonical form* (their own org, their client, a

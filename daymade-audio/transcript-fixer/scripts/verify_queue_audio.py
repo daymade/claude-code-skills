@@ -5,7 +5,7 @@
 """verify_queue_audio.py — 批量 pending 音频交叉核验（第二引擎双窗口识别）。
 
 对某转写文件在 review queue 里的 pending 项，逐项从源音频剪 tight/medium
-双片段，送第二识别引擎（默认 StepFun）交叉识别，输出对照表供裁决。
+双片段，送已授权的第二识别引擎交叉识别，输出对照表供裁决。
 
 典型场景：Native pass 后积压的 pending（实体/疑词）——本地检索阶梯已尽，
 用第二引擎的耳朵裁决，而不是把队列推给用户。
@@ -14,20 +14,24 @@
   uv run scripts/verify_queue_audio.py \
     --transcript /abs/path/meeting.md \
     --audio /abs/path/source.wav \
-    [--speed 1.3]            # 转写时间轴→音频轴倍速（加速上传的妙记=原始/加速比；反推法：源音频时长/妙记时长）
+    [--speed <observed-factor>]  # 源音频时长/平台时长；同一时间轴不传此参数
     [--queue-ids 1817,1818]  # 默认该文件全部 pending
-    --engine-script /abs/stepfun-asr/scripts/asr_transcribe.py
+    --engine-script /abs/authorized-stdout-engine.py
     [--outdir /tmp/asr-verify]
 
 输出：<outdir>/results.json；相同音频片段不调用 ASR，结果标记 same_clip。
 脚本只附加符合条件的音证，不写裁决；逐项裁决见 references/advanced_correction_evidence.md。
-依赖：ffmpeg；识别引擎脚本（音频路径作为位置参数，识别文本写 stdout）。
+依赖：ffmpeg；末尾发言需要 ffprobe 的有效媒体时长；识别引擎脚本（音频路径作为位置参数，识别文本写 stdout）。
 """
-import argparse, datetime, hashlib, json, os, re, subprocess, sys
+import argparse, datetime, hashlib, json, math, os, re, subprocess, sys
+from pathlib import Path
 
 TS_RE = re.compile(r'^(\S+) (\d{2}):(\d{2}):(\d{2})\.(\d{3})\s*$')
 SKILL_DIR = os.path.dirname(os.path.abspath(__file__))
 FIX = os.path.join(SKILL_DIR, "fix_transcription.py")
+if SKILL_DIR not in sys.path:
+    sys.path.insert(0, SKILL_DIR)
+from fetch_minute_audio import audio_duration_seconds
 
 
 def parse_turns(lines):
@@ -75,7 +79,8 @@ def _selected_position(text, original, context, context_offset):
     return candidates.pop()
 
 
-def token_offset(turns, line_no, original, *, context=None, context_offset=None, lines=None):
+def token_offset(turns, line_no, original, *, context=None, context_offset=None, lines=None,
+                 timeline_end=None):
     """Estimate the selected slot's time; never choose the first repeated token."""
     indices = [j for j, t in enumerate(turns) if t[0] < line_no]
     if not indices:
@@ -85,9 +90,11 @@ def token_offset(turns, line_no, original, *, context=None, context_offset=None,
     if idx + 1 < len(turns):
         dur = turns[idx + 1][1] - ts
     else:
-        dur = 120.0
-    if dur <= 0 or dur > 600:
-        dur = min(max(dur, 10), 600)
+        if timeline_end is None:
+            raise ValueError("final turn needs an observed media duration; anchor remains pending")
+        dur = timeline_end - ts
+    if not math.isfinite(dur) or dur <= 0:
+        raise ValueError("speaker turn has no positive finite duration; anchor remains pending")
     if lines is None:
         pos = _selected_position(text, original, context, context_offset)
     else:
@@ -170,8 +177,11 @@ def main():
     ap.add_argument("--tight", type=float, default=5.0, help="tight 窗 ±秒（默认 5）")
     ap.add_argument("--medium", type=float, default=20.0, help="medium 窗 ±秒（默认 20）")
     a = ap.parse_args()
-    if a.tight <= 0 or a.medium <= a.tight:
-        ap.error("--medium must be greater than positive --tight")
+    if not math.isfinite(a.speed) or a.speed <= 0:
+        ap.error("--speed must be positive and finite; derive it from source evidence")
+    if not all(math.isfinite(value) for value in (a.tight, a.medium)) \
+            or a.tight <= 0 or a.medium <= a.tight:
+        ap.error("--medium must be greater than positive --tight; both must be finite")
 
     os.makedirs(a.outdir, exist_ok=True)
     with open(a.transcript, encoding="utf-8") as transcript_file:
@@ -184,6 +194,15 @@ def main():
     if not items:
         sys.exit("no pending items for this file")
 
+    timeline_end = None
+    if any(it["line_number"] > turns[-1][0] for it in items):
+        duration, why = audio_duration_seconds(Path(a.audio))
+        if duration is not None:
+            timeline_end = duration / a.speed
+        else:
+            print(f"final-turn duration unavailable: {why}; affected rows remain pending",
+                  file=sys.stderr)
+
     results = []
     for it in items:
         tid = it["id"]
@@ -191,7 +210,7 @@ def main():
             tok_t = token_offset(
                 turns, it["line_number"], it["original_text"],
                 context=it.get("context_snippet"), context_offset=it.get("context_offset"),
-                lines=lines) * a.speed
+                lines=lines, timeline_end=timeline_end) * a.speed
         except ValueError as exc:
             results.append({
                 "id": tid, "line": it["line_number"], "original": it["original_text"],
