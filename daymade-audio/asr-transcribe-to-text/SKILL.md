@@ -362,9 +362,13 @@ the Apple-Silicon long-form route: source-time blocks are checkpointed, each
 block runs whisper.cpp's Silero VAD, 2-second overlap is de-duplicated at block
 seams, and pyannote speaker labels are late-fused afterward.
 
-The four runtime assets are explicit operator inputs. Do not discover or
-download them silently inside a batch. `whisper.cpp` documents the model and VAD
-download scripts; verify the binary/model/VAD files before starting.
+Runtime assets and the GPU build manifest are explicit operator inputs. Do not
+discover or download models silently inside a batch. Before using this route,
+read [GPU-only runtime preparation](references/whispercpp_gpu_runtime.md).
+The agent prepares the isolated pinned build within existing setup authorization;
+an unmodified binary's `--use-gpu` flag does not prove GPU VAD. The runner rejects
+unknown build identities before model load and the native guard rejects CPU or
+unknown graph assignments before inference.
 
 ```bash
 # 1. Checkpointed ASR on the original source timeline
@@ -372,6 +376,7 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/transcribe_long_whispercpp.py \
   INPUT_16K_MONO_PCM16.wav OUTPUT_DIR \
   --ffmpeg-path /absolute/path/to/ffmpeg \
   --whisper-bin /absolute/path/to/whisper-cli \
+  --gpu-runtime-manifest /absolute/path/to/user-cache/gpu-runtime.json \
   --whisper-model /absolute/path/to/ggml-large-v2-or-v3.bin \
   --vad-model /absolute/path/to/ggml-silero-v6.2.0.bin
 
@@ -958,6 +963,7 @@ Substitute the resolved absolute path for `${CLAUDE_SKILL_DIR}` everywhere in th
 - `prepare_asr_input.py` — Merge multi-segment recordings + normalize for ASR (16 kHz mono), optional pitch-preserved speedup for metered uploads; self-verifies duration math and splice boundaries
 - `transcribe_local_mlx.py` — Local MLX transcription (macOS ARM64, PEP 723 deps), bounded low-energy chunks, atomic checkpoints/resume, owner-liveness binding
 - `transcribe_long_whispercpp.py` — **DEFAULT LONG-AUDIO ASR**: explicit source-time blocks + overlap ownership + whisper.cpp/Silero VAD + atomic checkpoint/resume
+- `build_whispercpp_gpu.py` — Prepare an isolated pinned Metal runtime with native GPU graph checks; keep its binaries/manifest in user cache
 - `fuse_whispercpp_diarization.py` — Late-fuse normalized whisper.cpp time segments with pyannote speech/speakers; remove ungrounded silence hallucinations and emit TXT/CSV/receipt
 - `speaker_transcribe.py` — Short/medium decoupled pipeline (session-wide Qwen3-ASR + whisper timing + pyannote); `--no-diarization` plain-text fast path; `--text-file` for remote/pre-made ASR text
 - `align_speakers.py` — Decoupled alignment core (stdlib): maps full transcript onto whisper word lattice + pyannote segments; cuts turns at pauses and speaker changes but never inside a Latin word; usable standalone for debugging
@@ -970,6 +976,7 @@ Substitute the resolved absolute path for `${CLAUDE_SKILL_DIR}` everywhere in th
 
 **References:**
 - `execution_location_and_comparison.md` — Conditional local/remote choice, existing transcript/cache reuse, safe runtime identity and same-source comparison
+- `whispercpp_gpu_runtime.md` — Path L GPU-VAD preparation, native computation evidence and checkpoint recovery boundary
 - `decoupled_speaker_alignment.md` — The default architecture: why decouple, alignment algorithm, trust signals, failure modes
 - `speaker_diarization.md` — Production pitfalls: over-segmentation, mic-domain effects, when to distrust labels; legacy cascade notes
 - `voiceprint_speaker_id.md` — CAM++ speaker ID: enroll/match, threshold+margin gates, the acoustic-domain caveat, bootstrap

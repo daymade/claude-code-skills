@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **asr-transcribe-to-text** (`daymade-audio` v1.48.0): Restore GPU-only VAD and ASR with a pinned isolated Metal runtime, reject unsupported CPU/DTW paths before inference, and preserve source-time chunks and verified checkpoint recovery. Fix speech-checkpoint reopening and subprocess pipe draining.
+- **youtube-downloader** (v1.2.0): Route transcript requests through existing drafts and original subtitles before strict audio-only ASR; retain file downloads and distinguish uploaded tracks from reviewed text.
+- **lark-cli-router** (`daymade-claude-code` v4.27.9) and **feishu-doc-scraper** (v1.8.2): Reconcile linked archive materials from roots and complete thread replies, and replace a missing comments reference with current read-side guides.
+
 - **claude-switch-models-setup** (`daymade-claude-code` v4.27.8) and **skill-creator** (`daymade-skill` v1.69.5): Align leased Fleet authoring routes with the existing source owner, distinguish authoring from canonical installation, and remove derived summaries and obsolete editing narratives while preserving operating boundaries. Change type: factual documentation alignment; runtime unchanged.
 - **app-evolver** (v1.1.0): Compose public REA and reverse-skill instructions for evidence gaps while preserving the existing source-analysis, product-fit, implementation and acceptance workflow. Personal favorites and local recovery Skills remain optional. Reference-only integration neither bundles external frameworks nor configures MCP or installs engines. Change type: bounded workflow extension.
 

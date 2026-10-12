@@ -1,6 +1,11 @@
 ---
 name: youtube-downloader
-description: Download YouTube videos and HLS streams (m3u8) from platforms like Mux, Vimeo, etc. using yt-dlp and ffmpeg. Use this skill when users request downloading videos, extracting audio, handling protected streams with authentication headers, or troubleshooting download issues like nsig extraction failures, 403 errors, or cookie extraction problems.
+description: >-
+  Fetch existing YouTube transcripts/subtitles or archive spoken video content as text,
+  and download YouTube videos/audio or HLS streams (m3u8) with yt-dlp and ffmpeg.
+  Use for transcript/subtitle retrieval, text-first video archiving, video/audio downloads,
+  protected streams with authentication headers, and download failures including nsig,
+  403 or browser-cookie issues.
 ---
 
 # YouTube Downloader
@@ -11,6 +16,15 @@ Enable reliable video and audio downloads from YouTube and HLS streaming platfor
 - YouTube downloads (up to 4K) using PO token providers or browser cookies
 - HLS stream downloads with authentication headers
 - Handling protected content and troubleshooting common download failures
+
+## Goal Split: File vs. Text (Read First)
+
+Before downloading anything, classify the request:
+
+- **User wants the video/audio file itself** (save it, edit it, watch offline) → continue with the download flow below, unchanged.
+- **User wants the spoken content as text** (transcript, subtitles, meeting notes, archive, "what was said") → follow `references/text-first.md` FIRST: existing archived transcripts → platform transcript APIs → yt-dlp subtitle-only → authorized audio track + ASR. Do not download the full video just to obtain text.
+
+The text-first route never blocks a file request: when the user wants the file, download it with the unchanged flow below.
 
 ## Non-Technical User Experience (Default)
 
@@ -494,9 +508,12 @@ ffmpeg -i video.mp4 -i audio.m4a -c copy merged.mp4
 - **yt-dlp Documentation**: https://github.com/yt-dlp/yt-dlp
 - **Format Selection Guide**: https://github.com/yt-dlp/yt-dlp#format-selection
 
-## Next Step: Transcribe Downloaded Audio/Video
+## Next Step: Text From the Video
 
-After downloading, if the user's goal involves getting text from the video (transcription, subtitles, meeting notes), proactively suggest:
+Two situations, two routes:
+
+- **The user's goal is text and nothing has been downloaded yet**: do not download the video just to get text — follow the text-first ladder in `references/text-first.md` (existing archived transcripts → platform transcript APIs → yt-dlp subtitle-only → authorized audio track + ASR).
+- **The user already has the downloaded file and now also wants text**: still check existing transcripts and original subtitles using its known source identity. If those checks yield no usable text, reuse the local file at level L4 without another download. Proactively suggest:
 
 ```
 Download complete: [filename]

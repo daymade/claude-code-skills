@@ -11,9 +11,10 @@ of a collection; do not wait for the user to mention comments.
 
 Use [fetch_comments.py](../scripts/fetch_comments.py) as the executable authority
 for flags, defaults and exit behavior; inspect its `--help` when choosing options.
-Use the installed `lark-cli` guides for authentication and permissions. Before
-the first run, read `lark-drive`, its `lark-drive-list-comments.md`,
-`lark-drive-comments-guide.md`, and `lark-drive-comment-location.md` references.
+Use the installed `lark-cli` guides for authentication and permissions
+(`lark-shared`). Before the first run, read `lark-drive`, its
+`lark-drive-list-comments.md`, `lark-drive-list-replies.md`, and
+`lark-drive-comment-location.md` references.
 The bundled helper uses the exercised `+list-comments` shortcut and
 `drive file.comment.replys list` schema; it never posts, resolves, or edits comments.
 

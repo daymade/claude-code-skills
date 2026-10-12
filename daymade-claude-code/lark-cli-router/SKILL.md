@@ -121,6 +121,14 @@ a replacement.
    does not prove the requested result; for JSON output, inspect `ok` and errors
    as well. Outer `ok == true` does not prove each item succeeded. Do not test for
    a top-level `code == 0`; interpret domain results using the loaded guide.
+   For an authorized conversation archive that includes linked materials, derive
+   the requested set from every captured root and complete thread-reply page,
+   including nested auto-expanded replies; load the current `lark-im` message-list,
+   thread-list and enrichment references to interpret pagination and reply errors.
+   Extract links and attachment identities from that union of raw message content,
+   retaining parent relationships; unfinished pages, omitted replies, recalled
+   content and denied resources remain explicit gaps and `partial`, while an
+   overview-only request keeps its narrower scope.
    For batches, reconcile each requested resource identity with its returned
    item, error and expected result/artifact. Identify missing, duplicate and
    unrequested items; a duplicate never fills a missing request. Count verified
