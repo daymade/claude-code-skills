@@ -238,14 +238,22 @@ def test_public_json_contract_lists_the_complete_always_present_shape():
     parameter_contract = parameters.split("- `--json` (optional):", 1)[1].split("\n\n", 1)[0]
     for name in names:
         assert f"`{name}`" in parameter_contract
-    assert re.search(r"\b(?:all|listed) fields are always present\b", parameter_contract, re.I)
+    assert re.search(
+        r"(?:^|(?<=[.!?]))\s*(?:the\s+)?(?:all|listed) fields are always present\b",
+        parameter_contract,
+        re.I,
+    )
     assert "Stage 2/3 runs add" not in parameters
 
     parser = runpy.run_path(str(ARGUMENT_PARSER_PY))["create_argument_parser"]()
     json_help = next(action.help for action in parser._actions if action.dest == "json_output")
     for name in names:
         assert name in json_help
-    assert re.search(r"\b(?:all|listed) status fields are always present\b", " ".join(json_help.split()), re.I)
+    assert re.search(
+        r"(?:^|(?<=[.!?]))\s*(?:the\s+)?(?:all|listed) status fields are always present\b",
+        " ".join(json_help.split()),
+        re.I,
+    )
 
 
 def test_multi_recording_completion_is_not_satisfied_by_sampled_clips():
