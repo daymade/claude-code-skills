@@ -19,10 +19,12 @@ reusing its text.
 **Trigger:** always start here.
 
 **Entry:**
-1. `skills-search` across all owned sources for a skill that already archives this
+1. If available, use `skills-search` across owned sources for a skill that already archives this
    content (e.g. favorites/web-archive owners), then query that owner's archive.
-2. `favorites-search` over the existing favorites/subscription collections for the
-   video ID.
+2. If available, use `favorites-search` over the existing favorites/subscription collections for the
+   video ID. If either helper or its archive is unavailable, record that route as
+   unchecked and continue to L2/L3; do not require installation of an inaccessible
+   helper or treat its absence as proof that no transcript exists.
 
 Reuse archived text as-is when the record's video ID matches and the snapshot is
 complete (full transcript, not a stub). Do not re-download or re-transcribe what
