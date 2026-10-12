@@ -1020,6 +1020,66 @@ class PriorWorkHookTests(unittest.TestCase):
                     hook.classify_prompt(prompt, False), "required_prior_signal"
                 )
 
+    def test_absent_reuse_asset_declaration_does_not_arm(self) -> None:
+        # Same complete read-only replay shape, with only synthetic paths.
+        prompt = (
+            "This is a bounded workflow replay, not a real transfer request. "
+            "Read the exact candidate Skill at /synthetic/youtube-downloader/SKILL.md "
+            "and its referenced text-first guide. Then respond to the user case "
+            "below as its executor, stating the next concrete action and any "
+            "necessary command. Do not browse, download, transcribe, install, "
+            "spend money, change credentials, write files, or delegate. Use Read "
+            "only. Return a concise result for this case, not a review of the Skill.\n\n"
+            "用户请求：明确下载公开YouTube视频原件（含画面和声音）保存在指定本地目录，"
+            "我不是要逐字稿，也不是要只有音频。当前没有需要复用的本地原件。"
+            "请给出你将执行的原视频下载命令；本次只输出命令，不实际下载，"
+            "URL用占位符URL，目录用OUTPUT_DIR。"
+        )
+        for value in (prompt, "当前没有需要复用的本地原件。", "没有需要复用的本地原件",
+                      "现在没有需要重用的材料；只解释当前文件。", "本次没有需要沿用的材料\n只读当前文件。"):
+            with self.subTest(prompt=value):
+                self.assertEqual(hook.classify_prompt(value), "none")
+        self.assertIsNone(hook.handle_user_prompt({
+            "hook_event_name": "UserPromptSubmit", "session_id": "negative-new-session", "prompt": prompt,
+        }))
+        self.assertIsNone(prior_work.load_requirement(hook._manifest(), "negative-new-session"))
+
+    def test_absent_reuse_questions_hedges_and_positive_clauses_still_arm(self) -> None:
+        prompts = [
+            "有没有需要复用的本地原件？", "没有需要复用的本地原件吗？",
+            "没有需要复用的本地原件？", "没有需要复用的本地原件呢？",
+            "当前没有需要复用的本地原件吧", "可能没有需要复用的本地原件。",
+            "当前没有需要复用的本地原件也许是查漏了。",
+            "当前没有需要复用的本地原件是否属实。请先核实。",
+            "当前没有需要复用的本地原件（尚未确认）。请先核实。",
+            "当前没有需要复用的本地原件，是吗？",
+            "当前没有需要复用的本地原件。是吗？",
+            "当前没有需要复用的本地原件。（尚未确认）请先核实。",
+            "不确定有没有需要复用的本地原件。",
+            "当前没有需要复用的本地原件，但请复用已有脚本。",
+            "当前没有需要复用的本地原件但请复用已有脚本。",
+            "当前没有需要复用的本地原件。请检索我们以前的代码。",
+            "当前没有需要复用的本地原件\n请复用已有代码。",
+            "当前没有需要复用的本地原件；记不清是哪个脚本了。",
+        ]
+        for prompt in prompts:
+            with self.subTest(prompt=prompt):
+                self.assertEqual(hook.classify_prompt(prompt), "required_prior_signal")
+
+    def test_absent_reuse_followup_does_not_release_old_requirement(self) -> None:
+        sid = "pending-negative-followup"
+        hook.handle_user_prompt({"hook_event_name": "UserPromptSubmit", "session_id": sid,
+                                "prompt": "请检索我们之前的抓取代码。"})
+        before = prior_work.load_requirement(hook._manifest(), sid)
+        self.assertIsNone(hook.handle_user_prompt({"hook_event_name": "UserPromptSubmit", "session_id": sid,
+                                                  "prompt": "当前没有需要复用的本地原件。"}))
+        self.assertEqual(prior_work.load_requirement(hook._manifest(), sid), before)
+        self.assertIsNotNone(hook.handle_stop({"hook_event_name": "Stop", "session_id": sid,
+                                              "stop_hook_active": False}))
+        for value in ({}, {"prompt": ""}, {"prompt": None}):
+            self.assertIsNone(hook.handle_user_prompt({"session_id": sid, **value}))
+            self.assertEqual(prior_work.load_requirement(hook._manifest(), sid), before)
+
     def test_completed_receipt_survives_negated_and_hedge_followups(self) -> None:
         # The real 2026-08-28 block: a completed receipt was stranded when
         # "不要复用现在的 aicms-docs" minted a fresh requirement, and the next

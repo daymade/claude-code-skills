@@ -109,6 +109,16 @@ NEGATED_PRIOR_SIGNAL = re.compile(
     r"(?:复用|重用|沿用|参考(?:以前|之前|历史|已有))[^\n，,。；;]{0,60}"
     r"|(?:不要|不用|无需|不需要|不必|别|勿)\s*(?:再\s*)?(?:用|看|查|翻)\s*"
     r"(?:以前|之前|历史|旧)(?:的)?"
+    # A declarative clause may deny having an asset needing reuse. Strip only
+    # its negative verb span, not its object or a later positive reuse request.
+    # Admit only bare original/material declarations ending the prompt or
+    # followed by the bounded delivery controls below. Unknown continuations
+    # stay scannable, including adjacent verification/uncertainty clauses.
+    r"|(?:\A|(?<=[\n，,。；;：:]))[ \t]*(?:当前|现在|本次)?[ \t]*"
+    r"没有[ \t]*需要[ \t]*(?:复用|重用|沿用)"
+    r"(?=(?:的)?(?:本地)?(?:原件|材料)[ \t]*(?:$|[\n。；;][ \t]*"
+    r"(?:$|(?:请给出你将执行的原视频下载命令|只解释当前文件|只读当前文件)"
+    r"[ \t]*(?:$|[\n。；;]))))"
     r"|(?:don't|do not|no need to|stop)\s+(?:reuse|reusing|referencing)"
     r"[^\n,.!?;]{0,60}",
     re.IGNORECASE,
