@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **excel-automation** (`daymade-docs` v1.25.1): Route paper-form reconstruction from the repository entry to the existing workflow and remove derived capability and step counts. Change type: documentation alignment; workbook creation and control behavior unchanged.
+
 - **excel-automation** (`daymade-docs` v1.25.0): Add a workflow for reconstructing paper-form images or scans as editable XLSX files. Check source fields, prefill confirmed facts, preserve identifier and date types, and inspect printed pages with the actual print engine named. Change type: bounded form-reconstruction workflow.
 
 - **transcript-fixer** (`daymade-audio` v1.49.0): Accept the existing local MLX runner's file outputs with source, text, producer, pinned-model and GPU receipt checks; retain logs and separate audio evidence from verdicts. Add occurrence-specific Native/cold-review contrasts for standard-term normalization, address forms and homophonic spelling. Change type: bounded audio-intake capability and review clarification.

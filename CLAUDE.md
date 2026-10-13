@@ -123,6 +123,10 @@ as the route rather than a second copy of those procedures.
 For customer-approved report forms, follow
 [skill-creator's report-template contract](daymade-skill/skill-creator/references/authoring-and-reuse.md#show-the-result-not-just-the-work).
 
+For rebuilding a paper form from an image, scan or screenshot as an editable
+XLSX with a printable layout, enter
+[excel-automation](daymade-docs/excel-automation/SKILL.md).
+
 For HTML report creation or updates, enter
 [report-with-html's Define success workflow](report-with-html/SKILL.md#workflow)
 for reader/use, evidence precision, delivery location and investigation acceptance.

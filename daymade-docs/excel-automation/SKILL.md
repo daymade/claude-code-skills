@@ -39,8 +39,6 @@ timeout 5 osascript -e 'tell application "Microsoft Excel" to activate'
 
 ## Overview
 
-Three capabilities:
-
 | Capability | Tool | When to Use |
 |-----------|------|-------------|
 | **Create** formatted Excel | `openpyxl` | Reports, mockups, dashboards |
@@ -155,7 +153,7 @@ file.xlsx (ZIP archive)
 └── _rels/.rels
 ```
 
-### Sheet Name Resolution (Two-Step)
+### Sheet Name Resolution
 
 Sheet names in `workbook.xml` link to physical files via `_rels/workbook.xml.rels`:
 
