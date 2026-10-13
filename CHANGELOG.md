@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **asr-transcribe-to-text** (`daymade-audio` v1.49.1): Keep unreliable recognizer output as a draft with speech content unknown; require independent source-audio evidence for no-speech claims. Treat density and repetition as inspection clues and recover only when conditions address the observed failure. Align the timing-leg warning while preserving its condition and timestamp payload. Change type: bounded transcript-admission correction.
+
 - **excel-automation** (`daymade-docs` v1.25.1): Route paper-form reconstruction from the repository entry to the existing workflow and remove derived capability and step counts. Change type: documentation alignment; workbook creation and control behavior unchanged.
 
 - **excel-automation** (`daymade-docs` v1.25.0): Add a workflow for reconstructing paper-form images or scans as editable XLSX files. Check source fields, prefill confirmed facts, preserve identifier and date types, and inspect printed pages with the actual print engine named. Change type: bounded form-reconstruction workflow.

@@ -86,13 +86,13 @@ def main():
             log(f"WARNING: no word timestamps for {wav.name} — skipping (alignment will fail for this file)")
             continue
 
-        # Repetition-loop guard (music-only clips hallucinate looping words with
-        # confident timestamps — see SKILL.md Batch Transcription). Don't abort:
-        # the alignment step's anchored_ratio is the real trust signal; just warn.
+        # Repetition diagnostic only; preserve timestamps and warn. Neither
+        # word diversity nor anchored_ratio establishes source speech presence
+        # or recognition truth; verify against the original audio.
         uniq = len({w["word"] for w in words}) / len(words)
         if uniq < 0.06 and len(words) > 20:
-            log(f"WARNING: unique-word ratio {uniq:.3f} on {wav.name} — likely no-speech / "
-                "music-only; timestamps (and downstream speaker labels) are probably junk")
+            log(f"WARNING: unique-word ratio {uniq:.3f} on {wav.name} — suspicious repetition; "
+                "verify original audio before trusting timestamps or speaker labels; speech presence unknown")
 
         out.parent.mkdir(parents=True, exist_ok=True)
         payload = {"wav": str(wav), "model": args.model, "num_words": len(words), "words": words}

@@ -711,12 +711,20 @@ unavailable execution identity explicit instead of silently falling back to CPU.
 After transcription, check completeness:
 
 1. Confirm output is not empty
-2. Check character count is plausible (~400 chars/min for Chinese, ~200 words/min for English)
+2. Use character count and density (~400 chars/min for Chinese, ~200 words/min for English) only as inspection clues, not minimum-output or rejection thresholds; never pad text to reach them
 3. For local MLX, confirm the checkpoint manifest says `status: complete`; the
    script refuses to write the final `.txt` when any chunk hits its token ceiling
 4. For legacy/remote output, check the **ending** — a mid-sentence tail can mean truncation
 5. Show user the first and last ~200 characters as preview
 6. **Speaker path**: check the alignment report — `anchored_ratio` should be ≥ 0.5 (the script warns when lower), the speaker count should be plausible for the recording (a two-person interview showing 5 speakers, or a monologue split into 2+, means diarization over-segmented — see `references/speaker_diarization.md` for when to distrust labels)
+
+Keep empty, suspected-loop or implausibly timed ASR results as unreliable drafts
+with speech content unknown; retain the original output and do not write it into
+a canonical transcript. Verify the affected interval against the original audio
+or an existing verified source transcript before admission. Repetition alone,
+including repeated words or lyrics, does not establish an ASR failure or absent
+speech. Label `no speech` only after independent verification of the original
+audio for the claimed interval, never from an ASR result or density heuristic.
 
 When this run is the independent evidence track for an existing high-stakes
 transcript, completeness means the entire baseline recording reached a complete
@@ -725,20 +733,14 @@ they cannot support a whole-transcript or “higher-quality final” claim. Hand
 complete output to `transcript-fixer`; let its human gate settle unresolved
 proper-name forks.
 
-If truncated or wrong, use **AskUserQuestion**:
-```
-Transcription may be truncated:
-- Expected: ~[N] chars for [M] minutes of audio
-- Got: [actual] chars ([pct]% of expected)
-- Last line: "[last 100 chars...]"
-
-Options:
-A) Inspect the failed chunk; if it is dense real speech, retry with a measured
-   per-chunk budget up to 16384
-B) If it is music/silence repetition, classify or preprocess that chunk instead
-C) Switch mode — try [local/remote] instead
-D) Abort
-```
+For truncated or unreliable output, execute recovery already covered by the
+task's authorization: inspect the source or reuse its verified transcript,
+then retry only when new input, preprocessing, parameters or evidence addresses
+the observed failure. When source verification confirms dense real speech and
+a per-chunk token ceiling caused truncation, retry with a measured per-chunk
+budget up to 16384. Do not repeat the same source/model run without such a
+change. Retain partial output; ask only for a genuinely new permission, cost or
+user-owned choice.
 
 ## Step 5: Fallback — Overlap-Merge (Remote API Only)
 
@@ -808,9 +810,9 @@ Then re-run Step 0.
 Passing many files to one `transcribe_local_mlx.py` invocation is efficient (model loads once) — **but only when every file contains actual speech.** If the batch may include music-only / BGM-only clips (short promo videos, montage clips with subtitles instead of voiceover), do NOT batch them in one process:
 
 - On music/rhythm-only audio the model can fall into a **repetition loop hallucination** (e.g. endless "One, two, three, one, two, three..."). The 8192-token per-chunk ceiling bounds resource growth, while the 12-character n-gram quality gate rejects a loop even when it stops below that ceiling; one bad file can still consume the whole chunk timeout and starve a batch.
-- **Drive batch jobs one-file-per-process with a per-file timeout** (e.g. `timeout 240` / `perl -e 'alarm 240; exec @ARGV'` around each invocation, skip on timeout, second pass for failures). A stuck file then costs 4 minutes, not the batch.
-- For a stuck file, retry with `--max-tokens 3000`: real speech in a short clip fits comfortably; a looping file gets truncated output you can classify.
-- **Detect "no speech" instead of shipping garbage**: if the transcript's unique-word ratio is extremely low (e.g. `len(set(words))/len(words) < 0.06` on a 40+ char output), the clip almost certainly has no voiceover — label it as such rather than delivering the loop text. (Downstream OCR of on-screen captions is the actual fix for subtitle-only videos.)
+- **Drive batch jobs one-file-per-process with a per-file timeout** (e.g. `timeout 240` / `perl -e 'alarm 240; exec @ARGV'` around each invocation, preserve failures for condition-bound recovery). A stuck file then costs 4 minutes, not the batch.
+- Inspect a stuck file's source and failure first. Use `--max-tokens 3000` only when evidence supports a smaller output budget; retain any truncated result as a draft and follow Step 4's condition-bound retry rule.
+- **Expose unreliable transcription, not an invented content verdict**: use low unique-word ratio, empty text or suspicious repetition as inspection clues. Apply Step 4's draft/admission boundary; these signals cannot prove that a clip has no voiceover or justify discarding legitimate repeated speech or lyrics. Use on-screen-caption OCR only when the actual source supports that separate task.
 
 ## Word-Level Timestamps (subtitles, audio-visual alignment)
 
