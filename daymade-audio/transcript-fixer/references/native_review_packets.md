@@ -79,6 +79,26 @@ or unusual but intelligible word. An unknown entity alone is not a residual.
 High confidence and a grammatical replacement are not evidence. Preserve speaker
 labels, timestamps, user verdicts, and the correction ledger.
 
+## Occurrence-specific evidence
+
+During both Native triage and cold review, identify the discriminator for the
+exact utterance before preferring a fluent replacement. A later standard term
+establishes a candidate vocabulary; it does not establish what this speaker said
+earlier. An authoritative participant label establishes identity; it does not
+authorize replacing a legitimate nickname or unusual address with that name.
+Use the raw diff and the existing evidence ladder; audio supports pronunciation,
+while homophonic spelling needs an occurrence-specific written or semantic source.
+These are agent judgments, not predicates the packet checker can establish.
+
+Apply these synthetic contrasts; they are not dictionary rules:
+
+| Evidence in the disputed slot | Action |
+|---|---|
+| Raw `数据员工`; two covered audio windows retain that reading; another speaker later says `数字员工` | Keep `数据员工`. The later term does not override sound at this occurrence. |
+| Raw address `小林老师`; participant roster says `晓林`; no source establishes whether the speaker used a nickname | Retain the spoken address; leave an actual uncertainty pending. Identity alone does not select the address's characters. |
+| Raw `负债五月`; the same speaker explicitly explains that payment was made in May and repeats `五月付` for that transaction | A minimal `负债`→`付在` correction may use that payment chain; preserve month, amount and all qualifications. |
+| A tax discussion contains the unusual spoken form `税入`; no occurrence evidence establishes `收入` | Keep the raw form. Topic and grammatical preference do not establish a transcription error. |
+
 ## Validate, then adjudicate
 
 ```bash

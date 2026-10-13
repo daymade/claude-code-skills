@@ -23,6 +23,7 @@ Use a two-phase loop:
 - Skip Native AI only when the human explicitly limits this run to the dictionary pass or a dated artifact proves Native AI already ran on this exact transcript.
 - In Claude Code or Codex, do not run Stage 3. Use Stage 1 plus the native workflow.
 - Never rewrite speech for fluency. A correction must explain a plausible ASR error and preserve who said what.
+- A standard term elsewhere or a known participant is a candidate source, not proof of this occurrence's wording. Apply the occurrence-specific contrasts in [Native review packets](references/native_review_packets.md#occurrence-specific-evidence) during the first pass and cold review; retain the raw form when the discriminator is missing.
 - By default, never infer or reassign speaker identities. Preserve speaker-label lines; human-confirmed labels and user verdicts are authoritative. Only an explicit, task-scoped user grant to infer identities opens the separate derived-reader branch: read [scoped speaker inference](references/scoped_speaker_inference.md) before acting. That grant is permission to infer, not an identity confirmation or permission for other transcripts.
 - When comparing two transcripts of the same session (a 1.3x-sped Feishu 妙记 vs a full-speed one, DJI vs 录音豆, two devices, or any duplicate/overlapping capture), do NOT let an alignment script's output stand in for reading. Script diffs (`difflib`, normalize-and-compare, per-turn speaker-label counts) are locators for *candidate* divergent segments only — their similarity ratios, "identical turn counts", and "speaker-divergence counts" are never the conclusion. Read both transcripts turn by turn yourself and decide from that. Real case 2026-09-18: a per-line regex that missed continuation lines reported "150 speaker divergences, all empty" then flipped to "1" once multi-line bodies were parsed — the whole numeric range was parser noise, and a canonical swap was nearly made on it. Corroboration that is genuinely independent requires a different recognizer over the source audio (rung 7), not a re-segmentation of the same recognition.
 - Parsing a Feishu 妙记 `.txt` (or any `speaker HH:MM:SS.mmm` transcript): the spoken text lives on the lines AFTER the speaker-label line, up to the next label — not on the label line itself. A single-line regex (`group(3)` of the label) reads every multi-line turn's body as empty. Counting speakers or turns: use UTF-8-safe tooling (Python), never `sort | uniq -c` or `awk '{print $1}'` — both silently collapse distinct CJK speaker labels into one (2026-08-29 `sort|uniq` folded 5 speakers' 106 turns into "说话人A 106"; 2026-09-18 `awk $1` reported "说话人A 373" for a file whose real distribution was 说话人A17/说话人B287/说话人C60/说话人D9).
@@ -391,6 +392,14 @@ uv run scripts/verify_queue_audio.py \
   --transcript /abs/meeting.md --audio /abs/source.wav \
   --time-overrides /abs/verified-times.json \
   --engine-script /abs/stdout_recognizer.py --outdir /abs/audio-evidence
+
+# Existing local MLX runner: read .txt + completion manifest, never its progress logs.
+# Resolve the runner from asr-transcribe-to-text; prepare its cached model there first.
+uv run scripts/verify_queue_audio.py \
+  --transcript /abs/meeting.md --audio /abs/source.wav \
+  --time-overrides /abs/verified-times.json \
+  --engine-script /abs/transcribe_local_mlx.py --engine-format mlx-file \
+  --outdir /abs/audio-evidence
 
 # Multi-format Stage 1/API comparison report
 uv run scripts/generate_diff_report.py \

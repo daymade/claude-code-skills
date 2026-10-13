@@ -281,6 +281,20 @@ Generates these files in the output directory:
 ## verify_queue_audio.py
 
 Run through `uv run` with `--transcript`, `--audio` and `--engine-script`.
+`--engine-format stdout` preserves the pure-text stdout contract (default).
+`--engine-format mlx-file` accepts the existing `transcribe_local_mlx.py` owner:
+it receives both clips plus `--output-dir` through `uv run`, using the prepared
+offline model cache and GPU. Resolve that script from the installed
+`asr-transcribe-to-text` Skill; no sibling directory is assumed. Missing readiness
+must be repaired there before retrying; this command neither prepares models nor
+changes provider. Each pair retains a fresh `mlx-*` directory with `.txt`,
+`_mlx_checkpoints/*/manifest.json`, stdout/stderr logs and both windows' provenance
+in `results.json`. Only complete schema-2 manifests matching clip bytes, output
+text, producer script, immutable model revision and GPU device are accepted.
+MLX mode rechecks the original source's resolved path, inode, size, change clocks
+and bytes after cuts/recognition and before authority append. A changed or unreadable
+source records `source_identity_error`, returns `engine_failed` and leaves rows pending.
+Both modes reject an empty reading as `engine_failed`; MLX mode ignores stdout.
 Optional `--queue-ids` limits the exact file's pending rows; `--speed` maps the
 transcript clock to media seconds. `--tight`/`--medium` are positive half-widths,
 with medium strictly larger. `--outdir` contains clips and `results.json`.
@@ -304,7 +318,9 @@ See [batch evidence](advanced_correction_evidence.md#batch-pending-adjudication-
 for positioning and bounded re-cuts.
 
 Each result preserves both recognizer outputs/exit codes, position source,
-anchors and clip ranges. Status distinguishes `anchor_error`, `timestamp_unknown`, `same_clip`,
+anchors and clip ranges. Completed recognition also records `clip_sha256` and
+`engine_provenance`; MLX mode binds the original source audio path/hash as well.
+Status distinguishes `anchor_error`, `timestamp_unknown`, `same_clip`,
 `engine_failed`, `coverage_unknown`, `needs_reanchor`, `original_supported`,
 `suggestion_supported`, `recognizer_disagreement` and `unsettled_reading`.
 Exit 1 means position/coverage, engine, clip independence or authority append

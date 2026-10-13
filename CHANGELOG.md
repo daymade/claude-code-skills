@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **transcript-fixer** (`daymade-audio` v1.49.0): Accept the existing local MLX runner's file outputs with source, text, producer, pinned-model and GPU receipt checks; retain logs and separate audio evidence from verdicts. Add occurrence-specific Native/cold-review contrasts for standard-term normalization, address forms and homophonic spelling. Change type: bounded audio-intake capability and review clarification.
+
 - **terraform-skill** (v1.5.7): Require real release-entry wiring checks, authenticated promotion evidence and measured preservation on no-op plans; distinguish unordered runtime inventory from configuration changes and read live state before retrying a failed release. Change type: bounded release-verification extension.
 
 - **transcript-fixer** (`daymade-audio` v1.48.7): remove derived counts, duplicate exit summaries and obsolete cause attribution from source-audio helper commentary; keep executable behavior and CLI output unchanged.
