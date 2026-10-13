@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **transcript-fixer** (`daymade-audio` v1.48.7): remove derived counts, duplicate exit summaries and obsolete cause attribution from source-audio helper commentary; keep executable behavior and CLI output unchanged.
+
 - **transcript-fixer** (`daymade-audio` v1.48.6): Align audio examples with verified media positions and a required stdout engine, complete the Stage 1 JSON example, and limit ledger writes to supported verdicts. Route reviewed-file continuation from project instructions and remove derived CLI navigation and counts.
 - **transcript-fixer** (`daymade-audio` v1.48.5): share finite media-duration validation, reject HTTP download failures, and align source-audio/clip-review instructions with their executable owners. Retire the duplicate shell download parser and derived section summaries; preserve verified positions and pending-verdict continuation.
 
