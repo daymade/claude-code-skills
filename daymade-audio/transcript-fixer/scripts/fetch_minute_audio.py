@@ -40,12 +40,8 @@ import sys
 import typing
 from pathlib import Path
 
-# Mirrors `_TS_LINE` in scripts/review-dashboard/server.py — deliberately the
-# SAME shape, because this check exists to predict what the dashboard will be
-# able to play. A looser pattern does not just risk drift, it actively misfires:
-# a permissive `HH:MM:SS` scan also matches wall-clock times sitting in YAML
-# frontmatter (an upload timestamp like `...T12:26:17` reads as 12.4 hours),
-# which made an early version of this script reject a perfectly healthy pairing.
+# Count only speaker-timestamp lines; wall-clock times in YAML frontmatter do
+# not identify playback positions.
 SPEAKER_TS_LINE = re.compile(r"^\S.*?\s(\d{2}):(\d{2}):(\d{2})\.(\d{3})\s*$")
 
 
@@ -54,13 +50,7 @@ def run(cmd: list[str], env: dict[str, str] | None = None) -> subprocess.Complet
 
 
 def fail(message: str) -> "typing.NoReturn":
-    """Operational failure — nothing usable was produced.
-
-    Exits 3 so a caller can tell it apart from exit 1 (a real file downloaded,
-    but its timeline does not match the transcript). Conflating the two sends
-    the operator hunting for a different recording when the actual problem was
-    a wrong --profile.
-    """
+    """Report the actual operational failure without inferring its cause."""
     print(f"✗ {message}", file=sys.stderr)
     raise SystemExit(3)
 
@@ -68,12 +58,8 @@ def fail(message: str) -> "typing.NoReturn":
 def fetch_signed_url(token: str, profile: str, identity: str = "user") -> str:
     """Ask lark-cli for the signed download URL.
 
-    Two things this gets right that a hand-rolled version usually doesn't:
-    the envelope is real JSON, so it is parsed rather than regex-scraped (a
-    regex leaves `\\u0026` and other escapes literal, producing a URL that 404s
-    or truncates at the first parameter); and the Feishu API is a domestic
-    service, so any HTTP proxy in the environment is disabled for the call —
-    a proxy both breaks the request and would carry credentials outbound.
+    Parse the CLI envelope as JSON so URL escapes are decoded. Keep this
+    source workflow's request independent of environment HTTP proxies.
     """
     if identity not in ("user", "bot"):
         fail("--as must be user or bot; preserve the source identity")
@@ -140,9 +126,7 @@ def download(url: str, output: Path) -> None:
 def audio_duration_seconds(path: Path) -> tuple[float | None, str]:
     """(duration, reason). reason is "" on success, else why it is unknown.
 
-    The two failure causes need different words: telling an operator to install
-    ffprobe when ffprobe just ran and emitted something unparseable sends them
-    after the wrong thing.
+    Distinguish an unavailable probe from an unusable result in diagnostics.
     """
     if not shutil.which("ffprobe"):
         return None, "ffprobe not installed"
@@ -209,7 +193,6 @@ def main() -> int:
     # Exit codes carry the verification result because the diagnostics go to
     # stderr while the frontmatter line goes to stdout — a caller capturing
     # stdout would otherwise see a clean-looking success for an unverified file.
-    #   0 = verified   1 = timeline mismatch   2 = unverified   3 = op failure
     unverified = False
 
     duration, why = audio_duration_seconds(args.output)
