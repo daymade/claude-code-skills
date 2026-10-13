@@ -75,6 +75,30 @@ Pre-mutation validation prevents a known bad candidate from touching live state.
 detects runtime, dependency, routing, and user-journey failures that static validation cannot know. Run
 both; never describe a post-deploy failure as evidence that the pre-deploy gate worked.
 
+## Exercise the actual release entry
+
+The release author must test the repository's real orchestration recipe, not only its controller
+functions. In an isolated fixture, execute the canonical entry with boundary executors replaced by
+recording stubs; retain its actual ordering and file handling. Cover saved-plan filename registration,
+plan creation, private evidence production, summary/digest binding, proof consumption and live verification.
+Do not mock away the Make recipe that wires these steps together. A missing producer must fail before
+mutation; a healthy recipe must reach its consumer. Keep a real staging run as the runtime acceptance.
+
+For a narrow runtime update, capture the exact target identity and protected state before and after,
+including when the plan has no changes. Derive preservation flags from those comparisons. Bind production
+promotion to the authenticated staging producer, source, environment and attempt; a local JSON object
+with the expected shape does not establish provenance. Test absent, empty, fabricated and stale evidence.
+
+Compare runtime state by meaning. Canonicalize only fields known to be unordered, such as a container's
+mount inventory; preserve every entry and field. A permutation should pass, while a changed mount source,
+destination, type or access mode should fail. Do not sort order-sensitive arrays or omit protected fields
+to silence a false alarm. Use captured healthy output and synthetic changed values for calibration.
+
+If a release exits nonzero, establish whether mutation occurred before replaying it. Independently read
+the target identity, effective configuration and affected user path; distinguish a write failure from a
+post-write verifier failure. Preserve both facts in the result: what is live and which acceptance remains
+unmet. Reconcile through the canonical narrow release entry rather than blindly replaying a saved plan.
+
 ## Minimum fixtures
 
 Healthy fixtures:
