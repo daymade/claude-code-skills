@@ -348,9 +348,17 @@ The executing agent can group several doubts in one utterance and reuse two
 distinct windows covering that utterance and its surrounding speech. Use an
 already available, authorized second recognizer; local GPU execution follows
 `asr-transcribe-to-text`. Keep each window's full output, source-time range and
-source identity before adjudicating each occurrence. A file-output local runner
-is not directly compatible with this script's `--engine-script` stdout interface;
-run it through its owning ASR workflow and inspect the retained results instead.
+source identity before adjudicating each occurrence. For the existing local MLX
+runner, add `--engine-format mlx-file` and point `--engine-script` at
+`asr-transcribe-to-text`'s `transcribe_local_mlx.py`. The helper invokes that owner
+through `uv run` once for each pair, with a fresh output directory and offline
+model lookup. Prepare the authorized pinned model through the owning ASR Skill
+first; missing runner/cache/GPU leaves evidence incomplete rather than switching
+models or using CPU. It reads `.txt` plus a complete source-bound checkpoint
+manifest, retains logs and records model revision, device, producer, clip and text
+hashes. A successful process with missing, empty, stale or mismatched output is
+`engine_failed`. Keep other file-output engines on their own workflow until an
+explicit adapter exists; do not use progress logs as recognition text.
 Written sources settle spelling; acoustic agreement supports a reading, while
 conflicts retain the original and pending state. Do not report a clip-only check
 as complete independent transcription of the recording.
