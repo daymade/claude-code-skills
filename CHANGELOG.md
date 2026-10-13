@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **terraform-skill** (v1.5.7): Require real release-entry wiring checks, authenticated promotion evidence and measured preservation on no-op plans; distinguish unordered runtime inventory from configuration changes and read live state before retrying a failed release. Change type: bounded release-verification extension.
+
 - **transcript-fixer** (`daymade-audio` v1.48.7): remove derived counts, duplicate exit summaries and obsolete cause attribution from source-audio helper commentary; keep executable behavior and CLI output unchanged.
 
 - **transcript-fixer** (`daymade-audio` v1.48.6): Align audio examples with verified media positions and a required stdout engine, complete the Stage 1 JSON example, and limit ledger writes to supported verdicts. Route reviewed-file continuation from project instructions and remove derived CLI navigation and counts.
