@@ -277,7 +277,9 @@ Use [transcript-fixer](daymade-audio/transcript-fixer/SKILL.md) for transcript
 correction. Its Native workflow owns evidence selection, selective human escalation,
 and correction/finalization order;
 [Native review packets](daymade-audio/transcript-fixer/references/native_review_packets.md)
-owns split, batch, and resumed review instructions. Keep CLI parameters and
+owns split, batch, and resumed review instructions; first-pass and cold reviewers
+use its [occurrence-specific evidence](daymade-audio/transcript-fixer/references/native_review_packets.md#occurrence-specific-evidence).
+Keep CLI parameters and
 validation behavior in
 [native_review.py](daymade-audio/transcript-fixer/scripts/native_review.py), and
 queue anchor behavior in
@@ -292,6 +294,10 @@ For batch audio checks, follow
 [verify_queue_audio.py](daymade-audio/transcript-fixer/scripts/verify_queue_audio.py)
 owns executable anchor, duration and attachment validation; keep its CLI and
 adjudication details in that SOP.
+For an existing MLX file-output recognizer, use the
+[audio engine CLI contract](daymade-audio/transcript-fixer/references/script_parameters.md#verify_queue_audiopy)
+and resolve the runner from `asr-transcribe-to-text`; do not use progress stdout
+as recognition text.
 When changing these paths, update their owning instructions together; keep
 review coverage, unresolved verdicts, and repository publication distinct.
 For local correction tests and repository CI ownership, follow the
