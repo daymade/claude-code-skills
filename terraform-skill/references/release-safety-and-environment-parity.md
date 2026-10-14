@@ -84,6 +84,24 @@ plan creation, private evidence production, summary/digest binding, proof consum
 Do not mock away the Make recipe that wires these steps together. A missing producer must fail before
 mutation; a healthy recipe must reach its consumer. Keep a real staging run as the runtime acceptance.
 
+For a shared runtime, the release author also enumerates parallel plan guards and post-write consumers
+before changing the transition. Replay their joint canonical path with the same authenticated baseline.
+A missing Terraform `before` is not proof that no live configuration exists: accept recovery only from
+the explicitly authorized provenance-bound evidence, then preserve the complete protected inventory.
+If a consumer already supports an authenticated runtime binding for permitted image replacement, validate
+that binding before applying a legacy original-image equality; a binding-shaped JSON object alone cannot
+authorize arbitrary drift.
+Test both the intended transition and missing, empty, forged or unrelated route/image/runtime changes.
+
+Retain real subprocess and filesystem boundaries for the changed transport, even when cloud operations
+are stubbed. Use a complete production-sized synthetic witness, the runner's restrictive umask and real
+import/file handling. Check successful completion, bounded failure, temporary-file cleanup and unchanged
+tracked/untracked checkout state. Large private evidence belongs in a validated private file or descriptor,
+not an unbounded environment/argument string. Exercise the actual pipe/file consumer: an input writer
+finishing does not prove the reader observed EOF. Do not assume an isolated interpreter inherits ambient
+flags that suppress bytecode or other cache writes. These are focused regression cases, not permission
+to widen live deployment or repeat unchanged runtime tests.
+
 For a narrow runtime update, capture the exact target identity and protected state before and after,
 including when the plan has no changes. Derive preservation flags from those comparisons. Bind production
 promotion to the authenticated staging producer, source, environment and attempt; a local JSON object
