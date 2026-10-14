@@ -33,6 +33,7 @@ Usage:
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import subprocess
@@ -755,7 +756,7 @@ def select_tool_evidence(
         anchor = (calls or results)[0]
         timestamp = parse_timestamp(anchor["timestamp"])
         if from_timestamp is not None or to_timestamp is not None:
-            if timestamp is None:
+            if timestamp is None or not math.isfinite(timestamp):
                 unknown_time += 1
                 continue
             if from_timestamp is not None and timestamp < from_timestamp:

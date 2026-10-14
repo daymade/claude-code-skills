@@ -116,6 +116,26 @@ class ToolEvidenceTests(unittest.TestCase):
         data = self.data(self.run_cli("--contains", "scp", "--from", "2026-09-16"), 1)
         self.assertEqual(data["coverage"]["unknown_time_excluded"], 1)
 
+    def test_nonfinite_times_are_counted_unknown_with_finite_window_controls(self):
+        records = []
+        for number, timestamp in enumerate([
+            "NaN", "+Inf", "-Inf", "2027-01-02T10:00:00Z", "2026-09-16T02:00:01Z",
+        ]):
+            call = json.loads(json.dumps(self.records[1]))
+            call["timestamp"] = timestamp
+            call["message"]["content"][0]["id"] = f"time-{number}"
+            records.append(call)
+        self.write(records)
+        data = self.data(self.run_cli(
+            "--tool", "Bash", "--from", "2027-01-01T00:00:00Z", "--to", "2027-01-03T00:00:00Z",
+        ))
+        self.assertEqual(data["coverage"]["tool_blocks_examined"], 5)
+        self.assertEqual(data["coverage"]["groups_examined"], 5)
+        self.assertEqual(data["coverage"]["unknown_time_excluded"], 3)
+        self.assertEqual(data["coverage"]["matched_groups"], 1)
+        self.assertEqual([pair["ordinal"] for pair in data["pairs"]], [4])
+        self.assertEqual(data["pairs"][0]["calls"][0]["timestamp"], "2027-01-02T10:00:00Z")
+
     def test_json_byte_bound_labels_prefixes_and_full_preserves_large_payload(self):
         self.records[0]["message"]["content"][0]["content"] = "backup " + "汉字\\\"\n" * 5000
         self.write(self.records)
