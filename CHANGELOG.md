@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **terraform-skill** (v1.5.8): Verify shared-runtime transitions across parallel guards and post-write consumers, and retain production-sized witness, subprocess, permission and clean-checkout boundaries in release regression tests. Change type: bounded release-validation clarification; runtime unchanged.
+
 - **github-ops** (v1.14.9): Resolve named access recipients from provenance-bearing account records and verify their GitHub login and numeric ID before a permission change. Preserve existing authorization and readback boundaries. Change type: bounded recipient-identity clarification.
 
 - **skill-creator** (`daymade-skill` v1.70.1): Use the fixed entry's help for its current command list and selected-tool arguments; retain executable examples and invocation boundaries. Change type: documentation deduplication; runtime unchanged.
