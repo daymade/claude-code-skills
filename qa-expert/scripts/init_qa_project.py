@@ -2,17 +2,16 @@
 """
 Initialize QA Project Structure
 
-Creates complete QA testing infrastructure including documentation templates,
-tracking CSVs, and baseline metrics for any software project.
+Creates QA directories, documentation templates and example tracking CSVs.
+Use a fresh project root: generated template files are overwritten.
 
 Usage:
     python scripts/init_qa_project.py <project-name> [output-dir]
 
 Example:
-    python scripts/init_qa_project.py my-app ./tests
+    python scripts/init_qa_project.py my-app ./
 """
 
-import os
 import sys
 import csv
 from pathlib import Path
@@ -85,89 +84,38 @@ def create_bug_tracking_template(base_path):
 
 def create_baseline_metrics(base_path, project_name):
     """Create BASELINE-METRICS.md template."""
-    content = f"""# Baseline Metrics - {project_name}
+    content = f"""# Baseline Evidence - {project_name}
 
-**Date**: {datetime.now().strftime("%Y-%m-%d")}
-**Purpose**: Pre-QA snapshot for comparison during testing
+Record the actual observation date and immutable evidence before QA execution.
+Template creation is not a baseline measurement. Leave unmeasured fields unknown.
 
----
+## Test and coverage evidence
 
-## 1. Test Coverage (Current State)
+- Unit, integration and E2E runner commands, source ref and raw output: [locators]
+- Coverage report and its measured dimensions: [locator]
+- Tested browsers/runtime: [observed environment]
 
-### Unit Tests
-- **Total Tests**: [NUMBER]
-- **Passing**: [NUMBER] ([%]%)
-- **Failing**: [NUMBER]
-- **Coverage**: [%]% (statements/branches/functions)
+## Known issues and technical debt
 
-### Integration Tests
-- **Total Tests**: [NUMBER]
-- **Status**: [Passing/Failing/Not Implemented]
+- Issue/debt record and reproduction evidence: [locators]
 
-### E2E Tests
-- **Total Tests**: [NUMBER]
-- **Browsers Covered**: [List browsers]
+## Security evidence
 
----
+- Project security policy and applicable OWASP cases: [locators]
+- Observed mitigation results and untested categories: [evidence]
 
-## 2. Known Issues (Pre-QA)
+## Performance and code quality
 
-### Critical Issues
-- [ ] Issue 1: Description
-- [ ] Issue 2: Description
+- Workload, environment and raw timing measurements: [locators]
+- Lint/typecheck/static-analysis commands and output: [locators]
 
-### Technical Debt
-- [ ] Debt 1: Description
-- [ ] Debt 2: Description
+## Hypotheses to test
 
----
+- Suspected issue, evidence, proposed case ID and verification: [details]
 
-## 3. Security Status
-
-### OWASP Top 10 Coverage
-- [ ] A01: Broken Access Control
-- [ ] A02: Cryptographic Failures
-- [ ] A03: Injection
-- [ ] A04: Insecure Design
-- [ ] A05: Security Misconfiguration
-- [ ] A06: Vulnerable Components
-- [ ] A07: Authentication Failures
-- [ ] A08: Data Integrity Failures
-- [ ] A09: Logging Failures
-- [ ] A10: SSRF
-
-**Current Coverage**: [X]/10 ([%]%)
-
----
-
-## 4. Performance Metrics
-
-- **Page Load Time**: [X]ms (average)
-- **API Response Time**: [X]ms (p95)
-- **Database Query Time**: [X]ms (average)
-
----
-
-## 5. Code Quality
-
-- **Linting Errors**: [NUMBER]
-- **TypeScript Strict Mode**: [Yes/No]
-- **Code Duplication**: [%]%
-- **Cyclomatic Complexity**: [Average]
-
----
-
-## 6. Predicted Issues
-
-**CRITICAL-001**: [Title]
-- **Predicted Severity**: P0/P1/P2
-- **Root Cause**: [Analysis]
-- **Test Case**: TC-XXX-YYY will verify
-- **Mitigation**: [Recommendation]
-
----
-
-**Next Steps**: Begin Week 1 testing with baseline established.
+Compute aggregate totals from the original test/bug/coverage records when needed.
+Do not maintain a parallel live summary here. Preserve historical observations by
+binding their actual date, source ref and raw evidence.
 """
 
     file_path = base_path / "tests/docs/BASELINE-METRICS.md"
@@ -178,99 +126,38 @@ def create_baseline_metrics(base_path, project_name):
 
 def create_weekly_report_template(base_path):
     """Create WEEKLY-PROGRESS-REPORT.md template."""
-    content = """# Weekly QA Progress Report - Week [N]
+    content = """# Weekly QA Progress Report
 
-**Date Range**: [Start Date] - [End Date]
-**QA Lead**: [Name]
-**Project**: [Project Name]
+**Reporting period**: [actual start/end dates]
+**Project / responsible engineer**: [identity]
 
----
+## Evidence
 
-## Executive Summary
+- Immutable test execution and bug records for this period: [locators]
+- Coverage/security/performance evidence: [locators or unknown]
+- Baseline evidence used for comparison: [locator]
+- Authoritative project release policy: [locator]
 
-**Status**: 🟢 On Track / 🟡 At Risk / 🔴 Blocked
+Calculate progress, pass rates and bug totals from those records at report time.
+Keep aggregates in the generated report output when needed, not hand-maintained
+counter tables. A dated report is an observation of that period, not live status.
 
-### Key Metrics
-- **Tests Executed**: X / Y ([Z]%)
-- **Pass Rate**: [%]%
-- **Bugs Filed**: [N] (P0: [a], P1: [b], P2: [c], P3: [d])
-- **Code Coverage**: [%]%
+## Findings and acceptance
 
----
+- Reproduced bug ID, impact and evidence: [details]
+- Acceptance decision under the project policy, including unmeasured criteria:
+  [decision and evidence]
+- Change since baseline supported by the original measurements: [details]
 
-## Test Execution Progress
+## Blockers and risks
 
-| Category | Total | Executed | Pass | Fail | Pass Rate |
-|----------|-------|----------|------|------|-----------|
-| Component 1 | X | Y | Z | W | [%]% |
-| Component 2 | X | Y | Z | W | [%]% |
-| Security | X | Y | Z | W | [%]% |
-| **TOTAL** | X | Y | Z | W | [%]% |
+- Blocked prerequisite or case ID, effect and recovery condition: [details]
+- Unverified hypothesis and next probe: [details]
 
----
+## Next authorized batch
 
-## Quality Gates Status
-
-| Gate | Target | Current | Status |
-|------|--------|---------|--------|
-| Test Execution | 100% | [%]% | ✅/⚠️/❌ |
-| Pass Rate | ≥80% | [%]% | ✅/⚠️/❌ |
-| P0 Bugs | 0 | [N] | ✅/⚠️/❌ |
-| P1 Bugs | ≤5 | [N] | ✅/⚠️/❌ |
-| Code Coverage | ≥80% | [%]% | ✅/⚠️/❌ |
-| Security Coverage | 90% | [%]% | ✅/⚠️/❌ |
-
----
-
-## Bugs Summary
-
-### P0 Bugs (Blockers)
-1. **BUG-001**: [Title]
-   - Status: [Open/In Progress/Blocked]
-   - Assignee: [Name]
-   - ETA: [Date]
-
-### P1 Bugs (Critical)
-1. **BUG-XXX**: [Title]
-
----
-
-## Baseline Comparison
-
-| Metric | Week 1 | This Week | Trend |
-|--------|--------|-----------|-------|
-| Pass Rate | [%]% | [%]% | ⬆️/⬇️/➡️ |
-| P0 Bugs | [N] | [N] | ⬆️/⬇️/➡️ |
-| Coverage | [%]% | [%]% | ⬆️/⬇️/➡️ |
-
----
-
-## Blockers & Risks
-
-### Current Blockers
-- [ ] Blocker 1: Description
-- [ ] Blocker 2: Description
-
-### Risks
-- ⚠️ **Risk 1**: Description - Mitigation: [Action]
-- ⚠️ **Risk 2**: Description - Mitigation: [Action]
-
----
-
-## Next Week Plan
-
-### Test Cases (Week [N+1])
-- [Category]: TC-XXX-YYY to TC-XXX-ZZZ ([N] tests)
-- Estimated Time: [X] hours
-
-### Prerequisites
-- [ ] Prerequisite 1
-- [ ] Prerequisite 2
-
----
-
-**Prepared By**: [Name]
-**Date**: [Date]
+- Case IDs and prerequisites: [details]
+- Planned work and project schedule: [details]
 """
 
     file_path = base_path / "tests/docs/templates/WEEKLY-PROGRESS-REPORT.md"
@@ -281,78 +168,8 @@ def create_weekly_report_template(base_path):
 
 def create_master_qa_prompt(base_path, project_name):
     """Create MASTER-QA-PROMPT.md for autonomous execution."""
-    content = f"""# Master QA Prompt - {project_name}
-
-**Purpose**: Single copy-paste prompt for autonomous QA test execution.
-
----
-
-## ⭐ Master Prompt (Copy-Paste This)
-
-```
-You are a senior QA engineer with 20+ years of experience at Google.
-Execute the {project_name} QA test plan.
-
-**CRITICAL INSTRUCTIONS**:
-
-1. Read tests/docs/QA-HANDOVER-INSTRUCTIONS.md
-2. Read tests/docs/BASELINE-METRICS.md
-3. Read tests/docs/templates/TEST-EXECUTION-TRACKING.csv
-
-**Determine Current State**:
-- If no tests executed: Start Day 1 onboarding
-- If tests in progress: Resume from last completed test case
-
-**For EACH test case**:
-1. Read test specification
-2. Execute test steps
-3. Update TEST-EXECUTION-TRACKING.csv IMMEDIATELY (no batching)
-4. If FAILED: File bug in BUG-TRACKING-TEMPLATE.csv
-5. If P0 bug: STOP and escalate
-
-**Daily Routine**:
-- Morning: Check blockers, plan today's tests
-- During: Execute tests, update CSV after EACH test
-- End-of-day: Provide summary (tests executed, pass rate, bugs filed)
-
-**Weekly Routine** (Friday):
-- Generate WEEKLY-PROGRESS-REPORT.md
-- Compare against BASELINE-METRICS.md
-- Assess quality gates
-
-**MANDATORY RULES**:
-- ❌ DO NOT skip tests
-- ❌ DO NOT batch CSV updates
-- ❌ DO NOT deviate from documented test cases
-- ✅ STOP immediately if P0 bug discovered
-
-**Start now**: Tell me current state and what you're doing today.
-```
-
----
-
-## Auto-Resume Capability
-
-The master prompt automatically:
-1. Reads TEST-EXECUTION-TRACKING.csv
-2. Finds last "Completed" test
-3. Resumes from next test
-4. No manual tracking needed
-
----
-
-## Weekly Execution Schedule
-
-**Week 1**: Critical path tests (highest priority)
-**Week 2**: User workflows (common journeys)
-**Week 3**: Data integrity (database, API)
-**Week 4**: Security audit (OWASP Top 10)
-**Week 5**: Regression (re-run P0 tests)
-
----
-
-**Usage**: Copy the master prompt above and paste it to start autonomous QA execution.
-"""
+    canonical = Path(__file__).resolve().parents[1] / "references/master_qa_prompt.md"
+    content = f"# QA execution for {project_name}\n\n" + canonical.read_text(encoding="utf-8")
 
     file_path = base_path / "tests/docs/MASTER-QA-PROMPT.md"
     with open(file_path, 'w') as f:
@@ -364,76 +181,32 @@ def create_readme(base_path, project_name):
     """Create README.md for QA docs."""
     content = f"""# QA Documentation - {project_name}
 
-**Status**: 🟢 Ready for Execution
-**Created**: {datetime.now().strftime("%Y-%m-%d")}
-**QA Framework**: Google Testing Standards
+Initialization created templates. Test execution readiness has not been verified.
 
----
+## Prepare before execution
 
-## 📋 Quick Start
+1. Replace example CSV rows with actual case/bug records; examples are not evidence.
+2. Supply the project's current strategy, test specifications and harness commands.
+   Handover and onboarding documents must be supplied when the project needs them;
+   they are not generated by this initializer.
+3. Verify the authorized environment and synthetic fixtures. Record dated baseline
+   evidence using [BASELINE-METRICS.md](BASELINE-METRICS.md).
+4. Follow [MASTER-QA-PROMPT.md](MASTER-QA-PROMPT.md) for agent execution and recovery,
+   or execute the same test specifications manually and track each result.
 
-### Option 1: Autonomous Execution (Recommended)
-```bash
-# Copy the master prompt from MASTER-QA-PROMPT.md and paste to your LLM
-```
+## Generated files
 
-### Option 2: Manual Execution
-1. Read `QA-HANDOVER-INSTRUCTIONS.md`
-2. Complete Day 1 onboarding checklist
-3. Execute test cases from category-specific documents
-4. Update tracking CSVs after each test
+- [Execution tracking CSV](templates/TEST-EXECUTION-TRACKING.csv)
+- [Bug tracking CSV](templates/BUG-TRACKING-TEMPLATE.csv)
+- [Weekly report template](templates/WEEKLY-PROGRESS-REPORT.md)
+- [Baseline evidence template](BASELINE-METRICS.md)
+- [QA execution SOP](MASTER-QA-PROMPT.md)
 
----
+Use the loaded qa-expert Skill's metrics command to calculate current results.
+The target project's release policy owns acceptance; generated templates do not
+prove there are no blockers. Future execution needs an authorized active runner.
 
-## 📚 Document Index
-
-### Core Strategy
-- **QA-HANDOVER-INSTRUCTIONS.md** - Master handover guide
-- **BASELINE-METRICS.md** - Pre-QA snapshot
-
-### Test Cases
-- **01-[CATEGORY]-TEST-CASES.md** - Component tests
-- **02-SECURITY-TEST-CASES.md** - OWASP Top 10 tests
-
-### Templates
-- **TEST-EXECUTION-TRACKING.csv** - Progress tracker
-- **BUG-TRACKING-TEMPLATE.csv** - Bug log
-- **WEEKLY-PROGRESS-REPORT.md** - Status reporting
-
-### Automation
-- **MASTER-QA-PROMPT.md** - Autonomous execution
-
----
-
-## 🎯 Quality Gates
-
-| Gate | Target | Status |
-|------|--------|--------|
-| Test Execution | 100% | ⏳ Not Started |
-| Pass Rate | ≥80% | ⏳ Not Started |
-| P0 Bugs | 0 | ✅ No blockers |
-| Code Coverage | ≥80% | ⏳ Baseline TBD |
-| Security | 90% | ⏳ Week 4 |
-
----
-
-## 🚀 Getting Started
-
-**Day 1 Setup** (5 hours):
-1. Environment setup
-2. Test data seeding
-3. Execute first test case
-4. Verify tracking systems
-
-**Week 1-5 Execution**:
-- Follow test case documents
-- Update CSV after EACH test
-- File bugs for failures
-- Weekly progress reports
-
----
-
-**Contact**: QA Lead - [Your Name]
+Do not rerun initialization over populated files: it overwrites the templates.
 """
 
     file_path = base_path / "tests/docs/README.md"
@@ -455,6 +228,10 @@ def main():
 
     print(f"\n🚀 Initializing QA Project: {project_name}")
     print(f"   Location: {base_path}\n")
+
+    # Fail before creating outputs if the bundled canonical SOP is unavailable.
+    canonical = Path(__file__).resolve().parents[1] / "references/master_qa_prompt.md"
+    canonical.read_text(encoding="utf-8")
 
     # Create directory structure
     create_directory_structure(base_path)

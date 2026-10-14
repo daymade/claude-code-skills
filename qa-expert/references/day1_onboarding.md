@@ -137,9 +137,9 @@ Update `TEST-EXECUTION-TRACKING.csv`:
 | Field | Value |
 |-------|-------|
 | **Status** | Completed |
-| **Result** | ✅ PASS or ❌ FAIL |
+| **Result** | ✅ PASSED or ❌ FAILED |
 | **Bug ID** | (leave blank if passed) |
-| **Execution Date** | 2025-11-XX |
+| **Execution Date** | [actual observation date] |
 | **Executed By** | [Your Name] |
 | **Notes** | Brief description (e.g., "Skill installed in 3.2s, all files present") |
 
@@ -174,14 +174,14 @@ Update `TEST-EXECUTION-TRACKING.csv`:
 ### 5.2 Review Week 1 Plan (20 min)
 **With QA Lead**: Review weekly execution schedule.
 
-**Example Week 1: CLI Testing (93 test cases)**
-| Day | Test Cases | Hours | Deliverables |
-|-----|------------|-------|--------------|
-| Monday | TC-CLI-001 to TC-CLI-015 | 5h | 15 test cases executed |
-| Tuesday | TC-CLI-016 to TC-CLI-030 | 5.5h | 15 test cases executed |
-| Wednesday | TC-CLI-031 to TC-CLI-045 | 5.5h | 15 test cases executed |
-| Thursday | TC-CLI-046 to TC-CLI-060 | 5.5h | 15 test cases executed |
-| Friday | TC-CLI-061 to TC-CLI-093 | 6.5h | 33 test cases + weekly report |
+**Illustrative CLI schedule; use the project's approved cases and timing**
+| Day | Test Cases | Estimated Hours |
+|-----|------------|-----------------|
+| Monday | TC-CLI-001 to TC-CLI-015 | 5h |
+| Tuesday | TC-CLI-016 to TC-CLI-030 | 5.5h |
+| Wednesday | TC-CLI-031 to TC-CLI-045 | 5.5h |
+| Thursday | TC-CLI-046 to TC-CLI-060 | 5.5h |
+| Friday | TC-CLI-061 to TC-CLI-093; weekly report | 6.5h |
 
 **Discuss**:
 - Any blockers from today's setup?
@@ -235,7 +235,7 @@ Before leaving for the day, verify all setup complete:
 - [ ] Responsive design mode tested
 
 ### Test Data
-- [ ] Regular test users created (5+ users)
+- [ ] Regular test users created for the selected cases
 - [ ] Admin user created with role assigned
 - [ ] Moderator user created with role assigned (if applicable)
 

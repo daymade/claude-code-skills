@@ -370,7 +370,7 @@ If fix is verified:
   - Verified By: [Your name/ID]
   - Verification Date: [Today's date]
 - Update TEST-EXECUTION-TRACKING.csv:
-  - Result: "PASS"
+  - Result: "✅ PASSED"
   - Notes: "Re-tested after BUG-[XXX] fix, now passing"
 
 If fix is NOT verified (bug still exists):

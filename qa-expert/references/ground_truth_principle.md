@@ -2,7 +2,8 @@
 
 **Purpose**: Prevent test suite integrity problems caused by documentation/tracking file mismatches.
 
-**Lesson Learned**: CCPM project discovered 3.2% consistency rate between CSV and documentation (only 3 out of 93 test IDs matched correctly).
+**Lesson Learned**: In the recorded CCPM example, only 3 out of 93 test IDs matched between CSV and documentation.
+No documentation-only IDs were reported in that example.
 
 ---
 
@@ -153,18 +154,7 @@ python <your-project>/scripts/validate_test_ids.py \
   tests/docs/02-CLI-TEST-CASES.md \
   tests/docs/templates/TEST-EXECUTION-TRACKING.csv
 
-# Output:
-# ============================================================
-# Test ID Validation Report
-# ============================================================
-#
-# ✅ Matching IDs:     3
-# ⚠️  CSV-only IDs:     90
-# ⚠️  Doc-only IDs:     0
-#
-# 📊 Consistency Rate: 3.2%
-#
-# ❌ SYNC ISSUE DETECTED!
+# Inspect the report printed from the actual doc/CSV pair.
 ```
 
 ### Strategy 2: ID Mapping Document
@@ -182,10 +172,10 @@ When mismatch detected, create bridge document:
 **Tracking File**: TEST-EXECUTION-TRACKING.csv (execution tracking only)
 
 ## ID Mapping Table
-| CSV ID | Doc ID | Test Name | Match Status |
-|--------|--------|-----------|--------------|
-| TC-CLI-001 | TC-CLI-001 | Install Skill by Name | ✅ Match |
-| TC-CLI-012 | TC-CLI-008 | Install Non-Existent Skill | ❌ Mismatch |
+| CSV ID | Doc ID | Test Name |
+|--------|--------|-----------|
+| TC-CLI-001 | TC-CLI-001 | Install Skill by Name |
+| TC-CLI-012 | TC-CLI-008 | Install Non-Existent Skill |
 ```
 
 ### Strategy 3: CSV Usage Guide
@@ -207,7 +197,7 @@ Create explicit instructions for QA engineers:
 
 2. **Use this CSV ONLY for**:
    - Tracking execution status
-   - Recording results (PASSED/FAILED)
+   - Recording results (`✅ PASSED` / `❌ FAILED` for the bundled metrics script)
    - Linking to bug reports
 
 ## ❌ Don't Trust CSV for Test Specifications
@@ -245,7 +235,7 @@ Subject: [URGENT] Test Suite Sync Issue - Read Before Testing
 Team,
 
 We discovered a test ID mismatch between CSV and documentation:
-- Consistency Rate: 3.2% (only 3 out of 93 tests match)
+- Affected case IDs and original validation evidence: [locators]
 - Impact: Tests executed based on CSV may use wrong steps
 - Action Required: Read CSV-USAGE-GUIDE.md before continuing
 
@@ -311,21 +301,18 @@ When using `init_qa_project.py`, ensure:
 
 ## Integration with qa-expert Skill
 
-When initializing a project with `qa-expert`:
+Initialize templates from the loaded Skill directory into a fresh project root:
 
 ```bash
-python scripts/init_qa_project.py my-app ./
-
-# This creates:
-tests/docs/
-  ├── README.md                        (declares ground truth)
-  ├── 02-CLI-TEST-CASES.md            (authoritative specs)
-  ├── TEST-ID-MAPPING.md              (if needed)
-  └── templates/
-      ├── TEST-EXECUTION-TRACKING.csv (tracking only)
-      ├── CSV-USAGE-GUIDE.md          (usage instructions)
-      └── validate_test_ids.py        (validation script)
+uv run <qa-expert-dir>/scripts/init_qa_project.py my-app <project-root>
 ```
+
+The [initializer](../scripts/init_qa_project.py) owns generated files; the project's
+generated `tests/docs/README.md` links to them. Category specifications, ID mappings,
+CSV usage instructions and the example ID validator above are project preparation
+work, not initializer outputs. Bind or create only what the actual project needs,
+preserving existing execution history. Follow [the execution SOP](master_qa_prompt.md)
+for preparation and interrupted-test recovery.
 
 ---
 
@@ -349,5 +336,5 @@ tests/docs/
 
 **Document Version**: 1.0
 **Created**: 2025-11-10
-**Based On**: CCPM test suite integrity incident (3.2% consistency rate)
+**Based On**: CCPM test suite integrity incident
 **Priority**: 🔴 P0 (Critical for test suite quality)
