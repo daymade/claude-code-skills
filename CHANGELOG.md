@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.21.1): Put the existing task/object-link trigger and ordinary citation exclusion first so truncated Skill directories expose them. Preserve the remaining discovery text, runtime workflow and evals. Change type: discovery-surface repair.
 - **read-claude-code-history** (`daymade-claude-code` v4.28.0): Add bounded original tool-call evidence with paired results, source coordinates, selection filters and explicit pairing/coverage status. Keep narrow evidence queries separate from full briefings and preserve existing history-reader modes.
 
 - **frontend-visual-qa** (v1.21.0): Route specific task/object link handoffs through the existing state-and-journey audit, including repeated-title machine/run identity. Add synthetic wrong-destination and exact-link replays; keep ordinary source citations outside this trigger. Change type: bounded trigger extension.
