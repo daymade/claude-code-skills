@@ -3,6 +3,7 @@
 **Purpose**: Prevent test suite integrity problems caused by documentation/tracking file mismatches.
 
 **Lesson Learned**: In the recorded CCPM example, only 3 out of 93 test IDs matched between CSV and documentation.
+No documentation-only IDs were reported in that example.
 
 ---
 
