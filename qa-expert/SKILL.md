@@ -68,6 +68,13 @@ Write standardized, reproducible test cases following AAA pattern (Arrange-Act-A
 
 **Reference**: See `references/google_testing_standards.md` for complete AAA pattern guidelines and coverage thresholds.
 
+For payment, procurement, fulfillment or refund recovery, load
+[transaction recovery acceptance](references/transaction-recovery-acceptance.md)
+before selecting cases. For schema upgrades, accounting views or integration
+fixtures, load [migration and fixture acceptance](references/migration-fixture-acceptance.md).
+Bind these recipes to the application's existing contract and test harness;
+retain the general AAA, tracking and reporting workflow.
+
 ### 3. Test Execution & Tracking
 
 **Ground Truth Principle** (critical):
