@@ -33,6 +33,10 @@ resume a session, write configuration or approve an action. Source reading does
 not require running it, and a method name does not establish read-only behavior.
 Keep already-authorized tests moving; this check adds no approval workflow.
 
+When the task requires running the original application to assess reuse, load
+[the isolated original-app recipe](original-app-demo.md). Use its populated journey
+and external-boundary checks; a responsive empty component is not that outcome.
+
 ## State the depth of each material claim
 
 Keep four observations separate: source/edition bound; relevant implementation
