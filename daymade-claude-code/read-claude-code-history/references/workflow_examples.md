@@ -154,18 +154,16 @@ Check whether the index includes the archive and its last indexed time. An
 incomplete index cannot support an absence claim. File mtime is not evidence
 of conversation chronology.
 
-## Custom Extraction from Raw JSONL
+## Select Original Tool Evidence Before Custom Extraction
 
-For extraction needs not covered by bundled scripts, first locate a candidate
-through the index and verify its exact Session identity. A one-file custom
-extractor stays confined to that Session:
+For an original command, tool input or result from one known Session, follow
+[Original tool call/result evidence](../SKILL.md#original-tool-callresult-evidence).
+That entry owns selectors, original coordinates, pairing, full-output capture and
+coverage limits; do not print a full briefing or build a custom JSONL extractor
+for a request it already covers.
 
-```python
-import json
-
-with open('session.jsonl', 'r') as f:
-    for line in f:
-        data = json.loads(line)
-        # Custom extraction logic; use data.get("timestamp") for time evidence.
-        # See references/session_file_format.md for structure
-```
+For an extraction need the bundled scripts do not cover, first locate a candidate
+through the index and verify its exact Session identity. Keep any custom extractor
+confined to that selected Session and interpret its records with
+[the session format](session_file_format.md). State the unsupported need and
+coverage gap instead of treating custom output as the reader's verified evidence.

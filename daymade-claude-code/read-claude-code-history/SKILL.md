@@ -38,9 +38,9 @@ hand the verified evidence to `daymade-claude-code:continue-claude-code-work`.
 | Kimi CLI sessions | `history_index.py recall --provider kimi`, then read the named session's `wire.jsonl`; see **Kimi CLI** below |
 | Continue a verified Claude session | Stop reading and invoke `daymade-claude-code:continue-claude-code-work` |
 
-## 找「我们之前做的那个 X」（产物类目标）的三个判据
+## 找「我们之前做的那个 X」（产物类目标）的判据
 
-按词搜不到时换这三个判据，别扩词硬搜：
+按词搜不到时换这些判据，别扩词硬搜：
 
 1. **时间约束是第一筛子**。用户给了时间窗（「前两天」「本周」）→ 先按 mtime 筛文件系统（`find <root> -newermt '<日期>' -name '*.html'`），候选面缩到几十条再按形态排。全库关键词搜索应该在时间筛之后，不是之前。
 2. **session scratchpad 必须在搜索面内**（`/private/tmp/claude-$(id -u)/**/scratchpad/`，macOS 单用户通常是 `claude-501`）。Claude session 的默认产物落点在那，不在 workspace——「我们之前写的 X」有相当概率躺在 scratchpad。找产物类目标时显式包含它。
@@ -128,14 +128,19 @@ the whole briefing or recreating a raw-history parser.
   --tool-evidence --tool Bash --contains 'scp' --contains 'backup'
 <skill-dir>/scripts/read_claude_session.py --session <SESSION_ID> \
   --tool-evidence --ordinal 4:6 --from <ISO_WITH_TIMEZONE> --to <ISO_WITH_TIMEZONE>
+
+# Save the complete selected payload when it exceeds the bounded response.
+<skill-dir>/scripts/read_claude_session.py --session <SESSION_ID> \
+  --tool-evidence --tool Bash --contains 'scp' --full > /absolute/path/tool-evidence.json
 ```
 
 Expect one JSON envelope with original `tool_use` and `tool_result` blocks, the
 selected source SHA-256, one-based physical line and content-block coordinates,
 record UUID/parent UUID, timestamp, cwd and recorded agent/sidechain identity.
 This mode reads the selected main transcript, including its stored sidechains;
-it excludes separate subagent files and does not read current Git state, memory
-or unrelated conversation prose. Global lookup checks only exact
+it excludes separate subagent files and does not read current Git state or memory.
+It validates every physical record in that transcript; its evidence output omits
+unrelated conversation prose. Global lookup checks only exact
 `<SESSION_ID>.jsonl` filenames in active homes and registered archives; a renamed
 archive remains outside that lookup. Pass an explicitly bounded `--project` if
 its existing discovery can locate that renamed file. Record-level identity,
@@ -287,7 +292,7 @@ Do not call a compact summary verbatim history; it is a continuation aid and mus
 be checked against raw records and the current workspace for load-bearing claims.
 
 Before writing any negative or absolute claim ("never said," "never appears,"
-"could not have happened," "impossible to satisfy"), clear all three:
+"could not have happened," "impossible to satisfy"), complete this checklist:
 
 1. **Every record type, not only user/assistant text.** A grep for the literal
    string must also cover `attachment` (`queued_command.prompt`), `tool_result`,
@@ -367,8 +372,8 @@ Locate the real home instead of guessing, in this order:
 
 1. **Ask the recall index, if one was ever built with Kimi in scope.**
    `scripts/history_index.py status` prints `scope.sources`, and a `provider:
-   kimi` entry there carries the absolute `home` it was indexed from. One
-   command, no searching. It only answers after Kimi has been indexed once, so
+   kimi` entry there carries the absolute `home` it was indexed from. It only
+   answers after Kimi has been indexed once, so
    it is the fastest path on a configured machine and silent on a fresh one.
 2. **Read the desktop client's user-data directory off its running process.**
    An Electron app carries `--user-data-dir` on its command line
@@ -387,7 +392,7 @@ Locate the real home instead of guessing, in this order:
    both are present. This test is what tells the store apart from the CLI
    install directory one level up.
 
-Two schema facts that decide whether a located store reads correctly. Newer
+Schema facts decide whether a located store reads correctly. Newer
 builds drop `id` and `cwd` from each session's `state.json` and keep the working
 directory only in `session_index.jsonl`, so a session's project must come from
 that map rather than from its own state file. And the same `sessions/` tree holds

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **read-claude-code-history** (`daymade-claude-code` v4.28.1): Align original-tool evidence documentation with transcript validation and filtered output; add complete-output capture, route narrow requests to the existing reader, and remove derived count wording.
+
 - **frontend-visual-qa** (v1.21.1): Put the existing task/object-link trigger and ordinary citation exclusion first so truncated Skill directories expose them. Preserve the remaining discovery text, runtime workflow and evals. Change type: discovery-surface repair.
 - **read-claude-code-history** (`daymade-claude-code` v4.28.0): Add bounded original tool-call evidence with paired results, source coordinates, selection filters and explicit pairing/coverage status. Keep narrow evidence queries separate from full briefings and preserve existing history-reader modes.
 
