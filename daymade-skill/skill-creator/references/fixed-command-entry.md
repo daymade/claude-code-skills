@@ -11,13 +11,8 @@ Use the resolved skill-creator source path to call these tools from any working
 directory. Keep the selected tool's subcommands, flags and exit meanings.
 
 ```bash
-python3 "<skill-creator-path>/scripts/creator.py" audit_skill_regression --help
-python3 "<skill-creator-path>/scripts/creator.py" release_readiness --help
-python3 "<skill-creator-path>/scripts/creator.py" source_contract --help
-python3 "<skill-creator-path>/scripts/creator.py" materialize --help
-python3 "<skill-creator-path>/scripts/creator.py" delivery_identity --help
-python3 "<skill-creator-path>/scripts/creator.py" quick_validate --help
-python3 "<skill-creator-path>/scripts/creator.py" skill_read_plan --help
+python3 "<skill-creator-path>/scripts/creator.py" --help
+python3 "<skill-creator-path>/scripts/creator.py" <command> --help
 ```
 
 Replace `<skill-creator-path>` with an absolute path. Supply absolute paths for
