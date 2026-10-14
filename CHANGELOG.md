@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **github-ops** (v1.14.10): Include author and committer identity metadata in public publication checks for original and merged commits. Capture values privately, distinguish new exposure from known public metadata, and retain authorization boundaries for identity and history changes. Change type: bounded publication-verification clarification.
+
 - **app-evolver** (v1.1.1): Add outcome-priority replay cases that distinguish admission to autonomous repair from the next business result. Preserve necessary defect verification and bounded probes.
 - **competitors-analysis** (v1.6.2): Classify actual additions, prior coverage corrections, edition differences and unresolved changes in update reports, retaining pinned before/after evidence and runtime limits.
 - **frontend-visual-qa** (v1.20.10): Separate build provenance from selected delivery identity when reusing a compiled artifact; require production-input equivalence and retain resource and rendered-journey acceptance.

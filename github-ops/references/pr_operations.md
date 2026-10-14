@@ -53,6 +53,14 @@ Use the owning sanitization workflow for content decisions; this reference binds
 inputs and hosted result. A clean source-file scan leaves PR text and commit messages
 unchecked unless they were also supplied. Do not add a separate reviewer for metadata.
 
+Include each candidate commit's author and committer name/email in that same private
+publication evidence. Inspect the committed Git object before pushing; a private or
+empty profile email does not hide the email stored in a Git commit. Compare these fields
+with the approved Git identity, and separately with a known prior public commit when
+distinguishing new exposure from existing public metadata. Keep a missing baseline or
+unread field unknown. Preserve configured identities and history unless changing them
+is explicitly authorized; an audit finding alone does not authorize either change.
+
 Create or edit the PR from the reviewed text, then use a fresh read to compare its exact
 title/body and head SHA with that reviewed input:
 
@@ -66,8 +74,16 @@ reviewed input. After landing, read the PR's merge commit and its hosted message
 
 ```bash
 gh pr view NUMBER -R OWNER/REPO --json state,mergeCommit,url
-gh api repos/OWNER/REPO/commits/MERGE_SHA --jq '{sha,message:.commit.message}'
+gh api repos/OWNER/REPO/commits/MERGE_SHA \
+  --jq '{sha,message:.commit.message,author:{name:.commit.author.name,email:.commit.author.email},committer:{name:.commit.committer.name,email:.commit.committer.email}}' \
+  > '<private-commit-evidence.json>'
 ```
+
+Apply this projection to every original pushed candidate SHA as well as the actual
+merge SHA. Read the captured fields privately, verify both roles, and compare them
+with the frozen identity evidence; squash/rebase or a hosted merge can change metadata.
+Report the inspected scope and whether a field is newly exposed without repeating
+private identity values in a public PR, changelog or audit summary.
 
 Set `MERGE_SHA` from that fresh PR read. Compare the published message with the intended
 landing text, and read the frozen source paths and changelog from that exact fetched
