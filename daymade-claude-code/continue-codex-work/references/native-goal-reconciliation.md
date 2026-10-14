@@ -20,10 +20,27 @@ the governing contract; a reminder or an unfinished objective adds no authority.
    `usageLimited` and `budgetLimited` are not recovery-by-reset cases: do not change
    their counters/budget or create a substitute Goal. If only one route is blocked,
    continue the other necessary authorized work.
-4. Inspect the installed host's official help, generated protocol schema and live
+4. Read the latest failed/interrupted turn and unresolved tool outcome through the
+   verified thread's owning reader/control. Record its exact error and time beside
+   the Goal observation; a status label alone does not explain why execution stopped.
+   Apply the following preflight before attempting a recovery write.
+5. Inspect the installed host's official help, generated protocol schema and live
    connection contract. Prefer its purpose-built recovery control when available.
    If using an existing verified protocol transport, bind it to the exact target
    thread and endpoint; do not guess sockets or edit the runtime database.
+
+### Classify the failure before recovery
+
+| Observed cause | Next action |
+|---|---|
+| Transient capacity, network or service failure | Read whether the original turn/process later completed. Resume only unfinished work through an authorized supported control; do not duplicate an outcome-unknown write. |
+| Explicit user pause/cancellation | Require a later human continuation covering the same task. A scheduled reminder or peer message cannot revoke the pause. |
+| Usage/budget limit | Preserve counters and budget; use only an already-authorized available route. Do not reset or replace the Goal. |
+| Safety/policy rejection | Report the rejected action and stated reason. Do not retry that same rejected action through another model, transport, rewording or state store to bypass the rejection. Continue independent permitted work; use a genuinely narrower permitted action only when it avoids the rejected operation. |
+| Missing or ambiguous cause | Keep the cause unknown and obtain the missing bounded readback before a recovery mutation. Continue independent work that does not need that mutation. |
+
+Keep the user's authorization separate from the host's execution decision: a
+defensive task can be authorized and still have a rejected execution route.
 
 ### Recover through the host that owns the loaded thread
 
@@ -76,3 +93,20 @@ the same authorized task. A queued status reminder does not prove business execu
 If the current host has no verified recovery path, state that bounded limitation
 and complete the useful authorized work this turn can perform; do not mark the
 business objective complete merely because that recovery path is unavailable.
+
+## Verify unattended work and reporting separately
+
+When the user requests continued work and periodic updates, bind two outcomes in
+the existing task record: a future business turn and a report delivered through an
+authorized channel. Use only the host's supported execution/scheduling owner; this
+Skill does not install a scheduler, create a replacement Goal or grant messaging
+permission. A reporting reminder alone does not execute the business task.
+
+For each outcome, record the exact task/target, executor, due time and timezone,
+last observed result and any failure. Compare the due time with the current clock
+after interruption; an overdue update needs delivery, not a timer in the past.
+Read an actual later turn for execution and an actual delivered message for
+reporting. Missing observations remain unverified. One successful report does not
+prove the next report or continued work; registered timers and an active Goal do
+not prove either outcome. Do not promise an unattended cadence before its supported
+executor is established, or describe unobserved future rounds as working.
