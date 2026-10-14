@@ -199,10 +199,27 @@ live base plus a local or compare-API current-base-versus-head result.
 
 ### 2. Fetch the Exact Objects Without Touching the User's Worktree
 
-Prefer an independent temporary clone. Reuse the current clone only when its remote
-matches the base repository, the worktree is safe, and namespaced review refs cannot
-interfere with ongoing work. Never switch, reset, clean, or restore the user's working
-tree for a review. Do not create a git worktree by default.
+Choose the isolated carrier before fetching. Read the current base's repository
+instructions for registered source ownership, hook installation and exposure-tier
+requirements. A matching remote URL alone does not establish those identities.
+
+- For read-only object inspection, prefer an independent temporary clone. Reuse
+  the current clone only when its remote matches the base repository, its worktree
+  is safe, and namespaced review refs cannot interfere with ongoing work.
+- Before an authorized repair, run the repository's actual source-owner check.
+  For Skill edits, load `skill-creator` and follow its source-location procedure.
+  Use a linked worktree of the registered source or an explicitly approved,
+  registered leased authoring clone when that contract requires it. An ordinary
+  independent clone remains suitable when no registered-source constraint applies.
+  An invalid or unknown owner stops edits; resolve the owner before retrying.
+- Verify the selected carrier uses the repository's required hooks and exposure
+  tier. A linked worktree inherits identity; it does not exempt team/public content
+  from scanning. Do not add a tier exception merely to make a temporary clone pass.
+
+Never switch, reset, clean, or restore the user's working tree for a review.
+Do not create a worktree for read-only inspection by default. A linked worktree
+is not a security sandbox: untrusted tests still require the credential-isolated
+execution described in [Respect the Trust Boundary](#respect-the-trust-boundary).
 
 Fetch the live base ref and GitHub's PR head ref into isolated refs:
 
