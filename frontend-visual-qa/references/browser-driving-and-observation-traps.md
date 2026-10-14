@@ -299,6 +299,23 @@ the selected image. Enlarging a thumbnail does not establish that the original
 was obtained. Preserve visible thumbnail/original-unverified/low-confidence
 labels; an image description is not a verified fact about its contents.
 
+### Horizontal PRE reading needs a fresh input target
+
+For a horizontally overflowing `<pre>`, the auditor brings the intended block
+into view and measures its current bounding rectangle immediately before input.
+Check `elementFromPoint` at the wheel position: the hit must be that block or a
+child whose closest `<pre>` is the intended block. If it hits an image or another
+block, stop input and re-target. That observation proves a miss; it does not
+establish lazy loading or any other cause of the position change.
+
+After scrolling, re-rendering or layout changes, discard the old coordinates
+and repeat the geometry and hit check. Use normal horizontal wheel input, then
+read back movement and inspect the visible text at the start, middle and end
+of the affected block. A blank screenshot does not count as a read position;
+reacquire an inspected frame or keep that position unverified. Observe offsets;
+do not assign `scrollLeft` or `currentTime`, or change CSS to stage a result.
+This is a journey-specific auditor check, not an automatic sweep verdict.
+
 ## 9. Virtual time fast-forwards timers, not I/O
 
 `--virtual-time-budget=N` makes `setTimeout`-based test scripts complete

@@ -279,6 +279,10 @@ The full capture-calibration protocol and minimum inspection set are in
 §12. Extent and device-emulation traps specific to headless capture are
 catalogued in the same reference at §4–§5.
 
+Before reading an overflowing `<pre>` with horizontal wheel input, load the
+[fresh input-target check](references/browser-driving-and-observation-traps.md#horizontal-pre-reading-needs-a-fresh-input-target)
+and inspect the affected text positions rather than accepting scroll movement alone.
+
 Load [references/history-derived-checklist.md](references/history-derived-checklist.md)
 for the core visual/responsive defect catalog and standards-backed checks.
 For composition or density audits, execute its **Information necessity before
