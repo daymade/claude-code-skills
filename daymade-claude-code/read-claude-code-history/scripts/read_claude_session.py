@@ -33,6 +33,7 @@ Usage:
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import subprocess
@@ -49,6 +50,7 @@ PROJECTS_DIR = CLAUDE_DIR / "projects"  # default home only; discovery below spa
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _core.homes import discover_claude_homes  # noqa: E402
 from _core.claude import scan_claude_session  # noqa: E402
+from _core.parse import parse_date_boundary, parse_timestamp  # noqa: E402
 from _core.text import is_local_command_record  # noqa: E402
 from _core.sources import (  # noqa: E402
     HistorySourceConfigError,
@@ -159,7 +161,7 @@ def discover_session_refs(
 
 
 def discover_exact_session_refs(
-    session_id: str, manifest_path: Optional[str] = None
+    session_id: str, manifest_path: Optional[str] = None, *, canonical_only: bool = False
 ) -> tuple[List[Dict], List[str]]:
     """Find exact Session candidates across every project and source.
 
@@ -205,6 +207,9 @@ def discover_exact_session_refs(
             ],
             warnings,
         )
+
+    if canonical_only:
+        return [], warnings
 
     # A registered archive may preserve the right record identity under a
     # renamed file. Fall back to the analyzer's byte-level candidate scan only
@@ -382,7 +387,7 @@ def format_session_entry(entry: Dict, file_exists: bool = True) -> str:
 # ── Session file parsing ────────────────────────────────────────────
 
 
-def parse_session_structure(session_file: Path) -> Dict:
+def parse_session_structure(session_file: Path, *, collect_tool_evidence: bool = False) -> Dict:
     """Parse every physical record in one selected Claude Session.
 
     This reader is the evidence source for continuation. A previous resume-oriented
@@ -461,6 +466,7 @@ def parse_session_structure(session_file: Path) -> Dict:
     last_assistant_has_text = False
     error_count = 0
     observed_session_ids = set()
+    tool_events = []
 
     with open(session_file, encoding="utf-8") as f:
         for i, raw_line in enumerate(f):
@@ -540,8 +546,54 @@ def parse_session_structure(session_file: Path) -> Dict:
 
             # Track tool calls and results
             msg = obj.get("message", {})
+            if not isinstance(msg, dict):
+                raise SessionEvidenceError(
+                    f"invalid message object at physical line {i + 1} in {session_file}"
+                )
             role = msg.get("role", "")
             content = msg.get("content", "")
+            if collect_tool_evidence and isinstance(content, list):
+                for block_index, block in enumerate(content, 1):
+                    if not isinstance(block, dict):
+                        continue
+                    kind = block.get("type")
+                    if (role, kind) not in {
+                        ("assistant", "tool_use"), ("user", "tool_result")
+                    }:
+                        continue
+                    if not isinstance(observed_id, str) or not observed_id:
+                        raise SessionEvidenceError(
+                            f"tool block has no record-level Session identity at physical line {i + 1} in {session_file}"
+                        )
+                    if (obj.get("agentId") is not None and not isinstance(obj["agentId"], str)) or (
+                        obj.get("isSidechain") is not None and not isinstance(obj["isSidechain"], bool)
+                    ):
+                        raise SessionEvidenceError(
+                            f"invalid tool lineage metadata at physical line {i + 1} in {session_file}"
+                        )
+                    if kind == "tool_use" and (
+                        not isinstance(block.get("name"), str) or not block["name"]
+                        or not isinstance(block.get("input"), dict)
+                    ):
+                        raise SessionEvidenceError(
+                            f"invalid tool name/input at physical line {i + 1} in {session_file}"
+                        )
+                    tool_events.append({
+                        "line": i + 1,
+                        "block_index": block_index,
+                        "timestamp": obj.get("timestamp"),
+                        "uuid": obj.get("uuid"),
+                        "parent_uuid": obj.get("parentUuid"),
+                        "session_id": obj.get("sessionId"),
+                        "agent_id": obj.get("agentId"),
+                        "is_sidechain": obj.get("isSidechain"),
+                        "cwd": obj.get("cwd"),
+                        "block": block,
+                    })
+            if collect_tool_evidence:
+                # The selected original blocks are the complete output surface
+                # for this mode; skip unrelated prose and briefing bookkeeping.
+                continue
 
             # Extract tool_use from assistant messages
             if role == "assistant" and isinstance(content, list):
@@ -635,7 +687,186 @@ def parse_session_structure(session_file: Path) -> Dict:
         "files_touched": files_touched,
         "end_reason": end_reason,
         "observed_session_ids": observed_session_ids,
+        "tool_events": tool_events,
     }
+
+
+def select_tool_evidence(
+    events: List[Dict], *, tools: List[str], contains: List[str],
+    ordinal: Optional[tuple[int, int]] = None,
+    from_timestamp: Optional[float] = None, to_timestamp: Optional[float] = None,
+) -> Dict:
+    """Pair original blocks by ID within their recorded agent/sidechain context.
+
+    Pairing is order independent. Duplicate or missing IDs never select one
+    convenient counterpart: keep every original block and name the uncertainty.
+    Ordinals refer to groups in first-physical-occurrence order, before filters.
+    """
+    groups = {}
+    for index, event in enumerate(events):
+        block = event["block"]
+        is_call = block["type"] == "tool_use"
+        tool_id = block.get("id" if is_call else "tool_use_id")
+        valid_id = isinstance(tool_id, str) and bool(tool_id)
+        key = (
+            tool_id, event["agent_id"], event["is_sidechain"] is True
+        ) if valid_id else ("missing_id", index)
+        group = groups.setdefault(key, {
+            "ordinal": len(groups) + 1, "tool_use_id": tool_id,
+            "calls": [], "results": [], "payload_complete": True,
+        })
+        group["calls" if is_call else "results"].append(event)
+
+    selected = []
+    unknown_time = 0
+    for group in groups.values():
+        calls, results = group["calls"], group["results"]
+        if not isinstance(group["tool_use_id"], str) or not group["tool_use_id"]:
+            status = "missing_id"
+        elif len(calls) > 1 or len(results) > 1:
+            status = "ambiguous"
+        elif not calls:
+            status = "missing_call"
+        elif not results:
+            status = "missing_result"
+        else:
+            status = "paired"
+        group["pairing_status"] = status
+        if tools and not any(call["block"].get("name") in tools for call in calls):
+            continue
+        # Search both original call input and result text; all repeated literals
+        # must match somewhere in this pair. Do not search unrelated prose.
+        def text_values(value):
+            if isinstance(value, str):
+                yield value
+            elif isinstance(value, dict):
+                for child in value.values():
+                    yield from text_values(child)
+            elif isinstance(value, list):
+                for child in value:
+                    yield from text_values(child)
+
+        searchable = list(
+            text for event in calls + results for text in text_values(event["block"])
+        )
+        if not all(any(literal in text for text in searchable) for literal in contains):
+            continue
+        if ordinal and not ordinal[0] <= group["ordinal"] <= ordinal[1]:
+            continue
+        anchor = (calls or results)[0]
+        timestamp = parse_timestamp(anchor["timestamp"])
+        if from_timestamp is not None or to_timestamp is not None:
+            if timestamp is None or not math.isfinite(timestamp):
+                unknown_time += 1
+                continue
+            if from_timestamp is not None and timestamp < from_timestamp:
+                continue
+            if to_timestamp is not None and timestamp > to_timestamp:
+                continue
+        selected.append(group)
+    return {
+        "groups": selected, "groups_examined": len(groups),
+        "tool_blocks_examined": len(events), "unknown_time_excluded": unknown_time,
+    }
+
+
+def _evidence_json(value: Dict) -> str:
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n"
+
+
+def format_tool_evidence(
+    session_id: str, session_file: Path, source_hash: str, parsed: Dict,
+    selected: Dict, *, source_labels: List[str], copy_paths: List[Path],
+    filters: Dict, max_output_bytes: Optional[int],
+) -> str:
+    """Return one JSON envelope bounded in UTF-8 bytes, including its newline.
+
+    Emit complete pairs first. An oversized first pair may expose explicitly
+    incomplete serialized block prefixes; never present them as original blocks.
+    """
+    matches = selected["groups"]
+    payload = {
+        "kind": "claude_original_tool_evidence", "session_id": session_id,
+        "source": {
+            "path": str(session_file), "sha256": source_hash,
+            "bytes": parsed["file_size"], "physical_lines": parsed["total_lines"],
+            "sources": source_labels, "copies_checked": [str(path) for path in copy_paths],
+            "observed_session_ids": sorted(parsed["observed_session_ids"]),
+            "scope": "selected main transcript, including its recorded sidechains",
+            "subagent_files_read": 0,
+        },
+        "filters": filters,
+        "coverage": {
+            "tool_blocks_examined": selected["tool_blocks_examined"],
+            "groups_examined": selected["groups_examined"],
+            "unknown_time_excluded": selected["unknown_time_excluded"],
+            "matched_groups": len(matches), "returned_groups": 0,
+            "complete_groups": 0, "omitted_groups": len(matches),
+            "first_omitted_ordinal": matches[0]["ordinal"] if matches else None,
+            "output_complete": not matches, "max_output_bytes": max_output_bytes,
+        },
+        "pairs": [],
+    }
+
+    def update_coverage():
+        returned = len(payload["pairs"])
+        complete = sum(pair["payload_complete"] for pair in payload["pairs"])
+        payload["coverage"].update({
+            "returned_groups": returned, "complete_groups": complete,
+            "omitted_groups": len(matches) - returned,
+            "first_omitted_ordinal": matches[returned]["ordinal"] if returned < len(matches) else None,
+            "output_complete": complete == len(matches),
+        })
+
+    def fits():
+        return max_output_bytes is None or len(_evidence_json(payload).encode("utf-8")) <= max_output_bytes
+
+    if not fits():
+        raise SessionEvidenceError("tool-evidence metadata exceeds --max-output-bytes; raise the bound")
+    for pair in matches:
+        payload["pairs"].append(pair)
+        update_coverage()
+        if fits():
+            continue
+        payload["pairs"].pop()
+        update_coverage()
+        if payload["pairs"]:
+            break
+        # A partial group retains all coordinates and pairing status. Only the
+        # block payload becomes a labelled prefix of its serialized JSON.
+        partial = {**pair, "calls": [], "results": [], "payload_complete": False}
+        raw_blocks = []
+        for side in ("calls", "results"):
+            for event in pair[side]:
+                raw = json.dumps(event["block"], ensure_ascii=False)
+                item = {key: value for key, value in event.items() if key != "block"}
+                item.update({"block_json_prefix": "", "block_characters": len(raw), "block_complete": False})
+                partial[side].append(item)
+                raw_blocks.append((item, raw))
+        payload["pairs"].append(partial)
+        update_coverage()
+        if not fits():
+            payload["pairs"].pop()
+            update_coverage()
+            break
+        low, high = 0, max((len(raw) for _, raw in raw_blocks), default=0)
+        while low < high:
+            middle = (low + high + 1) // 2
+            for item, raw in raw_blocks:
+                item["block_json_prefix"] = raw[:middle]
+                item["block_complete"] = middle >= len(raw)
+            if fits():
+                low = middle
+            else:
+                high = middle - 1
+        for item, raw in raw_blocks:
+            item["block_json_prefix"] = raw[:low]
+            item["block_complete"] = low >= len(raw)
+        break
+    output = _evidence_json(payload)
+    if max_output_bytes is not None and len(output.encode("utf-8")) > max_output_bytes:
+        raise SessionEvidenceError("tool-evidence output exceeded its byte bound")
+    return output
 
 
 def _detect_end_reason(
@@ -1590,7 +1821,53 @@ def main():
         help="With --agent-prompts: only print calls whose description "
         "starts with TEXT",
     )
+    parser.add_argument("--tool-evidence", "--tools", action="store_true",
+                        help="With exact --session: JSON original tool call/result pairs only")
+    parser.add_argument("--tool", action="append", default=[], metavar="NAME",
+                        help="With --tool-evidence: exact tool name; repeat for alternatives")
+    parser.add_argument("--contains", action="append", default=[], metavar="TEXT",
+                        help="With --tool-evidence: case-sensitive literal in call/result values; repeat for AND")
+    parser.add_argument("--ordinal", metavar="N[:M]",
+                        help="With --tool-evidence: 1-based pair/group ordinal or inclusive range before filters")
+    parser.add_argument("--from", dest="from_time", metavar="ISO",
+                        help="With --tool-evidence: inclusive call time (or orphan result time)")
+    parser.add_argument("--to", dest="to_time", metavar="ISO",
+                        help="With --tool-evidence: inclusive end time; ISO timezone or local date")
+    parser.add_argument("--max-output-bytes", type=int, default=64000, metavar="N",
+                        help="Tool evidence UTF-8 JSON byte bound including newline (default: 64000; --full removes it)")
     args = parser.parse_args()
+    tool_filters = bool(args.tool or args.contains or args.ordinal or args.from_time or args.to_time)
+    if tool_filters and not args.tool_evidence:
+        parser.error("--tool/--contains/--ordinal/--from/--to need --tool-evidence")
+    ordinal_range = None
+    from_timestamp = to_timestamp = None
+    if args.tool_evidence:
+        if not args.session or args.query or args.list or args.find_command_sha256 or args.agent_prompts:
+            parser.error("--tool-evidence needs exact --session and no --query/--list/--find-command-sha256/--agent-prompts")
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", args.session):
+            parser.error("--tool-evidence needs a Session ID, not a file path")
+        if not tool_filters:
+            parser.error("--tool-evidence needs a --tool/--contains/--ordinal/--from/--to selector")
+        if any(not value for value in args.tool + args.contains):
+            parser.error("--tool and --contains cannot be empty")
+        if args.max_output_bytes < 1024:
+            parser.error("--max-output-bytes must be at least 1024")
+        if args.ordinal:
+            if not re.fullmatch(r"[1-9][0-9]*(?::[1-9][0-9]*)?", args.ordinal):
+                parser.error("--ordinal takes a positive N or inclusive N:M range")
+            values = [int(value) for value in args.ordinal.split(":")]
+            ordinal_range = (values[0], values[-1])
+            if ordinal_range[0] > ordinal_range[1]:
+                parser.error("--ordinal range start must not exceed end")
+        try:
+            if args.from_time:
+                from_timestamp = parse_date_boundary(args.from_time)
+            if args.to_time:
+                to_timestamp = parse_date_boundary(args.to_time, end=True)
+        except ValueError as error:
+            parser.error(str(error))
+        if from_timestamp is not None and to_timestamp is not None and from_timestamp > to_timestamp:
+            parser.error("--from must not be after --to")
     if args.find_command_sha256 is not None:
         if not args.session or args.query or args.list:
             parser.error("--find-command-sha256 needs --session and no --query/--list")
@@ -1613,7 +1890,7 @@ def main():
     try:
         if global_exact_session:
             session_refs, source_warnings = discover_exact_session_refs(
-                args.session, args.history_sources
+                args.session, args.history_sources, canonical_only=args.tool_evidence
             )
         else:
             session_refs, source_warnings = discover_session_refs(
@@ -1738,11 +2015,38 @@ def main():
         expected_session_id = selected_ref["session_id"]
 
     session_id = expected_session_id or selected_ref["session_id"]
+    if args.tool_evidence and session_id != args.session:
+        print("Error: --tool-evidence requires the full exact Session ID", file=sys.stderr)
+        sys.exit(1)
     try:
         session_file, source_labels, copy_paths = select_session_copy(selected_ref)
     except SessionEvidenceError as error:
         print(f"Error: cannot recover complete Claude Session evidence: {error}", file=sys.stderr)
         sys.exit(1)
+
+    if args.tool_evidence:
+        try:
+            source_hash = _file_digest(session_file)
+            parsed = parse_session_structure(session_file, collect_tool_evidence=True)
+            validate_selected_session_identity(parsed["observed_session_ids"], session_id)
+            if _file_digest(session_file) != source_hash:
+                raise SessionEvidenceError("selected transcript changed during the read; retry the read")
+            selected = select_tool_evidence(
+                parsed["tool_events"], tools=args.tool, contains=args.contains,
+                ordinal=ordinal_range, from_timestamp=from_timestamp, to_timestamp=to_timestamp,
+            )
+            output = format_tool_evidence(
+                session_id, session_file, source_hash, parsed, selected,
+                source_labels=source_labels, copy_paths=copy_paths,
+                filters={"tools": args.tool, "contains": args.contains, "ordinal": ordinal_range,
+                         "from": args.from_time, "to": args.to_time},
+                max_output_bytes=None if args.full else args.max_output_bytes,
+            )
+        except (SessionEvidenceError, OSError, UnicodeError) as error:
+            print(f"Error: cannot read original Claude tool evidence: {error}", file=sys.stderr)
+            sys.exit(1)
+        sys.stdout.write(output)
+        sys.exit(0 if selected["groups"] else 1)
 
     if args.find_command_sha256:
         try:

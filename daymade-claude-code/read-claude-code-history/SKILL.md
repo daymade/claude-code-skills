@@ -23,6 +23,7 @@ hand the verified evidence to `daymade-claude-code:continue-claude-code-work`.
 |---|---|
 | Recent Claude Code sessions, titles, dates, or IDs | Indexed metadata only; the bundled `list_local_history.py` currently reads all candidate bodies before date/limit filtering, so do not use it for a broad inventory |
 | One known Session reconstructed as a chronological evidence briefing | `scripts/read_claude_session.py --session <ID>` |
+| Original tool input and paired result from one exact Session, selected by tool name, literal text, ordinal or time | `scripts/read_claude_session.py --session <ID> --tool-evidence --contains '<literal>'`; see **Original tool call/result evidence** below |
 | The exact command behind a hook audit row that records a Session ID and a command SHA-256 instead of the text | `scripts/read_claude_session.py --session <ID> --find-command-sha256 <HEX>`; see **Command behind a hook audit row** below |
 | Every Agent/Task tool_use in one Session, quoted verbatim (e.g. the exact prompt handed to an independent reviewer agent) | `scripts/read_claude_session.py --session <ID> --agent-prompts` (optionally `--agent-description-prefix TEXT`); a prompt dispatched twice is listed twice |
 | Which session launched a program in a known time window, across sessions | `scripts/analyze_sessions.py tool-calls --from <ISO> --to <ISO> --pattern <REGEX> [--tool NAME]`; candidates are selected by filesystem metadata before any body is read, then grouped by session; Codex rollouts are out of scope and the gap is stated in the output |
@@ -115,6 +116,59 @@ project across the discovered active homes and registered archives; an explicit
 `--project` remains a strict scope. A filename alone never proves Session identity.
 Read [Local runtime and working-directory evidence](references/session_file_format.md#local-runtime-and-working-directory-evidence)
 before interpreting task endings, local-command output, or cwd receipts.
+
+### Original tool call/result evidence
+
+Use this mode for a particular backup, transfer, continuation command or tool
+receipt. Resolve one exact Session first; do not obtain tool evidence by printing
+the whole briefing or recreating a raw-history parser.
+
+```text
+<skill-dir>/scripts/read_claude_session.py --session <SESSION_ID> \
+  --tool-evidence --tool Bash --contains 'scp' --contains 'backup'
+<skill-dir>/scripts/read_claude_session.py --session <SESSION_ID> \
+  --tool-evidence --ordinal 4:6 --from <ISO_WITH_TIMEZONE> --to <ISO_WITH_TIMEZONE>
+```
+
+Expect one JSON envelope with original `tool_use` and `tool_result` blocks, the
+selected source SHA-256, one-based physical line and content-block coordinates,
+record UUID/parent UUID, timestamp, cwd and recorded agent/sidechain identity.
+This mode reads the selected main transcript, including its stored sidechains;
+it excludes separate subagent files and does not read current Git state, memory
+or unrelated conversation prose. Global lookup checks only exact
+`<SESSION_ID>.jsonl` filenames in active homes and registered archives; a renamed
+archive remains outside that lookup. Pass an explicitly bounded `--project` if
+its existing discovery can locate that renamed file. Record-level identity,
+malformed/unreadable input and divergent-copy gates still apply. A source changing
+during the read fails visibly; repeat only this read.
+
+Require at least one selector. Repeat `--tool NAME` for exact, case-sensitive
+tool-name alternatives. Repeat `--contains TEXT` to require every case-sensitive
+literal somewhere in that group's original string values, including nested call
+inputs and result content; an orphan result cannot match a tool-name filter.
+`--tools` is an alias for `--tool-evidence`. `--ordinal N` or `N:M` selects one-based
+group ordinals in first physical occurrence order **before** other filters.
+Time bounds are inclusive and use the first call timestamp, or the first orphan
+result timestamp. Datetimes require a timezone; date-only bounds use the machine's
+local day. Missing/invalid timestamps excluded by a time filter are counted.
+
+Pair by tool-use ID within recorded agent/sidechain context, independent of which
+side landed first. Preserve every block for repeated IDs and label `ambiguous`;
+label absent counterparts `missing_call` or `missing_result`, and missing IDs
+`missing_id`. These statuses describe evidence availability, not execution success.
+Read the original result's error/content fields before claiming the action worked.
+
+Check `coverage.output_complete` before treating returned matches as complete.
+The default `--max-output-bytes 64000` bounds the entire UTF-8 JSON envelope,
+including its newline. Larger matches may return an explicitly incomplete
+`block_json_prefix` with its original character count instead of a `block`;
+later groups may be omitted with a count and `first_omitted_ordinal`. Raise the
+bound or use `--full` redirected to an absolute local output path to obtain full
+selected payloads; `--full` removes this mode's byte cap. If metadata alone cannot
+fit, the read fails without emitting evidence. Exit 0 means at least one selected
+group, 1 means no match or a source/read failure, and 2 means invalid arguments.
+Read stderr and coverage to distinguish those cases; zero matches with a time
+gap or excluded source is not proof that the action never happened.
 
 ### Command behind a hook audit row
 
