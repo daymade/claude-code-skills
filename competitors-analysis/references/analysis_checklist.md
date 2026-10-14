@@ -97,6 +97,7 @@ Check claims in context, not with a banned-word pass/fail rule:
 For multi-competitor reports:
 
 - [ ] Source register lists carrier, edition and retrieval date, with Git local path/remote/commit or package origin/member/digest; unknown version or origin stays unknown.
+- [ ] For Update, classify each material change against the bound earlier and current evidence: actual addition, prior coverage correction, edition difference or unverified change. Do not call a feature new merely because this analysis first found it.
 - [ ] Positioning table distinguishes user segment from technical implementation.
 - [ ] Strengths are tied to user-visible behavior or code evidence.
 - [ ] Weaknesses/gaps cite evidence or are labeled as `待验证`.
@@ -113,6 +114,19 @@ For multi-competitor reports:
 - [ ] Continuation reads that entry and latest user correction before acting; do not rerun a completed inventory without changed inputs or a specific gap.
 
 ## Common Fixes
+
+### A newly discovered path is not necessarily a new feature
+
+When refreshing a prior analysis, use the same carrier and edition for a temporal
+comparison. The executor checks the earlier source before assigning the change
+type; stop once the evidence supports that classification or its bounded unknown.
+
+| Synthetic case | Correct report |
+|---|---|
+| An earlier profile said no remote path; the pinned earlier source already contained it, but that file was not inspected | Prior coverage correction; revise the old judgment without inventing an introduction date |
+| A bound earlier revision lacks the path and a later revision adds it | Actual source addition within those revisions; runtime compatibility and business benefit still need their own evidence |
+| App and plugin editions expose different paths | Edition difference; compare within the same edition before claiming a temporal change |
+| Earlier source or requested edition is unavailable | Unverified change with the missing evidence named; do not infer absence from that gap |
 
 ### Citation Readback And Counterevidence
 

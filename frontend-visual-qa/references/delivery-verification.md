@@ -15,6 +15,26 @@ the parent HTML/JS is insufficient when a reader, iframe or independent bundle
 is served separately. Select the complete relevant resource set through the
 project's release owner; this probe cannot discover or authenticate that set.
 
+## Reuse a build from another source ref
+
+When the release owner reuses a compiled build, record its build ref separately
+from the selected published artifact ref in the task's provenance evidence.
+Keep the HTTP manifest's `artifact_ref` bound to the selected delivery; matching
+HTTP bytes does not establish which source produced them.
+
+The release owner must establish that the production inputs are equivalent:
+source, build configuration, dependency lock, generated inputs and relevant
+environment. A test-file suffix alone is insufficient: imports, globs or build
+plugins may consume that file. If equivalence is unproven, rebuild the selected
+artifact or keep source provenance unverified. Then perform the normal resource
+readback and affected rendered journey; this reference does not run a build or
+grant deployment permission.
+
+| Synthetic provenance case | Disposition |
+|---|---|
+| Build A and published B differ only in an extra test; the release owner proves it is excluded from all production inputs | Reuse is supportable; retain both refs and the equivalence evidence |
+| Only a `.test` file changed, but a production glob consumes it or its participation is unknown | Reuse is unsupported by that filename; rebuild or retain the unresolved provenance |
+
 ## Manifest
 
 Use a private task file outside the Skill package. In this synthetic example,
