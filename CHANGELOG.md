@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` v1.70.0): Add source-bound reading and scalar JSON selection with a final output-byte limit. Expose validation and reading through the fixed command entry; preserve direct invocation and distinguish selected content from complete loading.
+
 - **asr-transcribe-to-text** (`daymade-audio` v1.49.1): Keep unreliable recognizer output as a draft with speech content unknown; require independent source-audio evidence for no-speech claims. Treat density and repetition as inspection clues and recover only when conditions address the observed failure. Align the timing-leg warning while preserving its condition and timestamp payload. Change type: bounded transcript-admission correction.
 
 - **excel-automation** (`daymade-docs` v1.25.1): Route paper-form reconstruction from the repository entry to the existing workflow and remove derived capability and step counts. Change type: documentation alignment; workbook creation and control behavior unchanged.
