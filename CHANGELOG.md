@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **github-ops** (v1.14.10): Include author and committer identity metadata in public publication checks for original and merged commits. Capture values privately, distinguish new exposure from known public metadata, and retain authorization boundaries for identity and history changes. Change type: bounded publication-verification clarification.
+- **github-review-pr** (v1.4.5): Select repair isolation from verified source ownership and hook/exposure requirements, preserving read-only clones, registered worktrees, approved leased clones and credential-isolated untrusted tests. Change type: bounded carrier-selection correction.
+- **github-ops** (v1.14.10): Check publication policy before pushing and use the optional checked push helper or a native full-SHA push with independent remote equality. Preserve helper-absent operation and brace refspec variables for Zsh. Change type: bounded publication-recipe correction.
 
 - **frontend-visual-qa** (v1.20.11): Re-bind the intended PRE before normal horizontal wheel input, discard stale coordinates after layout changes, and keep blank reading frames unverified. A missed input target does not establish a lazy-loading cause. Change type: bounded browser-observation clarification.
 - **terraform-skill** (v1.5.8): Verify shared-runtime transitions across parallel guards and post-write consumers, and retain production-sized witness, subprocess, permission and clean-checkout boundaries in release regression tests. Change type: bounded release-validation clarification; runtime unchanged.
