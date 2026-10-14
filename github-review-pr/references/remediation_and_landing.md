@@ -118,11 +118,14 @@ Query the PR and both repositories again. Verify all of these:
 Treat a missing permission as a blocker, not as a reason to open a different branch or
 fork. Never push a repair to the base branch unless the user explicitly named it.
 
-### Prepare an isolated repair clone
+### Prepare an isolated repair environment
 
-Use an independent clone rather than the user's working tree. Fetch and check out the
-exact live head branch from the head repository. Verify the local commit equals the
-reviewed head SHA before editing.
+Before editing, apply the review entry's
+[carrier and source-owner selection](../SKILL.md#2-fetch-the-exact-objects-without-touching-the-users-worktree).
+Use the resulting independent clone, registered linked worktree or approved leased
+authoring clone rather than the user's working tree. Keep required hooks and exposure
+checks active. Fetch and check out the exact live head branch from the head repository
+in that environment. Verify the local commit equals the reviewed head SHA before editing.
 
 Apply only the smallest complete fix for verified PR-owned/shared findings. Preserve
 the contributor's intent and existing features. Follow the current base repository's
@@ -405,8 +408,9 @@ authorization to execute both the landing and the named follow-up. Merge authori
 alone does not authorize a direct push to the base branch.
 
 After verifying the merge, refresh the live base and treat it as a new immutable
-starting point. Implement only the previously named deterministic follow-up in an
-independent clean clone. Follow the base repository's current instructions, stage
+starting point. Select a clean repair environment through the same
+[carrier and source-owner procedure](../SKILL.md#2-fetch-the-exact-objects-without-touching-the-users-worktree).
+Implement only the previously named deterministic follow-up. Follow the base repository's current instructions, stage
 explicit paths, run the prescribed validation, inspect the complete diff, and perform
 semantic secret/PII review before any public push.
 

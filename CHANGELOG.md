@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **github-review-pr** (v1.4.5): Select repair isolation from verified source ownership and hook/exposure requirements, preserving read-only clones, registered worktrees, approved leased clones and credential-isolated untrusted tests. Change type: bounded carrier-selection correction.
+- **github-ops** (v1.14.10): Check publication policy before pushing and use the optional checked push helper or a native full-SHA push with independent remote equality. Preserve helper-absent operation and brace refspec variables for Zsh. Change type: bounded publication-recipe correction.
+
 - **frontend-visual-qa** (v1.20.11): Re-bind the intended PRE before normal horizontal wheel input, discard stale coordinates after layout changes, and keep blank reading frames unverified. A missed input target does not establish a lazy-loading cause. Change type: bounded browser-observation clarification.
 - **competitors-analysis** (v1.6.3): Keep update classification in its canonical checklist procedure; route the report template and repository entry to it. Align application-priority and build-provenance entry routes. Change type: documentation deduplication and entry alignment; scripts unchanged.
 - **terraform-skill** (v1.5.8): Verify shared-runtime transitions across parallel guards and post-write consumers, and retain production-sized witness, subprocess, permission and clean-checkout boundaries in release regression tests. Change type: bounded release-validation clarification; runtime unchanged.
