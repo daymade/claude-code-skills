@@ -71,6 +71,21 @@ an unresolved assumption into an implementation requirement. If a hypothesis
 can be checked now, check it. Otherwise make it the subject of a bounded probe
 or a user question rather than a scheduled feature.
 
+When choosing the next increment, treat confirmed evidence and permission to act
+as admission conditions. Rank admitted work by the unfinished user result it
+unlocks. An uncertain blocker on that path calls for a bounded probe; it does
+not make an easier unrelated repair more valuable. The executor makes this
+judgment; no checklist score establishes business priority.
+
+Use these synthetic replay cases when a repair batch ends or the user questions
+the direction. Stop after the next action names the missing observation and its
+falsifier; do not launch another audit merely to fill the queue.
+
+| Current evidence | Next useful action | Invalid substitute |
+|---|---|---|
+| Confirmed repairs are delivered; the user still cannot identify how the real task's contributions combine; no new failure is observed | Inspect that task's actual contribution/result path and identify the concrete missing result | Add a new module-wide boundary audit because it is easy to prove |
+| The real intervention path reproduces an already-authorized duplicate-write defect | Repair that defect with failure and healthy controls, then return to the same intervention path | Declare all technical checks unnecessary, or count the repair as the complete collaboration outcome |
+
 Synthetic example: an enrichment stage delays a completed draft. Adapt the
 competitor's phase separation if the target contract allows a usable draft before
 enrichment. Preserve strict review if review is required before publication.

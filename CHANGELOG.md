@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **frontend-visual-qa** (v1.20.10): Re-bind the intended PRE before normal horizontal wheel input, discard stale coordinates after layout changes, and keep blank reading frames unverified. A missed input target does not establish a lazy-loading cause. Change type: bounded browser-observation clarification.
+- **app-evolver** (v1.1.1): Add outcome-priority replay cases that distinguish admission to autonomous repair from the next business result. Preserve necessary defect verification and bounded probes.
+- **competitors-analysis** (v1.6.2): Classify actual additions, prior coverage corrections, edition differences and unresolved changes in update reports, retaining pinned before/after evidence and runtime limits.
+- **frontend-visual-qa** (v1.20.10): Separate build provenance from selected delivery identity when reusing a compiled artifact; require production-input equivalence and retain resource and rendered-journey acceptance.
+
 - **github-ops** (v1.14.9): Resolve named access recipients from provenance-bearing account records and verify their GitHub login and numeric ID before a permission change. Preserve existing authorization and readback boundaries. Change type: bounded recipient-identity clarification.
 
 - **skill-creator** (`daymade-skill` v1.70.1): Use the fixed entry's help for its current command list and selected-tool arguments; retain executable examples and invocation boundaries. Change type: documentation deduplication; runtime unchanged.
