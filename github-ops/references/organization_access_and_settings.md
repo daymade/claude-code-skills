@@ -46,6 +46,27 @@ Write-plus-PR arrangement, use [branch protection](branch_protection.md) and ver
 because they joined the organization. It does not remove explicit repository/team grants,
 owner access, enterprise grants, or the minimum read visibility of internal repositories.
 
+## Resolve a named recipient
+
+When a request names a person rather than a GitHub login, first locate an existing
+user-confirmed account mapping or an account record with traceable provenance. Use the
+organization's member/collaborator inventory to find candidate logins, then read only
+the relevant account record. Do not infer a person's GitHub identity from a similar
+profile name, an OS login, or an unverified alias; do not open a person's computer
+merely to resolve a repository-access request.
+
+Verify the selected account through a fresh read:
+
+```bash
+gh api --hostname HOST -X GET "users/USER" --jq '{login,id,type,html_url}'
+```
+
+Bind the requested person to that observed login and numeric ID before any grant,
+revocation or invitation. This lookup proves the account exists; the mapping record
+must establish whose account it is. If the mapping is missing, conflicting or still
+ambiguous, ask for the exact account before the write. Keep private person-to-account
+records in their existing private owner, not in this distributed Skill.
+
 ## Read-only access audit
 
 Bind `ORG`, `REPO`, and `USER` to exact slugs before running the queries.
