@@ -210,7 +210,9 @@ For a single competitor, use `references/profile_template.md`. Record the curren
 project's authoritative scope source when used. Without our-product context,
 omit its comparison section and keep opportunity judgments repository-specific.
 
-For a landscape summary, use this structure:
+For a landscape summary, use this structure. For Update, apply the
+[change-classification procedure](references/analysis_checklist.md#a-newly-discovered-path-is-not-necessarily-a-new-feature)
+when filling the change table.
 
 ```markdown
 # {Product} Competitor Landscape
@@ -231,8 +233,6 @@ their evidence versions and failure conditions, and the next decision-bearing ch
 ## Changes Since The Prior Analysis (for Update)
 | Competitor / edition | Change type | Earlier and current evidence | Consequence for the judgment |
 |---|---|---|---|
-Classify actual additions, prior coverage corrections, edition differences and
-unverified changes separately; retrieval date alone is not a feature's introduction date.
 
 ## Positioning
 | Competitor | User segment | Primary promise | Source |
