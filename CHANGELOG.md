@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **terraform-skill** (v1.5.8): Verify shared-runtime transitions across parallel guards and post-write consumers, and retain production-sized witness, subprocess, permission and clean-checkout boundaries in release regression tests. Change type: bounded release-validation clarification; runtime unchanged.
+- **continue-codex-work** (`daymade-claude-code` v4.27.11): Classify the latest execution failure before Goal recovery and verify future business execution separately from report delivery. Change type: bounded recovery clarification.
+- **qa-expert** (v1.1.1): Add transaction recovery, populated financial upgrade and portable integration-fixture acceptance recipes, retaining existing policies and healthy controls. Change type: bounded test-selection guidance.
+- **competitors-analysis** (v1.6.3): Add an isolated original-application demo recipe with populated journeys, calibrated external boundaries and exact patch reconstruction. Change type: bounded execution guidance.
+
 - **app-evolver** (v1.1.1): Add outcome-priority replay cases that distinguish admission to autonomous repair from the next business result. Preserve necessary defect verification and bounded probes.
 - **competitors-analysis** (v1.6.2): Classify actual additions, prior coverage corrections, edition differences and unresolved changes in update reports, retaining pinned before/after evidence and runtime limits.
 - **frontend-visual-qa** (v1.20.10): Separate build provenance from selected delivery identity when reusing a compiled artifact; require production-input equivalence and retain resource and rendered-journey acceptance.
