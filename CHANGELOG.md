@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **read-claude-code-history** (`daymade-claude-code` v4.28.0): Add bounded original tool-call evidence with paired results, source coordinates, selection filters and explicit pairing/coverage status. Keep narrow evidence queries separate from full briefings and preserve existing history-reader modes.
+
 - **frontend-visual-qa** (v1.21.0): Route specific task/object link handoffs through the existing state-and-journey audit, including repeated-title machine/run identity. Add synthetic wrong-destination and exact-link replays; keep ordinary source citations outside this trigger. Change type: bounded trigger extension.
 
 - **github-ops** (v1.14.11): Include author and committer identity metadata in public publication checks for original and merged commits. Capture values privately, distinguish new exposure from known public metadata, and retain authorization boundaries for identity and history changes. Change type: bounded publication-verification clarification.
