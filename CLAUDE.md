@@ -502,6 +502,8 @@ validation.
 For document-ingestion reviews and authorized small maintainer repairs, enter
 [github-review-pr](github-review-pr/SKILL.md) and its
 [small-repair workflow](github-review-pr/references/remediation_and_landing.md#expose-an-authorized-small-repair).
+Before selecting an environment for an authorized repair, follow its
+[carrier and source-owner selection](github-review-pr/SKILL.md#2-fetch-the-exact-objects-without-touching-the-users-worktree).
 For cross-runtime staged-content validation or isolated task-copy setup, enter
 [auto-repo-setup's Git safety reference](auto-repo-setup/references/git_safety.md).
 
@@ -514,17 +516,13 @@ For inbound coordination during delivery or closeout, use
 [peer-message's receiving route](peer-message/SKILL.md#收到消息先分流).
 Keep the receiving and user-delivery procedure with that owner rather than duplicating it here.
 
-This repository uses standard git workflow, but **always stage files by name**,
-never `git add -A` / `git add .`. Multiple agents may have unstaged changes in
-the same worktree — a blanket stage piggybacks their work into your commit:
-
-```bash
-git status
-git add path/to/file1 path/to/file2   # specific files only
-git diff --cached --name-status       # every staged entry (`D` lines included) must be one you intended; a `D` you never made = drift from a parallel session's index-bypassing commit — see git-safety-net Mode D
-git commit -m "message"
-git push
-```
+Stage only explicit owned file paths; never `git add -A` / `git add .`.
+Inspect the staged file list, including deletions,
+in a separate call before committing; investigate any entry outside the intended
+scope through `git-safety-net`. For branch publication and PR creation, follow
+[the publication recipe](github-ops/references/pr_operations.md#basic-pr-creation)
+before the first push. Keep its policy preflight, pinned source and remote readback
+in that owner rather than maintaining another push example here.
 
 For recovery or repository convergence under concurrent work, treat
 `git-safety-net/SKILL.md` as the canonical authorization and evidence router. It owns the
@@ -587,20 +585,9 @@ stale feature worktree select its own stale dispatcher. CI and the GitHub main
 ruleset independently enforce version progression on PRs; private review
 evidence is checked locally by pre-push, as defined in the linked release SOP.
 
-**Push through the remote name, never a bare URL.** The guard resolves the
-remote from its argument (`process.argv[3]`) and then fetches
-`<remote> refs/heads/main:refs/remotes/<remote>/main` to judge the push against
-current main. Handed a bare URL it therefore builds the refspec
-`refs/remotes/https://github.com/…/main` and dies with
-`fatal: invalid refspec` followed by `could not refresh current main` — which
-reads like a network failure and is not. From a linked worktree, push over HTTPS
-with a token without editing repository config by overriding per invocation:
-
-```
-git -C <worktree> \
-  -c remote.origin.url=<https-url> -c remote.origin.pushurl=<https-url> \
-  push origin HEAD:refs/heads/<branch>
-```
+Push through the remote name so the repository guard can refresh current main.
+For per-invocation HTTPS transport without changing shared remote configuration,
+follow [the named-remote transport SOP](references/git-publication-transport.md).
 
 1. **Never commit directly to local `main`.** All work starts on a feature
    branch (`git checkout -b <topic>`), ships via PR, and lands by squash merge.
