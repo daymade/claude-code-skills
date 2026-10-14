@@ -70,6 +70,10 @@ For competitor source-carrier/edition binding, claims, citations and existing-pr
 [citation readback checklist](competitors-analysis/references/analysis_checklist.md#citation-readback-and-counterevidence).
 For user-selected collection destinations, load the
 [collection destination route](competitors-analysis/references/collection_destination.md).
+For running an original application demo, follow that Skill's
+[original-app demo recipe](competitors-analysis/references/original-app-demo.md).
+For transaction recovery tests or financial migration/fixture acceptance, enter
+[qa-expert](qa-expert/SKILL.md); its test-case routes select the detailed recipes.
 
 For choosing or reviewing a library, framework, storage, data format, model,
 build-vs-buy or architecture — including 用哪个 / 选什么框架 / 要不要自建 / A 还是 B /
@@ -335,6 +339,10 @@ the delivered artifact. Detailed retrieval mechanics remain in
 `daymade-claude-code/prior-work-retrieval/SKILL.md`.
 
 ### Local Conversation History Boundary
+
+For reconciliation of an already-resumed native Goal, read
+[native Goal reconciliation](daymade-claude-code/continue-codex-work/references/native-goal-reconciliation.md)
+directly; use `continue-codex-work`'s full entry for external task takeover.
 
 For input appended after an operation's current-thread request, use [read-codex-history's bounded input cursor](daymade-claude-code/read-codex-history/SKILL.md#bounded-current-thread-direct-input-cursor). That owner defines source binding and read failures; the consuming operation owns human authorization. Keep executable commands and source details in the Skill.
 

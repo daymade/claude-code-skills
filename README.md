@@ -872,9 +872,9 @@ Establish world-class QA testing processes with autonomous LLM execution, Google
 - Preparing QA documentation for third-party team handoffs
 
 **Key features:**
-- **One-command initialization**: Complete QA infrastructure with templates, CSVs, and documentation
-- **Autonomous execution**: Master prompt enables LLM to auto-execute all tests, auto-track results, auto-file bugs
-- **Testing standards and quality gates**: Follow [qa-expert](./qa-expert/SKILL.md) for the canonical policy
+- **One-command initialization**: QA directories, templates and example CSVs
+- **Autonomous execution**: Follow the approved project plan with result tracking and bug reports
+- **Testing standards and quality gates**: Follow [qa-expert](./qa-expert/SKILL.md) for execution; the target project owns release policy
 - **Ground Truth Principle**: Prevents doc/CSV sync issues (test docs = authoritative source)
 - **Bug tracking**: P0-P4 classification with detailed repro steps and environment info
 - **Onboarding**: Guide for new QA engineers
@@ -883,11 +883,11 @@ Establish world-class QA testing processes with autonomous LLM execution, Google
 
 **Example usage:**
 ```bash
-# Initialize QA project (creates full infrastructure)
-python3 scripts/init_qa_project.py my-app ./
+# Resolve qa-expert-dir from the loaded Skill; use a fresh project root
+uv run <qa-expert-dir>/scripts/init_qa_project.py my-app <project-root>
 
 # Calculate quality metrics and gates status
-python3 scripts/calculate_metrics.py tests/TEST-EXECUTION-TRACKING.csv
+uv run <qa-expert-dir>/scripts/calculate_metrics.py <project-root>/tests/docs/templates/TEST-EXECUTION-TRACKING.csv
 
 # For autonomous execution, copy master prompt from:
 # references/master_qa_prompt.md → paste to LLM → execute the project's approved test plan
@@ -902,11 +902,11 @@ python3 scripts/calculate_metrics.py tests/TEST-EXECUTION-TRACKING.csv
 - `google_testing_standards.md` - AAA pattern, coverage thresholds, OWASP testing
 - `day1_onboarding.md` - Onboarding timeline for new QA engineers
 - `ground_truth_principle.md` - Preventing doc/CSV sync issues
-- `llm_prompts_library.md` - 30+ ready-to-use QA prompts
+- `llm_prompts_library.md` - Task-specific QA prompts
 
 **Requirements**: Python 3.8+
 
-**💡 Innovation**: The autonomous execution capability (via master prompt) enables LLM to execute entire test suites 100x faster than manual execution, with zero human error in tracking. Perfect for third-party QA handoffs - just provide the master prompt and they can start testing immediately.
+Initialization creates templates. Before execution, replace example rows, supply test specifications and verify the project harness. Follow [the execution SOP](./qa-expert/references/master_qa_prompt.md) for recovery and handoff.
 
 ---
 
@@ -4084,7 +4084,7 @@ Use **capture-screen** to script repeatable app-window screenshots. Combine with
 Use **meeting-minutes-taker** to transform raw meeting transcripts into structured, evidence-based minutes. Combine with **transcript-fixer** to clean up ASR errors before generating minutes. Features multi-pass generation with UNION merge to avoid content loss.
 
 ### For QA Testing & Quality Assurance
-Use **qa-expert** to establish comprehensive QA testing infrastructure with autonomous LLM execution, Google Testing Standards, and OWASP security testing. Perfect for project launches, third-party QA handoffs, and enforcing quality gates (100% execution, ≥80% pass rate, 0 P0 bugs). The master prompt enables 100x faster test execution with zero tracking errors.
+Use [qa-expert](./qa-expert/SKILL.md) for QA setup, test cases, execution tracking, reporting and third-party handoffs.
 
 ### For Prompt Engineering & Requirements Engineering
 Use **prompt-optimizer** to transform vague feature requests into precise EARS specifications with domain theory grounding. Perfect for product requirements documents, AI-assisted coding, and learning prompt engineering best practices. Combine with **skill-creator** to create well-structured skill prompts, or with **ppt-creator** to ensure presentation content requirements are clearly specified.
