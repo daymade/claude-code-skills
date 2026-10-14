@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **github-ops** (v1.14.9): Resolve named access recipients from provenance-bearing account records and verify their GitHub login and numeric ID before a permission change. Preserve existing authorization and readback boundaries. Change type: bounded recipient-identity clarification.
+
 - **skill-creator** (`daymade-skill` v1.70.1): Use the fixed entry's help for its current command list and selected-tool arguments; retain executable examples and invocation boundaries. Change type: documentation deduplication; runtime unchanged.
 
 - **skill-creator** (`daymade-skill` v1.70.0): Add source-bound reading and scalar JSON selection with a final output-byte limit. Expose validation and reading through the fixed command entry; preserve direct invocation and distinguish selected content from complete loading.
