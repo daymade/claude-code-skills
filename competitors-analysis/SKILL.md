@@ -228,6 +228,12 @@ their evidence versions and failure conditions, and the next decision-bearing ch
 | Competitor / edition | Carrier | Local source / member | Git remote + commit or package origin + digest | Retrieved / freshness |
 |---|---|---|---|---|
 
+## Changes Since The Prior Analysis (for Update)
+| Competitor / edition | Change type | Earlier and current evidence | Consequence for the judgment |
+|---|---|---|---|
+Classify actual additions, prior coverage corrections, edition differences and
+unverified changes separately; retrieval date alone is not a feature's introduction date.
+
 ## Positioning
 | Competitor | User segment | Primary promise | Source |
 |---|---|---|---|
