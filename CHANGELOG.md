@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.20.10): Re-bind the intended PRE before normal horizontal wheel input, discard stale coordinates after layout changes, and keep blank reading frames unverified. A missed input target does not establish a lazy-loading cause. Change type: bounded browser-observation clarification.
+
 - **skill-creator** (`daymade-skill` v1.70.1): Use the fixed entry's help for its current command list and selected-tool arguments; retain executable examples and invocation boundaries. Change type: documentation deduplication; runtime unchanged.
 
 - **skill-creator** (`daymade-skill` v1.70.0): Add source-bound reading and scalar JSON selection with a final output-byte limit. Expose validation and reading through the fixed command entry; preserve direct invocation and distinguish selected content from complete loading.
