@@ -169,9 +169,11 @@ If the handle is lost, recover the existing run through the host's supported
 status/artifact query; leave its outcome unknown when that evidence is unavailable.
 Do not repeat a write to replace missing completion evidence.
 
-Before a command expected to produce large output, choose a scratch output path
-outside the shipped Skill. Capture raw stdout/stderr and the exit status, then
-return a small summary and the path. For example, this stdlib recipe runs an
+Before a command that may produce large output, choose a scratch output path
+outside the shipped Skill. Treat unmeasured JSON output as potentially large;
+scope or count flags do not establish a byte bound. Capture raw stdout/stderr and
+the exit status before inspecting its shape or selecting values, then return a
+small summary and the path. For example, this stdlib recipe runs an
 already-authorized command supplied after the script name:
 
 ```python
@@ -187,28 +189,73 @@ print(f"exit={result.returncode} bytes={path.stat().st_size} output={path}")
 sys.exit(result.returncode)
 ```
 
-Inspect that file with bounded line ranges or structured-field queries. Preserve
-stderr and nonzero status when choosing another capture method. If a response is
-already truncated, read the missing evidence from the saved output; if nothing
-was saved, rerun only a safe read-only command or retrieve its existing artifact.
-Do not rerun a write merely to recapture its output. Truncated responses cannot
-establish completeness. File length alone does not justify reorganizing the Skill.
+Inspect the saved file through the bounded reader below. Use `--schema-json` for
+JSON key/type/count metadata, then select exact scalar leaves with repeatable
+`--json-pointer /path` arguments and the returned `--expect-sha256`. Missing keys
+fail; a container requires a schema query or explicit leaf selection. Do not
+construct a summary by excluding guessed field names: an unexpected key can carry
+the entire payload. Preserve present null/empty values as distinct from missing.
+
+Preserve stderr and nonzero status when choosing another capture method. If a
+response is already truncated, read the missing evidence from the saved output;
+if nothing was saved, rerun only a safe read-only command or retrieve its existing
+artifact. Do not rerun a write merely to recapture its output. Truncated responses
+cannot establish completeness. File length alone does not justify reorganizing
+the Skill.
 
 ## Complete file reads
 
-Prefer the host's Skill/Read loader. For a shell fallback, first run:
+Prefer the host's Skill/Read loader. For a shell fallback, use the fixed entry with
+an absolute source path. The original direct `skill_read_plan.py <file>
+--max-chunk-bytes <bytes>` invocation remains supported. First request a plan:
 
 ```bash
-python3 <skill-creator-path>/scripts/skill_read_plan.py <file> --max-chunk-bytes 12000
+python3 <skill-creator-path>/scripts/creator.py skill_read_plan <file> \
+  --max-chunk-bytes 2000 --max-output-bytes 6000
 ```
 
-Choose the byte budget below both the inner tool and outer response limits; 12000
-is a starting choice, not a universal safe limit. The plan reports a content hash
-and contiguous, nonoverlapping line ranges covering the entire file. Read each
-range with a separate literal `sed -n '<start>,<end>p' <file>` or native Read call;
-do not aggregate all ranges into one capped response. Track successfully received
-ranges against that hash. If either layer truncates, reduce the budget and read
-the missing range again. If the file changes, regenerate the plan and load the new
-content. An oversized single line requires a byte-range reader or a larger safe
-budget. The planner never sets a loaded marker. Reuse verified loading in the same
-session instead of repeatedly rereading unchanged text.
+Choose a budget below both the inner tool and outer response limits; these values
+are starting choices. `--max-output-bytes` caps the final UTF-8 JSON envelope,
+including escaping, metadata and its newline. Oversized content fails with exit 2
+before any content is emitted. Error envelopes obey a valid usable budget;
+malformed arguments with only an unusable budget may return a small generic
+diagnostic or no output, never source content. Success exits 0. The reader
+does not constrain several results aggregated into one outer tool response or
+prevent truncation when the caller chooses a smaller token budget. Return one
+reader envelope per outer call, with adequate inner and outer response budgets;
+do not append several pages into one capped payload.
+
+Read a planned range in a separate call, binding it to the returned `sha256`:
+
+```bash
+python3 <skill-creator-path>/scripts/creator.py skill_read_plan <file> \
+  --lines 1:20 --expect-sha256 <sha256> --max-output-bytes 6000
+```
+
+Use one-based inclusive line ranges; use `--chars 0:200` for a zero-based,
+half-open Unicode character range when a single line is too large. `--chars` can
+also accompany exactly one `--json-pointer` to slice a large string leaf. It
+cannot accompany several pointers or a schema query. Read JSON shape first with
+`--schema-json`, optionally `--at-pointer /path`, then request only the needed
+leaves. Character positions count decoded codepoints; output limits count bytes.
+
+If a first plan refuses an oversized plain-text line before returning a hash,
+compute that same file's SHA-256 with a local hashing tool, then pass the digest
+with `--expect-sha256` to the character read. Do not remove the hash requirement.
+
+Plan/schema responses contain only a bounded page. Follow `next_cursor` using
+`--cursor` and the same `--expect-sha256`; `plan_complete`/`schema_complete` are
+true only when one response contains the whole plan/shape. Collect pages against
+that hash. A complete plan is metadata, not source-content loading. Content
+responses identify the requested range or pointers and `source_coverage`;
+`requested_range_complete` describes the selection, not whole-file loading.
+
+Track successfully received content ranges against the source hash. A changed
+hash fails rather than stitching versions together. If either tool layer
+truncates, reduce the budget and recover the missing range. The reader never sets
+a loaded marker: preserve unknown when a host's loading-evidence adapter does not
+recognize its receipt. For such a host's mandatory loading check, retain the
+recognized native Read or separate literal `sed -n '<start>,<end>p' <file>` path
+using the bounded plan; do not bypass the check. Do not promote a JSON selection
+to a complete file read. Reuse verified loading in the same session instead of
+repeatedly rereading unchanged text.

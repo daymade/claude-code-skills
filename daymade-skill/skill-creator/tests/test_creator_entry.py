@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ENTRY = ROOT / "scripts/creator.py"
 OWNERS = (
     "audit_skill_regression", "release_readiness", "source_contract", "materialize", "delivery_identity",
+    "quick_validate", "skill_read_plan",
 )
 
 
@@ -93,6 +94,8 @@ class CreatorEntryTests(unittest.TestCase):
             ("source_contract", "check-path"),
             ("delivery_identity", "prepare", "--output", str(output)),
             ("materialize", "prepare", "--root", str(output)),
+            ("quick_validate", "--audience", "public"),
+            ("skill_read_plan", "--max-chunk-bytes", "100"),
         )
         for owner, *args in cases:
             with self.subTest(owner=owner):
@@ -104,6 +107,9 @@ class CreatorEntryTests(unittest.TestCase):
     def test_missing_unknown_and_blank_inputs_never_start_runtime(self):
         output = self.workspace / "must not be created"
         cases = [(), ("unknown", "--output", str(output)), ("--help", "extra")]
+        cases.extend((name, "--help") for name in (
+            "scripts.quick_validate", "quick_validate.py", "python",
+        ))
         cases.extend((owner,) for owner in OWNERS)
         for blank in ("", " ", "\t\n"):
             cases.extend((
@@ -114,6 +120,8 @@ class CreatorEntryTests(unittest.TestCase):
                 ("source_contract", "check-path", blank),
                 ("release_readiness", "attest", "--repo=" + blank),
                 ("materialize", "prepare", "--root", blank),
+                ("quick_validate", blank),
+                ("skill_read_plan", blank, "--max-chunk-bytes", "100"),
             ))
         for args in cases:
             with self.subTest(args=args):
@@ -122,6 +130,55 @@ class CreatorEntryTests(unittest.TestCase):
                 self.assertIn(b"creator:", result.stderr)
                 self.assertFalse(output.exists())
         self.assertEqual(self.calls(), [])
+
+    def test_quick_validate_matches_direct_valid_invalid_and_parser_results(self):
+        source = self.workspace / "skill with spaces"
+        source.mkdir()
+        (source / "SKILL.md").write_text(
+            "---\nname: entry-example\ndescription: Validate an example skill.\n---\n"
+            "\n# Entry example\n\nValidate an example.\n",
+            encoding="utf-8",
+        )
+        cases = (
+            ((str(source), "--audience", "public"), 0),
+            ((str(source), "--audience=public", "--format", "json"), 0),
+            ((str(source / "missing"), "--audience", "public", "--format", "json"), 1),
+            ((str(source), "--audience"), 2),
+            ((str(source), "--audience", "unknown"), 2),
+            ((str(source), "--unknown"), 2),
+        )
+        for args, code in cases:
+            with self.subTest(args=args):
+                direct = self.direct("quick_validate", *args)
+                self.assertEqual(direct.returncode, code, direct.stderr)
+                actual = self.invoke("quick_validate", *args)
+                self.assert_same_result(actual, direct)
+                if "--format" in args:
+                    self.assertEqual(json.loads(actual.stdout)["valid"], code == 0)
+        self.assertEqual(len(self.calls()), len(cases))
+
+    def test_read_plan_matches_direct_from_other_cwd(self):
+        source = self.workspace / "source with spaces.txt"
+        source.write_text("first line\nsecond line\nthird line\n", encoding="utf-8")
+        digest = hashlib.sha256(source.read_bytes()).hexdigest()
+        cases = (
+            (str(source), "--max-chunk-bytes", "20"),
+            (str(source), "--lines", "1:2", "--expect-sha256", digest),
+            (str(source), "--lines", "1:2"),
+            (str(source), "--unknown"),
+        )
+        for index, args in enumerate(cases):
+            with self.subTest(args=args):
+                direct = self.direct("skill_read_plan", *args)
+                self.assertEqual(direct.returncode, 0 if index < 2 else 2, direct.stderr)
+                actual = self.invoke("skill_read_plan", *args)
+                self.assert_same_result(actual, direct)
+                if index == 1:
+                    report = json.loads(actual.stdout)
+                    self.assertEqual(report["content"], "first line\nsecond line\n")
+                    self.assertEqual(report["sha256"], digest)
+                    self.assertTrue(report["requested_range_complete"])
+        self.assertEqual(len(self.calls()), len(cases))
 
     def test_real_snapshot_preserves_paths_with_spaces(self):
         source = self.workspace / "source with spaces"
@@ -145,11 +202,14 @@ class CreatorEntryTests(unittest.TestCase):
     def test_symlink_resolves_owner_instead_of_using_link_directory(self):
         link = self.caller / "creator-link.py"
         link.symlink_to(ENTRY)
-        self.assert_same_result(
-            self.invoke("source_contract", "--help", entry=link),
-            self.direct("source_contract", "--help"),
-        )
-        self.assertEqual(Path(self.calls()[0]["cwd"]), ROOT)
+        for owner in OWNERS:
+            with self.subTest(owner=owner):
+                self.assert_same_result(
+                    self.invoke(owner, "--help", entry=link),
+                    self.direct(owner, "--help"),
+                )
+        self.assertEqual(len(self.calls()), len(OWNERS))
+        self.assertTrue(all(Path(call["cwd"]) == ROOT for call in self.calls()))
 
     def test_relative_paths_keep_owner_cwd_semantics(self):
         owner = self.workspace / "isolated owner"
@@ -172,19 +232,23 @@ class CreatorEntryTests(unittest.TestCase):
 
     def test_child_exit_23_and_both_streams_are_retained_without_retry(self):
         env = dict(self.env, CREATOR_TEST_CHILD_FAILURE="1")
-        result = self.invoke("materialize", "--help", env=env)
-        self.assertEqual(result.returncode, 23)
-        self.assertEqual(result.stdout, b"child stdout\n")
-        self.assertEqual(result.stderr, b"child stderr\n")
-        self.assertEqual(len(self.calls()), 1)
+        for owner in OWNERS:
+            with self.subTest(owner=owner):
+                result = self.invoke(owner, "--help", env=env)
+                self.assertEqual(result.returncode, 23)
+                self.assertEqual(result.stdout, b"child stdout\n")
+                self.assertEqual(result.stderr, b"child stderr\n")
+        self.assertEqual(len(self.calls()), len(OWNERS))
 
     def test_missing_uv_fails_explicitly_without_fallback(self):
         empty_bin = self.workspace / "empty-bin"
         empty_bin.mkdir()
         env = dict(self.env, PATH=str(empty_bin))
-        result = self.invoke("materialize", "--help", env=env)
-        self.assertEqual(result.returncode, 127)
-        self.assertIn(b"cannot start uv", result.stderr)
+        for owner in OWNERS:
+            with self.subTest(owner=owner):
+                result = self.invoke(owner, "--help", env=env)
+                self.assertEqual(result.returncode, 127)
+                self.assertIn(b"cannot start uv", result.stderr)
         self.assertEqual(self.calls(), [])
 
     def test_missing_owner_module_fails_before_runtime(self):
@@ -192,9 +256,11 @@ class CreatorEntryTests(unittest.TestCase):
         (owner / "scripts").mkdir(parents=True)
         copied = owner / "scripts/creator.py"
         shutil.copyfile(ENTRY, copied)
-        result = self.invoke("materialize", "--help", entry=copied)
-        self.assertEqual(result.returncode, 2)
-        self.assertIn(b"owner module is missing", result.stderr)
+        for name in OWNERS:
+            with self.subTest(owner=name):
+                result = self.invoke(name, "--help", entry=copied)
+                self.assertEqual(result.returncode, 2)
+                self.assertIn(b"owner module is missing", result.stderr)
         self.assertEqual(self.calls(), [])
 
 

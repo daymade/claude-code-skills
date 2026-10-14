@@ -189,8 +189,11 @@ both clear.
 Validate each entry edit immediately:
 
 ```bash
-uv run --frozen python -m scripts.quick_validate <skill-dir>
+python3 "<skill-creator-dir>/scripts/creator.py" quick_validate "<absolute-skill-dir>"
 ```
+
+Keep the direct invocation supported from the locked skill-creator project:
+`uv run --frozen python -m scripts.quick_validate <skill-dir>`.
 
 Write descriptions as YAML block scalars. Keep distinct trigger jobs in the
 description; body-only words cannot restore discovery. Bundle helpers/components

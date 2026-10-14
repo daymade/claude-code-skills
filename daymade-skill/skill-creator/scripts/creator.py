@@ -14,6 +14,8 @@ COMMANDS = {
     "source_contract": "scripts.source_contract",
     "materialize": "scripts.materialize",
     "delivery_identity": "scripts.delivery_identity",
+    "quick_validate": "scripts.quick_validate",
+    "skill_read_plan": "scripts.skill_read_plan",
 }
 
 
