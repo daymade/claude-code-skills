@@ -71,7 +71,8 @@ Determine which scenario applies:
 - **Browser returns HTTP 503, but `curl` and SSH both work** → System proxy bypass conflict (Step 2C)
 - **`local.<domain>` fails in browser/default `curl`, but direct/no-proxy request works** → Local vanity domain proxy interception (Step 2C-1)
 - **Tailscale ping works, SSH works, but curl/HTTP times out** → HTTP proxy env var conflict (Step 2A)
-- **Tailscale ping works, SSH/TCP times out** → Route conflict (Step 2B)
+- **Tailscale ping works, SSH/TCP times out** → Check route ownership (Step 2B); a matching symptom alone does not prove a route conflict.
+- **Tailscale IPv4 SSH times out, or an alternate peer address triggers host-key verification** → Read [same-peer IPv4/IPv6 SSH recovery](references/tailscale_address_family_ssh.md) before declaring the host offline or changing trust/network state.
 - **Remote dev server auth redirects to `localhost` → browser can't follow** → SSH tunnel needed (Step 2D)
 - **`make status` / scripts curl to localhost fail with proxy** → localhost proxy interception (Step 2E)
 - **`git push/pull` fails with `FATAL: failed to begin relaying via HTTP`** → SSH double tunnel (Step 2F)
@@ -1144,8 +1145,10 @@ ifconfig | grep -A2 'inet 100\.'
 nc -z -w 5 <tailscale-ip> 22
 
 # 3. Test SSH
-ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no <user>@<tailscale-ip> 'echo SSH_OK && hostname && whoami'
+ssh -T -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes <approved-ssh-alias> 'echo SSH_OK && hostname && whoami'
 ```
+
+Resolve the approved alias against the selected live peer. When changing its address family, preserve its verified host-key identity using the [same-peer SSH recovery](references/tailscale_address_family_ssh.md) procedure; do not disable host-key checking. An unknown or changed key requires an independent identity check before continuing.
 
 All three must pass. If step 1 fails, revisit Step 3. If step 1 shows wrong utun (e.g., Shadowrocket's utun with MTU 4064 instead of Tailscale's with MTU 1280), that is also a route conflict. If step 2 passes but step 3 fails with `kex_exchange_identification`, revisit Step 5A (Tailscale SSH proxy intercept). If step 2 fails, check WSL sshd or firewall. If step 3 fails with other errors, revisit Steps 4-5.
 
