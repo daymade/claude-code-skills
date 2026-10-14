@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **github-ops** (v1.14.11): Include author and committer identity metadata in public publication checks for original and merged commits. Capture values privately, distinguish new exposure from known public metadata, and retain authorization boundaries for identity and history changes. Change type: bounded publication-verification clarification.
 - **github-review-pr** (v1.4.5): Select repair isolation from verified source ownership and hook/exposure requirements, preserving read-only clones, registered worktrees, approved leased clones and credential-isolated untrusted tests. Change type: bounded carrier-selection correction.
 - **github-ops** (v1.14.10): Check publication policy before pushing and use the optional checked push helper or a native full-SHA push with independent remote equality. Preserve helper-absent operation and brace refspec variables for Zsh. Change type: bounded publication-recipe correction.
 
