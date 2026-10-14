@@ -68,6 +68,8 @@ For local/remote ASR selection, speed comparison and speech-content acceptance, 
 For competitor source-carrier/edition binding, claims, citations and existing-product learning, enter
 [competitors-analysis](competitors-analysis/SKILL.md) and its
 [citation readback checklist](competitors-analysis/references/analysis_checklist.md#citation-readback-and-counterevidence).
+For changes since a prior analysis, load its
+[Update classification](competitors-analysis/references/analysis_checklist.md#a-newly-discovered-path-is-not-necessarily-a-new-feature).
 For user-selected collection destinations, load the
 [collection destination route](competitors-analysis/references/collection_destination.md).
 
@@ -89,6 +91,8 @@ For evidence-based improvement of an existing application, enter
 [app-evolver](app-evolver/SKILL.md). For released-artifact or runtime evidence,
 load its [Skill composition route](app-evolver/references/skill-composition.md);
 keep specialist selection and handoff boundaries in that owner.
+When a repair batch ends or the user questions its direction, load its
+[increment-selection contract](app-evolver/references/evidence-and-fit.md#make-the-disposition-operational).
 
 For permission-sensitive fixtures, use Skill Creator's
 [execution-context verification recipe](daymade-skill/skill-creator/references/stateful-script-verification.md#execution-identity-and-permission-fixtures).
@@ -185,6 +189,8 @@ Python hooks.
 For rendered UI freshness, delayed editor/batch responses or deployment acceptance, enter
 [frontend-visual-qa](frontend-visual-qa/SKILL.md). Keep its manifest, launcher,
 result semantics and rendered-journey procedure in that owner.
+For build reuse across source refs, load its
+[delivery provenance procedure](frontend-visual-qa/references/delivery-verification.md#reuse-a-build-from-another-source-ref).
 For nested zoomable workspaces, use its
 [journey and state matrix](frontend-visual-qa/references/journey-and-page-contracts.md#journey-and-state-matrix).
 For embedded-reader zoom, return, focus or filtered-selection changes, use its

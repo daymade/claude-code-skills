@@ -97,7 +97,7 @@ Check claims in context, not with a banned-word pass/fail rule:
 For multi-competitor reports:
 
 - [ ] Source register lists carrier, edition and retrieval date, with Git local path/remote/commit or package origin/member/digest; unknown version or origin stays unknown.
-- [ ] For Update, classify each material change against the bound earlier and current evidence: actual addition, prior coverage correction, edition difference or unverified change. Do not call a feature new merely because this analysis first found it.
+- [ ] For Update, apply the [change-classification procedure](#a-newly-discovered-path-is-not-necessarily-a-new-feature).
 - [ ] Positioning table distinguishes user segment from technical implementation.
 - [ ] Strengths are tied to user-visible behavior or code evidence.
 - [ ] Weaknesses/gaps cite evidence or are labeled as `待验证`.
