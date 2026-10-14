@@ -217,8 +217,9 @@ python3 <skill-creator-path>/scripts/creator.py skill_read_plan <file> \
 Choose a budget below both the inner tool and outer response limits; these values
 are starting choices. `--max-output-bytes` caps the final UTF-8 JSON envelope,
 including escaping, metadata and its newline. Oversized content fails with exit 2
-before any content is emitted. Smaller error envelopes also obey the cap; an
-unusable tiny cap can return exit 2 with no output. Success exits 0. The reader
+before any content is emitted. Error envelopes obey a valid usable budget;
+malformed arguments with only an unusable budget may return a small generic
+diagnostic or no output, never source content. Success exits 0. The reader
 does not constrain several results aggregated into one outer tool response or
 prevent truncation when the caller chooses a smaller token budget. Return one
 reader envelope per outer call, with adequate inner and outer response budgets;
@@ -237,6 +238,10 @@ also accompany exactly one `--json-pointer` to slice a large string leaf. It
 cannot accompany several pointers or a schema query. Read JSON shape first with
 `--schema-json`, optionally `--at-pointer /path`, then request only the needed
 leaves. Character positions count decoded codepoints; output limits count bytes.
+
+If a first plan refuses an oversized plain-text line before returning a hash,
+compute that same file's SHA-256 with a local hashing tool, then pass the digest
+with `--expect-sha256` to the character read. Do not remove the hash requirement.
 
 Plan/schema responses contain only a bounded page. Follow `next_cursor` using
 `--cursor` and the same `--expect-sha256`; `plan_complete`/`schema_complete` are
