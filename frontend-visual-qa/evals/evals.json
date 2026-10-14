@@ -374,6 +374,24 @@
         "Checks reversal and object-switch late completion cannot reopen or steal focus, alongside normal and repeated-entry healthy controls",
         "Reports missing fixture/runtime evidence as unverified and keeps gesture emulation separate from hardware identity or physical feel"
       ]
+    },
+    {
+      "id": 26,
+      "name": "specific-task-link-recipient-identity",
+      "prompt": "Hand off a link to the current Mobile sample build task on worker-remote, job-current. Use evals/files/route-state-fixture.html in its synthetic task surface (?surface=tasks); its rendered inventory supplies the opaque task keys and canonical links. First open the task-surface homepage, then ?surface=tasks&machine=worker-remote&exited=1 without a task key, then the canonical current-task link from the inventory. Inspect the selected detail and native progress after each navigation and after refreshing the final link. Titles repeat and every page loads successfully. Audit only; do not start a worker, change production state, fabricate a key, or accept HTTP success/title matching as delivery proof. Give the recipient link and an evidence-backed verdict for each destination, keeping this check limited to task-link delivery.",
+      "expected_output": "A bounded rendered route audit that rejects both the homepage's local session and the correct-machine same-title prior job, then hands off the fixture-issued current-task URL only after the selected machine/node/job and native progress match the authoritative record and survive refresh. It preserves task, machine, exited and fragment state, distinguishes an opaque fixture key from a real credential, and makes no live worker or deployment claim.",
+      "expectations": [
+        "Uses the rendered fixture inventory to obtain the opaque canonical current-task link instead of inventing or decoding the task key",
+        "Rejects the homepage despite successful rendering because selected machine operator-local and job-local do not match worker-remote/job-current",
+        "Rejects the machine-scoped destination despite its matching title and worker-remote machine because selected job-prior is not job-current",
+        "Opens the canonical link and refreshes it, comparing the rendered selected machine, node, job and native-progress detail with the authoritative current record on both observations",
+        "Preserves task, machine and necessary exited query parameters plus the progress fragment in the handed-off link; a link that omits them cannot receive a pass",
+        "Reports actual observed destinations and evidence, marks unavailable browser observations unverified, and keeps source/deployment freshness not applicable",
+        "Does not widen this link check into an unrelated complete UI audit or operate a live worker"
+      ],
+      "files": [
+        "evals/files/route-state-fixture.html"
+      ]
     }
   ]
 }

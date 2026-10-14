@@ -4,7 +4,9 @@ description: >-
   Audits already-rendered UI and Markdown/Obsidian image layout — web app, deck/slide, dashboard, design-system, or Electron/native app
   — via real-browser/native-app journeys and a Playwright sweep. Use after UI implementation to find
   typography, overflow, responsive, routing, data-viz, browser-output, or native-shell defects, or
-  to compare a render against a reference. Not for greenfield UI design (use ui-designer) or
+  to compare a render against a reference. Also use before handing off a link that must open a
+  specific task/object in an existing UI; ordinary source citations alone do not trigger an audit.
+  Not for greenfield UI design (use ui-designer) or
   QA-program setup (use qa-expert).
 ---
 
@@ -32,6 +34,10 @@ profile that covers the request:
   browser tool/game, map/GIS, or review tool;
 - **reference parity** — comparison with a named screenshot, product, or tier;
 - **data visualization** — chart hierarchy, tokens, semantics, and accessibility.
+
+For a specific task/object link handoff, select **state and journey** for that
+destination, including authoritative machine and run/job identity when titles
+repeat. Keep the audit bounded to the promised destination.
 
 For a website/document converted to Markdown, or an illustrated transcript/note
 consumed in Obsidian or another named reader, load
