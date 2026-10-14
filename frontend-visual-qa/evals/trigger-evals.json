@@ -94,5 +94,13 @@
   {
     "query": "源码和 5173 开发页都修好了，但我给你的 https://localhost:9443/login 还是旧样式。请查清这个精确 UAT 地址实际跑的版本，并在原地址重新做视觉验证。",
     "should_trigger": true
+  },
+  {
+    "query": "把 worker-beta 上刚启动的 Mobile sample build 任务链接给我，我要点开直接看这次运行的原生进展。工作台主页会默认打开本机会话。",
+    "should_trigger": true
+  },
+  {
+    "query": "解释这段配置，并附上官方文档原文链接作为引用；不用打开或验收任何产品界面。",
+    "should_trigger": false
   }
 ]

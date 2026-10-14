@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.21.0): Route specific task/object link handoffs through the existing state-and-journey audit, including repeated-title machine/run identity. Add synthetic wrong-destination and exact-link replays; keep ordinary source citations outside this trigger. Change type: bounded trigger extension.
+
 - **github-ops** (v1.14.11): Include author and committer identity metadata in public publication checks for original and merged commits. Capture values privately, distinguish new exposure from known public metadata, and retain authorization boundaries for identity and history changes. Change type: bounded publication-verification clarification.
 - **qa-expert** (v1.1.2): Align initialization, generated documentation and execution guidance with actual template outputs and metrics behavior. Export the canonical master SOP, remove unsupported execution guarantees and hand-maintained aggregate tables, and preserve manual testing, reporting and checkpoint recovery.
 - **local-codex** (`daymade-codex` v1.4.2): Clarify authorized cache reuse and remote device-code recovery, verify the target account through its ordinary CLI entry, and distinguish new-process access from existing-session adoption.

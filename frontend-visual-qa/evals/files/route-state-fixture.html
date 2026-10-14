@@ -21,6 +21,14 @@
     <h1>Overview</h1>
     <p id="content">Overview content</p>
   </main>
+  <section id="task-surface" hidden style="padding:32px">
+    <h1>Task link delivery fixture</h1>
+    <p>All records, opaque keys and progress below are synthetic.</p>
+    <h2>Authoritative task inventory</h2>
+    <ul id="task-inventory"></ul>
+    <h2>Selected task</h2>
+    <article id="task-detail"></article>
+  </section>
   <script>
     const title = document.querySelector("h1");
     const content = document.querySelector("#content");
@@ -34,6 +42,54 @@
         // Deliberate defect: the visible workspace changes without URL/history state.
       });
     });
+
+    // Optional task surface; keep the original workspace route-defect case intact.
+    const params = new URLSearchParams(location.search);
+    if (params.get("surface") === "tasks") {
+      document.querySelector("nav").style.display = "none";
+      document.querySelector("main").hidden = true;
+      document.querySelector("#task-surface").hidden = false;
+      const records = [
+        { key: "fixture-local-opaque", title: "Mobile sample build", machine: "operator-local", node: "node-local", job: "job-local", state: "running", source: "local-native", progress: "Local session awaiting a prompt." },
+        { key: "fixture-prior-opaque", title: "Mobile sample build", machine: "worker-remote", node: "node-remote", job: "job-prior", state: "exited", source: "native_runtime", progress: "Prior run stopped before the build." },
+        { key: "fixture-current-opaque", title: "Mobile sample build", machine: "worker-remote", node: "node-remote", job: "job-current", state: "exited", source: "native_runtime", progress: "Current run completed the synthetic build step." }
+      ];
+      function canonicalLink(record) {
+        const url = new URL(location.href);
+        url.search = new URLSearchParams({ surface: "tasks", task: record.key, machine: record.machine, ...(record.state === "exited" ? { exited: "1" } : {}) });
+        url.hash = "progress";
+        return url.href;
+      }
+      for (const record of records) {
+        const item = document.createElement("li");
+        item.textContent = `${record.title} | machine=${record.machine} | node=${record.node} | job=${record.job} | state=${record.state} | source=${record.source} `;
+        const link = document.createElement("a");
+        link.href = canonicalLink(record);
+        link.textContent = `Open ${record.job}`;
+        item.append(link);
+        document.querySelector("#task-inventory").append(item);
+      }
+      const candidates = records.filter((record) =>
+        (!params.has("machine") || record.machine === params.get("machine")) &&
+        (params.get("exited") === "1" || record.state !== "exited"));
+      const selected = params.has("task")
+        ? candidates.find((record) => record.key === params.get("task") && record.machine === params.get("machine"))
+        : candidates[0];
+      const detail = document.querySelector("#task-detail");
+      if (selected) {
+        const heading = document.createElement("h3");
+        heading.textContent = selected.title;
+        const identity = document.createElement("p");
+        identity.id = "selected-identity";
+        identity.textContent = `machine=${selected.machine} | node=${selected.node} | job=${selected.job} | source=${selected.source}`;
+        const progress = document.createElement("p");
+        progress.id = "progress";
+        progress.textContent = selected.progress;
+        detail.append(heading, identity, progress);
+      } else {
+        detail.textContent = "Requested task is unavailable in this machine/state scope.";
+      }
+    }
   </script>
 </body>
 </html>
