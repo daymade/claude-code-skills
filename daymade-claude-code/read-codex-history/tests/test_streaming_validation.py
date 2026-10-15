@@ -208,6 +208,38 @@ class StreamingValidationTests(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(reader.LineageResolutionError):
                 self.validate(path, CHILD)
 
+    def test_incomplete_captured_copied_context_stays_invalid_after_source_append(self):
+        rows = self.copied_rows()
+        for index, row in enumerate(rows):
+            row["ordinal"] = index
+        prefix = "".join(json.dumps(row) + "\n" for row in rows[:3]).encode()
+        suffix = "".join(json.dumps(row) + "\n" for row in rows[3:]).encode()
+        path = self.write([], CHILD)
+        for appended in [False, True]:
+            path.write_bytes(prefix + (suffix if appended else b""))
+            with self.subTest(appended=appended), self.assertRaisesRegex(
+                reader.LineageResolutionError, "copied context is incomplete",
+            ):
+                reader.validate_codex_rollout(path, CHILD, end_byte_offset=len(prefix))
+
+    def test_complete_captured_copied_context_ignores_later_valid_or_corrupt_tail(self):
+        rows = self.copied_rows()
+        for index, row in enumerate(rows):
+            row["ordinal"] = index
+        prefix = "".join(json.dumps(row) + "\n" for row in rows[:4]).encode()
+        valid_suffix = (json.dumps(rows[4]) + "\n").encode()
+        path = self.write([], CHILD)
+        for suffix in [b"", valid_suffix, b"{malformed}\n", b"{"]:
+            path.write_bytes(prefix + suffix)
+            with self.subTest(suffix=suffix):
+                data = reader.validate_codex_rollout(path, CHILD, end_byte_offset=len(prefix))
+                self.assertEqual(data["total_lines"], 4)
+                self.assertEqual(data["copied_context_record_count"], 3)
+                self.assertEqual(data["end_ordinal_exclusive"], 4)
+                self.assertEqual(data["parsed_bytes"], len(prefix))
+                self.assertEqual(data["session_meta_ids"], [CHILD])
+                self.assert_summary(data)
+
     def test_legacy_metadata_accounting_does_not_accumulate_repeated_ids(self):
         path = self.write([meta("legacy-root"), *[meta("legacy-root") for _ in range(1000)]])
         data = self.validate(path, "legacy-root")

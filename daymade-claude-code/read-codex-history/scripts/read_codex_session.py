@@ -704,6 +704,9 @@ def _summarize_codex_rollout(
             data["own_metadata_record_count"] += 1
     if not data["total_lines"]:
         raise LineageResolutionError("rollout contains no session_meta records")
+    copied = data["copied_model_context"]
+    if copied and data["end_ordinal_exclusive"] < copied["start_ordinal"]:
+        raise LineageResolutionError("captured copied context is incomplete before own-history boundary")
     # Legacy rollouts also carry history_base; validate it without following an
     # external file or retaining its conversation.
     _history_base(data["meta"], str(data["meta"].get("id")))
