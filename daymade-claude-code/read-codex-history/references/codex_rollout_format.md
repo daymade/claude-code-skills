@@ -51,11 +51,11 @@ Every line is one JSON object with a top-level `timestamp`, `type`, and (usually
 
 `response_item/message` `content` is a list of `{type, text}` where `type` is **`input_text`** for user/developer content and **`output_text`** for assistant content (user turns may also carry `input_image` items, with or without text). The shared `extract_text` decodes `text`/`input_text` but **not** `output_text`, so the parser joins `output_text` items locally (changing the shared helper would alter every sibling skill that bundles `_core`).
 
-**Version drift, measured on ~2,600 real rollouts (0.142.2–0.149.0):** the `event_msg/user_message` / `agent_message` mirror stream is the norm through 0.146.x and in the 0.147/0.148 alphas; stable 0.147.0 drops it for most sessions (measured 30/1050 residual files at the time), with rare residuals into 0.149.0. The two streams do NOT always mirror each other, and the divergence runs in both directions and per role: in 0.142.3 / 0.143.0 / 0.144.0 the event stream also carries per-step **commentary** narration that `response_item/message` never has (one measured file: 494 event messages vs 29 message records), while mid-turn queued user inputs appear only in message records (whole-stream selection was measured to lose the final user request on real dual-stream files). The parser therefore collects both streams and lets the **richer stream win per role**, with ties going to the event stream. Each chosen turn keeps its physical record ordinal; selected and fork briefings interleave the chosen user and assistant streams by ordinal, rather than placing requests and responses in separate buckets that erase which state preceded a correction. Assistant `message` records carry a `phase` field: a session whose tail is a `commentary` message was cut off mid-turn and is classified **in progress**, not completed. `task_complete.last_agent_message` is inserted at its own record ordinal only when the selected assistant stream lacks that text anywhere; a completed old turn is never moved behind later commentary. Two more user-turn shapes: an invoked skill arrives as a user message whose whole body is the skill bundle (`<skill>…</name>…`, measured 2.7–148 KB), rendered as a one-line `[skill invoked: <name> — injected body omitted]` marker; and an image-only message (an `input_image` item with no text) renders as `[image-only user message]` instead of vanishing from the briefing.
+**Version drift:** the `event_msg/user_message` / `agent_message` mirror stream is the norm through 0.146.x and in the 0.147/0.148 alphas; stable 0.147.0 drops it for most sessions (measured 30/1050 residual files at the time), with rare residuals into 0.149.0. The two streams do NOT always mirror each other, and the divergence runs in both directions and per role: in 0.142.3 / 0.143.0 / 0.144.0 the event stream also carries per-step **commentary** narration that `response_item/message` never has (one measured file: 494 event messages vs 29 message records), while mid-turn queued user inputs appear only in message records (whole-stream selection was measured to lose the final user request on real dual-stream files). The parser therefore collects both streams and lets the **richer stream win per role**, with ties going to the event stream. Each chosen turn keeps its physical record ordinal; selected and fork briefings interleave the chosen user and assistant streams by ordinal, rather than placing requests and responses in separate buckets that erase which state preceded a correction. Assistant `message` records carry a `phase` field: a session whose tail is a `commentary` message was cut off mid-turn and is classified **in progress**, not completed. `task_complete.last_agent_message` is inserted at its own record ordinal only when the selected assistant stream lacks that text anywhere; a completed old turn is never moved behind later commentary. Additional user-turn shapes: an invoked skill arrives as a user message whose whole body is the skill bundle (`<skill>…</name>…`, measured 2.7–148 KB), rendered as a one-line `[skill invoked: <name> — injected body omitted]` marker; and an image-only message (an `input_image` item with no text) renders as `[image-only user message]` instead of vanishing from the briefing.
 
 ## Compaction format
 
-When Codex compacts, it emits a `compacted` record whose `replacement_history` is the list of messages that **replace the live model window** — not a single distilled summary like Claude Code. In the observed append-only rollouts, raw records written before that boundary remain earlier in the JSONL; the extractor continues parsing them for the chronological timeline and ingests every compacted record. The briefing renders the latest compacted continuation state for the selected session and the latest one per ancestor, because each later state supersedes the earlier compacted window. That history also re-injects the system preamble. In one real record the 13 items were:
+When Codex compacts, it emits a `compacted` record whose `replacement_history` is the list of messages that **replace the live model window** — not a single distilled summary like Claude Code. In the observed append-only rollouts, raw records written before that boundary remain earlier in the JSONL; the extractor continues parsing them for the chronological timeline and ingests every compacted record. The briefing renders the latest compacted continuation state for the selected session and the latest one per ancestor, because each later state supersedes the earlier compacted window. That history also re-injects the system preamble. A measured record contained:
 
 - items with `role: "user"` — the surviving user requests (high signal)
 - items with `role: "developer"` — the permissions block, the agent-role message, `<multi_agent_mode>` (system noise)
@@ -97,9 +97,147 @@ Older Codex CLI (measured: `history_mode: "legacy"`, cli_version `0.149.0`) had 
 
 — i.e. the file's *second* record is itself a `session_meta` whose `payload.id` equals the first record's `forked_from_id`. A rollout with exactly two `session_meta` identities is therefore not always a real identity conflict; `validate_selected_rollout_identity`'s "fused rollout" error is deliberately narrow, so `recover_legacy_embedded_fork` runs first and only treats the shape above as an embedded snapshot, never anything looser.
 
-The embedded copy is a re-serialization, not a byte-identical copy: the wrapper `timestamp` is rewritten to the fork moment, and some payload shapes gain an extra key. Measured on a real 17,312-record embedded snapshot (session `01a037ab-baa7-74a3-9832-41086a99fd4e`, forked from `01a02fe8-8477-7632-bb47-9cadf3eae086`, 66.3 MB / 19,161 records total): every `response_item/message` payload gained an `id` (namespaced under the CHILD's own session id, e.g. `msg_01a037ab-...`, not the parent's), and every `response_item/reasoning` payload gained a null `content`; every other payload was untouched. Comparing record-for-record after dropping the `id` key and every null-valued key from both sides matched all 17,312 records against the real parent file with zero exceptions — the parent had 7 further records of its own after the fork point (17,319 total), correctly excluded.
+The embedded copy is a re-serialization, not a byte-identical copy: the wrapper `timestamp` is rewritten to the fork moment, and some payload shapes gain an extra key. Measured on a real 17,312-record embedded snapshot (66.3 MB / 19,161 records total): every `response_item/message` payload gained an `id` namespaced under the CHILD's own session id, and every `response_item/reasoning` payload gained a null `content`; every other payload was untouched. Comparing record-for-record after dropping the `id` key and every null-valued key from both sides matched each copied record against the real parent file; the parent's 7 further records after the fork point were correctly excluded.
 
-Because there is no declared byte offset to trust, the extractor **derives and verifies** one: it locates the parent rollout by the declared `forked_from_id`, then streams the child's records (from index 1 onward) against the parent's own records (from index 0), stopping at the first mismatch under the normalization above. The resulting byte offset is read directly off the parent's real bytes via `tell()`, so — unlike an externally declared `history_base.end_byte_offset` — it always lands on a true JSONL line boundary by construction. Fails closed, distinctly, when: the declared parent cannot be located; fewer than 2 leading records match (not strong enough evidence to build a lineage edge on); or a third `session_meta` identity turns up in the child's own tail beyond the embedded range (the pre-existing fused-rollout error, unchanged). On success the briefing's "Inherited Session Lineage" section reports the parent's path, the derived record/byte boundary, how many records were inherited, and how many are the child's own — and the Selected Session Timeline contains only the child's own records, never the embedded copy. Scope: only the *selected* session's own embedded snapshot is recovered this way; an ancestor further up a chain that is itself a legacy-embedded fork keeps the pre-existing soft warning below, unrecovered.
+Because there is no declared byte offset to trust, the extractor **derives and verifies** one: it locates the parent rollout by the declared `forked_from_id`, then streams the child's records (from index 1 onward) against the parent's own records (from index 0), stopping at the first mismatch under the normalization above. The resulting byte offset is read directly off the parent's real bytes via `tell()`, so — unlike an externally declared `history_base.end_byte_offset` — it always lands on a true JSONL line boundary by construction. Fails closed, distinctly, when: the declared parent cannot be located; fewer than 2 leading records match (not strong enough evidence to build a lineage edge on); or a third `session_meta` identity turns up in the child's own tail beyond the embedded range (the pre-existing fused-rollout error, unchanged). On success the briefing's "Inherited Session Lineage" section reports the parent's path, the derived record/byte boundary, how many records were inherited, and how many are the child's own — and the Selected Session Timeline contains only the child's own records, never the embedded copy. Scope: recover the *selected* session's embedded snapshot only; do not assume recursive legacy recovery for an ancestor. Retain the native ancestry warnings or failures.
+
+## Captured rollout validation for exporters
+
+Use this callable from [the native reader](../scripts/read_codex_session.py):
+
+```python
+validate_codex_rollout(path, expected_session_id, *, end_byte_offset, resolve_session=None)
+```
+
+Import the script with its bundled `_core` available, using Python 3.10 or newer.
+Check that the imported module exposes the callable before exporting. If the
+module, bundled dependency or callable is missing, stop and restore/update the
+owning Skill installation; do not substitute an exporter-local parser.
+
+Select the source by verified native identity and capture a concrete positive
+integer byte cutoff once, before validation. Pass that cutoff even for a whole-file
+capture; it must lie within the physical file and end after a complete JSONL line.
+The ordinary `parse_codex_rollout` path accumulates conversation content and keeps
+its default total-prefix guard. This callable uses the explicit cutoff as its
+streaming budget while retaining the native record-size, JSONL, ordinal and
+identity checks. Read current bounds and the returned summary definition in the
+reader's `MAX_ROLLOUT_BYTES`, `MAX_RECORD_BYTES` and `_summarize_codex_rollout`;
+do not change global constants to make an export pass.
+
+Consume the returned `meta` and `session_meta_ids`; never construct a replacement
+metadata object or an identity list from the requested ID. Imported metadata is
+excluded from own identity accounting only through the native copied-context or
+verified legacy rules. The summary retains metadata and coordinates rather than
+conversation/tool bodies, and validation alone does not resolve all ancestors.
+
+For paginated copied context, use `copied_model_context`: the captured prefix must
+reach `subagent_history_start_ordinal`, even if the source grows later. An empty
+own-history tail is valid once the copied prefix is complete. Later bytes outside
+the captured cutoff, including malformed bytes, do not become part of that capture.
+This proves the inherited model context stored locally, not an external parent's
+original byte prefix. Keep the capture self-contained; do not invent an external
+history-base edge from its parent declaration.
+
+For modern ancestry, pass the native callback:
+`resolve_inherited_lineage(data, resolver, read_rollout=validate_codex_rollout)`.
+The resolver accepts the declared physical rollout ID and returns its exact path
+or `None`. For a selected legacy embedded fork, give that resolver to the validator
+as `resolve_session`; pass its returned `legacy_parent_edge` to
+`extend_legacy_lineage(edge, resolver, read_rollout=validate_codex_rollout)`.
+Let the validator perform the [legacy comparison](#legacy-embedded-fork-snapshot-no-history_base).
+Do not pass this callable to `recover_legacy_embedded_fork`'s internal parser-shaped
+callback, which also accepts a skipped record range. Without `read_rollout`, the
+ancestry helpers retain their ordinary accumulating-parser behavior.
+
+Treat `LineageResolutionError`, source I/O errors, or ancestry warnings as an
+unverified boundary. Restore the required parent/source or take a new complete,
+explicitly identified capture before retrying; do not skip a bad record, widen an
+old cutoff silently, or report warning-bearing ancestry as complete. Keep bytes
+inside the cutoff stable through validation and copying: this API supplies no
+mutation lock, writer lease, execution ownership or session resume.
+
+### Synthetic callable example
+
+Run from the Skill directory. The example creates temporary synthetic rollouts,
+walks modern and legacy ancestry, and checks copied-context capture boundaries
+without opening native history:
+
+```bash
+python3 - <<'PY'
+import importlib.util
+import json
+import tempfile
+from pathlib import Path
+
+script = Path("scripts/read_codex_session.py").resolve()
+spec = importlib.util.spec_from_file_location("native_reader", script)
+reader = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(reader)
+assert callable(getattr(reader, "validate_codex_rollout", None))
+root_id = "11111111-1111-4111-8111-111111111111"
+child_id = "22222222-2222-4222-8222-222222222222"
+
+def meta(identity, **fields):
+    return {"type": "session_meta", "payload": {"id": identity, **fields}}
+
+def encode(rows, start=0):
+    return b"".join((json.dumps({**row, "ordinal": start + i}) + "\n").encode()
+                    for i, row in enumerate(rows))
+
+with tempfile.TemporaryDirectory() as temporary:
+    directory = Path(temporary)
+    parent = directory / f"rollout-2026-01-01T00-00-00-{root_id}.jsonl"
+    parent_rows = [meta(root_id, history_mode="paginated")]
+    parent.write_bytes(encode(parent_rows))
+    parent_cutoff = parent.stat().st_size
+    leaf = directory / f"rollout-2026-01-01T00-00-00-{root_id}_{child_id}.jsonl"
+    leaf.write_bytes(encode([meta(root_id, history_mode="paginated", history_base={
+        "thread_id": root_id, "end_byte_offset": parent_cutoff,
+        "end_ordinal_exclusive": len(parent_rows),
+    })], start=len(parent_rows)))
+    resolver = lambda identity: parent if identity == root_id else None
+    data = reader.validate_codex_rollout(leaf, root_id, end_byte_offset=leaf.stat().st_size)
+    lineage, warnings = reader.resolve_inherited_lineage(
+        data, resolver, read_rollout=reader.validate_codex_rollout,
+    )
+    assert not warnings and lineage[0]["end_byte_offset"] == parent_cutoff
+
+    legacy_parent_rows = [meta(root_id), {
+        "type": "event_msg", "payload": {"type": "user_message", "message": "synthetic"},
+    }]
+    parent.write_bytes(encode(legacy_parent_rows))
+    legacy = directory / f"rollout-2026-01-01T00-00-00-{child_id}.jsonl"
+    legacy.write_bytes(encode([
+        meta(child_id, history_mode="legacy", forked_from_id=root_id), *legacy_parent_rows,
+    ]))
+    recovered = reader.validate_codex_rollout(
+        legacy, child_id, end_byte_offset=legacy.stat().st_size, resolve_session=resolver,
+    )
+    lineage, warnings = reader.extend_legacy_lineage(
+        recovered["legacy_parent_edge"], resolver, read_rollout=reader.validate_codex_rollout,
+    )
+    assert not warnings and lineage[-1]["mechanism"] == "legacy_embedded"
+
+    copied = directory / f"rollout-2026-01-01T00-00-00-{child_id}.jsonl"
+    inherited_rows = [meta(root_id, session_id=root_id)]
+    rows = [meta(child_id, session_id=root_id, history_mode="paginated",
+                 thread_source="subagent", parent_thread_id=root_id,
+                 subagent_history_start_ordinal=1 + len(inherited_rows)), *inherited_rows]
+    incomplete = encode(rows[:1])
+    complete = encode(rows)
+    copied.write_bytes(complete + b"{later malformed tail}\n")
+    try:
+        reader.validate_codex_rollout(copied, child_id, end_byte_offset=len(incomplete))
+    except reader.LineageResolutionError:
+        pass
+    else:
+        raise AssertionError("an incomplete captured prefix was accepted")
+    result = reader.validate_codex_rollout(copied, child_id, end_byte_offset=len(complete))
+    assert result["session_meta_ids"] == [child_id]
+    assert result["parsed_bytes"] == len(complete)
+print("synthetic captured-prefix and ancestry checks passed")
+PY
+```
 
 ## Session end reason
 

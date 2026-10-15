@@ -14,7 +14,7 @@ Read Codex evidence only. Do not continue the old task or change its project. If
 the user wants execution after the read is complete, pass the verified evidence
 to `daymade-claude-code:continue-codex-work`.
 
-## Codex has four different history surfaces
+## Codex history surfaces
 
 | Surface | Authority | Use |
 |---|---|---|
@@ -60,7 +60,7 @@ FROM logs WHERE feedback_log_body LIKE '%could not be refreshed%'
 GROUP BY process_uuid ORDER BY 2 DESC;
 ```
 
-Two pitfalls measured 2026-10-03:
+Pitfalls measured 2026-10-03:
 
 - A `thread_id` found here is an app-server thread handle, not proof of a
   resumable rollout. Verify it exists in `state_*.sqlite` `threads.id` before
@@ -86,6 +86,7 @@ interpreting fork snapshots, compaction, event streams, or end reasons.
 | Whole-conversation original-input counts and quotations, including inherited history | `scripts/reconcile_codex_inputs.py --session <ID>` |
 | Locate one exact rollout by internal identity | `scripts/analyze_sessions.py locate-codex <ID>` |
 | Reconstruct one Session and its declared parent snapshots | `scripts/read_codex_session.py --session <ID>` |
+| Validate an exporter’s captured rollout prefix without collecting the conversation | [Captured rollout validation for exporters](#captured-rollout-validation-for-exporters) |
 | Verify a tool return, a comment ID, or external messages already read in a known Session | The **Original tool and record evidence** command below; briefing previews are not complete tool evidence |
 | Find a rollout containing a topic or phrase | `read-claude-code-history/scripts/history_index.py recall --provider codex`, then verify the exact rollout |
 | Which live processes are erroring, error shapes over time, reconnect/timeout history | The **Runtime error log** section above (`logs_*.sqlite` bucketing); not the rollout event stream |
@@ -194,16 +195,11 @@ partial results, and deterministic fixture-only validation.
 Expected output: `# Codex Session Evidence Briefing`, verified selected identity,
 root-to-child fork lineage, exact parent byte boundaries, chronological handoff,
 compacted context, latest plan, tool calls, files, errors, end reason, and workspace
-state. If the state DB points to a rollout with the wrong identity, the reader must
-reject it and try the exact `session_meta.id` locator; never continue from the wrong
-file because its title or filename looked close. Codex 0.160 separates a logical
-thread from its immutable physical rollouts: the state index selects the current
-rollout, and `history_base.thread_id` references a physical rollout ID. Multiple
-segments require a valid indexed selection. Copies of the same physical rollout
-must be byte-identical or an append-only superset; divergent copies remain errors.
-Inherited prefixes must match both byte and ordinal boundaries. Paginated records
-must retain continuous stored ordinals. Missing, malformed, ambiguous, cyclic,
-oversized, identity-mismatched, or partial-line history fails visibly.
+state. Follow the [rollout identity and fork contract](references/codex_rollout_format.md#forked-session-lineage)
+for logical/physical selection and inherited boundaries. Reject a wrong state-DB
+candidate and use the exact identity locator; a similar title or filename is not
+permission to continue from it. A briefing safety-limit failure remains a failed
+briefing; use the exporter route below only when validation is the requested result.
 
 If the complete briefing is too large for one model context, materialize it once to a
 private temporary file and record its SHA-256 plus line count before reading. That one
@@ -212,6 +208,14 @@ payload or one monolithic context load. Read bounded, non-overlapping ranges usi
 existing headings or exact record coordinates, keep coverage against the recorded line
 count, and report every unread range as a gap. Do not rerun the reader with different
 truncation and fuse the outputs into a complete-looking chronology.
+
+### Captured rollout validation for exporters
+
+Use the shipped `validate_codex_rollout` callable when an exporter needs to validate
+an explicitly selected byte prefix without accumulating conversation content.
+Read the [API, readiness and recovery contract](references/codex_rollout_format.md#captured-rollout-validation-for-exporters)
+before importing it or walking ancestry. Consume its actual metadata and verified
+edges; copying or validating history does not establish execution ownership.
 
 ### Original tool and record evidence
 
@@ -282,11 +286,11 @@ Constraints measured against this index, each of which changes what a zero means
 
 - **Read the freshness boundary first.** `sqlite3 ~/.claude-flow-viewer/search.sqlite "SELECT * FROM search_meta;"` prints `last_indexed_at`; sessions newer than that timestamp are not in the index at all, so a query cannot see them. Report that bound alongside any coverage claim.
 - **Match through `search_chunks_fts`, never `search_chunks` directly.** A direct query is an unindexed full scan of the ~9GB table — measured 26s against 0.03s for the indexed path.
-- **It is full-text, not vector.** `search_embeddings` holds 0 rows; the sqlite-vec shard tables exist but were never populated. So this path recovers only what literally occurred in the corpus, never a paraphrase or a synonym. For a paraphrase use the hybrid recall index in `read-claude-code-history`.
+- **This query uses full-text matching.** It retrieves literal corpus text rather than vector similarity. The measured snapshot had 0 rows in `search_embeddings` despite existing sqlite-vec shard tables; check current population before claiming vector availability. For a paraphrase use the hybrid recall index in `read-claude-code-history`.
 - **FTS5 syntax on this build.** Combine quoted phrases with explicit `OR`. An unquoted multi-term query is *implicit AND*: two terms joined by a bare space match only rows containing both, so a query that should widen the search returns nothing instead. Write `"term-a" OR "term-b"`. `NEAR/n` slash syntax raises a syntax error; the standard two-operand `NEAR(A B, k)` form parses without error (it returned 0 rows on one tested query — that was a real no-co-occurrence result, not a syntax failure, so do not read the 0 as "NEAR is broken").
-- **The `unicode61` tokenizer makes a contiguous CJK run one token**, so a Chinese phrase matches only when it aligns with a whole run. Measured on `技术选型`: phrase query 10 rows against 163 substring occurrences; on `闭门造车`: 10 against 790. The decisive proof that a single character is not its own token: `闭` returns 2 rows while `闭门` returns 17 — if `闭` tokenized independently it could not be the smaller set. A longer run in the same family queries far better (`不要闭门造车` → 314 rows against 790), so for Chinese search the longest contiguous run you can guess, and note that a short phrase can silently miss ~94% of real occurrences. ASCII and punctuation-delimited terms do not have this problem (`technology-selection` matched 35 against 34). Never read a zero-row or low-row Chinese query as absence — a miss here is indistinguishable in shape from "we never discussed it", which is the exact failure this path exists to prevent.
+- **The `unicode61` tokenizer makes a contiguous CJK run one token**, so a Chinese phrase matches only when it aligns with a whole run. Measured on `技术选型`: phrase query 10 rows against 163 substring occurrences; on `闭门造车`: 10 against 790. The decisive proof that a single character is not its own token: `闭` returns 2 rows while `闭门` returns 17 — if `闭` tokenized independently it could not be the smaller set. A longer run in the same family queries far better (`不要闭门造车` → 314 rows against 790), so for Chinese search use the longest contiguous run you can guess. ASCII and punctuation-delimited terms do not have this problem (`technology-selection` matched 35 against 34). Never read a zero-row or low-row Chinese query as absence — a miss here is indistinguishable in shape from "we never discussed it", which is the exact failure this path exists to prevent.
 - **Filter `c.kind` to get the user's own words.** `prompt` is the user's input and `ai-text` the assistant's; `thinking`, `tool-call`, and `tool-result` are also indexed, so an unfiltered query mostly reads tool output back to you.
-- **Check `s.source` before attributing a hit.** The index spans three providers, so a hit found here is not by itself a Codex finding.
+- **Check `s.source` before attributing a hit.** A hit found here is not by itself a Codex finding.
 - **Exclude the current session.** The current session records this very question and the command that searches for it, so it matches almost any query about itself.
 
 ## Identity and lineage gate
@@ -294,17 +298,12 @@ Constraints measured against this index, each of which changes what a zero means
 Before making any behavior claim about a named Session:
 
 1. Verify the prompt-ledger Session ID if quoting user input.
-2. Locate rollout candidates by their internal `session_meta.id`, not filename alone.
-3. Parse the selected rollout and require `session_meta.id == requested ID`.
-4. For each fork edge, require the declared parent ID and exact
-   `history_base.end_byte_offset`; reject missing, ambiguous, cyclic, or mismatched
-   ancestry rather than reading the parent's current tail. A legacy rollout with no
-   `history_base` that inlines its parent's session_meta as the very next record is
-   instead verified record-for-record against the real parent file before its
-   derived byte boundary is trusted.
-5. Report prompt-only or rollout-only gaps explicitly.
+2. Use the [exact Session reader](#exact-session-evidence-and-lineage), or the
+   [captured-prefix API](#captured-rollout-validation-for-exporters) for an exporter,
+   and follow its identity/ancestry contract before attributing events.
+3. Report prompt-only or rollout-only gaps explicitly.
 
-This gate is the direct correction for two observed cases: a prompt-ledger Session
+Observed failures included a prompt-ledger Session
 whose state DB pointed at another rollout, and a `/fork` input with no child rollout.
 
 ## Read-result contract
