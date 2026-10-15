@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **lark-cli-router** (`daymade-claude-code` v4.30.1): Move the existing dated-recording trigger before the catalog description cutoff, preserving all other triggers and runtime behavior.
+
 - **lark-cli-router** (`daymade-claude-code` v4.30.0): Add date-first recording candidate lookup for explicit dates and explicitly authorized profiles, preserving pagination and partial results while the agent confirms the meeting from its content.
 
 - **read-codex-history** (`daymade-claude-code` v4.29.1): Document the shipped streaming validation API and lineage callbacks with a synthetic runnable example; centralize the contract, correct index-only recovery guidance, and remove derived summaries. Runtime unchanged.

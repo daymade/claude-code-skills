@@ -1,9 +1,9 @@
 ---
 name: lark-cli-router
 description: >-
-  Routes any Feishu/Lark/Doubao operation through the version-matched lark-cli domain guide embedded
+  Routes any Feishu/Lark/Doubao operation, including recording lookup by date (按日期找会议录音), through the version-matched lark-cli domain guide embedded
   in the installed CLI, then executes and verifies the task. Use for 飞书/Lark/Doubao docs, drive,
-  sheets, Base, wiki, minutes, recording lookup by date (按日期找会议录音), meetings, calendar, IM, mail, tasks, approval, apps, auth/scope,
+  sheets, Base, wiki, minutes, meetings, calendar, IM, mail, tasks, approval, apps, auth/scope,
   resource URLs or tokens, and lark-cli troubleshooting. This is the single Lark entry point; use
   ima-copilot instead for Tencent IMA.
 metadata:
