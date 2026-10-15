@@ -446,6 +446,16 @@ Before interpreting the inventory, partition objects as follows:
 Generic phrases such as "take over", "continue", or "finish this" do not move an object between
 sets. The user must name the additional object or otherwise make the expansion unambiguous.
 
+Before using an inherited restriction to withhold an otherwise authorized action, the executor
+reads its original user statement and adjacent exchange through the history owner. Bind the
+restriction to its object, action, destination and review/expiry condition, with a source coordinate.
+Local commit, repository push, shared-document upload and sending to a recipient are separate
+actions: a restriction on one does not automatically cover the others. A handover's "the user
+explicitly said" is not independent evidence. An ambiguous or unavailable source stays unknown
+for the affected action; continue independently authorized work, and use a later explicit user
+correction when it resolves the scope. Missing prohibition is not permission. This semantic
+judgment is performed by the executor; no automatic scope detector is claimed.
+
 Before spawning reviewers or interpreting refs, the sole writer performs one authority refresh,
 including any required fetch, then freezes the exact local and remote-tracking refs and queries the
 hosting service for its current branch list and PR heads. Keep the two inventories separate:
@@ -461,6 +471,14 @@ NEEDS REVIEW refs, walk the supersession ladder above and open distinctive code/
 Merge or adapt the smallest unique behavior; never merge an old whole branch merely because it has
 many `+` commits or a compelling name. Report inspect-only and excluded refs separately without
 turning their existence into an action item.
+
+Build the source contribution inventory from immutable refs, not the survivor's `git status`:
+use `git diff --raw --no-abbrev -z <merge-base> <source-ref>` to select changed paths, then compare
+their complete entries and behavior with the maintained survivor through the trial merge and
+supersession checks above. The path list selects evidence; it does not prove containment.
+A source-tracked build script or asset can be absent from the survivor while its physical copy is
+ignored and ordinary status is clean. Include those paths explicitly when already authorized to
+land them; otherwise retain the unresolved source ref. Do not retire it on a clean-status verdict.
 
 ### 2. Build keeper commits after exclusive ownership transfers
 
