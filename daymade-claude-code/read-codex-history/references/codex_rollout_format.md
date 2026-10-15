@@ -247,4 +247,4 @@ Derived from the tail of the rollout and the set of unpaired tool calls:
 - **interrupted** — a `function_call`/`custom_tool_call` has no matching `*_output` (dispatched but never returned).
 - **in_progress** — tools ran and returned, but there is no closing `agent_message`/`task_complete` (cut off mid-task). This is the common resume case.
 - **abandoned** — the last significant record is a `user_message` with no response.
-- **error_cascade** — three or more tool failures (failed `patch_apply_end`, or error-looking tool `output`).
+- **error_cascade** — three or more unrecovered tool failures in the current turn (failed patch outcomes or error-looking tool `output`). A nonempty, non-error-looking tool return, an explicitly successful patch, a new user request, or `task_complete` clears this failure tail. Missing/empty results do not establish recovery. Earlier errors remain in Errors Encountered; their cumulative count does not determine the current end reason.

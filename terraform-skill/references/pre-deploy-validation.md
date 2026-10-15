@@ -208,6 +208,38 @@ does not become scope approval; obtain the decision its contract requires for th
 Apply the fresh exact bytes accepted by the wrapper. Do not bypass freshness/approval gates or
 invent urgency to reuse an approval.
 
+### Diagnose an update with no visible value diff
+
+Keep an unexplained resource action outside a service-only release. Compare the exact resource's
+before/after values, unknowns, replacement paths and sensitivity metadata; preserve the distinction
+between a missing key, `null` and `false`. Equal `terraform show -json` values and sensitivity
+projections do not exclude differences in the native plan's value marks.
+
+Use the repository's version-matched, read-only native-plan inspector when available. Bind its
+projection to the exact saved-plan bytes and target environment; a separately supplied JSON file
+is not evidence about that plan until the binding is verified. Keep native plans and decoded state
+private because they can contain secrets. If native metadata cannot be inspected, retain the action
+as unexplained rather than relabeling it a no-op or widening the release allowlist.
+
+Check the configuration source after proving a marks-only difference. In a Terraform 1.5.7
+reproduction, a conditional's `null` branch lost a password sensitivity mark; wrapping the whole
+conditional preserved it:
+
+```hcl
+password = sensitive(var.key_name == "" ? var.password : null)
+```
+
+Verify the current Terraform/provider behavior before using this repair. Require a fresh native
+plan to show the intended no-op with unchanged business values; do not substitute `ignore_changes`,
+a broader target or a repeated refresh-only apply. A successful state refresh does not prove that
+the configuration will preserve the mark in the next ordinary plan.
+
+Handle an omitted `resource_changes` separately from an empty array. Accept omission only through
+an explicitly supported state-reconciliation entry whose native plan proves refresh-only mode,
+the authorized environment/target and zero cloud-resource actions. Keep normal release rejection
+for missing or null inventories; do not turn a narrow format compatibility case into a general
+permission to apply an uninspectable plan.
+
 ## 6. Issue promotion evidence only after live verification
 
 A zero exit from `terraform apply` proves only that Terraform completed its operation. Run required
