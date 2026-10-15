@@ -538,12 +538,10 @@ scope through `git-safety-net`. For branch publication and PR creation, follow
 before the first push. Keep its policy preflight, pinned source and remote readback
 in that owner rather than maintaining another push example here.
 
-For recovery or repository convergence under concurrent work, treat
-`git-safety-net/SKILL.md` as the canonical authorization and evidence router. It owns the
-change-authorized / inspect-only / excluded partition, the scoped-vs-exhaustive audit
-boundary, and authorized temporary-backup retirement;
-do not copy its detailed commands here or treat a visible collaborator ref/worktree as a cleanup
-target merely because it appears in the inventory.
+For recovery or repository convergence under concurrent work, enter
+[git-safety-net](git-safety-net/SKILL.md).
+For inherited upload restrictions or source paths hidden by ignore rules, read its
+[convergence authority and source-inventory procedure](git-safety-net/references/merge_verification.md#1-freeze-the-outcome-and-the-first-ref-snapshot).
 
 For GitHub-hosted state — PRs, issues, Actions, repository or organization settings, permissions,
 and API/UI mutations — treat `github-ops/SKILL.md` as the canonical operating contract. A command
