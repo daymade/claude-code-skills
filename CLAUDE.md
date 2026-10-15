@@ -319,6 +319,11 @@ For local correction tests and repository CI ownership, follow the
 [testing strategy](daymade-audio/transcript-fixer/references/architecture.md#testing-strategy);
 keep maintainer-only repository resources distinct from installed Skill paths.
 
+### Feishu Recording Lookup
+
+To find an existing Feishu recording by date, enter
+[lark-cli-router's recording lookup](daymade-claude-code/lark-cli-router/SKILL.md#find-an-existing-recording-by-date).
+
 ### Feishu Document Capture
 
 For Feishu document reads and archives, enter

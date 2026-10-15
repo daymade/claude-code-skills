@@ -21,21 +21,21 @@ and use the embedded guide's direct lookup instead of searching again.
      --start 2026-03-10 --end 2026-03-10
    ```
 
-   Repeat `--profile` only for the decided scope. By default the helper queries
-   profiles in argument order with a shared 50-item budget, shrinking each page
-   to the remaining budget. Raw items count before deduplication. It adds no
-   title or participant filters and retains archived and unarchived candidates.
-   Use `--all-pages` only when the user explicitly requests all results under the
-   embedded guide; that mode uses up to four concurrent profile queries. An
-   unsuccessful lookup alone does not authorize this flag.
+   Repeat `--profile` only for the decided scope. Consult the helper's `--help`
+   for runtime limits and exit meanings; the embedded guide owns pagination policy.
+   By default the helper queries profiles in argument order with a shared item
+   budget, shrinking each page to the remaining budget. Raw items count before
+   deduplication. It adds no title or participant filters and retains archived and
+   unarchived candidates. Use `--all-pages` only when the user explicitly requests
+   all results under the embedded guide; that mode queries profiles concurrently.
+   An unsuccessful lookup alone does not authorize this flag.
    For large results, retain the full JSON in a private task file and inspect
    coverage and bounded candidate groups; clipped terminal output is incomplete.
 4. Read `coverage` for every requested profile and retain partial results.
    `complete` means pagination completed for this explicit date/profile scope;
    it does not confirm a recording's identity or imply all accounts were searched.
-   Exit codes: **0** complete coverage, **1** incomplete coverage with any obtained
-   candidates retained, **2** invalid command-line arguments. Do not interpret an
-   API/CLI failure or an unqueried account as an empty search. Follow the existing
+   Do not interpret an API/CLI failure or an unqueried account as an empty search.
+   Follow the existing
    auth/permission recovery route; do not broaden access or loop on a denial.
    A `confirmation_required` stop retains the next page token; profiles not yet
    queried are `not_queried`. If existing candidates already identify the target,
