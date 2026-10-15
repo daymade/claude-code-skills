@@ -284,7 +284,7 @@ Load only the branch relevant to the current task:
 - `references/apple_content_caching.md` — Apple Content Caching diagnosis, unit interpretation, supported remote controls, confirmation plan, and post-cleanup verification.
 - `references/chromium_code_sign_clones.md` — Chrome/Chromium/Edge code-sign-clone semantics, nominal-versus-physical reporting, exact inactive-target manifests, cleanup verification, and recurrence prevention.
 - `references/cleanup_targets.md` — cache, log, application, developer, large-file, and Time Machine target semantics.
-- `references/proving-redundancy-before-deletion.md` — the evidence ladder for large data folders (duplication → creation-origin → references → session-history census → .DS_Store → project decision records). Load BEFORE proposing deletion of any big project-asset / media / dataset directory; a size ranking is not evidence.
+- `references/proving-redundancy-before-deletion.md` — Load BEFORE proposing deletion of any big project-asset / media / dataset directory; a size ranking is not evidence.
 - `references/growth_attribution.md` — "what grew lately" questions: finding and calibrating a baseline export, the not-scanned trap, which file timestamp answers "arrived since", reconciling path-accounted deltas with `df` (swap, snapshots, short-lived copies), and naming the writer.
 - `references/docker_analysis.md` — per-object Docker and OrbStack analysis, database-volume safeguards, and refill root-cause diagnosis.
 - `references/mole_integration.md` — TTY workflow for interactive Mole analysis and preview.

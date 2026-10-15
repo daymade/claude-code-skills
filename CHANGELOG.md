@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-cleaner** (`daymade-macos` v1.22.6): Route deletion-evidence history lookup through the current provider readers; preserve unknown usage when index or original-record coverage is missing. Align the bilingual history guide and project entry with indexed discovery.
+
 - **read-claude-code-history** (`daymade-claude-code` v4.28.1): Align original-tool evidence documentation with transcript validation and filtered output; add complete-output capture, route narrow requests to the existing reader, and remove derived count wording.
 
 - **frontend-visual-qa** (v1.21.1): Put the existing task/object-link trigger and ordinary citation exclusion first so truncated Skill directories expose them. Preserve the remaining discovery text, runtime workflow and evals. Change type: discovery-surface repair.
