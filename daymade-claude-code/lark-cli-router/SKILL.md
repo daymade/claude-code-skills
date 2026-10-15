@@ -3,7 +3,7 @@ name: lark-cli-router
 description: >-
   Routes any Feishu/Lark/Doubao operation through the version-matched lark-cli domain guide embedded
   in the installed CLI, then executes and verifies the task. Use for 飞书/Lark/Doubao docs, drive,
-  sheets, Base, wiki, minutes, meetings, calendar, IM, mail, tasks, approval, apps, auth/scope,
+  sheets, Base, wiki, minutes, recording lookup by date (按日期找会议录音), meetings, calendar, IM, mail, tasks, approval, apps, auth/scope,
   resource URLs or tokens, and lark-cli troubleshooting. This is the single Lark entry point; use
   ima-copilot instead for Tencent IMA.
 metadata:
@@ -25,6 +25,14 @@ instead of copying their domain instructions into another static catalog.
   current task.
 - Do not bypass `lark-cli` with browser automation, raw `curl`, or guessed API
   contracts while the CLI or one of its embedded guides covers the task.
+
+## Find an existing recording by date
+
+When Feishu is the known source and the request is to find an existing recording
+by date, read [recording lookup](references/recording-lookup.md) before searching.
+Use its bounded candidate helper with explicit authorized profiles; do not start
+ingest, gap audit or ASR for a playback-link lookup. Preserve a supplied minute
+token or meeting ID and use the embedded guide's direct lookup instead.
 
 ## Workflow
 
