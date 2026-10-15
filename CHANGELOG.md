@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **lark-cli-router** (`daymade-claude-code` v4.30.0): Add date-first recording candidate lookup for explicit dates and explicitly authorized profiles, preserving pagination and partial results while the agent confirms the meeting from its content.
+
 - **read-codex-history** (`daymade-claude-code` v4.29.1): Document the shipped streaming validation API and lineage callbacks with a synthetic runnable example; centralize the contract, correct index-only recovery guidance, and remove derived summaries. Runtime unchanged.
 - **tunnel-doctor** (v1.17.3): Test working SSH gateway candidates through the actual consumer before extending native relay work; preserve required UDP and other protocol acceptance.
 
