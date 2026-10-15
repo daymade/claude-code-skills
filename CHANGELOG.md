@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **read-codex-history** (`daymade-claude-code` v4.30.3): Classify an error cascade from the current unrecovered failure tail while retaining historical errors. Bounded rollout replay and regression tests cover recovery, empty results, patch outcomes and terminal-state precedence. Change type: existing-contract repair.
+- **terraform-skill** (v1.5.9): Document native-plan sensitivity-mark diagnosis when JSON values show no change; require exact plan binding and preserve release rejection for unexplained actions. Change type: bounded guidance addition.
+
 - **lark-cli-router** (`daymade-claude-code` v4.30.2): Use the installed CLI's guide metadata for routing, add an entry link for existing date-based recording lookup, and defer duplicated budget, concurrency and exit-code definitions to helper help and the official guide; code, permissions and the Skill description are unchanged.
 
 - **lark-cli-router** (`daymade-claude-code` v4.30.1): Move the existing dated-recording trigger before the catalog description cutoff, preserving all other triggers and runtime behavior.

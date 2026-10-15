@@ -1116,7 +1116,7 @@ def _user_turn_text(text: str) -> str:
     return text
 
 
-def _detect_end_reason(data: dict) -> str:
+def _detect_end_reason(data: dict, *, unrecovered_tool_errors: int) -> str:
     if data["open_calls"]:
         return "interrupted"
     if data["last_sig"] == "user_message":
@@ -1138,9 +1138,9 @@ def _detect_end_reason(data: dict) -> str:
         if data["last_sig"] == "task_complete" and data["task_error"] and not data["task_tail"]:
             return "errored"
         return "completed"
-    # Check the error cascade before in_progress: a cascade also ends on a
-    # tool_output/patch tail, so testing in_progress first would shadow it.
-    if len(data["errors"]) >= 3:
+    # Keep historical errors for diagnosis; only an unrecovered failure tail
+    # can classify the current turn as a cascade.
+    if unrecovered_tool_errors >= 3:
         return "error_cascade"
     if data["last_sig"] in ("tool_call", "tool_output", "patch"):
         return "in_progress"
@@ -1244,6 +1244,7 @@ def parse_codex_rollout(
         "open_calls": {},  # call_id -> tool name (dispatched, awaiting output)
         "last_sig": None,
     }
+    unrecovered_tool_errors = 0
 
     for record in _iter_rollout_records(path, end_byte_offset):
         data["total_lines"] += 1
@@ -1325,6 +1326,7 @@ def parse_codex_rollout(
                         }
                     )
                     data["last_sig"] = "user_message"
+                    unrecovered_tool_errors = 0
             elif ptype == "agent_message":
                 message = str(payload.get("message") or "").strip()
                 if message:
@@ -1347,6 +1349,9 @@ def parse_codex_rollout(
                     stderr = str(payload.get("stderr") or "patch failed").strip()
                     if stderr:
                         data["errors"].append(stderr[:300])
+                        unrecovered_tool_errors += 1
+                elif payload.get("success") is True:
+                    unrecovered_tool_errors = 0
                 data["last_sig"] = "patch"
             elif ptype == "item_completed":
                 # ≥0.147 generic item envelope; only FileChange is read here.
@@ -1362,6 +1367,9 @@ def parse_codex_rollout(
                     stderr = str(item.get("stderr") or "").strip()
                     if status != "completed" or stderr:
                         data["errors"].append((stderr or f"patch status={status}")[:300])
+                        unrecovered_tool_errors += 1
+                    elif item.get("status") == "completed":
+                        unrecovered_tool_errors = 0
                     data["last_sig"] = "patch"
             elif ptype == "turn_aborted":
                 data["last_sig"] = "turn_aborted"
@@ -1378,6 +1386,7 @@ def parse_codex_rollout(
                 error = payload.get("error")
                 data["task_error"] = error if isinstance(error, dict) else None
                 data["last_sig"] = "task_complete"
+                unrecovered_tool_errors = 0
         elif rtype == "response_item":
             if ptype == "message":
                 role = payload.get("role")
@@ -1403,6 +1412,7 @@ def parse_codex_rollout(
                             }
                         )
                         data["last_sig"] = "user_message"
+                        unrecovered_tool_errors = 0
                 elif role == "assistant":
                     text = _message_text(payload.get("content"), {"output_text", "text"}).strip()
                     if text:
@@ -1455,6 +1465,10 @@ def parse_codex_rollout(
                 output = extract_text(payload.get("output"))
                 if output and _looks_like_error(output):
                     data["errors"].append(output[:300])
+                    unrecovered_tool_errors += 1
+                elif output.strip():
+                    # Empty/missing output is not evidence of recovery.
+                    unrecovered_tool_errors = 0
                 data["last_sig"] = "tool_output"
 
     # Stream selection is PER ROLE: in dual-stream versions either side of
@@ -1493,7 +1507,9 @@ def parse_codex_rollout(
         key=lambda turn: int(turn["ordinal"]),
     )
 
-    data["end_reason"] = _detect_end_reason(data)
+    data["end_reason"] = _detect_end_reason(
+        data, unrecovered_tool_errors=unrecovered_tool_errors
+    )
     return data
 
 
