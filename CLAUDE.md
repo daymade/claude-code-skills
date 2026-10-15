@@ -808,7 +808,7 @@ All Python scripts in this repository:
 
 ## Quality Standards
 
-For changes to scripts, configuration, or operating procedures, use
+For changes to scripts, importable API contracts, configuration, or operating procedures, use
 [docs-cleaner](daymade-docs/docs-cleaner/SKILL.md) for scoped documentation delivery:
 resolve implementation intent and authorization before updating the owning SOP,
 and validate the delivered command examples. Keep detailed governance in that Skill.

@@ -108,7 +108,7 @@ rows contain a string `session_id`, numeric epoch-second `ts`, and string
 `text`. It is the direct source for “what did I type?” output; the state
 database remains the source for conversation inventory metadata, and rollout
 JSONL remains the source for full-event search or continuation. Do not replace
-one with another merely because all three mention the same Session ID.
+one with another merely because they mention the same Session ID.
 
 The verbatim-input command reads the ledger strictly. A malformed or unsupported
 row aborts before output so a partial read cannot look complete. Global recent
@@ -287,7 +287,7 @@ persisted workspace through `--cwd` or use `--all-projects` to discover it.
 | Required archive unavailable | The configured whole-history source set is incomplete | Restore/mount the archive or deliberately correct the registry; do not claim absence |
 | Invalid history source registry | The source set cannot be trusted | Fix the reported JSON/schema/path error and rerun |
 | Project directory not found | Claude's encoded project directory did not match | Use the exact workspace path or `--all-projects` |
-| No compatible Codex database | SQLite is absent, unreadable, or has an unknown schema | Review the warning; raw rollout scanning runs next |
+| No compatible Codex database | SQLite is absent, unreadable, or has an unknown schema | Follow the [index-only inventory contract](../SKILL.md#recent-inventory) |
 | Codex prompt history missing or malformed | Exact user-input output cannot be proven complete | Fix or restore `<codex-home>/history.jsonl`; do not fall back to inferred transcript text or render a partial table |
 | Codex row says `writer-lock file held` | A process owned that exact advisory lock during the snapshot; its identity is unknown | Read the exact ID with `daymade-claude-code:read-codex-history`, then use `continue-codex-work` only if the user asks to act; do not infer process identity or progress from the lock alone |
 | Writer-lock observation is `busy` | Another process held the coordination lock; its identity and purpose are unknown | Report the unresolved runtime boundary and make no inactivity claim; take a fresh snapshot only on a new user request |
