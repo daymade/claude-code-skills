@@ -121,6 +121,64 @@ class OriginalMediaTests(unittest.TestCase):
         self.assertEqual(result['media_references'], 2)
         self.assertEqual(result['actual_reader'], 'not_verified')
 
+    @unittest.skipUnless(shutil.which('pandoc'), 'pandoc required for actual conversion engine')
+    def test_whiteboards_lark_hosts_frontmatter_and_discussion(self):
+        for index, host in enumerate(('feishu.cn', 'larkoffice.com', 'larksuite.com')):
+            with self.subTest(host=host):
+                root = self.root / host
+                (root / 'media').mkdir(parents=True)
+                (root / 'discussion').mkdir()
+                (root / 'discussion/comments.md').write_text('# Comments\n')
+                (root / 'media/board.jpg').write_bytes(b'board')
+                (root / 'media/image.png').write_bytes(b'image')
+                files = [
+                    {'storage': 'source', 'locator': {'token': 'board-token'}, 'cache_path': 'media/board.jpg', 'bytes': 5},
+                    {'storage': 'source', 'locator': {'token': 'image-token'}, 'cache_path': 'media/image.png', 'bytes': 5},
+                ]
+                (root / 'manifest.json').write_text(json.dumps({'files': files}))
+                closing = '/>' if index == 2 else '></whiteboard>'
+                raw = ('<title>实际标题</title><p>before</p><whiteboard token="board-token"'
+                       + closing + '<p>after</p><img src="image-token"/>')
+                (root / 'capture.json').write_text(json.dumps({'data': {'document': {
+                    'content': raw, 'revision_id': 545}}}))
+                result = render.render(root / 'capture.json', root / 'manifest.json', root / 'note.md',
+                                       f'https://tenant.{host}/docx/DocumentToken1234567890',
+                                       'discussion/comments.md')
+                text = (root / 'note.md').read_text()
+                self.assertIn('title: "实际标题"', text)
+                self.assertIn('source_type: "docx"', text)
+                self.assertIn('source_revision: 545', text)
+                self.assertRegex(text, r'extracted: "\d{4}-\d{2}-\d{2}"')
+                self.assertIn('[Comments and feedback](<discussion/comments.md>)', text)
+                self.assertIn('![Whiteboard board-token](<media/board.jpg>)', text)
+                self.assertIn('![](<media/image.png>)', text)
+                self.assertLess(text.index('before'), text.index('![Whiteboard board-token]'))
+                self.assertLess(text.index('![Whiteboard board-token]'), text.index('after'))
+                self.assertNotIn('<whiteboard', text)
+                self.assertEqual(result['media_references'], 2)
+                self.assertEqual(result['whiteboard_references'], 1)
+                self.assertEqual(result['discussion_links'], 1)
+
+    def test_whiteboard_requires_verified_preview(self):
+        with self.assertRaisesRegex(ValueError, 'no verified local preview'):
+            render.prepare('<whiteboard token="missing"></whiteboard>', {})
+
+    def test_renderer_rejects_unapproved_host_and_bad_discussion(self):
+        (self.root / 'manifest.json').write_text(json.dumps({'files': []}))
+        (self.root / 'capture.json').write_text(json.dumps({'data': {'document': {
+            'title': '标题', 'content': '<p>Body</p>'}}}))
+        with self.assertRaisesRegex(ValueError, 'original Feishu/Lark URL'):
+            render.render(self.root / 'capture.json', self.root / 'manifest.json',
+                          self.root / 'host.md', 'https://example.org/wiki/node')
+        for discussion in ('/absolute/comments.md', '../outside.md', 'missing.md'):
+            with self.subTest(discussion=discussion):
+                with self.assertRaises(ValueError):
+                    render.render(self.root / 'capture.json', self.root / 'manifest.json',
+                                  self.root / 'discussion.md', 'https://example.feishu.cn/wiki/node',
+                                  discussion)
+        self.assertFalse((self.root / 'host.md').exists())
+        self.assertFalse((self.root / 'discussion.md').exists())
+
     def test_missing_mapping_fails_instead_of_false_green(self):
         with self.assertRaisesRegex(ValueError, 'no verified local original'):
             render.prepare('<img src="missing"/>', {})

@@ -136,8 +136,9 @@ def capture(url, solved_status="false", profile=None, max_pages=100, caller=call
                             continue
                         content = reply.get("content")
                         elements = content.get("elements") if isinstance(content, dict) else None
-                        if not isinstance(elements, list):
-                            raise CaptureError("Reply has no content elements")
+                        text_available = isinstance(elements, list)
+                        if not text_available:
+                            elements = []
                         extra = reply.get("extra")
                         if extra is not None and not isinstance(extra, dict):
                             raise CaptureError("Reply extra is not an object")
@@ -146,6 +147,10 @@ def capture(url, solved_status="false", profile=None, max_pages=100, caller=call
                             raise CaptureError("Reply image_list is not an array")
                         seen_replies[rid] = reply
                         thread["replies"].append(reply)
+                        if not text_available:
+                            result["unexpanded_content"].append({"comment_id": cid,
+                                "reply_id": rid, "content": content,
+                                "reason": "reply_content_elements_not_list"})
                         for element in elements:
                             if element_text(element) is None:
                                 result["unexpanded_content"].append({"comment_id": cid,
@@ -198,12 +203,18 @@ def render(result):
             author = reply.get("user_id") or "unknown"
             lines += [f"### {author} · reply {reply['reply_id']}",
                       f"Created (Unix seconds): {reply.get('create_time', 'unknown')}; updated: {reply.get('update_time', 'unknown')}", ""]
-            for element in reply["content"]["elements"]:
-                text = element_text(element)
-                if text is not None:
-                    lines += [literal(text), ""]
-                else:
-                    lines += ["Unexpanded content:", literal(json.dumps(element, ensure_ascii=False)), ""]
+            content = reply.get("content")
+            elements = content.get("elements") if isinstance(content, dict) else None
+            if isinstance(elements, list):
+                for element in elements:
+                    text = element_text(element)
+                    if text is not None:
+                        lines += [literal(text), ""]
+                    else:
+                        lines += ["Unexpanded content:", literal(json.dumps(element, ensure_ascii=False)), ""]
+            else:
+                lines += ["Text content unavailable in the source response:",
+                          literal(json.dumps(content, ensure_ascii=False)), ""]
             if (reply.get("extra") or {}).get("image_list"):
                 lines += ["Unexpanded images:", literal(json.dumps(reply["extra"]["image_list"], ensure_ascii=False)), ""]
     return "\n".join(lines) + "\n"

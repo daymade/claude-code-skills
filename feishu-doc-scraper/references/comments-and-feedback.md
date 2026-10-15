@@ -50,6 +50,14 @@ and rejects changing IDs/records, missing cursors, or exhausted page limits.
 It always queries every thread's reply endpoint, including when the comment
 card does not advertise more replies. Use `--max-pages` to cap each listing.
 
+A reply whose `content` or `content.elements` is missing, null, or otherwise not
+an array does not abort the batch. Preserve its raw reply, mark the text as
+unexpanded, register any `extra.image_list`, and continue later replies and
+threads. This keeps page/thread coverage distinct from text understanding: even
+`threads_complete=true` can still be `partial`. When reporting partial coverage,
+compare raw comment-card count, processed thread count, and raw reply-page thread
+count instead of presenting the processed count as the document's total.
+
 Exit `0` means the selected threads and their text were captured completely,
 including a genuine empty scope. Exit `3` means partial: inspect `errors` and
 `unexpanded_content`. Permission/network/schema failures are **unknown**, not
@@ -90,7 +98,8 @@ timestamps and the two API reads do not form a transactionally frozen revision.
 
 Run `python3 -m unittest discover -s <skill>/tests -p 'test_*.py'`.
 The network-free tests exercise comment and reply pagination, empty results,
-permission gaps, rich content, source identity drift, and snapshot preservation.
+missing/null/empty content shapes, image-bearing null text, permission gaps,
+rich content, source identity drift, and snapshot preservation.
 A live authenticated check should include one document with a comment and reply
 and one document with no comments in the selected scope. Do not publish private
 live captures as fixtures.
