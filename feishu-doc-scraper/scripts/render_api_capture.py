@@ -127,6 +127,7 @@ def render(capture, manifest, output, source, discussion=None):
         raise ValueError('Source must be an original Feishu/Lark URL')
     source_kind = origin.path.strip('/').split('/')[0]
     source_type = SOURCE_TYPES.get(source_kind, source_kind or 'unknown')
+    discussion_link = discussion_destination(root, output, discussion)
 
     def cite(match):
         a = attrs(match.group())
@@ -168,7 +169,6 @@ def render(capture, manifest, output, source, discussion=None):
              '\ncapture_method: lark-cli-api\npost_process: "saved API HTML → localized media/whiteboards → pandoc GFM"\n' +
              'qmd:\n  metadata:\n    platform: "feishu"\n    key: ' + json.dumps(origin.path.rstrip('/').split('/')[-1]) +
              '\n    kind: "document_snapshot"\n---\n\n')
-    discussion_link = discussion_destination(root, output, discussion)
     if discussion_link:
         front += discussion_link + '\n\n'
     if output.exists():
