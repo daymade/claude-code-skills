@@ -572,6 +572,144 @@ class FileChangeTests(unittest.TestCase):
 
 
 class EndReasonTests(unittest.TestCase):
+    @staticmethod
+    def resolved_tools(outputs, *, custom=False):
+        records = []
+        for index, output in enumerate(outputs):
+            call_id = f"outcome-{index}"
+            call = _function_call("probe", {}, call_id=call_id)
+            result = _function_call_output(call_id, output)
+            if custom:
+                call["payload"]["type"] = "custom_tool_call"
+                call["payload"]["input"] = call["payload"].pop("arguments")
+                result["payload"]["type"] = "custom_tool_call_output"
+            records.extend([call, result])
+        return records
+
+    def test_completed_turn_then_healthy_custom_outputs_is_in_progress(self):
+        # Same event shape as the bounded real regression: old failures, a
+        # completed turn, a new request, then four non-error tool returns.
+        records = self.resolved_tools(["Traceback: synthetic failure"] * 6)
+        records.extend([
+            _msg("assistant", "First task finished", "output_text"),
+            _ev("task_complete", last_agent_message="First task finished"),
+            _msg("user", "Audit the result", "input_text"),
+        ])
+        commentary = _msg("assistant", "Checking the result", "output_text")
+        commentary["payload"]["phase"] = "commentary"
+        records.append(commentary)
+        records.extend(self.resolved_tools(
+            [[{"type": "text", "text": "Observed result"}]] * 4, custom=True
+        ))
+        data = mod.parse_codex_rollout(_write_rollout(records))
+        self.assertEqual(data["end_reason"], "in_progress")
+        self.assertEqual(data["last_sig"], "tool_output")
+        self.assertEqual(data["open_calls"], {})
+        self.assertEqual(len(data["errors"]), 6)
+
+    def test_successful_tool_output_clears_failure_tail_without_losing_errors(self):
+        for custom in (False, True):
+            with self.subTest(custom=custom):
+                data = mod.parse_codex_rollout(_write_rollout(self.resolved_tools(
+                    ["Command failed: synthetic"] * 3 + ["Observed result"],
+                    custom=custom,
+                )))
+                self.assertEqual(data["end_reason"], "in_progress")
+                self.assertEqual(len(data["errors"]), 3)
+
+    def test_three_unrecovered_tool_failures_remain_error_cascade(self):
+        for custom in (False, True):
+            with self.subTest(custom=custom):
+                data = mod.parse_codex_rollout(_write_rollout(self.resolved_tools(
+                    ["Command failed: synthetic"] * 3, custom=custom,
+                )))
+                self.assertEqual(data["end_reason"], "error_cascade")
+                self.assertEqual(len(data["errors"]), 3)
+
+    def test_recovered_failures_do_not_accumulate_into_a_new_cascade(self):
+        data = mod.parse_codex_rollout(_write_rollout(self.resolved_tools([
+            "Command failed: synthetic", "Observed result",
+            "Command failed: synthetic", "Observed result",
+            "Command failed: synthetic",
+        ])))
+        self.assertEqual(data["end_reason"], "in_progress")
+        self.assertEqual(len(data["errors"]), 3)
+
+    def test_new_request_and_completed_turn_clear_failure_tail(self):
+        for boundary in (
+            _msg("user", "New request", "input_text"),
+            _ev("user_message", message="New request"),
+            _ev("task_complete", last_agent_message="Finished"),
+        ):
+            with self.subTest(boundary=boundary["payload"]["type"]):
+                records = self.resolved_tools(["Command failed: synthetic"] * 3)
+                records.extend([boundary, *self.resolved_tools(["Command failed: new task"])])
+                data = mod.parse_codex_rollout(_write_rollout(records))
+                self.assertEqual(data["end_reason"], "in_progress")
+                self.assertEqual(len(data["errors"]), 4)
+
+    def test_missing_null_and_empty_outputs_are_not_recovery_or_new_failures(self):
+        for output in (None, "", " \n\t", [], {}):
+            for prior_failures in (0, 3):
+                with self.subTest(output=output, prior_failures=prior_failures):
+                    records = self.resolved_tools(["Command failed: synthetic"] * prior_failures)
+                    records.extend(self.resolved_tools([output]))
+                    data = mod.parse_codex_rollout(_write_rollout(records))
+                    self.assertEqual(data["end_reason"], "error_cascade" if prior_failures else "in_progress")
+                    self.assertEqual(len(data["errors"]), prior_failures)
+        for prior_failures in (0, 3):
+            with self.subTest(output="missing", prior_failures=prior_failures):
+                records = self.resolved_tools(["Command failed: synthetic"] * prior_failures)
+                records.extend(self.resolved_tools([None]))
+                del records[-1]["payload"]["output"]
+                data = mod.parse_codex_rollout(_write_rollout(records))
+                self.assertEqual(data["end_reason"], "error_cascade" if prior_failures else "in_progress")
+                self.assertEqual(len(data["errors"]), prior_failures)
+
+    def test_patch_outcomes_share_the_failure_tail_across_both_schemas(self):
+        for failed, success in (
+            (_ev("patch_apply_end", success=False, stderr="synthetic conflict"),
+             _ev("patch_apply_end", success=True)),
+            (_file_change_event([], status="failed", stderr="synthetic conflict"),
+             _file_change_event([])),
+        ):
+            with self.subTest(schema=failed["payload"]["type"]):
+                records = [failed] * 3
+                data = mod.parse_codex_rollout(_write_rollout(records))
+                self.assertEqual(data["end_reason"], "error_cascade")
+                data = mod.parse_codex_rollout(_write_rollout([*records, success]))
+                self.assertEqual(data["end_reason"], "in_progress")
+                self.assertEqual(len(data["errors"]), 3)
+
+    def test_patch_without_explicit_success_does_not_clear_failure_tail(self):
+        missing_status = _file_change_event([])
+        del missing_status["payload"]["item"]["status"]
+        for patch in (
+            _ev("patch_apply_end"),
+            missing_status,
+            _file_change_event([], status=None),
+            _file_change_event([], status=""),
+        ):
+            with self.subTest(patch=patch):
+                records = self.resolved_tools(["Command failed: synthetic"] * 3)
+                data = mod.parse_codex_rollout(_write_rollout([*records, patch]))
+                self.assertEqual(data["end_reason"], "error_cascade")
+                self.assertEqual(len(data["errors"]), 3)
+
+    def test_failure_tail_keeps_completion_abort_and_open_call_precedence(self):
+        tails = (
+            (_ev("task_complete", last_agent_message="Finished"), "completed"),
+            (_ev("task_complete", error={"message": "synthetic terminal error"}), "errored"),
+            (_ev("turn_aborted"), "interrupted"),
+            (_function_call("probe", {}, call_id="unresolved"), "interrupted"),
+        )
+        for tail, expected in tails:
+            with self.subTest(expected=expected):
+                records = self.resolved_tools(["Command failed: synthetic"] * 3)
+                data = mod.parse_codex_rollout(_write_rollout([*records, tail]))
+                self.assertEqual(data["end_reason"], expected)
+                self.assertEqual(len(data["errors"]), 3)
+
     def test_turn_aborted_is_interrupted(self):
         rollout = _write_rollout([
             {"type": "session_meta", "payload": {"id": "e1", "cwd": "/tmp"}},
