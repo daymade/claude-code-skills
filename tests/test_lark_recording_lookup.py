@@ -206,6 +206,75 @@ class LookupTests(unittest.TestCase):
                     self.assertEqual(LOOKUP.main(arguments), code)
                 self.assertEqual(json.loads(output.getvalue())["complete"], complete)
 
+    def test_known_refresh_notice_is_retained_without_breaking_json(self):
+        wire = response()
+        wire.stdout = LOOKUP.REFRESH_NOTICE + "\r\n" + wire.stdout
+        result, _ = self.run_lookup({("account-a", None): wire})
+        self.assertTrue(result["complete"])
+        self.assertEqual(result["coverage"][0]["notices"], [LOOKUP.REFRESH_NOTICE])
+
+    def test_unknown_stdout_noise_and_bad_json_remain_errors(self):
+        body = response().stdout
+        for value in ("unknown notice\n" + body, body + "\n" + LOOKUP.REFRESH_NOTICE,
+                      LOOKUP.REFRESH_NOTICE + "\nnot JSON"):
+            with self.subTest(value=value):
+                result, _ = self.run_lookup({("account-a", None): SimpleNamespace(
+                    returncode=0, stdout=value, stderr="")})
+                self.assertFalse(result["complete"])
+                self.assertEqual(result["coverage"][0]["error"]["type"], "JSONDecodeError")
+
+    def test_default_budget_is_shared_and_deduplication_does_not_refund_it(self):
+        for distinct in (True, False):
+            calls = []
+            def runner(argv, **kwargs):
+                profile = argv[argv.index("--profile") + 1]
+                size = int(argv[argv.index("--page-size") + 1])
+                page = len(calls)
+                calls.append((profile, size))
+                return response([item(f"record-{page}-{i}" if distinct else "record-a")
+                                 for i in range(size)], more=True, token=f"next-{page}")
+            with self.subTest(distinct=distinct):
+                result = LOOKUP.lookup(["account-a", "account-b"], DAY, DAY, runner=runner)
+                self.assertEqual(calls, [("account-a", 30), ("account-a", 20)])
+                self.assertFalse(result["complete"])
+                self.assertTrue(result["needs_confirmation"])
+                self.assertEqual(result["coverage"][0]["items_received"], 50)
+                self.assertEqual(result["coverage"][0]["next_page_token"], "next-1")
+                self.assertEqual(result["coverage"][0]["stop_reason"], "confirmation_required")
+                self.assertEqual(result["coverage"][1]["status"], "not_queried")
+                self.assertEqual(result["coverage"][1]["pages_read"], 0)
+                self.assertEqual(len(result["candidates"]), 50 if distinct else 1)
+
+    def test_budget_exhaustion_on_last_page_can_still_be_complete(self):
+        routes = {
+            ("account-a", None): response([item(f"record-{i}") for i in range(29)]),
+            ("account-b", None): response([item(f"record-{i}") for i in range(29, 50)]),
+        }
+        result, runner = self.run_lookup(routes, ("account-a", "account-b"))
+        self.assertTrue(result["complete"])
+        self.assertFalse(result["needs_confirmation"])
+        self.assertEqual(len(result["candidates"]), 50)
+        self.assertEqual([c[c.index("--page-size") + 1] for c, _ in runner.calls], ["30", "21"])
+
+    def test_explicit_full_result_intent_reads_remaining_pages(self):
+        runner = Runner({
+            ("account-a", None): response([item(f"record-{i}") for i in range(30)], more=True, token="second"),
+            ("account-a", "second"): response([item(f"record-{i}") for i in range(30, 60)], more=True, token="third"),
+            ("account-a", "third"): response([item("record-60")]),
+        })
+        result = LOOKUP.lookup(["account-a"], DAY, DAY, runner=runner, all_pages=True)
+        self.assertTrue(result["complete"])
+        self.assertFalse(result["needs_confirmation"])
+        self.assertEqual(len(result["candidates"]), 61)
+        self.assertEqual(len(runner.calls), 3)
+
+    def test_cli_full_result_flag_reaches_lookup(self):
+        with mock.patch.object(LOOKUP, "lookup", return_value={"complete": True}) as query:
+            with redirect_stdout(io.StringIO()):
+                self.assertEqual(LOOKUP.main(["--profile", "account-a", "--start", DAY,
+                                              "--end", DAY, "--all-pages"]), 0)
+            self.assertTrue(query.call_args.kwargs["all_pages"])
+
     def test_real_subprocess_cli_contract_with_an_offline_fake(self):
         with tempfile.TemporaryDirectory() as directory:
             fake = Path(directory) / "lark-cli"

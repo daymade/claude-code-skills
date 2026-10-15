@@ -6,8 +6,10 @@
 """List dated Feishu recording candidates through explicitly supplied profiles.
 
 No profile discovery, title filtering, transcript reads or archive writes.
-Exit 0 means every requested profile finished pagination, 1 means incomplete
-coverage, and 2 means invalid command-line input.
+Without explicit full-result intent, read at most 50 items across profiles in
+argument order. --all-pages permits concurrent full pagination. Exit 0 means
+every requested profile finished pagination, 1 means incomplete coverage, and
+2 means invalid command-line input.
 """
 from __future__ import annotations
 
@@ -22,15 +24,19 @@ import subprocess
 from typing import Callable
 
 
+REFRESH_NOTICE = "[lark-cli] uat-client: token already refreshed by another process"
+
+
 class PageError(Exception):
     pass
 
 
-def cli_command(profile: str, start: str, end: str, page_token: str | None) -> list[str]:
+def cli_command(profile: str, start: str, end: str, page_token: str | None,
+                page_size: int = 30) -> list[str]:
     command = [
         "lark-cli", "--profile", profile, "minutes", "+search",
         "--start", start, "--end", end, "--as", "user",
-        "--page-size", "30", "--format", "json",
+        "--page-size", str(page_size), "--format", "json",
     ]
     if page_token is not None:
         command.extend(["--page-token", page_token])
@@ -38,7 +44,7 @@ def cli_command(profile: str, start: str, end: str, page_token: str | None) -> l
 
 
 def query_profile(profile: str, start: str, end: str, *, runner: Callable,
-                  timeout: float) -> dict:
+                  timeout: float, max_items: int | None = None) -> dict:
     rows: list[dict] = []
     pages_read = 0
     items_received = 0
@@ -52,10 +58,16 @@ def query_profile(profile: str, start: str, end: str, *, runner: Callable,
         "LARKSUITE_CLI_NO_SKILLS_NOTIFIER": "1",
     })
     error = None
+    notices: list[str] = []
+    stop_reason = None
     try:
         while True:
+            if max_items is not None and items_received >= max_items:
+                stop_reason = "confirmation_required"
+                break
+            page_size = 30 if max_items is None else min(30, max_items - items_received)
             stage = "cli"
-            response = runner(cli_command(profile, start, end, page_token),
+            response = runner(cli_command(profile, start, end, page_token, page_size),
                               capture_output=True, text=True, encoding="utf-8",
                               env=env, timeout=timeout, check=False)
             if response.returncode != 0:
@@ -63,7 +75,12 @@ def query_profile(profile: str, start: str, end: str, *, runner: Callable,
                 raise PageError(f"CLI exit {response.returncode}" +
                                 (f": {detail}" if detail else ""))
             stage = "response"
-            payload = json.loads(response.stdout)
+            lines = response.stdout.splitlines(keepends=True)
+            # This exact leading notice is emitted by the CLI during normal
+            # concurrent token refresh. Unknown output remains a parse error.
+            while lines and lines[0].rstrip("\r\n") == REFRESH_NOTICE:
+                notices.append(lines.pop(0).rstrip("\r\n"))
+            payload = json.loads("".join(lines))
             if not isinstance(payload, dict) or payload.get("ok") is not True:
                 raise PageError("response must be an object with ok=true")
             data = payload.get("data")
@@ -108,24 +125,39 @@ def query_profile(profile: str, start: str, end: str, *, runner: Callable,
         # Retain observed candidates from successful pages, including another
         # profile's results. A failed query is never converted to an empty one.
         error = {"stage": stage, "type": type(exc).__name__, "message": str(exc)[:600]}
-    status = "complete" if error is None else ("partial" if pages_read else "error")
+    if stop_reason is not None:
+        status = "partial" if pages_read else "not_queried"
+    else:
+        status = "complete" if error is None else ("partial" if pages_read else "error")
     return {"profile": profile, "status": status, "pages_read": pages_read,
             "items_received": items_received, "usable_items": len(rows),
-            "error": error, "rows": rows}
+            "error": error, "notices": notices, "stop_reason": stop_reason,
+            "next_page_token": page_token if stop_reason is not None else None,
+            "rows": rows}
 
 
 def lookup(profiles: list[str], start: str, end: str, *, timeout: float = 60,
-           runner: Callable | None = None) -> dict:
+           runner: Callable | None = None, all_pages: bool = False) -> dict:
     """Query only these profiles; their ownership/authorization is the caller's job."""
     profiles = list(dict.fromkeys(profiles))
     if not profiles:
         raise ValueError("at least one explicitly authorized profile is required")
     runner = runner or subprocess.run
-    with ThreadPoolExecutor(max_workers=min(4, len(profiles))) as pool:
-        futures = [pool.submit(query_profile, p, start, end, runner=runner,
-                               timeout=timeout) for p in profiles]
-        # Submission order keeps output deterministic while queries run in parallel.
-        results = [future.result() for future in futures]
+    if all_pages:
+        with ThreadPoolExecutor(max_workers=min(4, len(profiles))) as pool:
+            futures = [pool.submit(query_profile, p, start, end, runner=runner,
+                                   timeout=timeout) for p in profiles]
+            results = [future.result() for future in futures]
+    else:
+        # A shared, sequential budget keeps the guide's confirmation boundary
+        # predictable across profiles. Raw items count even when deduplicated.
+        results = []
+        remaining = 50
+        for profile in profiles:
+            result = query_profile(profile, start, end, runner=runner,
+                                   timeout=timeout, max_items=max(0, remaining))
+            remaining -= result["items_received"]
+            results.append(result)
     by_token: dict[str, dict] = {}
     for result in results:
         for row in result["rows"]:
@@ -140,6 +172,8 @@ def lookup(profiles: list[str], start: str, end: str, *, timeout: float = 60,
     coverage = [{k: v for k, v in r.items() if k != "rows"} for r in results]
     return {"schema": 1, "start": start, "end": end,
             "requested_profiles": profiles, "status": status, "complete": complete,
+            "all_pages": all_pages,
+            "needs_confirmation": any(r["stop_reason"] for r in results),
             "coverage": coverage, "candidates": list(by_token.values())}
 
 
@@ -177,12 +211,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--start", required=True, type=date_argument)
     parser.add_argument("--end", required=True, type=date_argument,
                         help="Inclusive date; use the same start/end for one day.")
+    parser.add_argument("--all-pages", action="store_true",
+                        help="Only when the user explicitly requested all results; bypass the 50-item confirmation boundary.")
     parser.add_argument("--timeout", type=timeout_argument, default=60,
                         help="Per-CLI-call timeout in seconds (default: 60).")
     args = parser.parse_args(argv)
     if args.start > args.end:
         parser.error("start must not be after end")
-    result = lookup(args.profile, args.start, args.end, timeout=args.timeout)
+    result = lookup(args.profile, args.start, args.end, timeout=args.timeout,
+                    all_pages=args.all_pages)
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0 if result["complete"] else 1
 
