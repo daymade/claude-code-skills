@@ -53,25 +53,12 @@ Run `lark-cli skills list --json`. Match the user's intent and any URL path or
 token to the returned `name`, `description`, and `metadata.cliHelp`.
 
 Do not derive the CLI domain by stripping `lark-` from the guide name: exceptions
-exist, and `metadata.cliHelp` or the guide itself is authoritative. These
-high-confusion routes need explicit care:
+exist, and `metadata.cliHelp` or the guide itself is authoritative.
 
-| Intent | Guide |
-|---|---|
-| auth, login, profile identity, missing scope, user vs bot | `lark-shared` |
-| `/wiki/` document content | `lark-doc` |
-| wiki space, membership, or node hierarchy | `lark-wiki` |
-| future meeting or room scheduling | `lark-calendar` |
-| ended meeting search, participants, or meeting artifacts | `lark-vc` |
-| known `note_id` | `lark-note` |
-| `minute_token`, 妙记 content, or audio-to-minutes | `lark-minutes` |
-| live meeting participation or in-meeting events | `lark-vc-agent` |
-| file upload, download, move, permissions, metadata, or Office import | `lark-drive` |
-
-For ordinary docs, sheets, Base, slides, mail, IM, tasks, approval, apps, and
-other domains, the live `skills list` descriptions are the routing table. A
-multi-domain request may select a workflow guide or a small ordered set of domain
-guides.
+Select the guide from the live descriptions. A compatibility guide that delegates
+to another Skill is for an explicitly requested legacy name; load its canonical
+owner for the task. For a multi-domain request, select a workflow guide or a small
+ordered set of domain guides from those descriptions.
 
 ### 3. Load the selected instructions completely
 

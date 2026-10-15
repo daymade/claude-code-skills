@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **lark-cli-router** (`daymade-claude-code` v4.30.2): Remove the duplicated intent-to-guide table in favor of the installed CLI's guide descriptions and embedded instructions, and add a repository entry link for existing date-based recording lookup; preserve legacy guide-name compatibility and the recording lookup contract.
+
 - **lark-cli-router** (`daymade-claude-code` v4.30.1): Move the existing dated-recording trigger before the catalog description cutoff, preserving all other triggers and runtime behavior.
 
 - **lark-cli-router** (`daymade-claude-code` v4.30.0): Add date-first recording candidate lookup for explicit dates and explicitly authorized profiles, preserving pagination and partial results while the agent confirms the meeting from its content.
