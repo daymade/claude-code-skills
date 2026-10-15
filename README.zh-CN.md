@@ -1029,66 +1029,19 @@ python3 scripts/calculate_metrics.py tests/TEST-EXECUTION-TRACKING.csv
 
 > **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:read-claude-code-history`）
 
-从所有活跃配置目录和 `~/.claude/history-sources.json` 已登记的长期备份中，
-读取、搜索和导出 Claude Code 历史，但不续做或修改旧任务。
+回查已有工作，不恢复旧任务执行。先进入
+[结果路由](./daymade-claude-code/read-claude-code-history/SKILL.md#route-by-the-requested-result)，
+读取当前操作流程、前置条件和覆盖边界。
 
-**使用场景：**
-- 从之前的 Claude Code 会话中恢复已删除或丢失的文件
-- 把一个已知 Session 重建成按时间交替的用户／Assistant 上下文
-- 读取人类真实输入，包括工作中途排队的纠正消息
-- 在对话历史中搜索特定代码
-- 跨多个会话跟踪文件修改
-- 查找包含特定关键字或实现的会话
-- 机器迁移后按真实对话日期核查历史，不信文件 mtime
+**按所需结果进入：**
 
-**主要功能：**
-- **完整来源集**：默认同时检索活跃目录与已登记备份
-- **Provider 边界**：默认只读 Claude；Codex 请求交给 `read-codex-history`
-- **跨项目扩搜**：项目未知时用 `--all-projects` 一次检索全部项目；可同时传多个关键词
-- **副本安全并集**：同一会话 ID 的所有副本都参与检索，相同记录不重复计数
-- **内部时间检索**：按 JSONL 记录时间过滤，不用文件 mtime
-- **结构化检索**：覆盖消息、thinking、工具输入/结果、队列、附件、摘要与 file-history 原始路径
-- **精确检查点恢复**：联合同一会话的多个副本与配套备份根，恢复 Write/Edit/命令行修改后捕获的原始字节，包括二进制与删除前检查点
-- **保真度显式可见**：Write-only 结果标为低保真；元数据指向的精确字节缺失时直接报错，不静默猜测
-- **统计分析**：消息计数、工具使用明细、文件操作
-- **批量操作**：使用关键字过滤处理多个会话
-- **流式处理**：高效处理大型会话文件（>100MB）
-- **读／续做分离**：只产出证据回执，本 Skill 不自行继续工作
+- 会话未知或只记得主题：[索引发现](./daymade-claude-code/read-claude-code-history/SKILL.md#indexed-content-search)
+- 已知会话：[按时间读取原始上下文](./daymade-claude-code/read-claude-code-history/SKILL.md#exact-session-evidence)
+- 原始命令及其回执：[工具调用与结果证据](./daymade-claude-code/read-claude-code-history/SKILL.md#original-tool-callresult-evidence)
+- 人类原话：[输入导出](./daymade-claude-code/read-claude-code-history/SKILL.md#human-input-export)
+- 已删除或被覆盖文件：[恢复流程](./daymade-claude-code/read-claude-code-history/SKILL.md#deleted-content-recovery)
 
-**示例用法：**
-```bash
-# 列出项目的最近会话
-python3 scripts/analyze_sessions.py list /path/to/project
-
-# 按时间读取一个 Session，并保留中途排队的人类输入
-python3 scripts/read_claude_session.py --session <session-id> --project /path/to/project --full
-
-# 按 Session 导出近期人类原话
-python3 scripts/extract_user_messages.py ./user-words --days 7 --group-by session
-
-# 搜索包含关键字的会话
-python3 scripts/analyze_sessions.py search /path/to/project \
-  "ComponentName" "featureX" --from-date 2026-03-01 --to-date 2026-04-30
-
-# 从 search 输出的精确路径恢复已删除文件
-python3 scripts/recover_content.py <printed-session-path> -k DeletedComponent -o ./recovered/
-
-# 项目未知时一次查找多个已消失的临时任务产物
-python3 scripts/analyze_sessions.py search --all-projects \
-  artifact-a.html artifact-b.html \
-  --exclude-session <current-session-id>
-
-# 获取会话统计信息
-python3 scripts/analyze_sessions.py stats /path/to/session.jsonl --show-files
-```
-
-**🎬 实时演示**
-
-*即将推出*
-
-📚 **文档**：参见 [daymade-claude-code/read-claude-code-history/references/](./daymade-claude-code/read-claude-code-history/references/)：
-- `session_file_format.md` - JSONL 结构和提取模式
-- `workflow_examples.md` - 详细的恢复和分析工作流
+执行命令以这些入口为准，README 不另维护操作配方。
 
 ---
 

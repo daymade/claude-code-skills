@@ -982,68 +982,19 @@ for history recall, interrupted work and conversation-backup health checks.
 
 > **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:read-claude-code-history`)
 
-Read, search, and export Claude Code history across all active config homes and
-the long-term archives registered in `~/.claude/history-sources.json`, without
-resuming or modifying the old task.
+Inspect prior work without resuming the old task. Start with the
+[result router](./daymade-claude-code/read-claude-code-history/SKILL.md#route-by-the-requested-result)
+for the current workflow, prerequisites and coverage limits.
 
-**When to use:**
-- Recovering deleted or lost files from previous Claude Code sessions
-- Reconstructing one known Session as a chronological user/assistant handoff
-- Listing what the human actually typed, including queued mid-turn corrections
-- Searching for specific code across conversation history
-- Tracking file modifications across multiple sessions
-- Finding sessions containing specific keywords or implementations
-- Finding which session ran a given command or tool call in a known time window, or when hook runs happened (outcome, duration, exit code)
-- Verifying date-bounded topics after a machine migration without trusting mtime
+**Choose the requested result:**
 
-**Key features:**
-- **Complete source set**: Search active homes and registered archives by default
-- **Provider boundary**: Claude-only by default; Codex requests route to `read-codex-history`
-- **Cross-project sweep**: `--all-projects` searches every Claude project when the project is unknown; `--exclude-session` skips self-matches
-- **Copy-safe union**: Search distinct records from every copy of a session ID without double-counting identical records
-- **Internal-time search**: Filter matching records by JSONL timestamps, never file mtime
-- **Structured search**: Cover messages, thinking, tools, results, queues, attachments, summaries, and original file-history paths
-- **Exact checkpoint recovery**: Union same-session copies and companion roots, then restore captured bytes after Write/Edit/shell changes, including binaries and pre-deletion checkpoints
-- **Fail-visible fidelity**: Label Write-only checkpoints as lower fidelity and abort when exact metadata points to missing bytes instead of silently guessing
-- **Statistics analysis**: Message counts, tool usage breakdown, file operations
-- **Batch operations**: Process multiple sessions with keyword filtering
-- **Streaming processing**: Handle large session files (>100MB) efficiently
-- **Read/continue separation**: Produces an evidence receipt and never resumes work itself
+- Unknown Session or remembered topic: [indexed discovery](./daymade-claude-code/read-claude-code-history/SKILL.md#indexed-content-search)
+- Known Session: [chronological evidence](./daymade-claude-code/read-claude-code-history/SKILL.md#exact-session-evidence)
+- Original command and its receipt: [tool call/result evidence](./daymade-claude-code/read-claude-code-history/SKILL.md#original-tool-callresult-evidence)
+- Verbatim human wording: [human-input export](./daymade-claude-code/read-claude-code-history/SKILL.md#human-input-export)
+- Deleted or overwritten files: [recovery workflow](./daymade-claude-code/read-claude-code-history/SKILL.md#deleted-content-recovery)
 
-**Example usage:**
-```bash
-# List recent sessions for a project
-python3 scripts/analyze_sessions.py list /path/to/project
-
-# Read one Session chronologically, preserving queued human input
-python3 scripts/read_claude_session.py --session <session-id> --project /path/to/project --full
-
-# Export recent human wording grouped by Session
-python3 scripts/extract_user_messages.py ./user-words --days 7 --group-by session
-
-# Search sessions for keywords
-python3 scripts/analyze_sessions.py search /path/to/project \
-  "ComponentName" "featureX" --from-date 2026-03-01 --to-date 2026-04-30
-
-# Recover deleted files from the exact path printed by search
-python3 scripts/recover_content.py <printed-session-path> -k DeletedComponent -o ./recovered/
-
-# Search every project for multiple vanished job artifacts
-python3 scripts/analyze_sessions.py search --all-projects \
-  artifact-a.html artifact-b.html \
-  --exclude-session <current-session-id>
-
-# Get session statistics
-python3 scripts/analyze_sessions.py stats /path/to/session.jsonl --show-files
-```
-
-**🎬 Live Demo**
-
-*Coming soon*
-
-📚 **Documentation**: See [daymade-claude-code/read-claude-code-history/references/](./daymade-claude-code/read-claude-code-history/references/) for:
-- `session_file_format.md` - JSONL structure and extraction patterns
-- `workflow_examples.md` - Detailed recovery and analysis workflows
+Use the commands in those entries rather than a separate README recipe.
 
 ---
 

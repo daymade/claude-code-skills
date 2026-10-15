@@ -367,6 +367,10 @@ For an original Claude tool call and its result from one known Session, use
 [read-claude-code-history's narrow evidence entry](daymade-claude-code/read-claude-code-history/SKILL.md#original-tool-callresult-evidence).
 Keep selectors, pairing, source scope and incomplete-output handling in that owner.
 
+For Claude history discovery without a known Session, use
+[read-claude-code-history's indexed search entry](daymade-claude-code/read-claude-code-history/SKILL.md#indexed-content-search).
+Keep executable examples and coverage requirements in that owner.
+
 Codex inventory must use the index-only command in
 `daymade-claude-code/read-codex-history/SKILL.md`. If its state database is
 unavailable, report an unknown inventory; do not substitute a raw rollout scan.

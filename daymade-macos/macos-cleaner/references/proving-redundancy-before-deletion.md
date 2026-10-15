@@ -19,11 +19,11 @@ modern macOS (APFS mounts `noatime` by default — access does not update
 timestamps), and a human opening files in Finder leaves no log. No evidence can
 support "never used."
 
-**"Was it ever used as a DATA SOURCE?" is answerable.** Agent-executed usage
-(Bash commands, Read/Write/Edit tool calls, pipeline code, scripts) lives in
-session transcripts and in the repo. Census that, and the residual — purely
-manual usage — shrinks to a traceable surface (.DS_Store, below). The evidence
-ladder climbs from provable to bounded:
+**"Does the covered evidence show it was used as a DATA SOURCE?" is answerable.**
+Agent-executed usage can appear in session transcripts and repo code. Inspect
+the original commands and their direction; missing records or search coverage
+remain unknown. Manual usage is a separate gap, even when agent evidence is
+available. The evidence ladder climbs from provable to bounded:
 
 ## The ladder (each rung is a command, not an impression)
 
@@ -38,7 +38,7 @@ one item: it was other people's data on other people's disks, and the whole
 "270 GB accounting gap" that motivated the walk was manufactured by the
 measurement itself.
 
-Two rules this rung enforces: any path under `/Volumes/` is suspect until df'd,
+Any path under `/Volumes/` is suspect until df'd,
 and in disk-accounting contexts `du` always carries `-x`. **A candidate that
 has not been df'd does not enter the evidence table** — no exceptions for
 "the size was just measured."
@@ -93,30 +93,24 @@ A hit is only evidence if the referencing thing is **alive**: a pipeline script
 load-bearing infrastructure; a doc sentence describing it makes it a *subject*,
 not a dependency. Read the actual lines — never classify from the file list.
 
-### 4. Session-history census — was it ever READ from?
+### 4. Bounded session evidence — did recorded work READ from it?
 
-This is the rung that answered the 2026-09-19 question, and it is a
-mechanical sweep, not a search:
+Enter the [conversation-history router](../../../daymade-claude-code/local-conversation-history/SKILL.md)
+for provider selection, indexed discovery and the selected provider's original-record
+reader. Follow that owner's current commands and coverage contract rather than
+using a raw history sweep. If the required reader or usable index is unavailable,
+leave usage unknown and continue independent evidence checks; a cleanup request
+does not itself authorize installation or an unbounded scan.
 
-```bash
-# Claude (all sources incl. archives) + Codex rollouts, bounded by date,
-# excluding the current session
-<read-claude-code-history>/scripts/analyze_sessions.py search \
-  --all-projects --exclude-session <CURRENT_SESSION_ID> --codex \
-  --from-date <YYYY-MM-DD> '<folder-name-1>' '<folder-name-2>'
-```
+Classify the original tool calls: **read/process from the candidate** (cp FROM
+it, Read of files inside, scripts consuming it) vs **write/create into it** vs
+**audit only** (du/ls/find — measuring is not using). Preserve source coordinates
+and the covered providers, sessions and time window. An index hit locates a
+candidate; verify the original call and result before assigning its role.
 
-Read the **label census** per matched session (`tool_input:Bash` /
-`tool_input:Read` / `tool_result` / `message` …). Then classify the actual tool
-calls: **read/process from the candidate** (cp FROM it, Read of files inside,
-scripts consuming it) vs **write/create into it** vs **audit only** (du/ls/find
-— measuring is not using). On 2026-09-19 this produced the decisive line: 300
-matched session files across 3 months, **zero** read/process operations, only
-the creation command (rung 2) and du audits.
-
-Two coverage facts to state in any report: Kimi sessions are a separate store
-(`--kimi` widens the search) — if the project's work spanned Kimi, include it;
-and this census covers agent-executed work only. Manual usage is rung 5.
+No ranked hits means no hits in the stated index coverage, not zero read/process
+operations. Missing tool records, unindexed sources and manual use remain gaps;
+do not use those gaps as evidence that the candidate is disposable.
 
 ### 5. .DS_Store — the last manual-usage trace
 
@@ -150,14 +144,16 @@ unprovable:
 |---|---|---|
 | Content duplicated in canonical copy | name+size+mtime triple, structure match | proven |
 | Candidate was created FROM canonical | creation command verbatim | proven |
-| Zero agent read/process operations | 300 sessions censused, label-classified | proven (scope: Claude+Codex, since <date>) |
+| Agent read/process usage in covered records | original calls/results, source coordinates, providers and time window | observed use or no use found in stated coverage; gaps remain unknown |
 | Project's own decision record | log.md / _decisions quote | proven |
 | Manual usage | .DS_Store newest mtime = <date> | bounded: browsed at most |
 | Non-agent manual use beyond Finder | — | unprovable — user's knowledge only |
 
-**Deletion is proposable when rungs 1-3 are proven and rungs 5-6 bound the
-residue.** The final gate is still the user's: they are the only one who can
-close the last row.
+Propose deletion only after duplication, origin and live dependencies are
+verified and the usage evidence and remaining gaps have been assessed. Unresolved
+usage cannot be converted into a non-use verdict. Apply the
+[Safety and authorization contract](../SKILL.md#safety-and-authorization-contract)
+to the exact target; a history search does not authorize deletion.
 
 ## Anti-patterns this reference exists to kill
 
@@ -229,7 +225,7 @@ base-evolved (compare contents); ONLY = untracked (build output in practice —
 2952 of 3197 files that day). A trailing `??` directory in `status` hides
 thousands of files; expand before counting.
 
-### 4. Two stranded shapes with no upstream at all
+### 4. Stranded shapes with no upstream at all
 
 A repo whose `origin` points at a local *bundle file* has no repatriation path —
 pushing writes back into the bundle, so its commits exist nowhere else by
