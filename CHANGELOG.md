@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **read-codex-history** (`daymade-claude-code` v4.29.1): Document the shipped streaming validation API and lineage callbacks with a synthetic runnable example; centralize the contract, correct index-only recovery guidance, and remove derived summaries. Runtime unchanged.
+- **tunnel-doctor** (v1.17.3): Test working SSH gateway candidates through the actual consumer before extending native relay work; preserve required UDP and other protocol acceptance.
+
 - **read-codex-history** (`daymade-claude-code` v4.29.0): `validate_codex_rollout(..., end_byte_offset=...)`; streaming identity, ordinal and copied-context validation; existing parser limits preserved.
 - **git-safety-net** (`git-safety-net` v1.22.5 → v1.22.6): "verify the original restriction's object, action and destination"; "Build the source contribution inventory from immutable refs, not the survivor's `git status`".
 

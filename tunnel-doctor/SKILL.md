@@ -66,6 +66,25 @@ Proxy/VPN tools on macOS create conflicts at several independent layers. Layers 
 
 ### Step 1: Identify the Symptom
 
+Name the actual consuming command or service and its required protocols before
+choosing a repair. When an authorized directly reachable peer can reach the slow
+target, and authenticated SSH plus a representative transfer through that peer
+already work better, treat the gateway as an integration candidate. First inspect
+the consumer's effective SSH/inventory arguments and test whether its normal entry
+can use that path; a successful handwritten `ssh -J` does not prove integration.
+
+If the gateway carries the required workload, connect it through the existing
+managed transport and replay the original operation without per-request jump
+arguments. Verify target identity, host-key trust, content integrity, elapsed time
+and the declared failure/recovery behavior. Do this before further work on a
+native relay that is not required by the user's result. Keep exact hosts, ports
+and live route state in the owning infrastructure configuration.
+
+Keep unmet protocols explicit: an SSH gateway does not establish UDP or arbitrary
+application connectivity. Continue the relevant network repair when those are
+required; do not replace that acceptance with SSH success. The executing agent
+must judge protocol fit and user intent; no bundled checker establishes either.
+
 Determine which scenario applies:
 
 - **Browser returns HTTP 503, but `curl` and SSH both work** → System proxy bypass conflict (Step 2C)
