@@ -333,7 +333,9 @@ def copied_context_contract(meta: dict[str, Any]) -> Optional[dict[str, Any]]:
 
 
 def _iter_rollout_records(
-    path: Path, end_byte_offset: Optional[int] = None
+    path: Path, end_byte_offset: Optional[int] = None, *,
+    max_total_bytes: Optional[int] = None,
+    on_record_end: Optional[Callable[[int], None]] = None,
 ) -> Iterator[dict[str, Any]]:
     """Yield rollout records, optionally stopping at an exact byte boundary.
 
@@ -354,7 +356,10 @@ def _iter_rollout_records(
             f"history_base.end_byte_offset {end_byte_offset} is outside {path} "
             f"(physical size {physical_size})"
         )
-    if end_byte_offset > MAX_ROLLOUT_BYTES:
+    byte_limit = MAX_ROLLOUT_BYTES if max_total_bytes is None else max_total_bytes
+    if type(byte_limit) is not int or not 0 <= byte_limit <= MAX_HISTORY_POSITION:
+        raise LineageResolutionError("invalid rollout byte safety limit")
+    if end_byte_offset > byte_limit:
         raise LineageResolutionError(f"rollout prefix exceeds byte safety limit: {path}")
 
     with path.open("rb") as handle:
@@ -425,6 +430,8 @@ def _iter_rollout_records(
                 if next_ordinal > MAX_HISTORY_POSITION:
                     raise LineageResolutionError(f"paginated record ordinal overflow in {path}")
             record_number += 1
+            if on_record_end is not None:
+                on_record_end(handle.tell())
             yield record
 
         if handle.tell() != end_byte_offset:
@@ -485,6 +492,7 @@ def resolve_inherited_lineage(
     max_depth: int = MAX_LINEAGE_DEPTH,
     on_parent: Optional[Callable[[str, Path, int], None]] = None,
     on_verified_parent: Optional[Callable[[dict[str, Any]], None]] = None,
+    read_rollout: Optional[Callable[..., dict[str, Any]]] = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Resolve every declared ancestor at the exact snapshot inherited by its child.
 
@@ -534,14 +542,21 @@ def resolve_inherited_lineage(
 
         if on_parent is not None:
             on_parent(parent_id, parent_path, history_base["end_byte_offset"])
-        parent_data = parse_codex_rollout(
-            parent_path, end_byte_offset=history_base["end_byte_offset"]
-        )
+        ids = _rollout_ids(parent_path)
+        expected_id = ids[0] if ids else parent_id
+        if read_rollout is None:
+            parent_data = parse_codex_rollout(
+                parent_path, end_byte_offset=history_base["end_byte_offset"]
+            )
+        else:
+            parent_data = read_rollout(
+                parent_path, expected_id,
+                end_byte_offset=history_base["end_byte_offset"],
+            )
         try:
-            ids = _rollout_ids(parent_path)
             if ids and ids[1] != parent_id.lower():
                 raise LineageResolutionError("history_base references a different physical rollout")
-            validate_selected_rollout_identity(parent_data, ids[0] if ids else parent_id)
+            validate_selected_rollout_identity(parent_data, expected_id)
         except LineageResolutionError as exc:
             raise LineageResolutionError(
                 f"parent snapshot identity is invalid for {parent_id}: {exc}: "
@@ -613,14 +628,143 @@ def validate_selected_rollout_identity(
             raise LineageResolutionError("paginated rollout requires a canonical matching filename")
 
 
-def _second_rollout_record(path: Path) -> Optional[dict[str, Any]]:
+def _consume_rollout_metadata(
+    data: dict[str, Any], record: dict[str, Any], *, bounded_ids: bool = False,
+) -> bool:
+    """Account for real own metadata; return whether this record is copied context."""
+    payload = record.get("payload") if isinstance(record.get("payload"), dict) else {}
+    if data["meta"] is None and record.get("type") == "session_meta":
+        data["copied_model_context"] = copied_context_contract(payload)
+    copied = data["copied_model_context"]
+    if copied and 0 < record["ordinal"] < copied["start_ordinal"]:
+        return True
+    if record.get("type") == "session_meta":
+        meta_id = payload.get("id")
+        ids = data["session_meta_ids"]
+        if isinstance(meta_id, str) and (not bounded_ids or meta_id not in ids):
+            if bounded_ids and len(ids) >= 2:
+                raise LineageResolutionError("fused rollout contains more than two session_meta identities")
+            ids.append(meta_id)
+        if data["meta"] is None:
+            data["meta"] = payload
+    return False
+
+
+def _summarize_codex_rollout(
+    path: Path, *, end_byte_offset: int,
+    skip_record_index_range: Optional[tuple[int, int]] = None,
+) -> dict[str, Any]:
+    """Consume a caller-captured prefix without retaining conversation records."""
+    physical_size = path.stat().st_size
+    if type(end_byte_offset) is not int or not 0 < end_byte_offset <= min(
+        physical_size, MAX_HISTORY_POSITION
+    ):
+        raise LineageResolutionError("streaming validation requires a positive captured byte cutoff within the rollout")
+    data: dict[str, Any] = {
+        "source_path": _resolved_path_key(path),
+        "file_size": physical_size,
+        "parsed_bytes": end_byte_offset,
+        "snapshot_end_byte_offset": end_byte_offset,
+        "skip_record_index_range": skip_record_index_range,
+        "total_lines": 0,
+        "meta": None,
+        "session_meta_ids": [],
+        "copied_model_context": None,
+        "copied_context_record_count": 0,
+        "own_metadata_record_count": 0,
+        "ordinal_start": None,
+        "end_ordinal_exclusive": None,
+        "legacy_parent_edge": None,
+    }
+    for record in _iter_rollout_records(
+        path, end_byte_offset, max_total_bytes=end_byte_offset,
+    ):
+        index = data["total_lines"]
+        data["total_lines"] += 1
+        rtype, payload = record.get("type"), record.get("payload")
+        if not isinstance(rtype, str) or not rtype.strip() or not isinstance(payload, dict):
+            raise LineageResolutionError("rollout record requires a type and an object payload")
+        if index == 0 and rtype != "session_meta":
+            raise LineageResolutionError("rollout must begin with session_meta")
+        if rtype == "session_meta" and (
+            not isinstance(payload.get("id"), str) or not payload["id"].strip()
+        ):
+            raise LineageResolutionError("session_meta lacks a valid identity")
+        if index == 0 and payload.get("history_mode") == "paginated":
+            data["ordinal_start"] = record["ordinal"]
+        if data["ordinal_start"] is not None:
+            data["end_ordinal_exclusive"] = record["ordinal"] + 1
+        if skip_record_index_range is not None:
+            start, end = skip_record_index_range
+            if start <= index < end:
+                continue
+        if _consume_rollout_metadata(data, record, bounded_ids=True):
+            data["copied_context_record_count"] += 1
+        elif rtype == "session_meta":
+            data["own_metadata_record_count"] += 1
+    if not data["total_lines"]:
+        raise LineageResolutionError("rollout contains no session_meta records")
+    copied = data["copied_model_context"]
+    if copied and data["end_ordinal_exclusive"] < copied["start_ordinal"]:
+        raise LineageResolutionError("captured copied context is incomplete before own-history boundary")
+    # Legacy rollouts also carry history_base; validate it without following an
+    # external file or retaining its conversation.
+    _history_base(data["meta"], str(data["meta"].get("id")))
+    return data
+
+
+def validate_codex_rollout(
+    path: Path, expected_session_id: str, *, end_byte_offset: int,
+    resolve_session: Optional[Callable[[str], Optional[Path]]] = None,
+) -> dict[str, Any]:
+    """Validate an explicitly captured prefix with bounded retained metadata.
+
+    Require a positive exact JSONL byte cutoff, including for whole-file reads.
+    This streaming consumer can validate a prefix larger than the ordinary
+    parser's 1 GiB guard; the native ordinal/copied-context state machine and
+    64 MiB per-record guard still apply. Retain only the first metadata object,
+    at most two distinct own metadata identities and scalar counts/coordinates.
+    Do not collect turns, copied records, prose or tool results.
+
+    A supported legacy embedded fork requires its real parent resolver. Return
+    its verified edge in ``legacy_parent_edge``; its ``data`` is another bounded
+    summary. Modern ancestry remains explicit through ``resolve_inherited_lineage``
+    with ``read_rollout=validate_codex_rollout``. No validation resumes a session.
+    """
+    if not isinstance(expected_session_id, str) or not expected_session_id.strip():
+        raise LineageResolutionError("streaming validation requires an expected session identity")
+    data = _summarize_codex_rollout(path, end_byte_offset=end_byte_offset)
+    if data["meta"].get("id") != expected_session_id:
+        validate_selected_rollout_identity(data, expected_session_id)
+    parent_id = _detect_legacy_embedded_fork(
+        path, data["meta"], end_byte_offset=end_byte_offset,
+    )
+    if parent_id is not None:
+        if resolve_session is None:
+            raise LineageResolutionError("legacy embedded validation requires a real parent resolver")
+        recovered = recover_legacy_embedded_fork(
+            path, data, expected_session_id, resolve_session,
+            read_rollout=_summarize_codex_rollout,
+        )
+        if recovered is not None:
+            data, edge = recovered
+            data["legacy_parent_edge"] = edge
+    validate_selected_rollout_identity(data, expected_session_id)
+    return data
+
+
+def _second_rollout_record(
+    path: Path, *, end_byte_offset: Optional[int] = None,
+) -> Optional[dict[str, Any]]:
     """Return a rollout's second JSONL record (blank lines never count), or
     None when the file has fewer than two. Cheap regardless of file size —
     stops after two records — because it exists only to test the
     legacy-embedded-fork shape before ever committing to the full comparison
     against a candidate parent file.
     """
-    records = iter_jsonl(path)
+    records = (iter_jsonl(path) if end_byte_offset is None else _iter_rollout_records(
+        path, end_byte_offset, max_total_bytes=end_byte_offset,
+    ))
     try:
         next(records)
         return next(records)
@@ -630,7 +774,9 @@ def _second_rollout_record(path: Path) -> Optional[dict[str, Any]]:
         records.close()
 
 
-def _detect_legacy_embedded_fork(path: Path, meta: dict[str, Any]) -> Optional[str]:
+def _detect_legacy_embedded_fork(
+    path: Path, meta: dict[str, Any], *, end_byte_offset: Optional[int] = None,
+) -> Optional[str]:
     """Return the parent id when `path` embeds a legacy fork snapshot inline.
 
     Older Codex CLI (measured: `history_mode: "legacy"`, cli_version 0.149.0)
@@ -650,7 +796,7 @@ def _detect_legacy_embedded_fork(path: Path, meta: dict[str, Any]) -> Optional[s
     if meta.get("history_mode")=="paginated" or meta.get("history_base") is not None:
         return None
     forked_from_id = meta.get("forked_from_id")
-    second = _second_rollout_record(path)
+    second = _second_rollout_record(path, end_byte_offset=end_byte_offset)
     if second is None or second.get("type") != "session_meta":
         return None
     second_payload = second.get("payload")
@@ -693,7 +839,8 @@ def _legacy_records_match(child_record: dict[str, Any], parent_record: dict[str,
 
 
 def _legacy_embedded_snapshot_boundary(
-    child_path: Path, parent_path: Path, session_id: str, parent_id: str
+    child_path: Path, parent_path: Path, session_id: str, parent_id: str, *,
+    streaming_end_byte_offset: Optional[int] = None,
 ) -> tuple[int, int]:
     """Find the exact parent byte boundary a legacy-embedded copy proves.
 
@@ -714,7 +861,42 @@ def _legacy_embedded_snapshot_boundary(
     """
     matched = 0
     end_byte_offset = 0
-    child_records = iter_jsonl(child_path, strict=True)
+    def parent_records_with_offsets() -> Iterator[tuple[dict[str, Any], int]]:
+        if streaming_end_byte_offset is not None:
+            captured_size = parent_path.stat().st_size
+            position = 0
+
+            def save_position(offset: int) -> None:
+                nonlocal position
+                position = offset
+
+            for record in _iter_rollout_records(
+                parent_path, captured_size, max_total_bytes=captured_size,
+                on_record_end=save_position,
+            ):
+                yield record, position
+            return
+        with parent_path.open("rb") as parent_handle:
+            for raw_line in iter(parent_handle.readline, b""):
+                if not raw_line.strip():
+                    continue
+                try:
+                    record = json.loads(raw_line.decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                    raise LineageResolutionError(
+                        f"cannot decode parent rollout {parent_path} while measuring "
+                        f"the legacy-embedded snapshot inherited by {session_id}: {exc}"
+                    ) from exc
+                yield record, parent_handle.tell()
+
+    child_records = (
+        iter_jsonl(child_path, strict=True) if streaming_end_byte_offset is None
+        else _iter_rollout_records(
+            child_path, streaming_end_byte_offset,
+            max_total_bytes=streaming_end_byte_offset,
+        )
+    )
+    parent_records = parent_records_with_offsets()
     try:
         try:
             next(child_records)  # the child's own leading session_meta
@@ -724,30 +906,21 @@ def _legacy_embedded_snapshot_boundary(
                 f"{parent_id} but has no records of its own to compare"
             ) from exc
 
-        with parent_path.open("rb") as parent_handle:
-            while True:
-                raw_line = parent_handle.readline()
-                if not raw_line:
-                    break
-                if not raw_line.strip():
-                    continue
-                try:
-                    child_record = next(child_records)
-                except StopIteration:
-                    break
-                try:
-                    parent_record = json.loads(raw_line.decode("utf-8"))
-                except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-                    raise LineageResolutionError(
-                        f"cannot decode parent rollout {parent_path} while measuring "
-                        f"the legacy-embedded snapshot inherited by {session_id}: {exc}"
-                    ) from exc
-                if not isinstance(parent_record, dict) or not _legacy_records_match(
-                    child_record, parent_record
-                ):
-                    break
-                matched += 1
-                end_byte_offset = parent_handle.tell()
+        while True:
+            try:
+                child_record = next(child_records)
+            except StopIteration:
+                break
+            try:
+                parent_record, parent_offset = next(parent_records)
+            except StopIteration:
+                break
+            if not isinstance(parent_record, dict) or not _legacy_records_match(
+                child_record, parent_record
+            ):
+                break
+            matched += 1
+            end_byte_offset = parent_offset
     except (OSError, UnicodeError) as exc:
         raise LineageResolutionError(
             f"cannot compare {child_path} against legacy-embedded parent "
@@ -755,6 +928,7 @@ def _legacy_embedded_snapshot_boundary(
         ) from exc
     finally:
         child_records.close()
+        parent_records.close()
 
     if matched < MIN_LEGACY_EMBEDDED_PREFIX:
         raise LineageResolutionError(
@@ -772,6 +946,8 @@ def recover_legacy_embedded_fork(
     data: dict[str, Any],
     session_id: str,
     resolve_session: Callable[[str], Optional[Path]],
+    *,
+    read_rollout: Optional[Callable[..., dict[str, Any]]] = None,
 ) -> Optional[tuple[dict[str, Any], dict[str, Any]]]:
     """Peel a legacy-embedded parent snapshot out of `data`, when present.
 
@@ -800,7 +976,10 @@ def recover_legacy_embedded_fork(
     without a provable snapshot).
     """
     meta = data.get("meta") or {}
-    parent_id = _detect_legacy_embedded_fork(path, meta)
+    parent_id = _detect_legacy_embedded_fork(
+        path, meta, end_byte_offset=(data.get("snapshot_end_byte_offset")
+                                  if read_rollout is not None else None),
+    )
     if parent_id is None:
         return None
 
@@ -813,14 +992,17 @@ def recover_legacy_embedded_fork(
         )
 
     matched, parent_end_byte_offset = _legacy_embedded_snapshot_boundary(
-        path, parent_path, session_id, parent_id
+        path, parent_path, session_id, parent_id,
+        streaming_end_byte_offset=(data.get("snapshot_end_byte_offset")
+                                   if read_rollout is not None else None),
     )
 
-    corrected_data = parse_codex_rollout(
+    parse_rollout = parse_codex_rollout if read_rollout is None else read_rollout
+    corrected_data = parse_rollout(
         path, end_byte_offset=data.get("snapshot_end_byte_offset"),
         skip_record_index_range=(1, 1 + matched),
     )
-    parent_data = parse_codex_rollout(parent_path, end_byte_offset=parent_end_byte_offset)
+    parent_data = parse_rollout(parent_path, end_byte_offset=parent_end_byte_offset)
     try:
         validate_selected_rollout_identity(parent_data, parent_id)
     except LineageResolutionError as exc:
@@ -852,6 +1034,7 @@ def extend_legacy_lineage(
     *,
     on_parent: Optional[Callable[[str, Path, int], None]] = None,
     on_verified_parent: Optional[Callable[[dict[str, Any]], None]] = None,
+    read_rollout: Optional[Callable[..., dict[str, Any]]] = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Root-first lineage for a selected session recovered via
     `recover_legacy_embedded_fork`: the legacy parent edge itself, preceded by
@@ -869,6 +1052,7 @@ def extend_legacy_lineage(
         further_lineage, warnings = resolve_inherited_lineage(
             parent_edge["data"], resolve_session, on_parent=on_parent,
             on_verified_parent=on_verified_parent,
+            read_rollout=read_rollout,
         )
     return [*further_lineage, parent_edge], warnings
 
@@ -1070,10 +1254,7 @@ def parse_codex_rollout(
         rtype = record.get("type")
         payload = record.get("payload") if isinstance(record.get("payload"), dict) else {}
         ptype = payload.get("type")
-        if data["meta"] is None and rtype=="session_meta":
-            data["copied_model_context"]=copied_context_contract(payload)
-        copied=data["copied_model_context"]
-        if copied and 0<record["ordinal"]<copied["start_ordinal"]:
+        if _consume_rollout_metadata(data, record):
             # Keep exact objects and physical coordinates separately. Imported
             # parent context must not inflate the child's own inputs or plan.
             data["copied_context_records"].append({"record":data["total_lines"],"original":record})
@@ -1126,13 +1307,7 @@ def parse_codex_rollout(
                 ).encode("utf-8")).hexdigest(),
             })
 
-        if rtype == "session_meta":
-            meta_id = payload.get("id")
-            if isinstance(meta_id, str):
-                data["session_meta_ids"].append(meta_id)
-            if data["meta"] is None:
-                data["meta"] = payload
-        elif rtype == "compacted":
+        if rtype == "compacted":
             summary = _compacted_summary(payload)
             if summary:
                 data["compact_summaries"].append(summary)
