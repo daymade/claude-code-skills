@@ -56,6 +56,11 @@ Then enforce these boundaries:
    receipts, and audit breadth are supporting evidence, never substitutes for that outcome. Stop
    when the contract is satisfied; record unrelated findings separately without acting on them.
 
+Before withholding otherwise authorized commits or pushes because a handover says
+"do not upload", verify the original restriction's object, action and destination.
+Use [the convergence authority check](references/merge_verification.md#1-freeze-the-outcome-and-the-first-ref-snapshot);
+an assistant-authored restriction is a lookup lead, not a new user decision.
+
 ## Entry router — pick the mode from what the user is worried about
 
 | The user says / needs… | Go to |

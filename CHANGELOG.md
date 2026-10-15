@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **git-safety-net** (`git-safety-net` v1.22.5 → v1.22.6): "verify the original restriction's object, action and destination"; "Build the source contribution inventory from immutable refs, not the survivor's `git status`".
+
 - **macos-cleaner** (`daymade-macos` v1.22.6): Route deletion-evidence history lookup through the current provider readers; preserve unknown usage when index or original-record coverage is missing. Align the bilingual history guide and project entry with indexed discovery.
 
 - **read-claude-code-history** (`daymade-claude-code` v4.28.1): Align original-tool evidence documentation with transcript validation and filtered output; add complete-output capture, route narrow requests to the existing reader, and remove derived count wording.
