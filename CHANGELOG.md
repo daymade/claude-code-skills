@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **feishu-doc-scraper** (v1.9.0): Continue comment capture after unavailable reply text while preserving raw replies and image gaps, align the renderer with all three Lark hosts, render verified whiteboard previews in place, and emit complete provenance plus optional discussion links. Add synthetic shape/host/media regressions and live capture/render validation. Change type: bounded capture-reliability and rendering repair.
 - **app-evolver** (v1.1.2): Adapt Eleven's feature-investigation playbooks into the existing reverse-analysis handoff: locate observable anchors, trace substantive work, retain build-bound evidence notes and respect the existing mutation owner. Keep network and performance conclusions within observed evidence; add no framework or runtime dependency. Change type: bounded evidence-selection refinement.
 - **read-codex-history** (`daymade-claude-code` v4.30.3): Classify an error cascade from the current unrecovered failure tail while retaining historical errors. Bounded rollout replay and regression tests cover recovery, empty results, patch outcomes and terminal-state precedence. Change type: existing-contract repair.
 - **terraform-skill** (v1.5.9): Document native-plan sensitivity-mark diagnosis when JSON values show no change; require exact plan binding and preserve release rejection for unexplained actions. Change type: bounded guidance addition.

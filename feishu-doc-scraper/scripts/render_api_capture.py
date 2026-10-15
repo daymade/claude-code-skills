@@ -9,6 +9,7 @@ The source JSON remains untouched. This is a conversion preflight, not proof
 that the resulting note displays correctly in the recipient's actual reader.
 """
 import argparse
+from datetime import datetime, timezone
 import html
 import json
 import os
@@ -16,6 +17,12 @@ from pathlib import Path
 import re
 import subprocess
 import urllib.parse
+
+from check_archive_storage import FEISHU_HOST_SUFFIXES
+
+
+WHITEBOARD_MARKER = 'FEISHU-RENDER-WHITEBOARD-'
+SOURCE_TYPES = {'docx': 'docx', 'wiki': 'wiki', 'sheets': 'sheet', 'minutes': 'minutes'}
 
 
 def attrs(tag):
@@ -45,13 +52,45 @@ def prepare(content, media):
         embed = f'<p><img src="{target}" alt=""></p>' if Path(urllib.parse.unquote(media[token])).suffix.lower() == '.mp4' else ''
         return embed + f'<p><a href="{target}">{name}</a></p>'
 
+    def whiteboard(match):
+        token = attrs(match.group()).get('token')
+        if token not in media:
+            raise ValueError('Embedded whiteboard has no verified local preview: ' + str(token))
+        used.add(token)
+        return f'<p>{WHITEBOARD_MARKER}{token}</p>'
+
     content = re.sub(r'<img\b[^>]*>', image, content)
     content = re.sub(r'<source\b[^>]*>', video, content)
+    content = re.sub(r'<whiteboard\b[^>]*>(?:\s*</whiteboard>)?', whiteboard,
+                     content, flags=re.DOTALL)
     content = re.sub(r'</?(?:figure|view|span)\b[^>]*>', '', content)
     return content, used
 
 
-def render(capture, manifest, output, source):
+def document_title(document, fallback):
+    if document.get('title'):
+        return document['title']
+    content = document.get('content') or ''
+    match = re.search(r'<title>(.*?)</title>', content, flags=re.DOTALL)
+    return html.unescape(match.group(1)).strip() if match else fallback
+
+
+def discussion_destination(root, output, discussion):
+    if discussion is None:
+        return None
+    relative = Path(discussion)
+    if relative.is_absolute() or '..' in relative.parts:
+        raise ValueError('Discussion companion must stay inside the archive folder')
+    actual = (root / relative).resolve()
+    if not actual.is_relative_to(root) or not actual.is_file():
+        raise ValueError('Discussion companion is missing from the archive folder')
+    relative = Path(os.path.relpath(actual, output.parent)).as_posix()
+    if any(c in relative for c in '<>\n\r'):
+        raise ValueError('Discussion name cannot be represented by a native Markdown destination')
+    return f'[Comments and feedback](<{relative}>)'
+
+
+def render(capture, manifest, output, source, discussion=None):
     data = json.loads(Path(capture).read_text(encoding='utf-8'))
     document = data['data']['document']
     content = document.get('content')
@@ -83,8 +122,12 @@ def render(capture, manifest, output, source):
         media[token] = urllib.parse.quote(relative, safe='/')
     content, used = prepare(content, media)
     origin = urllib.parse.urlsplit(source)
-    if origin.scheme != 'https' or not origin.hostname or not origin.hostname.endswith('.feishu.cn'):
-        raise ValueError('Source must be the original Feishu URL')
+    host_suffixes = tuple('.' + host for host in FEISHU_HOST_SUFFIXES)
+    if origin.scheme != 'https' or not origin.hostname or not origin.hostname.endswith(host_suffixes):
+        raise ValueError('Source must be an original Feishu/Lark URL')
+    source_kind = origin.path.strip('/').split('/')[0]
+    source_type = SOURCE_TYPES.get(source_kind, source_kind or 'unknown')
+    discussion_link = discussion_destination(root, output, discussion)
 
     def cite(match):
         a = attrs(match.group())
@@ -96,12 +139,20 @@ def render(capture, manifest, output, source):
         return f'<a href="{html.escape(url, quote=True)}">{html.escape(a.get("title") or token)}</a>'
 
     content = re.sub(r'<cite\b[^>]*>\s*</cite>', cite, content)
+    whiteboard_counts = {}
+    for token in re.findall(re.escape(WHITEBOARD_MARKER) + r'([A-Za-z0-9_-]+)', content):
+        whiteboard_counts[token] = whiteboard_counts.get(token, 0) + 1
     converted = subprocess.run(['pandoc', '-f', 'html', '-t', 'gfm', '--wrap=none'],
                                input=content, text=True, capture_output=True, check=True).stdout
     # Blank lines keep adjacent images independent in Markdown readers.
     converted = converted.replace(')![](', ')\n\n![](')
-    if '\ufffd' in converted:
+    if '�' in converted:
         raise ValueError('Conversion contains replacement characters')
+    for token, count in whiteboard_counts.items():
+        marker = WHITEBOARD_MARKER + token
+        if converted.count(marker) != count:
+            raise ValueError('Pandoc changed a localized whiteboard marker: ' + token)
+        converted = converted.replace(marker, f'![Whiteboard {token}]({media[token]})')
     for token in used:
         if media[token] not in converted:
             raise ValueError('Pandoc dropped a localized media reference')
@@ -109,16 +160,24 @@ def render(capture, manifest, output, source):
         if any(c in decoded for c in '<>\n\r'):
             raise ValueError('Media name cannot be represented by a native Markdown destination')
         converted = converted.replace('(' + media[token] + ')', '(<'+ decoded + '>)')
-    title = document.get('title') or output.stem
-    front = ('---\ntitle: ' + json.dumps(title, ensure_ascii=False) + '\nsource: ' + json.dumps(source) +
-             '\ncapture_method: lark-cli-api\npost_process: "saved API HTML → localized media → pandoc GFM"\n' +
+    title = document_title(document, output.stem)
+    front = ('---\ntitle: ' + json.dumps(title, ensure_ascii=False) +
+             '\nsource: ' + json.dumps(source) +
+             '\nsource_type: ' + json.dumps(source_type) +
+             ('\nsource_revision: ' + str(document['revision_id']) if document.get('revision_id') is not None else '') +
+             '\nextracted: ' + json.dumps(datetime.now(timezone.utc).date().isoformat()) +
+             '\ncapture_method: lark-cli-api\npost_process: "saved API HTML → localized media/whiteboards → pandoc GFM"\n' +
              'qmd:\n  metadata:\n    platform: "feishu"\n    key: ' + json.dumps(origin.path.rstrip('/').split('/')[-1]) +
              '\n    kind: "document_snapshot"\n---\n\n')
+    if discussion_link:
+        front += discussion_link + '\n\n'
     if output.exists():
         raise ValueError('Output already exists; render to a new pilot path and review the diff')
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(front + converted, encoding='utf-8')
     return {'output': str(output), 'media_references': len(used),
+            'whiteboard_references': sum(whiteboard_counts.values()),
+            'discussion_links': int(bool(discussion_link)),
             'status': 'converted_reader_pending', 'actual_reader': 'not_verified'}
 
 
@@ -128,8 +187,9 @@ def main():
     p.add_argument('manifest', type=Path)
     p.add_argument('output', type=Path)
     p.add_argument('--source', required=True)
+    p.add_argument('--discussion', help='Relative Markdown discussion companion inside the archive')
     a = p.parse_args()
-    print(json.dumps(render(a.capture, a.manifest, a.output, a.source), ensure_ascii=False))
+    print(json.dumps(render(a.capture, a.manifest, a.output, a.source, a.discussion), ensure_ascii=False))
 
 
 if __name__ == '__main__':

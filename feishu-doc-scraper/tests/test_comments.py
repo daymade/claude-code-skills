@@ -99,6 +99,55 @@ class CommentTests(unittest.TestCase):
         self.assertIn("future_format", mod.render(got))
         self.assertIn("image-token", mod.render(got))
 
+    def test_missing_empty_and_null_content_shapes_are_distinct(self):
+        cases = []
+        missing_content = reply("r1")
+        del missing_content["content"]
+        cases.append(("missing_content", missing_content, "partial", 1))
+        missing_elements = reply("r1")
+        del missing_elements["content"]["elements"]
+        cases.append(("missing_elements", missing_elements, "partial", 1))
+        null_elements = reply("r1")
+        null_elements["content"]["elements"] = None
+        cases.append(("null_elements", null_elements, "partial", 1))
+        empty_elements = reply("r1")
+        empty_elements["content"]["elements"] = []
+        cases.append(("empty_elements", empty_elements, "complete", 0))
+        cases.append(("valid_elements", reply("r1"), "complete", 0))
+        for name, candidate, expected_status, expected_gaps in cases:
+            with self.subTest(shape=name):
+                responses = [page([card("c1")]), page([candidate])]
+                got = mod.capture("https://example.feishu.cn/docx/doc", caller=lambda *_: responses.pop(0))
+                self.assertEqual(got["status"], expected_status)
+                self.assertTrue(got["threads_complete"])
+                self.assertEqual(len(got["comments"][0]["replies"]), 1)
+                self.assertEqual(len(got["unexpanded_content"]), expected_gaps)
+                self.assertEqual(got["errors"], [])
+                self.assertIn("r1", mod.render(got))
+
+    def test_null_text_and_images_do_not_abort_following_threads(self):
+        abnormal = reply("r-null")
+        abnormal["content"]["elements"] = None
+        abnormal["extra"] = {"image_list": ["image-token-null"]}
+        responses = [page([card("c1"), card("c2")]),
+                     page([abnormal]), page([reply("r2", "second thread text")])]
+        got = mod.capture("https://example.feishu.cn/docx/doc", caller=lambda *_: responses.pop(0))
+        self.assertEqual(got["status"], "partial")
+        self.assertTrue(got["threads_complete"])
+        self.assertEqual(got["errors"], [])
+        self.assertEqual(len(got["comments"]), 2)
+        self.assertTrue(all(thread["replies_complete"] for thread in got["comments"]))
+        self.assertEqual([len(thread["replies"]) for thread in got["comments"]], [1, 1])
+        self.assertEqual(got["comments"][0]["replies"][0], abnormal)
+        reasons = [item.get("reason") for item in got["unexpanded_content"]]
+        self.assertIn("reply_content_elements_not_list", reasons)
+        self.assertIn({"comment_id": "c1", "reply_id": "r-null",
+                       "image_list": ["image-token-null"]}, got["unexpanded_content"])
+        text = mod.render(got)
+        self.assertIn("image-token-null", text)
+        self.assertIn("second thread text", text)
+        self.assertIn('"elements": null', text)
+
     def test_identity_drift_is_rejected(self):
         responses = [page([], True, "next"), {**page([]), "file_token": "another-document"}]
         got = mod.capture("https://example.feishu.cn/docx/doc", caller=lambda *_: responses.pop(0))

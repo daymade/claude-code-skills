@@ -38,9 +38,11 @@ STRUCTURED_MIME_BY_SUFFIX = {
     ".yml": {"application/yaml", "application/x-yaml", "text/plain"},
 }
 VALID_STORAGE = {"git", "source", "oss"}
+FEISHU_HOST_SUFFIXES = ("feishu.cn", "larkoffice.com", "larksuite.com")
 FEISHU_LOCATOR_URL_RE = re.compile(
-    r"^https://[A-Za-z0-9.-]+\.(?:feishu\.cn|larkoffice\.com|larksuite\.com)/"
-    r"(?:wiki|docx|sheets|base|file|minutes)/[A-Za-z0-9]{20,}$"
+    r"^https://[A-Za-z0-9.-]+\.(?:"
+    + "|".join(re.escape(host) for host in FEISHU_HOST_SUFFIXES)
+    + r")/(?:wiki|docx|sheets|base|file|minutes)/[A-Za-z0-9]{20,}$"
 )
 FEISHU_LOCATOR_TOKEN_RE = re.compile(r"^[A-Za-z0-9]{20,}$")
 WECHAT_MESSAGE_ID_RE = re.compile(r"^[0-9]{10,}$")

@@ -63,19 +63,29 @@ verified originals under that archive's `media/`, then run the actual pandoc pat
 ```bash
 uv run --script <skill-dir>/scripts/render_api_capture.py \
   <document-fetch.json> <archive-manifest.json> <archive>/<new-pilot-name.md> \
-  --source <original-feishu-url>
+  --source <original-feishu-url> \
+  --discussion discussion/comments.md
 ```
 
 The renderer defines its archive root as the manifest's parent directory. Put the
 manifest at that root; its local artifact paths are relative to the same directory.
+Use the same Feishu/Lark host family accepted by the archive storage contract
+(`feishu.cn`, `larkoffice.com`, `larksuite.com`). `--discussion` is optional;
+when supplied, its target must be an existing relative Markdown file inside the
+archive, and the renderer adds a visible **Comments and feedback** link.
 
 Expected: `status=converted_reader_pending`, nonzero `media_references` when the
-source contains media, and `actual_reader=not_verified`. The output note must
-remain under the manifest's archive directory; an outside output is refused. The helper localizes img/source tokens from the
-manifest, preserves image alt text, converts attachment figures to native
-Markdown embeds plus filename links, and refuses missing originals/overwrites.
-It does not resolve whiteboards or replace the reference-graph worklist. Continue
-the existing raw-HTML residual check within the user's selected capture scope.
+source contains media, and `actual_reader=not_verified`. `whiteboard_references`
+counts localized whiteboard occurrences and `discussion_links` confirms the
+optional companion link. The output note must remain under the manifest's archive
+directory; an outside output is refused. The helper localizes img/source and
+whiteboard tokens from the manifest, preserves image alt text, converts attachment
+figures to native Markdown embeds plus filename links, and replaces whiteboard
+blocks with native relative preview images at their original positions. It also
+writes `source_type`, `source_revision` when present, `extracted`, and
+`post_process` provenance. Missing originals/previews and overwrites are refused.
+The renderer does not replace the reference-graph worklist. Continue the existing
+raw-HTML residual check within the user's selected capture scope.
 
 Before expanding a batch, the agent opens this pilot in the recipient's real
 Obsidian reading canvas: inspect images and captions, briefly play each affected
