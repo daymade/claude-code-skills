@@ -12,6 +12,11 @@ Keep the specialist responsible for its own methods and dependencies; keep
 app-evolver responsible for product fit, authorized changes and user acceptance.
 Do not replace the existing workflow with a reverse-engineering framework.
 
+For a named feature or function investigation, read
+[feature investigation](feature-investigation.md) before the specialist handoff.
+Use its anchor selection and evidence notes with the selected owner's available
+tools; it requires no Eleven application, ACP adapter or additional MCP server.
+
 ## Select the owner
 
 | Input or unfinished result | Skill route | Boundary |

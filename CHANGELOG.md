@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **app-evolver** (v1.1.2): Adapt Eleven's feature-investigation playbooks into the existing reverse-analysis handoff: locate observable anchors, trace substantive work, retain build-bound evidence notes and respect the existing mutation owner. Keep network and performance conclusions within observed evidence; add no framework or runtime dependency. Change type: bounded evidence-selection refinement.
+
 - **lark-cli-router** (`daymade-claude-code` v4.30.2): Use the installed CLI's guide metadata for routing, add an entry link for existing date-based recording lookup, and defer duplicated budget, concurrency and exit-code definitions to helper help and the official guide; code, permissions and the Skill description are unchanged.
 
 - **lark-cli-router** (`daymade-claude-code` v4.30.1): Move the existing dated-recording trigger before the catalog description cutoff, preserving all other triggers and runtime behavior.
