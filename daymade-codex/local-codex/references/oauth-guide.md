@@ -48,7 +48,7 @@ GROUP BY process_uuid ORDER BY 2 DESC;"
 
 ## Remote account switch and expired-login recovery
 
-Bind the approved target host, target user/home, expected account, and authorization before writing. Keep machine addresses and real account values in the owner's configuration, not this guide.
+Bind the approved target host, target user/home, expected account, and authorization before writing. Resolve the current project's already-approved account, target and recovery restrictions from that project's existing authoritative entry before proposing a method or re-requesting authorization; a recipe in this guide does not authorize a new or unapproved target, and the latest user direction on the particular task controls any device-authorization fallback. Keep machine addresses, project entry locations and real account values in the owner's configuration, not this guide.
 
 1. **Resolve the entry the user actually runs.** Inspect the target through its login shell, including wrappers and process-scoped network configuration. On macOS, an approved SSH alias can run `/bin/zsh -lic 'command -v codex; codex --version'`. Do not assume a Homebrew path or call a native package binary when the normal entry supplies its network environment. Use the existing remote/network owner if the authenticated command plane fails.
 2. **Separate identity, validity, and quota.** Cached email/plan metadata and `codex login status` locate a login; neither proves its refresh token works or that quota remains. If the target already has the expected account and a fresh request succeeds, keep that valid login and finish without replacing it or requesting another authorization. Distinguish an authentication rejection such as `invalid_refresh_token`, a quota rejection, and a transport failure. Stop repeating the same invalid credential. Stop only task-owned probes when their terminal authentication failure is already established.
@@ -75,7 +75,7 @@ Use a bounded task-owned process and inspect its actual terminal result. Do not 
 |-------|----------|
 | "Not authenticated" or missing cache | Use the authorized local or remote login branch for the selected store |
 | Expired access token with a valid refresh token | Let Codex refresh through the actual target entry; verify the resulting account and request |
-| `invalid_refresh_token` or another terminal refresh rejection | Stop repeating that cache; use authorized device-code recovery on a remote host |
+| `invalid_refresh_token` or another terminal refresh rejection | Stop repeating that cache; enter the [remote account switch and expired-login recovery](#remote-account-switch-and-expired-login-recovery) workflow, which owns the choice between authorized verified cache reuse and device authorization |
 | Desktop app logged in but CLI not | Compare home, store and executable first; do not blindly log out a shared store |
 | Quota rejection | Report the selected account's quota condition; switch only to the account the user authorized |
 | Only existing sessions fail while a fresh process works | Investigate those processes and coordinate any necessary restart/resume; do not infer global revocation or stop other sessions |
