@@ -199,7 +199,6 @@ plist = {
     "Label": os.environ["LABEL"],
     "ProgramArguments": program_arguments,
     "RunAtLoad": True,
-    "StartInterval": 300,
     "WatchPaths": watch_paths,
     "StandardOutPath": str(Path(os.environ["LOG_DIR"]) / "source-sync.out.log"),
     "StandardErrorPath": str(Path(os.environ["LOG_DIR"]) / "source-sync.err.log"),

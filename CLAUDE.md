@@ -473,7 +473,7 @@ re-add a marketplace: removing it uninstalls plugins installed from that
 marketplace. Do not `cp -r` a second Skill tree into a user Skill directory; that
 copy immediately creates an independent drift owner.
 
-For maintainer source-backed activation, follow
+For maintainer source-backed activation or source-watcher deployment, follow
 [Local Source Sync Architecture](daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md).
 That reference owns the activation-manifest contract, host-specific selection,
 legacy compatibility, and repair workflow. An approved whole-marketplace policy

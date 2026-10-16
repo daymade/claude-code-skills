@@ -168,7 +168,7 @@ Rules:
   states are reported. A scoped install conflict fails. User-owned directories
   and foreign links are not replaced. A pre-existing direct Skill remains
   independent of a disabled plugin with the same source.
-- The background daemon executes a **pinned plugin copy**, installed into its own
+- With the pinned layout, the background daemon executes a **pinned plugin copy**, installed into its own
   `CLAUDE_CONFIG_DIR` under `~/.local/share/`, not the live checkout. That isolation is
   deliberate: editing a source repo must not change what an already-running daemon does.
   The cost is that nothing advances the pin — a fix can be merged, tested and believed
@@ -180,9 +180,9 @@ Rules:
 - Reinstall the LaunchAgent after advancing its runtime pin. `--install` uses uv
   once to install Python in this profile manager's own configuration directory;
   ordinary runs invoke that absolute interpreter directly. The daemon uses the
-  Python commands' shared lock and runs on WatchPaths events plus the interval
-  declared by the generated plist in `sync-local-skill-sources-daemon.sh`. After
-  installation or a deliberate trigger, require a new UTC
+  Python commands' shared lock and runs only at load and on `WatchPaths` events;
+  the generated plist has no `StartInterval`. After installation or a deliberate
+  trigger, require a new UTC
   `source-sync verified links and profiles at ...` log line. Registration and exit
   code alone do not prove a recent successful pass.
 - Skills outside a host's expanded activation policy remain cold for that host.
