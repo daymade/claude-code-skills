@@ -123,6 +123,25 @@ class SourceSyncDaemonTests(unittest.TestCase):
             self.assertEqual(plist["ProgramArguments"], [str(daemon)])
             self.assertEqual("", result.stderr)
 
+    def test_first_install_renders_event_only_watcher_with_startup(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw).resolve()
+            daemon, env = self._prepare(root)
+            self._install(daemon, env)
+
+            plist = plistlib.loads(self._plist_path(root).read_bytes())
+
+            self.assertNotIn("StartInterval", plist)
+            self.assertTrue(plist["RunAtLoad"])
+            self.assertEqual(
+                plist["WatchPaths"],
+                [
+                    str(root / ".claude/settings.json"),
+                    str(root / ".claude/plugins/installed_plugins.json"),
+                    "/tmp/example/marketplace.json",
+                ],
+            )
+
     def test_plist_without_a_program_arguments_key_is_silent(self):
         """Rule 1 keeps the key-absent case silent: absence is not a configuration."""
         with tempfile.TemporaryDirectory() as raw:
@@ -350,7 +369,7 @@ class SourceSyncDaemonTests(unittest.TestCase):
             # It stays wrapped, but the message may not claim to know who wrapped it.
             self.assertNotIn("operator-installed", result.stderr)
             # Only ProgramArguments is preserved; the rest is still this installer's.
-            self.assertEqual(plist["StartInterval"], 300)
+            self.assertNotIn("StartInterval", plist)
             self.assertTrue(plist["RunAtLoad"])
             self.assertIn("/tmp/example/marketplace.json", plist["WatchPaths"])
             self.assertEqual(
@@ -480,13 +499,11 @@ class SourceSyncDaemonTests(unittest.TestCase):
 
     # --- unchanged behaviour the rewrite must not have disturbed ---------------
 
-    def test_install_uses_owned_interpreter_and_retries_periodically(self):
+    def test_install_uses_owned_interpreter_and_runs_sync(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw).resolve()
             daemon, env = self._prepare(root)
             result = self._install(daemon, env)
-            plist = plistlib.loads(self._plist_path(root).read_bytes())
-            self.assertEqual(plist["StartInterval"], 300)
             self.assertIn("source-sync verified links and profiles at", result.stdout)
             # No silent success marker when either underlying sync fails.
             (root / "scripts/sync-local-skill-sources.py").write_text("raise SystemExit(7)\n")
