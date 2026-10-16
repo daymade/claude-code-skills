@@ -427,6 +427,10 @@ For change-only automatic backups, use its
 
 ### Codex Quota and Account Checks
 
+For a remote Codex sign-in prompt or terminal refresh rejection, start at
+[Local Codex authentication recovery](daymade-codex/local-codex/references/oauth-guide.md#remote-account-switch-and-expired-login-recovery).
+That owner defines project-authorization recovery, credential-store selection and usable-access verification; quota checks below remain a separate route.
+
 For Codex reset announcements or account quota questions, enter
 [tibo-reset-codex](tibo-reset-codex/SKILL.md). Follow its
 [account usage SOP](tibo-reset-codex/references/account-usage.md) for authentication,
