@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-watchdog** (`daymade-macos` v1.22.7): Add calendar deadline recovery and separate native-run, dispatch/consumption, and actual user-output evidence. Change type: bounded recovery-verification clarification.
+- **debugging-network-issues** (v1.11.2): Add a bounded HTTP response-completeness recipe for valid JSON returned from a short body, retaining size limits and healthy framing controls. Change type: bounded verification guidance.
+
 - **claude-switch-models-setup** (`daymade-claude-code` v4.30.3 → v4.30.4): Remove the local source-sync LaunchAgent's periodic wake while preserving startup and file-event triggers, installer-owned interpreter and logging behavior, and foreign failure-recorder wrappers. Add an installer-rendered plist regression for event-only scheduling. Change type: workflow scheduling redesign.
 - **local-codex** (`daymade-codex` v1.4.2 → v1.4.3): Route terminal token-refresh rejection to the single existing remote-recovery workflow instead of mandating device code, and require resolving the current project's already-approved account, target and recovery restrictions from its own authoritative entry before proposing a login method. Preserve authorized first-time device login, verified cache reuse, exact-backup and atomic private transport, and existing-session distinction. Change type: bounded recovery-routing correction.
 - **feishu-doc-scraper** (v1.9.0): Continue comment capture after unavailable reply text while preserving raw replies and image gaps, align the renderer with all three Lark hosts, render verified whiteboard previews in place, and emit complete provenance plus optional discussion links. Add synthetic shape/host/media regressions and live capture/render validation. Change type: bounded capture-reliability and rendering repair.
