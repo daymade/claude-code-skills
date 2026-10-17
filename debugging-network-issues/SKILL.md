@@ -203,6 +203,8 @@ The recipe above (0.6) handles a *timeout* — an error code you can grep for. T
 
 So the first move is to stop reading status and **measure a rate**.
 
+For device or wired/Wi-Fi comparisons, load [device throughput fieldwork](references/device-throughput-fieldwork.md) before probing or changing association; bind the control/data paths, comparison and recovery window there.
+
 **The decisive experiment: two independent channels, same direction, same time budget.**
 
 This is Principle 3's layered isolation applied to capacity instead of correctness. Pick two channels that reach the same host over the same network path but share **no application code** — the point is that a result they agree on cannot be caused by either one's internals.
@@ -266,6 +268,8 @@ This follows RFC 6349's separation of sustained TCP throughput from RTT/liveness
 the proof must exercise enough data for transfer capacity to dominate setup cost.
 
 ### Step 1: Gather direct evidence at every hop
+
+Before calling an unfamiliar device or local-client HTTP/RPC endpoint for evidence, load [device throughput fieldwork](references/device-throughput-fieldwork.md#classify-an-unfamiliar-endpoint-before-calling-it); finish offline discovery and classify effects before a separate execution call.
 
 Before framing hypotheses, collect:
 

@@ -38,6 +38,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -73,6 +74,21 @@ HR_ONLY_MD = """# 讲师介绍
 
 HR_AND_TABLE_MD = HR_ONLY_MD + "\n" + TABLE_MD
 
+# Synthetic uneven-content tables; no private document or device identifiers.
+CJK_AUTO_TABLES = {
+    "short": "| 标签 | 说明 |\n|---|---|\n| 状态 | 正常 |\n| 结果 | 完成 |\n",
+    "schedule": (
+        "| 序号 | 场次 | 日期 | 金额 |\n|---|---|---|---|\n"
+        "| 1 | 合成课程项目的基础应用练习（入门） | 4/28（周二）下午 | 1234元 |\n"
+        "| 2 | 合成复习 | 5/19（周二）下午 | 234元 |\n"
+    ),
+    "long": (
+        "| 标签 | 说明 | 状态 |\n|---|---|---|\n"
+        "| 长项 | " + "这是一段用于检验长表格单元格换行的合成中文说明，"
+        * 8 + " | 完成 |\n| 短项 | 正常 | 完成 |\n"
+    ),
+}
+
 
 def _render(md: str, out: Path, theme: str = "default",
             backend: str = "weasyprint") -> None:
@@ -95,6 +111,29 @@ def _render(md: str, out: Path, theme: str = "default",
     if proc.returncode != 0 or not out.exists():
         detail = (proc.stderr or proc.stdout or "").strip().splitlines()
         pytest.skip(f"{backend} cannot render here: {detail[-1] if detail else '?'}")
+
+
+@pytest.mark.parametrize("case", CJK_AUTO_TABLES)
+def test_cjk_auto_tables_keep_text_on_paper_and_borders_painted(case, tmp_path):
+    """Long cells wrap; healthy short and schedule tables stay complete."""
+    import pdfplumber
+
+    md = CJK_AUTO_TABLES[case]
+    out = tmp_path / f"cjk-auto-{case}.pdf"
+    _render(md, out, theme="cjk-auto")
+    chars = []
+    with pdfplumber.open(out) as pdf:
+        for page in pdf.pages:
+            assert page.chars, "The paper-bound check must examine actual text"
+            outside = [c for c in page.chars
+                       if c["x0"] < 0 or c["x1"] > page.width]
+            assert not outside, f"Text outside paper: {outside[:3]}"
+            chars.extend(c["text"] for c in page.chars)
+    cjk = lambda text: Counter(c for c in text if "\u4e00" <= c <= "\u9fff")
+    assert cjk("".join(chars)) == cjk(md), "CJK cell text was lost or duplicated"
+    ok, checked = ctb.check_ink(str(out))
+    assert checked > 0, "Border check must measure a table"
+    assert ok, "A promised table boundary has no painted ink"
 
 
 # --- merge_positions -------------------------------------------------------

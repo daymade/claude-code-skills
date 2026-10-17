@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **debugging-network-issues** (v1.11.2 → v1.11.3): Separate endpoint discovery from execution and add bounded device-throughput guidance for actual data paths, receiver counts, rollback budgets and independent restoration readback. Retain existing mutation and recovery owners. Change type: bounded evidence and workflow correction.
+- **pdf-creator** (`daymade-docs` v1.25.1 → v1.25.2): Allow long CJK table cells to wrap in `cjk-auto`, require command-copy acceptance from the final PDF, and report actual preview paths while preserving generated filenames. Change type: bounded rendering and delivery-verification repair.
 - **continue-codex-work** (`daymade-claude-code` v4.30.5): Document the existing TUI `/goal resume` recovery route alongside App Server control, using the official guide and version-pinned source. Preserve authorization, policy rejection, budget/counter readback and actual automatic-turn verification. Change type: bounded recovery-routing correction.
 - **frontend-visual-qa** (v1.21.2): Add anonymous dashboard replays for readable history without runtime coverage and a correctly scoped zero alongside an unknown source. Keep runtime instructions unchanged; independent consumer runs and semantic review cover both controls.
 - **macos-watchdog** (`daymade-macos` v1.23.1): Correct stop-versus-disable guidance and returned-service diagnosis; consolidate lifecycle commands under the owning Skill procedure.
