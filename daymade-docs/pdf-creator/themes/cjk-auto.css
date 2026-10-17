@@ -235,17 +235,17 @@ pre code {
  * 15+ chars), fixed equal-width forces narrow column for long content and
  * triggers CJK mid-bracket breaks.
  *
- * Override: table-layout: auto + every cell nowrap → weasyprint computes
- * each column's min-content width from actual cell content, allocates
- * proportionally. !important needed because md_to_pdf.py auto-injects a
- * fixed-layout patch AFTER theme load.
+ * Override: table-layout: auto allocates content-aware column widths;
+ * white-space: normal lets long cells wrap instead of forcing the table
+ * beyond the paper. !important is needed because md_to_pdf.py injects a
+ * fixed-layout / nowrap-header patch AFTER theme load.
  */
 table {
     table-layout: auto !important;
     width: 100% !important;
 }
 table td, table th {
-    white-space: nowrap !important;
+    white-space: normal !important;
     word-break: keep-all !important;
     overflow-wrap: normal !important;
 }
