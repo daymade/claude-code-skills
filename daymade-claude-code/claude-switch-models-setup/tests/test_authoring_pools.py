@@ -72,6 +72,55 @@ class AuthoringPoolsTests(unittest.TestCase):
         self.write()
         self.assertEqual(canonical, self.inventory()["daymade-skills"]["member"])
 
+    def test_git_reported_paths_use_physical_identity(self):
+        git = sync.authoring_git
+
+        def reported_path(repo, *args):
+            result = git(repo, *args)
+            if args in (("rev-parse", "--show-toplevel"), ("rev-parse", "--absolute-git-dir")):
+                return result + "/"
+            return result
+
+        with mock.patch.object(sync, "authoring_git", side_effect=reported_path):
+            self.assertEqual(2, len(self.inventory()["daymade-skills"]["member"]))
+
+    def test_git_reported_case_aliases_on_case_insensitive_filesystem(self):
+        alias = Path(str(self.repo).swapcase())
+        if not alias.exists() or not alias.samefile(self.repo):
+            self.skipTest("requires a case-insensitive filesystem")
+        git = sync.authoring_git
+
+        def reported_path(repo, *args):
+            result = git(repo, *args)
+            if args in (("rev-parse", "--show-toplevel"), ("rev-parse", "--absolute-git-dir")):
+                alias = Path(result.swapcase())
+                self.assertTrue(alias.samefile(Path(result)))
+                return str(alias)
+            return result
+
+        with mock.patch.object(sync, "authoring_git", side_effect=reported_path):
+            self.assertEqual(2, len(self.inventory()["daymade-skills"]["member"]))
+
+    def test_git_path_identity_rejects_missing_empty_and_other_directories(self):
+        git = sync.authoring_git
+        for repo, args, expected, other in (
+            (self.repo, ("rev-parse", "--show-toplevel"), self.repo, self.clone),
+            (self.clone, ("rev-parse", "--show-toplevel"), self.clone, self.repo),
+            (self.clone, ("rev-parse", "--absolute-git-dir"), self.clone / ".git", self.repo / ".git"),
+        ):
+            alias = self.root / ("git-alias-" + str(len(args)) + repo.name + expected.name)
+            alias.symlink_to(expected, target_is_directory=True)
+            for bad in (None, "", " ", "relative", str(self.root / "absent"), str(other), str(alias)):
+                def reported_path(actual_repo, *actual_args):
+                    if actual_repo == repo and actual_args == args:
+                        return bad
+                    return git(actual_repo, *actual_args)
+
+                with self.subTest(repo=repo.name, args=args, bad=bad):
+                    with mock.patch.object(sync, "authoring_git", side_effect=reported_path):
+                        with self.assertRaises(ValueError):
+                            self.inventory()
+
     def test_real_source_contract_changes_only_enrolled_clone(self):
         creator = Path(__file__).resolve().parents[3] / "daymade-skill/skill-creator/scripts/source_contract.py"
         import importlib.util

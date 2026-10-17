@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **claude-switch-models-setup** (`daymade-claude-code` v4.30.6): Accept Git path spellings that identify the same physical authoring checkout on case-insensitive filesystems; retain exact origin, active lease, independent Git directory and symlink checks. Change type: bounded authoring-identity repair.
+
 - **transcript-fixer** (`daymade-audio` v1.49.2): Preserve separate review anchors for repeated raw occurrences when Stage 1 leaves input unchanged; add single-item `--reanchor-context-offset` recovery while retaining ambiguous-anchor, drift and name refusals. Change type: bounded queue-recovery repair.
 - **tibo-reset-codex** (`tibo-reset-codex` v1.22.2 → v1.23.0): Separate current account state, unattributed window changes and evidenced reset events so account switches no longer inherit reset claims. Add deterministic attribution, append-only finding invalidation, anonymous rollout labels, and regressions for direct, natural, banked, official and multi-account paths. Change type: workflow and safety redesign with an append-only journal extension.
 
