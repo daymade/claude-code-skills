@@ -1576,7 +1576,9 @@ def common_message_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--codex-delivery", choices=("live", "queued"), default="live",
                         help="live tool output for loaded Codex threads (default); "
-                        "queue only for unloaded threads or explicit queued delivery")
+                        "notLoaded may queue automatically; explicit queued is a delayed "
+                        "user-visible message, possibly after expiry; never a workaround "
+                        "for live failure")
     parser.add_argument("--topic", help="stable coordination issue/resource key")
     parser.add_argument("--kind", choices=("request", "notice", "reply", "state"), default="notice")
     parser.add_argument("--expires-at", help="ISO timestamp with timezone; required for request/state")
