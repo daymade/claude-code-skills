@@ -1,0 +1,42 @@
+{
+  "transitions": [
+    {
+      "before": {
+        "source": "api",
+        "source_ref": "sanitized:before",
+        "identity": "verified",
+        "account_ref": "a1b2c3d4",
+        "checked_at_utc": "2026-10-14T04:58:00+00:00",
+        "window_seconds": 604800,
+        "used_percent": 100,
+        "reset_at_utc": "2026-10-20T04:58:00+00:00",
+        "banked_available": 3,
+        "banked_applicable_now": 3,
+        "plan_type": "pro"
+      },
+      "after": {
+        "source": "api",
+        "source_ref": "sanitized:after",
+        "identity": "verified",
+        "account_ref": "a1b2c3d4",
+        "checked_at_utc": "2026-10-17T13:32:00+00:00",
+        "window_seconds": 604800,
+        "used_percent": 3,
+        "reset_at_utc": "2026-10-24T13:10:13+00:00",
+        "banked_available": 3,
+        "banked_applicable_now": 0,
+        "plan_type": "pro"
+      },
+      "anonymous_candidates": [
+        {
+          "shape": "usage_drop",
+          "source_ref": "sanitized:anonymous-rollout"
+        }
+      ]
+    }
+  ],
+  "events": [],
+  "auth_hints": {
+    "last_refresh_utc": "2026-10-17T13:06:41+00:00"
+  }
+}

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tibo-reset-codex** (`tibo-reset-codex` v1.22.2 → v1.23.0): Separate current account state, unattributed window changes and evidenced reset events so account switches no longer inherit reset claims. Add deterministic attribution, append-only finding invalidation, anonymous rollout labels, and regressions for direct, natural, banked, official and multi-account paths. Change type: workflow and safety redesign with an append-only journal extension.
+
 - **debugging-network-issues** (v1.11.2 → v1.11.3): Separate endpoint discovery from execution and add bounded device-throughput guidance for actual data paths, receiver counts, rollback budgets and independent restoration readback. Retain existing mutation and recovery owners. Change type: bounded evidence and workflow correction.
 - **pdf-creator** (`daymade-docs` v1.25.2 → v1.25.3): Allow long CJK table cells to wrap in `cjk-auto`, require command-copy acceptance from the final PDF, and report actual preview paths while preserving generated filenames. Change type: bounded rendering and delivery-verification repair.
 - **peer-message** (v1.21.6): Classify only the exact queued-Codex missing-executable pre-spawn failure as not_sent; preserve unknown for ambiguous queue failures.
