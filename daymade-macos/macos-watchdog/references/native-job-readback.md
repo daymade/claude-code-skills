@@ -9,7 +9,7 @@ description: >-
 
 1. Select the exact expected plist from the owning installer's current contract.
    Do not infer it from a first matching label, a log path, or a shell environment.
-2. Run the bundled stdlib helper from the current GUI user's session:
+2. Run the bundled stdlib helper with Python 3.10+ from the current GUI user's session:
 
    ```bash
    python3 "<skill-directory>/scripts/inspect_native_job.py" --plist "<expected-plist>"
@@ -23,7 +23,9 @@ description: >-
    `program_match`, `arguments_match` and `environment_match` to be true;
    require each configured working-directory/output-path flag to be true.
    Treat null path flags as unconfigured, rather than verified matches. Require
-   `disabled` to be false before describing the job as enabled.
+   `disabled` to be false before describing the job as enabled. Require the
+   scheduling comparisons in § Scheduling flags to be true, including when
+   an expected key is absent. Null scheduling flags mean incomplete evidence.
 5. Verify the owning job's completed native round and business output separately.
    Do not use `loaded: true`, a matching configuration or a running process as
    proof of successful work, public-output freshness or failure-path health.
@@ -52,9 +54,60 @@ description: >-
   domain. Do not install, reload, restart or signal jobs through this helper.
   Accept native disabled-state entries expressed as `enabled` / `disabled` or
   `false` / `true`; preserve unknown for other forms or duplicate entries.
+- Compare scheduling through the scheduling flags below, read from
+  the same service print. Preserve unknown for scheduling shapes the native
+  text cannot represent unambiguously.
 - Keep output limited to status, label and boolean/null flags. Do not print
   native output, expected argv, environment values, exceptions or logs to
   compensate for an unknown result. Expected argv may itself contain secrets.
+
+## Scheduling flags
+
+Read `start_interval_match`,
+`watch_paths_match`, `run_at_load_match` and `keep_alive_match` as boolean/null
+comparisons, not copies of the loaded values.
+
+- Configured expected key: require the flag to be true only when the loaded
+  job's scheduling equals the expected value. A changed StartInterval, a
+  missing/extra/replaced WatchPaths entry, or a flipped RunAtLoad or KeepAlive
+  is a mismatch.
+- A missing expected key is meaningful: a stale loaded timer against no
+  expected StartInterval is a mismatch, not a pass. Apply the same rule to
+  every scheduling key — an absent expected key never waives a stale loaded
+  value. Compare against launchd defaults: RunAtLoad and KeepAlive default to
+  false, so a loaded true against an absent expected key is a mismatch;
+  StartInterval and WatchPaths have no default, so any loaded value against an
+  absent expected key is a mismatch.
+- Treat null as unreadable or unsupported. An absent expected key with a
+  provably absent/default loaded value is a verified match, not null.
+- Supply a positive integer `StartInterval`, strict boolean `RunAtLoad`, and
+  either a boolean `KeepAlive` or the single-condition dictionary
+  `{SuccessfulExit: <boolean>}`. Compare that conditional form through the
+  captured `semaphores` / `successful exit => 0|1` representation; leave other
+  or combined conditions unknown. A conditional native block never proves a
+  boolean-off expectation matches merely because the `keepalive` flag is absent.
+- Supply `WatchPaths` as a nonempty list of absolute single-line paths without
+  quotes or backslashes. An empty, null or malformed configured value is invalid
+  input, not the absent-key default. Require the indexed quoted descriptor,
+  correct service and FSEvents stream; unfamiliar representations stay unknown.
+- Require the native `properties` line to establish both enabled and disabled
+  boolean flags. Do not infer false from a missing line. Read `StartInterval`
+  through `run interval = N seconds`; unparsed trigger families or timer
+  descriptors leave that comparison unknown. An expected `StartCalendarInterval`
+  also prevents an overall match: this helper does not compare calendar rules.
+- Within a parsed service, a definite field mismatch takes precedence over an
+  unrelated unresolved scheduling field. Preserve the existing caller boundary:
+  an unreadable disabled-state probe makes the overall result unknown even if
+  a service-field flag is false; an explicit disabled override is a mismatch.
+- Unknown/unsupported native format is never success: when the loaded
+  scheduling state cannot be read unambiguously from the native text (for
+  example a KeepAlive dictionary form the format cannot represent), keep the
+  flag null and the result unknown. Do not normalize it into a match.
+
+Limit a `match` claim to these compared fields. Other plist policies and trigger
+families are outside the helper's coverage; inspect them through their owning
+procedure when the task depends on them. Configuration equality does not prove
+that a service stays idle or that a filesystem event reaches its consumer.
 
 ## Reuse and verify the parser
 

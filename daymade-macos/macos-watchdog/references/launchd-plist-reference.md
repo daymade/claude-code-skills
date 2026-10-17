@@ -1,15 +1,6 @@
 # launchd plist Reference (macOS, verified Ventura+)
 
-Field-level reference for watchdog plists. Scope: what a periodic self-healing job needs — not the full launchd surface (sockets, MachServices, WatchPaths).
-
-## Contents
-- Domains and placement
-- Core keys (identity / schedule / respawn)
-- Calendar deadlines and recovery
-- Logging
-- Resource and environment control
-- launchctl command reference
-- Verification commands
+Field-level reference for watchdog plists. Scope: what a periodic or event-driven self-healing job needs — not the full launchd surface (sockets, MachServices).
 
 ## Domains and placement
 
@@ -25,9 +16,26 @@ Label convention: reverse-DNS (`com.example.thermal-watch`). The label is the jo
 ```xml
 <key>Label</key>                <string>com.example.my-watch</string>
 <key>ProgramArguments</key>     <array><string>/bin/bash</string><string>/ABS/path/to/script.sh</string><string>heal</string></array>
-<key>StartInterval</key>        <integer>300</integer>   <!-- seconds between runs -->
 <key>RunAtLoad</key>            <true/>                  <!-- also fire once at bootstrap/login -->
 ```
+
+Select a trigger through [the event workflow](event-driven-observers.md).
+For an event-triggered job, omit the timer:
+
+```xml
+<key>WatchPaths</key><array><string>/ABS/PATH/TO/watched-dir</string></array>
+```
+
+For a justified periodic observer, use a timer instead:
+
+```xml
+<key>StartInterval</key><integer>300</integer>
+```
+
+Treat `WatchPaths` as a lossy launch hint; it supplies no event payload or
+exactly-once queue. Apply the [event workflow's deployment and acceptance](event-driven-observers.md)
+before relying on it. Do not infer quiet scheduling from `RunAtLoad` alone:
+`KeepAlive` can also cause an initial launch.
 
 - `ProgramArguments` element 0: absolute path to the executable (or `/bin/bash` + script path as element 1). PATH inheritance is not available — Homebrew binaries need their absolute path or an explicit `EnvironmentVariables/PATH`.
 - Scripts need a shebang AND the execute bit; a missing `+x` fails silently (see Logging).
@@ -40,8 +48,8 @@ Label convention: reverse-DNS (`com.example.thermal-watch`). The label is the jo
 | Form | Effect |
 |---|---|
 | `KeepAlive: true` | Restart whenever the process exits, for any reason |
-| `KeepAlive: { SuccessfulExit: false }` | Restart only on crash (non-zero exit) |
-| `KeepAlive: { NetworkState: true }` | Restart when network connectivity changes (e.g. after wake) |
+| `KeepAlive: { SuccessfulExit: false }` | Restart after non-zero exit; can also cause an initial launch |
+| `KeepAlive: { NetworkState: true }` | Do not use as a reconnect signal: current `man launchd.plist` says it is no longer implemented |
 
 ### ThrottleInterval (respawn rate limit)
 
@@ -70,12 +78,13 @@ Check the current host's `man launchd.plist`: `StartCalendarInterval` coalesces 
 5. Record the task's completion ACK only after the required user result, with its actual evidence and time. A later catch-up does not erase a missed deadline. To claim recovery, observe an authorized overdue bootstrap/login path through its required layers; when only configuration or startup passed, report those limits and the remaining delivery failure.
 
 The native readback helper checks configuration only; it cannot enforce due/ACK policy or inspect user reports. The operator must inspect the owning task's records and actual output. Missing consumer evidence leaves that layer unverified.
+Apply its [supported readback boundary](native-job-readback.md) before using a helper result as calendar-configuration evidence.
 
 ## Logging
 
 ```xml
-<key>StandardOutPath</key>  <string>/Users/&lt;username&gt;/Library/Logs/my-watch.out.log</string>
-<key>StandardErrorPath</key><string>/Users/&lt;username&gt;/Library/Logs/my-watch.err.log</string>
+<key>StandardOutPath</key>  <string>/ABS/PATH/TO/logs/my-watch.out.log</string>
+<key>StandardErrorPath</key><string>/ABS/PATH/TO/logs/my-watch.err.log</string>
 ```
 
 Without these, a failing job leaves no trace anywhere. launchd does not capture output by default. The script should additionally self-rotate its own application log (cap ~1 MB, keep 1 backup) — `Standard*Path` files only grow.
@@ -113,17 +122,23 @@ requester from the dialog title or assume every unsigned binary behaves like tha
 | Stop now | `launchctl bootout gui/$(id -u)/<label>` |
 | Stop and keep stopped across login | `launchctl disable user/$(id -u)/<label>` (reverse: `launchctl enable …`) |
 | Re-load after editing plist | `bootout` → edit → `bootstrap` (active state must match disk) |
-| Force one immediate run | `launchctl kickstart -k gui/$(id -u)/<label>` |
+| Request one run of an idle owned job | `launchctl kickstart gui/$(id -u)/<label>` |
 | Is it loaded? exit code of last run? | `launchctl list | grep <label>` (PID-or-`-`, last exit status, label) |
 
-Deprecated: `load`/`unload`. `unload` on Ventura+ leaves the job re-loadable by `RunAtLoad` while the plist stays in place — the "stopped" watchdog fires again. `bootstrap`/`bootout` are the modern pair.
+Check exact ownership, active work and pending intent through the
+[deployment workflow](event-driven-observers.md) before replacement or stopping.
+Do not use `kickstart -k` as a routine test: it terminates an existing instance.
+Use `bootstrap`/`bootout` instead of deprecated `load`/`unload`; use `disable`
+when the job must stay disabled across later loads.
 
 ## Verification commands
 
 Before declaring a plist edit active, run `scripts/inspect_native_job.py` with
 the exact expected plist and follow `native-job-readback.md`. Require explicit
 job ENV and configured argv/path matches; do not use a first-match regex over
-the whole `launchctl print` output. Verify completed work separately.
+the whole `launchctl print` output. Apply the scheduling checks in
+[native readback](native-job-readback.md), including absent expected keys.
+Verify completed work separately.
 
 ```bash
 plutil -lint <plist>                        # syntax

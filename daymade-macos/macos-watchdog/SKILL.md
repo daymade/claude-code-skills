@@ -1,28 +1,33 @@
 ---
 name: macos-watchdog
 description: >-
-  Designs and audits macOS launchd watchdogs. Use for LaunchAgent/LaunchDaemon setup,
-  plist changes, scheduled self-healing, repeated notifications, apps reopening after
-  quit, crash or repair loops hammering the Mac, or a watchdog alert shown as Script Editor.
-  Covers stop/disable/restart, cooldown/backoff, notification throttling and alert
-  decisions. 中文：launchd 守护进程、常驻任务、开机自启、后台监控、定时自愈、通知来源排查。
+  Designs and audits macOS launchd watchdogs: LaunchAgent/LaunchDaemon setup,
+  plist edits, scheduled self-healing, repeated notifications, apps reopening after
+  quit, crash/repair loops, Script Editor alerts, stop/disable/restart,
+  cooldown/backoff, notification throttling, alert decisions, schedule readback,
+  WatchPaths/FSEvents event triggers. Supports periodic observers.
+  launchd 守护进程、常驻任务、开机自启、后台监控、定时自愈、通知来源排查、事件驱动监控。
 ---
 
 # macOS Watchdog
 
-A watchdog is a launchd job that periodically detects a recurring problem and remediates it without a human. The craft is not "how to install a plist" — it is **how to keep the watchdog from becoming a new disturbance**: every watchdog on this machine was born from an incident, and the recurring failure mode afterward is the watchdog itself (false "all good" reports, notification floods, re-launching apps the user quit, fork-bomb replays).
+Select event or periodic triggers for the problem being observed, then apply the quiet-watchdog contract before remediation.
 
-The governing principle, learned the expensive way: **a watchdog's lifecycle is bound to its premise state**. When the condition it exists to fix cannot be fixed by it (broken WiFi, user quit the target app, prerequisite state gone), the watchdog must stand down *by itself* — not wait for a human to disable it.
+Bind a watchdog's lifecycle to its premise state. When it cannot repair the
+condition (broken WiFi, user quit the target app, prerequisite state gone),
+stand down without waiting for a human to disable it.
 
 ## Entry decision tree
 
 | The situation is… | Go to |
 |---|---|
-| Installing a NEW watchdog from scratch | § Deploy, then § The quiet-watchdog contract |
+| Installing a NEW watchdog from scratch | Select the trigger through `references/event-driven-observers.md`, then § Deploy and § The quiet-watchdog contract |
 | An existing watchdog misbehaves (spam, re-launches apps, hammers) | § The quiet-watchdog contract, diagnose which clause it violates |
 | Stopping / disabling / restarting a job | § Stop semantics |
 | plist key details (KeepAlive forms, domains, logging, resource limits) | `references/launchd-plist-reference.md` |
-| Checking whether a plist edit is active, or comparing job argv / explicit ENV / configured paths | Run `scripts/inspect_native_job.py` with the exact expected plist; read `references/native-job-readback.md` for result and source-selection rules |
+| Choosing between event-driven and periodic for a source of truth | `references/event-driven-observers.md` § Select event vs periodic |
+| Deploying / accepting an event-driven observer (WatchPaths, FSEvents, inotify-style) | `references/event-driven-observers.md` § Deployment SOP and § Acceptance SOP |
+| Checking whether a plist edit is active, or comparing job argv / explicit ENV / configured paths / scheduling keys | Run `scripts/inspect_native_job.py` with the exact expected plist; read `references/native-job-readback.md` for result, scheduling-flag and source-selection rules |
 | Setting up or recovering an already-authorized persistent calendar job with delivery deadlines | `references/launchd-plist-reference.md` § Calendar deadlines and recovery; check overdue work and actual delivery separately |
 | Cooldown/backoff/notification-throttle patterns + sanitized war stories | `references/quiet-watchdog-patterns.md` |
 | SRE alert layering (page vs ticket, fatigue numbers) | `references/alert-discipline.md` |
@@ -78,15 +83,18 @@ do not take the first matching key from default or inherited environment section
 Verify the completed business round separately from registration or process state.
 
 1. **Location**: user agent → `~/Library/LaunchAgents/` (GUI session context: can `open` apps, show notifications); system daemon → `/Library/LaunchDaemons/` (root, no GUI access). Choose by whether the job needs the user's GUI session, not by habit.
-2. **plist**: start from `assets/launchagent.template.plist` (annotated: Label, ProgramArguments, StartInterval, StandardOutPath/StandardErrorPath, ThrottleInterval, Nice). Validate with `plutil -lint`. `ProgramArguments` element 0 = absolute path; never rely on PATH inheritance.
-3. **Load/reload**: `launchctl bootstrap gui/$(id -u) <plist>`; after editing a plist, `bootout` then `bootstrap` again — launchd's active state must match disk. Force one run with `launchctl kickstart -k gui/$(id -u)/<label>`.
+2. **plist**: for periodic jobs start from `assets/launchagent.template.plist`; for event jobs follow `references/event-driven-observers.md` and its plist reference. Validate with `plutil -lint`. `ProgramArguments` element 0 = absolute path; never rely on shell PATH inheritance.
+3. **Load/reload**: before replacing or stopping an existing job, apply the ownership, active-work and pending-intent checks in `references/event-driven-observers.md` § Deployment SOP. For an authorized idle job, load with `launchctl bootstrap gui/$(id -u) <plist>`; after a plist edit, `bootout` then `bootstrap`. Request one run of an idle owned job with `launchctl kickstart gui/$(id -u)/<label>`; `-k` terminates an existing instance and is not a routine test.
 4. **Logs**: `StandardOutPath`/`StandardErrorPath` are non-negotiable (without them failures vanish), plus in-script log rotation (cap ~1 MB).
-5. **Idempotency guard**: re-running your deploy must not double-install. `scripts/new-launchagent.sh <label> <script> <interval>` is the idempotent wrapper (bootout-if-loaded → write plist → bootstrap → verify `launchctl list`).
+5. **Idempotency guard**: re-running your deploy must not double-install. For periodic jobs only, use `scripts/new-launchagent.sh <label> <script> <interval>` after the replacement checks above; it can boot out a loaded job. For event jobs use the event SOP. In both cases, verify loaded configuration through the native helper and completed work separately.
 6. **TCC / Full Disk Access**: a LaunchAgent reading protected files needs a working grant for its effective permission subject. Use `macos-permissions` to inspect TCC attribution and verify a protected read from the actual job; the shell's interpreter path alone does not decide this.
 7. **Batch throttling by default**: any watchdog loop that spawns work (replays, fuzz, batch scans, parallel API calls) needs an explicit rate cap as a default parameter, not a later optimization. To the machine, an unthrottled loop and a runaway process are indistinguishable (real case: an unthrottled test replay forked 1,041 processes/sec for 7 minutes and pushed the die to 83 °C).
 8. **Browser side-effect acceptance**: a successful data fetch alone does not prove a browser-backed watchdog is ready. The deploying operator must declare a budget for task-owned spaces and pages, then independently inventory them across multiple rounds, including injected initialization and cleanup failures. Counts must stay within that lifecycle budget; protect user-owned and unknown-origin pages throughout. If the task requires no focus stealing, independently observe the foreground app and visible windows during those rounds; CDP success is not focus evidence. For ego lite lifecycle, locking, ownership conflicts and cleanup readback, load the named Skill `ego-lite-use` when installed. Otherwise use the owning browser tool's documented lifecycle while meeting the same budget and readback requirements. Missing resource observations, or missing focus observations when no focus stealing is required, leave acceptance incomplete.
 
 ## Stop semantics (the deprecated trap)
+
+Before stopping or replacing a job, apply the ownership and active-work checks
+in § Deploy and the current task's authorization boundary.
 
 | Intent | Command |
 |---|---|
@@ -94,7 +102,9 @@ Verify the completed business round separately from registration or process stat
 | Stop now AND keep stopped across login | `launchctl disable user/$(id -u)/<label>` (reverse: `enable`) |
 | Edit then reload | `bootout` → edit plist → `bootstrap` |
 
-**Never `launchctl unload`**: deprecated, and on Ventura+ the job re-loads via `RunAtLoad` when the plist stays in place — the "disabled" watchdog fires again (observed: an `unload`ed watcher re-firing 3 times in 2h). `bootstrap`/`bootout` are the modern pair.
+Use `bootstrap`/`bootout` instead of deprecated `load`/`unload`. When a job
+must remain disabled across later loads, apply `disable`; stopping an instance
+alone does not establish that persistent override.
 
 ## Troubleshooting quick map
 
