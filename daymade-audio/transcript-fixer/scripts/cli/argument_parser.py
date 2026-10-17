@@ -10,6 +10,38 @@ from __future__ import annotations
 import argparse
 
 
+def _nonnegative_int(value: str) -> int:
+    try:
+        number = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError("must be a nonnegative integer") from None
+    if number < 0:
+        raise argparse.ArgumentTypeError("must be a nonnegative integer")
+    return number
+
+
+class _TranscriptArgumentParser(argparse.ArgumentParser):
+    def parse_args(self, args=None, namespace=None):
+        parsed = super().parse_args(args, namespace)
+        if parsed.reanchor_context_offset is not None:
+            other_commands = (
+                "init", "health", "metrics", "config_action", "migration_action",
+                "audit_retention_action", "validate", "add_correction", "add_context_rule",
+                "list_context_rules", "audit_dictionary", "list_corrections", "export_path",
+                "import_path", "review_learned", "approve", "report_false_positive",
+                "load_presets", "extract_uncertain", "enqueue_review", "list_review",
+                "show_review", "attach_authority", "resolve_review", "scan_traps",
+                "probe_term", "close_sidecars", "lookup_term", "input",
+            )
+            if (len(parsed.reanchor_review or []) != 1
+                    or any(getattr(parsed, name, None) is not None
+                           and getattr(parsed, name, None) is not False
+                           for name in other_commands)):
+                self.error("--reanchor-context-offset requires exactly one "
+                           "--reanchor-review ID as the only command")
+        return parsed
+
+
 def create_argument_parser() -> argparse.ArgumentParser:
     """
     Create and configure the argument parser for transcript-fixer CLI.
@@ -17,7 +49,7 @@ def create_argument_parser() -> argparse.ArgumentParser:
     Returns:
         Configured ArgumentParser instance
     """
-    parser = argparse.ArgumentParser(
+    parser = _TranscriptArgumentParser(
         description="Transcript Fixer - Iterative correction tool",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -485,6 +517,15 @@ def create_argument_parser() -> argparse.ArgumentParser:
              "enqueue: refresh line/context verbatim from the current file; when "
              "the file is gone, search --reanchor-root (and the recorded parent "
              "dir) for *.md containing the original text and re-point it"
+    )
+    parser.add_argument(
+        "--reanchor-context-offset",
+        metavar="N",
+        type=_nonnegative_int,
+        dest="reanchor_context_offset",
+        help="Select a legacy occurrence with exactly one --reanchor-review ID: "
+             "zero-based Unicode offset of original in that item's recorded context; "
+             "current-file anchor checks still apply"
     )
     parser.add_argument(
         "--reanchor-root",

@@ -244,6 +244,14 @@ behavior: a context covering both occurrences stays ambiguous and acceptance
 refuses. Different contexts/offsets preserve separate questions; re-running an
 identical anchor skips it even after a verdict.
 
+Stage 1 supplies one offset per raw occurrence only when its input bytes decode
+exactly to the engine input, its output leaves that input unchanged, and the
+raw occurrence count for the same pair and line equals the deferral count. It
+stores the complete original line, including a token beyond character 200.
+Applied corrections, normalized newlines or unmatched counts retain null
+offsets and the existing ambiguity refusal. Prefix and full-form rules remain
+independent candidates.
+
 For an explicit slot, the guard uses its surrounding context without sibling
 occurrences of the old token. Accepting one slot therefore leaves the other row
 independently reviewable even when the replacement changes the line's length.
@@ -253,14 +261,19 @@ offset is not permission to edit whatever now occupies that character index.
 The legacy no-offset already-applied guard retains its broader nearby-survivor
 check described above.
 
-Repair a pending legacy row through the Python API
-`ReviewQueue.reanchor(item_id, context_offset=N)` when independent source evidence
-identifies the intended slot. `N` refers to the row's recorded context, not the
-current whole line. The method validates that slot against the current file,
+Repair a pending legacy row with
+`--reanchor-review ID --reanchor-context-offset N` (or the Python API
+`ReviewQueue.reanchor(item_id, context_offset=N)`) when independent source evidence
+identifies the intended slot. The CLI requires exactly one ID and a nonnegative
+integer; this option cannot accompany another command. `N` is a zero-based
+Unicode character index in the row's recorded context, not a byte offset or an
+index in the current whole line. The method validates that slot against the current file,
 refreshes its context/offset under the same row ID and writes `review_reanchor`
 audit evidence; it does not change the verdict or transcript. Re-read the row and
-file before enqueuing missing siblings. The CLI's ordinary `--reanchor-review`
-preserves an existing offset but does not choose one for an ambiguous legacy row.
+file before enqueuing missing siblings. Omitting `--reanchor-context-offset`
+preserves the ordinary reanchor behavior: an existing offset is retained, and an
+ambiguous legacy row still refuses. Wrong slices, missing context, drift and
+already-decided rows refuse without changing the file, row or audit history.
 
 ```bash
 # 1. See what was actually decided. The default listing shows PENDING only —
