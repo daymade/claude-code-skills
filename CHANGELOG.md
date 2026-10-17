@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` v1.70.2): Add two synthetic task-result examples for actual host consumption and evidence-assisted answer correction; preserve the first-attempt result separately from the corrected answer. Change type: bounded acceptance-example clarification; scripts and evaluation formats unchanged.
 - **continue-codex-work** (`daymade-claude-code` v4.30.5): Document the existing TUI `/goal resume` recovery route alongside App Server control, using the official guide and version-pinned source. Preserve authorization, policy rejection, budget/counter readback and actual automatic-turn verification. Change type: bounded recovery-routing correction.
 - **frontend-visual-qa** (v1.21.2): Add anonymous dashboard replays for readable history without runtime coverage and a correctly scoped zero alongside an unknown source. Keep runtime instructions unchanged; independent consumer runs and semantic review cover both controls.
 - **macos-watchdog** (`daymade-macos` v1.23.1): Correct stop-versus-disable guidance and returned-service diagnosis; consolidate lifecycle commands under the owning Skill procedure.

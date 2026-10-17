@@ -55,6 +55,9 @@ Keep two completion gates separate:
   deterministic check when it decides a narrow correction; use actual task
   outputs and appropriate old/new observations when it does not.
 
+Use the [named task-result examples](#named-task-result-examples) to distinguish
+consumer execution, answer correctness and correction after supplied evidence.
+
 Select 1–2 replays only when they exercise the entire changed behavior **and**
 required preservation scope. For a broad loading or routing change, cover each
 important affected job rather than treating a successful correction, recovery or
@@ -70,6 +73,34 @@ it. Continue available authorized work, or report the unmet criterion and exact
 authorization/environment needed to resume. Treat only a later user instruction
 as a scope change. Finish after both gates clear; omit optional unmeasured claims
 without adding work that cannot change the acceptance decision.
+
+### Named task-result examples
+
+Use these fictional cases as output-level controls within the selected tier;
+keep actual traces and judgments in the existing private task record.
+
+#### `native-consumption`: a successful process without the requested consumer
+
+Requested result: have a fresh host explicitly invoke the installed
+`sample-helper` Skill and run that package's read-only information command.
+
+| Observed evidence | Task-result judgment |
+|---|---|
+| The package directory exists and the host catalog lists the Skill. | Installation/discovery evidence only; actual consumption remains unverified. |
+| The process exits successfully, but its available tools omit Skill invocation and its answer reports that nothing was loaded or run. | The required consumer task did not run. Preserve the preparation gap; this does not establish a defect in the installed package. |
+| A prepared fresh host actually invokes the Skill, receives the matching installed body and successfully runs the same package's command. | Explicit consumption passes this case. Natural-language selection and a downstream business task remain untested. |
+
+#### `first-answer-and-correction`: correct reads with an unsupported next action
+
+Requested result: read a synthetic inbox matter and project record, then report
+the existing owner, unfinished delivery, paused outreach and an unconfirmed reply,
+with a next action supported by the selected client.
+
+| Observed evidence | Task-result judgment |
+|---|---|
+| Every read succeeds and the first answer preserves the project facts, but recommends a receipt query the client's verified implementation does not provide. | The first answer is only partially correct; tool success does not pass the whole requested result. |
+| The operator supplies the relevant implementation facts after that answer. | Record this evidence intervention separately from the original inputs and first answer. |
+| In the same session, the revised answer withdraws the unavailable query, retains the existing owner and missing delivery, keeps outreach paused and does not resend the unconfirmed reply. | The specific corrected answer is usable after intervention. Keep the first attempt partially failed; this is neither an autonomous first-pass success nor evidence of a general fix. |
 
 ## Verification depth router (run before choosing any workflow)
 
