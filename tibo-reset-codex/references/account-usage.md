@@ -134,7 +134,8 @@ python3 scripts/reset_attribution.py --input /tmp/tibo-attribution.json
 
 输出的 `observations.current_state` 是可报告现值；`classification` 与 `candidate_causes` 是证据分类；
 `claim_gate` 逐类放行或阻断 `current_state`、`account_window_change`、`same_account_reset`、
-`multi_account_reset`（多账号排除自然周期与切号后的直接实测）、`account_switch`、`global_reset` 与
+`multi_account_reset`（多账号排除自然周期与切号后的提前窗口变化或直接实测）、
+`cross_account_observation`（较弱的跨账户窗口变化观测）、`account_switch`、`global_reset` 与
 `all_accounts`（仅官方 `all_paid`）。`block` 的断言不得交付。脚本缺键、空值、重复周窗口、
 不可比窗口或坏时间戳会显式失败或保持 `unknown`，不把 malformed input 变成正面归因。
 

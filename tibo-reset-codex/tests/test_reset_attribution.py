@@ -262,6 +262,102 @@ class ResetAttributionTests(unittest.TestCase):
         self.assertEqual(result["classification"], "account_switch")
         self.assertFalse(result["blocked"])
 
+    def test_be_negations_and_uncertainty_are_not_positive_claims(self):
+        for text in ("这个账号没有被重置", "这个账号尚未被重置"):
+            with self.subTest(text=text):
+                self.assertEqual(attr.user_events(text, "a1b2c3d4", "2026-10-17T13:32:00Z"), [])
+        for message in ("当前账户没有被重置。", "当前账户尚未被重置。", "无法确定当前账户已被重置。"):
+            with self.subTest(message=message):
+                self.assertEqual(attr.claims_in_message(message), [])
+
+    def test_quota_weekly_and_all_account_scope_claims(self):
+        for message in ("当前额度已重置，原因未核实。", "weekly 已重置，原因未核实。"):
+            with self.subTest(message=message):
+                claims = attr.claims_in_message(message)
+                self.assertEqual([c["claim"] for c in claims], [attr.CLAIM_SAME_ACCOUNT])
+        direct = current_only_bundle([{
+            "kind": "account_reset_observed", "account_ref": "a1b2c3d4",
+            "checked_at_utc": "2026-10-17T13:32:00Z",
+        }])
+        result = attr.evaluate(direct)
+        claims = attr.claims_in_message("所有账户已经重置。")
+        self.assertEqual([c["claim"] for c in claims], [attr.CLAIM_ALL_ACCOUNTS])
+        self.assertEqual(result["claim_gate"][attr.CLAIM_ALL_ACCOUNTS], "block")
+
+    def test_official_negative_and_plan_only_scopes_are_rejected(self):
+        for text in ("Reset has landed, but not for everyone.",
+                     "Reset has landed for everyone on Pro only."):
+            with self.subTest(text=text):
+                self.assertEqual(attr.official_events(text, "2026-10-17T13:32:00Z"), [])
+
+    def test_product_only_multi_account_and_weaker_cross_account_observation(self):
+        transitions = []
+        for ref, future in (("a1b2c3d4", "2026-10-20T12:00:00Z"),
+                            ("b2c3d4e5", "2026-10-21T12:00:00Z")):
+            transition = natural_bundle()["transitions"][0]
+            transition["before"]["account_ref"] = ref
+            transition["after"]["account_ref"] = ref
+            transition["before"]["reset_at_utc"] = future
+            transition["after"]["reset_at_utc"] = "2026-10-17T13:30:00Z"
+            transitions.append(transition)
+        result = attr.evaluate({"transitions": transitions, "events": []})
+        self.assertEqual(result["claim_gate"][attr.CLAIM_MULTI_ACCOUNT], "allow")
+        self.assertEqual(result["claim_gate"][attr.CLAIM_CROSS_ACCOUNT], "allow")
+
+        natural_two = []
+        for ref in ("a1b2c3d4", "b2c3d4e5"):
+            transition = natural_bundle()["transitions"][0]
+            transition["before"]["account_ref"] = ref
+            transition["after"]["account_ref"] = ref
+            natural_two.append(transition)
+        weaker = attr.evaluate({"transitions": natural_two, "events": []})
+        self.assertEqual(weaker["claim_gate"][attr.CLAIM_MULTI_ACCOUNT], "block")
+        self.assertEqual(weaker["claim_gate"][attr.CLAIM_CROSS_ACCOUNT], "allow")
+
+    def test_transcript_preserves_all_account_transitions(self):
+        observations = []
+        for ref, used, reset, checked in (
+            ("a1b2c3d4", 80, "2026-10-20T12:00:00Z", "2026-10-17T12:00:00Z"),
+            ("a1b2c3d4", 0, "2026-10-24T13:30:00Z", "2026-10-17T13:01:00Z"),
+            ("b2c3d4e5", 75, "2026-10-21T12:00:00Z", "2026-10-17T12:02:00Z"),
+            ("b2c3d4e5", 0, "2026-10-24T13:31:00Z", "2026-10-17T13:03:00Z"),
+        ):
+            item = usage_payload(ref)
+            item["windows"][0]["used_percent"] = used
+            item["windows"][0]["remaining_percent"] = 100 - used
+            item["windows"][0]["reset_at_utc"] = reset
+            item["checked_at_utc"] = checked
+            observations.append(item)
+        records = [
+            {"type": "user", "message": {"role": "user", "content": "现在什么情况"}},
+            {"type": "assistant", "message": {"role": "assistant", "content": [
+                {"type": "tool_use", "name": "Bash", "id": f"usage-{i}",
+                 "input": {"command": "uv run python scripts/query_usage.py"}} for i in range(4)
+            ]}},
+            {"type": "user", "message": {"role": "user", "content": [
+                {"type": "tool_result", "tool_use_id": f"usage-{i}", "content": json.dumps(obs)}
+                for i, obs in enumerate(observations)
+            ]}},
+        ]
+        result = evaluate_records(records, "观测到大范围静默重置。")
+        self.assertEqual(result["claim_gate"][attr.CLAIM_MULTI_ACCOUNT], "allow")
+        self.assertFalse(result["blocked"])
+
+    def test_banked_reverse_order_confirmation(self):
+        records = [
+            {"type": "user", "message": {"role": "user",
+                         "content": "我确认这个账号的 banked reset 已兑现。"}},
+            {"type": "assistant", "message": {"role": "assistant", "content": [
+                {"type": "tool_use", "name": "Bash", "id": "usage",
+                 "input": {"command": "uv run python scripts/query_usage.py"}}]}},
+            {"type": "user", "message": {"role": "user", "content": [
+                {"type": "tool_result", "tool_use_id": "usage", "content": json.dumps(usage_payload())},
+            ]}},
+        ]
+        result = evaluate_records(records, "该账户已经重置。")
+        self.assertEqual(result["classification"], "banked_redeem")
+        self.assertFalse(result["blocked"])
+
     def test_common_claim_variants_and_mixed_uncertainty_are_blocked(self):
         messages = [
             "当前账户已经重置。",

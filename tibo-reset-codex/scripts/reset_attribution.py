@@ -25,6 +25,7 @@ WEEK_SECONDS = 604800
 NATURAL_ANCHOR_TOLERANCE = timedelta(minutes=10)
 CLAIM_SAME_ACCOUNT = "same_account_reset"
 CLAIM_MULTI_ACCOUNT = "multi_account_reset"
+CLAIM_CROSS_ACCOUNT = "cross_account_observation"
 CLAIM_ALL_ACCOUNTS = "all_accounts"
 DIRECT_EVENT_KINDS = {"account_reset_observed", "banked_redeem", "official_global_reset"}
 
@@ -192,6 +193,17 @@ def official_global_events(transition, events):
             and overlaps(item, transition.get("before"), transition.get("after"))]
 
 
+def cross_account_window_changes(transitions, events):
+    refs = set()
+    for transition in transitions:
+        after = transition.get("after")
+        if (after is not None and after["identity"] == "verified"
+                and window_change_observed(transition)
+                and not has_account_switch(transition, events)):
+            refs.add(after["account_ref"])
+    return refs
+
+
 def multi_account_reset_observed(transitions, events):
     refs = set()
     for transition in transitions:
@@ -200,7 +212,7 @@ def multi_account_reset_observed(transitions, events):
             continue
         if natural_cycle_observed(transition) or has_account_switch(transition, events):
             continue
-        if has_direct_account_reset(transition, events):
+        if window_change_observed(transition) or has_direct_account_reset(transition, events):
             refs.add(after["account_ref"])
     return len(refs) >= 2
 
@@ -246,6 +258,7 @@ def evaluate(bundle):
     official = bool(official_records)
     window_changed = window_change_observed(transition)
     multi_account = multi_account_reset_observed(transitions, events)
+    cross_account = len(cross_account_window_changes(transitions, events)) >= 2
     banked = natural is False and direct_reset and any(
         item["kind"] == "banked_redeem" and target_matches(item, after)
         and overlaps(item, before, after) for item in events)
@@ -305,13 +318,14 @@ def evaluate(bundle):
         "anonymous_usage_drop": "observed" if transition["anonymous_candidates"] else "unknown",
         "account_window_changed_between_observations": "observed" if window_changed else "unknown",
         "same_account_reset": "observed" if reset_observed else "unknown",
-        "cross_account_near_simultaneous_reset": "observed" if multi_account else "unknown",
+        "cross_account_near_simultaneous_reset": "observed" if cross_account else "unknown",
     }
     claim_gate = {
         "current_state": "allow" if after["identity"] == "verified" else "block",
         "account_window_change": "allow" if window_changed else "block",
         "same_account_reset": "allow" if reset_observed else "block",
         "multi_account_reset": "allow" if multi_account else "block",
+        "cross_account_observation": "allow" if cross_account else "block",
         "account_switch": "allow" if switch else "block",
         "global_reset": "allow" if official else "block",
         "cause": "allow" if classification != "unknown" else "block",
@@ -414,7 +428,9 @@ def user_events(text, account_ref, timestamp):
                        "checked_at_utc": timestamp, "source": "user", "source_ref": "user:account_switch"})
     negated = any(marker in text for marker in
                   ("不是重置", "并非重置", "没有重置", "没重置", "还没重置", "未重置",
-                   "尚未重置", "没有发生重置", "是否重置", "会不会重置", "能否重置"))
+                   "尚未重置", "没有发生重置", "没有被重置", "没被重置", "尚未被重置",
+                   "还未被重置", "还没被重置", "未被重置", "无法确定", "不能确定",
+                   "是否重置", "会不会重置", "能否重置"))
     explicit_reset = re.search(
         r"(?:账号|账户|额度|weekly)[^。!？?；;\n]{0,12}(?:已经|已|刚)?[^。!？?；;\n]{0,6}重置",
         text, re.I)
@@ -423,11 +439,14 @@ def user_events(text, account_ref, timestamp):
         events.append({"kind": "account_reset_observed", "account_ref": account_ref,
                        "checked_at_utc": timestamp, "source": "user", "source_ref": "user:account_reset"})
     banked_negated = any(marker in lowered for marker in
-                         ("没有兑现", "没兑现", "尚未兑现", "没有使用", "未使用", "没有用"))
+                         ("没有兑现", "没兑现", "尚未兑现", "未兑现", "没有使用", "未使用", "没有用"))
     banked = re.search(
-        r"(?:兑现|使用|用掉|用了|redeem(?:ed)?)[^。!？?；;\n]{0,24}(?:备用\s*reset|banked\s*reset|备用重置)",
+        r"(?:兑现|使用|用掉|用了|redeem(?:ed)?)[^。!？?；;，,\n]{0,24}(?:备用\s*reset|banked\s*reset|备用重置)",
         lowered)
-    if banked and not banked_negated:
+    banked_reverse = re.search(
+        r"(?:备用\s*reset|banked\s*reset|备用重置)[^。!？?；;，,\n]{0,16}(?:已经|已)?\s*(?:兑现|使用|用掉|redeem(?:ed)?)",
+        lowered)
+    if (banked or banked_reverse) and not banked_negated:
         events.append({"kind": "banked_redeem", "account_ref": account_ref,
                        "checked_at_utc": timestamp, "source": "user", "source_ref": "user:banked_redeem"})
     return events
@@ -488,8 +507,11 @@ def usage_source_input(data):
 
 def official_events(text, timestamp=None):
     lowered = text.casefold()
-    if any(marker in lowered for marker in
-           ("not all accounts", "not everyone", "not all paid", "only plus", "plus only")):
+    if (any(marker in lowered for marker in
+            ("not all accounts", "not everyone", "not for everyone", "not for all",
+             "not all paid", "only plus", "plus only"))
+            or re.search(r"\b(?:pro|plus|team|enterprise|business)\s+only\b", lowered)
+            or re.search(r"\bonly\s+(?:pro|plus|team|enterprise|business)\b", lowered)):
         return []
     scope_terms = ("all paid", "everyone", "every paid", "all accounts")
     if "for plus" in lowered and not any(term in lowered for term in scope_terms):
@@ -581,27 +603,35 @@ def evidence_from_transcript(path):
                     item["account_ref"] = only_ref
     if not observations:
         raise AttributionError("no verified query_usage observation in the selected turn")
-    transition = {"before": observations[-2] if len(observations) > 1 else None,
-                  "after": observations[-1],
-                  "anonymous_candidates": [{"shape": "usage_drop"}] if anonymous else []}
-    return {"transitions": [transition], "events": events,
+    transitions = []
+    for index, after in enumerate(observations):
+        transitions.append({
+            "before": observations[index - 1] if index else None,
+            "after": after,
+            "anonymous_candidates": ([{"shape": "usage_drop"}]
+                                     if anonymous and index == len(observations) - 1 else []),
+        })
+    return {"transitions": transitions, "events": events,
             "auth_hints": {"last_refresh_utc": auth_refresh} if auth_refresh else {}}
 
 
 UNCERTAIN = re.compile(
-    r"是否[^。!？?；;\n]{0,30}重置|没有证据[^。!？?；;\n]{0,30}重置|"
-    r"不能(?:证明|确认|称为|判定)[^。!？?；;\n]{0,30}重置|"
-    r"无法(?:证明|确认|判定)[^。!？?；;\n]{0,30}重置|"
-    r"不是重置|并非重置|可能只是换号|可能[^。!？?；;\n]{0,12}换号|"
-    r"窗口(?:已经)?(?:发生)?变化|重置(?:是否|与否)[^。!？?；;\n]{0,20}(?:未核实|未知|待核实)")
+    r"是否[^。!？?；;，,\n]{0,30}重置|没有证据[^。!？?；;，,\n]{0,30}重置|"
+    r"没有被重置|没被重置|尚未被重置|还未被重置|还没被重置|未被重置|"
+    r"无法(?:确定|证明|确认|判定)[^。!？?；;，,\n]{0,30}重置|"
+    r"不能(?:确定|证明|确认|称为|判定)[^。!？?；;，,\n]{0,30}重置|"
+    r"不确定[^。!？?；;，,\n]{0,30}重置|"
+    r"不是重置|并非重置|可能只是换号|可能[^。!？?；;，,\n]{0,12}换号|"
+    r"窗口(?:已经)?(?:发生)?变化|重置(?:是否|与否)[^。!？?；;，,\n]{0,20}(?:未核实|未知|待核实)")
 META = re.compile(r"示例|模板|规则|判据|拦截|误报|测试|回归|案例|复发|教训|修复|审查|如果|若|不得|禁止|应该|不应|撤回|更正|误判|错误归因")
 SAME_ACCOUNT_CLAIM = re.compile(
-    r"账[号户][^。!？?；;，,\n]{0,40}(?:已经|已|刚|被)[^。!？?；;，,\n]{0,20}重置|"
-    r"账[号户][^。!？?；;，,\n]{0,40}重置了|刚被重置|"
+    r"(?:账[号户]|额度|weekly)[^。!？?；;，,\n]{0,40}(?:已经|已|刚|被)[^。!？?；;，,\n]{0,20}重置|"
+    r"(?:账[号户]|额度|weekly)[^。!？?；;，,\n]{0,40}重置了|刚被重置|"
     r"account (?:has been|was) reset", re.I)
-MULTI_ACCOUNT_CLAIM = re.compile(r"大范围静默重置|跨账户近同时重置", re.I)
+MULTI_ACCOUNT_CLAIM = re.compile(r"大范围静默重置", re.I)
+CROSS_ACCOUNT_CLAIM = re.compile(r"跨账户近同时重置", re.I)
 ALL_ACCOUNTS_CLAIM = re.compile(
-    r"全员(?:已经)?重置|所有账号(?:已经)?重置|"
+    r"全员(?:已经)?重置|所有账[号户](?:已经)?重置|"
     r"officially reset (?:all|everyone)|all paid subscriptions[^。!？?；;，,\n]{0,25}reset", re.I)
 
 
@@ -612,11 +642,16 @@ def claims_in_message(message):
         if (not stripped or stripped.endswith(("？", "?")) or UNCERTAIN.search(stripped)
                 or META.search(stripped)):
             continue
-        if SAME_ACCOUNT_CLAIM.search(stripped):
+        has_multi = bool(MULTI_ACCOUNT_CLAIM.search(stripped))
+        has_cross = bool(CROSS_ACCOUNT_CLAIM.search(stripped))
+        has_all = bool(ALL_ACCOUNTS_CLAIM.search(stripped))
+        if not (has_all or has_multi or has_cross) and SAME_ACCOUNT_CLAIM.search(stripped):
             claims.append({"claim": CLAIM_SAME_ACCOUNT, "text": stripped[:180]})
-        if MULTI_ACCOUNT_CLAIM.search(stripped):
+        if has_multi:
             claims.append({"claim": CLAIM_MULTI_ACCOUNT, "text": stripped[:180]})
-        if ALL_ACCOUNTS_CLAIM.search(stripped):
+        if has_cross:
+            claims.append({"claim": CLAIM_CROSS_ACCOUNT, "text": stripped[:180]})
+        if has_all:
             claims.append({"claim": CLAIM_ALL_ACCOUNTS, "text": stripped[:180]})
     return claims
 
