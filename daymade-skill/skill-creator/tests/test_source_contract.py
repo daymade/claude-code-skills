@@ -118,6 +118,38 @@ class SourceContractTests(unittest.TestCase):
         self.assertEqual(result["status"], "valid")
         self.assertEqual(result["checks"]["installation"]["status"], "unknown")
 
+    def test_physical_identity_requires_existing_same_directory(self):
+        missing = self.root / "absent"
+        self.assertFalse(source.same_physical_path(missing, missing))
+        self.assertFalse(source.same_physical_path(self.repo, self.manifest.parent))
+        self.assertTrue(source.same_physical_path(self.repo, self.repo))
+
+    def test_registered_and_project_draft_locations_need_not_exist_yet(self):
+        self.write_manifest([{"name": "suite", "source": "./future-suite", "skills": ["./new-skill"]}])
+        target = self.repo / "future-suite/new-skill"
+        report = source.check_source(target, repo=self.repo, phase="create")
+        self.assertEqual("valid", report["status"], report)
+        self.assertEqual("suite@test-market", report["plugin_id"])
+        for phase in ("auto", "project"):
+            target = self.repo / ".agents/skills/future-skill"
+            report = source.check_source(target, repo=self.repo, scope=phase, phase="create")
+            self.assertEqual("valid", report["status"], report)
+            self.assertEqual("project", report["scope"])
+
+    def test_case_alias_registration_containment_and_new_skill_placement(self):
+        alias = self.repo.with_name(self.repo.name.upper())
+        if not alias.exists() or not alias.samefile(self.repo):
+            self.skipTest("requires a case-insensitive filesystem")
+        for directory, repo in ((self.repo / "seed", alias), (alias / "seed", self.repo)):
+            with self.subTest(directory=directory, repo=repo):
+                report = source.check_source(directory, repo=repo, inventory=self.inventory())
+                self.assertEqual("valid", report["status"], report)
+        for directory, repo in ((self.repo / "new-skill", alias), (alias / "new-skill", self.repo)):
+            with self.subTest(directory=directory, repo=repo):
+                report = source.check_source(directory, repo=repo, inventory=self.inventory(), phase="create")
+                self.assertEqual("valid", report["status"], report)
+                self.assertTrue(report["registration_pending"])
+
     def test_standalone_plugin_namespace_can_differ_from_skill_name(self):
         target = self.repo / "seed"
         self.skill(target, "formal-helper")

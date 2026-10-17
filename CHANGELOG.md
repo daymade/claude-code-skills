@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **claude-switch-models-setup** (`daymade-claude-code` v4.30.6): Accept Git path spellings that identify the same physical authoring checkout on case-insensitive filesystems; retain exact origin, active lease, independent Git directory and symlink checks. Change type: bounded authoring-identity repair.
+- **claude-switch-models-setup / skill-creator** (`daymade-claude-code` v4.30.6, `daymade-skill` v1.70.3): Recognize the same physical authoring checkout across Git path spellings in owner inventory and source-contract registration checks. Preserve exact origin, active lease, independent Git directory and symlink boundaries. Change type: bounded authoring-identity repair.
 - **peer-message** (v1.21.6 → v1.22.0): Add `inspect-inbound` to read one supported Codex envelope by explicit thread UUID and exact own message ID, returning complete raw content, store coordinates and distinct found/miss/unavailable/error outcomes without sending, consuming or resuming a session; preserve existing commands. Change type: narrow read-only capability.
 
 - **transcript-fixer** (`daymade-audio` v1.49.2): Preserve separate review anchors for repeated raw occurrences when Stage 1 leaves input unchanged; add single-item `--reanchor-context-offset` recovery while retaining ambiguous-anchor, drift and name refusals. Change type: bounded queue-recovery repair.
