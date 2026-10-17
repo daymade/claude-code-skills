@@ -53,13 +53,17 @@ Markdown, or when the requested document editing requires another engine capabil
    precedence rule Step 3 already applies to revision-reading: **use the project's own
    verified renderer if it has one for this delivery type — a pinned profile, a project
    wrapper, anything already vetted — before reaching for either general-purpose option
-   below.** Only absent that, choose between the two by what this delivery actually needs:
+   below.** A verified project-native background renderer remains eligible; native
+   Word fidelity does not itself require taking over the user's desktop. The GUI
+   helper below is one macOS route, not a claim that all native Word automation must
+   use the foreground. Only absent a project renderer, choose between the two by
+   what this delivery actually needs:
 
-   | | Real Microsoft Word (GUI-menu export) | LibreOffice (`soffice --headless`) |
+   | | Bundled macOS Word GUI-menu export | LibreOffice (`soffice --headless`) |
    |---|---|---|
    | Font/pagination fidelity | Renders with Word's own font substitution logic — the same thing the eventual reader's Word will do | Its own, different substitution logic — can silently reflow a document that Word renders on one page onto two |
    | Requires | `Word.app` installed on the rendering machine | `soffice` on PATH (or `/Applications/LibreOffice.app/.../soffice` on macOS) |
-   | Automatable headlessly | No — drives the real GUI (see script below) | Yes |
+   | Automatable headlessly | This helper drives the real GUI (see script below) | Yes |
    | Use when | Fidelity to what a Word reader will see matters — the common case, given the skill's own general stance in `SKILL.md` that a lenient renderer clearing every check is not proof Word renders the same file correctly — or the project has explicitly ruled out LibreOffice for this deliverable | Word isn't installed, or the delivery genuinely doesn't depend on exact Word-fidelity |
 
    (That `SKILL.md` stance — quoted there as `"LibreOffice rendering clean is not the same
@@ -68,6 +72,14 @@ Markdown, or when the requested document editing requires another engine capabil
    with phantom bullet markers LibreOffice can't see at all). It's cited here for the general
    lesson, not as a reproduction of a font/pagination case specifically — the font/pagination
    divergence in this row is its own, separately observed finding, below.)
+
+   **Before the GUI helper:** check the target app/document, user activity and other
+   agents' ownership. A concrete handoff or an explicit standing idle-desktop grant
+   must cover the operation. Under an existing grant, coordinate exclusive access
+   and proceed without another confirmation; inactivity alone is not ownership.
+   If busy/unknown, continue independent preparation or an already verified background
+   renderer. Do not activate Word or switch tools to evade a host refusal. Stop on
+   human takeover and leave the user's current focus untouched.
 
    **Verified 2026-09, Microsoft Word for Mac / Chinese (Simplified) UI locale only:**
    real-Word export via `scripts/word_export_pdf.applescript`. Every UI string it clicks by
