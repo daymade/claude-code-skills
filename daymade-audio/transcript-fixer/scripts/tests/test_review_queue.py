@@ -24,10 +24,13 @@ import json
 import sqlite3
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+import cli.commands as commands_module
 
 from core.review_queue import (  # noqa: E402
     ReAnchorNeeded,
@@ -406,6 +409,95 @@ def _item(transcript: Path, **kw) -> dict:
     }
     base.update(kw)
     return base
+
+
+class TestReanchorOffsetCLI:
+    @staticmethod
+    def _run(monkeypatch, queue, argv):
+        import cli.commands as commands
+        import fix_transcription
+
+        monkeypatch.setattr(commands, "_get_review_queue", lambda: queue)
+        monkeypatch.setattr(sys, "argv", ["fix_transcription.py", *argv, "--json"])
+        fix_transcription.main()
+
+    @staticmethod
+    def _snapshot(queue, db_path, target, item_id):
+        return (queue.get(item_id).to_dict(), target.read_bytes(), db_path.read_bytes())
+
+    @pytest.mark.parametrize("second", [False, True])
+    def test_parser_dispatch_repairs_one_legacy_occurrence(self, queue, tmp_path,
+                                                          monkeypatch, capsys, second):
+        target = tmp_path / "legacy-cli.md"
+        text = "actor 是开头，另一个 actor 是结尾。"
+        # Compute the second Unicode index from the source, not its byte offset.
+        selected = text.rindex("actor") if second else 0
+        target.write_text(text, encoding="utf-8")
+        item_id = queue.enqueue([{"file": str(target), "line": 1, "original": "actor",
+                                  "suggested": "agentic", "context": text}])["added"][0]
+        with pytest.raises(SystemExit) as refused:
+            self._run(monkeypatch, queue, ["--reanchor-review", str(item_id)])
+        assert refused.value.code == 2
+        assert json.loads(capsys.readouterr().out)["error"] == "reanchor_failed"
+        self._run(monkeypatch, queue, ["--reanchor-review", str(item_id),
+                                      "--reanchor-context-offset", str(selected)])
+        result = json.loads(capsys.readouterr().out)
+        assert [r["id"] for r in result["reanchored"]] == [item_id]
+        assert queue.get(item_id).context_offset == selected
+        assert queue.get(item_id).status == "pending"
+        assert target.read_text(encoding="utf-8") == text
+        queue.resolve(item_id, "accepted")
+        assert target.read_text(encoding="utf-8") == text[:selected] + "agentic" + text[selected + 5:]
+
+    @pytest.mark.parametrize("argv", [
+        ["--reanchor-context-offset", "0"],
+        ["--reanchor-review", "1", "2", "--reanchor-context-offset", "0"],
+        ["--reanchor-review", "1", "--reanchor-context-offset", "-1"],
+        ["--reanchor-review", "1", "--reanchor-context-offset", "not-int"],
+        ["--reanchor-review", "1", "--reanchor-context-offset", "1.5"],
+        ["--list-review", "--reanchor-review", "1", "--reanchor-context-offset", "0"],
+    ])
+    def test_invalid_option_combinations_fail_before_queue_access(self, monkeypatch, argv):
+        import cli.commands as commands
+        import fix_transcription
+
+        def unexpected_queue_access():
+            pytest.fail("invalid offset options reached the queue")
+
+        monkeypatch.setattr(commands, "_get_review_queue", unexpected_queue_access)
+        monkeypatch.setattr(sys, "argv", ["fix_transcription.py", *argv])
+        with pytest.raises(SystemExit) as refused:
+            fix_transcription.main()
+        assert refused.value.code == 2
+
+    @pytest.mark.parametrize("failure", ["wrong_slice", "out_of_range", "drift", "no_context", "decided"])
+    def test_refused_repair_preserves_file_row_and_database(self, queue, db_path, tmp_path,
+                                                           monkeypatch, capsys, failure):
+        target = tmp_path / "refused-cli.md"
+        text = "先读 actor，再校对 actor。"
+        target.write_bytes((text + "\r\n").encode("utf-8"))
+        item = {"file": str(target), "line": 1, "original": "actor", "suggested": "agent"}
+        if failure != "no_context":
+            item["context"] = text
+        item_id = queue.enqueue([item])["added"][0]
+        selected = text.rindex("actor")
+        if failure == "wrong_slice":
+            selected = 0
+        elif failure == "out_of_range":
+            selected = 999
+        elif failure == "drift":
+            target.write_text("先读 actor，原来的结尾已重写。", encoding="utf-8")
+        elif failure == "decided":
+            queue.resolve(item_id, "kept_original", note="preserve this decision")
+        before = self._snapshot(queue, db_path, target, item_id)
+        with pytest.raises(SystemExit) as refused:
+            self._run(monkeypatch, queue, ["--reanchor-review", str(item_id),
+                                          "--reanchor-context-offset", str(selected)])
+        assert refused.value.code == 2
+        result = json.loads(capsys.readouterr().out)
+        assert result["reanchored"] == []
+        assert result["failed"][0]["id"] == item_id
+        assert self._snapshot(queue, db_path, target, item_id) == before
 
 
 # ==================== enqueue ====================
@@ -1506,3 +1598,168 @@ def test_ledger_cannot_claim_a_different_correction(queue, tmp_path):
     assert file.read_bytes() == before
     assert queue.get(item_id).status == "pending"
     assert queue.get(item_id).evidence is None
+
+
+@pytest.fixture
+def stage1_deferral_queue(tmp_path, monkeypatch):
+    from core.review_queue import ReviewQueue
+    import core.review_queue as queue_module
+
+    database = tmp_path / "synthetic.db"
+    with sqlite3.connect(database) as connection:
+        connection.executescript((Path(__file__).parent.parent / "core/schema.sql").read_text())
+    fake_temp = tmp_path / "temp-staging"
+    fake_temp.mkdir()
+    monkeypatch.setattr(queue_module.tempfile, "gettempdir", lambda: str(fake_temp))
+    queue = ReviewQueue(database)
+    monkeypatch.setattr(commands_module, "_get_review_queue", lambda: queue)
+    return queue
+
+
+def _run_synthetic_stage1(path, corrections, monkeypatch, context_rules=None):
+    """Exercise the real parser, Stage 1 engine and enqueue caller together."""
+    import utils.config as config_module
+    from cli.argument_parser import create_argument_parser
+
+    service = SimpleNamespace(
+        get_corrections_with_metadata=lambda domains: (
+            corrections, {key: {"confidence": 0.5 if key != "garbledprefix" else 1.0}
+                          for key in corrections}),
+        load_context_rules=lambda domains: context_rules or [],
+        get_domain_stats=lambda: {"synthetic": len(corrections)},
+    )
+    config = SimpleNamespace(
+        paths=SimpleNamespace(people_roster_path=None),
+        resources=SimpleNamespace(max_file_size=1_000_000, max_text_length=1_000_000),
+    )
+    monkeypatch.delenv("TRANSCRIPT_FIXER_PEOPLE_ROSTER", raising=False)
+    monkeypatch.setattr(commands_module, "_get_service", lambda: service)
+    monkeypatch.setattr(commands_module, "_load_trap_demotion_sets", lambda domains: (set(), set()))
+    monkeypatch.setattr(config_module, "get_config", lambda: config)
+    args = create_argument_parser().parse_args([
+        "--input", str(path), "--stage", "1", "--domain", "synthetic",
+    ])
+    return commands_module.cmd_run_correction(args)
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_stage1_caller_preserves_each_raw_occurrence(stage1_deferral_queue, tmp_path,
+                                                    monkeypatch, reverse):
+    path = tmp_path / "repeats.md"
+    text = "  先读 actor，再校对 actor，最后介绍 actor。  \n"
+    path.write_bytes(text.encode("utf-8"))
+    queue = stage1_deferral_queue
+    status = _run_synthetic_stage1(path, {"actor": "agentic"}, monkeypatch)
+    assert status["deferred"] == 3
+    assert status["review_enqueued"] == 3
+    rows = sorted(queue.list_items(), key=lambda item: item.context_offset)
+    positions = [text.index("actor"), text.index("actor", text.index("actor") + 5), text.rindex("actor")]
+    assert [item.context_offset for item in rows] == positions
+    assert all(item.context_snippet == text.rstrip("\n") for item in rows)
+    assert _run_synthetic_stage1(path, {"actor": "agentic"}, monkeypatch)["review_enqueued"] == 0
+    assert path.read_bytes() == text.encode("utf-8")
+    expected = text
+    order = rows[::-1] if reverse else rows
+    for index, row in enumerate(order):
+        queue.resolve(row.id, "accepted")
+        selected = positions[rows.index(row)]
+        shift = sum(len("agentic") - len("actor") for prior in order[:index]
+                    if prior.context_offset < selected)
+        selected += shift
+        expected = expected[:selected] + "agentic" + expected[selected + 5:]
+        assert path.read_bytes() == expected.encode("utf-8")
+        assert sum(item.status == "pending" for item in queue.list_items(status=None)) == 2 - index
+
+
+def test_stage1_late_token_keeps_full_raw_line(stage1_deferral_queue, tmp_path, monkeypatch):
+    path = tmp_path / "long-line.md"
+    text = "  " + "说明；" * 100 + "请校对 actor。  \n"
+    path.write_text(text, encoding="utf-8")
+    assert _run_synthetic_stage1(path, {"actor": "agentic"}, monkeypatch)["review_enqueued"] == 1
+    row = stage1_deferral_queue.list_items()[0]
+    assert row.context_snippet == text.rstrip("\n")
+    assert row.context_offset == text.index("actor") > 200
+    stage1_deferral_queue.resolve(row.id, "accepted")
+    assert path.read_text(encoding="utf-8") == text.replace("actor", "agentic")
+
+
+@pytest.mark.parametrize("newline", ["\r\n", "\r"])
+def test_stage1_normalized_newlines_do_not_claim_raw_offsets(stage1_deferral_queue, tmp_path,
+                                                           monkeypatch, newline):
+    path = tmp_path / "newlines.md"
+    raw = ("先读 actor，再校对 actor。" + newline).encode("utf-8")
+    path.write_bytes(raw)
+    _run_synthetic_stage1(path, {"actor": "agentic"}, monkeypatch)
+    rows = stage1_deferral_queue.list_items()
+    assert len(rows) == 1
+    assert rows[0].context_offset is None
+    assert path.read_bytes() == raw
+
+
+@pytest.mark.parametrize("replacement", ["short", "title\nsubtitle"])
+def test_stage1_applied_context_change_never_supplies_evolving_offsets(stage1_deferral_queue,
+                                                                     tmp_path, monkeypatch,
+                                                                     replacement):
+    path = tmp_path / "mixed.md"
+    text = "garbledprefix 先读 actor，再校对 actor。\n"
+    path.write_text(text, encoding="utf-8")
+    _run_synthetic_stage1(path, {"actor": "agentic"}, monkeypatch, context_rules=[{
+        "pattern": "garbledprefix", "replacement": replacement,
+    }])
+    rows = stage1_deferral_queue.list_items()
+    assert rows
+    assert all(row.context_offset is None for row in rows)
+    assert path.read_text(encoding="utf-8") == text
+
+
+def test_stage1_raw_count_mismatch_does_not_guess_occurrence(stage1_deferral_queue, tmp_path):
+    from core.dictionary_processor import Change
+    from core.review_queue import ReAnchorNeeded
+
+    path = tmp_path / "mismatch.md"
+    text = "先读 actor，再校对 actor。\n"
+    path.write_text(text, encoding="utf-8")
+    change = Change(1, "actor", "agentic", "dictionary", "synthetic", "high")
+    commands_module._enqueue_deferrals([change], path, text, "synthetic",
+                                      original_bytes=text.encode(), stage1_text=text)
+    row = stage1_deferral_queue.list_items()[0]
+    assert row.context_offset is None
+    with pytest.raises(ReAnchorNeeded):
+        stage1_deferral_queue.resolve(row.id, "accepted")
+    assert path.read_text(encoding="utf-8") == text
+    assert stage1_deferral_queue.get(row.id).status == "pending"
+
+
+def test_stage1_cancelled_applied_changes_still_keep_null_offsets(stage1_deferral_queue,
+                                                                tmp_path, monkeypatch):
+    path = tmp_path / "cancelled-mixed.md"
+    text = "garbledprefix 先读 actor，再校对 actor。\n"
+    path.write_text(text, encoding="utf-8")
+    status = _run_synthetic_stage1(path, {"actor": "agentic"}, monkeypatch, context_rules=[
+        {"pattern": "garbledprefix", "replacement": "differentprefix"},
+        {"pattern": "differentprefix", "replacement": "garbledprefix"},
+    ])
+    assert status["applied"] == 2
+    assert (tmp_path / "cancelled-mixed_stage1.md").read_text(encoding="utf-8") == text
+    assert all(row.context_offset is None for row in stage1_deferral_queue.list_items())
+
+
+def test_stage1_prefix_overlap_preserves_independent_candidates(stage1_deferral_queue, tmp_path):
+    from core.dictionary_processor import DictionaryProcessor
+
+    path = tmp_path / "prefixes.md"
+    text = "先读 actorish，再读 actor。\n"
+    path.write_text(text, encoding="utf-8")
+    pairs = {"actorish": "agentic", "actor": "agent", "torish": "tail"}
+    processor = DictionaryProcessor(pairs, [], {key: {"confidence": 0.5} for key in pairs})
+    output, changes = processor.process(text, review_mode=True, boundary_check=False)
+    assert output == text
+    assert len(changes) == 4
+    assert commands_module._enqueue_deferrals(changes, path, text, "synthetic",
+                                             original_bytes=text.encode(), stage1_text=output) == 4
+    rows = stage1_deferral_queue.list_items()
+    assert {(row.original_text, row.context_offset) for row in rows} == {
+        ("actorish", text.index("actorish")), ("actor", text.index("actor")),
+        ("actor", text.rindex("actor")), ("torish", text.index("torish")),
+    }
+    assert path.read_text(encoding="utf-8") == text

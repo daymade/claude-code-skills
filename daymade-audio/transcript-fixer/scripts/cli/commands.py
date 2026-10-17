@@ -16,6 +16,7 @@ import re
 import shutil
 import sys
 import tempfile
+from collections import Counter
 from pathlib import Path
 from typing import Optional
 
@@ -156,7 +157,10 @@ def _get_learning_engine(service: CorrectionService | None = None):
     )
 
 
-def _enqueue_deferrals(changes, input_path: Path, original_text: str, domain: str) -> int:
+def _enqueue_deferrals(changes, input_path: Path, original_text: str, domain: str,
+                       *, original_bytes: bytes | None = None,
+                       stage1_text: str | None = None,
+                       applied_count: int = 0) -> int:
     """Persist Stage 1 safe-mode deferrals into the review queue.
 
     Returns how many items were actually enqueued (dedup + temp-dir anchors are
@@ -164,18 +168,44 @@ def _enqueue_deferrals(changes, input_path: Path, original_text: str, domain: st
     already succeeded — a queue hiccup is warned loudly, not fatal.
     """
     try:
-        lines = original_text.splitlines()
+        changes = list(changes)
+        # Change.line_number counts LF characters in the engine. Only attach
+        # raw coordinates when no decoding/newline normalization or applied
+        # correction has changed the text that produced those deferrals.
+        lines = original_text.split("\n")
+        unchanged_input = (
+            original_bytes is not None
+            and original_bytes.decode("utf-8") == original_text
+            and stage1_text == original_text
+            and applied_count == 0
+        )
+        counts = Counter((c.line_number, c.from_text, c.to_text) for c in changes)
+        offsets = {}
+        if unchanged_input:
+            for key, count in counts.items():
+                line, original, _ = key
+                if original and line and 1 <= line <= len(lines):
+                    positions = [m.start() for m in re.finditer(re.escape(original), lines[line - 1])]
+                    if len(positions) == count:
+                        offsets[key] = iter(positions)
         items = []
         for c in changes:
             context = ""
+            context_offset = None
             if c.line_number and 1 <= c.line_number <= len(lines):
-                context = lines[c.line_number - 1].strip()[:200]
+                # Keep the complete raw line: a prefix can omit a late token,
+                # and trimming would change the Unicode offset's origin.
+                context = lines[c.line_number - 1]
+                positions = offsets.get((c.line_number, c.from_text, c.to_text))
+                if positions is not None:
+                    context_offset = next(positions)
             items.append({
                 "source": "stage1_deferred",
                 "domain": domain,
                 "file": str(input_path.resolve()),
                 "line": c.line_number,
                 "context": context,
+                "context_offset": context_offset,
                 "original": c.from_text,
                 "suggested": c.to_text,
                 "kind": "homophone",
@@ -1462,6 +1492,7 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
             f"({file_size} > {runtime_config.resources.max_file_size} bytes)"
         )
         sys.exit(1)
+    original_bytes = input_path.read_bytes()
     with open(input_path, 'r', encoding='utf-8') as f:
         original_text = f.read()
     if len(original_text) > runtime_config.resources.max_text_length:
@@ -1628,6 +1659,9 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
                     # exact `domain = ?` match can then never find the item
                     # under any real domain name.
                     (domains[0] if domains else "general"),
+                    original_bytes=original_bytes,
+                    stage1_text=stage1_text,
+                    applied_count=applied_count,
                 )
 
         else:
@@ -2647,6 +2681,14 @@ def cmd_reanchor_review(args: argparse.Namespace) -> None:
     """Re-anchor pending items whose transcript drifted or moved since enqueue."""
     from core.review_queue import ReviewQueueError
 
+    context_offset = getattr(args, "reanchor_context_offset", None)
+    if context_offset is not None and (
+        type(context_offset) is not int or context_offset < 0
+        or len(args.reanchor_review or []) != 1
+    ):
+        _queue_cmd_error(args, "invalid_reanchor_context_offset",
+                         "--reanchor-context-offset requires a nonnegative integer "
+                         "and exactly one --reanchor-review ID")
     queue = _get_review_queue()
     roots = getattr(args, "reanchor_root", None) or []
     reanchor_to = getattr(args, "reanchor_to", None)
@@ -2654,8 +2696,10 @@ def cmd_reanchor_review(args: argparse.Namespace) -> None:
     failures: list[dict] = []
     for item_id in args.reanchor_review:
         try:
-            results.append(queue.reanchor(item_id, search_roots=roots,
-                                          reanchor_to=reanchor_to))
+            kwargs = {"search_roots": roots, "reanchor_to": reanchor_to}
+            if context_offset is not None:
+                kwargs["context_offset"] = context_offset
+            results.append(queue.reanchor(item_id, **kwargs))
         except ReviewQueueError as e:
             failures.append({"id": item_id, "error": str(e)})
 
