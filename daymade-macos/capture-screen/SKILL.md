@@ -7,6 +7,24 @@ description: Programmatic screenshot capture on macOS. Find window IDs with Swif
 
 Programmatic screenshot capture on macOS: find windows, control views, capture images.
 
+## Select observation or foreground control
+
+For an existing view, enumerate and capture the exact window without activating it.
+Skip Step 2 when no view change is needed. A window image proves visible content in
+that capture, not keyboard focus, input delivery or a successful business action.
+
+Before opening/raising windows, scrolling, selecting, changing zoom or sending keys,
+the executing agent checks user activity and other agents' ownership. Use a concrete
+task handoff or an existing explicit idle-desktop authorization; under the latter,
+coordinate exclusive access and proceed without asking again. Idle input alone is
+not ownership. Busy/unknown occupancy or unexpected input stops foreground actions;
+continue independent reads and do not restore old focus after human takeover.
+
+Inspect the chosen tool's activation semantics. An app-targeted call or a shell job
+running in the background does not prove it preserves focus. A failed capture does
+not authorize raising the window, permission changes or switching tools around a
+host refusal/GUI lock. Only request a handoff when existing authorization is absent.
+
 ## Quick Start
 
 ```bash
@@ -23,7 +41,7 @@ Three-step workflow:
 
 ```
 1. Find Window  →  Swift CGWindowListCopyWindowInfo  →  get numeric Window ID
-2. Control View  →  AppleScript (osascript)           →  zoom, scroll, select
+2. Control View  →  only if needed and authorized    →  zoom, scroll, select
 3. Capture       →  screencapture -l <WID>            →  PNG/JPEG output
 ```
 
@@ -61,9 +79,11 @@ Output format: `WID=12345 | App=Microsoft Excel | Title=workbook.xlsx`
 
 Parse the WID number for use with `screencapture -l`.
 
-## Step 2: Control Window (AppleScript)
+## Step 2: Control Window (AppleScript, optional foreground work)
 
-Verified commands for controlling application windows before capture.
+Use these commands only inside the authorized foreground interval above. Bind the
+exact app/window/document before using any `active window` or `active workbook`
+example; never infer the target from whichever window happens to be active.
 
 ### Microsoft Excel (full AppleScript support)
 
@@ -163,7 +183,9 @@ file output.png    # Should show "PNG image data, ..."
 
 ## Multi-Shot Workflow
 
-Complete example: capture multiple sections of an Excel workbook.
+Foreground example: capture multiple sections of an Excel workbook. Establish the
+authorization and exclusive ownership above first. If a user takes over, stop the
+remaining sequence rather than replaying it or restoring your previous focus.
 
 ```bash
 # 1. Open file and activate Excel
@@ -237,7 +259,8 @@ Use this order:
 2. Confirm target identity
 3. Add/enable exact app in Settings
 
-If the command fails with `ERROR: Failed to enumerate windows`, do this:
+If the command fails with `ERROR: Failed to enumerate windows`, use the permission
+triage below; opening System Settings is foreground work governed by the entry gate:
 
 ```bash
 open "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
@@ -294,4 +317,4 @@ If you maintain another macOS permission-related flow, reuse this standardized t
 | Google Chrome | Swift | Basic (activate, window management) | No scroll/zoom via AppleScript |
 | Any macOS app | Swift | Basic (activate via `tell application`) | screencapture works universally |
 
-AppleScript control depth varies by application. Excel has the richest AppleScript dictionary. For apps with limited AppleScript, use keyboard simulation via `System Events` as a fallback.
+AppleScript control depth varies by application. Excel has the richest AppleScript dictionary. For apps with limited AppleScript, keyboard simulation via `System Events` is a foreground alternative only after the entry gate passes, not an automatic recovery from a failed background action.

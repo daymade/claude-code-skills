@@ -69,9 +69,11 @@ Dry-run changes no progress, window, clipboard or login.
 
 ## Restore and resume an interrupted batch
 
-Obtain the user's authorized, bounded Ghostty input handoff; tell them to leave
-keyboard and mouse untouched through reconciliation. Do not send global
-keystrokes without that handoff or bypass a host denial.
+Apply the Skill entry's foreground check: use an authorized bounded Ghostty handoff
+or an existing explicit idle-desktop grant plus current exclusive ownership. Notify
+the user to leave keyboard and mouse untouched through reconciliation; do not ask
+again when the standing grant covers this action. Busy/unknown occupancy or takeover
+stops global input, while dry-run/check work continues. Do not bypass a host denial.
 
 ```bash
 # Reopen missing sessions as tabs in one window:
