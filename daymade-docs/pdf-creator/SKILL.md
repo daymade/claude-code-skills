@@ -86,7 +86,7 @@ Override with `--backend chrome` or `--backend weasyprint`; an explicit flag alw
 
 Chrome wraps each page in a `re W* n` clip path at the `@page` content box. Content past that box is still in the PDF's object layer but is **never painted**. Measured on A4 with `margin: 2.5cm 2cm 2cm 2cm`: the clip path ends at **538.90pt**, while the table's right border sits at **545.18pt** — so the border is silently amputated.
 
-**This is not a "wide table" problem — under `default` and `cjk-auto` it is every table.** Those themes set `table { table-layout: fixed; width: 100% }`, so a two-column table spans the same full content width as a ten-column one and lands its right border at the same 545.18pt. Measured: a trivial `| 周一 | 周二 |` table clips identically to a six-column fee schedule. Content width is irrelevant; the theme's own `width: 100%` plus cell padding is what crosses the line.
+**This is not a "wide table" problem — under `default` and `cjk-auto` it is every table.** Both themes set `table { width: 100% }`; `default` uses fixed columns, while `cjk-auto` overrides the typography patch with content-aware auto layout. A two-column table still spans the full content width. Measured: a trivial `| 周一 | 周二 |` table clips identically to a six-column fee schedule. Content width is irrelevant; the theme's own `width: 100%` plus cell padding is what crosses the line.
 
 The overflow itself is **by design**: the CJK typography layer sets `overflow-wrap: normal` precisely so content overflows rather than breaking mid-token (see "CJK Typography" below). That trade-off is safe under weasyprint and destructive under Chrome.
 
@@ -181,7 +181,7 @@ For existing Word/WPS → PDF, use the docx-creator route above.
 
 **This is not optional.** After every PDF generation, the script automatically:
 
-1. Converts each page to PNG via `pdftoppm` (poppler-utils) into a `<pdf-name>/` subdirectory under the **system temp dir** (NOT next to the PDF — previews are a throwaway self-check artifact and must never linger in your working tree / git repo). The exact path is printed after the run as `Previews: <path>/page-NN.png`; the files themselves are `page-1.png`, `page-2.png`, … with no zero padding
+1. Converts each page to PNG via `pdftoppm` (poppler-utils) into a `<pdf-name>/` subdirectory under the **system temp dir** (NOT next to the PDF — previews are a throwaway self-check artifact and must never linger in your working tree / git repo). The run prints the directory as `Previews:` and an existing `First page:` path. Poppler may zero-pad page numbers according to the page count; enumerate the actual `page-*.png` files instead of constructing filenames.
 2. Prints a structured self-check checklist reminding the caller to visually inspect each page
 3. Runs typography lint to detect CJK line-break anti-patterns
 
@@ -193,13 +193,15 @@ For existing Word/WPS → PDF, use the docx-creator route above.
 - Code block garbling
 - Chrome default headers/footers (if bypassed this skill)
 
-**Workflow**, at the pause point between generating and delivering — two steps, and the second is not covered by the first:
+**Workflow**, at the pause point between generating and delivering:
 
-1. **Read the pages.** `Read` each `page-N.png` at the printed `Previews:` path and verify against the markdown source. If anything renders differently from intent, **fix the markdown** (use `- ` real lists instead of pseudo-lists, insert blank lines, restructure tables) and rerun. The script does NOT silently "fix" non-standard markdown — that would mask the signal that the source is wrong, causing the same markdown to render incorrectly in other processors (Obsidian, GitHub, VS Code preview).
+1. **Read the pages.** Enumerate and `Read` each actual PNG in the printed `Previews:` directory and verify against the markdown source. If anything renders differently from intent, **fix the markdown** (use `- ` real lists instead of pseudo-lists, insert blank lines, restructure tables) and rerun. The script does NOT silently "fix" non-standard markdown — that would mask the signal that the source is wrong, causing the same markdown to render incorrectly in other processors (Obsidian, GitHub, VS Code preview).
 
 2. **If the document has any table, run `scripts/check_table_borders.py` on the PDF** — and if the render went through Chrome, run its `--reference` form, which is the only form that is a verdict there (both forms are in "Chrome clips, it does not merely overflow" above). Step 1 cannot substitute for this. The missing border reads as a styling choice, and the checklist in step 1 primes you to look for text cut off, which is exactly what does not happen. Do not deliver a PDF with tables on the strength of step 1 alone.
 
-Neither step catches everything. The PNGs come from `pdftoppm`, which renders CID Type 0C fonts that macOS Preview and Adobe Reader show as blanks — so a font-embedding defect can look perfect in step 1 and be unreadable on the recipient's machine. That one is handled by theme routing, not by looking (see "Backends"); the check to run by hand is in Troubleshooting under "Inline code with mixed CJK + ASCII".
+3. **Check executable command copying when the PDF contains commands.** As the author, extract the command block from the final PDF (for example with `pdftotext -layout`), excluding prose and page footers while preserving its line breaks. Compare it with the Markdown source for tokens, quotes, pipes, redirections and continuation semantics. Visible code is not proof of faithful copying: a wrapped line can become a separate command or put `|` at the start of a new shell statement. For shell, `sh -n` checks syntax only; it cannot prove the arguments or redirection targets are unchanged. Use a harmless argument-capture stub when that meaning needs an execution check. If wrapping changes a command, manually add explicit continuations at safe boundaries in the source, rebuild, and extract the final PDF again. Do not insert backslashes automatically, change all code blocks to `nowrap`, or execute live diagnostic commands merely to test copying. This comparison is author-run; the script's checklist does not enforce it.
+
+These checks do not catch everything. The PNGs come from `pdftoppm`, which renders CID Type 0C fonts that macOS Preview and Adobe Reader show as blanks — so a font-embedding defect can look perfect in step 1 and be unreadable on the recipient's machine. That one is handled by theme routing, not by looking (see "Backends"); the check to run by hand is in Troubleshooting under "Inline code with mixed CJK + ASCII".
 
 **Disable** with `--no-preview` for batch / non-interactive runs:
 
@@ -217,7 +219,7 @@ The script applies two layers of CJK-aware processing automatically — **withou
 
 `_load_theme()` appends a CJK typography CSS patch to the loaded theme CSS. The patch:
 
-- `table { table-layout: fixed; width: 100% }` — equal column widths prevent weasyprint auto-layout from squeezing one column to ~10% width when an adjacent column has 5x more content
+- `table { table-layout: fixed; width: 100% }` — equal column widths prevent weasyprint auto-layout from squeezing one column to ~10% width when an adjacent column has 5x more content. The `cjk-auto` theme overrides this with `table-layout: auto !important` and `white-space: normal !important` on cells, allocating content-aware widths while letting long cells wrap.
 - `td, th { word-break: keep-all; overflow-wrap: normal; line-break: strict }` — don't slice CJK characters apart. The deliberate trade-off encoded by `overflow-wrap: normal` (not `break-word`) is to let content overflow slightly rather than fall back to mid-token breaks — rationale documented in the `CJK typography patch (auto-injected` comment block in `md_to_pdf.py` and locked in by `scripts/tests/test_cjk_tables.py`
 - `th { white-space: nowrap }` — short headers stay one line for predictable column widths
 

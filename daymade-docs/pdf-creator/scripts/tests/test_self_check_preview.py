@@ -9,6 +9,7 @@ Verifies the contract:
      is automatically reminded to visually inspect the rendering)
   3. --no-preview disables both PNG generation and checklist
   4. Stale PNGs from a previous longer run are cleaned on rerun
+  5. The printed first-page path exists for short and zero-padded documents
 
 This test enforces "Visual Verification" rule from CLAUDE.md: PDF generation
 silently succeeding does NOT mean the rendering matches the markdown intent.
@@ -92,6 +93,7 @@ def main() -> int:
             "Paragraphs render as separate blocks",
             "Tables fit within page margins",
             "Emoji + CJK glyphs render",
+            "Executable commands extracted from the final PDF preserve",
         ]
         missing = [m for m in checklist_markers if m not in result.stdout]
         if not missing:
@@ -107,7 +109,12 @@ def main() -> int:
         leaked = tmp / "test-preview"  # the old (buggy) location next to the PDF
         if preview_dir.exists() and not leaked.exists():
             pages = sorted(preview_dir.glob("page-*.png"))
-            if pages and all(p.stat().st_size > 0 for p in pages):
+            first = next(
+                (line.removeprefix("   First page: ") for line in result.stdout.splitlines()
+                 if line.startswith("   First page: ")), ""
+            )
+            if (pages and all(p.stat().st_size > 0 for p in pages)
+                    and Path(first) == pages[0] and Path(first).is_file()):
                 print(
                     f"✅ {len(pages)} non-empty preview PNGs in temp; "
                     "none leaked next to the PDF"
@@ -150,6 +157,32 @@ def main() -> int:
             passed += 1
         else:
             print("❌ Stale page-99.png not cleaned on rerun")
+
+        # ---- Test 5: Poppler zero-pads the filename for a ten-page PDF ----
+        total += 1
+        long_md = tmp / "ten-pages.md"
+        long_md.write_text(
+            "\n\n<div style='break-before: page'></div>\n\n".join(
+                f"# Page {number}\n\nPreview path control." for number in range(1, 11)
+            ), encoding="utf-8",
+        )
+        result = run_md_to_pdf(
+            [str(long_md), str(tmp / "ten-pages.pdf"), "--backend", "weasyprint"],
+            script_dir, tmp,
+        )
+        pages = sorted((preview_root / "ten-pages").glob("page-*.png"))
+        first = next(
+            (line.removeprefix("   First page: ") for line in result.stdout.splitlines()
+             if line.startswith("   First page: ")), ""
+        )
+        if (result.returncode == 0 and len(pages) == 10
+                and pages[0].name == "page-01.png"
+                and Path(first) == pages[0] and Path(first).is_file()):
+            print("✅ Ten-page run prints the actual zero-padded first-page path")
+            passed += 1
+        else:
+            print(f"❌ Ten-page preview path mismatch: first={first!r}, pages={pages}")
+            print(result.stderr)
 
     print(f"\n=== {passed}/{total} tests passed ===")
     return 0 if passed == total else 1

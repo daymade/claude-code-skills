@@ -235,7 +235,7 @@
       "description": "Routes docs: Word/PDF/PPTX/saved HTML→Markdown; MD/Word→PDF; create Word; PDF HTML/translate; Excel/xlsm/macOS; photo/signed scans; Mermaid; DOCX review; post-change docs. Reads one bundled Daymade specialist. New slide decks use deck-creator when installed; generic PDF reading/editing and spreadsheet analysis stay with their own Skills. Retired ppt-creator stays manual-only.",
       "source": "./daymade-docs",
       "strict": false,
-      "version": "1.25.2",
+      "version": "1.25.3",
       "category": "suite",
       "keywords": [
         "suite",
@@ -939,7 +939,7 @@
       "description": "Investigates network, streaming and protocol failures with falsification-first layered experiments, the general fallback for unknown root causes. Use for ECONNRESET / RST_STREAM / SSE stalls, CDN/CGNAT timeouts or certificate errors, throughput collapse where everything returns 200 but transfers crawl, or LAN identity/topology mysteries. Not for known Tailscale/TUN/DNS/proxy-path conflicts (use tunnel-doctor).",
       "source": "./debugging-network-issues",
       "strict": false,
-      "version": "1.11.2",
+      "version": "1.11.3",
       "category": "developer-tools",
       "keywords": [
         "debugging",
