@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **skill-creator** (`daymade-skill` v1.70.2): Add two synthetic task-result examples for actual host consumption and evidence-assisted answer correction; preserve the first-attempt result separately from the corrected answer. Change type: bounded acceptance-example clarification; scripts and evaluation formats unchanged.
 - **continue-codex-work** (`daymade-claude-code` v4.30.5): Document the existing TUI `/goal resume` recovery route alongside App Server control, using the official guide and version-pinned source. Preserve authorization, policy rejection, budget/counter readback and actual automatic-turn verification. Change type: bounded recovery-routing correction.
+- **capture-screen / macos-permissions** (`daymade-macos` v1.23.2): Separate observation from foreground control; check existing authorization and desktop ownership before activation or permission-dialog input.
+- **docx-creator** (`daymade-docs` v1.25.2): Keep verified native background renderers eligible and scope the bundled macOS Word helper's foreground requirements to that helper.
+- **ghostty-use** (v1.6.2): Keep snapshots and checks independent of desktop takeover; reuse explicit idle-desktop authorization for restore and stop input on human takeover.
+- **kimi-use** (v1.8.1): Recognize existing idle-desktop authorization while retaining background-first operation, current ownership checks and host-denial boundaries.
+
 - **frontend-visual-qa** (v1.21.2): Add anonymous dashboard replays for readable history without runtime coverage and a correctly scoped zero alongside an unknown source. Keep runtime instructions unchanged; independent consumer runs and semantic review cover both controls.
 - **macos-watchdog** (`daymade-macos` v1.23.1): Correct stop-versus-disable guidance and returned-service diagnosis; consolidate lifecycle commands under the owning Skill procedure.
 - **macos-watchdog** (`daymade-macos` v1.22.7 → v1.23.0): Compare loaded scheduling with the expected plist, including absent timers and unresolved native formats. Add event-trigger selection, deployment and downstream acceptance guidance while retaining periodic observers.
