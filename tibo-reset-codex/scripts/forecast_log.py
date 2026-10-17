@@ -310,6 +310,35 @@ def read_announcements(path):
         return read_rows(stream, kinds=("forecast",))
 
 
+def finding_invalidates(data, rows):
+    """Resolve prior findings retired by this append-only correction.
+
+    Raw rows stay byte-for-byte immutable. A correction names the earlier
+    finding ids it invalidates; full ids are canonical and short prefixes must
+    be unique, matching evidence_refs semantics.
+    """
+    if "invalidates" not in data:
+        return {}
+    refs = data["invalidates"]
+    if not isinstance(refs, list) or any(
+            not isinstance(ref, str) or not ref.strip() for ref in refs):
+        raise ValueError("invalidates must be a list of prior finding id strings")
+    resolved = []
+    for ref in refs:
+        exact = [row["id"] for row in rows if row["id"] == ref]
+        if exact:
+            resolved.append(ref)
+            continue
+        prefixes = [row["id"] for row in rows if row["id"].startswith(ref)]
+        if len(prefixes) == 1:
+            resolved.append(prefixes[0])
+        elif len(prefixes) > 1:
+            raise ValueError(f"invalidates {ref!r} matches multiple findings; use the full id")
+        else:
+            raise ValueError(f"invalidates {ref!r} matches no prior finding")
+    return {"invalidates": resolved}
+
+
 def make_finding(data):
     body = {"invocation": required_text(data, "invocation"),
             "query": required_text(data, "query"),
@@ -342,8 +371,11 @@ def append_finding(path, data, now=None):
     now = now or datetime.now(timezone.utc)
     body = make_finding(data)
     with locked_journal(path, kinds=("finding",)) as (stream, rows):
+        body = {**body, **finding_invalidates(data, rows)}
         for old in rows:
-            if all(old.get(k) == v for k, v in body.items()):
+            same_optional_presence = all((key in old) == (key in body)
+                                         for key in ("notes", "session_ref", "invalidates"))
+            if same_optional_presence and all(old.get(k) == v for k, v in body.items()):
                 return old
         row = {"schema_version": 1, "id": str(uuid.uuid4()), "record_type": "finding",
                "recorded_at": now.isoformat(), **body}
@@ -368,13 +400,22 @@ def list_findings(path, limit=20):
 
 
 def latest_monitor_handoff(path):
-    """Read the complete latest monitor handoff without exposing every raw reading."""
+    """Read the effective latest monitor handoff, honoring append-only invalidation.
+
+    If the newest monitor row itself was later invalidated and no corrected
+    monitor handoff replaced it, return None rather than silently reviving an
+    older, unrelated handoff. The caller must then write the corrected state.
+    """
     if not path.exists():
         return None
     with path.open(encoding="utf-8") as stream:
         fcntl.flock(stream, fcntl.LOCK_SH)
         rows = read_rows(stream, kinds=("finding",))
-    return next((row for row in reversed(rows) if row.get("invocation") == "monitor"), None)
+    latest = next((row for row in reversed(rows) if row.get("invocation") == "monitor"), None)
+    if latest is None:
+        return None
+    invalidated = {target for row in rows for target in row.get("invalidates", [])}
+    return None if latest["id"] in invalidated else latest
 
 
 def append_record(path, command, data, now=None):

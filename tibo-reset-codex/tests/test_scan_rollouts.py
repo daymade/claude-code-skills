@@ -95,6 +95,8 @@ class ScanRolloutsTests(unittest.TestCase):
         zeroings = scan.find_zeroings(self.collect())
         self.assertEqual(len(zeroings), 1)
         self.assertTrue(zeroings[0]["clean"])
+        self.assertFalse(zeroings[0]["identity_bound"])
+        self.assertEqual(zeroings[0]["attribution"], "unattributed")
 
     def test_backjump_with_rising_used_is_flagged_as_lead(self):
         earlier = 1789700000
@@ -142,9 +144,12 @@ class ScanRolloutsTests(unittest.TestCase):
         self.assertEqual(scan.find_zeroings(rows), [])
         candidates = scan.find_low_usage_anchor_advances(rows)
         self.assertEqual(len(candidates), 1)
+        self.assertFalse(candidates[0]["identity_bound"])
+        self.assertEqual(candidates[0]["attribution"], "unattributed")
         report = scan.format_report(rows, 7, scan.find_backjumps(rows), [])
         self.assertIn("低用量锚点前移 09-12 09:09:00", report)
         self.assertIn("原因未定", report)
+        self.assertIn("unattributed：匿名快照不证明重置", report)
         self.assertIn("0 条不证明未重置", report)
 
     def test_sparse_observation_still_surfaces_low_usage_anchor_advance(self):
@@ -219,7 +224,7 @@ class ScanRolloutsTests(unittest.TestCase):
         rows = self.collect()
         report = scan.format_report(rows, 7, scan.find_backjumps(rows), scan.find_zeroings(rows))
         for marker in ("采样 2 行", "回跳次数: 0", "归零区间 09-11 22:59:00 98%",
-                       "干净+7d", "最新快照",
+                       "干净+7d", "unattributed：匿名快照不证明重置", "最新快照",
                        "banked：本数据源无此字段，改跑 query_usage.py"):
             self.assertIn(marker, report)
         self.assertNotIn("打满触发", report)

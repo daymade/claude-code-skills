@@ -82,6 +82,7 @@ uv run python scripts/forecast_log.py handoff               # 最新完整监测
 | `readings` | 必填对象（可为空）；源名 → 逐字字段值，只抄读到的值，不改写不概括（邮箱例外，见隐私契约） |
 | `notes` | 可选字符串数组 |
 | `session_ref` | 可选；本 session transcript 的本机路径 |
+| `invalidates` | 可选 finding id 数组；追加式纠正作废旧 finding，不改写旧行。完整 id 或唯一短前缀；目标必须已存在，空数组与非空数组按字面区分 |
 
 账号查询的 `readings` 只存实际读到的非敏感字段，并必须带账号句柄 `account_ref`（放在该来源的
 读数对象里；`query_usage` 输出里有，网页读数按账号 SOP 在本地算）；banked 与用量读数缺
@@ -96,6 +97,18 @@ id 前缀），每个引用必须已存在于 findings.jsonl，否则报错退�
 旧记录无此键照常解析。重试同一条 record/review 时 `evidence_refs` 需与首次一致：缺省
 （不写键）与显式 `[]` 是两个不同状态，幂等匹配按字面比较，不一致会新建记录而非返回原记录。
 `summary` 为每个 forecast/review 显示 `evidence_refs_count`。
+
+**用户纠正作废旧归因时，仍走追加，不改原始读数**：
+
+1. 先追加一条纠正 finding，逐字保存用户原话，并用 `invalidates` 指向被证伪的旧 finding；
+   需要接替监测状态时，把这条直接写成新的 `invocation=monitor` 完整交接，或紧接着再追加一条完整交接。
+2. `handoff` 只返回当前有效的最新 monitor 行：若最新 monitor 已被后续 finding 作废且没有更正规程交接，
+   返回 `null`，不会悄悄复活更早的旧交接。此时必须先写纠正后的 monitor，再按它继续。
+3. 若旧证据还造成预测 false-hit，沿用既有 `review` 追加 `unknown:true`、`event_status:"unknown"`、
+   `score_update:true`，并用 `evidence_refs` 链接纠正 finding；不新增记录类型，不删除旧 review。
+4. 完全相同的纠正重试返回原行。缺键与显式 `invalidates:[]` 是不同状态；非法、缺失或有歧义的目标 id
+   会拒绝追加，最后一条有效记录保持原样。旧 reader 仍能解析新增可选键，但只有当前实现执行上述
+   invalidation 读法，不能把旧 reader 的原始行展示当成有效状态判断。
 
 每次成功追加后脚本尽力在数据目录做一次本地 git 快照（自动 `init`、目录 0700）；
 git 任何失败只在 stderr 打一行 note、绝不影响追加成功，也不构成备份承诺；`--no-git` 关闭。

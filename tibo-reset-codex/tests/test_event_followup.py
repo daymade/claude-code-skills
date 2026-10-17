@@ -272,6 +272,26 @@ class EventFollowupTests(unittest.TestCase):
         self.assertEqual(log.followup_plan(self.path)["event_tasks"], [])
         self.assertFalse(self.path.exists())
 
+    def test_finding_invalidation_roundtrips_across_frozen_v119_reader(self):
+        path = self.path.parent / "findings.jsonl"
+        first = legacy.append_finding(path, {
+            "invocation": "monitor", "query": "old handoff", "endpoints": [], "readings": {},
+        }, self.now)
+        self.assertEqual(legacy.latest_monitor_handoff(path)["id"], first["id"])
+        self.assertEqual(log.latest_monitor_handoff(path)["id"], first["id"])
+        corrected = log.append_finding(path, {
+            "invocation": "monitor", "query": "corrected handoff", "endpoints": [], "readings": {},
+            "invalidates": [first["id"]],
+        }, self.now)
+        self.assertEqual(log.latest_monitor_handoff(path)["id"], corrected["id"])
+        self.assertEqual(legacy.latest_monitor_handoff(path)["id"], corrected["id"])
+        with path.open(encoding="utf-8") as stream:
+            rows = legacy.read_rows(stream, kinds=("finding",))
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["id"], first["id"])
+        self.assertNotIn("invalidates", rows[0])
+        self.assertEqual(rows[1]["invalidates"], [first["id"]])
+
     def test_cli_accepts_historical_announcement_and_followup(self):
         p = Path(self.folder.name) / "input.json"
         p.write_text(json.dumps(self.announcement))

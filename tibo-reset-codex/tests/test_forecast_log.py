@@ -381,6 +381,82 @@ class ForecastLogTests(unittest.TestCase):
         self.assertEqual(full["notes"], ["skipped monitor, verdict No"])
         self.assertEqual(full["session_ref"], "/tmp/session.jsonl")
 
+    def test_finding_invalidates_is_append_only_and_idempotent(self):
+        first = self.finding(invocation="monitor", query="wrong reset attribution",
+                             endpoints=[], readings={}, notes=["old incorrect handoff"])
+        before = self.findings_path.read_bytes()
+        corrected = self.finding(invocation="monitor", query="corrected account switch",
+                                 endpoints=[], readings={}, notes=["user confirmed account switch"],
+                                 invalidates=[first["id"][:8]])
+        self.assertEqual(corrected["invalidates"], [first["id"]])
+        self.assertTrue(self.findings_path.read_bytes().startswith(before))
+        self.assertEqual(log.latest_monitor_handoff(self.findings_path)["id"], corrected["id"])
+        retry = self.finding(invocation="monitor", query="corrected account switch",
+                             endpoints=[], readings={}, notes=["user confirmed account switch"],
+                             invalidates=[first["id"][:8]])
+        self.assertEqual(retry["id"], corrected["id"])
+        self.assertEqual(len(self.findings_path.read_text().splitlines()), 2)
+        empty = self.finding(invocation="other", invalidates=[])
+        self.assertEqual(empty["invalidates"], [])
+
+    def test_invalid_finding_invalidates_are_rejected(self):
+        first = self.finding()
+        for value in (None, first["id"], [""], ["missing"]):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                self.finding(invalidates=value)
+        row = {"schema_version": 1, "record_type": "finding",
+               "recorded_at": "2026-10-01T00:00:00+00:00",
+               "invocation": "monitor", "query": "q", "endpoints": [], "readings": {}}
+        with self.findings_path.open("a", encoding="utf-8") as stream:
+            for ident in ("aaaa-1", "aaaa-2"):
+                stream.write(json.dumps({**row, "id": ident}) + "\n")
+        with self.assertRaisesRegex(ValueError, "matches multiple findings"):
+            self.finding(invalidates=["aaa"])
+        resolved = self.finding(invocation="other", invalidates=["aaaa-2"])
+        self.assertEqual(resolved["invalidates"], ["aaaa-2"])
+
+    def test_invalidated_latest_monitor_is_not_silently_revived(self):
+        first = self.finding(invocation="monitor", query="wrong handoff",
+                             endpoints=[], readings={})
+        self.finding(invocation="other", query="user correction",
+                     invalidates=[first["id"]])
+        self.assertIsNone(log.latest_monitor_handoff(self.findings_path))
+        corrected = self.finding(invocation="monitor", query="corrected handoff",
+                                 endpoints=[], readings={}, invalidates=[first["id"]])
+        self.assertEqual(log.latest_monitor_handoff(self.findings_path)["id"], corrected["id"])
+
+    def test_false_hit_review_uses_existing_append_only_recipe(self):
+        raw = self.finding()
+        findings_before = self.findings_path.read_bytes()
+        issued = self.record(evidence_refs=[raw["id"]])
+        self.review(issued["id"], evidence_refs=[raw["id"]])
+        correction = self.finding(invocation="other", query="user refutes reset attribution",
+                                  readings={"user_correction": "这次是我换号了，并非重置"},
+                                  invalidates=[raw["id"]])
+        reviewed = self.review(issued["id"], unknown=True, event_status="unknown",
+                               score_update=True, evidence_refs=[correction["id"]],
+                               reason="User identified an account switch, not a reset.",
+                               lesson="Keep the raw readings and retire the false event verdict.")
+        self.assertEqual(reviewed["outcome"], "unknown")
+        self.assertEqual(reviewed["evidence_refs"], [correction["id"]])
+        summary = log.summarize(self.path)
+        self.assertEqual(summary["pending"][0]["latest_review"]["outcome"], "unknown")
+        self.assertEqual(summary["pending"][0]["score_review_id"], reviewed["id"])
+        self.assertTrue(self.findings_path.read_bytes().startswith(findings_before))
+
+    def test_finding_idempotency_requires_identical_optional_key_presence(self):
+        target = self.finding(query="target")
+        base = {"invocation": "monitor", "query": "same", "endpoints": [], "readings": {}}
+        corrected = self.finding(**base, invalidates=[target["id"]])
+        distinct = self.finding(**base)
+        self.assertNotEqual(distinct["id"], corrected["id"])
+        empty = self.finding(invocation="other", query="empty", invalidates=[])
+        missing = self.finding(invocation="other", query="empty")
+        self.assertNotEqual(missing["id"], empty["id"])
+        with_notes = self.finding(invocation="other", query="notes", notes=["kept"])
+        without_notes = self.finding(invocation="other", query="notes")
+        self.assertNotEqual(without_notes["id"], with_notes["id"])
+
     def test_invalid_finding_shapes_are_rejected(self):
         for changes in ({"invocation": ""}, {"invocation": None}, {"query": "   "},
                         {"endpoints": "https://example.invalid"},
