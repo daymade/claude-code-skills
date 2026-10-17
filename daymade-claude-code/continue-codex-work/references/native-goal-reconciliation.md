@@ -44,6 +44,42 @@ defensive task can be authorized and still have a rejected execution route.
 
 ### Recover through the host that owns the loaded thread
 
+Identify the host that actually holds the verified thread before selecting a
+control. A TUI running without a daemon can still expose its own Goal command;
+an absent App Server socket does not establish that recovery is unavailable.
+
+#### Existing TUI control
+
+When the installed TUI's official help supports `/goal resume`, bind the existing
+session's input surface to the exact target thread. After the authorization and
+failure preflight above, capture the existing Goal fields as required by
+[Recover and verify](#recover-and-verify-without-resetting-the-task), then submit
+`/goal resume` once in that same Codex input composer. This is a TUI slash command,
+not an OS shell command or a queued peer message. Do not open another resumed
+process to manufacture a controllable session.
+
+The continuation executor may perform this input only through an available,
+permitted control of that verified session. If host policy rejects access to the
+application or input surface, report the exact rejection and leave `/goal resume`
+as the current user's action in that session; do not switch input APIs or terminal
+transports to bypass the rejection. Continue independent permitted work without
+claiming the Goal resumed.
+
+Treat the command response as an attempt, then independently read the same Goal
+and observe a later automatic turn under the shared verification procedure below.
+Preserve the pause/cancellation and usage/budget boundaries above; command support
+does not authorize a reset or revival.
+
+The [official Goal guide](https://developers.openai.com/cookbook/examples/codex/using_goals_in_codex)
+documents `/goal resume`. In the version-pinned
+[TUI dispatch](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/tui/src/chatwidget/slash_dispatch.rs#L991)
+and [Goal action](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/tui/src/app/thread_goal_actions.rs#L233),
+it requests `active` for the existing thread while omitting objective and budget
+replacement. Verify support on the installed version and read back preservation;
+these sources do not prove a command succeeded in the current session.
+
+#### App Server control, when exposed
+
 As the continuation executor, distinguish a successful read through an independent
 stdio App Server from permission to update a thread another live host owns. If the
 setter reports an active writer, discover the existing host's verified control
