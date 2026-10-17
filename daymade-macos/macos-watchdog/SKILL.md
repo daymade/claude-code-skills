@@ -99,7 +99,7 @@ in § Deploy and the current task's authorization boundary.
 | Intent | Command |
 |---|---|
 | Stop now, allow re-bootstrap later | `launchctl bootout gui/$(id -u)/<label>` (daemon: `sudo launchctl bootout system/<label>`) |
-| Stop now AND keep stopped across login | `launchctl disable user/$(id -u)/<label>` (reverse: `enable`) |
+| Prevent later loads across login (stop a loaded job separately) | `launchctl disable user/$(id -u)/<label>` (reverse: `enable`) |
 | Edit then reload | `bootout` → edit plist → `bootstrap` |
 
 Use `bootstrap`/`bootout` instead of deprecated `load`/`unload`. When a job
@@ -113,7 +113,7 @@ alone does not establish that persistent override.
 | "It re-launches the app I quit" | URL-scheme/`open` calls missing the process-alive gate (clause 4) |
 | "It spams the same repair every few minutes" | No exhausted-round cool-down (clause 3); also check the ladder's failure path doesn't reset its dead-counter |
 | "It reports healthy through a real outage" | Health check certifies only the path it probes — one green probe ≠ all planes healthy (add the second plane's probe) |
-| "bootout didn't stick / it came back" | `unload` used instead of `bootout`, or `RunAtLoad` + plist still in place |
+| "bootout didn't stick / it came back" | Confirm the exact domain/service target and who bootstrapped it again; for a persistent stop follow § Stop semantics |
 | Silent no-runs | `StandardErrorPath` missing → failures invisible; then `log show --predicate 'process == "launchd"' --last 15m` |
 | "log mtime is fresh" but the job is actually failing | out.log all-green is **not** health — a failed pass may write nothing (`set -e` + prints-verified-only-on-success), so the last-success timestamp stays fresh forever. Judge the **failure** path (err.log / last-exit status), not success-side freshness (Pattern 7) |
 | Works interactively, fails under launchd | TCC/FDA on the wrong interpreter; PATH assumptions in `ProgramArguments` |

@@ -114,22 +114,16 @@ Its automated Full Disk Access route owns the repair and background readback; it
 attribution reference records the observed case. Do not infer the
 requester from the dialog title or assume every unsigned binary behaves like that case.
 
-## launchctl command reference
+## launchctl lifecycle
 
-| Intent | Command |
-|---|---|
-| Load | `launchctl bootstrap gui/$(id -u) <plist>` (daemon: `sudo launchctl bootstrap system <plist>`) |
-| Stop now | `launchctl bootout gui/$(id -u)/<label>` |
-| Stop and keep stopped across login | `launchctl disable user/$(id -u)/<label>` (reverse: `launchctl enable …`) |
-| Re-load after editing plist | `bootout` → edit → `bootstrap` (active state must match disk) |
-| Request one run of an idle owned job | `launchctl kickstart gui/$(id -u)/<label>` |
-| Is it loaded? exit code of last run? | `launchctl list | grep <label>` (PID-or-`-`, last exit status, label) |
+Follow [Deploy](../SKILL.md#deploy-mechanics-that-bite) for loading, reloading
+and requesting an owned idle run; follow
+[Stop semantics](../SKILL.md#stop-semantics-the-deprecated-trap) for removing or
+persistently disabling a job. Those procedures own the authorization and
+active-work checks.
 
-Check exact ownership, active work and pending intent through the
-[deployment workflow](event-driven-observers.md) before replacement or stopping.
-Do not use `kickstart -k` as a routine test: it terminates an existing instance.
-Use `bootstrap`/`bootout` instead of deprecated `load`/`unload`; use `disable`
-when the job must stay disabled across later loads.
+For a system daemon, bootstrap in the system domain:
+`sudo launchctl bootstrap system <plist>`.
 
 ## Verification commands
 
