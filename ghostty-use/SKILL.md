@@ -21,6 +21,15 @@ on Ghostty 1.3.1, 2026-10-04), so this skill walks a practical loop around that 
 manual `ps` inventory → liveness-graded snapshot → keystroke-paste restore →
 automatic reconciliation that makes every paste failure visible.
 
+Snapshot, reconstruction, dry-run and reconciliation can proceed without taking
+the desktop. Actual restore uses global keyboard/clipboard input and is foreground
+work even when launched as a background shell job. Before restore, use a concrete
+Ghostty handoff or existing explicit idle-desktop permission; check current activity
+and coordinate exclusive agent ownership. Under that standing grant, notify and
+execute without asking again. Idle input alone is not ownership. If busy/unknown,
+continue preparation and read-only checks; stop input on human takeover and never
+restore your old focus. Host denials remain binding.
+
 ## Entry decision tree
 
 | You just said / want | Run |
@@ -50,8 +59,8 @@ python3 <skill-dir>/scripts/ghostty_session.py switch-restore
 Default to tabs in one window; use `--layout windows` only when independent windows are requested.
 Keep the printed fixed manifest through the handoff. Treat unresolved capture,
 unchanged account or still-running old processes as an incomplete handoff. Never
-terminate processes or switch credentials through this route. Ask for a bounded
-Ghostty keyboard/mouse handoff before actual opening; `--dry-run` and `--check`
+terminate processes or switch credentials through this route. Apply the foreground
+conditions above before actual opening; ask only when that handoff is missing. `--dry-run` and `--check`
 remain read-only. Distinguish reopened IDs from new-account requests that worked:
 the script reports authentication as `not_checked` and sends no test prompt.
 

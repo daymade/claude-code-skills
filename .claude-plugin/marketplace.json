@@ -58,7 +58,7 @@
       "description": "Drives Kimi.app via computer-use for Work/Agent data-plugin queries and Chat 深度研究 reports, using the user's logged-in session; also the kimi-cu macOS desktop-automation playbook (channel reliability tiers, foregrounding, AX-tree recovery, form & dialog recipes) for driving any desktop app. Use for \"用 Kimi 查\" / \"操作 Kimi 客户端\" / \"Kimi 插件\" / \"Kimi 深度研究\" / kimi-cu desktop automation. Not for kimi.com browser automation or direct iFinD API access.",
       "source": "./kimi-use",
       "strict": false,
-      "version": "1.8.0",
+      "version": "1.8.1",
       "category": "developer-tools",
       "keywords": [
         "kimi",
@@ -235,7 +235,7 @@
       "description": "Routes docs: Word/PDF/PPTX/saved HTML→Markdown; MD/Word→PDF; create Word; PDF HTML/translate; Excel/xlsm/macOS; photo/signed scans; Mermaid; DOCX review; post-change docs. Reads one bundled Daymade specialist. New slide decks use deck-creator when installed; generic PDF reading/editing and spreadsheet analysis stay with their own Skills. Retired ppt-creator stays manual-only.",
       "source": "./daymade-docs",
       "strict": false,
-      "version": "1.25.1",
+      "version": "1.25.2",
       "category": "suite",
       "keywords": [
         "suite",
@@ -310,7 +310,7 @@
       "description": "Apple-platform development and operations suite for macOS window capture, TCC permission diagnosis and Full Disk Access repair, iOS/macOS app development, disk cleanup, and launchd watchdogs.",
       "source": "./daymade-macos",
       "strict": false,
-      "version": "1.23.1",
+      "version": "1.23.2",
       "category": "suite",
       "keywords": [
         "suite",
@@ -1313,7 +1313,7 @@
       "description": "Snapshots, restores and reconciles Claude Code / Codex sessions inside Ghostty tabs across reboots. Use when quitting the Mac for an update (保存终端会话 / 重启前备份终端), after restart to reopen tabs with their original session IDs (恢复之前的窗口 / restore my ghostty tabs), or to audit which sessions survived. Not for resuming one conversation via its own --resume, terminal screenshots, or tmux state. Also use for periodic change-only snapshots (定期增量快照 / 没变化不记录). Also use before or after a manual Codex account switch (额度耗尽换号 / 换号后恢复全部 Codex).",
       "source": "./ghostty-use",
       "strict": false,
-      "version": "1.6.1",
+      "version": "1.6.2",
       "category": "developer-tools",
       "keywords": [
         "ghostty",
