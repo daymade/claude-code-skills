@@ -1,0 +1,135 @@
+{
+  "schema": 1,
+  "cases": {
+    "case-a": {
+      "identity": {
+        "machine": "node-alpha",
+        "job": "job-a",
+        "native_session": "session-a",
+        "owner": "controller-a",
+        "parent_session_binding": null,
+        "title": "Cache path verification",
+        "canonical_route": "?case=case-a"
+      },
+      "process": {
+        "state": "exited",
+        "exit_code": 0
+      },
+      "business_result": "blocked",
+      "source_time": null,
+      "model": {
+        "value": "sample-model-a",
+        "basis": "bound native execution record"
+      },
+      "dispatch": {
+        "record": null,
+        "reason": null
+      },
+      "markdown": "## Result\n\nReproduction is complete. The requested fix is blocked by missing workspace access.\n\n- Evidence: `check.txt`\n- Next action: the existing controller must provide the workspace access.\n\n**The fix has not been applied.**",
+      "reader": {
+        "mode": "rendered_markdown",
+        "headline": "Result",
+        "body": "<p>Reproduction is complete. The requested fix is blocked by missing workspace access.</p>\n<ul>\n<li>Evidence: <code>check.txt</code></li>\n<li>Next action: the existing controller must provide the workspace access.</li>\n</ul>\n<p><strong>The fix has not been applied.</strong></p>"
+      },
+      "transport": {
+        "envelope": {
+          "schema_version": 1,
+          "correlation_id": "alpha-7f3c-9b1d",
+          "machine": "node-alpha",
+          "owner": "controller-a",
+          "parent_session_binding": null,
+          "title": "Cache path verification",
+          "rendered_headline": "Result",
+          "rendered_body": "<p>Reproduction is complete. The requested fix is blocked by missing workspace access.</p>",
+          "disclaimer": "Authoritative markdown is synthetic and local-only; no real task event is started or mutated.",
+          "source_time": null
+        }
+      },
+      "next_update": {
+        "allowed": true,
+        "transition": "new_report_observed",
+        "source_time_before": null,
+        "source_time_after": null,
+        "observer_time_before": "2026-10-18T05:42:11+08:00",
+        "observer_time_after": "2026-10-18T05:42:12+08:00",
+        "scope": "this fixture record only",
+        "record_id": "report-a-1",
+        "ordinal": 1,
+        "markdown": "## Follow-up\n\nThe workspace access is still missing. The existing controller must provide it.",
+        "reader": {
+          "headline": "Follow-up",
+          "body": "<p>The workspace access is still missing. The existing controller must provide it.</p>"
+        }
+      },
+      "record_id": "report-a-0",
+      "ordinal": 0
+    },
+    "case-b": {
+      "identity": {
+        "machine": "node-beta",
+        "job": "job-b",
+        "native_session": "session-b",
+        "owner": "controller-b",
+        "parent_session_binding": null,
+        "title": "Cache path verification",
+        "canonical_route": "?case=case-b"
+      },
+      "process": {
+        "state": "exited",
+        "exit_code": 0
+      },
+      "business_result": "requested_draft_complete",
+      "source_time": null,
+      "model": {
+        "value": null,
+        "basis": "not supplied"
+      },
+      "dispatch": {
+        "record": null,
+        "reason": null
+      },
+      "markdown": "## Result\n\nThe requested draft and its checks are complete. Publication was outside this job.\n\n- Draft: `draft.txt`\n- Diagnostic example: `printf \"%s\\n\" \"$VALUE\"`\n\nRaw JSON remains available in diagnostics.",
+      "reader": {
+        "mode": "rendered_markdown",
+        "headline": "Result",
+        "body": "<p>The requested draft and its checks are complete. Publication was outside this job.</p>\n<ul>\n<li>Draft: <code>draft.txt</code></li>\n<li>Diagnostic example: <code>printf \"%s\\n\" \"$VALUE\"</code></li>\n</ul>\n<p>Raw JSON remains available in diagnostics.</p>"
+      },
+      "transport": {
+        "envelope": {
+          "schema_version": 1,
+          "correlation_id": "beta-4e2a-6f8c",
+          "machine": "node-beta",
+          "owner": "controller-b",
+          "parent_session_binding": null,
+          "title": "Cache path verification",
+          "rendered_headline": "Result",
+          "rendered_body": "<p>The requested draft and its checks are complete. Publication was outside this job.</p>",
+          "model": null,
+          "model_basis": "not supplied",
+          "dispatch_record": null,
+          "dispatch_reason": null,
+          "source_time": null,
+          "disclaimer": "Authoritative markdown is synthetic and local-only; no real task event is started or mutated."
+        }
+      },
+      "next_update": {
+        "allowed": true,
+        "transition": "new_report_observed",
+        "source_time_before": null,
+        "source_time_after": null,
+        "observer_time_before": "2026-10-18T05:42:21+08:00",
+        "observer_time_after": "2026-10-18T05:42:22+08:00",
+        "scope": "this fixture record only",
+        "record_id": "report-b-1",
+        "ordinal": 1,
+        "markdown": "## Follow-up\n\nThe requested draft is still available; publication remains outside this job.",
+        "reader": {
+          "headline": "Follow-up",
+          "body": "<p>The requested draft is still available; publication remains outside this job.</p>"
+        }
+      },
+      "record_id": "report-b-0",
+      "ordinal": 0
+    }
+  }
+}
