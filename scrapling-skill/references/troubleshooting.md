@@ -59,6 +59,7 @@ Typical cache roots:
 
 - `~/Library/Caches/ms-playwright/`
 - `~/.cache/ms-playwright/`
+- `%LOCALAPPDATA%\ms-playwright\` (Windows)
 
 ### 3. Static fetch TLS trust-store failure
 
