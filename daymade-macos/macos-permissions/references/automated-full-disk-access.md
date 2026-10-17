@@ -16,9 +16,18 @@ Stop after the background read works. Adding another FDA entry would not improve
 
 ## 3. Add a new grant through System Settings when needed
 
+Opening or focusing System Settings and entering authentication are foreground
+actions. The executing agent checks the exact machine/window, current user activity
+and other agents' ownership first. Reuse a concrete task handoff or explicit standing
+permission for an idle desktop; coordinate exclusive access and do not ask again
+when that authorization already covers the action. Busy or unknown occupancy means
+continue independent background diagnosis and defer the affected UI step. Request
+only a genuinely missing handoff. Desktop access does not authorize an additional
+permission grant, secret use or restarting another task's process.
+
 Apple's [Privacy & Security guide](https://support.apple.com/en-mk/guide/mac-help/mchl211c911f/mac) describes Full Disk Access as a System Settings list: use Add, select the app, then Open. `open 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles'` opened the correct pane on the tested Mac. Use an available native Computer Use tool to inspect the current window before clicking, and target the exact executable path found in step 1. If the pane requests Touch ID or a password, continue only with the user's available system-authentication method; never echo or save a supplied password in a file or report.
 
-Reobserve after every UI action. A tool's `ok:true` alone does not prove the UI changed, and a reported typing error does not prove a secure field stayed empty. If background input misses a password field, foreground System Settings and focus the secure field before using a permitted native input channel. Inspect masked input before submitting, then read the grant and run the job.
+Reobserve after every UI action. A tool's `ok:true` alone does not prove the UI changed, and a reported typing error does not prove a secure field stayed empty. If background input misses a password field, do not automatically foreground System Settings: first satisfy the foreground boundary above, then focus the secure field through a permitted native input channel. Inspect masked input before submitting, then read the grant and run the job. Stop input on human takeover; do not restore the previous focus.
 
 The following GUI routes completed with a dedicated, non-sensitive probe reading a TCC-protected file **as a user LaunchAgent** on macOS 26.6.2:
 
