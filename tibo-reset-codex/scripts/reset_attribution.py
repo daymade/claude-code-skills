@@ -427,7 +427,7 @@ def user_events(text, account_ref, timestamp):
         events.append({"kind": "account_switch", "account_ref": account_ref,
                        "checked_at_utc": timestamp, "source": "user", "source_ref": "user:account_switch"})
     negated = any(marker in text for marker in
-                  ("不是重置", "并非重置", "没有重置", "没重置", "还没重置", "未重置",
+                  ("不是重置", "并非重置", "不是被重置", "并非被重置", "没有重置", "没重置", "还没重置", "未重置",
                    "尚未重置", "没有发生重置", "没有被重置", "没被重置", "尚未被重置",
                    "还未被重置", "还没被重置", "未被重置", "无法确定", "不能确定",
                    "是否重置", "会不会重置", "能否重置"))
@@ -510,6 +510,7 @@ def official_events(text, timestamp=None):
     if (any(marker in lowered for marker in
             ("not all accounts", "not everyone", "not for everyone", "not for all",
              "not all paid", "only plus", "plus only"))
+            or re.search(r"\b(?:except|but\s+not|not\s+for|on\s+(?:pro|plus|team|enterprise|business))\b", lowered)
             or re.search(r"\b(?:pro|plus|team|enterprise|business)\s+only\b", lowered)
             or re.search(r"\bonly\s+(?:pro|plus|team|enterprise|business)\b", lowered)):
         return []
@@ -617,7 +618,9 @@ def evidence_from_transcript(path):
 
 UNCERTAIN = re.compile(
     r"是否[^。!？?；;，,\n]{0,30}重置|没有证据[^。!？?；;，,\n]{0,30}重置|"
-    r"没有被重置|没被重置|尚未被重置|还未被重置|还没被重置|未被重置|"
+    r"没有被重置|没被重置|尚未被重置|还未被重置|还没被重置|未被重置|不是被重置|并非被重置|"
+    r"没有[^。!？?；;，,\n]{0,12}重置|没[^。!？?；;，,\n]{0,12}重置|尚未[^。!？?；;，,\n]{0,12}重置|"
+    r"not (?:been )?reset|"
     r"无法(?:确定|证明|确认|判定)[^。!？?；;，,\n]{0,30}重置|"
     r"不能(?:确定|证明|确认|称为|判定)[^。!？?；;，,\n]{0,30}重置|"
     r"不确定[^。!？?；;，,\n]{0,30}重置|"
@@ -631,7 +634,9 @@ SAME_ACCOUNT_CLAIM = re.compile(
 MULTI_ACCOUNT_CLAIM = re.compile(r"大范围静默重置", re.I)
 CROSS_ACCOUNT_CLAIM = re.compile(r"跨账户近同时重置", re.I)
 ALL_ACCOUNTS_CLAIM = re.compile(
-    r"全员(?:已经)?重置|所有账[号户](?:已经)?重置|"
+    r"全员[^。!？?；;，,\n]{0,12}重置|"
+    r"(?:所有账[号户]|all accounts|everyone)[^。!？?；;，,\n]{0,60}(?:重置|reset)|"
+    r"(?:重置|reset)[^。!？?；;，,\n]{0,30}(?:所有账[号户]|all accounts|everyone)|"
     r"officially reset (?:all|everyone)|all paid subscriptions[^。!？?；;，,\n]{0,25}reset", re.I)
 
 
@@ -639,7 +644,7 @@ def claims_in_message(message):
     claims = []
     for sentence in re.split(r"(?<=[。!？?；;，,\n])", message or ""):
         stripped = sentence.strip()
-        if (not stripped or stripped.endswith(("？", "?")) or UNCERTAIN.search(stripped)
+        if (not stripped or stripped.endswith(("？", "?", "吗", "嘛", "么")) or UNCERTAIN.search(stripped)
                 or META.search(stripped)):
             continue
         has_multi = bool(MULTI_ACCOUNT_CLAIM.search(stripped))

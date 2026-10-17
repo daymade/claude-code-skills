@@ -262,8 +262,32 @@ class ResetAttributionTests(unittest.TestCase):
         self.assertEqual(result["classification"], "account_switch")
         self.assertFalse(result["blocked"])
 
+    def test_all_account_tense_and_english_variants(self):
+        direct = current_only_bundle([{
+            "kind": "account_reset_observed", "account_ref": "a1b2c3d4",
+            "checked_at_utc": "2026-10-17T13:32:00Z",
+        }])
+        result = attr.evaluate(direct)
+        for message in ("所有账户已重置。", "所有账户已被重置。", "All accounts have been reset."):
+            with self.subTest(message=message):
+                claims = attr.claims_in_message(message)
+                self.assertEqual([c["claim"] for c in claims], [attr.CLAIM_ALL_ACCOUNTS])
+                self.assertEqual(result["claim_gate"][attr.CLAIM_ALL_ACCOUNTS], "block")
+
+    def test_official_exceptions_and_plan_scopes_are_rejected(self):
+        for text in ("Reset has landed for everyone except Plus.",
+                     "Reset has landed for everyone on Pro and Plus.",
+                     "Reset has landed for everyone on Team only."):
+            with self.subTest(text=text):
+                self.assertEqual(attr.official_events(text, "2026-10-17T13:32:00Z"), [])
+
+    def test_passive_correction_and_unpunctuated_question_are_not_claims(self):
+        for message in ("当前账号不是被重置，而是换号了。", "当前账户已经被重置了吗"):
+            with self.subTest(message=message):
+                self.assertEqual(attr.claims_in_message(message), [])
+
     def test_be_negations_and_uncertainty_are_not_positive_claims(self):
-        for text in ("这个账号没有被重置", "这个账号尚未被重置"):
+        for text in ("这个账号没有被重置", "这个账号尚未被重置", "这个账号不是被重置", "这个账号并非被重置"):
             with self.subTest(text=text):
                 self.assertEqual(attr.user_events(text, "a1b2c3d4", "2026-10-17T13:32:00Z"), [])
         for message in ("当前账户没有被重置。", "当前账户尚未被重置。", "无法确定当前账户已被重置。"):
