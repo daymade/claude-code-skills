@@ -1,4 +1,5 @@
 import contextlib
+import errno
 import hashlib
 import importlib.util
 import io
@@ -505,6 +506,78 @@ class PeerMessageTests(unittest.TestCase):
             self.assertEqual(receipt["provenance_boundary"], "advisory_text_only")
             self.assertIn("pause writes", envelope)
             self.assertIn(receipt["message_id"], envelope)
+
+    def exercise_codex_prespawn(self, result, expected_outcome):
+        message_id = "55555555-5555-4555-8555-555555555555"
+        thread_id = "22222222-2222-4222-8222-222222222222"
+        actor = "claude:coordinator"
+        board = mock.Mock()
+        prepared = {
+            "status": "prepared",
+            "message_id": message_id,
+            "body": "synthetic queued body",
+            "metadata": {"sender": actor},
+        }
+        args = peer.argparse.Namespace(
+            state_dir=Path("synthetic-state"),
+            wait=0,
+            claude_home=Path("synthetic-claude"),
+            codex_home=Path("synthetic-codex"),
+            codex_delivery="queued",
+        )
+        with (
+            mock.patch.object(peer.coordination, "Board", return_value=board),
+            mock.patch.object(peer, "prepare_coordination", return_value=prepared),
+            mock.patch.object(
+                peer,
+                "resolve_codex_entry",
+                return_value={"id": thread_id, "name": "codex-worker"},
+            ),
+            mock.patch.object(peer.subprocess, "run") as run,
+        ):
+            if isinstance(result, BaseException):
+                run.side_effect = result
+            else:
+                run.return_value = result
+            if expected_outcome == "accepted":
+                receipt = peer.managed_send(
+                    args, "codex:codex-worker", "body", actor, None
+                )
+                self.assertEqual(receipt["transport_status"], "accepted")
+            else:
+                with self.assertRaises(peer.PeerError):
+                    peer.managed_send(
+                        args, "codex:codex-worker", "body", actor, None
+                    )
+            run.assert_called_once()
+            board.commit.assert_called_once()
+            self.assertEqual(board.commit.call_args.args[:3], (message_id, actor, expected_outcome))
+
+    def test_codex_prespawn_missing_executable_commits_not_sent(self):
+        self.exercise_codex_prespawn(
+            FileNotFoundError(errno.ENOENT, "missing executable", "codex"),
+            "not_sent",
+        )
+
+    def test_codex_prespawn_ambiguous_failures_commit_unknown(self):
+        cases = {
+            "timeout": subprocess.TimeoutExpired(["codex"], 30),
+            "io_error": OSError(errno.EIO, "synthetic I/O failure"),
+            "wrong_errno": FileNotFoundError(errno.EACCES, "denied", "codex"),
+            "different_filename": FileNotFoundError(errno.ENOENT, "missing", "other"),
+            "omitted_filename": FileNotFoundError(errno.ENOENT, "missing"),
+            "empty_filename": FileNotFoundError(errno.ENOENT, "missing", ""),
+            "queue_nonzero": subprocess.CompletedProcess(["codex"], 1, "", "rejected"),
+        }
+        for name, result in cases.items():
+            with self.subTest(name=name):
+                self.exercise_codex_prespawn(result, "unknown")
+
+    def test_codex_prespawn_success_commits_accepted(self):
+        self.exercise_codex_prespawn(
+            subprocess.CompletedProcess(["codex"], 0, "queued\n", ""),
+            "accepted",
+        )
 
     def test_codex_verification_checks_queue_then_history(self):
         with tempfile.TemporaryDirectory() as raw:
