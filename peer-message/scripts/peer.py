@@ -13,6 +13,7 @@ peer-message CLI and means Claude. The live Codex adapter uses uv/websockets.
 from __future__ import annotations
 
 import argparse
+import errno
 import importlib.util
 import glob
 import hashlib
@@ -672,7 +673,14 @@ def send_codex(
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
-        raise PeerError(f"codex queue could not run: {exc}") from exc
+        outcome = (
+            "not_sent"
+            if isinstance(exc, FileNotFoundError)
+            and exc.errno == errno.ENOENT
+            and exc.filename == "codex"
+            else None
+        )
+        raise PeerError(f"codex queue could not run: {exc}", outcome=outcome) from exc
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout).strip()
         raise PeerError(f"codex queue rejected {thread_id!r}: {detail}")
