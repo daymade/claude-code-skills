@@ -5,6 +5,7 @@ Field-level reference for watchdog plists. Scope: what a periodic self-healing j
 ## Contents
 - Domains and placement
 - Core keys (identity / schedule / respawn)
+- Calendar deadlines and recovery
 - Logging
 - Resource and environment control
 - launchctl command reference
@@ -48,6 +49,27 @@ Minimum seconds between respawn attempts after an exit. Default 10.
 
 - Guards against crash-loop storms: a `ThrottleInterval` of 1 with a crashing job produced 37 MB of identical error logs and, in another real incident, 30+ zombie processes because the port wasn't released before the respawn.
 - **It is a fixed delay with no backoff**, and it only throttles *process respawn* — a job that runs, spams, and exits 0 is completely outside its reach. Escalating silence must be implemented in the script (see `quiet-watchdog-patterns.md` § auto-cooldown).
+
+## Calendar deadlines and recovery
+
+Apply this READ-DO check only to an already-authorized persistent calendar job with delivery deadlines. The task's operator and existing runner own recovery; reuse its due-time, acknowledgement and stop records rather than adding another scheduler or requiring a new state file per task.
+
+Check the current host's `man launchd.plist`: `StartCalendarInterval` coalesces intervals missed during sleep into one wake event; this is not a guarantee of punctual execution while powered off or logged out. `RunAtLoad` launches once when loaded, defaults to false, and the manual discourages speculative startup work. Use it here only for a bounded due-state check at bootstrap/login, not an unconditional send or full historical replay.
+
+1. Read the task's current authorization, STOP/cancel condition, next due time, last actual-output ACK and any pending/unknown delivery outcome. Compare `date +%s` with the due time converted to the same epoch using the task's declared timezone. Stop on cancellation; do not resend an ACKed round or one with unknown prior delivery. If not yet due, exit without sending. Missing state stays unknown.
+2. If overdue, coalesce missed rounds into one catch-up decision under the existing task policy. Do not create a new schedule for an expired deadline or send one message per missed interval. A startup invocation only proves that the check ran.
+3. Before the authorized catch-up, verify the currently available documented channel and exact intended target through their owning tool. An old successful canary does not establish current reachability. If the documented endpoint is unavailable, retain an explicit failure/unknown result; do not guess another socket, restart a shared service or blindly resend an unconfirmed attempt.
+4. Separate the following evidence. Do not promote a lower layer into a higher one:
+
+   | Layer | Required observation |
+   |---|---|
+   | Native job | Expected configuration readback, plus the completed native run's exit/failure evidence; registration or a process alone is insufficient |
+   | Dispatch and consumption | The specific attempt's acceptance receipt **and** evidence that the exact target actually consumed it; a transport ACK alone is insufficient |
+   | User result | The requested output actually delivered to the user; for a periodic report, the real report and its timestamp, not the reminder or canary |
+
+5. Record the task's completion ACK only after the required user result, with its actual evidence and time. A later catch-up does not erase a missed deadline. To claim recovery, observe an authorized overdue bootstrap/login path through its required layers; when only configuration or startup passed, report those limits and the remaining delivery failure.
+
+The native readback helper checks configuration only; it cannot enforce due/ACK policy or inspect user reports. The operator must inspect the owning task's records and actual output. Missing consumer evidence leaves that layer unverified.
 
 ## Logging
 

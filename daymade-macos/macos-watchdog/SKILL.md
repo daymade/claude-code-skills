@@ -23,6 +23,7 @@ The governing principle, learned the expensive way: **a watchdog's lifecycle is 
 | Stopping / disabling / restarting a job | § Stop semantics |
 | plist key details (KeepAlive forms, domains, logging, resource limits) | `references/launchd-plist-reference.md` |
 | Checking whether a plist edit is active, or comparing job argv / explicit ENV / configured paths | Run `scripts/inspect_native_job.py` with the exact expected plist; read `references/native-job-readback.md` for result and source-selection rules |
+| Setting up or recovering an already-authorized persistent calendar job with delivery deadlines | `references/launchd-plist-reference.md` § Calendar deadlines and recovery; check overdue work and actual delivery separately |
 | Cooldown/backoff/notification-throttle patterns + sanitized war stories | `references/quiet-watchdog-patterns.md` |
 | SRE alert layering (page vs ticket, fatigue numbers) | `references/alert-discipline.md` |
 | A watchdog alert appears under Script Editor or its sender is unclear | `references/alert-discipline.md` § Message content; inspect the delivered card |
