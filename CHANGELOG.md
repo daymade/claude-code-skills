@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **peer-message** (v1.22.0 → v1.22.1): Refresh mutable facts before ownership questions, require deliberate queued delivery with its visible consequences, and detect same-ID prepared-content conflicts before lifecycle suppression; preserve valid new blockers, legacy handling and existing transports. Change type: bounded coordination repair.
+
 - **scrapling-skill** (v1.0.1): Detect installed Chromium and Chrome Headless Shell under Windows `%LOCALAPPDATA%\ms-playwright`, retaining macOS/Linux cache checks and missing-runtime hints. Change type: bounded diagnostic repair (#643).
 - **claude-switch-models-setup / skill-creator** (`daymade-claude-code` v4.30.6, `daymade-skill` v1.70.3): Recognize the same physical authoring checkout across Git path spellings in owner inventory and source-contract registration checks. Preserve exact origin, active lease, independent Git directory and symlink boundaries. Change type: bounded authoring-identity repair.
 - **peer-message** (v1.21.6 → v1.22.0): Add `inspect-inbound` to read one supported Codex envelope by explicit thread UUID and exact own message ID, returning complete raw content, store coordinates and distinct found/miss/unavailable/error outcomes without sending, consuming or resuming a session; preserve existing commands. Change type: narrow read-only capability.

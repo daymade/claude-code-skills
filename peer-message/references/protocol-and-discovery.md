@@ -117,12 +117,12 @@ thread/read 核对精确 ID、status 与 canAcceptDirectInput；active/idle 使�
 turn/start 的 toolOutput（namespace=peer_message、name=delivery），不覆盖模型、cwd、
 sandbox 或 approval，不回复服务审批请求。消息在宿主下一次接收边界进入当前回合，
 不强行中断工具调用。notLoaded 才保留官方 queue，receipt 标明 target_not_loaded；
-不自动 resume。需要旧排队行为时显式传 `--codex-delivery queued`，它可能等长回合结束。
+不自动 resume。明确需要延迟留话时才显式传 `--codex-delivery queued`：它可能等长回合结束，完整信封会作为用户消息进入对话，而不是内部 tool output。选择前由发送 agent 核对任务是否需要这次延迟送达、内容到达时是否仍有用；`expires-at` 只约束本地协调处理，不会让宿主队列自动过期，也不保证在期限前显示。接收方不回 ACK 或 `coord finish` 不会隐藏、撤回已排队的原文。脚本无法替 agent 判断这项业务必要性。
 
 缺 uv、socket 不可用或只读前置失败时
 报告 not_sent；写入后超时、断连、拒绝或 receipt 无法解析时保留 unknown。禁止自动
 转 queue 或重发。核对原 message ID 的接收证据后决定下一步；先修复已确认的环境缺口，
-不能把错误当成换通道授权。helper 本身不启动服务、不杀进程、不修改权限。
+不能把错误当成换通道授权，也不手动改传 queued 绕过同一失败。需要及时回应却无法及时投递的窗口协调，保留未送达的事实，按既定等待窗口与隔离方案继续；不是再建一条迟到的请求。helper 本身不启动服务、不杀进程、不修改权限。
 
 调用 `codex queue` 的子进程异常中，只有 `FileNotFoundError` 同时满足 `errno == ENOENT` 且 `filename == "codex"`
 才提交 not_sent；其他启动或通信错误、超时及 queue 非零退出仍提交 unknown。
