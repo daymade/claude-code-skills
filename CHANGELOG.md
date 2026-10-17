@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tibo-reset-codex** (`tibo-reset-codex` v1.22.2 → v1.23.0): Separate current account state, unattributed window changes and evidenced reset events so account switches no longer inherit reset claims. Add deterministic attribution, append-only finding invalidation, anonymous rollout labels, and regressions for direct, natural, banked, official and multi-account paths. Change type: workflow and safety redesign with an append-only journal extension.
+
 - **frontend-visual-qa** (v1.21.2): Add anonymous dashboard replays for readable history without runtime coverage and a correctly scoped zero alongside an unknown source. Keep runtime instructions unchanged; independent consumer runs and semantic review cover both controls.
 - **macos-watchdog** (`daymade-macos` v1.23.1): Correct stop-versus-disable guidance and returned-service diagnosis; consolidate lifecycle commands under the owning Skill procedure.
 - **macos-watchdog** (`daymade-macos` v1.22.7 → v1.23.0): Compare loaded scheduling with the expected plist, including absent timers and unresolved native formats. Add event-trigger selection, deployment and downstream acceptance guidance while retaining periodic observers.

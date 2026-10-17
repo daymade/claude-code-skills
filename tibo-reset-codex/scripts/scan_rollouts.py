@@ -118,7 +118,8 @@ def find_zeroings(rows):
                 < CLEAN_ANCHOR_TOLERANCE_SECONDS
             zeroings.append({"prev_ts": prev[0], "prev_used": prev[1],
                              "ts": row[0], "used": row[1], "anchor": anchor,
-                             "clean": clean})
+                             "clean": clean, "identity_bound": False,
+                             "attribution": "unattributed"})
         prev = row
     return zeroings
 
@@ -145,7 +146,9 @@ def find_low_usage_anchor_advances(rows):
                     advances.append({"prev_ts": prev[0], "prev_used": prev[1],
                                      "ts": ts, "used": used,
                                      "old_anchor": anchor_text(prev[2]),
-                                     "new_anchor": anchor})
+                                     "new_anchor": anchor,
+                                     "identity_bound": False,
+                                     "attribution": "unattributed"})
                     seen_anchors.add(anchor_minute)
         prev = row
     return advances
@@ -167,7 +170,8 @@ def format_report(rows, scan, backjumps, zeroings):
         lines.append(
             f"归零区间 {parse_ts(z['prev_ts']):%m-%d %H:%M:%S} {z['prev_used']:.0f}% → "
             f"{parse_ts(z['ts']):%m-%d %H:%M:%S} {z['used']:.0f}%"
-            f" | 新锚点 {z['anchor']:%m-%d %H:%M} {shape}")
+            f" | 新锚点 {z['anchor']:%m-%d %H:%M} {shape}"
+            f" | {z['attribution']}：匿名快照不证明重置")
     lines.append("")
     advances = find_low_usage_anchor_advances(rows)
     for a in advances:
@@ -175,7 +179,8 @@ def format_report(rows, scan, backjumps, zeroings):
             f"低用量锚点前移 {parse_ts(a['prev_ts']):%m-%d %H:%M:%S} {a['prev_used']:.0f}% → "
             f"{parse_ts(a['ts']):%m-%d %H:%M:%S} {a['used']:.0f}%"
             f" | 锚点 {a['old_anchor']:%m-%d %H:%M} → {a['new_anchor']:%m-%d %H:%M}"
-            " | 原因未定：按账号核对自然周期、平台重置与切号")
+            " | 原因未定：按账号核对自然周期、平台重置与切号"
+            f" | {a['attribution']}：匿名快照不证明重置")
     lines.append(f"低用量锚点前移候选: {len(advances)}（按新锚点分钟去重，不能当重置次数）")
     lines.append("覆盖边界：归零列表只收录已用量下降 >20 点；本候选也非穷尽，"
                  "0 条不证明未重置。")
