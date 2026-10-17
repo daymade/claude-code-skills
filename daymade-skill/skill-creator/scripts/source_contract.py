@@ -44,6 +44,22 @@ def git_identity(path):
     return {"root": root, "common": common.resolve()}
 
 
+def same_physical_path(left, right):
+    try:
+        return left.samefile(right)
+    except OSError:
+        return False
+
+
+def same_source_location(left, right):
+    # Registered draft locations may not exist until the create phase succeeds.
+    return left == right or same_physical_path(left, right)
+
+
+def physically_contains(root, directory):
+    return any(same_physical_path(root, parent) for parent in (directory, *directory.parents))
+
+
 def load_inventory(path=None):
     if path:
         value = read_object(path)
@@ -85,7 +101,7 @@ def owned_repository(identity, market, inventory):
     # Do not spawn one Git process per remaining sibling Skill after a match.
     for path in paths:
         other = git_identity(path)
-        if other is not None and str(other["common"]) == str(identity["common"]):
+        if other is not None and same_physical_path(other["common"], identity["common"]):
             return True
     return False
 
@@ -134,10 +150,10 @@ def registrations(repo, manifest, directory, name):
             suite_parents.append(plugin_root)
             for member in members:
                 member_root = local_path(plugin_root, member)
-                if member_root == directory:
+                if same_source_location(member_root, directory):
                     found.append({"plugin_id": f"{entry.get('name')}@{manifest.get('name')}",
                                   "kind": "suite", "entry": entry})
-        elif plugin_root == directory:
+        elif same_source_location(plugin_root, directory):
             found.append({"plugin_id": f"{entry.get('name')}@{manifest.get('name')}",
                           "kind": "standalone", "entry": entry})
     if any(not isinstance(record["entry"].get("name"), str) or not record["entry"]["name"] for record in found):
@@ -169,10 +185,10 @@ def check_source(path, repo=None, scope="auto", phase="delivery", inventory=None
         declared = Path(repo).expanduser().resolve() if repo else None
         if declared:
             declared_identity = git_identity(declared)
-            if not declared_identity or declared_identity["root"] != declared:
+            if not declared_identity or not same_physical_path(declared_identity["root"], declared):
                 check("source", "invalid", "Declared source_repo is not a Git repository root")
                 return report
-            if not identity or identity["common"] != declared_identity["common"] or not directory.is_relative_to(declared):
+            if not identity or not same_physical_path(identity["common"], declared_identity["common"]) or not physically_contains(declared, directory):
                 check("source", "invalid", "Skill is outside the declared source repository")
                 return report
             identity = declared_identity
@@ -182,12 +198,12 @@ def check_source(path, repo=None, scope="auto", phase="delivery", inventory=None
         root = identity["root"]
         report["source_repo"] = str(root)
         if scope == "auto":
-            scope = "project" if any(directory.parent == root / p / "skills" for p in (".claude", ".agents")) else "marketplace"
+            scope = "project" if any(same_source_location(directory.parent, root / p / "skills") for p in (".claude", ".agents")) else "marketplace"
         report["scope"] = scope
         if scope == "project":
-            valid = any(directory.parent == root / p / "skills" for p in (".claude", ".agents"))
+            valid = any(same_source_location(directory.parent, root / p / "skills") for p in (".claude", ".agents"))
             # User-global installation roots are not project source directories.
-            valid = valid and root != Path.home().resolve()
+            valid = valid and not same_physical_path(root, Path.home().resolve())
             check("source", "valid" if valid else "invalid", "Project source must be <repo>/.claude/skills/<name> or <repo>/.agents/skills/<name>")
             check("registration", "valid" if valid else "invalid", "Project-local discovery path checked; marketplace registration is not required")
         else:
@@ -218,7 +234,7 @@ def check_source(path, repo=None, scope="auto", phase="delivery", inventory=None
                 # Exact source containment/registration establishes their mapping.
                 report["plugin_id"] = record["plugin_id"]
                 check("registration", "valid", "Marketplace points at this exact source directory")
-            elif phase == "create" and (directory.parent == root or directory.parent in suites):
+            elif phase == "create" and (same_source_location(directory.parent, root) or any(same_source_location(directory.parent, parent) for parent in suites)):
                 check("registration", "valid", "New Skill source placement checked; registration is required before delivery")
                 report["registration_pending"] = True
             else:

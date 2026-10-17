@@ -2115,6 +2115,14 @@ def authoring_object(path: Path) -> dict:
     return data
 
 
+def authoring_git_path_matches(raw: object, expected: Path) -> bool:
+    """Compare Git's path spelling with the validated physical directory."""
+    try:
+        return authoring_real_path(raw, "Git repository path").samefile(expected)
+    except (OSError, ValueError):
+        return False
+
+
 def authoring_inventory(sources: list[MarketplaceSource], path: Path) -> dict:
     """Add only explicitly enrolled, currently leased independent clones.
 
@@ -2147,7 +2155,7 @@ def authoring_inventory(sources: list[MarketplaceSource], path: Path) -> dict:
         if root in seen:
             raise ValueError(f"{path}: duplicate authoring pool")
         seen.add(root)
-        if canonical != src.repo or authoring_git(canonical, "rev-parse", "--show-toplevel") != str(canonical) or authoring_git(canonical, "remote", "get-url", "origin") != origin:
+        if canonical != src.repo or not authoring_git_path_matches(authoring_git(canonical, "rev-parse", "--show-toplevel"), canonical) or authoring_git(canonical, "remote", "get-url", "origin") != origin:
             raise ValueError(f"{path}: canonical registered repo/origin mismatch")
         authoring_real_path(str(canonical / ".git"), "canonical Git metadata")
         authoring_real_path(str(canonical / ".claude-plugin" / "marketplace.json"), "canonical marketplace manifest")
@@ -2178,7 +2186,7 @@ def authoring_inventory(sources: list[MarketplaceSource], path: Path) -> dict:
                 raise ValueError(f"{root}: invalid task branch/base")
             clone = authoring_real_path(str(root / slot), "leased clone")
             git_dir = authoring_real_path(str(clone / ".git"), "independent Git directory")
-            if not git_dir.is_dir() or authoring_git(clone, "rev-parse", "--absolute-git-dir") != str(git_dir) or authoring_git(clone, "rev-parse", "--show-toplevel") != str(clone):
+            if not git_dir.is_dir() or not authoring_git_path_matches(authoring_git(clone, "rev-parse", "--absolute-git-dir"), git_dir) or not authoring_git_path_matches(authoring_git(clone, "rev-parse", "--show-toplevel"), clone):
                 raise ValueError(f"{clone}: expected an independent clone")
             if authoring_git(clone, "remote", "get-url", "origin") != origin or authoring_git(clone, "branch", "--show-current") != lease["branch"]:
                 raise ValueError(f"{clone}: active lease branch/origin mismatch")
