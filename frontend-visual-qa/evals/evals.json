@@ -424,6 +424,41 @@
         "Finishes the user's finite statement review once its bounded conclusion and evidence limits are supplied rather than importing an unrelated continuous-work mandate"
       ],
       "files": []
+    },
+    {
+      "id": 29,
+      "name": "result-consumption-blocked-exit0",
+      "prompt": "Open frontend-visual-qa/evals/files/result-consumption-fixture.html?case=case-a and inspect the ordinary detail, original reader, optional diagnostics, and return control. Do not accept process exit 0 as evidence that the requested fix succeeded.",
+      "expected_output": "A result-consumption audit that preserves the fixture's independent synthetic identities and exact canonical routes, reports the blocked business result from the authoritative record, marks any local next-update control as fixture-only, and never invents success from exit 0.",
+      "files": [
+        "evals/files/result-consumption-fixture.html",
+        "evals/files/result-consumption-authority.json"
+      ],
+      "expectations": [
+        "Opens the fixture and compares visible ordinary detail, original reader, diagnostics, and return control against the independent synthetic authority record",
+        "Flags unrendered Markdown in the ordinary result even when the original reader renders the same record correctly; reader success alone does not pass ordinary consumption",
+        "Reports the blocked business result and the fix-not-applied state; does not convert exit 0 or a successful process into the requested fix succeeding",
+        "Identifies the fixture's two distinct identities by exact canonical route and machine/job/session/owner rather than by repeating title alone",
+        "Accepts diagnostics only as local escaped or wrapped transport disclosure; does not promote diagnostic text to authoritative business result or current production status",
+        "Reports any next-update control as a fixture-safe synthetic transition bounded to this record only; no real task event, production state change, or service action is started or mutated"
+      ]
+    },
+    {
+      "id": 30,
+      "name": "result-consumption-healthy-outputs",
+      "prompt": "Open frontend-visual-qa/evals/files/result-consumption-fixture.html?case=case-b and inspect the ordinary detail, original reader, optional diagnostics, and return control. Accept healthy readable output, explicit optional raw JSON/code, and honest unknown model/dispatch/parent/source time without manufacturing defects from the unknowns.",
+      "expected_output": "A bounded healthy result-consumption audit that accepts the readable ordinary and reader outputs, preserves optional raw JSON/code and honest unknowns, and keeps fixture boundaries clear.",
+      "files": [
+        "evals/files/result-consumption-fixture.html",
+        "evals/files/result-consumption-authority.json"
+      ],
+      "expectations": [
+        "Opens the fixture and reads the healthy readable ordinary detail and original reader outputs without requiring every unknown to be filled",
+        "Accepts optional raw JSON/code in diagnostics as legitimate output; does not file diagnostic disclosure as a defect when raw code remains valid",
+        "Preserves honest unknown or not-supplied model, dispatch, parent binding, and source time rather than inventing values or downgrading healthy output because of unknowns",
+        "Distinguishes the two identities by exact canonical route and machine/job/session/owner while accepting their repeated title as intentional fixture shape",
+        "Does not claim browser rendering is validated from static fixture files, and treats any next-update control as a fixture-safe local synthetic transition only"
+      ]
     }
   ]
 }

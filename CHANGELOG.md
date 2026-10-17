@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.21.3): Add paired synthetic result-consumption replays for an unformatted summary with a readable original and a healthy output with honest unknowns. Cover route-bound local updates; runtime instructions unchanged.
 - **peer-message** (v1.22.0 → v1.22.1): Refresh mutable facts before ownership questions, require deliberate queued delivery with its visible consequences, and detect same-ID prepared-content conflicts before lifecycle suppression; preserve valid new blockers, legacy handling and existing transports. Change type: bounded coordination repair.
 
 - **scrapling-skill** (v1.0.1): Detect installed Chromium and Chrome Headless Shell under Windows `%LOCALAPPDATA%\ms-playwright`, retaining macOS/Linux cache checks and missing-runtime hints. Change type: bounded diagnostic repair (#643).

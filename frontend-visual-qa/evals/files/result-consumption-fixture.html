@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Task result review</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f6f4;color:#263b35;font:16px/1.6 system-ui,sans-serif}
+header,main,footer{max-width:1000px;margin:auto;padding:20px 28px}header{border-bottom:1px solid #d4ded7}
+h1{font-size:24px;line-height:1.3;margin:10px 0}h2{font-size:20px;margin-top:0}p{margin:10px 0}
+nav{display:flex;gap:10px;flex-wrap:wrap;align-items:center}a,button{font:inherit;color:#286e5a}
+button{border:1px solid #bacdc0;border-radius:5px;padding:7px 12px;background:white;cursor:pointer}
+button:disabled{cursor:default;opacity:.6}a[aria-current=page],button[aria-pressed=true]{font-weight:700;text-decoration:underline}
+.meta{color:#577165;font-size:14px;overflow-wrap:anywhere}.panel{background:white;border:1px solid #d4ded7;border-radius:8px;padding:24px;margin:18px 0}
+[hidden]{display:none!important}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:14px/1.7 ui-monospace,monospace;background:#f1f4f1;padding:16px;border-radius:5px}
+code{font-family:ui-monospace,monospace;background:#edf2ed;padding:1px 4px}.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+footer{font-size:13px;color:#577165}button:focus-visible,a:focus-visible{outline:3px solid #73aa96;outline-offset:3px}
+</style>
+</head>
+<body>
+<header>
+<nav aria-label="Task identity"><a id="route-a" href="?case=case-a">node-alpha / job-a</a><a id="route-b" href="?case=case-b">node-beta / job-b</a></nav>
+<h1 id="task-title">Task result</h1><p id="identity" class="meta"></p>
+<p id="execution" class="meta"></p><p id="provenance" class="meta"></p>
+</header>
+<main>
+<nav aria-label="Read result"><button id="show-result" type="button">Result</button><button id="show-reader" type="button">Original reader</button><button id="show-diagnostics" type="button">Diagnostics</button><button id="return-result" type="button">Return to result</button></nav>
+<section id="ordinary-detail" class="panel" data-panel="result" aria-label="Ordinary detail"><h2>Latest report</h2><div id="ordinary-content"></div></section>
+<section id="reader-detail" class="panel" data-panel="reader" aria-label="Original reader" hidden><h2 id="reader-title">Original report</h2><div id="reader-content"></div></section>
+<section id="diagnostic-detail" class="panel" data-panel="diagnostics" aria-label="Optional diagnostics" hidden><h2>Source record</h2><p class="meta">Optional raw JSON. Observation time and source time have separate fields.</p><pre id="diagnostic-content"></pre></section>
+<section aria-label="Local update demonstration">
+<p id="record-coordinate" class="meta"></p><p id="source-time" class="meta"></p>
+<div class="controls"><button id="next-update-trigger" type="button">Trigger next local update</button><button id="read-update" type="button" hidden>Read new report</button><span id="unread-count" role="status" aria-live="polite">0 unread</span></div>
+<p id="next-update-status" class="meta" aria-live="polite">No local update observed.</p>
+</section>
+</main>
+<footer>Local synthetic task records. These controls affect this page only; no real task is started or changed.</footer>
+<script type="application/json" id="authority">{"schema":1,"cases":{"case-a":{"identity":{"machine":"node-alpha","job":"job-a","native_session":"session-a","owner":"controller-a","parent_session_binding":null,"title":"Cache path verification","canonical_route":"?case=case-a"},"process":{"state":"exited","exit_code":0},"business_result":"blocked","source_time":null,"model":{"value":"sample-model-a","basis":"bound native execution record"},"dispatch":{"record":null,"reason":null},"markdown":"## Result\n\nReproduction is complete. The requested fix is blocked by missing workspace access.\n\n- Evidence: `check.txt`\n- Next action: the existing controller must provide the workspace access.\n\n**The fix has not been applied.**","reader":{"mode":"rendered_markdown","headline":"Result","body":"\u003cp>Reproduction is complete. The requested fix is blocked by missing workspace access.\u003c/p>\n\u003cul>\n\u003cli>Evidence: \u003ccode>check.txt\u003c/code>\u003c/li>\n\u003cli>Next action: the existing controller must provide the workspace access.\u003c/li>\n\u003c/ul>\n\u003cp>\u003cstrong>The fix has not been applied.\u003c/strong>\u003c/p>"},"transport":{"envelope":{"schema_version":1,"correlation_id":"alpha-7f3c-9b1d","machine":"node-alpha","owner":"controller-a","parent_session_binding":null,"title":"Cache path verification","rendered_headline":"Result","rendered_body":"\u003cp>Reproduction is complete. The requested fix is blocked by missing workspace access.\u003c/p>","disclaimer":"Authoritative markdown is synthetic and local-only; no real task event is started or mutated.","source_time":null}},"next_update":{"allowed":true,"transition":"new_report_observed","source_time_before":null,"source_time_after":null,"observer_time_before":"2026-10-18T05:42:11+08:00","observer_time_after":"2026-10-18T05:42:12+08:00","scope":"this fixture record only","record_id":"report-a-1","ordinal":1,"markdown":"## Follow-up\n\nThe workspace access is still missing. The existing controller must provide it.","reader":{"headline":"Follow-up","body":"\u003cp>The workspace access is still missing. The existing controller must provide it.\u003c/p>"}},"record_id":"report-a-0","ordinal":0},"case-b":{"identity":{"machine":"node-beta","job":"job-b","native_session":"session-b","owner":"controller-b","parent_session_binding":null,"title":"Cache path verification","canonical_route":"?case=case-b"},"process":{"state":"exited","exit_code":0},"business_result":"requested_draft_complete","source_time":null,"model":{"value":null,"basis":"not supplied"},"dispatch":{"record":null,"reason":null},"markdown":"## Result\n\nThe requested draft and its checks are complete. Publication was outside this job.\n\n- Draft: `draft.txt`\n- Diagnostic example: `printf \"%s\\n\" \"$VALUE\"`\n\nRaw JSON remains available in diagnostics.","reader":{"mode":"rendered_markdown","headline":"Result","body":"\u003cp>The requested draft and its checks are complete. Publication was outside this job.\u003c/p>\n\u003cul>\n\u003cli>Draft: \u003ccode>draft.txt\u003c/code>\u003c/li>\n\u003cli>Diagnostic example: \u003ccode>printf \"%s\\n\" \"$VALUE\"\u003c/code>\u003c/li>\n\u003c/ul>\n\u003cp>Raw JSON remains available in diagnostics.\u003c/p>"},"transport":{"envelope":{"schema_version":1,"correlation_id":"beta-4e2a-6f8c","machine":"node-beta","owner":"controller-b","parent_session_binding":null,"title":"Cache path verification","rendered_headline":"Result","rendered_body":"\u003cp>The requested draft and its checks are complete. Publication was outside this job.\u003c/p>","model":null,"model_basis":"not supplied","dispatch_record":null,"dispatch_reason":null,"source_time":null,"disclaimer":"Authoritative markdown is synthetic and local-only; no real task event is started or mutated."}},"next_update":{"allowed":true,"transition":"new_report_observed","source_time_before":null,"source_time_after":null,"observer_time_before":"2026-10-18T05:42:21+08:00","observer_time_after":"2026-10-18T05:42:22+08:00","scope":"this fixture record only","record_id":"report-b-1","ordinal":1,"markdown":"## Follow-up\n\nThe requested draft is still available; publication remains outside this job.","reader":{"headline":"Follow-up","body":"\u003cp>The requested draft is still available; publication remains outside this job.\u003c/p>"}},"record_id":"report-b-0","ordinal":0}}}</script>
+<script id="fixture-runtime">
+(function(){
+  'use strict';
+  const facts=JSON.parse(document.getElementById('authority').textContent);
+  const states={};
+  let activeRoute;
+  const element=id=>document.getElementById(id);
+  const routeFromUrl=()=>new URLSearchParams(location.search).get('case');
+  const stateFor=route=>states[route]||(states[route]={generated:false,read:false,showNew:false});
+  function currentRecord(){
+    const fact=facts.cases[activeRoute],state=stateFor(activeRoute);
+    return state.showNew?{...fact,record_id:fact.next_update.record_id,ordinal:fact.next_update.ordinal,markdown:fact.next_update.markdown,reader:fact.next_update.reader,source_time:fact.next_update.source_time_after}:fact;
+  }
+  function showPanel(panel){
+    for(const node of document.querySelectorAll('[data-panel]'))node.hidden=node.getAttribute('data-panel')!==panel;
+    for(const name of ['result','reader','diagnostics'])element('show-'+name).setAttribute('aria-pressed',String(name===panel));
+  }
+  function render(){
+    const fact=facts.cases[activeRoute],record=currentRecord(),state=stateFor(activeRoute);
+    element('task-title').textContent=fact.identity.title;
+    element('identity').textContent=fact.identity.machine+' / '+fact.identity.job+' / '+fact.identity.native_session+' / declared controller '+fact.identity.owner;
+    element('execution').textContent='Execution ended · exit '+fact.process.exit_code;
+    element('provenance').textContent='Model: '+(fact.model.value||'Not supplied')+' · Dispatch record: '+(fact.dispatch.record||'Not supplied')+' · Parent session: '+(fact.identity.parent_session_binding||'Not supplied');
+    const ordinary=element('ordinary-content');
+    ordinary.innerHTML='';
+    if(activeRoute==='case-a'){
+      const raw=document.createElement('pre');raw.textContent=record.markdown;ordinary.appendChild(raw);
+    }else{
+      ordinary.innerHTML=record.reader.body;
+    }
+    element('reader-title').textContent=record.reader.headline;
+    element('reader-content').innerHTML=record.reader.body;
+    const observed=state.generated?fact.next_update.observer_time_after:fact.next_update.observer_time_before;
+    element('diagnostic-content').textContent=JSON.stringify({identity:fact.identity,process:fact.process,model:fact.model,dispatch:fact.dispatch,record_id:record.record_id,ordinal:record.ordinal,source_time:record.source_time,observed_at:observed,envelope:fact.transport.envelope},null,2);
+    element('record-coordinate').textContent='Record '+record.record_id+' · ordinal '+record.ordinal;
+    element('source-time').textContent='Source time: '+(record.source_time||'Not recorded')+' · Observed at: '+observed;
+    element('unread-count').textContent=state.generated&&!state.read?'1 unread':'0 unread';
+    element('read-update').hidden=!state.generated||state.read;
+    element('next-update-trigger').disabled=state.generated;
+    element('next-update-status').textContent=state.generated?'Local report '+fact.next_update.record_id+' observed on '+fact.identity.machine+' / '+fact.identity.job+'.':'No local update observed.';
+    for(const [name,id]of [['case-a','route-a'],['case-b','route-b']])element(id).setAttribute('aria-current',name===activeRoute?'page':'false');
+  }
+  function applyRoute(route){
+    activeRoute=Object.hasOwn(facts.cases,route)?route:'case-a';
+    history.replaceState(null,'',facts.cases[activeRoute].identity.canonical_route);
+    stateFor(activeRoute);render();showPanel('result');
+  }
+  for(const [name,id]of [['case-a','route-a'],['case-b','route-b']])element(id).addEventListener('click',event=>{event.preventDefault();applyRoute(name);});
+  for(const name of ['result','reader','diagnostics'])element('show-'+name).addEventListener('click',()=>showPanel(name));
+  element('return-result').addEventListener('click',()=>showPanel('result'));
+  element('next-update-trigger').addEventListener('click',()=>{
+    const fact=facts.cases[activeRoute],state=stateFor(activeRoute);
+    if(state.generated||fact.next_update.allowed!==true)return;
+    state.generated=true;render();
+    window.dispatchEvent(new CustomEvent('fixture:report',{detail:{machine:fact.identity.machine,job:fact.identity.job,session:fact.identity.native_session,record_id:fact.next_update.record_id,source_time:fact.next_update.source_time_after,observed_at:fact.next_update.observer_time_after}}));
+  });
+  element('read-update').addEventListener('click',()=>{const state=stateFor(activeRoute);if(!state.generated)return;state.read=true;state.showNew=true;render();showPanel('result');});
+  window.addEventListener('popstate',()=>applyRoute(routeFromUrl()));
+  applyRoute(routeFromUrl());
+})();
+</script>
+</body>
+</html>
