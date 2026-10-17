@@ -17,12 +17,18 @@ Verified on Ghostty 1.3.1, macOS 26 (Darwin 25/27), 2026-10-04.
    `osascript -e 'tell application "System Events" to get UI elements enabled'` —
    `false` means keystrokes will silently do nothing useful; grant it before
    restoring 40 tabs.
-2. Tell the user to avoid keyboard/mouse input until reconciliation finishes.
+2. Apply the entry's foreground authorization and ownership check. Reuse a current
+   explicit idle-desktop grant after coordinating exclusive access; do not turn the
+   notice into another approval request. Otherwise obtain the missing bounded handoff.
+   Tell the user to avoid keyboard/mouse input until reconciliation finishes.
    Per missing session: activate Ghostty → Cmd+T → write reopen command to clipboard →
    Cmd+V → Return. Timing constants (0.8s activate / 1.2s tab / 0.4s paste)
    are in `scripts/ghostty_session.py::_paste_tab` — tune there, not in SKILL.md.
    During a restore run, keyboard/mouse interruption is the main failure mode:
    an interrupted step leaves an empty tab whose command was never delivered.
+   Stop input on takeover and reconcile read-only; do not restore the previous focus
+   or continue the remaining paste sequence while ownership is lost. The script's
+   notification and paste return values do not implement an ownership lock.
 3. **Auto-reconciliation is the honesty mechanism.** Paste return codes only say
    osascript itself succeeded; they cannot say the command landed. After the
    loop, re-enumerate live sessions by UUID and print every missing session with
