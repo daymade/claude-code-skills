@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-watchdog** (`daymade-macos` v1.23.1): Correct stop-versus-disable guidance and returned-service diagnosis; consolidate lifecycle commands under the owning Skill procedure.
 - **macos-watchdog** (`daymade-macos` v1.22.7 → v1.23.0): Compare loaded scheduling with the expected plist, including absent timers and unresolved native formats. Add event-trigger selection, deployment and downstream acceptance guidance while retaining periodic observers.
 - **skill-evolver** (v1.0.3): Add optional, self-contained replay cases for hidden state changes, changed artifact identity and independent work with a missing runtime. Select cases by the affected behavior; preserve existing verification owners and permission boundaries.
 - **macos-watchdog** (`daymade-macos` v1.22.7): Add calendar deadline recovery and separate native-run, dispatch/consumption, and actual user-output evidence. Change type: bounded recovery-verification clarification.
