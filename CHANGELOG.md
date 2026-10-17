@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **peer-message** (v1.21.6 → v1.22.0): Add `inspect-inbound` to read one supported Codex envelope by explicit thread UUID and exact own message ID, returning complete raw content, store coordinates and distinct found/miss/unavailable/error outcomes without sending, consuming or resuming a session; preserve existing commands. Change type: narrow read-only capability.
+
 - **transcript-fixer** (`daymade-audio` v1.49.2): Preserve separate review anchors for repeated raw occurrences when Stage 1 leaves input unchanged; add single-item `--reanchor-context-offset` recovery while retaining ambiguous-anchor, drift and name refusals. Change type: bounded queue-recovery repair.
 - **tibo-reset-codex** (`tibo-reset-codex` v1.22.2 → v1.23.0): Separate current account state, unattributed window changes and evidenced reset events so account switches no longer inherit reset claims. Add deterministic attribution, append-only finding invalidation, anonymous rollout labels, and regressions for direct, natural, banked, official and multi-account paths. Change type: workflow and safety redesign with an append-only journal extension.
 

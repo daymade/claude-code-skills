@@ -93,6 +93,352 @@ class PeerMessageTests(unittest.TestCase):
         history.commit()
         history.close()
 
+    def run_inbound(self, home, message_id="inbound-fixture", *, json_output=True):
+        output, errors = io.StringIO(), io.StringIO()
+        arguments = [
+            "--codex-home", str(home), "inspect-inbound",
+            "codex:22222222-2222-4222-8222-222222222222",
+            "--message-id", message_id,
+        ]
+        if json_output:
+            arguments.append("--json")
+        with contextlib.ExitStack() as stack:
+            # These paths may write, deliver or discover an implicit target.
+            for owner, name in (
+                (peer.coordination, "Board"), (peer, "send_one"),
+                (peer, "send_codex"), (peer, "send_claude"),
+                (peer, "resolve_codex"), (peer, "resolve_codex_entry"),
+                (peer, "current_address"), (peer, "wait_for_verification"),
+                (peer.subprocess, "run"), (peer.subprocess, "Popen"),
+                (peer.socket, "socket"), (peer.time, "sleep"),
+            ):
+                stack.enter_context(mock.patch.object(
+                    owner, name, side_effect=AssertionError(f"forbidden inspection call: {name}")
+                ))
+            stack.enter_context(contextlib.redirect_stdout(output))
+            stack.enter_context(contextlib.redirect_stderr(errors))
+            code = peer.main(arguments)
+        return code, json.loads(output.getvalue()) if json_output else output.getvalue(), errors.getvalue()
+
+    def inbound_envelope(self, message_id="inbound-fixture", *, sender="claude:fixture", body="request: fixture"):
+        return peer.codex_envelope(body, sender, None, message_id)
+
+    def inbound_queue_row(self, envelope, *, item_id="queue-fixture", thread_id=None, order=1):
+        return (
+            item_id, thread_id or "22222222-2222-4222-8222-222222222222",
+            json.dumps({"UserInput": {"content": [{"text": envelope}]}}), order, 100, 100,
+        )
+
+    def inbound_history_row(self, envelope, *, item_id="history-fixture", kind="message", namespace="peer_message", thread_id=None):
+        value = (
+            {"type": kind, "namespace": namespace, "name": "delivery", "output": envelope}
+            if kind == "functionCallOutput" else {"type": kind, "content": [{"text": envelope}]}
+        )
+        return (
+            thread_id or "22222222-2222-4222-8222-222222222222", "turn-fixture", item_id,
+            7, 100, json.dumps(value),
+            "functionCallOutput" if kind == "functionCallOutput" else "userMessage", 7,
+        )
+
+    def test_inbound_selectors_fail_before_store_discovery(self):
+        valid = "codex:22222222-2222-4222-8222-222222222222"
+        bad_targets = (
+            "", "codex:worker", "worker", "claude:22222222-2222-4222-8222-222222222222",
+            "codex:22222222222242228222222222222222", "codex:*",
+            "codex:AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA",
+        )
+        cases = [["inspect-inbound", target, "--message-id", "fixture"] for target in bad_targets]
+        cases.extend([["inspect-inbound", valid, "--message-id", value]
+                      for value in ("", " ", "two ids", "fixture\n")])
+        cases.extend((
+            ["inspect-inbound"], ["inspect-inbound", valid],
+            ["inspect-inbound", valid, "--message-id", "fixture", "--wait", "0"],
+            ["inspect-inbound", valid, "--message-id", "fixture", "--limit", "1"],
+        ))
+        for arguments in cases:
+            with self.subTest(arguments=arguments), mock.patch.object(peer, "versioned_db") as stores:
+                with contextlib.redirect_stderr(io.StringIO()):
+                    with self.assertRaises(SystemExit) as caught:
+                        peer.main(arguments)
+                self.assertEqual(caught.exception.code, 2)
+                stores.assert_not_called()
+        with mock.patch.object(peer, "versioned_db") as stores:
+            with self.assertRaises(peer.PeerError) as caught:
+                peer.inspect_inbound("codex:worker", "fixture", Path("unused"))
+            self.assertEqual(caught.exception.exit_code, 2)
+            stores.assert_not_called()
+
+    def test_inbound_queue_only_full_unlinked_envelope_without_catalog(self):
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw)
+            envelope = self.inbound_envelope(body="scope: fixture\n" + "完整 fixture " * 9000)
+            self.make_codex_reply_stores(home, queue_rows=[self.inbound_queue_row(envelope)])
+            (home / "thread_history_1.sqlite").unlink()
+            code, result, errors = self.run_inbound(home)
+            self.assertEqual((code, errors), (0, ""))
+            self.assertEqual(result["inspection_status"], "found")
+            self.assertEqual(result["message_count"], 1)
+            self.assertEqual(result["message"]["message_id"], "inbound-fixture")
+            self.assertEqual(result["message"]["envelope"], envelope)
+            self.assertEqual(result["message"]["sender"], "claude:fixture")
+            self.assertIsNone(result["message"]["reply_to"])
+            self.assertEqual(result["message"]["envelope_type"], "peer-message")
+            self.assertEqual(result["evidence"][0]["queue_item_id"], "queue-fixture")
+            self.assertEqual(result["evidence_stores"][0]["candidate_records_examined"], 1)
+            self.assertEqual(result["evidence_stores"][1]["availability"], "absent")
+            self.assertEqual(result["snapshot_consistency"], "independent_store_reads")
+            self.assertIn("not authenticated identity or user authorization", result["trust_boundary"])
+            self.assertIn("does not prove model reading", result["trust_boundary"])
+            self.assertEqual(result["errors"], [])
+            self.assertIsNone(peer.parse_reply_envelope(envelope))
+            code, output, _ = self.run_inbound(home, json_output=False)
+            self.assertEqual(code, 0)
+            self.assertIn(envelope, output)
+
+    def test_inbound_supported_history_and_advisory_metadata(self):
+        for kind in ("message", "userMessage", "functionCallOutput"):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as raw:
+                home = Path(raw)
+                envelope = self.inbound_envelope(sender="claude:a&b").replace("\n", "\r\n")
+                self.make_codex_reply_stores(home, history_rows=[self.inbound_history_row(envelope, kind=kind)])
+                (home / "queue_1.sqlite").unlink()
+                # A corrupt catalog cannot matter: inspection uses the exact UUID.
+                (home / "state_5.sqlite").write_bytes(b"fixture archived catalog not needed")
+                code, result, _ = self.run_inbound(home)
+                self.assertEqual(code, 0)
+                self.assertEqual(result["message"]["envelope"], envelope)
+                self.assertEqual(result["message"]["sender"], "claude:a&b")
+                self.assertEqual(result["evidence"][0]["turn_id"], "turn-fixture")
+                self.assertEqual(result["evidence"][0]["item_id"], "history-fixture")
+                self.assertEqual(result["evidence"][0]["rollout_ordinal"], 7)
+                self.assertEqual(result["evidence_stores"][1]["candidate_records_examined"], 1)
+
+    def test_inbound_identical_duplicates_retain_every_coordinate(self):
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw)
+            envelope = self.inbound_envelope()
+            self.make_codex_reply_stores(
+                home, queue_rows=[self.inbound_queue_row(envelope, item_id=f"queue-{i}", order=i) for i in (1, 2)],
+                history_rows=[self.inbound_history_row(envelope)],
+            )
+            code, result, _ = self.run_inbound(home)
+            self.assertEqual((code, result["message_count"]), (0, 1))
+            self.assertEqual(len(result["evidence"]), 3)
+            self.assertEqual([item.get("queue_item_id", item.get("item_id")) for item in result["evidence"]],
+                             ["queue-1", "queue-2", "history-fixture"])
+            self.assertEqual([store["candidate_records_examined"] for store in result["evidence_stores"]], [2, 1])
+
+    def test_inbound_conflicting_raw_envelopes_fail_without_partial_content(self):
+        original = self.inbound_envelope()
+        variants = (
+            self.inbound_envelope(body="request: changed fixture"),
+            self.inbound_envelope(sender="claude:another-fixture"),
+            original.replace("\n", "\r\n"),
+        )
+        for other in variants:
+            for cross_store in (False, True):
+                with self.subTest(other=other, cross_store=cross_store), tempfile.TemporaryDirectory() as raw:
+                    home = Path(raw)
+                    queue = [self.inbound_queue_row(original)]
+                    history = []
+                    if cross_store:
+                        history.append(self.inbound_history_row(other))
+                    else:
+                        queue.append(self.inbound_queue_row(other, item_id="queue-other", order=2))
+                    self.make_codex_reply_stores(home, queue_rows=queue, history_rows=history)
+                    code, result, _ = self.run_inbound(home)
+                    self.assertEqual(code, 4)
+                    self.assertEqual(result["inspection_status"], "read_or_integrity_error")
+                    self.assertEqual(result["message_count"], 0)
+                    self.assertIsNone(result["message"])
+                    self.assertEqual(result["evidence"], [])
+                    self.assertIn("conflicting inbound payloads", " ".join(result["errors"]))
+                    self.assertEqual(len(result["evidence_stores"]), 2)
+
+    def test_inbound_id_mentions_examples_prefixes_and_foreign_threads_are_not_matches(self):
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw)
+            wanted = self.inbound_envelope()
+            negatives = [
+                "ordinary inbound-fixture text", "```xml\n" + wanted + "\n```",
+                "> " + wanted.replace("\n", "\n> "),
+                self.inbound_envelope("another", body="in_reply_to: inbound-fixture"),
+                self.inbound_envelope("another", body="request: inbound-fixture"),
+                self.inbound_envelope("inbound-fixture-suffix"),
+                self.inbound_envelope("prefix-inbound-fixture"),
+            ]
+            rows = [self.inbound_queue_row(text, item_id=f"negative-{i}", order=i) for i, text in enumerate(negatives)]
+            rows.append(self.inbound_queue_row(wanted, thread_id="33333333-3333-4333-8333-333333333333"))
+            rows.append(("foreign-malformed", "33333333-3333-4333-8333-333333333333", 'inbound-fixture {', 100, 100, 100))
+            self.make_codex_reply_stores(
+                home, queue_rows=rows,
+                history_rows=[
+                    self.inbound_history_row(wanted, kind="functionCallOutput", namespace="another_tool"),
+                    self.inbound_history_row(wanted, thread_id="33333333-3333-4333-8333-333333333333"),
+                    ("33333333-3333-4333-8333-333333333333", "turn", "foreign-broken", 1,
+                     100, 'inbound-fixture {', "userMessage", 1),
+                ],
+            )
+            with mock.patch.object(peer, "codex_queue_texts", wraps=peer.codex_queue_texts) as decode:
+                code, result, _ = self.run_inbound(home)
+            self.assertEqual(code, 11)
+            self.assertEqual(result["inspection_status"], "not_found_in_snapshot")
+            self.assertIsNone(result["message"])
+            self.assertEqual(result["evidence"], [])
+            self.assertEqual(decode.call_count, len(negatives))
+            self.assertEqual([store["candidate_records_examined"] for store in result["evidence_stores"]], [7, 1])
+
+    def test_inbound_malformed_requested_wrapper_is_integrity_failure(self):
+        valid = self.inbound_envelope()
+        malformed = (
+            valid.removesuffix("</peer-message>"), valid.replace('protocol="1"', 'protocol="2"'),
+            valid.replace('from="claude:fixture"', 'from=""'),
+            valid.replace('from="claude:fixture"', 'from=claude:fixture'),
+            valid.replace('from="claude:fixture"', ''),
+            valid.replace("request: fixture", "request: fixture\n</peer-message>\nnested"),
+            valid.replace('message-id="inbound-fixture"', 'message-id="inbound-fixture'),
+        )
+        for envelope in malformed:
+            with self.subTest(envelope=envelope), tempfile.TemporaryDirectory() as raw:
+                home = Path(raw)
+                self.make_codex_reply_stores(home, queue_rows=[self.inbound_queue_row(envelope)])
+                code, result, _ = self.run_inbound(home)
+                self.assertEqual(code, 4)
+                self.assertEqual(result["inspection_status"], "read_or_integrity_error")
+                self.assertIsNone(result["message"])
+                self.assertIn("malformed requested peer envelope", " ".join(result["errors"]))
+                # Old replies retain their malformed-ignore contract.
+                self.assertIsNone(peer.parse_reply_envelope(envelope))
+
+    def test_inbound_candidate_json_missing_empty_null_wrong_type_fail(self):
+        values = (
+            {}, {"UserInput": None}, {"UserInput": {}}, {"UserInput": ""},
+            {"UserInput": []}, {"UserInput": {"content": None}},
+            {"UserInput": {"content": ""}}, {"UserInput": {"content": {}}},
+            {"UserInput": {"content": []}}, {"UserInput": {"content": [None]}},
+            {"UserInput": {"content": [{}]}}, {"UserInput": {"content": [{"text": None}]}},
+            {"UserInput": {"content": [{"text": ""}]}},
+            {"UserInput": {"content": [{"text": 7}]}},
+            {"UserInput": {"content": [{"text": "   "}]}},
+        )
+        payloads = [json.dumps({"needle": "inbound-fixture", **value}) for value in values]
+        payloads.extend(('inbound-fixture {', '["inbound-fixture"]'))
+        for payload in payloads:
+            with self.subTest(payload=payload), tempfile.TemporaryDirectory() as raw:
+                home = Path(raw)
+                self.make_codex_reply_stores(home, queue_rows=[("broken", "22222222-2222-4222-8222-222222222222", payload, 1, 100, 100)])
+                code, result, _ = self.run_inbound(home)
+                self.assertEqual(code, 4)
+                self.assertEqual(result["evidence_stores"][0]["candidate_records_examined"], 1)
+                self.assertEqual(result["evidence_stores"][1]["read_status"], "read")
+                self.assertIsNone(result["message"])
+
+    def test_inbound_history_schema_and_content_fail_even_after_queue_hit(self):
+        values = (
+            {}, {"type": "unknown", "content": [{"text": "inbound-fixture"}]},
+            {"type": "message"}, {"type": "message", "content": []},
+            {"type": "message", "content": [{"text": ""}]},
+            {"type": "message", "content": [{"text": None}]},
+            {"type": "functionCallOutput", "namespace": "peer_message", "name": "delivery"},
+            {"type": "functionCallOutput", "namespace": "peer_message", "name": "delivery", "output": None},
+            {"type": "functionCallOutput", "namespace": "peer_message", "name": "delivery", "output": ""},
+        )
+        payloads = [(json.dumps({"needle": "inbound-fixture", **value}),
+                     "functionCallOutput" if value.get("type") == "functionCallOutput" else "userMessage")
+                    for value in values]
+        payloads.append(('inbound-fixture {', "userMessage"))
+        for payload, kind in payloads:
+            with self.subTest(payload=payload), tempfile.TemporaryDirectory() as raw:
+                home = Path(raw)
+                self.make_codex_reply_stores(
+                    home, queue_rows=[self.inbound_queue_row(self.inbound_envelope())],
+                    history_rows=[("22222222-2222-4222-8222-222222222222", "turn", "broken", 1, 100, payload, kind, 1)],
+                )
+                code, result, _ = self.run_inbound(home)
+                self.assertEqual(code, 4)
+                self.assertEqual(result["evidence_stores"][0]["read_status"], "read")
+                self.assertEqual(result["evidence_stores"][1]["candidate_records_examined"], 1)
+                self.assertEqual(result["evidence_stores"][1]["read_status"], "error")
+                self.assertIsNone(result["message"])
+                self.assertEqual(result["evidence"], [])
+
+    def test_inbound_present_store_read_and_schema_errors_fail_after_hit(self):
+        for broken in ("unreadable", "schema", "corrupt"):
+            with self.subTest(broken=broken), tempfile.TemporaryDirectory() as raw:
+                home = Path(raw)
+                self.make_codex_reply_stores(home, queue_rows=[self.inbound_queue_row(self.inbound_envelope())])
+                history_path = home / "thread_history_1.sqlite"
+                if broken == "schema":
+                    with contextlib.closing(sqlite3.connect(history_path)) as connection:
+                        connection.execute("ALTER TABLE thread_items RENAME TO unsupported_schema")
+                elif broken == "corrupt":
+                    history_path.write_bytes(b"synthetic corrupt sqlite file")
+                original_ro = peer.sqlite_ro
+                def read(path):
+                    if broken == "unreadable" and path == history_path:
+                        raise sqlite3.OperationalError("synthetic read denial")
+                    return original_ro(path)
+                with mock.patch.object(peer, "sqlite_ro", side_effect=read) as reads:
+                    code, result, _ = self.run_inbound(home)
+                self.assertEqual(code, 4)
+                self.assertEqual(reads.call_count, 2)
+                self.assertIsNone(result["message"])
+                self.assertEqual(result["evidence"], [])
+                self.assertEqual(result["evidence_stores"][1]["read_status"], "error")
+
+    def test_inbound_no_stores_and_clean_snapshot_miss_are_distinct(self):
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw)
+            code, result, _ = self.run_inbound(home)
+            self.assertEqual((code, result["inspection_status"]), (10, "unknown_no_evidence_store"))
+            self.assertEqual([s["availability"] for s in result["evidence_stores"]], ["absent", "absent"])
+            self.make_codex_reply_stores(home)
+            code, result, _ = self.run_inbound(home)
+            self.assertEqual((code, result["inspection_status"]), (11, "not_found_in_snapshot"))
+            self.assertEqual([s["candidate_records_examined"] for s in result["evidence_stores"]], [0, 0])
+            self.assertEqual([s["read_status"] for s in result["evidence_stores"]], ["read", "read"])
+
+    def test_inbound_real_cli_preserves_store_bytes_rows_and_uses_ro_connections(self):
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw)
+            envelope = self.inbound_envelope()
+            self.make_codex_reply_stores(home, queue_rows=[self.inbound_queue_row(envelope)],
+                                         history_rows=[self.inbound_history_row(envelope)])
+            def snapshot():
+                result = {}
+                for path in sorted(home.glob("*.sqlite")):
+                    with contextlib.closing(sqlite3.connect(path)) as connection:
+                        result[path.name] = (hashlib.sha256(path.read_bytes()).hexdigest(), list(connection.iterdump()))
+                return result
+            before = snapshot()
+            cli = subprocess.run([
+                peer.sys.executable, str(SCRIPT), "--codex-home", str(home),
+                "--claude-home", str(home / "unused-claude"), "--state-dir", str(home / "unused-state"),
+                "inspect-inbound", "codex:22222222-2222-4222-8222-222222222222",
+                "--message-id", "inbound-fixture", "--json",
+            ], capture_output=True, text=True, check=False)
+            self.assertEqual(cli.returncode, 0, cli.stderr)
+            result = json.loads(cli.stdout)
+            self.assertEqual(result["message"]["envelope"], envelope)
+            self.assertEqual(len(result["evidence"]), 2)
+            self.assertEqual(before, snapshot())
+            self.assertFalse((home / "unused-state").exists())
+            original_connect = peer.sqlite3.connect
+            opened = []
+            def checked_connect(database, *args, **kwargs):
+                self.assertTrue(database.endswith("?mode=ro"))
+                self.assertTrue(kwargs.get("uri"))
+                connection = original_connect(database, *args, **kwargs)
+                with self.assertRaises(sqlite3.OperationalError):
+                    connection.execute("CREATE TABLE forbidden_inspection_write (id TEXT)")
+                opened.append(database)
+                return connection
+            with mock.patch.object(peer.sqlite3, "connect", side_effect=checked_connect):
+                code, result, _ = self.run_inbound(home)
+            self.assertEqual(code, 0)
+            self.assertEqual(len(opened), 2)
+            self.assertEqual(before, snapshot())
+
     def make_claude_target(
         self,
         root: Path,
