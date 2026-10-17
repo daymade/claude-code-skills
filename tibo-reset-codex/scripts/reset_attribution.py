@@ -420,35 +420,59 @@ def observation_from_usage(data, source_ref):
     }
 
 
+def is_question(text):
+    stripped = (text or "").strip()
+    return bool(stripped) and (
+        "？" in stripped or "?" in stripped or stripped.endswith(("吗", "嘛", "么")))
+
+
+RESET_NEGATION = re.compile(
+    r"(?:不是|并非|没有|没|尚未|还未|还没)[^。!？?；;，,\n]{0,16}重置|"
+    r"(?:未被|未)重置|(?:not|never)[^。!？?；;，,\n]{0,20}reset",
+    re.I,
+)
+
+
 def user_events(text, account_ref, timestamp):
-    lowered = text.casefold()
     events = []
-    if "换号" in text and ("不是重置" in text or "我换号" in text or "换号了" in text):
-        events.append({"kind": "account_switch", "account_ref": account_ref,
-                       "checked_at_utc": timestamp, "source": "user", "source_ref": "user:account_switch"})
-    negated = any(marker in text for marker in
-                  ("不是重置", "并非重置", "不是被重置", "并非被重置", "没有重置", "没重置", "还没重置", "未重置",
-                   "尚未重置", "没有发生重置", "没有被重置", "没被重置", "尚未被重置",
-                   "还未被重置", "还没被重置", "未被重置", "无法确定", "不能确定",
-                   "是否重置", "会不会重置", "能否重置"))
-    explicit_reset = re.search(
-        r"(?:账号|账户|额度|weekly)[^。!？?；;\n]{0,12}(?:已经|已|刚)?[^。!？?；;\n]{0,6}重置",
-        text, re.I)
-    english_reset = "my account was reset" in lowered or "my account has been reset" in lowered
-    if "换号" not in text and not negated and (explicit_reset or english_reset):
-        events.append({"kind": "account_reset_observed", "account_ref": account_ref,
-                       "checked_at_utc": timestamp, "source": "user", "source_ref": "user:account_reset"})
-    banked_negated = any(marker in lowered for marker in
-                         ("没有兑现", "没兑现", "尚未兑现", "未兑现", "没有使用", "未使用", "没有用"))
-    banked = re.search(
-        r"(?:兑现|使用|用掉|用了|redeem(?:ed)?)[^。!？?；;，,\n]{0,24}(?:备用\s*reset|banked\s*reset|备用重置)",
-        lowered)
-    banked_reverse = re.search(
-        r"(?:备用\s*reset|banked\s*reset|备用重置)[^。!？?；;，,\n]{0,16}(?:已经|已)?\s*(?:兑现|使用|用掉|redeem(?:ed)?)",
-        lowered)
-    if (banked or banked_reverse) and not banked_negated:
-        events.append({"kind": "banked_redeem", "account_ref": account_ref,
-                       "checked_at_utc": timestamp, "source": "user", "source_ref": "user:banked_redeem"})
+    event_kinds = set()
+
+    def add(kind, source_ref):
+        if kind in event_kinds:
+            return
+        event_kinds.add(kind)
+        events.append({"kind": kind, "account_ref": account_ref,
+                       "checked_at_utc": timestamp, "source": "user", "source_ref": source_ref})
+
+    # Evaluate each statement independently: a question or correction must not
+    # contaminate an affirmative statement elsewhere in the same user message.
+    for raw in re.split(r"(?<=[。!？?；;，,\n])", text or ""):
+        statement = raw.strip()
+        if not statement:
+            continue
+        lowered = statement.casefold()
+        not_direct = is_question(statement) or any(
+            marker in statement for marker in ("无法确定", "不能确定", "不确定", "是否", "会不会", "能否"))
+        if not not_direct and "换号" in statement and (
+                "不是重置" in statement or "我换号" in statement or "换号了" in statement):
+            add("account_switch", "user:account_switch")
+        negated = bool(RESET_NEGATION.search(statement))
+        explicit_reset = re.search(
+            r"(?:账号|账户|额度|weekly)[^。!？?；;\n]{0,12}(?:已经|已|刚)?[^。!？?；;\n]{0,6}重置",
+            statement, re.I)
+        english_reset = "my account was reset" in lowered or "my account has been reset" in lowered
+        if not not_direct and not negated and "换号" not in statement and (explicit_reset or english_reset):
+            add("account_reset_observed", "user:account_reset")
+        banked_negated = any(marker in lowered for marker in
+                             ("没有兑现", "没兑现", "尚未兑现", "未兑现", "没有使用", "未使用", "没有用"))
+        banked = re.search(
+            r"(?:兑现|使用|用掉|用了|redeem(?:ed)?)[^。!？?；;，,\n]{0,24}(?:备用\s*reset|banked\s*reset|备用重置)",
+            lowered)
+        banked_reverse = re.search(
+            r"(?:备用\s*reset|banked\s*reset|备用重置)[^。!？?；;，,\n]{0,16}(?:已经|已)?\s*(?:兑现|使用|用掉|redeem(?:ed)?)",
+            lowered)
+        if not not_direct and (banked or banked_reverse) and not banked_negated:
+            add("banked_redeem", "user:banked_redeem")
     return events
 
 
@@ -510,9 +534,11 @@ def official_events(text, timestamp=None):
     if (any(marker in lowered for marker in
             ("not all accounts", "not everyone", "not for everyone", "not for all",
              "not all paid", "only plus", "plus only"))
-            or re.search(r"\b(?:except|but\s+not|not\s+for|on\s+(?:pro|plus|team|enterprise|business))\b", lowered)
-            or re.search(r"\b(?:pro|plus|team|enterprise|business)\s+only\b", lowered)
-            or re.search(r"\bonly\s+(?:pro|plus|team|enterprise|business)\b", lowered)):
+            # An exception, contrast or any individual plan name makes the scope
+            # non-universal for this gate. Do not enumerate ever more exception
+            # synonyms: plan-scoped text simply cannot prove an all-paid reset.
+            or re.search(r"\b(?:except|excluding|but)\b", lowered)
+            or re.search(r"\b(?:pro|plus|team|enterprise|business|free|trial)\b", lowered)):
         return []
     scope_terms = ("all paid", "everyone", "every paid", "all accounts")
     if "for plus" in lowered and not any(term in lowered for term in scope_terms):
@@ -618,14 +644,13 @@ def evidence_from_transcript(path):
 
 UNCERTAIN = re.compile(
     r"是否[^。!？?；;，,\n]{0,30}重置|没有证据[^。!？?；;，,\n]{0,30}重置|"
-    r"没有被重置|没被重置|尚未被重置|还未被重置|还没被重置|未被重置|不是被重置|并非被重置|"
-    r"没有[^。!？?；;，,\n]{0,12}重置|没[^。!？?；;，,\n]{0,12}重置|尚未[^。!？?；;，,\n]{0,12}重置|"
-    r"not (?:been )?reset|"
     r"无法(?:确定|证明|确认|判定)[^。!？?；;，,\n]{0,30}重置|"
     r"不能(?:确定|证明|确认|称为|判定)[^。!？?；;，,\n]{0,30}重置|"
     r"不确定[^。!？?；;，,\n]{0,30}重置|"
-    r"不是重置|并非重置|可能只是换号|可能[^。!？?；;，,\n]{0,12}换号|"
-    r"窗口(?:已经)?(?:发生)?变化|重置(?:是否|与否)[^。!？?；;，,\n]{0,20}(?:未核实|未知|待核实)")
+    r"可能只是换号|可能[^。!？?；;，,\n]{0,12}换号|"
+    r"窗口(?:已经)?(?:发生)?变化|重置(?:是否|与否)[^。!？?；;，,\n]{0,20}(?:未核实|未知|待核实)",
+    re.I,
+)
 META = re.compile(r"示例|模板|规则|判据|拦截|误报|测试|回归|案例|复发|教训|修复|审查|如果|若|不得|禁止|应该|不应|撤回|更正|误判|错误归因")
 SAME_ACCOUNT_CLAIM = re.compile(
     r"(?:账[号户]|额度|weekly)[^。!？?；;，,\n]{0,40}(?:已经|已|刚|被)[^。!？?；;，,\n]{0,20}重置|"
@@ -633,24 +658,32 @@ SAME_ACCOUNT_CLAIM = re.compile(
     r"account (?:has been|was) reset", re.I)
 MULTI_ACCOUNT_CLAIM = re.compile(r"大范围静默重置", re.I)
 CROSS_ACCOUNT_CLAIM = re.compile(r"跨账户近同时重置", re.I)
+BANKED_RESET_TERM = re.compile(r"banked\s+resets?|备用\s*resets?|备用重置", re.I)
+ALL_SCOPE_PATTERN = (
+    r"(?:全员|(?:所有|全部|全量)(?:付费)?账[号户]|everyone|"
+    r"all\s+(?:paid\s+)?(?:accounts?|users?|subscriptions?)|"
+    r"every\s+(?:paid\s+)?(?:accounts?|users?|subscriptions?))"
+)
 ALL_ACCOUNTS_CLAIM = re.compile(
-    r"全员[^。!？?；;，,\n]{0,12}重置|"
-    r"(?:所有账[号户]|all accounts|everyone)[^。!？?；;，,\n]{0,60}(?:重置|reset)|"
-    r"(?:重置|reset)[^。!？?；;，,\n]{0,30}(?:所有账[号户]|all accounts|everyone)|"
-    r"officially reset (?:all|everyone)|all paid subscriptions[^。!？?；;，,\n]{0,25}reset", re.I)
+    ALL_SCOPE_PATTERN + r"[^。!？?；;，,\n]{0,60}(?:重置|reset)|"
+    r"(?:重置|reset)[^。!？?；;，,\n]{0,30}" + ALL_SCOPE_PATTERN +
+    r"|officially reset (?:all|everyone)",
+    re.I,
+)
 
 
 def claims_in_message(message):
     claims = []
     for sentence in re.split(r"(?<=[。!？?；;，,\n])", message or ""):
         stripped = sentence.strip()
-        if (not stripped or stripped.endswith(("？", "?", "吗", "嘛", "么")) or UNCERTAIN.search(stripped)
-                or META.search(stripped)):
+        if (not stripped or is_question(stripped) or RESET_NEGATION.search(stripped)
+                or UNCERTAIN.search(stripped) or META.search(stripped)):
             continue
+        claim_source = BANKED_RESET_TERM.sub("", stripped)
         has_multi = bool(MULTI_ACCOUNT_CLAIM.search(stripped))
         has_cross = bool(CROSS_ACCOUNT_CLAIM.search(stripped))
-        has_all = bool(ALL_ACCOUNTS_CLAIM.search(stripped))
-        if not (has_all or has_multi or has_cross) and SAME_ACCOUNT_CLAIM.search(stripped):
+        has_all = bool(ALL_ACCOUNTS_CLAIM.search(claim_source))
+        if not (has_all or has_multi or has_cross) and SAME_ACCOUNT_CLAIM.search(claim_source):
             claims.append({"claim": CLAIM_SAME_ACCOUNT, "text": stripped[:180]})
         if has_multi:
             claims.append({"claim": CLAIM_MULTI_ACCOUNT, "text": stripped[:180]})

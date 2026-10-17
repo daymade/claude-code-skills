@@ -268,29 +268,68 @@ class ResetAttributionTests(unittest.TestCase):
             "checked_at_utc": "2026-10-17T13:32:00Z",
         }])
         result = attr.evaluate(direct)
-        for message in ("所有账户已重置。", "所有账户已被重置。", "All accounts have been reset."):
+        for message in ("所有账户已重置。", "所有账户已被重置。", "All accounts have been reset.",
+                        "所有付费账户已经重置。", "All paid accounts have been reset.",
+                        "Every paid account has been reset."):
             with self.subTest(message=message):
                 claims = attr.claims_in_message(message)
                 self.assertEqual([c["claim"] for c in claims], [attr.CLAIM_ALL_ACCOUNTS])
                 self.assertEqual(result["claim_gate"][attr.CLAIM_ALL_ACCOUNTS], "block")
 
+    def test_banked_distribution_is_not_an_all_account_reset_claim(self):
+        for message in ("40M 里程碑的 banked reset 已官宣全员发放并官宣全员到账。",
+                        "备用重置已官宣全员发放。"):
+            with self.subTest(message=message):
+                self.assertEqual(attr.claims_in_message(message), [])
+        claims = attr.claims_in_message("所有账户已经重置，banked reset 已兑现。")
+        self.assertEqual([item["claim"] for item in claims], [attr.CLAIM_ALL_ACCOUNTS])
+
     def test_official_exceptions_and_plan_scopes_are_rejected(self):
         for text in ("Reset has landed for everyone except Plus.",
+                     "Reset has landed for everyone excluding Plus.",
+                     "Reset has landed for everyone but Plus.",
                      "Reset has landed for everyone on Pro and Plus.",
                      "Reset has landed for everyone on Team only."):
             with self.subTest(text=text):
                 self.assertEqual(attr.official_events(text, "2026-10-17T13:32:00Z"), [])
+        control = attr.official_events(
+            "We have now reset usage for all paid subscriptions", "2026-10-17T13:32:00Z")
+        self.assertEqual(control[0]["scope"], "all_paid")
 
     def test_passive_correction_and_unpunctuated_question_are_not_claims(self):
-        for message in ("当前账号不是被重置，而是换号了。", "当前账户已经被重置了吗"):
+        for message in ("当前账号不是被重置，而是换号了。", "当前账户已经被重置了吗",
+                        "当前账号不是已经被重置，而是换号了。", "当前账号并非已经被重置，而是换号了。"):
             with self.subTest(message=message):
                 self.assertEqual(attr.claims_in_message(message), [])
 
-    def test_be_negations_and_uncertainty_are_not_positive_claims(self):
-        for text in ("这个账号没有被重置", "这个账号尚未被重置", "这个账号不是被重置", "这个账号并非被重置"):
+    def test_user_questions_do_not_create_direct_events(self):
+        for text in ("当前账户已经被重置了吗？", "当前账户已经被重置了吗"):
+            records = [
+                {"type": "user", "timestamp": "2026-10-17T13:30:00Z",
+                 "message": {"role": "user", "content": text}},
+                {"type": "assistant", "message": {"role": "assistant", "content": [
+                    {"type": "tool_use", "name": "Bash", "id": "usage",
+                     "input": {"command": "uv run python scripts/query_usage.py"}}]}},
+                {"type": "user", "message": {"role": "user", "content": [
+                    {"type": "tool_result", "tool_use_id": "usage", "content": json.dumps(usage_payload())}]}},
+            ]
+            with self.subTest(text=text):
+                result = evaluate_records(records, "当前账户已经重置。")
+                self.assertEqual(result["classification"], "unknown")
+                self.assertTrue(result["blocked"])
+        for text in ("这次是我换号了吗？", "这个账号的 banked reset 已兑现了吗"):
             with self.subTest(text=text):
                 self.assertEqual(attr.user_events(text, "a1b2c3d4", "2026-10-17T13:32:00Z"), [])
-        for message in ("当前账户没有被重置。", "当前账户尚未被重置。", "无法确定当前账户已被重置。"):
+        mixed = attr.user_events("之前重置了吗？不是，是我换号了", "a1b2c3d4", "2026-10-17T13:32:00Z")
+        self.assertEqual([event["kind"] for event in mixed], ["account_switch"])
+
+    def test_be_negations_and_uncertainty_are_not_positive_claims(self):
+        for text in ("这个账号没有被重置", "这个账号尚未被重置", "这个账号不是被重置", "这个账号并非被重置",
+                     "这个账号不是已经被重置", "这个账号并非已经被重置"):
+            with self.subTest(text=text):
+                self.assertEqual(attr.user_events(text, "a1b2c3d4", "2026-10-17T13:32:00Z"), [])
+        for message in ("当前账户没有被重置。", "当前账户尚未被重置。", "无法确定当前账户已被重置。",
+                        "当前账号不是已经被重置，而是换号了。", "当前账号并非已经被重置，而是换号了。"):
             with self.subTest(message=message):
                 self.assertEqual(attr.claims_in_message(message), [])
 
