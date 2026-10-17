@@ -90,6 +90,8 @@ keep discovery observations separate from final result checks.
 For research-driven evolution of a specified existing Skill, start at
 [skill-evolver](skill-evolver/SKILL.md) and follow its public stage routes; use
 local private adapters only when available.
+For verification of changed state side effects, artifact reuse or prerequisite
+handling, read `skill-evolver/references/behavior-replay-cases.md`.
 
 For evidence-based improvement of an existing application, enter
 [app-evolver](app-evolver/SKILL.md). For released-artifact or runtime evidence,
