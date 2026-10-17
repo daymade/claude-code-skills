@@ -4,6 +4,7 @@ Diagnose a local Scrapling CLI installation and optionally run a smoke test.
 """
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -38,6 +39,9 @@ def detect_browser_cache() -> Tuple[List[str], List[str]]:
         Path.home() / "Library" / "Caches" / "ms-playwright",
         Path.home() / ".cache" / "ms-playwright",
     ]
+    local_appdata = os.environ.get("LOCALAPPDATA")
+    if local_appdata:
+        roots.append(Path(local_appdata) / "ms-playwright")
     chromium = []
     headless_shell = []
     for root in roots:
