@@ -18,7 +18,16 @@ MATCH_FIELDS = (
     "program_match", "arguments_match", "environment_match",
     "working_directory_match", "stdout_match", "stderr_match",
 )
+SCHEDULE_FIELDS = (
+    "start_interval_match", "watch_paths_match",
+    "run_at_load_match", "keep_alive_match",
+)
 LABEL_PATTERN = re.compile(r"[A-Za-z0-9_.-]+\Z")
+
+# Sentinel for a native shape that is neither provably present nor provably
+# absent. The launchctl text format is not a stable API: anything ambiguous
+# yields unknown for that one check, never a guessed match or mismatch.
+_AMBIGUOUS = object()
 
 
 @dataclass
@@ -32,7 +41,7 @@ class _Block:
 def _unknown(label: str | None = None) -> dict:
     return {
         "status": "unknown", "label": label, "loaded": None,
-        "disabled": None, **{name: None for name in MATCH_FIELDS},
+        "disabled": None, **{name: None for name in MATCH_FIELDS + SCHEDULE_FIELDS},
     }
 
 
@@ -65,6 +74,30 @@ def _validate_expected(expected: object) -> str:
     for key in ("Program", "WorkingDirectory", "StandardOutPath", "StandardErrorPath"):
         if key in expected and (not _text_value(expected[key]) or expected[key] != expected[key].strip()):
             raise ValueError
+    if "StartInterval" in expected:
+        interval = expected["StartInterval"]
+        # Strict int only: bool is not an int here, and launchd intervals are positive.
+        if type(interval) is not int or interval <= 0:
+            raise ValueError
+    if "WatchPaths" in expected:
+        # An absent key is the empty expectation. A present key must be a
+        # nonempty array of absolute single-line paths: an empty array or
+        # malformed members are rejected as invalid input (unknown), never
+        # treated as absent and never scored as a guessed mismatch.
+        paths = expected["WatchPaths"]
+        if not isinstance(paths, list) or not paths:
+            raise ValueError
+        for path in paths:
+            if (not _text_value(path) or not path or path != path.strip()
+                    or not path.startswith("/") or '"' in path or "\\" in path):
+                raise ValueError
+    if "RunAtLoad" in expected and type(expected["RunAtLoad"]) is not bool:
+        raise ValueError
+    keep_alive = expected.get("KeepAlive", False)
+    # Unknown dictionary conditions remain a field-level unknown; do not lose
+    # independent argv/environment evidence because one condition is unsupported.
+    if type(keep_alive) is not bool and not isinstance(keep_alive, dict):
+        raise ValueError
     return label
 
 
@@ -112,11 +145,16 @@ def _one_block(root: _Block, name: str) -> _Block | None:
     return found[0] if found else None
 
 
-def _scalars(root: _Block) -> dict[str, str]:
+def _scalars(root: _Block) -> dict[str, object]:
     result = {}
     for line in root.lines:
         key, sep, value = line.partition(" = ")
-        if not sep or key in result:
+        if not sep:
+            raise ValueError
+        if key in result:
+            if key in {"properties", "run interval", "event triggers", "semaphores"}:
+                result[key] = _AMBIGUOUS
+                continue
             raise ValueError
         result[key] = value
     return result
@@ -139,6 +177,161 @@ def _environment(block: _Block | None) -> dict[str, str]:
             raise ValueError
         result[key] = value
     return result
+
+
+def _schedule_block(root: _Block, name: str) -> "_Block | None":
+    # Unlike _one_block, duplicates degrade only the affected schedule check
+    # to unknown instead of discarding every other proven result.
+    found = [block for block in root.blocks if block.name == name]
+    if len(found) > 1:
+        return _AMBIGUOUS
+    return found[0] if found else None
+
+
+def _schedule_scalar(root: _Block, scalars: dict, name: str):
+    # A block where a scalar is expected is an unsupported representation,
+    # including a simultaneous scalar/block pair; never treat it as absent.
+    if any(block.name == name for block in root.blocks):
+        return _AMBIGUOUS
+    return scalars.get(name)
+
+
+def _property_flags(root: _Block, scalars: dict) -> "set[str] | None":
+    # The trailing scalar "properties = flag | flag | ..."; None when absent.
+    value = _schedule_scalar(root, scalars, "properties")
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return _AMBIGUOUS
+    tokens = {token.strip() for token in value.split("|")}
+    if not tokens or "" in tokens:
+        return _AMBIGUOUS
+    return tokens
+
+
+def _run_interval(root: _Block, scalars: dict) -> "int | None":
+    # The only provable timer signal is the "run interval = N seconds" scalar.
+    value = _schedule_scalar(root, scalars, "run interval")
+    triggers = _schedule_block(root, "event triggers")
+    if "event triggers" in scalars or triggers is _AMBIGUOUS:
+        return _AMBIGUOUS
+    if triggers is not None and (triggers.lines or any(
+            block.name != "com.apple.launchd.WatchPaths" for block in triggers.blocks)):
+        # Older timer descriptors and other unparsed event families cannot
+        # establish timer absence from a missing current-format scalar.
+        return _AMBIGUOUS
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return _AMBIGUOUS
+    match = re.fullmatch(r"([0-9]+) seconds", value)
+    if not match or int(match[1]) <= 0:
+        return _AMBIGUOUS
+    return int(match[1])
+
+
+def _watch_paths(root: _Block) -> "list[str] | None":
+    # Only the indexed quoted descriptor form is supported:
+    # event triggers -> com.apple.launchd.WatchPaths -> descriptor ->
+    # "WatchPaths" => [ / 0 = "/path" / ... / ]. Anything else is unknown.
+    if any(line.partition(" = ")[0] == "event triggers" for line in root.lines):
+        return _AMBIGUOUS
+    triggers = _schedule_block(root, "event triggers")
+    if triggers is None or triggers is _AMBIGUOUS:
+        return triggers
+    named = [block for block in triggers.blocks if block.name == "com.apple.launchd.WatchPaths"]
+    if len(named) > 1:
+        return _AMBIGUOUS
+    if not named:
+        return None
+    if triggers.lines:
+        return _AMBIGUOUS
+    try:
+        fields = _scalars(named[0])
+    except ValueError:
+        return _AMBIGUOUS
+    if (fields.get("service") != root.name.rsplit("/", 1)[-1]
+            or fields.get("stream") != "com.apple.fsevents.matching"):
+        return _AMBIGUOUS
+    descriptors = [block for block in named[0].blocks if block.name == "descriptor"]
+    if len(descriptors) != 1 or len(named[0].blocks) != 1 or descriptors[0].blocks:
+        return _AMBIGUOUS
+    lines = descriptors[0].lines
+    if len(lines) < 2 or lines[0] != '"WatchPaths" => [' or lines[-1] != "]":
+        return _AMBIGUOUS
+    paths = []
+    for index, line in enumerate(lines[1:-1]):
+        entry = re.fullmatch(r'([0-9]+) = "([^"\\]*)"', line)
+        if (entry is None or int(entry[1]) != index
+                or not entry[2].startswith("/") or entry[2] != entry[2].strip()):
+            return _AMBIGUOUS
+        paths.append(entry[2])
+    # No captured probe shows an empty descriptor; never guess its meaning.
+    return paths if paths else _AMBIGUOUS
+
+
+def _switch_check(wanted: bool, props, token: str, conditional: bool) -> "bool | None":
+    # 'props' is None (properties line absent), _AMBIGUOUS, or a set of tokens.
+    if props is _AMBIGUOUS:
+        return None
+    if wanted:
+        # Affirmative evidence only: the flag in a present properties line.
+        if props is None:
+            return None
+        return token in props
+    if props is not None and token in props:
+        return False
+    if conditional:
+        # A semaphores block proves a conditional KeepAlive: the plain boolean
+        # state is then unknown, never a proven false-match.
+        return None
+    if props is None:
+        return None
+    return True
+
+
+def _keep_alive_check(wanted, root: _Block, scalars: dict, props) -> "bool | None":
+    semaphores = _schedule_block(root, "semaphores")
+    if "semaphores" in scalars:
+        return None
+    if not isinstance(wanted, dict):
+        return _switch_check(wanted, props, "keepalive", semaphores is not None)
+    # Supported conditional form is bound to the captured native semaphore.
+    # Other conditions, combined conditions and unfamiliar values stay unknown.
+    if set(wanted) != {"SuccessfulExit"} or type(wanted["SuccessfulExit"]) is not bool:
+        return None
+    if props is None or props is _AMBIGUOUS or "keepalive" in props:
+        return None
+    if semaphores is None:
+        return False
+    if semaphores is _AMBIGUOUS or semaphores.blocks or len(semaphores.lines) != 1:
+        return None
+    match = re.fullmatch(r"successful exit => ([01])", semaphores.lines[0])
+    if match is None:
+        return None
+    return bool(int(match[1])) == wanted["SuccessfulExit"]
+
+
+def _interval_check(expected: dict, interval) -> "bool | None":
+    if interval is _AMBIGUOUS:
+        return None
+    wanted = expected.get("StartInterval")
+    if wanted is None:
+        # An absent StartInterval is meaningful: any loaded timer is stale.
+        return interval is None
+    if interval is None:
+        return False
+    return interval == wanted
+
+
+def _watch_paths_check(expected: dict, watched) -> "bool | None":
+    if watched is _AMBIGUOUS:
+        return None
+    if "WatchPaths" not in expected:
+        return watched is None
+    if watched is None:
+        return False
+    return watched == expected["WatchPaths"]
 
 
 def inspect_job_print(expected: dict, text: str, uid: int) -> dict:
@@ -176,7 +369,24 @@ def inspect_job_print(expected: dict, text: str, uid: int) -> dict:
         ):
             if plist_key in expected:
                 result[flag] = scalars.get(native_key) == expected[plist_key]
-        result["status"] = "mismatch" if any(result[k] is False for k in MATCH_FIELDS) else "match"
+        props = _property_flags(root, scalars)
+        interval = _run_interval(root, scalars)
+        watched = _watch_paths(root)
+        keep_alive_wanted = expected.get("KeepAlive", False)
+        result.update({
+            "start_interval_match": _interval_check(expected, interval),
+            "watch_paths_match": _watch_paths_check(expected, watched),
+            "run_at_load_match": _switch_check(expected.get("RunAtLoad", False), props, "runatload", False),
+            "keep_alive_match": _keep_alive_check(keep_alive_wanted, root, scalars, props),
+        })
+        if any(result[name] is False for name in MATCH_FIELDS + SCHEDULE_FIELDS):
+            # A definite mismatch on any checked field wins over unrelated unknowns.
+            result["status"] = "mismatch"
+        elif (any(result[name] is None for name in SCHEDULE_FIELDS)
+              or "StartCalendarInterval" in expected):
+            result["status"] = "unknown"
+        else:
+            result["status"] = "match"
         return result
     except (ValueError, TypeError, UnicodeError):
         return _unknown(label)
@@ -218,8 +428,10 @@ def inspect_native_job(plist_path: Path, timeout: float = 5.0, *, runner: Callab
         uid = os.getuid()
         text = _read_command(["/bin/launchctl", "print", f"gui/{uid}/{label}"], timeout, runner)
         result = inspect_job_print(expected, text, uid)
-        if result["status"] == "unknown":
+        if result["loaded"] is not True:
             return result
+        # A loaded job with unresolved schedule checks still needs the
+        # read-only disabled probe: an explicit disable is a definite mismatch.
         disabled = _read_command(["/bin/launchctl", "print-disabled", f"gui/{uid}"], timeout, runner)
         result["disabled"] = inspect_disabled_print(disabled, label)
         if result["disabled"] is None:

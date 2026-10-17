@@ -270,6 +270,10 @@ For browser-backed recurring jobs, enter
 acceptance before shipping. That Skill owns resource-budget and focus evidence;
 keep the detailed procedure there.
 
+Before selecting file-event or periodic triggers, follow
+[macos-watchdog's trigger and acceptance workflow](daymade-macos/macos-watchdog/references/event-driven-observers.md).
+For loaded plist scheduling and configuration, use its
+[native readback](daymade-macos/macos-watchdog/references/native-job-readback.md).
 Before choosing or changing any periodic observer's cadence, follow
 [macos-watchdog's observation contract](daymade-macos/macos-watchdog/references/probe-cost.md).
 For named macOS load/runaway alerts, follow
