@@ -139,6 +139,11 @@ defaults/side effects. Return the exact source/diff, preservation dispositions,
 affected task-result checks and remaining gaps. Do not infer heavy evaluation
 authorization from the tier or substitute a made artifact for the original result.
 
+When selecting checks for changed side effects, artifact recovery or prerequisite
+handling, use the matching [behavior replay cases](behavior-replay-cases.md).
+Select only the affected cases; their supplied observations exercise the
+executor's decisions and do not replace the actual target's consumer run.
+
 Use the target's actual execution Skill for consumer and recovery validation
 within authorization. For authorized publication or local availability, execute
 Creator's delivery branch and the current repository/`skill-governance` owner.
