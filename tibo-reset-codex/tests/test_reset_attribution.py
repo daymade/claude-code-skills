@@ -302,8 +302,13 @@ class ResetAttributionTests(unittest.TestCase):
             with self.subTest(message=message):
                 self.assertEqual(attr.claims_in_message(message), [])
 
-    def test_user_questions_do_not_create_direct_events(self):
-        for text in ("当前账户已经被重置了吗？", "当前账户已经被重置了吗"):
+    def test_user_questions_and_hedges_do_not_create_direct_events(self):
+        for text in ("当前账户已经被重置了吗？", "当前账户已经被重置了吗",
+                     "这个账号已经重置了没", "这个账号已经重置了没有",
+                     "这个账号可能已经被重置了", "这次可能是我换号了",
+                     "这个账号的 banked reset 可能已兑现", "这个账号有没有已经重置",
+                     "这个账号是不是已经重置", "这个账号好像已经重置",
+                     "这个账号已经重置了，可能", "My account was reset, maybe"):
             records = [
                 {"type": "user", "timestamp": "2026-10-17T13:30:00Z",
                  "message": {"role": "user", "content": text}},
@@ -314,6 +319,7 @@ class ResetAttributionTests(unittest.TestCase):
                     {"type": "tool_result", "tool_use_id": "usage", "content": json.dumps(usage_payload())}]}},
             ]
             with self.subTest(text=text):
+                self.assertEqual(attr.user_events(text, "a1b2c3d4", "2026-10-17T13:32:00Z"), [])
                 result = evaluate_records(records, "当前账户已经重置。")
                 self.assertEqual(result["classification"], "unknown")
                 self.assertTrue(result["blocked"])
@@ -322,6 +328,8 @@ class ResetAttributionTests(unittest.TestCase):
                 self.assertEqual(attr.user_events(text, "a1b2c3d4", "2026-10-17T13:32:00Z"), [])
         mixed = attr.user_events("之前重置了吗？不是，是我换号了", "a1b2c3d4", "2026-10-17T13:32:00Z")
         self.assertEqual([event["kind"] for event in mixed], ["account_switch"])
+        confirmed = attr.user_events("这个账号已经重置了，我确认", "a1b2c3d4", "2026-10-17T13:32:00Z")
+        self.assertEqual([event["kind"] for event in confirmed], ["account_reset_observed"])
 
     def test_be_negations_and_uncertainty_are_not_positive_claims(self):
         for text in ("这个账号没有被重置", "这个账号尚未被重置", "这个账号不是被重置", "这个账号并非被重置",

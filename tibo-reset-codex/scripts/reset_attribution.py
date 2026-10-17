@@ -420,10 +420,18 @@ def observation_from_usage(data, source_ref):
     }
 
 
+QUESTION_SUFFIX = re.compile(r"(?:吗|嘛|么|没|没有)[啊呀呢啦]*$")
+DIRECT_UNCERTAINTY = re.compile(
+    r"是否|会不会|能否|有没有|是不是|可否|无法确定|不能确定|不确定|"
+    r"可能|或许|也许|大概|估计|疑似|好像|似乎|maybe|perhaps|probably|might|could",
+    re.I,
+)
+
+
 def is_question(text):
     stripped = (text or "").strip()
     return bool(stripped) and (
-        "？" in stripped or "?" in stripped or stripped.endswith(("吗", "嘛", "么")))
+        "？" in stripped or "?" in stripped or bool(QUESTION_SUFFIX.search(stripped)))
 
 
 RESET_NEGATION = re.compile(
@@ -446,13 +454,12 @@ def user_events(text, account_ref, timestamp):
 
     # Evaluate each statement independently: a question or correction must not
     # contaminate an affirmative statement elsewhere in the same user message.
-    for raw in re.split(r"(?<=[。!？?；;，,\n])", text or ""):
+    for raw in re.split(r"(?<=[。!！？?；;\n])", text or ""):
         statement = raw.strip()
         if not statement:
             continue
         lowered = statement.casefold()
-        not_direct = is_question(statement) or any(
-            marker in statement for marker in ("无法确定", "不能确定", "不确定", "是否", "会不会", "能否"))
+        not_direct = is_question(statement) or bool(DIRECT_UNCERTAINTY.search(statement))
         if not not_direct and "换号" in statement and (
                 "不是重置" in statement or "我换号" in statement or "换号了" in statement):
             add("account_switch", "user:account_switch")
