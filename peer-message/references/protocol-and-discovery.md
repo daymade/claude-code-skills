@@ -124,6 +124,9 @@ sandbox 或 approval，不回复服务审批请求。消息在宿主下一次接
 转 queue 或重发。核对原 message ID 的接收证据后决定下一步；先修复已确认的环境缺口，
 不能把错误当成换通道授权。helper 本身不启动服务、不杀进程、不修改权限。
 
+调用 `codex queue` 的子进程异常中，只有 `FileNotFoundError` 同时满足 `errno == ENOENT` 且 `filename == "codex"`
+才提交 not_sent；其他启动或通信错误、超时及 queue 非零退出仍提交 unknown。
+
 不要直接插入 SQLite。发现和读回以只读方式访问 Codex home 中最高 schema 版本的：
 
 - `state_<N>.sqlite` → `threads`：thread id、exact `name`、title、cwd、recency。
