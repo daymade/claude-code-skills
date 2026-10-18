@@ -78,8 +78,31 @@ unknown; its FDA bootstrap is in `references/tcc-mechanics.md`.
   `sys.addaudithook` to log `open` events aligned to the tccd timestamp — not `fs_usage`.
 - **SIP protects the system TCC.db read-only.** You cannot `INSERT`/`UPDATE` a grant from the
   command line — authorization must go through the GUI. `auth_value` is readable, writable is not.
-- **After granting, restart the requesting process.** Grants are read at launch; a running process
-  keeps its old (denied) state until relaunched.
+- **After granting, verify the request before considering a restart.** Follow
+  [the request lifecycle below](#after-a-grant-or-reset); restart requirements depend on
+  the permission and application, not on the presence of an Allow click.
+
+## After a grant or reset
+
+The executing agent checks the original request through its task-owned process/tool handle
+and repeats the named protected operation in the same requester and execution context.
+These are operator checks; this Skill does not automatically manage process lifecycles.
+
+1. If the original request is still running, keep it alive and wait within its existing
+   deadline for its actual result. An Automation/AppleEvent request can complete after Allow
+   without restarting its requester. A dismissed dialog or an enabled switch is not success.
+2. If a wait expires, inspect the original request's terminal result before retrying. A tool
+   wait ending does not itself prove the underlying request ended; keep its state unknown
+   when no result is available. A late Allow cannot make an expired request succeed. Once
+   the original request has ended, issue one new bounded, read-only query when needed to
+   verify access; check for any completed side effect before repeating the business action.
+3. If access still fails, check the exact requester, permission and application-specific
+   relaunch requirement. Restart only when that requirement or the observed failure makes
+   it necessary, and only a task-owned process or an explicitly authorized target whose work
+   is preserved. Do not terminate another session's process or restart a shared service to
+   apply a grant. Keep that repair pending while continuing independent diagnosis.
+4. After any required relaunch, repeat the protected operation in its real context. Stop
+   permission changes when it succeeds; a grant record alone does not prove the job works.
 
 ## Scope
 

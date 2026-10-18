@@ -47,8 +47,10 @@ worked for the Mac WeChat reader; that result does not establish inheritance for
 
 If no usable grant exists, use that GUI route for the **absolute `uv` path from the job's actual
 `ProgramArguments`**. Verify that exact client in the system TCC database using
-[`tcc-mechanics.md`](tcc-mechanics.md), then restart the job and
-repeat its protected read. TCC stores the absolute path, not a literal `~`.
+[`tcc-mechanics.md`](tcc-mechanics.md), then follow the
+[request lifecycle](../SKILL.md#after-a-grant-or-reset) and repeat its protected read.
+Relaunch only when needed and within that process-ownership boundary.
+TCC stores the absolute path, not a literal `~`.
 
 ## It recurs
 

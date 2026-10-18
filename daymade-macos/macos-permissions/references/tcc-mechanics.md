@@ -25,7 +25,9 @@ that TCC is why.
 
 Both are SQLite. Both are protected — the reading process itself needs Full Disk Access (see SIP
 below). To grant FDA to your terminal: System Settings → Privacy & Security → Full Disk Access →
-`+` → add `/Applications/Utilities/Terminal.app` (or Ghostty/iTerm) → restart the terminal.
+`+` → add `/Applications/Utilities/Terminal.app` (or Ghostty/iTerm), then verify the protected
+read. If macOS requires a relaunch, preserve open work and follow the
+[request lifecycle](../SKILL.md#after-a-grant-or-reset); do not quit a shared terminal blindly.
 For a Full Disk Access check, use the **system** database; the tested Mac's `uv` grant was there.
 The user-database examples below do not establish FDA state.
 
@@ -143,7 +145,9 @@ tccutil reset ScreenCapture                             # nuclear: all apps for 
 | `kTCCServiceAppleEvents` | `AppleEvents` |
 | `kTCCServiceSystemPolicyAllFiles` | `SystemPolicyAllFiles` |
 
-After `reset`, quit and relaunch the app — it must re-request to re-prompt.
+After `reset`, trigger a new request for the affected resource. If the application needs
+a relaunch to make that request, follow the [request lifecycle](../SKILL.md#after-a-grant-or-reset)
+and its process-ownership boundary before restarting it.
 
 ## SIP and the FDA bootstrap
 
@@ -162,7 +166,8 @@ Access for the reading process. Grant FDA to your terminal first, then it can re
 
 - **"App can't record my screen" after a macOS update**: the grant drifted to Unknown/Denied.
   Fix: toggle the app OFF then ON in Screen Recording, or `tccutil reset ScreenCapture <bundle-id>`
-  then relaunch.
+  then verify capture; follow the [request lifecycle](../SKILL.md#after-a-grant-or-reset)
+  if the application requires a relaunch.
 - **Automation grant won't stick**: `kTCCServiceAppleEvents` needs a grant on **both** the
   controller AND the target app. Granting only the controller is the classic miss. Separately, a
   Hardened-Runtime binary missing the `com.apple.security.automation.apple-events` entitlement
@@ -172,7 +177,7 @@ Access for the reading process. Grant FDA to your terminal first, then it can re
   See `uv-fda-trap.md` for the observed launchd + unsigned-binary case.
 - **An uninstalled app still appears in Privacy & Security**: the TCC entry persists after removal.
   Click `-` in the System Settings list, or `tccutil reset` on its bundle ID.
-- **`tccutil reset` doesn't reprompt**: reset sets Unknown but the app must re-request; quit and
-  relaunch it.
+- **`tccutil reset` doesn't reprompt**: reset sets Unknown but the app must re-request the
+  affected resource; relaunch only if needed, under the request lifecycle above.
 - **MDM-managed grants**: `auth_reason = 6` means forced by a configuration profile, not
   user-revocable without removing the profile.
