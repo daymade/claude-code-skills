@@ -71,6 +71,50 @@ Give original acceptance criteria and immutable candidate, not only a success
 summary. Reproduce findings mechanically where possible; fix the confirmed
 axes and recheck preservation. Do not keep adding reviewers after those axes close.
 
+### Synthetic pair: leaving before completion
+
+A collection builder starts attempt `trial-m`; the user leaves its pending view
+for `/collections` before the completion receipt arrives. The old build then
+opens the created collection. In the corrected build, the receipt arrives while
+the exact list remains visible: route `/collections`, heading “Collections”,
+workspace “Cedar” and its expected rows. Capture router navigation attempts as
+well as rendered state; a rejected redirect or a brief detour back to the list
+still violates the no-navigation contract.
+
+The acceptance owner fixes the observation interval before running the probe,
+keeps capture active across departure and the correlated receipt, and reports
+its actual start/end and coverage. A complete trace with no navigation attempt
+proves absence within that interval, not permanent absence. A missing receipt or
+capture gap leaves the affected claim unverified. Calibrate against the old
+redirect: “URL is not the created collection” would also pass on a login page;
+the exact expected list and visible workspace identity must reject that case.
+
+### Synthetic pair: staying for normal completion
+
+Use a separate authorized attempt `trial-n` and remain on its pending view. A
+four-second UI assertion fails. Later evidence correlates that same attempt's
+receipt with the created collection identifier. Independent receiving-view
+evidence shows the rendered detail page for that identifier, matching workspace
+identity and usable controls. Report the original probe as failed and the later
+user-visible completion as separate
+corroboration. Without that correlation, the page could belong to earlier work.
+
+A separate cold opening of that detail route takes nine seconds. That
+measurement can inform a future probe's wait; it neither changes the failed
+probe nor establishes a product deadline. Choose future waits from the affected
+app's contract and observed path. If the contract requires completion within the
+original bound, later completion does not pass that requirement. Keep the
+leave-page observation interval separate from this positive completion check.
+Do not resend an attempt whose outcome is unknown or whose receipt was already
+consumed merely to obtain a green run; inspect existing evidence first.
+
+For these fixtures, `POST /api/collections/search` only reads, while
+`POST /api/collection-builds` starts work. Confirm the real endpoints' effects in
+their implementation or current contract before probing: the HTTP method alone
+does not classify a mutation or authorize a replay. The acceptance owner uses
+the app's available traces and receiving view; missing access remains an explicit
+evidence gap, not a reason to invent a new request or generic allowance.
+
 ## Deliver at the declared boundary
 
 Read back the result at the consumer: persisted data, real receiving view,
