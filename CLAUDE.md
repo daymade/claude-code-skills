@@ -448,7 +448,9 @@ For Codex reset announcements or account quota questions, enter
 [account usage SOP](tibo-reset-codex/references/account-usage.md) for authentication,
 per-account verification, adjacent-reset attribution and browser restoration. Treat
 [query_usage.py](tibo-reset-codex/scripts/query_usage.py) as the executable authority
-for query parameters, supported response fields and exit behavior. For local
+for query parameters, supported response fields and exit behavior;
+[reset_attribution.py](tibo-reset-codex/scripts/reset_attribution.py) owns mechanical
+claim/evidence attribution and `claim_gate`. For local
 snapshot reconstruction, [scan_rollouts.py](tibo-reset-codex/scripts/scan_rollouts.py)
 owns candidate output. An unfulfilled
 reset promise or a question about missing execution signals enters the Skill's
