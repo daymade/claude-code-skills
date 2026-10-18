@@ -7,8 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.21.5): Keep the same long input and normal viewport when verifying constrained source-and-return journeys. Add synthetic collapsed-pane, ordinary-navigation and short-input controls; runtime permissions unchanged.
+
 - **tibo-reset-codex** (v1.23.2): Use the vendor's direct file entry for login-browser reads in restricted macOS research; retain source-coverage unknowns and existing account authorization. Change type: bounded execution guidance.
-- **frontend-visual-qa** (v1.21.5): Separate freshness from performance evidence; compare the same visible endpoint under evidenced resource/cache conditions and retain failed attempts. Change type: bounded evidence interpretation.
+- **frontend-visual-qa** (v1.21.6): Separate freshness from performance evidence; compare the same visible endpoint under evidenced resource/cache conditions and retain failed attempts. Change type: bounded evidence interpretation.
 - **macos-permissions** (`daymade-macos` v1.23.4): Correlate preflight, requester, service and database grants with the actual operation before choosing a permission repair. Change type: bounded diagnostic correction.
 - **github-ops** (v1.14.12): Continue authorized Confirm access recovery through the normal credential route while retaining physical-challenge and account-selection handoffs. Change type: bounded authentication recovery clarification.
 - **terraform-skill** (v1.5.10): Classify authorized linked releases, preserve dedicated routes through later ordinary publication, and retain environment/backend boundaries. Change type: bounded release decision clarification.
