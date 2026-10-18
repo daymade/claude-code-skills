@@ -198,13 +198,13 @@ Python hooks.
 For rendered UI freshness, delayed editor/batch responses or deployment acceptance, enter
 [frontend-visual-qa](frontend-visual-qa/SKILL.md). Keep its manifest, launcher,
 result semantics and rendered-journey procedure in that owner.
-For build reuse across source refs, load its
-[delivery provenance procedure](frontend-visual-qa/references/delivery-verification.md#reuse-a-build-from-another-source-ref).
+For build reuse across source refs or a target redeployed during acceptance, load its
+[delivery verification procedure](frontend-visual-qa/references/delivery-verification.md).
 For nested zoomable workspaces, use its
 [journey and state matrix](frontend-visual-qa/references/journey-and-page-contracts.md#journey-and-state-matrix).
 For embedded-reader zoom, return, focus or filtered-selection changes, use its
 [reader journey](frontend-visual-qa/references/journey-and-page-contracts.md#embedded-readers-and-semantic-zoom).
-For browser visibility or long JSONL input problems, load its
+For browser visibility, selected read modes, request/capture timing or long JSONL input problems, load its
 [browser-driving and observation traps](frontend-visual-qa/references/browser-driving-and-observation-traps.md);
 keep adapter requirements and invocation examples in that reference.
 For changed contribution views or multi-item reads, use that same journey contract
