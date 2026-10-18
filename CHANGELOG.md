@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **tibo-reset-codex** (v1.23.0 → v1.23.1): Correct `account_ref` endpoint-identity wording and route the repository entry to the existing mechanical attribution owner; runtime code unchanged. Change type: authoritative documentation correction.
 
+- **daymade-skill** (v1.70.3 → v1.70.4): Route suite instructions to the existing task-result examples and governance owner; remove derived membership and duplicated governance text. Change type: documentation routing repair.
 - **macos-permissions** (`daymade-macos` v1.23.3): Verify the original permission request before restarting; distinguish expired requests from late consent and limit necessary relaunches to controlled, authorized processes. Change type: bounded permission-recovery correction.
 
 - **peer-message** (v1.22.2): Route queued-delivery decisions to the transport SOP, align receive outcomes with the implementation, and add repository entry points for fresh ownership checks and receive-integrity handling; preserve runtime behavior.
