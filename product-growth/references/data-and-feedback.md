@@ -59,6 +59,13 @@ estimate prevalence only with a defined sampling frame and denominator.
 - Verify what users currently obtain: edition, installation, permissions, upgrade
   path and public/private availability. Historical popularity does not prove current
   deliverability, default enablement or accepted work.
+- Before ranking a current defect, bind the claim to a current released artifact,
+  immutable revision or direct consumer observation. A newly retrieved cached page
+  can still describe an old version. Reconcile reports and closed issues with linked
+  fixes and the version users receive; do not reopen completed work from old text.
+- If freshness cannot be resolved, classify the next step as evidence refresh,
+  not product repair. Compare its decision value with other supported actions;
+  do not let a stale lead automatically occupy the top priority.
 
 Stop collecting when remaining answers cannot change the next decision. Preserve
 unsearched/inaccessible surfaces rather than concluding that no feedback exists.

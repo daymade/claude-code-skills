@@ -49,3 +49,13 @@ outcomes, calculate a simple unadjusted normal 95% difference interval of roughl
 check longer-term value, costs and guardrails before shipping. Do not infer
 retention lift from activation. Replace that simple interval for clustered or
 repeatedly inspected data with a design-appropriate analysis.
+
+## Retire an obsolete repair lead
+
+Given an old failure report and a cached version-one instruction page, plus a
+verified current version-two artifact that corrects that instruction, remove the
+old instruction repair from the current backlog. Keep external task success and
+growth impact unknown. If only old text is available, propose refreshing evidence
+before deciding whether a repair is needed. If a fresh consumer observation still
+reproduces the failure, investigate that current failure instead of dismissing it
+because an earlier fix was published.
