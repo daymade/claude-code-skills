@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.21.4): Add reader-usability counterexamples and focused replay cases for retained but unreadable bodies, global chrome and overlay interference, and viewport-drift false comparisons. Change type: bounded guidance addition; scripts and permissions unchanged.
+
 - **tibo-reset-codex** (v1.23.2): Use the vendor's direct file entry for login-browser reads in restricted macOS research; retain source-coverage unknowns and existing account authorization. Change type: bounded execution guidance.
 
 - **tibo-reset-codex** (v1.23.0 → v1.23.1): Correct `account_ref` endpoint-identity wording and route the repository entry to the existing mechanical attribution owner; runtime code unchanged. Change type: authoritative documentation correction.

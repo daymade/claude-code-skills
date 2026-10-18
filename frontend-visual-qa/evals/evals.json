@@ -459,6 +459,34 @@
         "Distinguishes the two identities by exact canonical route and machine/job/session/owner while accepting their repeated title as intentional fixture shape",
         "Does not claim browser rendering is validated from static fixture files, and treats any next-update control as a fixture-safe local synthetic transition only"
       ]
+    },
+    {
+      "id": 31,
+      "name": "retained-reader-unreadable-ordinary-entry",
+      "prompt": "Audit only from supplied observations; no browser or runnable fixture is available. A populated mobile workspace opens an original-text reader. Its iframe/document identity, Find term, loaded range and body scroll survive return, and the build passes. In the ordinary entry the actual body height is 0; an enlarged entry shows prose. A newly added header action squeezes status text into a vertical column. The original-text button exists in the DOM, but the pointer's topmost hit is a relationship overlay; a forced handler call succeeds. Give the bounded verdict and the smallest evidence needed to close the affected change. Preserve existing identity and audit-only boundaries.",
+      "expected_output": "Rejects a usability pass despite retention/build success, distinguishes the ordinary entry from the enlarged state, and requests actual readable body and ordinary input evidence for the composed header/overlay/reader state without inventing execution or a universal height threshold.",
+      "files": [],
+      "expectations": [
+        "Reports the supplied ordinary-body and intercepted-control failures independently of the passing document/Find/range/scroll checks; enlarged reading does not pass the ordinary entry",
+        "Examines the actual body and complete surrounding header/title/overlay state rather than iframe geometry or isolated component evidence alone",
+        "Requires ordinary visible input and hit ownership; does not accept a forced click or handler call as proof the covered control is usable",
+        "Keeps identity/retention controls and chooses project-specific readable content and controls instead of inventing a universal pixel minimum",
+        "Marks fresh rendered/interaction evidence unavailable and makes no source edit, deployment, live task action or invented interaction claim"
+      ]
+    },
+    {
+      "id": 32,
+      "name": "reader-viewport-drift-healthy-control",
+      "prompt": "Audit only from supplied observations; no live browser or phone control is available. The same canonical synthetic task at a settled 390x844 viewport has a readable body, working ordinary original-text/return controls, and a return/reopen that preserves its document, Find, loaded range and nonzero body scroll. A separate alleged regression compares 390x844 before with 1440x900 after; the driver reset viewport between calls and the reader document differs. Product runtime status is honestly unknown. Decide what this evidence supports and what the next bounded check is. The user requested only this finite reading audit, not native intervention or a phone test.",
+      "expected_output": "Preserves the supplied healthy same-state reading evidence, rejects the viewport-mismatched comparison as a product-regression proof, and requests only a stable same-target/state/viewport comparison. It keeps physical-phone and runtime-state evidence separate without manufacturing a repair.",
+      "files": [],
+      "expectations": [
+        "Accepts the supplied healthy same-target reading/return observations within their stated scope while distinguishing them from a fresh live verification",
+        "Treats the differing-viewport document comparison as inconclusive and checks driver viewport/emulation and settled state before filing a product lifecycle defect",
+        "Reuses the unaffected healthy evidence and requests only the affected stable-viewport comparison; does not demand all routes, change CSS or clear retained state to force a result",
+        "Preserves honest unknown runtime status and marks physical phone, keyboard and native intervention unperformed rather than treating reading success as proof for them",
+        "Finishes the finite audit with its scoped verdict and missing evidence, without creating live work or an automatic review loop"
+      ]
     }
   ]
 }
