@@ -50,6 +50,9 @@ sudo -n sqlite3 '/Library/Application Support/com.apple.TCC/TCC.db' \
 Use `from Sub:` to identify a candidate requester, then verify its exact path and a real
 protected read before choosing what to authorize. An unreadable TCC.db leaves grant state
 unknown; its FDA bootstrap is in `references/tcc-mechanics.md`.
+When interpreting preflight logs or an allowed grant row, first load
+[Correlate preflight and grant evidence](references/tcc-mechanics.md#correlate-preflight-and-grant-evidence)
+before choosing a permission repair.
 
 ## Decision tree
 

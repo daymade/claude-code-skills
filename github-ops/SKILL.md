@@ -214,10 +214,17 @@ End with one of four honest states:
 Authentication is scoped to the authorized operation; it is not a reason to reopen an
 already-authorized exact write. Before starting an interactive browser or device flow, state
 the GitHub application, active account, target host, and the exact permission delta. Continue
-the steps the browser can complete after that explanation. Hand control to the user only when
-their physical presence is required, such as MFA, a hardware key, or an account-selection
-decision. Never request broader scopes, a different account, or an unrelated approval merely
-because the normal flow is interactive.
+the steps the browser can complete after that explanation. A **Confirm access** page is a
+reauthentication prompt; its heading alone does not establish that the user's physical presence
+is required. For the verified browser account, host and exact operation, use the already
+authorized normal password-manager workflow through the trusted page, without extracting or
+displaying credentials. Resume from the first unmet step, then independently read the actual
+operation's result; completing reauthentication does not prove the write happened.
+
+Hand control to the user for an actual physical MFA or hardware-key challenge, an unresolved
+account-selection decision, or an unavailable approved credential route. Do not bypass a
+physical challenge. Never request broader scopes, a different account, or an unrelated approval
+merely because the normal flow is interactive; do not ask again for the already-authorized write.
 
 Do not expose credential values in terminal output, URLs, arguments, committed files, or
 reports. A production host's pull-only registry credential is not authorization to publish.
