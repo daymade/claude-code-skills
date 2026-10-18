@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.21.4): Keep the same long input and normal viewport when verifying constrained source-and-return journeys. Add synthetic collapsed-pane, ordinary-navigation and short-input controls; runtime permissions unchanged.
+
 - **tibo-reset-codex** (v1.23.2): Use the vendor's direct file entry for login-browser reads in restricted macOS research; retain source-coverage unknowns and existing account authorization. Change type: bounded execution guidance.
 
 - **tibo-reset-codex** (v1.23.0 → v1.23.1): Correct `account_ref` endpoint-identity wording and route the repository entry to the existing mechanical attribution owner; runtime code unchanged. Change type: authoritative documentation correction.

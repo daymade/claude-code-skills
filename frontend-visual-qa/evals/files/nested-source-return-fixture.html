@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Synthetic constrained reader</title>
+<style>
+* { box-sizing: border-box; }
+body { margin: 16px; font: 16px/24px Arial, sans-serif; }
+button { font: inherit; padding: 6px 12px; }
+#context { display: flex; flex-direction: column; height: 320px; width: 640px; border: 1px solid; overflow: hidden; }
+#heading { flex: none; margin: 0; padding: 12px; }
+#reader { flex: 1 1 auto; min-height: 0; padding: 12px; overflow: auto; }
+body.faulty #heading { height: 294px; overflow: hidden; }
+body.short #heading { height: 52px; }
+body.repaired #heading { height: 100px; overflow: auto; }
+#context p { margin: 0 0 20px; }
+#context article { padding-bottom: 36px; }
+#original { width: 640px; }
+[hidden] { display: none !important; }
+</style>
+<main>
+  <div id="context" data-parent="parent-copper" data-group="group-amber" data-page="3">
+    <h1 id="heading"></h1>
+    <div id="reader" tabindex="0" aria-label="Conversation body">
+      <p>Introductory synthetic context. Scroll this reading area to reach the two records.</p>
+      <p>A second full line of context keeps the source entries below the first fold.</p>
+      <p>All labels and identifiers in this example are invented.</p>
+      <article data-child="child-birch" data-record="record-17">
+        <p>Shared review title</p><p>First record body: the copper draft needs a second reading.</p>
+        <button data-source="child-birch/record-17">Open first source</button>
+      </article>
+      <article data-child="child-cedar" data-record="record-29">
+        <p id="target-body">Second record body: the amber draft preserves the complete decision.</p>
+        <p>Shared review title</p>
+        <button id="target-source" data-source="child-cedar/record-29">Open second source</button>
+      </article>
+      <p>End of the synthetic conversation.</p>
+    </div>
+  </div>
+  <section id="original" hidden aria-label="Original record">
+    <h2>Original record</h2>
+    <p id="original-identity"></p><p id="original-body"></p>
+    <button id="return">Return to conversation</button>
+  </section>
+</main>
+<script>
+const params = new URLSearchParams(location.search);
+document.body.classList.add(params.get('layout') === 'repaired' ? 'repaired' : 'faulty');
+document.body.classList.add(params.get('input') === 'short' ? 'short' : 'long');
+const heading = document.querySelector('#heading');
+heading.textContent = params.get('input') === 'short' ? 'Review the draft' :
+  'Review the complete draft, retain the original request and every contribution. '.repeat(12);
+const context = document.querySelector('#context');
+const reader = document.querySelector('#reader');
+const original = document.querySelector('#original');
+let returnScroll = 0;
+for (const button of document.querySelectorAll('[data-source]')) {
+  button.addEventListener('click', () => {
+    returnScroll = reader.scrollTop;
+    context.dataset.selected = button.dataset.source;
+    original.dataset.child = button.closest('article').dataset.child;
+    original.dataset.record = button.closest('article').dataset.record;
+    document.querySelector('#original-identity').textContent = button.dataset.source;
+    document.querySelector('#original-body').textContent = button.closest('article').querySelector('p[id]')?.textContent ||
+      'First record body: the copper draft needs a second reading.';
+    context.hidden = true; original.hidden = false;
+  });
+}
+document.querySelector('#return').addEventListener('click', () => {
+  original.hidden = true; context.hidden = false;
+  reader.scrollTop = returnScroll;
+});
+</script>
+</html>
