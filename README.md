@@ -3969,6 +3969,30 @@ provenance, implement the justified improvement and verify failure recovery.
 
 ---
 
+### **product-growth** - Evidence-Based Growth Diagnosis
+
+> **Install**: `claude plugin install product-growth@daymade-skills`
+
+Diagnose growth from business data and actively discovered feedback. Define the
+right units and cohorts, distinguish attribution from causal effects, and select
+improvements with measurable customer and business outcomes. Adapt to SaaS,
+commerce, marketplaces, developer tools and other product models.
+
+**When to use:** Organic growth sources, missing channels/metrics, activation or
+retention problems, revenue quality, ecosystem adoption and growth-action reviews.
+
+```text
+Use product-growth to explain our organic growth, find missing feedback channels,
+and recommend the next improvement with evidence and a verification plan.
+```
+
+**Requirements**: Host file-reading and analysis tools for supplied data; permitted
+web/API access for live public feedback. Specialist Skills are optional adapters.
+
+📚 **Documentation**: [product-growth](./product-growth/SKILL.md).
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -3986,6 +4010,11 @@ contribution; implementation and authorized fixes remain with **github-contribut
 
 ### For Documentation
 Combine **doc-to-markdown** for document conversion and **mermaid-tools** for diagram generation to create comprehensive documentation. Use **llm-icon-finder** to add brand icons.
+
+### For Product Growth
+Use **product-growth** to connect real feedback and business data to growth
+mechanisms, comparable metrics and verifiable actions. Use **app-evolver** for
+authorized application implementation.
 
 ### For Research & Analysis
 Use **deep-research** to produce format-controlled research reports with evidence tables and citations. Combine with **fact-checker** to validate claims or with **twitter-reader** for social-source collection.
@@ -4206,6 +4235,10 @@ Each skill includes:
 - **meme-creator**: See `meme-creator/SKILL.md` for the pipeline and `meme-creator/references/tracking-playbook.md` for the CSRT failure taxonomy and manual-keyframe fallback
 
 ## 🛠️ Requirements
+
+- **product-growth**: Host file-reading/analysis tools; authorized web/API access for live feedback. No bundled runtime dependencies.
+
+
 
 - **Claude Code** 2.0.13 or higher
 - **Codex CLI with `doctor --json` and `debug models` + uv/Python 3.11+** (for codex-1m-context-window-setup)
