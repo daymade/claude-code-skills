@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **capture-screen** (`daymade-macos` v1.23.5): Route permission recovery guidance to the existing request lifecycle and remove manual summary counts; keep capture commands and runtime behavior unchanged.
+- **frontend-visual-qa** (v1.21.8): Remove derived table/list counts from reading guidance and add the repository's embedded-reader workflow entry. Existing checks and evidence boundaries are unchanged.
 
 - **Installation entry points**: Generate registered suite/plugin targets on Windows, preserve document and statusline choices in both featured-plugin menus, and direct generated CLI commands to the terminal. Align the README selectors, command-generator instructions and update guidance; add output-based installer regressions against the marketplace manifest.
 
