@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tibo-reset-codex** (v1.23.2): Use the vendor's direct file entry for login-browser reads in restricted macOS research; retain source-coverage unknowns and existing account authorization. Change type: bounded execution guidance.
+
 - **tibo-reset-codex** (v1.23.0 → v1.23.1): Correct `account_ref` endpoint-identity wording and route the repository entry to the existing mechanical attribution owner; runtime code unchanged. Change type: authoritative documentation correction.
 
 - **daymade-skill** (v1.70.3 → v1.70.4): Route suite instructions to the existing task-result examples and governance owner; remove derived membership and duplicated governance text. Change type: documentation routing repair.
