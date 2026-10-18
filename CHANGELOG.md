@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tibo-reset-codex** (v1.23.0 → v1.23.1): Correct `account_ref` endpoint-identity wording and route the repository entry to the existing mechanical attribution owner; runtime code unchanged. Change type: authoritative documentation correction.
+
 - **frontend-visual-qa** (v1.21.3): Add paired synthetic result-consumption replays for an unformatted summary with a readable original and a healthy output with honest unknowns. Cover route-bound local updates; runtime instructions unchanged.
 - **peer-message** (v1.22.0 → v1.22.1): Refresh mutable facts before ownership questions, require deliberate queued delivery with its visible consequences, and detect same-ID prepared-content conflicts before lifecycle suppression; preserve valid new blockers, legacy handling and existing transports. Change type: bounded coordination repair.
 
