@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **floorplan-finder** (v1.0.0): Add online residential plan discovery, original-image comparison, entrance and bathroom ambiguity checks, same-layout confirmation, and evidence-based recovery. Register the standalone plugin and align both language guides. Marketplace catalog: 3.25.0.
 - **product-growth** (v1.0.0): Add evidence-based growth diagnosis, proactive feedback discovery, product-specific metrics, causal reasoning and action/result verification. Register the standalone plugin and align both language guides.
 
 - **capture-screen** (`daymade-macos` v1.23.6): Route permission recovery guidance to the existing request lifecycle and remove manual summary counts; keep capture commands and runtime behavior unchanged.

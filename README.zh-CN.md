@@ -3948,6 +3948,27 @@ Daymade Skill Evolver 组装已有 Skills，为指定现有 Skill 完成一轮�
 
 ---
 
+### **floorplan-finder** - 查找并核对住宅户型原图
+
+> **安装**：`claude plugin install floorplan-finder@daymade-skills`
+
+从网上查找现成户型原图，核对房间连接、入户朝向、左右镜像与图源。
+区分用户确认的同款户型和有房号记录对应的原始图纸。
+
+**适用场景**：按小区、楼栋或房号找图；比较同款候选；继续受限页面或模糊图纸造成的未完成搜索。
+
+```text
+用 floorplan-finder 找与这套房实际格局相同的现成户型图。
+面积只记得大概值，请保留原图并展示候选差异。
+```
+
+**要求**：获授权的网页检索、读取和看图工具；需要网页交互的来源另需浏览器。
+网页获取和视频专项 Skill 为可选能力，无随包运行时依赖。
+
+📚 **文档**：[floorplan-finder](./floorplan-finder/SKILL.md)。
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -3967,6 +3988,8 @@ review 后修复/落地时，使用 **github-review-pr**。
 结合 **doc-to-markdown** 进行文档转换和 **mermaid-tools** 进行图表生成，创建全面的文档。使用 **llm-icon-finder** 添加品牌图标。
 
 ### 调研与分析
+使用 **floorplan-finder** 查找住宅户型原图，按已知格局逐项核对候选。
+
 使用 **deep-research** 生成格式可控的调研报告，包含证据表与引用。与 **fact-checker** 结合用于验证关键结论，或与 **twitter-reader** 结合收集社媒资料。
 
 ### 技术决策
@@ -4123,6 +4146,8 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 
 ### 快速链接
 
+- **floorplan-finder**：[户型原图查找与核对](./floorplan-finder/SKILL.md)
+
 - **github-ops**：参见 `github-ops/references/api_reference.md` 了解 API 文档
 - **github-review-pr**：参见 `github-review-pr/SKILL.md` 了解当前 base 评审工作流；显式个人政策见 `github-review-pr/references/personal_maintainer_context.md`
 - **doc-to-markdown**：参见 `daymade-docs/doc-to-markdown/references/conversion-examples.md` 了解转换场景
@@ -4183,6 +4208,8 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 - **meme-creator**：参见 `meme-creator/SKILL.md` 了解完整流程，及 `meme-creator/references/tracking-playbook.md` 了解 CSRT 失效分类与手工关键帧接管
 
 ## 🛠️ 系统要求
+
+- **floorplan-finder**：获授权的网页读取和看图工具；来源需要交互时另需浏览器，无随包运行时依赖。
 
 - **product-growth**：宿主文件读取与分析工具；实时反馈需要获授权的网页/API 通道，无随包运行时依赖。
 
