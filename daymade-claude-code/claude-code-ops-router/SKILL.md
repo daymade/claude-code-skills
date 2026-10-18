@@ -2,9 +2,9 @@
 name: claude-code-ops-router
 description: >-
   Routes Claude Code: plugin/Skill repair, marketplace, statusline, model
-  profiles/source sync, 1M/[1m] context, usage/quota reset ping, memory→docs, .txt
-  repair, turning auto memory off. Reads one bundled specialist; history, hooks, and Lark keep their own
-  entries.
+  profiles/source sync, startup context and MCP schema, 1M/[1m] context,
+  usage/quota reset ping, memory→docs, .txt repair, turning auto memory off.
+  Reads one bundled specialist; history, hooks, and Lark keep their own entries.
 ---
 
 # Claude Code operations router
@@ -34,6 +34,7 @@ frontmatter. The export-repair directory `claude-export-txt-better` exposes
 | Create or maintain a Claude Code plugin marketplace, suite membership, or marketplace manifest | `../marketplace-dev/SKILL.md` |
 | Analyze Claude Code/Desktop Code token use, cost, cache, quota burn, or 5-hour blocks | `../claude-usage-analyst/SKILL.md` |
 | Configure isolated Claude Code model-provider profiles, aliases, source-backed Claude/Codex Skill activation, or context-window size; repair early compaction, `[1m]` display, or `CLAUDE_CODE_MAX_CONTEXT_TOKENS` | `../claude-switch-models-setup/SKILL.md` |
+| Reduce fixed startup context from preloaded MCP tool schemas; locate the active profile, check provider compatibility, or safely suppress selected MCP servers | `../claude-switch-models-setup/SKILL.md` |
 | Migrate existing Claude personal memory into tool-agnostic AGENTS.md reference documents, or retire a project's auto memory so documents own everything it held | `../claude-migrate-memory-to-doc/SKILL.md` |
 | Set a one-shot local ping after a Claude subscription quota reset to start the next usage window | `../claude-code-ping-start-5h-quota/SKILL.md` |
 

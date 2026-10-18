@@ -103,6 +103,30 @@ Without the sharing variable this prints a hashed name; with it, the bare one.
 The same shim answers any "does this actually reach the store I think it does"
 question, including after a Claude Code upgrade.
 
+## Inspecting MCP registration without printing secrets
+
+Do not use unfiltered `claude mcp get <server>` for routine scope discovery. Its
+stdio `Environment` and remote headers can contain credentials, which would then
+enter the conversation.
+
+Use `claude mcp list` for names and connection health. When a scope is actually
+required, filter the result to one non-secret field in the same pipeline:
+
+```bash
+claude mcp get <server> 2>&1 | rg '^  Scope:'
+```
+
+Only the `Scope` line should reach the conversation. Empty output is an
+unverified scope, not evidence that the server is absent. Do not broaden the
+filter to `Environment`, authorization headers, or URLs.
+
+For structured registry data, read only the required keys from the active state
+file rather than printing complete server entries:
+
+```bash
+jq -r '.mcpServers // {} | keys[]' "<active-state-json>"
+```
+
 ## Reading a token without printing it
 
 `mcpOAuth` keys are `<server name>|<hash of the server URL>`. A key existing
