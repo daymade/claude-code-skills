@@ -221,9 +221,6 @@ for w in windowList {
     let name = w[kCGWindowName as String] as? String ?? ""
     let wid = w[kCGWindowNumber as String] as? Int ?? 0
 
-    // Skip windows without a title (menu bar items, system UI, etc.)
-    if name.isEmpty && !keyword.isEmpty { continue }
-
     if keyword.isEmpty
         || owner.localizedCaseInsensitiveContains(keyword)
         || name.localizedCaseInsensitiveContains(keyword) {
