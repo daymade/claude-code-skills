@@ -245,6 +245,8 @@ run final evidence on the original URL. The detailed page-state probe,
 §2–§5. Record the final URL and dimensions before CSS diagnosis, then restore
 the user's expected viewport when finished.
 
+For a loading-speed claim, read §2's performance-comparison boundary before measuring.
+
 For a scripted sweep, first prove the target state is reproducible with one of:
 
 - the project's fixture/storage-state/setup path;

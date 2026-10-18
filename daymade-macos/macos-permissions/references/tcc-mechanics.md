@@ -95,10 +95,40 @@ the grant keys on a path that changes with versions; `0` (bundle ID) means it su
 
 | Value | Meaning |
 |---|---|
-| `0` | **Denied.** Requests fail silently with a permission error. |
+| `0` | **Denied** for the queried service/client decision; does not establish the cause of another operation's failure. |
 | `1` | Unknown / not yet asked. Next request triggers a prompt. |
-| `2` | **Allowed.** Requests succeed. |
+| `2` | **Allowed** for the queried service/client in that database; the actual operation still needs readback. |
 | `3` | Limited (partial Photos/album access and similar). |
+
+## Correlate preflight and grant evidence
+
+The executing agent interprets these signals against the named operation before choosing a
+permission repair:
+
+- Match the request identifier when available, exact client and attribution chain, service,
+  and time window to the failing operation. Nearby log lines or another client's grant do
+  not establish that operation's decision.
+- Treat `preflight=yes` as a permission check, not proof that the protected operation was
+  attempted and denied. An AllFiles preflight with `authValue=0` reports no authorization
+  for that check; it does not establish a Network Volumes denial or a need for FDA.
+- Keep per-user and system database results separate. An allowed Network Volumes row in
+  the per-user database neither establishes an AllFiles grant in the system database nor
+  proves a network-file read succeeded. Record which database and service each row describes.
+- Use the original operation's readback, actual requester, execution context and expected
+  content. An empty result where content was expected, or a timeout, is not success. Collect
+  only missing requester/context, terminal-result or correlated TCC evidence; a new read is
+  warranted only if it can fill that gap, with a bounded deadline. Once the exact correlated
+  read remains unexplained, retain **cause unknown**, stop the permission-repair branch and
+  test a different cause. Do not add FDA, change permissions or repeat an unchanged read
+  from the preflight or grant row alone.
+
+**Illustrative counterexample:** `com.example.reader` has a per-user Network Volumes allow
+row, an AllFiles preflight reports `authValue=0`, and reading a known nonempty file at
+`/Volumes/ExampleShare/sample.txt` times out. Neither "FDA denied the read" nor "access
+works" follows. Reuse that attempt's result and TCC records; the next discriminating probe
+collects only missing request/client/service/time or terminal-result evidence. If that exact
+read is already correlated and remains unexplained, keep the cause unknown and investigate
+another cause without repeating the same timeout or changing permissions.
 
 ## Reading TCC.db
 

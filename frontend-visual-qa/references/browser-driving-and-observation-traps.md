@@ -125,6 +125,33 @@ CSS for blank space or mobile layout. Reset stale zoom/device emulation and
 re-capture after display or scale changes. Restore the user's expected viewport
 when finished.
 
+### Separate freshness checks from performance comparisons
+
+When the task includes loading speed, name the user-visible endpoint before measuring: for example,
+the requested task's readable body, rather than a successful HTML request or an empty shell. Record
+the route/action, device/browser, build identity and cache conditions with that observation. Keep
+those conditions comparable across runs; for a version comparison, identify the intended build
+difference explicitly. A cache-disabled freshness check is a different condition from ordinary use.
+
+Inspect the whole resource path needed to reach that endpoint, including the main application and
+later lazy-loaded reader resources. Retain observed transferred bytes and the browser/tool's cache
+indicators when available; missing timing/cache evidence stays unknown. A warm reader resource says
+nothing about whether the main application was fetched over the network. A fresh browser context
+also does not establish that intermediary or server caches were cold.
+
+Separate measured application/resource timings from total automation wall time, which can include
+operator delays, polling and tool waits. Keep the first failure or timeout alongside a later success;
+do not replace it with the fastest retry or infer its cause without a discriminating observation.
+Stop at the measured condition: do not claim an all-cold journey or a release speedup from unlike
+cache states, devices, routes or timing endpoints.
+
+Synthetic counterexample: the application script is fetched over the network, then a reader module
+is served from browser cache and its body becomes readable. Report that mixed journey and its
+observed body-ready time. Do not label the whole visit warm/cold or compare its reader-only time
+with another visit's application startup time. If both visits instead measure the same body-ready
+endpoint under matched, evidenced conditions, report that scoped comparison without requiring
+unrelated performance experiments.
+
 ## 3. `file://` is not drivable by browser-extension tooling
 
 Extension-based browser automation generally cannot navigate to `file://` URLs
