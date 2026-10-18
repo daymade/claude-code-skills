@@ -79,6 +79,19 @@ not to the entire run; `--max-bytes` bounds each response body.
 
 ## Completion and recovery
 
+### A deployment changes during acceptance
+
+Synthetic example: the frozen expectation names release A, but a concurrent
+authorized rollout makes the target serve B. Preserve A's expected manifest,
+the loaded page's identity and the mismatch/partial observations; do not rewrite
+them into a pass or roll the other publisher back. Resolve B through the release
+owner and independently freeze its published artifact and build inputs before
+creating a separately named B expectation. Reload the canonical target, verify
+the affected resources, then rerun the affected rendered journey. Unchanged
+checks with unchanged inputs remain reusable. If B cannot be established or
+the target keeps changing, retain partial status and the precise unresolved
+identity; live values copied into a new expectation do not resolve it.
+
 The command only issues GETs, keeps ordinary proxy/TLS behavior, refuses
 cross-origin redirects, and does not deploy, restart, sign in or change accounts.
 Encoded responses and login-dependent resources require the existing same-state
