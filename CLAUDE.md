@@ -862,8 +862,10 @@ Before submitting or modifying skills:
 ## Adding a New Skill to Marketplace
 
 Follow [Adding a New Skill to Marketplace](references/new-skill-guide.md) for
-registration, README updates, validation, and publication. Use the existing suite
-identity when adding a member; do not introduce a parallel standalone plugin.
+registration, README updates, documentation alignment, validation, and publication.
+Apply **Quality Standards** above to this file's affected stable rules and routes.
+Use the existing suite identity when adding a member; do not introduce a parallel
+standalone plugin.
 The local-availability gate under **Testing Skills Locally** applies when local
 use is part of the requested delivery.
 
