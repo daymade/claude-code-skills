@@ -45,7 +45,7 @@ description: >-
 按其中的依赖准备、目标状态、发送与恢复流程执行。入口不另定义一套运行时参数；
 `scripts/codex_live.py` 是随本 Skill 分发的实时 adapter。
 
-选择 `--codex-delivery queued` 前，确认这条消息仍需要延迟送达：queue 会把完整信封作为用户消息送入对话，可能在协作窗口结束后才出现。接收方静默处理或 `coord finish` 都不能撤回它。实时路径不可用不构成改传 queued 的依据；短时窗口需要及时答复却无法及时投递时，报告该协调未送达，按既定有界等待与隔离推进方式继续。明确需要延迟留话的任务仍可使用 queued；不要以降噪为由吞掉有效新问题。
+选择 `--codex-delivery queued` 前，按 [Codex 传输 SOP](references/protocol-and-discovery.md#3-codex-发现与实时投递)核对延迟送达的必要性、用户可见后果、有效期和失败恢复边界。
 
 ## 路由表
 
