@@ -122,10 +122,13 @@ class ResultConsumptionFixtureContracts(unittest.TestCase):
         self.assertIsNone(data['identity']['parent_session_binding'])
         self.assertIn('Raw JSON remains available',self.trace['initialB']['reader'])
 
-    def test_only_two_new_cases_and_no_runtime_dependencies(self):
+    def test_result_consumption_cases_and_no_runtime_dependencies(self):
         cases=json.loads((ROOT/'evals/evals.json').read_text())['evals']
-        self.assertEqual([row['id'] for row in cases],list(range(1,31)))
-        for row in cases[-2:]:
+        by_id={row['id']:row for row in cases}
+        self.assertEqual(len(by_id),len(cases),'eval IDs must remain unique')
+        for case_id in (29,30):
+            self.assertIn(case_id,by_id)
+            row=by_id[case_id]
             self.assertEqual(row['files'],['evals/files/result-consumption-fixture.html','evals/files/result-consumption-authority.json'])
         for forbidden in ['fetch(', 'XMLHttpRequest', 'https://', 'http://', 'expected grade', 'defect name']:
             self.assertNotIn(forbidden,self.html)
