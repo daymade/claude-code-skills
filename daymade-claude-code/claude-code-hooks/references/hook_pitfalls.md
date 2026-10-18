@@ -3143,10 +3143,10 @@ this list and describe defects you reach by asking a different question):
   suite (a calibration test that pins the constant to its date-stamped value
   caught the mismatch in the follow-up — but only after production had
   already burned the receipts).
-  Cover a third upgrade input besides a fresh database and an older-version
-  database: a **current-version/partial-structure** database already stamped
-  with the current schema version but missing a structure the new writer adds,
-  such as an index. The first two fixtures cannot expose this state, and a
+  Cover a **current-version/partial-structure** database alongside fresh and
+  older-version databases: it is already stamped with the current schema
+  version but missing a structure the new writer adds, such as an index. The
+  fresh and older-version fixtures cannot expose this state, and a
   migration gated only on `user_version < STATE_SCHEMA_VERSION` will not run
   for it. Keep the version bump above as part of an ordered schema change; do
   not replace that lesson with "never bump the version." In the same change,
@@ -3423,8 +3423,8 @@ this list and describe defects you reach by asking a different question):
   that a person can see a prompt in the ordinary interface. Do not add a second
   notification channel until you have reproduced the original channel in that
   host and proved its intended notice invisible. For final acceptance, drive
-  exactly one logical injection in an ordinary real host and verify three
-  independent observations: the immediate prompt appears exactly once; the
+  exactly one logical injection in an ordinary real host and verify all of the
+  following: the immediate prompt appears exactly once; the
   next prompt does not display it again; and the reminder body still enters
   the next model request.
 - **Real case:** `goal-reanchor`'s re-anchor reminder had injection and
