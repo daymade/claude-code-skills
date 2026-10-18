@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **read-codex-history** (`daymade-claude-code` v4.30.7): Read strictly identified pre-envelope legacy metadata, state markers and bare response items. Share header classification with backup consumers while preserving original bytes and tool evidence; reject unknown shapes and conflicting identities.
+
 - **macos-permissions** (`daymade-macos` v1.23.5): Reuse current protected-operation evidence, retain pending requests and bound missing-evidence reads; align the repository diagnosis entry. Change type: bounded SOP consistency repair.
 - **terraform-skill** (v1.5.11): Check existing candidate-bound production authorization before requesting missing approval. Change type: bounded SOP consistency repair.
 - **Repository instructions**: Align authentication, performance, protected-read and release navigation with canonical owners; remove repeated route summaries.

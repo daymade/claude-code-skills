@@ -47,6 +47,20 @@ Every line is one JSON object with a top-level `timestamp`, `type`, and (usually
 | `response_item` | `custom_tool_call_output` | `call_id`, `output` (list) | pairs a call; error detection |
 | `turn_context` / `world_state` / `inter_agent_communication_metadata` | — | turn settings, world snapshots, sub-agent routing metadata | observed; ignored |
 
+### Pre-envelope legacy records
+
+`codex_rollout_header(record, path)` validates the first metadata record and
+returns a `session_meta` view. The supported pre-envelope header has exactly
+`id`, `timestamp`, `instructions` (string or null), and `git` (object), with a
+UUID matching both identities of its canonical, unsegmented filename. This
+shape is legacy; added pagination, ordinal or ancestry fields are rejected.
+Following records may be exact `record_type: state` markers or the supported
+bare message, function-call, function-call-output and reasoning shapes.
+Unknown shapes fail visibly. Parsing uses normalized views; original-record
+exports, record positions, hashes and stored JSONL bytes remain unchanged.
+As with enveloped records, user-role evidence retains injected context while
+the chronological briefing applies the existing noise filter.
+
 ### Message content element types (important)
 
 `response_item/message` `content` is a list of `{type, text}` where `type` is **`input_text`** for user/developer content and **`output_text`** for assistant content (user turns may also carry `input_image` items, with or without text). The shared `extract_text` decodes `text`/`input_text` but **not** `output_text`, so the parser joins `output_text` items locally (changing the shared helper would alter every sibling skill that bundles `_core`).
