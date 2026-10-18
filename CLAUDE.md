@@ -153,6 +153,9 @@ owns later reconciliation and consumer readback.
 For citation previews and in-place source inspection, enter
 [report-with-html's interaction owner](report-with-html/references/interaction-components.md)
 and [frontend-visual-qa's source-inspection route](frontend-visual-qa/references/journey-and-page-contracts.md#cited-source-inspection).
+For embedded-reader sizing, surrounding navigation, overlays or reading/return
+changes, enter [frontend-visual-qa](frontend-visual-qa/SKILL.md) and its
+[embedded-reader journey](frontend-visual-qa/references/journey-and-page-contracts.md#embedded-readers-and-semantic-zoom).
 
 For HTML report images and explanatory diagrams, enter
 [report-with-html](report-with-html/SKILL.md); its
