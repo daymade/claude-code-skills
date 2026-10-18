@@ -61,11 +61,13 @@ Resolve scope above before selecting a mode. A bare repository URL selects
 Profile, using the confirmed current project for comparison when available.
 Known competitors are optional for a scoped Discover request.
 
-Use the user's wording to choose the path:
+Use the user's wording and historical qualifiers to choose the path. A request
+to recap earlier work selects the inventory route before keyword-based discovery:
 
 | User intent | Mode | What to do |
 |---|---|---|
-| "find competitors", "竞品有哪些", broad market query | Discover | Search GitHub and web sources, shortlist candidates, clone only relevant repositories |
+| "recap competitors already studied", "回顾已分析的竞品", historical cumulative list | Landscape inventory | Follow [historical inventory](references/landscape_synthesis.md#inventory-prior-analysis-when-requested); reconcile existing records without requiring new profiles or synthesis |
+| "find competitors", "竞品有哪些", broad market query for new discovery | Discover | Search GitHub and web sources, shortlist candidates, clone only relevant repositories |
 | "add competitor <url>" | Ingest | Clone the repository, record remote + commit, then produce a first profile |
 | A repository URL or supplied code package, "analyze competitor", "review this repo" | Profile | Bind the source, read code, write a cited technical profile; compare with the confirmed current product when applicable |
 | "compare", "landscape", "opportunities" | Landscape | Ensure each competitor has a profile, then synthesize gaps and opportunities |

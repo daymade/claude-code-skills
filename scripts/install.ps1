@@ -7,6 +7,17 @@ function Write-Error { Write-Host $args -ForegroundColor Red }
 function Write-Info { Write-Host $args -ForegroundColor Yellow }
 function Write-Cyan { Write-Host $args -ForegroundColor Cyan }
 
+# Registered plugin IDs from .claude-plugin/marketplace.json.
+$plugins = @(
+    @{ Name = "daymade-skill"; Description = "bundles skill-creator and friends" }
+    @{ Name = "github-ops"; Description = "GitHub operations" }
+    @{ Name = "daymade-docs"; Description = "document conversion and Mermaid diagrams" }
+    @{ Name = "daymade-claude-code"; Description = "Claude Code tools and statusline customization" }
+    @{ Name = "teams-channel-post-writer"; Description = "Teams communication" }
+    @{ Name = "repomix-unmixer"; Description = "repomix extraction" }
+    @{ Name = "llm-icon-finder"; Description = "AI/LLM icons" }
+)
+
 Write-Host "================================================" -ForegroundColor Cyan
 Write-Host "Claude Code Skills Marketplace Installer" -ForegroundColor Cyan
 Write-Host "================================================" -ForegroundColor Cyan
@@ -48,15 +59,15 @@ if ($isInteractive) {
     # Installation menu
     Write-Host "What would you like to install?"
     Write-Host ""
-    Write-Host "1) skill-creator only (RECOMMENDED - enables you to create your own skills)"
-    Write-Host "2) All skills"
+    Write-Host "1) daymade-skill only (RECOMMENDED - bundles skill-creator and friends)"
+    Write-Host "2) Featured plugins"
     Write-Host "3) Custom selection"
     Write-Host "4) Exit"
     Write-Host ""
     $choice = Read-Host "Enter your choice (1-4)"
 } else {
     Write-Info "Running in non-interactive mode."
-    Write-Host "Defaulting to option 1: skill-creator only (RECOMMENDED)"
+    Write-Host "Defaulting to option 1: daymade-skill only (RECOMMENDED)"
     Write-Host ""
     Write-Host "To run interactively, download and run directly:"
     Write-Host "  Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/daymade/claude-code-skills/main/scripts/install.ps1' -OutFile install.ps1"
@@ -71,9 +82,9 @@ $commands += "claude plugin marketplace add https://github.com/daymade/claude-co
 switch ($choice) {
     "1" {
         Write-Host ""
-        Write-Cyan "Installing skill-creator..."
+        Write-Cyan "Generating commands for daymade-skill (bundles skill-creator)..."
         Write-Host ""
-        $commands += "claude plugin install skill-creator@daymade-skills"
+        $commands += "claude plugin install $($plugins[0].Name)@daymade-skills"
 
         $afterInstall = @"
 After installation, ask Claude Code:
@@ -86,48 +97,31 @@ Claude Code will guide you through the skill creation process!
     }
     "2" {
         Write-Host ""
-        Write-Cyan "Installing all skills..."
+        Write-Cyan "Generating commands for featured plugins..."
         Write-Host ""
-        $skills = @("skill-creator", "github-ops", "markdown-tools", "mermaid-tools",
-                    "statusline-generator", "teams-channel-post-writer", "repomix-unmixer", "llm-icon-finder")
-        foreach ($skill in $skills) {
-            $commands += "claude plugin install $skill@daymade-skills"
+        foreach ($plugin in $plugins) {
+            $commands += "claude plugin install $($plugin.Name)@daymade-skills"
         }
     }
     "3" {
         Write-Host ""
-        Write-Host "Available skills:"
-        Write-Host "  1) skill-creator (meta-skill for creating skills)"
-        Write-Host "  2) github-ops (GitHub operations)"
-        Write-Host "  3) markdown-tools (document conversion)"
-        Write-Host "  4) mermaid-tools (diagram generation)"
-        Write-Host "  5) statusline-generator (statusline customization)"
-        Write-Host "  6) teams-channel-post-writer (Teams communication)"
-        Write-Host "  7) repomix-unmixer (repomix extraction)"
-        Write-Host "  8) llm-icon-finder (AI/LLM icons)"
+        Write-Host "Available plugins:"
+        for ($index = 0; $index -lt $plugins.Count; $index++) {
+            Write-Host "  $($index + 1)) $($plugins[$index].Name) ($($plugins[$index].Description))"
+        }
         Write-Host ""
 
         if ($isInteractive) {
-            $selections = (Read-Host "Enter skill numbers separated by spaces (e.g., '1 2 3')").Split(' ')
+            $selections = (Read-Host "Enter plugin numbers separated by spaces (e.g., '1 2 3')").Split(' ')
         } else {
-            Write-Info "Non-interactive mode: Installing skill-creator only"
+            Write-Info "Non-interactive mode: Selecting daymade-skill only"
             $selections = @("1")
         }
 
-        $skillMap = @{
-            "1" = "skill-creator"
-            "2" = "github-ops"
-            "3" = "markdown-tools"
-            "4" = "mermaid-tools"
-            "5" = "statusline-generator"
-            "6" = "teams-channel-post-writer"
-            "7" = "repomix-unmixer"
-            "8" = "llm-icon-finder"
-        }
-
         foreach ($num in $selections) {
-            if ($skillMap.ContainsKey($num)) {
-                $commands += "claude plugin install $($skillMap[$num])@daymade-skills"
+            $index = 0
+            if ([int]::TryParse($num, [ref]$index) -and $index -ge 1 -and $index -le $plugins.Count) {
+                $commands += "claude plugin install $($plugins[$index - 1].Name)@daymade-skills"
             }
         }
     }
@@ -146,7 +140,7 @@ Write-Success "================================================"
 Write-Success "Installation commands generated!"
 Write-Success "================================================"
 Write-Host ""
-Write-Host "Run these commands in Claude Code:" -ForegroundColor Cyan
+Write-Host "RUN IN TERMINAL:" -ForegroundColor Cyan
 Write-Host ""
 foreach ($cmd in $commands) {
     Write-Info $cmd
@@ -160,7 +154,7 @@ if ($afterInstall) {
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Green
 Write-Host "1. Copy the commands above"
-Write-Host "2. Paste them into Claude Code"
+Write-Host "2. Paste them into your terminal"
 Write-Host "3. Restart Claude Code"
 Write-Host "4. Start using your skills!"
 Write-Host ""

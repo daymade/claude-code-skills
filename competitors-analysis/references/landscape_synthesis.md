@@ -1,7 +1,53 @@
 # Landscape synthesis that changes a decision
 
 Read this for Landscape and when continuing an existing competitive analysis.
-The output is a supported product judgment, not the number of competitors covered.
+For an explicitly requested historical inventory, complete the inventory below;
+add product judgments only when requested. Other Landscape work produces a
+supported product judgment, not the number of competitors covered.
+
+## Inventory prior analysis when requested
+
+The executing agent uses this route for a retrospective list of competitors already
+registered or studied. Do not add history retrieval to a new-market Discover,
+supplied-source Profile or ordinary Update without a history/reuse request.
+
+1. Bind the project, any requested time boundary, and explicit inclusions/exclusions
+   from the latest request and authoritative project research entry. Read the
+   cumulative competitor register and its linked earlier analyses at their original
+   locations; the latest shortlist alone does not establish the historical set.
+   Keep **caller-specified this turn**, **newly researched this turn** and
+   **historical accumulated** as source labels, not mutually exclusive buckets.
+   Current URLs or a recent report must not silently replace the requested scope.
+2. Reconcile current explicit objects with the cumulative entries in scope. Retain
+   registered-only objects and label their research depth; a missing deep profile
+   does not remove an entry. For missing earlier evidence, use the host's available
+   reuse/history owner (`prior-work-retrieval`, `local-conversation-history` or the
+   matching provider reader). Inspect its index coverage and narrow by project,
+   time/session metadata or an exact known record before opening original messages;
+   verify candidates in their original artifact or message. If the owner or matching
+   index is unavailable, stale or incomplete, keep the known entries and state that
+   coverage gap. Do not scan the raw conversation corpus; output limits and timeouts
+   do not bound input reads. New web discovery cannot replace historical evidence.
+3. Resolve aliases against canonical URLs or original records, preserving unresolved
+   identity matches. Label each object's kind: product, combined/substitute workflow,
+   or model/component. Do not silently merge those kinds into one competitor count.
+4. Return one row per reconciled object with its identity, kind, source label(s),
+   research depth and original evidence locator/version. Distinguish registered-only,
+   profiled, code-examined and behavior-exercised depth from the evidence actually
+   present. Keep a registered row whose original evidence is missing, marking that
+   gap rather than claiming it was studied. Report the records/time range covered
+   and unresolved sources; qualify any completeness claim by that coverage. If
+   totals are useful, count deduplicated objects by kind and state the grouping.
+
+For example, a supplied `https://example.org/cedar` profile and an older register
+containing Cedar, Finch and a Finch + Reed workflow yield two product rows and a
+separate workflow row. Finch remains listed as registered-only if no deeper
+analysis is evidenced; the new Cedar URL does not reduce the inventory to Cedar.
+
+Stop at the requested inventory and coverage. Do not clone, fetch, run applications
+or create a new ledger solely to answer this retrospective list. Reuse the existing
+research entry when a durable correction is requested; a simple Profile needs no
+inventory ledger. These are agent instructions, not mechanically enforced checks.
 
 ## Start from the business and adopted alternative
 
@@ -123,8 +169,9 @@ narration, review receipts or a transcript of the analyst's reasoning.
 
 ## Acceptance
 
-A reader who knows the product should be able to say which choice changes, why
-the evidence supports it for this business, what it costs, and what would make it
-wrong. Accurate citations and a complete capability table alone do not pass.
+For synthesis, a reader who knows the product should be able to say which choice
+changes, why the evidence supports it for this business, what it costs, and what
+would make it wrong. Accurate citations and a complete capability table alone do
+not pass.
 After interruption, that reader should also know what remains to decide without
 repeating evidence gathering that is still valid.
