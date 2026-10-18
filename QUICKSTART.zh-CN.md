@@ -65,7 +65,7 @@ uv run --project "$TASK_CREATOR" --frozen python "$TASK_CREATOR/scripts/quick_va
 
 **只想使用现有技能？方法如下！**
 
-### 选项 1：自动化安装（最快）
+### 选项 1：生成安装命令
 
 **macOS/Linux：**
 ```bash
@@ -77,7 +77,8 @@ curl -fsSL https://raw.githubusercontent.com/daymade/claude-code-skills/main/scr
 iwr -useb https://raw.githubusercontent.com/daymade/claude-code-skills/main/scripts/install.ps1 | iex
 ```
 
-按照交互提示选择技能。
+将生成的命令放到终端执行。如需精选插件菜单或自定义选择，
+按脚本输出中的说明下载脚本后在本地运行。
 
 ### 选项 2：手动安装
 
