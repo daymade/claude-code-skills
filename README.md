@@ -12,7 +12,7 @@
 
 </div>
 
-Professional Claude Code skills marketplace featuring production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace for development, research, content, and residential floor plan searches.
 
 ## 📑 Table of Contents
 
@@ -3993,6 +3993,30 @@ web/API access for live public feedback. Specialist Skills are optional adapters
 
 ---
 
+### **floorplan-finder** - Existing Residential Floor Plans
+
+> **Install**: `claude plugin install floorplan-finder@daymade-skills`
+
+Find original residential floor plans online and compare room connections,
+entrance orientation, mirrored variants, and source identity. Distinguish a
+user-confirmed matching layout from a documented exact-unit drawing.
+
+**When to use:** Find a plan by development/building/unit, compare same-layout
+candidates, or recover a search stalled on inaccessible listings or ambiguous drawings.
+
+```text
+Use floorplan-finder to find an existing plan matching this home's layout.
+Keep approximate area flexible and show the original candidate images.
+```
+
+**Requirements**: Authorized web search/fetch and image-viewing tools. An
+interactive browser is needed for sources that require page interaction.
+Specialist retrieval and video Skills are optional; no bundled runtime dependencies.
+
+📚 **Documentation**: [floorplan-finder](./floorplan-finder/SKILL.md).
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -4017,6 +4041,9 @@ mechanisms, comparable metrics and verifiable actions. Use **app-evolver** for
 authorized application implementation.
 
 ### For Research & Analysis
+Use **floorplan-finder** to retrieve residential plan originals and verify them
+against supplied layout constraints.
+
 Use **deep-research** to produce format-controlled research reports with evidence tables and citations. Combine with **fact-checker** to validate claims or with **twitter-reader** for social-source collection.
 
 ### For Technology Decisions
@@ -4175,6 +4202,8 @@ Each skill includes:
 
 ### Quick Links
 
+- **floorplan-finder**: [Plan search and verification](./floorplan-finder/SKILL.md)
+
 - **github-ops**: See `github-ops/references/api_reference.md` for API documentation
 - **github-review-pr**: See `github-review-pr/SKILL.md` for the current-base review workflow and `github-review-pr/references/personal_maintainer_context.md` for the explicit personal policy profile
 - **doc-to-markdown**: See `daymade-docs/doc-to-markdown/references/conversion-examples.md` for conversion scenarios
@@ -4235,6 +4264,8 @@ Each skill includes:
 - **meme-creator**: See `meme-creator/SKILL.md` for the pipeline and `meme-creator/references/tracking-playbook.md` for the CSRT failure taxonomy and manual-keyframe fallback
 
 ## 🛠️ Requirements
+
+- **floorplan-finder**: Authorized web retrieval and image viewing; interactive browser for sources requiring it. No bundled runtime dependencies.
 
 - **product-growth**: Host file-reading/analysis tools; authorized web/API access for live feedback. No bundled runtime dependencies.
 
