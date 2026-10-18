@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **daymade-audio** (v1.49.3): Expose the existing explicit re-anchor option in the CLI reference and repository entry; keep occurrence semantics in the queue SOP and remove duplicated field lists and obsolete batch narration. Change type: documentation alignment; runtime code unchanged.
+
 - **frontend-visual-qa** (v1.21.6): Add reader-usability counterexamples and focused replay cases for retained but unreadable bodies, global chrome and overlay interference, and viewport-drift false comparisons. Scope result-consumption fixture checks to their case identities so later cases can be appended. Change type: bounded guidance addition; scripts and permissions unchanged.
 - **frontend-visual-qa** (v1.21.5): Keep the same long input and normal viewport when verifying constrained source-and-return journeys. Add synthetic collapsed-pane, ordinary-navigation and short-input controls; runtime permissions unchanged.
 
