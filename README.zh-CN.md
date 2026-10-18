@@ -69,7 +69,7 @@
 然后：
 1. 选择 **Browse and install plugins**
 2. 选择 **daymade/claude-code-skills**
-3. 选择 **skill-creator**
+3. 选择 **daymade-skill**（包含 skill-creator）
 4. 选择 **Install now**
 
 **在终端（CLI）：**
@@ -125,7 +125,10 @@ claude plugin install daymade-skill@daymade-skills
 3. 选择你需要的插件
 4. 选择 **Install now**
 
-### 自动化安装（推荐）
+### 生成安装命令
+
+以下脚本会打印安装命令，请将生成的命令放到终端执行。
+下载脚本后在本地运行，可使用精选插件菜单或自定义选择。
 
 **macOS/Linux：**
 ```bash
@@ -4197,10 +4200,9 @@ Codex 的技能也可以通过 Codex 插件市场安装；使用前请查看对�
 
 ### 如何更新技能？
 
-使用相同的安装命令进行更新：
-```bash
-claude plugin install skill-name@daymade-skills
-```
+按[插件更新流程](./daymade-skill/skill-governance/references/skill-surface-governance.md#supported-repair)
+刷新市场元数据，并在原有安装范围内更新插件。技能已迁入套件时，按[套件迁移流程](./daymade-skill/skill-governance/references/skill-surface-governance.md#8-reconcile-a-suite-migration)
+安装并验证替代套件后，再移除旧插件。
 
 ### 我可以贡献自己的技能吗？
 

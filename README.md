@@ -71,7 +71,7 @@ This is a **production-hardened fork** of [Anthropic's official skill-creator](h
 Then:
 1. Select **Browse and install plugins**
 2. Select **daymade/claude-code-skills**
-3. Select **skill-creator**
+3. Select **daymade-skill** (includes skill-creator)
 4. Select **Install now**
 
 **From your terminal (CLI):**
@@ -127,7 +127,10 @@ Then:
 3. Select the plugin you want
 4. Select **Install now**
 
-### Automated Installation (Recommended)
+### Generate Installation Commands
+
+These scripts print commands for you to run in your terminal. Download and run
+the script locally to choose from the featured-plugin menu or make a custom selection.
 
 **macOS/Linux:**
 ```bash
@@ -4250,10 +4253,10 @@ plugin marketplace; check each Skill's requirements before use.
 
 ### How do I update skills?
 
-Use the same install command to update:
-```bash
-claude plugin install skill-name@daymade-skills
-```
+Follow [plugin updates](./daymade-skill/skill-governance/references/skill-surface-governance.md#supported-repair)
+to refresh marketplace metadata and update the installed plugin at its existing scope.
+For skills moved into a suite, follow [suite migration](./daymade-skill/skill-governance/references/skill-surface-governance.md#8-reconcile-a-suite-migration)
+to install and verify the replacement before removing the old plugin.
 
 ### Can I contribute my own skill?
 
