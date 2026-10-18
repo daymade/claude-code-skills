@@ -216,6 +216,26 @@ input trains people to ignore the whole gate, which is worse than not having it.
 
 ## 7. Mid-run state is not final state
 
+### Establish the view and request before waiting
+
+Before timing a load, record the selected object, active tab/read mode and the
+request that this view is supposed to issue. A report tab showing “No report”
+may be a healthy empty state; it does not establish that the full conversation
+failed to load. Use the ordinary control for the required view, then observe its
+request and rendered content. Keep no-request, failed-request and successful
+empty-response observations distinct; a missing request alone does not identify
+a server defect.
+
+For a claimed in-flight screenshot, arm request observation before the action
+and retain the request identity plus a common-clock ordering:
+`requestStart < capture < responseEnd`. If capture spans an interval, keep that
+interval inside the request interval. A screenshot during debounce, before the
+request starts, is only pre-request evidence. If the response wins the race,
+retain the settled result and leave the in-flight state unverified; use an
+authorized isolated delay only as diagnostic evidence, not as the live journey.
+Inspect both the captured state and the settled content; neither replaces the
+other when a stale-result transition is the behavior under test.
+
 When a multi-step process is running (a batch sweep, a sync, a queued render),
 reading its state file or its output directory *while it runs* shows whichever
 items it has reached so far. Items not yet processed look identical to items that
