@@ -152,7 +152,8 @@ def codex_rollout_header(record: dict[str, Any], path: Path) -> dict[str, Any]:
           and re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z", record["timestamp"])
           and (record["instructions"] is None or isinstance(record["instructions"], str))
           and isinstance(record["git"], dict)
-          and ids == (record["id"].lower(), record["id"].lower())):
+          and ids == (record["id"].lower(), record["id"].lower())
+          and "_" not in path.stem):
         header = {"type": "session_meta", "payload": {**record, "history_mode": "legacy"}}
     else:
         raise LineageResolutionError("rollout must begin with supported session metadata")

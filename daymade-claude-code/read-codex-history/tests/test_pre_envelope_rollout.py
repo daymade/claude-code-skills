@@ -66,6 +66,15 @@ class PreEnvelopeRolloutTests(unittest.TestCase):
         self.write([header]);renamed=self.path.with_name('unknown-name.jsonl');self.path.rename(renamed)
         with self.assertRaises(reader.LineageResolutionError):reader.parse_codex_rollout(renamed)
 
+    def test_pre_envelope_header_cannot_disguise_a_physical_suffix_as_legacy(self):
+        header=records()[0]
+        for physical in (SID,'00000000-0000-4000-8000-000000000002'):
+            with self.subTest(physical=physical):
+                path=self.path.with_name(self.path.stem+'_'+physical+'.jsonl')
+                path.write_text(json.dumps(header)+'\n')
+                with self.assertRaises(reader.LineageResolutionError):
+                    reader.validate_codex_rollout(path,SID,end_byte_offset=path.stat().st_size)
+
     def test_unrecognized_body_and_mixed_modern_metadata_fail(self):
         for row in ({'record_type':'state','extra':True},{'record_type':None},{},
                     {'type':'unknown'}, {'type':'message','role':'user','content':[]},
