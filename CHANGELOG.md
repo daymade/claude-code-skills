@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **competitors-analysis** (v1.6.5): Reconcile requested and cumulative competitor sources before historical inventories, retaining evidence depth and normal discovery/profile/update paths. Change type: bounded routing correction.
+- **app-evolver** (v1.1.3): Add paired acceptance examples for bounded absence and normal eventual completion, preserving failed attempts and read-only API semantics. Change type: bounded acceptance guidance.
+
 - **tibo-reset-codex** (v1.23.2): Use the vendor's direct file entry for login-browser reads in restricted macOS research; retain source-coverage unknowns and existing account authorization. Change type: bounded execution guidance.
 
 - **tibo-reset-codex** (v1.23.0 → v1.23.1): Correct `account_ref` endpoint-identity wording and route the repository entry to the existing mechanical attribution owner; runtime code unchanged. Change type: authoritative documentation correction.
