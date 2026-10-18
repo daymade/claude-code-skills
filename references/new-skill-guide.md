@@ -1,18 +1,5 @@
 # Adding a New Skill to Marketplace - Detailed Guide
 
-**CRITICAL**: When adding a skill to this marketplace, you MUST update all of these files. Missing any file will result in incomplete integration.
-
-## Files to Update
-
-```
-✅ CHANGELOG.md                        (Add version entry)
-✅ README.md                          (description, install, unnumbered skill section, use case, docs link, requirements)
-✅ README.zh-CN.md                    (same as above, translated) ⚠️ CRITICAL
-✅ CLAUDE.md                          (stable manifest/README authority pointer only)
-✅ .claude-plugin/marketplace.json    (metadata + standalone entry or existing suite membership)
-✅ <skill-directory>/                 (The canonical Skill source directory)
-```
-
 Packaging creates a disposable `<output-dir>/skill-name.skill` artifact. Keep the
 source directory in Git; do not copy the package back into the source tree.
 
@@ -27,7 +14,10 @@ uv run --frozen python -m scripts.security_scan "$SKILL_DIR" --verbose
 
 `security_scan` (gitleaks) is a **keyword-based first pass, NOT the gate**. It cannot see real project/person nicknames, CJK names (gitleaks ignores CJK), or verbatim transcript lines — none have a secret signature. **Before publishing you MUST read the whole skill yourself** (SKILL.md + every reference + every example) and judge each concrete noun semantically: generic placeholder, or lifted from a real project/person? See [`../daymade-skill/skill-creator/references/sanitization_checklist.md`](../daymade-skill/skill-creator/references/sanitization_checklist.md). A green scan is **not** a clean bill of health. (2026-06-28: openclaw shipped review with real instance nicknames that scan/gitleaks/grep all missed — caught only by the read-through.)
 
-### 2. Package the Skill
+### 2. Package an archive deliverable
+
+Run this step when a `.skill` archive is part of the requested delivery:
+
 ```bash
 SKILL_DIR="<repo-root>/<skill-directory>"
 cd <repo-root>/daymade-skill/skill-creator
@@ -46,14 +36,6 @@ Add new version entry at the top (after [Unreleased]):
   - Feature 1
   - Feature 2
   - Bundled scripts/references/assets
-
-### Changed
-- Updated marketplace version from X.(Y-1).0 to X.Y.0
-- Updated README.md to include skill-name in skills listing
-- Updated README.zh-CN.md to include skill-name in skills listing
-- Added skill-name use case section to README.md
-- Added skill-name use case section to README.zh-CN.md
-- Added dependencies to requirements section (if any, both EN and ZH)
 ```
 
 ### 4. Update README.md
@@ -108,9 +90,12 @@ Use **skill-name** to [describe primary use case]. Combine with **other-skill** 
 
 **e. Add documentation quick link and update requirements section (if needed).**
 
-### 5. Check CLAUDE.md
+### 5. Align operating documentation
 
-- Keep only the stable pointer to `.claude-plugin/marketplace.json` and the two READMEs. Do not add a per-skill entry, version, count, or catalog position.
+Before freezing the candidate, follow the repository's
+[documentation contract](../CLAUDE.md#quality-standards) for the affected operating
+procedures and instruction entries, and its
+[catalog authority](../CLAUDE.md#available-skills) for marketplace navigation.
 
 ### 6. Update .claude-plugin/marketplace.json (MOST IMPORTANT)
 
@@ -153,13 +138,8 @@ python3 daymade-claude-code/marketplace-dev/scripts/check_doc_skill_lists.py
 Stage the explicit source, manifest, changelog, and affected documentation paths
 together. Read `git diff --cached --stat` in a separate call before committing.
 Follow [the repository PR workflow](../CLAUDE.md#local-main-is-a-read-only-mirror);
-do not commit to local `main`. Create the release from the verified merged
-commit, with reviewed release notes in a file:
-
-```bash
-gh release create vX.Y.0 --target <merged-main-sha> \
-  --title "Release vX.Y.0: Add skill-name" --notes-file <release-notes.md>
-```
+do not commit to local `main`. Complete the authorized deliverable through
+[publication and packaging](../daymade-skill/skill-creator/references/publishing-and-packaging.md).
 
 ### Local availability when requested
 
@@ -179,28 +159,6 @@ Source-only or package-only delivery does not require changing local activation.
   --title "Skill Demo" \
   --theme "Dracula"
 ```
-
-## Verification Checklist
-
-Before committing, verify:
-
-- [ ] CHANGELOG.md has new version entry
-- [ ] README.md has an unnumbered skill section
-- [ ] README.md has use case section
-- [ ] README.md has documentation link
-- [ ] README.md requirements updated (if needed)
-- [ ] README.zh-CN.md has an unnumbered skill section
-- [ ] README.zh-CN.md has use case section
-- [ ] README.zh-CN.md has documentation link
-- [ ] README.zh-CN.md requirements updated (if needed)
-- [ ] README.zh-CN.md installation command added
-- [ ] CLAUDE.md still contains only the manifest/README authority pointer
-- [ ] marketplace.json metadata.version updated
-- [ ] marketplace.json metadata.description updated
-- [ ] marketplace.json has the standalone entry or existing suite member
-- [ ] marketplace.json validates (python3 -m json.tool)
-- [ ] Disposable `.skill` package was generated outside the source tree
-- [ ] Security scan passed
 
 ## Common Mistakes to Avoid
 
