@@ -99,8 +99,9 @@ These are operator checks; this Skill does not automatically manage process life
 3. If access still fails, check the exact requester, permission and application-specific
    relaunch requirement. Restart only when that requirement or the observed failure makes
    it necessary, and only a task-owned process or an explicitly authorized target whose work
-   is preserved. Do not terminate another session's process or restart a shared service to
-   apply a grant. Keep that repair pending while continuing independent diagnosis.
+   is preserved. Before terminating another session's process or restarting a shared service,
+   verify explicit authorization for that exact operation and preservation of its in-flight
+   work. Without both, keep that repair pending while continuing independent diagnosis.
 4. After any required relaunch, repeat the protected operation in its real context. Stop
    permission changes when it succeeds; a grant record alone does not prove the job works.
 
