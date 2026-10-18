@@ -223,6 +223,8 @@ When a LaunchAgent cannot read protected data, enter
 [automated repair SOP](daymade-macos/macos-permissions/references/automated-full-disk-access.md).
 For a reported denial that may no longer occur, start at its
 [reproduction step](daymade-macos/macos-permissions/SKILL.md#reproduce-the-reported-denial-first).
+After a permission grant or reset, follow `macos-permissions`'s
+[request lifecycle](daymade-macos/macos-permissions/SKILL.md#after-a-grant-or-reset).
 Keep attribution, repair and actual-context verification with those owners.
 
 Treat `daymade-skill/skill-creator` as a locked uv project. Run its bundled Python tools from that directory with `uv run --frozen`; the project-local `.venv` is isolated from caller projects while uv's shared cache supplies the pinned packages. Do not reintroduce per-call `--with` overlays for dependencies already in its `pyproject.toml`.
