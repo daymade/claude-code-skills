@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **daymade-audio** (v1.49.3): Expose the existing explicit re-anchor option in the CLI reference and repository entry; keep occurrence semantics in the queue SOP and remove duplicated field lists and obsolete batch narration. Change type: documentation alignment; runtime code unchanged.
 
+- **competitors-analysis** (v1.6.5): Reconcile requested and cumulative competitor sources before historical inventories, retaining evidence depth and normal discovery/profile/update paths. Change type: bounded routing correction.
+- **app-evolver** (v1.1.3): Add paired acceptance examples for bounded absence and normal eventual completion, preserving failed attempts and read-only API semantics. Change type: bounded acceptance guidance.
 - **frontend-visual-qa** (v1.21.6): Add reader-usability counterexamples and focused replay cases for retained but unreadable bodies, global chrome and overlay interference, and viewport-drift false comparisons. Scope result-consumption fixture checks to their case identities so later cases can be appended. Change type: bounded guidance addition; scripts and permissions unchanged.
 - **frontend-visual-qa** (v1.21.5): Keep the same long input and normal viewport when verifying constrained source-and-return journeys. Add synthetic collapsed-pane, ordinary-navigation and short-input controls; runtime permissions unchanged.
 
