@@ -110,8 +110,8 @@ preserve the product's own unknown/read-only boundary.
 #### Reader usability counterexamples
 
 When reader sizing, surrounding navigation or overlays change, use these observed
-failure shapes to choose the affected checks. Retention probes alone pass the
-first two rows; neither build success nor a matching iframe resolves them.
+failure shapes to choose the affected checks. Retention alone does not establish
+reader usability; neither build success nor a matching iframe resolves these failures.
 
 | Observation | What the executor must establish |
 |---|---|
@@ -355,7 +355,7 @@ short animation never appeared. Arm observation before the trigger:
 
 Trigger the action repeatedly, then read window.__visualQaTransient.
 
-Separate four outcomes:
+Distinguish the observed outcomes:
 
 - nothing appeared — handler/event path may be broken;
 - the expected message appeared and persisted — behavior verified;

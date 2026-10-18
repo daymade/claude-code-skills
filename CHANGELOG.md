@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.21.8): Remove derived table/list counts from reading guidance and add the repository's embedded-reader workflow entry. Existing checks and evidence boundaries are unchanged.
+
 - **Installation entry points**: Generate registered suite/plugin targets on Windows, preserve document and statusline choices in both featured-plugin menus, and direct generated CLI commands to the terminal. Align the README selectors, command-generator instructions and update guidance; add output-based installer regressions against the marketplace manifest.
 
 - **competitors-analysis** (v1.6.5): Reconcile requested and cumulative competitor sources before historical inventories, retaining evidence depth and normal discovery/profile/update paths. Change type: bounded routing correction.
