@@ -3143,6 +3143,21 @@ this list and describe defects you reach by asking a different question):
   suite (a calibration test that pins the constant to its date-stamped value
   caught the mismatch in the follow-up — but only after production had
   already burned the receipts).
+  Cover a third upgrade input besides a fresh database and an older-version
+  database: a **current-version/partial-structure** database already stamped
+  with the current schema version but missing a structure the new writer adds,
+  such as an index. The first two fixtures cannot expose this state, and a
+  migration gated only on `user_version < STATE_SCHEMA_VERSION` will not run
+  for it. Keep the version bump above as part of an ordered schema change; do
+  not replace that lesson with "never bump the version." In the same change,
+  either bump the version so the migration adds the missing structure, or run
+  an idempotent ensure such as `CREATE INDEX IF NOT EXISTS` on every writable
+  open. Build the fixture by letting the old writer produce this
+  current-version/partial-structure database, then actually open it through
+  the new writer's normal writable-open path and assert that the structure is
+  created. For an index, also run `EXPLAIN QUERY PLAN` for the target lookup
+  and assert a `SEARCH` plan using that index rather than a table `SCAN`;
+  presence in `sqlite_master` alone does not prove the lookup uses it.
 - **Real case (2026-10-06, same deploy as #58's sibling work):** a cadence
   hook added a `floor_at` column, bumped the policy version string but not
   `STATE_SCHEMA_VERSION`. ~1100 error receipts accumulated in ~25 minutes of
@@ -3390,3 +3405,31 @@ this list and describe defects you reach by asking a different question):
   establish the supplied context; they do not prove the model's action was right.
   Reminder counts, registration and green fixtures remain distinct from business
   acceptance. This entry adds no new gate or guarantee against every priority error.
+
+## 66. Hook emission and model-context records do not prove that a notification is visible in the ordinary interface
+
+- **Symptom:** a reminder has transcript, log and injection evidence, and the
+  model receives it, yet the person using the ordinary interface never sees an
+  immediate prompt. A second notification channel gets stacked on top before
+  the original channel's visibility has been reproduced, adding duplication
+  without closing the acceptance gap.
+- **Cause and fix:** separate emission, transcript recording, model-context
+  delivery and user-visible rendering; evidence for one does not establish
+  another. Read the relevant official hook documentation in its original form;
+  a `WebFetch` answer or a secondhand summary does not substitute for that
+  text. Transcript entries, `hook_system_message`, hook logs, injection
+  counters and `hookSpecificOutput.additionalContext` can establish emission,
+  recording or model-context delivery. They do not, by themselves, establish
+  that a person can see a prompt in the ordinary interface. Do not add a second
+  notification channel until you have reproduced the original channel in that
+  host and proved its intended notice invisible. For final acceptance, drive
+  exactly one logical injection in an ordinary real host and verify three
+  independent observations: the immediate prompt appears exactly once; the
+  next prompt does not display it again; and the reminder body still enters
+  the next model request.
+- **Real case:** `goal-reanchor`'s re-anchor reminder had injection and
+  transcript evidence while ordinary-interface visibility remained a separate
+  question. Checking one logical injection in the real host, rather than
+  adding another notification channel on an unproven invisibility claim,
+  closed that gap without confusing model delivery with what the user could
+  see.
