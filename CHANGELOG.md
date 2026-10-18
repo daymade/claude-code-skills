@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-permissions** (`daymade-macos` v1.23.5): Reuse current protected-operation evidence, retain pending requests and bound missing-evidence reads; align the repository diagnosis entry. Change type: bounded SOP consistency repair.
+- **terraform-skill** (v1.5.11): Check existing candidate-bound production authorization before requesting missing approval. Change type: bounded SOP consistency repair.
+- **Repository instructions**: Align authentication, performance, protected-read and release navigation with canonical owners; remove repeated route summaries.
 - **frontend-visual-qa** (v1.21.8): Remove derived table/list counts from reading guidance and add the repository's embedded-reader workflow entry. Existing checks and evidence boundaries are unchanged.
 
 - **Installation entry points**: Generate registered suite/plugin targets on Windows, preserve document and statusline choices in both featured-plugin menus, and direct generated CLI commands to the terminal. Align the README selectors, command-generator instructions and update guidance; add output-based installer regressions against the marketplace manifest.

@@ -25,7 +25,7 @@ Several common traps need different fixes:
 
 ### Reproduce the reported denial first
 
-The executing agent repeats the named protected read through the actual failing requester and execution context before changing permissions. A file listing, another terminal, SSH access or a foreground run cannot substitute for the denied file read or background job. Record the path/resource, requester, context and result; this is a diagnostic step, not a mechanical permission classifier.
+The executing agent first inspects the original protected operation through its task-owned handle and any retained result. Reuse current evidence for the same resource, requester and execution context. Keep a still-running request within its existing deadline; do not launch a replacement while its terminal state is unknown. When current evidence is missing or stale, issue one bounded read through the actual failing requester and context before choosing a permission repair. A file listing, another terminal, SSH access or a foreground run cannot substitute for that operation. Record the path/resource, requester, context and result; this is a diagnostic step, not a mechanical permission classifier.
 
 If that read now succeeds, report **currently accessible; earlier cause unknown** and stop permission changes unless a specific required read still fails. Do not call the cause repaired without evidence of the cause and its correction, or add Full Disk Access, change ACLs, reconnect shared mounts or restart a shared host merely to clear a historical error. If it still fails, follow the attribution checks below; `Operation not permitted` alone does not establish TCC as the cause.
 

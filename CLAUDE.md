@@ -124,10 +124,9 @@ proxy-conflict and network-recovery references. For automatic WeCom integration,
 enter `setup-notifications-via-wecom`; its receipt contract owns accepted/rejected/unknown
 handling, while the worker owns event identity and delivery state.
 
-For Terraform publication, approval, first mutation, expired plans, environment isolation or
-initialization-cache changes, enter [`terraform-skill`](terraform-skill/SKILL.md).
-Its pre-deploy and release references own publisher preparation, native-expression verification and authorization;
-its isolation reference owns backend/workspace identity and fresh-state validation.
+For Terraform publication, linked releases, shared-route replacement, approval, first mutation,
+expired plans, environment isolation or initialization-cache changes, enter
+[`terraform-skill`](terraform-skill/SKILL.md).
 
 For Deep Research or Kimi financial-research changes, enter the owning
 [`deep-research`](deep-research/SKILL.md) or [`kimi-use`](kimi-use/SKILL.md) Skill.
@@ -196,8 +195,9 @@ Python hooks.
 ### Rendered UI delivery acceptance
 
 For rendered UI freshness, delayed editor/batch responses or deployment acceptance, enter
-[frontend-visual-qa](frontend-visual-qa/SKILL.md). Keep its manifest, launcher,
-result semantics and rendered-journey procedure in that owner.
+[frontend-visual-qa](frontend-visual-qa/SKILL.md).
+Before measuring loading speed, read its
+[cache and timing comparison](frontend-visual-qa/references/browser-driving-and-observation-traps.md#separate-freshness-checks-from-performance-comparisons).
 For build reuse across source refs or a target redeployed during acceptance, load its
 [delivery verification procedure](frontend-visual-qa/references/delivery-verification.md).
 For nested zoomable workspaces, use its
@@ -219,14 +219,14 @@ For oversized images or figure readability in a Markdown note or transcript, use
 It owns reader-specific sizing and the representative pilot; keep display values
 and verification details there.
 
-### Background Full Disk Access repair
+### Background protected-data access
 
-When a LaunchAgent cannot read protected data, enter
-[`macos-permissions`](daymade-macos/macos-permissions/SKILL.md) and its
+For a background protected-data read failure, start at
+[macos-permissions' reproduction step](daymade-macos/macos-permissions/SKILL.md#reproduce-the-reported-denial-first).
+Before interpreting preflight logs or grant rows, read its
+[correlation procedure](daymade-macos/macos-permissions/references/tcc-mechanics.md#correlate-preflight-and-grant-evidence).
+For an established Full Disk Access repair, use its
 [automated repair SOP](daymade-macos/macos-permissions/references/automated-full-disk-access.md).
-For a reported denial that may no longer occur, start at its
-[reproduction step](daymade-macos/macos-permissions/SKILL.md#reproduce-the-reported-denial-first).
-Keep attribution, repair and actual-context verification with those owners.
 
 Treat `daymade-skill/skill-creator` as a locked uv project. Run its bundled Python tools from that directory with `uv run --frozen`; the project-local `.venv` is isolated from caller projects while uv's shared cache supplies the pinned packages. Do not reintroduce per-call `--with` overlays for dependencies already in its `pyproject.toml`.
 
@@ -570,9 +570,9 @@ For inherited upload restrictions or source paths hidden by ignore rules, read i
 [convergence authority and source-inventory procedure](git-safety-net/references/merge_verification.md#1-freeze-the-outcome-and-the-first-ref-snapshot).
 
 For GitHub-hosted state — PRs, issues, Actions, repository or organization settings, permissions,
-and API/UI mutations — treat `github-ops/SKILL.md` as the canonical operating contract. A command
-receipt is not completion; use that Skill's operation-specific independent readback. Keep detailed
-GitHub SOPs there rather than copying them into this repository-level instruction file.
+and API/UI mutations — enter [github-ops](github-ops/SKILL.md).
+For reauthentication during an authorized operation, use its
+[named-write authentication procedure](github-ops/SKILL.md#8-authenticate-only-for-the-named-write).
 For upstream contributions and desktop E2E acceptance, enter
 [github-contributor](github-contributor/SKILL.md) and its
 [quality/E2E workflow](github-contributor/references/phase3_quality_gates_and_e2e.md).
