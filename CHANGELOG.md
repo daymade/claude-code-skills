@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **claude-code-hooks / repository instructions** (`daymade-claude-code` v4.30.8): Remove derived fixture and observation counts from visibility and migration guidance, and add the consuming instruction-entry routes. Runtime behavior and acceptance contracts are unchanged. Change type: documentation hygiene and routing alignment.
 - **floorplan-finder** (v1.0.0): Add online residential plan discovery, original-image comparison, entrance and bathroom ambiguity checks, same-layout confirmation, and evidence-based recovery. Register the standalone plugin and align both language guides. Marketplace catalog: 3.25.0.
 - **product-growth** (v1.0.0): Add evidence-based growth diagnosis, proactive feedback discovery, product-specific metrics, causal reasoning and action/result verification. Register the standalone plugin and align both language guides.
 

@@ -174,6 +174,9 @@ For hook creation, consolidation, Skill-entry enforcement, registration or recov
 and follow its Build order and installer-owned recovery contract. Follow that
 Skill's loop and reminder contract; keep current thresholds in the
 owning implementation.
+For ordinary-interface notification visibility, use
+[hook_pitfalls.md #66](daymade-claude-code/claude-code-hooks/references/hook_pitfalls.md);
+for current-version/partial-structure SQLite upgrades, use that file's #59.
 
 Python entry points registered as synchronous Claude Code/Codex lifecycle hooks or
 background services (LaunchAgents included) must call a fixed direct interpreter
@@ -862,8 +865,10 @@ Before submitting or modifying skills:
 ## Adding a New Skill to Marketplace
 
 Follow [Adding a New Skill to Marketplace](references/new-skill-guide.md) for
-registration, README updates, validation, and publication. Use the existing suite
-identity when adding a member; do not introduce a parallel standalone plugin.
+registration, README updates, documentation alignment, validation, and publication.
+Apply **Quality Standards** above to this file's affected stable rules and routes.
+Use the existing suite identity when adding a member; do not introduce a parallel
+standalone plugin.
 The local-availability gate under **Testing Skills Locally** applies when local
 use is part of the requested delivery.
 
