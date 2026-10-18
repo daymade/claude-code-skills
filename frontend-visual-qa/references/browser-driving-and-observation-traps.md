@@ -35,6 +35,20 @@ reference-based clicking over coordinates for anything smaller than a large
 button — coordinates are for canvas, maps, and drag paths, where no element
 reference exists.
 
+For a long request or title inside a fixed reading pane, keep the **same full
+input and normal viewport**. Inspect the actual content height and clipping
+ancestors: a positive outer height can consist entirely of padding. Use ordinary
+scrolling until the source entry and at least one complete body line are readable,
+then click normally and follow the existing
+[source identity and return contract](journey-and-page-contracts.md). A short-input
+pass or hit-test is auxiliary evidence; a click attempted before scrolling the
+entry into view cannot refute the candidate repair. The repository-only synthetic
+control is `evals/files/nested-source-return-fixture.html`; from an existing
+Playwright project, run `node --test <skill-source>/tests/test_nested_source_return.mjs`.
+These development files are excluded from the installed bundle; obtain them from
+this Skill's public source checkout. This control covers long faulty, long repaired
+and short healthy inputs; it does not verify a live product or physical device.
+
 ## 2. The page you are looking at may not be the page you just changed
 
 For a source-change or deployment claim, visual verification is a chain:
