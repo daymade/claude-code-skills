@@ -14,17 +14,36 @@ uv run --frozen python -m scripts.security_scan "$SKILL_DIR" --verbose
 
 `security_scan` (gitleaks) is a **keyword-based first pass, NOT the gate**. It cannot see real project/person nicknames, CJK names (gitleaks ignores CJK), or verbatim transcript lines — none have a secret signature. **Before publishing you MUST read the whole skill yourself** (SKILL.md + every reference + every example) and judge each concrete noun semantically: generic placeholder, or lifted from a real project/person? See [`../daymade-skill/skill-creator/references/sanitization_checklist.md`](../daymade-skill/skill-creator/references/sanitization_checklist.md). A green scan is **not** a clean bill of health. (2026-06-28: openclaw shipped review with real instance nicknames that scan/gitleaks/grep all missed — caught only by the read-through.)
 
-### 2. Package an archive deliverable
+### 2. Update .claude-plugin/marketplace.json (MOST IMPORTANT)
 
-Run this step when a `.skill` archive is part of the requested delivery:
+For a member of an existing suite, append its relative path to that plugin's
+`skills` array and bump the suite version. Do not create a second standalone
+entry. For a new standalone plugin, use this shape:
 
-```bash
-SKILL_DIR="<repo-root>/<skill-directory>"
-cd <repo-root>/daymade-skill/skill-creator
-uv run --frozen python -m scripts.package_skill "$SKILL_DIR" <output-dir>
+```json
+{
+  "name": "skill-name",
+  "description": "Clear description with trigger conditions. Use when [scenarios]",
+  "source": "./skill-name",
+  "strict": false,
+  "version": "1.0.0",
+  "category": "appropriate-category",
+  "keywords": ["keyword1", "keyword2", "keyword3"]
+}
 ```
 
-### 3. Update CHANGELOG.md
+**Categories:** `developer-tools`, `document-conversion`, `documentation`, `customization`, `communication`, `utilities`, `assets`, `design`, `productivity`, `security`, `media`
+
+Validate: `python3 -m json.tool .claude-plugin/marketplace.json > /dev/null`
+
+### 3. Align operating documentation
+
+Before freezing the candidate, follow the repository's
+[documentation contract](../CLAUDE.md#quality-standards) for the affected operating
+procedures and instruction entries, and its
+[catalog authority](../CLAUDE.md#available-skills) for marketplace navigation.
+
+### 4. Update CHANGELOG.md
 
 Add new version entry at the top (after [Unreleased]):
 
@@ -38,7 +57,7 @@ Add new version entry at the top (after [Unreleased]):
   - Bundled scripts/references/assets
 ```
 
-### 4. Update README.md
+### 5. Update README.md
 
 **a. Update description:**
 ```markdown
@@ -90,40 +109,21 @@ Use **skill-name** to [describe primary use case]. Combine with **other-skill** 
 
 **e. Add documentation quick link and update requirements section (if needed).**
 
-### 5. Align operating documentation
-
-Before freezing the candidate, follow the repository's
-[documentation contract](../CLAUDE.md#quality-standards) for the affected operating
-procedures and instruction entries, and its
-[catalog authority](../CLAUDE.md#available-skills) for marketplace navigation.
-
-### 6. Update .claude-plugin/marketplace.json (MOST IMPORTANT)
-
-For a member of an existing suite, append its relative path to that plugin's
-`skills` array and bump the suite version. Do not create a second standalone
-entry. For a new standalone plugin, use this shape:
-
-```json
-{
-  "name": "skill-name",
-  "description": "Clear description with trigger conditions. Use when [scenarios]",
-  "source": "./skill-name",
-  "strict": false,
-  "version": "1.0.0",
-  "category": "appropriate-category",
-  "keywords": ["keyword1", "keyword2", "keyword3"]
-}
-```
-
-**Categories:** `developer-tools`, `document-conversion`, `documentation`, `customization`, `communication`, `utilities`, `assets`, `design`, `productivity`, `security`, `media`
-
-Validate: `python3 -m json.tool .claude-plugin/marketplace.json > /dev/null`
-
-### 7. Update README.zh-CN.md
+### 6. Update README.zh-CN.md
 
 **CRITICAL**: Chinese documentation must be kept in sync with English version.
 
 Review the same user-facing changes as README.md, translated to professional technical Chinese. Keep code examples in English.
+
+### 7. Package an archive deliverable
+
+Run this step when a `.skill` archive is part of the requested delivery:
+
+```bash
+SKILL_DIR="<repo-root>/<skill-directory>"
+cd <repo-root>/daymade-skill/skill-creator
+uv run --frozen python -m scripts.package_skill "$SKILL_DIR" <output-dir>
+```
 
 ### 8. Validate, merge, and release
 
