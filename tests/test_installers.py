@@ -47,7 +47,7 @@ class InstallerContract:
         if not self.executable:
             self.skipTest(f"{self.script} runtime is unavailable")
 
-    def run_installer(self, replies=()):
+    def run_installer(self, replies=(), *, invocation="file"):
         with tempfile.TemporaryDirectory(prefix="installer-test-") as directory:
             sandbox = Path(directory)
             home = sandbox / "home"
@@ -86,8 +86,17 @@ class InstallerContract:
             )
             command = [self.executable]
             if self.script.endswith(".ps1"):
-                command.extend(["-NoLogo", "-NoProfile", "-File"])
-            command.append(str(ROOT / self.script))
+                command.extend(["-NoLogo", "-NoProfile"])
+            if invocation == "console-iex":
+                source = str(ROOT / self.script).replace("'", "''")
+                command.extend([
+                    "-Command",
+                    f"[IO.File]::ReadAllText('{source}') | Invoke-Expression",
+                ])
+            else:
+                if self.script.endswith(".ps1"):
+                    command.append("-File")
+                command.append(str(ROOT / self.script))
             if replies:
                 if os.name != "posix":
                     self.skipTest("interactive installer checks require a POSIX PTY")
@@ -185,7 +194,7 @@ class InstallerContract:
         self.assertNotIn("Run these commands in Claude Code", output)
         self.assertNotIn("Paste them into Claude Code", output)
 
-    def test_piped_input_recommends_the_core_suite(self):
+    def test_redirected_stdin_recommends_the_core_suite(self):
         output = self.run_installer()
         self.assert_commands(output, ["daymade-skill"])
         self.assertIn(
@@ -225,6 +234,14 @@ class BashInstallerTests(InstallerContract, unittest.TestCase):
 class PowerShellInstallerTests(InstallerContract, unittest.TestCase):
     executable = POWERSHELL
     script = "scripts/install.ps1"
+
+    def test_console_object_pipeline_keeps_interactive_core_selection(self):
+        output = self.run_installer(
+            [("Enter your choice (1-4)", "1")], invocation="console-iex"
+        )
+        self.assertIn("What would you like to install?", output)
+        self.assertNotIn("Running in non-interactive mode.", output)
+        self.assert_commands(output, ["daymade-skill"])
 
 
 if __name__ == "__main__":

@@ -77,8 +77,8 @@ curl -fsSL https://raw.githubusercontent.com/daymade/claude-code-skills/main/scr
 iwr -useb https://raw.githubusercontent.com/daymade/claude-code-skills/main/scripts/install.ps1 | iex
 ```
 
-将生成的命令放到终端执行。管道输入默认选择推荐的 `daymade-skill` 套件。
-如需精选插件菜单或自定义选择，按脚本输出中的说明下载脚本后在本地运行。
+将生成的命令放到终端执行。如需精选插件菜单或自定义选择，
+按脚本输出中的说明下载脚本后在本地运行。
 
 ### 选项 2：手动安装
 

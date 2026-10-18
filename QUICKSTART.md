@@ -77,9 +77,8 @@ curl -fsSL https://raw.githubusercontent.com/daymade/claude-code-skills/main/scr
 iwr -useb https://raw.githubusercontent.com/daymade/claude-code-skills/main/scripts/install.ps1 | iex
 ```
 
-Run the generated commands in your terminal. Piped input selects the recommended
-`daymade-skill` suite. For the featured-plugin menu or custom selection, download
-and run the script locally as described in its output.
+Run the generated commands in your terminal. For the featured-plugin menu or
+custom selection, download and run the script locally as described in its output.
 
 ### Option 2: Manual Installation
 

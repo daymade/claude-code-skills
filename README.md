@@ -129,9 +129,8 @@ Then:
 
 ### Generate Installation Commands
 
-These scripts print commands for you to run in your terminal. Piped input selects
-the recommended `daymade-skill` suite; download and run the script locally for the
-featured-plugin menu or custom selection.
+These scripts print commands for you to run in your terminal. Download and run
+the script locally to choose from the featured-plugin menu or make a custom selection.
 
 **macOS/Linux:**
 ```bash
