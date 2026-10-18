@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **competitors-analysis** (v1.6.5): Reconcile requested and cumulative competitor sources before historical inventories, retaining evidence depth and normal discovery/profile/update paths. Change type: bounded routing correction.
 - **app-evolver** (v1.1.3): Add paired acceptance examples for bounded absence and normal eventual completion, preserving failed attempts and read-only API semantics. Change type: bounded acceptance guidance.
+- **frontend-visual-qa** (v1.21.5): Keep the same long input and normal viewport when verifying constrained source-and-return journeys. Add synthetic collapsed-pane, ordinary-navigation and short-input controls; runtime permissions unchanged.
 
 - **tibo-reset-codex** (v1.23.2): Use the vendor's direct file entry for login-browser reads in restricted macOS research; retain source-coverage unknowns and existing account authorization. Change type: bounded execution guidance.
 - **frontend-visual-qa** (v1.21.3 → v1.21.4): Add view/request-bound capture checks and concurrent-deployment recovery; preserve existing audit profiles and authority. Change type: bounded verification-method clarification.
