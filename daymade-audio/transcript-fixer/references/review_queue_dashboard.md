@@ -228,10 +228,9 @@ hint whose context matches, and refuses (`re_anchor_needed`) when it cannot
 choose — no line hint at all, nothing matching near the hint, or two occurrences
 equally near it. Either way the other occurrences are left standing,
 **including on the very line the verdict just edited**, which is
-where a repeated name is most likely. Measured on one real batch: ten items
-resolved, four of them left six more occurrences behind, two of those on a line a
-verdict had already touched. So a verdict batch has a second half:
+where a repeated name is most likely.
 
+### Same-line occurrence anchoring
 
 When the same token occurs twice on one line, supply a verbatim context that
 contains only the intended occurrence, or include `context_offset`: the zero-based
