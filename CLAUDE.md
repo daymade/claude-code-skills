@@ -227,6 +227,8 @@ Before interpreting preflight logs or grant rows, read its
 [correlation procedure](daymade-macos/macos-permissions/references/tcc-mechanics.md#correlate-preflight-and-grant-evidence).
 For an established Full Disk Access repair, use its
 [automated repair SOP](daymade-macos/macos-permissions/references/automated-full-disk-access.md).
+After a permission grant or reset, follow `macos-permissions`'s
+[request lifecycle](daymade-macos/macos-permissions/SKILL.md#after-a-grant-or-reset).
 
 Treat `daymade-skill/skill-creator` as a locked uv project. Run its bundled Python tools from that directory with `uv run --frozen`; the project-local `.venv` is isolated from caller projects while uv's shared cache supplies the pinned packages. Do not reintroduce per-call `--with` overlays for dependencies already in its `pyproject.toml`.
 

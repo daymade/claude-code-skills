@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **capture-screen** (`daymade-macos` v1.23.6): Route permission recovery guidance to the existing request lifecycle and remove manual summary counts; keep capture commands and runtime behavior unchanged.
 - **macos-permissions** (`daymade-macos` v1.23.5): Reuse current protected-operation evidence, retain pending requests and bound missing-evidence reads; align the repository diagnosis entry. Change type: bounded SOP consistency repair.
 - **terraform-skill** (v1.5.11): Check existing candidate-bound production authorization before requesting missing approval. Change type: bounded SOP consistency repair.
 - **Repository instructions**: Align authentication, performance, protected-read and release navigation with canonical owners; remove repeated route summaries.
