@@ -3926,6 +3926,28 @@ Daymade Skill Evolver 组装已有 Skills，为指定现有 Skill 完成一轮�
 
 ---
 
+### **product-growth** - 有证据的产品增长诊断
+
+> **安装**：`claude plugin install product-growth@daymade-skills`
+
+主动发现真实反馈，结合业务数据分析增长来源、指标缺口与改进机会。区分统计口径、
+渠道归因和因果效应，把建议落实为可验证的用户价值与业务结果；按 SaaS、电商、
+双边市场、开发工具等产品的实际价值和使用周期选择指标。
+
+**适用场景**：自然增长来源、遗漏渠道或指标、激活与留存、收入质量、生态采用和行动复盘。
+
+```text
+用 product-growth 分析我们的自然增长，主动查找遗漏的反馈渠道，给出有证据、
+能检验结果的下一项改进。
+```
+
+**要求**：宿主能读取和分析所给数据；实时公开反馈需要获授权的网页/API 通道。
+专项 Skill 为可选适配器。
+
+📚 **文档**：[product-growth](./product-growth/SKILL.md)。
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -3936,6 +3958,10 @@ Daymade Skill Evolver 组装已有 Skills，为指定现有 Skill 完成一轮�
 使用 **github-ops** 完成可验证的 PR、问题、Actions、仓库、组织访问和 API 操作。维护者要对一个现有
 贡献者 PR 或完整 open PR 队列做基于当前 base 的代码 review、责任归因或
 review 后修复/落地时，使用 **github-review-pr**。
+
+### 产品增长
+使用 **product-growth** 把真实反馈与业务数据连到增长机制、可比指标和可验证行动。
+已授权的应用实现可交给 **app-evolver**。
 
 ### 文档处理
 结合 **doc-to-markdown** 进行文档转换和 **mermaid-tools** 进行图表生成，创建全面的文档。使用 **llm-icon-finder** 添加品牌图标。
@@ -4157,6 +4183,10 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 - **meme-creator**：参见 `meme-creator/SKILL.md` 了解完整流程，及 `meme-creator/references/tracking-playbook.md` 了解 CSRT 失效分类与手工关键帧接管
 
 ## 🛠️ 系统要求
+
+- **product-growth**：宿主文件读取与分析工具；实时反馈需要获授权的网页/API 通道，无随包运行时依赖。
+
+
 
 - **Claude Code** 2.0.13 或更高版本
 - **支持 `doctor --json` 与 `debug models` 的 Codex CLI + uv/Python 3.11+**（用于 codex-1m-context-window-setup）
