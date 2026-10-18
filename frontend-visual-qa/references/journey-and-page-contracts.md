@@ -107,6 +107,24 @@ Record only affected states and the actual results. Missing source, unavailable
 body or a hidden/throttled test target keeps the dependent verdict unverified;
 preserve the product's own unknown/read-only boundary.
 
+#### Reader usability counterexamples
+
+When reader sizing, surrounding navigation or overlays change, use these observed
+failure shapes to choose the affected checks. Retention probes alone pass the
+first two rows; neither build success nor a matching iframe resolves them.
+
+| Observation | What the executor must establish |
+|---|---|
+| The document, Find and scroll survive return, but the body has zero height or only a clipped sliver beneath a long title. | Inspect the ordinary, populated page with its actual navigation and title; read the body and use its controls. Measure the body rather than the iframe shell. A larger frame is not a pass if the prose remains unreadable. |
+| A new global action changes the mobile grid, or a relationship overlay stays above the original-text control. | Inspect the complete header and reader together, then use the ordinary visible control. Compare the hit owner at the pointer with the promised action; DOM presence or a forced/programmatic click cannot clear an intercepted control. |
+| Returning appears to recreate the reader, but the driver changed viewport or emulation between observations. | Mark that comparison inconclusive, bind the same settled viewport and repeat only the affected journey before attributing the recreation to the product. Refresh element references after a driver operation invalidates them. |
+
+Keep a healthy same-target reading/return control alongside the failure case.
+Preserve the promised document, query, range and actual scroll owner while also
+reading usable body content. Use the project's reading requirement; an observed
+pixel height is not a universal minimum. A narrow-browser result does not supply
+unperformed physical-phone, keyboard or native-intervention evidence.
+
 Treat these as Major unless the project taxonomy says otherwise:
 
 - a primary action blocks indefinitely with no recovery;
