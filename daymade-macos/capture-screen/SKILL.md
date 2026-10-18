@@ -37,7 +37,7 @@ screencapture -x -l 12345 output.png
 
 ## Overview
 
-Three-step workflow:
+Workflow:
 
 ```
 1. Find Window  →  Swift CGWindowListCopyWindowInfo  →  get numeric Window ID
@@ -280,7 +280,8 @@ Then:
     - Ensure you granted permission to the real app bundle (not `swift` / terminal helpers).
     - For CLI tools, build/run as a packaged `.app` during permission verification.
     - Click `+` and add the `.app` manually from `/Applications`.
-3. Re-run the command after restarting the app.
+3. Follow the [permission request lifecycle](../macos-permissions/SKILL.md#after-a-grant-or-reset)
+   before retrying or deciding whether the app needs a relaunch.
 4. If this is a CLI workflow, also check whether the launcher is a helper binary:
    - In most cases the entry shown in TCC is the helper process (`swift`, `Terminal`, `iTerm`, etc.), not the business app.
    - Permission still works after helper-level grant, but it is not ideal for final UX.
@@ -300,7 +301,7 @@ The same rule still applies: the system can only show permissions for a concrete
 2) Open target pane
 3) Verify identity shown by OS = identity you granted
 4) If not matched, use the script-reported candidate identities and grant the launcher process
-5) Reopen/restart and verify
+5) Verify through the permission request lifecycle above
 ```
 
 For production apps, avoid requesting permissions via `swift`/`python` entry points; always route permission checks in the packaged app process so users only see one target.

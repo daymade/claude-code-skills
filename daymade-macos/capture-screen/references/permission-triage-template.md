@@ -12,7 +12,7 @@
 2. 确认 TCC 实体
    - 不是脚本文件名。
    - **弹窗上显示的名字 ≠ 发起方**。无签名可执行文件（`uv` 管的 python、CLI 工具）在 TCC 里 `identifier=-`，被归因到 responsible 父进程；弹窗标题却显示它当前调用的解释器名（`python3.11`/`python3.14`），会随版本漂移。**授权名字会骗人。**
-   - **两个独立真相源，都读，别靠截图/操作回执：**
+   - **独立真相源，都读，别靠截图/操作回执：**
      - 谁在请求：`log show --predicate 'subsystem=="com.apple.TCC"'` 里 `from Sub:{<path>}` 是发起方；`responsible=` 是归因根。
      - 授权现状：`sudo sqlite3 '/Library/Application Support/com.apple.TCC/TCC.db' "select client,auth_value from access where service='<kTCCService...>' and client like '%<名字>%';"`（`auth_value=2` 已授权 / `0` 未授权）。SIP 保护该库只读——命令行改不了，授权必须走 GUI。
    - 先确认“当前触发进程”与“最终应用体”是否一致。
@@ -20,7 +20,7 @@
 3. 确认设置面板
    - 直接跳转到对应隐私面板
    - 允许该进程/应用
-   - 重启进程后复验
+   - 按 [权限请求生命周期](../../macos-permissions/SKILL.md#after-a-grant-or-reset)复验，再判断是否需要重启
 
 ## 通用动作模板
 
@@ -37,7 +37,7 @@ open "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone
 - 优先确认请求来自真实 .app Bundle（签名、打包）
 - 如果当前为 CLI/脚本入口，先给宿主进程授权（Terminal/iTerm/swift/python）
 - 在设置面板点击 `+` 手工添加目标 `.app`
-- 变更后退出并重启应用，重新测试
+- 变更后按上述权限请求生命周期复验
 
 ## 超出录屏/麦克风的权限问题
 
