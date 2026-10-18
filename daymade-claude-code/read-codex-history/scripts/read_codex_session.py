@@ -110,9 +110,10 @@ def list_sessions(
 def _rollout_session_id(path: Path) -> Optional[str]:
     """Return the internal session_meta id, or None when it is not provable."""
     try:
-        records = _iter_rollout_records(path)
+        records = _iter_rollout_views(path)
         try:
-            record = next(records, None)
+            pair = next(records, None)
+            record = pair[1] if pair else None
             if not record or record.get("type") != "session_meta":
                 raise LineageResolutionError(f"rollout has no leading session_meta: {path}")
             payload = record.get("payload")
@@ -132,6 +133,77 @@ def _rollout_ids(path: Path) -> Optional[tuple[str, str]]:
     if match is None:
         return None
     return match[1].lower(), (match[2] or match[1]).lower()
+
+
+def codex_rollout_header(record: dict[str, Any], path: Path) -> dict[str, Any]:
+    """Validate a leading header and return the shared session_meta view.
+
+    Pre-envelope rollouts have one exact metadata shape and a canonical,
+    unsegmented filename. They cannot assert pagination or ancestry.
+    """
+    if not isinstance(record, dict):
+        raise LineageResolutionError("rollout must begin with supported session metadata")
+    ids = _rollout_ids(path)
+    if record.get("type") == "session_meta" and isinstance(record.get("payload"), dict):
+        header = record
+    elif (set(record) == {"id", "timestamp", "instructions", "git"}
+          and isinstance(record["id"], str) and re.fullmatch(_UUID, record["id"])
+          and isinstance(record["timestamp"], str)
+          and re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z", record["timestamp"])
+          and (record["instructions"] is None or isinstance(record["instructions"], str))
+          and isinstance(record["git"], dict)
+          and ids == (record["id"].lower(), record["id"].lower())
+          and "_" not in path.stem):
+        header = {"type": "session_meta", "payload": {**record, "history_mode": "legacy"}}
+    else:
+        raise LineageResolutionError("rollout must begin with supported session metadata")
+    meta = header["payload"]
+    identity = meta.get("id")
+    if not isinstance(identity, str) or not identity.strip():
+        raise LineageResolutionError("rollout metadata lacks a session identity")
+    mode = meta.get("history_mode", "legacy")
+    if mode not in ("legacy", "paginated") or ("history_mode" not in meta and "ordinal" in header):
+        raise LineageResolutionError("rollout history mode is unknown")
+    if ids and ids[0] != identity.lower():
+        raise LineageResolutionError("rollout filename logical identity differs from metadata")
+    if (mode == "paginated" or (path.name.startswith("rollout-") and "_" in path.stem)) and ids is None:
+        raise LineageResolutionError("rollout requires a canonical matching filename")
+    return header
+
+
+def _pre_envelope_record_view(record: dict[str, Any]) -> dict[str, Any]:
+    """Normalize only the known pre-envelope response-item and state shapes."""
+    if record == {"record_type": "state"}:
+        return {"type": "legacy_state", "payload": {}}
+    kind = record.get("type")
+    fields = set(record)
+    valid = False
+    if kind == "message" and fields == {"type", "id", "role", "content"}:
+        valid = (record["id"] is None or isinstance(record["id"], str)) and record["role"] in ("user", "assistant", "system", "developer") and isinstance(record["content"], list)
+        for part in record["content"] if isinstance(record["content"], list) else []:
+            if not isinstance(part, dict) or set(part) != {"type", "text"} or part["type"] not in ("input_text", "output_text", "text") or not isinstance(part["text"], str):
+                valid = False
+    elif kind == "function_call" and fields == {"type", "id", "name", "arguments", "call_id"}:
+        valid = all(isinstance(record[key], str) and record[key] for key in ("id", "name", "call_id")) and isinstance(record["arguments"], str)
+    elif kind == "function_call_output" and fields == {"type", "call_id", "output"}:
+        valid = isinstance(record["call_id"], str) and bool(record["call_id"]) and isinstance(record["output"], str)
+    elif kind == "reasoning" and fields == {"type", "id", "summary", "content", "encrypted_content"}:
+        valid = isinstance(record["id"], str) and bool(record["id"]) and isinstance(record["summary"], list) and record["content"] is None and isinstance(record["encrypted_content"], str)
+    if not valid:
+        raise LineageResolutionError("unsupported pre-envelope rollout record")
+    return {"type": "response_item", "payload": record}
+
+
+def _iter_rollout_views(path: Path, end_byte_offset: Optional[int] = None, **kwargs):
+    """Yield (original, normalized view), keeping original evidence untouched."""
+    pre_envelope = False
+    for index, original in enumerate(_iter_rollout_records(path, end_byte_offset, **kwargs)):
+        if index == 0:
+            view = codex_rollout_header(original, path) if "type" not in original else original
+            pre_envelope = view is not original
+        else:
+            view = _pre_envelope_record_view(original) if pre_envelope else original
+        yield original, view
 
 
 def _rollout_key(path: Path, logical_id: str) -> str:
@@ -676,7 +748,7 @@ def _summarize_codex_rollout(
         "end_ordinal_exclusive": None,
         "legacy_parent_edge": None,
     }
-    for record in _iter_rollout_records(
+    for original, record in _iter_rollout_views(
         path, end_byte_offset, max_total_bytes=end_byte_offset,
     ):
         index = data["total_lines"]
@@ -1246,7 +1318,7 @@ def parse_codex_rollout(
     }
     unrecovered_tool_errors = 0
 
-    for record in _iter_rollout_records(path, end_byte_offset):
+    for original_record, record in _iter_rollout_views(path, end_byte_offset):
         data["total_lines"] += 1
         if skip_record_index_range is not None:
             skip_start, skip_end = skip_record_index_range
@@ -1304,7 +1376,7 @@ def parse_codex_rollout(
                 "attachments": attachments,
                 "schema_issues": schema_issues,
                 "record_sha256": hashlib.sha256(json.dumps(
-                    record, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+                    original_record, ensure_ascii=False, sort_keys=True, separators=(",", ":")
                 ).encode("utf-8")).hexdigest(),
             })
 
@@ -2021,7 +2093,7 @@ def extract_record_evidence(
     matches: list[dict[str, Any]] = []
     found: set[int] = set()
     total = 0
-    for total, record in enumerate(_iter_rollout_records(path, end_byte_offset), 1):
+    for total, (original, record) in enumerate(_iter_rollout_views(path, end_byte_offset), 1):
         payload = record.get("payload")
         payload = payload if isinstance(payload, dict) else {}
         kind = payload.get("type")
@@ -2039,7 +2111,7 @@ def extract_record_evidence(
             continue
         if tools and not is_tool:
             continue
-        if contains is not None and not _contains_original_string(record, contains):
+        if contains is not None and not _contains_original_string(original, contains):
             continue
         matches.append({
             "record": total,
@@ -2047,7 +2119,7 @@ def extract_record_evidence(
             "role": payload.get("role"),
             "human_authorship": "not_established_by_role",
             "paired_call": calls.get(call_id) if is_tool else None,
-            "original": record,
+            "original": original,
             "truncated": False,
         })
     missing = sorted(requested - found)
@@ -2092,7 +2164,7 @@ def extract_logical_record_evidence(
     total = 0
     retained = 0
     for source in sources:
-        for ordinal, record in enumerate(_iter_rollout_records(
+        for ordinal, (original, record) in enumerate(_iter_rollout_views(
                 Path(source["path"]), source["end_byte_offset"]), 1):
             total += 1
             skip = source.get("skip_record_index_range")
@@ -2112,12 +2184,12 @@ def extract_logical_record_evidence(
                        "logical_record": retained}
             if kind in {"function_call", "custom_tool_call"} and call_id:
                 calls[call_id] = {**locator, "name": payload.get("name"), "call_id": call_id}
-            if contains is not None and not _contains_original_string(record, contains):
+            if contains is not None and not _contains_original_string(original, contains):
                 continue
             matches.append({**locator, "source_kind": "tool_record",
                             "role": payload.get("role"),
                             "human_authorship": "not_established_by_role",
-                            "paired_call": calls.get(call_id), "original": record,
+                            "paired_call": calls.get(call_id), "original": original,
                             "truncated": False})
     return {"session_id": session_id, "path": str(path), "identity": "verified",
             "scope": "logical_history", "sources": sources,
