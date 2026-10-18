@@ -95,8 +95,10 @@ or the current live config. Those validate a different system.
   by itself must rerun or cryptographically consume that evidence; it cannot mint a receipt from plan text.
 - Before production, freshly fetch/read the authoritative remote branch and prove the candidate commit is
   in its history. Reject fetch failure; never fall back to a cached remote-tracking ref.
-- Ask for production authorization at the last reversible point, using a channel the applying process
-  cannot forge. Plan digests and blast-radius acknowledgements prove review, not permission.
+- Verify production authorization at the last reversible point, including existing standing or exact
+  approval that covers this candidate, target and mutation. Obtain missing authorization through a
+  channel the applying process cannot forge; do not reopen a covered approval. Plan digests and
+  blast-radius acknowledgements prove review, not permission.
 - Keep the invalid-config recovery path separate and narrow: exact target, approved known-good bytes,
   prevalidation, compare-and-swap live identity, recovery ledger, and public readback.
 
