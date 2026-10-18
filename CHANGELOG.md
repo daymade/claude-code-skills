@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Installation entry points**: Generate registered suite/plugin targets on Windows, preserve document and statusline choices in both featured-plugin menus, and direct generated CLI commands to the terminal. Align the README selectors, command-generator instructions and update guidance; add output-based installer regressions against the marketplace manifest.
+
 - **frontend-visual-qa** (v1.21.6): Add reader-usability counterexamples and focused replay cases for retained but unreadable bodies, global chrome and overlay interference, and viewport-drift false comparisons. Scope result-consumption fixture checks to their case identities so later cases can be appended. Change type: bounded guidance addition; scripts and permissions unchanged.
 - **frontend-visual-qa** (v1.21.5): Keep the same long input and normal viewport when verifying constrained source-and-return journeys. Add synthetic collapsed-pane, ordinary-navigation and short-input controls; runtime permissions unchanged.
 
