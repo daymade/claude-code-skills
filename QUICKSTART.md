@@ -65,7 +65,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for the contribution policy.
 
 **Just want to use existing skills? Here's how!**
 
-### Option 1: Automated Installation (Fastest)
+### Option 1: Generate Installation Commands
 
 **macOS/Linux:**
 ```bash
@@ -77,7 +77,8 @@ curl -fsSL https://raw.githubusercontent.com/daymade/claude-code-skills/main/scr
 iwr -useb https://raw.githubusercontent.com/daymade/claude-code-skills/main/scripts/install.ps1 | iex
 ```
 
-Follow the interactive prompts to select skills.
+Run the generated commands in your terminal. For the featured-plugin menu or
+custom selection, download and run the script locally as described in its output.
 
 ### Option 2: Manual Installation
 
