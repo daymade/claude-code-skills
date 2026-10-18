@@ -19,6 +19,37 @@ A focused resource name does not imply a focused blast radius. Inspect provision
 edges: a "service deploy" resource may also extract a gateway directory, replace the runtime env, and
 recreate a shared front door.
 
+### Classify linked releases before separating them
+
+When a shared gateway would also change another site's version, compare that change with the
+current release contract and its actual verification. A version difference alone is not an
+unintended release. Include an expected, already authorized and verified linked change when the
+same exact candidate, target and recovery path cover it; do not ask for the same approval again.
+Keep an unrelated, unapproved or unverified change outside the mutation, using an existing narrow
+release entry when available. If none exists, report the concrete missing boundary rather than
+silently broadening the release or inventing an alternate publisher.
+
+Before choosing that entry, compare its complete output with the current protected route inventory
+and the services those routes require. A production-only route whose backend is absent in staging
+does not become a valid staging candidate by copying its hostname/configuration there. Use the
+repository's supported environment-specific candidate and evidence; if those are unavailable, keep
+that release path unresolved. Do not expand a narrow delivery into a full-stack drift repair merely
+to make state, live configuration and a broad publisher look identical.
+
+For a route added through a dedicated release path, also inspect the next ordinary publisher's
+generated candidate. It must preserve the route and its required bindings, or explicitly exclude
+that ownership boundary from its replacement set. A successful dedicated deployment does not
+prove the next directory sync will retain it. Verify this with a focused candidate/route regression
+case before changing the publisher; a manual post-release check alone cannot establish preservation.
+
+Synthetic decision cases:
+
+| Observed candidate | Release decision |
+|---|---|
+| Another site's version advances as part of its approved release; exact candidate and shared-runtime checks pass | Include it within that authorization and recovery boundary |
+| The same version advance has unknown approval or failed verification | Hold that change; use a supported narrower entry or report its missing prerequisite |
+| Dedicated route is live, but the next ordinary publisher omits it | Preserve the route in that publisher before claiming durable delivery; do not remove it to reconcile state |
+
 ## Use one required-key contract
 
 Keep required keys in one manifest or derive them from one canonical schema. Run the same validator for
