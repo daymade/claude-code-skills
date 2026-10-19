@@ -660,6 +660,41 @@ class ListSessionsAnchorTest(unittest.TestCase):
              mock.patch.object(gs, "_transcript_candidates", side_effect=resolve):
             return gs.list_sessions()
 
+    def test_no_daemon_and_daemon_option_values_remain_live(self):
+        for command in (
+            f"codex --no-daemon resume {S_CODEX}",
+            f"codex resume {S_CODEX} --no-daemon",
+            f"/opt/daemon-tools/bin/codex --no-daemon resume {S_CODEX}",
+            f"node /opt/daemon-tools/bin/codex --no-daemon resume {S_CODEX}",
+            f"codex --profile daemon resume {S_CODEX}",
+            f"codex --model=daemon resume {S_CODEX}",
+            f"codex --cd /tmp/daemon-project resume {S_CODEX}",
+            f"claude --settings /tmp/daemon-settings.json -r {S_CODEX}",
+        ):
+            with self.subTest(command=command):
+                sessions = self._run_list(f"  500 ttys042 {command}\n", lambda *args: [])
+                self.assertEqual([s["sid"] for s in sessions], [S_CODEX])
+                self.assertEqual(sessions.unresolved, [])
+
+    def test_services_and_non_terminal_commands_stay_excluded(self):
+        for command in (
+            f"codex daemon {S_CODEX}",
+            f"codex --profile daemon daemon {S_CODEX}",
+            f"codex app-server {S_CODEX}",
+            f"codex exec resume {S_CODEX}",
+            f"codex --model daemon exec {S_CODEX}",
+            f"codex companion {S_CODEX}",
+            f"claude code-mode {S_CODEX}",
+            f"claude chrome {S_CODEX}",
+            f"claude Computer Use {S_CODEX}",
+        ):
+            with self.subTest(command=command):
+                sessions = self._run_list(f"  500 ttys042 {command}\n", lambda *args: [])
+                self.assertEqual(list(sessions), [])
+                self.assertEqual(sessions.unresolved, [])
+        sessions = self._run_list(f"  500 ?? codex --no-daemon resume {S_CODEX}\n", lambda *args: [])
+        self.assertEqual(list(sessions), [])
+
     def test_uuidless_tui_anchored_via_transcript(self):
         rows = ("  500 ttys042 claude --dangerously-skip-permissions\n"
                 "  501 ttys043 node /x/bin/codex resume " + S_DEAD + "\n")
