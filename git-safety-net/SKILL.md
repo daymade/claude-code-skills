@@ -591,8 +591,10 @@ and final branch-count gates that a single-branch retirement does not need.
   the complete ignored inventory. Require exact equality with the frozen
   pre-removal manifest for every ignored path, entry type, file hash, and symlink target, and
   re-verify each preserved source and backup copy; any difference aborts. Removal must be the next
-  operation. Remove only with
-  `git worktree remove <absolute-path>` **without `--force`**. Afterwards prove the path and
+  operation. Try `git worktree remove <absolute-path>` without force first. Only a clean,
+  fully preserved submodule worktree refused specifically because of its submodules may use
+  the controlled single-`--force` branch in the referenced § Worktree retirement procedure; dirty, unknown,
+  locked, occupied, or incompletely backed-up state still stops removal. Afterwards prove the path and
   registration are gone while the recorded HEAD still resolves through the kept branch/base or the
   verified bundle and every copied ignored item still matches its recorded hash. Never remove the
   primary/current checkout; retire its branch only as a separate,
@@ -657,10 +659,9 @@ and final branch-count gates that a single-branch retirement does not need.
   old-path absence + new-path presence; permanent deletion is a separate explicit decision. Full
   READ-DO sequence and `--shared` boundary:
   **[references/merge_verification.md](references/merge_verification.md)** § Independent clone retirement.
-  This retirement occupancy check is the second of the Skill's three `lsof` uses — the shared-file
-  writer probe in `references/prevention_practices.md` and `references/merge_verification.md`'s
-  clone-occupancy probe share the same read-only, stop-on-any-genuine-writer rule; change the
-  criterion in one, change it in the others.
+  The shared-file writer probe in `references/prevention_practices.md` and the clone/worktree
+  occupancy probes in `references/merge_verification.md` share the same read-only,
+  stop-on-any-genuine-writer rule; change the criterion in one, change it in the others.
 
 **Step 4 — after the delete, re-check by content, not by filename.** When a cleanup (or a batch of
 squash-merges) is already done and the question becomes "did any of it drop work?", the naming-based
