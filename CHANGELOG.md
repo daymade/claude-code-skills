@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **claude-code-hooks** (`daymade-claude-code` v4.30.14): Record the measured difference between outer-wrapper and nested-hook enforcement, retaining the evidence limits. Change type: factual casebook addition; no hook or rule change.
 - **peer-message** (v1.23.0): Emit typed Claude session/PID discovery keys that cannot match another session's name; retain display names, reject ambiguous identities and support the keys through reply, verification and coordination consumers. Preserve explicit legacy target resolution; reserve bare `claude-session:` / `claude-pid:` strings for machine keys and use `claude:<exact-name>` for names with those prefixes. Change type: identity-address interface repair.
 - **Locked dependency patches** (`daymade-skill` v1.70.7; `peer-message` v1.22.3): Refresh Creator's urllib3 lock and compatible network-preview transitive dependencies while retaining direct dependency pins, package interfaces and installation commands. Change type: security dependency maintenance.
 - **Document routing visibility** (`daymade-docs` v1.25.5): Keep complete document-task signals within the shortened Codex catalog prefix observed in a fresh host; preserve the full routing table and manual commands. Change type: discovery-contract repair.
