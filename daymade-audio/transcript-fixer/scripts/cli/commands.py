@@ -2988,7 +2988,10 @@ def cmd_resolve_review(args: argparse.Namespace) -> None:
         to_text = suggested if decision == "accepted" else (
             getattr(args, "review_override_to", None) or ""
         ).strip()
-        entity_type = getattr(args, "review_entity_type", None) or item.entity_type
+        entity_type = getattr(args, "review_entity_type", None) or (
+            selected_candidate.get("entity_type", "unknown") if selected_candidate is not None else item.entity_type)
+        candidate_kind = selected_candidate.get("kind", item.kind) if selected_candidate is not None else item.kind
+        candidate_evidence = selected_candidate.get("evidence") if selected_candidate is not None else item.evidence
         # An authority named AT VERDICT TIME (audio check since enqueue, a
         # user ruling in review) has to reach the guard: the evidence column
         # was write-once at enqueue, which deadlocked every row whose target
@@ -3020,7 +3023,7 @@ def cmd_resolve_review(args: argparse.Namespace) -> None:
         if to_text:
             _name_convergence_refusal(
                 args, item.original_text, to_text,
-                _combined_evidence(item.evidence, authority), item.kind,
+                _combined_evidence(candidate_evidence, authority), candidate_kind,
                 entity_type=entity_type, nonperson_reference_validated=nonperson_reference_validated,
             )
 
@@ -3033,7 +3036,7 @@ def cmd_resolve_review(args: argparse.Namespace) -> None:
             by=getattr(args, "review_by", None),
             authority=authority,
             ledger_entry=ledger_entry,
-            entity_type=getattr(args, "review_entity_type", None),
+            entity_type=entity_type if decision in ("accepted", "overridden") else None,
             candidate_index=getattr(args, "review_candidate_index", None),
         )
     except ReAnchorNeeded as e:

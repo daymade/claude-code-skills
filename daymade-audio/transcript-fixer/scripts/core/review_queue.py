@@ -417,8 +417,12 @@ class ReviewQueue:
         old, snippet, offset = anchor["original_text"], anchor["context_snippet"], anchor["context_offset"]
         focused = ReviewQueue._focused_context(old, snippet, offset)
         try:
-            return ReviewQueue._locate_anchor(content, old, anchor["line_number"], focused,
-                                             require_exact_context=offset is not None)
+            if not focused or focused.count(old) != 1:
+                raise ReAnchorNeeded("occurrence has no unambiguous context")
+            matches = list(re.finditer(re.escape(focused), content))
+            if len(matches) != 1:
+                raise ReAnchorNeeded("occurrence context is not globally unique")
+            return matches[0].start() + focused.index(old)
         except ReAnchorNeeded:
             # Identity recovery only: an unchanged, substantial neighbour must
             # identify ONE slot in the entire file. Never use edit distance or
@@ -710,7 +714,9 @@ class ReviewQueue:
                  item.domain, line_no),
             ).fetchall()
             collision = next((row for row in collisions
-                              if self._same_occurrence(proposed, row, content)), None)
+                              if self._same_occurrence(proposed, row, content)
+                              or (not row["context_snippet"] and row["context_offset"] is None
+                                  and lines[line_no - 1].count(item.original_text) == 1)), None)
             if collision:
                 raise ReviewQueueError(
                     f"re-anchor would collide with item #{collision['id']} "
@@ -1054,7 +1060,11 @@ class ReviewQueue:
                 raise ReviewQueueError("candidate_index must identify an existing zero-based candidate")
             candidate = item.candidates[candidate_index]
             execution_item = replace(item, suggested_text=candidate.get("suggested_text"),
-                                     actions=candidate.get("actions") or [])
+                                     actions=candidate.get("actions") or [],
+                                     kind=candidate.get("kind", item.kind),
+                                     entity_type=candidate.get("entity_type", "unknown"),
+                                     evidence=candidate.get("evidence"),
+                                     source=candidate.get("source", item.source))
 
         if decision == "reopen":
             return self._reopen(item, note=note, by=by)
@@ -1119,7 +1129,8 @@ class ReviewQueue:
                     conn.execute("UPDATE review_items SET entity_type = ? WHERE id = ?", (entity_type, item_id))
                 self._audit(conn, "review_resolve", item_id, by,
                             {"decision": decision, "resolved_text": resolved_text,
-                             "actions_applied": len(apply_log)})
+                             "actions_applied": len(apply_log), "candidate_index": candidate_index,
+                             "candidate": item.candidates[candidate_index] if candidate_index is not None else None})
                 for sibling in conn.execute("SELECT id, suggested_text FROM review_items WHERE occurrence_parent = ? AND status = 'pending'", (item_id,)).fetchall():
                     sibling_decision = decision
                     if resolved_text is not None:
@@ -1144,7 +1155,9 @@ class ReviewQueue:
             raise
         result = self.get(item_id)
         assert result is not None
-        return {"item": result.to_dict(), "apply_log": apply_log}
+        return {"item": result.to_dict(), "apply_log": apply_log,
+                "selected_candidate_index": candidate_index,
+                "selected_candidate": item.candidates[candidate_index] if candidate_index is not None else None}
 
     def _reopen(self, item: ReviewItem, note: Optional[str], by: Optional[str]) -> dict[str, Any]:
         """Undo: atomically claim the item back to pending (guarded against a

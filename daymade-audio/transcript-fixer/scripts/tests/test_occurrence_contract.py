@@ -221,6 +221,9 @@ def test_cli_selects_candidate_with_its_own_action_pack(isolated, tmp_path, monk
     status, result = cli(monkeypatch, capsys, "--resolve-review", item_id,
                          "--decision", "accepted", "--review-candidate", 1)
     assert status == 0 and result["item"]["resolved_text"] == "action"
+    assert result["selected_candidate_index"] == 1
+    assert result["selected_candidate"]["evidence"] == "dictionary B"
+    assert result["selected_candidate"]["actions"] == second["actions"]
     assert file.read_text() == "deploy action now" and "selected B" in note.read_text()
     # A second decision and a foreign candidate index cannot execute anything.
     before = (file.read_bytes(), note.read_bytes())
@@ -259,3 +262,33 @@ def test_invalid_enqueue_type_never_changes_existing_state(isolated, tmp_path, e
     with pytest.raises(ReviewQueueError, match="entity_type"):
         isolated.enqueue([payload(file, file.read_text(), entity_type=entity_type)])
     assert isolated.list_items() == [] and file.read_text() == "学习名台系统。"
+
+
+def test_repeated_utterances_after_line_drift_never_collapse(isolated, tmp_path):
+    file = tmp_path / "meeting.md"
+    text = "deploy actor now"
+    file.write_text(text + "\n" + text + "\n")
+    ids = isolated.enqueue([{"file": str(file), "line": line, "context": text,
+                             "original": "actor", "suggested": "action", "kind": "wording"}
+                            for line in (1, 2)])["added"]
+    assert len(ids) == 2
+    file.write_text("heading\n" + file.read_text())
+    report = isolated.consolidate(str(file))
+    assert report["linked"] == [] and report["ambiguous_ids"] == ids
+    isolated.resolve(ids[0], "accepted")
+    assert file.read_text().count("actor") == 1
+    assert isolated.stats(file_path=str(file))["pending_total"] == 1
+
+
+def test_selected_candidate_uses_its_kind_and_evidence(isolated, tmp_path, monkeypatch, capsys):
+    file = tmp_path / "meeting.md"
+    file.write_text("deploy actor now")
+    first = {"file": str(file), "line": 1, "context": file.read_text(), "original": "actor",
+             "suggested": "action", "kind": "wording", "evidence": "用户裁定：action"}
+    item_id = isolated.enqueue([first])["added"][0]
+    assert isolated.enqueue([{**first, "suggested": "明台", "kind": "entity", "evidence": None}])["added"] == []
+    before = file.read_bytes()
+    status, result = cli(monkeypatch, capsys, "--resolve-review", item_id,
+                         "--decision", "accepted", "--review-candidate", 1)
+    assert status == 2 and result["error"] == "target_unknown"
+    assert file.read_bytes() == before and isolated.get(item_id).status == "pending"
