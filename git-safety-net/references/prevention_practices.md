@@ -102,10 +102,9 @@ path before reading it for a writer. No process found and the
 file has stopped moving: report the gap, do not mutate, and stay read-only rather than inventing a
 session to ask — the same stop-the-write-path default as above.
 
-This shared-file writer probe is one of the Skill's three `lsof` uses — the others are SKILL.md's
-retirement occupancy check and `references/merge_verification.md` § Independent clone retirement's
-`lsof +D <absolute-clone>` — and all three keep the same read-only, stop-on-any-genuine-writer
-rule; change the criterion in one, change it in the others.
+This shared-file writer probe and the clone/worktree occupancy probes in
+`references/merge_verification.md` keep the same read-only, stop-on-any-genuine-writer rule;
+change the criterion in one, change it in the others.
 
 ## Exact-SHA handoff and scoped completion
 
@@ -555,14 +554,17 @@ item must be proven reproducible
 or copied out with its relative path and verified against a recorded content hash because Git
 bundles cannot reach it. Record the exact HEAD, prove containment against
 a freshly fetched maintained base, and create a verified targeted bundle from the worktree's branch
-or collision-checked recovery ref before current-session authorization and non-forced removal.
+or collision-checked recovery ref before current-session authorization and normal removal.
 Afterwards verify the path/registration disappeared and the recorded HEAD still resolves through a
 kept ref/base or the bundle, then recheck every copied
 ignored item against its pre-removal hash. Immediately before removal, repeat the worktree status
 and source-hash checks and make removal the next operation; otherwise a writer can change ignored
-bytes after the early backup check. Never reduce the worktree count
-with `rm -rf` or `git worktree remove --force`; the safe target is one maintained primary checkout,
-not zero checkouts.
+bytes after the early backup check. The § Worktree retirement procedure in
+[merge_verification.md](merge_verification.md) also covers recursive module preservation and
+occupancy, with one narrow single-`--force` branch after normal removal refuses a clean submodule
+worktree specifically because of its modules. Dirty, unknown, locked, occupied or incompletely
+preserved state still stops removal. Never reduce the worktree count with `rm -rf`; the safe
+target is one maintained primary checkout, not zero checkouts.
 
 ## Snapshot before any history rewrite
 
@@ -687,15 +689,17 @@ between the lagging index and the advanced HEAD; the working tree never owned th
 Disposal, by ownership (`git checkout -- .` / `git restore .` are destructive forms and stay
 banned even when the math looks lossless):
 
-- **Your own temporary worktree, no longer needed:** retire it through the "Worktree
-  retirement" flow in merge_verification.md — the reconciliation above doubles as that
-  flow's "prove the checkout is disposable" evidence: a worktree whose entire dirty set is
-  phantom contains no unsaved work. Plain `git worktree remove` refuses a dirty worktree
-  and the phantom `D` makes it look dirty; once reconciliation has explained *every* dirty
-  entry, adding `--force` only bypasses git's conservative refusal. That is not the banned
-  "use `--force` to make a dirty/uninspectable worktree disappear" — here the dirty was
-  inspected and fully accounted for, which is exactly the condition that ban exists to
-  force you to establish first.
+- **Your own temporary worktree, no longer needed:** the reconciliation above explains the
+  phantom; it does not make non-empty status eligible for forced removal. After exclusive
+  ownership and preservation, re-sync only the proved phantom paths with
+  `git restore --staged -- <proved-paths>` as in § Commit-scope hygiene. If the working-tree
+  bytes already match HEAD, this produces empty status without losing content. If files also
+  lag, use the existing `git_align_checkout.sh` preview/apply route from SKILL.md's Scripts
+  table against the frozen HEAD and an exact clean source; preserve its existing regular-file,
+  manifest and zero-skip/readback gates. A symlink/gitlink or unexplained remainder needs its
+  existing immutable-entry/owner path; do not force it away. Re-run the full "Worktree retirement"
+  flow in merge_verification.md after status is empty: normal removal first, and only its
+  clean-submodule exception may justify a single force flag.
 - **Your own primary checkout:** no immediate action is required as long as you never run a
   bare commit over it — the drift harms nothing else by sitting there. `git restore --staged
   -- .` only re-syncs the index; the working tree still lags HEAD and there is no
