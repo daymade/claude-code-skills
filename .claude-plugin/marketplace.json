@@ -39,7 +39,7 @@
       "description": "Researches and improves a specified existing Skill using successful/failed work and competitor evidence. Use for 优化这个Skill, 从成功和失败经验改进Skill, or 研究竞品后优化指定技能. Routine creation and editing use skill-creator.",
       "source": "./skill-evolver",
       "strict": false,
-      "version": "1.0.3",
+      "version": "1.0.4",
       "category": "developer-tools",
       "keywords": [
         "skill-improvement",
@@ -650,7 +650,7 @@
       "description": "Multi-path parallel product analysis with cross-model test-time compute scaling. Spawns parallel agents (Claude Code + Codex CLI) for multi-perspective exploration, then synthesizes findings into actionable optimization plans. Supports self-audit, UX audit, API audit, architecture review, and competitive benchmarking via competitors-analysis skill",
       "source": "./product-analysis",
       "strict": false,
-      "version": "1.0.2",
+      "version": "1.0.3",
       "category": "productivity",
       "keywords": [
         "product-analysis",

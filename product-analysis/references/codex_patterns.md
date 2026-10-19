@@ -55,7 +55,7 @@ codex -m o4-mini -c model_reasoning_effort="high" --full-auto \
 
 # Dimension 3: Backend API
 codex -m o4-mini -c model_reasoning_effort="high" --full-auto \
-  "List all API endpoints. Identify unused endpoints with no frontend consumer. Check error handling consistency. Give router file paths."
+  "List all API endpoints. Trace frontend, CLI, integration and external/API consumers and lifecycle evidence before calling a route unused; otherwise mark coverage unknown. Check error handling consistency. Give router and consumer file paths."
 ```
 
 ## Output Handling
@@ -70,8 +70,7 @@ Codex outputs to stdout. When run in background:
 The primary value of Codex in this workflow is **independent perspective**:
 - Different training data may surface different patterns
 - Different reasoning approach may catch what Claude misses
-- Agreement across models = high confidence
-- Disagreement = worth investigating manually
+- Treat agreement and disagreement as leads; verify original evidence, scope and independence through the [synthesis method](synthesis_methodology.md).
 
 ## Limitations
 

@@ -4,7 +4,7 @@ Detailed definitions for each audit dimension. Agents should use these as explor
 
 ## Dimension 1: Frontend Navigation & Information Density
 
-**Goal**: Quantify cognitive load for a new user.
+**Goal**: Locate possible navigation friction; verify its effect on the user's task.
 
 **Key questions**:
 1. How many top-level components does App.tsx mount simultaneously?
@@ -52,11 +52,11 @@ Step N: [Action] → [What user sees] → [Next possible actions: count]
 
 ## Dimension 3: Backend API Surface
 
-**Goal**: Identify API bloat, inconsistency, and unused endpoints.
+**Goal**: Identify API inconsistency and investigate consumer coverage and lifecycle.
 
 **Key questions**:
 1. How many total API endpoints exist?
-2. Which endpoints have no corresponding frontend call?
+2. Which routes serve frontend, CLI, integrations or documented external/API clients? Which consumers or lifecycle evidence remain uninspected?
 3. Are error responses consistent across all endpoints?
 4. Is authentication applied consistently?
 5. Are there duplicate endpoints serving similar purposes?
@@ -64,15 +64,20 @@ Step N: [Action] → [What user sees] → [Next possible actions: count]
 **Exploration targets**:
 - Router files (API route definitions)
 - Frontend API client / fetch calls
+- CLI clients, integrations, SDKs and external-client contracts
+- Deprecation/lifecycle records and authorized usage observations
 - Error handling middleware
 - Authentication middleware
 - API documentation / OpenAPI spec
 
 **Output format**:
 ```
-| Method | Path | Purpose | Has Frontend Consumer | Auth Required |
-|--------|------|---------|----------------------|---------------|
+| Method | Path | Purpose | Consumer Evidence / Coverage Gaps | Lifecycle | Auth Required |
+|--------|------|---------|-----------------------------------|-----------|---------------|
 ```
+
+Do not infer unused from no frontend caller. Preserve supported consumers;
+record unknown coverage when evidence cannot establish retirement safety.
 
 ## Dimension 4: Architecture & Module Structure
 

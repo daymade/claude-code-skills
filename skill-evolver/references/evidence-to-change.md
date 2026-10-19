@@ -96,7 +96,13 @@ condition and continue independent public work; zero accessible hits are not pro
 that the unavailable collection is empty.
 
 **Competitors — load and execute:** `competitors-analysis` → **Entry Router** for
-the applicable Discover/Ingest/Profile/Landscape/Update work. For mechanism claims,
+the applicable code-backed Discover/Ingest/Profile/Landscape/Update work. Check
+its actual entry scope before handing off: for manual/native or market comparisons
+without code, inspect original documentation, supplied observations and task
+probes with available tools or an applicable research owner. Do not force cloning
+or claim that this source-analysis owner covers those tasks. Keep the same
+decision, counterevidence and benefit boundaries in the returned comparison.
+For code-backed mechanism claims,
 load its Repository Fact Gathering route and `references/mechanism_evidence.md`:
 bind the comparison baseline, trace the decisive mechanism lifecycle and state
 evidence depth. Pass the actual task surface, fixed source candidates/edition,

@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **skill-evolver** (v1.0.4): Compare recommendations with current mechanisms, distinguish evidence gaps from negative value, preserve bounded opportunities and justified repairs, and scope comparison handoffs to their actual owners. Change type: bounded decision and routing repair.
+- **product-analysis** (v1.0.3): Ground confidence and priority in source and task evidence instead of agent votes or counts; preserve CLI, integration and external API consumers before declaring routes unused. Change type: bounded evidence-judgment repair.
 - **tunnel-doctor** (v1.17.4): Distinguish a dedicated SSH key's source restriction from TUN/firewall drops; retain owner-controlled repair and verify the authenticated public body, access boundaries and natural reconnect. Change type: bounded diagnostic and evidence guidance.
 - **capture-screen** (`daymade-macos` v1.23.7): Find untitled on-screen windows when their application owner matches the keyword; retain title matching and unfiltered listing. Verified with deterministic filtering checks and a self-owned untitled native window. Change type: existing-contract bug fix.
 - **claude-code-hooks / repository instructions** (`daymade-claude-code` v4.30.8): Remove derived fixture and observation counts from visibility and migration guidance, and add the consuming instruction-entry routes. Runtime behavior and acceptance contracts are unchanged. Change type: documentation hygiene and routing alignment.
