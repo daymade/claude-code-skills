@@ -137,9 +137,16 @@ def claude_registry(claude_home: Path) -> list[dict[str, Any]]:
 def resolve_claude(
     target: str, claude_home: Path, *, require_live: bool = True
 ) -> dict[str, Any]:
+    return _select_claude(target, claude_registry(claude_home), require_live=require_live)
+
+
+def _select_claude(
+    target: str, entries: list[dict[str, Any]], *, require_live: bool = True
+) -> dict[str, Any]:
+    """Apply the same exact-match rules to a single registry snapshot."""
     needle = target.removeprefix("claude:").removeprefix("uds:")
     matches = []
-    for entry in claude_registry(claude_home):
+    for entry in entries:
         values = {
             str(entry.get("pid", "")),
             str(entry.get("name", "")),
@@ -165,6 +172,39 @@ def resolve_claude(
             EXIT_TARGET,
         )
     raise PeerError(f"Claude target {target!r} is not running", EXIT_TARGET)
+
+
+def claude_discovery_address(
+    entry: dict[str, Any], entries: list[dict[str, Any]]
+) -> str:
+    """Prefer a session UUID, then a PID, only when it selects this exact row."""
+    candidates = []
+    session_id = entry.get("sessionId")
+    if isinstance(session_id, str) and session_id:
+        try:
+            uuid.UUID(session_id)
+        except ValueError:
+            pass
+        else:
+            candidates.append(session_id)
+    pid = entry.get("pid")
+    if isinstance(pid, int) and not isinstance(pid, bool) and pid > 0:
+        candidates.append(str(pid))
+    for key in candidates:
+        address = f"claude:{key}"
+        try:
+            selected = _select_claude(address, entries, require_live=entry["alive"])
+        except PeerError:
+            continue
+        # A duplicated UUID with one live process must not relabel a dead row as
+        # that live process. Name/PID/UUID cross-field collisions use the same rules.
+        if selected is entry:
+            return address
+    raise PeerError(
+        f"Claude discovery cannot uniquely address registry entry pid={pid!r}; "
+        "session UUID and PID are missing or ambiguous",
+        EXIT_TARGET,
+    )
 
 
 def claude_token(entry: dict[str, Any], claude_home: Path) -> str:
@@ -1356,12 +1396,14 @@ def cmd_list(args: argparse.Namespace) -> int:
         raise PeerError("--full-titles requires --output; do not dump full prompts into discovery")
     rows = []
     if args.provider in ("all", "claude"):
-        for entry in claude_registry(args.claude_home):
+        entries = claude_registry(args.claude_home)
+        for entry in entries:
             rows.append(
                 {
                     "provider": "claude",
-                    "address": f"claude:{entry.get('name') or entry['pid']}",
+                    "address": claude_discovery_address(entry, entries),
                     "id": entry.get("sessionId"),
+                    "name": entry.get("name"),
                     "status": entry.get("status"),
                     "alive": entry["alive"],
                     "reachable": bool(entry["alive"] and entry["socketExists"]),
@@ -1407,7 +1449,8 @@ def cmd_list(args: argparse.Namespace) -> int:
             if row["provider"] == "claude":
                 lines.append(
                     f"{row['address']:<36} status={str(row['status']):<8} "
-                    f"alive={row['alive']} reachable={row['reachable']} cwd={row['cwd']}"
+                    f"name={row.get('name')!r} alive={row['alive']} "
+                    f"reachable={row['reachable']} cwd={row['cwd']}"
                 )
             else:
                 lines.append(

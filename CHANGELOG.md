@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **peer-message** (v1.22.4): Emit uniquely resolved Claude session UUIDs, with PID fallback, as discovery addresses; retain display names and reject ambiguous identities. Preserve exact legacy target resolution and transport behavior. Change type: existing-contract bug fix.
 - **Locked dependency patches** (`daymade-skill` v1.70.7; `peer-message` v1.22.3): Refresh Creator's urllib3 lock and compatible network-preview transitive dependencies while retaining direct dependency pins, package interfaces and installation commands. Change type: security dependency maintenance.
 - **Document routing visibility** (`daymade-docs` v1.25.5): Keep complete document-task signals within the shortened Codex catalog prefix observed in a fresh host; preserve the full routing table and manual commands. Change type: discovery-contract repair.
 - **transcript-fixer** (`daymade-audio` v1.50.0): Preserve competing proposals and rule evidence under one located occurrence across line/context drift, add scoped legacy consolidation and explicit candidate action selection, accept typed written references for nonperson names while retaining person-name guards, and support destination-selected review-report directories with closure discovery. Change type: additive queue and report workflow capability.

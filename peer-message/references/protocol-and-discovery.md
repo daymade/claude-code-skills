@@ -19,6 +19,8 @@ description: Transport-neutral addressing, Claude UDS and Codex live/queued deli
 
 旧命令里未带前缀的 target 继续解释为 Claude，避免恢复版破坏既有调用。
 
+使用 `list` 返回的 `address` 原值作为脚本投递键，不从中提取名称；用独立的 `name` 字段展示名称。Claude 清单优先返回能在同一注册表快照中精确选中该 session/进程的 UUID；UUID 缺失、为空、无效或有歧义时，退回可唯一解析的 PID。两者都无法唯一选中该条记录时，清单报 discovery 错误（exit 3），不输出部分清单。保留旧名称输入的精确匹配语义；重新发现目标，不把已保存的名称地址当作稳定身份。PID 只标识当前进程，不能跨进程退出或 PID 复用保存为永久身份。
+
 ### 两个 route 的地址空间
 
 上表是 `scripts/peer.py` 的地址空间。官方 Claude peer tools 支持的地址与它并不相同：
