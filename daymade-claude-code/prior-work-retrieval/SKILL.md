@@ -50,16 +50,27 @@ cannot override a newer explicit decision.
 ### 2. Validate the explicit source manifest
 
 The manifest is the only discovery scope. No directory exists merely because a
-convention says it should. Default path:
+convention says it should. Validate the selected manifest:
 
 ```bash
 uv run --no-project python scripts/prior_work.py \
   --manifest <path> validate-manifest
 ```
 
-The default is `~/.config/daymade/prior-work/sources.json`; a project may pin
-another path. Global options precede the subcommand. The schema and carrier
-examples are in `references/source-manifest.md`.
+The CLI's `--manifest` override applies only to that invocation. Hooks use
+`PRIOR_WORK_MANIFEST` inherited by their host, or
+`~/.config/daymade/prior-work/sources.json` when unset. Keep CLI operations and
+hooks on the active requirement's required-source contract and recorded state;
+manifest paths may differ when that contract agrees and the hooks can read the
+requirement and receipt.
+
+An `export` in a child shell does not change an already running parent host's
+environment. Complete that host's legitimate current contract. Bind the intended
+manifest for a future host before its hooks activate; do not replace required
+sources mid-task to make a receipt pass.
+
+Place global options before the subcommand. The schema and carrier examples are
+in `references/source-manifest.md`.
 
 ### 3. Retrieve across declared carriers
 
