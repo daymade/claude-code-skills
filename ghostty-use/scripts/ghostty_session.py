@@ -51,7 +51,7 @@ STATE_DIR = os.path.join(HOME, ".ghostty-session")
 SNAP_DIR = os.path.join(STATE_DIR, "snapshots")
 UUID_RE = re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b")
 ACTIVE_HOURS = 48
-SKIP_PATTERNS = ("app-server", "daemon", "code-mode", "companion", "chrome", "Computer Use")
+SKIP_PATTERNS = ("app-server", "code-mode", "companion", "chrome", "Computer Use")
 
 
 # ---------- process enumeration ----------
@@ -108,6 +108,12 @@ def list_sessions(resolve_uuidless=True):
             "claude" if re.search(r"(^|/)claude( |$)", cmd) else None)
         if tool is None:
             continue
+        if tool == "codex":
+            # Share the watcher's option-aware command classification: daemon is
+            # a service subcommand, while --no-daemon and option values are TUIs.
+            from ghostty_watch import cli_identity
+            if cli_identity({"cmdline": cmd}) is None:
+                continue
         m = UUID_RE.search(cmd)
         if m:
             sid = m.group(0)

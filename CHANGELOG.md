@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **prior-work-retrieval** (`daymade-claude-code` v4.30.10): Clarify invocation-only manifest overrides, inherited hook configuration, and active required-source contract selection. Preserve different-path manifests with matching contracts and readable requirement/receipt state. Change type: bounded decision guidance.
+- **ghostty-use** (v1.6.3): Recognize live Codex `--no-daemon` sessions and daemon-named paths or option values while excluding service commands; prevent duplicate restore attempts for these live sessions. Change type: existing-contract bug fix.
 - **skill-evolver** (v1.0.4): Compare recommendations with current mechanisms, distinguish evidence gaps from negative value, preserve bounded opportunities and justified repairs, and scope comparison handoffs to their actual owners. Change type: bounded decision and routing repair.
 - **product-analysis** (v1.0.3): Ground confidence and priority in source and task evidence instead of agent votes or counts; preserve CLI, integration and external API consumers before declaring routes unused. Change type: bounded evidence-judgment repair.
 - **tunnel-doctor** (v1.17.4): Distinguish a dedicated SSH key's source restriction from TUN/firewall drops; retain owner-controlled repair and verify the authenticated public body, access boundaries and natural reconnect. Change type: bounded diagnostic and evidence guidance.
