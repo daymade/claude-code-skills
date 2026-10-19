@@ -40,19 +40,19 @@
     {
       "id": 7,
       "prompt": "写一个新的视觉 QA 流程。",
-      "expected_output": "Finds the existing visual-QA Skill and runtime contracts before proposing changes; chooses reuse/adapt rather than replacing it from memory.",
+      "expected_output": "Does not automatically invoke prior-work-retrieval or create a retrieval/receipt obligation from an ordinary creation request. Follows the current visual-QA workflow owner for the requested work; searches history only if the user explicitly asks for prior work.",
       "files": []
     },
     {
       "id": 8,
       "prompt": "改这套 deck 的截图生成方式。",
-      "expected_output": "Searches downstream consumer docs and accepted deck artifacts, verifies their filenames/contracts, and records the compatibility decision.",
+      "expected_output": "Does not automatically invoke prior-work-retrieval or create a retrieval/receipt obligation from an ordinary implementation change. Inspects the current deck generation and consumer contracts through their owning workflow; searches history only if explicitly requested.",
       "files": []
     },
     {
       "id": 9,
       "prompt": "读取项目最新进展，群里和私聊也要覆盖。",
-      "expected_output": "Searches project docs, meeting and archived WeChat carriers, invokes the live-WeChat manual route when relevant, and reports any uncovered voice/media instead of claiming global coverage.",
+      "expected_output": "Does not automatically invoke prior-work-retrieval or create a retrieval/receipt obligation for a current-status check. Uses the current project and messaging reader owners to cover the requested groups and private chats, reporting coverage gaps without turning the request into historical reuse research.",
       "files": []
     },
     {
