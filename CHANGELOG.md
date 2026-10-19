@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **prior-work-retrieval** (`daymade-claude-code` v4.30.12): Clarify the installed-Skill working directory for bundled commands and align ordinary creation, implementation and status-check eval expectations with the existing explicit-history trigger. Route manifest selection from repository instructions. Change type: existing-contract documentation repair.
+
 - **macos-cleaner / macos-watchdog** (`daymade-macos` v1.23.8): Distinguish uv cache artifacts from persistent runtimes, bound exact-package cleanup waits, and separate Python service preparation from startup while retaining verified FDA launchers. Change type: bounded operating-procedure guidance.
 
 - **git-safety-net** (v1.22.8): Audit commits held by non-standard refs or worktree reflogs, report incomplete Git scans, and retain manual review for non-commit objects. Change type: existing-contract loss-audit repair.

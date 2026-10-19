@@ -377,6 +377,9 @@ comparison are owned by that Skill; a receipt about a locator is not proof of
 the delivered artifact. Detailed retrieval mechanics remain in
 `daymade-claude-code/prior-work-retrieval/SKILL.md`.
 
+For CLI/hook manifest selection or continuation in an already-running host, read
+[the manifest-selection contract](daymade-claude-code/prior-work-retrieval/SKILL.md#2-validate-the-explicit-source-manifest).
+
 ### Local Conversation History Boundary
 
 For reconciliation of an already-resumed native Goal, read
