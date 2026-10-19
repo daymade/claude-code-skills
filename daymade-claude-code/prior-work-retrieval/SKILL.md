@@ -237,8 +237,9 @@ rejects legacy or hand-built receipts that omit either field. Receipt freshness
 is bound to the definitions of **required** carriers. Editing an optional carrier
 does not invalidate already verified required coverage; changing a required root,
 route, mode, authority, or limit does. The full manifest hash remains provenance.
-Between `retrieve` and `complete`, Git-backed filesystem sources also retain
-their search scope and selected file bytes. An unrelated commit or a pure rebase
+Between `retrieve` and `complete`, required Git-backed filesystem sources and
+optional sources with a reuse/adapt/reject decision retain their search scope
+and selected file bytes. An unrelated commit or a pure rebase
 does not require retrieval again when those inputs agree. Changes within the
 source's include/exclude scope (including new, deleted or unselected candidates),
 working files, or ignore dependencies require another search. The CLI checks
@@ -246,6 +247,7 @@ this scope with ripgrep's glob rules; legacy runs retain the stricter HEAD and
 mtime checks. Non-Git and command adapters do not acquire a Git scope proof.
 This comparison completes the original retrieval; it does not continuously
 refresh a completed receipt or exempt a new user requirement.
+Gitlink changes do not qualify for this narrow rebinding proof.
 Then verify:
 
 ```bash

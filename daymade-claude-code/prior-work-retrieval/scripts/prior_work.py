@@ -387,6 +387,21 @@ def _source_git_read(repo: Path, *args: str) -> bytes:
     return result.stdout
 
 
+def _source_git_changes(repo: Path, relative: str, *revisions: str) -> tuple[list[str], bool]:
+    raw = _source_git_read(repo, "diff", "--raw", "--no-abbrev", "--no-renames",
+                           "--ignore-submodules=none", "-z", *revisions, "--", relative)
+    fields = raw.split(b"\0")
+    paths = []
+    gitlinks = False
+    for index in range(0, len(fields) - 1, 2):
+        header = fields[index].split()
+        if len(header) != 5 or not header[0].startswith(b":") or not fields[index + 1]:
+            raise PriorWorkError("Could not verify the retrieval source's Git change modes")
+        gitlinks |= b"160000" in {header[0][1:], header[1]}
+        paths.append(os.fsdecode(fields[index + 1]))
+    return paths, gitlinks
+
+
 def _source_git_state(
     source: dict[str, Any], search_cwd: str | None = None
 ) -> dict[str, Any] | None:
@@ -400,14 +415,19 @@ def _source_git_state(
     relative = root.relative_to(repo).as_posix()
     # --no-renames keeps deletion and addition paths independent. Untracked
     # paths matter too: a newly created better match must force another search.
-    dirty = _source_git_read(repo, "diff", "--no-renames", "--name-only", "-z", "HEAD", "--", relative)
+    dirty, gitlinks = _source_git_changes(repo, relative, "HEAD")
     # Explicit rg include globs can override Git ignore rules. Preserve those
     # untracked names too; the shared rg matcher applies the actual source scope.
-    dirty += _source_git_read(repo, "ls-files", "--others", "-z", "--", relative)
+    dirty += [os.fsdecode(path) for path in _source_git_read(
+        repo, "ls-files", "--others", "-z", "--", relative).split(b"\0") if path]
+    if gitlinks or any((repo / path).is_dir() for path in dirty):
+        # Git collapses nested repositories to a directory/gitlink, while rg
+        # can search their files. Such working changes have no narrow proof.
+        return None
     paths = []
-    for path in dirty.split(b"\0"):
+    for path in dirty:
         if path:
-            paths.append(Path(os.fsdecode(path)).relative_to(relative).as_posix() if relative != "." else os.fsdecode(path))
+            paths.append(Path(path).relative_to(relative).as_posix() if relative != "." else path)
     search_cwd = search_cwd or str(Path.cwd())
     relevant = _source_paths(source, sorted(set(paths)), search_cwd)
     working = []
@@ -447,12 +467,14 @@ def _verify_source_scope(source: dict[str, Any], recorded: Any) -> dict[str, Any
     dependencies = recorded.get("dependencies_sha256")
     if not isinstance(dependencies, str) or not dependencies or current["dependencies_sha256"] != dependencies:
         raise PriorWorkError("Retrieval source scope dependencies changed; retrieve again")
-    changed = _source_git_read(Path(current["git_root"]), "diff", "--no-renames", "--name-only", "-z",
-                               old_head, current["git_head"], "--", current["root_relative"])
+    changed, gitlinks = _source_git_changes(Path(current["git_root"]), current["root_relative"],
+                                           old_head, current["git_head"])
+    if gitlinks:
+        raise PriorWorkError("Retrieval source includes a changed nested Git repository; retrieve again")
     paths = []
-    for path in changed.split(b"\0"):
+    for path in changed:
         if path:
-            value = os.fsdecode(path)
+            value = path
             paths.append(Path(value).relative_to(current["root_relative"]).as_posix()
                          if current["root_relative"] != "." else value)
     if _source_paths(source, paths, search_cwd):
@@ -1194,21 +1216,6 @@ def complete(
         raise PriorWorkError(
             "Retrieval run has no outcome_terms; run retrieve with the current contract"
         )
-    # Rebinding across commits preserves the search scope, not merely the
-    # selected result. A newly added or removed unselected candidate matters.
-    verified_scopes = {}
-    scope_checks = []
-    for row in run.get("coverage", []):
-        if "source_scope" not in row or row["source_scope"] == "legacy":
-            continue  # Legacy and non-Git/command coverage keep their contract.
-        if row["source_scope"] != "git":
-            raise PriorWorkError("Retrieval source scope contract is invalid; retrieve again")
-        source = next((s for s in manifest["sources"] if s["id"] == row["source_id"]), None)
-        if not source or row.get("source_sha256") != _source_hash(source):
-            raise PriorWorkError("Retrieval source definition changed after retrieval; retrieve again")
-        recorded = row.get("source_git_state")
-        verified_scopes[(source["id"], _source_hash({"state": recorded}))] = _verify_source_scope(source, recorded)
-        scope_checks.append((source, recorded))
     reuse = _parse_assignments(reuse_values, "--reuse")
     adapt = _parse_assignments(adapt_values, "--adapt")
     reject = _parse_assignments(reject_values, "--reject")
@@ -1223,6 +1230,24 @@ def complete(
     unknown = (set(reuse) | set(adapt) | set(reject)) - set(candidates)
     if unknown:
         raise PriorWorkError(f"Unknown candidate IDs: {sorted(unknown)}")
+    # Rebinding preserves required coverage and sources with an actual decision.
+    # Unused optional source maintenance cannot invalidate required evidence.
+    decision_sources = {candidates[key]["source_id"] for key in set(reuse) | set(adapt) | set(reject)}
+    verified_scopes = {}
+    scope_checks = []
+    for row in run.get("coverage", []):
+        if not row.get("required") and row["source_id"] not in decision_sources:
+            continue
+        if "source_scope" not in row or row["source_scope"] == "legacy":
+            continue  # Legacy and non-Git/command coverage keep their contract.
+        if row["source_scope"] != "git":
+            raise PriorWorkError("Retrieval source scope contract is invalid; retrieve again")
+        source = next((s for s in manifest["sources"] if s["id"] == row["source_id"]), None)
+        if not source or row.get("source_sha256") != _source_hash(source):
+            raise PriorWorkError("Retrieval source definition changed after retrieval; retrieve again")
+        recorded = row.get("source_git_state")
+        verified_scopes[(source["id"], _source_hash({"state": recorded}))] = _verify_source_scope(source, recorded)
+        scope_checks.append((source, recorded))
     adopted = set(reuse) | set(adapt)
     if not adopted:
         if not no_reuse_reason or len(no_reuse_reason.strip()) < 20:

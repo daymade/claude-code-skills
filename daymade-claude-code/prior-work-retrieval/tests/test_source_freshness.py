@@ -51,10 +51,10 @@ class SourceFreshnessTests(unittest.TestCase):
         return subprocess.run([sys.executable, "-I", str(SCRIPT), "--manifest", str(self.manifest), *args],
                               env=self.env, capture_output=True, text=True)
 
-    def retrieve(self):
+    def retrieve(self, *extra):
         result = self.cli("retrieve", "--business-outcome", "Reuse the verified provider contract.",
                           "--outcome-term", "reusable", "--query", "reusable", "--term", "reusable",
-                          "--session-id", "fixture", "--json")
+                          "--session-id", "fixture", "--json", *extra)
         self.assertEqual(result.returncode, 0, result.stderr)
         run = json.loads(result.stdout)
         self.candidate = next(c for c in run["candidates"] if c["path"].endswith("contract.md"))
@@ -150,6 +150,103 @@ class SourceFreshnessTests(unittest.TestCase):
         run = self.retrieve()
         (self.source / "ignored.md").write_text("A newly reusable provider contract.\n")
         self.assertIn("working scope changed", self.complete(run).stderr)
+
+    def nested_git(self, path, *args):
+        return subprocess.run(["git", "-C", str(path), *args], env=self.env,
+                              capture_output=True, text=True, check=True).stdout.strip()
+
+    def make_nested(self, path):
+        path.mkdir(parents=True)
+        for args in [("init", "-q"), ("config", "user.name", "Fixture"),
+                     ("config", "user.email", "fixture@example.invalid")]:
+            self.nested_git(path, *args)
+        (path / "nested.md").write_text("New authoritative reusable contract.\n")
+        self.nested_git(path, "add", "--", "nested.md")
+        self.nested_git(path, "commit", "-qm", "nested fixture")
+
+    def test_new_nested_gitlink_cannot_hide_new_candidates_behind_directory_name(self):
+        run = self.retrieve()
+        self.make_nested(self.source / "vendor")
+        self.commit()
+        result = self.complete(run)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("changed nested Git repository", result.stderr)
+        self.assertTrue(any(c["path"].endswith("vendor/nested.md") for c in self.retrieve()["candidates"]))
+
+    def test_new_untracked_nested_repository_requires_new_search(self):
+        run = self.retrieve()
+        self.make_nested(self.source / "vendor")
+        self.assertEqual(self.complete(run).returncode, 2)
+        self.assertTrue(any(c["path"].endswith("vendor/nested.md") for c in self.retrieve()["candidates"]))
+
+    def test_tracked_nested_repository_change_delete_and_dirty_content_recheck(self):
+        vendor = self.source / "vendor"
+        self.make_nested(vendor)
+        self.commit()
+        run = self.retrieve()
+        (vendor / "new.md").write_text("A new reusable decision.\n")
+        self.assertEqual(self.complete(run).returncode, 2)
+        self.nested_git(vendor, "add", "--", "new.md")
+        self.nested_git(vendor, "commit", "-qm", "advance nested source")
+        self.commit()
+        self.assertIn("changed nested Git repository", self.complete(run).stderr)
+        run = self.retrieve()
+        # This embedded-repository fixture intentionally has no .gitmodules.
+        self.git("update-index", "--force-remove", "--", "evidence/vendor")
+        shutil.rmtree(vendor)
+        self.commit()
+        self.assertIn("changed nested Git repository", self.complete(run).stderr)
+
+    def test_nested_repository_outside_source_remains_unrelated(self):
+        run = self.retrieve()
+        other = self.repo / "other/vendor"
+        self.make_nested(other)
+        self.commit()
+        self.assertEqual(self.complete(run).returncode, 0)
+        (other / "nested.md").write_text("Changed out-of-scope reusable contract.\n")
+        self.nested_git(other, "add", "--", "nested.md")
+        self.nested_git(other, "commit", "-qm", "advance outside source")
+        self.commit()
+        self.assertEqual(self.complete(run).returncode, 0)
+
+    def add_optional_source(self):
+        optional = self.repo / "optional"
+        optional.mkdir()
+        (optional / "notes.md").write_text("An optional reusable note.\n")
+        self.commit()
+        payload = json.loads(self.manifest.read_text())
+        payload["sources"].append({"id": "optional", "carrier": "docs", "mode": "filesystem",
+                                   "root": str(optional), "includes": ["**/*.md"], "required": False})
+        self.manifest.write_text(json.dumps(payload))
+
+    def change_optional_definition(self):
+        payload = json.loads(self.manifest.read_text())
+        payload["sources"][1]["max_results"] = 9
+        self.manifest.write_text(json.dumps(payload))
+
+    def test_unused_optional_definition_keeps_required_completion_valid(self):
+        self.add_optional_source()
+        run = self.retrieve()
+        self.change_optional_definition()
+        self.assertEqual(self.complete(run).returncode, 0)
+
+    def test_decided_optional_and_promoted_required_definition_changes_recheck(self):
+        self.add_optional_source()
+        run = self.retrieve()
+        optional = next(c for c in run["candidates"] if c["source_id"] == "optional")
+        self.change_optional_definition()
+        for decision in ("reuse", "adapt", "reject"):
+            with self.subTest(decision=decision):
+                result = self.cli("complete", "--run", run["run_id"], "--session-id", "fixture",
+                                  "--reuse", self.candidate["candidate_id"] + "=reuse the required opened contract",
+                                  "--" + decision, optional["candidate_id"] + "=specific opened optional-source decision", "--json")
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("source definition changed", result.stderr)
+        run = self.retrieve("--require-source", "optional")
+        payload = json.loads(self.manifest.read_text())
+        payload["sources"][1]["max_results"] = 8
+        self.manifest.write_text(json.dumps(payload))
+        self.assertIn("source definition changed", self.complete(run).stderr)
 
     def test_missing_null_empty_scope_dependencies_fail_closed(self):
         run = self.retrieve()
