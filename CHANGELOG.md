@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **transcript-fixer** (`daymade-audio` v1.50.0): Preserve competing proposals and rule evidence under one located occurrence across line/context drift, add scoped legacy consolidation and explicit candidate action selection, accept typed written references for nonperson names while retaining person-name guards, and support destination-selected review-report directories with closure discovery. Change type: additive queue and report workflow capability.
 - **macos-cleaner / macos-watchdog** (`daymade-macos` v1.23.9): Route repository and README entries to the canonical uv retirement and persistent-runtime procedures; remove duplicated instructions, unsafe cleanup examples and derived summaries. Change type: bounded documentation alignment.
 
 - **prior-work-retrieval** (`daymade-claude-code` v4.30.12): Clarify the installed-Skill working directory for bundled commands and align ordinary creation, implementation and status-check eval expectations with the existing explicit-history trigger. Route manifest selection from repository instructions. Change type: existing-contract documentation repair.

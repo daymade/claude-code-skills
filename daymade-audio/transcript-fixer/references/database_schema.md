@@ -158,6 +158,8 @@ is the storage shape.
 | line_number | INTEGER | 1-based line hint for anchor disambiguation |
 | context_snippet | TEXT | Line content recorded at enqueue time (content check on resolve) |
 | context_offset | INTEGER | Nullable zero-based Unicode character offset of the selected original inside context_snippet |
+| entity_type | TEXT | Explicit referent type; defaults to `unknown`, retaining person-name safety |
+| occurrence_parent | INTEGER | Representative ID for a linked historical duplicate; original row remains queryable |
 | original_text | TEXT | Text as it stands in the transcript (NOT NULL) |
 | suggested_text | TEXT | Pre-filled suggestion (nullable — unknown-entity questions) |
 | kind | TEXT | 'entity', 'homophone', 'wording', 'unknown' (CHECK; drives priority) |
@@ -172,18 +174,45 @@ is the storage shape.
 | applied_at | TIMESTAMP | When the action pack executed |
 | apply_log | TEXT | JSON per-action execution log |
 
-**No UNIQUE constraint** — enqueue groups by
-(file_path, original_text, suggested_text, domain, line_number), then compares
-context and selected position across ALL statuses. A different same-line position
-is a separate question. Opening an older queue adds the nullable `context_offset`
-column idempotently; existing rows and verdicts are retained without inventing a
-position. `reopen` is a decision
+**No UNIQUE constraint** — enqueue compares uniquely located occurrences within
+exact file/original/domain scope. Suggestions and line hints are not occurrence
+identities. A different same-line position remains a separate question. Opening
+an older queue adds `context_offset`, `entity_type` and `occurrence_parent`
+idempotently; old rows, verdicts and actions remain intact. Scoped consolidation
+links only uniquely located pending rows; ambiguous and decided conflicts remain
+visible. `reopen` is a decision
 verb, not a status: it reverts applied edits and sets the row back to 'pending'.
 
 Indexes: `status`, `domain`, `priority DESC`, `file_path`.
 
 Audit trail: enqueue/resolve/reopen write `audit_log` rows with
 `entity_type='review_item'`.
+
+### review_candidates, review_anchors and review_report_locations
+
+`review_candidates` stores append-only candidate payloads (`item_id`, content
+`fingerprint`, `payload_json`, `created_at`). Payloads retain suggestion, source,
+kind, entity type, evidence, actions and optional dictionary/rule `provenance`.
+The `(item_id, fingerprint)` primary key makes identical proposals idempotent.
+Normal readers project one representative with its candidate list. Historical
+linked rows remain in `review_items`; verdict/reopen events are audited.
+
+`review_anchors` retains each item's historical verbatim anchors by content
+fingerprint, including the strict UTF-8 source version used for coordinate
+identity. Old records without that version remain unknown rather than being
+retroactively stamped with the current file. Refreshing a live anchor after neighbouring edits does not erase
+the old identity; re-enqueueing an already answered historical anchor stays
+idempotent. It does not assign ambiguous old contexts to guessed positions.
+
+Use the updated writer for these occurrence/candidate features. Older readers
+can still read legacy `review_items` fields but do not understand candidate
+selection or representative projection; do not mix old verdict writers into
+an upgraded review workflow.
+
+`review_report_locations` binds exact canonical transcript paths to unique report
+paths. Report writing registers custom locations in runtime SQLite; closure reads
+those locations in addition to its ordinary output directory. This table contains
+runtime paths and is not part of the distributed bundle.
 
 ## Views
 

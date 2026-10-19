@@ -38,6 +38,90 @@ produced, and an optional **action pack** executed on accept: `file_edit`
 `append_note` (add a trap line to a domain context file). No action pack + a
 file anchor = the default single `file_edit`.
 
+### One occurrence, multiple candidates
+
+Treat the located body span as the question. Enqueue compares occurrences within
+the same exact file, domain and original, across line drift and suggested text.
+When two anchors uniquely locate one span, the queue retains one item and appends
+distinct candidates, evidence, action packs and optional `provenance` objects.
+Use `provenance` for dictionary/rule identity; Stage 1 also retains its dictionary
+source in candidate evidence. Repeated identical proposals do not create rows.
+Inspect `candidates` in `--show-review --json` or the dashboard before deciding.
+Different candidates require `overridden --override-to TEXT` or an explicit
+zero-based `--review-candidate N`; plain `accepted` refuses to silently choose
+the first. Without a candidate index, the representative item's action pack
+executes. With the index, only that candidate's suggestion/action pack executes;
+competing action packs are never combined. Inspect the chosen pack before deciding.
+
+For an existing batch, run:
+
+```bash
+uv run scripts/fix_transcription.py --consolidate-review \
+  --review-file /absolute/canonical.md --json
+```
+
+This scoped migration links uniquely located pending rows, preserves their old IDs,
+actions and audit history, and reports `ambiguous_ids` and `verdict_conflicts`.
+Normal listings/counts show representatives; old IDs remain readable and name their
+`occurrence_parent`. Resolve the representative, using an explicit override when
+candidates conflict. Its verdict settles linked pending rows with the selected
+`resolved_text`; reopening it restores the linked rows to pending. Already-decided
+rows are not rewritten by consolidation. Repeated enqueue performs the same scoped
+linking for its file and records any refreshed live anchor in the audit trail.
+
+Identity recovery may use an unchanged neighbour of at least six characters only
+when it identifies one slot in the whole file. It never equates slots by nearest
+line or edit distance. A broad legacy context containing several originals without
+an offset remains ambiguous: inspect it and use the explicit offset repair below.
+Do not assign it to the first occurrence or discard it as a duplicate. A type or
+candidate conflict is retained; aggregation supplies no new authority.
+
+Exact recorded coordinates are a retry identity only while the strictly decoded
+UTF-8 file has its recorded content fingerprint. Changed files and old anchors
+without that fingerprint require independently unique context; they cannot borrow
+an old line number. Historical decided retries also require the actual unique
+applied context. Replaying an identical proposal for an unresolved multi-slot
+legacy report retains that same ambiguous question without attaching a new
+candidate, refreshing its version or claiming a physical slot.
+
+### Written authority for nonperson names
+
+Keep omitted `entity_type` as `unknown`; `null`, blank and unrecognised values are
+invalid in enqueue payloads. `unknown` and `person` retain the person-name guard.
+Classify an occurrence as `system`, `product`, `organization` or `place` only from
+explicit source/context evidence. A type label or prose containing a business
+term is insufficient. For an existing row use `--review-entity-type TYPE` with
+the verdict; classification and authority persist only if the verdict succeeds.
+
+Supply a written reference through `--authority-record`:
+
+```json
+{
+  "kind": "entity_reference",
+  "entity_type": "system",
+  "item_id": 12,
+  "target": "明台",
+  "source_ref": "project-registry:line-8",
+  "source_path": "/absolute/source-record.md",
+  "quote": "业务系统：明台系统。"
+}
+```
+
+The CLI checks the item/target/type, reads `source_path`, requires the exact quote
+and target there, and requires an adjacent type cue in the recorded occurrence
+(for example `名台系统` for `system`). It rejects a type conflicting with a known
+roster name/variant. Use a verified local export for a remote reference; keep its
+source identity in `source_ref`. The operator judges whether the source is
+authoritative: literal quote validation cannot establish that judgment or infer
+the referent's identity. A source reference for a system never authorises a
+person-name correction. Missing cues, unavailable sources or conflicting people
+evidence leave the row pending; do not manufacture roster/audio/user citations.
+
+```bash
+uv run scripts/fix_transcription.py --resolve-review 12 --decision accepted \
+  --review-entity-type system --authority-record entity-reference.json --json
+```
+
 ### Cited answers and ledger writes
 
 When the user answers an unresolved term or name question, preserve that answer

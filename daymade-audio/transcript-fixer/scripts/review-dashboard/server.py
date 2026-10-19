@@ -159,6 +159,9 @@ def api_queue(
         params.append(status)
     query += " ORDER BY priority DESC, id ASC LIMIT 500"
     with _connect_ro() as conn:
+        occurrence_schema = "occurrence_parent" in {r[1] for r in conn.execute("PRAGMA table_info(review_items)")}
+        if occurrence_schema:
+            query = query.replace("WHERE 1=1", "WHERE occurrence_parent IS NULL", 1)
         if resolved_file:
             file_row_count = conn.execute(
                 "SELECT COUNT(*) FROM review_items WHERE file_path = ?",
@@ -171,6 +174,11 @@ def api_queue(
                     "the file cannot be certified as human-review complete",
                 )
         rows = conn.execute(query, params).fetchall()
+        projected = [_row_to_dict(r) for r in rows]
+        if occurrence_schema:
+            for item in projected:
+                item["entity_type"] = conn.execute("SELECT entity_type FROM review_items WHERE id=?", (item["id"],)).fetchone()[0]
+                item["candidates"] = [json.loads(r[0]) for r in conn.execute("SELECT payload_json FROM review_candidates WHERE item_id=? ORDER BY rowid", (item["id"],))]
         if item_id is not None and not rows:
             raise HTTPException(404, "review item not found in the requested scope")
 
@@ -184,7 +192,7 @@ def api_queue(
             stats_params = [resolved_file]
             stats_scope = "exact_file"
         by_status = dict(conn.execute(
-            f"SELECT status, COUNT(*) FROM review_items WHERE 1=1{stats_sql} "
+            f"SELECT status, COUNT(*) FROM review_items WHERE {'occurrence_parent IS NULL' if occurrence_schema else '1=1'}{stats_sql} "
             "GROUP BY status",
             stats_params,
         ).fetchall())
@@ -195,7 +203,7 @@ def api_queue(
         sources = [r[0] for r in conn.execute(
             "SELECT DISTINCT source FROM review_items ORDER BY source").fetchall()]
     return {
-        "items": [_row_to_dict(r) for r in rows],
+        "items": projected,
         "stats": {"by_status": by_status, "pending_total": by_status.get("pending", 0)},
         "filters": {"domains": domains, "kinds": kinds, "sources": sources},
         "scope": {

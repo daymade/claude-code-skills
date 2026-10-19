@@ -27,11 +27,12 @@ Design (borrowed from annotation-tool practice — Prodigy/Argilla):
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import re
 import sqlite3
 import tempfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional, NamedTuple
@@ -110,6 +111,9 @@ class ReviewItem:
     applied_at: Optional[str] = None
     apply_log: Optional[list[dict[str, Any]]] = None
     context_offset: Optional[int] = None
+    entity_type: str = "unknown"
+    occurrence_parent: Optional[int] = None
+    candidates: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -121,6 +125,9 @@ class ReviewItem:
             "line_number": self.line_number,
             "context_snippet": self.context_snippet,
             "context_offset": self.context_offset,
+            "entity_type": self.entity_type,
+            "occurrence_parent": self.occurrence_parent,
+            "candidates": self.candidates,
             "original_text": self.original_text,
             "suggested_text": self.suggested_text,
             "kind": self.kind,
@@ -217,6 +224,22 @@ class ReviewQueue:
             if "context_offset" not in {r[1] for r in conn.execute("PRAGMA table_info(review_items)")}:
                 conn.execute("ALTER TABLE review_items ADD COLUMN context_offset INTEGER")
             conn.commit()
+        columns = {r[1] for r in conn.execute("PRAGMA table_info(review_items)")}
+        if not {"entity_type", "occurrence_parent"} <= columns:
+            conn.execute("BEGIN IMMEDIATE")
+            columns = {r[1] for r in conn.execute("PRAGMA table_info(review_items)")}
+            if "entity_type" not in columns:
+                conn.execute("ALTER TABLE review_items ADD COLUMN entity_type TEXT NOT NULL DEFAULT 'unknown'")
+            if "occurrence_parent" not in columns:
+                conn.execute("ALTER TABLE review_items ADD COLUMN occurrence_parent INTEGER")
+            conn.commit()
+        conn.execute("""CREATE TABLE IF NOT EXISTS review_candidates (
+            item_id INTEGER NOT NULL, fingerprint TEXT NOT NULL, payload_json TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(item_id, fingerprint))""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS review_anchors (
+            item_id INTEGER NOT NULL, fingerprint TEXT NOT NULL, payload_json TEXT NOT NULL,
+            PRIMARY KEY(item_id, fingerprint))""")
         return conn
 
     # ==================== Enqueue ====================
@@ -231,10 +254,12 @@ class ReviewQueue:
         evolving text and legitimately need not appear in the input file)."""
         added: list[int] = []
         skipped_dup = 0
+        merged_candidates: list[dict[str, int]] = []
         skipped_temp = 0
         rejected_unanchored: list[dict[str, Any]] = []
         repaired_hints: list[dict[str, Any]] = []
         anchor_cache: dict[str, Optional[str]] = {}  # path -> file content (read once per file)
+        consolidated: set[str] = set()
         with self._connect() as conn:
             for raw in items:
                 item = self._normalize(raw)
@@ -254,26 +279,77 @@ class ReviewQueue:
                 # already applied in-memory), which legitimately need not appear
                 # verbatim in the input file — the guard owns their fate.
                 reason = None
-                if item["file_path"] and item["source"] != "stage1_deferred":
+                if item["file_path"]:
                     fp = item["file_path"]
                     if fp not in anchor_cache:
                         anchor_cache[fp] = self._read_anchor_source(fp)
-                    reason = self._check_anchor_verbatim(item, anchor_cache[fp])
+                    if anchor_cache[fp] is not None:
+                        item["_file_fingerprint"] = hashlib.sha256(anchor_cache[fp].encode()).hexdigest()
+                    if item["source"] != "stage1_deferred":
+                        reason = self._check_anchor_verbatim(item, anchor_cache[fp])
+                    if fp not in consolidated:
+                        self._consolidate_file(conn, fp, anchor_cache[fp])
+                        consolidated.add(fp)
                 # Keep the historical pair/line bucket, then compare occurrence
                 # anchors. Different snippets on one line are not one question.
                 candidates = conn.execute(
                     """SELECT * FROM review_items
                        WHERE COALESCE(file_path,'') = COALESCE(?,'')
                          AND original_text = ?
-                         AND COALESCE(suggested_text,'') = COALESCE(?,'')
                          AND domain = ?
-                         AND COALESCE(line_number,-1) = COALESCE(?,-1)
+                         AND occurrence_parent IS NULL
                        """,
-                    (item["file_path"], item["original_text"], item["suggested_text"],
-                     item["domain"], item["line_number"]),
+                    (item["file_path"], item["original_text"], item["domain"]),
                 ).fetchall()
-                if any(self._same_occurrence(item, row, anchor_cache.get(item["file_path"]))
-                       for row in candidates):
+                # An old no-offset report may represent an unresolved bag of
+                # several slots. Replaying that EXACT proposal is the same
+                # open question, not evidence that it denotes one body span.
+                # Do not refresh its coordinates/fingerprint or merge a new
+                # proposal into it through this formal-retry branch.
+                proposal_json = self._candidate_json(item)
+                proposal_fp = hashlib.sha256(proposal_json.encode()).hexdigest()
+                legacy_retry = next((row for row in candidates
+                    if row["status"] == PENDING and row["context_offset"] is None
+                    and item["context_offset"] is None and item["line_number"] == row["line_number"]
+                    and item["context_snippet"] == row["context_snippet"]
+                    and (row["context_snippet"] or "").count(item["original_text"]) > 1
+                    and conn.execute("SELECT 1 FROM review_candidates WHERE item_id=? AND fingerprint=?",
+                                     (row["id"], proposal_fp)).fetchone()), None)
+                if legacy_retry is not None:
+                    skipped_dup += 1
+                    continue
+                duplicate = next((row for row in candidates if any(self._same_occurrence(
+                    item, anchor, anchor_cache.get(item["file_path"])) for anchor in
+                    self._identity_anchors(conn, row))), None)
+                if duplicate is not None:
+                    self._store_anchor(conn, duplicate["id"], dict(duplicate))
+                    self._store_anchor(conn, duplicate["id"], item)
+                    if not conn.execute("SELECT 1 FROM review_candidates WHERE item_id=? LIMIT 1", (duplicate["id"],)).fetchone():
+                        self._store_candidate(conn, duplicate["id"], dict(duplicate))
+                    changed = self._store_candidate(conn, duplicate["id"], item)
+                    if changed:
+                        merged_candidates.append({"id": duplicate["id"]})
+                        self._audit(conn, "review_candidate_attach", duplicate["id"], None,
+                                    {"suggested": item["suggested_text"], "source": item["source"]})
+                    if duplicate["status"] == PENDING and item["context_snippet"] and anchor_cache.get(item["file_path"]):
+                        content = anchor_cache[item["file_path"]]
+                        if item["context_snippet"] in content:
+                            # Both independently located the same span above.
+                            # Keep the old anchor in append-only audit before
+                            # refreshing the live slot to current verbatim text.
+                            try:
+                                position = self._occurrence_position(content, item)
+                            except ReAnchorNeeded:
+                                skipped_dup += 1
+                                continue
+                            line = content[:position].count("\n") + 1
+                            previous = {k: duplicate[k] for k in ("line_number", "context_snippet", "context_offset")}
+                            current = {"line_number": line, "context_snippet": item["context_snippet"], "context_offset": item["context_offset"]}
+                            if previous != current:
+                                conn.execute("UPDATE review_items SET line_number=?, context_snippet=?, context_offset=? WHERE id=?",
+                                             (line, item["context_snippet"], item["context_offset"], duplicate["id"]))
+                                self._audit(conn, "review_occurrence_reanchor", duplicate["id"], None,
+                                            {"before": previous, "after": current})
                     skipped_dup += 1
                     continue
                 if reason:
@@ -294,24 +370,57 @@ class ReviewQueue:
                     """INSERT INTO review_items
                        (source, domain, file_path, line_number, context_snippet,
                         original_text, suggested_text, kind, evidence, actions_json, priority,
-                        context_offset)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        context_offset, entity_type)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         item["source"], item["domain"], item["file_path"],
                         item["line_number"], item["context_snippet"],
                         item["original_text"], item["suggested_text"], item["kind"],
                         item["evidence"], json.dumps(item["actions"], ensure_ascii=False),
-                        item["priority"], item["context_offset"],
+                        item["priority"], item["context_offset"], item["entity_type"],
                     ),
                 )
                 item_id = cur.lastrowid
                 added.append(item_id)
+                self._store_candidate(conn, item_id, item)
+                self._store_anchor(conn, item_id, item)
                 self._audit(conn, "review_enqueue", item_id, None,
                             {"source": item["source"], "domain": item["domain"],
                              "original": item["original_text"][:80]})
             conn.commit()
         return {"added": added, "skipped_duplicates": skipped_dup, "skipped_temp": skipped_temp,
-                "rejected_unanchored": rejected_unanchored, "repaired_hints": repaired_hints}
+                "rejected_unanchored": rejected_unanchored, "repaired_hints": repaired_hints,
+                "merged_candidates": merged_candidates}
+
+    @staticmethod
+    def _store_anchor(conn, item_id: int, item: dict[str, Any]) -> None:
+        payload = {k: item.get(k) for k in ("original_text", "line_number", "context_snippet", "context_offset", "_file_fingerprint")}
+        serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        conn.execute("INSERT OR IGNORE INTO review_anchors VALUES (?, ?, ?)",
+                     (item_id, hashlib.sha256(serialized.encode()).hexdigest(), serialized))
+
+    @staticmethod
+    def _identity_anchors(conn, row) -> list[dict[str, Any]]:
+        current = dict(row)
+        # Current verdict metadata belongs to the item, even when considering
+        # an older anchor. A historical coordinate is not a frozen verdict.
+        return [current, *[{**current, **json.loads(r[0])} for r in conn.execute(
+            "SELECT payload_json FROM review_anchors WHERE item_id=?", (row["id"],))]]
+
+    @staticmethod
+    def _candidate_json(item: dict[str, Any]) -> str:
+        payload = {key: item.get(key) for key in (
+            "source", "suggested_text", "kind", "entity_type", "evidence", "provenance")}
+        payload["actions"] = item.get("actions", json.loads(item.get("actions_json") or "[]"))
+        return json.dumps(payload, ensure_ascii=False, sort_keys=True)
+
+    @staticmethod
+    def _store_candidate(conn, item_id: int, item: dict[str, Any]) -> bool:
+        """Append distinct proposals; never replace a suggestion, evidence or action pack."""
+        serialized = ReviewQueue._candidate_json(item)
+        fingerprint = hashlib.sha256(serialized.encode()).hexdigest()
+        return bool(conn.execute("INSERT OR IGNORE INTO review_candidates VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
+                                 (item_id, fingerprint, serialized)).rowcount)
 
     @staticmethod
     def _same_occurrence(item: dict[str, Any], row: sqlite3.Row,
@@ -321,22 +430,109 @@ class ReviewQueue:
         A legacy anchor lacking context is not a wildcard over all same-line
         occurrences. Only merge differing contexts when both locate one span.
         """
-        if ((item["context_snippet"] or "") == (row["context_snippet"] or "")
-                and item["context_offset"] == row["context_offset"]):
+        same_record = (item["line_number"] == row["line_number"]
+                and (item["context_snippet"] or "") == (row["context_snippet"] or "")
+                and item["context_offset"] == row["context_offset"])
+        prior = dict(row)
+        if same_record and content is None:
+            return item.get("suggested_text") == prior.get("suggested_text")
+        if same_record and prior.get("_file_fingerprint") == hashlib.sha256(content.encode()).hexdigest():
             return True
         if content is None:
             return False
         masked, _ = _mask_ledger_spans(content)
+        # A decided retry after an edit needs the actual applied form at that
+        # recorded slot. Equal old coordinates alone do not prove a retry.
+        resolved = prior.get("resolved_text")
+        if same_record and prior.get("status") in ("accepted", "overridden") and resolved:
+            try:
+                focused = ReviewQueue._focused_context(row["original_text"], row["context_snippet"], row["context_offset"])
+                applied = focused.replace(row["original_text"], resolved, 1) if focused and focused.count(row["original_text"]) == 1 else None
+                if applied and focused not in masked and masked.count(applied) == 1:
+                    return True
+            except ReAnchorNeeded:
+                pass
         try:
-            positions = [ReviewQueue._locate_anchor(
-                masked, anchor["original_text"], anchor["line_number"],
-                ReviewQueue._focused_context(anchor["original_text"],
-                                             anchor["context_snippet"], anchor["context_offset"]),
-                require_exact_context=anchor["context_offset"] is not None)
-                for anchor in (item, row)]
+            positions = [ReviewQueue._occurrence_position(masked, anchor) for anchor in (item, row)]
         except ReAnchorNeeded:
             return False
         return positions[0] == positions[1]
+
+    @staticmethod
+    def _occurrence_position(content: str, anchor) -> int:
+        old, snippet, offset = anchor["original_text"], anchor["context_snippet"], anchor["context_offset"]
+        focused = ReviewQueue._focused_context(old, snippet, offset)
+        try:
+            if not focused or focused.count(old) != 1:
+                raise ReAnchorNeeded("occurrence has no unambiguous context")
+            matches = list(re.finditer(re.escape(focused), content))
+            if len(matches) != 1:
+                raise ReAnchorNeeded("occurrence context is not globally unique")
+            return matches[0].start() + focused.index(old)
+        except ReAnchorNeeded:
+            # Identity recovery only: an unchanged, substantial neighbour must
+            # identify ONE slot in the entire file. Never use edit distance or
+            # the nearest line to equate competing same-line occurrences.
+            if not focused or focused.count(old) != 1:
+                raise
+            before, after = focused.split(old)
+            probes = [part for part in (before[-32:] + old if len(before) >= 6 else "",
+                                       old + after[:32] if len(after) >= 6 else "") if part]
+            hits = set()
+            for probe in probes:
+                occurrences = [m.start() for m in re.finditer(re.escape(probe), content)]
+                if len(occurrences) == 1:
+                    hits.add(occurrences[0] + (len(probe) - len(old) if probe.endswith(old) else 0))
+            if len(hits) == 1:
+                return hits.pop()
+            raise ReAnchorNeeded("occurrence identity is ambiguous after context drift")
+
+    def _consolidate_file(self, conn, file_path: str, content: Optional[str]) -> dict:
+        """Link legacy rows only when their current slots are independently unique.
+
+        Keep every old id, action pack and verdict. Ambiguous no-offset anchors
+        are reported, never assigned to the first matching occurrence.
+        """
+        result = {"linked": [], "ambiguous_ids": [], "verdict_conflicts": []}
+        if content is None:
+            return result
+        masked, _ = _mask_ledger_spans(content)
+        slots: dict[tuple, sqlite3.Row] = {}
+        rows = conn.execute("SELECT * FROM review_items WHERE file_path = ? AND occurrence_parent IS NULL ORDER BY id",
+                            (file_path,)).fetchall()
+        for row in rows:
+            try:
+                position = self._occurrence_position(masked, row)
+            except ReAnchorNeeded:
+                result["ambiguous_ids"].append(row["id"])
+                continue
+            key = (row["domain"], row["original_text"], position)
+            parent = slots.get(key)
+            if parent is None:
+                slots[key] = row
+                continue
+            if parent["status"] != PENDING or row["status"] != PENDING:
+                # Decided records are not rewritten by a schema upgrade.
+                result["verdict_conflicts"].append([parent["id"], row["id"]])
+                continue
+            self._store_candidate(conn, parent["id"], dict(parent))
+            self._store_candidate(conn, parent["id"], dict(row))
+            self._store_anchor(conn, parent["id"], dict(parent))
+            self._store_anchor(conn, parent["id"], dict(row))
+            for proposal in conn.execute("SELECT * FROM review_candidates WHERE item_id = ?", (row["id"],)).fetchall():
+                conn.execute("INSERT OR IGNORE INTO review_candidates VALUES (?, ?, ?, ?)",
+                             (parent["id"], proposal["fingerprint"], proposal["payload_json"], proposal["created_at"]))
+            conn.execute("UPDATE review_items SET occurrence_parent = ? WHERE id = ?", (parent["id"], row["id"]))
+            self._audit(conn, "review_occurrence_link", row["id"], None, {"parent_id": parent["id"]})
+            result["linked"].append({"id": row["id"], "parent_id": parent["id"]})
+        return result
+
+    def consolidate(self, file_path: str) -> dict:
+        path = str(Path(file_path).resolve())
+        with self._connect() as conn:
+            result = self._consolidate_file(conn, path, self._read_anchor_source(path))
+            conn.commit()
+        return {"file_path": path, **result}
 
     @staticmethod
     def _focused_context(old: str, snippet: Optional[str], offset: Optional[int]) -> Optional[str]:
@@ -366,9 +562,9 @@ class ReviewQueue:
         if not path.is_file():
             return None
         try:
-            with open(path, encoding="utf-8", errors="replace", newline="") as f:
+            with open(path, encoding="utf-8", newline="") as f:
                 return f.read()
-        except OSError:
+        except (OSError, UnicodeError):
             return None
 
     @staticmethod
@@ -547,7 +743,8 @@ class ReviewQueue:
         line_start = sum(len(ln) for ln in masked.splitlines(keepends=True)[:line_no - 1])
         new_offset = position - line_start - (len(lines[line_no - 1]) - len(lines[line_no - 1].lstrip()))
         proposed = {"original_text": item.original_text, "line_number": line_no,
-                    "context_snippet": new_context, "context_offset": new_offset}
+                    "context_snippet": new_context, "context_offset": new_offset,
+                    "_file_fingerprint": hashlib.sha256(content.encode()).hexdigest()}
         # A re-point must not collide with another pending item's dedup key —
         # that would strand a permanently unresolvable duplicate in the queue.
         with self._connect() as conn:
@@ -564,7 +761,10 @@ class ReviewQueue:
                  item.domain, line_no),
             ).fetchall()
             collision = next((row for row in collisions
-                              if self._same_occurrence(proposed, row, content)), None)
+                              if any(self._same_occurrence(proposed, anchor, content)
+                                     for anchor in self._identity_anchors(conn, row))
+                              or (not row["context_snippet"] and row["context_offset"] is None
+                                  and lines[line_no - 1].count(item.original_text) == 1)), None)
             if collision:
                 raise ReviewQueueError(
                     f"re-anchor would collide with item #{collision['id']} "
@@ -579,6 +779,7 @@ class ReviewQueue:
             if cur.rowcount != 1:
                 raise ReviewQueueError(
                     f"item {item_id} changed status while re-anchoring — re-read and retry")
+            self._store_anchor(conn, item_id, proposed)
             # Explicit action packs carry their own file paths/line hints.
             # file_edit.expect_line must follow ANY line move — not just
             # re-points: a stale expect_line OUTRANKS item.line_number at
@@ -709,6 +910,12 @@ class ReviewQueue:
             except (TypeError, ValueError):
                 raise ReviewQueueError(f"line must be an integer, got {line_number!r}")
         snippet = raw.get("context") or raw.get("context_snippet")
+        entity_type = raw.get("entity_type", "unknown")
+        if entity_type not in ("unknown", "person", "system", "product", "organization", "place"):
+            raise ReviewQueueError("entity_type must be unknown, person, system, product, organization or place")
+        provenance = raw.get("provenance")
+        if provenance is not None and not isinstance(provenance, dict):
+            raise ReviewQueueError("provenance must be an object when supplied")
         offset = raw.get("context_offset")
         self._validate_context_offset(original, snippet, offset)
         return {
@@ -721,6 +928,8 @@ class ReviewQueue:
             "original_text": original,
             "suggested_text": suggested,
             "kind": kind,
+            "entity_type": entity_type,
+            "provenance": provenance,
             "evidence": raw.get("evidence"),
             "actions": actions,
             "priority": int(priority),
@@ -744,7 +953,7 @@ class ReviewQueue:
         file_path: Optional[str] = None,
         limit: int = 500,
     ) -> list[ReviewItem]:
-        query = "SELECT * FROM review_items WHERE 1=1"
+        query = "SELECT * FROM review_items WHERE occurrence_parent IS NULL"
         params: list[Any] = []
         if status:
             query += " AND status = ?"
@@ -801,7 +1010,7 @@ class ReviewQueue:
         for the selected file/domain/source so a human verdict can be read back
         as pending→decided without falling back to global queue counts.
         """
-        where = " WHERE 1=1"
+        where = " WHERE occurrence_parent IS NULL"
         params: list[Any] = []
         if domain:
             where += " AND domain = ?"
@@ -833,6 +1042,10 @@ class ReviewQueue:
         }
 
     def _row_to_item(self, row: sqlite3.Row) -> ReviewItem:
+        parent_id = row["occurrence_parent"] or row["id"]
+        with self._connect() as conn:
+            candidates = [json.loads(r[0]) for r in conn.execute(
+                "SELECT payload_json FROM review_candidates WHERE item_id = ? ORDER BY created_at, rowid", (parent_id,))]
         return ReviewItem(
             id=row["id"],
             created_at=row["created_at"],
@@ -842,6 +1055,9 @@ class ReviewQueue:
             line_number=row["line_number"],
             context_snippet=row["context_snippet"],
             context_offset=row["context_offset"],
+            entity_type=row["entity_type"],
+            occurrence_parent=row["occurrence_parent"],
+            candidates=candidates,
             original_text=row["original_text"],
             suggested_text=row["suggested_text"],
             kind=row["kind"],
@@ -868,6 +1084,8 @@ class ReviewQueue:
         by: Optional[str] = None,
         authority: Optional[str] = None,
         ledger_entry: Optional[str] = None,
+        entity_type: Optional[str] = None,
+        candidate_index: Optional[int] = None,
     ) -> dict[str, Any]:
         """Record a decision and (for accepted/overridden) execute the action pack.
 
@@ -878,9 +1096,24 @@ class ReviewQueue:
         """
         if decision not in VALID_DECISIONS:
             raise ReviewQueueError(f"invalid decision {decision!r} (valid: {VALID_DECISIONS})")
+        if entity_type is not None and entity_type not in ("unknown", "person", "system", "product", "organization", "place"):
+            raise ReviewQueueError("invalid entity_type")
         item = self.get(item_id)
         if item is None:
             raise ReviewQueueError(f"review item {item_id} not found")
+        if item.occurrence_parent is not None:
+            raise ReviewQueueError(f"item {item_id} belongs to occurrence #{item.occurrence_parent}; inspect and resolve that item")
+        execution_item = item
+        if candidate_index is not None:
+            if type(candidate_index) is not int or not 0 <= candidate_index < len(item.candidates):
+                raise ReviewQueueError("candidate_index must identify an existing zero-based candidate")
+            candidate = item.candidates[candidate_index]
+            execution_item = replace(item, suggested_text=candidate.get("suggested_text"),
+                                     actions=candidate.get("actions") or [],
+                                     kind=candidate.get("kind", item.kind),
+                                     entity_type=candidate.get("entity_type", "unknown"),
+                                     evidence=candidate.get("evidence"),
+                                     source=candidate.get("source", item.source))
 
         if decision == "reopen":
             return self._reopen(item, note=note, by=by)
@@ -895,12 +1128,14 @@ class ReviewQueue:
             raise ReviewQueueError("ledger entry requires accepted or overridden")
         resolved_text: Optional[str] = None
         if decision == "accepted":
-            if not item.suggested_text:
+            if candidate_index is None and len({c["suggested_text"] for c in item.candidates if c.get("suggested_text")}) > 1:
+                raise ReviewQueueError("conflicting candidates for this occurrence; inspect candidates and use overridden --override-to explicitly")
+            if not execution_item.suggested_text:
                 raise ReviewQueueError(
                     f"item {item_id} has no suggestion to accept — "
                     "use --decision overridden --override-to TEXT"
                 )
-            resolved_text = item.suggested_text
+            resolved_text = execution_item.suggested_text
         elif decision == "overridden":
             if not override_to or not override_to.strip():
                 raise ReviewQueueError("--decision overridden requires --override-to TEXT")
@@ -919,7 +1154,7 @@ class ReviewQueue:
                 if current is None or current[0] != PENDING:
                     raise ReviewQueueError(f"item {item_id} changed state meanwhile — reload and retry")
                 if resolved_text is not None:
-                    apply_log = self._apply_actions(item, resolved_text,
+                    apply_log = self._apply_actions(execution_item, resolved_text,
                                                     override=decision == "overridden",
                                                     ledger_entry=ledger_entry)
                     applied_at = _utcnow()
@@ -939,9 +1174,21 @@ class ReviewQueue:
                                  "OR evidence = '' THEN ? ELSE evidence || char(10) || ? END "
                                  "WHERE id = ?", (line, line, item_id))
                     self._audit(conn, "review_evidence_attach", item_id, by, {"appended": line})
+                if entity_type is not None:
+                    conn.execute("UPDATE review_items SET entity_type = ? WHERE id = ?", (entity_type, item_id))
                 self._audit(conn, "review_resolve", item_id, by,
                             {"decision": decision, "resolved_text": resolved_text,
-                             "actions_applied": len(apply_log)})
+                             "actions_applied": len(apply_log), "candidate_index": candidate_index,
+                             "candidate": item.candidates[candidate_index] if candidate_index is not None else None})
+                for sibling in conn.execute("SELECT id, suggested_text FROM review_items WHERE occurrence_parent = ? AND status = 'pending'", (item_id,)).fetchall():
+                    sibling_decision = decision
+                    if resolved_text is not None:
+                        sibling_decision = "accepted" if sibling["suggested_text"] == resolved_text else "overridden"
+                    conn.execute("UPDATE review_items SET status=?, decided_at=?, decided_by=?, decision_note=?, resolved_text=?, apply_log=? WHERE id=?",
+                                 (sibling_decision, _utcnow(), by, f"Occurrence #{item_id}: {note or decision}", resolved_text,
+                                  json.dumps([{"occurrence_parent": item_id}]), sibling["id"]))
+                    self._audit(conn, "review_occurrence_resolve", sibling["id"], by,
+                                {"parent_id": item_id, "decision": sibling_decision, "resolved_text": resolved_text})
                 conn.commit()
         except Exception as error:
             # Validation failures have no apply log and changed no files.
@@ -957,7 +1204,9 @@ class ReviewQueue:
             raise
         result = self.get(item_id)
         assert result is not None
-        return {"item": result.to_dict(), "apply_log": apply_log}
+        return {"item": result.to_dict(), "apply_log": apply_log,
+                "selected_candidate_index": candidate_index,
+                "selected_candidate": item.candidates[candidate_index] if candidate_index is not None else None}
 
     def _reopen(self, item: ReviewItem, note: Optional[str], by: Optional[str]) -> dict[str, Any]:
         """Undo: atomically claim the item back to pending (guarded against a
@@ -979,6 +1228,8 @@ class ReviewQueue:
                 raise ReviewQueueError(
                     f"item {item.id} changed state meanwhile — reload and retry")
             revert_log = self._revert_applied(item.apply_log or [])
+            conn.execute("UPDATE review_items SET status='pending', decided_at=NULL, decided_by=NULL, decision_note=?, resolved_text=NULL, applied_at=NULL, apply_log=NULL WHERE occurrence_parent=?",
+                         (f"Occurrence #{item.id} reopened", item.id))
             self._audit(conn, "review_reopen", item.id, by, {"reverts": revert_log})
             conn.commit()
         reopened = self.get(item.id)
