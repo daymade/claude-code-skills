@@ -1854,7 +1854,7 @@ claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
 
 ### **product-analysis** - 多路径产品审计与优化
 
-使用并行的 Claude Code 分析代理（必要时结合 Codex CLI）进行产品审计，覆盖 UX、API、架构和竞品对比场景，输出可量化指标与优先级建议。
+通过并行探索与有证据的综合判断，审计 UX、API、架构及选定竞品的实现。
 
 **使用场景：**
 - 上线前审核或定期产品健康度检查
@@ -1864,9 +1864,9 @@ claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
 
 **主要功能：**
 - 自动识别项目类型和 `codex` 可用性
-- 支持 `full / ux / api / arch / compare` 多维度审计模式
-- Claude 与可选 Codex 代理并行分析，降低单点偏见
-- 产出量化指标与 P0/P1/P2 修复优先级建议
+- 按任务选择[审计范围](product-analysis/SKILL.md#scope-modes)
+- Claude 与可选 Codex 代理并行探索
+- 按[综合判断方法](product-analysis/references/synthesis_methodology.md)核对证据和选择优先级
 - 输出可落地的优化方案（行动项 + 依据）
 
 **示例用法：**
@@ -1876,8 +1876,8 @@ claude plugin install product-analysis@daymade-skills
 
 # 然后请求审计
 "用 full 模式做一轮产品上线前审计"
-"做一轮 UX 审计并给出可量化问题"
-"做一轮 API 审计，识别未使用的接口"
+"审计 UX 导航，并验证它对用户任务的影响"
+"追踪 API 消费者，识别可以安全退役的接口"
 "用 compare 模式和竞品进行对标"
 ```
 
@@ -4104,7 +4104,7 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 使用 **tunnel-doctor** 诊断和修复 macOS 上 Tailscale 与代理/VPN 工具的多层冲突（路由劫持、HTTP 环境变量、系统代理、SSH ProxyCommand、VM/容器代理传播、DNS 解析器卡死）。当 Tailscale ping 正常但 TCP 连接失败、git push 报 "failed to begin relaying via HTTP"，或在使用 Shadowrocket、Clash、Surge 的同时设置 Tailscale SSH 到 WSL 实例时特别有用。还覆盖 **TUN 测量污染**——开着全局代理时，裸探针（`nc -z` 显示 0.00s、`ping`、国外 `ip-api` 查询）为什么会撒谎，以及该信什么。
 
 ### 产品审计与优化
-使用 **product-analysis** 进行上线前和例行产品体检，覆盖 UX、API、架构与竞品对比场景。支持 P0/P1/P2 分级建议，并可根据可量化指标输出可执行优化清单。适用于需要跨团队协作验证方向是否合理的复杂产品。
+使用 [product-analysis](./product-analysis/SKILL.md) 进行上线、UX、API、架构审计及基于源码的竞品对比。
 
 ### 远程桌面与 VDI 优化
 使用 **windows-remote-desktop-connection-doctor** 诊断 macOS 上 Azure Virtual Desktop / W365 连接质量问题。当传输协议显示 WebSocket 而非 UDP Shortpath、RTT 异常高，或更换网络位置后 RDP Shortpath 失败时特别有用。结合网络证据收集与 Windows App 日志分析，系统性定位根因。
@@ -4190,7 +4190,7 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 - **fact-checker**：参见 `fact-checker/SKILL.md` 了解事实核查工作流程和声明验证过程
 - **competitors-analysis**：参见 `competitors-analysis/SKILL.md` 了解 discover/ingest/profile/landscape 工作流，参见 `competitors-analysis/references/profile_template.md` 了解竞品档案模板
 - **windows-remote-desktop-connection-doctor**：参见 `windows-remote-desktop-connection-doctor/references/windows_app_log_analysis.md` 了解日志解析模式和 `windows-remote-desktop-connection-doctor/references/avd_transport_protocols.md` 了解传输协议详情
-- **product-analysis**：参见 `product-analysis/SKILL.md` 了解工作流，参见 `product-analysis/references/synthesis_methodology.md` 了解跨代理加权与推荐逻辑
+- **product-analysis**：参见[工作流](product-analysis/SKILL.md)与[证据综合方法](product-analysis/references/synthesis_methodology.md)，核对原始来源并形成建议
 - **excel-automation**：参见 `daymade-docs/excel-automation/SKILL.md` 了解创建/解析/控制工作流，参见 `daymade-docs/excel-automation/references/formatting-reference.md` 了解格式规范
 - **capture-screen**：参见 `daymade-macos/capture-screen/SKILL.md` 了解基于 CGWindowID 的 macOS 截图流程
 - **continue-claude-code-work**：参见 `daymade-claude-code/continue-claude-code-work/SKILL.md` 了解本地会话产物恢复、漂移检查与续做流程
