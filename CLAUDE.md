@@ -836,6 +836,9 @@ For public first-use instructions, follow [QUICKSTART.md](QUICKSTART.md) or
 the [bug report template](.github/ISSUE_TEMPLATE/bug_report.md) rather than copying
 a Skill list or assuming the reporter's host.
 
+For a blocked packaging attempt, follow the
+[packaging recovery procedure](daymade-skill/skill-creator/references/publishing-and-packaging.md#step-7-packaging-a-skill).
+
 For changes to scripts, importable API contracts, configuration, or operating procedures, use
 [docs-cleaner](daymade-docs/docs-cleaner/SKILL.md) for scoped documentation delivery:
 resolve implementation intent and authorization before updating the owning SOP,

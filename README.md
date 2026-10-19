@@ -14,20 +14,6 @@
 
 Professional Claude Code skills marketplace for development, research, content, and residential floor plan searches.
 
-## 📑 Table of Contents
-
-- [🌟 Essential Skill: skill-creator](#-essential-skill-skill-creator)
-- [🚀 Quick Installation](#-quick-installation)
-- [🇨🇳 Chinese User Guide](#-chinese-user-guide)
-- [📦 Other Available Skills](#-other-available-skills)
-- [🎬 Interactive Demo Gallery](#-interactive-demo-gallery)
-- [🎯 Use Cases](#-use-cases)
-- [📚 Documentation](#-documentation)
-- [🛠️ Requirements](#-requirements)
-- [❓ FAQ](#-faq)
-- [🤝 Contributing](#-contributing)
-- [📄 License](#-license)
-
 ---
 
 ## 🌟 Essential Skill: skill-creator
