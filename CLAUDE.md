@@ -843,6 +843,11 @@ All Python scripts in this repository:
 
 ## Quality Standards
 
+For public first-use instructions, follow [QUICKSTART.md](QUICKSTART.md) or
+[QUICKSTART.zh-CN.md](QUICKSTART.zh-CN.md). For reporter environment fields, use
+the [bug report template](.github/ISSUE_TEMPLATE/bug_report.md) rather than copying
+a Skill list or assuming the reporter's host.
+
 For changes to scripts, importable API contracts, configuration, or operating procedures, use
 [docs-cleaner](daymade-docs/docs-cleaner/SKILL.md) for scoped documentation delivery:
 resolve implementation intent and authorization before updating the owning SOP,

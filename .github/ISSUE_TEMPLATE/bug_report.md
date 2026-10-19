@@ -12,17 +12,7 @@ A clear and concise description of what the bug is.
 
 ## Affected Skill
 
-Which skill is affected?
-
-- [ ] skill-creator
-- [ ] github-ops
-- [ ] doc-to-markdown
-- [ ] mermaid-tools
-- [ ] statusline-generator
-- [ ] teams-channel-post-writer
-- [ ] repomix-unmixer
-- [ ] llm-icon-finder
-- [ ] Other (please specify):
+Name the affected skill and its plugin or suite, if known:
 
 ## Steps to Reproduce
 
@@ -47,9 +37,10 @@ Paste any error messages or logs here
 ## Environment
 
 - **OS**: [e.g., macOS 14.0, Windows 11, Ubuntu 22.04]
-- **Claude Code Version**: [e.g., 2.0.13]
-- **Skill Version**: [e.g., 1.2.0]
-- **Python Version** (if applicable): [e.g., 3.9.0]
+- **Agent host and version**: [Claude Code, Codex, another host or an integration]
+- **Installation method or source**: [marketplace, CLI, source checkout, platform catalog, or unknown]
+- **Plugin/suite version or source commit**: [if known; suite members share the suite version]
+- **Python Version** (if applicable):
 
 ## Additional Context
 

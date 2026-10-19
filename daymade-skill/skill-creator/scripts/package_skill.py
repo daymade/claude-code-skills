@@ -24,6 +24,7 @@ Notes:
 import argparse
 import os
 import re
+import shlex
 import shutil
 import sys
 import tempfile
@@ -183,7 +184,14 @@ def package_skill(
 
     if not is_valid:
         print(f"BLOCKED: {message}")
-        print(f"   You MUST run: uv run --frozen python -m scripts.security_scan {skill_path.name}")
+        scan_argv = [
+            "uv", "run", "--project", str(PACKAGE_ROOT), "--frozen", "python",
+            str(SCRIPT_DIR / "security_scan.py"), str(skill_path),
+        ]
+        print("   Run the command for your shell, then retry packaging:")
+        print(f"   POSIX shell: {shlex.join(scan_argv)}")
+        powershell_command = " ".join("'" + arg.replace("'", "''") + "'" for arg in scan_argv)
+        print(f"   PowerShell: & {powershell_command}")
         print("   Security review is MANDATORY before packaging.")
         return None
     print(f"PASSED: {message}\n")

@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **transcript-fixer** (`daymade-audio` v1.50.0): Preserve competing proposals and rule evidence under one located occurrence across line/context drift, add scoped legacy consolidation and explicit candidate action selection, accept typed written references for nonperson names while retaining person-name guards, and support destination-selected review-report directories with closure discovery. Change type: additive queue and report workflow capability.
 
 - **macos-cleaner / macos-watchdog** (`daymade-macos` v1.23.8): Distinguish uv cache artifacts from persistent runtimes, bound exact-package cleanup waits, and separate Python service preparation from startup while retaining verified FDA launchers. Change type: bounded operating-procedure guidance.
+- **First-use recovery** (`daymade-skill` v1.70.6): Print shell-specific absolute security-scan commands when Skill packaging is blocked, so users can scan the original source from their current directory and retry without weakening validation. Change type: existing-contract repair.
+- **Presentation availability** (`daymade-docs` v1.25.4; `slides-creator` v2.1.1): Align retired presentation entries, router guidance and bilingual catalogs with their shipped compatibility notices; preserve registered identities and historical demo assets. Change type: factual correction.
+- **Document discovery**: Keep HTML conversion and documentation-maintenance selection signals within the existing short-description budget; align the route tests with saved HTML support.
+- **User entry points**: Correct first-use delivery links and contribution guidance, remove missing demo references, and let bug reports identify the actual host, installation source and plugin release.
 
 - **git-safety-net** (v1.22.8): Audit commits held by non-standard refs or worktree reflogs, report incomplete Git scans, and retain manual review for non-commit objects. Change type: existing-contract loss-audit repair.
 
