@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **git-safety-net** (v1.22.8): Audit commits held by non-standard refs or worktree reflogs, report incomplete Git scans, and retain manual review for non-commit objects. Change type: existing-contract loss-audit repair.
+
 - **Growth workflow documentation**: Align product-analysis examples and bilingual guidance with evidence-based synthesis; route repository instruction entries to mechanism decisions and product-audit synthesis.
 
 ### Added
