@@ -136,6 +136,9 @@ uv run --frozen python -m scripts.package_skill <path/to/skill-folder> ./dist --
 
 Treat the [packager](../scripts/package_skill.py) as the executable owner of its
 validation, regression-review and security prerequisites and archive creation.
+If security validation blocks packaging, run its complete recovery command for
+your shell from the original working directory, then retry the original packaging
+command. Keep the resolved paths and shell quoting intact.
 
 ### Step 8: Update Marketplace
 

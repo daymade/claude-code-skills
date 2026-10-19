@@ -1,3 +1,7 @@
+import shlex
+import shutil
+import subprocess
+import sys
 import zipfile
 from pathlib import Path
 
@@ -167,6 +171,97 @@ def test_package_skill_missing_security_marker(tmp_path, capsys):
     assert artifact is None
     captured = capsys.readouterr()
     assert "Security scan not completed" in captured.out
+
+
+def test_security_recovery_hint_preserves_tool_and_skill_arguments(
+    tmp_path, capsys, monkeypatch
+):
+    skill_dir = _make_minimal_skill(tmp_path, "recovery-skill")
+    creator_root = tmp_path / "creator's $project [copy]"
+    monkeypatch.setattr(package_module, "PACKAGE_ROOT", creator_root)
+    monkeypatch.setattr(package_module, "SCRIPT_DIR", creator_root / "scripts")
+
+    assert package_skill(skill_dir, new_skill=True) is None
+
+    output = capsys.readouterr().out
+    command = next(
+        line.split("POSIX shell: ", 1)[1]
+        for line in output.splitlines()
+        if "POSIX shell: " in line
+    )
+    assert shlex.split(command) == [
+        "uv", "run", "--project", str(creator_root), "--frozen", "python",
+        str(creator_root / "scripts" / "security_scan.py"), str(skill_dir),
+    ]
+    assert "PowerShell: & " in output
+    assert not (skill_dir / ".security-scan-passed").exists()
+
+
+@pytest.mark.parametrize("shell", ["posix", "powershell"])
+def test_security_recovery_hint_scans_original_skill_and_finishes_package(
+    tmp_path, shell
+):
+    for tool in ("uv", "gitleaks"):
+        if not shutil.which(tool):
+            pytest.skip(f"Real scan recovery requires {tool}")
+    executable = shutil.which("sh" if shell == "posix" else "pwsh")
+    if not executable:
+        pytest.skip(f"No {shell} shell available")
+
+    # Unquoted interpolation would create sentinel files in the caller directory.
+    parent = tmp_path / "author's $HOME [draft] ; $(touch injected) `touch injected-backtick`"
+    parent.mkdir()
+    skill_dir = _make_minimal_skill(parent, "recovery-skill")
+    (skill_dir / "task.txt").write_text("Recovered task content.\n", encoding="utf-8")
+    caller = tmp_path / "unrelated caller"
+    caller.mkdir()
+    # A same-named directory and an invalid caller project must not redirect scanning.
+    decoy = _make_minimal_skill(caller, "recovery-skill")
+    (caller / "pyproject.toml").write_text("not valid TOML\n", encoding="utf-8")
+    relative_skill = Path("..") / parent.name / skill_dir.name
+    package_argv = [
+        sys.executable, str(package_module.SCRIPT_DIR / "package_skill.py"),
+        str(relative_skill), "--new-skill",
+    ]
+
+    blocked = subprocess.run(package_argv, cwd=caller, capture_output=True, text=True)
+    assert blocked.returncode == 1, blocked.stdout + blocked.stderr
+    assert "Security scan not completed" in blocked.stdout
+    assert not (skill_dir / "dist").exists()
+    label = "POSIX shell: " if shell == "posix" else "PowerShell: "
+    command = next(
+        line.split(label, 1)[1]
+        for line in blocked.stdout.splitlines()
+        if label in line
+    )
+    shell_argv = (
+        [executable, "-c", command]
+        if shell == "posix"
+        else [executable, "-NoProfile", "-NonInteractive", "-Command", command]
+    )
+
+    scanned = subprocess.run(shell_argv, cwd=caller, capture_output=True, text=True)
+    assert scanned.returncode == 0, scanned.stdout + scanned.stderr
+    assert (skill_dir / ".security-scan-passed").is_file()
+    assert not (decoy / ".security-scan-passed").exists()
+    assert not (caller / "injected").exists()
+    assert not (caller / "injected-backtick").exists()
+
+    packaged = subprocess.run(package_argv, cwd=caller, capture_output=True, text=True)
+    assert packaged.returncode == 0, packaged.stdout + packaged.stderr
+    artifact = skill_dir / "dist" / "recovery-skill.skill"
+    with zipfile.ZipFile(artifact) as archive:
+        assert archive.read("recovery-skill/task.txt") == b"Recovered task content.\n"
+        assert "recovery-skill/SKILL.md" in archive.namelist()
+        assert not any(".security-scan-passed" in name for name in archive.namelist())
+
+    # Keep the stale-content gate fail-closed after a genuine successful recovery.
+    original_zip = artifact.read_bytes()
+    (skill_dir / "task.txt").write_text("Changed after scan.\n", encoding="utf-8")
+    stale = subprocess.run(package_argv, cwd=caller, capture_output=True, text=True)
+    assert stale.returncode == 1, stale.stdout + stale.stderr
+    assert "Skill content changed since last security scan" in stale.stdout
+    assert artifact.read_bytes() == original_zip
 
 
 @pytest.mark.parametrize("corruption", ["duplicate", "trailing-garbage"])

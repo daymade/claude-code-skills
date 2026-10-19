@@ -51,7 +51,7 @@ uv run --project "$TASK_CREATOR" --frozen python "$TASK_CREATOR/scripts/quick_va
   "$TASK_PROJECT/.claude/skills/my-first-skill"
 ```
 
-Continue through [skill-creator's delivery workflow](./daymade-skill/skill-creator/SKILL.md#skill-creation-process-step-by-step) for the required security, regression and packaging checks. Structural validation alone does not establish delivery.
+Continue through [skill-creator's delivery workflow](./daymade-skill/skill-creator/SKILL.md#step-5-sanitization-review) for the required security, regression and packaging checks. Structural validation alone does not establish delivery.
 
 ### Step 4: Verify host consumption
 
