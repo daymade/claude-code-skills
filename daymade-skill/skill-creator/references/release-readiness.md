@@ -1,6 +1,6 @@
 # Local release readiness
 
-Use this after the required independent review and before a Git publication step.
+Use this when preparing a candidate for independent review and Git publication.
 
 ## Select the publication contract before attesting
 
@@ -26,6 +26,38 @@ Choosing a private repository's own gate does not relax or bypass that helper.
 Report which gate actually passed; a same-repository release is not a successful
 helper attestation. If no applicable gate is defined, resolve the publication
 contract before pushing rather than inventing a readiness claim.
+
+## Integrate current main before binding review
+
+Fetch the named remote's main branch and resolve its full commit. Integrate that
+tree in the owned feature worktree before freezing the candidate; preserve parallel
+work. A candidate missing current main is integration drift, not a request to
+review main's unrelated Skills. Keep the final-tree comparison and version checks.
+
+If a stale marketplace guard blocks the change, integrate main first. Rebuild any
+remaining manifest conflict from that immutable base plus only the owned changes;
+assert the base values and preserve the trailing newline. On a contended shared
+checkout where `git merge` (ort) refuses staged files, merge in a temporary
+worktree, copy the merged file back so staged content equals the merge
+result byte-for-byte, then `git merge --ff-only <merge-sha>` — a
+fast-forward accepts staged content that equals the target; ort never does.
+Preserve other writers' changes throughout this recovery. Stage and commit as
+separate commands under the repository's commit contract.
+
+Resolve the integrated candidate with `git rev-parse HEAD`, then run the version
+check before binding review evidence:
+
+```bash
+python3 <marketplace-path>/scripts/ci/check_version_progression.py \
+  --repo <source-worktree> --base <fetched-main-full-sha> \
+  --candidate <integrated-candidate-full-sha>
+```
+
+Read the merged CHANGELOG and confirm its entries remain under the intended
+heading; a union merge preserves lines, not their placement. Review this candidate,
+commit its permitted archive and attest only after the checks pass. If main moves
+again, integrate it and bind the resulting exact commit anew. Reuse earlier
+behavior evidence only for content proved unchanged; review the changed delta.
 
 ## External-archive helper and dispatcher
 
@@ -75,7 +107,7 @@ python3 <skill-creator-path>/scripts/release_readiness.py attest \
   --review-repo <private-knowledge-worktree> \
   --review-commit <archive-full-sha> --review-path <review-relative-path>
 python3 <marketplace-path>/scripts/ci/check_skill_release.py \
-  --repo <source-worktree> --base <current-main> --candidate <reviewed-full-sha>
+  --repo <source-worktree> --base <fetched-main-full-sha> --candidate <reviewed-full-sha>
 ```
 
 Repeat `--skill-path` for multiple roots. The receipt is local under Git's common

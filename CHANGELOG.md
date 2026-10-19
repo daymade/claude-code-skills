@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Growth workflow documentation**: Align product-analysis examples and bilingual guidance with evidence-based synthesis; route repository instruction entries to mechanism decisions and product-audit synthesis.
 
 ### Added
+- **prior-work-retrieval** (`daymade-claude-code` v4.30.13): Align adapter-result interpretation and freshness recovery with the existing implementation; route repository instructions to the owning contract. Change type: factual documentation correction.
+- **skill-creator** (`daymade-skill` v1.70.8): Document current-main integration and version checks before exact-candidate review binding; consolidate stale-base recovery in the release SOP. Change type: operating-document alignment.
 - **skill-creator** (`daymade-skill` v1.70.5): Preserve executable bits when extracting immutable Git baselines under restrictive umasks; report mismatched paths and distinguish missing files, extra files, content and executable modes without weakening preservation checks. Change type: baseline recipe repair and diagnostic improvement.
 - **app-evolver** (v1.1.5): Add a bounded synthetic output replay for analysis-stage honesty, learning-scope reconciliation, benefit/trade-off disclosure and local-versus-overall comparison claims. Runtime workflow unchanged. Change type: development replay addition.
 - **qa-expert** (v1.2.1): Add asynchronous editing acceptance through the existing harness: final-await freshness, stale suggestions, late-session results, related-object conflicts and healthy delete/restore controls. Change type: bounded acceptance guidance.
