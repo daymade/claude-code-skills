@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Growth workflow documentation**: Align product-analysis examples and bilingual guidance with evidence-based synthesis; route repository instruction entries to mechanism decisions and product-audit synthesis.
 
 ### Added
+- **qa-expert** (v1.2.0): Add file-backed persistence and CLI acceptance recipes for byte integrity, selected dependencies, crash recovery, asynchronous completion, pipe delivery and shared immutable-object reads. Preserve existing QA, transaction and migration workflows. Change type: bounded acceptance-method addition.
+- **git-safety-net** (v1.22.7): Add a controlled clean-submodule worktree retirement path where the current Git implementation requires it; preserve authorization, containment, backup and dirty/unknown-state refusal. Change type: operating-procedure correction.
 - **frontend-visual-qa** (v1.21.9): Add paired prompt-only evals for full-report reading versus request/latency metrics and bounded automatic recovery; runtime guidance unchanged.
 - **prior-work-retrieval** (`daymade-claude-code` v4.30.10): Clarify invocation-only manifest overrides, inherited hook configuration, and active required-source contract selection. Preserve different-path manifests with matching contracts and readable requirement/receipt state. Change type: bounded decision guidance.
 - **ghostty-use** (v1.6.3): Recognize live Codex `--no-daemon` sessions and daemon-named paths or option values while excluding service commands; prevent duplicate restore attempts for these live sessions. Change type: existing-contract bug fix.

@@ -88,8 +88,11 @@ those HEADs explicitly, so do not run it when another linked path is excluded.
 Before removal, require empty tracked/untracked status **and a separate ignored-file inventory**,
 exact HEAD capture, content containment proof against a fresh base, a verified targeted bundle of
 the worktree's branch or collision-checked recovery ref, and current-session deletion authority.
-Only then use non-forced `git worktree remove`, followed by path/registration/ref postcondition
-checks. The bundle preserves Git objects, not ignored files; copy any ignored item that is not
+Only then try normal `git worktree remove`, followed by path/registration/ref postcondition
+checks. Its clean-submodule exception in the complete gate below permits one force flag only after
+a specific submodule refusal and independent module preservation; it does not permit removal of
+dirty, unknown, locked, occupied or incompletely preserved state. The bundle preserves the
+superproject's objects, not module-private objects or ignored files; copy any ignored item that is not
 proven reproducible and verify it against a recorded pre-removal
 content hash. Freeze the complete ignored path/type/hash-or-link-target manifest, including
 disposable entries. After authority, repeat both status checks and rebuild that manifest; any

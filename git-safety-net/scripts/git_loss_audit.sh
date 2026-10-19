@@ -144,7 +144,7 @@ if [ "$LOCAL_ONLY_COUNT" -gt 0 ]; then
 fi
 if [ "$DIRTY_WORKTREE_COUNT" -gt 0 ]; then
   echo "  ⚠ ${DIRTY_WORKTREE_COUNT} worktree(s) contain uncommitted tracked or untracked files."
-  echo "    Commit/preserve them before removing any worktree; never use 'git worktree remove --force'."
+  echo "    Commit/preserve them and re-establish clean status; never force-remove a dirty worktree."
 fi
 if [ "$UNAVAILABLE_WORKTREE_COUNT" -gt 0 ]; then
   echo "  ⚠ ${UNAVAILABLE_WORKTREE_COUNT} registered worktree(s) could not be inspected. Resolve or"
