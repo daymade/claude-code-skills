@@ -26,6 +26,24 @@ def affected(repo, base, candidate):
     return sorted(r for r in roots if any(p.startswith(r + "/") and not should_exclude_skill_relative(Path(p[len(r)+1:]), policy=inclusion_policy_metadata()) for p in changed))
 
 
+def integrated_base(repo, base, candidate):
+    """Diagnose integration drift before it looks like somebody else's review gap.
+
+    Keep affected() two-point: it describes the actual publication tree. Once
+    current main is an ancestor, that scope is also the candidate's own change.
+    """
+    base_commit = git(repo, "rev-parse", base + "^{commit}")
+    candidate_commit = git(repo, "rev-parse", candidate + "^{commit}")
+    common = git(repo, "merge-base", base_commit, candidate_commit)
+    if common != base_commit:
+        raise ValueError(
+            f"candidate does not include current base {base_commit}; integrate the "
+            "current main tree and rerun version progression before binding review "
+            "evidence to the resulting exact candidate (this is integration drift, "
+            "not a request to review main's unrelated Skills)"
+        )
+
+
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
@@ -34,6 +52,7 @@ def main():
     p.add_argument("--candidate", required=True)
     a = p.parse_args()
     try:
+        integrated_base(a.repo, a.base, a.candidate)
         paths = affected(a.repo, a.base, a.candidate)
         if paths:
             verify(a.repo, a.candidate, paths)
