@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **transcript-fixer** (`daymade-audio` v1.50.0): Preserve competing proposals and rule evidence under one located occurrence across line/context drift, add scoped legacy consolidation and explicit candidate action selection, accept typed written references for nonperson names while retaining person-name guards, and support destination-selected review-report directories with closure discovery. Change type: additive queue and report workflow capability.
+- **prior-work-retrieval** (`daymade-claude-code` v4.30.12): Clarify the installed-Skill working directory for bundled commands and align ordinary creation, implementation and status-check eval expectations with the existing explicit-history trigger. Route manifest selection from repository instructions. Change type: existing-contract documentation repair.
 
 - **macos-cleaner / macos-watchdog** (`daymade-macos` v1.23.8): Distinguish uv cache artifacts from persistent runtimes, bound exact-package cleanup waits, and separate Python service preparation from startup while retaining verified FDA launchers. Change type: bounded operating-procedure guidance.
 - **First-use recovery** (`daymade-skill` v1.70.6): Print shell-specific absolute security-scan commands when Skill packaging is blocked, so users can scan the original source from their current directory and retry without weakening validation. Change type: existing-contract repair.
