@@ -73,8 +73,10 @@ ordinary target improvement does not require a separate retrospective receipt.
 Bind research questions to the business result and target's input, error, recovery
 and downstream-consumer paths. Use accessible favorites-search or supplied curated
 links/exports through the reference's curation handoff before external tool or
-method selection, then execute competitors-analysis's source and synthesis routes
-for relevant capabilities. Return their source-bound mechanisms and counterevidence
+method selection. Use competitors-analysis's source and synthesis routes for
+code-backed comparisons within its current entry scope; use original product
+documentation, supplied observations or task probes for manual/native workflows
+without code. Return their source-bound mechanisms and counterevidence
 to this round; do not substitute a feature list for the owner's decision chain.
 
 Execute deep-research for requested research lanes or unresolved breadth/synthesis,
@@ -86,10 +88,24 @@ benefits separate when joining the returned evidence.
 
 ## Decide every important mechanism
 
-Use Skill Creator's applicable ordinary-update or cross-task-improvement handoff
-to classify evidence-backed findings and identify the smallest maintenance point.
-Use competitors-analysis's
-Landscape handoff to account for every important discovered mechanism as adopt,
+Before presenting an improvement diagnosis, use Skill Creator's applicable
+ordinary-update or cross-task-improvement handoff and compare each material
+candidate with the target's current decision path. State the existing mechanism
+and source, the proposed decision change, whether the finding is a missing
+mechanism, an unexecuted existing behavior, missing evidence or a positive
+opportunity, and one condition where the change should not apply. Reuse the
+current mechanism when no supported increment remains.
+
+Keep unknown or inconclusive benefit separate from evidence of no worthwhile
+value. Keep unranked leads separate from repair or investment recommendations;
+allow stopping when evidence supports it. Add comparison or further research only
+when it can change the decision or fulfills an explicit requested lane. Preserve
+bounded opportunity learning without an earlier failure and already justified
+repairs without a forced competitor gate. Keep named helpers within their actual
+entry scope and optional when equivalent work is possible with ordinary tools.
+
+For code-backed competitor research, use competitors-analysis's Landscape
+handoff to account for every important discovered mechanism as adopt,
 do not adopt or needs verification under its existing disposition contract. Check
 the returned coverage against the original questions and sources, including
 positive opportunities and existing equivalents; do not manufacture changes.

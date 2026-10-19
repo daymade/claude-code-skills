@@ -99,7 +99,7 @@ Give specific file paths, line numbers, and UX assessment.
 ```
 Explore the backend API surface:
 1. List ALL API endpoints (method + path + purpose).
-2. Identify endpoints that are unused or have no frontend consumer.
+2. Trace frontend, CLI, integration and documented external/API consumers. Mark unused only with consumer and lifecycle evidence; otherwise report coverage unknown.
 3. Check error handling consistency (do all endpoints return structured errors?).
 4. Check authentication/authorization patterns (which endpoints require auth?).
 5. Identify any endpoints that duplicate functionality.
@@ -163,10 +163,13 @@ After all agents complete, synthesize findings in the main conversation context.
 
 ### Cross-Validation
 
-Compare findings across agents (Claude vs Claude, Claude vs Codex):
-- **Agreement** = high confidence finding
-- **Disagreement** = investigate deeper (one agent may have missed context)
-- **Codex-only finding** = different model perspective, validate manually
+Use [the synthesis method](references/synthesis_methodology.md) to compare findings
+across agents. Treat agreement and disagreement as review leads; verify material
+claims against original sources or reproducible observations of the relevant
+consumer. Base confidence on measurement validity, scope coverage and evidence
+independence, rather than votes or model identity. Reconcile different scopes
+before combining counts. Use counts to locate possible task friction; verify the
+task effect before claiming usability or business impact.
 
 ### Quantification
 
@@ -176,7 +179,7 @@ Extract hard numbers from agent reports:
 |--------|----------------|
 | First-screen interactive elements | Total count of buttons/links/inputs visible to new user |
 | Feature entry point duplication | Number of features with 2+ entry points |
-| API endpoints without frontend consumer | Count of unused backend routes |
+| API consumer coverage | Routes with observed consumers, verified unused routes and unknown coverage, including CLI/integration/external clients |
 | Onboarding steps to first value | Steps from launch to first successful action |
 | Module coupling score | Number of circular or bi-directional dependencies |
 
