@@ -282,6 +282,184 @@ def _git_root(path: Path) -> Path | None:
     return None
 
 
+def _source_hash(source: dict[str, Any]) -> str:
+    return "sha256:" + hashlib.sha256(
+        json.dumps(source, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+def _file_hash(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return "sha256:" + digest.hexdigest()
+
+
+def _source_paths(
+    source: dict[str, Any], paths: Sequence[str], search_cwd: str
+) -> list[str]:
+    """Use ripgrep's own glob semantics on a bounded list, including deletions.
+
+    Placeholder files contain no source content. This avoids approximating rg
+    globs with a different matcher or enumerating the entire source tree.
+    """
+    if not paths:
+        return []
+    if any(pattern.startswith("/") for pattern in source["includes"] + source["excludes"]):
+        return list(paths)  # Absolute-path globs cannot be projected safely.
+    names = sorted(set(paths))
+    name_set = set(names)
+    if any(parent.as_posix() in name_set for name in names for parent in Path(name).parents):
+        # Representing both sides of a file/directory replacement in one
+        # synthetic tree is ambiguous; conservatively require a new search.
+        return names
+    with tempfile.TemporaryDirectory(prefix="prior-work-paths-") as directory:
+        # rg globs containing '/' are relative to the invocation directory,
+        # even when the searched root is absolute. Preserve that relationship.
+        mirror = Path(directory)
+        root = mirror / Path(source["root"]).as_posix().lstrip("/")
+        cwd = mirror / Path(search_cwd).as_posix().lstrip("/")
+        root.mkdir(parents=True, exist_ok=True)
+        cwd.mkdir(parents=True, exist_ok=True)
+        for value in names:
+            path = Path(value)
+            if path.is_absolute() or not path.parts or ".." in path.parts:
+                raise PriorWorkError("Unsafe source-relative Git path")
+            target = root / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.touch()
+        command = ["rg", "--files", "--hidden", "--no-ignore", "--null"]
+        for pattern in source["includes"]:
+            command.extend(["--glob", pattern])
+        for pattern in source["excludes"]:
+            command.extend(["--glob", pattern if pattern.startswith("!") else "!" + pattern])
+        command.extend(["--", str(root)])
+        result = subprocess.run(command, cwd=cwd, capture_output=True, check=False)
+        if result.returncode not in {0, 1}:
+            raise PriorWorkError("Could not check the retrieval source's glob scope")
+        matched = {Path(os.fsdecode(p)).relative_to(root).as_posix()
+                   for p in result.stdout.split(b"\0") if p}
+        # Ignore rules are search inputs even when they do not match a source
+        # include glob. A changed rule can expose a new, better candidate.
+        matched.update(p for p in paths if Path(p).name in {".gitignore", ".ignore", ".rgignore"})
+        return sorted(matched)
+
+
+def _scope_dependencies(root: Path, repo: Path) -> str:
+    paths = set()
+    for directory in (root, *root.parents):
+        paths.update(directory / name for name in (".gitignore", ".ignore", ".rgignore"))
+    info = _source_git_read(repo, "rev-parse", "--git-path", "info/exclude").decode().strip()
+    info_path = Path(info)
+    paths.add(info_path if info_path.is_absolute() else repo / info_path)
+    for key in ("RIPGREP_CONFIG_PATH",):
+        value = os.environ.get(key)
+        if value:
+            paths.add(Path(value).expanduser().resolve())
+    # git config chooses the global ignore file consumed by ripgrep.
+    result = subprocess.run(["git", "-C", str(repo), "config", "--path", "--get", "core.excludesfile"],
+                            capture_output=True, text=True, check=False)
+    if result.returncode not in {0, 1}:
+        raise PriorWorkError("Could not verify the source's global ignore configuration")
+    if result.stdout.strip():
+        paths.add(Path(result.stdout.strip()).expanduser().resolve())
+    else:
+        paths.add(Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))) / "git/ignore")
+    values = []
+    for path in sorted(paths):
+        if path.exists() and not path.is_file():
+            raise PriorWorkError("A retrieval scope dependency is not a readable file")
+        values.append([str(path), _file_hash(path) if path.is_file() else "absent"])
+    return _source_hash({"files": values, "rg_config": os.environ.get("RIPGREP_CONFIG_PATH")})
+
+
+def _source_git_read(repo: Path, *args: str) -> bytes:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo), *args], capture_output=True,
+            timeout=10, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise PriorWorkError("Could not verify the retrieval source's Git state") from error
+    if result.returncode:
+        raise PriorWorkError("Could not verify the retrieval source's Git state")
+    return result.stdout
+
+
+def _source_git_state(
+    source: dict[str, Any], search_cwd: str | None = None
+) -> dict[str, Any] | None:
+    root = Path(source["root"])
+    repo = _git_root(root / ".prior-work-scope")
+    if repo is None:
+        return None
+    head = _git_head(repo)
+    if not head:
+        return None
+    relative = root.relative_to(repo).as_posix()
+    # --no-renames keeps deletion and addition paths independent. Untracked
+    # paths matter too: a newly created better match must force another search.
+    dirty = _source_git_read(repo, "diff", "--no-renames", "--name-only", "-z", "HEAD", "--", relative)
+    # Explicit rg include globs can override Git ignore rules. Preserve those
+    # untracked names too; the shared rg matcher applies the actual source scope.
+    dirty += _source_git_read(repo, "ls-files", "--others", "-z", "--", relative)
+    paths = []
+    for path in dirty.split(b"\0"):
+        if path:
+            paths.append(Path(os.fsdecode(path)).relative_to(relative).as_posix() if relative != "." else os.fsdecode(path))
+    search_cwd = search_cwd or str(Path.cwd())
+    relevant = _source_paths(source, sorted(set(paths)), search_cwd)
+    working = []
+    for value in relevant:
+        path = root / value
+        if path.is_symlink():
+            data = ["symlink", os.readlink(path)]
+        elif path.is_file():
+            data = ["file", path.stat().st_mode, _file_hash(path)]
+        else:
+            data = ["missing"]
+        working.append([value, data])
+    return {"git_root": str(repo), "git_head": head,
+            "search_cwd": search_cwd,
+            "dependencies_sha256": _scope_dependencies(root, repo),
+            "root_relative": relative, "working_sha256": _source_hash({"paths": working})}
+
+
+def _verify_source_scope(source: dict[str, Any], recorded: Any) -> dict[str, Any]:
+    if not isinstance(recorded, dict):
+        raise PriorWorkError("Source scope Git evidence is missing; retrieve again")
+    search_cwd = recorded.get("search_cwd")
+    if not isinstance(search_cwd, str) or not search_cwd or not Path(search_cwd).is_absolute():
+        raise PriorWorkError("Retrieval invocation context is missing; retrieve again")
+    current = _source_git_state(source, search_cwd)
+    if not current:
+        raise PriorWorkError("Source scope Git evidence is unavailable; retrieve again")
+    for key in ("git_root", "root_relative"):
+        if not isinstance(recorded.get(key), str) or current[key] != recorded[key]:
+            raise PriorWorkError("Retrieval source Git provenance changed; retrieve again")
+    old_head = recorded.get("git_head")
+    if not isinstance(old_head, str) or not old_head:
+        raise PriorWorkError("Retrieval source Git revision is missing; retrieve again")
+    working = recorded.get("working_sha256")
+    if not isinstance(working, str) or not working or current["working_sha256"] != working:
+        raise PriorWorkError("Retrieval source working scope changed; retrieve again")
+    dependencies = recorded.get("dependencies_sha256")
+    if not isinstance(dependencies, str) or not dependencies or current["dependencies_sha256"] != dependencies:
+        raise PriorWorkError("Retrieval source scope dependencies changed; retrieve again")
+    changed = _source_git_read(Path(current["git_root"]), "diff", "--no-renames", "--name-only", "-z",
+                               old_head, current["git_head"], "--", current["root_relative"])
+    paths = []
+    for path in changed.split(b"\0"):
+        if path:
+            value = os.fsdecode(path)
+            paths.append(Path(value).relative_to(current["root_relative"]).as_posix()
+                         if current["root_relative"] != "." else value)
+    if _source_paths(source, paths, search_cwd):
+        raise PriorWorkError("Retrieval source scope changed after retrieval; retrieve again")
+    return current
+
+
 def _looks_like_path_term(term: str) -> bool:
     """Return whether a term explicitly asks for a path or filename match."""
 
@@ -314,6 +492,7 @@ def _filesystem_candidates(
     rg = shutil.which("rg")
     if rg is None:
         return [], {"status": "failed", "error": "rg_not_found"}
+    source_state = _source_git_state(source)
     candidates: dict[tuple[str, int], dict[str, Any]] = {}
     maximum = source["max_results"]
     command = [
@@ -487,6 +666,8 @@ def _filesystem_candidates(
     )
     limited = rows[:maximum]
     git_cache: dict[Path, str | None] = {}
+    if source_state is not None:
+        _verify_source_scope(source, source_state)
     for entry in limited:
         path = Path(entry["path"])
         repo_root = _git_root(path)
@@ -496,11 +677,18 @@ def _filesystem_candidates(
             {
                 "git_root": str(repo_root) if repo_root else None,
                 "git_head": git_cache.get(repo_root) if repo_root else None,
+                "source_sha256": _source_hash(source),
+                "source_scope": "git" if source_state is not None else "legacy",
+                "source_git_state": source_state,
+                "content_sha256": _file_hash(path),
                 **_file_metadata(path),
             }
         )
     return limited, {
         "status": "searched",
+        "source_sha256": _source_hash(source),
+        "source_scope": "git" if source_state is not None else "legacy",
+        "source_git_state": source_state,
         "errors": [],
         "matches_before_limit": len(rows),
         "path_matches_before_limit": path_match_count,
@@ -823,7 +1011,10 @@ def _parse_assignments(values: Sequence[str], label: str) -> dict[str, str]:
     return result
 
 
-def _verify_candidate_source(candidate: dict[str, Any]) -> dict[str, Any]:
+def _verify_candidate_source(
+    candidate: dict[str, Any], source: dict[str, Any] | None = None,
+    verified_scope: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     path_value = candidate.get("path")
     if not isinstance(path_value, str) or not path_value:
         raise PriorWorkError(
@@ -833,8 +1024,23 @@ def _verify_candidate_source(candidate: dict[str, Any]) -> dict[str, Any]:
     if not path.is_file():
         raise PriorWorkError(f"Candidate source disappeared before completion: {path}")
     stat = path.stat()
+    content_hash = candidate.get("content_sha256")
+    if "content_sha256" in candidate or "source_scope" in candidate:
+        if not isinstance(content_hash, str) or len(content_hash) != 71 or not content_hash.startswith("sha256:"):
+            raise PriorWorkError("Candidate content identity is missing or invalid; retrieve again")
+        if _file_hash(path) != content_hash:
+            raise PriorWorkError(f"Candidate source changed after retrieval: {path}; retrieve again")
+        if not source or candidate.get("source_sha256") != _source_hash(source):
+            raise PriorWorkError("Candidate source definition changed after retrieval; retrieve again")
+        if candidate.get("source_scope") not in {"git", "legacy"}:
+            raise PriorWorkError("Candidate source scope contract is missing; retrieve again")
+        if candidate["source_scope"] == "git":
+            if not isinstance(candidate.get("source_git_state"), dict):
+                raise PriorWorkError("Candidate source scope identity is missing; retrieve again")
+            if verified_scope is None:
+                verified_scope = _verify_source_scope(source, candidate.get("source_git_state"))
     expected_mtime = candidate.get("mtime_ns")
-    if isinstance(expected_mtime, int) and stat.st_mtime_ns != expected_mtime:
+    if content_hash is None and isinstance(expected_mtime, int) and stat.st_mtime_ns != expected_mtime:
         raise PriorWorkError(
             f"Candidate source changed after retrieval: {path}; retrieve again"
         )
@@ -846,12 +1052,17 @@ def _verify_candidate_source(candidate: dict[str, Any]) -> dict[str, Any]:
             raise PriorWorkError(
                 f"Candidate {candidate.get('candidate_id')} lost its Git provenance"
             )
-        observed_git_head = _git_head(Path(git_root_value))
+        observed_git_head = (verified_scope["git_head"]
+                             if verified_scope and verified_scope["git_root"] == git_root_value
+                             else _git_head(Path(git_root_value)))
         if observed_git_head != expected_git_head:
-            raise PriorWorkError(
-                f"Candidate repository HEAD changed after retrieval: {git_root_value}; "
-                "retrieve again against the current authority"
-            )
+            if verified_scope and verified_scope["git_root"] == git_root_value:
+                pass  # The complete source scope was verified above.
+            else:
+                raise PriorWorkError(
+                    f"Candidate repository HEAD changed after retrieval: {git_root_value}; "
+                    "retrieve again against the current authority"
+                )
     line_number = candidate.get("line")
     expected_line_hash = candidate.get("line_sha256")
     observed_line_hash = None
@@ -872,6 +1083,7 @@ def _verify_candidate_source(candidate: dict[str, Any]) -> dict[str, Any]:
         "path_mtime_ns": stat.st_mtime_ns,
         "line_sha256": observed_line_hash,
         "git_head": observed_git_head,
+        "content_sha256": content_hash,
     }
 
 
@@ -982,6 +1194,21 @@ def complete(
         raise PriorWorkError(
             "Retrieval run has no outcome_terms; run retrieve with the current contract"
         )
+    # Rebinding across commits preserves the search scope, not merely the
+    # selected result. A newly added or removed unselected candidate matters.
+    verified_scopes = {}
+    scope_checks = []
+    for row in run.get("coverage", []):
+        if "source_scope" not in row or row["source_scope"] == "legacy":
+            continue  # Legacy and non-Git/command coverage keep their contract.
+        if row["source_scope"] != "git":
+            raise PriorWorkError("Retrieval source scope contract is invalid; retrieve again")
+        source = next((s for s in manifest["sources"] if s["id"] == row["source_id"]), None)
+        if not source or row.get("source_sha256") != _source_hash(source):
+            raise PriorWorkError("Retrieval source definition changed after retrieval; retrieve again")
+        recorded = row.get("source_git_state")
+        verified_scopes[(source["id"], _source_hash({"state": recorded}))] = _verify_source_scope(source, recorded)
+        scope_checks.append((source, recorded))
     reuse = _parse_assignments(reuse_values, "--reuse")
     adapt = _parse_assignments(adapt_values, "--adapt")
     reject = _parse_assignments(reject_values, "--reject")
@@ -1033,7 +1260,9 @@ def complete(
     for decision, mapping in (("reuse", reuse), ("adapt", adapt), ("reject", reject)):
         for candidate_id, reason in mapping.items():
             candidate = candidates[candidate_id]
-            verification = _verify_candidate_source(candidate)
+            source = next((s for s in manifest["sources"] if s["id"] == candidate["source_id"]), None)
+            observed = verified_scopes.get((candidate["source_id"], _source_hash({"state": candidate.get("source_git_state")})))
+            verification = _verify_candidate_source(candidate, source, observed)
             path_value = candidate.get("path")
             decisions.append(
                 {
@@ -1047,6 +1276,11 @@ def complete(
                     "verification": verification,
                 }
             )
+    # A single invocation shares scope observations across decisions, then
+    # rechecks once after reading every selected original. Nothing is cached
+    # across commands, and a mid-completion source change cannot pass.
+    for source, recorded in scope_checks:
+        _verify_source_scope(source, recorded)
     receipt = {
         "schema_version": SCHEMA_VERSION,
         "kind": "prior_work_retrieval_receipt",

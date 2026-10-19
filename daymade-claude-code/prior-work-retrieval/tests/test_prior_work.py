@@ -406,7 +406,7 @@ class PriorWorkTests(unittest.TestCase):
         with self.assertRaisesRegex(prior_work.PriorWorkError, "unsupported argv placeholder"):
             self.manifest()
 
-    def test_repository_head_change_invalidates_an_unchanged_candidate(self) -> None:
+    def test_new_source_decision_invalidates_an_unchanged_candidate(self) -> None:
         subprocess.run(["git", "init", "-q", str(self.docs)], check=True)
         subprocess.run(
             ["git", "-C", str(self.docs), "config", "user.email", "test@example.invalid"],
@@ -441,7 +441,7 @@ class PriorWorkTests(unittest.TestCase):
         subprocess.run(
             ["git", "-C", str(self.docs), "commit", "-qm", "new decision"], check=True
         )
-        with self.assertRaisesRegex(prior_work.PriorWorkError, "HEAD changed"):
+        with self.assertRaisesRegex(prior_work.PriorWorkError, "source scope changed"):
             prior_work.complete(
                 manifest,
                 run["run_id"],
