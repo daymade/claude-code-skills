@@ -24,7 +24,7 @@ make a request explicit.
 
 ## Completion contract
 
-A retrieval pass is complete only when all five are true:
+A retrieval pass is complete only when the following conditions hold:
 
 1. The task's real business outcome is written as one sentence.
 2. Every relevant carrier declared in the manifest reports `searched`,
@@ -75,7 +75,7 @@ in `references/source-manifest.md`.
 ### 3. Retrieve across declared carriers
 
 Write the user-world outcome separately from the proposed implementation. Then
-provide two term sets:
+provide:
 
 - `--outcome-term`: 1–5 artifact/event/entity/date terms that could locate an
   already-finished result (accepted deliverable, canonical transcript, deployed
@@ -100,9 +100,8 @@ uv run --no-project python scripts/prior_work.py retrieve \
   --session-id "$CODEX_SESSION_ID"
 ```
 
-Do NOT redirect the output (`> /tmp/run.txt`) to save it: by design
-(2026-08-27, regression-locked in `test_unquoted_redirection_even_after_
-route_stays_gated`) a file redirection trips the write gate even on a
+Do NOT redirect the output (`> /tmp/run.txt`) to save it: a file
+redirection trips the write gate even on a
 read-only route command, so a redirected retrieve is blocked and the run
 JSON never lands where you aimed. Let the output print and read it from the
 transcript; the durable copy is the run JSON under the manifest's `state_dir`
@@ -216,12 +215,12 @@ reported as "none exists" by paraphrase either. Check index provider coverage
 and freshness, refine indexed terms, and report the remaining gap. Do not run
 an unindexed whole-history label census.
 
-**Results at low confidence are not zero results.** When a carrier reports
+**Returned results need inspection.** When a carrier reports
 `result_count > 0` alongside `terms_passed: false`, expand those ranked results
-before writing the receipt. `terms_passed: false` says only that the query words
-did not appear in their literal form inside the top-K; it does not say the results
-are irrelevant, and under hybrid or BM25 ranking the leading hit is often exactly
-the synonym you were looking for. Write the receipt only after reading them.
+before writing the receipt. Interpret that adapter field through the
+[command-source contract](references/source-manifest.md#source-fields), not as
+a literal-match, ranking-confidence or relevance verdict. Write the receipt only
+after reading the results.
 
 That requirement is about what the receipt must be able to show. A
 `no_reuse_reason` has to point at named results and say why each one does not
@@ -248,6 +247,9 @@ mtime checks. Non-Git and command adapters do not acquire a Git scope proof.
 This comparison completes the original retrieval; it does not continuously
 refresh a completed receipt or exempt a new user requirement.
 Gitlink changes do not qualify for this narrow rebinding proof.
+If completion reports changed source evidence or scope, retrieve again for the
+current requirement, inspect the affected results and complete the new run.
+Do not edit saved runs or old receipts to make stale evidence pass.
 Then verify:
 
 ```bash
@@ -369,7 +371,7 @@ path remain possible so the agent can repair the gate without bypassing it.
 ## Surface contract
 
 First use in a session: run `python3 scripts/surface_version.py` once and note
-the 12-char fingerprint — the sha256 of this skill's `scripts/**/*.py` code
+the fingerprint — the sha256 of this skill's `scripts/**/*.py` code
 surface. If it differs from the fingerprint you last saw for this skill, the
 code changed under you: re-read this SKILL.md and the references from disk
 before acting on in-context echoes of them. The fingerprint covers code only;

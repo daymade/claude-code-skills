@@ -371,8 +371,8 @@ reuse, or history request. Ordinary implementation, reports, and read-only
 inspection do not arm it; PreToolUse and Stop may enforce only a requirement
 already created by the current prompt. Artifact selection and runtime-read
 comparison are owned by that Skill; a receipt about a locator is not proof of
-the delivered artifact. Detailed retrieval mechanics remain in
-`daymade-claude-code/prior-work-retrieval/SKILL.md`.
+the delivered artifact. For retrieval freshness, changed-source recovery and
+receipt lifetime, follow the [Prior Work operating contract](daymade-claude-code/prior-work-retrieval/SKILL.md).
 
 ### Local Conversation History Boundary
 
@@ -785,30 +785,9 @@ This is what makes the check above decidable. `git diff --name-only` tells you
 *which* skills changed; only an immutable ref tells you what their versions were
 before anyone started editing.
 
-**When the pre-commit guard blocks with "marketplace release state is stale or
-incomplete"**: the staged `marketplace.json` diverges from current `origin/main`
-in plugins you did *not* touch — someone merged after you branched, and the
-guard's progression check compares your index against *current* main, not your
-branch point. Recovery:
-
-1. Rebuild `marketplace.json` from `origin/main`'s state plus **only** your
-   changes, programmatically — assert the base values before mutating, never
-   text-merge or hand-edit two versions:
-   ```bash
-   git show origin/main:.claude-plugin/marketplace.json   # the ONLY baseline
-   # then apply your bump(s)/skills-array addition onto THAT content,
-   # and preserve the file's trailing newline (json.dump drops it)
-   ```
-2. If the guard then reports a *foreign* plugin's "content changed but version
-   did not increase": your branch is missing that plugin's merge entirely —
-   bring the branch current with `origin/main`. On a contended shared checkout
-   where `git merge` (ort) refuses your staged files: merge in a temporary
-   worktree, copy the merged file back so staged content equals the merge
-   result byte-for-byte, then `git merge --ff-only <merge-sha>` — a
-   fast-forward accepts staged content that equals the target; ort never does.
-3. Commit as a standalone command — `git add … && git commit` in one line trips
-   the scope guard's unknown-domain branch regardless of
-   content.
+For a stale marketplace guard, a foreign plugin's apparent version regression,
+or a release candidate missing current main, follow
+[integration before review binding](daymade-skill/skill-creator/references/release-readiness.md#integrate-current-main-before-binding-review).
 
 **CHANGELOG.md merges as a union** (`.gitattributes`). Merging `origin/main`
 into a branch locally, or rebasing onto it, keeps parallel additions under
