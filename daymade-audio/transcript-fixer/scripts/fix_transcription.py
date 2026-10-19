@@ -82,8 +82,19 @@ def main() -> None:
     """Main entry point - parse arguments and dispatch to commands"""
     parser = create_argument_parser()
     args = parser.parse_args()
+    if args.review_entity_type is not None and (args.resolve_review is None or args.review_decision not in ("accepted", "overridden")):
+        parser.error("--review-entity-type requires --resolve-review with accepted/overridden")
+    if args.review_candidate_index is not None and (args.resolve_review is None or args.review_decision not in ("accepted", "overridden")):
+        parser.error("--review-candidate requires --resolve-review with accepted/overridden")
+    if args.consolidate_review:
+        if not args.review_file or args.resolve_review is not None or args.enqueue_review or args.list_review or args.show_review is not None or args.close_sidecars or args.review_authority_record is not None or args.review_ledger_entry is not None:
+            parser.error("--consolidate-review requires --review-file and cannot resolve/enqueue in the same call")
+        from cli.commands import _get_review_queue, _emit_json
+        result = _get_review_queue().consolidate(args.review_file)
+        _emit_json(result)
+        return
 
-    if args.review_authority_record is not None or args.review_ledger_entry is not None:
+    if args.review_authority_record is not None or args.review_ledger_entry is not None or args.review_entity_type is not None or args.review_candidate_index is not None:
         other_commands = (
             "init", "health", "metrics", "config_action", "migration_action",
             "audit_retention_action", "validate", "add_correction", "add_context_rule",
