@@ -23,7 +23,7 @@
 - [🎬 交互式演示画廊](#-交互式演示画廊)
 - [🎯 使用场景](#-使用场景)
 - [📚 文档](#-文档)
-- [🛠️ 系统要求](#️-系统要求)
+- [🛠️ 系统要求](#-系统要求)
 - [❓ 常见问题](#-常见问题)
 - [🤝 贡献](#-贡献)
 - [📄 许可证](#-许可证)
@@ -4043,7 +4043,7 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 - **llm-eval-harness**：参见 `llm-eval-harness/references/evaluation_disciplines.md` 了解每条纪律背后的推理（环境变量传 key、thinking-aware 吞吐、代理隔离、概率化协议判定），以及 `llm-eval-harness/references/quality_blind_judge.md` 了解独立盲审质量方法
 - **meme-creator**：参见 `meme-creator/SKILL.md` 了解完整流程，及 `meme-creator/references/tracking-playbook.md` 了解 CSRT 失效分类与手工关键帧接管
 
-## 🛠️ 系统要求
+## 🛠 系统要求
 
 - **floorplan-finder**：获授权的网页读取和看图工具；来源需要交互时另需浏览器，无随包运行时依赖。
 
@@ -4154,7 +4154,7 @@ Codex 的技能也可以通过 Codex 插件市场安装；使用前请查看对�
 ## 📞 联系方式
 
 - **GitHub**：[@daymade](https://github.com/daymade)
-- **Email**：daymadev89@gmail.com
+- **Email**：[daymadev89@gmail.com](mailto:daymadev89@gmail.com)
 - **仓库**：[daymade/claude-code-skills](https://github.com/daymade/claude-code-skills)
 
 ---
