@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-cleaner / macos-watchdog** (`daymade-macos` v1.23.8): Distinguish uv cache artifacts from persistent runtimes, bound exact-package cleanup waits, and separate Python service preparation from startup while retaining verified FDA launchers. Change type: bounded operating-procedure guidance.
+
 - **git-safety-net** (v1.22.8): Audit commits held by non-standard refs or worktree reflogs, report incomplete Git scans, and retain manual review for non-commit objects. Change type: existing-contract loss-audit repair.
 
 - **Growth workflow documentation**: Align product-analysis examples and bilingual guidance with evidence-based synthesis; route repository instruction entries to mechanism decisions and product-audit synthesis.
