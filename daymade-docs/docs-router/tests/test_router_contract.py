@@ -76,7 +76,7 @@ class DocsRouterContractTest(unittest.TestCase):
         plugin = next(item for item in manifest["plugins"] if item["name"] == "daymade-docs")
         self.assertEqual(plugin["description"], description)
         self.assertLessEqual(len(description), 420)
-        visible = description[:160]
+        visible = description[:150]
         for signal in (
             "Word/PDF/PPTX/HTML→Markdown",
             "MD/Word→PDF",
