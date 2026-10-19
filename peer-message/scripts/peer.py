@@ -454,11 +454,11 @@ def auto_sender() -> str:
     codex_id = os.environ.get("CODEX_THREAD_ID") or os.environ.get("CODEX_SESSION_ID")
     if codex_id:
         return f"codex:{codex_id}"
-    claude_name = os.environ.get("CLAUDE_CODE_SESSION_NAME")
-    if claude_name:
-        return f"claude:{claude_name}"
     claude_id = os.environ.get("CLAUDE_CODE_SESSION_ID")
-    return f"claude:{claude_id}" if claude_id else "local-script"
+    if claude_id:
+        return f"claude-session:{claude_id}"
+    claude_name = os.environ.get("CLAUDE_CODE_SESSION_NAME")
+    return f"claude:{claude_name}" if claude_name else "local-script"
 
 
 def auto_reply_address(sender: str) -> str | None:
@@ -1652,12 +1652,22 @@ def common_message_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def canonical_address(value: str, args) -> str:
+    """Resolve the original typed/legacy input, then serialize a Board equality key."""
     if value == "local-script":
         return value
     if value.startswith("codex:"):
         return "codex:" + resolve_codex(value, args.codex_home)
     entry = resolve_claude(value, args.claude_home)
     return "claude:" + str(entry.get("sessionId") or entry["pid"])
+
+
+def coordination_actor_key(current_identity: str) -> str:
+    """Serialize a known current-host identity for Board equality, without lookup.
+
+    Use only at a direct Board boundary. Never feed this result to a resolver.
+    """
+    identity = claude_identity_key(current_identity)
+    return "claude:" + identity[1] if identity else current_identity
 
 
 def prepare_coordination(board, args, target, body, sender):
@@ -1706,12 +1716,11 @@ def cmd_coord(args):
         if args.operation == "status":
             result = board.status(args.scope)
         else:
-            # Board identities are persisted equality keys, not delivery addresses.
-            # Retain their existing spelling across the typed discovery migration.
             actor = current_address(args.claude_home, args.codex_home)
-            identity = claude_identity_key(actor)
-            if identity:
-                actor = "claude:" + identity[1]
+            # prepare still resolves the typed actor. The other operations compare
+            # the current actor directly with persisted keys, even after exit.
+            if args.operation != "prepare":
+                actor = coordination_actor_key(actor)
             if args.operation == "claim":
                 result = board.claim(args.scope, args.task, actor, args.resource)
             elif args.operation == "release":

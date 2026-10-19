@@ -306,6 +306,8 @@ class ClaudeDiscoveryAddressTests(unittest.TestCase):
                 return json.loads(output.getvalue())
             with mock.patch.dict(peer.os.environ, {"CLAUDE_CODE_SESSION_ID": a["sessionId"]}, clear=True), \
                  mock.patch.object(peer, "claude_registry", return_value=[a, b]):
+                claimed = command(["claim", "--scope", "synthetic", "--task", "before-exit"])
+                self.assertEqual(claimed["owner"], f"claude:{a['sessionId']}")
                 prepared = command(["prepare", f"claude-session:{b['sessionId']}", "--message", "fixture"])
                 self.assertEqual(prepared["metadata"]["sender"], f"claude:{a['sessionId']}")
                 self.assertEqual(prepared["metadata"]["target"], f"claude:{b['sessionId']}")
@@ -316,13 +318,82 @@ class ClaudeDiscoveryAddressTests(unittest.TestCase):
                 event = {"tool_name": "SendMessage", "hook_event_name": "PreToolUse",
                          "session_id": a["sessionId"], "tool_use_id": "synthetic-use",
                          "tool_input": {"to": "recipient", "message": prepared["body"]}}
-                with mock.patch.object(guard.peer, "claude_registry", return_value=[a, b]):
+                # The prepared sender remains A even after only an alias and B remain.
+                alias = self.entry(1003, name=a["sessionId"])
+                with mock.patch.object(guard.peer, "claude_registry", return_value=[alias, b]):
                     self.assertEqual(guard.check(event, root=root, claude_home=root)["status"], "checked")
-            # A lifecycle commit remains possible after its registry rows disappear.
+            # Current-host equality operations need no surviving registry row.
             with mock.patch.dict(peer.os.environ, {"CLAUDE_CODE_SESSION_ID": a["sessionId"]}, clear=True), \
                  mock.patch.object(peer, "claude_registry", return_value=[]):
                 committed = command(["commit", "--message-id", prepared["message_id"], "--outcome", "not_sent"])
+                self.assertEqual(command(["release", "--scope", "synthetic", "--task", "before-exit"])["status"], "released")
+                claimed = command(["claim", "--scope", "synthetic", "--task", "after-exit"])
+                self.assertEqual(claimed["owner"], f"claude:{a['sessionId']}")
+                self.assertEqual(command(["release", "--scope", "synthetic", "--task", "after-exit"])["status"], "released")
             self.assertEqual(committed["status"], "not_sent")
+
+    def test_f2_prepare_never_persists_an_alias_as_the_current_sender(self):
+        a, alias, recipient = self.entry(), self.entry(1002), self.entry(1003, name="recipient")
+        alias["name"] = a["sessionId"]
+        target = self.catalog([recipient])[0]["address"]
+        with tempfile.TemporaryDirectory() as raw:
+            state = Path(raw)
+            output, error = io.StringIO(), io.StringIO()
+            with mock.patch.dict(peer.os.environ, {"CLAUDE_CODE_SESSION_ID": a["sessionId"]}, clear=True), \
+                 mock.patch.object(peer, "claude_registry", return_value=[alias, recipient]), \
+                 mock.patch.object(peer.socket, "socket", side_effect=AssertionError("no transport")), \
+                 contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
+                code = peer.main(["--state-dir", str(state), "coord", "prepare", target,
+                                  "--message", "synthetic preparation"])
+            self.assertEqual(code, peer.EXIT_TARGET)
+            self.assertEqual(output.getvalue(), "")
+            self.assertIn(f"claude-session:{a['sessionId']}", error.getvalue())
+            with contextlib.closing(peer.sqlite_ro(state / "coordination.sqlite3")) as db:
+                self.assertEqual(db.execute("SELECT COUNT(*) FROM messages").fetchone()[0], 0)
+                self.assertEqual(db.execute("SELECT COUNT(*) FROM native_sends").fetchone()[0], 0)
+
+    def test_automatic_cli_sender_keeps_uuid_type_for_send_and_broadcast(self):
+        a = self.entry()
+        alias = self.entry(1002, name=a["sessionId"])
+        c, d = self.entry(1003, name="recipient"), self.entry(1004, name="other")
+        targets = [r["address"] for r in self.catalog([c, d])]
+        cases = (
+            ("uuid", {"CLAUDE_CODE_SESSION_ID": a["sessionId"]}, [alias, c, d], False),
+            ("uuid-socket", {"CLAUDE_CODE_SESSION_ID": a["sessionId"],
+                             "CLAUDE_CODE_MESSAGING_SOCKET": a["messagingSocketPath"]}, [alias, c, d], False),
+            ("uuid-name", {"CLAUDE_CODE_SESSION_ID": a["sessionId"],
+                           "CLAUDE_CODE_SESSION_NAME": "worker"}, [{**alias, "name": "worker"}, c, d], False),
+            ("healthy", {"CLAUDE_CODE_SESSION_ID": a["sessionId"]}, [a, c, d], True),
+        )
+        for label, environment, entries, healthy in cases:
+            for operation in ("send", "broadcast"):
+                with self.subTest(case=label, operation=operation), tempfile.TemporaryDirectory() as raw:
+                    state = Path(raw)
+                    argv = (["send", targets[0]] if operation == "send" else
+                            ["broadcast", "--to", targets[0], "--to", targets[1], "--confirm-count", "2"])
+                    output, error, client = io.StringIO(), io.StringIO(), mock.Mock()
+                    with mock.patch.dict(peer.os.environ, environment, clear=True), \
+                         mock.patch.object(peer, "claude_registry", return_value=entries), \
+                         mock.patch.object(peer.socket, "socket", return_value=client) as sockets, \
+                         mock.patch.object(peer, "claude_token", return_value="synthetic-token") as token, \
+                         contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
+                        code = peer.main(["--state-dir", str(state), *argv, "--message", "synthetic automatic sender",
+                                          "--wait", "0", "--json"])
+                    with contextlib.closing(peer.sqlite_ro(state / "coordination.sqlite3")) as db:
+                        rows = db.execute("SELECT sender,state FROM messages").fetchall()
+                    if healthy:
+                        count = 1 if operation == "send" else 2
+                        self.assertEqual(code, 0)
+                        self.assertEqual(len(rows), count)
+                        self.assertEqual(sockets.call_count, count)
+                        self.assertEqual(token.call_count, count)
+                        self.assertTrue(all(row["sender"] == f"claude:{a['sessionId']}" and
+                                            row["state"] == "accepted" for row in rows))
+                    else:
+                        self.assertEqual(code, peer.EXIT_TARGET if operation == "send" else peer.EXIT_PARTIAL)
+                        self.assertEqual(len(rows), 0)
+                        sockets.assert_not_called()
+                        token.assert_not_called()
 
 
 class DiscoveryOutputTests(unittest.TestCase):

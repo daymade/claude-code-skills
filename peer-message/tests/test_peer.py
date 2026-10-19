@@ -1403,7 +1403,7 @@ class PeerMessageTests(unittest.TestCase):
         }
         with mock.patch.dict(peer.os.environ, env, clear=True):
             sender = peer.auto_sender()
-            self.assertEqual(sender, "claude:22222222-2222-4222-8222-222222222222")
+            self.assertEqual(sender, "claude-session:22222222-2222-4222-8222-222222222222")
             self.assertEqual(
                 peer.auto_reply_address(sender), "uds:/tmp/cc-socks/4242.sock"
             )
@@ -1487,7 +1487,7 @@ class PeerMessageTests(unittest.TestCase):
             "CLAUDE_CODE_SESSION_NAME": "my-session",
         }
         with mock.patch.dict(peer.os.environ, env, clear=True):
-            sender = peer.auto_sender()
+            sender = "claude:my-session"  # An explicit display label lacks the UUID.
             envelope = peer.claude_envelope(
                 "body", sender, peer.auto_reply_address(sender), "MID"
             )

@@ -23,7 +23,7 @@ description: Transport-neutral addressing, Claude UDS and Codex live/queued deli
 
 使用 `list` 返回的 `address` 原值作为脚本投递键，不从中提取名称；用独立的 `name` 字段展示名称。清单优先返回能精确选中该行的 `claude-session:` 键；UUID 缺失、为空、无效或有歧义时，退回可唯一解析的 `claude-pid:` 键。两者都无法唯一选中该行时，清单报 discovery 错误（exit 3），不输出部分清单。新键只匹配声明的身份字段，原会话消失或退出后不会转而匹配别人的名称。
 
-将新键原样传给脚本的 send、verify、replies、coord prepare 或 `--reply-to`；不要交给官方原生发送工具。脚本向 Claude 包装回信时仍先归一化为原生 `uds:` 地址，无法归一化则附上脚本回信提示。保留旧 `claude:<exact-name>`／PID／UUID／`uds:` 输入的原解析语义；裸字符串以 `claude-session:` 或 `claude-pid:` 开头时属于新键，名称恰为这种形状时改用 `claude:<exact-name>` 明确寻址，非法新键拒绝后不退回名称匹配。重新发现目标，不把旧名称地址当作稳定身份。PID 不能跨进程退出或复用保存为永久身份；同一 UUID 的多进程存活集合改变时，也不保证绑定同一进程。协调板继续使用原有 canonical 身份作相等比较，不迁移已有任务记录。
+将新键原样传给脚本的 send、verify、replies、coord prepare 或 `--reply-to`；不要交给官方原生发送工具。自动 sender 有宿主 UUID 时同样使用类型键；脚本向 Claude 包装回信时仍先归一化为原生 `uds:` 地址，无法归一化则附上脚本回信提示。保留旧 `claude:<exact-name>`／PID／UUID／`uds:` 输入的原解析语义；裸字符串以 `claude-session:` 或 `claude-pid:` 开头时属于新键，名称恰为这种形状时改用 `claude:<exact-name>` 明确寻址，非法新键拒绝后不退回名称匹配。重新发现目标，不把旧名称地址当作稳定身份。PID 不能跨进程退出或复用保存为永久身份；同一 UUID 的多进程存活集合改变时，也不保证绑定同一进程。类型键保持到解析确认；旧 canonical 拼写只用于 Board 持久化或相等比较，不先降级再交给 legacy resolver。当前 actor 结清记录、claim 或 release 时可直接按宿主身份比较已有记录，不因 registry 消失改认别人；prepare 无法解析当前 actor 时明确失败，不产生错误 sender 的记录。已有任务记录不迁移。
 
 ### 两个 route 的地址空间
 
