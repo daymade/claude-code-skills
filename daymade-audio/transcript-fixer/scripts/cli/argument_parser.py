@@ -591,6 +591,15 @@ def create_argument_parser() -> argparse.ArgumentParser:
              "See the cited-answers reference for supported forms. Checks citation shape and item scope, "
              "not user authorship. Only with accepted/overridden; incompatible with --authority."
     )
+    parser.add_argument("--review-entity-type", dest="review_entity_type",
+        choices=["unknown", "person", "system", "product", "organization", "place"],
+        help="With --resolve-review: classify this occurrence; nonperson types require a typed entity_reference authority record and an explicit context cue. Missing retains the stored type.")
+    parser.add_argument("--review-candidate", type=int, dest="review_candidate_index",
+        help="With accepted/overridden: select the zero-based candidates entry and its action pack explicitly; never combine competing action packs.")
+    parser.add_argument("--consolidate-review", action="store_true", dest="consolidate_review",
+        help="With --review-file: persist links between uniquely located duplicate occurrences, retain old rows and all candidates, and report ambiguous legacy anchors. No verdict or transcript edit.")
+    parser.add_argument("--sidecar-dir", metavar="DIR",
+        help="Write review reports to this directory (default: beside input). Reuse with --close-sidecars; run outputs still follow --output. Existing reports are preserved.")
     parser.add_argument(
         "--ledger-entry", dest="review_ledger_entry",
         help="Append a confirmed entry beginning with the actual original→resolved pair to the anchored transcript's "
