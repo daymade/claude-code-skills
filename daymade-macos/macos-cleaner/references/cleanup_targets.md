@@ -193,6 +193,46 @@ Do not reopen a broad Mole scan for a named developer cache. Resolve one exact p
 | JetBrains caches | **Help → Diagnostic Tools → Special Files and Folders** or `idea.system.path` | `~/Library/Caches/JetBrains/<product><version>` | Quit the IDE; prefer its cache invalidation UI. An exact cache for an uninstalled/retired product version may go to Trash. Never target config/plugins/local history by assuming every JetBrains directory is cache. |
 | Stopped Docker container | `docker inspect <exact-name-or-id>` plus `docker ps -a` | None | Use `references/docker_analysis.md`; stopped status alone never authorizes removal. |
 
+#### uv cache retirement
+
+Before classifying a uv target, distinguish its role from its directory name:
+
+| Role | Check before retirement | Consequence |
+|---|---|---|
+| Downloaded/built package archives | Resolve the configured cache and exact package names; check current references and restoration inputs | A later install may download or build again; shared extents/hard links can limit physical release |
+| Cache-managed execution environments | Inspect the actual launcher, environment configuration and active consumers | A running or later invocation may depend on the cached environment; preserve active or unresolved references |
+| Project/service persistent virtual environment | Resolve its Python, base interpreter, lockfile and owning installer | This is a runtime, even when reproducible; retire it through its project/service lifecycle, not a cache cleanup |
+
+Treat internal bucket names and suffixes as installed-version details. Do not
+infer abandonment from a name, age, bucket version or cache-to-project count.
+Keep missing reference evidence `unknown`; a cache's total allocation is not a
+garbage estimate. Never manually delete an internal cache subset.
+
+For an approved finite package list, check `uv --version`, `uv cache clean --help`
+and relevant known issues for that installed release before selecting the command.
+When its help accepts `[PACKAGE]...`, clean the approved names in one official
+invocation, for example `uv cache clean <package-a> <package-b>`; otherwise retain
+the supported single-package form. Keep whole-cache cleanup separately authorized.
+
+If another uv command holds the cache lock, identify its owner and active work
+read-only. A transient busy observation is not a cleanup failure: allow one
+bounded official wait using `UV_LOCK_TIMEOUT=<seconds> uv cache clean <package-a> <package-b>`,
+with the duration chosen for this task and confirmed against current
+uv documentation. Do not use `--force`, stop another job, or repeatedly restart the
+same attempt. On timeout, report the holder and remaining approved targets; resume
+only after a changed condition, such as the holder completing its work. Recheck
+the target and protected consumers before resuming.
+
+After success, verify the approved package postcondition, preserved environments
+and a real affected consumer through the existing Phase 4 checks. Do not infer
+physical release from the command's estimate or include non-target objects in the
+claimed cleanup. The executing agent owns this classification and lock decision;
+the plan checker does not prove environment liveness or approval of each package
+argument. Compare every supplied name with the approved list before execution.
+
+Use the current [uv cache documentation](https://docs.astral.sh/uv/concepts/cache/)
+for bucket versioning, supported cleanup, cache locks and `UV_LOCK_TIMEOUT`.
+
 #### `uv cache prune` is not sanctioned here — a hard exclusion (verified 2026-09-19)
 
 `uv cache prune` may never appear in a plan's action set. Two verified reasons:
