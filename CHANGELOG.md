@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Growth workflow documentation**: Align product-analysis examples and bilingual guidance with evidence-based synthesis; route repository instruction entries to mechanism decisions and product-audit synthesis.
+
 ### Added
 - **frontend-visual-qa** (v1.21.9): Add paired prompt-only evals for full-report reading versus request/latency metrics and bounded automatic recovery; runtime guidance unchanged.
 - **prior-work-retrieval** (`daymade-claude-code` v4.30.10): Clarify invocation-only manifest overrides, inherited hook configuration, and active required-source contract selection. Preserve different-path manifests with matching contracts and readable requirement/receipt state. Change type: bounded decision guidance.
