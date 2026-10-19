@@ -709,10 +709,9 @@ Use this READ-DO sequence for one explicitly authorized clone:
    On macOS, `/usr/sbin/lsof +D <absolute-clone>` is one available probe; use the platform-native
    equivalent elsewhere. A process result gathered in parallel with another Git probe can be the
    auditor observing its own sibling process, so it cannot authorize a move. Any genuine writer or
-   unknown occupant stops the retirement. This `lsof +D` occupancy probe is the third of the
-   Skill's three `lsof` uses — the shared-file writer probe in `references/prevention_practices.md`
-   and SKILL.md's retirement occupancy check are the others — and all three stop on any genuine
-   writer or unknown occupant; change the criterion in one, change it in the others.
+   unknown occupant stops the retirement. This occupancy probe, the worktree-retirement probe
+   below, and the shared-file writer probe in `references/prevention_practices.md` all stop on a
+   genuine writer or unknown occupant; change the criterion in one, change it in the others.
 5. **Re-freeze, then make the quarantine move the next operation:**
 
    ```bash
@@ -750,7 +749,9 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
 `--branches` checks. Retire one only after this sequence:
 
 1. **Inventory and identify the primary checkout:** run `git worktree list --porcelain`. Keep the
-   first/primary checkout; select only the exact linked path the user intends to retire. A Git
+   first/primary checkout; select only the exact linked path the user intends to retire. Record
+   the kept checkout's HEAD and existing index/worktree state for unchanged-state readback; do not
+   clean or normalize unrelated WIP there. A Git
    worktree lock prevents pruning, moving, and deletion; it is not an ownership lease or deletion
    authority. If its reason says the worktree is active, or the user assigns it to another worker,
    stop before inspecting its contents and do not unlock it as a workaround. A checkout that a
@@ -760,8 +761,13 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
    Real case: a detached "deploy" worktree with no open handles and no file change in ten days was
    the working copy of a LaunchAgent that ran every 30 minutes.
 2. **Inspect tracked and untracked state in the linked checkout itself:** run
-   `git -C <worktree-path> status --porcelain=v1 --untracked-files=all`. The output must be
-   empty. Do not substitute the primary checkout's status.
+   `git -C <worktree-path> status --porcelain=v1 --untracked-files=all --ignore-submodules=none`.
+   The output must be empty. Do not substitute the primary checkout's status. Enumerate the
+   gitlinks and `git submodule status --recursive`; inspect each initialized nested checkout with
+   the same status command. Record each module's HEAD, gitlink SHA, resolved Git/common directory,
+   local refs, symbolic refs, reflogs, and local object inventory. An uninitialized gitlink is not
+   automatically an initialized repository: verify its directory and any retained module Git
+   store separately. A failed inventory or unknown module path stops retirement.
 3. **Inventory ignored physical files separately:** run
    `git -C <worktree-path> status --porcelain=v1 --ignored --untracked-files=all` and inspect every
    `!!` path. A normal clean status ignores this layer. So does `git worktree remove` itself —
@@ -783,7 +789,9 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
    primary checkout, or otherwise user-authored or uncertain — outside the worktree first with `cp -p`,
    preserving its relative path under the backup; hash, never read or print, a path that may hold a
    credential. Run the same hash/readlink check on each source and backup copy and require equality.
-   Use `git check-ignore -v <path>` when the ignore rule itself is unclear.
+   Use `git check-ignore -v <path>` when the ignore rule itself is unclear. Apply this inventory,
+   preservation and equality check inside every initialized submodule too; the superproject's
+   ignored listing does not inventory the module's private files.
 4. **Record the exact identity:** copy `git -C <worktree-path> rev-parse HEAD` and
    `git -C <worktree-path> branch --show-current`. An empty branch means detached HEAD, not "no
    work". Confirm the recorded HEAD resolves as a commit; when a branch is present, require that
@@ -797,21 +805,44 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
    export that ref. Verify the targeted bundle; do not pin unrelated danglers or use `--all-refs`
    unless the Outcome contract separately authorizes every captured ref. Keep any ignored-file
    copies from step 3 beside this backup—the bundle does not contain them.
-7. **Obtain current-session deletion authority, then remove through Git without force:** run
+   For every local submodule repository threatened by removal, obtain preservation authority for
+   that exact repository and preserve it independently. A superproject bundle records a gitlink,
+   not the module's objects. Freeze its HEAD, refs/symbolic targets, reflogs and all local objects
+   (`git -C <module> cat-file --batch-all-objects --batch-check`), including reflog-only and
+   unreachable objects. Create and verify a module HEAD/ref bundle and an external copy of its
+   complete resolved Git/common metadata and object stores; scope those copies to the exact
+   threatened, authorized module repositories, not unrelated primary-checkout files or the
+   superproject's entire common directory. A ref bundle alone omits unreachable objects and
+   reflog records. Verify copied paths, entry types, modes and hashes, then read back
+   every frozen ref, reflog and object from the independent copy. An archived `core.worktree` or
+   `commondir` pointer may still refer to the old location: record the original mapping and use
+   explicit backup-local Git/work-tree paths for the recovery probe. Do not call the copy verified
+   if it still depends on the source. Unresolved alternates, partial/promisor or extension object
+   stores, shared module stores, unsupported file types, or incomplete recovery evidence stop
+   retirement; do not deinitialize a module or delete its Git directory to evade this gate.
+7. **Obtain current-session deletion authority, then try normal removal:** run
    the tracked/untracked status check again. Then re-run the exact ignored-inventory command from
    step 3, expand directories the same way, and rebuild the ignored manifest. Its path set, entry
    types, regular-file hashes, and symlink targets must exactly equal the frozen step 3 manifest;
    any added or missing path, type change, content change, or link-target change aborts removal.
-   Also require every preserved source and backup copy to match that manifest. Make
-   `git worktree remove <absolute-worktree-path>` the next operation—no intervening command may
-   reopen the race. Never use `rm -rf` or
-   `git worktree remove --force` to make a dirty/uninspectable worktree disappear.
+   Also require every preserved source and backup copy to match that manifest, and recheck all
+   module identities, refs, reflogs, object inventories and backups from steps 2/6. Finish the Git
+   probes before running the platform's process-occupancy probe against the exact target and any
+   module Git stores removal threatens. On macOS, `/usr/sbin/lsof +D <absolute-target>` is one
+   available probe. Inspect its rows and diagnostics; any genuine process user or unknown result
+   stops removal. Do not mistake a concurrent probe's own Git process for a user: run probes
+   sequentially. Reconfirm no lock, scheduler use, or ownership conflict. Make
+   `git -C <kept-checkout> worktree remove <absolute-worktree-path>` the next operation—no
+   intervening command may reopen the race. If it refuses specifically because of submodules,
+   follow the clean-submodule exception below. Every other refusal stops this procedure. Never use
+   `rm -rf` or force to make a dirty/uninspectable worktree disappear.
 8. **Verify the postconditions independently:** re-run `git worktree list --porcelain`, prove the
    exact path no longer exists, resolve the kept local branch if one exists, and re-run the
    recorded-HEAD containment check (or locate that HEAD in the verified bundle). These observations
    distinguish "checkout removed, history preserved" from a partial cleanup. Re-hash every copied
    ignored file at its backup-relative path and compare it with the pre-removal manifest; merely
-   seeing a destination file is not an integrity check.
+   seeing a destination file is not an integrity check. Independently re-open each module backup,
+   verify its bundle and frozen refs/reflogs/objects, and verify every copied module-private file.
 9. **Retire its branch separately:** prefer `git branch -d <branch>`. Worktree-removal authority
    does not authorize branch deletion. If Git refuses after a
    proven squash/supersession case, require the verified backup and explicit deletion authority
@@ -819,6 +850,36 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
 
 The recovery artifacts created in step 6 may later follow § Retire task-owned temporary recovery
 artifacts. A copied ignored path that exists only in that backup keeps the artifact ineligible.
+
+### Clean-submodule exception — one force flag after a specific normal refusal
+
+The [official `git worktree remove` contract](https://git-scm.com/docs/git-worktree#_commands)
+allows force for submodule worktrees. The executing operator must read `git --version` and the
+installed `git help worktree` removal contract, and retain the actual normal command's exit code
+and stderr. A gitlink alone is not a reason to force: normal removal can succeed when its module
+is uninitialized. This is a READ-DO branch for the exact already-authorized linked target, not a
+general cleanup shortcut; the Skill has no automatic enforcement of its evidence gates.
+
+Use `git -C <kept-checkout> worktree remove --force <absolute-worktree-path>` with **one** force
+flag only when the installed Git contract permits it, the normal command refused specifically
+because the target contains submodules, and all preceding gates passed. Immediately before that
+retry, repeat steps 2/3/4/6/7's state, backup and occupancy comparisons and require the target and
+every initialized module to have empty tracked/untracked status. Preserve the kept checkout's
+recorded HEAD and existing index/worktree bytes; unrelated WIP there is not a removal target and
+must not be normalized. Activity that can change the exact frozen target, refs or stores blocks
+retirement; unrelated primary-checkout state alone does not. The exact target path, HEAD, module
+mappings and inventories must still match the frozen evidence;
+containment and recovery copies must still verify. An ignored item without a proved reproducible
+source or verified external copy is incomplete preservation, even when Git calls the checkout clean.
+The force removal must be the next operation, followed by step 8's independent readback and proof
+that the kept checkout's recorded state is unchanged.
+
+Target/module dirtiness, changed frozen evidence, or unknown, locked, occupied, excluded or
+incompletely preserved target/store state stops this branch. A new refusal is a finding to explain,
+not permission to escalate. Never add a second
+`--force`, unlock the target, change file permissions, deinitialize modules, or fall back to `rm`
+to bypass it. Preservation alone does not make a dirty worktree eligible; reconcile through the
+existing explicit-path workflow and re-establish empty status before returning here.
 
 ## Adversarial multi-agent verification (for a whole repo of branches)
 
