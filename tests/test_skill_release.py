@@ -166,6 +166,30 @@ class ReleaseTests(MainlineGuardTests):
         head = run(self.repo, "git", "rev-parse", "HEAD").stdout.strip()
         self.assertEqual(affected(self.repo, self.head, head), [])
 
+    def test_stale_main_is_diagnosed_before_review_scope_and_new_head_rebinds(self):
+        rr.attest(self.repo, self.head, [self.skill], review_not_required="format-only", reason="fixture exact-head binding")
+        run(self.repo, "git", "switch", "-qc", "advanced-main", self.base)
+        (self.repo / "unrelated.txt").write_text("another publisher advanced main\n")
+        run(self.repo, "git", "add", "--", "unrelated.txt")
+        run(self.repo, "git", "commit", "-qm", "main advance")
+        fresh_base = run(self.repo, "git", "rev-parse", "HEAD").stdout.strip()
+
+        def check(candidate):
+            return run(self.repo, sys.executable, "scripts/ci/check_skill_release.py",
+                       "--repo", str(self.repo), "--base", fresh_base, "--candidate", candidate, check=False)
+
+        stale = check(self.head)
+        self.assertEqual(stale.returncode, 2)
+        self.assertIn("integration drift", stale.stderr)
+        self.assertNotIn("receipt does not cover", stale.stderr)
+        run(self.repo, "git", "switch", "feature")
+        run(self.repo, "git", "merge", "--no-edit", fresh_base)
+        integrated = run(self.repo, "git", "rev-parse", "HEAD").stdout.strip()
+        self.assertEqual(affected(self.repo, fresh_base, integrated), [self.skill])
+        self.assertEqual(check(integrated).returncode, 2)  # old receipt never covers a new SHA
+        rr.attest(self.repo, integrated, [self.skill], review_not_required="format-only", reason="fixture unchanged content, new exact head")
+        self.assertEqual(check(integrated).returncode, 0)
+
 
 # Inheritance supplies fixture setup only; avoid rerunning parent cases with a new baseline.
 for _name in list(vars(MainlineGuardTests)):
