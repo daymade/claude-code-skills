@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Growth workflow documentation**: Align product-analysis examples and bilingual guidance with evidence-based synthesis; route repository instruction entries to mechanism decisions and product-audit synthesis.
+
 ### Added
 - **qa-expert** (v1.2.0): Add file-backed persistence and CLI acceptance recipes for byte integrity, selected dependencies, crash recovery, asynchronous completion, pipe delivery and shared immutable-object reads. Preserve existing QA, transaction and migration workflows. Change type: bounded acceptance-method addition.
 - **git-safety-net** (v1.22.7): Add a controlled clean-submodule worktree retirement path where the current Git implementation requires it; preserve authorization, containment, backup and dirty/unknown-state refusal. Change type: operating-procedure correction.

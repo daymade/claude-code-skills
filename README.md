@@ -1820,7 +1820,7 @@ claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
 
 ### **product-analysis** - Multi-Path Product Analysis & Optimization
 
-Run a scalable, evidence-driven product audit using parallel Claude Code agents and optional Codex CLI parallelization. Covers UX, API, architecture, and competitive benchmark workflows with quantified findings and priority recommendations.
+Audit UX, API, architecture and selected competitor implementations using parallel exploration and evidence-based synthesis.
 
 **When to use:**
 - Product launch readiness reviews
@@ -1830,10 +1830,9 @@ Run a scalable, evidence-driven product audit using parallel Claude Code agents 
 
 **Key features:**
 - Auto-detects tool context (project stack + optional `codex` availability)
-- Parallel analysis across dimensions: `full`, `ux`, `api`, `arch`, `compare`
-- Multi-agent synthesis with quantified findings and P0/P1/P2 recommendations
+- Select the applicable [audit scope](product-analysis/SKILL.md#scope-modes)
+- Evidence verification and priority selection through the [synthesis method](product-analysis/references/synthesis_methodology.md)
 - Built-in comparison hooks with `competitors-analysis`
-- Cross-validation workflow to reduce overfitting from a single model perspective
 
 **Example usage:**
 ```bash
@@ -1842,8 +1841,8 @@ claude plugin install product-analysis@daymade-skills
 
 # Then ask Claude for analysis
 "Run product-analysis in full mode for launch audit"
-"Do a UX audit and report quantified navigation findings"
-"Run API audit and identify unused endpoints"
+"Audit UX navigation and verify its effects on the user's task"
+"Trace API consumers and identify routes safe to retire"
 "Compare this product with our top competitors"
 ```
 
@@ -4160,7 +4159,7 @@ Use **i18n-expert** to set up complete i18n infrastructure for React/Next.js/Vue
 Use **tunnel-doctor** to diagnose and fix conflicts between Tailscale and proxy/VPN tools on macOS across multiple independent layers (route hijacking, HTTP env vars, system proxy, SSH ProxyCommand, VM/container proxy propagation, DNS resolver stall). Essential when Tailscale ping works but TCP connections fail, when git push fails with "failed to begin relaying via HTTP", or when setting up Tailscale SSH to WSL instances alongside Shadowrocket, Clash, or Surge. Also covers **TUN measurement contamination** — why raw probes (`nc -z` showing 0.00s, `ping`, a foreign `ip-api` lookup) lie while a global proxy is up, and what to trust instead.
 
 ### For Product Audits
-Use **product-analysis** for structured pre-release and architecture reviews. It combines UX, API, and architecture analysis into measurable findings with priority-ranked recommendations. Add `compare` mode to benchmark against competitor implementations through evidence-backed reports.
+Use [product-analysis](./product-analysis/SKILL.md) for launch, UX, API or architecture audits and code-backed competitor comparisons.
 
 ### For Remote Desktop & VDI Optimization
 Use **windows-remote-desktop-connection-doctor** to diagnose Azure Virtual Desktop / W365 connection quality issues on macOS. Essential when transport shows WebSocket instead of UDP Shortpath, when RTT is unexpectedly high, or when RDP Shortpath fails after changing network locations. Combines network evidence gathering with Windows App log analysis for systematic root cause identification.
@@ -4246,7 +4245,7 @@ Each skill includes:
 - **fact-checker**: See `fact-checker/SKILL.md` for fact-checking workflow and claim verification process
 - **competitors-analysis**: See `competitors-analysis/SKILL.md` for the discover/ingest/profile/landscape workflow and `competitors-analysis/references/profile_template.md` for the competitor profile template
 - **windows-remote-desktop-connection-doctor**: See `windows-remote-desktop-connection-doctor/references/windows_app_log_analysis.md` for log parsing patterns and `windows-remote-desktop-connection-doctor/references/avd_transport_protocols.md` for transport protocol details
-- **product-analysis**: See `product-analysis/SKILL.md` for workflow and `product-analysis/references/synthesis_methodology.md` for cross-agent weighting and recommendation logic
+- **product-analysis**: See the [workflow](product-analysis/SKILL.md) and [evidence synthesis](product-analysis/references/synthesis_methodology.md) for source verification and recommendation decisions
 - **excel-automation**: See `daymade-docs/excel-automation/SKILL.md` for create/parse/control workflows and `daymade-docs/excel-automation/references/formatting-reference.md` for formatting standards
 - **capture-screen**: See `daymade-macos/capture-screen/SKILL.md` for CGWindowID-based screenshot workflows on macOS
 - **continue-claude-code-work**: See `daymade-claude-code/continue-claude-code-work/SKILL.md` for local artifact recovery, drift checks, and resume workflow
