@@ -203,6 +203,9 @@ being copied here. An owning installer may support an already authorized
 launcher; that does not make a package-manager dispatcher the default for
 Python hooks.
 
+For persistent Python service installation, environment reuse or startup, follow
+[macos-watchdog's persistent runtime procedure](daymade-macos/macos-watchdog/SKILL.md#persistent-python-runtime).
+
 ### Rendered UI delivery acceptance
 
 For rendered UI freshness, delayed editor/batch responses or deployment acceptance, enter
@@ -267,6 +270,9 @@ recovery, or capacity checks before necessary backup/copy/extraction, use
 [macos-cleaner](daymade-macos/macos-cleaner/SKILL.md) and its
 [necessary-copy capacity preflight](daymade-macos/macos-cleaner/references/safety_rules.md#necessary-copy-capacity-preflight).
 When changing measurement, run the SOP's targeted regression suite before shipping.
+For uv cache diagnosis or retirement, enter
+[macos-cleaner](daymade-macos/macos-cleaner/SKILL.md) and its
+[uv target semantics](daymade-macos/macos-cleaner/references/cleanup_targets.md#uv-cache-retirement).
 
 ### Automated Test Suites (CI)
 

@@ -1267,104 +1267,12 @@ python scripts/fetch_tweet.py https://x.com/user/status/123 output.md
 
 > **安装**：`claude plugin install daymade-macos@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-macos:macos-cleaner`）
 
-**在 macOS 上恢复磁盘空间最安全的方式。** 已知具体嫌疑源时先做定向只读取证（包括 Apple 内容缓存），只有来源未知时才扩大到系统缓存、应用残留、大文件和开发环境。
-
-**为什么 macos-cleaner 与众不同：**
-- **安全优先理念**：在明确用户确认之前绝不删除。每项操作都包含风险评估（🟢 安全 / 🟡 谨慎 / 🔴 保留）。
-- **智能胜于自动化**：先分析，详细解释，然后由你决定。与盲目删除的一键清理工具不同，我们帮助你理解要删除的内容及原因。
-- **开发者友好**：深度分析 Docker、Homebrew、npm、pip 缓存 - 这些是通用清理工具遗漏的工具。
-- **透明且教育性**：每项建议都包含对文件的解释、为什么安全（或不安全）以及删除后的影响。
-- **专业品质**：由了解误删重要文件痛苦的开发者构建。包含全面的安全检查和 Time Machine 备份建议。
-
-**我们的设计原则：**
-1. **用户控制优先**：你做决定，我们提供洞察
-2. **解释一切**：没有神秘的删除 - 完全透明的影响说明
-3. **保守的默认值**：不确定时，我们保留而不是删除
-4. **开发者视角**：理解开发工具缓存，而不仅仅是系统文件
-5. **混合方法**：结合脚本精度与可视化工具（Mole 集成）
-
-**使用场景：**
-- 你的 Mac 磁盘空间不足（使用率 >80%）
-- 你是开发者，Docker/npm/pip/Homebrew 缓存堆积如山
-- Apple 内容缓存提示 `Caching needs more space`、处于 unlimited，或 `ActualCacheUsed` 异常偏高
-- 你想了解占用空间的内容，而不仅仅是盲目删除
-- 你需要清理已卸载应用程序的残留
-- 你更喜欢理解而非自动化
-
-**主要功能：**
-- **智能缓存分析**：按安全级别对系统缓存、应用缓存、日志进行分类
-- **Apple 内容缓存**：区分逻辑 `CacheUsed` 与物理 `ActualCacheUsed`，核验 peer 和受保护服务，并使用 Apple 支持的限额、停用与清空入口
-- **应用残留检测**：查找已卸载应用程序的孤立数据，并提供可信度评分
-- **大文件与重复文件发现**：智能分类，并可在精确批准的路径内运行只读 `fdupes` 检查
-- **开发环境清理**：Docker 镜像/容器/卷、OrbStack、Homebrew、npm、pip；Docker 构建缓存只测量，不提供 prune 类删除
-- **交互式安全删除**：批量确认、选择性删除、撤销友好（尽可能使用废纸篓）
-- **前后报告**：跟踪空间恢复并提供详细分解
-- **Mole 集成**：与可视化清理工具无缝协作，适合 GUI 偏好
-- **风险分类**：每个项目都标有安全级别和说明
-- **Time Machine 感知**：建议在大批量删除（>10 GB）前进行备份
-
-**我们的优势：**
-- ✅ **通过透明度建立信任**：其他清理工具隐藏删除内容。我们展示一切并解释原因。
-- ✅ **以开发者为中心**：我们清理 Docker，而不仅仅是浏览器缓存。我们理解 `.git` 目录、`node_modules` 和构建产物。
-- ✅ **内置安全检查**：保护系统文件、用户数据、凭据、活动数据库或正在使用的文件不被删除。
-- ✅ **教育性**：了解什么可以安全删除及原因，以便你能自信地维护你的 Mac。
-- ❌ **不是一键解决方案**：在你确认一份有明确范围的命令计划前不会改变任何状态；如果你要求 Claude 执行，也只会运行已确认的动作并做前后验证。
+📚 **文档**：[macOS Cleaner](./daymade-macos/macos-cleaner/SKILL.md)；uv 缓存诊断或清退进入该 Skill 的 [uv 目标语义](./daymade-macos/macos-cleaner/references/cleanup_targets.md#uv-cache-retirement)。
 
 **示例用法：**
-```bash
-# 安装 Apple 平台套件
-claude plugin install daymade-macos@daymade-skills
-
-# 要求 Claude Code 分析你的 Mac
-"我的 Mac 快没空间了，帮我分析一下是什么在占用存储空间"
-
-# Claude 将会：
-# 1. 已知嫌疑源时先定向只读检查；只有来源未知时才做广泛分析
-# 2. 展示带有安全级别的分类结果
-# 3. 解释每个类别（缓存、残留、大文件、开发工具）
-# 4. 推荐清理方法
-# 5. 仅执行你确认的操作
-
-# 示例分析输出：
-📊 磁盘空间分析
-━━━━━━━━━━━━━━━━━━━━━━━
-总计:       500 GB
-已用:       450 GB (90%)
-可用:        50 GB (10%)
-
-🟢 安全清理 (95 GB):
-  - 系统缓存:          45 GB (应用会自动重新生成)
-  - Homebrew 缓存:      5 GB (需要时重新安装)
-  - npm 缓存:           3 GB (清除安全)
-  - 旧日志:             8 GB (仅诊断数据)
-  - 废纸篓:            34 GB (已标记为删除)
-
-🟡 建议审查 (62 GB):
-  - 大型下载:          38 GB (可能包含重要文件)
-  - 应用残留:           8 GB (验证应用是否真正卸载)
-  - Docker 镜像:       12 GB (可能正在使用)
-  - 旧 .git 仓库:       4 GB (验证项目是否已归档)
-
-🔴 除非确定否则保留 (0 GB):
-  - 未检测到高风险项目
-
-建议：从 🟢 安全项目开始 (95 GB)，然后一起审查 🟡 项目。
+```text
+我的 Mac 快没空间了，帮我分析一下是什么在占用存储空间
 ```
-
-**🎬 实时演示**
-
-*即将推出*
-
-📚 **文档**：参见 [macos-cleaner/references/](./daymade-macos/macos-cleaner/references/) 了解：
-- `apple_content_caching.md` - Apple 内容缓存的定向诊断与受支持修复
-- `cleanup_targets.md` - 每个清理目标的详细说明
-- `mole_integration.md` - 如何将脚本与 Mole 可视化工具结合使用
-- `safety_rules.md` - 全面的安全指南以及永远不应删除的内容
-
-**要求**：
-- **Python 3.6+**（macOS 预装）
-- **macOS**（在 macOS 10.15+ 上测试）
-- **可选**：[Mole](https://github.com/tw93/Mole) 用于可视化清理界面
 
 ---
 
@@ -3456,14 +3364,9 @@ completion drive 随时能盖过它；hook 才是一堵墙。
 > **安装**：`claude plugin install daymade-macos@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-macos:macos-watchdog`）
 
 设计、部署、纪律化 macOS launchd 看门狗——检测复发问题并自动修复的
-LaunchAgent / LaunchDaemon，同时不让看门狗自己变成干扰源。提炼自
-15 个生产环境看门狗及其事故史。
+LaunchAgent / LaunchDaemon，同时不让看门狗自己变成干扰源。
 
-**核心能力：**
-- 安静看门狗契约——前提状态自检（监控的生命周期绑定其前提）、耐心模式（延迟打扰而非延迟检测）、升级式自动冷却、绝不复活用户主动退出的应用
-- 会咬人的部署细节——gui vs system domain、StandardOut/ErrorPath、作用于真实解释器的 TCC/FDA，以及停止语义（`unload` 已废弃且会被 `RunAtLoad` 复活——只用 bootout/bootstrap/disable）
-- 默认批量循环节流 + SRE 告警分层（page vs ticket、疲劳数字）
-- 附带 `watchdog-cooldown.sh`（可 source 的升级式冷却 + 手动暂停状态机）、`new-launchagent.sh`（带校验的幂等安装器）与带注释的 plist 模板
+📚 **文档**：[macOS Watchdog](./daymade-macos/macos-watchdog/SKILL.md)；常驻 Python 的部署进入 [持久运行时](./daymade-macos/macos-watchdog/SKILL.md#persistent-python-runtime)。
 
 **使用示例：**
 ```text
@@ -4024,7 +3927,7 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 使用 **twitter-reader** 无需 JavaScript 渲染或身份验证即可获取推文内容。非常适合记录社交媒体讨论、归档话题、分析推文内容或从 Twitter/X 收集参考资料。与 **doc-to-markdown** 结合可将获取的内容转换为其他格式，或与 **repomix-safe-mixer** 结合安全地打包研究集合。
 
 ### macOS 系统维护与磁盘空间恢复
-使用 **macos-cleaner** 以安全优先的方式诊断和恢复 macOS 磁盘空间。它会把 Apple 内容缓存等已知嫌疑源先路由到定向只读取证，区分逻辑量与物理占盘，说明影响和恢复方式，并在任何状态变更前要求明确确认；同时覆盖 Docker/OrbStack、Homebrew/npm/pip、应用残留、大文件和可选的 Mole 探索。
+[macOS Cleaner](./daymade-macos/macos-cleaner/SKILL.md)。
 
 ### 技能发现与管理
 使用 **skills-search** 优先发现并复用已配置本地仓库里的 Skill；必要时再进入 CCPM 注册表，保留外部检索、安装和管理能力。
@@ -4116,7 +4019,7 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 - **promptfoo-evaluation**：参见 `promptfoo-evaluation/references/promptfoo_api.md` 了解评测模式
 - **developing-ios-apps**：参见 `daymade-macos/developing-ios-apps/references/xcodegen-full.md` 了解 XcodeGen 选项与 project.yml 细节
 - **twitter-reader**：参见 `twitter-reader/SKILL.md` 了解 API 密钥设置和 URL 格式支持
-- **macos-cleaner**：参见 `daymade-macos/macos-cleaner/references/apple_content_caching.md` 了解 Apple 内容缓存、`daymade-macos/macos-cleaner/references/cleanup_targets.md` 了解清理目标语义、`daymade-macos/macos-cleaner/references/mole_integration.md` 了解 Mole、`daymade-macos/macos-cleaner/references/safety_rules.md` 了解安全指南
+- [macos-cleaner](./daymade-macos/macos-cleaner/SKILL.md)
 - **skill-reviewer**：参见 `daymade-skill/skill-reviewer/references/evaluation_checklist.md` 了解完整评估标准、`daymade-skill/skill-reviewer/references/pr_template.md` 了解 PR 模板
 - **github-contributor**：参见 `github-contributor/references/pr_checklist.md` 了解 PR 质量清单、`github-contributor/references/project_evaluation.md` 了解项目评估标准、`github-contributor/references/communication_templates.md` 了解 issue/PR 沟通模板
 - **i18n-expert**：参见 `i18n-expert/SKILL.md` 了解完整的 i18n 设置工作流程、键架构指导和审计程序
