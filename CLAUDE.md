@@ -168,8 +168,9 @@ For HTML report images and explanatory diagrams, enter
 source verification, placement and review. Keep report-specific assets with the report.
 
 Treat [packaging_policy.py](daymade-skill/skill-creator/scripts/packaging_policy.py)
-as the canonical inclusion policy for packaging, security attestation, source
-audits, and version checks. Keep consumers on this shared implementation. Preserve the recorded policy
+as the canonical inclusion policy for packaged content, security attestation and
+source audits. Version progression and shipped-change review use their owning
+gates under **Updating Existing Skills** below. Preserve the recorded policy
 when verifying an existing baseline; consult
 [source snapshot archives](daymade-skill/skill-creator/references/source-snapshot-archives.md)
 before archiving or restoring it.
@@ -758,7 +759,7 @@ The marketplace is configured in `.claude-plugin/marketplace.json`:
    - The registered plugin owns the release version. Suite members share their suite's
      version; a standalone Skill uses its own plugin entry.
    - Follow [skill-creator's versioning contract](daymade-skill/skill-creator/SKILL.md)
-     for shipped-file changes and change classification.
+     for change classification and release identity.
 
 ### ⚠️ Updating Existing Skills (MANDATORY)
 
@@ -768,22 +769,14 @@ decide which changed files ship. Do not infer a separate member version from its
 
 For pre-commit release progression, use the existing
 [version checker](scripts/ci/check_version_progression.py) through the
-[mainline guard](scripts/git-mainline-guard.mjs). Its registered-plugin mapping and
-the packaging owner above determine which release identity must advance.
+[mainline guard](scripts/git-mainline-guard.mjs). That checker owns registered-plugin
+mapping and version-increment eligibility; package exclusion alone is not a version
+exemption. Select shipped-change review eligibility through
+[release readiness](daymade-skill/skill-creator/references/release-readiness.md).
 
 **Read the baseline version from an immutable ref, never from the working tree.**
-In a shared checkout `marketplace.json` may already carry a parallel session's
-in-flight bump — staged or merely saved — and `git status` looks normal either
-way, so a version computed from the working copy silently inherits their number
-as its starting point:
-
-```bash
-git show origin/main:.claude-plugin/marketplace.json   # baseline to bump FROM
-```
-
-This is what makes the check above decidable. `git diff --name-only` tells you
-*which* skills changed; only an immutable ref tells you what their versions were
-before anyone started editing.
+A shared checkout's `marketplace.json` may already carry another session's staged
+or saved version bump; that working copy cannot establish the baseline.
 
 For a stale marketplace guard, a foreign plugin's apparent version regression,
 or a release candidate missing current main, follow
