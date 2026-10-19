@@ -5,7 +5,8 @@ Use the current host's native discovery, messaging, and return channel first.
 Use this CLI only for uncovered targets or script callers, never to bypass
 denied or Held messages. This script cannot inspect a model's available tools.
 
-Targets use `claude:<pid-or-name-or-session-id>` or
+Discovery targets use `claude-session:<uuid>` or `claude-pid:<pid>`.
+Legacy targets use `claude:<pid-or-name-or-session-id>` or
 `codex:<thread-id-or-exact-name>`. An unprefixed target preserves the original
 peer-message CLI and means Claude. The live Codex adapter uses uv/websockets.
 """
@@ -144,10 +145,12 @@ def _select_claude(
     target: str, entries: list[dict[str, Any]], *, require_live: bool = True
 ) -> dict[str, Any]:
     """Apply the same exact-match rules to a single registry snapshot."""
-    needle = target.removeprefix("claude:").removeprefix("uds:")
+    identity = claude_identity_key(target)
+    needle = (identity[1] if identity else
+              target.removeprefix("claude:").removeprefix("uds:"))
     matches = []
     for entry in entries:
-        values = {
+        values = {str(entry.get(identity[0], ""))} if identity else {
             str(entry.get("pid", "")),
             str(entry.get("name", "")),
             str(entry.get("sessionId", "")),
@@ -174,6 +177,23 @@ def _select_claude(
     raise PeerError(f"Claude target {target!r} is not running", EXIT_TARGET)
 
 
+def claude_identity_key(target: str) -> tuple[str, str] | None:
+    """Reserve typed machine keys; explicit claude:<name> stays legacy input."""
+    if target.startswith("claude-session:"):
+        value = target.removeprefix("claude-session:")
+        try:
+            uuid.UUID(value)
+        except ValueError as exc:
+            raise PeerError("invalid Claude session identity key", EXIT_TARGET) from exc
+        return "sessionId", value
+    if target.startswith("claude-pid:"):
+        value = target.removeprefix("claude-pid:")
+        if not re.fullmatch(r"[1-9][0-9]*", value):
+            raise PeerError("invalid Claude PID identity key", EXIT_TARGET)
+        return "pid", value
+    return None
+
+
 def claude_discovery_address(
     entry: dict[str, Any], entries: list[dict[str, Any]]
 ) -> str:
@@ -186,18 +206,17 @@ def claude_discovery_address(
         except ValueError:
             pass
         else:
-            candidates.append(session_id)
+            candidates.append(f"claude-session:{session_id}")
     pid = entry.get("pid")
     if isinstance(pid, int) and not isinstance(pid, bool) and pid > 0:
-        candidates.append(str(pid))
-    for key in candidates:
-        address = f"claude:{key}"
+        candidates.append(f"claude-pid:{pid}")
+    for address in candidates:
         try:
             selected = _select_claude(address, entries, require_live=entry["alive"])
         except PeerError:
             continue
         # A duplicated UUID with one live process must not relabel a dead row as
-        # that live process. Name/PID/UUID cross-field collisions use the same rules.
+        # that live process. Typed keys never enter name matching.
         if selected is entry:
             return address
     raise PeerError(
@@ -489,7 +508,7 @@ def current_address(claude_home: Path, codex_home: Path) -> str:
 
     if claude_id:
         try:
-            return f"claude:{uuid.UUID(claude_id)}"
+            return f"claude-session:{uuid.UUID(claude_id)}"
         except ValueError as exc:
             raise PeerError(
                 "CLAUDE_CODE_SESSION_ID is not a UUID; pass an explicit reply address",
@@ -497,11 +516,9 @@ def current_address(claude_home: Path, codex_home: Path) -> str:
             ) from exc
 
     if claude_name:
-        entry = resolve_claude(f"claude:{claude_name}", claude_home)
-        session_id = entry.get("sessionId")
-        if isinstance(session_id, str) and session_id:
-            return f"claude:{session_id}"
-        return f"claude:{claude_name}"
+        entries = claude_registry(claude_home)
+        entry = _select_claude(f"claude:{claude_name}", entries)
+        return claude_discovery_address(entry, entries)
 
     raise PeerError(
         "current host did not expose a Claude or Codex session identity; "
@@ -548,7 +565,8 @@ def claude_envelope(body: str, sender: str, reply_to: str | None, message_id: st
     canonical = os.environ.get("CLAUDE_CODE_SESSION_ID")
     if canonical and canonical not in f"{reply_to or ''}{sender}":
         hint = f" [from-session: {canonical}]"
-    if reply_to and reply_to.startswith("codex:"):
+    # Typed Claude keys also need the script hint when no live socket normalized them.
+    if reply_to and reply_to.startswith(("codex:", "claude-session:", "claude-pid:")):
         # `codex:<uuid>` is a working reply address -- `codex queue --thread` takes it,
         # and `resolve_codex` resolves it. What it is not is an address the official
         # Claude tools can reach, and only some recipients hold that limitation.
@@ -580,13 +598,14 @@ def normalize_claude_reply(
     it at the source of the address rather than at each of those three sites is what
     makes the guarantee hold regardless of how the address arrived.
 
-    The intersection was always derivable: `resolve_claude` matches a needle against
+    Typed identity keys match only their declared field; legacy `resolve_claude`
+    inputs match a needle against
     {pid, name, sessionId, messagingSocketPath}, so a `claude:<uuid>` finds its own
     registry row, and the officially-resolvable socket and bare name are both on it.
     Unresolvable addresses are left alone -- `claude_envelope` states the route in the
     body instead, the same fallback the Codex branch uses.
     """
-    if not reply_to or not reply_to.startswith("claude:"):
+    if not reply_to or not reply_to.startswith(("claude:", "claude-session:", "claude-pid:")):
         return sender, reply_to
     try:
         # Not require_live=False: the sender is this process, so being alive is a
@@ -647,16 +666,18 @@ def send_claude(
         raise PeerError(f"Claude UDS delivery failed: {exc}") from exc
     finally:
         client.close()
+    receipt_target = (target if claude_identity_key(target) else
+                      f"claude:{entry.get('name') or entry['pid']}")
     return {
         "provider": "claude",
-        "target": f"claude:{entry.get('name') or entry['pid']}",
+        "target": receipt_target,
         "target_id": entry.get("sessionId"),
         "message_id": message_id,
         "transport_status": "accepted",
         "provenance_boundary": "claude_cross_session",
         "bytes_sent": len(payload),
         "resolved": {
-            "address": f"claude:{entry.get('name') or entry['pid']}",
+            "address": receipt_target,
             "id": entry.get("sessionId"),
             "name": entry.get("name"),
             "cwd": entry.get("cwd"),
@@ -772,7 +793,9 @@ def verify_claude(target: str, message_id: str, claude_home: Path) -> dict[str, 
     try:
         entry = resolve_claude(target, claude_home, require_live=False)
     except PeerError as resolution_error:
-        needle = target.removeprefix("claude:").removeprefix("uds:")
+        identity = claude_identity_key(target)
+        needle = (identity[1] if identity and identity[0] == "sessionId" else
+                  target.removeprefix("claude:").removeprefix("uds:"))
         try:
             session_id = str(uuid.UUID(needle))
         except ValueError:
@@ -1206,7 +1229,9 @@ def claude_replies(
     try:
         entry = resolve_claude(target, claude_home, require_live=False)
     except PeerError as resolution_error:
-        needle = target.removeprefix("claude:").removeprefix("uds:")
+        identity = claude_identity_key(target)
+        needle = (identity[1] if identity and identity[0] == "sessionId" else
+                  target.removeprefix("claude:").removeprefix("uds:"))
         try:
             session_id = str(uuid.UUID(needle))
         except ValueError:
@@ -1351,7 +1376,12 @@ def send_one(
         return receipt
     verification_target = target
     if receipt["provider"] == "claude" and receipt.get("target_id"):
-        verification_target = f"claude:{receipt['target_id']}"
+        try:
+            uuid.UUID(receipt["target_id"])
+        except (ValueError, TypeError, AttributeError):
+            pass
+        else:
+            verification_target = f"claude-session:{receipt['target_id']}"
     evidence = wait_for_verification(
         verification_target, message_id, wait_seconds, claude_home, codex_home
     )
@@ -1676,7 +1706,12 @@ def cmd_coord(args):
         if args.operation == "status":
             result = board.status(args.scope)
         else:
+            # Board identities are persisted equality keys, not delivery addresses.
+            # Retain their existing spelling across the typed discovery migration.
             actor = current_address(args.claude_home, args.codex_home)
+            identity = claude_identity_key(actor)
+            if identity:
+                actor = "claude:" + identity[1]
             if args.operation == "claim":
                 result = board.claim(args.scope, args.task, actor, args.resource)
             elif args.operation == "release":

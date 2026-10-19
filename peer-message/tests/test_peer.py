@@ -754,7 +754,7 @@ class PeerMessageTests(unittest.TestCase):
             ):
                 self.assertEqual(
                     peer.current_address(claude_home, root / ".codex"),
-                    f"claude:{entry['sessionId']}",
+                    f"claude-session:{entry['sessionId']}",
                 )
 
     def test_current_address_fails_without_host_identity(self):

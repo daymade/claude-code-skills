@@ -64,7 +64,7 @@ class ClaudeDiscoveryAddressTests(unittest.TestCase):
             with self.subTest(before=before, after=after):
                 rows = self.assert_round_trip(before, after)
                 self.assertEqual([r["address"] for r in rows],
-                                 [f"claude:{e['sessionId']}" for e in before])
+                                 [f"claude-session:{e['sessionId']}" for e in before])
                 self.assertEqual([r["name"] for r in rows], [e["name"] for e in before])
 
     def test_saved_address_never_follows_reused_name_or_exited_session(self):
@@ -84,19 +84,19 @@ class ClaudeDiscoveryAddressTests(unittest.TestCase):
                       {**a, "sessionId": "not-a-uuid"}):
             with self.subTest(entry=entry):
                 row = self.catalog([entry])[0]
-                self.assertEqual(row["address"], "claude:1001")
+                self.assertEqual(row["address"], "claude-pid:1001")
                 self.assertIs(self.resolve(row["address"], [entry]), entry)
 
     def test_duplicate_uuid_uses_pid_and_one_live_keeps_exact_uuid(self):
         a = self.entry()
         b = self.entry(1002, sessionId=a["sessionId"])
         rows = self.assert_round_trip([a, b], [a, b])
-        self.assertEqual([r["address"] for r in rows], ["claude:1001", "claude:1002"])
+        self.assertEqual([r["address"] for r in rows], ["claude-pid:1001", "claude-pid:1002"])
         inactive = {**b, "alive": False}
         rows = self.catalog([a, inactive])
-        self.assertEqual(rows[0]["address"], f"claude:{a['sessionId']}")
+        self.assertEqual(rows[0]["address"], f"claude-session:{a['sessionId']}")
         self.assertIs(self.resolve(rows[0]["address"], [a, inactive]), a)
-        self.assertEqual(rows[1]["address"], "claude:1002")
+        self.assertEqual(rows[1]["address"], "claude-pid:1002")
         self.assertIs(self.resolve(rows[1]["address"], [a, inactive], require_live=False), inactive)
 
     def test_pid_collision_does_not_defeat_unique_uuid(self):
@@ -110,8 +110,6 @@ class ClaudeDiscoveryAddressTests(unittest.TestCase):
         bad_pairs = (
             [a, {**a, "messagingSocketPath": "/synthetic/other.sock"}],
             [self.entry(sessionId=None), self.entry(sessionId="")],
-            [a, self.entry(1002, name=a["sessionId"], sessionId=a["sessionId"]),
-             self.entry(1003, name=str(a["pid"]))],
         )
         for entries in bad_pairs:
             for output in ([], ["--output", "/must-not-create-discovery.json"]):
@@ -126,16 +124,16 @@ class ClaudeDiscoveryAddressTests(unittest.TestCase):
                 self.assertIn("discovery", str(caught.exception))
                 self.assertEqual(out.getvalue(), "")
 
-    def test_cross_field_uuid_collision_uses_pid(self):
+    def test_cross_field_uuid_collision_cannot_shadow_typed_uuid(self):
         a = self.entry()
         b = self.entry(1002, name=a["sessionId"])
         rows = self.assert_round_trip([a, b], [a, b])
-        self.assertEqual(rows[0]["address"], "claude:1001")
+        self.assertEqual(rows[0]["address"], f"claude-session:{a['sessionId']}")
 
     def test_inactive_rows_remain_identifiable_and_unreachable(self):
         entry = self.entry(alive=False)
         row = self.catalog([entry])[0]
-        self.assertEqual(row["address"], f"claude:{entry['sessionId']}")
+        self.assertEqual(row["address"], f"claude-session:{entry['sessionId']}")
         self.assertFalse(row["alive"])
         self.assertFalse(row["reachable"])
         self.assertIs(self.resolve(row["address"], [entry], require_live=False), entry)
@@ -145,8 +143,63 @@ class ClaudeDiscoveryAddressTests(unittest.TestCase):
     def test_text_retains_name_separate_from_address(self):
         entry = self.entry(name="display-worker")
         text = self.catalog([entry], text=True)
-        self.assertIn(f"claude:{entry['sessionId']}", text)
+        self.assertIn(f"claude-session:{entry['sessionId']}", text)
         self.assertIn("name='display-worker'", text)
+
+    def test_f1_saved_identity_never_matches_a_new_name_alias(self):
+        a, b = self.entry(), self.entry(1002)
+        for label, original, after in (
+            ("uuid_alias_after_removed", a, [{**b, "name": a["sessionId"]}]),
+            ("uuid_alias_after_dead", a, [{**a, "alive": False}, {**b, "name": a["sessionId"]}]),
+            ("pid_alias_without_pid_reuse", {**a, "sessionId": None},
+             [{**b, "name": str(a["pid"])}]),
+        ):
+            address = self.catalog([original])[0]["address"]
+            with self.subTest(case=label), self.assertRaises(peer.PeerError) as caught:
+                self.resolve(address, after)
+            self.assertEqual(caught.exception.exit_code, peer.EXIT_TARGET)
+
+    def test_legacy_eight_inputs_across_four_states_keep_exact_outcomes(self):
+        a, b = self.entry(), self.entry(1002)
+        addresses = ("worker", "claude:worker", "1001", "claude:1001",
+                     a["sessionId"], f"claude:{a['sessionId']}",
+                     f"uds:{a['messagingSocketPath']}", "claude:absent")
+        examined = 0
+        for address in addresses:
+            for label, entries in (("single", [a]), ("duplicate-name", [a, b]),
+                                   ("dead", [{**a, "alive": False}]), ("removed", [])):
+                with self.subTest(address=address, state=label):
+                    error = None
+                    if address == "claude:absent" or not entries:
+                        error = f"no Claude session matches {address!r}"
+                    elif label == "dead":
+                        error = f"Claude target {address!r} is not running"
+                    elif label == "duplicate-name" and address in addresses[:2]:
+                        error = f"ambiguous Claude target {address!r}; use one of pids 1001, 1002"
+                    if error:
+                        with self.assertRaises(peer.PeerError) as caught:
+                            self.resolve(address, entries)
+                        self.assertEqual(caught.exception.exit_code, peer.EXIT_TARGET)
+                        self.assertEqual(str(caught.exception), error)
+                    else:
+                        self.assertIs(self.resolve(address, entries), a)
+                    examined += 1
+        self.assertEqual(examined, 32)
+
+    def test_reserved_namespace_names_remain_explicitly_addressable(self):
+        a = self.entry()
+        for name in (f"claude-session:{a['sessionId']}", "claude-pid:1001",
+                     "claude-session:bad", "claude-pid:bad",
+                     "claude-session:", "claude-pid:"):
+            b = self.entry(1002, name=name)
+            with self.subTest(name=name):
+                self.assertIs(self.resolve(f"claude:{name}", [a, b]), b)
+                self.assertIs(self.resolve(f"claude:{name}", [b]), b)
+                with self.assertRaises(peer.PeerError):
+                    self.resolve(name, [b])
+        # Legacy uds: explicitly selects a socket even if it resembles a new key.
+        b = self.entry(1002, messagingSocketPath=f"claude-session:{a['sessionId']}")
+        self.assertIs(self.resolve(f"uds:{b['messagingSocketPath']}", [a, b]), b)
 
     def test_old_exact_name_pid_uuid_and_uds_inputs_preserve_resolution(self):
         entry = self.entry()
@@ -170,6 +223,106 @@ class ClaudeDiscoveryAddressTests(unittest.TestCase):
              mock.patch.object(Path, "exists", return_value=True):
             registry = peer.claude_registry(Path("/synthetic"))
         self.assertEqual([r["pid"] for r in registry], [1001])
+
+    def test_whoami_emits_typed_identity_for_uuid_name_and_pid_fallback(self):
+        a = self.entry()
+        for environment, entry, expected in (
+            ({"CLAUDE_CODE_SESSION_ID": a["sessionId"]}, a, f"claude-session:{a['sessionId']}"),
+            ({"CLAUDE_CODE_SESSION_NAME": "worker"}, a, f"claude-session:{a['sessionId']}"),
+            ({"CLAUDE_CODE_SESSION_NAME": "worker"}, {**a, "sessionId": None}, "claude-pid:1001"),
+        ):
+            output = io.StringIO()
+            with self.subTest(environment=environment), \
+                 mock.patch.dict(peer.os.environ, environment, clear=True), \
+                 mock.patch.object(peer, "claude_registry", return_value=[entry]), \
+                 contextlib.redirect_stdout(output):
+                self.assertEqual(peer.main(["whoami", "--json"]), 0)
+            address = json.loads(output.getvalue())["address"]
+            self.assertEqual(address, expected)
+            self.assertIs(self.resolve(address, [entry]), entry)
+
+    def test_typed_reply_normalizes_for_native_claude_or_carries_script_hint(self):
+        a = self.entry()
+        for address in (f"claude-session:{a['sessionId']}", "claude-pid:1001"):
+            with self.subTest(address=address), \
+                 mock.patch.object(peer, "claude_registry", return_value=[a]):
+                self.assertEqual(peer.normalize_claude_reply("label", address, Path("/synthetic")),
+                                 ("worker", f"uds:{a['messagingSocketPath']}"))
+            with mock.patch.object(peer, "claude_registry", return_value=[]):
+                sender, reply = peer.normalize_claude_reply("label", address, Path("/synthetic"))
+            self.assertEqual((sender, reply), ("label", address))
+            self.assertIn(f"[reply: peer.py send {address}]",
+                          peer.claude_envelope("fixture", sender, reply, "message-1"))
+
+    def test_send_one_and_transcript_consumers_keep_typed_identity_after_exit(self):
+        a = self.entry()
+        b = self.entry(1002, name=a["sessionId"])
+        address = self.catalog([a])[0]["address"]
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw)
+            project = home / "projects" / "fixture"
+            project.mkdir(parents=True)
+            paths = []
+            for entry, reply_id in ((a, "right-reply"), (b, "wrong-reply")):
+                path = project / f"{entry['sessionId']}.jsonl"
+                envelope = peer.claude_envelope("in_reply_to: request-1\nresult: fixture",
+                                               "sender", "uds:/synthetic/sender.sock", reply_id)
+                path.write_text("\n".join(json.dumps({"type": "queue-operation", "operation": "enqueue",
+                                                       "content": content})
+                                          for content in ("message-1", envelope)) + "\n")
+                paths.append(path)
+            registry = [a]
+            client = mock.Mock()
+            client.sendall.side_effect = lambda payload: registry.__setitem__(slice(None), [b])
+            with mock.patch.object(peer, "claude_registry", side_effect=lambda _: registry), \
+                 mock.patch.object(peer, "claude_homes", return_value=[home]), \
+                 mock.patch.object(peer, "claude_token", return_value="synthetic-token"), \
+                 mock.patch.object(peer.socket, "socket", return_value=client):
+                receipt = peer.send_one(address, "fixture", "local-script", None, 0.1,
+                                        home, home, message_id="message-1")
+                self.assertEqual(receipt["target"], address)
+                self.assertEqual(receipt["resolved"]["address"], address)
+                self.assertEqual(receipt["delivery_status"], "verified_enqueued")
+                self.assertEqual(receipt["evidence"], str(paths[0]))
+                found = peer.replies(address, "request-1", 10, home, home)
+            client.connect.assert_called_once_with(a["messagingSocketPath"])
+            self.assertEqual(client.sendall.call_count, 1)
+            self.assertEqual([r["reply_id"] for r in found["replies"]], ["right-reply"])
+            with mock.patch.object(peer, "claude_registry", return_value=[b]), \
+                 mock.patch.object(peer, "claude_token", side_effect=AssertionError("no token read")), \
+                 mock.patch.object(peer.socket, "socket", side_effect=AssertionError("no transport")):
+                with self.assertRaises(peer.PeerError):
+                    peer.send_one(address, "fixture", "local-script", None, 0, home, home)
+
+    def test_coord_typed_prepare_native_claim_and_commit_keep_persisted_actor(self):
+        a, b = self.entry(), self.entry(1002, name="recipient")
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            common = ["--state-dir", str(root)]
+            def command(tail):
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    self.assertEqual(peer.main([*common, "coord", *tail]), 0)
+                return json.loads(output.getvalue())
+            with mock.patch.dict(peer.os.environ, {"CLAUDE_CODE_SESSION_ID": a["sessionId"]}, clear=True), \
+                 mock.patch.object(peer, "claude_registry", return_value=[a, b]):
+                prepared = command(["prepare", f"claude-session:{b['sessionId']}", "--message", "fixture"])
+                self.assertEqual(prepared["metadata"]["sender"], f"claude:{a['sessionId']}")
+                self.assertEqual(prepared["metadata"]["target"], f"claude:{b['sessionId']}")
+                spec = importlib.util.spec_from_file_location(
+                    "discovery_native_guard", Path(peer.__file__).with_name("native_guard.py"))
+                guard = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(guard)
+                event = {"tool_name": "SendMessage", "hook_event_name": "PreToolUse",
+                         "session_id": a["sessionId"], "tool_use_id": "synthetic-use",
+                         "tool_input": {"to": "recipient", "message": prepared["body"]}}
+                with mock.patch.object(guard.peer, "claude_registry", return_value=[a, b]):
+                    self.assertEqual(guard.check(event, root=root, claude_home=root)["status"], "checked")
+            # A lifecycle commit remains possible after its registry rows disappear.
+            with mock.patch.dict(peer.os.environ, {"CLAUDE_CODE_SESSION_ID": a["sessionId"]}, clear=True), \
+                 mock.patch.object(peer, "claude_registry", return_value=[]):
+                committed = command(["commit", "--message-id", prepared["message_id"], "--outcome", "not_sent"])
+            self.assertEqual(committed["status"], "not_sent")
 
 
 class DiscoveryOutputTests(unittest.TestCase):
