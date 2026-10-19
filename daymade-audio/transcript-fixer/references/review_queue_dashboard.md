@@ -76,6 +76,14 @@ an offset remains ambiguous: inspect it and use the explicit offset repair below
 Do not assign it to the first occurrence or discard it as a duplicate. A type or
 candidate conflict is retained; aggregation supplies no new authority.
 
+Exact recorded coordinates are a retry identity only while the strictly decoded
+UTF-8 file has its recorded content fingerprint. Changed files and old anchors
+without that fingerprint require independently unique context; they cannot borrow
+an old line number. Historical decided retries also require the actual unique
+applied context. Replaying an identical proposal for an unresolved multi-slot
+legacy report retains that same ambiguous question without attaching a new
+candidate, refreshing its version or claiming a physical slot.
+
 ### Written authority for nonperson names
 
 Keep omitted `entity_type` as `unknown`; `null`, blank and unrecognised values are

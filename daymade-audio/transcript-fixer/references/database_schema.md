@@ -198,7 +198,9 @@ Normal readers project one representative with its candidate list. Historical
 linked rows remain in `review_items`; verdict/reopen events are audited.
 
 `review_anchors` retains each item's historical verbatim anchors by content
-fingerprint. Refreshing a live anchor after neighbouring edits does not erase
+fingerprint, including the strict UTF-8 source version used for coordinate
+identity. Old records without that version remain unknown rather than being
+retroactively stamped with the current file. Refreshing a live anchor after neighbouring edits does not erase
 the old identity; re-enqueueing an already answered historical anchor stays
 idempotent. It does not assign ambiguous old contexts to guessed positions.
 

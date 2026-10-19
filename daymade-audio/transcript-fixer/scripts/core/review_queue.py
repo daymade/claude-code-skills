@@ -283,6 +283,8 @@ class ReviewQueue:
                     fp = item["file_path"]
                     if fp not in anchor_cache:
                         anchor_cache[fp] = self._read_anchor_source(fp)
+                    if anchor_cache[fp] is not None:
+                        item["_file_fingerprint"] = hashlib.sha256(anchor_cache[fp].encode()).hexdigest()
                     if item["source"] != "stage1_deferred":
                         reason = self._check_anchor_verbatim(item, anchor_cache[fp])
                     if fp not in consolidated:
@@ -299,9 +301,26 @@ class ReviewQueue:
                        """,
                     (item["file_path"], item["original_text"], item["domain"]),
                 ).fetchall()
+                # An old no-offset report may represent an unresolved bag of
+                # several slots. Replaying that EXACT proposal is the same
+                # open question, not evidence that it denotes one body span.
+                # Do not refresh its coordinates/fingerprint or merge a new
+                # proposal into it through this formal-retry branch.
+                proposal_json = self._candidate_json(item)
+                proposal_fp = hashlib.sha256(proposal_json.encode()).hexdigest()
+                legacy_retry = next((row for row in candidates
+                    if row["status"] == PENDING and row["context_offset"] is None
+                    and item["context_offset"] is None and item["line_number"] == row["line_number"]
+                    and item["context_snippet"] == row["context_snippet"]
+                    and (row["context_snippet"] or "").count(item["original_text"]) > 1
+                    and conn.execute("SELECT 1 FROM review_candidates WHERE item_id=? AND fingerprint=?",
+                                     (row["id"], proposal_fp)).fetchone()), None)
+                if legacy_retry is not None:
+                    skipped_dup += 1
+                    continue
                 duplicate = next((row for row in candidates if any(self._same_occurrence(
                     item, anchor, anchor_cache.get(item["file_path"])) for anchor in
-                    [row, *[json.loads(r[0]) for r in conn.execute("SELECT payload_json FROM review_anchors WHERE item_id=?", (row["id"],))]])), None)
+                    self._identity_anchors(conn, row))), None)
                 if duplicate is not None:
                     self._store_anchor(conn, duplicate["id"], dict(duplicate))
                     self._store_anchor(conn, duplicate["id"], item)
@@ -375,18 +394,30 @@ class ReviewQueue:
 
     @staticmethod
     def _store_anchor(conn, item_id: int, item: dict[str, Any]) -> None:
-        payload = {k: item.get(k) for k in ("original_text", "line_number", "context_snippet", "context_offset")}
+        payload = {k: item.get(k) for k in ("original_text", "line_number", "context_snippet", "context_offset", "_file_fingerprint")}
         serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
         conn.execute("INSERT OR IGNORE INTO review_anchors VALUES (?, ?, ?)",
                      (item_id, hashlib.sha256(serialized.encode()).hexdigest(), serialized))
 
     @staticmethod
-    def _store_candidate(conn, item_id: int, item: dict[str, Any]) -> bool:
-        """Append distinct proposals; never replace a suggestion, evidence or action pack."""
+    def _identity_anchors(conn, row) -> list[dict[str, Any]]:
+        current = dict(row)
+        # Current verdict metadata belongs to the item, even when considering
+        # an older anchor. A historical coordinate is not a frozen verdict.
+        return [current, *[{**current, **json.loads(r[0])} for r in conn.execute(
+            "SELECT payload_json FROM review_anchors WHERE item_id=?", (row["id"],))]]
+
+    @staticmethod
+    def _candidate_json(item: dict[str, Any]) -> str:
         payload = {key: item.get(key) for key in (
             "source", "suggested_text", "kind", "entity_type", "evidence", "provenance")}
         payload["actions"] = item.get("actions", json.loads(item.get("actions_json") or "[]"))
-        serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        return json.dumps(payload, ensure_ascii=False, sort_keys=True)
+
+    @staticmethod
+    def _store_candidate(conn, item_id: int, item: dict[str, Any]) -> bool:
+        """Append distinct proposals; never replace a suggestion, evidence or action pack."""
+        serialized = ReviewQueue._candidate_json(item)
         fingerprint = hashlib.sha256(serialized.encode()).hexdigest()
         return bool(conn.execute("INSERT OR IGNORE INTO review_candidates VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
                                  (item_id, fingerprint, serialized)).rowcount)
@@ -399,13 +430,28 @@ class ReviewQueue:
         A legacy anchor lacking context is not a wildcard over all same-line
         occurrences. Only merge differing contexts when both locate one span.
         """
-        if (item["line_number"] == row["line_number"]
+        same_record = (item["line_number"] == row["line_number"]
                 and (item["context_snippet"] or "") == (row["context_snippet"] or "")
-                and item["context_offset"] == row["context_offset"]):
+                and item["context_offset"] == row["context_offset"])
+        prior = dict(row)
+        if same_record and content is None:
+            return item.get("suggested_text") == prior.get("suggested_text")
+        if same_record and prior.get("_file_fingerprint") == hashlib.sha256(content.encode()).hexdigest():
             return True
         if content is None:
             return False
         masked, _ = _mask_ledger_spans(content)
+        # A decided retry after an edit needs the actual applied form at that
+        # recorded slot. Equal old coordinates alone do not prove a retry.
+        resolved = prior.get("resolved_text")
+        if same_record and prior.get("status") in ("accepted", "overridden") and resolved:
+            try:
+                focused = ReviewQueue._focused_context(row["original_text"], row["context_snippet"], row["context_offset"])
+                applied = focused.replace(row["original_text"], resolved, 1) if focused and focused.count(row["original_text"]) == 1 else None
+                if applied and focused not in masked and masked.count(applied) == 1:
+                    return True
+            except ReAnchorNeeded:
+                pass
         try:
             positions = [ReviewQueue._occurrence_position(masked, anchor) for anchor in (item, row)]
         except ReAnchorNeeded:
@@ -516,9 +562,9 @@ class ReviewQueue:
         if not path.is_file():
             return None
         try:
-            with open(path, encoding="utf-8", errors="replace", newline="") as f:
+            with open(path, encoding="utf-8", newline="") as f:
                 return f.read()
-        except OSError:
+        except (OSError, UnicodeError):
             return None
 
     @staticmethod
@@ -697,7 +743,8 @@ class ReviewQueue:
         line_start = sum(len(ln) for ln in masked.splitlines(keepends=True)[:line_no - 1])
         new_offset = position - line_start - (len(lines[line_no - 1]) - len(lines[line_no - 1].lstrip()))
         proposed = {"original_text": item.original_text, "line_number": line_no,
-                    "context_snippet": new_context, "context_offset": new_offset}
+                    "context_snippet": new_context, "context_offset": new_offset,
+                    "_file_fingerprint": hashlib.sha256(content.encode()).hexdigest()}
         # A re-point must not collide with another pending item's dedup key —
         # that would strand a permanently unresolvable duplicate in the queue.
         with self._connect() as conn:
@@ -714,7 +761,8 @@ class ReviewQueue:
                  item.domain, line_no),
             ).fetchall()
             collision = next((row for row in collisions
-                              if self._same_occurrence(proposed, row, content)
+                              if any(self._same_occurrence(proposed, anchor, content)
+                                     for anchor in self._identity_anchors(conn, row))
                               or (not row["context_snippet"] and row["context_offset"] is None
                                   and lines[line_no - 1].count(item.original_text) == 1)), None)
             if collision:
@@ -731,6 +779,7 @@ class ReviewQueue:
             if cur.rowcount != 1:
                 raise ReviewQueueError(
                     f"item {item_id} changed status while re-anchoring — re-read and retry")
+            self._store_anchor(conn, item_id, proposed)
             # Explicit action packs carry their own file paths/line hints.
             # file_edit.expect_line must follow ANY line move — not just
             # re-points: a stale expect_line OUTRANKS item.line_number at

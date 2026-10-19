@@ -292,3 +292,80 @@ def test_selected_candidate_uses_its_kind_and_evidence(isolated, tmp_path, monke
                          "--decision", "accepted", "--review-candidate", 1)
     assert status == 2 and result["error"] == "target_unknown"
     assert file.read_bytes() == before and isolated.get(item_id).status == "pending"
+
+
+def test_coordinate_equality_requires_its_recorded_file_version(isolated, tmp_path):
+    file = tmp_path / "meeting.md"
+    text = "deploy actor now"
+    file.write_text(text + "\n" + text + "\n")
+    rows = [{"file": str(file), "line": line, "context": text, "original": "actor",
+             "suggested": "action", "kind": "wording"} for line in (1, 2)]
+    ids = isolated.enqueue(rows)["added"]
+    # Same version: exact recorded coordinates remain a valid retry identity.
+    assert isolated.enqueue(rows)["skipped_duplicates"] == 2
+    file.write_text("heading\n" + file.read_text())
+    fresh = {**rows[0], "line": 2, "suggested": "agentic"}
+    result = isolated.enqueue([fresh])
+    # The old second row's line=2 is no longer proof of the first current slot.
+    assert result["added"] and not result["merged_candidates"]
+    assert {c["suggested_text"] for c in isolated.get(ids[1]).candidates} == {"action"}
+    assert isolated.stats(file_path=str(file))["pending_total"] == 3
+    assert isolated.consolidate(str(file))["linked"] == []
+
+
+def test_legacy_no_fingerprint_does_not_invent_coordinate_authority(isolated, tmp_path):
+    file = tmp_path / "meeting.md"
+    text = "deploy actor now"
+    file.write_text(text + "\n" + text + "\n")
+    row = {"file": str(file), "line": 1, "context": text, "original": "actor",
+           "suggested": "action", "kind": "wording"}
+    item_id = isolated.enqueue([row])["added"][0]
+    with sqlite3.connect(isolated.db_path) as conn:
+        conn.execute("DELETE FROM review_anchors")
+    result = isolated.enqueue([{**row, "suggested": "agentic"}])
+    assert result["added"] and not result["merged_candidates"]
+    assert isolated.get(item_id).suggested_text == "action"
+
+
+def test_decided_historical_retry_requires_unique_applied_context(isolated, tmp_path):
+    file = tmp_path / "meeting.md"
+    text = "deploy actor now"
+    file.write_text(text)
+    row = {"file": str(file), "line": 1, "context": text, "original": "actor",
+           "suggested": "action", "kind": "wording"}
+    item_id = isolated.enqueue([row])["added"][0]
+    isolated.resolve(item_id, "accepted")
+    assert isolated.enqueue([row])["added"] == []
+    file.write_text("heading\n" + text + "\n" + text + "\n")
+    # An indistinguishable raw utterance is not proof of an applied retry.
+    result = isolated.enqueue([{**row, "line": 2}])
+    assert result["added"]
+    assert isolated.get(item_id).status == "accepted"
+
+
+def test_ambiguous_legacy_exact_retry_does_not_gain_a_new_file_version(isolated, tmp_path):
+    file = tmp_path / "meeting.md"
+    text = "deploy actor then inspect actor"
+    file.write_text(text)
+    row = {"file": str(file), "line": 1, "context": text, "original": "actor",
+           "suggested": "action", "kind": "wording", "source": "stage1_deferred"}
+    item_id = isolated.enqueue([row])["added"][0]
+    with sqlite3.connect(isolated.db_path) as conn:
+        anchors_before = list(conn.execute("SELECT * FROM review_anchors"))
+    file.write_text("heading\n" + text.replace("inspect", "review"))
+    assert isolated.enqueue([row])["added"] == []
+    assert isolated.get(item_id).status == "pending"
+    with sqlite3.connect(isolated.db_path) as conn:
+        assert list(conn.execute("SELECT * FROM review_anchors")) == anchors_before
+
+
+def test_invalid_utf8_never_acquires_a_content_fingerprint(isolated, tmp_path):
+    file = tmp_path / "meeting.md"
+    file.write_bytes(b"deploy actor \xff now")
+    assert ReviewQueue._read_anchor_source(str(file)) is None
+    row = {"file": str(file), "line": 1, "context": "deploy actor \ufffd now",
+           "original": "actor", "suggested": "action", "kind": "wording"}
+    item_id = isolated.enqueue([row])["added"][0]
+    with sqlite3.connect(isolated.db_path) as conn:
+        anchors = [json.loads(r[0]) for r in conn.execute("SELECT payload_json FROM review_anchors WHERE item_id=?", (item_id,))]
+    assert all(a["_file_fingerprint"] is None for a in anchors)
