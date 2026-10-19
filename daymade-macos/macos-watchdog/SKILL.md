@@ -22,6 +22,7 @@ stand down without waiting for a human to disable it.
 | The situation is… | Go to |
 |---|---|
 | Installing a NEW watchdog from scratch | Select the trigger through `references/event-driven-observers.md`, then § Deploy and § The quiet-watchdog contract |
+| Installing, upgrading, reusing or starting a persistent Python job | § Persistent Python runtime |
 | An existing watchdog misbehaves (spam, re-launches apps, hammers) | § The quiet-watchdog contract, diagnose which clause it violates |
 | Stopping / disabling / restarting a job | § Stop semantics |
 | plist key details (KeepAlive forms, domains, logging, resource limits) | `references/launchd-plist-reference.md` |

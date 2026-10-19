@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Locked dependency patches** (`daymade-skill` v1.70.7; `peer-message` v1.22.3): Refresh Creator's urllib3 lock and compatible network-preview transitive dependencies while retaining direct dependency pins, package interfaces and installation commands. Change type: security dependency maintenance.
 - **Document routing visibility** (`daymade-docs` v1.25.5): Keep complete document-task signals within the shortened Codex catalog prefix observed in a fresh host; preserve the full routing table and manual commands. Change type: discovery-contract repair.
+- **macos-cleaner / macos-watchdog** (`daymade-macos` v1.23.9): Route repository and README entries to the canonical uv retirement and persistent-runtime procedures; remove duplicated instructions, unsafe cleanup examples and derived summaries. Change type: bounded documentation alignment.
+
 - **prior-work-retrieval** (`daymade-claude-code` v4.30.12): Clarify the installed-Skill working directory for bundled commands and align ordinary creation, implementation and status-check eval expectations with the existing explicit-history trigger. Route manifest selection from repository instructions. Change type: existing-contract documentation repair.
 
 - **macos-cleaner / macos-watchdog** (`daymade-macos` v1.23.8): Distinguish uv cache artifacts from persistent runtimes, bound exact-package cleanup waits, and separate Python service preparation from startup while retaining verified FDA launchers. Change type: bounded operating-procedure guidance.
