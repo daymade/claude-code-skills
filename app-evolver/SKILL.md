@@ -31,6 +31,12 @@ Before research or edits, establish:
   deliverables, protected behavior/data and stopping condition.
 - Analysis-only versus implementation authorization, and any unresolved
   product choice whose answer changes the outcome.
+- Scope of the learning task. For a broad product or competitor learning
+  effort, let the bound device and operator roles and the complete intended
+  user result, with its impact judgments, constrain the research questions
+  before selecting any single technical scenario for study. Keep a task about
+  a single feature or a known defect narrow; do not expand it into a
+  whole-product report.
 
 Reuse earlier user decisions; ask in the current conversation only for missing
 information or a real unresolved choice. Use the host's question tool when
@@ -47,6 +53,13 @@ judgment to an immutable ref; inspect current runtime/config separately. Preserv
 other writers' work and coordinate overlapping ownership before editing.
 On resume, reconcile the latest request, actual artifacts and unfinished evidence;
 continue from the first unmet result rather than replaying the original plan.
+Apply the same reconciliation when the user corrects a premise, redirects
+attention or explicitly changes scope mid-task: update the binding to match,
+retract only the conclusions that depended on the superseded premise, and
+reuse unrelated already-verified facts. Select the next research question
+under the current authorized task. Correcting one example does not promote
+that example into the whole task, and a genuine scope narrowing takes effect
+rather than being treated as a passing remark.
 
 ## 2. Ground opportunities and constraints
 
