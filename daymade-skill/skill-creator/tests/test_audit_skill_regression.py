@@ -1433,6 +1433,62 @@ def _git_repo_with_commit(root: Path) -> str:
     return commit
 
 
+@pytest.mark.skipif(os.name != "posix", reason="POSIX tar permission contract")
+def test_git_archive_recipe_preserves_executable_bits_under_restrictive_umask(tmp_path):
+    """Run the documented extraction shape on a real committed executable."""
+    repo = tmp_path / "repo"
+    skill = _make_skill(repo / "skill", "- Keep offline recovery available.")
+    runner = skill / "run.sh"
+    runner.write_text("#!/bin/sh\nprintf 'ready\\n'\n", encoding="utf-8")
+    runner.chmod(0o755)
+    commit = _git_repo_with_commit(repo)
+    archive = tmp_path / "baseline.tar"
+    archive.write_bytes(subprocess.check_output(["git", "-C", str(repo), "archive", commit, "skill"]))
+
+    for name, option in (("plain", "-x"), ("preserved", "-xp")):
+        destination = tmp_path / name
+        destination.mkdir()
+        subprocess.run(
+            ["sh", "-c", 'umask 077; exec tar "$@"', "extract", option,
+             "-f", str(archive), "-C", str(destination)],
+            check=True, capture_output=True,
+        )
+        assert (destination / "skill" / "run.sh").read_bytes() == runner.read_bytes()
+
+    with pytest.raises(ValueError, match=r"run\.sh: executable bits differ .*111, found 100"):
+        build_report(tmp_path / "plain" / "skill", skill, baseline_origin=f"git-ref:{commit}")
+    preserved = tmp_path / "preserved" / "skill"
+    report = build_report(preserved, skill, baseline_origin=f"git-ref:{commit}")
+    assert report["before"]["provenance"]["resolved_commit"] == commit
+    (preserved / "run.sh").write_text("changed bytes\n", encoding="utf-8")
+    with pytest.raises(ValueError, match=r"run\.sh: content differs"):
+        build_report(preserved, skill, baseline_origin=f"git-ref:{commit}")
+
+
+@pytest.mark.parametrize("mutation, expected", [
+    ("missing", "run.sh: missing file"),
+    ("unexpected", "extra.md: unexpected file"),
+    ("mode", "run.sh: executable bits differ"),
+])
+def test_git_ref_mismatch_diagnostic_does_not_accept_tampered_baselines(tmp_path, mutation, expected):
+    repo = tmp_path / "repo"
+    skill = _make_skill(repo / "skill", "- Keep offline recovery available.")
+    runner = skill / "run.sh"
+    runner.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    runner.chmod(0o755)
+    commit = _git_repo_with_commit(repo)
+    before = tmp_path / "before"
+    create_baseline_snapshot(skill, before)
+    if mutation == "missing":
+        (before / "run.sh").unlink()
+    elif mutation == "unexpected":
+        (before / "extra.md").write_text("unexpected\n", encoding="utf-8")
+    else:
+        (before / "run.sh").chmod(0o644)
+    with pytest.raises(ValueError, match=expected):
+        build_report(before, skill, baseline_origin=f"git-ref:{commit}")
+
+
 def test_git_ref_baseline_when_skill_is_repo_root(tmp_path):
     # skill 目录即仓根（SKILL.md 直接在 repo 根）：git-ref baseline 不得报
     # "Git baseline does not contain ./SKILL.md"（prefix 曾恒拼成 "./" 永不匹配）

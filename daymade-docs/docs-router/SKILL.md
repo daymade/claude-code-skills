@@ -1,9 +1,8 @@
 ---
 name: docs-router
 description: >-
-  Routes docs: Word/PDF/PPTX/saved HTML→Markdown; MD/Word→PDF; create Word; PDF
-  HTML/translate; Excel/xlsm/macOS; photo/signed scans; Mermaid; DOCX review;
-  post-change docs. Reads one bundled Daymade specialist. New slide decks use
+  Word/PDF/PPTX/HTML→Markdown;MD/Word→PDF;create Word;PDF HTML/translate;Excel/xlsm/macOS;photo/signed scans;Mermaid;DOCX review;post-change docs.
+  Reads one bundled Daymade specialist. New slide decks use
   deck-creator when installed; generic PDF reading/editing and spreadsheet
   analysis stay with their own Skills. Retired ppt-creator stays manual-only.
 ---
@@ -55,7 +54,7 @@ Do not select a Daymade child for a new slide deck or generic PPT work. Use
 `deck-creator` for new presentation creation only when it is installed. If it
 is unavailable, this suite has no automatic current PPT builder; external
 users may explicitly invoke the retired `/daymade-docs:ppt-creator` for
-compatibility. General PDF reading/editing,
+its compatibility notice only, not PPT generation. General PDF reading/editing,
 ordinary spreadsheet analysis, and other tasks without a matching row remain
 with their owning skills or normal workflow. If the result is unclear, inspect
 the actual file/task or ask for the missing input or output; do not guess a

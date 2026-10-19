@@ -23,7 +23,7 @@
       "description": "Improves an existing application using its code, product contract, authorized work history and competitor evidence. Use for 取长补短、取其精华去其糟粕、参考竞品优化应用 or evolving an app from successful and failed work. Carries authorized changes through implementation and user-result verification, including REA and reverse Skill composition; use skill-evolver for Skills.",
       "source": "./app-evolver",
       "strict": false,
-      "version": "1.1.4",
+      "version": "1.1.5",
       "category": "developer-tools",
       "keywords": [
         "app-improvement",
@@ -93,7 +93,7 @@
       "description": "Bridge local Claude Code and Codex sessions only when the current host's native communication tools do not cover the target. Use for cross-product messages, hooks/scripts posting to sessions, fallback reply lookup and delivery verification, or diagnosing Held peer messages. Also use its coordination guidance when shared-work ownership or an inbound peer assertion needs verification. For ordinary parent/subagent, teammate, or independent-session communication, first discover and use available native tools; do not load this skill merely to send a native message. The bundled network preview for cross-machine pairing is deprecated (existing deployments only; invitations use the peer-message:v1 format). Never bypass a denied or Held message with another transport. Not for spawning agents, moving full history, or granting user approval. Triggers: 跨产品通信、原生工具未覆盖的会话、脚本回帖、peer 送达排查、共享在制品归属核实、peer-message:v1 邀请（既有部署）。",
       "source": "./peer-message",
       "strict": false,
-      "version": "1.22.2",
+      "version": "1.22.3",
       "category": "communication",
       "keywords": [
         "agent-communication",
@@ -167,7 +167,7 @@
       "description": "Claude Code operations suite that bundles cross-project prior-work retrieval across code, docs, Skills, meetings, WeChat archives, and conversation history; provider-separated Claude Code and Codex history readers; identity- and lineage-gated continuation workflows; plugin/skill troubleshooting; CLAUDE.md progressive disclosure optimization; version-synced Lark CLI routing; statusline configuration; exported .txt repair; full claude.ai conversation extraction with tool-call rendering and file download; plugin marketplace development and suite consolidation; writing/testing/debugging Claude Code hooks; multi-provider profile isolation; personal-memory migration into tool-agnostic AGENTS.md reference docs; one-shot local timers that ping Claude right after subscription quota reset to start a fresh 5-hour usage window; working web search installed on an agent whose relayed model backend cannot execute the built-in one; and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
       "source": "./daymade-claude-code",
       "strict": false,
-      "version": "4.30.12",
+      "version": "4.30.13",
       "category": "suite",
       "keywords": [
         "suite",
@@ -248,10 +248,10 @@
     },
     {
       "name": "daymade-docs",
-      "description": "Routes docs: Word/PDF/PPTX/saved HTML→Markdown; MD/Word→PDF; create Word; PDF HTML/translate; Excel/xlsm/macOS; photo/signed scans; Mermaid; DOCX review; post-change docs. Reads one bundled Daymade specialist. New slide decks use deck-creator when installed; generic PDF reading/editing and spreadsheet analysis stay with their own Skills. Retired ppt-creator stays manual-only.",
+      "description": "Word/PDF/PPTX/HTML→Markdown;MD/Word→PDF;create Word;PDF HTML/translate;Excel/xlsm/macOS;photo/signed scans;Mermaid;DOCX review;post-change docs. Reads one bundled Daymade specialist. New slide decks use deck-creator when installed; generic PDF reading/editing and spreadsheet analysis stay with their own Skills. Retired ppt-creator stays manual-only.",
       "source": "./daymade-docs",
       "strict": false,
-      "version": "1.25.3",
+      "version": "1.25.5",
       "category": "suite",
       "keywords": [
         "suite",
@@ -326,7 +326,7 @@
       "description": "Apple-platform development and operations suite for macOS window capture, TCC permission diagnosis and Full Disk Access repair, iOS/macOS app development, disk cleanup, and launchd watchdogs.",
       "source": "./daymade-macos",
       "strict": false,
-      "version": "1.23.7",
+      "version": "1.23.9",
       "category": "suite",
       "keywords": [
         "suite",
@@ -353,7 +353,7 @@
       "description": "Audio processing suite covering the full speech pipeline: ASR transcription (Qwen3, StepFun) with batch-mode guards against music-only repetition-loop hallucinations, speaker diarization and CAM++ voiceprint identification for multi-speaker recordings, transcript error correction, structured meeting minutes generation, and TTS voice synthesis (StepFun). Install once for the complete audio workflow.",
       "source": "./daymade-audio",
       "strict": false,
-      "version": "1.49.3",
+      "version": "1.50.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -380,7 +380,7 @@
       "description": "Daymade skills core suite. Bundles skill creation, quality review, real Claude/Codex Skill-surface governance, suite-migration reconciliation, and marketplace development tooling under one shared namespace. Skill governance separates canonical source, installed inventory, discovery policy, the fresh model-visible catalog, and router-resolved cold resources instead of optimizing cache counts; it preserves Claude's official versioned-cache lifecycle and verifies selected entries in the real host prompt. Skill verification separates risk classification from evaluation spend: bounded fixes use targeted checks, narrow behavior changes use sampled replays, and paired baselines, graders, benchmarks, or a viewer run only after explicit user authorization or a decision-bearing evidence plan plus opt-in; that authorization does not change the risk tier. Existing-skill edits retain an old-vs-new capability audit and content-bound packaging attestation so prompt compression cannot silently delete runtime contracts. When the official skill-creator plugin is also installed, skill-creator detects the coexistence and offers a consent-based, reversible SessionStart routing hook so the daymade edition wins deterministically; on machines without the official plugin nothing is ever installed.",
       "source": "./daymade-skill",
       "strict": false,
-      "version": "1.70.5",
+      "version": "1.70.8",
       "category": "suite",
       "keywords": [
         "suite",
@@ -706,7 +706,7 @@
       "description": "QA process setup with AAA test cases, P0-P4 bug tracking, metrics reports, OWASP security testing and third-party handoffs. Use for test planning, approved-batch execution and checkpoint recovery through the bundled master prompt.",
       "source": "./qa-expert",
       "strict": false,
-      "version": "1.2.0",
+      "version": "1.2.1",
       "category": "developer-tools",
       "keywords": [
         "qa",
@@ -773,10 +773,10 @@
     },
     {
       "name": "slides-creator",
-      "description": "【DEPRECATED · 已废弃】叙事优先的幻灯片创建方法论已于 2026-08-07 并入 deck-creator（作者私有仓 Route A）。本条目仅为退役通告保留，请勿调用。",
+      "description": "Deprecated slide-creation entry retained as a compatibility notice. Use to check the retirement status of slides-creator or identify a legacy installation. This package does not generate slides or delegate presentation creation.",
       "source": "./slides-creator",
       "strict": false,
-      "version": "2.1.0",
+      "version": "2.1.1",
       "category": "content-creation",
       "keywords": [
         "slides",

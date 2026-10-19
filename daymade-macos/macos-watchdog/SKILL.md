@@ -22,6 +22,7 @@ stand down without waiting for a human to disable it.
 | The situation is… | Go to |
 |---|---|
 | Installing a NEW watchdog from scratch | Select the trigger through `references/event-driven-observers.md`, then § Deploy and § The quiet-watchdog contract |
+| Installing, upgrading, reusing or starting a persistent Python job | § Persistent Python runtime |
 | An existing watchdog misbehaves (spam, re-launches apps, hammers) | § The quiet-watchdog contract, diagnose which clause it violates |
 | Stopping / disabling / restarting a job | § Stop semantics |
 | plist key details (KeepAlive forms, domains, logging, resource limits) | `references/launchd-plist-reference.md` |
@@ -90,6 +91,51 @@ Verify the completed business round separately from registration or process stat
 6. **TCC / Full Disk Access**: a LaunchAgent reading protected files needs a working grant for its effective permission subject. Use `macos-permissions` to inspect TCC attribution and verify a protected read from the actual job; the shell's interpreter path alone does not decide this.
 7. **Batch throttling by default**: any watchdog loop that spawns work (replays, fuzz, batch scans, parallel API calls) needs an explicit rate cap as a default parameter, not a later optimization. To the machine, an unthrottled loop and a runaway process are indistinguishable (real case: an unthrottled test replay forked 1,041 processes/sec for 7 minutes and pushed the die to 83 °C).
 8. **Browser side-effect acceptance**: a successful data fetch alone does not prove a browser-backed watchdog is ready. The deploying operator must declare a budget for task-owned spaces and pages, then independently inventory them across multiple rounds, including injected initialization and cleanup failures. Counts must stay within that lifecycle budget; protect user-owned and unknown-origin pages throughout. If the task requires no focus stealing, independently observe the foreground app and visible windows during those rounds; CDP success is not focus evidence. For ego lite lifecycle, locking, ownership conflicts and cleanup readback, load the named Skill `ego-lite-use` when installed. Otherwise use the owning browser tool's documented lifecycle while meeting the same budget and readback requirements. Missing resource observations, or missing focus observations when no focus stealing is required, leave acceptance incomplete.
+
+### Persistent Python runtime
+
+For a persistent Python job, separate dependency preparation from normal startup:
+
+- **Install/upgrade:** use the owning installer's explicit prepare action to
+  create a persistent environment outside uv's cache from retained locked inputs.
+  Bind the selected Python series, complete frozen distribution set and base
+  interpreter to that installation. Keep dependency changes in this phase.
+- **Reuse:** execute the environment's actual Python to compare its series and
+  complete installed distribution names/versions with those frozen inputs, and
+  verify its resolved base Python still exists and runs. A ready marker or a
+  matching Python series alone does not validate the environment. Reject an empty,
+  mismatched or broken environment; resume the authorized prepare action rather
+  than silently accepting it.
+- **Run:** register the absolute environment Python path in `ProgramArguments`
+  and invoke the service entry directly. Fail visibly when that runtime is missing
+  or invalid; do not silently fall back to `uv run`, another interpreter, or an
+  install during startup. Check inherited variables and startup hooks when they
+  could redirect the selected runtime. Finite maintenance scripts may still use
+  their declared `uv run` workflow.
+
+Before switching an existing job, retain the ownership, active-work and pending
+intent checks from § Deploy. Preserve its canonical configuration and rollback
+target; compare the live configuration with the inspected version immediately
+before replacing it, and stop on drift. Use the existing native readback and
+completed business-round acceptance through the actual consumer; a marker, PID
+or HTTP health response does not replace that result. The deploying operator
+owns these checks; this Skill does not supply a generic environment installer.
+
+Keep permission attribution separate from Python environment selection. When a
+native executable needs an already authorized launcher's FDA identity, follow
+`macos-permissions` and its
+[measured uv attribution case](../macos-permissions/references/uv-fda-trap.md).
+If the real protected read proves that exact `uv` launcher is required, retain
+the verified responsibility chain. For a native executable, the installed uv's
+supported `uv run --no-project --offline --no-cache -- <absolute-binary> ...` form
+can avoid the shared main cache while preserving that launcher; verify the same
+protected operation from the real job before accepting it. Do not generalize this
+exception to Python dependency startup. `--no-cache` uses a temporary cache; it
+does not promise zero temporary disk use or, for other Python tasks, zero downloads.
+
+Consult [uv's environment-use guidance](https://docs.astral.sh/uv/guides/integration/docker/#using-the-environment)
+for direct environment execution and its
+[cache documentation](https://docs.astral.sh/uv/concepts/cache/) for `--no-cache`.
 
 ## Stop semantics (the deprecated trap)
 

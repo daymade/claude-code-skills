@@ -202,6 +202,8 @@ async function renderCard() {
     : (it.file_path && it.suggested_text
         ? [{ type: "file_edit" }] : []);
   const pending = it.status === "pending";
+  const candidates = it.candidates || [];
+  const conflicting = new Set(candidates.map(c => c.suggested_text).filter(Boolean)).size > 1;
   area.innerHTML = `
   <div class="card">
     <div class="card-head">
@@ -223,12 +225,13 @@ async function renderCard() {
       ${actions.map((a) => `<span class="action-chip">${ACTION_LABEL[a.type] || esc(a.type)}</span>`).join("")}
     </div>
     ${it.evidence ? `<div class="evidence"><b>证据：</b>${esc(it.evidence)}</div>` : ""}
+    ${candidates.length > 1 ? `<div class="evidence"><b>候选与来源：</b>${candidates.map(c => `<p>${esc(c.suggested_text || "")} · ${esc(c.source || "")}<br>${esc(c.evidence || "")}${c.provenance ? `<br>${esc(JSON.stringify(c.provenance))}` : ""}</p>`).join("")}${conflicting ? "<p>候选有冲突，请用「改成…」明确选择。</p>" : ""}</div>` : ""}
     <div class="audio-row" id="audio-row"></div>
     <div class="context" id="context-box"><div class="ctx-note">加载上下文…</div></div>
     ${!pending ? renderResolved(it) : ""}
     ${pending ? `
     <div class="decide-bar">
-      <button class="btn accept" data-decide="accepted" ${it.suggested_text ? "" : "disabled"}><kbd>A</kbd>接受建议</button>
+      <button class="btn accept" data-decide="accepted" ${it.suggested_text && !conflicting ? "" : "disabled"}><kbd>A</kbd>接受建议</button>
       <button class="btn keep" data-decide="kept_original"><kbd>R</kbd>原文正确</button>
       <button class="btn" data-decide="override"><kbd>W</kbd>改成…</button>
       <button class="btn" data-decide="skipped"><kbd>S</kbd>跳过/不认识</button>

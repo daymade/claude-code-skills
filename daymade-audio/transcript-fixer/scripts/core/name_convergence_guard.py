@@ -40,6 +40,7 @@ import json
 import re
 from dataclasses import dataclass
 from typing import Callable, Optional
+from pathlib import Path
 
 from rapidfuzz.distance import Levenshtein
 
@@ -145,6 +146,42 @@ _DENIED_AUTHORITY_RE = re.compile(r"不声称|没有")
 _DENIAL_OBJECT_PREFIX_RE = re.compile(r"(?:\s|任何|取得|获得|有效的?)*")
 
 USER_ANSWER_PREFIX = "[user_answer] "
+ENTITY_REFERENCE_PREFIX = "[entity_reference] "
+NONPERSON_CUES = {
+    "system": ("系统", "平台", "system", "platform"),
+    "product": ("产品", "软件", "product", "software"),
+    "organization": ("公司", "集团", "机构", "company", "organization"),
+    "place": ("市", "区", "县", "镇", "路", "city", "district"),
+}
+
+
+def entity_reference_citation(record: object, *, item_id: int, target: str,
+                              entity_type: str, original: str, context: Optional[str]) -> str:
+    """Verify a typed written citation and its actual source quote.
+
+    This is not an identity classifier. The operator still judges source authority;
+    a free nonperson label alone never waives the person-name guard.
+    """
+    if not isinstance(record, dict) or record.get("kind") != "entity_reference":
+        raise ValueError("authority record requires kind=entity_reference")
+    if entity_type not in NONPERSON_CUES or record.get("entity_type") != entity_type:
+        raise ValueError("entity_reference requires the item's explicit nonperson entity_type")
+    if type(record.get("item_id")) is not int or record["item_id"] != item_id or record.get("target") != target:
+        raise ValueError("entity_reference item_id/target does not match this verdict")
+    for key in ("source_ref", "source_path", "quote"):
+        if not isinstance(record.get(key), str) or not record[key].strip():
+            raise ValueError(f"entity_reference requires nonempty {key}")
+    quote = record["quote"]
+    if target not in quote:
+        raise ValueError("entity_reference quote must contain the exact target")
+    source = Path(record["source_path"]).expanduser()
+    if quote not in source.read_text(encoding="utf-8"):
+        raise ValueError("entity_reference quote is absent from source_path")
+    # A typed citation must also describe this occurrence as that referent.
+    cues = NONPERSON_CUES[entity_type]
+    if not context or not any(re.search(re.escape(original) + r"\s*" + re.escape(cue), context, re.I) for cue in cues):
+        raise ValueError("this occurrence has no explicit adjacent cue for entity_type")
+    return ENTITY_REFERENCE_PREFIX + json.dumps(record, ensure_ascii=False, separators=(",", ":"))
 
 # This is a citation syntax, not an open-ended sentiment classifier. A target
 # mention (including a target followed by a rejection) cannot testify for itself.
@@ -362,6 +399,8 @@ def guard(
     kind: Optional[str],
     *,
     lookup_fn: Callable[[str], NameLookup],
+    entity_type: str = "unknown",
+    nonperson_reference_validated: bool = False,
 ) -> Optional[GuardRejection]:
     """Decide whether converging ``from_text`` onto ``to_text`` may be written.
 
@@ -372,7 +411,27 @@ def guard(
     from/to pair matches the phonetic-neighbour shape (so --add, which carries
     no kind, is still gated on exactly the incident shape).
     """
-    if kind not in PERSON_NAME_KINDS and not is_person_name_shape(from_text, to_text):
+    if entity_type in NONPERSON_CUES:
+        # Known people cannot be relabelled into products/systems to get a
+        # written-reference exception. Roster variants also remain protected.
+        people = [lookup_fn(term) for term in (from_text, to_text)]
+        if any(claim.roster_entry or claim.roster_variant_of for claim in people):
+            return GuardRejection("nonperson_roster_conflict", "nonperson type conflicts with a recorded person; retain the person-name authority route")
+        for line in (evidence or "").splitlines() if nonperson_reference_validated else []:
+            if ENTITY_REFERENCE_PREFIX not in line:
+                continue
+            try:
+                record = json.loads(line.split(ENTITY_REFERENCE_PREFIX, 1)[1])
+                if record.get("target") == to_text and record.get("entity_type") == entity_type:
+                    # Actual source/occurrence validation is done by the CLI
+                    # before this pure decision function. Only this typed
+                    # citation opens the nonperson branch, never prose keywords.
+                    if all(isinstance(record.get(k), str) and record[k].strip() for k in ("source_ref", "source_path", "quote")) and to_text in record["quote"]:
+                        return None
+            except (ValueError, TypeError, AttributeError):
+                pass
+        return GuardRejection("nonperson_authority_required", "explicit nonperson entity_type requires a validated entity_reference --authority-record; a type label or business prose alone is insufficient")
+    if kind not in PERSON_NAME_KINDS and entity_type != "person" and not is_person_name_shape(from_text, to_text):
         return None
 
     look = lookup_fn(to_text)

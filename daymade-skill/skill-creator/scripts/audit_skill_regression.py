@@ -170,13 +170,13 @@ def _git_output(repo: Path, *args: str, text: bool = True) -> str | bytes:
     return result.stdout
 
 
-def _git_tree_hash(
+def _git_tree_entries(
     repo: Path,
     commit: str,
     skill_rel: Path,
     inclusion_policy: Any,
-) -> str:
-    """Hash the distributable/development skill tree exactly as stored in Git."""
+) -> list[tuple[Path, str, str]]:
+    """Select the auditable blobs and modes from one immutable Git tree."""
     # skill_rel == Path(".")（skill 目录即仓根）时，git ls-tree 输出无前缀路径
     # （"SKILL.md"），而 ".".rstrip("/")+"/" 拼出的 "./" 永不匹配任何条目，
     # 会把整个树滤空并报 "does not contain ./SKILL.md"。仓根必须用空前缀。
@@ -208,12 +208,23 @@ def _git_tree_hash(
 
     if not any(rel == Path("SKILL.md") for rel, _mode, _object_id in entries):
         raise ValueError(f"Git baseline does not contain {prefix}SKILL.md")
+    return sorted(entries, key=lambda item: item[0])
+
+
+def _git_tree_hash(
+    repo: Path,
+    commit: str,
+    skill_rel: Path,
+    inclusion_policy: Any,
+) -> str:
+    """Hash the distributable/development skill tree exactly as stored in Git."""
+    entries = _git_tree_entries(repo, commit, skill_rel, inclusion_policy)
 
     digest = hashlib.sha256()
     # Same order as tree_hash(), which sorts Path objects (component by component).
     # A plain string sort puts "a-b/y" before "a/x" ("-" < "/"), so any skill with
     # sibling directories sharing a prefix would never match its own Git baseline.
-    for rel, mode, object_id in sorted(entries, key=lambda item: item[0]):
+    for rel, mode, object_id in entries:
         content = _git_output(repo, "cat-file", "blob", object_id, text=False)
         assert isinstance(content, bytes)
         digest.update(rel.as_posix().encode("utf-8"))
@@ -223,6 +234,43 @@ def _git_tree_hash(
         digest.update(content)
         digest.update(b"\0")
     return digest.hexdigest()
+
+
+def _git_baseline_mismatch_details(
+    before: Path,
+    repo: Path,
+    commit: str,
+    skill_rel: Path,
+    inclusion_policy: Any,
+) -> str:
+    """Describe mismatches without printing file contents or weakening the hash gate."""
+    expected = {
+        rel: (mode, oid)
+        for rel, mode, oid in _git_tree_entries(repo, commit, skill_rel, inclusion_policy)
+    }
+    actual = dict(_iter_files(before, inclusion_policy))
+    details: list[str] = []
+    for rel in sorted(expected.keys() | actual.keys()):
+        if rel not in actual:
+            details.append(f"{rel.as_posix()}: missing file")
+        elif rel not in expected:
+            details.append(f"{rel.as_posix()}: unexpected file")
+        else:
+            mode, oid = expected[rel]
+            content = _git_output(repo, "cat-file", "blob", oid, text=False)
+            if actual[rel].read_bytes() != content:
+                details.append(f"{rel.as_posix()}: content differs")
+            wanted = 0o111 if mode == "100755" else 0
+            observed = actual[rel].stat().st_mode & 0o111
+            if observed != wanted:
+                details.append(
+                    f"{rel.as_posix()}: executable bits differ "
+                    f"(expected {wanted:03o}, found {observed:03o})"
+                )
+    shown = details[:10]
+    if len(details) > len(shown):
+        shown.append(f"... {len(details) - len(shown)} more difference(s)")
+    return "; ".join(shown) or "tree changed during comparison; read the baseline again"
 
 
 def create_baseline_snapshot(source: Path, output: Path) -> Path:
@@ -500,8 +548,12 @@ def _resolve_baseline_provenance(
         expected_hash = _git_tree_hash(repo, commit, skill_rel, inclusion_policy)
         actual_hash = tree_hash(before, inclusion_policy)
         if actual_hash != expected_hash:
+            details = _git_baseline_mismatch_details(
+                before, repo, commit, skill_rel, inclusion_policy
+            )
             raise ValueError(
-                f"before tree does not match {requested_ref} for {skill_rel.as_posix()}"
+                f"before tree does not match {requested_ref} for {skill_rel.as_posix()}: "
+                f"{details}"
             )
         provenance = {
             "origin": f"git-ref:{commit}",

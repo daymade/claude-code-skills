@@ -59,6 +59,79 @@ PRESERVED_REVIEW_EVIDENCE_SUFFIXES = frozenset({
 })
 
 
+def _report_registry():
+    """Use runtime state, not a package-local or transcript-adjacent manifest."""
+    import sqlite3
+    conn = sqlite3.connect(_get_review_queue().db_path, timeout=15)
+    conn.execute("CREATE TABLE IF NOT EXISTS review_report_locations (transcript_path TEXT NOT NULL, report_path TEXT NOT NULL UNIQUE, PRIMARY KEY(transcript_path, report_path))")
+    return conn
+
+
+def _write_review_report(path: Path, text: str, input_path: Path) -> None:
+    """Preserve previous report generations; refuse another input's same stem."""
+    canonical = str(input_path.resolve())
+    path = path.resolve()
+    incoming = text
+    with _report_registry() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        owner = conn.execute("SELECT transcript_path FROM review_report_locations WHERE report_path=?", (str(path),)).fetchone()
+        if owner is not None and owner[0] != canonical:
+            raise ValueError(f"review report belongs to another transcript: {path}; choose a different --sidecar-dir")
+        if path.exists():
+            previous = path.read_text(encoding="utf-8")
+            entries, declared = parse_stage1_report(previous)
+            if declared is None or len(entries) < declared:
+                raise ValueError(f"existing report is unreadable; preserve it and choose another --sidecar-dir: {path}")
+            if owner is None and path.parent != input_path.resolve().parent:
+                raise ValueError(f"unowned report already exists in --sidecar-dir: {path}")
+            if text not in previous:
+                text = previous.rstrip() + "\n\n" + text
+            else:
+                text = previous
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # Register the directory durably, then serialize the read/append/replace
+        # against other CLI writers. SQLite and files remain separate media.
+        conn.execute("INSERT OR IGNORE INTO review_report_locations VALUES (?, ?)", (canonical, str(path)))
+        conn.commit()
+        conn.execute("BEGIN IMMEDIATE")
+        if path.exists():
+            latest = path.read_text(encoding="utf-8")
+            entries, declared = parse_stage1_report(latest)
+            if declared is None or len(entries) < declared:
+                raise ValueError(f"existing report changed to unreadable content: {path}")
+            text = latest if incoming in latest else latest.rstrip() + "\n\n" + incoming
+        else:
+            text = incoming
+        fd, temporary = tempfile.mkstemp(prefix=".review-report-", dir=path.parent)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as out:
+                out.write(text)
+                out.flush()
+                os.fsync(out.fileno())
+            if path.exists():
+                os.chmod(temporary, path.stat().st_mode & 0o777)
+            os.replace(temporary, path)
+        finally:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
+
+
+def _registered_report_dirs(input_path: Path) -> list[Path]:
+    with _report_registry() as conn:
+        rows = conn.execute("SELECT report_path FROM review_report_locations WHERE transcript_path=?", (str(input_path.resolve()),)).fetchall()
+    return sorted({Path(r[0]).parent for r in rows}, key=str)
+
+
+def _assert_report_ownership(input_path: Path, directories: list[Path]) -> None:
+    with _report_registry() as conn:
+        for directory in directories:
+            for suffix in PRESERVED_REVIEW_EVIDENCE_SUFFIXES:
+                path = (directory / f"{input_path.stem}{suffix}").resolve()
+                owner = conn.execute("SELECT transcript_path FROM review_report_locations WHERE report_path=?", (str(path),)).fetchone()
+                if owner and owner[0] != str(input_path.resolve()):
+                    raise ValueError(f"review report belongs to another transcript: {path}")
+
+
 def _get_service() -> CorrectionService:
     """Get configured CorrectionService instance."""
     # P1-5 FIX: Use centralized configuration
@@ -209,6 +282,7 @@ def _enqueue_deferrals(changes, input_path: Path, original_text: str, domain: st
                 "original": c.from_text,
                 "suggested": c.to_text,
                 "kind": "homophone",
+                "provenance": {"rule_type": c.rule_type, "rule_name": c.rule_name, "domain": domain},
                 "evidence": (
                     f"Stage 1 safe-mode deferral: rule '{c.from_text}→{c.to_text}' "
                     f"({c.rule_type}: {c.rule_name}), risk={c.risk}"
@@ -439,9 +513,9 @@ def parse_stage1_report(text: str) -> tuple[list[dict], int | None]:
          "type": m["type"], "context": m["ctx"].strip()}
         for m in _REPORT_ENTRY_RE.finditer(text)
     ]
-    m = _REPORT_TOTAL_RE.search(text)
-    if m is not None:
-        return entries, int(m.group(1))
+    totals = _REPORT_TOTAL_RE.findall(text)
+    if totals:
+        return entries, sum(int(n) for n in totals)
     if _REPORT_EMPTY_MARKER in text:
         return entries, 0
     return entries, None
@@ -559,8 +633,10 @@ def close_sidecars(input_path: Path, output_dir: Path, *, dry_run: bool = False,
     # with no row of its own is undecided — and is what --decide-raw records.
     rows_by_pair: dict[tuple[str, str], list[tuple[int, str]]] = {}
     for r in rows:
-        rows_by_pair.setdefault((r.original_text, r.suggested_text), []).append(
-            (r.line_number if r.line_number is not None else -1, r.status))
+        suggestions = {r.suggested_text} | {c.get("suggested_text") for c in getattr(r, "candidates", [])}
+        for suggestion in suggestions:
+            rows_by_pair.setdefault((r.original_text, suggestion), []).append(
+                (r.line_number if r.line_number is not None else -1, r.status))
 
     undecided: list[dict] = []
     entries_by_pair: dict[tuple[str, str], list[tuple[dict, str]]] = {}
@@ -675,6 +751,16 @@ def cmd_close_sidecars(args: argparse.Namespace) -> None:
             _queue_cmd_error(args, "output_not_found",
                              f"--output is not an existing directory: {output_dir}", code=2)
         output_dir = output_dir.resolve()
+    extra_dirs = _registered_report_dirs(input_path)
+    if getattr(args, "sidecar_dir", None):
+        explicit = Path(args.sidecar_dir).expanduser().resolve()
+        if not explicit.is_dir():
+            _queue_cmd_error(args, "sidecar_dir_not_found", f"--sidecar-dir does not exist: {explicit}", code=2)
+        extra_dirs.append(explicit)
+    try:
+        _assert_report_ownership(input_path, [output_dir, *extra_dirs])
+    except ValueError as error:
+        _queue_cmd_error(args, "report_owner_conflict", str(error), code=2)
     domains = _parse_domains(getattr(args, "domain", None))
     report = close_sidecars(
         input_path, output_dir,
@@ -687,6 +773,27 @@ def cmd_close_sidecars(args: argparse.Namespace) -> None:
         queue=_get_review_queue(),
         disabled_pairs=_retired_pairs(domains),
     )
+    reports = [report]
+    for directory in sorted(set(extra_dirs) - {output_dir}, key=str):
+        reports.append(close_sidecars(input_path, directory,
+            dry_run=getattr(args, "dry_run", False),
+            discard_unpromoted=getattr(args, "discard_unpromoted", False),
+            decide_raw=getattr(args, "decide_raw", None), domain=(domains[0] if domains else "general"),
+            decided_by=getattr(args, "review_by", None), note=getattr(args, "review_note", None),
+            queue=_get_review_queue(), disabled_pairs=_retired_pairs(domains)))
+    if len(reports) > 1:
+        report = {**report, "directories": reports,
+                  "verdict": max((r["verdict"] for r in reports), key=lambda v: {"closed": 0, "open": 1, "blocked": 2}[v])}
+        report["entries"] = {key: sum(r["entries"][key] for r in reports) for key in reports[0]["entries"]}
+        report["decisions_recorded"] = sum(r["decisions_recorded"] for r in reports)
+        report["sidecars"] = {key: [str(Path(r["dir"]) / name) for r in reports for name in r["sidecars"][key]]
+                              for key in ("present", "removed", "retained")}
+        report["blockers"] = {
+            "pending_ids": sorted({item for r in reports for item in r["blockers"]["pending_ids"]}),
+            "undecided": [entry for r in reports for entry in r["blockers"]["undecided"]],
+            "stage1_unpromoted": any(r["blockers"]["stage1_unpromoted"] for r in reports),
+            "report_unparsed": [str(Path(r["dir"]) / name) for r in reports for name in r["blockers"]["report_unparsed"]],
+        }
     exit_code = {"closed": 0, "open": 1}.get(report["verdict"], 2)
     if getattr(args, "json_output", False):
         _emit_json(report)
@@ -695,6 +802,8 @@ def cmd_close_sidecars(args: argparse.Namespace) -> None:
     e = report["entries"]
     print(f"🧾 Sidecar closure — {input_path.name}" + ("  (DRY RUN)" if report["dry_run"] else ""))
     print(f"   directory: {report['dir']}")
+    if "directories" in report:
+        print("   searched directories: " + ", ".join(r["dir"] for r in report["directories"]))
     print(f"   sidecars present: {', '.join(report['sidecars']['present']) or 'none'}")
     print(f"   report entries: {e['total']} (applied {e['applied']}, rewritten {e['gone']}, "
           f"decided {e['decided']}, rule disabled {e['disabled']}, pending {e['pending']}, undecided {e['undecided']})")
@@ -1314,6 +1423,8 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
     else:
         output_dir = input_path.parent
     output_dir.mkdir(parents=True, exist_ok=True)
+    review_dir = Path(args.sidecar_dir).expanduser().resolve() if getattr(args, "sidecar_dir", None) else output_dir
+    review_dir.mkdir(parents=True, exist_ok=True)
 
     # Auto-finalize: if a previous Stage 1 run left *_stage1.md behind and it is
     # newer than the input file, promote it to the input file and clean up
@@ -1632,18 +1743,16 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
             # (an applied change, or a safe-mode deferral worth reviewing).
             if changes_file and (applied_count > 0 or skipped_count > 0):
                 changes_report = _format_changes_report(stage1_changes, original_text)
-                changes_file_path = output_dir / f"{input_path.stem}_changes.md"
-                with open(changes_file_path, 'w', encoding='utf-8') as f:
-                    f.write(changes_report)
+                changes_file_path = review_dir / f"{input_path.stem}_changes.md"
+                _write_review_report(changes_file_path, changes_report, input_path)
                 print(f"📋 Changes report: {changes_file_path}")
 
             # Write needs-review file
             if review_mode and skipped_count > 0:
                 needs_review = [c for c in stage1_changes if c.risk in ("medium", "high")]
                 review_report = _format_changes_report(needs_review, original_text, title="Needs Review")
-                review_file_path = output_dir / f"{input_path.stem}_needs_review.md"
-                with open(review_file_path, 'w', encoding='utf-8') as f:
-                    f.write(review_report)
+                review_file_path = review_dir / f"{input_path.stem}_needs_review.md"
+                _write_review_report(review_file_path, review_report, input_path)
                 print(f"🟡 Needs review: {review_file_path}")
                 needs_review_written = review_file_path
 
@@ -2579,13 +2688,15 @@ def _name_lookup(term: str):
 
 
 def _name_convergence_refusal(args, from_text: str, to_text: str,
-                              evidence: str | None, kind: str | None):
+                              evidence: str | None, kind: str | None,
+                              entity_type: str = "unknown", nonperson_reference_validated: bool = False):
     """Run the name-convergence guard; on rejection emit the refusal and exit
     non-zero with nothing written (fail-closed). Returns None when the write
     may proceed."""
     from core.name_convergence_guard import guard
 
-    rejection = guard(from_text, to_text, evidence, kind, lookup_fn=_name_lookup)
+    rejection = guard(from_text, to_text, evidence, kind, lookup_fn=_name_lookup,
+                      entity_type=entity_type, nonperson_reference_validated=nonperson_reference_validated)
     if rejection is not None:
         _queue_cmd_error(args, rejection.code, rejection.message, code=2)
     return None
@@ -2862,13 +2973,25 @@ def cmd_resolve_review(args: argparse.Namespace) -> None:
     # spelling collapse accepted with no authority named. kept_original /
     # skipped / reopen write no target form, so they are not gated.
     if decision in ("accepted", "overridden"):
+        nonperson_reference_validated = False
         item = queue.get(args.resolve_review)
         if item is None:
             _queue_cmd_error(args, "not_found",
                              f"review item {args.resolve_review} not found")
-        to_text = item.suggested_text if decision == "accepted" else (
+        candidate_index = getattr(args, "review_candidate_index", None)
+        selected_candidate = None
+        if candidate_index is not None:
+            if not 0 <= candidate_index < len(item.candidates):
+                _queue_cmd_error(args, "invalid_candidate_index", "--review-candidate must identify an existing zero-based candidate", code=2)
+            selected_candidate = item.candidates[candidate_index]
+        suggested = selected_candidate.get("suggested_text") if selected_candidate is not None else item.suggested_text
+        to_text = suggested if decision == "accepted" else (
             getattr(args, "review_override_to", None) or ""
         ).strip()
+        entity_type = getattr(args, "review_entity_type", None) or (
+            selected_candidate.get("entity_type", "unknown") if selected_candidate is not None else item.entity_type)
+        candidate_kind = selected_candidate.get("kind", item.kind) if selected_candidate is not None else item.kind
+        candidate_evidence = selected_candidate.get("evidence") if selected_candidate is not None else item.evidence
         # An authority named AT VERDICT TIME (audio check since enqueue, a
         # user ruling in review) has to reach the guard: the evidence column
         # was write-once at enqueue, which deadlocked every row whose target
@@ -2884,10 +3007,15 @@ def cmd_resolve_review(args: argparse.Namespace) -> None:
         # means the refusal leaves no side effects, so the append now happens
         # only after the guard has said the write may proceed.
         if record_path is not None:
-            from core.name_convergence_guard import user_answer_citation
+            from core.name_convergence_guard import user_answer_citation, entity_reference_citation
             try:
                 record = json.loads(Path(record_path).read_text(encoding="utf-8"))
-                authority = user_answer_citation(record, item_id=item.id, target=to_text)
+                if isinstance(record, dict) and record.get("kind") == "entity_reference":
+                    authority = entity_reference_citation(record, item_id=item.id, target=to_text,
+                        entity_type=entity_type, original=item.original_text, context=item.context_snippet)
+                    nonperson_reference_validated = True
+                else:
+                    authority = user_answer_citation(record, item_id=item.id, target=to_text)
             except (OSError, ValueError, TypeError) as e:
                 _queue_cmd_error(args, "invalid_authority_record", str(e), code=2)
         # Empty target means the call is malformed; resolve() below raises its
@@ -2895,7 +3023,8 @@ def cmd_resolve_review(args: argparse.Namespace) -> None:
         if to_text:
             _name_convergence_refusal(
                 args, item.original_text, to_text,
-                _combined_evidence(item.evidence, authority), item.kind,
+                _combined_evidence(candidate_evidence, authority), candidate_kind,
+                entity_type=entity_type, nonperson_reference_validated=nonperson_reference_validated,
             )
 
     try:
@@ -2907,6 +3036,8 @@ def cmd_resolve_review(args: argparse.Namespace) -> None:
             by=getattr(args, "review_by", None),
             authority=authority,
             ledger_entry=ledger_entry,
+            entity_type=entity_type if decision in ("accepted", "overridden") else None,
+            candidate_index=getattr(args, "review_candidate_index", None),
         )
     except ReAnchorNeeded as e:
         if getattr(args, "json_output", False):

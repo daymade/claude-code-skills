@@ -7,13 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Locked dependency patches** (`daymade-skill` v1.70.7; `peer-message` v1.22.3): Refresh Creator's urllib3 lock and compatible network-preview transitive dependencies while retaining direct dependency pins, package interfaces and installation commands. Change type: security dependency maintenance.
+- **Document routing visibility** (`daymade-docs` v1.25.5): Keep complete document-task signals within the shortened Codex catalog prefix observed in a fresh host; preserve the full routing table and manual commands. Change type: discovery-contract repair.
+- **transcript-fixer** (`daymade-audio` v1.50.0): Preserve competing proposals and rule evidence under one located occurrence across line/context drift, add scoped legacy consolidation and explicit candidate action selection, accept typed written references for nonperson names while retaining person-name guards, and support destination-selected review-report directories with closure discovery. Change type: additive queue and report workflow capability.
+- **macos-cleaner / macos-watchdog** (`daymade-macos` v1.23.9): Route repository and README entries to the canonical uv retirement and persistent-runtime procedures; remove duplicated instructions, unsafe cleanup examples and derived summaries. Change type: bounded documentation alignment.
+
+- **prior-work-retrieval** (`daymade-claude-code` v4.30.12): Clarify the installed-Skill working directory for bundled commands and align ordinary creation, implementation and status-check eval expectations with the existing explicit-history trigger. Route manifest selection from repository instructions. Change type: existing-contract documentation repair.
+
+- **macos-cleaner / macos-watchdog** (`daymade-macos` v1.23.8): Distinguish uv cache artifacts from persistent runtimes, bound exact-package cleanup waits, and separate Python service preparation from startup while retaining verified FDA launchers. Change type: bounded operating-procedure guidance.
+- **First-use recovery** (`daymade-skill` v1.70.6): Print shell-specific absolute security-scan commands when Skill packaging is blocked, so users can scan the original source from their current directory and retry without weakening validation. Change type: existing-contract repair.
+- **Presentation availability** (`daymade-docs` v1.25.4; `slides-creator` v2.1.1): Align retired presentation entries, router guidance and bilingual catalogs with their shipped compatibility notices; preserve registered identities and historical demo assets. Change type: factual correction.
+- **Document discovery**: Keep HTML conversion and documentation-maintenance selection signals within the existing short-description budget; align the route tests with saved HTML support.
+- **User entry points**: Correct first-use delivery links and contribution guidance, remove missing demo references, and let bug reports identify the actual host, installation source and plugin release.
+
 - **git-safety-net** (v1.22.8): Audit commits held by non-standard refs or worktree reflogs, report incomplete Git scans, and retain manual review for non-commit objects. Change type: existing-contract loss-audit repair.
 
 - **Growth workflow documentation**: Align product-analysis examples and bilingual guidance with evidence-based synthesis; route repository instruction entries to mechanism decisions and product-audit synthesis.
 
 ### Added
-- **prior-work-retrieval** (`daymade-claude-code` v4.30.12): Align adapter-result interpretation and freshness recovery with the existing implementation; route repository instructions to the owning contract. Change type: factual documentation correction.
-- **skill-creator** (`daymade-skill` v1.70.5): Document current-main integration and version checks before exact-candidate review binding; consolidate stale-base recovery in the release SOP. Change type: operating-document alignment.
+- **prior-work-retrieval** (`daymade-claude-code` v4.30.13): Align adapter-result interpretation and freshness recovery with the existing implementation; route repository instructions to the owning contract. Change type: factual documentation correction.
+- **skill-creator** (`daymade-skill` v1.70.8): Document current-main integration and version checks before exact-candidate review binding; consolidate stale-base recovery in the release SOP. Change type: operating-document alignment.
+- **skill-creator** (`daymade-skill` v1.70.5): Preserve executable bits when extracting immutable Git baselines under restrictive umasks; report mismatched paths and distinguish missing files, extra files, content and executable modes without weakening preservation checks. Change type: baseline recipe repair and diagnostic improvement.
+- **app-evolver** (v1.1.5): Add a bounded synthetic output replay for analysis-stage honesty, learning-scope reconciliation, benefit/trade-off disclosure and local-versus-overall comparison claims. Runtime workflow unchanged. Change type: development replay addition.
+- **qa-expert** (v1.2.1): Add asynchronous editing acceptance through the existing harness: final-await freshness, stale suggestions, late-session results, related-object conflicts and healthy delete/restore controls. Change type: bounded acceptance guidance.
 - **prior-work-retrieval / release checks** (`daymade-claude-code` v4.30.10 → v4.30.11): Preserve retrieval evidence across unrelated commits when the searched Git scope, source definitions, ignore dependencies and selected bytes agree; retain rechecks for changed candidates and new requirements. Diagnose a stale publication base before requesting exact-head review evidence. Change type: bounded freshness and release-diagnostic repair.
 - **qa-expert** (v1.2.0): Add file-backed persistence and CLI acceptance recipes for byte integrity, selected dependencies, crash recovery, asynchronous completion, pipe delivery and shared immutable-object reads. Preserve existing QA, transaction and migration workflows. Change type: bounded acceptance-method addition.
 - **git-safety-net** (v1.22.7): Add a controlled clean-submodule worktree retirement path where the current Git implementation requires it; preserve authorization, containment, backup and dirty/unknown-state refusal. Change type: operating-procedure correction.

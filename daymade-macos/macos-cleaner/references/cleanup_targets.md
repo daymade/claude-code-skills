@@ -185,7 +185,7 @@ Do not reopen a broad Mole scan for a named developer cache. Resolve one exact p
 | Chromium code-sign clones | `scripts/analyze_code_sign_clones.py` resolves the current user's `DARWIN_USER_TEMP_DIR` sibling `X` directory and validates exact owned roots | None; do not scan every user's `/private/var/folders` tree | Read `chromium_code_sign_clones.md`; preserve active/unknown children and bind any inactive batch to the analyzer's exact candidate SHA |
 | Xcode DerivedData | Xcode **Settings → Locations → Derived Data** | `~/Library/Developer/Xcode/DerivedData` | Quit Xcode; prefer removing an exact inactive project child. Whole-root Trash requires explicit rebuild-cost approval. |
 | npm `_cacache` / `_npx` | `npm config get cache`, then append the exact child name | None; do not guess around npm's returned root | `_npx` may go to Trash after confirming no `npx` process. Keep `_cacache` by default; whole-cache removal requires explicit redownload approval. |
-| uv cache | `uv cache dir` (honors `--cache-dir`, `UV_CACHE_DIR`, and uv config) | `$XDG_CACHE_HOME/uv` or `~/.cache/uv` only as a candidate | Prefer `uv cache clean <exact-package>` for a named obsolete package, or `uv cache clean` only when the whole cache is approved. Do not edit uv's internal cache by hand. |
+| uv cache | `uv cache dir` (honors `--cache-dir`, `UV_CACHE_DIR`, and uv config) | `$XDG_CACHE_HOME/uv` or `~/.cache/uv` only as a candidate | [uv cache retirement](#uv-cache-retirement) |
 | Playwright browsers | The project's `PLAYWRIGHT_BROWSERS_PATH` / runner configuration | `~/Library/Caches/ms-playwright` only as a candidate | Stop Playwright/browser processes. Prefer project-supported browser removal; otherwise move the verified whole inactive cache to Trash, not internal browser files guessed by name. |
 | iOS DeviceSupport | Xcode's active platform/device support view plus the exact on-disk directory | `~/Library/Developer/Xcode/iOS DeviceSupport` | Quit Xcode; move only an exact OS-version child no longer needed for connected-device debugging. |
 | Hugging Face cache | Active service/project values for `HF_HOME`, `HF_HUB_CACHE`, or `XDG_CACHE_HOME` | `~/.cache/huggingface` only as a candidate | Prefer the installed Hugging Face cache-management command after verifying its current help. Without a verified supported control, keep internal cache subsets; whole inactive cache Trash is a separate user decision. |
@@ -193,14 +193,54 @@ Do not reopen a broad Mole scan for a named developer cache. Resolve one exact p
 | JetBrains caches | **Help → Diagnostic Tools → Special Files and Folders** or `idea.system.path` | `~/Library/Caches/JetBrains/<product><version>` | Quit the IDE; prefer its cache invalidation UI. An exact cache for an uninstalled/retired product version may go to Trash. Never target config/plugins/local history by assuming every JetBrains directory is cache. |
 | Stopped Docker container | `docker inspect <exact-name-or-id>` plus `docker ps -a` | None | Use `references/docker_analysis.md`; stopped status alone never authorizes removal. |
 
+#### uv cache retirement
+
+Before classifying a uv target, distinguish its role from its directory name:
+
+| Role | Check before retirement | Consequence |
+|---|---|---|
+| Downloaded/built package archives | Resolve the configured cache and exact package names; check current references and restoration inputs | A later install may download or build again; shared extents/hard links can limit physical release |
+| Cache-managed execution environments | Inspect the actual launcher, environment configuration and active consumers | A running or later invocation may depend on the cached environment; preserve active or unresolved references |
+| Project/service persistent virtual environment | Resolve its Python, base interpreter, lockfile and owning installer | This is a runtime, even when reproducible; retire it through its project/service lifecycle, not a cache cleanup |
+
+Treat internal bucket names and suffixes as installed-version details. Do not
+infer abandonment from a name, age, bucket version or cache-to-project count.
+Keep missing reference evidence `unknown`; a cache's total allocation is not a
+garbage estimate. Never manually delete an internal cache subset.
+
+For an approved finite package list, check `uv --version`, `uv cache clean --help`
+and relevant known issues for that installed release before selecting the command.
+When its help accepts `[PACKAGE]...`, clean the approved names in one official
+invocation, for example `uv cache clean <package-a> <package-b>`; otherwise retain
+the supported single-package form. Keep whole-cache cleanup separately authorized.
+
+If another uv command holds the cache lock, identify its owner and active work
+read-only. A transient busy observation is not a cleanup failure: allow one
+bounded official wait using `UV_LOCK_TIMEOUT=<seconds> uv cache clean <package-a> <package-b>`,
+with the duration chosen for this task and confirmed against current
+uv documentation. Do not use `--force`, stop another job, or repeatedly restart the
+same attempt. On timeout, report the holder and remaining approved targets; resume
+only after a changed condition, such as the holder completing its work. Recheck
+the target and protected consumers before resuming.
+
+After success, verify the approved package postcondition, preserved environments
+and a real affected consumer through the existing Phase 4 checks. Do not infer
+physical release from the command's estimate or include non-target objects in the
+claimed cleanup. The executing agent owns this classification and lock decision;
+the plan checker does not prove environment liveness or approval of each package
+argument. Compare every supplied name with the approved list before execution.
+
+Use the current [uv cache documentation](https://docs.astral.sh/uv/concepts/cache/)
+for bucket versioning, supported cleanup, cache locks and `UV_LOCK_TIMEOUT`.
+
 #### `uv cache prune` is not sanctioned here — a hard exclusion (verified 2026-09-19)
 
-`uv cache prune` may never appear in a plan's action set. Two verified reasons:
+`uv cache prune` may never appear in a plan's action set:
 
 - **"Unreachable" is cache-graph reachability, not venv liveness.** `uv cache prune` does not track which environments use which objects (astral-sh/uv#10153, maintainer), so "the cache holds 586 environments but only 28 project venvs exist" is not evidence that the rest are dead.
 - **Pre-0.12.x builds follow symlinks out of the cache during prune** (astral-sh/uv#19542; fixed in 0.12.x by PR #19543). Measured on a machine running uv 0.11.21: `environments-v2` held 1918 symlinks, 1775 of them pointing at managed Python install trees under `~/.local/share/uv/python/`, and prune's removal is directory-level — it can delete the interpreter trees of live venvs.
 
-The upgrade-then-prune path is verified to work (2026-09-19: upgrading 0.11.21 → 0.12.17 and pruning reclaimed 50.9 GiB, cache 92.2 → 41.3 GiB, with sampled venvs still importing and the managed Python tree intact). A user who explicitly directs that command may run it in Phase 3 — but a version fix addresses only the symlink bug, not the reachability semantics, so this stays a directed action, never a skill proposal. Do not cite the 50.9 GiB figure as a reason to propose it: size is not evidence, and the Phase 2 entry gate's lead rule would otherwise structurally reward exactly that. Sanctioned alternative: `uv cache clean <exact-package>`.
+In a recorded 2026-09-19 run, upgrading 0.11.21 → 0.12.17 and pruning changed cache readings from 92.2 to 41.3 GiB, with sampled venvs still importing and the managed Python tree intact. A user who explicitly directs that command may run it in Phase 3 — but a version fix addresses only the symlink bug, not the reachability semantics, so this stays a directed action, never a skill proposal. Do not cite that historical cache-size change as a reason to propose it: size is not evidence, and the Phase 2 entry gate's lead rule would otherwise structurally reward exactly that. For the supported alternative, follow [uv cache retirement](#uv-cache-retirement).
 
 This entry is the worked example for safety rule 5's known-issue check. What made it decisive was searching the command's defect history **before** running it — the session that found #19542 this way was one search away from pruning a machine whose 1775 cache symlinks pointed at the interpreter trees of live venvs, and it had no independent way to notice the damage afterward. Note the shape of both defects: neither is visible from the tool's own help text or from the size of the cache, and both are specific to a *version* of the command, which is why the check must name the installed version rather than the command. Apply the same check to every supported control in this table before it enters a plan — including the ones already recommended here.
 

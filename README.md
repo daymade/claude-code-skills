@@ -179,7 +179,7 @@ This suite exposes related skills under one namespace, including:
 
 These skills ship as a bundle — there are no separate single-skill plugins. All documentation skills live under `daymade-docs/` and install together from the suite.
 The router handles automatic selection. The specialist commands remain available for manual use;
-`ppt-creator` is manual-only. New presentation creation uses `deck-creator` when installed.
+For the retained PPT command, read the [compatibility notice](./daymade-docs/ppt-creator/SKILL.md).
 
 **Apple Platform Suite** (shared namespace for macOS and iOS development/operations):
 ```bash
@@ -425,7 +425,7 @@ Selects the bundled specialist for document conversion, Word and PDF production,
 Mermaid images, macOS Excel automation, scanned PDFs, DOCX review extraction, or
 documentation cleanup. It reads the selected specialist's full instructions and
 required references. Specialist slash commands remain available for manual use.
-New presentation creation uses `deck-creator` when installed; `ppt-creator` is manual-only.
+For the retained PPT command, read the [compatibility notice](./daymade-docs/ppt-creator/SKILL.md).
 
 ---
 
@@ -448,10 +448,6 @@ Converts documents to markdown with Windows/WSL path handling and PDF image extr
 - Windows/WSL path automation
 - Confluence export processing
 - Helper scripts for path conversion and image extraction
-
-**🎬 Live Demo**
-
-![Markdown Tools Demo](./demos/doc-to-markdown/convert-docs.gif)
 
 ---
 
@@ -653,10 +649,6 @@ Investigate and resolve Cloudflare configuration issues using API-driven evidenc
 - DNS, cache, and firewall diagnostics
 - Agentic approach with optional helper scripts
 
-**🎬 Live Demo**
-
-![Cloudflare Troubleshooting Demo](./demos/cloudflare-troubleshooting/diagnose-redirect-loop.gif)
-
 ---
 
 ### **ui-designer** - UI Design System Extractor
@@ -684,31 +676,10 @@ Extract design systems from reference UI images and generate implementation-read
 
 ---
 
-### **ppt-creator** - Professional Presentation Creation
+### **ppt-creator** - Compatibility Notice
 
-> **Install**: `claude plugin install daymade-docs@daymade-skills` (suite-only — invoked as `daymade-docs:ppt-creator`)
-
-Create persuasive, audience-ready slide decks from topics or documents with data-driven charts and dual-format PPTX output.
-
-**When to use:**
-- Creating presentations, pitch decks, or keynotes
-- Need structured content with professional storytelling
-- Require data visualization and charts
-- Want complete PPTX files with speaker notes
-- Building business reviews or product pitches
-
-**Key features:**
-- Pyramid Principle structure (conclusion → reasons → evidence)
-- Assertion-evidence slide framework
-- Automatic data synthesis and chart generation (matplotlib)
-- Dual-path PPTX creation (Marp CLI + document-skills:pptx)
-- Complete orchestration: content → data → charts → PPTX with charts
-- 45-60 second speaker notes per slide
-- Quality scoring with auto-refinement (target: 75/100)
-
-**🎬 Live Demo**
-
-![PPT Creator Demo](./demos/ppt-creator/create-presentation.gif)
+Read the [retirement and installation-compatibility notice](./daymade-docs/ppt-creator/SKILL.md)
+before using the legacy `daymade-docs:ppt-creator` command.
 
 ---
 
@@ -1271,104 +1242,12 @@ python scripts/fetch_tweet.py https://x.com/user/status/123 output.md
 
 > **Install**: `claude plugin install daymade-macos@daymade-skills` (suite-only — invoked as `daymade-macos:macos-cleaner`)
 
-**The safest way to reclaim disk space on macOS.** Start with targeted read-only diagnosis when a subsystem is already suspect—including Apple Content Caching—then analyze caches, application remnants, large files, and development environments only as needed.
-
-**Why macos-cleaner stands out:**
-- **Safety-First Philosophy**: Never deletes without explicit user confirmation. Every operation includes risk assessment (🟢 Safe / 🟡 Caution / 🔴 Keep).
-- **Intelligence Over Automation**: Analyzes first, explains thoroughly, then lets you decide. Unlike one-click cleaners that blindly delete, we help you understand what you're removing and why.
-- **Developer-Friendly**: Deep analysis of Docker, Homebrew, npm, pip caches - tools that generic cleaners miss.
-- **Transparent & Educational**: Every recommendation includes an explanation of what the file is, why it's safe (or not), and what happens if you delete it.
-- **Professional Quality**: Built by developers who know the pain of accidentally deleting important files. Includes comprehensive safety checks and Time Machine backup recommendations.
-
-**Our design principles:**
-1. **User Control First**: You make the decisions, we provide the insights
-2. **Explain Everything**: No mysterious deletions - full transparency on impact
-3. **Conservative Defaults**: When uncertain, we preserve rather than delete
-4. **Developer Context**: Understand development tool caches, not just system files
-5. **Hybrid Approach**: Combine script precision with visual tools (Mole integration)
-
-**When to use:**
-- Your Mac is running out of disk space (>80% full)
-- You're a developer with Docker/npm/pip/Homebrew caches piling up
-- Apple Content Caching reports `Caching needs more space`, an unlimited cache, or unexpectedly high `ActualCacheUsed`
-- You want to understand what's consuming space, not just delete blindly
-- You need to clean up after uninstalled applications
-- You prefer understanding over automation
-
-**Key features:**
-- **Smart Cache Analysis**: Categorizes system caches, app caches, logs by safety level
-- **Apple Content Caching**: Separates logical `CacheUsed` from physical `ActualCacheUsed`, verifies peers and protected services, and uses Apple's supported limit/deactivate/flush controls
-- **Application Remnant Detection**: Finds orphaned data from uninstalled apps with confidence scoring
-- **Large & Duplicate File Discovery**: Intelligent categorization plus optional read-only `fdupes` scans inside exact approved paths
-- **Development Environment Cleanup**: Docker images/containers/volumes, OrbStack, Homebrew, npm, and pip; Docker build cache is measured but prune-based deletion is out of scope
-- **Interactive Safe Deletion**: Batch confirmation, selective deletion, undo-friendly (uses Trash when possible)
-- **Before/After Reports**: Track space recovery with detailed breakdown
-- **Mole Integration**: Seamless workflow with visual cleanup tool for GUI preferences
-- **Risk Categorization**: Every item labeled with safety level and explanation
-- **Time Machine Awareness**: Recommends backups before large deletions (>10 GB)
-
-**What makes us different:**
-- ✅ **Trust Through Transparency**: Other cleaners hide what they delete. We show everything and explain why.
-- ✅ **Developer-Centric**: We clean Docker, not just browser caches. We understand `.git` directories, `node_modules`, and build artifacts.
-- ✅ **Safety Checks Built-In**: Protection against deleting system files, user data, credentials, active databases, or files in use.
-- ✅ **Educational**: Learn what's safe to delete and why, so you can maintain your Mac confidently.
-- ❌ **Not a One-Click Solution**: Nothing changes until you approve a scoped command plan. When you ask Claude to execute it, only those confirmed actions run, followed by before/after verification.
+📚 **Documentation**: [macOS Cleaner](./daymade-macos/macos-cleaner/SKILL.md); for uv cache diagnosis or retirement, enter the Skill's [uv target semantics](./daymade-macos/macos-cleaner/references/cleanup_targets.md#uv-cache-retirement).
 
 **Example usage:**
-```bash
-# Install the Apple platform suite
-claude plugin install daymade-macos@daymade-skills
-
-# Ask Claude Code to analyze your Mac
-"My Mac is running out of space, help me analyze what's using storage"
-
-# Claude will:
-# 1. Route a named suspect to targeted read-only diagnosis; scan broadly only if the source is unknown
-# 2. Present categorized findings with safety levels
-# 3. Explain each category (caches, remnants, large files, dev tools)
-# 4. Recommend cleanup approach
-# 5. Execute ONLY what you confirm
-
-# Example analysis output:
-📊 Disk Space Analysis
-━━━━━━━━━━━━━━━━━━━━━━━━
-Total:     500 GB
-Used:      450 GB (90%)
-Available:  50 GB (10%)
-
-🟢 Safe to Clean (95 GB):
-  - System caches:     45 GB (apps regenerate automatically)
-  - Homebrew cache:     5 GB (reinstalls when needed)
-  - npm cache:          3 GB (safe to clear)
-  - Old logs:           8 GB (diagnostic data only)
-  - Trash:             34 GB (already marked for deletion)
-
-🟡 Review Recommended (62 GB):
-  - Large downloads:   38 GB (may contain important files)
-  - App remnants:       8 GB (verify apps are truly uninstalled)
-  - Docker images:     12 GB (may be in use)
-  - Old .git repos:     4 GB (verify project is archived)
-
-🔴 Keep Unless Certain (0 GB):
-  - No high-risk items detected
-
-Recommendation: Start with 🟢 Safe items (95 GB), then review 🟡 items together.
+```text
+My Mac is running out of space, help me analyze what's using storage
 ```
-
-**🎬 Live Demo**
-
-*Coming soon*
-
-📚 **Documentation**: See [macos-cleaner/references/](./daymade-macos/macos-cleaner/references/) for:
-- `apple_content_caching.md` - Targeted Apple Content Caching diagnosis and supported repair
-- `cleanup_targets.md` - Detailed explanations of every cleanup target
-- `mole_integration.md` - How to combine scripts with Mole visual tool
-- `safety_rules.md` - Comprehensive safety guidelines and what to never delete
-
-**Requirements**:
-- **Python 3.6+** (pre-installed on macOS)
-- **macOS** (tested on macOS 10.15+)
-- **Optional**: [Mole](https://github.com/tw93/Mole) for visual cleanup interface
 
 ---
 
@@ -2214,31 +2093,10 @@ Designs and diagnoses safe Terraform releases as well as the provisioner traps l
 
 ---
 
-### **slides-creator** - Narrative-First Slide Deck Creation
+### **slides-creator** - Compatibility Notice
 
-Guides users through structured narrative design (ABCDEFG model), then delegates visual generation to `baoyu-slide-deck`. Focuses on what machines can't do — narrative co-design with humans.
-
-**When to use:**
-- Creating presentations, slide decks, or PPTs from user content
-- Turning articles, transcripts, or notes into visual slides
-- Designing narrative arcs for talks and workshops
-
-**Key features:**
-- Phase 0: Source material collection (user's own words first)
-- Phase 1: Narrative structure discussion using ABCDEFG model
-- Phase 2: Content structuring for machine-readable input
-- Phase 3-5: Delegates visual generation to baoyu-slide-deck
-- Phase 6: Post-processing with directory reorganization and speaker notes extraction
-
-**Example usage:**
-```bash
-# Trigger the skill naturally
-"Help me turn my article into a slide deck"
-"Create a presentation from my talk transcript"
-"I need a 20-minute deck for a workshop"
-```
-
-**Requirements**: baoyu-slide-deck skill for visual generation.
+Read the [retirement and installation-compatibility notice](./slides-creator/SKILL.md)
+before using the legacy `slides-creator` entry.
 
 ---
 
@@ -3535,14 +3393,9 @@ debug this hook that's poisoning my session
 
 Design, deploy, and discipline macOS launchd watchdogs — LaunchAgents /
 LaunchDaemons that detect a recurring problem and auto-remediate it, without
-the watchdog itself becoming the disturbance. Distilled from 15 production
-watchdogs and their incident history.
+the watchdog itself becoming the disturbance.
 
-**Key features:**
-- The quiet-watchdog contract — premise-state self-check (a monitor's lifecycle binds to its premise), patient mode (defer disruption, not detection), escalating auto-cooldown, and never-resurrect-what-the-user-quit
-- Deploy mechanics that bite — gui vs system domain, StandardOut/ErrorPath, TCC/FDA attribution through `macos-permissions`, and stop semantics (`unload` is deprecated and gets resurrected by `RunAtLoad` — bootout/bootstrap/disable only)
-- Batch-loop throttling by default and SRE alert layering (page vs ticket, fatigue numbers)
-- Bundles `watchdog-cooldown.sh` (source-able escalating cooldown + manual pause state machine), `new-launchagent.sh` (idempotent installer with validation), and an annotated plist template
+📚 **Documentation**: [macOS Watchdog](./daymade-macos/macos-watchdog/SKILL.md); for persistent Python deployment, follow its [runtime procedure](./daymade-macos/macos-watchdog/SKILL.md#persistent-python-runtime).
 
 **Example usage:**
 ```text
@@ -4068,9 +3921,6 @@ Use **skill-creator** (see [Essential Skill](#-essential-skill-skill-creator) se
 Use **skill-evolver** for a research-driven improvement round on a specified existing
 Skill, from relevant evidence and trade-offs to authorized changes and result verification.
 
-### For Presentations & Business Communication
-Use **ppt-creator** to generate professional slide decks with data visualizations, structured storytelling, and complete PPTX output for pitches, reviews, and keynotes. Use **slides-creator** for narrative-first slide design — it guides you through the ABCDEFG storytelling framework, collects your original content first, then delegates visual generation to baoyu-slide-deck. Perfect when you have existing articles, transcripts, or talks that need to become visual slides.
-
 ### For Video Quality Analysis
 Use **video-comparer** to analyze compression results, evaluate codec performance, and generate interactive comparison reports. Combine with **youtube-downloader** to compare different quality downloads.
 
@@ -4096,7 +3946,7 @@ Use **meeting-minutes-taker** to transform raw meeting transcripts into structur
 Use [qa-expert](./qa-expert/SKILL.md) for QA setup, test cases, execution tracking, reporting and third-party handoffs.
 
 ### For Prompt Engineering & Requirements Engineering
-Use **prompt-optimizer** to transform vague feature requests into precise EARS specifications with domain theory grounding. Perfect for product requirements documents, AI-assisted coding, and learning prompt engineering best practices. Combine with **skill-creator** to create well-structured skill prompts, or with **ppt-creator** to ensure presentation content requirements are clearly specified.
+Use **prompt-optimizer** to transform vague feature requests into precise EARS specifications with domain theory grounding. Perfect for product requirements documents, AI-assisted coding, and learning prompt engineering best practices. Combine with **skill-creator** to create well-structured skill prompts.
 
 ### For Session History & File Recovery
 Use **read-claude-code-history** to recover deleted files from previous Claude Code sessions, search for specific implementations across conversation history, or track file evolution over time. Essential for recovering accidentally deleted code or finding that feature implementation you remember but can't locate.
@@ -4144,7 +3994,7 @@ Use **promptfoo-evaluation** to set up prompt tests, compare model outputs, and 
 Use **developing-ios-apps** to configure XcodeGen projects, resolve SPM dependency issues, and troubleshoot code signing or device deployment.
 
 ### For macOS System Maintenance & Disk Space Recovery
-Use **macos-cleaner** to diagnose and reclaim disk space on macOS with a safety-first approach. It routes known suspects such as Apple Content Caching to targeted read-only checks before any broad scan, distinguishes logical from physical usage, explains impact and recovery, and requires explicit confirmation before state changes. It also covers Docker/OrbStack, Homebrew/npm/pip, application remnants, large files, and optional Mole exploration.
+[macOS Cleaner](./daymade-macos/macos-cleaner/SKILL.md).
 
 ### For Twitter/X Content Research
 Use **twitter-reader** to fetch tweet content without JavaScript rendering or authentication. Perfect for documenting social media discussions, archiving threads, analyzing tweet content, or gathering reference material from Twitter/X. Combine with **doc-to-markdown** to convert fetched content into other formats, or with **repomix-safe-mixer** to package research collections securely.
@@ -4217,7 +4067,6 @@ Each skill includes:
 - **cli-demo-generator**: See `cli-demo-generator/references/vhs_syntax.md` for VHS syntax and `cli-demo-generator/references/best_practices.md` for demo guidelines
 - **cloudflare-troubleshooting**: See `cloudflare-troubleshooting/references/api_overview.md` for API documentation
 - **ui-designer**: See `ui-designer/SKILL.md` for design system extraction workflow
-- **ppt-creator**: See `daymade-docs/ppt-creator/references/WORKFLOW.md` for 9-stage creation process and `daymade-docs/ppt-creator/references/ORCHESTRATION_OVERVIEW.md` for automation
 - **youtube-downloader**: See `youtube-downloader/SKILL.md` for usage examples and troubleshooting
 - **repomix-safe-mixer**: See `repomix-safe-mixer/references/common_secrets.md` for detected credential patterns
 - **video-comparer**: See `video-comparer/references/video_metrics.md` for quality metrics interpretation and `video-comparer/references/configuration.md` for customization options
@@ -4237,7 +4086,7 @@ Each skill includes:
 - **promptfoo-evaluation**: See `promptfoo-evaluation/references/promptfoo_api.md` for evaluation patterns
 - **developing-ios-apps**: See `daymade-macos/developing-ios-apps/references/xcodegen-full.md` for XcodeGen options and project.yml details
 - **twitter-reader**: See `twitter-reader/SKILL.md` for API key setup and URL format support
-- **macos-cleaner**: See `daymade-macos/macos-cleaner/references/apple_content_caching.md` for Apple Content Caching, `daymade-macos/macos-cleaner/references/cleanup_targets.md` for cleanup target semantics, `daymade-macos/macos-cleaner/references/mole_integration.md` for Mole, and `daymade-macos/macos-cleaner/references/safety_rules.md` for safety guidelines
+- [macos-cleaner](./daymade-macos/macos-cleaner/SKILL.md)
 - **skill-reviewer**: See `daymade-skill/skill-reviewer/references/evaluation_checklist.md` for complete evaluation criteria and `daymade-skill/skill-reviewer/references/pr_template.md` for PR templates
 - **github-contributor**: See `github-contributor/references/pr_checklist.md` for PR quality checklist, `github-contributor/references/project_evaluation.md` for project evaluation criteria, and `github-contributor/references/communication_templates.md` for issue/PR templates
 - **i18n-expert**: See `i18n-expert/SKILL.md` for complete i18n setup workflow, key architecture guidance, and audit procedures
@@ -4255,7 +4104,6 @@ Each skill includes:
 - **claude-export-txt-better**: See `daymade-claude-code/claude-export-txt-better/SKILL.md` for the workflow, `daymade-claude-code/claude-export-txt-better/scripts/fix-claude-export.py` for the reconstruction algorithm, and `daymade-claude-code/claude-export-txt-better/evals/` for real regression fixtures
 - **douban-skill**: See `douban-skill/SKILL.md` for the export workflow and `douban-skill/references/troubleshooting.md` for the complete log of 7 tested scraping approaches and why each failed
 - **terraform-skill**: See `terraform-skill/SKILL.md` for the full catalogue of operational traps organised by exact error → root cause → copy-paste fix
-- **slides-creator**: See `slides-creator/SKILL.md` for the narrative-first workflow, `slides-creator/references/narrative-design-guide.md` for the ABCDEFG model, and `slides-creator/references/content-creation-first-law.md` for the universal content creation principle
 - **debugging-network-issues**: See `debugging-network-issues/SKILL.md` for the falsification-first workflow, `debugging-network-issues/references/layered-isolation-experiment.md` for the multi-hop isolation pattern, `debugging-network-issues/references/case-sse-rst-130s.md` for the SSE production case study, and `debugging-network-issues/references/case-proxy-tun-cname-override.md` for the client-side proxy/TUN CNAME-rule-override case study
 - **stepfun-tts**: See `stepfun-tts/SKILL.md` for the Contextual TTS decision tree and `stepfun-tts/references/migration_from_v2.md` for the `voice_label` → `instruction` migration playbook plus the censorship rewrite list
 - **stepfun-asr**: See `stepfun-asr/SKILL.md` for the SSE-endpoint workflow and the four ASR-side traps (wrong endpoint, Plan-vs-Normal key, repetition hallucination, SSE `error` event). `stepfun-asr/references/api_reference.md` documents the exact JSON request body and SSE event contract for raw HTTP integration
@@ -4283,8 +4131,6 @@ Each skill includes:
 - **Jina.ai API key** (for twitter-reader): Free tier available at https://jina.ai/
 - **asciinema** (optional, for cli-demo-generator interactive recording)
 - **ccusage** (optional, for statusline cost tracking)
-- **pandas & matplotlib** (optional, for ppt-creator chart generation)
-- **Marp CLI** (optional, for ppt-creator Marp PPTX export): `npm install -g @marp-team/marp-cli`
 - **Mole** (optional, for macos-cleaner visual cleanup): Download from https://github.com/tw93/Mole
 - **repomix** (for repomix-safe-mixer): `npm install -g repomix`
 - **CCPM CLI** (for skills-search): `npm install -g @daymade/ccpm`
@@ -4323,11 +4169,11 @@ to install and verify the replacement before removing the old plugin.
 
 ### Can I contribute my own skill?
 
-Absolutely! See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines. We recommend using the skill-creator to ensure your skill meets quality standards.
+Follow the [contribution policy](./CONTRIBUTING.md#what-we-dont-accept) for new-skill suggestions and submissions, and the [bug-fix route](./CONTRIBUTING.md#-bug-fixes-to-existing-skills) for existing skills.
 
 ### Are these skills safe to use?
 
-Yes, all skills are open-source and reviewed. The code is available in this repository for inspection.
+Open source makes inspection possible; it does not establish safety. Use [skill-reviewer](./daymade-skill/skill-reviewer/SKILL.md) and the [security checklist](./daymade-skill/skill-creator/references/sanitization_checklist.md) to inspect the relevant skill.
 
 ### How do Chinese users handle API access?
 

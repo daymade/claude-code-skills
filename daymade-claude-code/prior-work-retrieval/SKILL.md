@@ -24,7 +24,7 @@ make a request explicit.
 
 ## Completion contract
 
-A retrieval pass is complete only when the following conditions hold:
+A retrieval pass is complete only when all conditions below are true:
 
 1. The task's real business outcome is written as one sentence.
 2. Every relevant carrier declared in the manifest reports `searched`,
@@ -51,6 +51,9 @@ cannot override a newer explicit decision.
 
 The manifest is the only discovery scope. No directory exists merely because a
 convention says it should. Validate the selected manifest:
+
+Run the commands below from the actual installed Skill directory. When invoking
+them from a project directory, use the bundled scripts' absolute paths.
 
 ```bash
 uv run --no-project python scripts/prior_work.py \

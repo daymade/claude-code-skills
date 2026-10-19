@@ -203,6 +203,9 @@ being copied here. An owning installer may support an already authorized
 launcher; that does not make a package-manager dispatcher the default for
 Python hooks.
 
+For persistent Python service installation, environment reuse or startup, follow
+[macos-watchdog's persistent runtime procedure](daymade-macos/macos-watchdog/SKILL.md#persistent-python-runtime).
+
 ### Rendered UI delivery acceptance
 
 For rendered UI freshness, delayed editor/batch responses or deployment acceptance, enter
@@ -267,6 +270,9 @@ recovery, or capacity checks before necessary backup/copy/extraction, use
 [macos-cleaner](daymade-macos/macos-cleaner/SKILL.md) and its
 [necessary-copy capacity preflight](daymade-macos/macos-cleaner/references/safety_rules.md#necessary-copy-capacity-preflight).
 When changing measurement, run the SOP's targeted regression suite before shipping.
+For uv cache diagnosis or retirement, enter
+[macos-cleaner](daymade-macos/macos-cleaner/SKILL.md) and its
+[uv target semantics](daymade-macos/macos-cleaner/references/cleanup_targets.md#uv-cache-retirement).
 
 ### Automated Test Suites (CI)
 
@@ -376,6 +382,9 @@ already created by the current prompt. Artifact selection and runtime-read
 comparison are owned by that Skill; a receipt about a locator is not proof of
 the delivered artifact. For retrieval freshness, changed-source recovery and
 receipt lifetime, follow the [Prior Work operating contract](daymade-claude-code/prior-work-retrieval/SKILL.md).
+
+For CLI/hook manifest selection or continuation in an already-running host, read
+[the manifest-selection contract](daymade-claude-code/prior-work-retrieval/SKILL.md#2-validate-the-explicit-source-manifest).
 
 ### Local Conversation History Boundary
 
@@ -821,6 +830,11 @@ All Python scripts in this repository:
 - Follow PEP 8 style guidelines
 
 ## Quality Standards
+
+For public first-use instructions, follow [QUICKSTART.md](QUICKSTART.md) or
+[QUICKSTART.zh-CN.md](QUICKSTART.zh-CN.md). For reporter environment fields, use
+the [bug report template](.github/ISSUE_TEMPLATE/bug_report.md) rather than copying
+a Skill list or assuming the reporter's host.
 
 For changes to scripts, importable API contracts, configuration, or operating procedures, use
 [docs-cleaner](daymade-docs/docs-cleaner/SKILL.md) for scoped documentation delivery:

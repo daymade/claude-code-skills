@@ -76,9 +76,9 @@ class DocsRouterContractTest(unittest.TestCase):
         plugin = next(item for item in manifest["plugins"] if item["name"] == "daymade-docs")
         self.assertEqual(plugin["description"], description)
         self.assertLessEqual(len(description), 420)
-        visible = description[:160]
+        visible = description[:150]
         for signal in (
-            "Word/PDF/PPTX→Markdown",
+            "Word/PDF/PPTX/HTML→Markdown",
             "MD/Word→PDF",
             "create Word",
             "PDF HTML/translate",
@@ -100,7 +100,6 @@ class DocsRouterContractTest(unittest.TestCase):
         self.assertIn("A read-only investigation does not acquire write authorization", body)
         self.assertIn("only when it is installed", body)
         self.assertIn("no automatic current PPT builder", body)
-        self.assertIn("Routes docs:", header)
         for boundary in (
             "new presentation creation only when it is installed",
             "General PDF reading/editing",
@@ -123,7 +122,7 @@ class DocsRouterContractTest(unittest.TestCase):
             )
         }
         expected = {
-            "doc-to-markdown": "DOCX, PDF, or PPTX to Markdown",
+            "doc-to-markdown": "DOCX, PDF, PPTX, or saved HTML/HTM to Markdown",
             "pdf-creator": "Markdown into a printable PDF",
             "docx-creator": "existing Word/WPS manuscript",
             "pdf-to-html": "PDF into a self-contained",
