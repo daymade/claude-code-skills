@@ -3433,3 +3433,17 @@ this list and describe defects you reach by asking a different question):
   adding another notification channel on an unproven invisibility claim,
   closed that gap without confusing model delivery with what the user could
   see.
+
+## 67. A trusted nested-tool denial does not establish wrapper-source interception
+
+- **Measured case (2026-10-20):** a handler registered for `exec`
+  PreToolUse rejected the outer JavaScript in its classifier. In the
+  native host, that JavaScript emitted its sentinel, while a nested
+  tool call targeting the same synthetic path was denied by that
+  handler. The outer action was inside `if (false)`; the nested patch
+  was deliberately malformed, so neither probe could modify a file.
+- **Evidence limit:** this establishes working nested interception
+  alongside missing outer-source enforcement in the measured binding.
+  Raw hook stdin was not captured, so it does not distinguish an absent
+  outer callback from an unsupported input shape, or establish that
+  every outer handler is absent.
