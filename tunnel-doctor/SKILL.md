@@ -87,6 +87,7 @@ must judge protocol fit and user intent; no bundled checker establishes either.
 
 Determine which scenario applies:
 
+- **Public gateway returns 502 while its backend responds normally, or the dedicated SSH tunnel key is rejected as `correct key but not from a permitted host`** → read [SSH tunnel source restrictions](references/ssh_tunnel_source_restriction.md) before changing TUN/firewall rules or treating a running process as recovery.
 - **Browser returns HTTP 503, but `curl` and SSH both work** → System proxy bypass conflict (Step 2C)
 - **`local.<domain>` fails in browser/default `curl`, but direct/no-proxy request works** → Local vanity domain proxy interception (Step 2C-1)
 - **Tailscale ping works, SSH works, but curl/HTTP times out** → HTTP proxy env var conflict (Step 2A)
@@ -919,6 +920,8 @@ grep -a sshd /var/log/secure   2>/dev/null | tail -20    # RHEL family
 ```
 
 ⚠️ **Check the journal first, and do not read an empty `auth.log` as an answer.** On Ubuntu 24.04 the file still exists and still receives `CRON` and `sudo` lines, but `rsyslog` is not installed by default and **`sshd` writes nothing to it** — measured on a live 24.04 host: 90 lines in `auth.log`, 0 of them from `sshd`, while `journalctl -u ssh` had the full record. Reading `auth.log` alone there manufactures exactly the false "no attempts arrived" this step exists to prevent.
+
+If the server instead records `correct key but not from a permitted host`, the attempt reached sshd: inspect the dedicated key's `from=` authentication restriction using [SSH tunnel source restrictions](references/ssh_tunnel_source_restriction.md). The dynamic-address warning below concerns firewall allowlists; it is not the same enforcement layer. Follow that reference's owner-controlled correction and public-consumer verification before returning to packet-drop diagnosis.
 
 To see an attempt land in real time, run this on the host **while you retry the connection from the client** — it shows only sockets open at that instant, so it says nothing about an attempt that already failed and was torn down:
 
