@@ -487,6 +487,34 @@
         "Preserves honest unknown runtime status and marks physical phone, keyboard and native intervention unperformed rather than treating reading success as proof for them",
         "Finishes the finite audit with its scoped verdict and missing evidence, without creating live work or an automatic review loop"
       ]
+    },
+    {
+      "id": 33,
+      "name": "faster-detail-readable-preview-missing-full-tail",
+      "prompt": "Audit only these supplied synthetic observations; no live browser or interaction access is available. The baseline and candidate use the same canonical task sample-current, ordinary detail entry, settled 1440x900 viewport and cold-cache procedure; each installed build and effective configuration was independently verified. The baseline makes two detail GETs, returns HTTP 200 at 0.9 seconds and displays the authoritative report through marker SYNTHETIC-CURRENT-FULL-TAIL at 1.6 seconds from entry. The candidate makes one detail GET and returns HTTP 200 at 0.3 seconds. Its ordinary body is readable and nonempty, but contains only a preview: the authoritative full tail never appears during the supplied observation window, so candidate full-body-ready time is unknown. A separate original-text Reader return preserves its document, Find, loaded range and body scroll. Runtime execution status remains unknown. The proposed closeout says fewer requests, faster HTTP and the passing Reader prove the optimization succeeded. Give the bounded verdict and the smallest missing evidence needed for closure; do not invent a live test.",
+      "expected_output": "Rejects optimization closure because the current authoritative full report is not shown, while preserving the readable-preview and Reader-return observations as local passes. Separates request count and HTTP latency from complete-body readiness, retains unknown timing and runtime status, and requests only the affected current-task full-body evidence without claiming a speedup or fresh interaction.",
+      "files": [],
+      "expectations": [
+        "Rejects complete-report success and optimization closure despite the improved GET count and HTTP timing; a readable preview is not the authoritative full body",
+        "Uses the current canonical task and authoritative full-tail marker as the reading criterion; does not substitute nonzero body size, HTTP 200 or a late body from another selection",
+        "Preserves the supplied Reader document/Find/range/scroll return pass within its scope without using it to pass ordinary full-report reading",
+        "Keeps candidate full-body-ready time and runtime execution status unknown; reports the supplied synthetic metrics without claiming user-visible reading speed improved",
+        "Requests bounded same-target full-body-ready evidence under the already matched build/configuration, viewport and cache conditions; does not manufacture browser interaction, native execution or a broad retest"
+      ]
+    },
+    {
+      "id": 34,
+      "name": "bounded-current-detail-recovery-despite-two-gets",
+      "prompt": "Audit only supplied synthetic observations; no live browser or write access is available. Three runs of canonical task sample-current differ only in the first detail packet: its physical proof key is absent, explicitly null, or rejected as inconsistent. Each unsafe packet and its OLD-PREVIEW text are rejected. Current inventory still owns the valid selection generation and scope, with verified task key, node, job, tool, session, working directory and physical source binding. Without a manual refresh, each run makes exactly one bounded fresh GET for that current resource. The fresh packet passes the existing complete identity/proof checks and the ordinary detail displays the authoritative report ending SYNTHETIC-CURRENT-FULL-TAIL. There are two startup GETs per run. Supplied synthetic timing records the first failure at 0.3 seconds and complete current body ready at 2.4 seconds TOTAL from entry; no matched baseline body-ready measurement is supplied. Ordinary original-text/return preserves document, Find, loaded range and body scroll at the same settled 1440x900 viewport. Controls show retired scope, changed selection and unmount start no fallback GET or late body write; a failed fresh read stops visibly after that one attempt. Explicit refresh remains a new read. No write or native execution occurred, an unrelated POST outcome remains unconfirmed, and business adoption and native lineage are unknown. Decide whether two startup GETs invalidate the recovered reading and what performance conclusion is justified.",
+      "expected_output": "Accepts the supplied automatic current-report recovery and ordinary Reader return despite two startup GETs, while retaining the initial failure and total body-ready timing. Requires the bounded current-selection and full identity/proof guards, keeps failed recovery visible, and makes no unsupported speedup, authority, adoption or execution claim.",
+      "files": [],
+      "expectations": [
+        "Accepts the supported recovered full-body and ordinary Reader-return result despite two startup GETs; does not require manual refresh or minimize requests at the expense of correct reading",
+        "Rejects adoption of absent, null or inconsistent initial proof and old preview text; accepts only the fresh current packet after complete existing identity and physical-source validation",
+        "Limits automatic recovery to one bounded fresh read while both current selection generation/scope and inventory takeover remain valid; preserves retirement, selection-change, unmount and late-write guards and stops visibly on fresh-read failure",
+        "Retains the first failure and 2.4-second total entry-to-full-body timing rather than restarting the clock at fallback; makes no speedup claim without a matched body-ready comparison",
+        "Preserves explicit refresh as a new read and does not promote reading evidence into write authority, business adoption, native execution or lineage; does not resend the unconfirmed POST or invent live interaction"
+      ]
     }
   ]
 }
