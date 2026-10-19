@@ -37,7 +37,7 @@ Before the first existing-Skill edit, read preservation and the migration gate. 
 
 Preserve a current immutable baseline and avoid writes that clobber another session’s work. Apply these concurrent-session rules:
 
-1. **Baseline from a git ref, not from the working tree**, whenever the repo is clean at task start: `git archive <HEAD-sha> <skill-dir> | tar -x -C <workspace>/skill-before` and pass `--baseline-origin git-ref:<sha>` to the audit. A tree snapshot taken minutes before someone else's commit is a baseline for a tree that no longer exists. **Extract into a fresh, non-existent directory.** Into an existing one, `tar -x` silently overwrites same-named files and leaves files the archive doesn't contain untouched — a mixed snapshot with zero signal at extract time, which `compare` later rejects as not matching the ref. Same trap, other command: `mv <dir> <existing-dir>` nests instead of replacing — and where `mv` is aliased to `mv -i`, a target-already-exists rename prints one prompt line and defaults to *not* happening, with exit 0 either way (verified by experiment).
+1. **Baseline from a git ref, not from the working tree**, whenever the repo is clean at task start: `git archive <HEAD-sha> <skill-dir> | tar -xp -C <workspace>/skill-before` and pass `--baseline-origin git-ref:<sha>` to the audit. Preserve archive permissions with `-p`: a restrictive umask can otherwise remove executable bits from byte-identical scripts. Use the [materialization owner](materialization-budget.md) for budgeted immutable input copies. A tree snapshot taken minutes before someone else's commit is a baseline for a tree that no longer exists. **Extract into a fresh, non-existent directory.** Into an existing one, `tar -x` silently overwrites same-named files and leaves files the archive doesn't contain untouched — a mixed snapshot with zero signal at extract time, which `compare` later rejects as not matching the ref. Same trap, other command: `mv <dir> <existing-dir>` nests instead of replacing — and where `mv` is aliased to `mv -i`, a target-already-exists rename prints one prompt line and defaults to *not* happening, with exit 0 either way (verified by experiment).
 2. **Re-read before write** when a write is rejected or any time has passed: diff what changed (`git log --oneline -3`, `git show <new-commit> --stat`), fold the other session's intent into your version — their edit usually has a reason — and only then write.
 3. **Check HEAD *and which branch you are on* before committing.** `git log --oneline -1` catches a moved SHA: if it moved since your baseline, re-run the regression `compare` against the new ref before `verify` — the audit tool will reject a stale review anyway ("after skill changed"), so catching it yourself saves a round. But a sibling session can do something worse than advance HEAD: **it can switch the branch out from under you**, because a checkout is worktree-wide. Real sequence — `checkout -b feat/x`, edit for a while, and meanwhile another session ran `checkout main` + `pull`; the commit then landed on **main**, violating the repo's "never commit directly to local main" rule while the feature branch still pointed at the old base. So add `git branch --show-current` to the pre-commit check, not just the SHA. When it has already happened, `git reflog` is the authoritative reconstruction (it records each `checkout: moving from X to Y` with order), and the repair — **given a clean worktree** — is `git checkout -B <feature> <your-sha>` followed by `git branch -f main origin/main`: both are ref moves that never touch the working tree, so neither can destroy a parallel session's uncommitted work the way `reset --hard` would.
 4. **Stage only your own paths** (`git add <skill-dir> <registry-file>`), never `git add .` — the sibling session's uncommitted work must not ride along. (Already the rule for packaging; doubly load-bearing under concurrency.)
@@ -63,7 +63,7 @@ Preserve a current immutable baseline and avoid writes that clobber another sess
    ```bash
    mkdir -p <workspace>/skill-before   # tar -C requires the target to already exist
    git -C <repo-containing-the-skill> archive <ref> <skill-dir-relative-to-repo-root> \
-     | tar -x -C <workspace>/skill-before
+     | tar -xp -C <workspace>/skill-before
    # lands at <workspace>/skill-before/<skill-dir>/SKILL.md — one level deeper than
    # the snapshot subcommand's output, because `git archive` preserves the path
    # prefix; --before in step 3 is <workspace>/skill-before/<skill-dir>, not
@@ -72,6 +72,10 @@ Preserve a current immutable baseline and avoid writes that clobber another sess
 
    Include SKILL.md, references, scripts, assets, workflows, and existing evals—not
    just the main prompt. Never copy the already-edited tree and label it "before".
+   Preserve executable bits during extraction; do not repair an unexplained
+   mismatch with a blanket chmod. A Git-ref mismatch names missing/unexpected
+   files, content differences and executable-bit differences separately. Recover
+   the named path from the immutable source before retrying the audit.
    New snapshots record their inclusion policy so later verification uses the same
    source boundary. For local runtime authorization files, required configuration
    templates, legacy records, and verified ZIP archives, follow
