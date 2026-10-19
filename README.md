@@ -179,7 +179,7 @@ This suite exposes related skills under one namespace, including:
 
 These skills ship as a bundle — there are no separate single-skill plugins. All documentation skills live under `daymade-docs/` and install together from the suite.
 The router handles automatic selection. The specialist commands remain available for manual use;
-`ppt-creator` is manual-only. New presentation creation uses `deck-creator` when installed.
+For the retained PPT command, read the [compatibility notice](./daymade-docs/ppt-creator/SKILL.md).
 
 **Apple Platform Suite** (shared namespace for macOS and iOS development/operations):
 ```bash
@@ -425,7 +425,7 @@ Selects the bundled specialist for document conversion, Word and PDF production,
 Mermaid images, macOS Excel automation, scanned PDFs, DOCX review extraction, or
 documentation cleanup. It reads the selected specialist's full instructions and
 required references. Specialist slash commands remain available for manual use.
-New presentation creation uses `deck-creator` when installed; `ppt-creator` is manual-only.
+For the retained PPT command, read the [compatibility notice](./daymade-docs/ppt-creator/SKILL.md).
 
 ---
 
@@ -448,10 +448,6 @@ Converts documents to markdown with Windows/WSL path handling and PDF image extr
 - Windows/WSL path automation
 - Confluence export processing
 - Helper scripts for path conversion and image extraction
-
-**🎬 Live Demo**
-
-![Markdown Tools Demo](./demos/doc-to-markdown/convert-docs.gif)
 
 ---
 
@@ -653,10 +649,6 @@ Investigate and resolve Cloudflare configuration issues using API-driven evidenc
 - DNS, cache, and firewall diagnostics
 - Agentic approach with optional helper scripts
 
-**🎬 Live Demo**
-
-![Cloudflare Troubleshooting Demo](./demos/cloudflare-troubleshooting/diagnose-redirect-loop.gif)
-
 ---
 
 ### **ui-designer** - UI Design System Extractor
@@ -684,31 +676,10 @@ Extract design systems from reference UI images and generate implementation-read
 
 ---
 
-### **ppt-creator** - Professional Presentation Creation
+### **ppt-creator** - Compatibility Notice
 
-> **Install**: `claude plugin install daymade-docs@daymade-skills` (suite-only — invoked as `daymade-docs:ppt-creator`)
-
-Create persuasive, audience-ready slide decks from topics or documents with data-driven charts and dual-format PPTX output.
-
-**When to use:**
-- Creating presentations, pitch decks, or keynotes
-- Need structured content with professional storytelling
-- Require data visualization and charts
-- Want complete PPTX files with speaker notes
-- Building business reviews or product pitches
-
-**Key features:**
-- Pyramid Principle structure (conclusion → reasons → evidence)
-- Assertion-evidence slide framework
-- Automatic data synthesis and chart generation (matplotlib)
-- Dual-path PPTX creation (Marp CLI + document-skills:pptx)
-- Complete orchestration: content → data → charts → PPTX with charts
-- 45-60 second speaker notes per slide
-- Quality scoring with auto-refinement (target: 75/100)
-
-**🎬 Live Demo**
-
-![PPT Creator Demo](./demos/ppt-creator/create-presentation.gif)
+Read the [retirement and installation-compatibility notice](./daymade-docs/ppt-creator/SKILL.md)
+before using the legacy `daymade-docs:ppt-creator` command.
 
 ---
 
@@ -2214,31 +2185,10 @@ Designs and diagnoses safe Terraform releases as well as the provisioner traps l
 
 ---
 
-### **slides-creator** - Narrative-First Slide Deck Creation
+### **slides-creator** - Compatibility Notice
 
-Guides users through structured narrative design (ABCDEFG model), then delegates visual generation to `baoyu-slide-deck`. Focuses on what machines can't do — narrative co-design with humans.
-
-**When to use:**
-- Creating presentations, slide decks, or PPTs from user content
-- Turning articles, transcripts, or notes into visual slides
-- Designing narrative arcs for talks and workshops
-
-**Key features:**
-- Phase 0: Source material collection (user's own words first)
-- Phase 1: Narrative structure discussion using ABCDEFG model
-- Phase 2: Content structuring for machine-readable input
-- Phase 3-5: Delegates visual generation to baoyu-slide-deck
-- Phase 6: Post-processing with directory reorganization and speaker notes extraction
-
-**Example usage:**
-```bash
-# Trigger the skill naturally
-"Help me turn my article into a slide deck"
-"Create a presentation from my talk transcript"
-"I need a 20-minute deck for a workshop"
-```
-
-**Requirements**: baoyu-slide-deck skill for visual generation.
+Read the [retirement and installation-compatibility notice](./slides-creator/SKILL.md)
+before using the legacy `slides-creator` entry.
 
 ---
 
@@ -4068,9 +4018,6 @@ Use **skill-creator** (see [Essential Skill](#-essential-skill-skill-creator) se
 Use **skill-evolver** for a research-driven improvement round on a specified existing
 Skill, from relevant evidence and trade-offs to authorized changes and result verification.
 
-### For Presentations & Business Communication
-Use **ppt-creator** to generate professional slide decks with data visualizations, structured storytelling, and complete PPTX output for pitches, reviews, and keynotes. Use **slides-creator** for narrative-first slide design — it guides you through the ABCDEFG storytelling framework, collects your original content first, then delegates visual generation to baoyu-slide-deck. Perfect when you have existing articles, transcripts, or talks that need to become visual slides.
-
 ### For Video Quality Analysis
 Use **video-comparer** to analyze compression results, evaluate codec performance, and generate interactive comparison reports. Combine with **youtube-downloader** to compare different quality downloads.
 
@@ -4096,7 +4043,7 @@ Use **meeting-minutes-taker** to transform raw meeting transcripts into structur
 Use [qa-expert](./qa-expert/SKILL.md) for QA setup, test cases, execution tracking, reporting and third-party handoffs.
 
 ### For Prompt Engineering & Requirements Engineering
-Use **prompt-optimizer** to transform vague feature requests into precise EARS specifications with domain theory grounding. Perfect for product requirements documents, AI-assisted coding, and learning prompt engineering best practices. Combine with **skill-creator** to create well-structured skill prompts, or with **ppt-creator** to ensure presentation content requirements are clearly specified.
+Use **prompt-optimizer** to transform vague feature requests into precise EARS specifications with domain theory grounding. Perfect for product requirements documents, AI-assisted coding, and learning prompt engineering best practices. Combine with **skill-creator** to create well-structured skill prompts.
 
 ### For Session History & File Recovery
 Use **read-claude-code-history** to recover deleted files from previous Claude Code sessions, search for specific implementations across conversation history, or track file evolution over time. Essential for recovering accidentally deleted code or finding that feature implementation you remember but can't locate.
@@ -4217,7 +4164,6 @@ Each skill includes:
 - **cli-demo-generator**: See `cli-demo-generator/references/vhs_syntax.md` for VHS syntax and `cli-demo-generator/references/best_practices.md` for demo guidelines
 - **cloudflare-troubleshooting**: See `cloudflare-troubleshooting/references/api_overview.md` for API documentation
 - **ui-designer**: See `ui-designer/SKILL.md` for design system extraction workflow
-- **ppt-creator**: See `daymade-docs/ppt-creator/references/WORKFLOW.md` for 9-stage creation process and `daymade-docs/ppt-creator/references/ORCHESTRATION_OVERVIEW.md` for automation
 - **youtube-downloader**: See `youtube-downloader/SKILL.md` for usage examples and troubleshooting
 - **repomix-safe-mixer**: See `repomix-safe-mixer/references/common_secrets.md` for detected credential patterns
 - **video-comparer**: See `video-comparer/references/video_metrics.md` for quality metrics interpretation and `video-comparer/references/configuration.md` for customization options
@@ -4255,7 +4201,6 @@ Each skill includes:
 - **claude-export-txt-better**: See `daymade-claude-code/claude-export-txt-better/SKILL.md` for the workflow, `daymade-claude-code/claude-export-txt-better/scripts/fix-claude-export.py` for the reconstruction algorithm, and `daymade-claude-code/claude-export-txt-better/evals/` for real regression fixtures
 - **douban-skill**: See `douban-skill/SKILL.md` for the export workflow and `douban-skill/references/troubleshooting.md` for the complete log of 7 tested scraping approaches and why each failed
 - **terraform-skill**: See `terraform-skill/SKILL.md` for the full catalogue of operational traps organised by exact error → root cause → copy-paste fix
-- **slides-creator**: See `slides-creator/SKILL.md` for the narrative-first workflow, `slides-creator/references/narrative-design-guide.md` for the ABCDEFG model, and `slides-creator/references/content-creation-first-law.md` for the universal content creation principle
 - **debugging-network-issues**: See `debugging-network-issues/SKILL.md` for the falsification-first workflow, `debugging-network-issues/references/layered-isolation-experiment.md` for the multi-hop isolation pattern, `debugging-network-issues/references/case-sse-rst-130s.md` for the SSE production case study, and `debugging-network-issues/references/case-proxy-tun-cname-override.md` for the client-side proxy/TUN CNAME-rule-override case study
 - **stepfun-tts**: See `stepfun-tts/SKILL.md` for the Contextual TTS decision tree and `stepfun-tts/references/migration_from_v2.md` for the `voice_label` → `instruction` migration playbook plus the censorship rewrite list
 - **stepfun-asr**: See `stepfun-asr/SKILL.md` for the SSE-endpoint workflow and the four ASR-side traps (wrong endpoint, Plan-vs-Normal key, repetition hallucination, SSE `error` event). `stepfun-asr/references/api_reference.md` documents the exact JSON request body and SSE event contract for raw HTTP integration
@@ -4283,8 +4228,6 @@ Each skill includes:
 - **Jina.ai API key** (for twitter-reader): Free tier available at https://jina.ai/
 - **asciinema** (optional, for cli-demo-generator interactive recording)
 - **ccusage** (optional, for statusline cost tracking)
-- **pandas & matplotlib** (optional, for ppt-creator chart generation)
-- **Marp CLI** (optional, for ppt-creator Marp PPTX export): `npm install -g @marp-team/marp-cli`
 - **Mole** (optional, for macos-cleaner visual cleanup): Download from https://github.com/tw93/Mole
 - **repomix** (for repomix-safe-mixer): `npm install -g repomix`
 - **CCPM CLI** (for skills-search): `npm install -g @daymade/ccpm`
@@ -4323,11 +4266,11 @@ to install and verify the replacement before removing the old plugin.
 
 ### Can I contribute my own skill?
 
-Absolutely! See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines. We recommend using the skill-creator to ensure your skill meets quality standards.
+Follow the [contribution policy](./CONTRIBUTING.md#what-we-dont-accept) for new-skill suggestions and submissions, and the [bug-fix route](./CONTRIBUTING.md#-bug-fixes-to-existing-skills) for existing skills.
 
 ### Are these skills safe to use?
 
-Yes, all skills are open-source and reviewed. The code is available in this repository for inspection.
+Open source makes inspection possible; it does not establish safety. Use [skill-reviewer](./daymade-skill/skill-reviewer/SKILL.md) and the [security checklist](./daymade-skill/skill-creator/references/sanitization_checklist.md) to inspect the relevant skill.
 
 ### How do Chinese users handle API access?
 
