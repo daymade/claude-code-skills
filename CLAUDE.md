@@ -102,7 +102,9 @@ For evidence-based improvement of an existing application, enter
 [app-evolver](app-evolver/SKILL.md). For released-artifact or runtime evidence,
 load its [Skill composition route](app-evolver/references/skill-composition.md);
 keep specialist selection and handoff boundaries in that owner.
-When a repair batch ends or the user questions its direction, load its
+When the user corrects premises, research focus or scope, return first to its
+[task binding](app-evolver/SKILL.md#1-bind-the-application-and-unfinished-result).
+For next-increment selection after that reconciliation or a completed repair batch, use its
 [increment-selection contract](app-evolver/references/evidence-and-fit.md#make-the-disposition-operational).
 
 For permission-sensitive fixtures, use Skill Creator's
