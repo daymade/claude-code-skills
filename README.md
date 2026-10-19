@@ -23,7 +23,7 @@ Professional Claude Code skills marketplace for development, research, content, 
 - [🎬 Interactive Demo Gallery](#-interactive-demo-gallery)
 - [🎯 Use Cases](#-use-cases)
 - [📚 Documentation](#-documentation)
-- [🛠️ Requirements](#️-requirements)
+- [🛠️ Requirements](#-requirements)
 - [❓ FAQ](#-faq)
 - [🤝 Contributing](#-contributing)
 - [📄 License](#-license)
@@ -4110,7 +4110,7 @@ Each skill includes:
 - **llm-eval-harness**: See `llm-eval-harness/references/evaluation_disciplines.md` for the reasoning behind each discipline (env-var keys, thinking-aware throughput, proxy isolation, probabilistic protocol verdicts) and `llm-eval-harness/references/quality_blind_judge.md` for the independent blind-judge quality method
 - **meme-creator**: See `meme-creator/SKILL.md` for the pipeline and `meme-creator/references/tracking-playbook.md` for the CSRT failure taxonomy and manual-keyframe fallback
 
-## 🛠️ Requirements
+## 🛠 Requirements
 
 - **floorplan-finder**: Authorized web retrieval and image viewing; interactive browser for sources requiring it. No bundled runtime dependencies.
 
