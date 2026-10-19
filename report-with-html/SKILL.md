@@ -55,6 +55,9 @@ contract, interaction contracts, and browser verification.
   `references/approved-examples.md`
 - Reusable interactions and their keyboard contracts:
   `references/interaction-components.md`
+- Parameter exploration, selected-record follow-up and recoverable workbench state:
+  `references/interactive-analysis.md`. Load before authoring those interactions;
+  keep static reports on the ordinary path.
 - Numbered hover/focus source previews and original-content adapters:
   `references/citation-source-preview.md` (candidate/pilot; load when citations use previews).
 - Photos, screenshots and explanatory diagrams: `references/visual-evidence.md`.
@@ -128,6 +131,12 @@ stack for statistical charts. If neither exists, research and select a maintaine
 library before implementing; do not hand-build a chart engine.
 
 ### Interaction and accessibility
+
+For calculators or workbenches that continue from the reader's parameters or
+selection, load `references/interactive-analysis.md` before implementing controls,
+state recovery or the return to the conversation. Keep context preparation,
+state saving and an explicit message send distinct; use a manual handoff in a
+standalone browser.
 
 **Evidence comes to the reader; the reader does not travel to the evidence.** When the
 page cites a clause, a screenshot, or a source passage, embed it at the point of citation
