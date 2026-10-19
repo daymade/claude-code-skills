@@ -248,10 +248,10 @@
     },
     {
       "name": "daymade-docs",
-      "description": "Routes docs: Word/PDF/PPTX/saved HTML→Markdown; MD/Word→PDF; create Word; PDF HTML/translate; Excel/xlsm/macOS; photo/signed scans; Mermaid; DOCX review; post-change docs. Reads one bundled Daymade specialist. New slide decks use deck-creator when installed; generic PDF reading/editing and spreadsheet analysis stay with their own Skills. Retired ppt-creator stays manual-only.",
+      "description": "Docs: Word/PDF/PPTX/HTML→Markdown; MD/Word→PDF; create Word; PDF HTML/translate; Excel/xlsm/macOS; photo/signed scans; Mermaid; DOCX review; post-change docs. Reads one bundled Daymade specialist. New slide decks use deck-creator when installed; generic PDF reading/editing and spreadsheet analysis stay with their own Skills. Retired ppt-creator stays manual-only.",
       "source": "./daymade-docs",
       "strict": false,
-      "version": "1.25.3",
+      "version": "1.25.4",
       "category": "suite",
       "keywords": [
         "suite",
@@ -380,7 +380,7 @@
       "description": "Daymade skills core suite. Bundles skill creation, quality review, real Claude/Codex Skill-surface governance, suite-migration reconciliation, and marketplace development tooling under one shared namespace. Skill governance separates canonical source, installed inventory, discovery policy, the fresh model-visible catalog, and router-resolved cold resources instead of optimizing cache counts; it preserves Claude's official versioned-cache lifecycle and verifies selected entries in the real host prompt. Skill verification separates risk classification from evaluation spend: bounded fixes use targeted checks, narrow behavior changes use sampled replays, and paired baselines, graders, benchmarks, or a viewer run only after explicit user authorization or a decision-bearing evidence plan plus opt-in; that authorization does not change the risk tier. Existing-skill edits retain an old-vs-new capability audit and content-bound packaging attestation so prompt compression cannot silently delete runtime contracts. When the official skill-creator plugin is also installed, skill-creator detects the coexistence and offers a consent-based, reversible SessionStart routing hook so the daymade edition wins deterministically; on machines without the official plugin nothing is ever installed.",
       "source": "./daymade-skill",
       "strict": false,
-      "version": "1.70.5",
+      "version": "1.70.6",
       "category": "suite",
       "keywords": [
         "suite",
@@ -773,10 +773,10 @@
     },
     {
       "name": "slides-creator",
-      "description": "【DEPRECATED · 已废弃】叙事优先的幻灯片创建方法论已于 2026-08-07 并入 deck-creator（作者私有仓 Route A）。本条目仅为退役通告保留，请勿调用。",
+      "description": "Deprecated slide-creation entry retained as a compatibility notice. Use to check the retirement status of slides-creator or identify a legacy installation. This package does not generate slides or delegate presentation creation.",
       "source": "./slides-creator",
       "strict": false,
-      "version": "2.1.0",
+      "version": "2.1.1",
       "category": "content-creation",
       "keywords": [
         "slides",

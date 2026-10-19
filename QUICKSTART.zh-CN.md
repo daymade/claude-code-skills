@@ -51,7 +51,7 @@ uv run --project "$TASK_CREATOR" --frozen python "$TASK_CREATOR/scripts/quick_va
   "$TASK_PROJECT/.claude/skills/my-first-skill"
 ```
 
-继续按 [skill-creator 的交付流程](./daymade-skill/skill-creator/SKILL.md#skill-creation-process-step-by-step)完成所需的安全、回归和打包检查；结构验证通过不等于已完成交付。
+继续按 [skill-creator 的交付流程](./daymade-skill/skill-creator/SKILL.md#step-5-sanitization-review)完成所需的安全、回归和打包检查；结构验证通过不等于已完成交付。
 
 ### 步骤 4：验证宿主读取结果
 

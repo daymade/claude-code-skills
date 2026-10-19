@@ -10,7 +10,7 @@ Always welcome:
 
 1. Check if the issue already exists
 2. Provide clear description and reproduction steps
-3. Include Claude Code version and environment details
+3. Include the host, installation and environment details requested by the [bug report template](./.github/ISSUE_TEMPLATE/bug_report.md)
 4. Add relevant error messages or screenshots
 
 ### 🔧 Bug Fixes to Existing Skills
