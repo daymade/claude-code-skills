@@ -7,6 +7,7 @@
 - Essential filters for RST isolation
 - HTTP/2 specifics (stream RST is not TCP RST)
 - Correlating pcap with application logs
+- Four-boundary tunnel captures
 - Common pitfalls
 
 ## When to capture packets
@@ -121,6 +122,85 @@ Tie pcap to application activity via the request identifier:
 3. Cross-reference: the pcap flow on `(1.2.3.4:54321 ↔ server:443)` maps to application log entries for `req=abc123`
 
 This resolves ambiguities like "which of the 20 concurrent connections is the one that failed?"
+
+## Four-boundary tunnel captures
+
+Use this recipe when an authorized bulk-transfer observation reproduces a tunnel
+throughput problem and one capture cannot locate where packets disappear. For a
+known Tailscale/TUN/proxy conflict, begin with `tunnel-doctor`; use this recipe for
+the unresolved packet-boundary question. The investigator selects interfaces and
+filters from the actual route and observed flow, not from example interface names.
+
+For direction A→B, collect the same bounded run at four observation points:
+
+| Capture | What it observes |
+| --- | --- |
+| A tunnel interface | Inner application flow before encapsulation |
+| A physical interface | Outer tunnel datagrams at the sending host's capture tap |
+| B physical interface | Outer tunnel datagrams at the receiving host's capture tap |
+| B tunnel interface | Inner application flow after decapsulation |
+
+Analyze B→A separately. Record the actual inner flow's protocol, addresses and
+ports, outer endpoints, route/interface identity, capture commands, start/end
+times with timezone, snaplen and collector exit/drop statistics. Include all
+observed endpoint addresses, including stable and temporary IPv6 addresses.
+Start all captures before the transfer and keep them through its end and a stated
+settling interval. Stop only capture processes owned by this experiment.
+Keep captures and their decoding recipe in the incident's persistent evidence
+directory when later or post-reboot review is required.
+
+### Match packets before reporting a missing fraction
+
+For direct WireGuard transport-data packets, the public
+[protocol specification](https://www.wireguard.com/protocol/) defines a 16-byte
+prefix: type/reserved bytes, a little-endian 32-bit receiver index and a
+little-endian 64-bit counter. Compare `(receiver index, counter)` within the same
+direction, peer/session and key epoch; do not combine directions or unrelated
+sessions. Preserve the original captured headers and the decoding command or
+parser revision so another investigator can recompute the sets. Rekeying or
+endpoint changes require separate groups. A relayed or differently encapsulated
+path needs its actual framing decoded; do not interpret arbitrary UDP bytes as
+direct WireGuard headers.
+
+Choose snaplen after verifying that the actual link/IP/UDP headers and the full
+identifier prefix survive in both captures. IPv6 extension headers, fragmentation
+and different link-layer formats invalidate a fixed-offset assumption. Avoid
+payload capture when headers suffice; if the identifiers are truncated, the
+comparison is unknown rather than a missing-packet result.
+
+Use a common interior observation window, with a stated boundary margin, so a
+packet captured just before the other collector starts or just after it stops
+does not become apparent loss. Allow for reordering and capture-clock differences;
+compare packet identities, not timestamp equality. Deduplicate capture appearances
+and report raw and unique counts. For one compatible group, let `S` be the unique
+identifiers at the sending physical tap and `R` those at the receiving physical
+tap over that comparable window. Report `|S|`, `|R|`, `|S∩R|`, `|S−R|`, `|R−S|`
+and, only when `|S| > 0`, the missing fraction `|S−R| / |S|`. A gap in counter
+sequence alone is not evidence of loss: other traffic may share that session.
+
+Before attributing unmatched packets, inspect every collector's reported drops,
+endpoint/filter coverage, identifier decoding and host capture/offload behavior.
+Unresolved collector loss, omitted endpoints or incomparable packet segmentation
+leave the network-loss estimate unknown; zero collector drops alone do not prove
+complete capture. Do not subtract raw packet totals from different taps.
+
+### Bound the conclusion to the observed run
+
+Packets present at A's physical tap but absent at B's physical tap localize an
+observed discrepancy between those taps, subject to the capture checks above.
+That interval includes host driver/NIC, local access network and intermediate
+path; it does not identify the ISP, tunnel software or one router by itself.
+Outer delivery with missing inner delivery moves the next question toward
+decapsulation or host processing. Reverse-path agreement is a directional control,
+not proof that the forward path is healthy. An encrypted outer session can carry
+several inner flows: correlate the experiment window and traffic isolation before
+assigning its discrepancy to one application's transfer.
+
+Record whether the original symptom actually recurred. A slow transfer observed
+after a reboot can establish a current network defect without reproducing a prior
+whole-machine hang. Neither that result nor a healthy short SSH handshake closes
+the historical crash's causal chain. These are investigator-run checks, not an
+automatic packet-loss detector or a new permanent capture service.
 
 ## Common pitfalls
 
