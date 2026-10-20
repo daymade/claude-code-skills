@@ -24,8 +24,8 @@ generic engine does not select credentials, authorize funding or replace a
 registry policy.
 
 Read receipts with the bundled stdlib-only `scripts/eval_result.py` from the
-explicitly trusted engine installation. Import `RESULT_API_VERSION` (currently
-2), `invocation_digest`, `read_result` and `ResultContractError`. Bind the actual
+explicitly trusted engine installation. Import `RESULT_API_VERSION`,
+`invocation_digest`, `read_result` and `ResultContractError`. Bind the actual
 probe argv, fresh run ID, probe name and observed child return code:
 
 ```python
@@ -78,7 +78,7 @@ codes to the machine receipt reader.
 
 ## Evidence and progress
 
-Receipt schema 2 binds `run_id`, `probe`, invocation digest and route `identity`
+The receipt binds `run_id`, `probe`, invocation digest and route `identity`
 (model, endpoint kind/value, format and auth mode). It contains typed `units`,
 derived `counts`, state/verdict, derived summary and an optional run error.
 Counter names are planned/attempted/finished/usable/errors/skipped. They count
