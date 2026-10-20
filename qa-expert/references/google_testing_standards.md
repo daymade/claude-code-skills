@@ -1,6 +1,8 @@
 # Google Testing Standards Reference
 
-Comprehensive guide to Google's testing best practices and standards.
+Apply AAA test structure, isolation and coverage planning. Use the target
+project's approved policy for release decisions; do not treat the illustrative
+planning values below as universal requirements or attributed Google thresholds.
 
 ---
 
@@ -80,7 +82,7 @@ Examples:
 - Test individual functions/methods
 - No external dependencies
 - Fast execution (<100ms)
-- Coverage: ≥80% statements, 75% branches
+- Select coverage using [coverage planning](#coverage-planning).
 
 **Integration Tests**:
 - Test component interactions
@@ -102,15 +104,20 @@ Examples:
 
 ---
 
-## Coverage Thresholds
+## Coverage Planning
 
-### Code Coverage Targets
+Treat the following values as illustrative planning examples. Adopt or replace
+them through the target project's test strategy; keep the accepted values there
+rather than copying them into reports or prompts. Passing a coverage target does
+not establish that the assertions detect the required failure.
+
+### Illustrative Code Coverage Targets
 - ✅ **Statements**: ≥80%
 - ✅ **Branches**: ≥75%
 - ✅ **Functions**: ≥85%
 - ✅ **Lines**: ≥80%
 
-### Test Distribution (Recommended)
+### Illustrative Test Distribution
 - Unit Tests: 70%
 - Integration Tests: 20%
 - E2E Tests: 10%
@@ -217,14 +224,30 @@ function processSkillName(input: string): void {
 
 ### Release Criteria
 
-| Gate | Threshold | Blocker |
-|------|-----------|---------|
-| Test Execution | 100% | Yes |
-| Pass Rate | ≥80% | Yes |
-| P0 Bugs | 0 | Yes |
-| P1 Bugs | ≤5 | Yes |
-| Code Coverage | ≥80% | Yes |
-| Security | 90% OWASP | Yes |
+The QA engineer or executing agent must read the target project's authoritative
+release policy before giving go/no-go. Bind each required user journey to its
+test specification and observed result; use the bug log for actual severity and
+the appropriate coverage/security evidence for those claims. Preserve approved
+SLOs, exceptions and optional-failure tolerances instead of imposing this Skill's
+own thresholds. If the policy or a required observation is unavailable, report
+acceptance as unresolved; continue independent authorized work.
+
+Decide required journeys individually. An aggregate pass rate, completed test
+count, coverage score or green metrics report cannot override a failed required
+journey. Do not declare optional or explicitly excepted failures release blockers
+when the approved policy permits them. Retain the policy's decision owner for
+unresolved exceptions; do not invent approval.
+
+Treat the bundled metrics CLI as a report. Read its
+[implementation](../scripts/calculate_metrics.py) for its built-in checks;
+do not copy those values into another release table or treat exit 0 as approval.
+Keep missing results unknown, rather than counting them as successful execution.
+
+For a synthetic control, supply a project policy requiring first-use success
+while allowing a cosmetic failure. A failed first-use case must prevent a pass
+even when all other tests pass. With first-use passing and only that permitted
+cosmetic failure, the same policy may pass; with first-use unobserved, acceptance
+remains unresolved. Calibrate the decision against these distinct outcomes.
 
 ### Daily Checkpoints
 
