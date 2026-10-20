@@ -129,7 +129,9 @@ and its actual-reader pilot before expansion. Keep conversion evidence and reade
 observations separate; this file does not define another batch recipe.
 
 For proxy-selection or disruptive VPN recovery changes, enter `tunnel-doctor` and its
-proxy-conflict and network-recovery references. For automatic WeCom integration,
+proxy-conflict and network-recovery references. For unresolved tunnel packet-loss
+localization, read the [capture procedure](debugging-network-issues/references/packet-capture-recipes.md#four-boundary-tunnel-captures).
+For automatic WeCom integration,
 enter `setup-notifications-via-wecom`; its receipt contract owns accepted/rejected/unknown
 handling, while the worker owns event identity and delivery state.
 

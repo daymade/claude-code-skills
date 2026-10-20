@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **debugging-network-issues** (v1.11.5): Align the repository entry with the capture SOP; correct time-rotation, snapshot-length and timestamp guidance, verify TLS key-log prerequisites, and remove the hand-maintained contents list. Change type: documentation and operation-recipe correction.
+
 - **skill-creator** (`daymade-skill` v1.70.9 → v1.71.0): Add optional `materialize --summary` output for prepare, run, finish and recover. Report outcomes and the full receipt path while retaining complete receipts, child logs, default JSON output and existing exit codes. Change type: additive CLI option.
 - **macos-cleaner** (`daymade-macos` v1.24.3): Separate emergency recovery from the capacity investigation in result reports, retain mixed-directory toolchains, and exercise both premature closure and unnecessary continued scanning with bounded cases. Change type: bounded workflow clarification and representative acceptance cases.
 - **debugging-network-issues** (v1.11.4): Document paired inner/outer tunnel captures, directional packet-identity comparison and capture-coverage limits; keep current transfer findings separate from historical crash attribution. Change type: bounded evidence-recipe addition.

@@ -492,7 +492,7 @@ Read these before applying this skill to an unfamiliar problem domain; the wrong
 
 - [references/layered-isolation-experiment.md](references/layered-isolation-experiment.md) — 3-path technique, mock upstream template, result matrix
 - [references/instrumentation-patterns.md](references/instrumentation-patterns.md) — env-gated TRACE\_\*, greppable log tags, deployment checklist
-- [references/packet-capture-recipes.md](references/packet-capture-recipes.md) — tcpdump filters for RST isolation, interface selection on Docker, HTTP/2 decoding; for unresolved tunnel loss, compare both hosts' inner/outer boundaries and qualify packet-match coverage before attribution
+- For packet-level evidence or unresolved tunnel loss, read [references/packet-capture-recipes.md](references/packet-capture-recipes.md).
 - [references/counter-review-pattern.md](references/counter-review-pattern.md) — 4-agent team composition, 4-question filter, integration workflow
 - [references/cognitive-traps.md](references/cognitive-traps.md) — extended examples, rescue-cycle warnings
 - [references/case-sse-rst-130s.md](references/case-sse-rst-130s.md) — canonical case study with wrong-turn timeline
