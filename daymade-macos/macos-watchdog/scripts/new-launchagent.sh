@@ -41,6 +41,16 @@ case "$INTERVAL" in
     *[!0-9]*|'') echo "Interval must be integer seconds, got: $INTERVAL" >&2; exit 2 ;;
 esac
 [ "$INTERVAL" -ge 30 ] || { echo "Interval <30s is almost certainly a mistake (crash-loop territory)" >&2; exit 2; }
+if [ "$INTERVAL" -lt 60 ]; then
+    cat >&2 <<'WARN'
+WARNING: sub-minute StartInterval is a BTM transition tax (SKILL.md Deploy 9).
+Every firing costs two launchd job transitions that backgroundtaskmanagementd
+broadcasts as userDataDidChange, feeding LoginItems.appex monitor-rebuild
+amplification (the 2026-10 watchdog panics). Prefer a KeepAlive job running an
+in-process loop (period = max(interval, runtime+1s)) — zero steady-state
+transitions at the same cadence. Proceeding anyway.
+WARN
+fi
 [ -f "$PROGRAM" ] || { echo "Program not found: $PROGRAM" >&2; exit 2; }
 [ -x "$PROGRAM" ] || { echo "Program not executable (chmod +x first): $PROGRAM" >&2; exit 2; }
 case "$PROGRAM" in
