@@ -7,9 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` v1.70.9 → v1.71.0): Add optional `materialize --summary` output for prepare, run, finish and recover. Report outcomes and the full receipt path while retaining complete receipts, child logs, default JSON output and existing exit codes. Change type: additive CLI option.
 - **macos-cleaner** (`daymade-macos` v1.24.3): Separate emergency recovery from the capacity investigation in result reports, retain mixed-directory toolchains, and exercise both premature closure and unnecessary continued scanning with bounded cases. Change type: bounded workflow clarification and representative acceptance cases.
 - **debugging-network-issues** (v1.11.4): Document paired inner/outer tunnel captures, directional packet-identity comparison and capture-coverage limits; keep current transfer findings separate from historical crash attribution. Change type: bounded evidence-recipe addition.
 - **llm-eval-harness** (v1.6.0): Add run-bound machine receipts for speed, protocol, concurrency and answer collection; preserve partial and valid negative observations, distinguish measurement from execution failure, and support declared Anthropic auth modes. Change type: additive probe-result contract and failure-reporting repair.
+- **qa-expert** (v1.2.2): Test cross-runtime compatibility against the promised implementation's semantics, distinguish modeled inputs from native execution, align release decisions and reporting prompts with the project's authoritative policy, and quote QA command paths. Change type: bounded acceptance-recipe and documentation repair.
 
 - **frontend-visual-qa** (v1.21.10): Verify attention discovery across views and diagnose failed captures on the owned background target without automatic foreground recovery. Change type: bounded acceptance-recipe repair.
 - **data-visualization-discipline** (v1.1.3): Distinguish unknown, partially read and confirmed-zero counts, and reconcile attention summaries and filters against the existing state contract. Change type: bounded counterexample addition.

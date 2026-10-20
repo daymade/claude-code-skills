@@ -553,16 +553,33 @@ def recover(root, owner):
     return record
 
 
+def receipt_summary(record):
+    """Project recorded outcomes without echoing input inventories or child argv."""
+    result = {key: record[key] for key in
+              ("state", "charged_bytes", "max_total_bytes", "outcome_before_finish")
+              if key in record}
+    result["receipt_path"] = str(Path(record["root"]) / STATE)
+    runs = record.get("runs")
+    if isinstance(runs, list) and runs and isinstance(runs[-1], dict):
+        result["last_run"] = {key: runs[-1][key] for key in ("state", "returncode")
+                              if key in runs[-1]}
+    return result
+
+
 def _main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     p = sub.add_parser("prepare")
     p.add_argument("--manifest", required=True)
     p.add_argument("--root", required=True)
+    p.add_argument("--summary", action="store_true",
+                   help="print outcome fields and the full receipt path instead of the full JSON")
     for command in ("run", "finish", "recover"):
         p = sub.add_parser(command)
         p.add_argument("--root", required=True)
         p.add_argument("--owner", required=True)
+        p.add_argument("--summary", action="store_true",
+                       help="print outcome fields and the full receipt path instead of the full JSON")
         if command == "run":
             p.add_argument("--arm", required=True)
             p.add_argument("--poll-interval", type=float, default=0.1)
@@ -579,7 +596,7 @@ def _main(argv=None):
         else:
             command = args.argv[1:] if args.argv[:1] == ["--"] else args.argv
             result, code = run(args.root, args.owner, args.arm, command, args.poll_interval)
-        print(json.dumps(result, sort_keys=True))
+        print(json.dumps(receipt_summary(result) if args.summary else result, sort_keys=True))
         return code
     except (MaterializationError, OSError, ValueError, KeyError) as e:
         reason = getattr(e, "reason", "invalid_manifest")

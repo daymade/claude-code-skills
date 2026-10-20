@@ -29,7 +29,7 @@ Trigger this skill when:
 
 **One-command initialization**:
 ```bash
-uv run <qa-expert-dir>/scripts/init_qa_project.py <project-name> <project-root>
+uv run "<qa-expert-dir>/scripts/init_qa_project.py" "<project-name>" "<project-root>"
 ```
 
 **What gets created**:
@@ -55,7 +55,7 @@ creates templates; it does not run tests or install a scheduler.
 Initialize QA directories and templates:
 
 ```bash
-uv run <qa-expert-dir>/scripts/init_qa_project.py <project-name> <project-root>
+uv run "<qa-expert-dir>/scripts/init_qa_project.py" "<project-name>" "<project-root>"
 ```
 
 Creates directory structure, tracking CSVs, documentation templates, and master prompt for autonomous execution.
@@ -73,7 +73,11 @@ Write standardized, reproducible test cases following AAA pattern (Arrange-Act-A
 
 **Test case format**: TC-[CATEGORY]-[NUMBER] (e.g., TC-CLI-001, TC-WEB-042, TC-SEC-007)
 
-**Reference**: See `references/google_testing_standards.md` for complete AAA pattern guidelines and coverage thresholds.
+**Reference**: See `references/google_testing_standards.md` for AAA guidelines and project-bound coverage and release acceptance.
+
+For cross-platform adapters or compatibility with another runtime/implementation,
+load [runtime compatibility acceptance](references/runtime-compatibility-acceptance.md)
+before choosing mocks, expected results or supported-version cases.
 
 For payment, procurement, fulfillment or refund recovery, load
 [transaction recovery acceptance](references/transaction-recovery-acceptance.md)
@@ -133,7 +137,7 @@ File bugs with proper severity classification:
 Calculate metrics from the current tracking rows:
 
 ```bash
-uv run <qa-expert-dir>/scripts/calculate_metrics.py <project-root>/tests/docs/templates/TEST-EXECUTION-TRACKING.csv
+uv run "<qa-expert-dir>/scripts/calculate_metrics.py" "<project-root>/tests/docs/templates/TEST-EXECUTION-TRACKING.csv"
 ```
 
 **Metrics dashboard includes**:
@@ -148,7 +152,7 @@ and completed status as `Completed`. Its P0 check only reads linked bug IDs and
 `P0` in tracking notes; it does not read bug severity from the bug log. Coverage,
 OWASP mitigation and release acceptance need their own project evidence.
 The CLI prints failing checks but still exits 0; it is a report, not a release
-gate. Apply the target project's authoritative release policy. Calculate current
+gate. Follow [release acceptance](references/google_testing_standards.md#release-criteria). Calculate current
 totals on demand rather than maintaining another summary table.
 
 ### 6. Progress Reporting
@@ -180,7 +184,7 @@ Implement OWASP Top 10 security testing:
 6. **A07: Authentication Failures** - Session hijacking, CSRF
 7. **Others**: Data integrity, logging, SSRF
 
-**Target**: 90% OWASP coverage (9/10 threats mitigated).
+Select security acceptance from the target project's authoritative release policy.
 
 Each security test follows AAA pattern with specific attack vectors documented.
 
@@ -248,7 +252,7 @@ Access detailed guidelines from bundled references:
 - **`references/day1_onboarding.md`** - 5-hour onboarding guide for new QA engineers
 - **`references/master_qa_prompt.md`** - Preparation, execution, recovery and reporting SOP
 - **`references/llm_prompts_library.md`** - Prompts for specific QA tasks
-- **`references/google_testing_standards.md`** - AAA pattern, coverage thresholds, fail-fast validation
+- **`references/google_testing_standards.md`** - AAA pattern, coverage planning, release acceptance and fail-fast validation
 - **`references/ground_truth_principle.md`** - Preventing doc/CSV sync issues (critical for test suite integrity)
 
 ## Assets & Templates
@@ -268,7 +272,7 @@ Automation scripts for QA infrastructure:
 
 ### Pattern 1: Starting Fresh QA
 ```
-1. uv run <qa-expert-dir>/scripts/init_qa_project.py my-app <fresh-project-root>
+1. uv run "<qa-expert-dir>/scripts/init_qa_project.py" my-app "<fresh-project-root>"
 2. Fill in BASELINE-METRICS.md (document current state)
 3. Write test cases using assets/templates/TEST-CASE-TEMPLATE.md
 4. Copy master prompt from references/master_qa_prompt.md
@@ -289,7 +293,7 @@ Automation scripts for QA infrastructure:
 ```
 1. Read references/google_testing_standards.md (OWASP section)
 2. Write TC-SEC-XXX test cases for each OWASP threat
-3. Target 90% coverage (9/10 threats)
+3. Apply the project's approved security acceptance
 4. Document mitigations in test cases
 ```
 

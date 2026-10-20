@@ -2,19 +2,6 @@
 
 **Purpose**: Ready-to-use prompts for directing LLM assistants to execute specific QA tasks.
 
-**Last Updated**: 2025-11-09
-
----
-
-## Quick Navigation
-
-1. [Day 1 Onboarding](#day-1-onboarding)
-2. [Weekly Execution](#weekly-execution)
-3. [Daily Progress](#daily-progress)
-4. [Bug Investigation](#bug-investigation)
-5. [Weekly Reporting](#weekly-reporting)
-6. [Emergency Escalation](#emergency-escalation)
-
 ---
 
 ## Day 1 Onboarding
@@ -61,7 +48,7 @@ CRITICAL: Follow the test plan exactly as documented.
 Read: tests/docs/02-CLI-TEST-CASES.md (or appropriate test category document)
 
 Your task today (Monday, Week 1):
-- Execute test cases TC-CLI-001 through TC-CLI-015 (15 tests)
+- Execute test cases TC-CLI-001 through TC-CLI-015
 - Update tests/docs/templates/TEST-EXECUTION-TRACKING.csv after EACH test
 - File bugs in tests/docs/templates/BUG-TRACKING-TEMPLATE.csv for any failures
 - Expected time: 5 hours
@@ -72,7 +59,7 @@ Execute tests in order. For each test:
 3. Record result in TEST-EXECUTION-TRACKING.csv immediately
 4. If test fails, create bug report in BUG-TRACKING-TEMPLATE.csv before moving to next test
 
-After completing all 15 tests, give me a summary:
+After completing the selected cases, give me a summary:
 - How many passed/failed/blocked
 - Bug IDs filed (if any)
 - Any blockers for tomorrow
@@ -84,7 +71,7 @@ Continue Week [N] testing.
 
 Read: tests/docs/[CATEGORY]-TEST-CASES.md
 
-Today's test cases: TC-[CATEGORY]-[START] through TC-[CATEGORY]-[END] ([N] tests)
+Today's test cases: TC-[CATEGORY]-[START] through TC-[CATEGORY]-[END]
 
 Follow the same process as yesterday:
 1. Execute each test exactly as documented
@@ -100,7 +87,7 @@ Start now.
 Complete Week [N] testing and submit weekly progress report.
 
 Tasks:
-1. Execute remaining tests: TC-[CATEGORY]-[START] through TC-[CATEGORY]-[END] ([N] tests)
+1. Execute remaining tests: TC-[CATEGORY]-[START] through TC-[CATEGORY]-[END]
 2. Update TEST-EXECUTION-TRACKING.csv for all completed tests
 3. Generate weekly progress report using tests/docs/templates/WEEKLY-PROGRESS-REPORT.md
 
@@ -108,7 +95,7 @@ For the weekly report:
 - Calculate pass rate for Week [N] (passed / total executed)
 - Summarize all bugs filed this week (by severity: P0/P1/P2/P3)
 - Compare against baseline: tests/docs/BASELINE-METRICS.md
-- Assess quality gates: Are we on track for 80% pass rate?
+- Read the project's authoritative release policy and assess each required journey using the bundled release-acceptance guidance in references/google_testing_standards.md.
 - Plan for Week [N+1]
 
 Submit the completed WEEKLY-PROGRESS-REPORT.md.
@@ -129,7 +116,7 @@ Current status:
 - Blockers: [None / List blockers]
 
 Today's plan:
-- Test cases: TC-[XXX]-[YYY] to TC-[XXX]-[ZZZ] ([N] tests)
+- Test cases: TC-[XXX]-[YYY] to TC-[XXX]-[ZZZ]
 - Expected time: [X] hours
 - Prerequisites: [Any setup needed]
 
@@ -277,7 +264,7 @@ Fill in ALL sections:
 
 Calculate all metrics from actual data. Do NOT make up numbers.
 
-Save the report as: tests/docs/reports/WEEK-[N]-PROGRESS-REPORT-2025-11-[DD].md
+Save the report as: tests/docs/reports/WEEK-[N]-PROGRESS-REPORT-[YYYY-MM-DD].md
 ```
 
 ### Compare Against Baseline
@@ -293,7 +280,7 @@ Analysis:
 1. Test execution: Baseline had [X] unit tests passing. How many total tests do we have now?
 2. Pass rate: What's our QA test pass rate vs baseline pass rate?
 3. Bugs discovered: Baseline started with [X] P0 bugs. How many P0/P1/P2/P3 bugs have we found?
-4. Quality gates: Are we on track to meet 80% pass rate, zero P0 bugs policy?
+4. Release acceptance: Read the project's authoritative policy and follow references/google_testing_standards.md; identify required journeys and missing evidence.
 5. Security: Have we maintained OWASP coverage?
 
 Provide a comparison table showing:
@@ -430,7 +417,7 @@ Include relevant context before the prompt:
 Replace all template variables with actual values:
 - `[CATEGORY]`: CLI / WEB / API / SEC
 - `[NUMBER]`: Test case number (e.g., 001, 015)
-- `[N]`: Number of tests
+- `[N]`: Week number
 - `[XXX]`: Bug ID number
 
 ### 3. Reference Documentation
@@ -518,6 +505,4 @@ Be precise. Use exact command outputs, exact HTTP responses, exact UI text. Do N
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: 2025-11-09
 **Feedback**: If you create new useful prompts, add them to this document.
