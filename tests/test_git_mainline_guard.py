@@ -67,7 +67,7 @@ class MainlineGuardTests(unittest.TestCase):
         shutil.copy2(REPO_ROOT / "scripts/ci/check_skill_release.py", self.repo / "scripts/ci/check_skill_release.py")
         helpers = self.repo / "daymade-skill/skill-creator/scripts"
         helpers.mkdir(parents=True)
-        for helper in ("release_readiness.py", "packaging_policy.py"):
+        for helper in ("release_readiness.py", "release_distribution.py", "packaging_policy.py"):
             shutil.copy2(REPO_ROOT / "daymade-skill/skill-creator/scripts" / helper, helpers / helper)
 
         shutil.copy2(PRE_COMMIT_SOURCE, self.repo / ".githooks/pre-commit")

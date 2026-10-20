@@ -238,8 +238,10 @@ and review evidence bound to current content, and bump the registered plugin's
 release identity for shipped changes. Preserve unrelated registry entries.
 
 For repository publication, follow [release readiness](references/release-readiness.md)
-with committed exact-candidate independent evidence. A package-only/source-only
-request does not acquire installation or publication scope. When local availability
+with committed exact-candidate independent evidence. Reuse an unchanged complete
+distribution's review only through that procedure's dependency-bound rebind.
+A package-only/source-only request does not acquire installation or publication
+scope. When local availability
 is requested, invoke `skill-governance` and the source-sync owner, preserve host
 disables, read the actual consumed file and verify the fresh host. A registered or
 merged source is not proof of installation or business success.
