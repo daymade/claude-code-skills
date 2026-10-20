@@ -218,17 +218,23 @@ For build reuse across source refs or a target redeployed during acceptance, loa
 [delivery verification procedure](frontend-visual-qa/references/delivery-verification.md).
 For nested zoomable workspaces, use its
 [journey and state matrix](frontend-visual-qa/references/journey-and-page-contracts.md#journey-and-state-matrix).
+For live status or attention filters, follow its
+[cross-view attention journey](frontend-visual-qa/references/journey-and-page-contracts.md#operational-attention-across-views).
 For embedded-reader zoom, return, focus or filtered-selection changes, use its
 [reader journey](frontend-visual-qa/references/journey-and-page-contracts.md#embedded-readers-and-semantic-zoom).
 For browser visibility, selected read modes, request/capture timing or long JSONL input problems, load its
 [browser-driving and observation traps](frontend-visual-qa/references/browser-driving-and-observation-traps.md);
 keep adapter requirements and invocation examples in that reference.
+For timed-out screenshots or blank hidden-window captures, follow its
+[background capture diagnosis](frontend-visual-qa/references/browser-driving-and-observation-traps.md#background-screenshot-failure-does-not-establish-a-page-failure).
 For changed contribution views or multi-item reads, use that same journey contract
 for source-derived coverage and partial-result recovery; keep the detailed recipe
 with the Skill.
 Before designing or judging monitoring, availability or certificate matrices, enter
 [data-visualization-discipline](data-visualization-discipline/SKILL.md).
-Keep observation and risk semantics in its data-validation route, not a second checklist here.
+Observation and risk semantics follow its data-validation route.
+For incomplete observations, unknown counts or confirmed zero, use its
+[operational-state matrix](data-visualization-discipline/references/operational-state-matrix.md).
 
 For oversized images or figure readability in a Markdown note or transcript, use
 [frontend-visual-qa's actual-reader handoff](frontend-visual-qa/references/markdown-reader-handoff.md).
