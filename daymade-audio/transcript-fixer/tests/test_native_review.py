@@ -98,6 +98,43 @@ class NativeReviewTests(unittest.TestCase):
         self.assertTrue(r["ready_for_adjudication"])
         self.assertEqual(r["residuals"][0]["occurrences_on_line"], 2)
 
+    def test_cold_packet_can_revert_applied_expansion_and_report_supported_spelling(self):
+        # These are synthetic reviewer outputs. This tests the actual packet
+        # boundary, not whether a model can make the wording judgment.
+        self.source.write_text(
+            "甲 00:00:01.000\n我在星桥播报看过这一期。\n"
+            "名台系统，名字取明亮的明、平台的台。\n"
+            "乙 00:00:02.000\n星桥播报这个频道。\n",
+            encoding="utf-8",
+        )
+        before = self.source.read_bytes()
+        plan = nr.prepare(self.spec, self.run, max_lines=20, max_chars=1000, overlap=0)
+        self.assertEqual(len(plan["segments"]), 1)
+        self.results(plan)
+        rows = [
+            {"line": 2, "original": "星桥播报", "suggested": "星桥",
+             "reason": "Raw says 星桥; same referent does not establish omitted syllables."},
+            {"line": 3, "original": "名台", "suggested": "明台",
+             "reason": "This occurrence explicitly spells 明亮的明、平台的台."},
+        ]
+        self.edit_result(plan["segments"][0]["id"], lambda d: d.update(residuals=rows))
+        report = nr.check(self.run)
+        self.assertTrue(report["ready_for_adjudication"])
+        self.assertFalse(report["quality_complete"])
+        self.assertEqual(report["validated_segments"], 1)
+        self.assertEqual([(r["original"], r["suggested"]) for r in report["residuals"]],
+                         [("星桥播报", "星桥"), ("名台", "明台")])
+        self.assertEqual(self.source.read_bytes(), before)
+        # A candidate quoting the raw short form as if still present in the
+        # corrected packet is invalid; it cannot silently pass by testing raw.
+        self.edit_result(plan["segments"][0]["id"], lambda d: d.update(residuals=[
+            {"line": 2, "original": "我在星桥看过", "suggested": "我在星桥播报看过",
+             "reason": "Wrong artifact: this is raw text, absent from the packet."}]))
+        invalid = nr.check(self.run)
+        self.assertFalse(invalid["ready_for_adjudication"])
+        self.assertEqual(len(invalid["invalid_results"]), 1)
+        self.assertEqual(invalid["residuals"], [])
+
     def test_out_of_segment_and_boolean_line_rejected(self):
         p = self.prepare()
         self.results(p)

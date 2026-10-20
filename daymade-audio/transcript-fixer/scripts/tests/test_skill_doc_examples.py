@@ -40,6 +40,8 @@ IDENTITY_CONTEXT = SKILL_DIR / "references" / "dictionary_identity_and_context.m
 ITERATION_WORKFLOW = SKILL_DIR / "references" / "iteration_workflow.md"
 BEST_PRACTICES = SKILL_DIR / "references" / "best_practices.md"
 NATIVE_WORKFLOW = SKILL_DIR / "references" / "native_ai_full_workflow.md"
+NATIVE_QUEUE_FINALIZATION = SKILL_DIR / "references" / "native_queue_finalization.md"
+NATIVE_ACTION_DETAILS = SKILL_DIR / "references" / "native_action_details.md"
 QUICK_REFERENCE = SKILL_DIR / "references" / "quick_reference.md"
 
 PRODUCTION_FUNC = "_frontmatter_audio"
@@ -198,7 +200,10 @@ def test_public_dji_example_is_explicitly_synthetic():
     ).read_text(encoding="utf-8")
     assert "完全合成的演练 fixture" in text
     assert "不对应任何真实人物、项目或逐字稿" in text
-    assert "synthetic failure fixture" in native_workflow
+    # The enqueue payload detail is conditionally loaded at its action boundary.
+    queue_detail = NATIVE_QUEUE_FINALIZATION.read_text(encoding="utf-8")
+    assert "native_queue_finalization.md" in native_workflow
+    assert "synthetic failure fixture" in queue_detail
     for private_source_marker in (
         "实战全程",
         "私人实体已化名",
@@ -206,6 +211,7 @@ def test_public_dji_example_is_explicitly_synthetic():
     ):
         assert private_source_marker not in text
         assert private_source_marker not in native_workflow
+        assert private_source_marker not in queue_detail
 
 
 def test_public_json_contract_lists_the_complete_always_present_shape():
@@ -261,7 +267,7 @@ def test_multi_recording_completion_is_not_satisfied_by_sampled_clips():
     evidence = ADVANCED_EVIDENCE.read_text(encoding="utf-8")
     evidence_flat = " ".join(evidence.split())
 
-    assert "a sampled clip settles only that anchored item" in skill
+    assert "a sampled clip settles only that anchored item" in skill.lower()
     assert "run an independent ASR across the complete" in evidence_flat
     assert "sampled cross-check only — incomplete" in evidence_flat
     assert "Entity disagreement is a human gate, not a vote" in evidence
@@ -310,6 +316,8 @@ def test_exact_file_review_is_executable_and_old_dictionary_advice_is_unreachabl
         BEST_PRACTICES,
         WORKFLOW_GUIDE,
         NATIVE_WORKFLOW,
+        NATIVE_ACTION_DETAILS,
+        NATIVE_QUEUE_FINALIZATION,
         QUICK_REFERENCE,
     )
     combined = "\n".join(path.read_text(encoding="utf-8") for path in runtime_docs)

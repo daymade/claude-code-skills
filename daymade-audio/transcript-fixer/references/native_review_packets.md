@@ -50,7 +50,10 @@ use a separately verified segmentation method without silently renumbering text.
 
 Supply the packet, the relevant raw baseline/diff, the exact-file queue readback,
 and already-confirmed corrections. Queue status and `resolved_text` outrank a
-reviewer's preferred wording. Have the reviewer read its whole assigned packet
+reviewer's preferred wording. Distinguish confirmed verdicts from edits merely
+applied in the first pass: inspect the latter against raw evidence too. The
+already-corrected file is the review target, not evidence that its edits are right.
+Have the reviewer read its whole assigned packet
 and return one JSON file under `results/`:
 
 ```json
@@ -98,6 +101,23 @@ Apply these synthetic contrasts; they are not dictionary rules:
 | Raw address `小林老师`; participant roster says `晓林`; no source establishes whether the speaker used a nickname | Retain the spoken address; leave an actual uncertainty pending. Identity alone does not select the address's characters. |
 | Raw `负债五月`; the same speaker explicitly explains that payment was made in May and repeats `五月付` for that transaction | A minimal `负债`→`付在` correction may use that payment chain; preserve month, amount and all qualifications. |
 | A tax discussion contains the unusual spoken form `税入`; no occurrence evidence establishes `收入` | Keep the raw form. Topic and grammatical preference do not establish a transcription error. |
+
+Use these additional wholly synthetic controls for first-pass adjudication or
+cold review. They do not correspond to a real channel, person or transcript.
+The spelling control uses a fictional system, not a person-name exception.
+
+| Control | Supplied raw / first-pass edit and evidence | Expected output |
+|---|---|---|
+| Same-referent short form | Raw `我在星桥看过这一期`; later `星桥播报这个频道` clearly names the same referent. The first pass expanded `星桥`→`星桥播报`. No occurrence audio distinguishes omitted ASR syllables from a spoken abbreviation. | Cold review restores `星桥` in the earlier slot. The known referent does not establish the extra spoken syllables; keep any material ambiguity pending. |
+| Spoken mistake | Raw `八月三十二号，嗯，我日期可能记错了`; first pass changed `三十二号`→`三十一号` because August has 31 days. No source establishes the intended day. | Restore `三十二号` and preserve the speaker's doubt. Calendar knowledge establishes an impossible date, not an ASR mistake or the replacement day. |
+| Unknown token | Raw `这个 tavri 我还没弄懂`; the complete conversation and available local records supply no definition or canonical match. First pass replaced it with a familiar product solely because it fits the topic. | Restore `tavri`. Report an unresolved load-bearing token when needed; unfamiliarity alone supplies no correction. |
+| Supported same-sound spelling | Raw `名台系统，名字取明亮的明、平台的台`; the fictional system's written record is `明台系统`. First pass left `名台` unchanged. | Correct only `名台`→`明台`. The explicit spelling applies to this occurrence and the pronunciation is unchanged; do not generalize it into a person-name rule. |
+
+For a replay, give the reviewer the raw text, first-pass artifact and the stated
+evidence, without the expected-output column. Judge both whether it repairs the
+unsupported applied edits and whether it retains the supported spelling correction.
+Packet validation can verify literal spans and coverage; it cannot grade these
+wording judgments.
 
 ## Validate, then adjudicate
 
