@@ -116,7 +116,7 @@ Read `references/marketplace_schema.md` for the complete field reference.
 Key rules that are NOT obvious from the docs:
 
 1. **`$schema` field is REJECTED** by `claude plugin validate`. Do not include it.
-2. **`metadata` only has 3 valid fields**: `description`, `version`, `pluginRoot`. Nothing else.
+2. **Use the valid `metadata` fields**: `description`, `version`, `pluginRoot`.
    `metadata.homepage` does NOT exist — the validator accepts it silently but it's not in the spec.
 3. **`metadata.version`** is the marketplace catalog version, NOT individual plugin versions.
    It should match the repo's VERSION file (e.g., `"2.3.0"`).
@@ -126,8 +126,7 @@ Key rules that are NOT obvious from the docs:
    Having BOTH `strict: false` AND a `plugin.json` with components causes a load failure.
 6. **`source` defines the installed plugin root**. For single-skill plugins, point
    `source` directly at the skill directory (e.g., `"./tunnel-doctor"`) and omit
-   `skills` entirely — this is the official pattern used by 167/168 plugins in
-   `anthropics/claude-plugins-official`. For suite plugins, use
+   `skills` entirely. For suite plugins, use
    `source: "./<suite>"` with explicit `skills` array listing subdirectories.
    Avoid `source: "./"` (installs full repo as cache) and `skills: ["./"]`
    (rejected by Claude Code 2.1.x path-escape validator).
@@ -210,8 +209,7 @@ When adding a new plugin to an existing marketplace.json:
 
 ### Adding a member skill to an existing suite
 
-The most common edit, and the one that fails across the most CI rounds. Adding a
-member (not a new standalone plugin) moves four things together:
+Update the following together when adding a member to an existing suite:
 
 1. **The suite's `skills` array** in marketplace.json lists the new member
    (`./skill-name`). `check_marketplace.py` fails when a member dir with a SKILL.md
@@ -230,21 +228,12 @@ Every new file must also avoid absolute user paths (`/Users/<name>/…`) — the
 guard blocks the push. Write `~/`-relative and verify by re-running the real
 detector, not by eye.
 
-One further item has neither a hook nor a checker: the **CHANGELOG entry**.
-`check_version_progression.py` only checks arrows whose *destination* matches what
-the candidate ships, and the assertion it then makes is on the **from** end (a rebase
-past another release moves it) — a wrong destination is silently skipped.
-`check_changelog_structure.py` asserts that `## [Unreleased]` appears exactly once and
-is the first `##` heading. Neither requires an entry to *exist*. A PR that bumps the
-version and skips the changelog is therefore green everywhere and merges. The rule is
-stated in `marketplace-health-check/SKILL.md:90` ("flag it, don't merge without it"),
-but the doc-PR path never routes there (`marketplace-dev/SKILL.md:30`), and the
-broad-health-check route is itself scoped to "only when the user requested a broad
-health check … not a prerequisite for a targeted suite migration"
-(`marketplace-dev/SKILL.md:33`) — so on this path nothing asks for it.
-Confirm the entry yourself, in the same commit as the bump.
+Follow [Skill Creator's versioning contract](https://github.com/daymade/claude-code-skills/blob/main/daymade-skill/skill-creator/SKILL.md)
+and [release readiness](https://github.com/daymade/claude-code-skills/blob/main/daymade-skill/skill-creator/references/release-readiness.md)
+for release bookkeeping and review. Include the CHANGELOG entry with the bump;
+a passing structural check does not establish that the release is documented.
 
-The three checkers also take their base differently, and a usage error is not a verdict:
+The checkers take their base differently, and a usage error is not a verdict:
 
 | command | base argument | a usage error gives |
 |---|---|---|
@@ -280,7 +269,7 @@ fails.
 
 ### Step 1: One-shot pre-flight check
 
-Run the bundled validator. It runs four checks in sequence and exits non-zero on
+Run the bundled validator. It runs the following checks and exits non-zero on
 any required failure:
 
 ```bash
@@ -371,7 +360,7 @@ Run this checklist after every marketplace.json change. Do not skip items.
 bash scripts/check_marketplace.sh
 ```
 
-All four checks must pass. Treat the reverse-sync WARN as a real signal: an
+Pass the required checks. Treat the reverse-sync WARN as a real signal: an
 unregistered `SKILL.md` on disk is almost always either an accidentally-dropped
 skill you forgot to register, or dead code that should be removed.
 
@@ -437,7 +426,7 @@ claude plugin install <skill>@<marketplace-name>
 
 ### PR description template
 Include:
-- What was added (marketplace.json with N skills, M categories)
+- What marketplace support was added
 - Install commands users will use after merge
 - Design decisions (pure incremental, original descriptions, etc.)
 - Validation evidence (`claude plugin validate .` passed)
@@ -445,7 +434,7 @@ Include:
 
 ## Bundled hooks (optional, auto-activated)
 
-This skill ships two PostToolUse hooks under `hooks/`:
+Use the bundled PostToolUse hooks under `hooks/`:
 
 - `hooks/post_edit_validate.sh` — runs `claude plugin validate` whenever a
   `marketplace.json` file is written or edited.

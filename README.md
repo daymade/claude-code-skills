@@ -120,7 +120,7 @@ the script locally to choose from the featured-plugin menu or make a custom sele
 
 **macOS/Linux:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/daymade/claude-code-skills/main/scripts/install.sh | bash
+bash -o pipefail -c 'curl -fsSL https://raw.githubusercontent.com/daymade/claude-code-skills/main/scripts/install.sh | bash'
 ```
 
 **Windows (PowerShell):**

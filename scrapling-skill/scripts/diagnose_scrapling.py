@@ -10,7 +10,19 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Iterable, List, Tuple
+from typing import Iterable, List, Optional, Tuple
+
+
+class CacheLocationUnknown(Exception):
+    """Report a provider-local cache that this diagnostic cannot locate."""
+
+
+def _get_from_env(name: str) -> Optional[str]:
+    keys = (name, "npm_config_" + name.lower(), "npm_package_config_" + name.lower())
+    for key in keys:
+        if key in os.environ:
+            return os.environ[key]
+    return None
 
 
 def run_command(cmd: List[str]) -> Tuple[int, str, str]:
@@ -35,13 +47,25 @@ def existing_dirs(paths: Iterable[Path]) -> List[str]:
 
 
 def detect_browser_cache() -> Tuple[List[str], List[str]]:
-    roots = [
-        Path.home() / "Library" / "Caches" / "ms-playwright",
-        Path.home() / ".cache" / "ms-playwright",
-    ]
-    local_appdata = os.environ.get("LOCALAPPDATA")
-    if local_appdata:
-        roots.append(Path(local_appdata) / "ms-playwright")
+    override = _get_from_env("PLAYWRIGHT_BROWSERS_PATH")
+    if override == "0":
+        raise CacheLocationUnknown(
+            "PLAYWRIGHT_BROWSERS_PATH=0 selects a provider-local .local-browsers cache; "
+            "this diagnostic does not locate the active provider"
+        )
+    if override:
+        if not os.path.isabs(override):
+            base = _get_from_env("INIT_CWD") or os.getcwd()
+            override = os.path.abspath(os.path.join(base, override))
+        roots = [Path(os.path.normpath(override))]
+    else:
+        roots = [
+            Path.home() / "Library" / "Caches" / "ms-playwright",
+            Path.home() / ".cache" / "ms-playwright",
+        ]
+        local_appdata = os.environ.get("LOCALAPPDATA")
+        if local_appdata:
+            roots.append(Path(local_appdata) / "ms-playwright")
     chromium = []
     headless_shell = []
     for root in roots:
@@ -83,7 +107,16 @@ def diagnose_cli() -> bool:
 
 def diagnose_browsers() -> None:
     print_section("Browser Runtime")
-    chromium, headless_shell = detect_browser_cache()
+    try:
+        chromium, headless_shell = detect_browser_cache()
+    except CacheLocationUnknown as error:
+        print("chromium: unknown")
+        print("chrome-headless-shell: unknown")
+        print("cause: {0}".format(error))
+        print("hint: inspect the active provider's hermetic cache "
+              "before changing the installation")
+        return
+    print("check: cache directories only; browser version and launch are not verified")
     print("chromium: {0}".format("present" if chromium else "missing"))
     for path in chromium:
         print("  - {0}".format(path))
@@ -96,12 +129,12 @@ def diagnose_browsers() -> None:
 
 def preview_file(path: Path, preview_lines: int) -> None:
     print_section("Smoke Test Output")
+    print("path: {0}".format(path))
     if not path.exists():
         print("status: missing output file")
         return
 
     size = path.stat().st_size
-    print("path: {0}".format(path))
     print("bytes: {0}".format(size))
     if size == 0:
         print("status: empty")
@@ -123,9 +156,7 @@ def run_smoke_test(args: argparse.Namespace) -> int:
     if args.selector:
         suffix = ".md"
 
-    output_path = Path(tempfile.gettempdir()) / ("scrapling-smoke" + suffix)
-    if output_path.exists():
-        output_path.unlink()
+    output_path = Path(tempfile.mkdtemp(prefix="scrapling-smoke-")) / ("output" + suffix)
 
     cmd = ["scrapling", "extract", "fetch" if args.dynamic else "get", args.url, str(output_path)]
     if args.selector:
@@ -141,6 +172,8 @@ def run_smoke_test(args: argparse.Namespace) -> int:
         print(stdout.strip())
     if stderr.strip():
         print(stderr.strip())
+    if code != 0:
+        print("status: failed (exit {0})".format(code))
 
     preview_file(output_path, args.preview_lines)
     return code

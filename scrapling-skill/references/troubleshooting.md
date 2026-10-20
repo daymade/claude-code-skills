@@ -48,18 +48,34 @@ Recovery:
 scrapling install
 ```
 
-Success signals:
+Installation clues:
 
 - `scrapling install` later reports `The dependencies are already installed`
 - Browser caches contain both:
   - `chromium-*`
   - `chromium_headless_shell-*`
 
-Typical cache roots:
+Default cache candidates checked by the diagnostic:
 
 - `~/Library/Caches/ms-playwright/`
 - `~/.cache/ms-playwright/`
 - `%LOCALAPPDATA%\ms-playwright\` (Windows)
+
+Treat directory presence as a cache-location observation. Verify compatible
+browser versions and a working launch by running the needed browser-backed fetch
+and inspecting its saved content.
+
+For an explicit `PLAYWRIGHT_BROWSERS_PATH`, inspect only that root. Resolve a
+relative value lexically against `INIT_CWD`, or the current directory when it is
+unset or empty; preserve literal `~` and whitespace. Read each environment key
+before `npm_config_<lowercase-key>` and `npm_package_config_<lowercase-key>`;
+let a present empty value mask the lower-priority keys. With an empty or absent
+effective browser-path value, retain the default cache candidates above.
+
+For the exact value `0`, expect `unknown` from the diagnostic. Locate the active
+Playwright or Patchright provider's `.local-browsers` directory separately; this
+helper does not discover hermetic provider locations. Do not infer a missing
+runtime from `unknown` or substitute a populated default cache.
 
 ### 3. Static fetch TLS trust-store failure
 
@@ -157,6 +173,12 @@ python3 scripts/diagnose_scrapling.py \
 ```
 
 ### Validate saved output
+
+Use the path printed under `Smoke Test Output` for the diagnostic's result.
+Retain each invocation's separate temporary directory for inspection; later
+smoke tests do not replace earlier results. Treat `failed`, `missing output file`
+or `empty` as unsuccessful extraction even when another file from an earlier run
+contains valid content.
 
 ```bash
 wc -c article.md

@@ -118,7 +118,7 @@ claude plugin install daymade-skill@daymade-skills
 
 **macOS/Linux：**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/daymade/claude-code-skills/main/scripts/install.sh | bash
+bash -o pipefail -c 'curl -fsSL https://raw.githubusercontent.com/daymade/claude-code-skills/main/scripts/install.sh | bash'
 ```
 
 **Windows (PowerShell)：**

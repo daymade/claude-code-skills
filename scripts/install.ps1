@@ -1,9 +1,10 @@
 #!/usr/bin/env pwsh
 # Cross-platform PowerShell installer for Claude Code Skills
 
+& {
 # Color output functions
 function Write-Success { Write-Host $args -ForegroundColor Green }
-function Write-Error { Write-Host $args -ForegroundColor Red }
+function Write-Failure { Write-Host $args -ForegroundColor Red }
 function Write-Info { Write-Host $args -ForegroundColor Yellow }
 function Write-Cyan { Write-Host $args -ForegroundColor Cyan }
 
@@ -24,11 +25,11 @@ Write-Host "================================================" -ForegroundColor C
 Write-Host ""
 
 # Detect platform
-if ($IsWindows -or $env:OS -eq "Windows_NT") {
+if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
     $Platform = "Windows"
-} elseif ($IsMacOS) {
+} elseif (Get-Variable IsMacOS -ValueOnly -ErrorAction SilentlyContinue) {
     $Platform = "macOS"
-} elseif ($IsLinux) {
+} elseif (Get-Variable IsLinux -ValueOnly -ErrorAction SilentlyContinue) {
     $Platform = "Linux"
 } else {
     $Platform = "Unknown"
@@ -38,14 +39,13 @@ Write-Host "Detected Platform: $Platform"
 Write-Host ""
 
 # Check if Claude Code is available (simplified check)
-$claudeInstalled = $true
 if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
-    Write-Error "Warning: Claude Code command not found in PATH!"
+    Write-Failure "Warning: Claude Code command not found in PATH!"
     Write-Host "Please ensure Claude Code is installed: https://claude.com/code"
     Write-Host ""
     $continue = Read-Host "Continue anyway? (y/n)"
     if ($continue -ne 'y') {
-        exit 1
+        throw "Claude Code is unavailable; installation commands were not generated."
     }
 } else {
     Write-Success "✓ Claude Code detected"
@@ -70,14 +70,14 @@ if ($isInteractive) {
     Write-Host "Defaulting to option 1: daymade-skill only (RECOMMENDED)"
     Write-Host ""
     Write-Host "To run interactively, download and run directly:"
-    Write-Host "  Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/daymade/claude-code-skills/main/scripts/install.ps1' -OutFile install.ps1"
-    Write-Host "  .\install.ps1"
+    Write-Host "  & { Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/daymade/claude-code-skills/main/scripts/install.ps1' -OutFile install.ps1 -ErrorAction Stop; & .\install.ps1 }"
     Write-Host ""
     $choice = "1"
 }
 
 $commands = @()
 $commands += "claude plugin marketplace add https://github.com/daymade/claude-code-skills"
+$afterInstall = $null
 
 switch ($choice) {
     "1" {
@@ -112,26 +112,35 @@ Claude Code will guide you through the skill creation process!
         Write-Host ""
 
         if ($isInteractive) {
-            $selections = (Read-Host "Enter plugin numbers separated by spaces (e.g., '1 2 3')").Split(' ')
+            $selectionText = Read-Host "Enter plugin numbers separated by spaces (e.g., '1 2 3')"
         } else {
             Write-Info "Non-interactive mode: Selecting daymade-skill only"
-            $selections = @("1")
+            $selectionText = "1"
         }
 
+        # Validate the whole list before printing any installation commands.
+        if ($selectionText -notmatch '\A\s*[0-9]+(?:\s+[0-9]+)*\s*\z') {
+            throw "Invalid plugin selection! Enter numbers from 1 to $($plugins.Count)."
+        }
+        $selections = [regex]::Split($selectionText.Trim(), '\s+')
         foreach ($num in $selections) {
-            $index = 0
-            if ([int]::TryParse($num, [ref]$index) -and $index -ge 1 -and $index -le $plugins.Count) {
-                $commands += "claude plugin install $($plugins[$index - 1].Name)@daymade-skills"
+            $normalized = $num.TrimStart([char]'0')
+            if ($normalized.Length -eq 0 -or $normalized.Length -gt ([string]$plugins.Count).Length) {
+                throw "Invalid plugin selection! Enter numbers from 1 to $($plugins.Count)."
             }
+            $index = 0
+            if (-not [int]::TryParse($normalized, [ref]$index) -or $index -lt 1 -or $index -gt $plugins.Count) {
+                throw "Invalid plugin selection! Enter numbers from 1 to $($plugins.Count)."
+            }
+            $commands += "claude plugin install $($plugins[$index - 1].Name)@daymade-skills"
         }
     }
     "4" {
         Write-Host "Installation cancelled."
-        exit 0
+        return
     }
     default {
-        Write-Error "Invalid choice!"
-        exit 1
+        throw "Invalid choice!"
     }
 }
 
@@ -160,3 +169,4 @@ Write-Host "4. Start using your skills!"
 Write-Host ""
 Write-Host "Documentation: https://github.com/daymade/claude-code-skills"
 Write-Host ""
+}

@@ -167,7 +167,7 @@
       "description": "Claude Code operations suite that bundles cross-project prior-work retrieval across code, docs, Skills, meetings, WeChat archives, and conversation history; provider-separated Claude Code and Codex history readers; identity- and lineage-gated continuation workflows; plugin/skill troubleshooting; CLAUDE.md progressive disclosure optimization; version-synced Lark CLI routing; statusline configuration; exported .txt repair; full claude.ai conversation extraction with tool-call rendering and file download; plugin marketplace development and suite consolidation; writing/testing/debugging Claude Code hooks; multi-provider profile isolation; personal-memory migration into tool-agnostic AGENTS.md reference docs; one-shot local timers that ping Claude right after subscription quota reset to start a fresh 5-hour usage window; working web search installed on an agent whose relayed model backend cannot execute the built-in one; and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
       "source": "./daymade-claude-code",
       "strict": false,
-      "version": "4.30.14",
+      "version": "4.30.15",
       "category": "suite",
       "keywords": [
         "suite",
@@ -758,7 +758,7 @@
       "description": "Install, troubleshoot, and use Scrapling CLI for extracting HTML, Markdown, or text from webpages. Diagnoses missing extras, Playwright browser runtime issues, TLS verification failures, and WeChat public article extraction patterns. Use when users mention Scrapling, `scrapling extract`, `uv tool install scrapling`, or need to decide between static and browser-backed fetching",
       "source": "./scrapling-skill",
       "strict": false,
-      "version": "1.0.1",
+      "version": "1.0.2",
       "category": "developer-tools",
       "keywords": [
         "scrapling",
@@ -1023,10 +1023,10 @@
     },
     {
       "name": "marketplace-health-check",
-      "description": "Run a full 6-dimension health check of this Claude Code skills marketplace repo — code/script safety, documentation/SSOT consistency, security/PII leaks, open-PR triage, open-issue triage, and marketplace-manifest integrity — via a parallel fan-out Dynamic Workflow, then verify the serious findings and report by priority. Use this whenever the user asks to check the repo, run a health check, do a full sweep/audit before a release, 全面体检, 检查仓库状态, 看看仓库健康吗, 审计一下仓库, or asks whether the PRs / issues / docs / versions / PII are in good shape across the board — even if they never say workflow. Reach for it for any broad is-this-whole-repo-OK request, not just one-file checks.",
+      "description": "Runs an evidence-based health audit of this skills marketplace repo — code safety, docs/SSOT, security/PII, PR/issue triage, manifest integrity — via a parallel workflow, then verifies findings by priority. Use for 全面体检 / 检查仓库状态 / 审计一下仓库, a pre-release sweep, or \"is this repo OK\" even without saying \"workflow\". Not for building marketplace.json (use marketplace-dev) or cache drift (use skill-governance).",
       "source": "./marketplace-health-check",
       "strict": false,
-      "version": "1.1.0",
+      "version": "1.2.0",
       "category": "developer-tools",
       "keywords": [
         "health-check",

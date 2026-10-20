@@ -36,8 +36,8 @@ Load [skill-creator](./daymade-skill/skill-creator/SKILL.md#critical-edit-skills
 Replace these variables with the absolute paths of the loaded skill-creator directory and an existing Git project:
 
 ```bash
-TASK_CREATOR=/absolute/path/to/loaded/skill-creator
-TASK_PROJECT=/absolute/path/to/existing/git-project
+TASK_CREATOR='/absolute/path/to/loaded/skill-creator'
+TASK_PROJECT='/absolute/path/to/existing/git-project'
 uv run --project "$TASK_CREATOR" --frozen python "$TASK_CREATOR/scripts/init_skill.py" my-first-skill \
   --path "$TASK_PROJECT/.claude/skills" --repo "$TASK_PROJECT" --scope project
 ```
@@ -69,7 +69,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for the contribution policy.
 
 **macOS/Linux:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/daymade/claude-code-skills/main/scripts/install.sh | bash
+bash -o pipefail -c 'curl -fsSL https://raw.githubusercontent.com/daymade/claude-code-skills/main/scripts/install.sh | bash'
 ```
 
 **Windows (PowerShell):**

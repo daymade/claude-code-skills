@@ -1,6 +1,7 @@
 ---
 name: scrapling-skill
-description: Install, troubleshoot, and use Scrapling CLI to extract HTML, Markdown, or text from webpages. Use this skill whenever the user mentions Scrapling, `uv tool install scrapling`, `scrapling extract`, WeChat/mp.weixin articles, browser-backed page fetching, or needs help deciding between static and dynamic extraction.
+description: >-
+  Install, troubleshoot, and use Scrapling CLI to extract HTML, Markdown, or text from webpages. Use this skill whenever the user mentions Scrapling, `uv tool install scrapling`, `scrapling extract`, WeChat/mp.weixin articles, browser-backed page fetching, or needs help deciding between static and dynamic extraction.
 ---
 
 # Scrapling Skill
@@ -34,6 +35,8 @@ python3 scripts/diagnose_scrapling.py
 ```
 
 Use the result as the source of truth for the next step.
+For custom or unknown cache locations and smoke-test output retention, read
+`references/troubleshooting.md`.
 
 ## Step 2: Fix the Install
 
@@ -56,9 +59,10 @@ Install the Playwright runtime:
 scrapling install
 ```
 
-If the install looks slow or opaque, read `references/troubleshooting.md` before guessing. Do not claim success until either:
-- `scrapling install` reports that dependencies are already installed, or
-- the diagnostic script confirms both Chromium and Chrome Headless Shell are present.
+If the install looks slow or opaque, read `references/troubleshooting.md` before guessing.
+Treat an already-installed message or cache-directory presence as installation
+clues. Verify browser-backed readiness with the needed fetch and inspect its saved
+content; neither clue proves compatible versions or a working browser launch.
 
 ## Step 3: Choose the Fetcher
 
@@ -140,7 +144,7 @@ For `mp.weixin.qq.com`:
 
 If `extract fetch` fails:
 1. Re-check the install with `python3 scripts/diagnose_scrapling.py`
-2. Confirm Chromium and Chrome Headless Shell are present
+2. Check the selected browser cache; resolve an `unknown` location through `references/troubleshooting.md`
 3. Retry with a slightly longer timeout
 4. Escalate to `stealthy-fetch` only if the site behavior justifies it
 

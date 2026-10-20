@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Installation entry points**: Preserve PowerShell caller state and cancellation, reject invalid custom selections before generating commands, and stop download failures before running stale or partial scripts. Quote first-task paths in the bilingual quickstarts.
+- **scrapling-skill** (v1.0.2): Respect browser-cache environment overrides, report hermetic cache location as unknown, and preserve prior smoke-test outputs across successful and failed fetches. Change type: diagnostic and output-preservation repair.
+- **marketplace-health-check** (v1.2.0): Retain incomplete inspector results, distinguish audit coverage from repository health, reconcile paginated PR/issue inventories, and align scan and release guidance with their authoritative owners. Change type: audit-result and input-coverage repair.
+- **marketplace-dev** (`daymade-claude-code` v4.30.15): Route release bookkeeping to Skill Creator and remove stale line references and derived summaries. Change type: documentation alignment.
+
 - **docs-cleaner** (`daymade-docs` v1.25.6): Check reported outbound-link errors against the reader host before distinguishing broken targets from parser portability; preserve visible labels and contact identity. Change type: bounded link-check interpretation repair.
 
 - **claude-code-hooks** (`daymade-claude-code` v4.30.14): Record the measured difference between outer-wrapper and nested-hook enforcement, retaining the evidence limits. Change type: factual casebook addition; no hook or rule change.

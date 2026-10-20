@@ -56,15 +56,14 @@ if [ -t 0 ]; then
     echo "3) Custom selection"
     echo "4) Exit"
     echo ""
-    read -p "Enter your choice (1-4): " choice
+    read -r -p "Enter your choice (1-4): " choice
 else
     # Non-interactive mode (piped from curl)
     echo -e "${YELLOW}Running in non-interactive mode.${NC}"
     echo "Defaulting to option 1: daymade-skill only (RECOMMENDED)"
     echo ""
     echo "To run interactively, download and run directly:"
-    echo "  curl -fsSL https://raw.githubusercontent.com/daymade/claude-code-skills/main/scripts/install.sh -o install.sh"
-    echo "  bash install.sh"
+    echo "  curl -fsSL https://raw.githubusercontent.com/daymade/claude-code-skills/main/scripts/install.sh -o install.sh && bash install.sh"
     echo ""
     choice=1
 fi
@@ -107,22 +106,36 @@ case $choice in
         echo ""
 
         if [ -t 0 ]; then
-            read -p "Enter plugin numbers separated by spaces (e.g., '1 2 3'): " selections
+            read -r -p "Enter plugin numbers separated by spaces (e.g., '1 2 3'): " selections
         else
             echo -e "${YELLOW}Non-interactive mode: Selecting daymade-skill only${NC}"
             selections="1"
         fi
+
+        # Validate the whole list before printing any installation commands.
+        if [[ ! $selections =~ ^[[:space:]]*[0-9]+([[:space:]]+[0-9]+)*[[:space:]]*$ ]]; then
+            echo -e "${RED}Invalid plugin selection! Enter numbers from 1 to ${#PLUGINS[@]}.${NC}"
+            exit 1
+        fi
+        IFS=$' \t\r\v\f' read -r -a selection_numbers <<< "$selections"
+        selected_plugins=()
+        max_selection=${#PLUGINS[@]}
+        for num in "${selection_numbers[@]}"; do
+            num=${num#"${num%%[!0]*}"}
+            if [[ -z $num || ${#num} -gt ${#max_selection} ]] || [ "$num" -gt "$max_selection" ]; then
+                echo -e "${RED}Invalid plugin selection! Enter numbers from 1 to ${#PLUGINS[@]}.${NC}"
+                exit 1
+            fi
+            selected_plugins+=("${PLUGINS[$((num-1))]}")
+        done
 
         echo ""
         echo "RUN IN TERMINAL:"
         echo ""
         echo -e "${YELLOW}claude plugin marketplace add https://github.com/daymade/claude-code-skills${NC}"
         echo ""
-        for num in $selections; do
-            idx=$((num-1))
-            if [ $idx -ge 0 ] && [ $idx -lt ${#PLUGINS[@]} ]; then
-                echo -e "${YELLOW}claude plugin install ${PLUGINS[$idx]}@daymade-skills${NC}"
-            fi
+        for plugin in "${selected_plugins[@]}"; do
+            echo -e "${YELLOW}claude plugin install ${plugin}@daymade-skills${NC}"
         done
         ;;
     4)
