@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **llm-eval-harness** (v1.7.0): Upgrade machine results to bind the consumed configuration and retained answer bytes to each invocation. Machine-mode quality collection requires a fresh output directory; legacy collection retains directory reuse. Change type: machine-result interface revision and evidence-lifetime repair.
+
 - **macos-watchdog** (`daymade-macos` v1.24.3 → v1.24.4): Add a Decommissioning subsection to § Stop semantics — the permanent-retirement sequence for a job's whole line (bootout + capture plist, remove plist, prove zero repo references, delete the tool through the repo's PR flow, keep the data/log directory as the only irreversible step), plus an entry-table route. Anchored to the 2026-10-20 wechat-print retirement measurement (an every-minute job = 2,880 launchd transitions/day of Deploy-9 BTM tax). Change type: bounded lifecycle guidance addition.
 - **debugging-network-issues** (v1.11.5): Align the repository entry with the capture SOP; correct time-rotation, snapshot-length and timestamp guidance, verify TLS key-log prerequisites, and remove the hand-maintained contents list. Change type: documentation and operation-recipe correction.
 - **prior-work-retrieval** (`daymade-claude-code` v4.30.16): Keep current-session execution instructions from arming historical retrieval. Add an exact-original-event correction for that false positive, preserving genuine history obligations and the original requirement record.

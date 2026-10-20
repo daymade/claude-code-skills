@@ -40,7 +40,7 @@ import sys
 import time
 from pathlib import Path
 
-from eval_result import cli_main, add_result_arguments, execute_probe, unit
+from eval_result import capture_input, cli_main, add_result_arguments, execute_probe, unit
 
 try:
     from openai import OpenAI
@@ -73,8 +73,7 @@ def main():
     uc_path = os.path.expanduser(args.usecases)
     if not os.path.exists(uc_path):
         ap.error(f"Use-case library not found: {uc_path}")
-    with open(uc_path) as f:
-        cases = json.load(f)
+    cases, snapshot = capture_input(args.usecases)
     if not isinstance(cases, list) or not cases:
         ap.error("Use-case library must be a non-empty JSON list.")
 
@@ -83,7 +82,7 @@ def main():
     plan = [unit(f"case:{i}", "quality_case", i, case_id=str(case.get("id", i))) for i, case in enumerate(cases)]
     identity = {"model": args.model, "endpoint_kind": "base_url", "endpoint": args.base_url,
                 "format": "openai", "auth": "bearer"}
-    return execute_probe(args, "quality", identity, plan, lambda writer: collect(args, cases, writer))
+    return execute_probe(args, "quality", identity, plan, lambda writer: collect(args, cases, writer), consumed_inputs={"usecases": snapshot})
 
 
 def artifact_names(cases):
@@ -113,8 +112,8 @@ def collect(args, cases, writer):
     if not api_key:
         raise ValueError(f"Env var {args.key_env} is empty or unset — export your key there first.")
     writer.redact(api_key)
-    out_dir = os.path.expanduser(args.output_dir)
-    os.makedirs(out_dir, exist_ok=True)
+    out_dir = writer.output_root
+    os.makedirs(out_dir, mode=0o700, exist_ok=not bool(writer.path))
     client = OpenAI(api_key=api_key, base_url=args.base_url, timeout=args.timeout)
 
     print(f"# use-case runner  model={args.model}  cases={len(cases)}  → {out_dir}\n")
@@ -154,19 +153,22 @@ def collect(args, cases, writer):
             rec = {"id": cid, "prompt": prompt, "error": f"{type(e).__name__}: {writer.error_record(e)['message']}"}
             writer.fail_unit(uid, e)
             print(f"  {cid:24} ERROR {type(e).__name__}: {writer.error_record(e)['message']}")
+        # Persist and bind bytes before admitting this observation as retained evidence.
+        answer_path = out_dir / filename
+        with answer_path.open("x" if writer.path else "w", encoding="utf-8") as f:
+            json.dump(rec, f, ensure_ascii=False, indent=2)
+        writer.bind_artifact(answer_path, role="answer", unit_id=uid)
         if "error" not in rec:
             writer.finish_unit(uid, {"case_id": cid, "answer_chars": len(answer),
                                     "reasoning_chars": len(reasoning), "finish_reason": rec["finish_reason"], "artifact": filename})
         collected.append(rec)
-        # one file per answer makes it easy for blind-judge agents to read a single case
-        with open(os.path.join(out_dir, filename), "w") as f:
-            json.dump(rec, f, ensure_ascii=False, indent=2)
 
     summary_path = os.path.join(out_dir, "_all_answers.json")
-    with open(summary_path, "w") as f:
+    with open(summary_path, "x" if writer.path else "w", encoding="utf-8") as f:
         json.dump({"model": args.model, "base_url": args.base_url,
                    "collected_at": int(time.time()), "answers": collected}, f,
                   ensure_ascii=False, indent=2)
+    writer.bind_artifact(summary_path, role="aggregate")
     writer.result["summary"] = {"model": args.model, "cases": len(cases), "collected": sum(bool(r.get("answer")) for r in collected)}
     ok = sum(1 for r in collected if "error" not in r)
     print(f"\n# collected {ok}/{len(collected)} answers → {summary_path}")

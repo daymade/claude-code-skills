@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Offline acquisition, persistence and adversarial receipt tests; no model calls."""
 import asyncio
+import base64
 import contextlib
 import copy
 import importlib.util
 import io
 import json
+import hashlib
 import os
 import subprocess
 from pathlib import Path
@@ -18,7 +20,7 @@ import uuid
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
-from eval_result import (ResultContractError, ResultWriter, auth_headers, execute_probe,
+from eval_result import (capture_input, ResultContractError, ResultWriter, auth_headers, execute_probe,
                          invocation_digest, read_result, unit)
 
 
@@ -87,12 +89,17 @@ class OfflineSDK:
 
 class ResultTests(unittest.TestCase):
     def setUp(self):
+        for target in ("socket.socket.connect", "socket.socket.connect_ex", "socket.getaddrinfo"):
+            denial = patch(target, side_effect=AssertionError("offline suite forbids sockets"))
+            denial.start()
+            self.addCleanup(denial.stop)
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
         self.run_id = str(uuid.uuid4())
         self.path = self.root / "receipt.json"
         self.identity = {"model": "test-model", "endpoint_kind": "base_url", "endpoint": "https://example.invalid/v1",
                          "format": "openai", "auth": "bearer"}
+        self.writer_sequence = 0
         self.argv = ["--base-url", self.identity["endpoint"], "--model", "test-model", "--key-env", "SYNTH_KEY"]
         OfflineSDK.calls = 0
         OfflineSDK.mode = "ok"
@@ -117,11 +124,27 @@ class ResultTests(unittest.TestCase):
         cases.write_text(json.dumps([{"id": str(i), "prompt": "test"} for i in range(count)]))
         if "--usecases" not in self.argv:
             self.argv += ["--usecases", str(cases)]
+        self.writer_sequence += 1
+        out = self.root / f"writer-answers-{self.writer_sequence}"
+        if "--output-dir" in self.argv:
+            self.argv[self.argv.index("--output-dir") + 1] = str(out)
+        else:
+            self.argv += ["--output-dir", str(out)]
+        _, snapshot = capture_input(cases)
         return ResultWriter(self.path, self.run_id, "quality", self.argv, self.identity,
-                            [unit(f"case:{i}", "quality_case", i) for i in range(count)])
+                            [unit(f"case:{i}", "quality_case", i, case_id=str(i)) for i in range(count)],
+                            consumed_inputs={"usecases": snapshot})
     def complete(self, writer, uid="case:0"):
         writer.start_unit(uid)
-        writer.finish_unit(uid, {"answer_chars": 12, "reasoning_chars": 4, "artifact": uid.replace(":", "-") + ".json"})
+        writer.output_root.mkdir(exist_ok=True)
+        name = uid.replace(":", "-") + ".json"
+        answer = writer.output_root / name
+        answer.write_text(json.dumps({"id": uid, "answer": "fixture reply"}))
+        writer.bind_artifact(answer, role="answer", unit_id=uid)
+        writer.finish_unit(uid, {"answer_chars": 12, "reasoning_chars": 4, "artifact": name})
+        aggregate = writer.output_root / "_all_answers.json"
+        aggregate.write_text(json.dumps({"fixture": True}))
+        writer.bind_artifact(aggregate, role="aggregate")
     def reader(self, code, **kw):
         return read_result(self.path, expected_run_id=kw.get("run_id", self.run_id), expected_probe="quality",
                            expected_invocation_sha256=invocation_digest(self.argv), child_returncode=code,
@@ -166,6 +189,11 @@ class ResultTests(unittest.TestCase):
                     got = w.abort(KeyboardInterrupt() if state == "cancelled" else ValueError("bad input"), cancelled=state == "cancelled")
                 else:
                     w.fail_unit("case:1", OSError("offline"))
+                    if state == "no_measurement":
+                        w.output_root.mkdir()
+                        aggregate = w.output_root / "_all_answers.json"
+                        aggregate.write_text("{}")
+                        w.bind_artifact(aggregate, role="aggregate")
                     got = w.finish()
                 self.assertEqual(got, code)
                 self.assertEqual(self.reader(code)["state"], state)
@@ -267,7 +295,9 @@ class ResultTests(unittest.TestCase):
                 if self.path.exists(): self.path.unlink()
                 OfflineSDK.calls = 0
                 OfflineSDK.mode = mode
-                code = self.invoke(quality, args)
+                current = list(args)
+                current[current.index("--output-dir") + 1] = str(self.root / ("answers-" + mode))
+                code = self.invoke(quality, current)
                 r = self.read("quality", code)
                 self.assertEqual(code, expected)
                 self.assertEqual(r["counts"]["planned"], 2)
@@ -275,6 +305,7 @@ class ResultTests(unittest.TestCase):
                 if mode == "ok": self.assertEqual(r["verdict"], "not_judged")
         self.path.unlink()
         cases.write_text(json.dumps([{"id": "no-prompt"}]))
+        args[args.index("--output-dir") + 1] = str(self.root / "answers-skipped")
         with patch.object(quality, "OpenAI", OfflineSDK): code = self.invoke(quality, args)
         self.assertEqual(code, 12)
         self.assertEqual(self.read("quality", code)["counts"]["skipped"], 1)
@@ -394,6 +425,9 @@ class ResultTests(unittest.TestCase):
 
     def test_cli_real_interpreter_receipt_and_exit(self):
         bootstrap = '''import runpy, sys, types
+import socket
+def deny(*a, **kw): raise AssertionError("offline child forbids sockets")
+socket.socket.connect=deny; socket.socket.connect_ex=deny; socket.getaddrinfo=deny
 from pathlib import Path
 from types import SimpleNamespace
 class Offline:
@@ -411,6 +445,115 @@ runpy.run_path(script,run_name="__main__")
         self.assertEqual(child.returncode, 12, child.stderr)
         r = self.read("speed", child.returncode)
         self.assertEqual((r["state"], r["counts"]["planned"], r["counts"]["errors"]), ("no_measurement", 1, 1))
+
+    def test_consumed_quality_bytes_survive_library_edits_and_removal(self):
+        cases = self.root / "cases.json"
+        raw = b'[{"id":"kept","prompt":"original prompt","rubric":"original rubric"},{"id":"skipped"}]\n'
+        cases.write_bytes(raw)
+        seen = []
+        class MutatingSDK(OfflineSDK):
+            def create(self, **kw):
+                seen.append(kw["messages"][0]["content"])
+                cases.write_text('[{"id":"later","prompt":"edited"},{"id":"added","prompt":"next"},{"id":"third"}]')
+                return super().create(**kw)
+        with patch.object(quality, "OpenAI", MutatingSDK):
+            code = self.invoke(quality, self.argv + ["--usecases", str(cases), "--output-dir", str(self.root / "answers")])
+        self.assertEqual(code, 11)
+        for replacement in (b'[{"id":"same-count","prompt":"different"},{}]', b'[]'):
+            cases.write_bytes(replacement)
+            r = self.read("quality", code)
+            self.assertEqual((r["state"], r["counts"]["planned"], r["counts"]["usable"]), ("partial", 2, 1))
+        cases.unlink()
+        r = self.read("quality", code)
+        snapshot = r["consumed_inputs"]["usecases"]
+        self.assertEqual(base64.b64decode(snapshot["content_base64"]), raw)
+        self.assertEqual(snapshot["sha256"], hashlib.sha256(raw).hexdigest())
+        self.assertEqual(seen, ["original prompt"])
+        broken = copy.deepcopy(r)
+        broken["consumed_inputs"]["usecases"]["content_base64"] = base64.b64encode(b'[]').decode()
+        self.path.write_text(json.dumps(broken))
+        with self.assertRaises(ResultContractError): self.read("quality", code)
+
+    def test_consumed_speed_prompts_survive_mutation_with_partial_evidence(self):
+        prompts = self.root / "prompts.json"
+        raw = b'[["first","original first",100],["second","original second",100]]\n'
+        prompts.write_bytes(raw)
+        seen = []
+        class MutatingSDK(OfflineSDK):
+            mode = "partial"
+            calls = 0
+            def create(self, **kw):
+                seen.append(kw["messages"][0]["content"])
+                prompts.write_text('[["next","new config",100]]')
+                return super().create(**kw)
+        with patch.object(speed, "OpenAI", MutatingSDK):
+            code = self.invoke(speed, self.argv + ["--mode", "mixed", "--prompts-file", str(prompts)])
+        self.assertEqual(code, 11)
+        prompts.unlink()
+        r = self.read("speed", code)
+        self.assertEqual((r["state"], r["counts"]["planned"], r["counts"]["usable"]), ("partial", 2, 1))
+        self.assertEqual(seen, ["hi", "original first", "original second"])
+        self.assertEqual(base64.b64decode(r["consumed_inputs"]["prompts"]["content_base64"]), raw)
+
+    def test_missing_key_early_exit_retains_already_consumed_case_bytes(self):
+        cases = self.root / "early.json"
+        raw = b'[{"id":"one","prompt":"already consumed"}]\n'
+        cases.write_bytes(raw)
+        args = ["--base-url", "https://example.invalid/v1", "--model", "test-model", "--key-env", "MISSING_SYNTH_KEY",
+                "--usecases", str(cases), "--output-dir", str(self.root / "answers")]
+        with patch.dict(os.environ, {"MISSING_SYNTH_KEY": ""}), \
+             patch.object(quality, "OpenAI", side_effect=AssertionError("missing key must not construct SDK")):
+            code = self.invoke(quality, args)
+        self.assertEqual(code, 2)
+        cases.unlink()
+        r = self.read("quality", code)
+        self.assertEqual(r["state"], "execution_error")
+        self.assertEqual(base64.b64decode(r["consumed_inputs"]["usecases"]["content_base64"]), raw)
+
+    def test_machine_output_reuse_refuses_and_legacy_reuse_invalidates_old_binding(self):
+        cases = self.root / "cases.json"
+        cases.write_text('[{"id":"one","prompt":"first prompt"}]')
+        out = self.root / "answers"
+        args = self.argv + ["--usecases", str(cases), "--output-dir", str(out)]
+        with patch.object(quality, "OpenAI", OfflineSDK):
+            code = self.invoke(quality, args)
+        first_path, first_id, first_argv = self.path, self.run_id, self.last_argv
+        first = self.read("quality", code)
+        before = {name: (out / name).read_bytes() for name in first["artifacts"]}
+        cases.write_text('[{"id":"one","prompt":"second prompt"}]')
+        self.path = self.root / "second.json"
+        self.run_id = str(uuid.uuid4())
+        with patch.object(quality, "OpenAI", side_effect=AssertionError("reused machine directory must refuse before SDK")):
+            self.assertEqual(self.invoke(quality, args), 2)
+        self.assertEqual(before, {name: (out / name).read_bytes() for name in before})
+        def read_first():
+            return read_result(first_path, expected_run_id=first_id, expected_probe="quality",
+                expected_invocation_sha256=invocation_digest(first_argv), child_returncode=code)
+        self.assertEqual(read_first()["state"], "completed")
+        with patch.object(quality, "OpenAI", OfflineSDK):
+            self.assertEqual(self.invoke(quality, args, machine=False), 0)
+        with self.assertRaisesRegex(ResultContractError, "artifact bytes changed"):
+            read_first()
+
+    def test_answer_and_aggregate_byte_changes_are_both_rejected(self):
+        w = self.writer()
+        self.complete(w)
+        w.finish()
+        receipt = self.reader(0)
+        self.assertEqual(len(receipt["artifacts"]), 2)
+        for name in receipt["artifacts"]:
+            path = w.output_root / name
+            before = path.read_bytes()
+            path.write_bytes(b"changed bytes")
+            with self.assertRaisesRegex(ResultContractError, "artifact bytes changed"):
+                self.reader(0)
+            path.write_bytes(before)
+            self.assertEqual(self.reader(0)["state"], "completed")
+        broken = copy.deepcopy(receipt)
+        broken["schema_version"] = 1
+        self.path.write_text(json.dumps(broken))
+        with self.assertRaisesRegex(ResultContractError, "schema 2"):
+            self.reader(0)
 
     def test_quality_repeated_case_ids_retain_separate_artifacts(self):
         cases = self.root / "cases.json"

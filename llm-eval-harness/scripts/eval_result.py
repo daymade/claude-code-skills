@@ -9,6 +9,7 @@ from __future__ import annotations
 import copy
 import asyncio
 import argparse
+import base64
 import hashlib
 import json
 import math
@@ -19,8 +20,8 @@ import sys
 import tempfile
 import uuid
 
-RESULT_API_VERSION = 1
-SCHEMA_VERSION = 1
+RESULT_API_VERSION = 2
+SCHEMA_VERSION = 2
 PROBES = {"speed", "protocol", "concurrency", "quality"}
 KINDS = {"speed": {"speed_mixed", "speed_decode", "speed_setup"},
          "protocol": {"protocol_generation", "protocol_history"},
@@ -54,8 +55,46 @@ def invocation_digest(argv):
     return hashlib.sha256(json.dumps(_invocation_args(argv), ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
 
 
-def _validate_plan(probe, units, argv):
-    """Bind the recorded occurrences to actual requested modes/counts/input files."""
+def _argument(argv, flag):
+    value = None
+    for index, item in enumerate(argv):
+        if item == flag and index + 1 < len(argv):
+            value = argv[index + 1]
+        elif item.startswith(flag + "="):
+            value = item.split("=", 1)[1]
+    return value
+
+
+def _input_snapshot(raw, source):
+    value = json.loads(raw.decode("utf-8"))
+    return value, {"source": source, "sha256": hashlib.sha256(raw).hexdigest(),
+                   "size_bytes": len(raw), "content_base64": base64.b64encode(raw).decode("ascii")}
+
+
+def capture_input(path):
+    """Read exactly once; parsing and retained binding consume the same bytes."""
+    return _input_snapshot(Path(path).expanduser().read_bytes(), str(path))
+
+
+def capture_value(value, source):
+    return _input_snapshot(json.dumps(value, ensure_ascii=False).encode("utf-8"), source)
+
+
+def _consumed_input(inputs, name, source):
+    try:
+        snapshot = inputs[name]
+        raw = base64.b64decode(snapshot["content_base64"], validate=True)
+        if (snapshot["source"] != source or type(snapshot["size_bytes"]) is not int
+                or snapshot["size_bytes"] != len(raw)
+                or snapshot["sha256"] != hashlib.sha256(raw).hexdigest()):
+            raise ValueError("input byte binding differs")
+        return json.loads(raw.decode("utf-8"))
+    except (KeyError, TypeError, ValueError, UnicodeError) as exc:
+        raise ResultContractError(f"invalid consumed input snapshot: {name}") from exc
+
+
+def _validate_plan(probe, units, argv, inputs):
+    """Bind occurrences to consumed byte snapshots, never later mutable files."""
     parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
     parser.add_argument("--mode", default="both")
     parser.add_argument("--repeat", type=int, default=3 if probe == "speed" else 10)
@@ -71,7 +110,9 @@ def _validate_plan(probe, units, argv):
         if probe == "speed":
             expected.append(("setup", "speed_setup", 0, False))
             if args.mode in ("mixed", "both"):
-                prompts = json.loads(Path(args.prompts_file).read_text()) if args.prompts_file else [None] * 3
+                prompts = _consumed_input(inputs, "prompts", args.prompts_file or "builtin:speed-default-prompts")
+                if not isinstance(prompts, list) or any(not isinstance(x, list) or len(x) != 3 for x in prompts):
+                    raise ResultContractError("invalid consumed prompts")
                 expected += [(f"mixed:{i}", "speed_mixed", i, True) for i in range(len(prompts))]
             if args.mode in ("decode", "both"):
                 expected += [(f"decode:{i}", "speed_decode", i, True) for i in range(1, args.repeat + 1)]
@@ -84,11 +125,18 @@ def _validate_plan(probe, units, argv):
             expected += [(f"level:{level}:request:{i}", "concurrency_request", i, True)
                          for level, c in enumerate(args.concurrency) for i in range(1, c + 1)]
         else:
-            cases = json.loads(Path(args.usecases).expanduser().read_text())
+            cases = _consumed_input(inputs, "usecases", args.usecases)
+            if not isinstance(cases, list) or any(not isinstance(case, dict) for case in cases):
+                raise ResultContractError("invalid consumed usecases")
             expected += [(f"case:{i}", "quality_case", i, True) for i in range(len(cases))]
         actual = [(u.get("unit_id"), u.get("kind"), u.get("ordinal"), u.get("required")) for u in units]
         if not any(x[3] for x in expected) or actual != expected:
             raise ResultContractError("recorded unit plan differs from requested invocation")
+        for u in units:
+            if u["kind"] == "quality_case" and u["parameters"].get("case_id") != str(cases[u["ordinal"]].get("id", u["ordinal"])):
+                raise ResultContractError("case identity differs from consumed bytes")
+            if u["kind"] == "speed_mixed" and u["parameters"].get("label") != str(prompts[u["ordinal"]][0]):
+                raise ResultContractError("prompt label differs from consumed bytes")
     except (OSError, ValueError, TypeError, argparse.ArgumentError) as exc:
         raise ResultContractError(f"cannot bind requested plan: {type(exc).__name__}") from exc
 
@@ -287,6 +335,48 @@ def _check_json(value):
             _check_json(v)
 
 
+def _validate_artifacts(result, *, check_bytes):
+    manifest = result.get("artifacts")
+    if not isinstance(manifest, dict):
+        raise ResultContractError("missing artifact byte bindings")
+    if result["probe"] != "quality":
+        if manifest or result.get("artifact_root") is not None:
+            raise ResultContractError("unexpected answer artifacts for this probe")
+        return
+    root = result.get("artifact_root")
+    if not isinstance(root, str) or not Path(root).is_absolute():
+        raise ResultContractError("missing captured quality artifact root")
+    units = {u["unit_id"]: u for u in result["units"]}
+    for name, desc in manifest.items():
+        if (not isinstance(name, str) or Path(name).name != name or name in {".", ".."}
+                or not isinstance(desc, dict) or type(desc.get("size_bytes")) is not int
+                or desc["size_bytes"] < 0 or not isinstance(desc.get("sha256"), str)
+                or re.fullmatch(r"[0-9a-f]{64}", desc["sha256"]) is None):
+            raise ResultContractError("invalid artifact byte binding")
+        if desc.get("role") == "aggregate":
+            if name != "_all_answers.json" or desc.get("unit_id") is not None:
+                raise ResultContractError("invalid aggregate artifact binding")
+        elif desc.get("role") == "answer":
+            if desc.get("unit_id") not in units or name == "_all_answers.json":
+                raise ResultContractError("answer artifact has no planned owner")
+        else:
+            raise ResultContractError("unknown artifact role")
+        if check_bytes:
+            try:
+                raw = (Path(root) / name).read_bytes()
+            except OSError as exc:
+                raise ResultContractError("retained answer artifact is unavailable") from exc
+            if len(raw) != desc["size_bytes"] or hashlib.sha256(raw).hexdigest() != desc["sha256"]:
+                raise ResultContractError("retained answer artifact bytes changed")
+    for u in units.values():
+        if u["state"] == "observed":
+            desc = manifest.get(u["data"]["artifact"], {})
+            if desc.get("role") != "answer" or desc.get("unit_id") != u["unit_id"]:
+                raise ResultContractError("quality observation lacks its bound answer bytes")
+    if result.get("state") in {"completed", "partial", "no_measurement"} and "_all_answers.json" not in manifest:
+        raise ResultContractError("finished quality collection lacks its bound aggregate")
+
+
 def _derive(result, *, terminal=True):
     probe = result.get("probe")
     if probe not in PROBES or not isinstance(result.get("units"), list):
@@ -371,8 +461,8 @@ def read_result(path, *, expected_run_id, expected_probe, expected_invocation_sh
     except (OSError, ValueError) as exc:
         raise ResultContractError(f"result unavailable: {type(exc).__name__}") from exc
     if not isinstance(result, dict) or type(result.get("schema_version")) is not int or result["schema_version"] != SCHEMA_VERSION:
-        raise ResultContractError("unsupported result schema")
-    if not {"schema_version", "run_id", "probe", "invocation_sha256", "invocation", "identity", "state", "verdict", "counts", "units", "summary", "error"} <= set(result):
+        raise ResultContractError("unsupported result schema; schema 2 requires consumed-input and artifact byte bindings")
+    if not {"schema_version", "run_id", "probe", "invocation_sha256", "invocation", "identity", "state", "verdict", "counts", "units", "summary", "error", "consumed_inputs", "artifacts", "artifact_root"} <= set(result):
         raise ResultContractError("result is missing required fields")
     _check_json(result)
     for k, expected in (("run_id", expected_run_id), ("probe", expected_probe), ("invocation_sha256", expected_invocation_sha256)):
@@ -381,7 +471,9 @@ def read_result(path, *, expected_run_id, expected_probe, expected_invocation_sh
     if (not isinstance(result.get("invocation"), list) or not all(isinstance(x, str) for x in result["invocation"])
             or invocation_digest(result["invocation"]) != expected_invocation_sha256):
         raise ResultContractError("recorded invocation mismatch")
-    _validate_plan(result["probe"], result.get("units", []), result["invocation"])
+    if not isinstance(result["consumed_inputs"], dict):
+        raise ResultContractError("invalid consumed input bindings")
+    _validate_plan(result["probe"], result.get("units", []), result["invocation"], result["consumed_inputs"])
     identity = result.get("identity")
     if (not isinstance(identity, dict) or set(identity) != {"model", "endpoint_kind", "endpoint", "format", "auth"}
             or not all(isinstance(identity.get(k), str) and identity[k] for k in ("model", "endpoint", "format", "auth"))
@@ -404,11 +496,12 @@ def read_result(path, *, expected_run_id, expected_probe, expected_invocation_sh
     if (not isinstance(summary, dict) or summary.keys() != expected_summary.keys()
             or any(type(summary[k]) is not type(v) or summary[k] != v for k, v in expected_summary.items())):
         raise ResultContractError("summary contradicts typed evidence")
+    _validate_artifacts(result, check_bytes=True)
     return result
 
 
 class ResultWriter:
-    def __init__(self, path, run_id, probe, invocation_argv, identity, plan):
+    def __init__(self, path, run_id, probe, invocation_argv, identity, plan, *, consumed_inputs=None):
         if bool(path) != bool(run_id):
             raise ResultContractError("--result-json and --run-id must be supplied together")
         if run_id:
@@ -417,14 +510,22 @@ class ResultWriter:
             except (ValueError, AttributeError) as exc:
                 raise ResultContractError("--run-id must be a UUID") from exc
         self.path = Path(path) if path else None
+        output_arg = _argument(invocation_argv, "--output-dir") if probe == "quality" else None
+        if probe == "quality" and not output_arg:
+            raise ResultContractError("quality needs an explicit output directory")
+        self.output_root = Path(output_arg).expanduser().resolve() if output_arg else None
+        if self.path and self.output_root is not None and self.output_root.exists():
+            raise ResultContractError("machine quality --output-dir must not already exist; select a fresh run directory")
         self.secrets = []
         self.result = {"schema_version": SCHEMA_VERSION, "run_id": run_id or str(uuid.uuid4()),
                        "probe": probe, "invocation_sha256": invocation_digest(invocation_argv),
                        "invocation": _invocation_args(invocation_argv),
+                       "consumed_inputs": copy.deepcopy(consumed_inputs or {}),
+                       "artifact_root": str(self.output_root) if self.output_root is not None else None, "artifacts": {},
                        "identity": identity, "units": copy.deepcopy(plan), "summary": {}, "error": None}
         if not any(u.get("required") for u in plan):
             raise ResultContractError("evaluation requires at least one primary unit")
-        _validate_plan(probe, plan, self.result["invocation"])
+        _validate_plan(probe, plan, self.result["invocation"], self.result["consumed_inputs"])
         _derive(self.result, terminal=False)
         if self.path:
             # Refuse stale files/symlinks atomically; later writes replace only our reserved file.
@@ -474,6 +575,15 @@ class ResultWriter:
         u["state"] = "skipped"
         self._save(False)
 
+    def bind_artifact(self, path, *, role, unit_id=None):
+        path = Path(path)
+        if self.output_root is None or path.parent.resolve() != self.output_root:
+            raise ResultContractError("artifact lies outside the captured quality output directory")
+        raw = path.read_bytes()
+        self.result["artifacts"][path.name] = {"role": role, "unit_id": unit_id,
+            "sha256": hashlib.sha256(raw).hexdigest(), "size_bytes": len(raw)}
+        self._save(False)
+
     def _safe_data(self, value):
         if isinstance(value, str):
             for secret in self.secrets:
@@ -488,6 +598,7 @@ class ResultWriter:
         counts, state, verdict, code = _derive(self.result, terminal=terminal)
         self.result.update(counts=counts, state=state, verdict=verdict)
         self.result["summary"] = _summary(self.result["probe"], self.result["units"])
+        _validate_artifacts(self.result, check_bytes=False)
         _check_json(self.result)
         if self.path:
             fd, tmp = tempfile.mkstemp(prefix=f".{self.path.name}.", dir=self.path.parent)
@@ -515,12 +626,12 @@ class ResultWriter:
         return self._save(True)
 
 
-def execute_probe(args, probe, identity, plan, callback, *, argv=None):
+def execute_probe(args, probe, identity, plan, callback, *, argv=None, consumed_inputs=None):
     """Execute one acquisition lifecycle; callback returns its legacy exit code."""
     writer = None
     try:
         writer = ResultWriter(args.result_json, args.run_id, probe,
-                              sys.argv[1:] if argv is None else argv, identity, plan)
+                              sys.argv[1:] if argv is None else argv, identity, plan, consumed_inputs=consumed_inputs)
         legacy_exit = callback(writer) or 0
         code = writer.finish()
         return code if args.result_json else legacy_exit
