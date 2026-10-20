@@ -841,9 +841,11 @@ TZ=America/Los_Angeles date "+%F %T %Z(%z)"
   静默平台事件；官方 all/every wording 才证明全员范围。把这些层级写进结论，禁止一条截图
   外推全局，也禁止一条聚合器空结果抹掉产品事实。
 - **tracker 的 confirmed 标签可贴在未来预告上**，不能作到账证据。其 API 的
-  `reset_verification_status` 不提供可靠的到账正向信号。平台完成声明看 Tibo 后续原帖及其
-  措辞范围；某账号是否到账看已排除自然周期、切号后的同账号前后产品读数。单次当前余额
-  只证明该账号现状。
+  `reset_verification_status` 不提供可靠的到账正向信号。**但摘要文本里的独立检测句是正向时间
+  证据**（2026-10-20 实测：Radar 摘要 "landed at 20:41 UTC on our checks" 把 Day13 落地确认从
+  完成帖单点 21:12Z 收窄为 20:41–21:12Z 落地区间；status 字段的结论不变）。平台完成声明看
+  Tibo 后续原帖及其措辞范围；某账号是否到账看已排除自然周期、切号后的同账号前后产品读数。
+  单次当前余额只证明该账号现状。
 - **「celebration」在他的语义里 = 重置动作本身，不是发帖庆祝**（2026-08-30 实战教训：把
   「This celebration is moved to tomorrow as the button was already pressed today」读成
   「只是庆祝帖、无重置」，被两个独立源当场证伪；次日完整兑现——12:24 PT 发「reset will
