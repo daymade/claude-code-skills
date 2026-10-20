@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-watchdog** (`daymade-macos` v1.23.9 → v1.24.0): Three measured launchd mechanics from the 2026-10 watchdog-panic investigation: `kickstart -k` on instantly-exiting jobs hits the 10 s ThrottleInterval deterministically (not congestion); sub-minute `StartInterval` is a BTM transition tax (prefer `KeepAlive` in-process loops for high-frequency probes); macOS zeroes `XPC_SERVICE_NAME` for spawned children, so identity guards need an argv-passed alternative variable. Plus a troubleshooting row: after bootout+bootstrap the old job's final data row can fool a freshness check — anchor verification to rows after the new PID's start. Change type: bounded mechanics additions from measured incidents.
+
 - **docs-cleaner** (`daymade-docs` v1.25.6): Check reported outbound-link errors against the reader host before distinguishing broken targets from parser portability; preserve visible labels and contact identity. Change type: bounded link-check interpretation repair.
 
 - **claude-code-hooks** (`daymade-claude-code` v4.30.14): Record the measured difference between outer-wrapper and nested-hook enforcement, retaining the evidence limits. Change type: factual casebook addition; no hook or rule change.
