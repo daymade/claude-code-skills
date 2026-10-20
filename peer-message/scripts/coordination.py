@@ -306,7 +306,7 @@ class Board:
             raise CoordinationError("status limit must be an integer from 1 to 100")
         if type(offset) is not int or not 0 <= offset <= 9223372036854775807:
             raise CoordinationError("status offset must be a nonnegative SQLite integer")
-        for value, name in ((topic, "topic"), (participant, "participant"),
+        for value, name in ((scope, "scope"), (topic, "topic"), (participant, "participant"),
                             (message_id, "message-id")):
             if value is not None:
                 nonblank(value, name)

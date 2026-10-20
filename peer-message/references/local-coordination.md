@@ -46,6 +46,7 @@ python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord claim --scope '<project>' --tas
 查具体事项用 `--topic`，查双方用 `--participant` 的精确已存地址，或用 `--kind request`。
 未知发送和有效 request 优先显示；过期记录不自动关闭或消失。计数只覆盖这些筛选条件，
 消息数量或空登记不能证明无人使用桌面，也不能代替接收侧送达证据。
+省略筛选参数表示不筛选；显式传空白的 scope/topic/participant/message-id 则报错，不扩大查询范围。
 
 ```bash
 python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord status --scope '<project>' --owners-only

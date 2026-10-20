@@ -80,7 +80,7 @@ class StatusOutputTests(unittest.TestCase):
         self.assertEqual([r["id"] for r in page["messages"]], [wanted])
         self.assertEqual(self.board.status_page(topic="topic")["messages"], [])
         self.assertEqual(self.board.status_page(participant="receiver")["messages"], [])
-        for name in ("topic", "participant", "message_id"):
+        for name in ("scope", "topic", "participant", "message_id"):
             self.assertEqual(self.board.status_page(**{name: None})["message_page"]["total"], 2)
             for invalid in ("", " "):
                 with self.subTest(name=name, invalid=invalid), self.assertRaises(peer.coordination.CoordinationError):
@@ -137,7 +137,7 @@ class StatusOutputTests(unittest.TestCase):
         self.assertEqual(text, "")
 
     def test_cli_rejects_invalid_page_and_empty_filters_without_stdout(self):
-        for args in (("--limit", "0"), ("--offset", "-1"), ("--topic", ""), ("--participant", " "),
+        for args in (("--limit", "0"), ("--offset", "-1"), ("--scope", ""), ("--scope", " "), ("--topic", ""), ("--participant", " "),
                      ("--message-id", ""), ("--owners-only", "--kind", "request")):
             with self.subTest(args=args):
                 code, out, _ = self.cli(*args)
