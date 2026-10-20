@@ -79,6 +79,8 @@ For running an original application demo, follow that Skill's
 For file-backed persistence and CLI acceptance, transaction recovery tests,
 financial migration/fixture acceptance, runtime compatibility or project-bound release acceptance, enter
 [qa-expert](qa-expert/SKILL.md); its test-case routes select the detailed recipes.
+For path normalization or drive-relative adapter cases, follow its
+[runtime compatibility recipe](qa-expert/references/runtime-compatibility-acceptance.md#select-optional-path-operation-cases).
 
 For choosing or reviewing a library, framework, storage, data format, model,
 build-vs-buy or architecture — including 用哪个 / 选什么框架 / 要不要自建 / A 还是 B /
