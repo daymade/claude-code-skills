@@ -18,29 +18,51 @@ macOS/Linux shell examples.
    model are unchanged. Treat a reduction in one category accompanied by growth in
    another as an unproven optimization, not a saving.
 
-2. Identify the active configuration before reading or editing any file.
+2. Identify the active configuration before reading or editing any file, then bind
+   its paths for every later step.
 
    ```bash
-   printf 'CLAUDE_CONFIG_DIR=%s\n' "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
-   claude mcp list
+   CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+   printf 'CLAUDE_CONFIG_DIR=%s\n' "$CONFIG_DIR"
+   claude mcp list 2>&1 | sed -n -E 's/^([^:]+):.* - (✔ Connected|✘ Failed to connect)( — .*|$)/\1: \2/p'
    ```
 
-   Read `settings.json` and `.claude.json` from that actual profile layout, using
-   the main-versus-third-party paths in `SKILL.md`. Do not assume `~/.claude` is the
-   active profile, and do not infer the registry from a different profile's file.
+   The `sed` filter emits only each server name and its exact health status; it
+   strips endpoint URLs, stdio arguments and transport error details. Empty output
+   means names and health are unverified, not that the registry is empty.
+
+   Set the profile-specific paths once:
+
+   - default profile: `ACTIVE_SETTINGS="$HOME/.claude/settings.json"`,
+     `ACTIVE_STATE="$HOME/.claude.json"`, and no third-party provider overlay;
+   - third-party profile: `ACTIVE_SETTINGS="$CONFIG_DIR/settings.json"`,
+     `ACTIVE_STATE="$CONFIG_DIR/.claude.json"`, and
+     `PROVIDER_SETTINGS="$HOME/.claude/settings/<name>.json"`.
+
+   Use `ACTIVE_SETTINGS` for the edit and validation below, `ACTIVE_STATE` for
+   structured registry keys, and `PROVIDER_SETTINGS` only for the third-party
+   provider compatibility check. Do not assume `~/.claude` is the active profile,
+   and do not infer the registry from a different profile's file.
 
 3. Check provider compatibility before considering MCP tool search or deferred
-   loading. Inspect only the relevant key, never the whole provider file:
+   loading. Inspect only the relevant key, never the whole settings file:
 
    ```bash
+   # Default profile:
    jq -r 'paths(scalars) as $p | select($p[-1] == "ENABLE_TOOL_SEARCH") | "\($p|map(tostring)|join(".")) = \(getpath($p))"' \
-     "$HOME/.claude/settings/<name>.json"
+     "$ACTIVE_SETTINGS"
+
+   # Third-party profile:
+   jq -r 'paths(scalars) as $p | select($p[-1] == "ENABLE_TOOL_SEARCH") | "\($p|map(tostring)|join(".")) = \(getpath($p))"' \
+     "$PROVIDER_SETTINGS"
    ```
 
-   No output means the key is absent from that file, not that the feature is safe to
-   enable. If it is deliberately `false` for a third-party provider, preserve that
-   boundary instead of forcing the feature. Confirm current CLI support separately
-   before relying on deferred loading.
+   For a third-party profile, repeat the same field read against `ACTIVE_SETTINGS`
+   when that layer can also carry the key. No output means the key is absent from
+   that file, not that the feature is safe to enable. If it is deliberately
+   `false` for a third-party provider, preserve that boundary instead of forcing
+   the feature. Confirm current CLI support separately before relying on deferred
+   loading.
 
 ## Test a reversible reduction
 
@@ -49,19 +71,22 @@ macOS/Linux shell examples.
    because a total is high.
 
 2. Deny a candidate only through a one-process settings overlay. Replace `<server>`
-   with the exact name shown by `claude mcp list`:
+   with the exact name shown by the filtered list above:
 
    ```bash
-   claude --settings '{"deniedMcpServers":[{"serverName":"<server>"}]}' mcp list
+   claude --settings '{"deniedMcpServers":[{"serverName":"<server>"}]}' mcp list 2>&1 \
+     | sed -n -E 's/^([^:]+):.* - (✔ Connected|✘ Failed to connect)( — .*|$)/\1: \2/p'
    claude --settings '{"deniedMcpServers":[{"serverName":"<server>"}]}' --print '/context'
    ```
 
-   The first command checks which servers still connect. The second measures the
-   actual reduction. Neither edits the persistent configuration.
+   The first command checks which server names and health statuses remain without
+   printing endpoint URLs, stdio arguments or transport error details. The second
+   measures the actual reduction. Neither edits the persistent configuration.
 
 3. Inspect MCP configuration without dumping secrets. Do not run unfiltered
-   `claude mcp get <server>`: stdio `Environment` and remote headers can contain
-   credentials. Use `claude mcp list` and the field-limited inspection contract in
+   `claude mcp get <server>` or `claude mcp list`: stdio `Environment` and
+   arguments, remote headers, endpoint URLs and transport error details can contain
+   credentials. Use the field-limited/redacting inspection contract in
    `credential-storage.md` instead.
 
 4. For a single known settings key, use current CLI help and targeted field reads.
@@ -70,8 +95,8 @@ macOS/Linux shell examples.
 
 ## Persist only the minimal deny entry
 
-Merge the following into the active profile's `settings.json`, preserving every
-existing key and any existing `deniedMcpServers` entries:
+Merge the following into `$ACTIVE_SETTINGS`, preserving every existing key and any
+existing `deniedMcpServers` entries:
 
 ```json
 "deniedMcpServers": [
@@ -95,9 +120,9 @@ Run all three checks after the edit, without the temporary `--settings` overlay:
 
 ```bash
 claude --print '/context'
-claude mcp list
+claude mcp list 2>&1 | sed -n -E 's/^([^:]+):.* - (✔ Connected|✘ Failed to connect)( — .*|$)/\1: \2/p'
 jq -e '.deniedMcpServers | type == "array" and length > 0' \
-  "$HOME/.claude-profiles/<name>/settings.json"
+  "$ACTIVE_SETTINGS"
 ```
 
 Accept only when:
