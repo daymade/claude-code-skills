@@ -24,8 +24,8 @@ generic engine does not select credentials, authorize funding or replace a
 registry policy.
 
 Read receipts with the bundled stdlib-only `scripts/eval_result.py` from the
-explicitly trusted engine installation. Import `RESULT_API_VERSION` (currently
-1), `invocation_digest`, `read_result` and `ResultContractError`. Bind the actual
+explicitly trusted engine installation. Import `RESULT_API_VERSION`,
+`invocation_digest`, `read_result` and `ResultContractError`. Bind the actual
 probe argv, fresh run ID, probe name and observed child return code:
 
 ```python
@@ -78,7 +78,7 @@ codes to the machine receipt reader.
 
 ## Evidence and progress
 
-Receipt schema 1 binds `run_id`, `probe`, invocation digest and route `identity`
+The receipt binds `run_id`, `probe`, invocation digest and route `identity`
 (model, endpoint kind/value, format and auth mode). It contains typed `units`,
 derived `counts`, state/verdict, derived summary and an optional run error.
 Counter names are planned/attempted/finished/usable/errors/skipped. They count
@@ -108,6 +108,35 @@ whole ramp level. The writer finalizes ordinary errors and Python cancellation;
 an abrupt process kill may leave only a running snapshot. Preserve that partial
 evidence and report interruption, never terminal success. No terminal-write
 guarantee is possible after a hard kill.
+
+## Consumed inputs and answer artifacts
+
+Readiness depends on compatibility with the API 2/schema 2 receipt contract. The reader
+explicitly refuses schema 1 because it cannot establish consumed-input and retained
+answer-byte bindings; it does not silently upgrade an old receipt to current proof.
+Legacy invocations without machine arguments keep their existing collection modes.
+
+Read a quality usecase library or custom speed prompts exactly once before
+acquisition. The producer parses those same bytes and retains their base64 snapshot,
+SHA256 and source pointer in `consumed_inputs`. Built-in speed prompts are captured
+as a value snapshot. The reader derives the plan from these bound snapshots, without
+reopening the user-maintained library. Later edits, deletion or same-count changes
+to that source therefore do not invalidate its earlier partial/negative evidence.
+Already consumed inputs also remain in receipts for credential/instrument errors
+and cancellation after preflight.
+
+For machine quality collection, pass a previously nonexistent `--output-dir`.
+Reuse is an explicit pre-acquisition error, including an existing empty directory;
+choose a new run directory to resume. Ordinary legacy collection can still reuse a
+directory. Such a later legacy overwrite invalidates earlier machine evidence if
+it changes a bound answer, rather than silently changing what an old receipt means.
+
+Write each answer before admitting its observation and bind its exact retained
+bytes, filename and unit owner to the receipt. Bind `_all_answers.json` as well.
+The reader reads those retained files and checks size/SHA256; missing or changed
+bytes refuse validation. Preserve the captured artifact directory with the receipt.
+This detects supported output reuse or changed evidence; it is not a filesystem
+sandbox against an adversarial same-OS writer rewriting the receipt and artifacts.
 
 Use `--auth x-api-key|bearer` for Anthropic protocol/concurrency requests. The
 default remains x-api-key, and the setting applies to both protocol generation

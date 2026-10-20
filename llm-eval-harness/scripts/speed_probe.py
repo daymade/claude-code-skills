@@ -46,7 +46,7 @@ import os
 import sys
 import time
 
-from eval_result import cli_main, add_result_arguments, execute_probe, unit
+from eval_result import capture_input, capture_value, cli_main, add_result_arguments, execute_probe, unit
 
 try:
     from openai import OpenAI
@@ -239,9 +239,13 @@ def main():
         ap.error("repeat and max-tokens must be positive")
 
     prompts = DEFAULT_PROMPTS
-    if args.prompts_file and args.mode in ("mixed", "both"):
-        with open(args.prompts_file) as f:
-            prompts = [tuple(x) for x in json.load(f)]
+    consumed_inputs = {}
+    if args.mode in ("mixed", "both"):
+        if args.prompts_file:
+            prompts, snapshot = capture_input(args.prompts_file)
+        else:
+            prompts, snapshot = capture_value(DEFAULT_PROMPTS, "builtin:speed-default-prompts")
+        consumed_inputs["prompts"] = snapshot
     if args.mode in ("mixed", "both") and (not prompts or any(len(x) != 3 for x in prompts)):
         ap.error("mixed prompts must be nonempty [label, prompt, max_tokens] triples")
     plan = [unit("setup", "speed_setup", 0, required=False)]
@@ -251,7 +255,7 @@ def main():
         plan += [unit(f"decode:{i}", "speed_decode", i) for i in range(1, args.repeat + 1)]
     identity = {"model": args.model, "endpoint_kind": "base_url", "endpoint": args.base_url,
                 "format": "openai", "auth": "bearer"}
-    return execute_probe(args, "speed", identity, plan, lambda writer: collect(args, prompts, writer))
+    return execute_probe(args, "speed", identity, plan, lambda writer: collect(args, prompts, writer), consumed_inputs=consumed_inputs)
 
 
 def collect(args, prompts, writer):
