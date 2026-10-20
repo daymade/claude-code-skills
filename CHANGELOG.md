@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` v1.70.9 → v1.71.0): Add optional `materialize --summary` output for prepare, run, finish and recover. Report outcomes and the full receipt path while retaining complete receipts, child logs, default JSON output and existing exit codes. Change type: additive CLI option.
+
 - **frontend-visual-qa** (v1.21.10): Verify attention discovery across views and diagnose failed captures on the owned background target without automatic foreground recovery. Change type: bounded acceptance-recipe repair.
 - **data-visualization-discipline** (v1.1.3): Distinguish unknown, partially read and confirmed-zero counts, and reconcile attention summaries and filters against the existing state contract. Change type: bounded counterexample addition.
 
