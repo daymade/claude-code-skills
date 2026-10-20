@@ -9,6 +9,7 @@ The Skill and human/agent judgment decide which prior work is actually useful.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -162,6 +163,25 @@ CURRENT_SESSION_RECALL = re.compile(
     r"|(?:主线|当前|本次)\s*(?:任务|目标)\s*(?:是)?\s*什么来着",
     re.IGNORECASE,
 )
+# Continuing the current executor is not a request to retrieve prior work.
+# Match the complete coordinated execution-object list. A prefix match would
+# remove the governing 沿用 from a list that also names a historical artifact.
+_CURRENT_EXECUTION_OBJECT = (
+    r"(?:child(?![A-Za-z0-9_])|(?:子|原生)?会话|session(?![A-Za-z0-9_])|"
+    r"(?:独立)?工作目录|目录|cwd(?![A-Za-z0-9_])|"
+    r"(?:read[- ]only|只读)\s*(?:范围|限制)|执行(?:身份|对象|范围))"
+)
+CURRENT_EXECUTION_CONTINUITY = re.compile(
+    r"沿用[ \t]*(?:当前|本次)(?:的)?[ \t]*" + _CURRENT_EXECUTION_OBJECT
+    + r"(?:[ \t]*(?:、|，|,|和|与|以及|及)[ \t]*"
+    r"(?:(?:当前|本次)(?:的)?[ \t]*)?" + _CURRENT_EXECUTION_OBJECT + r")*"
+    # A comma may begin a separate execution restriction, but an unknown
+    # continuation stays scannable. Do not guess whether a following noun is
+    # another object governed by 沿用 or an independent historical reference.
+    r"(?=[ \t]*(?:$|[\n。；;!?？！]|[，,][ \t]*"
+    r"(?:不|不要|禁止)(?:接管|重放|切换|修改|写入|扩大)))",
+    re.IGNORECASE,
+)
 HOOK_GUIDANCE_MARKER = "Prior Work Retrieval is required before substantial production"
 USER_OPTOUT = re.compile(
     # 「不需要」 matters: a trapped session's own advised escape phrase
@@ -247,7 +267,9 @@ def _manifest() -> dict[str, Any]:
     return prior_work.load_manifest(prior_work.default_manifest_path().resolve())
 
 
-def classify_prompt(prompt: str, receipt_valid: bool = False) -> str:
+def _classify_prompt(
+    prompt: str, receipt_valid: bool, *, current_execution: bool
+) -> str:
     """Classify one UserPromptSubmit body.
 
     `receipt_valid` says this session already holds a receipt that passes
@@ -269,11 +291,81 @@ def classify_prompt(prompt: str, receipt_valid: bool = False) -> str:
         " ", STALE_AGE_IDIOM.sub(" ", IMPERATIVE_REMEMBER.sub(
             " ", NO_REUSE_TOKEN.sub(" ", NEGATED_PRIOR_SIGNAL.sub(" ", text))))
     )
+    if current_execution:
+        scannable = CURRENT_EXECUTION_CONTINUITY.sub(" ", scannable)
     if PRIOR_WORK_STRONG_SIGNAL.search(scannable):
         return "required_prior_signal"
     if PRIOR_WORK_WEAK_SIGNAL.search(scannable) and DISTAL_WORK_NOUN.search(scannable):
         return "none" if receipt_valid else "required_prior_signal"
     return "none"
+
+
+def classify_prompt(prompt: str, receipt_valid: bool = False) -> str:
+    return _classify_prompt(prompt, receipt_valid, current_execution=True)
+
+
+def reclassify_requirement(
+    event: dict[str, Any], expected_requirement_id: str
+) -> dict[str, Any]:
+    """Replay an exact original prompt to retire this false-positive scope only.
+
+    Ordinary UserPromptSubmit handling never calls this maintenance operation.
+    Keep the original required flag, trigger and identity as historical evidence;
+    neither an opt-out nor a retrieval receipt is manufactured.
+    """
+    prompt = event.get("prompt")
+    session_id = event.get("session_id")
+    if (event.get("hook_event_name") != "UserPromptSubmit"
+            or not isinstance(prompt, str) or not prompt.strip()
+            or not isinstance(session_id, str) or not session_id.strip()
+            or not isinstance(expected_requirement_id, str)
+            or re.fullmatch(r"[0-9a-f]{20}", expected_requirement_id) is None):
+        raise prior_work.PriorWorkError("Reclassification needs the original prompt event and exact requirement id")
+    manifest = _manifest()
+    current = prior_work.load_requirement(manifest, session_id)
+    prompt_sha256 = "sha256:" + hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+    if (current is None
+            or type(current.get("schema_version")) is not int
+            or current["schema_version"] != prior_work.SCHEMA_VERSION
+            or current.get("kind") != "prior_work_requirement"
+            or current.get("requirement_id") != expected_requirement_id
+            or current.get("prompt_sha256") != prompt_sha256
+            or current.get("prompt_preview") != prompt.strip()[:240]
+            or current.get("manifest_sha256") != manifest["manifest_sha256"]
+            or current.get("required") is not True
+            or current.get("trigger") != "required_prior_signal"
+            or not isinstance(current.get("created_at"), str)
+            or not current["created_at"].strip()
+            or "scope_reclassification" in current
+            or ("active_for_prompt" in current
+                and current["active_for_prompt"] is not True)):
+        raise prior_work.PriorWorkError("Original requirement identity/state does not match; no scope changed")
+    try:
+        created_at = prior_work.datetime.fromisoformat(
+            current["created_at"].replace("Z", "+00:00")
+        )
+        if created_at.tzinfo is None:
+            raise ValueError("timestamp has no timezone")
+    except ValueError as error:
+        raise prior_work.PriorWorkError("Original requirement timestamp is invalid") from error
+    # receipt_valid=False is essential: a valid receipt must not make a genuine
+    # weak recall classify as none and thereby authorize a correction.
+    if (classify_prompt(prompt, False) != "none"
+            or _classify_prompt(prompt, False, current_execution=False)
+            != "required_prior_signal"):
+        raise prior_work.PriorWorkError("Original prompt is not this current-execution false positive")
+    prior_work.set_prompt_scope(
+        manifest, session_id, active=False, expected_requirement=current,
+        reclassification={
+            "reason": "current_execution_continuity",
+            "classification": "none",
+            "reclassified_at": prior_work.utc_now(),
+            "classifier_sha256": "sha256:" + hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        },
+    )
+    return {"status": "reclassified", "session_id": session_id,
+            "requirement_id": expected_requirement_id, "prompt_sha256": prompt_sha256,
+            "active_for_prompt": False}
 
 
 def _tool_name(event: dict[str, Any]) -> str:
@@ -1034,6 +1126,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     modes.add_argument("--selftest", action="store_true")
     modes.add_argument("--install", action="store_true")
     modes.add_argument("--check-install", action="store_true")
+    modes.add_argument(
+        "--reclassify-requirement", metavar="EXACT_ID",
+        help="Retire a current-execution false positive using its exact original UserPromptSubmit JSON on stdin",
+    )
     parser.add_argument(
         "--keep-legacy-recall-hook",
         action="store_true",
@@ -1071,7 +1167,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (json.JSONDecodeError, OSError, TypeError) as error:
         print(f"prior-work hook invalid input: {error}", file=sys.stderr)
         return 2
-    output = handle_event(event)
+    if args.reclassify_requirement is not None:
+        try:
+            output = reclassify_requirement(event, args.reclassify_requirement)
+        except prior_work.PriorWorkError as error:
+            print(f"prior-work hook: {error}", file=sys.stderr)
+            return 2
+    else:
+        output = handle_event(event)
     if output is not None:
         print(json.dumps(output, ensure_ascii=False, separators=(",", ":")))
     return 0
