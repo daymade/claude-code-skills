@@ -185,6 +185,17 @@ is usually `- **skill-name** (\`suite\` vX.Y.Z): what broke, why, and what prove
 Write it in the **same commit** as the bump; a changelog updated "later" is one that never
 gets updated.
 
+**Edit registry files surgically — never rewrite them with a serializer.** `marketplace.json`
+(and any other machine-shaped registry: manifests, lockfiles, generated indexes) is read by
+humans in diffs. Regenerating the whole document with `json.dump`/equivalent reorders and
+reformats untouched entries — one version bump became 62 lines of keyword-array churn
+(2026-10-20), which polluted the review diff and triggered two peer sessions' ownership
+fan-outs in the shared checkout. The correct shape: read the current text, replace exactly
+the fields you mean to change (string splice or a targeted parser edit), and confirm
+`git diff` shows only those lines before staging. If you already produced the churn, do not
+`git checkout --` the file (banned destructive form); back it up outside the repo, then
+regenerate from `git show HEAD:<path>` with only your intended changes and write that back.
+
 
 
 **Keep the registry diff minimal — it is the single file every skill shares.** A marketplace manifest is the one place where every concurrent editor collides, so an unrelated formatting change there is far more expensive than the same change anywhere else: it turns a clean three-line bump into a conflict for whoever else is mid-edit. When you script the update (parsing to JSON, mutating, writing back), the rewrite silently normalizes things the file may not have used — trailing newline, indent width, key order, unicode escaping. Round-trip discipline: re-read the file afterwards and run `git diff --stat` on it; **the only lines that may appear are the fields you meant to change.** If extra lines show up, restore the file's original convention rather than shipping the normalization (a scripted bump once added a trailing newline to a manifest that had never had one — one wasted diff line, in the file most likely to be edited by someone else at the same moment). The same instinct applies to any shared registry a skill touches: lockfiles, catalogs, index documents.

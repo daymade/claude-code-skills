@@ -154,6 +154,12 @@ Use `bootstrap`/`bootout` instead of deprecated `load`/`unload`. When a job
 must remain disabled across later loads, apply `disable`; stopping an instance
 alone does not establish that persistent override.
 
+A temporary job that stays loaded keeps paying the § Deploy-9 transition tax
+(its every firing still feeds BTM broadcasts). When the task it served is
+done, `disable` it — do not leave a dead-purpose periodic job running because
+stopping it felt irreversible: `disable` is fully reversible (`enable` +
+`bootstrap`), and the plist can stay on disk as the re-enable path.
+
 ## Troubleshooting quick map
 
 | Symptom | First check |
