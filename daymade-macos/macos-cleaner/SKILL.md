@@ -269,7 +269,7 @@ Verification must cover all clauses of the approved plan:
 - Observe at bounded intervals when APFS accounting can lag or the source may refill. Record each timestamp and value.
 - If the free-space target is missed, stop all deletion. Begin a second read-only analysis and rank remaining sources by measured physical allocation.
 
-Never report “fixed” when only the command exit code is known. A successful cleanup requires both the intended state and the protected invariants.
+Never report “fixed” when only the command exit code is known. A successful cleanup requires both the intended state and the protected invariants. Use the [Phase-4 result fields and representative cases](references/report_templates.md#phase-4-result) to distinguish emergency recovery from an unfinished capacity investigation and to close already-explained work without extra scans.
 
 For a local target whose before snapshot was captured by the helper, generate the comparison with:
 

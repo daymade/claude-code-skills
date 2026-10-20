@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-cleaner** (`daymade-macos` v1.24.3): Separate emergency recovery from the capacity investigation in result reports, retain mixed-directory toolchains, and exercise both premature closure and unnecessary continued scanning with bounded cases. Change type: bounded workflow clarification and representative acceptance cases.
+
 - **frontend-visual-qa** (v1.21.10): Verify attention discovery across views and diagnose failed captures on the owned background target without automatic foreground recovery. Change type: bounded acceptance-recipe repair.
 - **data-visualization-discipline** (v1.1.3): Distinguish unknown, partially read and confirmed-zero counts, and reconcile attention summaries and filters against the existing state contract. Change type: bounded counterexample addition.
 
