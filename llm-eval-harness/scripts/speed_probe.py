@@ -46,6 +46,8 @@ import os
 import sys
 import time
 
+from eval_result import cli_main, add_result_arguments, execute_probe, unit
+
 try:
     from openai import OpenAI
 except ImportError:
@@ -101,6 +103,7 @@ def run_one(client, model, prompt, max_tokens, temperature, use_usage):
     reasoning_parts, content_parts = [], []
     chunk_count = 0          # content-bearing chunks — reveals batch-flush vs per-token streaming
     usage = None
+    finish_reason = None
     kwargs = dict(
         model=model,
         messages=[{"role": "user", "content": prompt}],
@@ -111,26 +114,33 @@ def run_one(client, model, prompt, max_tokens, temperature, use_usage):
     if use_usage:
         kwargs["stream_options"] = {"include_usage": True}
 
-    stream = client.chat.completions.create(**kwargs)
-    for chunk in stream:
-        now = time.perf_counter()
-        if chunk.choices:
-            delta = chunk.choices[0].delta
-            rc = extract_reasoning(delta)
-            if rc:
-                if ttft_any is None:
-                    ttft_any = now - t0
-                reasoning_parts.append(rc)
-            if delta and delta.content:
-                if ttft_any is None:
-                    ttft_any = now - t0
-                if ttft_content is None:
-                    ttft_content = now - t0
-                content_parts.append(delta.content)
-            if rc or (delta and delta.content):
-                chunk_count += 1
-        if getattr(chunk, "usage", None):
-            usage = chunk.usage
+    try:
+        stream = client.chat.completions.create(**kwargs)
+        for chunk in stream:
+            now = time.perf_counter()
+            if chunk.choices:
+                finish_reason = chunk.choices[0].finish_reason or finish_reason
+                delta = chunk.choices[0].delta
+                rc = extract_reasoning(delta)
+                if rc:
+                    if ttft_any is None:
+                        ttft_any = now - t0
+                    reasoning_parts.append(rc)
+                if delta and delta.content:
+                    if ttft_any is None:
+                        ttft_any = now - t0
+                    if ttft_content is None:
+                        ttft_content = now - t0
+                    content_parts.append(delta.content)
+                if rc or (delta and delta.content):
+                    chunk_count += 1
+            if getattr(chunk, "usage", None):
+                usage = chunk.usage
+    except (Exception, KeyboardInterrupt) as exc:
+        exc.partial_result = {"stream_complete": False, "content_chars": sum(map(len, content_parts)),
+                              "reasoning_chars": sum(map(len, reasoning_parts)), "chunks": chunk_count,
+                              "total_s": time.perf_counter() - t0}
+        raise
     t1 = time.perf_counter()
 
     reasoning = "".join(reasoning_parts)
@@ -152,6 +162,8 @@ def run_one(client, model, prompt, max_tokens, temperature, use_usage):
     batch_flushed = tok_per_chunk is not None and tok_per_chunk > 3
 
     return {
+        "stream_complete": True,
+        "finish_reason": finish_reason,
         "ttft_first_s": round(ttft_any, 3) if ttft_any is not None else None,
         "ttft_content_s": round(ttft_content, 3) if ttft_content is not None else None,
         "total_s": round(total, 3),
@@ -218,32 +230,55 @@ def main():
     ap.add_argument("--prompts-file", help="JSON list of [label, prompt, max_tokens] to override mixed tasks")
     ap.add_argument("--timeout", type=float, default=180)
     ap.add_argument("--output", help="write full JSON results here")
+    add_result_arguments(ap)
     args = ap.parse_args()
+    if args.repeat <= 0 or args.max_tokens <= 0:
+        ap.error("repeat and max-tokens must be positive")
 
-    api_key = os.environ.get(args.key_env)
+    prompts = DEFAULT_PROMPTS
+    if args.prompts_file and args.mode in ("mixed", "both"):
+        with open(args.prompts_file) as f:
+            prompts = [tuple(x) for x in json.load(f)]
+    if args.mode in ("mixed", "both") and (not prompts or any(len(x) != 3 for x in prompts)):
+        ap.error("mixed prompts must be nonempty [label, prompt, max_tokens] triples")
+    plan = [unit("setup", "speed_setup", 0, required=False)]
+    if args.mode in ("mixed", "both"):
+        plan += [unit(f"mixed:{i}", "speed_mixed", i, label=str(x[0])) for i, x in enumerate(prompts)]
+    if args.mode in ("decode", "both"):
+        plan += [unit(f"decode:{i}", "speed_decode", i) for i in range(1, args.repeat + 1)]
+    identity = {"model": args.model, "endpoint_kind": "base_url", "endpoint": args.base_url,
+                "format": "openai", "auth": "bearer"}
+    return execute_probe(args, "speed", identity, plan, lambda writer: collect(args, prompts, writer))
+
+
+def collect(args, prompts, writer):
+    api_key = os.environ.get(args.key_env, "").strip()
     if not api_key:
-        sys.exit(f"Env var {args.key_env} is empty or unset — export your key there first.")
+        raise ValueError(f"Env var {args.key_env} is empty or unset — export your key there first.")
+    writer.redact(api_key)
 
     client = OpenAI(api_key=api_key, base_url=args.base_url, timeout=args.timeout)
+    writer.start_unit("setup")
     use_usage = detect_usage_support(client, args.model)
+    writer.finish_unit("setup", {"usage_supported": use_usage})
 
     report = {"base_url": args.base_url, "model": args.model, "usage_supported": use_usage,
               "mixed": [], "decode": []}
     print(f"# speed probe  model={args.model}  usage={'native' if use_usage else 'estimated'}\n")
 
     if args.mode in ("mixed", "both"):
-        prompts = DEFAULT_PROMPTS
-        if args.prompts_file:
-            with open(args.prompts_file) as f:
-                prompts = [tuple(x) for x in json.load(f)]
         print("## mixed (representative tasks)")
-        for label, prompt, mx in prompts:
+        for index, (label, prompt, mx) in enumerate(prompts):
+            uid = f"mixed:{index}"
+            writer.start_unit(uid)
             try:
                 r = run_one(client, args.model, prompt, mx, args.temperature, use_usage)
             except Exception as e:
-                print(f"  {label}: ERROR {type(e).__name__}: {e}")
-                report["mixed"].append({"label": label, "error": str(e)})
+                print(f"  {label}: ERROR {type(e).__name__}: {writer.error_record(e)['message']}")
+                writer.fail_unit(uid, e, data=getattr(e, "partial_result", None))
+                report["mixed"].append({"label": label, "error": writer.error_record(e)["message"]})
                 continue
+            writer.finish_unit(uid, r)
             r["label"] = label
             print(_fmt_line(f"  {label:12}", r))
             report["mixed"].append(r)
@@ -252,11 +287,16 @@ def main():
         print("\n## decode (sustained ceiling, peak of N rounds)")
         peaks = []
         for i in range(1, args.repeat + 1):
+            uid = f"decode:{i}"
+            writer.start_unit(uid)
             try:
                 r = run_one(client, args.model, DECODE_PROMPT, args.max_tokens, 0.0, use_usage)
             except Exception as e:
-                print(f"  round {i}: ERROR {type(e).__name__}: {e}")
+                print(f"  round {i}: ERROR {type(e).__name__}: {writer.error_record(e)['message']}")
+                writer.fail_unit(uid, e, data=getattr(e, "partial_result", None))
+                report["decode"].append({"round": i, "error": writer.error_record(e)["message"]})
                 continue
+            writer.finish_unit(uid, r)
             print(_fmt_line(f"  round {i}:", r))
             report["decode"].append(r)
             if r["decode_tps"]:
@@ -292,6 +332,7 @@ def main():
     if any(r.get("reasoning_chars", 0) > 50 for r in report["mixed"]):
         print("  note: model emits thinking — e2e latency includes reasoning time, not just typing")
 
+    writer.result["summary"] = report
     if args.output:
         with open(args.output, "w") as f:
             json.dump(report, f, ensure_ascii=False, indent=2)
@@ -299,4 +340,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(cli_main(main))

@@ -284,6 +284,11 @@ For uv cache diagnosis or retirement, enter
 
 ### Automated Test Suites (CI)
 
+For third-party model speed, protocol, concurrency or answer collection, enter
+[llm-eval-harness](llm-eval-harness/SKILL.md). Its probe receipts distinguish
+completed observations, noncompliance, partial evidence and execution failure;
+process exit alone does not establish the measured result.
+
 A `tests/` directory under a Skill does **not** automatically run in CI.
 [The registry](scripts/ci/test-suites.txt) owns suite admission and membership;
 [the dispatcher](scripts/ci/run_registered_tests.sh) owns their execution commands.

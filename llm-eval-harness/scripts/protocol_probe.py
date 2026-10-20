@@ -76,8 +76,10 @@ import time
 import urllib.error
 import urllib.request
 
+from eval_result import cli_main, add_result_arguments, auth_headers, execute_probe, history_rejection, unit
 
-def one_request(url, model, api_key, prompt, budget, max_tokens, timeout, proxy):
+
+def one_request(url, model, api_key, prompt, budget, max_tokens, timeout, proxy, auth=None):
     """Fire one streaming /v1/messages request with thinking enabled; return which
     protocol features were observed in the SSE stream."""
     payload = json.dumps({
@@ -88,9 +90,7 @@ def one_request(url, model, api_key, prompt, budget, max_tokens, timeout, proxy)
         "thinking": {"type": "enabled", "budget_tokens": budget},
     }).encode()
     headers = {
-        "Content-Type": "application/json",
-        "x-api-key": api_key,
-        "anthropic-version": "2023-06-01",
+        **auth_headers("anthropic", api_key, auth),
         "Accept": "text/event-stream",
         "Connection": "close",  # critical: defeat LB sticky-routing of keep-alive
     }
@@ -118,7 +118,9 @@ def one_request(url, model, api_key, prompt, budget, max_tokens, timeout, proxy)
                 except json.JSONDecodeError:
                     continue
                 etype = evt.get("type")
-                if etype == "message_start":
+                if etype == "error":
+                    seen["error"] = json.dumps(evt.get("error", evt), ensure_ascii=False)[:300]
+                elif etype == "message_start":
                     seen["model_field"] = evt.get("message", {}).get("model")
                 elif etype == "content_block_delta":
                     d = evt.get("delta", {})
@@ -138,7 +140,7 @@ def one_request(url, model, api_key, prompt, budget, max_tokens, timeout, proxy)
     return seen
 
 
-def history_replay_request(url, model, api_key, budget, max_tokens, timeout, proxy):
+def history_replay_request(url, model, api_key, budget, max_tokens, timeout, proxy, auth=None):
     """Fire one /v1/messages request whose history ALREADY contains a `type: "thinking"`
     block in a prior assistant turn, then check whether the endpoint accepts it or
     rejects the request outright. This is the request-VALIDATION / multi-turn-continuity
@@ -168,9 +170,7 @@ def history_replay_request(url, model, api_key, budget, max_tokens, timeout, pro
     }
     body = json.dumps(payload).encode()
     headers = {
-        "Content-Type": "application/json",
-        "x-api-key": api_key,
-        "anthropic-version": "2023-06-01",
+        **auth_headers("anthropic", api_key, auth),
         "Accept": "text/event-stream",
         "Connection": "close",
     }
@@ -178,7 +178,7 @@ def history_replay_request(url, model, api_key, budget, max_tokens, timeout, pro
     opener = urllib.request.build_opener(*handlers)
 
     result = {"accepted": None, "http_status": None, "error_text": None,
-              "answered_followup": False, "rejects_thinking_type": False}
+              "answered_followup": False, "rejects_thinking_type": False, "message_stop": False}
     req = urllib.request.Request(url, data=body, headers=headers, method="POST")
     try:
         with opener.open(req, timeout=timeout) as resp:
@@ -197,7 +197,9 @@ def history_replay_request(url, model, api_key, budget, max_tokens, timeout, pro
                 except json.JSONDecodeError:
                     continue
                 etype = evt.get("type")
-                if etype == "error":
+                if etype == "message_stop":
+                    result["message_stop"] = True
+                elif etype == "error":
                     error_event = evt.get("error", evt)  # some vendors put a 200 + SSE error event
                 elif etype == "content_block_delta" and evt.get("delta", {}).get("type") == "text_delta":
                     text_out.append(evt["delta"].get("text", ""))
@@ -217,14 +219,11 @@ def history_replay_request(url, model, api_key, budget, max_tokens, timeout, pro
         result["accepted"] = None  # transport failure — not a protocol verdict either way
         result["error_text"] = f"{type(e).__name__}: {e}"
 
-    if result["error_text"]:
-        low = result["error_text"].lower()
-        result["rejects_thinking_type"] = "thinking" in low and any(
-            kw in low for kw in ("invalid", "not support", "unsupported"))
+    result["rejects_thinking_type"] = history_rejection(result)
     return result
 
 
-def run_generation(args, api_key):
+def run_generation(args, api_key, writer=None):
     """The original check: does `thinking: {type: enabled}` make the endpoint EMIT
     thinking_delta/signature_delta events? Returns the result dict for --output."""
     checks = ["transport_ok", "http_2xx", "thinking_delta", "signature_delta", "text", "message_stop"]
@@ -232,8 +231,12 @@ def run_generation(args, api_key):
     samples, model_fields = [], set()
     print(f"# generation probe  model={args.model}  N={args.repeat}  Connection: close\n")
     for i in range(1, args.repeat + 1):
+        if writer:
+            writer.start_unit(f"generation:{i}")
         s = one_request(args.url, args.model, api_key, args.prompt, args.budget,
-                        args.max_tokens, args.timeout, args.proxy)
+                        args.max_tokens, args.timeout, args.proxy, getattr(args, "auth", None))
+        if writer:
+            writer.finish_unit(f"generation:{i}", s)
         samples.append(s)
         for c in checks:
             if s[c]:
@@ -249,7 +252,10 @@ def run_generation(args, api_key):
 
     n = args.repeat
     rate = counts["thinking_delta"] / n if n else 0.0
-    if rate == 1.0:
+    valid = sum(s["http_2xx"] and s["message_stop"] and not s["error"] and (s["text"] or s["thinking_delta"]) for s in samples)
+    if valid != n:
+        verdict = f"inconclusive (usable={valid}/{n})"
+    elif rate == 1.0:
         verdict = "fully-implemented"
     elif rate == 0.0:
         verdict = "not-implemented"
@@ -270,7 +276,7 @@ def run_generation(args, api_key):
             "verdict": verdict, "samples": samples}
 
 
-def run_history_replay(args, api_key):
+def run_history_replay(args, api_key, writer=None):
     """The new check: does the endpoint ACCEPT a `type: "thinking"` block already
     present in an assistant turn's history, replayed back on a later turn? This is
     what every real agentic client does on every continuation."""
@@ -281,10 +287,14 @@ def run_history_replay(args, api_key):
     samples = []
     accepted = rejected_thinking = rejected_other = transport_fail = answered = 0
     for i in range(1, n + 1):
+        if writer:
+            writer.start_unit(f"history:{i}")
         r = history_replay_request(args.url, args.model, api_key, args.budget,
-                                    args.max_tokens, args.timeout, args.proxy)
+                                    args.max_tokens, args.timeout, args.proxy, getattr(args, "auth", None))
+        if writer:
+            writer.finish_unit(f"history:{i}", r)
         samples.append(r)
-        if r["accepted"] is True:
+        if r["accepted"] is True and r["message_stop"] and not r["error_text"]:
             accepted += 1
             if r["answered_followup"]:
                 answered += 1
@@ -356,11 +366,27 @@ def main():
     ap.add_argument("--timeout", type=float, default=90)
     ap.add_argument("--proxy", default=None, help="optional proxy URL (default: direct)")
     ap.add_argument("--output", help="write full JSON results here")
+    ap.add_argument("--auth", choices=["x-api-key", "bearer"], default=None, help="Anthropic auth mode (default x-api-key)")
+    add_result_arguments(ap)
     args = ap.parse_args()
+    if args.repeat <= 0 or args.budget <= 0 or args.max_tokens <= 0:
+        ap.error("repeat, budget and max-tokens must be positive")
 
-    api_key = os.environ.get(args.key_env)
+    plan = []
+    if args.check in ("generation", "all"):
+        plan += [unit(f"generation:{i}", "protocol_generation", i) for i in range(1, args.repeat + 1)]
+    if args.check in ("history-replay", "all"):
+        plan += [unit(f"history:{i}", "protocol_history", i) for i in range(1, args.repeat + 1)]
+    identity = {"model": args.model, "endpoint_kind": "request_url", "endpoint": args.url,
+                "format": "anthropic", "auth": args.auth or "x-api-key"}
+    return execute_probe(args, "protocol", identity, plan, lambda writer: collect(args, writer))
+
+
+def collect(args, writer):
+    api_key = os.environ.get(args.key_env, "").strip()
     if not api_key:
-        sys.exit(f"Env var {args.key_env} is empty or unset — export your key there first.")
+        raise ValueError(f"Env var {args.key_env} is empty or unset — export your key there first.")
+    writer.redact(api_key)
 
     if args.repeat < 10:
         print(f"⚠ --repeat {args.repeat} is below 10; a verdict from <10 samples is unreliable "
@@ -372,11 +398,11 @@ def main():
     output = {"model": args.model}
     ok = True
     if run_gen:
-        gen = run_generation(args, api_key)
+        gen = run_generation(args, api_key, writer)
         output["generation"] = gen
         ok = ok and gen["verdict"] == "fully-implemented"
     if run_hist:
-        hist = run_history_replay(args, api_key)
+        hist = run_history_replay(args, api_key, writer)
         output["history_replay"] = hist
         ok = ok and hist["verdict"] == "accepts-thinking-in-history"
 
@@ -389,14 +415,15 @@ def main():
             print("    happily EMITS thinking blocks when asked, but 400s the instant one comes back")
             print("    as input on a later turn. Passing generation tells you nothing about this.")
 
+    writer.result["summary"] = output
     if args.output:
         with open(args.output, "w") as f:
             json.dump(output, f, ensure_ascii=False, indent=2)
         print(f"  full JSON → {args.output}")
 
     # exit non-zero if not fully compliant on every check that ran — handy in CI / batch vendor screening
-    sys.exit(0 if ok else 1)
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(cli_main(main))
