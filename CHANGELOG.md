@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **claude-switch-models-setup** (`daymade-claude-code` v4.30.15 → v4.30.16): Recommend MiniMax-M3.1-Flash for new global/China profiles with adaptive thinking and max effort, retain explicit M3 alternatives and unchanged legacy templates, and verify actual launcher requests against a local HTTP fixture. Change type: provider-default correction.
 
+- **macos-watchdog** (`daymade-macos` v1.24.1 → v1.24.2): new-launchagent.sh now warns on sub-minute StartInterval (30–59 s) with the Deploy-9 BTM transition tax and the KeepAlive in-process loop alternative, instead of silently allowing the band the rule exists to discourage. Change type: tool-side warning aligned to a landed rule.
 - **macos-watchdog** (`daymade-macos` v1.24.0 → v1.24.1): Stop semantics now connects temporary-job hygiene to the Deploy-9 transition tax — a dead-purpose periodic job left loaded keeps feeding BTM broadcasts, and `disable` is the fully reversible way to retire it (plist stays as the re-enable path). Change type: bounded rule addition from a real retirement.
 - **skill-creator** (`daymade-skill` v1.70.8 → v1.70.9): Publishing guide now requires surgical edits to registry files — a `json.dump` full-file rewrite turned one version bump into 62 lines of keyword churn, polluting the review diff and triggering peer ownership fan-outs in a shared checkout; includes the banned-form-safe recovery path. Change type: factual procedure addition from a measured incident.
 
