@@ -287,6 +287,25 @@ exit and check its exit status. "Not reached yet" and "no result" are
 indistinguishable from the outside, and reporting the former as the latter is a
 fabricated negative.
 
+### Background screenshot failure does not establish a page failure
+
+When a screenshot times out or a hidden native-window capture is blank, the
+executing auditor first checks control of the same target, its URL, viewport,
+device scale and visibility through the current harness. Keep the failed capture
+and its parameters. A readable DOM alone is not visual acceptance; a blank native
+window capture alone does not establish that the page rendered blank.
+
+Within that owned target, use the harness's documented screenshot operation and,
+when it fails, a bounded supported raw capture such as CDP
+`Page.captureScreenshot`. Inspect the resulting pixels and the affected business
+state. If the driver changed viewport/emulation, compare against its recorded
+baseline and restore only its own settings when authorized; do not prescribe a
+blanket device-metrics reset. If capture still fails, keep visual acceptance
+unverified and continue independent work. Do not raise a window, send global
+input, change permissions or upgrade the browser as an automatic recovery. A
+background-only instruction excludes foreground recovery. Later successful
+capture proves that path works now, not the unique cause of the earlier failure.
+
 ## 8. A hidden tab defers media loads — the request is never sent
 
 Driving a tab through extension tooling usually means the tab is **not visible**
@@ -305,10 +324,11 @@ server-side or codec theory. If it is `hidden`, verify media in a context actual
 observed as visible. Headless mode alone does not establish visibility: a headless
 Chrome page can become hidden and defer animation frames too. For an owned,
 isolated Chromium CDP target, supported focus emulation
-(`Emulation.setFocusEmulationEnabled`, `enabled: true`) and `Page.bringToFront`
-can restore its active state; read visibility and actual frame/state progress
-again before judging the product. Do not activate a user's window or another
-agent's target without its existing control authority. Record visibility before
+(`Emulation.setFocusEmulationEnabled`, `enabled: true`) can restore its active
+state when the current task permits that emulation. Use `Page.bringToFront` only
+when foreground operation of that exact target is authorized; target ownership
+alone does not authorize it. Read visibility and actual frame/state progress
+again before judging the product. Record visibility before
 the action and at the settled observation; an unfinished hidden capture is not
 evidence that an animation is stuck. While escaping, OS-level
 scripting (e.g. AppleScript's application object) may not see the automation

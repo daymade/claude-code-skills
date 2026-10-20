@@ -74,6 +74,26 @@ child return or enlarged view does not upgrade another state's partial verdict.
 No automatic tool enforces this scope comparison; the executing auditor must
 apply SKILL.md's completion gate to the original user contract.
 
+### Operational attention across views
+
+When a change affects live status or attention, the executing auditor follows
+one authorized object from the ordinary list into its attention filter, group,
+detail and original record. Bind the same source identity and observation;
+compare all affected surfaces against the project's existing state interpreter.
+A job's running lifecycle may coexist with native waiting; a correct badge does
+not establish that the user can find the pending action.
+
+Use an actual waiting object when available. Enter through the ordinary filter,
+read its context, and, only with existing write authorization, answer through its
+bound original input. Verify the same object updates and leaves attention when
+the project's contract says the pending action is resolved. An unavailable input
+keeps that transition unverified; do not restart the task or resend an uncertain
+answer to manufacture completion. Keep nonwaiting and invalid/stale-evidence
+controls: they must not gain verified attention merely to make waiting visible.
+Check incomplete detail counts separately from confirmed complete zero counts.
+Retain the observed identities, filter membership and transition results; this
+recipe supplies no generic state classifier or additional write authority.
+
 ### Embedded readers and semantic zoom
 
 Use this bounded recipe when an affected workspace moves from cards or summaries
