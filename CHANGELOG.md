@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **prior-work-retrieval** (`daymade-claude-code` v4.30.16): Keep current-session execution instructions from arming historical retrieval. Add an exact-original-event correction for that false positive, preserving genuine history obligations and the original requirement record.
+
 - **macos-cleaner** (`daymade-macos` v1.24.3): Separate emergency recovery from the capacity investigation in result reports, retain mixed-directory toolchains, and exercise both premature closure and unnecessary continued scanning with bounded cases. Change type: bounded workflow clarification and representative acceptance cases.
 - **debugging-network-issues** (v1.11.4): Document paired inner/outer tunnel captures, directional packet-identity comparison and capture-coverage limits; keep current transfer findings separate from historical crash attribution. Change type: bounded evidence-recipe addition.
 
