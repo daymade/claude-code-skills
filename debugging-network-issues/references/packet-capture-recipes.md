@@ -1,15 +1,5 @@
 # Packet Capture Recipes
 
-## Contents
-
-- When to capture packets
-- Interface selection on Docker hosts
-- Essential filters for RST isolation
-- HTTP/2 specifics (stream RST is not TCP RST)
-- Correlating pcap with application logs
-- Four-boundary tunnel captures
-- Common pitfalls
-
 ## When to capture packets
 
 Reach for `tcpdump` when the question is at Layer 3-4 and application logs cannot answer it:
@@ -76,15 +66,24 @@ tcpdump -i any -s 0 -w /tmp/capture.pcap 'host <target> and port 443'
 tcpdump -r /tmp/capture.pcap -nn | head -50
 ```
 
-`-s 0` captures full packets (default truncates to 68 bytes for performance).
+Set snaplen explicitly and check the installed `tcpdump` manual. `-s 0` selects
+the tool's default large snapshot length; it is not an unlimited-length promise.
+Inspect captured versus original packet lengths before claiming complete payloads.
 
-### Ring-buffer capture for long-running collections
+### File-limited time rotation
 
 ```bash
 tcpdump -i any -w /tmp/cap-%Y%m%d-%H%M%S.pcap -G 60 -W 10 'host <target>'
 ```
 
-60-second files, 10-file rotation, self-cleaning. Safe to leave running overnight.
+With `-G`, `-W` limits the number of rotated files and exits when that limit is
+reached; this is not an indefinitely overwriting ring buffer. Reaching the limit
+ends observation, but the rotation limit is not a hard wall-clock deadline and
+time-based rotation alone does not bound file size. Set a separate stop for the
+experiment-owned capture and a storage allowance for the authorized window; preserve needed
+segments before cleanup, and check the collector's actual end time and exit status.
+For size-based cyclic overwrite, consult the installed manual's `-C`/`-W` contract;
+combining `-C` and `-G` changes how `-W` is handled.
 
 ## HTTP/2 specifics
 
@@ -101,7 +100,10 @@ The case study was the second kind: `tcpdump` showed no TCP RST on the client→
 
 `tcpdump` alone cannot show HTTP/2 frames because they are TLS-encrypted. If you control both endpoints, you can:
 
-1. Export the TLS session keys via `SSLKEYLOGFILE=/tmp/keylog.log curl ...`
+1. Confirm the selected curl TLS backend supports `SSLKEYLOGFILE`, set the local
+   parameters `key_log_path` and `authorized_test_url`, then run
+   `SSLKEYLOGFILE="$key_log_path" curl "$authorized_test_url"`. Verify that it wrote
+   keys for the captured run; setting the variable alone does not prove key logging.
 2. Open the pcap in Wireshark with the keylog to decrypt
 3. Filter: `http2.type == 3` (RST_STREAM frames)
 
@@ -218,12 +220,21 @@ Fix: use `-i any` first to verify, then narrow once you see traffic.
 
 ### Confusing timestamps across tools
 
-`tcpdump` timestamps are in the local timezone of the capture host. Application logs may be in UTC, or in a different timezone. When correlating, convert to a single timezone before comparing timestamps — use epoch seconds if unsure.
+Separate saved packet timestamps from their textual display. Text output uses the
+reader's display timezone, which can differ from the capture host or application
+log. Use `-tt` for epoch-style output when correlating, record capture-host clock
+offsets separately, and do not treat timezone conversion as clock synchronization.
 
 ### Missing the RST because it happened before capture started
 
-`tcpdump` only captures from the moment it starts. If the RST already happened, there is no going back. The fix is to start capture _before_ reproducing the incident (or to leave a ring-buffer capture running in advance for known-intermittent issues).
+`tcpdump` only captures from the moment it starts. If the RST already happened,
+there is no going back. Start a bounded capture before an authorized reproduction;
+for an intermittent symptom, verify that observation still covers the event rather
+than assuming a time-rotated collector kept running.
 
 ### Forgetting snaplen
 
-Default `-s 68` (or `-s 262144` on modern systems depending on version) may truncate large frames. Use `-s 0` to capture full packets if you intend to inspect payload bytes. For RST-only analysis, the default is fine (RST is a small packet).
+Use the snaplen check above. For tunnel matching, apply
+[identifier coverage](#match-packets-before-reporting-a-missing-fraction) before
+interpreting absent identifiers as packet loss. Small packets alone do not prove
+that the required headers survived the actual link-layer and encapsulation layout.
