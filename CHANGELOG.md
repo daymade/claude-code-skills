@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **scrapling-skill** (v1.0.3): Select the current platform's browser cache, respect Linux XDG and Windows local-app-data defaults, and avoid reporting caches from another platform. Change type: default-cache diagnosis repair.
 - **Installation entry points**: Preserve PowerShell caller state and cancellation, reject invalid custom selections before generating commands, propagate piped download failures, and make download-then-run examples stop on failed downloads. Quote first-task paths in the bilingual quickstarts.
 - **scrapling-skill** (v1.0.2): Respect browser-cache environment overrides, report hermetic cache location as unknown, preserve prior smoke-test outputs, and bind diagnostic commands and output checks to their actual paths. Change type: diagnostic and output-preservation repair.
 - **marketplace-health-check** (v1.2.0): Retain incomplete inspector results, distinguish audit coverage from repository health, reconcile paginated PR/issue inventories, and align scan and release guidance with their authoritative owners. Change type: audit-result and input-coverage repair.

@@ -37,8 +37,8 @@ python3 "$SCRAPLING_SKILL_DIR/scripts/diagnose_scrapling.py"
 ```
 
 Use the result as the source of truth for the next step.
-For custom or unknown cache locations and smoke-test output retention, read
-`references/troubleshooting.md`.
+For platform defaults, custom or unknown cache locations and smoke-test output
+retention, read `references/troubleshooting.md`.
 
 ## Step 2: Fix the Install
 

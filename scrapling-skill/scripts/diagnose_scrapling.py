@@ -14,7 +14,7 @@ from typing import Iterable, List, Optional, Tuple
 
 
 class CacheLocationUnknown(Exception):
-    """Report a provider-local cache that this diagnostic cannot locate."""
+    """Report a browser cache whose location this diagnostic cannot determine."""
 
 
 def _get_from_env(name: str) -> Optional[str]:
@@ -54,25 +54,25 @@ def detect_browser_cache() -> Tuple[List[str], List[str]]:
             "this diagnostic does not locate the active provider"
         )
     if override:
-        if not os.path.isabs(override):
-            base = _get_from_env("INIT_CWD") or os.getcwd()
-            override = os.path.abspath(os.path.join(base, override))
-        roots = [Path(os.path.normpath(override))]
+        root = override
+    elif sys.platform == "linux":
+        cache = os.environ.get("XDG_CACHE_HOME") or str(Path.home() / ".cache")
+        root = os.path.join(cache, "ms-playwright")
+    elif sys.platform == "darwin":
+        root = str(Path.home() / "Library" / "Caches" / "ms-playwright")
+    elif sys.platform == "win32":
+        cache = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+        root = os.path.join(cache, "ms-playwright")
     else:
-        roots = [
-            Path.home() / "Library" / "Caches" / "ms-playwright",
-            Path.home() / ".cache" / "ms-playwright",
-        ]
-        local_appdata = os.environ.get("LOCALAPPDATA")
-        if local_appdata:
-            roots.append(Path(local_appdata) / "ms-playwright")
-    chromium = []
-    headless_shell = []
-    for root in roots:
-        if not root.exists():
-            continue
-        chromium.extend(existing_dirs(sorted(root.glob("chromium-*"))))
-        headless_shell.extend(existing_dirs(sorted(root.glob("chromium_headless_shell-*"))))
+        raise CacheLocationUnknown("unsupported platform: {0}".format(sys.platform))
+    if not os.path.isabs(root):
+        base = _get_from_env("INIT_CWD") or os.getcwd()
+        root = os.path.abspath(os.path.join(base, root))
+    root = Path(os.path.normpath(root))
+    if not root.exists():
+        return [], []
+    chromium = existing_dirs(sorted(root.glob("chromium-*")))
+    headless_shell = existing_dirs(sorted(root.glob("chromium_headless_shell-*")))
     return chromium, headless_shell
 
 
@@ -113,7 +113,7 @@ def diagnose_browsers() -> None:
         print("chromium: unknown")
         print("chrome-headless-shell: unknown")
         print("cause: {0}".format(error))
-        print("hint: inspect the active provider's hermetic cache "
+        print("hint: inspect the selected provider and cache configuration "
               "before changing the installation")
         return
     print("check: cache directories only; browser version and launch are not verified")
