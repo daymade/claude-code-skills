@@ -25,6 +25,7 @@ stand down without waiting for a human to disable it.
 | Installing, upgrading, reusing or starting a persistent Python job | § Persistent Python runtime |
 | An existing watchdog misbehaves (spam, re-launches apps, hammers) | § The quiet-watchdog contract, diagnose which clause it violates |
 | Stopping / disabling / restarting a job | § Stop semantics |
+| Retiring a job and its tool permanently | § Stop semantics → Decommissioning a job permanently |
 | plist key details (KeepAlive forms, domains, logging, resource limits) | `references/launchd-plist-reference.md` |
 | Choosing between event-driven and periodic for a source of truth | `references/event-driven-observers.md` § Select event vs periodic |
 | Deploying / accepting an event-driven observer (WatchPaths, FSEvents, inotify-style) | `references/event-driven-observers.md` § Deployment SOP and § Acceptance SOP |
@@ -159,6 +160,34 @@ A temporary job that stays loaded keeps paying the § Deploy-9 transition tax
 done, `disable` it — do not leave a dead-purpose periodic job running because
 stopping it felt irreversible: `disable` is fully reversible (`enable` +
 `bootstrap`), and the plist can stay on disk as the re-enable path.
+
+### Decommissioning a job permanently
+
+Retiring a job's whole line (job + plist + tool) is a different operation from
+stopping one, and it is safe to be thorough: every step except the last is
+recoverable.
+
+1. **Stop and capture.** `bootout` a loaded job; an already-disabled idle job
+   has nothing running. Read the plist once (`plutil -p`) and keep its content
+   in the session record — it names the tool path, log paths, and schedule you
+   are about to remove.
+2. **Remove the plist** from `~/Library/LaunchAgents/`. A leftover
+   `launchctl disable` override for the label is inert once the plist is gone;
+   do not chase it.
+3. **Prove zero references before deleting the tool**: grep the owning repo
+   for the label and the tool name. Hits confined to the tool's own directory
+   mean nothing imports, schedules, or documents it.
+4. **Delete the tool through the repo's normal PR flow** — git history is the
+   backup. After the merge lands, remove regenerable residue (`__pycache__`)
+   from the checkout.
+5. **Keep the data/log directory by default** (wherever the plist pointed,
+   e.g. `~/.local/share/<tool>/`): it is small, it holds the config a revival
+   would need, and deleting it is the only irreversible step — offer it
+   explicitly instead of cleaning silently.
+
+Measured 2026-10-20 (wechat-print retirement): an every-minute
+`StartCalendarInterval` job had cost 2,880 launchd transitions/day of
+§ Deploy-9 BTM tax while emitting nothing but failure logs for six days.
 
 ## Troubleshooting quick map
 
