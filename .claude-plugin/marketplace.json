@@ -758,7 +758,7 @@
       "description": "Install, troubleshoot, and use Scrapling CLI for extracting HTML, Markdown, or text from webpages. Diagnoses missing extras, Playwright browser runtime issues, TLS verification failures, and WeChat public article extraction patterns. Use when users mention Scrapling, `scrapling extract`, `uv tool install scrapling`, or need to decide between static and browser-backed fetching",
       "source": "./scrapling-skill",
       "strict": false,
-      "version": "1.0.2",
+      "version": "1.0.3",
       "category": "developer-tools",
       "keywords": [
         "scrapling",
