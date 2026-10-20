@@ -851,9 +851,9 @@ python3 scripts/compare.py original.mp4 compressed.mp4 -o report.html --interval
 
 ---
 
-### **qa-expert** - 综合 QA 测试基础设施
+### **qa-expert** - QA 测试计划、执行与报告
 
-使用自主 LLM 执行、Google 测试标准和 OWASP 安全最佳实践建立世界级 QA 测试流程。
+使用 AAA 测试结构和 OWASP 安全类别，建立测试用例、执行跟踪、缺陷报告和 QA 交接流程。
 
 **使用场景：**
 - 为新项目或现有项目设置 QA 基础设施
@@ -861,48 +861,35 @@ python3 scripts/compare.py original.mp4 compressed.mp4 -o report.html --interval
 - 实施安全测试（OWASP Top 10 覆盖）
 - 执行具有自动进度跟踪的综合测试计划
 - 使用适当的 P0-P4 严重性分类提交错误
-- 计算质量指标和执行质量门禁
-- 启用自主 LLM 驱动的测试执行（100 倍加速）
+- 计算质量指标并评估项目发布条件
+- 启用自主 LLM 驱动的测试执行
 - 为第三方团队交接准备 QA 文档
 
 **主要功能：**
-- **一键初始化**：使用模板、CSV 和文档完成 QA 基础设施
-- **自主执行**：主提示使 LLM 能够自动执行所有测试、自动跟踪结果、自动提交错误
-- **Google 测试标准**：AAA 模式合规性、90% 覆盖率目标、快速失败验证
-- **OWASP 安全测试**：90% Top 10 覆盖，具有特定攻击向量
-- **质量门禁执行**：100% 执行、≥80% 通过率、0 个 P0 错误、≥80% 代码覆盖率
+- **一条命令初始化**：创建 QA 目录、模板和示例 CSV
+- **自主执行**：按项目批准的计划执行，跟踪结果并记录缺陷
+- **运行时兼容性**：将适配器输出与目标运行时的实际语义对照，区分模拟输入与原生执行
+- **发布验收**：依项目发布政策判断；总体通过率不能抵消关键用户任务失败
 - **基本事实原则**：防止文档/CSV 同步问题（测试文档 = 权威来源）
 - **错误跟踪**：P0-P4 分类，详细重现步骤和环境信息
-- **第 1 天入职**：新 QA 工程师的 5 小时指南
-- **30+ LLM 提示**：用于特定 QA 任务的即用型提示
-- **指标仪表板**：测试执行进度、通过率、错误分析、质量门禁状态
+- **入职指南**：帮助新 QA 工程师接手项目
+- **LLM 提示**：用于特定 QA 任务的提示
+- **指标报告**：测试执行进度、通过率、关联缺陷和内置检查结果
 
 **示例用法：**
 ```bash
-# 初始化 QA 项目（创建完整基础设施）
-python3 scripts/init_qa_project.py my-app ./
+# 从已加载的 Skill 定位 qa-expert-dir；使用全新的项目根目录
+uv run <qa-expert-dir>/scripts/init_qa_project.py my-app <project-root>
 
-# 计算质量指标和门禁状态
-python3 scripts/calculate_metrics.py tests/TEST-EXECUTION-TRACKING.csv
-
-# 对于自主执行，从以下位置复制主提示：
-# references/master_qa_prompt.md → 粘贴到 LLM → 在 5 周内自动执行 342 个测试
+# 测试执行后生成指标报告
+uv run <qa-expert-dir>/scripts/calculate_metrics.py <project-root>/tests/docs/templates/TEST-EXECUTION-TRACKING.csv
 ```
 
-**🎬 实时演示**
+初始化只创建模板。执行前需替换示例行、提供测试规范并验证项目测试工具。准备、恢复和交接按[执行 SOP](./qa-expert/references/master_qa_prompt.md)进行。指标命令只报告结果，不决定能否发布。
 
-*即将推出*
+📚 **文档**：从 [qa-expert](./qa-expert/SKILL.md) 进入测试选择、执行和报告流程。
 
-📚 **文档**：参见 [qa-expert/references/](./qa-expert/references/)：
-- `master_qa_prompt.md` - 自主执行的单一命令（100 倍加速）
-- `google_testing_standards.md` - AAA 模式、覆盖率阈值、OWASP 测试
-- `day1_onboarding.md` - 新 QA 工程师的 5 小时入职时间表
-- `ground_truth_principle.md` - 防止文档/CSV 同步问题
-- `llm_prompts_library.md` - 30+ 即用型 QA 提示
-
-**要求**：Python 3.8+
-
-**💡 创新**：自主执行能力（通过主提示）使 LLM 能够以比手动执行快 100 倍的速度执行整个测试套件，跟踪零人为错误。非常适合第三方 QA 交接 - 只需提供主提示，他们就可以立即开始测试。
+**要求**：Python 3.8+、uv
 
 ---
 
@@ -3864,7 +3851,7 @@ review 后修复/落地时，使用 **github-review-pr**。
 使用 **meeting-minutes-taker** 将原始会议转写稿转换为结构化、基于证据的会议纪要。与 **transcript-fixer** 结合使用可在生成纪要前清理 ASR 错误。特点是多轮生成配合 UNION 合并以避免内容丢失。
 
 ### QA 测试与质量保证
-使用 **qa-expert** 建立具有自主 LLM 执行、Google 测试标准和 OWASP 安全测试的综合 QA 测试基础设施。非常适合项目启动、第三方 QA 交接和执行质量门禁（100% 执行、≥80% 通过率、0 个 P0 错误）。主提示可实现 100 倍更快的测试执行，零跟踪错误。
+使用 [qa-expert](./qa-expert/SKILL.md) 建立 QA 流程、编写测试用例、跟踪执行、生成报告并交接给第三方团队。
 
 ### 提示词工程与需求工程
 使用 **prompt-optimizer** 将模糊的功能请求转换为具有领域理论基础的精确 EARS 规范。非常适合产品需求文档、AI 辅助编码和学习提示词工程最佳实践。与 **skill-creator** 结合使用以创建结构良好的技能提示。
@@ -3990,7 +3977,7 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 - **repomix-safe-mixer**：参见 `repomix-safe-mixer/references/common_secrets.md` 了解检测到的凭据模式
 - **video-comparer**：参见 `video-comparer/references/video_metrics.md` 了解质量指标解释和 `video-comparer/references/configuration.md` 了解自定义选项
 - **transcript-fixer**：参见 `daymade-audio/transcript-fixer/references/workflow_guide.md` 了解分步工作流和 `daymade-audio/transcript-fixer/references/team_collaboration.md` 了解协作模式
-- **qa-expert**：参见 `qa-expert/references/master_qa_prompt.md` 了解自主执行（100 倍加速）和 `qa-expert/references/google_testing_standards.md` 了解 AAA 模式和 OWASP 测试
+- **qa-expert**：参见 [qa-expert](./qa-expert/SKILL.md) 了解自主执行和测试标准
 - **prompt-optimizer**：参见 `prompt-optimizer/references/ears_syntax.md` 了解 EARS 转换模式、`prompt-optimizer/references/domain_theories.md` 了解理论目录和 `prompt-optimizer/references/examples.md` 了解完整转换示例
 - **read-codex-history**：参见 `daymade-claude-code/read-codex-history/references/storage_and_portability.md` 了解本地数据源选择、跨平台路径、隐私边界和诊断方法
 - **read-claude-code-history**：参见 `daymade-claude-code/read-claude-code-history/references/session_file_format.md` 了解 JSONL 结构和 `daymade-claude-code/read-claude-code-history/references/workflow_examples.md` 了解恢复工作流

@@ -817,9 +817,9 @@ done
 
 ---
 
-### **qa-expert** - Comprehensive QA Testing Infrastructure
+### **qa-expert** - QA Test Planning, Execution & Reporting
 
-Establish world-class QA testing processes with autonomous LLM execution, Google Testing Standards, and OWASP security best practices.
+Set up test cases, execution tracking, bug reports and QA handoffs using AAA test structure and OWASP security categories.
 
 **When to use:**
 - Setting up QA infrastructure for new or existing projects
@@ -827,46 +827,35 @@ Establish world-class QA testing processes with autonomous LLM execution, Google
 - Implementing security testing (OWASP Top 10 coverage)
 - Executing comprehensive test plans with automatic progress tracking
 - Filing bugs with proper P0-P4 severity classification
-- Calculating quality metrics and enforcing quality gates
+- Calculating quality metrics and assessing project release criteria
 - Enabling autonomous LLM-driven test execution
 - Preparing QA documentation for third-party team handoffs
 
 **Key features:**
 - **One-command initialization**: QA directories, templates and example CSVs
 - **Autonomous execution**: Follow the approved project plan with result tracking and bug reports
-- **Testing standards and quality gates**: Follow [qa-expert](./qa-expert/SKILL.md) for execution; the target project owns release policy
+- **Runtime compatibility**: Compare adapter outputs with the target runtime's actual semantics and distinguish modeled inputs from native execution
+- **Release acceptance**: Apply the project's release policy; an overall pass rate does not override a failed critical user task
 - **Ground Truth Principle**: Prevents doc/CSV sync issues (test docs = authoritative source)
 - **Bug tracking**: P0-P4 classification with detailed repro steps and environment info
 - **Onboarding**: Guide for new QA engineers
 - **LLM prompts**: Ready-to-use prompts for specific QA tasks
-- **Metrics dashboard**: Test execution progress, pass rate, bug analysis, quality gates status
+- **Metrics report**: Test execution progress, pass rate, linked bugs and built-in check results
 
 **Example usage:**
 ```bash
 # Resolve qa-expert-dir from the loaded Skill; use a fresh project root
 uv run <qa-expert-dir>/scripts/init_qa_project.py my-app <project-root>
 
-# Calculate quality metrics and gates status
+# Report metrics after test execution
 uv run <qa-expert-dir>/scripts/calculate_metrics.py <project-root>/tests/docs/templates/TEST-EXECUTION-TRACKING.csv
-
-# For autonomous execution, copy master prompt from:
-# references/master_qa_prompt.md → paste to LLM → execute the project's approved test plan
 ```
 
-**🎬 Live Demo**
+Initialization creates templates. Before execution, replace example rows, supply test specifications and verify the project harness. Follow [the execution SOP](./qa-expert/references/master_qa_prompt.md) for preparation, recovery and handoff. The metrics command reports results; it does not decide release acceptance.
 
-*Coming soon*
+📚 **Documentation**: Start with [qa-expert](./qa-expert/SKILL.md) for test selection, execution and reporting.
 
-📚 **Documentation**: See [qa-expert/references/](./qa-expert/references/) for:
-- `master_qa_prompt.md` - Autonomous execution entry
-- `google_testing_standards.md` - AAA pattern, coverage thresholds, OWASP testing
-- `day1_onboarding.md` - Onboarding timeline for new QA engineers
-- `ground_truth_principle.md` - Preventing doc/CSV sync issues
-- `llm_prompts_library.md` - Task-specific QA prompts
-
-**Requirements**: Python 3.8+
-
-Initialization creates templates. Before execution, replace example rows, supply test specifications and verify the project harness. Follow [the execution SOP](./qa-expert/references/master_qa_prompt.md) for recovery and handoff.
+**Requirements**: Python 3.8+, uv
 
 ---
 
