@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-cleaner** (`daymade-macos` v1.24.3): Separate emergency recovery from the capacity investigation in result reports, retain mixed-directory toolchains, and exercise both premature closure and unnecessary continued scanning with bounded cases. Change type: bounded workflow clarification and representative acceptance cases.
 - **debugging-network-issues** (v1.11.4): Document paired inner/outer tunnel captures, directional packet-identity comparison and capture-coverage limits; keep current transfer findings separate from historical crash attribution. Change type: bounded evidence-recipe addition.
 - **qa-expert** (v1.2.2): Test cross-runtime compatibility against the promised implementation's semantics, distinguish modeled inputs from native execution, align release decisions and reporting prompts with the project's authoritative policy, and quote QA command paths. Change type: bounded acceptance-recipe and documentation repair.
 

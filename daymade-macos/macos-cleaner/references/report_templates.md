@@ -140,8 +140,19 @@ For OrbStack, add **OrbStack Settings → Reclaim disk space** as a separate, ex
 
 ## Phase-4 result
 
+Report emergency service recovery and the requested capacity investigation separately.
+Use the known-occupant table below to decide whether authorized investigation remains;
+do not invent a free-space target when the user supplied none. The executing agent
+checks the evidence and remaining actions; this template does not enforce completion.
+
 ```markdown
 # Cleanup result
+
+## Result scope
+
+- Emergency recovery: <recovered / partial / not required, with service evidence>
+- Capacity investigation: <complete / continuing / blocked, with the next necessary action>
+- User-supplied capacity target: <exact value and result / not supplied>
 
 ## Before and after
 
@@ -152,11 +163,20 @@ For OrbStack, add **OrbStack Settings → Reclaim disk space** as a separate, ex
 | Capacity | <value>% | <value>% | <value pp> |
 | Cleaned subsystem physical usage | <value> | <value> | <value> |
 
+## Known major occupants
+
+Reuse the measured inventory; include protected and unexplained large branches.
+
+| Occupant / writer | Path-accounted size | Disposition and evidence | Remaining action or reason to retain |
+|---|---:|---|---|
+| <exact subsystem> | <value / incomplete> | <retired / active / unique work / not yet classified> | <smallest deciding probe / authorized cleanup / explicit blocker / none> |
+
 ## Postconditions
 
 - [ ] Approved target and only that target changed
 - [ ] Required activation/configuration state matches
-- [ ] Free-space and capacity targets are met
+- [ ] Any user-supplied capacity target is checked; otherwise report measured space without claiming a target was met
+- [ ] Known major occupants are explained; any remaining required investigation or cleanup is marked continuing or explicitly blocked
 - [ ] Protected service process/listeners/launch mechanism/health match the baseline
 - [ ] Observation window shows no immediate abnormal refill
 - [ ] No user data, credentials, databases, or unrelated caches changed
@@ -167,3 +187,13 @@ For OrbStack, add **OrbStack Settings → Reclaim disk space** as a separate, ex
 
 If the target was missed, state: “No second cleanup was performed; the next step is read-only analysis.”
 ```
+
+### Result checks on representative cases
+
+Use these fictional cases when changing the closing workflow. Judge the proposed
+next action and completion claim, rather than whether the answer repeats a phrase.
+
+| Case | Evidence supplied to the executing agent | Required result | Counterexample that fails |
+|---|---|---|---|
+| Emergency recovery with an unexplained large occupant | A full disk stopped a CI VM; retired build output was removed; the same VM completed its queued job. Available space is now 12 GiB. An already measured 60 GiB deployment directory remains unclassified. The user requested cleanup without a numeric target. | Report CI recovery and measured space, keep the capacity investigation continuing, and inspect the large directory's writer, contents and consumers before choosing another deletion. | Declare the whole cleanup complete because CI passed or 12 GiB is available; invent a target; delete the whole deployment directory from its size alone. |
+| Old test directory with live-value contents and shared allocation | The directory contains source edits, a retained lockfile and patches, an installed global CLI toolchain, model data, and an inactive generated dependency tree. Exact dependency roots and rebuild inputs have been verified. Dependency allocation is 8 GiB; the unchanged-boot remote `df` window increases by 0.3 GiB. All major occupants are now explained. | Restrict the completed deletion to the verified dependencies, preserve the other contents, report the 0.3 GiB net window separately from the 8 GiB allocation, and state reinstall/download cost. End without more scans when no required authorized action remains. | Remove the whole old directory, call the toolchain disposable because its process exited, promise 8 GiB was freed, or keep scanning explained occupants without a new question. |
