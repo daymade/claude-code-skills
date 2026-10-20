@@ -1,13 +1,5 @@
 # Scrapling Troubleshooting
 
-## Contents
-
-- Installation modes
-- Verified failure modes
-- Static vs dynamic fetch choice
-- WeChat extraction pattern
-- Smoke test commands
-
 ## Installation Modes
 
 Use the CLI path as the default:
@@ -144,22 +136,25 @@ Observed behavior:
 
 ## Smoke Test Commands
 
+Resolve `SCRAPLING_SKILL_DIR` through the
+[diagnostic entry](../SKILL.md#step-1-diagnose-the-install) before using these commands.
+
 ### Basic diagnosis
 
 ```bash
-python3 scripts/diagnose_scrapling.py
+python3 "$SCRAPLING_SKILL_DIR/scripts/diagnose_scrapling.py"
 ```
 
 ### Static extraction smoke test
 
 ```bash
-python3 scripts/diagnose_scrapling.py --url 'https://example.com'
+python3 "$SCRAPLING_SKILL_DIR/scripts/diagnose_scrapling.py" --url 'https://example.com'
 ```
 
 ### WeChat article smoke test
 
 ```bash
-python3 scripts/diagnose_scrapling.py \
+python3 "$SCRAPLING_SKILL_DIR/scripts/diagnose_scrapling.py" \
   --url 'https://mp.weixin.qq.com/s/ARTICLE_ID?scene=1' \
   --selector '#js_content'
 ```
@@ -167,7 +162,7 @@ python3 scripts/diagnose_scrapling.py \
 ### Dynamic extraction smoke test
 
 ```bash
-python3 scripts/diagnose_scrapling.py \
+python3 "$SCRAPLING_SKILL_DIR/scripts/diagnose_scrapling.py" \
   --url 'https://example.com' \
   --dynamic
 ```
@@ -181,7 +176,7 @@ or `empty` as unsuccessful extraction even when another file from an earlier run
 contains valid content.
 
 ```bash
-wc -c article.md
-sed -n '1,40p' article.md
-rg -n '<title>|js_content|main|rich_media_title' page.html
+SMOKE_OUTPUT='<absolute output path printed under Smoke Test Output>'
+wc -c "$SMOKE_OUTPUT"
+sed -n '1,40p' "$SMOKE_OUTPUT"
 ```

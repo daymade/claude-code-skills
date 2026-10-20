@@ -28,10 +28,12 @@ Scrapling Progress:
 
 ## Step 1: Diagnose the Install
 
-Run the bundled diagnostic script first:
+Resolve the loaded Skill directory without changing the user's working directory.
+Replace the placeholder once, then run the bundled diagnostic:
 
 ```bash
-python3 scripts/diagnose_scrapling.py
+SCRAPLING_SKILL_DIR='<absolute path to the loaded scrapling-skill directory>'
+python3 "$SCRAPLING_SKILL_DIR/scripts/diagnose_scrapling.py"
 ```
 
 Use the result as the source of truth for the next step.
@@ -143,7 +145,7 @@ For `mp.weixin.qq.com`:
 ### Browser-backed fetch failures
 
 If `extract fetch` fails:
-1. Re-check the install with `python3 scripts/diagnose_scrapling.py`
+1. Re-check the install with `python3 "$SCRAPLING_SKILL_DIR/scripts/diagnose_scrapling.py"`
 2. Check the selected browser cache; resolve an `unknown` location through `references/troubleshooting.md`
 3. Retry with a slightly longer timeout
 4. Escalate to `stealthy-fetch` only if the site behavior justifies it
@@ -153,13 +155,13 @@ If `extract fetch` fails:
 ### Diagnose and smoke test a URL
 
 ```bash
-python3 scripts/diagnose_scrapling.py --url 'https://example.com'
+python3 "$SCRAPLING_SKILL_DIR/scripts/diagnose_scrapling.py" --url 'https://example.com'
 ```
 
 ### Diagnose and smoke test a WeChat article body
 
 ```bash
-python3 scripts/diagnose_scrapling.py \
+python3 "$SCRAPLING_SKILL_DIR/scripts/diagnose_scrapling.py" \
   --url 'https://mp.weixin.qq.com/s/ARTICLE_ID?scene=1' \
   --selector '#js_content' \
   --no-verify
@@ -168,7 +170,7 @@ python3 scripts/diagnose_scrapling.py \
 ### Diagnose and smoke test a browser-backed fetch
 
 ```bash
-python3 scripts/diagnose_scrapling.py \
+python3 "$SCRAPLING_SKILL_DIR/scripts/diagnose_scrapling.py" \
   --url 'https://example.com' \
   --dynamic
 ```

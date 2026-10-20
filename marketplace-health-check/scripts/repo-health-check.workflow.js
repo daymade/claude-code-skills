@@ -125,9 +125,11 @@ const severityValues = CHECK_SCHEMA.properties.findings.items.properties.severit
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value)
 const hasOnly = (value, keys) => Object.keys(value).every(key => keys.includes(key))
 const text = value => typeof value === 'string' && value.trim().length > 0
+const incompletePrefix = 'Audit incomplete; overall repository health not determined: '
+const incompleteSummary = reason => reason.startsWith(incompletePrefix) ? reason : incompletePrefix + reason
 function notChecked(key, reason) {
   return { dimension: key, status: 'not_checked', health: 'needs-attention',
-    summary: 'Audit incomplete; no repository defect judgment: ' + reason,
+    summary: incompleteSummary(reason),
     findings: [], stats: 'Coverage not established for this dimension.' }
 }
 function normalize(key, value) {
@@ -142,7 +144,7 @@ function normalize(key, value) {
     return notChecked(key, 'Inspector returned no usable result or violated its dimension/schema contract.')
   }
   if (value.status === 'not_checked') {
-    return { ...notChecked(key, value.summary), stats: value.stats }
+    return { ...value, health: 'needs-attention', summary: incompleteSummary(value.summary) }
   }
   return value
 }

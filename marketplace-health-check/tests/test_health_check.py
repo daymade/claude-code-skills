@@ -193,11 +193,20 @@ const run = new (Object.getPrototypeOf(async function(){}).constructor)('args','
 const expected = ['code-and-script-safety','doc-consistency','security-pii','pull-requests','issues','marketplace-integrity'];
 const assert = require('assert').strict;
 function valid(key) { return { dimension:key, status:'checked', health:'good', summary:'Synthetic completed check', findings:[], stats:'1 sample checked' }; }
+function partial(key, prefixed=false) {
+ return { dimension:key, status:'not_checked', health:'needs-attention',
+  summary:(prefixed?'Audit incomplete; overall repository health not determined: ':'')+'Known synthetic observations; required scan unavailable.',
+  findings:[
+   {severity:'critical',title:'Synthetic critical exposure',detail:'Observed synthetic fixture exposure',location:'sample.md:1',recommendation:'Sanitize the fixture'},
+   {severity:'high',title:'Synthetic unsafe command',detail:'Observed missing fixture guard',location:'sample.py:2',recommendation:'Add the guard'}
+  ], stats:'2 files checked; required scanner unavailable' };
+}
 (async () => {
  let cases = 0;
- for (const variant of ['good','critical','null','undefined','throw','not_checked','empty','array','wrong_dimension','bad_health','missing_status','bad_findings','all_null']) {
+ for (const variant of ['good','critical','partial_findings','partial_prefixed','null','undefined','throw','not_checked','invalid_partial','empty','array','wrong_dimension','bad_health','missing_status','bad_findings','all_null']) {
    const labels = [];
-   const result = await run(undefined, () => {}, tasks => Promise.all(tasks.map(t=>t())), async (prompt, options) => {
+   let taskRows;
+   const result = await run(undefined, () => {}, async tasks => { taskRows=await Promise.all(tasks.map(t=>t())); return taskRows; }, async (prompt, options) => {
      const key = options.label.slice(6); labels.push(key);
      assert.deepEqual(options.schema.properties.dimension.enum, [key]);
      assert.deepEqual(options.schema.properties.status.enum, ['checked','not_checked']);
@@ -209,7 +218,9 @@ function valid(key) { return { dimension:key, status:'checked', health:'good', s
      if (variant === 'null') return null;
      if (variant === 'undefined') return undefined;
      if (variant === 'throw') throw new Error('Synthetic failure');
-     if (variant === 'not_checked') { value.status='not_checked'; value.summary='Required scanner unavailable'; }
+     if (variant === 'not_checked') { value.status='not_checked'; value.health='needs-attention'; value.summary='Required scanner unavailable'; }
+     if (variant === 'partial_findings' || variant === 'partial_prefixed') return partial(key,variant === 'partial_prefixed');
+     if (variant === 'invalid_partial') { value=partial(key); value.findings.push({severity:'panic'}); }
      if (variant === 'empty') return {};
      if (variant === 'array') return [];
      if (variant === 'wrong_dimension') value.dimension='issues';
@@ -224,8 +235,23 @@ function valid(key) { return { dimension:key, status:'checked', health:'good', s
    if (!complete) {
      const incomplete=result.checks.filter(c=>c.status==='not_checked');
      assert.equal(incomplete.length, variant==='all_null'?expected.length:1);
-     for(const row of incomplete) { assert.equal(row.health,'needs-attention'); assert.match(row.summary,/no repository defect judgment/); assert.deepEqual(row.findings,[]); }
+     for(const row of incomplete) {
+       assert.equal(row.health,'needs-attention');
+       assert.match(row.summary,/overall repository health not determined/);
+       if (variant === 'partial_findings' || variant === 'partial_prefixed') {
+         const original=partial(row.dimension);
+         assert.deepEqual(row.findings,original.findings);
+         assert.equal(row.stats,original.stats);
+         assert(row.summary.endsWith(original.summary));
+       } else {
+         assert.deepEqual(row.findings,[]);
+         if (variant === 'not_checked') assert.equal(row.stats,'1 sample checked');
+         if (variant === 'invalid_partial') assert.equal(row.stats,'Coverage not established for this dimension.');
+       }
+     }
    } else { assert(result.checks.every(c=>c.status==='checked')); }
+   // Both production normalization boundaries must preserve the same evidence and summary.
+   assert.deepEqual(result.checks,taskRows);
    cases++;
  }
  // Add a synthetic task to the actual body; leave its budget guard untouched.
@@ -246,7 +272,7 @@ function valid(key) { return { dimension:key, status:'checked', health:'good', s
                                 text=True, capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         report = json.loads(result.stdout)
-        self.assertEqual(report["cases"], 15)
+        self.assertEqual(report["cases"], 18)
         self.assertEqual(report["dimensions"], 6)
         self.assertFalse(report["nativeWorkflow"])
 
