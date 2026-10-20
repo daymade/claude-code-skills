@@ -65,7 +65,10 @@ def detect_browser_cache() -> Tuple[List[str], List[str]]:
         root = os.path.join(cache, "ms-playwright")
     else:
         raise CacheLocationUnknown("unsupported platform: {0}".format(sys.platform))
-    if not os.path.isabs(root):
+    is_absolute = os.path.isabs(root) or (
+        sys.platform == "win32" and root.startswith(("\\", "/"))
+    )
+    if not is_absolute:
         base = _get_from_env("INIT_CWD") or os.getcwd()
         root = os.path.abspath(os.path.join(base, root))
     root = Path(os.path.normpath(root))

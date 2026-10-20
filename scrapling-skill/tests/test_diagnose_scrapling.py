@@ -4,9 +4,11 @@
 import contextlib
 import importlib.util
 import io
+import ntpath
 import os
 from pathlib import Path
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -224,6 +226,69 @@ class CacheSelectionTests(unittest.TestCase):
             for key in ("PLAYWRIGHT_BROWSERS_PATH", "npm_config_playwright_browsers_path", "npm_package_config_playwright_browsers_path"):
                 with self.subTest(key=key):
                     self.assert_selected({key: str(selected)}, selected)
+
+
+class WindowsPathSemanticsTests(unittest.TestCase):
+    def assert_windows_root(self, env, expected):
+        cwd = r"C:\work"
+        observed_roots = []
+
+        class WindowsCachePath:
+            def __init__(self, value):
+                self.value = str(value)
+
+            def __str__(self):
+                return self.value
+
+            def exists(self):
+                return True
+
+            def glob(self, pattern):
+                observed_roots.append(self.value)
+                browser = BROWSERS[0] if pattern == "chromium-*" else BROWSERS[1]
+                return [WindowsCachePath(ntpath.join(self.value, browser))]
+
+        local_os = SimpleNamespace(path=ntpath, environ=env, getcwd=lambda: cwd)
+        local_sys = SimpleNamespace(platform="win32")
+        with patch.object(DIAGNOSE, "os", local_os), patch.object(DIAGNOSE, "sys", local_sys), patch.object(DIAGNOSE, "Path", WindowsCachePath):
+            # ntpath's POSIX fallback must use the simulated Windows cwd too.
+            with patch.object(os, "getcwd", return_value=cwd):
+                result = DIAGNOSE.detect_browser_cache()
+        self.assertEqual(observed_roots, [expected, expected])
+        self.assertEqual(result, tuple([ntpath.join(expected, browser)] for browser in BROWSERS))
+
+    def test_windows_rooted_absolute_relative_and_unc_selection(self):
+        cases = [
+            (r"\browser-cache", r"\browser-cache\ms-playwright"),
+            ("/browser-cache", r"\browser-cache\ms-playwright"),
+            (r"C:\browser-cache", r"C:\browser-cache\ms-playwright"),
+            ("browser-cache", r"D:\npm-start\browser-cache\ms-playwright"),
+            (r"\\server\share\cache", r"\\server\share\cache\ms-playwright"),
+        ]
+        for value, expected in cases:
+            with self.subTest(localappdata=value):
+                self.assert_windows_root({"LOCALAPPDATA": value, "INIT_CWD": r"D:\npm-start"}, expected)
+        for value, expected in (
+            (r"\browser-cache", r"\browser-cache"),
+            ("/browser-cache", r"\browser-cache"),
+            (r"C:\browser-cache", r"C:\browser-cache"),
+            ("browser-cache", r"D:\npm-start\browser-cache"),
+            (r"\\server\share\cache", r"\\server\share\cache"),
+        ):
+            with self.subTest(override=value):
+                self.assert_windows_root({"PLAYWRIGHT_BROWSERS_PATH": value, "INIT_CWD": r"D:\npm-start"}, expected)
+
+    @unittest.skipIf(os.name == "nt", "Synthetic cross-drive cwd requires ntpath's POSIX fallback")
+    def test_drive_relative_cross_drive_uses_simulated_current_drive(self):
+        # Native Windows per-drive cwd is outside this synthetic filesystem fixture.
+        self.assert_windows_root(
+            {"LOCALAPPDATA": r"C:browser-cache", "INIT_CWD": r"D:\npm-start"},
+            r"C:\work\browser-cache\ms-playwright",
+        )
+        self.assert_windows_root(
+            {"PLAYWRIGHT_BROWSERS_PATH": r"C:browser-cache", "INIT_CWD": r"D:\npm-start"},
+            r"C:\work\browser-cache",
+        )
 
 
 class SmokeOutputTests(unittest.TestCase):
