@@ -57,6 +57,141 @@ class MaterializeTests(unittest.TestCase):
     def read(self):
         return json.loads((self.root / m.STATE).read_text())
 
+    def cli(self, *args):
+        return subprocess.run([sys.executable, str(Path(m.__file__).resolve()), *args],
+                              cwd=self.base, env=self.env, capture_output=True)
+
+    def test_cli_summary_preserves_complete_receipt_logs_and_lifecycle_outcomes(self):
+        manifest = self.base / "manifest.json"
+        manifest.write_text(json.dumps({**self.manifest, "max_total_bytes": 8 * 1024 * 1024}))
+        result = self.cli("prepare", "--manifest", str(manifest), "--root", str(self.root), "--summary")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        summary = json.loads(result.stdout)
+        self.assertEqual(summary["state"], "prepared")
+        self.assertEqual(Path(summary["receipt_path"]), self.root / m.STATE)
+        self.assertNotIn("last_run", summary)
+        self.assertEqual(len(self.read()["inputs"]), 2)
+
+        # Match a real receipt's growth in path inventories without copying its values.
+        for number in range(500):
+            (self.root / "artifacts" / f"synthetic-evidence-{number:03d}.txt").write_text("fixture")
+        body = "SYNTHETIC-CHILD-OUTPUT\n" * 4096
+        command = "import sys;sys.stdout.write('SYNTHETIC-CHILD-OUTPUT\\n'*4096)"
+        result = self.cli("run", "--root", str(self.root), "--owner", "fixture-session",
+                          "--arm", "with", "--summary", "--", sys.executable, "-c", command)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        summary = json.loads(result.stdout)
+        record = self.read()
+        self.assertEqual(summary["state"], "run_succeeded")
+        self.assertEqual(summary["last_run"], {"state": "run_succeeded", "returncode": 0})
+        self.assertEqual(summary["charged_bytes"], record["charged_bytes"])
+        self.assertEqual(summary["max_total_bytes"], record["max_total_bytes"])
+        self.assertEqual(sum(name.startswith("artifacts/synthetic-evidence-")
+                             for name in record["path_highwater"]), 500)
+        self.assertGreater(len(json.dumps(record)), 12000)
+        self.assertLess(len(result.stdout), 1500)
+        self.assertNotIn(b"SYNTHETIC-CHILD-OUTPUT", result.stdout)
+        self.assertNotIn("inputs", summary)
+        self.assertNotIn("path_highwater", summary)
+        self.assertEqual((self.root / "artifacts/run-0001/stdout.log").read_text(), body)
+
+        result = self.cli("run", "--root", str(self.root), "--owner", "fixture-session",
+                          "--arm", "with", "--summary", "--", sys.executable, "-c",
+                          "import sys;print('stdout fixture');print('stderr fixture',file=sys.stderr);sys.exit(7)")
+        self.assertEqual(result.returncode, 23, result.stderr)
+        summary = json.loads(result.stdout)
+        self.assertEqual(summary["state"], "child_failed")
+        self.assertEqual(summary["last_run"], {"state": "child_failed", "returncode": 7})
+        self.assertEqual(self.read()["runs"][-1]["returncode"], 7)
+        self.assertEqual((self.root / "artifacts/run-0002/stdout.log").read_text(), "stdout fixture\n")
+        self.assertEqual((self.root / "artifacts/run-0002/stderr.log").read_text(), "stderr fixture\n")
+
+        result = self.cli("finish", "--root", str(self.root), "--owner", "fixture-session", "--summary")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        summary = json.loads(result.stdout)
+        self.assertEqual(summary["state"], "finished")
+        self.assertEqual(summary["outcome_before_finish"], "child_failed")
+        self.assertEqual(summary["last_run"]["returncode"], 7)
+        self.assertTrue(self.read()["cleanup"]["inventory_complete"])
+        self.assertEqual(len(self.read()["cleanup"]["removed"]), 2)
+        self.assertNotIn("cleanup", summary)
+
+    def test_cli_summary_keeps_prelaunch_budget_failure_and_absent_returncode(self):
+        self.prepare()
+        record = self.read()
+        record["max_total_bytes"] = 1
+        m.save(self.root, record)
+        result = self.cli("run", "--root", str(self.root), "--owner", "fixture-session",
+                          "--arm", "with", "--summary", "--", sys.executable, "-c", "print('not launched')")
+        self.assertEqual(result.returncode, 20, result.stderr)
+        summary = json.loads(result.stdout)
+        self.assertEqual(summary["state"], "budget_exceeded")
+        self.assertEqual(summary["last_run"]["state"], "budget_exceeded")
+        self.assertNotIn("returncode", summary["last_run"])
+        self.assertFalse((self.root / "artifacts/run-0001").exists())
+
+    def test_cli_summary_recover_preserves_full_record(self):
+        self.prepare()
+        child = subprocess.Popen([sys.executable, "-c", "pass"])
+        child.wait()
+        (self.root / m.LOCK).write_text(json.dumps({"owner": "fixture-session", "pid": child.pid}))
+        result = self.cli("recover", "--root", str(self.root), "--owner", "fixture-session", "--summary")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        summary = json.loads(result.stdout)
+        self.assertEqual(summary["state"], "recovered")
+        self.assertEqual(self.read()["recovered_from"], "prepared")
+        self.assertEqual(len(self.read()["inputs"]), 2)
+        self.assertFalse((self.root / m.LOCK).exists())
+
+    def test_cli_summary_errors_missing_and_empty_values_do_not_report_success(self):
+        self.prepare()
+        before = (self.root / m.STATE).read_bytes()
+        cases = [
+            ("prepare", "--root", str(self.base / "not-created"), "--summary"),
+            ("prepare", "--manifest", "", "--root", str(self.base / "not-created"), "--summary"),
+            ("run", "--root", str(self.root), "--arm", "with", "--summary"),
+            ("finish", "--root", "", "--owner", "fixture-session", "--summary"),
+            ("recover", "--root", str(self.base / "absent"), "--owner", "fixture-session", "--summary"),
+            ("run", "--root", str(self.base / "absent"), "--owner", "fixture-session",
+             "--arm", "with", "--summary", "--", sys.executable, "-c", "pass"),
+        ]
+        for operation in ("run", "finish", "recover"):
+            child = ("--arm", "with", "--", sys.executable, "-c", "pass") if operation == "run" else ()
+            cases.append((operation, "--root", str(self.root), "--owner", "", "--summary", *child))
+            cases.append((operation, "--root", str(self.root), "--owner", "wrong", "--summary", *child))
+        for args in cases:
+            with self.subTest(args=args):
+                result = self.cli(*args)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertEqual(result.stdout, b"")
+                self.assertNotEqual(result.stderr, b"")
+                self.assertEqual((self.root / m.STATE).read_bytes(), before)
+        self.assertFalse((self.base / "not-created").exists())
+
+    def test_cli_default_full_json_and_child_summary_argument_remain_compatible(self):
+        manifest = self.base / "manifest.json"
+        manifest.write_text(json.dumps(self.manifest))
+        result = self.cli("prepare", "--manifest", str(manifest), "--root", str(self.root))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), self.read())
+        self.assertEqual(result.stdout, (json.dumps(self.read(), sort_keys=True) + "\n").encode())
+        result = self.cli("run", "--root", str(self.root), "--owner", "fixture-session",
+                          "--arm", "with", "--", sys.executable, "-c", "import sys;print(sys.argv[1])", "--summary")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), self.read())
+        self.assertEqual((self.root / "artifacts/run-0001/stdout.log").read_text(), "--summary\n")
+
+    def test_summary_preserves_missing_null_and_empty_recorded_values_without_mutation(self):
+        for latest in ({}, {"state": "", "returncode": None}, {"state": "child_failed", "returncode": 9}):
+            record = {"root": "/synthetic/task", "state": "finished", "runs": [latest],
+                      "outcome_before_finish": None, "inputs": ["synthetic"], "path_highwater": {"synthetic": 1}}
+            before = json.dumps(record, sort_keys=True)
+            summary = m.receipt_summary(record)
+            self.assertEqual(summary["last_run"], latest)
+            self.assertIsNone(summary["outcome_before_finish"])
+            self.assertNotIn("charged_bytes", summary)
+            self.assertEqual(json.dumps(record, sort_keys=True), before)
+
     def test_scan_file_removed_between_walk_and_lstat_is_sampled_absent(self):
         self.root.mkdir()
         gone = self.root / ".next" / "export" / "transient.js"
