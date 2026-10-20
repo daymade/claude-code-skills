@@ -53,6 +53,16 @@ partial-clone object fails instead of silently downloading into a shared cache.
 
 ## Runnable small example
 
+Use `--summary` on `prepare`, `run`, `finish` or `recover` for smaller tool-visible
+stdout. It projects recorded state and byte limits, the full receipt's path, the
+latest recorded run state/return code when present, and the pre-finish outcome.
+The complete receipt remains in `root/.materialization.json`; inputs, child argv,
+path inventories and cleanup lists are not echoed in summary mode. Default stdout
+still returns the full JSON. Exit codes remain unchanged: a child exiting 7 still
+returns 23 from `run`, with 7 in the summary's `last_run.returncode`. A missing
+return code stays absent, never an invented success. This mode limits selected
+fields, not arbitrary path lengths or results aggregated by an outer tool call.
+
 Run this from the skill-creator directory. The manifest below chooses explicit
 limits for a tiny smoke test. Set operational limits from the real task before any larger
 run. The root below does not exist when `prepare` creates it.
@@ -77,15 +87,15 @@ path = pathlib.Path(os.environ['MATERIALIZATION_WORKSPACE']) / 'input-manifest.j
 path.write_text(json.dumps(manifest))
 PY
 uv run --frozen python -m scripts.materialize prepare \
-  --manifest "$materialization_workspace/input-manifest.json" \
+  --summary --manifest "$materialization_workspace/input-manifest.json" \
   --root "$materialization_workspace/task"
 materialization_exit=0
 uv run --frozen python -m scripts.materialize run \
-  --root "$materialization_workspace/task" --owner smoke-session --arm with_skill \
+  --summary --root "$materialization_workspace/task" --owner smoke-session --arm with_skill \
   -- python -c 'from pathlib import Path; print(Path("daymade-skill/skill-creator/SKILL.md").is_file())' \
   || materialization_exit=$?
 uv run --frozen python -m scripts.materialize finish \
-  --root "$materialization_workspace/task" --owner smoke-session
+  --summary --root "$materialization_workspace/task" --owner smoke-session
 printf 'run exit: %s\n' "$materialization_exit"
 ```
 
@@ -167,9 +177,9 @@ runner PID and child group are confirmed absent, use:
 
 ```bash
 uv run --frozen python -m scripts.materialize recover \
-  --root "$materialization_workspace/task" --owner smoke-session
+  --summary --root "$materialization_workspace/task" --owner smoke-session
 uv run --frozen python -m scripts.materialize finish \
-  --root "$materialization_workspace/task" --owner smoke-session
+  --summary --root "$materialization_workspace/task" --owner smoke-session
 ```
 
 `recover` checks the stored lock owner and runner PID, then removes only that stale
