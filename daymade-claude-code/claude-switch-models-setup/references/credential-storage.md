@@ -132,6 +132,10 @@ claude mcp get <server> 2>&1 | rg '^  Scope:'
 Only the `Scope` line should reach the conversation. Empty output is an
 unverified scope, not evidence that the server is absent.
 
+These examples require the public `sed`, `jq`, and `rg` CLIs. Resolve
+`<active-state-json>` from the profile-specific `ACTIVE_STATE` paths defined in
+`mcp-startup-context.md` and the main-versus-third-party paths in `SKILL.md`.
+
 For structured registry data, read only the required keys from the active state
 file rather than printing complete server entries:
 

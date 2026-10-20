@@ -3,7 +3,7 @@
 Use this procedure when `/context` shows substantial fixed cost before the first
 task, especially from MCP tool schemas. Do not use it for `CLAUDE.md` restructuring
 or context-window size configuration; those have separate owners. The commands are
-macOS/Linux shell examples.
+macOS/Linux shell examples and require the public `sed`, `jq`, and `rg` CLIs.
 
 ## Measure one comparable baseline
 
@@ -49,11 +49,11 @@ macOS/Linux shell examples.
 
    ```bash
    # Default profile:
-   jq -r 'paths(scalars) as $p | select($p[-1] == "ENABLE_TOOL_SEARCH") | "\($p|map(tostring)|join(".")) = \(getpath($p))"' \
+   jq -r 'paths as $p | select($p[-1] == "ENABLE_TOOL_SEARCH") | "\($p|map(tostring)|join(".")) = \(getpath($p))"' \
      "$ACTIVE_SETTINGS"
 
    # Third-party profile:
-   jq -r 'paths(scalars) as $p | select($p[-1] == "ENABLE_TOOL_SEARCH") | "\($p|map(tostring)|join(".")) = \(getpath($p))"' \
+   jq -r 'paths as $p | select($p[-1] == "ENABLE_TOOL_SEARCH") | "\($p|map(tostring)|join(".")) = \(getpath($p))"' \
      "$PROVIDER_SETTINGS"
    ```
 
