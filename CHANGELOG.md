@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **qa-expert** (v1.2.3): Add optional normalization and drive-relative path cases with independent runtime oracles and healthy controls; preserve the existing test-selection scope and native Windows evidence boundary.
 - **skill-creator** (`daymade-skill` v1.71.0 → v1.72.0): Add opt-in review rebind for unchanged complete plugin distributions and originally reviewed dependencies after main integration. Preserve immutable original reviews, exact-head publication checks, source identity and legacy attest/verify; reject incomplete declarations or changed content. Change type: additive release-evidence capability.
 
 - **tibo-reset-codex** (v1.23.2 → v1.23.3): Record that official-reset arrival checks are bound to the same `account_ref` and permanently close once the account is switched (take the baseline while the account is still logged in; do not enqueue follow-up tasks for switched-away accounts), and that a tracker's summary text carrying an independent detection timestamp is positive timing evidence that narrows the landing window with the completion post. Change type: bounded evidence-rule additions from the 2026-10-20 Day13 landing review.
