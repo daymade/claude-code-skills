@@ -14,6 +14,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import sys
 import tempfile
 import uuid
@@ -124,9 +125,59 @@ def _integer(value):
     return type(value) is int and value >= 0
 
 
+SPEED_METRICS = {
+    "ttft_first_s": ("number", True), "ttft_content_s": ("number", True),
+    "total_s": ("number", False), "decode_s": ("number", False),
+    "output_tokens": ("integer", False), "reasoning_tokens": ("integer", True),
+    "reasoning_chars": ("integer", False), "content_chars": ("integer", False),
+    "chunks": ("integer", False), "tokens_per_chunk": ("number", True),
+    "client_decode_tps": ("number", True), "server_decode_tps": ("number", True),
+    "server_mean_accept_length": ("number", True), "decode_tps": ("number", True),
+    "e2e_tps": ("number", True),
+}
+CONCURRENCY_METRICS = {
+    "index": ("integer", False), "status": ("integer", False),
+    "start": ("number", False), "end": ("number", False), "duration": ("number", False),
+}
+QUALITY_METRICS = {"answer_chars": ("integer", False), "reasoning_chars": ("integer", False)}
+
+
+def _validate_metrics(kind, data, *, partial=False):
+    """Validate only metric fields owned by this unit type, including partial data."""
+    if kind in {"speed_mixed", "speed_decode"}:
+        schema = SPEED_METRICS
+    elif kind == "concurrency_request":
+        schema = CONCURRENCY_METRICS
+    elif kind == "quality_case":
+        schema = QUALITY_METRICS
+    elif kind == "protocol_history":
+        schema = {"http_status": ("integer", True)}
+    else:
+        schema = {}
+    for field, (value_type, nullable) in schema.items():
+        if partial and field not in data:
+            continue
+        if field not in data:
+            raise ResultContractError(f"missing {kind} metric {field}")
+        value = data[field]
+        if value is None and nullable:
+            continue
+        valid = _integer(value) if value_type == "integer" else _number(value)
+        if not valid or (field in {"status", "http_status"} and value > 599):
+            raise ResultContractError(f"invalid {kind} metric {field}")
+
+
 def thinking_rejection(text):
     low = (text or "").lower()
-    return "thinking" in low and any(x in low for x in ("invalid", "not support", "unsupported", "not allowed"))
+    # A fabricated/rejected signature says nothing about acceptance of the block TYPE.
+    if "thinking" not in low or "signature" in low:
+        return False
+    return any(re.search(pattern, low) for pattern in (
+        r"\b(?:invalid|unsupported|unknown|unrecognized)\s+(?:(?:part|content|block)\s+)*type\b[^\n]{0,80}\bthinking\b",
+        r"\bthinking\s+(?:(?:content|part)\s+)?(?:block(?:\s+type)?|type)s?\b[^\n]{0,40}\b(?:unsupported|not supported|not allowed)\b",
+        r"\b(?:unsupported|not supported|not allowed)\b[^\n]{0,40}\bthinking\s+blocks?\b",
+        r"\b(?:does not support|do not support|cannot accept|can't accept)\b[^\n]{0,40}\bthinking\s+blocks?\b",
+    ))
 
 
 def history_rejection(data):
@@ -140,6 +191,7 @@ def _evidence(kind, data):
         return type(data.get("usage_supported")) is bool
     if kind.startswith("speed_"):
         return (data.get("stream_complete") is True and _number(data.get("total_s"))
+                and isinstance(data.get("finish_reason"), str) and bool(data["finish_reason"].strip())
                 and _number(data.get("ttft_first_s"))
                 and data["total_s"] >= data["ttft_first_s"]
                 and _number(data.get("output_tokens")) and data["output_tokens"] > 0
@@ -165,12 +217,14 @@ def _evidence(kind, data):
 def _validate_data(kind, data):
     if not isinstance(data, dict):
         raise ResultContractError("observed unit requires typed data")
+    _validate_metrics(kind, data)
     def booleans(keys):
         return all(type(data.get(k)) is bool for k in keys)
     if kind == "speed_setup":
         ok = booleans(["usage_supported"])
     elif kind.startswith("speed_"):
-        ok = ({"stream_complete", "content_chars", "reasoning_chars", "ttft_first_s", "total_s", "output_tokens"} <= set(data)
+        ok = ({"stream_complete", "finish_reason", "content_chars", "reasoning_chars", "ttft_first_s", "total_s", "output_tokens"} <= set(data)
+              and (data["finish_reason"] is None or isinstance(data["finish_reason"], str))
               and booleans(["stream_complete"]) and all(_integer(data.get(k)) for k in ("content_chars", "reasoning_chars"))
               and all(data.get(k) is None or _number(data[k]) for k in ("ttft_first_s", "total_s", "output_tokens")))
     elif kind == "protocol_generation":
@@ -186,7 +240,10 @@ def _validate_data(kind, data):
     elif kind == "concurrency_request":
         ok = _evidence(kind, data)
     else:
-        ok = _integer(data.get("answer_chars")) and _integer(data.get("reasoning_chars"))
+        artifact = data.get("artifact")
+        ok = (_integer(data.get("answer_chars")) and _integer(data.get("reasoning_chars"))
+              and isinstance(artifact, str) and bool(artifact) and Path(artifact).name == artifact
+              and artifact not in {".", "..", "_all_answers.json"})
     if not ok:
         raise ResultContractError(f"malformed {kind} observation")
 
@@ -235,6 +292,7 @@ def _derive(result, *, terminal=True):
     if probe not in PROBES or not isinstance(result.get("units"), list):
         raise ResultContractError("invalid probe or units")
     ids = set()
+    artifacts = set()
     for u in result["units"]:
         if not isinstance(u, dict) or not isinstance(u.get("unit_id"), str) or not u["unit_id"] or u["unit_id"] in ids:
             raise ResultContractError("missing/duplicate unit identity")
@@ -250,9 +308,20 @@ def _derive(result, *, terminal=True):
             raise ResultContractError("invalid unit state")
         if state == "observed":
             _validate_data(u["kind"], u.get("data"))
+            if u["kind"] == "concurrency_request" and u["data"]["index"] != u["ordinal"]:
+                raise ResultContractError("concurrency result index differs from its planned ordinal")
+        elif state == "error" and u.get("data") is not None:
+            if not isinstance(u["data"], dict):
+                raise ResultContractError("partial unit evidence must be an object")
+            _validate_metrics(u["kind"], u["data"], partial=True)
         usable = state == "observed" and _evidence(u["kind"], u.get("data"))
         if u["usable"] != usable:
             raise ResultContractError("claimed usable evidence disagrees with typed data")
+        if u["kind"] == "quality_case" and usable:
+            artifact = u["data"]["artifact"].casefold()
+            if artifact in artifacts:
+                raise ResultContractError("usable quality units share an answer artifact")
+            artifacts.add(artifact)
         if state == "error":
             if not isinstance(u.get("error"), dict) or not all(isinstance(u["error"].get(k), str) for k in ("code", "type", "message")):
                 raise ResultContractError("missing unit error")
@@ -330,7 +399,10 @@ def read_result(path, *, expected_run_id, expected_probe, expected_invocation_sh
         raise ResultContractError("result terminal fields/counters contradict units")
     if state == "running" or type(child_returncode) is not int or child_returncode != code:
         raise ResultContractError("child exit does not match a terminal receipt")
-    if result.get("summary") != _summary(result["probe"], result["units"]):
+    expected_summary = _summary(result["probe"], result["units"])
+    summary = result.get("summary")
+    if (not isinstance(summary, dict) or summary.keys() != expected_summary.keys()
+            or any(type(summary[k]) is not type(v) or summary[k] != v for k, v in expected_summary.items())):
         raise ResultContractError("summary contradicts typed evidence")
     return result
 

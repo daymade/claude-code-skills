@@ -64,6 +64,13 @@ protocol run has no capability measurement. A quality run collects answers;
 remains valid speed evidence when its stream completed and token/timing evidence
 is usable. Empty quality answers do not count as collected answers.
 
+Require a nonempty terminal `finish_reason` before treating an OpenAI speed stream
+as complete. EOF after output preserves `partial_output` and timings, but supplies
+no usable complete speed sample and does not enter throughput summaries. Keep
+signature-validation errors in replay tests inconclusive: rejecting a fabricated
+thinking signature does not prove rejection of the thinking block type. An
+explicit `invalid part type: thinking` response remains valid negative evidence.
+
 Legacy invocation without the two receipt arguments retains its existing modes
 and successful-run exit behavior: protocol returns 1 for noncompliance;
 concurrency can return 0 while reporting degradation. Do not feed legacy exit
@@ -79,12 +86,21 @@ primary benchmark units, not HTTP requests, SDK retries or billable calls.
 Speed's usage-support warm-up is a retained optional setup unit.
 
 Use unique occurrence ordinals for repeated labels, cases or concurrency levels.
+Reserve ordinary unique case filenames before assigning fallback names, including
+names that resemble those fallbacks. The quality reader rejects duplicate usable
+artifact references; distinct unit IDs alone cannot prove distinct answer files.
 Speed units retain timings, content/reasoning sizes, throughput provenance and
 partial stream errors. Protocol records both generation and history replay,
 including completion and HTTP/error evidence. Concurrency records each timed
 request outcome and keeps success-only latency summaries in the legacy output.
 Quality records answer/reasoning sizes and finish reason; inspect its existing
 answer artifacts for the full answer and rubric.
+
+Validate numeric metrics against the per-unit field schemas in
+`scripts/eval_result.py`, including error-unit partial metrics and derived summary
+types. Reject negative, nonfinite or wrongly typed values; retain nullable values
+and zero only where the declared metric permits them. HTTP status codes keep
+their protocol meaning rather than being treated as latency or throughput.
 
 The writer atomically saves a running snapshot before acquisition and after each
 unit. Concurrency saves each result when it completes rather than waiting for a

@@ -161,9 +161,11 @@ def run_one(client, model, prompt, max_tokens, temperature, use_usage):
     tok_per_chunk = round(out_tok / chunk_count, 1) if (out_tok and chunk_count) else None
     batch_flushed = tok_per_chunk is not None and tok_per_chunk > 3
 
+    stream_complete = isinstance(finish_reason, str) and bool(finish_reason.strip())
     return {
-        "stream_complete": True,
+        "stream_complete": stream_complete,
         "finish_reason": finish_reason,
+        "partial_output": None if stream_complete else {"content": content, "reasoning": reasoning},
         "ttft_first_s": round(ttft_any, 3) if ttft_any is not None else None,
         "ttft_content_s": round(ttft_content, 3) if ttft_content is not None else None,
         "total_s": round(total, 3),
@@ -215,6 +217,7 @@ def _fmt_line(prefix, r):
     flush = f"  ⚠batch-flush({r['tokens_per_chunk']}tok/chunk→client inflated)" if r["batch_flushed"] else ""
     return (f"{prefix} TTFT={r['ttft_first_s']}s  e2e={r['total_s']}s  out={r['output_tokens']}tok  "
             f"client={r['client_decode_tps']} tok/s{srv}{flush}"
+            f"{'  [INCOMPLETE STREAM]' if not r['stream_complete'] else ''}"
             f"{'  [TRUNCATED]' if r['truncated'] else ''}")
 
 
@@ -299,14 +302,14 @@ def collect(args, prompts, writer):
             writer.finish_unit(uid, r)
             print(_fmt_line(f"  round {i}:", r))
             report["decode"].append(r)
-            if r["decode_tps"]:
+            if r["stream_complete"] and r["decode_tps"]:
                 peaks.append(r["decode_tps"])
         if peaks:
             report["decode_peak_tps"] = max(peaks)
             report["decode_avg_tps"] = round(sum(peaks) / len(peaks), 1)
             print(f"  → decode peak {max(peaks)} / avg {report['decode_avg_tps']} tok/s")
 
-    all_runs = report["mixed"] + report["decode"]
+    all_runs = [r for r in report["mixed"] + report["decode"] if r.get("stream_complete")]
     print("\n# summary")
     srv_vals = [r["server_decode_tps"] for r in all_runs if r.get("server_decode_tps")]
     any_flush = any(r.get("batch_flushed") for r in all_runs)
@@ -315,10 +318,10 @@ def collect(args, prompts, writer):
     if report.get("decode_peak_tps"):
         src = "server" if srv_vals else "client"
         print(f"  sustained decode ceiling ({src}): {report['decode_peak_tps']} tok/s (compare to vendor claim)")
-    e2e = [r["e2e_tps"] for r in report["mixed"] if r.get("e2e_tps")]
+    e2e = [r["e2e_tps"] for r in report["mixed"] if r.get("stream_complete") and r.get("e2e_tps")]
     if e2e:
         print(f"  end-to-end throughput (what callers feel): {min(e2e)}–{max(e2e)} tok/s")
-    ttfts = [r["ttft_first_s"] for r in report["mixed"] if r.get("ttft_first_s")]
+    ttfts = [r["ttft_first_s"] for r in report["mixed"] if r.get("stream_complete") and r.get("ttft_first_s")]
     if ttfts:
         print(f"  TTFT (first token): {min(ttfts)}–{max(ttfts)} s")
     if any_flush:

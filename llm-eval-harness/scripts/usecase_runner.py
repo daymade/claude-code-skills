@@ -86,6 +86,28 @@ def main():
     return execute_probe(args, "quality", identity, plan, lambda writer: collect(args, cases, writer))
 
 
+def artifact_names(cases):
+    """Reserve ordinary unique IDs before allocating collision-free fallback names."""
+    ids = [str(case.get("id", i)) for i, case in enumerate(cases)]
+    candidates = [f"{cid}.json" if Path(cid).name == cid and cid not in {".", ".."} else None for cid in ids]
+    keys = [name.casefold() if name else None for name in candidates]
+    reserved = {"_all_answers.json"}
+    reserved.update(key for key in keys if key is not None and keys.count(key) == 1)
+    assigned = set()
+    result = []
+    for index, name in enumerate(candidates):
+        key = keys[index]
+        if key is None or keys.count(key) != 1 or key == "_all_answers.json":
+            name = f"case-{index}.json"
+            suffix = 0
+            while name.casefold() in reserved or name.casefold() in assigned:
+                suffix += 1
+                name = f"case-{index}-{suffix}.json"
+        assigned.add(name.casefold())
+        result.append(name)
+    return result
+
+
 def collect(args, cases, writer):
     api_key = os.environ.get(args.key_env, "").strip()
     if not api_key:
@@ -97,12 +119,10 @@ def collect(args, cases, writer):
 
     print(f"# use-case runner  model={args.model}  cases={len(cases)}  → {out_dir}\n")
     collected = []
-    ids = [str(case.get("id", i)) for i, case in enumerate(cases)]
+    filenames = artifact_names(cases)
     for idx, case in enumerate(cases):
         cid = str(case.get("id", idx))
-        filename = f"{cid}.json"
-        if ids.count(cid) > 1 or Path(cid).name != cid or cid in {".", ".."}:
-            filename = f"case-{idx}.json"
+        filename = filenames[idx]
         prompt = case.get("prompt")
         if not prompt:
             writer.skip_unit(f"case:{idx}")

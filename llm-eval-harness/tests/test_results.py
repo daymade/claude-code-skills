@@ -75,9 +75,10 @@ class OfflineSDK:
             return NS(choices=[NS(message=NS(content=answer, reasoning_content="reasoning", model_extra=None),
                                   finish_reason="stop")], usage=None)
         def chunks():
+            ended = not (self.mode == "eof" or (self.mode == "partial_eof" and n > 2))
             yield NS(choices=[NS(delta=NS(content=None if self.mode == "reasoning" else "answer with enough text",
                                          reasoning_content="reasoning output tokens" if self.mode == "reasoning" else None,
-                                         reasoning=None, model_extra=None), finish_reason="stop")],
+                                         reasoning=None, model_extra=None), finish_reason="stop" if ended else None)],
                      usage=NS(completion_tokens=50, completion_tokens_details=None, pd=None, model_extra=None))
             if self.mode == "stream_error":
                 raise OSError("cut mid-stream")
@@ -120,7 +121,7 @@ class ResultTests(unittest.TestCase):
                             [unit(f"case:{i}", "quality_case", i) for i in range(count)])
     def complete(self, writer, uid="case:0"):
         writer.start_unit(uid)
-        writer.finish_unit(uid, {"answer_chars": 12, "reasoning_chars": 4})
+        writer.finish_unit(uid, {"answer_chars": 12, "reasoning_chars": 4, "artifact": uid.replace(":", "-") + ".json"})
     def reader(self, code, **kw):
         return read_result(self.path, expected_run_id=kw.get("run_id", self.run_id), expected_probe="quality",
                            expected_invocation_sha256=invocation_digest(self.argv), child_returncode=code,
@@ -178,6 +179,7 @@ class ResultTests(unittest.TestCase):
         mutations = [lambda r: r["counts"].update(usable=True),
                      lambda r: r["units"].clear(),
                      lambda r: r["summary"].update(answer_chars=999),
+                     lambda r: r["summary"].update(usable_units=True),
                      lambda r: r["units"][0]["data"].update(answer_chars=-1),
                      lambda r: r["units"][0]["data"].update(reasoning_chars=float("nan")),
                      lambda r: r["units"].append(copy.deepcopy(r["units"][0])),
@@ -323,6 +325,20 @@ class ResultTests(unittest.TestCase):
         self.assertEqual((code, r["state"], r["counts"]["usable"]), (10, "completed", 2))
         self.assertTrue(all(x["headers"].get("Authorization") == "Bearer synthetic-key" for x in requests))
         self.assertGreater(r["units"][0]["data"]["end"], 0)
+        fields = {"index", "status", "start", "end", "duration"}
+        self.assertEqual({k for k, v in r["units"][0]["data"].items() if type(v) in (int, float)}, fields)
+        for field in fields:
+            for bad in (-1, True, "0", None, float("inf"), float("nan")):
+                with self.subTest(field=field, value=bad):
+                    broken = copy.deepcopy(r)
+                    broken["units"][0]["data"][field] = bad
+                    self.path.write_text(json.dumps(broken))
+                    with self.assertRaises(ResultContractError): self.read("concurrency", code)
+        healthy = copy.deepcopy(r)
+        for u in healthy["units"]:
+            u["data"].update(status=0, start=0, end=0, duration=0)
+        self.path.write_text(json.dumps(healthy))
+        self.assertEqual(self.read("concurrency", code)["counts"]["usable"], 2)
         self.path.unlink()
         with patch.object(concurrency, "aiohttp", aio): code = self.invoke(concurrency, args, machine=False)
         self.assertEqual(code, 0)
@@ -407,6 +423,120 @@ runpy.run_path(script,run_name="__main__")
         names = [u["data"]["artifact"] for u in r["units"]]
         self.assertEqual(len(set(names)), 2)
         self.assertTrue(all((out / name).is_file() for name in names))
+
+    def test_eof_without_finish_reason_preserves_content_without_measurement(self):
+        for mode, expected in (("eof", 12), ("partial_eof", 11)):
+            with self.subTest(mode=mode), patch.object(speed, "OpenAI", OfflineSDK):
+                if self.path.exists(): self.path.unlink()
+                OfflineSDK.calls = 0
+                OfflineSDK.mode = mode
+                code = self.invoke(speed, self.argv + ["--mode", "decode", "--repeat", "2"])
+                r = self.read("speed", code)
+                self.assertEqual(code, expected)
+                incomplete = [u for u in r["units"] if u["kind"] == "speed_decode" and not u["usable"]]
+                self.assertGreater(len(incomplete), 0)
+                self.assertTrue(all(u["data"]["finish_reason"] is None and not u["data"]["stream_complete"] for u in incomplete))
+                self.assertTrue(all(u["data"]["partial_output"]["content"] == "answer with enough text" for u in incomplete))
+        # A future writer cannot certify EOF merely by setting the boolean to true.
+        r["units"][-1]["data"]["stream_complete"] = True
+        self.path.write_text(json.dumps(r))
+        self.assertFalse(self.read("speed", code)["units"][-1]["usable"])
+
+    def test_allocator_reserves_unique_literal_names_and_reader_rejects_aliases(self):
+        cases = self.root / "cases.json"
+        inputs = [{"id": "repeat", "prompt": "first"}, {"id": "repeat", "prompt": "second"},
+                  {"id": "case-0", "prompt": "third"}, {"id": "ordinary", "prompt": "fourth"}]
+        cases.write_text(json.dumps(inputs))
+        out = self.root / "answers"
+        with patch.object(quality, "OpenAI", OfflineSDK):
+            code = self.invoke(quality, self.argv + ["--usecases", str(cases), "--output-dir", str(out)])
+        r = self.read("quality", code)
+        names = [u["data"]["artifact"] for u in r["units"]]
+        self.assertEqual((code, len(set(name.casefold() for name in names))), (0, 4))
+        self.assertEqual(names[2:], ["case-0.json", "ordinary.json"])
+        self.assertEqual([json.loads((out / name).read_text())["id"] for name in names], [x["id"] for x in inputs])
+        for duplicate in (names[0], names[0].upper()):
+            broken = copy.deepcopy(r)
+            broken["units"][1]["data"]["artifact"] = duplicate
+            self.path.write_text(json.dumps(broken))
+            with self.assertRaises(ResultContractError): self.read("quality", code)
+
+    def test_signature_errors_are_not_thinking_type_evidence(self):
+        args = ["--url", "https://example.invalid/v1/messages", "--model", "test-model", "--key-env", "SYNTH_KEY", "--repeat", "1", "--check", "history-replay"]
+        samples = [("Invalid signature in thinking block", 12),
+                   ("thinking block signature is invalid", 12),
+                   ("invalid part type: thinking", 10),
+                   ("Unsupported content block type 'thinking'", 10),
+                   (None, 12)]
+        for text, expected in samples:
+            with self.subTest(error=text):
+                if self.path.exists(): self.path.unlink()
+                class Opener:
+                    def open(self, request, **kw):
+                        if text is None:
+                            raise OSError("synthetic transport failure")
+                        raise protocol.urllib.error.HTTPError(request.full_url, 400, "bad", {}, io.BytesIO(text.encode()))
+                with patch.object(protocol.urllib.request, "build_opener", return_value=Opener()):
+                    code = self.invoke(protocol, args)
+                r = self.read("protocol", code)
+                self.assertEqual(code, expected)
+                self.assertEqual(r["units"][0]["data"]["rejects_thinking_type"], expected == 10)
+                if expected == 12:
+                    self.assertEqual((r["state"], r["counts"]["usable"]), ("no_measurement", 0))
+        self.assertIsNone(r["units"][0]["data"]["http_status"])
+        for bad in (-1, 600, True, "400", float("inf"), float("nan")):
+            broken = copy.deepcopy(r)
+            broken["units"][0]["data"]["http_status"] = bad
+            self.path.write_text(json.dumps(broken))
+            with self.assertRaises(ResultContractError): self.read("protocol", code)
+
+    def test_all_speed_metrics_reject_bad_values_and_accept_real_null_zero(self):
+        with patch.object(speed, "OpenAI", OfflineSDK):
+            code = self.invoke(speed, self.argv + ["--mode", "decode", "--repeat", "1"])
+        r = self.read("speed", code)
+        data = r["units"][1]["data"]
+        fields = {"ttft_first_s", "ttft_content_s", "total_s", "decode_s", "output_tokens", "reasoning_tokens",
+                  "reasoning_chars", "content_chars", "chunks", "tokens_per_chunk", "client_decode_tps",
+                  "server_decode_tps", "server_mean_accept_length", "decode_tps", "e2e_tps"}
+        emitted = {k for k, v in data.items() if type(v) in (int, float) or (v is None and k not in {"partial_output", "finish_reason"})}
+        self.assertEqual(emitted, fields)
+        for field in fields:
+            for bad in (-1, True, "0", float("inf"), float("nan")):
+                with self.subTest(field=field, value=bad):
+                    broken = copy.deepcopy(r)
+                    broken["units"][1]["data"][field] = bad
+                    self.path.write_text(json.dumps(broken))
+                    with self.assertRaises(ResultContractError): self.read("speed", code)
+        healthy = copy.deepcopy(r)
+        for field in ("ttft_first_s", "ttft_content_s", "total_s", "decode_s", "reasoning_tokens", "reasoning_chars", "client_decode_tps", "server_decode_tps", "server_mean_accept_length", "decode_tps", "e2e_tps"):
+            healthy["units"][1]["data"][field] = 0
+        self.path.write_text(json.dumps(healthy))
+        self.assertEqual(self.read("speed", code)["state"], "completed")
+        for field in ("ttft_content_s", "reasoning_tokens", "tokens_per_chunk", "client_decode_tps", "server_decode_tps", "server_mean_accept_length", "decode_tps", "e2e_tps"):
+            healthy["units"][1]["data"][field] = None
+        self.path.write_text(json.dumps(healthy))
+        self.assertEqual(self.read("speed", code)["state"], "completed")
+
+    def test_quality_metric_types_and_partial_metric_validation(self):
+        w = self.writer()
+        self.complete(w)
+        w.finish()
+        r = self.reader(0)
+        for field in ("answer_chars", "reasoning_chars"):
+            for bad in (-1, True, "1", float("inf"), None):
+                with self.subTest(field=field, value=bad):
+                    broken = copy.deepcopy(r)
+                    broken["units"][0]["data"][field] = bad
+                    self.path.write_text(json.dumps(broken))
+                    with self.assertRaises(ResultContractError): self.reader(0)
+        self.path.unlink()
+        OfflineSDK.mode = "stream_error"
+        with patch.object(speed, "OpenAI", OfflineSDK):
+            code = self.invoke(speed, ["--base-url", "https://example.invalid/v1", "--model", "test-model", "--key-env", "SYNTH_KEY", "--mode", "decode", "--repeat", "1"])
+        r = self.read("speed", code)
+        r["units"][1]["data"]["total_s"] = -1
+        self.path.write_text(json.dumps(r))
+        with self.assertRaises(ResultContractError): self.read("speed", code)
 
 
 if __name__ == "__main__":
