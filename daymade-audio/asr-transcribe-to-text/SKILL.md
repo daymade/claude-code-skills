@@ -807,6 +807,11 @@ Then re-run Step 0.
 
 ## Batch Transcription (many short files)
 
+Before using external VAD to select a batch, interpreting empty windows, or
+claiming backlog coverage, read [VAD and batch coverage](references/batch_vad_coverage.md).
+It separates source samples, candidate windows, attempts and verified content;
+reuse the selected producer's existing checkpoints and the branches below.
+
 Passing many files to one `transcribe_local_mlx.py` invocation is efficient (model loads once) — **but only when every file contains actual speech.** If the batch may include music-only / BGM-only clips (short promo videos, montage clips with subtitles instead of voiceover), do NOT batch them in one process:
 
 - On music/rhythm-only audio the model can fall into a **repetition loop hallucination** (e.g. endless "One, two, three, one, two, three..."). The 8192-token per-chunk ceiling bounds resource growth, while the 12-character n-gram quality gate rejects a loop even when it stops below that ceiling; one bad file can still consume the whole chunk timeout and starve a batch.

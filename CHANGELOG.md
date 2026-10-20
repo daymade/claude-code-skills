@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **data-visualization-discipline** (v1.1.3): Distinguish unknown, partially read and confirmed-zero counts, and reconcile attention summaries and filters against the existing state contract. Change type: bounded counterexample addition.
 
 - **macos-watchdog** (`daymade-macos` v1.24.1 → v1.24.2): new-launchagent.sh now warns on sub-minute StartInterval (30–59 s) with the Deploy-9 BTM transition tax and the KeepAlive in-process loop alternative, instead of silently allowing the band the rule exists to discourage. Change type: tool-side warning aligned to a landed rule.
+- **asr-transcribe-to-text** (`daymade-audio` v1.50.1): Separate capture, decode, external VAD, ASR attempt and readable-draft evidence; audit excluded windows without declaring silence or transcription quality, and resume only the required uncovered intervals. Preserve the integrated runner's existing no-speech contract.
+- **app-evolver** (v1.1.6): Add synthetic acceptance examples for import/consumer policy mismatches and shared-asset deletion races, including legitimate deletion and retry controls.
+
 - **macos-watchdog** (`daymade-macos` v1.24.0 → v1.24.1): Stop semantics now connects temporary-job hygiene to the Deploy-9 transition tax — a dead-purpose periodic job left loaded keeps feeding BTM broadcasts, and `disable` is the fully reversible way to retire it (plist stays as the re-enable path). Change type: bounded rule addition from a real retirement.
 - **skill-creator** (`daymade-skill` v1.70.8 → v1.70.9): Publishing guide now requires surgical edits to registry files — a `json.dump` full-file rewrite turned one version bump into 62 lines of keyword churn, polluting the review diff and triggering peer ownership fan-outs in a shared checkout; includes the banned-form-safe recovery path. Change type: factual procedure addition from a measured incident.
 
