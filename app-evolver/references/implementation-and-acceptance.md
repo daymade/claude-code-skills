@@ -49,6 +49,21 @@ Synthetic example: a device policy chosen for a desktop app does not decide its
 mobile architecture. Rebind the platform's current product contract before
 transferring the mechanism. Verify its own resources and consumer path.
 
+Synthetic import example: a writer accepts a media type or size that the actual
+history reader rejects. Exercise the production read/playback boundary before
+declaring the import usable, including a healthy supported input and the exact
+size boundary. Keep one owner for shared admission policy; a successful insert
+or schema check does not establish that the user can retrieve the asset.
+
+Synthetic shared-asset example: two records use the same content-addressed file.
+Import the second while permanently deleting the first, in both orders and with
+an active deletion lease. Revalidate the final identity/tombstone state under the
+binding protection before publishing an asset. A successful new record must read
+its original bytes; a tombstone must not recreate the deleted record or file.
+Also preserve legitimate last-reference deletion and retry after a failed write.
+Choose the application's existing transaction/lease owner; do not invent a
+parallel lifecycle solely for the import.
+
 ## Close the evidence loop
 
 For a defect, show the affected old behavior and the corrected behavior, plus
