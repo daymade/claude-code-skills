@@ -265,9 +265,26 @@ do not infer those values from a hand-maintained template summary.
 
 Every template uses the `<API_KEY>` placeholder. Templates for configurable gateways also use `<BASE_URL>`; the MiniMax templates pin the documented regional endpoint. Ask the user for every real placeholder value; do not guess or reuse values from the current machine unless the user explicitly provides them.
 
-MiniMax-M3 supports adaptive or disabled thinking; keep `ANTHROPIC_REASONING_MODEL`
-on the same model. MiniMax-M2.7 thinking is always on; do not claim a
-template-level disable path. Read model and context values from the chosen template.
+For new MiniMax profiles, recommend `minimax.json` (global) or `minimax-cn.json`
+(China) first. These select **MiniMax-M3.1-Flash**. The explicit M3 alternatives
+are `minimax-m3.json` and `minimax-m3-cn.json`. Match the API key to its regional
+endpoint. All four use `[1m]` for Claude Code's 1M context handling; the actual
+API model IDs omit that suffix.
+
+Flash templates enable thinking and pin `CLAUDE_CODE_EFFORT_LEVEL=max`.
+Claude Code 2.1.204 was verified to serialize `thinking.type=adaptive` and
+`output_config.effort=max`; rerun `CSMS_RUN_CLAUDE_WIRE_TESTS=1 python3 -m unittest
+discover -s tests -p test_minimax_profiles.py -v` from this skill when upgrading.
+Flash also accepts `low`, `medium`, `high`, and `xhigh` effort. Do not disable
+Flash thinking (`none`/`disabled` is rejected). For an explicit non-thinking
+workflow, choose M3 and set `alwaysThinkingEnabled` to `false`; keep
+`ANTHROPIC_REASONING_MODEL` on the same model. See the
+[MiniMax API contract](https://platform.minimax.io/docs/api-reference/text-anthropic-api).
+
+Do not replace a saved model or custom endpoint when adding templates. M2.7
+examples remain under `assets/templates/legacy/` for explicit legacy requests
+only, outside the active catalog. Their thinking is always on; do not claim a
+template-level disable path. Read exact values from the chosen template.
 
 ## Configuring Context Window Size
 
