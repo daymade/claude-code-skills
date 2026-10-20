@@ -29,7 +29,7 @@ Trigger this skill when:
 
 **One-command initialization**:
 ```bash
-uv run <qa-expert-dir>/scripts/init_qa_project.py <project-name> <project-root>
+uv run "<qa-expert-dir>/scripts/init_qa_project.py" "<project-name>" "<project-root>"
 ```
 
 **What gets created**:
@@ -55,7 +55,7 @@ creates templates; it does not run tests or install a scheduler.
 Initialize QA directories and templates:
 
 ```bash
-uv run <qa-expert-dir>/scripts/init_qa_project.py <project-name> <project-root>
+uv run "<qa-expert-dir>/scripts/init_qa_project.py" "<project-name>" "<project-root>"
 ```
 
 Creates directory structure, tracking CSVs, documentation templates, and master prompt for autonomous execution.
@@ -137,7 +137,7 @@ File bugs with proper severity classification:
 Calculate metrics from the current tracking rows:
 
 ```bash
-uv run <qa-expert-dir>/scripts/calculate_metrics.py <project-root>/tests/docs/templates/TEST-EXECUTION-TRACKING.csv
+uv run "<qa-expert-dir>/scripts/calculate_metrics.py" "<project-root>/tests/docs/templates/TEST-EXECUTION-TRACKING.csv"
 ```
 
 **Metrics dashboard includes**:
@@ -272,7 +272,7 @@ Automation scripts for QA infrastructure:
 
 ### Pattern 1: Starting Fresh QA
 ```
-1. uv run <qa-expert-dir>/scripts/init_qa_project.py my-app <fresh-project-root>
+1. uv run "<qa-expert-dir>/scripts/init_qa_project.py" my-app "<fresh-project-root>"
 2. Fill in BASELINE-METRICS.md (document current state)
 3. Write test cases using assets/templates/TEST-CASE-TEMPLATE.md
 4. Copy master prompt from references/master_qa_prompt.md

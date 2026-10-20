@@ -304,7 +304,7 @@ When using `init_qa_project.py`, ensure:
 Initialize templates from the loaded Skill directory into a fresh project root:
 
 ```bash
-uv run <qa-expert-dir>/scripts/init_qa_project.py my-app <project-root>
+uv run "<qa-expert-dir>/scripts/init_qa_project.py" my-app "<project-root>"
 ```
 
 The [initializer](../scripts/init_qa_project.py) owns generated files; the project's
@@ -334,7 +334,5 @@ for preparation and interrupted-test recovery.
 
 ---
 
-**Document Version**: 1.0
-**Created**: 2025-11-10
 **Based On**: CCPM test suite integrity incident
 **Priority**: 🔴 P0 (Critical for test suite quality)

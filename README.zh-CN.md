@@ -879,10 +879,10 @@ python3 scripts/compare.py original.mp4 compressed.mp4 -o report.html --interval
 **示例用法：**
 ```bash
 # 从已加载的 Skill 定位 qa-expert-dir；使用全新的项目根目录
-uv run <qa-expert-dir>/scripts/init_qa_project.py my-app <project-root>
+uv run "<qa-expert-dir>/scripts/init_qa_project.py" my-app "<project-root>"
 
 # 测试执行后生成指标报告
-uv run <qa-expert-dir>/scripts/calculate_metrics.py <project-root>/tests/docs/templates/TEST-EXECUTION-TRACKING.csv
+uv run "<qa-expert-dir>/scripts/calculate_metrics.py" "<project-root>/tests/docs/templates/TEST-EXECUTION-TRACKING.csv"
 ```
 
 初始化只创建模板。执行前需替换示例行、提供测试规范并验证项目测试工具。准备、恢复和交接按[执行 SOP](./qa-expert/references/master_qa_prompt.md)进行。指标命令只报告结果，不决定能否发布。

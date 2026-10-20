@@ -845,10 +845,10 @@ Set up test cases, execution tracking, bug reports and QA handoffs using AAA tes
 **Example usage:**
 ```bash
 # Resolve qa-expert-dir from the loaded Skill; use a fresh project root
-uv run <qa-expert-dir>/scripts/init_qa_project.py my-app <project-root>
+uv run "<qa-expert-dir>/scripts/init_qa_project.py" my-app "<project-root>"
 
 # Report metrics after test execution
-uv run <qa-expert-dir>/scripts/calculate_metrics.py <project-root>/tests/docs/templates/TEST-EXECUTION-TRACKING.csv
+uv run "<qa-expert-dir>/scripts/calculate_metrics.py" "<project-root>/tests/docs/templates/TEST-EXECUTION-TRACKING.csv"
 ```
 
 Initialization creates templates. Before execution, replace example rows, supply test specifications and verify the project harness. Follow [the execution SOP](./qa-expert/references/master_qa_prompt.md) for preparation, recovery and handoff. The metrics command reports results; it does not decide release acceptance.

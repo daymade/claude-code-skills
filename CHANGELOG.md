@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **debugging-network-issues** (v1.11.4): Document paired inner/outer tunnel captures, directional packet-identity comparison and capture-coverage limits; keep current transfer findings separate from historical crash attribution. Change type: bounded evidence-recipe addition.
-- **qa-expert** (v1.2.2): Test cross-runtime compatibility against the promised implementation's semantics, distinguish modeled inputs from native execution, and align release decisions and reporting prompts with the project's authoritative policy. Change type: bounded acceptance-recipe and documentation repair.
+- **qa-expert** (v1.2.2): Test cross-runtime compatibility against the promised implementation's semantics, distinguish modeled inputs from native execution, align release decisions and reporting prompts with the project's authoritative policy, and quote QA command paths. Change type: bounded acceptance-recipe and documentation repair.
 
 - **frontend-visual-qa** (v1.21.10): Verify attention discovery across views and diagnose failed captures on the owned background target without automatic foreground recovery. Change type: bounded acceptance-recipe repair.
 - **data-visualization-discipline** (v1.1.3): Distinguish unknown, partially read and confirmed-zero counts, and reconcile attention summaries and filters against the existing state contract. Change type: bounded counterexample addition.
