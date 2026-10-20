@@ -48,7 +48,9 @@ import os
 import statistics
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+
+from eval_result import cli_main, add_result_arguments, auth_headers, execute_probe, unit
 
 try:
     import aiohttp
@@ -70,45 +72,40 @@ class Result:
         return self.status == 200
 
 
-def build_request(fmt, model, api_key, index):
+def build_request(fmt, model, api_key, index, auth=None):
     """Return (headers, payload) for a minimal request — small max_tokens keeps it cheap;
     the prompt varies by index only to avoid any prompt-cache short-circuiting."""
     prompt = f"Reply with one word only: ok ({index})"
-    if fmt == "anthropic":
-        headers = {
-            "Content-Type": "application/json",
-            "x-api-key": api_key,
-            "anthropic-version": "2023-06-01",
-        }
-    else:  # openai
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        }
+    headers = auth_headers(fmt, api_key, auth)
     payload = {"model": model, "max_tokens": 16, "messages": [{"role": "user", "content": prompt}]}  # max-tokens-intentional: 并发维度只测吞吐与限流，正文内容不参与判定
     return headers, payload
 
 
-async def send_one(session, url, fmt, model, api_key, index, t0, timeout):
-    headers, payload = build_request(fmt, model, api_key, index)
+async def send_one(session, url, fmt, model, api_key, index, t0, timeout, auth=None, writer=None, unit_id=None):
+    headers, payload = build_request(fmt, model, api_key, index, auth)
+    if writer:
+        writer.start_unit(unit_id)
     start = time.monotonic() - t0
     try:
         async with session.post(url, json=payload, headers=headers,
                                 timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
             body = await resp.text()
             end = time.monotonic() - t0
-            return Result(index, resp.status, start, end, end - start, body[:80].replace("\n", " "))
+            result = Result(index, resp.status, start, end, end - start, body[:80].replace("\n", " "))
     except Exception as e:
         end = time.monotonic() - t0
-        return Result(index, 0, start, end, end - start, f"ERR:{type(e).__name__}")
+        result = Result(index, 0, start, end, end - start, f"ERR:{type(e).__name__}")
+    if writer:
+        writer.finish_unit(unit_id, asdict(result))
+    return result
 
 
-async def bench_round(url, fmt, model, api_key, concurrency, timeout):
+async def bench_round(url, fmt, model, api_key, concurrency, timeout, auth=None, writer=None, level=0):
     # trust_env=False isolates from any ambient proxy; force_close avoids keep-alive pooling
     connector = aiohttp.TCPConnector(limit=0, force_close=True)
     async with aiohttp.ClientSession(connector=connector, trust_env=False) as session:
         t0 = time.monotonic()
-        tasks = [send_one(session, url, fmt, model, api_key, i, t0, timeout)
+        tasks = [send_one(session, url, fmt, model, api_key, i, t0, timeout, auth, writer, f"level:{level}:request:{i}")
                  for i in range(1, concurrency + 1)]
         results = await asyncio.gather(*tasks)
     return list(results)
@@ -156,17 +153,32 @@ def main():
                     help="one or more levels, e.g. --concurrency 10 20 40 60 (ramps to find the ceiling)")
     ap.add_argument("--timeout", type=float, default=30)
     ap.add_argument("--output", help="write full JSON results here")
+    ap.add_argument("--auth", choices=["x-api-key", "bearer"], default=None, help="Anthropic auth mode (default x-api-key); OpenAI uses bearer")
+    add_result_arguments(ap)
     args = ap.parse_args()
+    if any(c <= 0 for c in args.concurrency) or args.timeout <= 0:
+        ap.error("concurrency levels and timeout must be positive")
 
-    api_key = os.environ.get(args.key_env)
+    plan = [unit(f"level:{level}:request:{i}", "concurrency_request", i,
+                 level_index=level, concurrency=c)
+            for level, c in enumerate(args.concurrency) for i in range(1, c + 1)]
+    identity = {"model": args.model, "endpoint_kind": "request_url", "endpoint": args.url,
+                "format": args.format, "auth": args.auth or ("bearer" if args.format == "openai" else "x-api-key")}
+    return execute_probe(args, "concurrency", identity, plan, lambda writer: collect(args, writer))
+
+
+def collect(args, writer):
+    api_key = os.environ.get(args.key_env, "").strip()
     if not api_key:
-        sys.exit(f"Env var {args.key_env} is empty or unset — export your key there first.")
+        raise ValueError(f"Env var {args.key_env} is empty or unset — export your key there first.")
+    writer.redact(api_key)
+    auth_headers(args.format, api_key, args.auth)
 
     print(f"# concurrency probe  model={args.model}  format={args.format}")
     print(f"# isolation: trust_env=False (ambient proxy excluded), force_close=True\n")
     rows = []
-    for c in args.concurrency:
-        results = asyncio.run(bench_round(args.url, args.format, args.model, api_key, c, args.timeout))
+    for level, c in enumerate(args.concurrency):
+        results = asyncio.run(bench_round(args.url, args.format, args.model, api_key, c, args.timeout, args.auth, writer, level))
         s = summarize(results, c)
         rows.append(s)
         lat = f"p50={s.get('latency_p50_s','-')}s p90={s.get('latency_p90_s','-')}s" if s["success"] else "—"
@@ -191,6 +203,7 @@ def main():
         print("    the slow/dropped/timed-out requests are excluded, so latency can look")
         print("    deceptively good as success rate falls. Read the two columns together.")
 
+    writer.result["summary"] = {"model": args.model, "format": args.format, "levels": rows}
     if args.output:
         with open(args.output, "w") as f:
             json.dump({"model": args.model, "format": args.format, "levels": rows}, f,
@@ -199,4 +212,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(cli_main(main))

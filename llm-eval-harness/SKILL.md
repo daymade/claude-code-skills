@@ -58,6 +58,13 @@ for the full reasoning behind this and the other disciplines.
 keys belong in `~/.llm-eval/` (or wherever you keep secrets), NOT in this skill directory —
 the skill is generic and public; your test suite is yours. See "Use-case library" below.
 
+**Machine launchers and interrupted runs:** use the paired `--result-json` / `--run-id`
+interface and the bundled `scripts/eval_result.py` reader to distinguish completed,
+noncompliant, partial, unmeasured, failed and cancelled runs. Read
+[machine results](references/machine-results.md) before integrating a launcher; that
+reference owns receipt freshness, typed evidence, exit codes, auth forwarding and
+the offline regression command. Keep legacy `--output` and quality answer artifacts.
+
 ## Quick start
 
 Detect what you have, then run the dimensions that apply. For an OpenAI-compatible model:
@@ -78,6 +85,10 @@ uv run --with aiohttp python scripts/concurrency_probe.py \
 If the endpoint is Anthropic-Messages-shaped (`/v1/messages`), also run the protocol probe
 (below). Pick dimensions by what the user actually asked — don't run all six if they only
 asked "is it fast?".
+
+Pass `--auth bearer` to Anthropic protocol/concurrency probes when the route requires
+Authorization instead of x-api-key. The default remains x-api-key and applies to both
+protocol generation and history replay. OpenAI concurrency keeps Bearer authentication.
 
 ## Dimension 0 — Availability (which model IDs actually work)
 

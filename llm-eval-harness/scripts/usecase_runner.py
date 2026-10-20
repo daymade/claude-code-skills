@@ -38,6 +38,9 @@ import json
 import os
 import sys
 import time
+from pathlib import Path
+
+from eval_result import cli_main, add_result_arguments, execute_probe, unit
 
 try:
     from openai import OpenAI
@@ -62,33 +65,71 @@ def main():
     ap.add_argument("--max-tokens", type=int, default=2048)
     ap.add_argument("--temperature", type=float, default=0.3)
     ap.add_argument("--timeout", type=float, default=120)
+    add_result_arguments(ap)
     args = ap.parse_args()
-
-    api_key = os.environ.get(args.key_env)
-    if not api_key:
-        sys.exit(f"Env var {args.key_env} is empty or unset — export your key there first.")
+    if args.max_tokens <= 0 or args.timeout <= 0:
+        ap.error("max-tokens and timeout must be positive")
 
     uc_path = os.path.expanduser(args.usecases)
     if not os.path.exists(uc_path):
-        sys.exit(f"Use-case library not found: {uc_path}\n"
-                 f"Create one (JSON list of {{id, prompt, ...}}) — see the skill's example_usecases.json.")
+        ap.error(f"Use-case library not found: {uc_path}")
     with open(uc_path) as f:
         cases = json.load(f)
     if not isinstance(cases, list) or not cases:
-        sys.exit("Use-case library must be a non-empty JSON list.")
+        ap.error("Use-case library must be a non-empty JSON list.")
 
+    if any(not isinstance(case, dict) for case in cases):
+        ap.error("each use case must be an object")
+    plan = [unit(f"case:{i}", "quality_case", i, case_id=str(case.get("id", i))) for i, case in enumerate(cases)]
+    identity = {"model": args.model, "endpoint_kind": "base_url", "endpoint": args.base_url,
+                "format": "openai", "auth": "bearer"}
+    return execute_probe(args, "quality", identity, plan, lambda writer: collect(args, cases, writer))
+
+
+def artifact_names(cases):
+    """Reserve ordinary unique IDs before allocating collision-free fallback names."""
+    ids = [str(case.get("id", i)) for i, case in enumerate(cases)]
+    candidates = [f"{cid}.json" if Path(cid).name == cid and cid not in {".", ".."} else None for cid in ids]
+    keys = [name.casefold() if name else None for name in candidates]
+    reserved = {"_all_answers.json"}
+    reserved.update(key for key in keys if key is not None and keys.count(key) == 1)
+    assigned = set()
+    result = []
+    for index, name in enumerate(candidates):
+        key = keys[index]
+        if key is None or keys.count(key) != 1 or key == "_all_answers.json":
+            name = f"case-{index}.json"
+            suffix = 0
+            while name.casefold() in reserved or name.casefold() in assigned:
+                suffix += 1
+                name = f"case-{index}-{suffix}.json"
+        assigned.add(name.casefold())
+        result.append(name)
+    return result
+
+
+def collect(args, cases, writer):
+    api_key = os.environ.get(args.key_env, "").strip()
+    if not api_key:
+        raise ValueError(f"Env var {args.key_env} is empty or unset — export your key there first.")
+    writer.redact(api_key)
     out_dir = os.path.expanduser(args.output_dir)
     os.makedirs(out_dir, exist_ok=True)
     client = OpenAI(api_key=api_key, base_url=args.base_url, timeout=args.timeout)
 
     print(f"# use-case runner  model={args.model}  cases={len(cases)}  → {out_dir}\n")
     collected = []
+    filenames = artifact_names(cases)
     for idx, case in enumerate(cases):
         cid = str(case.get("id", idx))
+        filename = filenames[idx]
         prompt = case.get("prompt")
         if not prompt:
+            writer.skip_unit(f"case:{idx}")
             print(f"  {cid}: SKIP (no prompt)")
             continue
+        uid = f"case:{idx}"
+        writer.start_unit(uid)
         try:
             resp = client.chat.completions.create(
                 model=args.model,
@@ -101,6 +142,7 @@ def main():
             reasoning = get_reasoning(msg) or ""
             rec = {
                 "id": cid, "prompt": prompt, "answer": answer,
+                "finish_reason": resp.choices[0].finish_reason,
                 "reasoning": reasoning,
                 "rubric": case.get("rubric"), "expected": case.get("expected"),
                 "tags": case.get("tags", []),
@@ -109,11 +151,15 @@ def main():
             print(f"  {cid:24} {len(answer)} chars"
                   f"{'  (+reasoning)' if reasoning else ''}")
         except Exception as e:
-            rec = {"id": cid, "prompt": prompt, "error": f"{type(e).__name__}: {e}"}
-            print(f"  {cid:24} ERROR {type(e).__name__}: {e}")
+            rec = {"id": cid, "prompt": prompt, "error": f"{type(e).__name__}: {writer.error_record(e)['message']}"}
+            writer.fail_unit(uid, e)
+            print(f"  {cid:24} ERROR {type(e).__name__}: {writer.error_record(e)['message']}")
+        if "error" not in rec:
+            writer.finish_unit(uid, {"case_id": cid, "answer_chars": len(answer),
+                                    "reasoning_chars": len(reasoning), "finish_reason": rec["finish_reason"], "artifact": filename})
         collected.append(rec)
         # one file per answer makes it easy for blind-judge agents to read a single case
-        with open(os.path.join(out_dir, f"{cid}.json"), "w") as f:
+        with open(os.path.join(out_dir, filename), "w") as f:
             json.dump(rec, f, ensure_ascii=False, indent=2)
 
     summary_path = os.path.join(out_dir, "_all_answers.json")
@@ -121,6 +167,7 @@ def main():
         json.dump({"model": args.model, "base_url": args.base_url,
                    "collected_at": int(time.time()), "answers": collected}, f,
                   ensure_ascii=False, indent=2)
+    writer.result["summary"] = {"model": args.model, "cases": len(cases), "collected": sum(bool(r.get("answer")) for r in collected)}
     ok = sum(1 for r in collected if "error" not in r)
     print(f"\n# collected {ok}/{len(collected)} answers → {summary_path}")
     print("# next: judge these with independent blind judges (see the skill's quality workflow),")
@@ -128,4 +175,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(cli_main(main))
