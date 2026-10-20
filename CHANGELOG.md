@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **transcript-fixer** (`daymade-audio` v1.50.1 → v1.50.2): Add synthetic same-referent short-form and unknown-token counterexamples that preserve spoken wording unless occurrence-specific evidence supports a correction. Bound native startup reading while retaining conditional contracts and historical evidence in linked references. Change type: bounded correction guidance and lossless loading reorganization.
 - **llm-eval-harness** (v1.7.0): Upgrade machine results to bind the consumed configuration and retained answer bytes to each invocation. Machine-mode quality collection requires a fresh output directory; legacy collection retains directory reuse. Change type: machine-result interface revision and evidence-lifetime repair.
 - **peer-message** (v1.24.0): Bound coordination status output with paged summaries, exact message filters, attention counts and explicit private detail export. Preserve complete programmatic reads and the existing delivery/ownership lifecycle; distinguish owner scope from message filters.
 
