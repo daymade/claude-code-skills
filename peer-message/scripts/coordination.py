@@ -290,12 +290,109 @@ class Board:
         return {"status": "released", "scope": scope, "task": task}
 
     def status(self, scope=None):
+        """Complete legacy programmatic view; the CLI uses status_page."""
         query = "SELECT * FROM owners WHERE released IS NULL"
         rows = self.db.execute(query + (" AND scope=?" if scope else ""), (scope,) if scope else ())
         owners = [self.owner_row(r) for r in rows]
         pending = [self.message_row(r) for r in self.db.execute(
             "SELECT * FROM messages WHERE closed_at IS NULL AND state!='not_sent' ORDER BY created")]
         return {"status": "ready", "owners": owners, "messages": pending,
+                "coverage": "participating local callers only; empty does not mean unoccupied"}
+
+    def status_page(self, scope=None, *, limit=20, offset=0, owners_only=False,
+                    topic=None, participant=None, kind=None, message_id=None, details=False):
+        """Read one consistent page without changing delivery or ownership state."""
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise CoordinationError("status limit must be an integer from 1 to 100")
+        if type(offset) is not int or not 0 <= offset <= 9223372036854775807:
+            raise CoordinationError("status offset must be a nonnegative SQLite integer")
+        for value, name in ((scope, "scope"), (topic, "topic"), (participant, "participant"),
+                            (message_id, "message-id")):
+            if value is not None:
+                nonblank(value, name)
+        if kind is not None and kind not in ("notice", "request", "reply", "state"):
+            raise CoordinationError("invalid status message kind")
+        if owners_only and any(v is not None for v in (topic, participant, kind, message_id)):
+            raise CoordinationError("owners-only cannot be combined with message filters")
+        now = self.clock()
+        owner_where = "released IS NULL" + (" AND scope=?" if scope else "")
+        owner_args = [scope] if scope else []
+        where, values = ["closed_at IS NULL", "state!='not_sent'"], []
+        for column, value in (("topic", topic), ("kind", kind), ("id", message_id)):
+            if value is not None:
+                where.append(f"{column}=?")
+                values.append(value)
+        if participant is not None:
+            where.append("(sender=? OR target=?)")
+            values.extend([participant, participant])
+        message_where = " AND ".join(where)
+        self.db.execute("SAVEPOINT coordination_status_page")
+        try:
+            owner_total = self.db.execute(f"SELECT count(*) FROM owners WHERE {owner_where}", owner_args).fetchone()[0]
+            owner_rows = self.db.execute(
+                f"SELECT * FROM owners WHERE {owner_where} ORDER BY updated DESC,scope,task LIMIT ? OFFSET ?",
+                [*owner_args, limit, offset]).fetchall()
+            counts = self.db.execute(f"""SELECT count(*),
+                count(CASE WHEN kind='request' AND (expires IS NULL OR expires>?) THEN 1 END),
+                count(CASE WHEN state='unknown' THEN 1 END),
+                count(CASE WHEN expires IS NOT NULL AND expires<=? THEN 1 END)
+                FROM messages WHERE {message_where}""", [now, now, *values]).fetchone()
+            message_rows = []
+            if not owners_only:
+                columns = "*" if details else "id,sender,target,topic,kind,created,expires,state,received_at"
+                message_rows = self.db.execute(f"""SELECT {columns} FROM messages WHERE {message_where}
+                    ORDER BY CASE WHEN state='unknown' THEN 0
+                        WHEN kind='request' AND (expires IS NULL OR expires>?) THEN 1
+                        WHEN expires IS NOT NULL AND expires<=? THEN 3 ELSE 2 END,
+                        created DESC,id LIMIT ? OFFSET ?""", [*values, now, now, limit, offset]).fetchall()
+        finally:
+            self.db.execute("RELEASE coordination_status_page")
+
+        def brief(value):
+            clipped = []
+            result = {}
+            for key, item in value.items():
+                if isinstance(item, str) and len(item) > 160:
+                    result[key] = item[:160]
+                    clipped.append(key)
+                else:
+                    result[key] = item
+            if clipped:
+                result["truncated_fields"] = clipped
+            return result
+
+        owners = []
+        for row in owner_rows:
+            owner = self.owner_row(row)
+            if not details:
+                resources = owner.pop("resources")
+                owner = brief(owner)
+                owner["resources"] = [x[:160] for x in resources[:8]]
+                owner["resources_total"] = len(resources)
+                owner["resources_truncated"] = len(resources) > 8 or any(len(x) > 160 for x in resources[:8])
+            owners.append(owner)
+        messages = []
+        for row in message_rows:
+            if details:
+                messages.append(self.message_row(row))
+            else:
+                item = dict(row)
+                item["expired"] = item["expires"] is not None and item["expires"] <= now
+                item["workflow"] = "processing" if item.pop("received_at") is not None else "pending"
+                messages.append(brief(item))
+
+        def page(total, shown, included=True):
+            more = included and offset + shown < total
+            return {"total": total, "shown": shown, "limit": limit, "offset": offset,
+                    "included": included, "truncated": shown < total,
+                    "has_more": more, "next_offset": offset + shown if more else None}
+
+        return {"status": "ready", "format": "details" if details else "summary", "observed_at": now,
+                "owners": owners, "messages": messages,
+                "owner_page": page(owner_total, len(owners)),
+                "message_page": page(counts[0], len(messages), not owners_only),
+                "message_counts": {"active_requests": counts[1], "unknown_sends": counts[2], "expired": counts[3]},
+                "message_scope": "global; --scope filters owners only; use --topic/--participant for messages",
                 "coverage": "participating local callers only; empty does not mean unoccupied"}
 
     def message_row(self, row):

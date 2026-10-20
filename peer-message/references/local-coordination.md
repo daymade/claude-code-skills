@@ -36,6 +36,32 @@ python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord claim --scope '<project>' --tas
   --resource '<shared-repository>:publish'
 ```
 
+`coord status` 默认返回有界摘要，不展开消息 `receipt` 或内部 `slot`。每类最多显示
+`--limit` 条（默认 20，上限 100）；`owner_page` / `message_page` 给出总数、当前偏移、
+显示数、`truncated`、`has_more` 与 `next_offset`。摘要长字段和资源列表另有截断标记，
+不能从截短的身份字段猜收件地址。stdout 超过字节上限时明确失败，改用较小页或导出。
+
+`--scope` 只筛负责人；消息没有可靠的项目 scope，仍明确标为 global。
+只查占用可加 `--owners-only`，消息行省略但总数和待答请求/未知发送计数仍保留。
+查具体事项用 `--topic`，查双方用 `--participant` 的精确已存地址，或用 `--kind request`。
+未知发送和有效 request 优先显示；过期记录不自动关闭或消失。计数只覆盖这些筛选条件，
+消息数量或空登记不能证明无人使用桌面，也不能代替接收侧送达证据。
+省略筛选参数表示不筛选；显式传空白的 scope/topic/participant/message-id 则报错，不扩大查询范围。
+
+```bash
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord status --scope '<project>' --owners-only
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord status --topic '<project>:publish-window' --limit 10
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord status --topic '<project>:publish-window' --limit 10 --offset 10
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord status --message-id '<exact-message-id>' \
+  --details --output '<new-private-json-path>'
+```
+
+完整选中行和回执通过 `--details --output` 显式导出；文件必须是新路径，权限为 `0600`，
+stdout 只回文件定位、大小和分页信息，不覆盖旧证据。普通 `--output` 则导出摘要页。
+保留导出原件，按需要读取字段，不把整个大文件再次灌入上下文。`--offset` 是实时视图的
+页偏移，不是冻结快照；并发变化时重新定位事项或精确 ID，不能把拼接多页当成完整静态盘点。
+原 Python `Board.status()` 完整读取接口保留；本变化只作用于 CLI 展示，不改变协调生命周期。
+
 `registered` 表示记录本人参与范围；`conflict` 返回已登记负责人和待协调原因，退出 3。
 直接定位该负责人，不枚举全机再逐个询问。相交资源也会阻止另一负责人登记。
 首次使用的空表只表示尚无参与登记，仍核对实际写者；登记是声明，不是资源锁、

@@ -1711,10 +1711,29 @@ def managed_send(args, target, body, sender, reply_to):
 
 
 def cmd_coord(args):
+    if args.operation == "status" and args.details and args.output is None:
+        raise PeerError("coord status --details requires --output to a new file")
     board = coordination.Board(args.state_dir)
     try:
         if args.operation == "status":
-            result = board.status(args.scope)
+            result = board.status_page(args.scope, limit=args.limit, offset=args.offset,
+                                      owners_only=args.owners_only, topic=args.topic,
+                                      participant=args.participant, kind=args.kind,
+                                      message_id=args.message_id, details=args.details)
+            rendered = json.dumps(result, ensure_ascii=False, sort_keys=True) + "\n"
+            size = len(rendered.encode("utf-8"))
+            if args.output is not None:
+                fd = os.open(args.output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(fd, "w", encoding="utf-8") as stream:
+                    stream.write(rendered)
+                print(json.dumps({"output": str(args.output.resolve()), "bytes": size,
+                                  "format": result["format"], "owner_page": result["owner_page"],
+                                  "message_page": result["message_page"]}, ensure_ascii=False))
+            elif size > 65536:
+                raise PeerError("coord status exceeds 65536 UTF-8 bytes; lower --limit or export with --output")
+            else:
+                print(rendered, end="")
+            return 0
         else:
             actor = current_address(args.claude_home, args.codex_home)
             # prepare still resolves the typed actor. The other operations compare
@@ -1812,6 +1831,15 @@ def build_parser() -> argparse.ArgumentParser:
     operations = coord_parser.add_subparsers(dest="operation", required=True)
     status_parser = operations.add_parser("status")
     status_parser.add_argument("--scope")
+    status_parser.add_argument("--owners-only", action="store_true", help="omit message rows; counts remain visible")
+    status_parser.add_argument("--limit", type=int, default=20, help="rows per owner/message page, 1..100 (default 20)")
+    status_parser.add_argument("--offset", type=int, default=0, help="nonnegative live-page offset (default 0)")
+    status_parser.add_argument("--topic", help="exact message topic; independent of owner scope")
+    status_parser.add_argument("--participant", help="exact stored sender or target address")
+    status_parser.add_argument("--kind", choices=("request", "notice", "reply", "state"))
+    status_parser.add_argument("--message-id", help="one exact open coordination message id")
+    status_parser.add_argument("--details", action="store_true", help="full selected rows and receipts; requires --output")
+    status_parser.add_argument("--output", type=Path, help="export this page to a new private file; stdout returns a small receipt")
     for operation in ("claim", "release"):
         entry = operations.add_parser(operation)
         entry.add_argument("--scope", required=True)
