@@ -650,12 +650,27 @@ not do for you:
   contain no links, or you searched the wrong place. (Files whose links are all in inline
   code or fenced blocks legitimately total 0 — lychee skips both, correctly.)
 
-  `lychee` (`brew install lychee` / `cargo install lychee`) parses Markdown properly, which
-  a shell pipeline does not: angle-bracket links `[x](<my file.md>)`, titled links
+  `lychee` (`brew install lychee` / `cargo install lychee`) handles Markdown link forms
+  that a shell pipeline does not: angle-bracket links `[x](<my file.md>)`, titled links
   `[x](y.md "Title")`, nested parens, reference-style `[x][ref]`, and links inside fenced
   code blocks all break a regex-and-`test -e` approach, in both directions — silently
   missing real breakage and falsely flagging valid links. If no link checker is available,
   say the outbound check was not run rather than substituting a hand-rolled one.
+
+  A checker validates only the links and fragments it parses. Its heading, anchor and
+  autolink rules may differ from the intended reader's host. For example, an emoji heading
+  containing a variation selector (VS16), or a bare email beside punctuation, can produce
+  a checker error even when the host's permalink or `mailto:` target works. These are
+  parser-compatibility examples, not a portable heading-slug algorithm.
+
+  Before calling a reported link broken or changing it, inspect the **exact Markdown in
+  the intended reader host**: follow the rendered heading/permalink or inspect the email's
+  actual `mailto:` target. Classify a confirmed missing or mismatched target as a real
+  broken link; classify a working host target with a checker error as parser portability.
+  If that host cannot be checked, keep reader resolution unverified rather than inferring
+  it from the checker. For a compatibility repair, preserve the visible label and contact
+  identity, then verify both the checker result and the actual reader target. Do not
+  remove a useful entry or change its intended destination merely to silence a diagnostic.
 
 ### Preservation check (Mode 2)
 
