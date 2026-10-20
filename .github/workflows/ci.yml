@@ -93,6 +93,11 @@ jobs:
       - name: Fixed skill-creator command entry
         run: python3 -m unittest discover -s daymade-skill/skill-creator/tests -p test_creator_entry.py
 
+      - name: Immutable review rebind and persisted receipt compatibility
+        run: |
+          python3 -m unittest discover -s daymade-skill/skill-creator/tests -p test_release_rebind.py
+          python3 -m unittest discover -s daymade-skill/skill-creator/tests -p test_persisted_receipt_roundtrip.py
+
       - name: Selected inputs and cumulative disk budget
         working-directory: daymade-skill/skill-creator
         run: python3 -m unittest tests.test_materialize

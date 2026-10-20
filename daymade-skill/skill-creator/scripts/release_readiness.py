@@ -4,11 +4,18 @@ Evidence is author-supplied; this checks persistence and identity, not review qu
 reviewer independence or private-repository visibility. Receipts stay in .git.
 """
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
 import re
 import subprocess
+import tempfile
+
+try:
+    from .release_distribution import dependencies, distribution
+except ImportError:
+    from release_distribution import dependencies, distribution
 
 
 class ReleaseError(ValueError):
@@ -84,7 +91,41 @@ def evidence(review_repo, review_commit, review_path, candidate, paths):
         raise ReleaseError("review metadata is missing or not passed")
     if data.get("candidate") != candidate or scope(data.get("skill_paths")) != paths:
         raise ReleaseError("review does not cover this candidate and exact skill scope")
-    return dict(review_repo=str(root), review_commit=review_commit, review_path=review_path, review_blob=blob)
+    result = dict(review_repo=str(root), review_commit=review_commit, review_path=review_path, review_blob=blob)
+    if "rebind_dependencies" in data:
+        result["rebind_dependencies"] = dependencies(data["rebind_dependencies"], relative)
+    return result
+
+
+def source_identity(repo):
+    return dict(common_dir=str(receipt_path(repo, "0" * 40).parent.parent),
+                origin=git(repo, "remote", "get-url", "origin"))
+
+
+def distribution_identity(repo, candidate, paths, dependency_paths):
+    return distribution(repo, candidate, paths, dependency_paths, git, relative)
+
+
+def integrated_main(repo, candidate, base):
+    identity(repo, base)
+    if git(repo, "rev-parse", "refs/remotes/origin/main") != base:
+        raise ReleaseError("base is not current fetched origin/main; fetch and integrate main first")
+    if git(repo, "merge-base", base, candidate) != base:
+        raise ReleaseError("candidate does not include current fetched main")
+
+
+def validate_contract(repo, candidate, paths, record, data):
+    contract = record.get("rebind_contract")
+    expected_keys = {"source_identity", "distribution"}
+    if not isinstance(contract, dict) or set(contract) != expected_keys:
+        raise ReleaseError("original receipt has no complete rebind contract; attest a reviewed dependency declaration first")
+    if contract["source_identity"] != source_identity(repo):
+        raise ReleaseError("rebind source identity changed")
+    dependency_paths = dependencies(data.get("rebind_dependencies"), relative)
+    expected = distribution_identity(repo, candidate, paths, dependency_paths)
+    if contract["distribution"] != expected:
+        raise ReleaseError("original distribution or dependency scope changed")
+    return expected
 
 
 def _parse_review_block(text: str):
@@ -125,6 +166,10 @@ def attest(repo, candidate, paths, review_repo=None, review_commit=None, review_
         if receipt_path(repo, candidate).parent == receipt_path(review_repo, candidate).parent:
             raise ReleaseError("review archive must be outside the published repository")
         record.update(evidence(review_repo, review_commit, review_path, candidate, paths))
+        if "rebind_dependencies" in record:
+            record["rebind_contract"] = dict(
+                source_identity=source_identity(repo),
+                distribution=distribution_identity(repo, candidate, paths, record["rebind_dependencies"]))
     target = receipt_path(repo, candidate)
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp = target.with_suffix(".tmp")
@@ -136,8 +181,10 @@ def attest(repo, candidate, paths, review_repo=None, review_commit=None, review_
 def verify(repo, candidate, paths):
     identity(repo, candidate)
     record = json.loads(receipt_path(repo, candidate).read_text())
-    if not isinstance(record, dict) or record.get("schema") != 1 or record.get("candidate") != candidate or scope(record.get("skill_paths")) != scope(paths):
+    if not isinstance(record, dict) or record.get("schema") not in (1, 2) or record.get("candidate") != candidate or scope(record.get("skill_paths")) != scope(paths):
         raise ReleaseError("receipt does not cover the exact candidate and skill scope")
+    if record["schema"] == 2:
+        return verify_rebind(repo, candidate, scope(paths), record)
     if "review_not_required" in record:
         if record["review_not_required"] not in ("typo-only", "format-only") or not isinstance(record.get("reason"), str) or not record["reason"].strip():
             raise ReleaseError("invalid exemption")
@@ -147,12 +194,74 @@ def verify(repo, candidate, paths):
         data = evidence(record.get("review_repo"), record.get("review_commit"), record.get("review_path"), candidate, scope(paths))
         if data["review_blob"] != record.get("review_blob"):
             raise ReleaseError("review blob changed")
+        if "rebind_contract" in record or "rebind_dependencies" in data:
+            validate_contract(repo, candidate, scope(paths), record, data)
     return record
+
+
+def rebind_record(repo, candidate, paths, original_candidate, base):
+    identity(repo, candidate)
+    identity(repo, original_candidate)
+    paths = scope(paths)
+    if candidate == original_candidate:
+        raise ReleaseError("rebind requires a different integrated candidate")
+    integrated_main(repo, candidate, base)
+    if git(repo, "merge-base", original_candidate, candidate) != original_candidate:
+        raise ReleaseError("original candidate must remain an ancestor; rebase or rewrite needs a new review")
+    original = verify(repo, original_candidate, paths)
+    if original["schema"] != 1 or "review_not_required" in original:
+        raise ReleaseError("rebind requires the original independent review, not an exemption or another rebind")
+    data = evidence(original.get("review_repo"), original.get("review_commit"),
+                    original.get("review_path"), original_candidate, paths)
+    before = validate_contract(repo, original_candidate, paths, original, data)
+    after = distribution_identity(repo, candidate, paths, before["dependencies"])
+    if before != after:
+        raise ReleaseError("distributed plugin or reviewed dependency changed; review the changed content")
+    digest = hashlib.sha256(receipt_path(repo, original_candidate).read_bytes()).hexdigest()
+    return dict(schema=2, candidate=candidate, skill_paths=paths,
+                original_candidate=original_candidate, original_receipt_sha256=digest,
+                base=base, distribution=after, source_identity=source_identity(repo))
+
+
+def verify_rebind(repo, candidate, paths, record):
+    if set(record) != {"schema", "candidate", "skill_paths", "original_candidate",
+                       "original_receipt_sha256", "base", "distribution", "source_identity"}:
+        raise ReleaseError("incomplete or unsupported rebind receipt")
+    # Re-evaluate current main rather than trusting the base observed at creation.
+    current_base = git(repo, "rev-parse", "refs/remotes/origin/main")
+    expected = rebind_record(repo, candidate, paths, record["original_candidate"], current_base)
+    identity(repo, record["base"])
+    if git(repo, "merge-base", record["base"], candidate) != record["base"]:
+        raise ReleaseError("recorded integration base is not included")
+    expected["base"] = record["base"]
+    if record != expected:
+        raise ReleaseError("rebind evidence does not match immutable content and original review")
+    return record
+
+
+def rebind(repo, candidate, paths, original_candidate, base):
+    record = rebind_record(repo, candidate, paths, original_candidate, base)
+    target = receipt_path(repo, candidate)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    content = json.dumps(record, indent=2) + "\n"
+    if target.exists():
+        if target.is_symlink() or target.read_text() != content:
+            raise ReleaseError("candidate receipt already exists; original evidence was preserved")
+        return target
+    # Exclusive publication avoids overwriting any concurrent attestation.
+    with tempfile.NamedTemporaryFile(mode="w", dir=target.parent, delete=False) as output:
+        temporary = Path(output.name)
+        output.write(content)
+    try:
+        os.link(temporary, target)
+    finally:
+        temporary.unlink()
+    return target
 
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("command", choices=("attest", "verify"))
+    p.add_argument("command", choices=("attest", "verify", "rebind"))
     p.add_argument("--repo", required=True, type=Path)
     p.add_argument("--candidate", required=True)
     p.add_argument("--skill-path", required=True, action="append")
@@ -161,16 +270,32 @@ def main():
     p.add_argument("--review-path")
     p.add_argument("--review-not-required", choices=("typo-only", "format-only"))
     p.add_argument("--reason")
+    p.add_argument("--from-candidate", help="full original independently reviewed commit for rebind")
+    p.add_argument("--base", help="full fetched origin/main commit for rebind")
     a = p.parse_args()
     try:
         if a.command == "attest":
             result = attest(a.repo, a.candidate, a.skill_path, a.review_repo, a.review_commit,
                             a.review_path, a.review_not_required, a.reason)
+        elif a.command == "rebind":
+            if any(value is not None for value in (a.review_repo, a.review_commit, a.review_path,
+                                                   a.review_not_required, a.reason)):
+                raise ReleaseError("rebind reuses original evidence; do not supply replacement review arguments")
+            result = rebind(a.repo, a.candidate, a.skill_path, a.from_candidate, a.base)
         else:
             result = verify(a.repo, a.candidate, a.skill_path)
+        if isinstance(result, dict) and result.get("schema") == 2:
+            result = dict(schema=2, candidate=result["candidate"],
+                          original_candidate=result["original_candidate"],
+                          skill_paths=result["skill_paths"],
+                          examined_files=result["distribution"]["examined_files"],
+                          receipt_path=str(receipt_path(a.repo, a.candidate)))
         print(f"release readiness OK: {result}")
     except (ValueError, OSError, TypeError, IndexError) as e:
-        p.exit(2, f"release readiness blocked: {e}; commit current review evidence, then attest this exact candidate\n")
+        recovery = ("preserve the original review; use normal review/attest if equivalence is unavailable"
+                    if a.command == "rebind" else
+                    "commit current review evidence, then attest this exact candidate")
+        p.exit(2, f"release readiness blocked: {e}; {recovery}\n")
 
 
 if __name__ == "__main__":
