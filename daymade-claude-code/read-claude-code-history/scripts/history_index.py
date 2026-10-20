@@ -405,6 +405,8 @@ def _connect(
     connection = sqlite3.connect(uri, uri=readonly)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys=ON")
+    if readonly:
+        connection.execute("PRAGMA temp_store=MEMORY")
     try:
         connection.enable_load_extension(True)
         connection.load_extension(str(runtime.library))

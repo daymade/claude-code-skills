@@ -782,6 +782,67 @@ class HistoryIndexTests(unittest.TestCase):
         readonly.close()
         self.assertEqual(opened.resolve(), target.resolve())
 
+    @contextmanager
+    def connection_without_native_extensions(self):
+        real_connect = sqlite3.connect
+
+        class Connection(sqlite3.Connection):
+            def enable_load_extension(self, _enabled):
+                pass
+
+            def load_extension(self, _library):
+                pass
+
+            def execute(self, sql, parameters=()):
+                if sql == "SELECT jieba_dict(?)":
+                    return super().execute("SELECT 1")
+                return super().execute(sql, parameters)
+
+        runtime = types.SimpleNamespace(
+            library=self.root / "test-library", dictionary=self.root / "test-dictionary"
+        )
+        with mock.patch.object(history_index, "find_simple_runtime", return_value=runtime), mock.patch.object(
+            history_index.sqlite3, "connect",
+            side_effect=lambda *args, **kwargs: real_connect(*args, factory=Connection, **kwargs),
+        ):
+            yield
+
+    def test_readonly_connection_keeps_temp_sorts_in_memory_without_index_writes(self) -> None:
+        connection = sqlite3.connect(self.db)
+        connection.execute("CREATE TABLE records(id INTEGER PRIMARY KEY, semantic_text TEXT)")
+        connection.execute("INSERT INTO records VALUES(1, 'original')")
+        connection.commit()
+        connection.close()
+        before = self.db.read_bytes()
+        with self.connection_without_native_extensions():
+            readonly = history_index._connect(self.db, readonly=True)
+            try:
+                self.assertEqual(readonly.execute("PRAGMA temp_store").fetchone()[0], 2)
+                self.assertEqual(readonly.execute("SELECT semantic_text FROM records").fetchone()[0], "original")
+                with self.assertRaisesRegex(sqlite3.OperationalError, "readonly"):
+                    readonly.execute("INSERT INTO records VALUES(2, 'must not persist')")
+            finally:
+                readonly.close()
+        self.assertEqual(self.db.read_bytes(), before)
+        self.assertFalse(Path(f"{self.db}-wal").exists())
+        self.assertFalse(Path(f"{self.db}-shm").exists())
+
+    def test_readonly_connection_does_not_create_a_missing_index(self) -> None:
+        with self.connection_without_native_extensions():
+            with self.assertRaisesRegex(history_index.IndexError, "Recall index does not exist"):
+                history_index._connect(self.db, readonly=True)
+        self.assertFalse(self.db.exists())
+
+    def test_readonly_connection_still_rejects_unsupported_schema_without_migration(self) -> None:
+        connection = sqlite3.connect(self.db)
+        connection.execute("PRAGMA user_version=999")
+        connection.close()
+        before = self.db.read_bytes()
+        with self.connection_without_native_extensions():
+            with self.assertRaisesRegex(history_index.IndexError, "Index schema version is 999"):
+                history_index.index_status(self.db, simple_root=None, inspect_sources=False, scope=None)
+        self.assertEqual(self.db.read_bytes(), before)
+
     def test_utf8_stdio_reconfiguration_prevents_partial_cjk_output(self) -> None:
         raw = io.BytesIO()
         stream = io.TextIOWrapper(raw, encoding="cp1252", errors="strict")
