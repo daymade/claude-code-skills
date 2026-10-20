@@ -47,24 +47,35 @@ Installation clues:
   - `chromium-*`
   - `chromium_headless_shell-*`
 
-Default cache candidates checked by the diagnostic:
+With no effective browser-path override, inspect only the current platform's root:
 
-- `~/Library/Caches/ms-playwright/`
-- `~/.cache/ms-playwright/`
-- `%LOCALAPPDATA%\ms-playwright\` (Windows)
+- On Linux, use `XDG_CACHE_HOME/ms-playwright` when `XDG_CACHE_HOME` is non-empty;
+  otherwise use `~/.cache/ms-playwright`.
+- On macOS, use `~/Library/Caches/ms-playwright`; ignore foreign platform settings.
+- On Windows, use `LOCALAPPDATA/ms-playwright` when `LOCALAPPDATA` is non-empty;
+  otherwise use `~/AppData/Local/ms-playwright`.
+
+Read `XDG_CACHE_HOME` and `LOCALAPPDATA` directly, without npm-key fallbacks. Treat
+their value `0` as an ordinary path. On other platforms, report `unknown` unless
+an explicit browser-path override selects a root; do not borrow another
+platform's populated cache.
 
 Treat directory presence as a cache-location observation. Verify compatible
 browser versions and a working launch by running the needed browser-backed fetch
 and inspecting its saved content.
 
-For an explicit `PLAYWRIGHT_BROWSERS_PATH`, inspect only that root. Resolve a
-relative value lexically against `INIT_CWD`, or the current directory when it is
-unset or empty; preserve literal `~` and whitespace. Read each environment key
+For an explicit `PLAYWRIGHT_BROWSERS_PATH`, inspect only that root. Read each
+browser-path or `INIT_CWD` environment key
 before `npm_config_<lowercase-key>` and `npm_package_config_<lowercase-key>`;
 let a present empty value mask the lower-priority keys. With an empty or absent
-effective browser-path value, retain the default cache candidates above.
+effective browser-path value, select the platform default above.
 
-For the exact value `0`, expect `unknown` from the diagnostic. Locate the active
+After selecting either a default or overridden root, resolve a relative path
+lexically against `INIT_CWD`, or the current directory when it is unset or empty.
+Preserve literal `~` and whitespace; normalize `..` without following symlinks.
+
+For the exact effective `PLAYWRIGHT_BROWSERS_PATH` value `0`, expect `unknown`
+from the diagnostic. Locate the active
 Playwright or Patchright provider's `.local-browsers` directory separately; this
 helper does not discover hermetic provider locations. Do not infer a missing
 runtime from `unknown` or substitute a populated default cache.

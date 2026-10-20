@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise browser cache reporting through the diagnostic CLI, without Scrapling."""
+"""Exercise CLI cache reporting with synthetic platform/cache fixtures."""
 
 import os
 from pathlib import Path
@@ -21,8 +21,13 @@ class BrowserCacheDiagnosisTests(unittest.TestCase):
         self.home = self.root / "home"
         self.home.mkdir()
         self.local_appdata = self.root / "AppData" / "Local"
+        self.platform = sys.platform
         self.env = os.environ.copy()
-        for key in ("LOCALAPPDATA", "PLAYWRIGHT_BROWSERS_PATH"):
+        for key in (
+            "LOCALAPPDATA", "XDG_CACHE_HOME", "PLAYWRIGHT_BROWSERS_PATH", "INIT_CWD",
+            "npm_config_playwright_browsers_path", "npm_package_config_playwright_browsers_path",
+            "npm_config_init_cwd", "npm_package_config_init_cwd",
+        ):
             self.env.pop(key, None)
         self.env.update({
             "HOME": str(self.home),
@@ -36,7 +41,13 @@ class BrowserCacheDiagnosisTests(unittest.TestCase):
 
     def diagnose(self, chromium, headless_shell, cache=None):
         result = subprocess.run(
-            [sys.executable, str(SCRIPT)],
+            [sys.executable, "-c",
+             "import runpy,sys,types; args=sys.argv[1:]; "
+             "module=runpy.run_path(args[0]); sys.argv=[args[0]]; "
+             "module['detect_browser_cache'].__globals__['sys']="
+             "types.SimpleNamespace(platform=args[1]); "
+             "raise SystemExit(module['main']())",
+             str(SCRIPT), self.platform],
             cwd=self.root,
             env=self.env,
             capture_output=True,
@@ -45,6 +56,7 @@ class BrowserCacheDiagnosisTests(unittest.TestCase):
         )
         # A missing CLI must still report the independently discovered browser runtime.
         self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertEqual(result.stderr, "")
         self.assertIn("CLI\n---\nstatus: missing\n", result.stdout)
         self.assertIn("Browser Runtime\n---------------\n", result.stdout)
         for name, present in (("chromium", chromium), ("chrome-headless-shell", headless_shell)):
@@ -59,12 +71,14 @@ class BrowserCacheDiagnosisTests(unittest.TestCase):
                     self.assertIn(f"  - {cache / browser}\n", result.stdout)
 
     def test_windows_default_cache_present(self):
+        self.platform = "win32"
         self.env["LOCALAPPDATA"] = str(self.local_appdata)
         cache = self.local_appdata / "ms-playwright"
         self.install_cache(cache)
         self.diagnose(True, True, cache)
 
     def test_windows_default_cache_absent_or_empty(self):
+        self.platform = "win32"
         self.env["LOCALAPPDATA"] = str(self.local_appdata)
         cache = self.local_appdata / "ms-playwright"
         self.diagnose(False, False)
@@ -72,6 +86,7 @@ class BrowserCacheDiagnosisTests(unittest.TestCase):
         self.diagnose(False, False)
 
     def test_windows_partial_cache_still_reports_missing_browser(self):
+        self.platform = "win32"
         self.env["LOCALAPPDATA"] = str(self.local_appdata)
         cache = self.local_appdata / "ms-playwright"
         for index in range(2):
@@ -81,6 +96,7 @@ class BrowserCacheDiagnosisTests(unittest.TestCase):
                 (cache / BROWSERS[index]).rmdir()
 
     def test_unset_or_empty_localappdata_does_not_scan_working_directory(self):
+        self.platform = "win32"
         self.install_cache(self.root / "ms-playwright")
         for value in (None, ""):
             with self.subTest(localappdata=value):
@@ -91,9 +107,11 @@ class BrowserCacheDiagnosisTests(unittest.TestCase):
                 self.diagnose(False, False)
 
     def test_macos_default_cache_preserved(self):
+        self.platform = "darwin"
         self.check_existing_default(self.home / "Library" / "Caches" / "ms-playwright")
 
     def test_linux_default_cache_preserved(self):
+        self.platform = "linux"
         self.check_existing_default(self.home / ".cache" / "ms-playwright")
 
     def check_existing_default(self, cache):

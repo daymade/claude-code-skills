@@ -4,9 +4,11 @@
 import contextlib
 import importlib.util
 import io
+import ntpath
 import os
 from pathlib import Path
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -28,6 +30,7 @@ class CacheSelectionTests(unittest.TestCase):
         self.populate(self.default)
         self.stack = contextlib.ExitStack()
         self.addCleanup(self.stack.close)
+        self.stack.enter_context(patch.object(DIAGNOSE.sys, "platform", "linux"))
         self.stack.enter_context(patch.object(DIAGNOSE.Path, "home", return_value=self.home))
         self.stack.enter_context(patch.object(DIAGNOSE.os, "getcwd", return_value=str(self.root)))
 
@@ -114,15 +117,178 @@ class CacheSelectionTests(unittest.TestCase):
                 self.assertNotIn("missing", output.getvalue())
                 self.assertNotIn("scrapling install", output.getvalue())
 
-    def test_default_roots_and_windows_localappdata_are_preserved(self):
-        macos = self.home / "Library" / "Caches" / "ms-playwright"
-        windows = self.root / "AppData" / "Local" / "ms-playwright"
-        self.populate(macos)
-        self.populate(windows)
-        with patch.dict(os.environ, {"LOCALAPPDATA": str(windows.parent)}, clear=True):
-            observed = DIAGNOSE.detect_browser_cache()
-        for browser, actual in zip(BROWSERS, observed):
-            self.assertEqual(actual, [str(root / browser) for root in (macos, self.default, windows)])
+    def test_platform_default_selects_one_root_and_ignores_stale_foreign_caches(self):
+        for platform in ("linux", "darwin", "win32"):
+            with self.subTest(platform=platform):
+                home = self.root / platform / "home"
+                linux = home / ".cache" / "ms-playwright"
+                macos = home / "Library" / "Caches" / "ms-playwright"
+                windows = home / "AppData" / "Local" / "ms-playwright"
+                selected = {"linux": linux, "darwin": macos, "win32": windows}[platform]
+                for stale in (linux, macos, windows):
+                    if stale != selected:
+                        self.populate(stale)
+                foreign = self.root / platform / "foreign-config"
+                self.populate(foreign / "ms-playwright")
+                env = {"LOCALAPPDATA": str(foreign)} if platform == "linux" else {"XDG_CACHE_HOME": str(foreign)}
+                if platform == "darwin":
+                    env["LOCALAPPDATA"] = str(foreign)
+                with patch.object(DIAGNOSE.sys, "platform", platform), patch.object(DIAGNOSE.Path, "home", return_value=home):
+                    with patch.dict(os.environ, env, clear=True):
+                        self.assertEqual(DIAGNOSE.detect_browser_cache(), ([], []))
+                    self.populate(selected)
+                    self.assert_selected(env, selected)
+
+    def test_linux_xdg_absent_or_empty_uses_home_and_ignores_npm_keys(self):
+        for env in (
+            {},
+            {"XDG_CACHE_HOME": ""},
+            {"npm_config_xdg_cache_home": "wrong"},
+            {"XDG_CACHE_HOME": "", "npm_package_config_xdg_cache_home": "wrong"},
+        ):
+            with self.subTest(env=env):
+                self.assert_selected(env, self.default)
+
+    def test_explicit_platform_cache_does_not_borrow_populated_home_defaults(self):
+        self.populate(self.home / "AppData" / "Local" / "ms-playwright")
+        for platform, key in (("linux", "XDG_CACHE_HOME"), ("win32", "LOCALAPPDATA")):
+            selected = self.root / platform / "selected" / "ms-playwright"
+            env = {key: str(selected.parent)}
+            with self.subTest(platform=platform), patch.object(DIAGNOSE.sys, "platform", platform):
+                with patch.dict(os.environ, env, clear=True):
+                    self.assertEqual(DIAGNOSE.detect_browser_cache(), ([], []))
+                self.populate(selected)
+                self.assert_selected(env, selected)
+
+    def test_windows_localappdata_absent_or_empty_uses_home_and_ignores_npm_keys(self):
+        selected = self.home / "AppData" / "Local" / "ms-playwright"
+        self.populate(selected)
+        with patch.object(DIAGNOSE.sys, "platform", "win32"):
+            for env in (
+                {},
+                {"LOCALAPPDATA": ""},
+                {"npm_config_localappdata": "wrong"},
+                {"LOCALAPPDATA": "", "npm_package_config_localappdata": "wrong"},
+            ):
+                with self.subTest(env=env):
+                    self.assert_selected(env, selected)
+
+    def test_platform_environment_paths_use_lexical_normalization_and_init_cwd(self):
+        for platform, key in (("linux", "XDG_CACHE_HOME"), ("win32", "LOCALAPPDATA")):
+            with patch.object(DIAGNOSE.sys, "platform", platform):
+                cases = [
+                    ({key: str(self.root / "absolute")}, self.root / "absolute"),
+                    ({key: "relative"}, self.root / "relative"),
+                    ({key: "relative", "INIT_CWD": "nested/init"}, self.root / "nested/init/relative"),
+                    ({key: "relative", "INIT_CWD": "", "npm_config_init_cwd": "wrong"}, self.root / "relative"),
+                    ({key: "relative", "npm_config_init_cwd": "npm-init"}, self.root / "npm-init/relative"),
+                    ({key: "relative", "npm_package_config_init_cwd": "package-init"}, self.root / "package-init/relative"),
+                    ({key: "~/literal"}, self.root / "~/literal"),
+                    ({key: "  "}, self.root / "  "),
+                    ({key: "0"}, self.root / "0"),
+                ]
+                for env, base in cases:
+                    with self.subTest(platform=platform, env=env):
+                        selected = base / "ms-playwright"
+                        self.populate(selected)
+                        self.assert_selected(env, selected)
+
+    def test_default_relative_symlink_dotdot_does_not_follow_link(self):
+        outside = self.root / "outside" / "nested"
+        outside.mkdir(parents=True)
+        link = self.root / "link"
+        try:
+            link.symlink_to(outside, target_is_directory=True)
+        except (NotImplementedError, OSError) as error:
+            self.skipTest("directory symlink unavailable: " + str(error))
+        selected = self.root / "cache" / "ms-playwright"
+        self.populate(selected)
+        self.populate(self.root / "outside" / "cache" / "ms-playwright")
+        for platform, key in (("linux", "XDG_CACHE_HOME"), ("win32", "LOCALAPPDATA")):
+            with self.subTest(platform=platform), patch.object(DIAGNOSE.sys, "platform", platform):
+                self.assert_selected({key: "link/../cache"}, selected)
+
+    def test_unsupported_platform_is_unknown_without_an_effective_override(self):
+        with patch.object(DIAGNOSE.sys, "platform", "unsupported-os"):
+            for env in ({}, {"PLAYWRIGHT_BROWSERS_PATH": "", "npm_config_playwright_browsers_path": "ignored"}):
+                with self.subTest(env=env), patch.dict(os.environ, env, clear=True):
+                    with self.assertRaisesRegex(DIAGNOSE.CacheLocationUnknown, "unsupported platform: unsupported-os"):
+                        DIAGNOSE.detect_browser_cache()
+                    output = io.StringIO()
+                    with contextlib.redirect_stdout(output):
+                        DIAGNOSE.diagnose_browsers()
+                    self.assertIn("chromium: unknown\n", output.getvalue())
+                    self.assertIn("unsupported platform: unsupported-os", output.getvalue())
+                    self.assertNotIn("hermetic", output.getvalue())
+                    self.assertNotIn("scrapling install", output.getvalue())
+            selected = self.root / "explicit"
+            self.populate(selected)
+            for key in ("PLAYWRIGHT_BROWSERS_PATH", "npm_config_playwright_browsers_path", "npm_package_config_playwright_browsers_path"):
+                with self.subTest(key=key):
+                    self.assert_selected({key: str(selected)}, selected)
+
+
+class WindowsPathSemanticsTests(unittest.TestCase):
+    def assert_windows_root(self, env, expected):
+        cwd = r"C:\work"
+        observed_roots = []
+
+        class WindowsCachePath:
+            def __init__(self, value):
+                self.value = str(value)
+
+            def __str__(self):
+                return self.value
+
+            def exists(self):
+                return True
+
+            def glob(self, pattern):
+                observed_roots.append(self.value)
+                browser = BROWSERS[0] if pattern == "chromium-*" else BROWSERS[1]
+                return [WindowsCachePath(ntpath.join(self.value, browser))]
+
+        local_os = SimpleNamespace(path=ntpath, environ=env, getcwd=lambda: cwd)
+        local_sys = SimpleNamespace(platform="win32")
+        with patch.object(DIAGNOSE, "os", local_os), patch.object(DIAGNOSE, "sys", local_sys), patch.object(DIAGNOSE, "Path", WindowsCachePath):
+            # ntpath's POSIX fallback must use the simulated Windows cwd too.
+            with patch.object(os, "getcwd", return_value=cwd):
+                result = DIAGNOSE.detect_browser_cache()
+        self.assertEqual(observed_roots, [expected, expected])
+        self.assertEqual(result, tuple([ntpath.join(expected, browser)] for browser in BROWSERS))
+
+    def test_windows_rooted_absolute_relative_and_unc_selection(self):
+        cases = [
+            (r"\browser-cache", r"\browser-cache\ms-playwright"),
+            ("/browser-cache", r"\browser-cache\ms-playwright"),
+            (r"C:\browser-cache", r"C:\browser-cache\ms-playwright"),
+            ("browser-cache", r"D:\npm-start\browser-cache\ms-playwright"),
+            (r"\\server\share\cache", r"\\server\share\cache\ms-playwright"),
+        ]
+        for value, expected in cases:
+            with self.subTest(localappdata=value):
+                self.assert_windows_root({"LOCALAPPDATA": value, "INIT_CWD": r"D:\npm-start"}, expected)
+        for value, expected in (
+            (r"\browser-cache", r"\browser-cache"),
+            ("/browser-cache", r"\browser-cache"),
+            (r"C:\browser-cache", r"C:\browser-cache"),
+            ("browser-cache", r"D:\npm-start\browser-cache"),
+            (r"\\server\share\cache", r"\\server\share\cache"),
+        ):
+            with self.subTest(override=value):
+                self.assert_windows_root({"PLAYWRIGHT_BROWSERS_PATH": value, "INIT_CWD": r"D:\npm-start"}, expected)
+
+    @unittest.skipIf(os.name == "nt", "Synthetic cross-drive cwd requires ntpath's POSIX fallback")
+    def test_drive_relative_cross_drive_uses_simulated_current_drive(self):
+        # Native Windows per-drive cwd is outside this synthetic filesystem fixture.
+        self.assert_windows_root(
+            {"LOCALAPPDATA": r"C:browser-cache", "INIT_CWD": r"D:\npm-start"},
+            r"C:\work\browser-cache\ms-playwright",
+        )
+        self.assert_windows_root(
+            {"PLAYWRIGHT_BROWSERS_PATH": r"C:browser-cache", "INIT_CWD": r"D:\npm-start"},
+            r"C:\work\browser-cache",
+        )
 
 
 class SmokeOutputTests(unittest.TestCase):
