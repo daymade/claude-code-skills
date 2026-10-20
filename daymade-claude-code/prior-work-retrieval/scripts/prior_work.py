@@ -1172,13 +1172,19 @@ def mark_requirement(
 
 
 def set_prompt_scope(
-    manifest: dict[str, Any], session_id: str, *, active: bool
+    manifest: dict[str, Any], session_id: str, *, active: bool,
+    expected_requirement: dict[str, Any] | None = None,
+    reclassification: dict[str, Any] | None = None,
 ) -> None:
     """Change enforcement scope without invalidating the retrieval receipt."""
     requirement = load_requirement(manifest, session_id)
+    if expected_requirement is not None and requirement != expected_requirement:
+        raise PriorWorkError("Requirement changed during reclassification; no scope changed")
     if requirement is None:
         return
     requirement["active_for_prompt"] = active
+    if reclassification is not None:
+        requirement["scope_reclassification"] = reclassification
     _atomic_json(requirement_path(manifest, session_id), requirement)
 
 

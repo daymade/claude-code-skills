@@ -307,6 +307,11 @@ unrelated hooks:
   - **A valid receipt already covers this session.** Hedge-phrased recall no
     longer mints a fresh requirement that strands the completed receipt. An
     explicit new prior-work ask still does.
+  - **Current execution continuity.** Instructions such as `沿用当前 child`,
+    continuing the current session, working directory or read-only scope do not
+    request historical retrieval. Exclude only a complete list of execution
+    objects; keep `沿用` when the same list also names a historical asset.
+    Historical reuse requests elsewhere in the prompt still count.
 
 Run `scripts/prior_work.py audit` to see whether the gate is behaving: it
 reports the trigger mix, the empty-gate rate (armed requirements that never
@@ -324,6 +329,24 @@ not by whether its own tests pass.
   the receipt; a later explicit retrieval request starts a new requirement.
   Until then, ordinary follow-ups and continuation wording do not automatically
   clear it; use the existing user opt-out for an explicit release.
+
+For a requirement incorrectly armed by current-execution continuity, the operator
+can replay its original event after deploying the reviewed classifier correction.
+Confirm through the execution owner that no prompt writer is active for that
+target. Set `REQUIREMENT_ID` to the original exact id and `ORIGINAL_EVENT_JSON`
+to the preserved original `UserPromptSubmit` event, then run:
+
+```bash
+scripts/prior-work-retrieval.sh --reclassify-requirement "$REQUIREMENT_ID" < "$ORIGINAL_EVENT_JSON"
+```
+
+This maintenance mode requires the original session, complete prompt hash,
+requirement id and manifest to match the stored required state. It accepts only
+the current-execution false-positive shape. It retires enforcement and records
+the correction while preserving the original requirement; it creates neither an
+opt-out nor a receipt. Missing or changed identity fails without changing state.
+Ordinary follow-ups, including an ordinary replay of that prompt, never invoke
+this correction.
 
 It migrates the narrower unversioned `recall-first-evidence` UserPromptSubmit
 handler into this superset while leaving its script on disk for recovery. The
