@@ -23,7 +23,7 @@
       "description": "Improves an existing application using its code, product contract, authorized work history and competitor evidence. Use for 取长补短、取其精华去其糟粕、参考竞品优化应用 or evolving an app from successful and failed work. Carries authorized changes through implementation and user-result verification, including REA and reverse Skill composition; use skill-evolver for Skills.",
       "source": "./app-evolver",
       "strict": false,
-      "version": "1.1.5",
+      "version": "1.1.6",
       "category": "developer-tools",
       "keywords": [
         "app-improvement",
@@ -353,7 +353,7 @@
       "description": "Audio processing suite covering the full speech pipeline: ASR transcription (Qwen3, StepFun) with batch-mode guards against music-only repetition-loop hallucinations, speaker diarization and CAM++ voiceprint identification for multi-speaker recordings, transcript error correction, structured meeting minutes generation, and TTS voice synthesis (StepFun). Install once for the complete audio workflow.",
       "source": "./daymade-audio",
       "strict": false,
-      "version": "1.50.0",
+      "version": "1.50.1",
       "category": "suite",
       "keywords": [
         "suite",
