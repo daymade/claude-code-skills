@@ -386,6 +386,13 @@ done | sort -hr
 
 **Cleanup**: verify inactivity, retained source/lockfile and reinstall inputs. With an existing instruction covering safe permanent cleanup, remove the exact disposable directory without making a dependency backup or asking again. Otherwise use the main skill's approval/Trash path. Actual hand edits or unavailable dependencies require preservation; do not invent them as a reason to copy every dependency tree.
 
+Classify mixed project directories by their actual contents. A private `tools/node`
+prefix can be an installed global CLI toolchain, even inside an old test directory;
+a process exiting does not retire that installation. Preserve source edits, model
+data and installed tools, and select only the verified dependency or build roots.
+The executing agent establishes those roles from installation metadata and live
+consumers; the directory name and the deletion helper do not establish them.
+
 **pnpm hard links make `du` a phantom.** pnpm links every installed file into the store (`nlink=2`), so deleting a project `node_modules` while the store stays releases ≈0 — the preserve-by-default store keeps the content alive (the SKILL.md mechanism table's hard-link row). Probe before promising any release: `find "<dir>" -type f -links +1 | head` — any hit means the directory is a link farm and the only real reclamation is the store itself, which is a separate USER-DECISION (it is not a row in the preserve-by-default table, so the Phase 2 cross-check does not apply; ask, don't propose) (2026-10-07: four project `node_modules` totaling 6.3 GiB sampled 200/200 hard-linked; all four left the action set with expected release ≈0).
 
 ### Retired packaged test Apps and build caches
