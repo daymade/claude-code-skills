@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **debugging-network-issues** (v1.11.5): Align the repository entry with the capture SOP; correct time-rotation, snapshot-length and timestamp guidance, verify TLS key-log prerequisites, and remove the hand-maintained contents list. Change type: documentation and operation-recipe correction.
 - **prior-work-retrieval** (`daymade-claude-code` v4.30.16): Keep current-session execution instructions from arming historical retrieval. Add an exact-original-event correction for that false positive, preserving genuine history obligations and the original requirement record.
 
 - **skill-creator** (`daymade-skill` v1.70.9 → v1.71.0): Add optional `materialize --summary` output for prepare, run, finish and recover. Report outcomes and the full receipt path while retaining complete receipts, child logs, default JSON output and existing exit codes. Change type: additive CLI option.
