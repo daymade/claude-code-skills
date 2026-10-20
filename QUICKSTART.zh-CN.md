@@ -36,8 +36,8 @@ claude plugin install daymade-skill@daymade-skills
 将变量替换为实际加载的 skill-creator 目录和已有 Git 项目的绝对路径：
 
 ```bash
-TASK_CREATOR=/absolute/path/to/loaded/skill-creator
-TASK_PROJECT=/absolute/path/to/existing/git-project
+TASK_CREATOR='/absolute/path/to/loaded/skill-creator'
+TASK_PROJECT='/absolute/path/to/existing/git-project'
 uv run --project "$TASK_CREATOR" --frozen python "$TASK_CREATOR/scripts/init_skill.py" my-first-skill \
   --path "$TASK_PROJECT/.claude/skills" --repo "$TASK_PROJECT" --scope project
 ```
@@ -69,7 +69,7 @@ uv run --project "$TASK_CREATOR" --frozen python "$TASK_CREATOR/scripts/quick_va
 
 **macOS/Linux：**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/daymade/claude-code-skills/main/scripts/install.sh | bash
+bash -o pipefail -c 'curl -fsSL https://raw.githubusercontent.com/daymade/claude-code-skills/main/scripts/install.sh | bash'
 ```
 
 **Windows (PowerShell)：**

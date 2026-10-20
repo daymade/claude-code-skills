@@ -1,0 +1,207 @@
+#!/usr/bin/env python3
+"""Check cache selection and smoke-output preservation without browser downloads."""
+
+import contextlib
+import importlib.util
+import io
+import os
+from pathlib import Path
+import tempfile
+import unittest
+from unittest.mock import patch
+
+
+SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "diagnose_scrapling.py"
+SPEC = importlib.util.spec_from_file_location("diagnose_scrapling", SCRIPT)
+DIAGNOSE = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(DIAGNOSE)
+BROWSERS = ("chromium-1243", "chromium_headless_shell-1243")
+
+
+class CacheSelectionTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix="cache-selection-")
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.home = self.root / "home"
+        self.default = self.home / ".cache" / "ms-playwright"
+        self.populate(self.default)
+        self.stack = contextlib.ExitStack()
+        self.addCleanup(self.stack.close)
+        self.stack.enter_context(patch.object(DIAGNOSE.Path, "home", return_value=self.home))
+        self.stack.enter_context(patch.object(DIAGNOSE.os, "getcwd", return_value=str(self.root)))
+
+    @staticmethod
+    def populate(root):
+        for browser in BROWSERS:
+            (root / browser).mkdir(parents=True, exist_ok=True)
+
+    def assert_selected(self, env, expected):
+        with patch.dict(os.environ, env, clear=True):
+            observed = DIAGNOSE.detect_browser_cache()
+        self.assertIsInstance(observed, tuple)
+        self.assertEqual(observed, tuple([str(expected / browser)] for browser in BROWSERS))
+
+    def test_custom_root_never_borrows_populated_defaults(self):
+        custom = self.root / "custom"
+        custom.mkdir()
+        with patch.dict(os.environ, {"PLAYWRIGHT_BROWSERS_PATH": str(custom)}, clear=True):
+            self.assertEqual(DIAGNOSE.detect_browser_cache(), ([], []))
+        self.populate(custom)
+        self.assert_selected({"PLAYWRIGHT_BROWSERS_PATH": str(custom)}, custom)
+
+    def test_relative_paths_environment_precedence_and_literal_values(self):
+        custom = self.root / "custom"
+        other = self.root / "not-selected"
+        cases = [
+            ({"PLAYWRIGHT_BROWSERS_PATH": str(custom)}, custom),
+            ({"PLAYWRIGHT_BROWSERS_PATH": "custom"}, custom),
+            ({"PLAYWRIGHT_BROWSERS_PATH": "custom", "INIT_CWD": str(self.root)}, custom),
+            ({"PLAYWRIGHT_BROWSERS_PATH": "custom", "INIT_CWD": "nested/init"}, self.root / "nested/init/custom"),
+            ({"npm_config_playwright_browsers_path": "custom"}, custom),
+            ({"npm_package_config_playwright_browsers_path": "custom"}, custom),
+            ({"PLAYWRIGHT_BROWSERS_PATH": "custom", "npm_config_playwright_browsers_path": str(other)}, custom),
+            ({"npm_config_playwright_browsers_path": "custom", "npm_package_config_playwright_browsers_path": str(other)}, custom),
+            ({"PLAYWRIGHT_BROWSERS_PATH": "custom", "npm_config_init_cwd": "npm-init"}, self.root / "npm-init/custom"),
+            ({"PLAYWRIGHT_BROWSERS_PATH": "custom", "npm_package_config_init_cwd": "package-init"}, self.root / "package-init/custom"),
+            ({"PLAYWRIGHT_BROWSERS_PATH": "custom", "INIT_CWD": "", "npm_config_init_cwd": str(other)}, custom),
+            ({"PLAYWRIGHT_BROWSERS_PATH": "custom", "npm_config_init_cwd": "", "npm_package_config_init_cwd": str(other)}, custom),
+            ({"PLAYWRIGHT_BROWSERS_PATH": "~/custom"}, self.root / "~/custom"),
+            ({"PLAYWRIGHT_BROWSERS_PATH": " 0 "}, self.root / " 0 "),
+            ({"PLAYWRIGHT_BROWSERS_PATH": "  "}, self.root / "  "),
+        ]
+        for env, selected in cases:
+            with self.subTest(env=env):
+                self.populate(selected)
+                self.assert_selected(env, selected)
+
+    def test_empty_values_shadow_lower_priority_keys(self):
+        cases = [
+            {"PLAYWRIGHT_BROWSERS_PATH": "", "npm_config_playwright_browsers_path": "custom"},
+            {"npm_config_playwright_browsers_path": "", "npm_package_config_playwright_browsers_path": "custom"},
+            {},
+        ]
+        self.populate(self.root / "custom")
+        for env in cases:
+            with self.subTest(env=env):
+                self.assert_selected(env, self.default)
+
+    def test_symlink_dotdot_is_normalized_without_following_link(self):
+        outside = self.root / "outside" / "nested"
+        outside.mkdir(parents=True)
+        link = self.root / "link"
+        try:
+            link.symlink_to(outside, target_is_directory=True)
+        except (NotImplementedError, OSError) as error:
+            self.skipTest("directory symlink unavailable: " + str(error))
+        selected = self.root / "browsers"
+        self.populate(selected)
+        self.populate(self.root / "outside" / "browsers")
+        for value in ("link/../browsers", str(link) + "/../browsers"):
+            with self.subTest(value=value):
+                self.assert_selected({"PLAYWRIGHT_BROWSERS_PATH": value}, selected)
+
+    def test_exact_zero_is_unknown_even_with_populated_defaults(self):
+        for key in ("PLAYWRIGHT_BROWSERS_PATH", "npm_config_playwright_browsers_path", "npm_package_config_playwright_browsers_path"):
+            with self.subTest(key=key), patch.dict(os.environ, {key: "0"}, clear=True):
+                with self.assertRaises(DIAGNOSE.CacheLocationUnknown):
+                    DIAGNOSE.detect_browser_cache()
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    DIAGNOSE.diagnose_browsers()
+                self.assertIn("chromium: unknown\n", output.getvalue())
+                self.assertIn("chrome-headless-shell: unknown\n", output.getvalue())
+                self.assertNotIn("missing", output.getvalue())
+                self.assertNotIn("scrapling install", output.getvalue())
+
+    def test_default_roots_and_windows_localappdata_are_preserved(self):
+        macos = self.home / "Library" / "Caches" / "ms-playwright"
+        windows = self.root / "AppData" / "Local" / "ms-playwright"
+        self.populate(macos)
+        self.populate(windows)
+        with patch.dict(os.environ, {"LOCALAPPDATA": str(windows.parent)}, clear=True):
+            observed = DIAGNOSE.detect_browser_cache()
+        for browser, actual in zip(BROWSERS, observed):
+            self.assertEqual(actual, [str(root / browser) for root in (macos, self.default, windows)])
+
+
+class SmokeOutputTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix="smoke-output-")
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.stack = contextlib.ExitStack()
+        self.addCleanup(self.stack.close)
+        self.stack.enter_context(patch.object(DIAGNOSE.tempfile, "tempdir", str(self.root)))
+
+    def invoke(self, flags, runner):
+        args = DIAGNOSE.build_parser().parse_args(["--url", "http://127.0.0.1/fixture", *flags])
+        output = io.StringIO()
+        with patch.object(DIAGNOSE, "run_command", side_effect=runner), contextlib.redirect_stdout(output):
+            code = DIAGNOSE.run_smoke_test(args)
+        return code, output.getvalue()
+
+    def test_successes_keep_distinct_outputs_and_old_fixed_name(self):
+        old_path = self.root / "scrapling-smoke.html"
+        old_path.write_text("preserve old result", encoding="utf-8")
+        outputs = []
+
+        def runner(command):
+            path = Path(command[4])
+            outputs.append(path)
+            path.write_text("result " + str(len(outputs)), encoding="utf-8")
+            return 0, "", ""
+
+        for _ in range(2):
+            code, text = self.invoke([], runner)
+            self.assertEqual(code, 0)
+            self.assertIn("path: " + str(outputs[-1]), text)
+        self.assertNotEqual(outputs[0].parent, outputs[1].parent)
+        self.assertEqual([path.read_text() for path in outputs], ["result 1", "result 2"])
+        self.assertEqual(old_path.read_text(), "preserve old result")
+
+    def test_fetch_failure_is_visible_and_preserves_existing_results(self):
+        old_path = self.root / "scrapling-smoke.md"
+        old_path.write_text("preserve selector result", encoding="utf-8")
+        code, text = self.invoke(["--selector", "main"], lambda command: (7, "", "fetch failed"))
+        self.assertEqual(code, 7)
+        self.assertIn("status: failed (exit 7)", text)
+        self.assertIn("status: missing output file", text)
+        self.assertIn("path: ", text)
+        self.assertEqual(old_path.read_text(), "preserve selector result")
+
+    def test_empty_output_is_visible(self):
+        def runner(command):
+            Path(command[4]).touch()
+            return 0, "", ""
+
+        code, text = self.invoke([], runner)
+        self.assertEqual(code, 0)
+        self.assertIn("bytes: 0\nstatus: empty", text)
+
+    def test_selector_preview_no_verify_and_dynamic_timeout_are_preserved(self):
+        calls = []
+
+        def runner(command):
+            calls.append(command)
+            Path(command[4]).write_text("first\nsecond\n", encoding="utf-8")
+            return 0, "extract stdout", "extract stderr"
+
+        code, text = self.invoke(["--selector", "main", "--no-verify", "--preview-lines", "1"], runner)
+        self.assertEqual(code, 0)
+        self.assertEqual(calls[-1][1:3], ["extract", "get"])
+        self.assertEqual(calls[-1][5:], ["-s", "main", "--no-verify"])
+        self.assertEqual(Path(calls[-1][4]).suffix, ".md")
+        self.assertIn("preview:\nfirst\n", text)
+        self.assertNotIn("second", text)
+        self.assertIn("extract stdout", text)
+        self.assertIn("extract stderr", text)
+        code, _ = self.invoke(["--dynamic", "--timeout", "12345", "--no-verify"], runner)
+        self.assertEqual(code, 0)
+        self.assertEqual(calls[-1][1:3], ["extract", "fetch"])
+        self.assertEqual(calls[-1][5:], ["--timeout", "12345"])
+        self.assertEqual(Path(calls[-1][4]).suffix, ".html")
+
+
+if __name__ == "__main__":
+    unittest.main()

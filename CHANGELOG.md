@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Installation entry points**: Preserve PowerShell caller state and cancellation, reject invalid custom selections before generating commands, propagate piped download failures, and make download-then-run examples stop on failed downloads. Quote first-task paths in the bilingual quickstarts.
+- **scrapling-skill** (v1.0.2): Respect browser-cache environment overrides, report hermetic cache location as unknown, preserve prior smoke-test outputs, and bind diagnostic commands and output checks to their actual paths. Change type: diagnostic and output-preservation repair.
+- **marketplace-health-check** (v1.2.0): Retain incomplete inspector results, distinguish audit coverage from repository health, reconcile paginated PR/issue inventories, and align scan and release guidance with their authoritative owners. Change type: audit-result and input-coverage repair.
+- **marketplace-dev** (`daymade-claude-code` v4.30.15): Route release bookkeeping to Skill Creator and remove stale line references and derived summaries. Change type: documentation alignment.
 - **macos-watchdog** (`daymade-macos` v1.23.9 → v1.24.0): Three measured launchd mechanics from the 2026-10 watchdog-panic investigation: `kickstart -k` on instantly-exiting jobs hits the 10 s ThrottleInterval deterministically (not congestion); sub-minute `StartInterval` is a BTM transition tax (prefer `KeepAlive` in-process loops for high-frequency probes); macOS zeroes `XPC_SERVICE_NAME` for spawned children, so identity guards need an argv-passed alternative variable. Plus a troubleshooting row: after bootout+bootstrap the old job's final data row can fool a freshness check — anchor verification to rows after the new PID's start. Change type: bounded mechanics additions from measured incidents.
 
 - **docs-cleaner** (`daymade-docs` v1.25.6): Check reported outbound-link errors against the reader host before distinguishing broken targets from parser portability; preserve visible labels and contact identity. Change type: bounded link-check interpretation repair.

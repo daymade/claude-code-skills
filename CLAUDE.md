@@ -33,7 +33,7 @@ Then:
 **From your terminal (CLI):**
 ```bash
 # Automated installation (macOS/Linux)
-curl -fsSL https://raw.githubusercontent.com/daymade/claude-code-skills/main/scripts/install.sh | bash
+bash -o pipefail -c 'curl -fsSL https://raw.githubusercontent.com/daymade/claude-code-skills/main/scripts/install.sh | bash'
 
 # Automated installation (Windows PowerShell)
 iwr -useb https://raw.githubusercontent.com/daymade/claude-code-skills/main/scripts/install.ps1 | iex

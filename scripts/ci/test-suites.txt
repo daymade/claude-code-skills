@@ -77,3 +77,5 @@ python-unittest  bilibili-source/tests
 python-unittest  ghostty-use/scripts
 python-unittest  frontend-visual-qa/tests
 python-unittest  competitors-analysis/tests
+python-unittest  scrapling-skill/tests
+python-unittest  marketplace-health-check/tests
