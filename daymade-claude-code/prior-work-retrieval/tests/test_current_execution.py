@@ -68,8 +68,9 @@ class CurrentExecutionTests(unittest.TestCase):
     def test_current_execution_objects_do_not_arm(self):
         prompts = [CURRENT_PROMPT, "沿用当前会话、cwd 和只读范围。",
                    "沿用本次执行身份。", "沿用当前工作目录和只读范围。",
-                   "沿用当前 read-only 范围。", "沿用本次原生会话。"]
-        self.assertEqual(len(prompts), 6)
+                   "沿用当前 read-only 范围。", "沿用本次原生会话。",
+                   "沿用本次原生会话、cwd与只读限制；请只做当前核对。"]
+        self.assertEqual(len(prompts), 7)
         for prompt in prompts:
             with self.subTest(prompt=prompt):
                 self.assertEqual(hook.classify_prompt(prompt), "none")
@@ -90,8 +91,9 @@ class CurrentExecutionTests(unittest.TestCase):
             "沿用当前会话与工作目录以及旧脚本。",
             "沿用当前 cwd、上次产物。",
             "沿用当前会话、工作目录和只读范围里的历史方案。",
+            "沿用当前cwd与历史脚本。",
         ]
-        self.assertEqual(len(prompts), 14)
+        self.assertEqual(len(prompts), 15)
         for prompt in prompts:
             with self.subTest(prompt=prompt):
                 self.assertEqual(hook.classify_prompt(prompt), "required_prior_signal")

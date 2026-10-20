@@ -167,7 +167,8 @@ CURRENT_SESSION_RECALL = re.compile(
 # Match the complete coordinated execution-object list. A prefix match would
 # remove the governing 沿用 from a list that also names a historical artifact.
 _CURRENT_EXECUTION_OBJECT = (
-    r"(?:child\b|(?:子|原生)?会话|session\b|(?:独立)?工作目录|目录|cwd\b|"
+    r"(?:child(?![A-Za-z0-9_])|(?:子|原生)?会话|session(?![A-Za-z0-9_])|"
+    r"(?:独立)?工作目录|目录|cwd(?![A-Za-z0-9_])|"
     r"(?:read[- ]only|只读)\s*(?:范围|限制)|执行(?:身份|对象|范围))"
 )
 CURRENT_EXECUTION_CONTINUITY = re.compile(
