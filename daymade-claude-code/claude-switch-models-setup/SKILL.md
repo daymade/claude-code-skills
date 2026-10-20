@@ -2,9 +2,9 @@
 name: claude-switch-models-setup
 disable-model-invocation: true
 description: >-
-  Sets up and maintains isolated Claude Code CLI profiles for multi-provider setup and
-  switching models (Kimi, MiniMax, DeepSeek, GLM, StepFun and Anthropic) in separate
-  terminal windows. Use for provider switching, csk/csd/csg aliases,
+  Isolates profiles for multi-provider setup and switching models in separate
+  terminal windows (Kimi, MiniMax, DeepSeek, GLM, StepFun, Anthropic).
+  Use for provider switching, csk/csd/csg aliases,
   CLAUDE_CONFIG_DIR, ~/.claude-profiles, profile drift (missing skills/hooks, symlinks,
   settings), context-window setup ([1m], CLAUDE_CODE_MAX_CONTEXT_TOKENS), or reducing
   startup context from preloaded MCP tool schemas.
