@@ -72,7 +72,7 @@ Resolve `<qa-expert-dir>` from the loaded Skill directory and `<project-root>` f
 the target project, then run:
 
 ```bash
-uv run <qa-expert-dir>/scripts/calculate_metrics.py <project-root>/tests/docs/templates/TEST-EXECUTION-TRACKING.csv
+uv run "<qa-expert-dir>/scripts/calculate_metrics.py" "<project-root>/tests/docs/templates/TEST-EXECUTION-TRACKING.csv"
 ```
 
 The implementation owns built-in checks. It uses exact CSV result strings and
