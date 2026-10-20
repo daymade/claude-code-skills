@@ -41,6 +41,20 @@ preserve a rooted path if the target keeps it, rather than resolving it against
 an unrelated base drive. Include drive-absolute and ordinary relative paths as
 controls. Keep this example separate from a claim about native Windows I/O.
 
+### Select optional path-operation cases
+
+Select these synthetic cases when normalization or drive-relative resolution is
+part of the adapter's promised operation; retain the existing fast path otherwise.
+
+| Operation | Discriminating input and independent oracle | Healthy controls |
+|---|---|---|
+| Normalize Windows syntax | Compare `C:\pkg\`, `pkg\` and `\\server\share\folder\` with the supported Node.js `path.win32.normalize()`. Assert the exact trailing separator: substituting Python `ntpath.normpath()` can remove it. | Include an empty string, a drive root and paths without trailing separators. |
+| Resolve a drive-relative path | Compare base `D:\base` plus `C:pkg` with the supported Node.js `path.win32.resolve(base, input)`. Freeze the oracle's current directory and per-drive environment; do not derive its result with the adapter's join/absolute-path helper. | Include the same-drive base `C:\base`, a drive-absolute input and an ordinary relative input. |
+
+Capture the oracle's output for the selected runtime and environment before
+evaluating the candidate. Do not hard-code a maintainer's current directory or
+generalize modeled path-module results to native Windows drive state.
+
 ## Calibrate and report
 
 Run the original faulty behavior or a test-owned mutation through the same
@@ -62,3 +76,4 @@ These checks support compatibility claims, not adoption or retention claims.
 
 - [Python path modules and version-specific `isabs`](https://docs.python.org/3.13/library/os.path.html#os.path.isabs)
 - [Node.js platform-specific path APIs](https://nodejs.org/api/path.html#pathwin32)
+- [Node.js v24.14.0 normalization and resolution](https://nodejs.org/download/release/v24.14.0/docs/api/path.html#pathnormalizepath)

@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **qa-expert** (v1.2.3): Add optional normalization and drive-relative path cases with independent runtime oracles and healthy controls; preserve the existing test-selection scope and native Windows evidence boundary.
 - **skill-creator** (`daymade-skill` v1.71.0 → v1.72.0): Add opt-in review rebind for unchanged complete plugin distributions and originally reviewed dependencies after main integration. Preserve immutable original reviews, exact-head publication checks, source identity and legacy attest/verify; reject incomplete declarations or changed content. Change type: additive release-evidence capability.
 
 - **read-claude-code-history** (`daymade-claude-code` v4.30.16 → v4.30.17): Keep temporary SQLite sorts in memory for existing read-only history queries so they work when filesystem writes are denied. Preserve read-only index opening and existing missing-index and schema checks. Change type: deterministic implementation repair.
