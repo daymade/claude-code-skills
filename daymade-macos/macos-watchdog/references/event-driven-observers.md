@@ -172,6 +172,31 @@ Implement in the observer and convergence worker:
    WITHOUT `-k` to request one run. There is no universal restart mandate;
    `bootout`/`bootstrap` re-loads after a plist edit, it is not an event test.
 
+### Wait for an authorized unload before replacement
+
+The deploying operator or owning installer performs this sequence after the
+ownership, idle-work, pending-intent and rollback checks above:
+
+1. Issue one `bootout` for the exact inspected service. Preserve the previous
+   plist, frozen inputs and pending state. A successful command return alone
+   does not establish that the registration has disappeared.
+2. Use the owner's read-only unload waiter when available. Otherwise observe
+   `/bin/launchctl print <exact-domain/service>` with an explicit finite deadline
+   and bounded command timeouts. Exit zero means the job remains loaded; wait
+   within that deadline. Accept absence only from a successful observation of
+   the command's recognized service-not-found result for that exact target.
+3. Stop on timeout, an unrecognized error or an incomplete observation; report
+   unload pending or unknown and retain recovery inputs. Do not issue another
+   `bootout`, signal a process, use `kickstart -k`, or bootstrap to force progress.
+   Resume from a fresh read of the same target when the missing evidence exists.
+4. Recheck the owning service's old-process/listener exit requirements, then
+   install the already inspected inputs. Registration absence proves neither
+   process exit nor successful replacement. Follow native readback and the
+   completed business-round acceptance below for the new job.
+
+Keep the installer's loaded-job refusal. This sequence observes an already
+authorized transition; it grants no authority to stop a busy or unrelated job.
+
 ## Acceptance SOP
 
 Use authorized, reversible inputs or task-owned fixtures. Preserve the original

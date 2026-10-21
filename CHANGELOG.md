@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-watchdog** (`daymade-macos` v1.24.4 → v1.24.5): Require bounded exact-service unload observation before an authorized replacement. Preserve loaded-job refusal, pending work and rollback inputs; keep timeout or unknown states visible. Change type: bounded deployment guidance correction.
+
 - **skill-creator** (`daymade-skill` v1.72.0 → v1.73.0): Capture an already-authorized argv without returning its output bodies.
 - **pdf-creator** (`daymade-docs` v1.26.0 → v1.26.1): Keep illustrated-guide metadata at its authoritative source while retaining expected hashes, crop data and unique locators. Add the project entry and a quoted Chinese-path example; remove copied theme properties, computed totals and an unresolved rule attribution. Rendering behavior is unchanged.
 
