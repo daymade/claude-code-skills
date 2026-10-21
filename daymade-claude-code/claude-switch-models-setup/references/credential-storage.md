@@ -103,6 +103,46 @@ Without the sharing variable this prints a hashed name; with it, the bare one.
 The same shim answers any "does this actually reach the store I think it does"
 question, including after a Claude Code upgrade.
 
+## Inspecting MCP registration without printing secrets
+
+Do not use unfiltered `claude mcp get <server>` or `claude mcp list` for routine
+inspection. `get` can print stdio `Environment` and remote headers; `list` can
+print endpoint URLs, stdio arguments and transport error details. Any of those
+fields can contain credentials, which would then enter the conversation.
+
+For names and connection health, keep only the server name and exact status in the
+same pipeline:
+
+```bash
+claude mcp list 2>&1 | sed -n -E 's/^([^:]+):.* - (✔ Connected|✘ Failed to connect)( — .*|$)/\1: \2/p'
+```
+
+Only lines in the `name: ✔ Connected` or `name: ✘ Failed to connect` form should
+reach the conversation. Empty output is unverified health, not evidence that the
+registry is empty. Do not broaden the filter to endpoint URLs, `Environment`,
+authorization headers, or transport error details.
+
+When a scope is actually required, filter the result to one non-secret field in
+the same pipeline:
+
+```bash
+claude mcp get <server> 2>&1 | rg '^  Scope:'
+```
+
+Only the `Scope` line should reach the conversation. Empty output is an
+unverified scope, not evidence that the server is absent.
+
+These examples require the public `sed`, `jq`, and `rg` CLIs. Resolve
+`<active-state-json>` from the profile-specific `ACTIVE_STATE` paths defined in
+`mcp-startup-context.md` and the main-versus-third-party paths in `SKILL.md`.
+
+For structured registry data, read only the required keys from the active state
+file rather than printing complete server entries:
+
+```bash
+jq -r '.mcpServers // {} | keys[]' "<active-state-json>"
+```
+
 ## Reading a token without printing it
 
 `mcpOAuth` keys are `<server name>|<hash of the server URL>`. A key existing
