@@ -31,7 +31,7 @@ original `/daymade-docs:<leaf>` command manually.
 | Requested result | Read this exact file |
 |---|---|
 | Convert a DOCX, PDF, PPTX, or saved HTML/HTM to Markdown; parse Word or extract document text and images into Markdown | `../doc-to-markdown/SKILL.md` |
-| Turn Markdown into a printable PDF | `../pdf-creator/SKILL.md` |
+| Turn Markdown into a printable PDF; adapt a manufacturer PDF manual into a concise Chinese illustrated recipient guide | `../pdf-creator/SKILL.md` |
 | Create or format a Word `.docx`; export or repair an **existing Word/WPS manuscript** as PDF | `../docx-creator/SKILL.md` |
 | Turn a PDF into a self-contained, image-faithful HTML reading page, optionally translating it while keeping figures and charts | `../pdf-to-html/SKILL.md` |
 | Extract Mermaid diagrams from Markdown or render Mermaid as PNG | `../mermaid-tools/SKILL.md` |
@@ -45,6 +45,11 @@ or “document.” For example, Markdown → PDF selects `pdf-creator`; an exist
 Word manuscript → PDF selects `docx-creator`; PDF → Markdown selects
 `doc-to-markdown`; PDF → HTML selects `pdf-to-html`. If the request spans two
 results, read each relevant child before its stage.
+
+For a manufacturer manual → Chinese illustrated guide (图文操作指南), select
+`pdf-creator` and load its conditional illustrated-manual reference before
+drafting. Use the sibling resolution above for any source-text or image
+extraction stage; keep ordinary PDF reading/editing with its existing owner.
 
 For website → Markdown, acquire the authorized pages through the owning web
 workflow first, then select `doc-to-markdown` for the saved HTML. That conversion

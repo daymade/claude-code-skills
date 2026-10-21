@@ -14,9 +14,18 @@ Create professional PDF documents from markdown with Chinese font support and th
 For an existing `.docx` source, use `docx-creator/references/word-to-pdf.md` instead.
 Choose by the authoritative input as well as the output suffix.
 
+When adapting a manufacturer PDF manual into a concise Chinese illustrated
+recipient guide, read [the illustrated-manual workflow](references/illustrated-manual.md)
+before drafting. Continue through this Skill's normal theme, backend and
+visual self-check requirements after assembling the Markdown source.
+
 ## Quick Start
 
 Every `scripts/…` path below is **relative to this skill's own directory** — run the commands from there, or substitute the absolute path. Running them from the directory holding your markdown fails with `Failed to spawn: 'scripts/md_to_pdf.py'`. Omitting the output path is allowed and derives it from the input's basename (`input.md` → `input.pdf`, in the input's directory).
+
+Keep relative image paths relative to the input Markdown file's directory.
+The converter uses that directory for both backends, including when its
+temporary HTML and the command's working directory are elsewhere.
 
 ```bash
 # Default theme (formal: Songti SC + black/grey, A4 print)

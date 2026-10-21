@@ -25,6 +25,7 @@ Requirements:
 from __future__ import annotations
 
 import argparse
+from html import escape
 import os
 import platform
 import re
@@ -355,12 +356,16 @@ def _md_to_html(md_file: str) -> str:
     return html
 
 
-def _build_full_html(html_content: str, css: str, title: str) -> str:
+def _build_full_html(
+    html_content: str, css: str, title: str, base_url: str | None = None
+) -> str:
     """Wrap HTML content in a full document with CSS."""
+    base_element = f'<base href="{escape(base_url, quote=True)}">' if base_url else ""
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
+    {base_element}
     <title>{title}</title>
     <style>{css}</style>
 </head>
@@ -370,11 +375,15 @@ def _build_full_html(html_content: str, css: str, title: str) -> str:
 </html>"""
 
 
-def _render_weasyprint(full_html: str, pdf_file: str, css: str) -> None:
+def _render_weasyprint(
+    full_html: str, pdf_file: str, css: str, base_url: str | None = None
+) -> None:
     """Render PDF using weasyprint."""
     from weasyprint import CSS, HTML
 
-    HTML(string=full_html).write_pdf(pdf_file, stylesheets=[CSS(string=css)])
+    HTML(string=full_html, base_url=base_url).write_pdf(
+        pdf_file, stylesheets=[CSS(string=css)]
+    )
 
 
 def _render_chrome(full_html: str, pdf_file: str) -> None:
@@ -796,10 +805,13 @@ def markdown_to_pdf(
 
     css = _load_theme(theme)
     html_content = _md_to_html(md_file)
-    full_html = _build_full_html(html_content, css, md_path.stem)
+    # Chrome reads a temporary HTML file outside the Markdown directory. Keep
+    # relative images anchored to the input, including URI-escaped local paths.
+    resource_base = md_path.resolve().parent.as_uri() + "/"
+    full_html = _build_full_html(html_content, css, md_path.stem, resource_base)
 
     if backend == "weasyprint":
-        _render_weasyprint(full_html, pdf_file, css)
+        _render_weasyprint(full_html, pdf_file, css, resource_base)
     elif backend == "chrome":
         _render_chrome(full_html, pdf_file)
     else:
