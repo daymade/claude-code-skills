@@ -16,11 +16,6 @@ Capture identifiable Claude Code and Codex terminal sessions before a reboot and
 reopen recorded IDs afterwards. Manual snapshots grade liveness; automatic backups
 store recovery metadata with explicit partial coverage and unknown liveness.
 
-Ghostty on macOS has no session-restoration CLI or AppleScript tab dictionary (verified
-on Ghostty 1.3.1, 2026-10-04), so this skill walks a practical loop around that limit:
-manual `ps` inventory → liveness-graded snapshot → keystroke-paste restore →
-automatic reconciliation that makes every paste failure visible.
-
 Snapshot, reconstruction, dry-run and reconciliation can proceed without taking
 the desktop. Actual restore uses global keyboard/clipboard input and is foreground
 work even when launched as a background shell job. Before restore, use a concrete
@@ -63,8 +58,11 @@ python3 <skill-dir>/scripts/ghostty_session.py switch-restore
 
 Default to tabs in one window; use `--layout windows` only when independent windows are requested.
 Keep the printed fixed manifest through the handoff. Treat unresolved capture,
-unchanged account or still-running old processes as an incomplete handoff. Never
-terminate processes or switch credentials through this route. Apply the foreground
+unverified original processes and missing sessions as incomplete. Mode selection,
+account preconditions and partial-restore readiness belong to
+[the switch SOP](references/codex-account-switch.md). Never send process-termination
+signals or switch credentials through this route; normal local exit controls use
+that SOP's authorized-host protocol. Apply the foreground
 conditions above before actual opening; ask only when that handoff is missing. `--dry-run` and `--check`
 remain read-only. Distinguish reopened IDs from new-account requests that worked:
 the script reports authentication as `not_checked` and sends no test prompt.
@@ -153,24 +151,20 @@ or unavailable evidence. Dry-run output is JSON for inspection.
 
 - **Anchor**: the session UUID from the process command line when present (never
   match on process names — argv[0] flips between bare `claude` and
-  `/usr/local/bin/claude`, and name matching produced two false "all sessions
-  gone" reports on 2026-10-04). Fresh TUIs carry no UUID on argv (only
+  `/usr/local/bin/claude`). Fresh TUIs carry no UUID on argv (only
   resume/fork writes one), so they are anchored from transcript storage instead:
   the session file born at or after the process started, in the project bucket
-  of the same cwd, internal identity verified (2026-10-07: 11 of 25 live
-  sessions were fresh TUIs, invisible to argv-only matching). When several
+  of the same cwd, internal identity verified. When several
   fresh TUIs share one bucket, transcripts are assigned disjointly — one file
   per TUI; an undecidable race (equidistant claims) refuses to the unresolved
   section rather than guessing. Live TUIs matching neither way are printed as
   unresolved rows in the snapshot report — visible, never silently dropped.
 - **Liveness**: last real interaction time read from the *content* of the session file —
-  not the file mtime (idle TUIs keep touching files; on 2026-10-04 an "active this
-  afternoon" read was contradicted by in-file timestamps showing death at 03:21).
+  not the file mtime, which can change without real interaction.
 - **Channel health**: `dead-channel` when a Claude transcript's tail carries a
   structured `isApiErrorMessage` with "Login expired" — restoring such a tab reopens
   history but the session stops at `/login`; the snapshot marks it so you can skip it.
-  Prose inside a conversation that merely *discusses* an error never counts (a healthy
-  session that once talked about "Login expired" was misclassified before this rule).
+  Prose inside a conversation that merely *discusses* an error never counts.
 - **Profile**: parsed from `--settings .../settings/<name>.json` when present, else
   `direct`.
 
@@ -179,14 +173,16 @@ or unavailable evidence. Dry-run output is JSON for inspection.
 - Reopen = activate Ghostty → Cmd+T → clipboard-paste the reopen command → Return, one
   tab per missing session, followed by mandatory auto-reconciliation. Keystroke paste is
   timing-sensitive: an interruption between Cmd+T and the paste leaves an empty tab
-  whose command was silently lost (measured 2026-10-04). The auto-check exists to make
+  whose command was silently lost. The auto-check exists to make
   that visible; never skip it, and never declare success from paste return codes alone.
 - Before any paste, tell the user to leave keyboard and mouse untouched through
   reconciliation. The script repeats this notice before its first GUI action.
 - Requires **Accessibility permission** for `osascript` keystrokes (System Events).
   If the current host denies Ghostty UI automation, do not switch channels to
   bypass it: prepare the selected manifest and exact user-run restore command,
-  then use read-only `check --snapshot <manifest> --strict` after the user runs it.
+  then reconcile after permitted execution. Reboot recovery uses read-only
+  `check --snapshot <manifest> --strict`; account switching uses
+  [the mode-bound switch check](references/codex-account-switch.md#restore-and-resume-an-interrupted-batch).
 - Window grouping is **not** restorable — Ghostty's macOS accessibility surface exposes
   no tab→window mapping. All tabs reopen into one window; reorder manually if needed.
 - Rollout files that codex itself cannot find anymore print `no-artifact`; restoring

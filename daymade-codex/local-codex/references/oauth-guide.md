@@ -74,13 +74,31 @@ Bind the approved target host, target user/home, expected account, and authoriza
 8. **Install through the bound owner and read back.** Use the provider's existing protected installation, or coordinate exclusive access to the exact target file store, recheck target identity and unchanged pre-install state, and atomically install only the verified current auth with mode `0600`. Preserve target config/history/Hooks; do not replace the directory. Independently confirm target identity, permissions and installation before target validation. Hand refresh ownership from the attempt to the confirmed target; do not keep querying both stores. On timeout or unknown write receipt, inspect/query the same operation before retry; do not overwrite or start another login to diagnose it.
 9. **Verify target access and report its scope.** Run the no-op through the target's ordinary entry with its bound home/store, then confirm the expected identity remains selected. Report identity, authentication, quota, existing-process adoption and Credit policy separately. Finish the browser controller's task and read task-owned probes to terminal state; preserve other users' sessions. Arrange an authorized execution handoff before long work if the current TUI has not adopted the required account.
 
+## Cached login inspection
+
+The wrapper's `status` runs supported `codex login status`, without an `exec`
+prompt. `login_present` describes the CLI's cached-login report; `auth_mode`
+distinguishes ChatGPT from another reported mode or unknown output. Unrecognized
+output and command failures remain unknown. Raw CLI text is not returned because
+other modes can include a credential fragment.
+
+`authenticated` is null and `authentication`, `quota` and `billing` remain
+`not_checked`. This is a deliberate change from the former model-request status
+check: callers must not interpret cached login as valid server access. Require
+the selected ChatGPT mode before this OAuth workflow; use the separately authorized
+Verification route when real access must be established.
+
 ## Verification
+
+For a build supporting `--no-daemon`, bind the check to an independent process as
+below. Confirm that option in the selected ordinary entry's `--help`; if unavailable,
+resolve its process/auth isolation before using the result as target-store evidence.
 
 ```bash
 # Set AUTH_CHECK_HOME to the verified attempt or target file-store root.
 # Use the resolved normal CLI entry and its required network context.
 CODEX_HOME="${AUTH_CHECK_HOME:?Set the verified attempt or target root}" \
-  codex -c 'cli_auth_credentials_store="file"' \
+  codex --no-daemon -c 'cli_auth_credentials_store="file"' \
   exec --skip-git-repo-check --ephemeral --sandbox read-only --json \
   'Reply only OK. Do not use tools.'
 ```

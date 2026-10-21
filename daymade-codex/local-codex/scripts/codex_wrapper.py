@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Local Codex CLI wrapper for OpenClaw integration.
-Uses OAuth auth from ~/.codex/auth.json (ChatGPT Pro subscription).
+Uses the selected Codex credential store; status never submits a model turn.
 """
 import json
 import os
@@ -54,23 +54,32 @@ def find_codex_binary() -> Optional[str]:
 
 
 def check_auth_status(codex_path: str) -> dict:
-    """Check if Codex OAuth auth is valid."""
+    """Inspect cached login only; server authentication remains unverified."""
+    evidence = {"authenticated": None, "authentication": "not_checked", "quota": "not_checked",
+                "billing": "not_checked", "login_present": None, "auth_mode": "unknown"}
     try:
         result = subprocess.run(
-            [codex_path, "exec", "--skip-git-repo-check", "echo auth-ok"],
+            [codex_path, "login", "status"],
             capture_output=True,
             text=True,
             timeout=30,
         )
+        lines = (result.stdout + "\n" + result.stderr).splitlines()
+        if result.returncode == 0 and "Logged in using ChatGPT" in lines:
+            evidence.update(login_present=True, auth_mode="chatgpt")
+        elif result.returncode == 0 and any(line.startswith("Logged in using ") for line in lines):
+            evidence.update(login_present=True, auth_mode="other")
+        elif result.returncode != 0 and "Not logged in" in lines:
+            evidence.update(login_present=False)
         return {
-            "authenticated": result.returncode == 0,
+            **evidence,
             "exit_code": result.returncode,
-            "stderr": result.stderr[:500] if result.stderr else "",
+            "stderr": "login_status_failed" if result.returncode and evidence["login_present"] is None else "",
         }
     except subprocess.TimeoutExpired:
-        return {"authenticated": False, "error": "timeout", "exit_code": -1}
-    except Exception as e:
-        return {"authenticated": False, "error": str(e), "exit_code": -1}
+        return {**evidence, "error": "timeout", "exit_code": -1}
+    except Exception:
+        return {**evidence, "error": "login_status_unavailable", "exit_code": -1}
 
 
 def exec_codex(
