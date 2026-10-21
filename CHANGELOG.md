@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **git-safety-net** (v1.22.8 → v1.22.9): Disable automatic maintenance only in the merged-branch test's disposable repositories so background object writes cannot outlive fixture cleanup. Preserve the large-conflict regression and production verdict logic. Change type: test-fixture isolation repair.
+
 - **transcript-fixer** (`daymade-audio` v1.50.2 → v1.50.3): Bind written entity citations to the selected occurrence. Support source-attested company short names in explicit founder introductions and their same-paragraph account references; preserve person-name conflicts, unrelated-source refusal and atomic verdict/ledger writes. Change type: bounded authority-validation behavior change.
 
 - **skill-creator** (`daymade-skill` v1.73.1 → v1.73.2): Refresh only the locked certifi dependency to 2026.10.19 to remove the emSign ECC Root CA - G3 trust anchor affected by compromised intermediate CA keys (GHSA-6q48-6c7w-9gw2). Preserve the other package pins and dependency edges. Change type: security maintenance repair.

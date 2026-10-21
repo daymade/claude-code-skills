@@ -51,6 +51,11 @@ class VerifyBranchMergedTests(unittest.TestCase):
         self.repo = self.root / "repo"
         self.git("init", "-q", "-b", "main", "--bare", str(self.remote))
         self.git("init", "-q", "-b", "main", str(self.repo))
+        # Detached maintenance can keep writing objects after a Git command returns,
+        # racing TemporaryDirectory cleanup. Only these disposable repos are affected.
+        for repo in (self.repo, self.remote):
+            self.git("-C", str(repo), "config", "maintenance.auto", "false")
+            self.git("-C", str(repo), "config", "gc.auto", "0")
         self.in_repo("config", "user.email", "fixture@example.invalid")
         self.in_repo("config", "user.name", "Fixture")
         self.in_repo("remote", "add", "origin", str(self.remote))
