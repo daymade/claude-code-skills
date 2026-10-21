@@ -107,15 +107,31 @@ Supply a written reference through `--authority-record`:
 }
 ```
 
-The CLI checks the item/target/type, reads `source_path`, requires the exact quote
-and target there, and requires an adjacent type cue in the recorded occurrence
-(for example `名台系统` for `system`). It rejects a type conflicting with a known
+The CLI checks the item/target/type, reads `source_path`, and requires the exact quote
+and target there. It checks the type cue at the recorded `context_offset`; without
+an offset, the context must contain exactly one original. An adjacent type cue
+remains supported (for example `名台系统` for `system`). It rejects a type conflicting with a known
 roster name/variant. Use a verified local export for a remote reference; keep its
 source identity in `source_ref`. The operator judges whether the source is
 authoritative: literal quote validation cannot establish that judgment or infer
 the referent's identity. A source reference for a system never authorises a
 person-name correction. Missing cues, unavailable sources or conflicting people
 evidence leave the row pending; do not manufacture roster/audio/user citations.
+
+For `organization`, the CLI also supports a source-bound company short name:
+
+- The source quote must name the target followed by a literal name extension and
+  `有限公司`, `公司`, `集团` or `机构`. The selected occurrence must carry the same
+  extension (or a prefix of at least two characters), followed by a name boundary.
+- The selected occurrence must introduce that name with `的创始人。我们公司`
+  (commas, full stops and whitespace may separate those two phrases), or refer to
+  its account with `[可以]关注[一下][这个/这家/我们]NAME，我们在/有/是/做…` after that
+  same-name company introduction in the same paragraph. Brackets mark optional
+  words; slashes mark alternatives. A name extension alone supplies no type cue.
+- Negative statements, person/product uses, a different name extension, a separate
+  paragraph, an unrelated company quote, or an ambiguous selected slot refuse this
+  short-name route. Source authority and the referent still require operator review;
+  these finite syntax checks do not infer a company from a product word.
 
 ```bash
 uv run scripts/fix_transcription.py --resolve-review 12 --decision accepted \
