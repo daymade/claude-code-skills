@@ -333,6 +333,8 @@ For loaded plist scheduling and configuration, use its
 [native readback](daymade-macos/macos-watchdog/references/native-job-readback.md).
 For stopping or persistently disabling a job, follow its
 [stop semantics](daymade-macos/macos-watchdog/SKILL.md#stop-semantics-the-deprecated-trap).
+Before replacing an existing launchd job, enter its
+[authorized unload and replacement procedure](daymade-macos/macos-watchdog/references/event-driven-observers.md#wait-for-an-authorized-unload-before-replacement).
 Before choosing or changing any periodic observer's cadence, follow
 [macos-watchdog's observation contract](daymade-macos/macos-watchdog/references/probe-cost.md).
 For named macOS load/runaway alerts, follow
