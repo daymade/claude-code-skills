@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **peer-message** (v1.24.0 → v1.24.1): Return structured error receipts for handled `--json` failures so consumers can distinguish confirmed unsent attempts from unknown delivery without parsing stderr. Preserve existing diagnostics and exit codes. Change type: error-receipt compatibility repair.
+
+- **macos-watchdog** (`daymade-macos` v1.24.5 → v1.24.6): Distinguish durable fault ownership from log-only diagnostics, and separate notification attempts, acceptance and consumption before applying cooldown or recovery. Keep unknown delivery pending without replaying the send. Change type: bounded alert-delivery guidance correction.
 - **app-evolver** (v1.1.7 → v1.1.8): Add an installed-package preservation example for parser replacement, including icon, permissions, user state, owned test endpoints and the distinction between mocked lifecycle checks and an active-download fault probe. Change type: bounded acceptance guidance.
 
 - **transcript-fixer** (`daymade-audio` v1.50.3 → v1.50.4): Add paired CLI regression cases for system/person homophones under trusted-domain correction, including missing and empty context controls. Change type: existing-contract regression coverage.
