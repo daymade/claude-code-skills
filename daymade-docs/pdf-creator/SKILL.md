@@ -28,17 +28,17 @@ The converter uses that directory for both backends, including when its
 temporary HTML and the command's working directory are elsewhere.
 
 ```bash
-# Default theme (formal: Songti SC + black/grey, A4 print)
+# Default theme
 uv run --with weasyprint scripts/md_to_pdf.py input.md output.pdf
 
 # Source directory and filename containing spaces and Chinese
 uv run --with weasyprint scripts/md_to_pdf.py \
   "guide source/操作指南.md" "guide source/操作指南.pdf"
 
-# Warm theme (training: PingFang SC + terra cotta)
+# Use a named theme
 uv run --with weasyprint scripts/md_to_pdf.py input.md --theme warm-terra
 
-# Mobile theme (narrow page, large font — for phone reading / WeChat sharing)
+# Mobile theme
 uv run --with weasyprint scripts/md_to_pdf.py input.md --theme mobile
 
 # Batch convert all markdown files with a specific theme
@@ -63,12 +63,12 @@ To create a new theme: copy `themes/default.css`, modify, save as `themes/your-t
 
 | Scenario | Recommended Theme | Why |
 |----------|-------------------|-----|
-| Print on A4 paper, handouts, contracts | `default` | Standard page size, formal typography |
-| Training materials, course outlines | `warm-terra` | Warm accent color, readable for workshop contexts |
+| Print on A4 paper, handouts, contracts | `default` | [Print layout](themes/default.css) |
+| Training materials, course outlines | `warm-terra` | [Training layout](themes/warm-terra.css) |
 | Send via WeChat, read on phone | `mobile` | [Phone layout](themes/mobile.css) |
 | Both print AND mobile needed | Run twice with different themes | The skill is fast; generate both versions |
 
-**Decision rule:** If the user does not specify, default to `warm-terra` for training/course content and `default` for formal documents — but pick `cjk-auto` over `default` when the document's tables have uneven column content (schedules, itemized lists), which is what that theme's `table-layout: auto` exists for. Ask "是否需要手机版？" only when the output channel is unclear.
+**Decision rule:** If the user does not specify, default to `warm-terra` for training/course content and `default` for formal documents — but pick [`cjk-auto`](themes/cjk-auto.css) over `default` when the document's tables have uneven column content (schedules, itemized lists). Ask "是否需要手机版？" only when the output channel is unclear.
 
 ## Backends
 
