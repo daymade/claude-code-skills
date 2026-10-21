@@ -300,8 +300,8 @@ queue 与 history 不是原子快照；内容在两次读取之间迁移时可�
 
 ### JSON 错误回执
 
-带 `--json` 开关的命令失败时（`send`、`broadcast`、`list`、`whoami`、`verify`、
-`replies`、`inspect-inbound`、`coord prepare`），stdout 额外输出一个可解析的错误
+对于带 `--json` 的 `send`、`broadcast`、`list`、`whoami`、`verify`、`replies`、
+`inspect-inbound` 和 `coord prepare`，仅进入 handler 后由 `main()` 捕获的异常会让 stdout 额外输出一个可解析的错误
 对象，成功路径输出不变；stderr 诊断文本与上表退出码逐字保持不变，非 JSON 调用
 的三个通道逐字节不变：
 
@@ -320,12 +320,12 @@ queue 与 history 不是原子快照；内容在两次读取之间迁移时可�
   回执仍为 `unknown`；Board 侧按退出码推导的 not_sent 记录以 `coord status` 为准，
   两者不互相改写。
 - `broadcast` 的逐目标失败已结构化在聚合 JSON 的 `failures[]` 内；退出 5 属于
-  命令正常完成，不触发错误回执。错误回执只对应命令级失败（参数、确认数、状态
+  命令正常完成，不触发错误回执。错误回执只对应 handler 内已捕获的命令级异常（确认数、状态
   不可用等）。
 - `coord status` 恒输出 JSON 但没有 `--json` 开关，不在错误回执覆盖范围内；
   其失败仍只写 stderr。
 
-JSON 消费者把 stdout 解析为单个 JSON 文档即可：解析出 `status=error` 时按
+上述错误回执可从 stdout 解析为单个 JSON 文档；argparse 参数解析错误和帮助出口不在本合同覆盖范围内，保留现有输出与退出行为。解析出 `status=error` 时按
 `outcome` 与对应退出码分流，不必解析 stderr 文本。
 
 ## 5. Broadcast 语义
