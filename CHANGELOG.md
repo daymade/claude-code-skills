@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-load-doctor** (`daymade-macos` v1.24.7 → v1.24.8): Preserve live REPL/browser state when triaging retained agent/MCP children; distinguish fresh/expired catalog behavior and probe-created servers with a fixed-version Codex CUA case. Change type: bounded diagnostic guidance addition.
 - **macos-cleaner / macos-watchdog** (`daymade-macos` v1.24.6 → v1.24.7): Land the 2026-10-21 disk-governance retrospective lessons — APFS clonefile phantom calibration (nominal du vs df-measured release), uv cache growth and lock semantics, a liveness channel rule for background destructive commands, two-end hash verification before source deletion, growth-attribution-first routing for disk-full emergencies, a stale-failure-signal watchdog pattern, tier-zero failure-signal existence, and a window-collision check before adding periodic jobs. Change type: documentation-only reference guidance.
 - **read-claude-code-history** (`daymade-claude-code` v4.30.20 → v4.30.21): Document that deleting source sessions purges their index rows on the next daily reconciliation, with the measured retention boundary and the standalone-archive recall path. Change type: documentation-only reference guidance.
 - **git-safety-net** (v1.22.9 → v1.22.10): Document anchoring dangling heads via refs/attic before deleting bundle files, including the measured gc prune-boundary failure mode. Change type: documentation-only reference guidance.

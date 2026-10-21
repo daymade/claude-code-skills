@@ -38,6 +38,53 @@ any desktop-app thread was mid-stream could not be determined: the recorded
 client-side log directory was empty. Reduced load supports mitigation;
 capability restoration and side effects require their own consumer evidence.
 
+## Stateful agent and MCP children
+
+Use this section when retained agent/MCP children could contain live state or
+when an inventory probe may have created them.
+
+1. **Preserve live state.** Name the state that must survive—REPL variables or
+   browser handles—before treating retained processes as waste. Trace tool
+   startup, catalog-cache age, and thread residency/unload predicates separately.
+   A completed response, inactivity number, or persisted conversation does not
+   prove that heap can be discarded or reconstructed.
+2. **Compare equivalent paths.** On an owned isolated host, compare genuine
+   no-tool work with actually-used tools. Record the exact server identity/key,
+   runtime version, and PID birth identity. When cache age could explain a
+   difference, distinguish fresh from actually expired behavior; do not turn one
+   version's cache interval into a fixed wait for every diagnosis. Fresh success
+   does not establish every age or path. Do not change stateful eviction or
+   unsubscribe semantics to make process counts drop.
+3. **Separate probe births.** Determine whether an inventory/status API reads an
+   existing runtime or creates a temporary discovery connection. Attribute
+   probe-created processes separately from workload-retained processes. Report
+   actual exit evidence or `unknown`; a transient birth alone is not a leak.
+   Keep workflow/collector completion distinct from product outcomes.
+
+### Worked case — Codex 0.163.0 CUA
+
+Scope this observation to a global Codex 0.163.0 runtime with one unchanged CUA
+catalog key. A fresh pure-text child created no new CUA pair. After the
+version's unchanged default catalog-cache age interval, a zero-tool child
+created an unused CUA pair while the original same-generation pair remained.
+This establishes extra creation for this version, key, and server, not unbounded
+growth or attribution of all Node processes. The ordinary configured REPL was
+tested only fresh; ordinary-expiry behavior remains unknown.
+
+Investigate the creation path while preserving live state. Before calling a
+repair successful, require a red→green reproduction on the owned isolated host,
+an actually-used consumer check, and state and non-target preservation. Exclude
+inventory-created births from the workload leak count without assuming those
+processes exited.
+
+Read the fixed upstream mechanisms rather than generalizing the case:
+
+- [Catalog-cache TTL](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/codex-mcp/src/tool_catalog_cache.rs#L33-L35)
+  and [`published_at` age eligibility](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/codex-mcp/src/tool_catalog_cache.rs#L125-L135).
+- [`unloading_target` subscriber/activity predicates](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/app-server/src/request_processors/thread_lifecycle.rs#L59-L65).
+- [Session runtime shutdown](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/core/src/session/handlers.rs#L290-L337).
+- [Thread+server runtime status versus configuration discovery](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/app-server/src/request_processors/mcp_processor.rs#L400-L451).
+
 ## Case 2 — unthrottled replay loop: a correct test that looks like a fork bomb
 
 **Symptom (2026-07-26):** machine reports "burning hot" mid-test.
