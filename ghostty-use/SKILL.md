@@ -47,8 +47,11 @@ duplicate-safe retries and separate authentication reporting.
 If login already changed before capture, use the explicit `switch-restore
 --after-login` branch. For a controlled exit sequence including the executing
 session, use `switch-plan --current-session <full-uuid>` first; it defers that
-session until an independent executor exists. The reference also specifies safe
-literal-control submission and its host-adapter boundary.
+session until an independent executor exists. Save its recovery inputs outside the
+exiting terminal with `switch-handoff`, then recheck them with
+`switch-handoff-check`; these commands preserve the host-adapter gap rather than
+authorize an exit. The reference specifies the exact commands and durable
+literal-control receipt.
 
 ```bash
 python3 <skill-dir>/scripts/ghostty_session.py switch-prepare
