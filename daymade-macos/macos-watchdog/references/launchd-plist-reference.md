@@ -80,6 +80,10 @@ Check the current host's `man launchd.plist`: `StartCalendarInterval` coalesces 
 The native readback helper checks configuration only; it cannot enforce due/ACK policy or inspect user reports. The operator must inspect the owning task's records and actual output. Missing consumer evidence leaves that layer unverified.
 Apply its [supported readback boundary](native-job-readback.md) before using a helper result as calendar-configuration evidence.
 
+## Window collision check before adding a periodic job
+
+Before scheduling a NEW periodic job, build the window table of existing jobs — not just start times, but *durations*, including jobs whose duration is unmeasured. Measured 2026-10-21: a weekly uv cache clean (123 G / millions of files; issue #9790 carries a '270 GB took hours' sample, local duration unmeasured = unknown) and a Docker prune were both first drafted into the same Sunday early-morning window — a heavy-IO collision caught only in review. Verify every assumed schedule against the live plist, not memory or folklore: the same review (adversarial VG#7) measured that one product's runtime backup actually runs *daily* 03:17, not "Sundays only" as assumed — a window table built from guessed schedules is worse than none. Stagger new heavy-IO jobs off existing windows and off the hour/half-hour marks; record each existing job's expected duration next to its start time, and write `unknown` where it has never been measured.
+
 ## Logging
 
 ```xml

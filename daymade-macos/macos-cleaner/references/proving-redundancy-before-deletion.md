@@ -60,6 +60,22 @@ Then compare directory-level structure (per-subdirectory `du -sk`): matching
 subdirectory names with similar sizes across the copies is the duplication
 signature; divergent names mean different content and the ladder stops here.
 
+**Two-end hash verification is the hard gate, not a courtesy check.** The
+source is deleted only after the archived copy's sha256 matches byte-for-byte
+on both ends; any mismatch or missing copy moves the item to preserve, no
+exceptions. Executed three times on 2026-10-21, all green: a ~28 GiB VM
+archived to NAS (sha256 both ends) before `lume delete` with df before/after;
+11.5 G of build outputs verified byte-identical against delivery copies
+(7d464c5e…/94ace0c4…) before deletion; 30 zero-reference delivery batches
+plus top-level deliveries/releases rsync+checksummed to the NAS before local
+removal (~13 GB). The tar-manifest form: manifest line count == archive
+member count, plus a random sample of 3 members extracted and parsed, before
+the source goes. Without this step "I believe a copy exists" can be the only
+copy — a DMG's historical signature bytes cannot be rebuilt (re-signing
+produces new bytes), and a 108 G same-day snapshot vanished with the sole
+copies of already-deleted live files before the hub confirmed receipt. The
+2026-09-28 TSV+SHA-256 approval-list precedent is the same gate.
+
 ### 2. Origin — was the candidate *created from* the canonical copy?
 
 The strongest single piece of evidence: find the session or script that created
@@ -92,6 +108,43 @@ A hit is only evidence if the referencing thing is **alive**: a pipeline script
 (`LIB="~/Downloads/<candidate>"` in a corpus builder) makes the folder
 load-bearing infrastructure; a doc sentence describing it makes it a *subject*,
 not a dependency. Read the actual lines — never classify from the file list.
+
+### 3b. Reference and registry checks that retention heuristics skip (2026-10-21, four measured failures)
+
+Before proposing any retention rule or deletion candidate, run all four
+checks — each one below was skipped at least once in a single night and each
+skip produced a wrong proposal:
+
+1. **Volume distribution over time.** "Keep the latest N batches" fails twice
+   over: the 58 batches before 10-16 totalled only 1.7 G (the bulk is all
+   recent, so keeping-recent keeps nothing and cutting-old frees ~1.0 G), and
+   51 batches are referenced by absolute path from committed documents —
+   batch deletion severs evidence chains. A retention heuristic that was
+   never checked against the volume histogram protects nothing and breaks
+   what it touches.
+2. **The code layer, not just documents.** Pipeline source can hardcode path
+   patterns (measured: one sync script named the releases pattern at four
+   separate call sites). Grep the owning code for the path/pattern before declaring
+   "zero references"; a zero-reference deletion claim also needs the
+   retirement evidence ring: no launchd entry, no live process, content
+   frozen since a stated date.
+3. **The referenced path's type, not the referencing file's type.** A
+   committed originals record's `release_path` points at a release
+   *directory* inside the batch (extensionless, may hold binaries).
+   Verifying "references point at text" because the files containing the
+   references are text is a different check — and the pilot batch sat
+   exactly in that blind spot.
+4. **Registries before judgement.** A deletion candidate registered in an
+   SSOT (a local VM registry README listing per-VM disposition rulings) is a
+   retained asset; the correct flow
+   (archive to NAS + two-end sha256 + SSOT update) comes *after* the
+   registry check, not instead of it.
+
+Slice disposal candidates by semantic classification (reference status x
+retention rule), never by mtime/age/du alone: the oldest 12 releases were
+all rule-protected classes (9 unpinned-with-.git + 3 legacy) while every
+safely movable pinned release was recent — an mtime slice selects exactly
+the protected set.
 
 ### 4. Bounded session evidence — did recorded work READ from it?
 
