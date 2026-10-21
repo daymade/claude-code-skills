@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -13,7 +14,7 @@ import sys
 import time
 from datetime import datetime, timezone
 
-from ghostty_storage import atomic_manifest, read_manifest, snapshot_lock
+from ghostty_storage import MAX_MANIFEST_BYTES, atomic_manifest, read_manifest, snapshot_lock
 import ghostty_watch as watch
 
 KIND = "codex-account-switch"
@@ -410,6 +411,7 @@ def plan(args, gs):
     """Do not exit the controller that must later resume its own session."""
     path, doc = current_manifest(gs, args)
     doc = main_sessions(doc, gs)
+    gs.CODEX_HOME_OVERRIDE = doc["codex_home"]
     current = args.current_session
     if current not in {s["sid"] for s in doc["sessions"]}:
         raise ValueError("current session must be a full main-session UUID in the fixed manifest")
@@ -420,20 +422,7 @@ def plan(args, gs):
     executor = getattr(args, "executor_pid", None)
     executor_start = None
     if executor:
-        raw = subprocess.run(["/bin/ps", "-axo", "pid=,ppid="], capture_output=True, text=True, timeout=10)
-        if raw.returncode:
-            raise ValueError("executor ancestry unavailable")
-        parents = {int(a): int(b) for a, b in (line.split() for line in raw.stdout.splitlines())}
-        forbidden = {s["pid"] for s in live if s["sid"] in {r["sid"] for r in doc["sessions"]}}
-        cursor, visited = executor, set()
-        while cursor in parents and cursor not in visited:
-            if cursor in forbidden:
-                raise ValueError("executor is a target process or its descendant; choose an independent controller")
-            visited.add(cursor)
-            cursor = parents[cursor]
-        executor_start = gs._proc_start(executor)
-        if executor not in parents or executor_start is None:
-            raise ValueError("executor process generation unavailable")
+        executor_start = executor_generation(executor, doc, live, gs)
     print(f"FIXED MANIFEST {path}")
     print(f"EXECUTOR pid={executor} started={executor_start}" if executor else "CURRENT SESSION DEFERRED: independent executor required before its exit")
     for s in sorted(doc["sessions"], key=lambda row: row["sid"] == current):
@@ -446,19 +435,134 @@ def plan(args, gs):
     return 0 if executor else 1
 
 
-def guarded_control(expected, control, controller, *, now=time.time):
+def executor_generation(executor, doc, live, gs):
+    """Check the actual controller generation, including missing original targets."""
+    if type(executor) is not int or executor <= 0:
+        raise ValueError("independent executor PID required")
+    raw = subprocess.run(["/bin/ps", "-axo", "pid=,ppid="], capture_output=True, text=True, timeout=10)
+    if raw.returncode:
+        raise ValueError("executor ancestry unavailable")
+    parents = {int(a): int(b) for a, b in (line.split() for line in raw.stdout.splitlines())}
+    forbidden = {s["pid"] for s in doc["sessions"] if gs._proc_start(s["pid"]) == s["started"]}
+    forbidden.update(s["pid"] for s in live if s.get("sid") in {r["sid"] for r in doc["sessions"]})
+    cursor, visited = executor, set()
+    while cursor in parents and cursor not in visited:
+        if cursor in forbidden:
+            raise ValueError("executor is a target process or its descendant; choose an independent controller")
+        visited.add(cursor)
+        cursor = parents[cursor]
+    started = gs._proc_start(executor)
+    if executor not in parents or started is None:
+        raise ValueError("executor process generation unavailable")
+    return started
+
+
+def _manifest_fingerprint(path, doc):
+    with Path(path).open("rb") as handle:
+        raw = handle.read(MAX_MANIFEST_BYTES + 1)
+    if len(raw) > MAX_MANIFEST_BYTES or json.loads(raw) != doc:
+        raise ValueError("fixed switch manifest changed during handoff")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _handoff(path, gs):
+    """Read the original manifest; never persist another session inventory."""
+    with Path(path).open("rb") as handle:
+        raw = handle.read(65537)
+    if len(raw) > 65536:
+        raise ValueError("executor handoff exceeds byte limit")
+    record = json.loads(raw)
+    if not isinstance(record, dict):
+        raise ValueError("executor handoff requires an object")
+    if record.get("kind") != "codex-switch-executor-handoff" or record.get("schema") != 1:
+        raise ValueError("select a switch-handoff record")
+    manifest = Path(record.get("manifest", ""))
+    if not manifest.is_absolute():
+        raise ValueError("fixed switch manifest changed; do not execute this handoff")
+    args = type("ManifestArgs", (), {"snapshot": str(manifest)})()
+    _, doc = current_manifest(gs, args)
+    if _manifest_fingerprint(manifest, doc) != record.get("manifest_sha256"):
+        raise ValueError("fixed switch manifest changed; do not execute this handoff")
+    doc = main_sessions(doc, gs)
+    if record.get("current_session") not in {s["sid"] for s in doc["sessions"]}:
+        raise ValueError("handoff current session is not in the fixed main-session set")
+    if type(record.get("after_login")) is not bool:
+        raise ValueError("handoff restore mode unavailable")
+    target = account_identity(doc["codex_home"])
+    if target != record.get("target_account"):
+        raise ValueError("target account changed; do not execute this handoff")
+    if (target == doc["source_account"]) != record["after_login"]:
+        raise ValueError("handoff mode does not match the fixed account identity")
+    return record, doc
+
+
+def handoff(args, gs):
+    """Persist recovery inputs outside the exiting terminal, without UI authority."""
+    path, doc = current_manifest(gs, args)
+    fingerprint = _manifest_fingerprint(path, doc)
+    doc = main_sessions(doc, gs)
+    gs.CODEX_HOME_OVERRIDE = doc["codex_home"]
+    if args.current_session not in {s["sid"] for s in doc["sessions"]}:
+        raise ValueError("current session must be a full main-session UUID in the fixed manifest")
+    live = observe(gs)
+    if live.unresolved:
+        raise ValueError("resolve live Codex identity before creating the executor handoff")
+    started = executor_generation(args.executor_pid, doc, live, gs)
+    target = account_identity(doc["codex_home"])
+    if (target == doc["source_account"]) != args.after_login:
+        raise ValueError("use --after-login only for a snapshot captured under the target account")
+    record = dict(schema=1, kind="codex-switch-executor-handoff", manifest=str(path),
+                  manifest_sha256=fingerprint,
+                  current_session=args.current_session, executor_pid=args.executor_pid,
+                  executor_started=started, target_account=target,
+                  after_login=args.after_login)
+    output = Path(args.out).expanduser().resolve()
+    atomic_manifest(output, record, replace=False)
+    print("HANDOFF SAVED " + str(output))
+    return handoff_check(type("HandoffArgs", (), {"handoff": str(output)})(), gs)
+
+
+def handoff_check(args, gs):
+    """Recheck a handoff and print original recovery argv; no UI or model turn."""
+    record, doc = _handoff(args.handoff, gs)
+    gs.CODEX_HOME_OVERRIDE = doc["codex_home"]
+    live = observe(gs)
+    if live.unresolved:
+        raise ValueError("unresolved live Codex identity blocks executor handoff")
+    started = executor_generation(record.get("executor_pid"), doc, live, gs)
+    if started != record.get("executor_started"):
+        raise ValueError("executor PID was reused; handoff is no longer valid")
+    current = next(s for s in doc["sessions"] if s["sid"] == record["current_session"])
+    print(f"EXECUTOR CHECKED pid={record['executor_pid']} started={started}")
+    print("CURRENT LAST " + current["sid"])
+    print("CURRENT REOPEN " + command(current, doc["codex_home"]))
+    recovery = [sys.executable, str(Path(gs.__file__).resolve()), "switch-restore",
+                "--snapshot", record["manifest"]]
+    if record["after_login"]:
+        recovery.append("--after-login")
+    print("RECOVERY " + shlex.join(recovery))
+    print("Handoff inputs checked only. Host permission, exact surface/draft binding, quota, authenticated continuation and billing: NOT CHECKED.")
+    print("CURRENT EXIT BLOCKED until an independent executor has a currently permitted, verified host adapter. This command does not provide that adapter.")
+    return 1
+
+
+def guarded_control(expected, control, controller, *, now=time.time, receipt=None):
     """Two-observation control handoff for an authorized host adapter; no retry.
 
     Adapter methods: observe() -> mapping, paste(text), submit(). They must use
     the host's allowed channel and bind the real surface to the expected TTY.
     This helper supplies no GUI adapter and cannot override a host denial.
+    Supply a private per-session receipt for cross-process at-most-once delivery.
+    Once a paste was attempted, the same receipt cannot be replayed, even if the
+    process dies before it can record the result. Never delete it to retry.
     """
     if control not in ("/quit", "/exit"):
         raise ValueError("only literal local exit controls are supported")
     fields = ("surface", "sid", "pid", "started", "tty")
     if (any(expected.get(k) in (None, "") for k in fields)
             or not isinstance(expected["pid"], int) or isinstance(expected["pid"], bool)
-            or expected["pid"] <= 0 or not isinstance(expected["started"], (float, int))):
+            or expected["pid"] <= 0 or type(expected["started"]) not in (float, int)
+            or not math.isfinite(expected["started"])):
         raise ValueError("complete surface/session/process binding required")
 
     def check(draft):
@@ -471,19 +575,48 @@ def guarded_control(expected, control, controller, *, now=time.time):
                 or observation.get("draft") != draft):
             raise ValueError("control readiness changed or draft is not exact; stop input")
         stamp = observation.get("observed_at")
-        if not isinstance(stamp, (float, int)) or not 0 <= now() - stamp <= 5:
+        if type(stamp) not in (float, int) or not math.isfinite(stamp) or not 0 <= now() - stamp <= 5:
             raise ValueError("fresh surface observation required; stop input")
 
-    check("")
-    controller.paste(control)  # controller must paste one complete literal, never type it character by character
-    check(control)  # no Return on stale focus, lost slash, user draft or process reuse
-    controller.submit()  # at most once per invocation; an unknown result requires reconciliation, never replay
-    return "submitted_unverified"
+    def deliver(save):
+        check("")
+        save("paste_started")  # write ahead of input; failure to persist prevents input
+        controller.paste(control)  # one complete literal, never character-by-character
+        check(control)  # no Return on lost slash, user draft or process reuse
+        save("submit_started")
+        controller.submit()  # an unknown result requires reconciliation, never replay
+        save("submitted_unverified")
+        return "submitted_unverified"
+
+    if receipt is None:
+        return deliver(lambda stage: None)
+    receipt = Path(receipt).expanduser().resolve()
+    with snapshot_lock(receipt.parent):
+        if receipt.exists():
+            raise ValueError("control receipt already exists; reconcile the original attempt, never replay")
+        record = dict(kind="codex-exit-control", schema=1,
+                      expected={key: expected[key] for key in fields}, control=control)
+        reserved = False
+
+        def save(stage):
+            nonlocal reserved
+            atomic_manifest(receipt, dict(record, stage=stage, observed_at=now()), replace=reserved)
+            reserved = True
+
+        try:
+            return deliver(save)
+        except BaseException:
+            # A hard interruption may leave paste_started/submit_started. All
+            # persisted stages block replay; no error text or draft is logged.
+            if reserved:
+                save("input_uncertain")
+            raise
 
 
 def run(args, gs):
     try:
-        return {"switch-prepare": prepare, "switch-restore": restore, "switch-plan": plan}[args.cmd](args, gs)
+        return {"switch-prepare": prepare, "switch-restore": restore, "switch-plan": plan,
+                "switch-handoff": handoff, "switch-handoff-check": handoff_check}[args.cmd](args, gs)
     except (ValueError, OSError, TypeError, AttributeError, subprocess.TimeoutExpired) as error:
         print("ERROR: " + str(error), file=sys.stderr)
         return 2

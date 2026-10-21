@@ -375,6 +375,59 @@ class SwitchTest(unittest.TestCase):
         self.active[3].assert_not_called()
         self.assertFalse(self.state.exists())
 
+    def test_handoff_persists_only_bound_inputs_and_rechecks_executor(self):
+        self.saved()
+        target = self.root / "handoff.json"
+        gs.CODEX_HOME_OVERRIDE = None
+        self.active[2].side_effect = lambda module: (self.assertEqual(module.CODEX_HOME_OVERRIDE, str(self.home)) or gs.SessionList())
+        with mock.patch.object(sw, "executor_generation", return_value=300):
+            self.assertEqual(gs.main(["switch-handoff", "--snapshot", str(self.manifest),
+                "--current-session", A, "--executor-pid", "90", "--out", str(target)]), 1)
+            record = json.loads(target.read_text())
+            self.assertNotIn("sessions", record)
+            self.assertNotIn("resume_argv", record)
+            self.assertEqual(record["current_session"], A)
+            self.assertEqual(target.stat().st_mode & 0o777, 0o600)
+            self.assertIn("CURRENT REOPEN cd --", self.output.getvalue())
+            self.assertIn("CURRENT EXIT BLOCKED", self.output.getvalue())
+            gs.CODEX_HOME_OVERRIDE = None
+            self.assertEqual(gs.main(["switch-handoff-check", "--handoff", str(target)]), 1)
+        before = target.read_bytes()
+        with mock.patch.object(sw, "executor_generation", return_value=301):
+            self.assertEqual(gs.main(["switch-handoff-check", "--handoff", str(target)]), 2)
+        self.assertEqual(target.read_bytes(), before)
+        self.active[3].assert_not_called()
+
+    def test_handoff_rejects_manifest_account_mode_drift_and_existing_output(self):
+        self.saved()
+        target = self.root / "handoff.json"
+        args = ["switch-handoff", "--snapshot", str(self.manifest), "--current-session", A,
+                "--executor-pid", "90", "--out", str(target)]
+        with mock.patch.object(sw, "executor_generation", return_value=300):
+            self.assertEqual(gs.main(args + ["--after-login"]), 2)
+            self.assertFalse(target.exists())
+            self.assertEqual(gs.main(args), 1)
+            before = target.read_bytes()
+            self.assertEqual(gs.main(args), 2)
+            self.assertEqual(target.read_bytes(), before)
+            self.auth("another")
+            self.assertEqual(gs.main(["switch-handoff-check", "--handoff", str(target)]), 2)
+            self.auth("new")
+            self.manifest.write_text(self.manifest.read_text() + "\n")
+            self.assertEqual(gs.main(["switch-handoff-check", "--handoff", str(target)]), 2)
+        self.active[3].assert_not_called()
+
+    def test_handoff_after_login_keeps_mode_in_actual_recovery_command(self):
+        self.saved()
+        self.auth("old")
+        target = self.root / "handoff.json"
+        with mock.patch.object(sw, "executor_generation", return_value=300):
+            self.assertEqual(gs.main(["switch-handoff", "--snapshot", str(self.manifest),
+                "--current-session", A, "--executor-pid", "90", "--after-login",
+                "--out", str(target)]), 1)
+        self.assertIn("--after-login", self.output.getvalue())
+        self.assertTrue(json.loads(target.read_text())["after_login"])
+
 
 class ControlTest(unittest.TestCase):
     def setUp(self):
@@ -437,6 +490,111 @@ class ControlTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             sw.guarded_control(self.binding, "/quit", adapter, now=lambda: 100)
         adapter.submit.assert_called_once()
+
+    def test_durable_receipt_prevents_cross_process_replay_after_unknown_submit(self):
+        with tempfile.TemporaryDirectory() as folder:
+            receipt = Path(folder) / "control.json"
+            adapter = self.adapter()
+            adapter.submit.side_effect = RuntimeError("outcome unknown")
+            with self.assertRaises(RuntimeError):
+                sw.guarded_control(self.binding, "/quit", adapter, now=lambda: 100, receipt=receipt)
+            saved = json.loads(receipt.read_text())
+            self.assertEqual(saved["stage"], "input_uncertain")
+            self.assertEqual(receipt.stat().st_mode & 0o777, 0o600)
+            self.assertNotIn("outcome unknown", receipt.read_text())
+            retry = self.adapter()
+            with self.assertRaisesRegex(ValueError, "never replay"):
+                sw.guarded_control(self.binding, "/quit", retry, now=lambda: 100, receipt=receipt)
+            retry.observe.assert_not_called()
+            retry.paste.assert_not_called()
+            retry.submit.assert_not_called()
+
+    def test_receipt_reserves_before_each_input_and_denial_writes_no_attempt(self):
+        with tempfile.TemporaryDirectory() as folder:
+            receipt = Path(folder) / "control.json"
+            denied = self.adapter(before=dict(self.ready, allowed=False))
+            with self.assertRaises(ValueError):
+                sw.guarded_control(self.binding, "/quit", denied, now=lambda: 100, receipt=receipt)
+            self.assertFalse(receipt.exists())
+            adapter = self.adapter()
+            adapter.paste.side_effect = lambda text: self.assertEqual(json.loads(receipt.read_text())["stage"], "paste_started")
+            adapter.submit.side_effect = lambda: self.assertEqual(json.loads(receipt.read_text())["stage"], "submit_started")
+            self.assertEqual(sw.guarded_control(self.binding, "/quit", adapter,
+                now=lambda: 100, receipt=receipt), "submitted_unverified")
+            self.assertEqual(json.loads(receipt.read_text())["stage"], "submitted_unverified")
+
+    def test_partial_paste_takeover_is_durable_and_never_sends_return(self):
+        with tempfile.TemporaryDirectory() as folder:
+            receipt = Path(folder) / "control.json"
+            adapter = self.adapter(after=dict(self.ready, draft="quit"))
+            with self.assertRaises(ValueError):
+                sw.guarded_control(self.binding, "/quit", adapter, now=lambda: 100, receipt=receipt)
+            adapter.paste.assert_called_once_with("/quit")
+            adapter.submit.assert_not_called()
+            self.assertEqual(json.loads(receipt.read_text())["stage"], "input_uncertain")
+
+    def test_boolean_and_nonfinite_time_cannot_claim_fresh_binding(self):
+        for value in (True, float("nan"), float("inf")):
+            adapter = self.adapter()
+            with self.assertRaises(ValueError):
+                sw.guarded_control(dict(self.binding, started=value), "/quit", adapter, now=lambda: 1)
+            adapter.paste.assert_not_called()
+            adapter = self.adapter(before=dict(self.ready, observed_at=value))
+            with self.assertRaises(ValueError):
+                sw.guarded_control(self.binding, "/quit", adapter, now=lambda: 1)
+            adapter.paste.assert_not_called()
+
+    def test_hard_interruption_receipt_survives_without_exception_handler(self):
+        with tempfile.TemporaryDirectory() as folder:
+            receipt = Path(folder) / "control.json"
+            script = '''import os, sys, time
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import ghostty_switch as sw
+binding = dict(surface="fixture", sid="11111111-1111-1111-1111-111111111111", pid=10, started=1, tty="ttys001")
+class Controller:
+    def observe(self):
+        return dict(binding, app="com.mitchellh.ghostty", tool="codex", allowed=True, foreground=True, exclusive=True, idle=True, draft="", observed_at=time.time())
+    def paste(self, text):
+        os._exit(17)
+    def submit(self):
+        raise AssertionError("must not submit")
+sw.guarded_control(binding, "/quit", Controller(), receipt=Path(sys.argv[2]))
+'''
+            result = subprocess.run([sys.executable, "-c", script, str(Path(sw.__file__).parent), str(receipt)],
+                                    capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 17, result.stderr)
+            self.assertEqual(json.loads(receipt.read_text())["stage"], "paste_started")
+            retry = self.adapter()
+            with self.assertRaisesRegex(ValueError, "never replay"):
+                sw.guarded_control(self.binding, "/quit", retry, now=lambda: 100, receipt=receipt)
+            retry.paste.assert_not_called()
+
+
+class ExecutorTest(unittest.TestCase):
+    def test_actual_independent_process_and_target_descendant(self):
+        # These are our own short-lived fixture processes; no real TUI is touched.
+        child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(2)"])
+        try:
+            doc = {"sessions": [{"pid": 999999999, "started": 0}]}
+            started = sw.executor_generation(child.pid, doc, [], gs)
+            self.assertEqual(started, gs._proc_start(child.pid))
+            doc = {"sessions": [{"pid": os.getpid(), "started": gs._proc_start(os.getpid())}]}
+            with self.assertRaisesRegex(ValueError, "descendant"):
+                sw.executor_generation(child.pid, doc, [], gs)
+        finally:
+            child.wait(timeout=5)
+
+    def test_reused_saved_target_pid_is_not_a_false_positive(self):
+        raw = subprocess.CompletedProcess([], 0, "10 1\n90 10\n1 0\n")
+        doc = {"sessions": [{"pid": 10, "started": 100}]}
+        with mock.patch.object(sw.subprocess, "run", return_value=raw), \
+                mock.patch.object(gs, "_proc_start", return_value=300):
+            self.assertEqual(sw.executor_generation(90, doc, [], gs), 300)
+        with mock.patch.object(sw.subprocess, "run", return_value=raw), \
+                mock.patch.object(gs, "_proc_start", side_effect=lambda pid: 100 if pid == 10 else 300):
+            with self.assertRaisesRegex(ValueError, "descendant"):
+                sw.executor_generation(90, doc, [], gs)
 
 
 class ObserverTest(unittest.TestCase):
