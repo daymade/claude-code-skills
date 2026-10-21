@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **peer-message** (v1.24.0 → v1.24.1): Return structured error receipts for handled `--json` failures so consumers can distinguish confirmed unsent attempts from unknown delivery without parsing stderr. Preserve existing diagnostics and exit codes. Change type: error-receipt compatibility repair.
+
+- **macos-watchdog** (`daymade-macos` v1.24.5 → v1.24.6): Distinguish durable fault ownership from log-only diagnostics, and separate notification attempts, acceptance and consumption before applying cooldown or recovery. Keep unknown delivery pending without replaying the send. Change type: bounded alert-delivery guidance correction.
+
 - **git-safety-net** (v1.22.8 → v1.22.9): Disable automatic maintenance only in the merged-branch test's disposable repositories so background object writes cannot outlive fixture cleanup. Preserve the large-conflict regression and production verdict logic. Change type: test-fixture isolation repair.
 
 - **transcript-fixer** (`daymade-audio` v1.50.2 → v1.50.3): Bind written entity citations to the selected occurrence. Support source-attested company short names in explicit founder introductions and their same-paragraph account references; preserve person-name conflicts, unrelated-source refusal and atomic verdict/ledger writes. Change type: bounded authority-validation behavior change.

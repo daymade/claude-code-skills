@@ -1929,6 +1929,34 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+ERROR_RECEIPT_OUTCOMES = ("not_sent", "unknown")
+
+
+def error_receipt_outcome(outcome: Any) -> str:
+    """Serialize a delivery outcome for the JSON error receipt.
+
+    Trust only the outcomes the delivery paths actually record on PeerError
+    (and `coord commit --outcome` accepts); anything else -- unrecognized
+    values included -- serializes as "unknown". The receipt never infers an
+    outcome from the human-readable message text, so generic coordination or
+    OS failures can never claim not_sent.
+    """
+    return outcome if type(outcome) is str and outcome in ERROR_RECEIPT_OUTCOMES else "unknown"
+
+
+def emit_json_error_receipt(args: argparse.Namespace, outcome: Any, error: Exception) -> None:
+    """Give --json consumers a parseable error receipt on stdout.
+
+    The caller prints the human diagnostic on stderr unchanged; this only adds
+    structured output for commands that requested JSON.
+    """
+    if not getattr(args, "json", False):
+        return
+    print(json.dumps(
+        {"status": "error", "outcome": error_receipt_outcome(outcome), "error": str(error)},
+        ensure_ascii=False, sort_keys=True))
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     args.claude_home = args.claude_home.expanduser()
@@ -1937,9 +1965,11 @@ def main(argv: list[str] | None = None) -> int:
         return int(args.handler(args))
     except PeerError as exc:
         print(f"error: {exc}", file=sys.stderr)
+        emit_json_error_receipt(args, exc.outcome, exc)
         return exc.exit_code
     except (coordination.CoordinationError, sqlite3.Error, OSError) as exc:
         print(f"error: coordination state/input unavailable: {exc}; retain state", file=sys.stderr)
+        emit_json_error_receipt(args, "unknown", exc)
         return EXIT_USAGE
 
 
