@@ -45,6 +45,31 @@ GROUP BY process_uuid ORDER BY 2 DESC;"
 # process_uuid is pid:<pid>:<uuid> — investigate those processes; this is not permission to stop them
 ```
 
+### Quota-driven continuation
+
+When switching to an already authorized account to continue included usage,
+the executing agent uses the existing refresh-owning provider to obtain fresh
+native account and rate-limit observations for the exact execution root and
+ordinary CLI route. Bind the expected account across the observation; a returned
+`accountId` must match it. Under the inspected [native response contract](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/app-server-protocol/schema/json/v2/GetAccountRateLimitsResponse.json),
+`ordinaryUsageAllowed` is boolean or null. Require strict `true`, attributed to
+that account, for this positive included-usage check; strings or integers are not
+permission. Missing/null remain unknown and do not erase a still-fresh denial.
+This check does not globally disable a project's existing legacy-admission policy.
+
+Check the selected model/service tier and its applicable standard quota windows
+as separate inputs. Exhausted windows or an active spend-control refusal still
+prevent this continuation when permission is true. Neither window percentages,
+OAuth nor permission true guarantees that extra Credit is disabled. Do not change
+billing, redeem a reset or select paid fallback to make the check pass.
+
+After readiness, continue the authorized unfinished business task with a bounded
+useful action. Reuse that action's terminal result as access evidence instead of
+adding repeated no-op model turns. Keep the original task, working tree and
+permissions; account adoption by a new CLI process does not prove adoption by
+any already-running TUI. The provider supplies observations; this choice and the
+business-result check remain the executing agent's responsibility.
+
 ### Headless / Automation notes
 - For local automation or a remote host, follow the workflow below: retain a valid authorized login, perform an explicit single-owner transfer, or obtain a fresh independent browser/device grant.
 - Keep CI/CD authentication under its owning deployment policy. Do not silently substitute API-key billing for the requested ChatGPT access.
@@ -70,9 +95,9 @@ Bind the approved target host, target user/home, expected account, and authoriza
    For another store, require owner-verified isolation and supported installation; do not assume a new home isolates a keyring or export one.
 
 6. **Complete the browser half with the existing controller.** Use an available, authorized browser automation owner (`ego-browser` when installed). Otherwise use an existing approved controller or hand off the same authorization page for the human-only step; do not install a browser or extract cookies as an implicit prerequisite. Open the URL emitted by the attempt CLI, confirm the expected email before continuing, and enter only the code from that still-running CLI. Inspect the current visible form, including separately rendered code-character inputs. Wait for visible input or completion state, not merely the presence of a hidden input. Treat MFA, disabled device authorization, an expired code, or a different account as an explicit recovery condition; do not retry the old code or approve a different account. For expiry, first confirm/cancel the task-owned old attempt, then obtain a new code.
-7. **Verify the attempt before installation.** Require the CLI's successful terminal exit, then independently read the attempt store's expected account identity, freshness and permissions without exposing credentials. Run the bounded authorized no-op below through the same entry, attempt home and store; require exit `0`, `OK` and `turn.completed`. Browser success alone, a lost CLI receipt or a failed token exchange cannot pass this step. Keep unknown attempts bound to their original handle and reconcile before retrying.
+7. **Verify the attempt before installation.** Require the CLI's successful terminal exit, then use the existing provider's bounded native account observation to verify the attempt's expected identity and server access through the same entry, home and store without exposing credentials. If this observation cannot establish access, use the separately authorized model-request check below; do not silently treat cached identity as a substitute. Browser success alone, a lost CLI receipt or a failed token exchange cannot pass this step. Keep unknown attempts bound to their original handle and reconcile before retrying.
 8. **Install through the bound owner and read back.** Use the provider's existing protected installation, or coordinate exclusive access to the exact target file store, recheck target identity and unchanged pre-install state, and atomically install only the verified current auth with mode `0600`. Preserve target config/history/Hooks; do not replace the directory. Independently confirm target identity, permissions and installation before target validation. Hand refresh ownership from the attempt to the confirmed target; do not keep querying both stores. On timeout or unknown write receipt, inspect/query the same operation before retry; do not overwrite or start another login to diagnose it.
-9. **Verify target access and report its scope.** Run the no-op through the target's ordinary entry with its bound home/store, then confirm the expected identity remains selected. Report identity, authentication, quota, existing-process adoption and Credit policy separately. Finish the browser controller's task and read task-owned probes to terminal state; preserve other users' sessions. Arrange an authorized execution handoff before long work if the current TUI has not adopted the required account.
+9. **Verify target access and report its scope.** Read the installed target through its refresh-owning provider and ordinary entry, then confirm the expected identity remains selected. For quota-driven continuation apply the check above and verify the first useful business action on that target; do not require another no-op when equivalent fresh access evidence already exists. Report identity, authentication, quota, existing-process adoption and Credit policy separately. Finish the browser controller's task and read task-owned probes to terminal state; preserve other users' sessions. Arrange an authorized execution handoff before long work if the current TUI has not adopted the required account.
 
 ## Cached login inspection
 
@@ -89,6 +114,11 @@ the selected ChatGPT mode before this OAuth workflow; use the separately authori
 Verification route when real access must be established.
 
 ## Verification
+
+Prefer the existing provider's native observation for account/access inspection;
+it does not require a model turn. Use the following model-request check only when
+authorized and necessary to establish execution access, or replace its no-op with
+the first bounded useful action from the original task and inspect that result.
 
 For a build supporting `--no-daemon`, bind the check to an independent process as
 below. Confirm that option in the selected ordinary entry's `--help`; if unavailable,

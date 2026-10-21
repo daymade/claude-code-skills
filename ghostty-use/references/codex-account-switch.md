@@ -112,7 +112,32 @@ independent executor must possess the fixed manifest, original cwd/resume comman
 authorized channel and sufficient target-account quota for the intended work.
 It must remain alive outside the exiting agent's process tree. Recheck its birth
 immediately before handoff. Preserve the original recovery command outside the
-exiting terminal. No script here exits or restarts the executing session for you.
+exiting terminal. Save an executor handoff at a new private path:
+
+```bash
+python3 <skill-dir>/scripts/ghostty_session.py switch-handoff \
+  --snapshot <fixed-manifest> --current-session <full-uuid> \
+  --executor-pid <pid> --out <private-handoff.json>
+python3 <skill-dir>/scripts/ghostty_session.py switch-handoff-check \
+  --handoff <private-handoff.json>
+```
+
+Keep `--after-login` on `switch-handoff` when the fixed snapshot was captured after
+the target login. The handoff binds the original manifest bytes, restore mode,
+target file-auth identity and executor PID/birth. It stores no second inventory or
+credentials. The check reads the original manifest and prints the exact current
+session reopen command and batch recovery command. Run that check from the
+independent executor before taking over; a PID reused by another process, changed
+manifest or account, unresolved identity, or executor inside a target process tree
+exits 2. Creation refuses an existing output.
+
+Exit 1 with `CURRENT EXIT BLOCKED` means the recovery inputs were checked but
+host permission, exact surface/draft binding and usable account quota remain
+unverified. It is deliberately not an exit-ready signal. No bundled script
+implements a permitted GUI adapter or exits/restarts the executing session.
+Do not launch another executor merely to make the PID check pass. A genuinely
+independent controller must already own the allowed host context and the original
+task continuation; a saved handoff cannot confer that context.
 
 For each exit, bind the actual visible Ghostty surface to the exact Codex UUID,
 TTY and live PID/birth using the host's current observations. A window title or
@@ -132,9 +157,20 @@ binds the surface/session/process/TTY fields. Observations must be fresh (within
 complete literal and raise on failure; `submit()` sends Return once and raises
 on failure or unknown delivery. The helper returns `submitted_unverified` only.
 Reconcile process disappearance before restore; never retry an unknown submit.
+Pass `receipt=<private-handoff-dir>/controls/<session-uuid>.json` to
+`guarded_control` for each original target. Its write-ahead receipt is saved before
+paste and before Return; any existing receipt blocks another delivery, including
+after a process interruption. An initial denied/stale observation sends nothing
+and creates no attempt. A failure after reserving input leaves `input_uncertain`;
+a hard interruption may leave `paste_started` or `submit_started`. All require
+read-only reconciliation of the original PID/birth and visible draft. Never
+delete the receipt or choose a new path to replay the attempt. A terminal process
+disappearance can establish normal exit; receipt success alone cannot.
 The helper supplies no surface-binding GUI adapter: the host must obtain and
 verify those observations through its permitted channel. It cannot turn supplied
-metadata into permission. A host denial stops GUI operation; do not fall back to
+metadata into permission. In particular, a terminal screen's title or text is
+insufficient when it exposes no exact SID/TTY or independently observable draft.
+A host denial stops GUI operation; do not fall back to
 AppleScript or another channel to bypass it. Read-only plans/checks remain usable.
 
 ## Restore and resume an interrupted batch
