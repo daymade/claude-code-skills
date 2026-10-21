@@ -426,6 +426,32 @@ one column. Each step checks the table before altering it and commits each
 backfill batch, so an interrupted migration re-runs cleanly, and none of it
 needs `sqlite-vec`.
 
+## Deleting source sessions deletes their index rows (measured 2026-10-21)
+
+The index is not a retrieval-preserving layer over deleted content. The daily
+reconciliation task (`claude-history-index.dailyupdate`) computes
+`set(known) - set(current)` and purges vanished sessions cascade-style —
+records, then chunks, then vec_chunks (`history_index.py:1759-1764`). After
+the next daily run, deleted sessions are permanently unsearchable unless they
+are restored to their original path; the state DB keeps dangling rows for
+purged sessions (current inventory: 15,202 rollout paths).
+
+Two adjacent traps, both measured: a sibling FTS store can be an empty shell
+while looking like a search layer (`search.sqlite` 8.9 G with
+`indexed_sessions`/`search_chunks` both 0 rows — 31 G of October sessions
+never entered it, and its server-side per-session DELETE path is not
+preservation); and source retirement exists as precedent (9 claude profiles
+retired with 94,005 rows kept) but its granularity is the *whole home* —
+retiring all of `~/.codex` would freeze future indexing, which is not
+acceptable for an active home.
+
+The only deletion-safe path that preserves search: build a standalone archive
+index first — `history_index.py --db <archive-db> index --rebuild` against
+the archived copy — or accept that searching old sessions means untarring the
+archive. Any disk-cleanup plan that touches session homes must state this
+tradeoff in the plan; deletion + daily reconciliation is the point of no
+return.
+
 ## Maintainer smoke checks
 
 Run the standard-library tests on every platform:

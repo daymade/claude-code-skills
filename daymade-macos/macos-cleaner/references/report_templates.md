@@ -45,6 +45,10 @@ State permission errors and incomplete scans. Never present a partial `du` total
 |---|---|---|---|---|---:|---|---|
 | 1 | `<command>` | <object/path/service> | <effect> | <reversible / Trash / backup / redownload-only> | <estimate + unit> | <impact> | <observable value> |
 
+Every verification or confirmation step in the plan must be executable exactly as written: exact command, exact target, exact pass criterion. A step of the shape "re-run one high-frequency chain — which one is side-effect-free must be checked before execution; this report does not choose" is an undelivered decision embedded in a checklist: the executor inherits a choice the planner was paid to make. Measured 2026-10-21 (adversarial R7): the warm-cache verification step stayed open until counter-review fixed the candidate (the sync tool's own `--help`, side-effect-free). Fix the candidate and state the criterion inside the plan, or mark the step explicitly unresolved and keep it out of the approved command set. The same rule bars confirmation steps without falsifiable criteria (see the git-side anchoring case in git-safety-net prevention_practices.md).
+
+Write the single safe form of each disposal, not a risk-asymmetric either/or. "Delete or archive" leaves the choice to the execution moment; when the options carry asymmetric risk (deleting loses a 1.8 G offline rust toolchain that can only be re-downloaded; archiving costs only NAS bytes), the plan must fix the safe form verbatim — "archive to NAS, verify by readback, then delete local copy". Measured 2026-10-21 (adversarial R2): a build-output line item was written as delete-or-archive while the report's own prose said archiving was preferable; an executor picking the first option would have destroyed the offline toolchain. If the report recommends one option anywhere, the command list must say that option and no other.
+
 ## Recommendation
 
 Recommend <option> because <evidence-based reason>. Alternatives:
