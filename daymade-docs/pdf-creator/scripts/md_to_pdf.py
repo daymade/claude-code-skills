@@ -13,9 +13,7 @@ Usage:
     python md_to_pdf.py input.md  # outputs input.pdf, default theme, auto backend
 
 Themes:
-    Stored in ../themes/*.css. Built-in themes:
-    - default:     Songti SC + black/grey, formal documents
-    - warm-terra:  PingFang SC + terra cotta, training/workshop materials
+    Stored in ../themes/*.css. List available choices with --list-themes.
 
 Requirements:
     pandoc (system install, e.g. brew install pandoc)
