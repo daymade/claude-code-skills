@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.21.11 → v1.21.12): Distinguish empty-but-focused Find from clear-and-blur, retain scope information through collapsed controls and preserve ordinary hosts of a shared Reader. Add synthetic loaded-window and naturally drifting pending-question regression cases. Change type: bounded acceptance guidance correction and evaluation coverage maintenance.
+- **data-visualization-discipline** (v1.1.3 → v1.1.4): Add a synthetic status-wall regression separating activity, attention, detail coverage, observation freshness and current identity, with complete-zero controls. Preserve runtime semantics. Change type: evaluation coverage maintenance.
 - **peer-message** (v1.24.0 → v1.24.1): Return structured error receipts for handled `--json` failures so consumers can distinguish confirmed unsent attempts from unknown delivery without parsing stderr. Preserve existing diagnostics and exit codes. Change type: error-receipt compatibility repair.
 
 - **macos-watchdog** (`daymade-macos` v1.24.5 → v1.24.6): Distinguish durable fault ownership from log-only diagnostics, and separate notification attempts, acceptance and consumption before applying cooldown or recovery. Keep unknown delivery pending without replaying the send. Change type: bounded alert-delivery guidance correction.

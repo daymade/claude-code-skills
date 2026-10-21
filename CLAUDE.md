@@ -256,6 +256,9 @@ Before designing or judging monitoring, availability or certificate matrices, en
 Observation and risk semantics follow its data-validation route.
 For incomplete observations, unknown counts or confirmed zero, use its
 [operational-state matrix](data-visualization-discipline/references/operational-state-matrix.md).
+When maintaining UI-journey or operational-state regression cases, use
+[frontend-visual-qa evals](frontend-visual-qa/evals/evals.json) and
+[data-visualization-discipline evals](data-visualization-discipline/evals/evals.json).
 
 For oversized images or figure readability in a Markdown note or transcript, use
 [frontend-visual-qa's actual-reader handoff](frontend-visual-qa/references/markdown-reader-handoff.md).

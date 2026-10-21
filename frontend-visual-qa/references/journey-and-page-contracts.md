@@ -109,6 +109,16 @@ this is a journey through the existing harness, not a replacement camera or pars
 - Return and reenter the same object; compare reader/document identity where
   retention is promised, range, scroll, expanded content and current find state.
   Use the actual scroll owner, not a guessed body/document scroll property.
+- For bounded Find, qualify a no-match result by the loaded range and use the
+  existing history/pagination path before inferring whole-document absence.
+  Read the product's Find contract before prescribing state changes: when its
+  scope hint is active for focus or a nonempty query, test empty-but-focused,
+  nonempty-but-collapsed and clear-then-blur separately. Clearing the query alone
+  does not end focus. Keep the required scope explanation visible at the point
+  of search, not only in a disclosure that closes on focus. For a shared Reader,
+  include a host without the optional scope declaration as a healthy control;
+  preserve its query, pagination, scroll and return behavior rather than imposing
+  the scoped host's hint or inventing new clear/scroll semantics.
 - Hide the selected object with an authorized filter or no-match query, then
   trigger its retained reading action. Check that it reads the same object and
   preserves the filter; disabling the action or clearing the query cannot certify
