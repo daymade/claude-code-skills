@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **ghostty-use** (v1.7.1 → v1.8.0): Persist fixed-manifest recovery inputs for an independent executor and recheck account mode, manifest bytes and process generation. Add opt-in write-ahead exit-control receipts that prevent replay after ambiguous delivery or interruption. Preserve the explicit missing-host-adapter boundary; this does not claim live GUI switching or authenticated continuation. Change type: additive handoff capability and control-safety repair.
+
 - **git-safety-net** (v1.22.8 → v1.22.9): Disable automatic maintenance only in the merged-branch test's disposable repositories so background object writes cannot outlive fixture cleanup. Preserve the large-conflict regression and production verdict logic. Change type: test-fixture isolation repair.
 
 - **transcript-fixer** (`daymade-audio` v1.50.2 → v1.50.3): Bind written entity citations to the selected occurrence. Support source-attested company short names in explicit founder introductions and their same-paragraph account references; preserve person-name conflicts, unrelated-source refusal and atomic verdict/ledger writes. Change type: bounded authority-validation behavior change.
