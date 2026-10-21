@@ -3371,7 +3371,7 @@ LaunchAgent / LaunchDaemon，同时不让看门狗自己变成干扰源。
 
 ### **devils-advocate** - 压力测试你的投资论点
 
-> **安装**：`claude plugin install daymade-financial@daymade-skills>`
+> **安装**：`claude plugin install daymade-financial@daymade-skills`
 > （仅随套件提供 — 以 `daymade-financial:devils-advocate` 调用）
 
 针对你提供的证据材料，对投资论点做结构化的「魔鬼代言人」压力测试——
