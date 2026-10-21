@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **macos-watchdog** (`daymade-macos` v1.24.4 → v1.24.5): Require bounded exact-service unload observation before an authorized replacement. Preserve loaded-job refusal, pending work and rollback inputs; keep timeout or unknown states visible. Change type: bounded deployment guidance correction.
+- **app-evolver** (v1.1.7): Compare existing and alternative information grouping after structural interface feedback, preserving the same task, content and return context before choosing local visual changes.
+- **frontend-visual-qa** (v1.21.11): Check long-document reading cues, late citations and usable controls at deep scroll positions, with uneven sections and relevant expanded panels.
 
 - **skill-creator** (`daymade-skill` v1.73.0 → v1.73.1): Keep invocation, selection and incomplete-read semantics in their owners. Distinguish registered tool selection from the capture command's child argv.
 - **skill-creator** (`daymade-skill` v1.72.0 → v1.73.0): Capture an already-authorized argv without returning its output bodies.
