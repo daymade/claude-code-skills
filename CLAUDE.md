@@ -127,6 +127,12 @@ For plugin/Skill naming, source registration or release labels, use
 [source location and activation](daymade-skill/skill-creator/references/source-location-and-activation.md)
 and [delivery identity](daymade-skill/skill-creator/references/delivery-identity.md).
 
+For a Chinese illustrated recipient guide from a manufacturer PDF, enter
+[docs-router](daymade-docs/docs-router/SKILL.md) and its
+[manual workflow](daymade-docs/pdf-creator/references/illustrated-manual.md).
+For relative-image resource paths or Markdown → PDF rendering, read
+[PDF Creator's ordinary entry](daymade-docs/pdf-creator/SKILL.md).
+
 For saved HTML batches, follow [the conversion owner](daymade-docs/doc-to-markdown/references/html-conversion.md#gate-a-batch-through-the-existing-recipe)
 and its actual-reader pilot before expansion. Keep conversion evidence and reader
 observations separate; this file does not define another batch recipe.
