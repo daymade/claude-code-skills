@@ -2,11 +2,12 @@
 name: claude-switch-models-setup
 disable-model-invocation: true
 description: >-
-  Sets up and maintains isolated Claude Code CLI profiles to run Kimi, MiniMax, DeepSeek, GLM,
-  StepFun or Anthropic in separate terminal windows. Use for multi-provider setup, switching models,
-  csk/csd/csg aliases, CLAUDE_CONFIG_DIR, or ~/.claude-profiles. Owns profile-drift troubleshooting
-  (missing skills/hooks, symlink drift, settings drift) and context-window setup ([1m] marker vs
-  CLAUDE_CODE_MAX_CONTEXT_TOKENS).
+  Isolates profiles for multi-provider setup and switching models in separate
+  terminal windows (Kimi, MiniMax, DeepSeek, GLM, StepFun, Anthropic).
+  Use for provider switching, csk/csd/csg aliases,
+  CLAUDE_CONFIG_DIR, ~/.claude-profiles, profile drift (missing skills/hooks, symlinks,
+  settings), context-window setup ([1m], CLAUDE_CODE_MAX_CONTEXT_TOKENS), or reducing
+  startup context from preloaded MCP tool schemas.
 ---
 
 # Claude Code Profiles and Local Skill Activation
@@ -16,6 +17,11 @@ description: >-
 This skill creates an isolated-but-shared profile system for Claude Code CLI. Each profile gets its own `.claude.json` state file (provider credentials and session history) while sharing skills, projects, hook scripts, agents, and installed plugin state across all profiles — and converging each profile's `settings.json` (hook registration, marketplaces, env feature flags, permissions, preferences) plus the **behavior slice of its `.claude.json`** (e.g. `workflowSizeGuideline`) from the default profile, so the only intended difference between profiles is the model/provider.
 
 The result: you can open one terminal with Kimi, another with DeepSeek, another with Anthropic — each running as a fully independent Claude Code process, without configuration bleed.
+
+For reducing fixed startup context from preloaded MCP tool schemas, read
+[references/mcp-startup-context.md](references/mcp-startup-context.md). It owns
+same-mode measurement, active-profile discovery, provider compatibility checks,
+reversible server suppression, and fresh-process acceptance.
 
 ## How It Works
 

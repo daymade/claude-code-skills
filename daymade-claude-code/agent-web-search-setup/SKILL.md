@@ -573,14 +573,17 @@ resolved into the proxy's fake-IP range, and a later check disproved it: both
 hosts sat in that range, twenty times apart in latency. Sitting in that range is
 not what separates a working host from a failing one; round-trip time is.
 
-`claude mcp get <name>` is better and still not sufficient. It health-checks the
-server and prints `Status: ✔ Connected` or the actual transport error, plus the
-scope it was registered at — which separates "registered" from "reachable", a
-distinction `list` does not make. Both states were seen on the same endpoint
-minutes apart. What it does not tell you is whether the grant landed, or which
-tools the server exposes, so it cannot close this step on its own. The live query,
-with the tool name read back from the run's own `init` and `tool_use` events, is
-the only check that answers the question being asked.
+`claude mcp get <name>` can health-check the server and report `Status: ✔
+Connected` or the actual transport error, but do not print its unfiltered output
+in an agent conversation: stdio `Environment` and remote headers can contain
+credentials. Use the [field-limited inspection
+contract](../claude-switch-models-setup/references/credential-storage.md#inspecting-mcp-registration-without-printing-secrets)
+when only the registration scope is needed. If full transport detail is necessary,
+have a human inspect it outside the agent conversation and report only the
+non-secret error class, not the raw output. Neither form tells you whether the
+grant landed, or which tools the server exposes. The live query, with the tool name
+read back from the run's own `init` and `tool_use` events, is the only check that
+answers the readiness question.
 
 **What to look for is a trigger list, not a name.** Read the installed skills'
 front matter and find any whose triggers include bare search words — "search",

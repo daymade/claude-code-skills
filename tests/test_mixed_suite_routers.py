@@ -36,7 +36,8 @@ SPECS = {
         },
         "prefix": ("plugin/Skill repair", "marketplace", "statusline",
                    "model profiles/source sync", "1M/[1m] context",
-                   "usage/quota reset ping", "memory→docs", ".txt repair"),
+                   "usage/quota reset ping", "memory→docs", ".txt repair",
+                   "MCP startup context"),
     },
 }
 
