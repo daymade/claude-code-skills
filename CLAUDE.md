@@ -32,10 +32,10 @@ Then:
 
 **From your terminal (CLI):**
 ```bash
-# Automated installation (macOS/Linux)
+# Generate installation commands (macOS/Linux)
 bash -o pipefail -c 'curl -fsSL https://raw.githubusercontent.com/daymade/claude-code-skills/main/scripts/install.sh | bash'
 
-# Automated installation (Windows PowerShell)
+# Generate installation commands (Windows PowerShell)
 iwr -useb https://raw.githubusercontent.com/daymade/claude-code-skills/main/scripts/install.ps1 | iex
 
 # Manual installation
@@ -43,6 +43,8 @@ claude plugin marketplace add https://github.com/daymade/claude-code-skills
 # Marketplace name: daymade-skills (from marketplace.json)
 claude plugin install daymade-skill@daymade-skills
 ```
+
+[Run the generated commands in your terminal](README.md#generate-installation-commands) after using either helper script.
 
 ### Skill Validation and Packaging
 
