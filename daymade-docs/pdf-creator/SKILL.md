@@ -222,7 +222,7 @@ python scripts/md_to_pdf.py input.md output.pdf --no-preview
 
 The script applies CJK-aware processing automatically — **without modifying the user's markdown source or theme CSS files**:
 
-### Layer 1: CSS patch (auto-injected, fixes ~80% of cases)
+### Layer 1: CSS patch (auto-injected)
 
 `_load_theme()` appends a CJK typography CSS patch to the loaded theme CSS. The patch:
 
