@@ -24,7 +24,7 @@ absolute output file and read the named record there. `--full` preserves the
 complete body; the default marker is not a verbatim export.
 
 ```bash
-python3 scripts/read_claude_session.py --session <SESSION_ID> --full
+python3 scripts/read_claude_session.py --session <SESSION_ID> --full > /absolute/path/session-evidence.md
 ```
 
 Use triage only when a known project physically bounds candidate directories:
