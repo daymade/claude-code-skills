@@ -3012,7 +3012,8 @@ def cmd_resolve_review(args: argparse.Namespace) -> None:
                 record = json.loads(Path(record_path).read_text(encoding="utf-8"))
                 if isinstance(record, dict) and record.get("kind") == "entity_reference":
                     authority = entity_reference_citation(record, item_id=item.id, target=to_text,
-                        entity_type=entity_type, original=item.original_text, context=item.context_snippet)
+                        entity_type=entity_type, original=item.original_text, context=item.context_snippet,
+                        context_offset=item.context_offset)
                     nonperson_reference_validated = True
                 else:
                     authority = user_answer_citation(record, item_id=item.id, target=to_text)

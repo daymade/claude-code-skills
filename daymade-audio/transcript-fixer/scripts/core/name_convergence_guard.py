@@ -155,8 +155,97 @@ NONPERSON_CUES = {
 }
 
 
+def _citation_occurrence(original: str, context: Optional[str], offset: Optional[int]) -> int:
+    """Bind type evidence to one recorded slot, never a sibling mention."""
+    if not isinstance(original, str) or not original or not isinstance(context, str) or not context:
+        raise ValueError("entity_reference requires a nonempty original and occurrence context")
+    if offset is None:
+        positions = [m.start() for m in re.finditer("(?=" + re.escape(original) + ")", context)]
+        if len(positions) != 1:
+            raise ValueError("entity_reference repeated original requires context_offset")
+        return positions[0]
+    if type(offset) is not int or offset < 0 or context[offset:offset + len(original)] != original:
+        raise ValueError("entity_reference context_offset must select this original")
+    return offset
+
+
+# This finite organization-introduction syntax is intentionally narrower than
+# entity classification. A source-attested name extension is not itself a cue.
+_ORG_UNSAFE_RE = re.compile(r"不|没|并非|产品|软件|系统|老师|先生|女士|我叫|来自|属于")
+_ORG_NEGATIVE_RE = re.compile(r"不|没|并非")
+_ORG_SOURCE_CONNECTOR_RE = re.compile(r"的|是|由|来自|属于|产品|软件|系统")
+_ORG_INTRO_PREFIX_RE = re.compile(
+    r"(?:^|[，,])\s*(?:我是|我就是|我叫[^，,。.!！?？;；\n]{1,20}[，,])\s*$")
+_ORG_COMPANY_PREDICATE_RE = re.compile(r"(?:是|做|研发|生产|成立|从事|主要|专注|提供|开发|经营)")
+
+
+def _organization_short_name(quote: str, target: str, original: str,
+                             context: str, offset: int) -> bool:
+    """Recognise a company self-introduction or its same-paragraph account reference.
+
+    The source must literally name TARGET+extension+corporate suffix. The selected
+    occurrence must carry the same extension, and be the founder introduction or
+    an explicit first-person account reference following that introduction.
+    """
+    if _ORG_UNSAFE_RE.search(quote):
+        return False
+    # Paragraph boundaries prevent a company introduced by a different speaker
+    # or in another paragraph from supplying this occurrence's referent.
+    lo, hi = 0, len(context)
+    for boundary in re.finditer(r"\n\s*\n", context):
+        if boundary.end() <= offset:
+            lo = boundary.end()
+        elif boundary.start() > offset:
+            hi = boundary.start()
+            break
+    paragraph, selected = context[lo:hi], offset - lo
+    source_names = re.finditer(re.escape(target) +
+        r"(?P<extension>[A-Za-z0-9\u3400-\u9fff·&-]{2,24}?)(?:有限公司|公司|集团|机构)", quote)
+    for source_name in source_names:
+        extension = source_name["extension"]
+        if _ORG_SOURCE_CONNECTOR_RE.search(extension):
+            continue
+        for size in range(2, len(extension) + 1):
+            short = original + extension[:size]
+            end = selected + len(short)
+            if not paragraph.startswith(short, selected) or not re.match(r"[的，,。.!！?？;；\s]", paragraph[end:end + 1]):
+                continue
+            # Both supported forms have an affirmative company self-introduction.
+            declaration = re.compile(re.escape(short) + r"的创始人[，,。.!！\s]*我们公司")
+            for intro in declaration.finditer(paragraph):
+                clause_start = max([m.end() for m in re.finditer(r"[，,。.!！?？;；\n]", paragraph[:intro.start()])], default=0)
+                sentence_start = max([m.end() for m in re.finditer(r"[。.!！?？;；\n]", paragraph[:intro.start()])], default=0)
+                if (not _ORG_INTRO_PREFIX_RE.search(paragraph[sentence_start:intro.start()])
+                        or _ORG_UNSAFE_RE.search(paragraph[clause_start:intro.start()])
+                        or _ORG_NEGATIVE_RE.search(paragraph[sentence_start:intro.start()])):
+                    continue
+                company_clause = re.split(r"[。.!！?？;；\n]", paragraph[intro.end():], maxsplit=1)[0]
+                if (not _ORG_COMPANY_PREDICATE_RE.match(company_clause)
+                        or _ORG_NEGATIVE_RE.search(company_clause)):
+                    continue
+                if intro.start() == selected:
+                    return True
+                if intro.end() > selected:
+                    continue
+                if _ORG_NEGATIVE_RE.search(paragraph[intro.start():selected]):
+                    continue
+                # A repeated name is supported only in this explicit account
+                # reference, not merely because it shares a company paragraph.
+                clause_start = max([m.end() for m in re.finditer(r"[，,。.!！?？;；\n]", paragraph[:selected])], default=0)
+                before, after = paragraph[clause_start:selected], paragraph[end:]
+                sentence_end = re.search(r"[。.!！?？;；\n]", after)
+                sentence_start = max([m.end() for m in re.finditer(r"[。.!！?？;；\n]", paragraph[:selected])], default=0)
+                sentence = paragraph[sentence_start:end] + (after[:sentence_end.start()] if sentence_end else after)
+                if (not _ORG_UNSAFE_RE.search(sentence)
+                        and re.fullmatch(r"(?:可以)?关注(?:一下)?(?:这个|这家|我们)?", before)
+                        and re.match(r"[，,]\s*我们(?:在|有|是|做)", after)):
+                    return True
+    return False
+
+
 def entity_reference_citation(record: object, *, item_id: int, target: str,
-                              entity_type: str, original: str, context: Optional[str]) -> str:
+                              entity_type: str, original: str, context: Optional[str],
+                              context_offset: Optional[int] = None) -> str:
     """Verify a typed written citation and its actual source quote.
 
     This is not an identity classifier. The operator still judges source authority;
@@ -177,10 +266,13 @@ def entity_reference_citation(record: object, *, item_id: int, target: str,
     source = Path(record["source_path"]).expanduser()
     if quote not in source.read_text(encoding="utf-8"):
         raise ValueError("entity_reference quote is absent from source_path")
-    # A typed citation must also describe this occurrence as that referent.
+    # A typed citation must describe the selected occurrence as that referent.
+    offset = _citation_occurrence(original, context, context_offset)
     cues = NONPERSON_CUES[entity_type]
-    if not context or not any(re.search(re.escape(original) + r"\s*" + re.escape(cue), context, re.I) for cue in cues):
-        raise ValueError("this occurrence has no explicit adjacent cue for entity_type")
+    adjacent = any(re.match(r"\s*" + re.escape(cue), context[offset + len(original):], re.I) for cue in cues)
+    short_name = entity_type == "organization" and _organization_short_name(quote, target, original, context, offset)
+    if not adjacent and not short_name:
+        raise ValueError("this occurrence has no supported source-bound cue for entity_type")
     return ENTITY_REFERENCE_PREFIX + json.dumps(record, ensure_ascii=False, separators=(",", ":"))
 
 # This is a citation syntax, not an open-ended sentiment classifier. A target
