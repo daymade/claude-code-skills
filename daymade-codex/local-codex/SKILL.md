@@ -54,8 +54,6 @@ the wrong build to quote when the fallback picked the app-bundled one. Use the
 "<codex_path from status output>" --version
 ```
 
-Two builds on one machine is the normal state, not an anomaly.
-
 ## Usage Patterns
 
 ### 1. Basic exec (single task)
@@ -89,31 +87,21 @@ python3 scripts/codex_wrapper.py review \
   300
 ```
 
-### 3. Check status
+### 3. Inspect cached login
 
 ```bash
 python3 scripts/codex_wrapper.py status
 ```
 
-## Output Format
+Interpret this result using [cached login inspection](references/oauth-guide.md#cached-login-inspection).
+For an authorized real access check, follow that guide's Verification route.
 
-The wrapper returns JSON with:
-- `success`: bool
-- `exit_code`: int
-- `elapsed_seconds`: float
-- `stdout`: raw output
-- `stderr`: error stream (truncated)
-- `parsed_jsonl`: parsed JSONL events (if --json)
-- `final_message`: extracted assistant text (if available)
+## Parameters and results
 
-## Parameters
-
-| Parameter | Default | Options |
-|-----------|---------|---------|
-| model | `gpt-5.5` | `gpt-5.5`, `gpt-5.5-pro`, `o4-mini`, etc. |
-| sandbox | `workspace-write` | `read-only`, `workspace-write`, `danger-full-access` |
-| timeout | 300 | seconds (increase for large tasks) |
-| json_output | true | always true (wrapper parses JSONL) |
+The command arguments, defaults and JSON fields are defined by `main()`,
+`exec_codex()`, `review_codex()` and `check_auth_status()` in
+[`scripts/codex_wrapper.py`](scripts/codex_wrapper.py). Use those definitions
+rather than a second parameter or output-field table.
 
 ## Safety Notes
 
@@ -128,16 +116,18 @@ The wrapper returns JSON with:
 For multi-step tasks, Codex supports session resume:
 ```bash
 # First step
-codex exec --ephemeral "Step 1..."
-# Later
-codex exec resume --last "Step 2..."
+codex exec --json "Step 1..."
+# Later, use the session ID reported by that first invocation:
+codex exec resume "${CODEX_SESSION_ID:?Set the session ID from the first invocation}" "Step 2..."
 ```
 
 The wrapper currently runs single-shot exec. For multi-step workflows, use raw `codex exec` commands.
+An ephemeral invocation does not persist a session for later resume.
+Use `--last` only after confirming that the most recent recorded session is the intended target.
 
 ## Limitations
 
 - Remote login can use device authorization with a browser on another machine; follow the OAuth guide instead of requiring a desktop app on the remote host.
-- `codex doctor` works and is the first thing to run when Codex misbehaves. Run it **without** `--summary` — `--summary` cuts reachability down to a bare `✗ reachability ... unreachable` line (it actually prints twice, once under Notes and once under Connectivity) with no host and no remedy, in both the fail and the warning state. The full form names the host, the endpoint statuses, and a `→ check proxy, ...` remedy line, likewise in both states; what differs between fail and warning is which endpoint failed and whether it is marked `(required)`. For `--json`, everything lives under `checks["network.provider_reachability"]`: `details` maps endpoint → status, and `issues` is a list whose objects carry `severity` / `cause` / `measured` / `expected` / `remedy` / `fields` (the last three are optional). Two traps: there is **no top-level `issues` key at all** — do not write `report["issues"]` (KeyError) or `report.get("issues")` (silently None); and a check's own `issues` key is **omitted entirely when empty** rather than sent as `[]`, so `check.get("issues")` returns None for the 20+ checks that have nothing to report. Top level has exactly 5 keys, `generatedAt` is a string like `"1790057704s since unix epoch"` rather than a timestamp, and exit 1 fires on **any** failed check, not just reachability — `rollout_db_parity` is ⚠ on this install, and if it ever flips to fail it turns that exit code red for a reason unrelated to your network, which is what gates like `codex-1m-context-window-setup`'s `returncode == 0` check read. Verified 2026-09-22 on 0.155.1 (npm) and 0.155.0-alpha.9.2 (ChatGPT.app-bundled); the remedy wording quoted here is specific to those builds — upstream has since changed it.
-- Environment variables are NOT inherited into Codex's sandbox; pass via config or prompt
+- Inspect the selected binary's `doctor --help` before using its diagnostics; when supported, use the full report for endpoint/remedy details rather than `--summary`. Interpret the failed check, not only the aggregate exit code, and read the emitted JSON schema instead of assuming an older build's keys.
+- Shell environment inheritance follows the selected build's `shell_environment_policy`; inspect the effective configuration. Keep credentials out of prompts.
 - Large file operations may need increased timeout
