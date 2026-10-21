@@ -421,7 +421,8 @@ For CLI/hook manifest selection or continuation in an already-running host, read
 
 For reconciliation of an already-resumed native Goal, read
 [native Goal reconciliation](daymade-claude-code/continue-codex-work/references/native-goal-reconciliation.md)
-directly; use `continue-codex-work`'s full entry for external task takeover.
+directly, binding the current host thread without external-takeover preparation;
+use `continue-codex-work`'s full entry and verified history receipt for external task takeover.
 
 For input appended after an operation's current-thread request, use [read-codex-history's bounded input cursor](daymade-claude-code/read-codex-history/SKILL.md#bounded-current-thread-direct-input-cursor). That owner defines source binding and read failures; the consuming operation owns human authorization. Keep executable commands and source details in the Skill.
 

@@ -1,14 +1,18 @@
 # Native Goal reconciliation
 
-Use only when taking over a task that already has a native Goal. Ordinary tasks do
-not need a Goal. Keep the user's latest stage, authorization and stop request as
+Use for same-thread native continuation or an external takeover of a task that
+already has a native Goal. Ordinary tasks do not need a Goal. Keep the user's latest stage, authorization and stop request as
 the governing contract; a reminder or an unfinished objective adds no authority.
 
 ## Read status and discover the actual recovery control
 
-1. Resolve the exact logical thread through the verified history receipt, then
-   read its Goal with the current host's getter. Keep missing, null or unreadable
-   Goal state explicit; never create a replacement to make the status look complete.
+1. Bind the exact logical thread before reading its Goal with the current host's
+   getter. For this same conversation already restored by the host, use its current
+   runtime identity and retained context; this check does not require external
+   takeover or another history scan. For a different context taking over an older
+   task, the owning continuation Skill's verified history receipt remains mandatory.
+   Keep missing, null or unreadable Goal state explicit; never create a replacement
+   to make the status look complete.
 2. Separate unfinished business from automatic execution. `blocked`, `paused`,
    `complete`, `usageLimited` and `budgetLimited` do not establish an active run.
    Even `active` is a state, not evidence that a later automatic turn occurred.
@@ -20,8 +24,9 @@ the governing contract; a reminder or an unfinished objective adds no authority.
    `usageLimited` and `budgetLimited` are not recovery-by-reset cases: do not change
    their counters/budget or create a substitute Goal. If only one route is blocked,
    continue the other necessary authorized work.
-4. Read the latest failed/interrupted turn and unresolved tool outcome through the
-   verified thread's owning reader/control. Record its exact error and time beside
+4. Read the latest failed/interrupted turn and unresolved tool outcome from the
+   retained same-thread evidence or the verified thread's owning reader/control.
+   Retrieve only missing decision-bearing evidence through that owner. Record its exact error and time beside
    the Goal observation; a status label alone does not explain why execution stopped.
    Apply the following preflight before attempting a recovery write.
 5. Inspect the installed host's official help, generated protocol schema and live
