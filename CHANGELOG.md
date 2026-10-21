@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **docs-router / pdf-creator** (`daymade-docs` v1.25.6 → v1.26.0): Add a source-traced workflow for concise Chinese illustrated guides from manufacturer manuals. Resolve relative images against the input Markdown directory in both PDF backends and verify that the intended figures appear in the rendered PDF.
+
 - **qa-expert** (v1.2.3): Add optional normalization and drive-relative path cases with independent runtime oracles and healthy controls; preserve the existing test-selection scope and native Windows evidence boundary.
 - **skill-creator** (`daymade-skill` v1.71.0 → v1.72.0): Add opt-in review rebind for unchanged complete plugin distributions and originally reviewed dependencies after main integration. Preserve immutable original reviews, exact-head publication checks, source identity and legacy attest/verify; reject incomplete declarations or changed content. Change type: additive release-evidence capability.
 
