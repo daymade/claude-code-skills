@@ -16,6 +16,7 @@ COMMANDS = {
     "delivery_identity": "scripts.delivery_identity",
     "quick_validate": "scripts.quick_validate",
     "skill_read_plan": "scripts.skill_read_plan",
+    "capture_command": "scripts.capture_command",
 }
 
 
@@ -33,9 +34,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if not args:
         return fail("an explicit command is required; use --help")
-    if any(not token.strip() for token in args):
+    validated_args = args
+    if args[0] == "capture_command" and "--" in args:
+        validated_args = args[: args.index("--")]
+    if any(not token.strip() for token in validated_args):
         return fail("blank arguments are not allowed")
-    for token in args:
+    for token in validated_args:
         if token.startswith("-") and "=" in token:
             if not token.split("=", 1)[1].strip():
                 return fail("blank option values are not allowed")

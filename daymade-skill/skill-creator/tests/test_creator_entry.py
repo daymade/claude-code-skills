@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ENTRY = ROOT / "scripts/creator.py"
 OWNERS = (
     "audit_skill_regression", "release_readiness", "source_contract", "materialize", "delivery_identity",
-    "quick_validate", "skill_read_plan",
+    "quick_validate", "skill_read_plan", "capture_command",
 )
 
 
@@ -96,6 +96,7 @@ class CreatorEntryTests(unittest.TestCase):
             ("materialize", "prepare", "--root", str(output)),
             ("quick_validate", "--audience", "public"),
             ("skill_read_plan", "--max-chunk-bytes", "100"),
+            ("capture_command", "--cwd", str(self.caller)),
         )
         for owner, *args in cases:
             with self.subTest(owner=owner):

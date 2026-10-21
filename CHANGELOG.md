@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` v1.72.0 → v1.73.0): Capture an already-authorized argv without returning its output bodies.
+
 - **ghostty-use** (v1.6.3 → v1.7.0): Add explicit post-login fixed-set recovery, a read-only current-session-last handoff plan and two-observation literal-control guard for authorized host adapters. Preserve manual switching, reboot recovery, Claude exclusion and unknown authentication reporting. Change type: additive workflow capability and control-safety repair; live GUI acceptance remains host-dependent.
 - **local-codex** (`daymade-codex` v1.4.3 → v1.4.4): Obtain independent grants in empty bound stores, preserve explicit single-owner transfers and bind refresh ownership before native quota queries. Separate identity, usable access, quota, process adoption and Credit policy. Change type: authentication workflow safety redesign and billing-claim correction.
 
