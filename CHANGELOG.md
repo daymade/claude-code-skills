@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` v1.72.0 → v1.73.0): Capture an already-authorized argv without returning its output bodies.
+- **pdf-creator** (`daymade-docs` v1.26.0 → v1.26.1): Keep illustrated-guide metadata at its authoritative source while retaining expected hashes, crop data and unique locators. Add the project entry and a quoted Chinese-path example; remove copied theme properties, computed totals and an unresolved rule attribution. Rendering behavior is unchanged.
+
+- **ghostty-use** (v1.6.3 → v1.7.0): Add explicit post-login fixed-set recovery, a read-only current-session-last handoff plan and two-observation literal-control guard for authorized host adapters. Preserve manual switching, reboot recovery, Claude exclusion and unknown authentication reporting. Change type: additive workflow capability and control-safety repair; live GUI acceptance remains host-dependent.
+- **local-codex** (`daymade-codex` v1.4.3 → v1.4.4): Obtain independent grants in empty bound stores, preserve explicit single-owner transfers and bind refresh ownership before native quota queries. Separate identity, usable access, quota, process adoption and Credit policy. Change type: authentication workflow safety redesign and billing-claim correction.
+
+- **docs-router / pdf-creator** (`daymade-docs` v1.25.6 → v1.26.0): Add a source-traced workflow for concise Chinese illustrated guides from manufacturer manuals. Resolve relative images against the input Markdown directory in both PDF backends and verify that the intended figures appear in the rendered PDF.
+
 - **qa-expert** (v1.2.3): Add optional normalization and drive-relative path cases with independent runtime oracles and healthy controls; preserve the existing test-selection scope and native Windows evidence boundary.
 - **skill-creator** (`daymade-skill` v1.71.0 → v1.72.0): Add opt-in review rebind for unchanged complete plugin distributions and originally reviewed dependencies after main integration. Preserve immutable original reviews, exact-head publication checks, source identity and legacy attest/verify; reject incomplete declarations or changed content. Change type: additive release-evidence capability.
 

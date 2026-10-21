@@ -909,8 +909,13 @@ def main(argv=None):
     p6.add_argument("--only", nargs="+", type=nonempty, metavar="ID")
     p6.add_argument("--dry-run", action="store_true", help="read-only readiness and command preview")
     p6.add_argument("--check", action="store_true", help="read-only account/process reconciliation")
+    p6.add_argument("--after-login", action="store_true", help="snapshot was captured after target login; does not prove a prior account change")
     p6.add_argument("--layout", choices=("windows", "tabs"), default="tabs")
     p6.add_argument("--reconcile-seconds", type=bounded_seconds, default=10)
+    p7 = sub.add_parser("switch-plan", help="read-only fixed-set exit/reopen plan; current session is last")
+    p7.add_argument("--snapshot", type=nonempty)
+    p7.add_argument("--current-session", required=True, type=nonempty, help="full UUID of the executing session")
+    p7.add_argument("--executor-pid", type=positive, help="independent controller process; never a target or its descendant")
     for parser in (p1, p4, p5):
         parser.add_argument("--history-reader", type=nonempty, help="installed read-codex-history Skill directory")
         parser.add_argument("--codex-home", type=nonempty)

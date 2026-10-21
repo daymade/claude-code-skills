@@ -292,7 +292,8 @@ def report(doc, live):
         print(f"  WAIT EXIT tty={p['tty']} pid={p['pid']} sid={p.get('sid', 'unresolved')}")
     for s in missing:
         print(f"  MISSING {s['sid']}")
-    print("account source: changed file-auth identity; per-session authenticated request: NOT CHECKED")
+    evidence = "snapshot captured after login" if doc.get("after_login") else "changed file-auth identity"
+    print(f"account source: {evidence}; per-session authenticated request: NOT CHECKED; billing: NOT CHECKED")
     return old, present, missing
 
 
@@ -305,14 +306,22 @@ def restore(args, gs):
         raise ValueError("--only selected a sub-agent; select its saved main parent instead")
     gs.CODEX_HOME_OVERRIDE = doc["codex_home"]
     account = account_identity(doc["codex_home"])
-    if account == doc["source_account"]:
+    after_login = getattr(args, "after_login", False)
+    if after_login and account != doc["source_account"]:
+        raise ValueError("--after-login requires the account captured in this snapshot; take a new snapshot")
+    if not after_login and account == doc["source_account"]:
         raise ValueError("ChatGPT account has not changed; switch login in the saved CODEX_HOME first")
+    doc["after_login"] = after_login
+    if after_login:
+        doc["restore_started_at"] = doc["prepared_at"]
     folder = Path(gs.STATE_DIR) / "switches"
     progress_path = folder / (path.stem + "-progress.json")
     if progress_path.exists():
         progress = read_manifest(progress_path)
         if progress.get("manifest") != str(path) or progress.get("target_account") != account:
             raise ValueError("this handoff is bound to another account; take a new switch-prepare snapshot")
+        if progress.get("after_login", False) != after_login:
+            raise ValueError("restore mode differs from saved progress; keep the original --after-login selection")
         epoch = progress.get("restore_started_at")
         if not isinstance(epoch, (float, int)) or epoch < doc["prepared_at"]:
             raise ValueError("handoff progress has an invalid restore start")
@@ -323,7 +332,8 @@ def restore(args, gs):
         return 1 if old or missing else 0
     # Never run a second copy alongside any old process in the fixed set.
     pending = [s for s in missing if s["sid"] in wanted]
-    if old:
+    blockers = [p for p in old if not after_login or not args.only or p.get("sid") in wanted]
+    if blockers:
         print("Readiness blocked: manually exit listed old/unverified TUIs; this command never terminates them.")
         return 1
     # Unresolved live TUIs could already be the target, so do not open duplicates.
@@ -351,15 +361,17 @@ def restore(args, gs):
     with snapshot_lock(folder / "restore"):
         if account_identity(doc["codex_home"]) != account:
             raise ValueError("account changed during restore preflight")
-        if "restore_started_at" not in doc:
-            doc["restore_started_at"] = int(time.time())  # ps lstart has one-second precision
+        if not progress_path.exists():
+            doc.setdefault("restore_started_at", int(time.time()))  # ps lstart has one-second precision
             atomic_manifest(progress_path, dict(manifest=str(path), target_account=account,
-                            restore_started_at=doc["restore_started_at"], sessions=[]), replace=False)
+                            after_login=after_login, restore_started_at=doc["restore_started_at"], sessions=[]), replace=False)
         if pending:
             print("Keep keyboard and mouse untouched until opening and reconciliation finish.", flush=True)
         for i, s in enumerate(pending, 1):
             fresh = observe(gs)
             blockers, _, fresh_missing = state(doc, fresh)
+            if after_login and args.only:
+                blockers = [p for p in blockers if p.get("sid") in wanted]
             if blockers or fresh.unresolved:
                 raise ValueError("process inventory changed during restore; stop and run switch-restore --check")
             if s["sid"] not in {p["sid"] for p in fresh_missing}:
@@ -382,20 +394,96 @@ def restore(args, gs):
         result = dict(manifest=str(path), checked_at=datetime.now(timezone.utc).isoformat(),
                       target_account=account, account_unchanged=account_unchanged,
                       reopened=[s["sid"] for s in present], missing=[s["sid"] for s in missing],
-                      old_processes=[s.get("sid") for s in old], authentication="not_checked")
+                      old_processes=[s.get("sid") for s in old], after_login=after_login,
+                      authentication="not_checked", billing="not_checked")
         atomic_manifest(folder / (path.stem + "-result.json"), dict(result, sessions=[]))
         if missing:
             retry = [sys.executable, str(Path(gs.__file__).resolve()), "switch-restore", "--snapshot", str(path),
-                     "--layout", args.layout, "--only"] + [s["sid"] for s in missing]
+                     "--layout", args.layout] + (["--after-login"] if after_login else []) + ["--only"] + [s["sid"] for s in missing]
             print("retry only missing: " + shlex.join(retry))
         if not account_unchanged:
             print("Account changed during reconciliation; reopened processes need another handoff.")
         return 1 if old or missing or not account_unchanged else 0
 
 
+def plan(args, gs):
+    """Do not exit the controller that must later resume its own session."""
+    path, doc = current_manifest(gs, args)
+    doc = main_sessions(doc, gs)
+    current = args.current_session
+    if current not in {s["sid"] for s in doc["sessions"]}:
+        raise ValueError("current session must be a full main-session UUID in the fixed manifest")
+    live = observe(gs)
+    if live.unresolved:
+        raise ValueError("resolve live Codex identity before planning exits")
+    by_sid = {s["sid"]: s for s in live}
+    executor = getattr(args, "executor_pid", None)
+    executor_start = None
+    if executor:
+        raw = subprocess.run(["/bin/ps", "-axo", "pid=,ppid="], capture_output=True, text=True, timeout=10)
+        if raw.returncode:
+            raise ValueError("executor ancestry unavailable")
+        parents = {int(a): int(b) for a, b in (line.split() for line in raw.stdout.splitlines())}
+        forbidden = {s["pid"] for s in live if s["sid"] in {r["sid"] for r in doc["sessions"]}}
+        cursor, visited = executor, set()
+        while cursor in parents and cursor not in visited:
+            if cursor in forbidden:
+                raise ValueError("executor is a target process or its descendant; choose an independent controller")
+            visited.add(cursor)
+            cursor = parents[cursor]
+        executor_start = gs._proc_start(executor)
+        if executor not in parents or executor_start is None:
+            raise ValueError("executor process generation unavailable")
+    print(f"FIXED MANIFEST {path}")
+    print(f"EXECUTOR pid={executor} started={executor_start}" if executor else "CURRENT SESSION DEFERRED: independent executor required before its exit")
+    for s in sorted(doc["sessions"], key=lambda row: row["sid"] == current):
+        p = by_sid.get(s["sid"])
+        label = "CURRENT LAST" if s["sid"] == current else "TARGET"
+        print(f"{label} {s['sid']} live_pid={p['pid'] if p else 'missing'} started={p['started'] if p else 'unknown'}")
+        print("  REOPEN " + command(s, doc["codex_home"]))
+    print("Plan only: no UI, credentials or processes changed. Recheck PID/birth, draft, busy state and host permission before each control.")
+    print("Executor existence is not an account/quota/authorization check. Real continuation and billing remain NOT CHECKED.")
+    return 0 if executor else 1
+
+
+def guarded_control(expected, control, controller, *, now=time.time):
+    """Two-observation control handoff for an authorized host adapter; no retry.
+
+    Adapter methods: observe() -> mapping, paste(text), submit(). They must use
+    the host's allowed channel and bind the real surface to the expected TTY.
+    This helper supplies no GUI adapter and cannot override a host denial.
+    """
+    if control not in ("/quit", "/exit"):
+        raise ValueError("only literal local exit controls are supported")
+    fields = ("surface", "sid", "pid", "started", "tty")
+    if (any(expected.get(k) in (None, "") for k in fields)
+            or not isinstance(expected["pid"], int) or isinstance(expected["pid"], bool)
+            or expected["pid"] <= 0 or not isinstance(expected["started"], (float, int))):
+        raise ValueError("complete surface/session/process binding required")
+
+    def check(draft):
+        observation = controller.observe()
+        if not isinstance(observation, dict):
+            raise ValueError("surface observation unavailable; stop input")
+        if (observation.get("app") != "com.mitchellh.ghostty" or observation.get("tool") != "codex"
+                or any(observation.get(k) != expected[k] for k in fields)
+                or any(observation.get(k) is not True for k in ("allowed", "foreground", "exclusive", "idle"))
+                or observation.get("draft") != draft):
+            raise ValueError("control readiness changed or draft is not exact; stop input")
+        stamp = observation.get("observed_at")
+        if not isinstance(stamp, (float, int)) or not 0 <= now() - stamp <= 5:
+            raise ValueError("fresh surface observation required; stop input")
+
+    check("")
+    controller.paste(control)  # controller must paste one complete literal, never type it character by character
+    check(control)  # no Return on stale focus, lost slash, user draft or process reuse
+    controller.submit()  # at most once per invocation; an unknown result requires reconciliation, never replay
+    return "submitted_unverified"
+
+
 def run(args, gs):
     try:
-        return prepare(args, gs) if args.cmd == "switch-prepare" else restore(args, gs)
+        return {"switch-prepare": prepare, "switch-restore": restore, "switch-plan": plan}[args.cmd](args, gs)
     except (ValueError, OSError, TypeError, AttributeError, subprocess.TimeoutExpired) as error:
         print("ERROR: " + str(error), file=sys.stderr)
         return 2

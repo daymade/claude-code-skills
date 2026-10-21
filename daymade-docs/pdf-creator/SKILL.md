@@ -14,18 +14,31 @@ Create professional PDF documents from markdown with Chinese font support and th
 For an existing `.docx` source, use `docx-creator/references/word-to-pdf.md` instead.
 Choose by the authoritative input as well as the output suffix.
 
+When adapting a manufacturer PDF manual into a concise Chinese illustrated
+recipient guide, read [the illustrated-manual workflow](references/illustrated-manual.md)
+before drafting. Continue through this Skill's normal theme, backend and
+visual self-check requirements after assembling the Markdown source.
+
 ## Quick Start
 
 Every `scripts/…` path below is **relative to this skill's own directory** — run the commands from there, or substitute the absolute path. Running them from the directory holding your markdown fails with `Failed to spawn: 'scripts/md_to_pdf.py'`. Omitting the output path is allowed and derives it from the input's basename (`input.md` → `input.pdf`, in the input's directory).
 
+Keep relative image paths relative to the input Markdown file's directory.
+The converter uses that directory for both backends, including when its
+temporary HTML and the command's working directory are elsewhere.
+
 ```bash
-# Default theme (formal: Songti SC + black/grey, A4 print)
+# Default theme
 uv run --with weasyprint scripts/md_to_pdf.py input.md output.pdf
 
-# Warm theme (training: PingFang SC + terra cotta)
+# Source directory and filename containing spaces and Chinese
+uv run --with weasyprint scripts/md_to_pdf.py \
+  "guide source/操作指南.md" "guide source/操作指南.pdf"
+
+# Use a named theme
 uv run --with weasyprint scripts/md_to_pdf.py input.md --theme warm-terra
 
-# Mobile theme (narrow page, large font — for phone reading / WeChat sharing)
+# Mobile theme
 uv run --with weasyprint scripts/md_to_pdf.py input.md --theme mobile
 
 # Batch convert all markdown files with a specific theme
@@ -40,15 +53,9 @@ python scripts/md_to_pdf.py --list-themes dummy.md
 
 ## Themes
 
-Stored in `themes/*.css`. Each theme is a standalone CSS file.
-
-| Theme | Page Size | Font | Color | Best for |
-|-------|-----------|------|-------|----------|
-| `default` | A4 | Songti SC + Heiti SC | Black/grey | Legal docs, contracts, formal reports |
-| `cjk-auto` | A4 | Songti SC + Heiti SC | Black/grey | Tables with uneven column content (course schedules, itemized lists) |
-| `warm-terra` | A4 | PingFang SC | Terra cotta (#d97756) + warm neutrals | Course outlines, training materials, workshops |
-| `warm-terra-menu` | A4 | PingFang SC | Terra cotta (#d97756) + warm neutrals | warm-terra variant hardened for module menus/lists: 2-column long-text tables wrap without first-column overflow + Menlo unicode-range keeps CJK inline-code from rendering blank in Preview/Adobe |
-| `mobile` | 148mm × 210mm | PingFang SC | Terra cotta + warm neutrals | Phone reading, WeChat sharing, on-the-go reference |
+Use `--list-themes` from Quick Start to read the available theme names and
+descriptions. Read [`themes/*.css`](themes/) for page geometry, font
+stacks, colors and per-theme layout rules.
 
 To create a new theme: copy `themes/default.css`, modify, save as `themes/your-theme.css`.
 
@@ -56,12 +63,12 @@ To create a new theme: copy `themes/default.css`, modify, save as `themes/your-t
 
 | Scenario | Recommended Theme | Why |
 |----------|-------------------|-----|
-| Print on A4 paper, handouts, contracts | `default` | Standard page size, formal typography |
-| Training materials, course outlines | `warm-terra` | Warm accent color, readable for workshop contexts |
-| Send via WeChat, read on phone | `mobile` | Narrow page (148mm), 15px font, 1.9 line-height — comfortable on small screens |
+| Print on A4 paper, handouts, contracts | `default` | [Print layout](themes/default.css) |
+| Training materials, course outlines | `warm-terra` | [Training layout](themes/warm-terra.css) |
+| Send via WeChat, read on phone | `mobile` | [Phone layout](themes/mobile.css) |
 | Both print AND mobile needed | Run twice with different themes | The skill is fast; generate both versions |
 
-**Decision rule:** If the user does not specify, default to `warm-terra` for training/course content and `default` for formal documents — but pick `cjk-auto` over `default` when the document's tables have uneven column content (schedules, itemized lists), which is what that theme's `table-layout: auto` exists for. Ask "是否需要手机版？" only when the output channel is unclear.
+**Decision rule:** If the user does not specify, default to `warm-terra` for training/course content and `default` for formal documents — but pick [`cjk-auto`](themes/cjk-auto.css) over `default` when the document's tables have uneven column content (schedules, itemized lists). Ask "是否需要手机版？" only when the output channel is unclear.
 
 ## Backends
 
@@ -126,7 +133,7 @@ The reference is a measuring stick, never a deliverable — it may well have the
 
 The count comparison, in both directions: fewer rules than the reference means the renderer dropped some; more means the arguments are swapped or the two files are not the same document. Counts rather than positions, and document-wide rather than per page, because the two backends break the same source differently — measured on one 60-row CJK table, whose row content decides where the breaks land: 5 pages vs 3 for `default`, 3 vs 15 for `warm-terra-menu`, with the rule counts identical throughout.
 
-Calibrated across 5 themes × single- and multi-page × both argument orders, 20 runs: the 12 pairs containing no clipped file pass in both orders, and the 8 that do are caught in both orders. Separately, 14 real markdown documents × 2 themes = 28 single-file runs, zero false positives.
+Calibrated across 5 themes × single- and multi-page × both argument orders: the 12 pairs containing no clipped file pass in both orders, and the 8 that do are caught in both orders. Separately, 14 real markdown documents × 2 themes, zero false positives.
 
 ## Batch Convert
 
@@ -157,7 +164,7 @@ uv run --with pdfplumber --with pillow --with numpy \
 | Chrome `--print-to-pdf` | Default header/footer appears (filename, date, URL, page numbers) | Passes `--no-pdf-header-footer` |
 | Chrome `--print-to-pdf` on macOS | Chrome can write the PDF and then never exit (Chrome 154 does so whenever it is given `--user-data-dir`), so the command hangs; a killed Chrome also leaves a copy of the Chrome app in a temporary directory | Stops Chrome once the PDF ends in `%%EOF`, gives up after a timeout, and passes `--disable-features=MacAppCodeSignClone` |
 | No post-render check | "Exit code 0" assumed success; rendering bugs hidden | Auto-generates per-page PNG previews + typography lint |
-| No theme system | One-size-fits-all; phone reading impossible | Three curated themes (default / warm-terra / mobile) |
+| No theme system | One-size-fits-all; phone reading impossible | [Theme selection](#print-vs-mobile-choose-the-right-theme) |
 | `batch_convert.py` missing | Writing ad-hoc loops, inconsistent flags | Built-in batch mode with `--theme` support |
 
 **Rule:** For Markdown → PDF, use this skill rather than manual pandoc/Chrome commands.
@@ -213,9 +220,9 @@ python scripts/md_to_pdf.py input.md output.pdf --no-preview
 
 ## CJK Typography (default behavior)
 
-The script applies two layers of CJK-aware processing automatically — **without modifying the user's markdown source or theme CSS files**:
+The script applies CJK-aware processing automatically — **without modifying the user's markdown source or theme CSS files**:
 
-### Layer 1: CSS patch (auto-injected, fixes ~80% of cases)
+### Layer 1: CSS patch (auto-injected)
 
 `_load_theme()` appends a CJK typography CSS patch to the loaded theme CSS. The patch:
 
@@ -242,7 +249,7 @@ Findings are printed to stderr with page+line locations. They are **warnings, no
 
 ### Why not silently auto-fix everything?
 
-Layer 2 deliberately does NOT modify the markdown. Per CLAUDE.md "禁止隐式行为" rule: silently rewriting non-standard markdown (e.g. expanding pseudo-lists into real lists) would mask the signal that the source is wrong, causing the same markdown to render incorrectly in other processors. Layer 1 is acceptable because it patches **rendering behavior** for already-standard markdown (a standard table that weasyprint happens to render imperfectly for CJK), not the markdown source itself.
+Layer 2 deliberately does NOT modify the markdown. Silently rewriting non-standard markdown (e.g. expanding pseudo-lists into real lists) would mask the signal that the source is wrong, causing the same markdown to render incorrectly in other processors. Layer 1 is acceptable because it patches **rendering behavior** for already-standard markdown (a standard table that weasyprint happens to render imperfectly for CJK), not the markdown source itself.
 
 ### Known limitations
 
