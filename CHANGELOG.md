@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **macos-load-doctor** (`daymade-macos` v1.24.5 → v1.24.6): Preserve live REPL/browser state when triaging retained agent/MCP children; distinguish fresh/expired catalog behavior and probe-created servers with a fixed-version Codex CUA case. Change type: bounded diagnostic guidance addition.
+- **macos-load-doctor** (`daymade-macos` v1.24.6 → v1.24.7): Preserve live REPL/browser state when triaging retained agent/MCP children; distinguish fresh/expired catalog behavior and probe-created servers with a fixed-version Codex CUA case. Change type: bounded diagnostic guidance addition.
 - **product-growth** (v1.0.0 → v1.0.1): Add a customer-conversation evidence recipe with per-call and cross-call quotations, response/follow-up pairing, precise acceptance objects and evidence-based answer/handoff gaps. Preserve sampling, causal and authorization boundaries. Change type: bounded evidence-selection guidance.
 - **report-with-html** (v1.4.3 → v1.4.4): Add synthetic regression cases for filtered navigation, in-place quotation/repeat inspection and derived-consumer readback after speaker-label refresh. Preserve existing interaction, maintenance and review ownership. Change type: bounded acceptance-recipe addition.
 - **frontend-visual-qa** (v1.21.11 → v1.21.12): Distinguish empty-but-focused Find from clear-and-blur, retain scope information through collapsed controls and preserve ordinary hosts of a shared Reader. Add synthetic loaded-window and naturally drifting pending-question regression cases. Change type: bounded acceptance guidance correction and evaluation coverage maintenance.
