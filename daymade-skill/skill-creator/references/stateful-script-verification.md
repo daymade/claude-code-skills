@@ -187,7 +187,7 @@ entry otherwise runs its owner from the skill-creator root. Supply an absolute,
 task-owned `--output-dir` that does not exist. The owner validates argv, paths and
 the summary budget before spawning, then creates the directory privately and
 exclusively instead of overwriting an existing path. Add
-`--max-output-bytes <bytes>` before `--` to change the default 6000-byte limit.
+`--max-output-bytes <bytes>` before `--` to set the metadata envelope budget.
 
 Run only the caller's already-authorized argv. The owner neither selects nor
 authorizes commands and is not a permission sandbox. It uses `shell=False`, so
