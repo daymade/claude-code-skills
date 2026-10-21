@@ -105,6 +105,36 @@ static-report control case free of unnecessary controls, state or follow-up UI.
 Keep this recipe a candidate method; do not promote an unapproved implementation
 to the approved component shelf or corpus.
 
+### Exercise filtered evidence and every record-selection entry
+
+Add these cases to that same browser journey when a collection includes quoted
+evidence or links between records. Use invented records `A`, `B`, `C`; let `A`
+and `C` match a filter and let an item in `C` repeat a passage from `B`. Give each
+passage distinct text and a source locator so an empty or wrong quote can fail.
+
+| State/action | Reader-visible observation |
+|---|---|
+| No match | Show an explicit empty list and disable list traversal; retain any separately pinned detail with its out-of-filter status, or clear it according to the declared selection policy |
+| One match | Previous/next cannot select hidden records; the sole matched record and count remain consistent |
+| Multiple matches (`A`, `C`) | Traverse only those IDs in the displayed order; test both ends and any documented wrap behavior |
+| Cross-link to excluded `B` | Do not silently bypass the matched set or change the filter; explain the exclusion and offer an explicit view change if appropriate |
+| Expand evidence while filtered | Show the complete passage, source and time/page locator in place, even when the source record is excluded from the list |
+| Inspect the repeat in `C` | Open the prior wording and locator from `B` in place; an ID alone is insufficient and inspection must not silently change list selection |
+| Reset | Restore the declared baseline order, counts and controls; remove stale filter-dependent context without silently discarding durable review work |
+
+Route list-row clicks, previous/next, cross-links and restored selections through
+the same selection policy. Keep evidence inspection separate from list navigation:
+filter only the intended list items, not nested quotation copies in conclusions,
+preparation notes, per-record details or an open evidence panel. Test with an
+expanded quote before and after the filter changes, including keyboard closing
+and return to the invoking location.
+
+The report author runs these cases and the existing acceptance reviewer inspects
+the observations. Record the matched IDs, selected ID and actual expanded wording,
+not only a click count or DOM element presence. No generic bundled gate enforces
+this policy; adapt the page's existing browser checks and prove a known-bad variant
+(for example, an empty evidence copy or a cross-link to hidden `B`) fails its case.
+
 ## Source boundary
 
 Use [ZCode's UI Plugin guide, pinned revision](https://github.com/zai-org/ZCode/blob/0a1fc56d279fd1001f78387bd81aec1c26767411/UI_PLUGIN.md)

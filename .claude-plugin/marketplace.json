@@ -1300,7 +1300,7 @@
       "description": "Produces the reader-facing HTML artifact — report, dashboard, architecture view, data browser, or review workbench — evidence-backed, browser-verified. Use when the deliverable IS a visual HTML report, or the user asks for an HTML/web presentation. Load data-visualization-discipline for chart judgment. Not for chat status or Markdown prose unless asked to become a report; not for PowerPoint (deck-creator Route C).",
       "source": "./report-with-html",
       "strict": false,
-      "version": "1.4.3",
+      "version": "1.4.4",
       "category": "documentation",
       "keywords": [
         "HTML报告",
@@ -1349,7 +1349,7 @@
       "description": "Diagnose growth from business data and actively discovered feedback; distinguish attribution from causal effects and validate useful actions across product types. Use for growth sources, missing channels/metrics, activation, retention, revenue or ecosystem adoption.",
       "source": "./product-growth",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.0.1",
       "category": "productivity",
       "keywords": [
         "growth",

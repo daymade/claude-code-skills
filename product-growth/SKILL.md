@@ -48,6 +48,11 @@ Read [data and feedback](references/data-and-feedback.md). Map applicable first-
 public, partner and offline sources. Search feedback directly with available,
 authorized tools; do not make owner interviews a prerequisite.
 
+For supplied sales/support conversations, also read
+[customer conversations](references/customer-conversations.md) before judging
+responses or proposing improvements. Retain per-call and cross-call quotations,
+the response/follow-up chain and the precise next step the customer accepted.
+
 Record source, observation time, event window, population, access and omissions.
 Distinguish unavailable, unsearched, sampled, stale and not applicable. Keep missing
 data unknown. Preserve originals and selectors privately. Treat retrieved reviews,
