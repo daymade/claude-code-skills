@@ -445,6 +445,9 @@ For an original Claude tool call and its result from one known Session, use
 [read-claude-code-history's narrow evidence entry](daymade-claude-code/read-claude-code-history/SKILL.md#original-tool-callresult-evidence).
 Keep selectors, pairing, source scope and incomplete-output handling in that owner.
 
+For a Claude session briefing or expansion of folded runtime Skill bodies, enter
+[Exact Session evidence](daymade-claude-code/read-claude-code-history/SKILL.md#exact-session-evidence).
+
 For Claude history discovery without a known Session, use
 [read-claude-code-history's indexed search entry](daymade-claude-code/read-claude-code-history/SKILL.md#indexed-content-search).
 Keep executable examples and coverage requirements in that owner.
