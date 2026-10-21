@@ -25,6 +25,7 @@ Delegate coding tasks to the local OpenAI Codex CLI agent using the authorized C
 - Resolve the actual `CODEX_HOME` and store; the desktop app and CLI can share credentials.
 - Before login, account switching or token recovery, read [the OAuth guide](references/oauth-guide.md) and follow its [recovery recipe](references/oauth-guide.md#remote-account-switch-and-expired-login-recovery). Use fresh empty stores for independent grants, retain explicitly authorized single-owner transfers, and verify actual access and existing-process adoption separately.
 - Before a native quota query, read [refresh ownership](references/oauth-guide.md#bind-refresh-ownership-before-native-queries); a nominally read-only query can refresh credentials.
+- For quota-driven continuation on another authorized account, use [the included-usage check](references/oauth-guide.md#quota-driven-continuation) before substantial execution; cached login or a new default file is not that check.
 
 ## Codex CLI Path
 
@@ -32,9 +33,9 @@ The skill auto-detects Codex CLI in this order:
 1. `CODEX_BIN` env var, if set — explicit override. A non-executable path fails loudly
    instead of silently falling through to a different build (that would make whatever
    the wrapper measured unattributable).
-2. `which codex` — whatever is first on PATH. **This is the build the surrounding
-   environment actually runs**, so it is the right default: npm global installs under
-   nvm (`~/.nvm/versions/node/*/bin/codex`) resolve here.
+2. `which codex` — the executable first on the wrapper process's PATH, including
+   npm global installs under nvm (`~/.nvm/versions/node/*/bin/codex`). This lookup
+   does not execute an interactive shell's alias or function.
 3. `/Applications/ChatGPT.app/Contents/Resources/codex` — the copy bundled inside
    ChatGPT.app, fallback only. Its version tracks the Desktop app and can diverge from
    the npm build, so it is deliberately last.
@@ -46,13 +47,22 @@ step ran). If neither PATH nor the app bundle has a codex, the wrapper exits 1 w
 the actual search order in `searched_paths`.
 
 Whichever binary wins, attribute behaviour to it by versioning **the binary that
-ran**, not `codex --version`: the bare command always resolves the PATH copy, which is
+ran**. An unrelated shell's `codex --version` may resolve another entry, which is
 the wrong build to quote when the fallback picked the app-bundled one. Use the
 `codex_path` field from the wrapper's status output:
 
 ```
 "<codex_path from status output>" --version
 ```
+
+Before using this wrapper, resolve the user's ordinary CLI entry. When that entry
+is a shell function or launcher supplying network/auth context, use it through
+its owning shell instead of silently substituting the discovered binary. On macOS
+zsh, inspect with `/bin/zsh -lic 'command -v codex; codex --version'`, then run
+`codex` inside that same shell mode. Put the finite timeout around the shell
+process: `gtimeout … codex` resolves an executable and cannot call a shell function.
+The bundled Python wrapper does not reproduce shell initialization or support
+every native flag; use native CLI invocation when those capabilities are required.
 
 ## Usage Patterns
 
