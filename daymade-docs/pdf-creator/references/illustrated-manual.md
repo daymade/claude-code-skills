@@ -23,8 +23,8 @@ recipient still needs to perform and observe.
 
 Inspect the already available official PDF first. Reuse its local text export
 or index to locate sections, then verify the selected text and illustrations
-against the PDF itself. Bind the source filename, title, model and edition;
-retain its official URL when known. Do not fetch another copy when the required
+against the PDF itself. Establish the model, edition and source identity from
+that PDF and its authoritative index. Do not fetch another copy when the required
 edition is already available. If a necessary source is missing, use the existing
 authorized acquisition workflow or report the exact missing source; do not
 substitute an unverified model or edition.
@@ -57,20 +57,35 @@ together outside the installed Skill bundle. Retain the source PDF at a recorded
 relative path in the working source package, or identify the unavailable original
 explicitly. Keep all figure paths relative so the package can move and rebuild.
 
-For each used figure, record its asset path, source PDF filename/path, official
-URL when known, edition, **one-based PDF page**, printed page label (or `null`
-when absent), and crop region with units and coordinate origin. For an extracted
-image, retain its extractor filename/index and page bounding box. For a page
-crop, record the actual crop rectangle; do not mislabel it as the extracted
-object's bounds. Keep the source map with the editable source; only the provenance
-needed by the reader belongs in the recipient PDF.
+In the source record, retain the relative PDF path and the expected SHA-256
+recorded when that source was acquired or selected for cropping. Compare the
+available PDF with this recorded identity before reusing figures. A mismatch is
+a source-stage gap; do not replace the expected hash with a fresh hash of the
+current file and present it as the original source identity.
+
+Read title, edition/date, printed page labels, page dimensions and rotation from
+the bound PDF when needed, rather than saving extractable metadata again. Link
+to an existing authoritative index for URLs or other provenance facts defined
+there. If a source URL or other provenance fact has no other authoritative home
+and supplies unique information for locating or identifying the original
+publication, retain it once in the source record; do not discard unique source
+information merely to remove a field.
+
+For each used figure, retain its relative asset path, expected asset hash,
+source-record locator, **one-based PDF page**, actual crop region with units and
+coordinate origin, and rendering parameters needed to reproduce it. For an
+extracted image, retain its extractor filename/index and page bounding box.
+Do not mislabel a page crop as the extracted object's bounds. Keep the source
+map with the editable source; it is a rebuilding record, not a reader prerequisite.
 
 Write short Chinese action sections in execution order. Put each figure beside
 the action it explains, state the expected visible result, and provide a
 source-supported next step when that result differs. Keep recovery branches
 within the requested task. Use section names for internal cross-references;
-generated output page numbers can change when the guide is rebuilt. When citing
-the manual, label PDF page numbers and printed page labels separately.
+generated output page numbers can change when the guide is rebuilt. Cite the
+manual with a direct source link to the relevant official PDF page or section.
+Keep that citation self-contained in the recipient PDF so the reader does not
+need a private source map or maintenance index to locate the original.
 
 ## 4. Build, inspect and hand off
 
