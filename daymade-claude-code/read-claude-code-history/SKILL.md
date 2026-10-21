@@ -107,8 +107,14 @@ Expected output: `# Claude Code Session Evidence Briefing`, session identity,
 compaction boundary, chronological user/assistant handoff, queued human prompts,
 end reason, unresolved calls, subagent state, files touched, memory, and current
 workspace state. The exact reader always parses every physical Session record,
-including records before compaction; `--full` only removes output character
-clipping. It checks active and registered-archive copies, accepts only identical
+including records before compaction. Default display clips long turns and folds
+only single-text runtime Skill bodies with `isMeta: true` and a unique earlier
+`sourceToolUseID` matching a Skill call in the same recorded lineage. It labels
+the Skill and record coordinate; `--full` expands these bodies and removes
+character clipping. Human pastes, queued prompts, mixed records and uncertain
+provenance remain visible under the normal clipping limit. Raw records, extracted
+timeline text and tool-evidence exports remain unchanged. It checks active and
+registered-archive copies, accepts only identical
 or strict append-only supersets, and fails visibly on divergent copies, multiple
 Session identities, a missing record-level Session identity, malformed JSONL, or
 unreadable bytes. With an exact Session ID and no `--project`, it searches every

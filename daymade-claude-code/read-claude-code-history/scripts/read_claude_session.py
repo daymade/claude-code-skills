@@ -1064,6 +1064,58 @@ def _clip(text: str, limit: int, full: bool) -> str:
     return text[:limit] + f"\n… (truncated at {limit}/{len(text)} chars — rerun with --full)"
 
 
+def _confirmed_skill_injections(messages: List[Dict]) -> Dict[int, str]:
+    """Locate display-only projections with an explicit Skill-call provenance.
+
+    A skill-looking heading or a user-role label is not authorship evidence.
+    Require runtime metadata, a unique matching Skill tool ID, and one text
+    payload. Mixed records, queued human prompts and unbound metadata stay visible.
+    """
+    calls: Dict[str, List[tuple]] = {}
+    for ordinal, record in enumerate(messages):
+        message = record.get("message", {})
+        content = message.get("content", "")
+        if message.get("role") != "assistant" or not isinstance(content, list):
+            continue
+        for block in content:
+            if not isinstance(block, dict) or block.get("type") != "tool_use":
+                continue
+            tool_id, inputs = block.get("id"), block.get("input")
+            name = inputs.get("skill") if isinstance(inputs, dict) else None
+            if not isinstance(tool_id, str) or not tool_id:
+                continue
+            if (block.get("name") != "Skill" or not isinstance(name, str)
+                    or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]*", name)):
+                name = None
+            calls.setdefault(tool_id, []).append(
+                (ordinal, name, record.get("agentId"), record.get("isSidechain"))
+            )
+
+    injections = {}
+    for ordinal, record in enumerate(messages):
+        message = record.get("message", {})
+        if (message.get("role") != "user" or record.get("isMeta") is not True
+                or record.get("_queued_human")):
+            continue
+        source_id = record.get("sourceToolUseID")
+        matches = calls.get(source_id, []) if isinstance(source_id, str) else []
+        if len(matches) != 1:
+            continue
+        call_ordinal, name, agent, sidechain = matches[0]
+        if (not name or call_ordinal >= ordinal or agent != record.get("agentId")
+                or sidechain != record.get("isSidechain")):
+            continue
+        content = message.get("content", "")
+        if isinstance(content, list):
+            if (len(content) != 1 or not isinstance(content[0], dict)
+                    or content[0].get("type") != "text"):
+                continue
+            content = content[0].get("text")
+        if isinstance(content, str) and content.strip():
+            injections[ordinal] = name
+    return injections
+
+
 def _append_timeline(sections: List[str], messages: List[Dict], full: bool) -> None:
     timeline = extract_turn_timeline(messages)
     if not timeline:
@@ -1072,8 +1124,11 @@ def _append_timeline(sections: List[str], messages: List[Dict], full: bool) -> N
     sections.append(
         "Every retained human and assistant turn — prose and thinking, kept as "
         "separate records, never merged — is shown in physical record order. "
-        "Default mode clips long turns; `--full` changes only clipping.\n"
+        "Default mode clips long turns and folds confirmed runtime Skill bodies. "
+        "`--full` expands those bodies and removes clipping; original records "
+        "remain unchanged.\n"
     )
+    skill_injections = _confirmed_skill_injections(messages)
     for segment in _handoff_segments(timeline):
         for turn in segment:
             role = turn["role"].upper()
@@ -1083,15 +1138,26 @@ def _append_timeline(sections: List[str], messages: List[Dict], full: bool) -> N
                 role = "USER (interrupt marker)"
             elif turn.get("kind") == "local_runtime":
                 role = "LOCAL RUNTIME (output)"
+            skill_name = skill_injections.get(turn["ordinal"])
+            if skill_name:
+                role = "SKILL RUNTIME (injected body)"
             queued = " · queued human input" if turn["queued"] else ""
             sections.append(f"### Record {turn['ordinal']} · {role}{queued}\n")
+            if skill_name and not full:
+                sections.append(
+                    f"[Skill invoked: {skill_name}; injected body folded "
+                    f"({len(turn['text'])} chars). Rerun with --full to expand "
+                    f"Record {turn['ordinal']}.]\n"
+                )
+                continue
             limit = 1000 if role == "USER" else 1600
             sections.append(_clip(turn["text"], limit, full) + "\n")
     # Local runtime records are chronology, not requests.  Find the last real
     # human turn and only call it unanswered when no later assistant prose was
     # retained; a local envelope after it cannot erase that state.
     last_human_index = max(
-        (index for index, turn in enumerate(timeline) if turn.get("kind") == "user"),
+        (index for index, turn in enumerate(timeline)
+         if turn.get("kind") == "user" and turn["ordinal"] not in skill_injections),
         default=None,
     )
     if last_human_index is not None and not any(
@@ -1784,7 +1850,7 @@ def main():
     parser.add_argument(
         "--full",
         action="store_true",
-        help="Do not clip compact-summary or full-session timeline text",
+        help="Expand confirmed Skill bodies and do not clip summary or timeline text",
     )
     parser.add_argument(
         "--history-sources",
