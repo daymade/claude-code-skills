@@ -118,10 +118,11 @@ For permission-sensitive fixtures, use Skill Creator's
 For its audit, release, source-contract or materialization commands from another
 working directory, use the [fixed command entry](daymade-skill/skill-creator/references/fixed-command-entry.md).
 
-Before reading a large file or captured tool response, follow Skill Creator's
-[bounded-read recipe](daymade-skill/skill-creator/references/stateful-script-verification.md)
-through that fixed entry. Keep selection, output limits and incomplete-read semantics
-in the owning recipe.
+Before a command that may exceed the response budget, enter Skill Creator's
+[large-output capture recipe](daymade-skill/skill-creator/references/stateful-script-verification.md#large-command-output).
+For a large file or saved tool response, use its
+[complete-file reading workflow](daymade-skill/skill-creator/references/stateful-script-verification.md#complete-file-reads).
+Keep invocation, selection and incomplete-read semantics in those owners.
 
 For plugin/Skill naming, source registration or release labels, use
 [source location and activation](daymade-skill/skill-creator/references/source-location-and-activation.md)
