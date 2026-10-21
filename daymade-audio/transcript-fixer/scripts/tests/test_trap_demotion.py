@@ -168,6 +168,82 @@ class TestLoadTrapDemotionSets:
             (frozenset(), frozenset())
 
 
+@pytest.mark.parametrize("context_state", ["protected", "missing", "empty"])
+def test_cli_trap_keeps_system_and_person_homophones_separate(
+        tmp_path, monkeypatch, context_state):
+    """Replay the real CLI seam with fictional names and an isolated queue.
+
+    A trusted person-name rule can also match a system token in the same domain.
+    The protected arm must defer both ambiguous occurrences, keep a correctly
+    spelled person unchanged, and still apply an unrelated deterministic rule.
+    Missing/empty-context controls establish that the veto, not no-op processing,
+    prevents the otherwise automatic replacements.
+    """
+    from types import SimpleNamespace
+    import cli.commands as commands
+    import utils.config as config_module
+    import core.review_queue as queue_module
+    from cli.argument_parser import create_argument_parser
+    from core.review_queue import ReviewQueue
+
+    contexts = tmp_path / ".transcript-fixer" / "contexts"
+    contexts.mkdir(parents=True)
+    if context_state != "missing":
+        (contexts / "synthetic.md").write_text(
+            "- **霁兵 / 霁斌 → 霁兵（禁裸词）** — 系统槽逐句判断；霁彬另为人名。\n"
+            if context_state == "protected" else "", encoding="utf-8")
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    monkeypatch.delenv("TRANSCRIPT_FIXER_PEOPLE_ROSTER", raising=False)
+
+    database = tmp_path / "review.db"
+    transient = tmp_path / "transient-only"
+    transient.mkdir()
+    monkeypatch.setattr(queue_module.tempfile, "gettempdir", lambda: str(transient))
+    with sqlite3.connect(database) as connection:
+        connection.executescript(
+            (Path(__file__).parent.parent / "core" / "schema.sql").read_text())
+    queue = ReviewQueue(database)
+    monkeypatch.setattr(commands, "_get_review_queue", lambda: queue)
+    service = SimpleNamespace(
+        get_corrections_with_metadata=lambda domains: (
+            {"霁斌": "霁彬", "demoasr": "DemoASR"},
+            {word: {"confidence": 1.0} for word in ("霁斌", "demoasr")}),
+        load_context_rules=lambda domains: [],
+        get_domain_stats=lambda: {"synthetic": 2},
+    )
+    monkeypatch.setattr(commands, "_get_service", lambda: service)
+    monkeypatch.setattr(config_module, "get_config", lambda: SimpleNamespace(
+        paths=SimpleNamespace(people_roster_path=None),
+        resources=SimpleNamespace(max_file_size=1_000_000, max_text_length=1_000_000)))
+    source = tmp_path / "conversation.md"
+    raw = ("甲 00:00:01.000\n霁斌系统有 demoasr 线索。\n"
+           "乙 00:00:02.000\n霁斌会回复负责人。\n"
+           "甲 00:00:03.000\n负责人霁彬已确认。\n")
+    source.write_text(raw, encoding="utf-8")
+    args = create_argument_parser().parse_args([
+        "--input", str(source), "--stage", "1", "--domain", "synthetic", "--apply-domain"])
+    result = commands.cmd_run_correction(args)
+    corrected = Path(result["output_path"]).read_text(encoding="utf-8")
+    assert source.read_text(encoding="utf-8") == raw
+    assert "负责人霁彬已确认。" in corrected
+    assert "DemoASR" in corrected
+    if context_state == "protected":
+        assert result["applied"] == 1
+        assert result["deferred"] == 2
+        assert result["review_enqueued"] == 2
+        assert "霁斌系统" in corrected and "霁彬系统" not in corrected
+        assert "霁斌会回复负责人。" in corrected
+        rows = queue.list_items(status="pending")
+        assert len(rows) == 2
+        assert {row.original_text for row in rows} == {"霁斌"}
+        assert {row.suggested_text for row in rows} == {"霁彬"}
+    else:
+        assert result["applied"] == 3
+        assert result["deferred"] == 0
+        assert "霁彬系统" in corrected
+        assert "霁彬会回复负责人。" in corrected
+
+
 # ---------------------------------------------------------------------------
 # B1. Migration v2.4 SQL
 # ---------------------------------------------------------------------------
