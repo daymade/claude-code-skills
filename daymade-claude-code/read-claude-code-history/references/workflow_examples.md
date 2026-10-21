@@ -14,7 +14,17 @@ backend is missing or its coverage is incomplete:
 ```bash
 python3 scripts/history_index.py status
 python3 scripts/history_index.py recall 'distinctive task' --mode bm25 --provider claude
-python3 scripts/read_claude_session.py --session <SESSION_ID> --full
+python3 scripts/read_claude_session.py --session <SESSION_ID>
+```
+
+Start with the default briefing. It retains the chronology while folding proven
+runtime Skill bodies into invocation markers. When a body or clipped turn is
+needed as evidence, rerun that exact Session with `--full` redirected to an
+absolute output file and read the named record there. `--full` preserves the
+complete body; the default marker is not a verbatim export.
+
+```bash
+python3 scripts/read_claude_session.py --session <SESSION_ID> --full > /absolute/path/session-evidence.md
 ```
 
 Use triage only when a known project physically bounds candidate directories:

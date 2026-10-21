@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **read-claude-code-history** (`daymade-claude-code` v4.30.19 → v4.30.20): Fold provenance-confirmed runtime Skill bodies in default briefings. Preserve full expansion, raw timeline text, user pastes, queued prompts and uncertain or mixed records. Change type: bounded display behavior change.
+
 - **continue-codex-work** (`daymade-claude-code` v4.30.18 → v4.30.19): Reconcile an already-restored same-thread Goal from current host identity and retained evidence. Keep verified history mandatory for external takeover, and preserve refusal, pause, budget and actual-continuation checks. Change type: entry-scope factual correction.
 
 - **macos-watchdog** (`daymade-macos` v1.24.4 → v1.24.5): Require bounded exact-service unload observation before an authorized replacement. Preserve loaded-job refusal, pending work and rollback inputs; keep timeout or unknown states visible. Change type: bounded deployment guidance correction.

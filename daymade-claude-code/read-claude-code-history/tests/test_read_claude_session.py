@@ -28,6 +28,102 @@ ANALYZE_SPEC.loader.exec_module(ANALYZE)
 
 
 class ClaudeSessionEvidenceTests(unittest.TestCase):
+    def _skill_messages(self, body="RUNTIME-BODY " * 250):
+        # Same provenance shape as observed runtime injections; all values synthetic.
+        return [
+            {"message": {"role": "user", "content": "Keep my original requirements."}},
+            {"message": {"role": "assistant", "content": [
+                {"type": "tool_use", "id": "skill-call", "name": "Skill",
+                 "input": {"skill": "example:helper"}},
+            ]}},
+            {"isMeta": True, "sourceToolUseID": "skill-call",
+             "message": {"role": "user", "content": [{"type": "text", "text": body}]}},
+        ]
+
+    def _timeline_text(self, records, *, full=False):
+        sections = []
+        MODULE._append_timeline(sections, records, full)
+        return "\n".join(sections)
+
+    def test_confirmed_runtime_skill_body_folds_only_in_default_display(self):
+        records = self._skill_messages()
+        original = json.dumps(records)
+        body = records[2]["message"]["content"][0]["text"]
+        self.assertEqual(MODULE._confirmed_skill_injections(records), {2: "example:helper"})
+        default = self._timeline_text(records)
+        self.assertIn("Record 2 · SKILL RUNTIME (injected body)", default)
+        self.assertIn("Skill invoked: example:helper", default)
+        self.assertIn(f"{len(body.strip())} chars", default)
+        self.assertNotIn("RUNTIME-BODY", default)
+        self.assertIn("--full to expand Record 2", default)
+        self.assertIn(body.strip(), self._timeline_text(records, full=True))
+        self.assertEqual(MODULE.extract_turn_timeline(records)[1]["text"], body.strip())
+        self.assertEqual(json.dumps(records), original)
+
+    def test_skill_looking_human_text_and_uncertain_metadata_are_not_folded(self):
+        for meta in (None, False, "true", 1):
+            with self.subTest(meta=meta):
+                records = self._skill_messages("# Example Skill\nA real human requirement.")
+                records[2]["isMeta"] = meta
+                self.assertEqual(MODULE._confirmed_skill_injections(records), {})
+                self.assertIn("A real human requirement.", self._timeline_text(records))
+        for source in (None, "missing-call", [], "skill-call"):
+            with self.subTest(source=source):
+                records = self._skill_messages()
+                records[2]["sourceToolUseID"] = source
+                if source == "skill-call":
+                    records[1]["message"]["content"][0]["name"] = "Read"
+                self.assertEqual(MODULE._confirmed_skill_injections(records), {})
+                self.assertIn("RUNTIME-BODY", self._timeline_text(records))
+
+    def test_mixed_and_queued_human_content_stays_visible(self):
+        for extra in (
+            {"type": "text", "text": "USER-CORRECTION: preserve this."},
+            {"type": "image", "source": {"type": "base64", "data": "synthetic"}},
+            {"type": "tool_result", "tool_use_id": "other", "content": "receipt"},
+        ):
+            with self.subTest(extra=extra["type"]):
+                records = self._skill_messages()
+                records[2]["message"]["content"].append(extra)
+                self.assertEqual(MODULE._confirmed_skill_injections(records), {})
+                self.assertIn("RUNTIME-BODY", self._timeline_text(records))
+                if extra["type"] == "text":
+                    self.assertIn("USER-CORRECTION", self._timeline_text(records, full=True))
+        records = self._skill_messages("QUEUED-CORRECTION")
+        records[2]["_queued_human"] = True
+        self.assertEqual(MODULE._confirmed_skill_injections(records), {})
+        self.assertIn("QUEUED-CORRECTION", self._timeline_text(records))
+
+    def test_ambiguous_skill_call_id_is_not_folded(self):
+        for name in ("different-helper", "example:helper"):
+            with self.subTest(name=name):
+                records = self._skill_messages()
+                records[1]["message"]["content"].append(
+                    {"type": "tool_use", "id": "skill-call", "name": "Skill",
+                     "input": {"skill": name}}
+                )
+                self.assertEqual(MODULE._confirmed_skill_injections(records), {})
+                self.assertIn("RUNTIME-BODY", self._timeline_text(records))
+
+    def test_future_or_other_lineage_skill_call_is_not_provenance(self):
+        records = self._skill_messages()
+        records[1], records[2] = records[2], records[1]
+        self.assertEqual(MODULE._confirmed_skill_injections(records), {})
+        for key, value in (("agentId", "other-agent"), ("isSidechain", True)):
+            with self.subTest(key=key):
+                records = self._skill_messages()
+                records[2][key] = value
+                self.assertEqual(MODULE._confirmed_skill_injections(records), {})
+
+    def test_runtime_skill_body_is_not_reported_as_an_unanswered_human_request(self):
+        records = self._skill_messages()
+        records.insert(1, {"message": {"role": "assistant", "content": "Done."}})
+        text = self._timeline_text(records)
+        self.assertNotIn("Unanswered retained request", text)
+        records.append({"message": {"role": "user", "content": "Follow up."}})
+        self.assertIn("Unanswered retained request", self._timeline_text(records))
+        self.assertIn("Follow up.", self._timeline_text(records))
+
     def _session_file(self, records: list[dict]) -> Path:
         handle = tempfile.NamedTemporaryFile(
             mode="w", suffix=".jsonl", delete=False, encoding="utf-8"
