@@ -40,8 +40,9 @@ def resolve(monkeypatch, capsys, item_id, authority, ledger):
 
 
 @pytest.mark.parametrize("slot", [0, 1])
-def test_organization_short_name_exact_slot_and_ledger(isolated, tmp_path, monkeypatch, capsys, slot):
-    text = INTRO + REPEAT
+@pytest.mark.parametrize("intro", [INTRO, "我是名台机器人的创始人。我们公司研发工业夹具。"])
+def test_organization_short_name_exact_slot_and_ledger(isolated, tmp_path, monkeypatch, capsys, slot, intro):
+    text = intro + REPEAT
     offset = text.index("名台") if slot == 0 else text.rindex("名台")
     file, ledger, item_id, authority, _, _ = setup_case(isolated, tmp_path, text, offset=offset)
     status, result = resolve(monkeypatch, capsys, item_id, authority, ledger)
@@ -63,6 +64,9 @@ def test_organization_short_name_exact_slot_and_ledger(isolated, tmp_path, monke
     (INTRO + "不要关注一下这个名台机器人，我们有账号。", 1),
     (INTRO + "可以关注一下这个名台机器人，不是我们公司。", 1),
     ("我不是名台机器人的创始人。我们公司做夹具。" + REPEAT, 1),
+    ("如果我是名台机器人的创始人。我们公司研发工业夹具。" + REPEAT, 1),
+    ("他说我是名台机器人的创始人。我们公司研发工业夹具。" + REPEAT, 1),
+    ("我叫甲明，名台机器人的创始人。我们公司非这家公司。" + REPEAT, 1),
     ("名台机器人的创始人。我们公司不是这家公司。" + REPEAT, 1),
     ("名台机器人的创始人。我们公司不是这家公司。", 0),
     ("我不是创始人，名台机器人的创始人。我们公司做夹具。" + REPEAT, 1),
@@ -82,6 +86,18 @@ def test_organization_cue_cannot_be_borrowed(isolated, tmp_path, monkeypatch, ca
     assert (isolated.get(item_id).to_dict(), file.read_bytes(), ledger.read_bytes()) == before
     with sqlite3.connect(isolated.db_path) as conn:
         assert list(conn.execute("SELECT * FROM audit_log")) == audit_before
+
+
+@pytest.mark.parametrize("prefix", ["我非", "I am not ", "我未担任", "我并未担任", "我从未担任", "我不是"])
+@pytest.mark.parametrize("repeat", [False, True])
+def test_negative_founder_never_supplies_company_identity(isolated, tmp_path, monkeypatch, capsys, prefix, repeat):
+    text = prefix + "名台机器人的创始人。我们公司研发工业夹具。" + (REPEAT if repeat else "")
+    offset = text.rindex("名台") if repeat else text.index("名台")
+    file, ledger, item_id, authority, _, _ = setup_case(isolated, tmp_path, text, offset=offset)
+    before = isolated.get(item_id).to_dict(), file.read_bytes()
+    status, result = resolve(monkeypatch, capsys, item_id, authority, ledger)
+    assert status == 2 and result["error"] == "invalid_authority_record", result
+    assert (isolated.get(item_id).to_dict(), file.read_bytes()) == before
 
 
 @pytest.mark.parametrize("quote", [

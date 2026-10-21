@@ -174,6 +174,9 @@ def _citation_occurrence(original: str, context: Optional[str], offset: Optional
 _ORG_UNSAFE_RE = re.compile(r"不|没|并非|产品|软件|系统|老师|先生|女士|我叫|来自|属于")
 _ORG_NEGATIVE_RE = re.compile(r"不|没|并非")
 _ORG_SOURCE_CONNECTOR_RE = re.compile(r"的|是|由|来自|属于|产品|软件|系统")
+_ORG_INTRO_PREFIX_RE = re.compile(
+    r"(?:^|[，,])\s*(?:我是|我就是|我叫[^，,。.!！?？;；\n]{1,20}[，,])\s*$")
+_ORG_COMPANY_PREDICATE_RE = re.compile(r"(?:是|做|研发|生产|成立|从事|主要|专注|提供|开发|经营)")
 
 
 def _organization_short_name(quote: str, target: str, original: str,
@@ -212,11 +215,13 @@ def _organization_short_name(quote: str, target: str, original: str,
             for intro in declaration.finditer(paragraph):
                 clause_start = max([m.end() for m in re.finditer(r"[，,。.!！?？;；\n]", paragraph[:intro.start()])], default=0)
                 sentence_start = max([m.end() for m in re.finditer(r"[。.!！?？;；\n]", paragraph[:intro.start()])], default=0)
-                if (_ORG_UNSAFE_RE.search(paragraph[clause_start:intro.start()])
+                if (not _ORG_INTRO_PREFIX_RE.search(paragraph[sentence_start:intro.start()])
+                        or _ORG_UNSAFE_RE.search(paragraph[clause_start:intro.start()])
                         or _ORG_NEGATIVE_RE.search(paragraph[sentence_start:intro.start()])):
                     continue
                 company_clause = re.split(r"[。.!！?？;；\n]", paragraph[intro.end():], maxsplit=1)[0]
-                if _ORG_NEGATIVE_RE.search(company_clause):
+                if (not _ORG_COMPANY_PREDICATE_RE.match(company_clause)
+                        or _ORG_NEGATIVE_RE.search(company_clause)):
                     continue
                 if intro.start() == selected:
                     return True

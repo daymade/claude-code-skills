@@ -123,11 +123,14 @@ For `organization`, the CLI also supports a source-bound company short name:
 - The source quote must name the target followed by a literal name extension and
   `有限公司`, `公司`, `集团` or `机构`. The selected occurrence must carry the same
   extension (or a prefix of at least two characters), followed by a name boundary.
-- The selected occurrence must introduce that name with `的创始人。我们公司`
+- The selected occurrence must follow `我是`, `我就是`, or `我叫NAME，` and
+  introduce the company name with `的创始人。我们公司`
   (commas, full stops and whitespace may separate those two phrases), or refer to
   its account with `[可以]关注[一下][这个/这家/我们]NAME，我们在/有/是/做…` after that
   same-name company introduction in the same paragraph. Brackets mark optional
   words; slashes mark alternatives. A name extension alone supplies no type cue.
+  The company self-description must begin with `是`, `做`, `研发`, `生产`, `成立`,
+  `从事`, `主要`, `专注`, `提供`, `开发` or `经营`; other phrasing stays pending.
 - Negative statements, person/product uses, a different name extension, a separate
   paragraph, an unrelated company quote, or an ambiguous selected slot refuse this
   short-name route. Source authority and the referent still require operator review;
