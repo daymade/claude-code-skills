@@ -66,6 +66,40 @@ parallel lifecycle solely for the import.
 
 ## Close the evidence loop
 
+### Synthetic parser replacement: preserve the installed application
+
+When the requested boundary is “replace only parsing,” freeze the installed
+application's package ID, image digest/core binary, UI, launcher icon, routes,
+permissions, settings, task journal and storage mapping. Reuse the existing
+extension/configuration seam before proposing a new frontend, queue or download
+engine. Compare the resulting installed package against that baseline: an
+unchanged binary hash does not prove that its icon, package identity, permissions
+or user state survived packaging.
+
+Exercise one authorized target through the installed application's ordinary task
+flow and read the resulting file independently. Preserve a known completed task
+and settings. A parser response, a built archive and a green HTTP health check
+are distinct observations; none replaces the completed native task and usable
+media. Keep actual dimensions/duration separate from advertised metadata.
+
+Treat parser availability as a separate lifecycle from the core downloader.
+Check startup failure and failure after readiness; the optional parser must not
+terminate unrelated core work. Mocked child-process tests prove wrapper control
+flow only. To claim an active download survives, start a controlled download in
+an isolated authorized instance, terminate only that instance's parser, and
+observe the same core process and task reach a usable file. If this probe was
+not run, retain that explicit gap rather than generalizing the mocks.
+
+Before an upgrade, release the test instance's own mounts and network endpoints
+and positively read back their absence. Keep test DNS/network configuration
+explicit; attaching a test container to a live app's network can block that
+network's replacement during installation. A failed cleanup stops the upgrade
+until the owned resource is removed; do not restart unrelated services as repair.
+
+Keep backup availability, successful installation, recovery and tested rollback
+as separate claims. Read an installed version, its icon/state and the original
+user journey after the package manager reports completion.
+
 For a defect, show the affected old behavior and the corrected behavior, plus
 representative healthy behavior. For an opportunity, measure the claimed benefit
 against the existing user path. Separate test fixtures from real workload evidence.
