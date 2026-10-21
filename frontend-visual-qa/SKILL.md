@@ -432,6 +432,9 @@ design-system artifacts, GIS/maps, or review tools.
 
 For citation markers that promise original evidence, run that reference's
 **Cited Source Inspection** against the actual text, image or PDF and its return path.
+For changed long-document navigation or source sidebars, also use its
+**Long-document reading positions** recipe; a correct first screen does not
+verify the same controls deep in the document.
 
 Load
 [references/data_viz_tier_and_token_audit.md](references/data_viz_tier_and_token_audit.md)
