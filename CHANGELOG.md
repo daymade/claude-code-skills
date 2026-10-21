@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **continue-codex-work** (`daymade-claude-code` v4.30.18 → v4.30.19): Reconcile an already-restored same-thread Goal from current host identity and retained evidence. Keep verified history mandatory for external takeover, and preserve refusal, pause, budget and actual-continuation checks. Change type: entry-scope factual correction.
+
 - **macos-watchdog** (`daymade-macos` v1.24.4 → v1.24.5): Require bounded exact-service unload observation before an authorized replacement. Preserve loaded-job refusal, pending work and rollback inputs; keep timeout or unknown states visible. Change type: bounded deployment guidance correction.
 - **app-evolver** (v1.1.7): Compare existing and alternative information grouping after structural interface feedback, preserving the same task, content and return context before choosing local visual changes.
 - **frontend-visual-qa** (v1.21.11): Check long-document reading cues, late citations and usable controls at deep scroll positions, with uneven sections and relevant expanded panels.
