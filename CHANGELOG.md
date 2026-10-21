@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **product-growth** (v1.0.0 → v1.0.1): Add a customer-conversation evidence recipe with per-call and cross-call quotations, response/follow-up pairing, precise acceptance objects and evidence-based answer/handoff gaps. Preserve sampling, causal and authorization boundaries. Change type: bounded evidence-selection guidance.
+- **report-with-html** (v1.4.3 → v1.4.4): Add synthetic regression cases for filtered navigation, in-place quotation/repeat inspection and derived-consumer readback after speaker-label refresh. Preserve existing interaction, maintenance and review ownership. Change type: bounded acceptance-recipe addition.
+
 - **git-safety-net** (v1.22.8 → v1.22.9): Disable automatic maintenance only in the merged-branch test's disposable repositories so background object writes cannot outlive fixture cleanup. Preserve the large-conflict regression and production verdict logic. Change type: test-fixture isolation repair.
 
 - **transcript-fixer** (`daymade-audio` v1.50.2 → v1.50.3): Bind written entity citations to the selected occurrence. Support source-attested company short names in explicit founder introductions and their same-paragraph account references; preserve person-name conflicts, unrelated-source refusal and atomic verdict/ledger writes. Change type: bounded authority-validation behavior change.
