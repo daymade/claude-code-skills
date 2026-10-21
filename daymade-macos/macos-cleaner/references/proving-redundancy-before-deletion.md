@@ -123,8 +123,8 @@ skip produced a wrong proposal:
    never checked against the volume histogram protects nothing and breaks
    what it touches.
 2. **The code layer, not just documents.** Pipeline source can hardcode path
-   patterns (`agent-fleet-sync.py:221/388/423/427` name the releases
-   pattern). Grep the owning code for the path/pattern before declaring
+   patterns (measured: one sync script named the releases pattern at four
+   separate call sites). Grep the owning code for the path/pattern before declaring
    "zero references"; a zero-reference deletion claim also needs the
    retirement evidence ring: no launchd entry, no live process, content
    frozen since a stated date.
@@ -135,7 +135,8 @@ skip produced a wrong proposal:
    references are text is a different check — and the pilot batch sat
    exactly in that blind spot.
 4. **Registries before judgement.** A deletion candidate registered in an
-   SSOT (`~/.openclaw/vm/README.md`) is a retained asset; the correct flow
+   SSOT (a local VM registry README listing per-VM disposition rulings) is a
+   retained asset; the correct flow
    (archive to NAS + two-end sha256 + SSOT update) comes *after* the
    registry check, not instead of it.
 
