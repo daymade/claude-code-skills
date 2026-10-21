@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **app-evolver** (v1.1.7 → v1.1.8): Add an installed-package preservation example for parser replacement, including icon, permissions, user state, owned test endpoints and the distinction between mocked lifecycle checks and an active-download fault probe. Change type: bounded acceptance guidance.
+
 - **transcript-fixer** (`daymade-audio` v1.50.3 → v1.50.4): Add paired CLI regression cases for system/person homophones under trusted-domain correction, including missing and empty context controls. Change type: existing-contract regression coverage.
 - **local-codex** (`daymade-codex` v2.0.0 → v2.0.1): Preserve the user's shell function or launcher during native execution; distinguish executable lookup from the ordinary entry. Verify quota-driven continuation through fresh account-bound included-usage evidence, reuse useful task execution instead of redundant no-op turns, and keep old-process adoption and Credit policy separate. Change type: bounded execution and evidence correction.
 - **ghostty-use** (v1.7.1 → v1.8.0): Persist fixed-manifest recovery inputs for an independent executor and recheck account mode, manifest bytes and process generation. Add opt-in write-ahead exit-control receipts that prevent replay after ambiguous delivery or interruption. Preserve the explicit missing-host-adapter boundary; this does not claim live GUI switching or authenticated continuation. Change type: additive handoff capability and control-safety repair.
