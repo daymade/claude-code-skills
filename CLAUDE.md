@@ -111,6 +111,8 @@ When the user corrects premises, research focus or scope, return first to its
 [task binding](app-evolver/SKILL.md#1-bind-the-application-and-unfinished-result).
 For next-increment selection after that reconciliation or a completed repair batch, use its
 [increment-selection contract](app-evolver/references/evidence-and-fit.md#make-the-disposition-operational).
+When feedback questions navigation, information hierarchy or interface coherence, use its
+[structure comparison](app-evolver/references/evidence-and-fit.md#reconsider-interface-structure).
 
 For permission-sensitive fixtures, use Skill Creator's
 [execution-context verification recipe](daymade-skill/skill-creator/references/stateful-script-verification.md#execution-identity-and-permission-fixtures).
@@ -179,9 +181,6 @@ owns later reconciliation and consumer readback.
 For citation previews and in-place source inspection, enter
 [report-with-html's interaction owner](report-with-html/references/interaction-components.md)
 and [frontend-visual-qa's source-inspection route](frontend-visual-qa/references/journey-and-page-contracts.md#cited-source-inspection).
-For embedded-reader sizing, surrounding navigation, overlays or reading/return
-changes, enter [frontend-visual-qa](frontend-visual-qa/SKILL.md) and its
-[embedded-reader journey](frontend-visual-qa/references/journey-and-page-contracts.md#embedded-readers-and-semantic-zoom).
 
 For HTML report images and explanatory diagrams, enter
 [report-with-html](report-with-html/SKILL.md); its
@@ -237,8 +236,11 @@ For nested zoomable workspaces, use its
 [journey and state matrix](frontend-visual-qa/references/journey-and-page-contracts.md#journey-and-state-matrix).
 For live status or attention filters, follow its
 [cross-view attention journey](frontend-visual-qa/references/journey-and-page-contracts.md#operational-attention-across-views).
-For embedded-reader zoom, return, focus or filtered-selection changes, use its
+For embedded-reader sizing, surrounding navigation, overlays, zoom, reading/return,
+focus or filtered-selection changes, use its
 [reader journey](frontend-visual-qa/references/journey-and-page-contracts.md#embedded-readers-and-semantic-zoom).
+For long-document outlines, active-section cues or source sidebars, follow its
+[reading-position recipe](frontend-visual-qa/references/journey-and-page-contracts.md#long-document-reading-positions).
 For browser visibility, selected read modes, request/capture timing or long JSONL input problems, load its
 [browser-driving and observation traps](frontend-visual-qa/references/browser-driving-and-observation-traps.md);
 keep adapter requirements and invocation examples in that reference.
