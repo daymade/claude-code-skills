@@ -33,21 +33,27 @@ def setup_case(queue, tmp_path, text, *, offset=...):
     return file, ledger, item_id, authority, record, source
 
 
-def resolve(monkeypatch, capsys, item_id, authority, ledger):
-    return cli(monkeypatch, capsys, "--resolve-review", item_id, "--decision", "accepted",
+def resolve(monkeypatch, capsys, item_id, authority, ledger, decision="accepted"):
+    extra = ["--override-to", "明台"] if decision == "overridden" else []
+    return cli(monkeypatch, capsys, "--resolve-review", item_id, "--decision", decision,
                "--authority-record", authority, "--ledger-entry", LEDGER_ENTRY,
-               "--note", "synthetic organization spelling decision")
+               "--note", "synthetic organization spelling decision", *extra)
 
 
 @pytest.mark.parametrize("slot", [0, 1])
-@pytest.mark.parametrize("intro", [INTRO, "我是名台机器人的创始人。我们公司研发工业夹具。"])
-def test_organization_short_name_exact_slot_and_ledger(isolated, tmp_path, monkeypatch, capsys, slot, intro):
+@pytest.mark.parametrize("intro", [INTRO, "我是名台机器人的创始人。我们公司研发工业夹具。",
+                                 "我就是名台机器人的创始人。我们公司研发工业夹具。"])
+@pytest.mark.parametrize("decision", ["accepted", "overridden"])
+@pytest.mark.parametrize("background", [False, True])
+def test_organization_short_name_exact_slot_and_ledger(isolated, tmp_path, monkeypatch, capsys, slot, intro, decision, background):
     text = intro + REPEAT
+    if background:
+        text = "此前做过非具身项目。" + text.replace("研发工业夹具", "研发非具身工业夹具")
     offset = text.index("名台") if slot == 0 else text.rindex("名台")
     file, ledger, item_id, authority, _, _ = setup_case(isolated, tmp_path, text, offset=offset)
-    status, result = resolve(monkeypatch, capsys, item_id, authority, ledger)
+    status, result = resolve(monkeypatch, capsys, item_id, authority, ledger, decision)
     assert status == 0, result
-    assert result["item"]["status"] == "accepted"
+    assert result["item"]["status"] == decision
     assert result["item"]["entity_type"] == "organization"
     assert file.read_text().split("---\n", 2)[-1] == text[:offset] + "明台" + text[offset + 2:]
     assert ledger.read_text().count(LEDGER_ENTRY) == 1
@@ -88,16 +94,36 @@ def test_organization_cue_cannot_be_borrowed(isolated, tmp_path, monkeypatch, ca
         assert list(conn.execute("SELECT * FROM audit_log")) == audit_before
 
 
+@pytest.mark.parametrize("conflict", ["这是一个产品", "这是一位老师"])
+@pytest.mark.parametrize("decision", ["accepted", "overridden"])
+def test_selected_sentence_conflict_before_comma_refuses_atomically(isolated, tmp_path, monkeypatch, capsys, conflict, decision):
+    text = INTRO + conflict + "，" + REPEAT
+    file, ledger, item_id, authority, _, _ = setup_case(isolated, tmp_path, text, offset=text.rindex("名台"))
+    before = isolated.get(item_id).to_dict(), file.read_bytes()
+    with sqlite3.connect(isolated.db_path) as conn:
+        audit_before = list(conn.execute("SELECT * FROM audit_log"))
+    status, result = resolve(monkeypatch, capsys, item_id, authority, ledger, decision)
+    assert status == 2 and result["error"] == "invalid_authority_record", result
+    assert (isolated.get(item_id).to_dict(), file.read_bytes()) == before
+    with sqlite3.connect(isolated.db_path) as conn:
+        assert list(conn.execute("SELECT * FROM audit_log")) == audit_before
+
+
 @pytest.mark.parametrize("prefix", ["我非", "I am not ", "我未担任", "我并未担任", "我从未担任", "我不是"])
 @pytest.mark.parametrize("repeat", [False, True])
-def test_negative_founder_never_supplies_company_identity(isolated, tmp_path, monkeypatch, capsys, prefix, repeat):
+@pytest.mark.parametrize("decision", ["accepted", "overridden"])
+def test_negative_founder_never_supplies_company_identity(isolated, tmp_path, monkeypatch, capsys, prefix, repeat, decision):
     text = prefix + "名台机器人的创始人。我们公司研发工业夹具。" + (REPEAT if repeat else "")
     offset = text.rindex("名台") if repeat else text.index("名台")
     file, ledger, item_id, authority, _, _ = setup_case(isolated, tmp_path, text, offset=offset)
     before = isolated.get(item_id).to_dict(), file.read_bytes()
-    status, result = resolve(monkeypatch, capsys, item_id, authority, ledger)
+    with sqlite3.connect(isolated.db_path) as conn:
+        audit_before = list(conn.execute("SELECT * FROM audit_log"))
+    status, result = resolve(monkeypatch, capsys, item_id, authority, ledger, decision)
     assert status == 2 and result["error"] == "invalid_authority_record", result
     assert (isolated.get(item_id).to_dict(), file.read_bytes()) == before
+    with sqlite3.connect(isolated.db_path) as conn:
+        assert list(conn.execute("SELECT * FROM audit_log")) == audit_before
 
 
 @pytest.mark.parametrize("quote", [

@@ -234,10 +234,9 @@ def _organization_short_name(quote: str, target: str, original: str,
                 clause_start = max([m.end() for m in re.finditer(r"[，,。.!！?？;；\n]", paragraph[:selected])], default=0)
                 before, after = paragraph[clause_start:selected], paragraph[end:]
                 sentence_end = re.search(r"[。.!！?？;；\n]", after)
-                clause = before + short + (after[:sentence_end.start()] if sentence_end else after)
                 sentence_start = max([m.end() for m in re.finditer(r"[。.!！?？;；\n]", paragraph[:selected])], default=0)
-                if (not _ORG_UNSAFE_RE.search(clause)
-                        and not _ORG_NEGATIVE_RE.search(paragraph[sentence_start:selected])
+                sentence = paragraph[sentence_start:end] + (after[:sentence_end.start()] if sentence_end else after)
+                if (not _ORG_UNSAFE_RE.search(sentence)
                         and re.fullmatch(r"(?:可以)?关注(?:一下)?(?:这个|这家|我们)?", before)
                         and re.match(r"[，,]\s*我们(?:在|有|是|做)", after)):
                     return True

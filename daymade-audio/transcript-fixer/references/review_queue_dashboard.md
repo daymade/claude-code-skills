@@ -133,7 +133,8 @@ For `organization`, the CLI also supports a source-bound company short name:
   `从事`, `主要`, `专注`, `提供`, `开发` or `经营`; other phrasing stays pending.
 - Negative statements, person/product uses, a different name extension, a separate
   paragraph, an unrelated company quote, or an ambiguous selected slot refuse this
-  short-name route. Source authority and the referent still require operator review;
+  short-name route. The account-reference check includes its whole sentence,
+  including clauses before a comma. Source authority and the referent still require operator review;
   these finite syntax checks do not infer a company from a product word.
 
 ```bash
