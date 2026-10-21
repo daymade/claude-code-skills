@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **ghostty-use** (v1.6.3 → v1.7.0): Add explicit post-login fixed-set recovery, a read-only current-session-last handoff plan and two-observation literal-control guard for authorized host adapters. Preserve manual switching, reboot recovery, Claude exclusion and unknown authentication reporting. Change type: additive workflow capability and control-safety repair; live GUI acceptance remains host-dependent.
+- **local-codex** (`daymade-codex` v1.4.3 → v1.4.4): Obtain independent grants in empty bound stores, preserve explicit single-owner transfers and bind refresh ownership before native quota queries. Separate identity, usable access, quota, process adoption and Credit policy. Change type: authentication workflow safety redesign and billing-claim correction.
+
 - **docs-router / pdf-creator** (`daymade-docs` v1.25.6 → v1.26.0): Add a source-traced workflow for concise Chinese illustrated guides from manufacturer manuals. Resolve relative images against the input Markdown directory in both PDF backends and verify that the intended figures appear in the rendered PDF.
 
 - **qa-expert** (v1.2.3): Add optional normalization and drive-relative path cases with independent runtime oracles and healthy controls; preserve the existing test-selection scope and native Windows evidence boundary.

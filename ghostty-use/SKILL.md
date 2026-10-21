@@ -49,6 +49,11 @@ Read [codex-account-switch.md](references/codex-account-switch.md) before this r
 Use `scripts/ghostty_session.py switch-prepare` and `switch-restore`; the bundled
 `scripts/ghostty_switch.py` owns fixed-manifest selection, account/process checks,
 duplicate-safe retries and separate authentication reporting.
+If login already changed before capture, use the explicit `switch-restore
+--after-login` branch. For a controlled exit sequence including the executing
+session, use `switch-plan --current-session <full-uuid>` first; it defers that
+session until an independent executor exists. The reference also specifies safe
+literal-control submission and its host-adapter boundary.
 
 ```bash
 python3 <skill-dir>/scripts/ghostty_session.py switch-prepare
