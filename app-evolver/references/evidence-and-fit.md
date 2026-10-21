@@ -21,6 +21,39 @@ their engines or volatile configuration into this Skill. A dependency name is
 not proof that its runtime is installed or usable. Probe the prerequisite needed
 by the chosen path, perform authorized preparation and resume its original job.
 
+## Reconsider interface structure
+
+Use this check when the user questions navigation, information hierarchy or the
+coherence of an existing interface. Keep an isolated cosmetic defect narrow.
+The executing coordinator performs the comparison; no generic layout score
+decides whether the information belongs at the right level.
+
+1. Name the actor's real task and the objects needed to finish it. Map each
+   current entry to its object, task, scope and return destination. Distinguish
+   everyday work from setup, operations, examples and diagnostics without
+   assuming that every function deserves a peer navigation item.
+2. Compare the current grouping with one plausible alternative using the same
+   representative content and required capabilities. Show which information is
+   persistent or disclosed on demand, what the actor sees first, and how they
+   enter, inspect evidence, act and return. Keep important uncertainty visible;
+   removing qualifiers or hiding necessary work cannot improve this comparison.
+3. Select from observed task friction: unclear ownership, repeated context,
+   cross-area searching, lost position or a misleading next action. Retain the
+   current structure if it serves the task better; fewer tabs, breadcrumbs,
+   working clicks and readable text alone do not settle the structural question.
+4. Carry the selected design idea through that complete path, including list,
+   detail, original evidence, history and relevant empty/error states. Use visual
+   treatment to express those relationships, rather than giving only the first
+   screen a new skin. Preserve object/version identity, drafts and return context
+   wherever the existing product promises them.
+
+Stop the comparison once evidence selects an authorized increment. Keep a
+reversible grouping assumption distinct from a user-approved product decision;
+leave missing user judgment explicit. Do not add a new product entity, remove a
+supported job or broaden implementation authority to make the layout convenient.
+Verify the affected path through the existing acceptance owner after implementing
+it; a coherent concept is a proposal until its actual use has been checked.
+
 ## Mine experience without manufacturing authority
 
 Use authorized, physically bounded sessions or indexed candidates. Preserve:

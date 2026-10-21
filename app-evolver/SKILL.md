@@ -64,6 +64,9 @@ rather than being treated as a passing remark.
 ## 2. Ground opportunities and constraints
 
 Read [evidence and fit](references/evidence-and-fit.md) before selecting changes.
+For criticism of interface hierarchy or a fragmented whole-product experience,
+use its [structure comparison](references/evidence-and-fit.md#reconsider-interface-structure)
+before selecting local visual fixes.
 
 Inspect the existing user journey, assets, services, tests and implementation
 owners first. Search available prior work and personal collections when requested
