@@ -91,7 +91,9 @@ jobs:
         run: python3 -m unittest discover -s daymade-skill/skill-creator/tests -p test_source_contract.py
 
       - name: Fixed skill-creator command entry
-        run: python3 -m unittest discover -s daymade-skill/skill-creator/tests -p test_creator_entry.py
+        run: |
+          python3 -m unittest discover -s daymade-skill/skill-creator/tests -p test_creator_entry.py
+          python3 -m unittest discover -s daymade-skill/skill-creator/tests -p test_capture_command.py
 
       - name: Immutable review rebind and persisted receipt compatibility
         run: |

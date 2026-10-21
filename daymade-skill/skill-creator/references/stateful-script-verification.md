@@ -169,35 +169,54 @@ If the handle is lost, recover the existing run through the host's supported
 status/artifact query; leave its outcome unknown when that evidence is unavailable.
 Do not repeat a write to replace missing completion evidence.
 
-Before a command that may produce large output, choose a scratch output path
-outside the shipped Skill. Treat unmeasured JSON output as potentially large;
-scope or count flags do not establish a byte bound. Capture raw stdout/stderr and
-the exit status before inspecting its shape or selecting values, then return a
-small summary and the path. For example, this stdlib recipe runs an
-already-authorized command supplied after the script name:
+Before a command that may produce large output, choose an absolute new private
+output directory outside the shipped Skill. Treat unmeasured JSON output as
+potentially large; scope or count flags do not establish a byte bound. Capture
+raw stdout/stderr and the exit status before inspecting its shape or selecting
+values. Use the explicit owner through the fixed entry:
 
-```python
-import subprocess
-import sys
-import tempfile
-from pathlib import Path
-
-with tempfile.NamedTemporaryFile(prefix="skill-output-", suffix=".log", delete=False) as out:
-    result = subprocess.run(sys.argv[1:], stdout=out, stderr=subprocess.STDOUT)
-    path = Path(out.name)
-print(f"exit={result.returncode} bytes={path.stat().st_size} output={path}")
-sys.exit(result.returncode)
+```bash
+python3 <skill-creator-path>/scripts/creator.py capture_command \
+  --cwd <absolute-existing-business-directory> \
+  --output-dir <absolute-new-private-output-directory> \
+  -- <already-authorized-executable> <arg>...
 ```
 
-Inspect the saved file through the bounded reader below. Use `--schema-json` for
-JSON key/type/count metadata, then select exact scalar leaves with repeatable
+Preserve the caller's business working directory with required `--cwd`; the fixed
+entry otherwise runs its owner from the skill-creator root. Supply an absolute,
+task-owned `--output-dir` that does not exist. The owner validates argv, paths and
+the summary budget before spawning, then creates the directory privately and
+exclusively instead of overwriting an existing path. Add
+`--max-output-bytes <bytes>` before `--` to change the default 6000-byte limit.
+
+Run only the caller's already-authorized argv. The owner neither selects nor
+authorizes commands and is not a permission sandbox. It uses `shell=False`, so
+shell metacharacters remain literal; ordinary empty arguments after the nonblank
+executable also reach the child unchanged.
+
+Read one bounded JSON metadata envelope on wrapper stdout, persisted unchanged as
+`result.json`. It contains real paths and byte counts for separate `stdout.bin`
+and `stderr.bin` files, plus status and the exact child returncode; it does not
+contain command text, environment values or output bodies. The serialized envelope,
+including metadata and its newline, stays within the selected budget. Unusable
+budget/path metadata fails before launch. Separate files preserve stream identity;
+they do not establish cross-stream ordering.
+
+Expect `child_exited` with the exact integer returncode, including a negative
+signal code, or `spawn_failed` with a null returncode and explicit error class and
+errno. A spawn failure exits 127 at the wrapper. A nonzero child remains nonzero
+at the wrapper, and its metadata is persisted as well. Do not rerun the command to
+recapture output or replace failure evidence.
+
+Inspect the saved files through the bounded reader below. Bind each range to the
+returned SHA-256 and return one reader envelope per outer call. Use `--schema-json`
+for JSON key/type/count metadata, then select exact scalar leaves with repeatable
 `--json-pointer /path` arguments and the returned `--expect-sha256`. Missing keys
 fail; a container requires a schema query or explicit leaf selection. Do not
 construct a summary by excluding guessed field names: an unexpected key can carry
 the entire payload. Preserve present null/empty values as distinct from missing.
 
-Preserve stderr and nonzero status when choosing another capture method. If a
-response is already truncated, read the missing evidence from the saved output;
+If a response is already truncated, read the missing evidence from the saved output;
 if nothing was saved, rerun only a safe read-only command or retrieve its existing
 artifact. Do not rerun a write merely to recapture its output. Truncated responses
 cannot establish completeness. File length alone does not justify reorganizing
