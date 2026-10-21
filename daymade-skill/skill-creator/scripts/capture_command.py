@@ -26,6 +26,7 @@ def _parser() -> argparse.ArgumentParser:
             "Capture raw stdout and stderr from an already-authorized argv "
             "into a new private directory. This is not a permission sandbox."
         ),
+        epilog="Pass the already-authorized child argv after --: EXECUTABLE [ARG ...].",
         allow_abbrev=False,
     )
     parser.add_argument("--cwd", required=True, help="absolute existing child working directory")
