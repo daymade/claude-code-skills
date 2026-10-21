@@ -1,10 +1,10 @@
 ---
 name: claude-code-ops-router
 description: >-
-  Routes Claude Code: plugin/Skill repair, marketplace, statusline, model
-  profiles/source sync, 1M/[1m] context, usage/quota reset ping, memory→docs, .txt
-  repair, startup context and MCP schema, turning auto memory off.
-  Reads one bundled specialist; history, hooks, and Lark keep their own entries.
+  plugin/Skill repair, marketplace, statusline, model profiles/source sync,
+  1M/[1m] context, usage/quota reset ping, memory→docs, .txt repair, MCP startup context.
+  Routes Claude Code to one bundled specialist, including turning auto memory off.
+  History, hooks, and Lark keep their own entries.
 ---
 
 # Claude Code operations router
