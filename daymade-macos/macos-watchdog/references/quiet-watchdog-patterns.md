@@ -10,6 +10,7 @@ Design patterns for the four contract clauses in SKILL.md, each with the sanitiz
 - Pattern 5: Health checks certify only the plane they probe
 - Pattern 6: Batch loops throttle by default
 - Pattern 7: A green success log is not a health signal
+- Pattern 8: A stale failure signal is history, not current state
 
 ## Pattern 1: Premise-state self-check
 
@@ -66,3 +67,9 @@ sr_open() {  # name yours after the target
 **Pattern.** A job that prints its success line *only after every step succeeded* (the `set -e` shape) leaves no trace at all on a failed pass. So the freshness of its success log says nothing about the last pass — only that *some* pass succeeded recently. The health judgement has to come from the failure path: does an err.log / failure-state file / last-exit status exist, and does anything read it? `launchctl list` gives only the **last** exit code and a run count, never an exit-code history — that history lives in the log.
 
 **War story.** A 300-second marketplace-sync daemon showed five simultaneous green signals — 4204 lines of `source-sync verified` at that moment, out.log mtime one minute old, `LastExitStatus=0`, plist on disk, job registered in `launchctl print` — while `source-sync.err.log` held 137 tracebacks from five distinct root causes. The failing passes wrote nothing whatsoever, so every freshness signal stayed green. What exposed it was counting the tracebacks, not reading the success log. (The log keeps growing on its 300-second beat, so read that count as a snapshot, not a constant.)
+
+## Pattern 8: A stale failure signal is history, not current state
+
+**Pattern.** `launchctl`'s LastExitStatus is the *most recent* exit, not the current one. An err.log whose last line predates the current instance's start is the previous incarnation's tail — typically `ThrottleInterval` retry noise — not a live failure. Judge health by *relative* freshness: err.log mtime frozen in the past while `ps -o etime` keeps growing = healthy; only err.log lines newer than the current instance's start warrant diagnosis. Before calling a port/listener a conflict, verify the holder's identity: compare the remote listener's process start with the local client's start — if they align to the second, the "squatter" is the job's own live session. When logs cross machines, convert timezones first (m6-0 logs at -0700, 15 h behind).
+
+**War story.** 2026-10-21, during a 100%-full disk emergency, two relays showed `last-exit 255` plus old err.log tracebacks and were one `kickstart` away from being "repaired". Recheck showed the 18084 listener was the relay's own current session (remote sshd-session started 01:12:21, local relay 01:12:20, second-aligned); the err.log's last line was written 60 s before the current instance started, then silent for 19 h 46 m. m6-0 was isomorphic (failure log frozen at the MacBook offline window; current instance stable 20 h+). Disposition: report, do not act — a kickstart would have cut two forwards that had been stable for 19-21 hours and manufactured a real second incident inside the emergency. Pattern 7 covers success-side silence (green log ≠ health); this pattern is its mirror: a stale *failure* signal is not a current fault.

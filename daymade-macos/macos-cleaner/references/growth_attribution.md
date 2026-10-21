@@ -16,6 +16,7 @@ Phase 2 entry gate in SKILL.md.
 - 3. Timestamp estimate
 - 4. Reconcile against free space
 - 5. Name the writer
+- 6. Disk-full emergencies still enter through here
 - Stop condition
 
 ## Output shape
@@ -131,6 +132,20 @@ directories:
 Report the remainder as **unattributed** rather than forcing it onto the nearest large
 directory.
 
+**A clonefile snapshot's cost is delayed, not zero.** Deleting a full-clonefile
+snapshot releases ≈0 at deletion time, but the cost lands later: as the live tree
+churns, blocks shared with the snapshot get pinned and gradually turn real —
+measured 2026-10-21, a snapshot already held files that no longer existed in live
+(`raw/codex/history.jsonl`, `generated_images/*.png`), i.e. it was already the sole
+owner of deleted content, and two same-day incremental snapshots' state DBs had
+fully diverged into ~3 G of real bytes. Two consequences: the snapshot directory's
+size root is the *live home it captures* (here `~/.codex` 108 G / `~/.claude` 20 G),
+so governing the snapshot directory without governing the live source solves
+nothing; and as an emergency-reclaim target a clonefile snapshot is a complete
+miss — it frees ≈0 today while its real cost accrues tomorrow. Attribution rows
+for snapshot directories must name the live source as the writer, not the capture
+script.
+
 ## 5. Name the writer
 
 A growing directory without an owner is an unfinished row. For each top row:
@@ -145,6 +160,41 @@ A growing directory without an owner is an unfinished row. For each top row:
   session's working files.
 - Build and verification pipelines that keep one full artifact per run grow until someone
   adds a retention rule. That fix belongs in the pipeline, not in a one-off cleanup.
+
+**Multiple independent growth engines mean a one-off cleanup is a recurring crisis, not
+a fix.** Measured 2026-10-21, one disk held at least five mutually independent engines,
+each with its own writer and none with retention/TTL: a package cache fed by ~2,800
+scheduled tool invocations/day plus 48-58 new ephemeral environments/day (~2.6 GB/day);
+an agent session home whose October volume alone was 29 GiB (screenshot-heavy
+computer-use sessions double-writing tool outputs); a releases directory whose retention
+had been silently blocked since install (18 G, only grows); a deliveries directory with
+no retention; a snapshot pipeline still capturing while publishing was broken, plus a
+12 G gate-artifacts directory with no TTL still being written. Cleaning the stock
+without designing retention into each writer repeats the same crisis monthly — the
+09-19 prune to 10-21 full disk was one complete measured cycle. The delta table's owner
+column is therefore the deliverable, not decoration: every top row needs either a
+retention design routed to its owning pipeline, or an explicit "accepted, will refill"
+note. Related trap: when the volume is concentrated in the recent window, age-based
+heuristics ("keep latest N") cannot hold the bulk — retention design starts from the
+volume distribution and the reference graph (see proving-redundancy-before-deletion.md
+rung 3b).
+
+## 6. Disk-full emergencies still enter through here
+
+A 100%-full disk does not suspend this reference; it makes it mandatory. Measured
+2026-10-21: an emergency run that skipped growth attribution and ranked targets by
+nominal `du` picked phantom targets three times in one day (a 123 G cache that released
+~38 GiB; a 108 G clonefile snapshot that released ≈0; a backup set with the same
+structure), while the largest real growth engine (`~/.codex` sessions, 76 G and
++29 GiB/month) sat outside the governed scope entirely until a late attribution pass
+found it. In an emergency, order targets by *attributed recent physical growth* — the
+section-3 ctime/allocated-bytes estimate and the section-4 `df` reconciliation — not by
+nominal size. A full per-file census also beats briefing arithmetic: the briefing's
+"38.25 GiB / 52 files / avg 753 MB" implied a >500 MB big-file strategy with a 6.9 G
+ceiling; the 15,202-thread census (0 missing, du and stat in agreement) showed the real
+mean is ~5 MB across a long tail, and the big-file strategy was correctly rejected.
+Emergency or not: no df readback, no claimed release; no growth attribution, no target
+ranking.
 
 ## Stop condition
 

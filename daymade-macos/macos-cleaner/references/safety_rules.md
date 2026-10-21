@@ -409,6 +409,12 @@ except OSError as e:
         # Try using find + rm
 ```
 
+## Background destructive commands need a liveness channel
+
+A fire-and-forget background `rm` / cleanup is indistinguishable from a stalled one. Measured 2026-10-21: during a 100%-full disk emergency, a background `rm` ran empty for 24 minutes while the schedule of follow-up actions assumed its release was in progress — the discovery cost one full emergency window.
+
+Rule: any state-changing command sent to the background must carry a progress/liveness signal that you actually read — a log file whose mtime advances, periodic `df -k` checkpoints, or the harness's own task-status readback — and no dependent action may be scheduled on the assumption that it is progressing. Check the signal before reporting or relying on the release. A silent background task is `unknown`, not "in progress"; Phase 3's rule of one state-changing command at a time, reading the result before sending the next, applies to the background form too.
+
 ## Recovery Options
 
 ### If User Accidentally Confirmed

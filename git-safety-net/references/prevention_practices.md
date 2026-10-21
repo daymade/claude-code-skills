@@ -16,6 +16,7 @@ ceremony; adopt the ones whose failure mode you're exposed to.
 - A foreign commit adopted onto your branch (the inverse case)
 - Distinguish live WIP, a stale copy, and a published projection by diff direction
 - Audit before rebase / branch-delete
+- Anchor dangling heads before deleting bundle files
 - Audit every authorized worktree before retirement
 - Snapshot before any history rewrite
 - Version / lockfile collisions between parallel branches
@@ -540,6 +541,36 @@ scripts/git_loss_audit.sh
 With an excluded worktree, do not run it; use the authorized checkout's scoped status/HEAD/remote
 checks. Local-only commits or dirty/unavailable authorized worktrees must be preserved before the
 destructive step, and excluded state remains explicitly unaudited.
+
+## Anchor dangling heads before deleting bundle files
+
+**Failure mode:** deleting bundle/backup artifacts can delete the only copy of commits and branch
+identities. Measured 2026-10-21: one unplug bundle held head `f80d49d9` that was NOT-IN-MAIN with
+zero carrying refs; across 53 bundles, 35 heads were dangling in the object store and 13 existed
+*only* inside bundles. `gc.pruneExpire` defaults to 2 weeks and the audit day sat exactly on that
+boundary — any `git gc --auto` plus the deletion would have permanently lost 2 small docs commits'
+content, 13 commits' entire content, and 47 branch names. A confirmation step worded "confirm it
+is archived elsewhere or explicitly abandoned" has no falsifiable criterion and degrades into the
+executor's judgement — `cat-file` readability was nearly mistaken for "merged".
+
+**Prevention (pure-additive, ~10 minutes, fully reversible):** enumerate every head the artifacts
+carry, then run the three-check matrix per head and anchor every unreachable one:
+
+```bash
+git cat-file -e <sha>                          # object exists in the store
+git merge-base --is-ancestor <sha> origin/main # content already in main
+git for-each-ref --contains <sha>              # a ref carries it
+git update-ref refs/attic/<name> <sha>         # anchor; reversible via `git update-ref -d`
+```
+
+An empty `refs/attic/*` namespace means zero naming conflicts; main and worktrees are untouched.
+For heads whose objects exist only inside a bundle, fetch from the bundle into `refs/attic/*`
+*first* — deleting the bundle deletes the only copy. Anchor the same day when dangling objects sit
+near the prune boundary, not "later". Note the squash-merge shape: 33/35 dangling heads were
+tree-identical to a main commit, so anchoring preserves branch name + commit identity rather than
+content; the remaining few hold unique content and are the ones that make skipping this step
+unrecoverable. Every "confirm X before deletion" step in a retirement plan must name its exact
+command and expected output.
 
 ## Audit every authorized worktree before retirement
 
