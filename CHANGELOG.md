@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **skill-creator** (`daymade-skill` v1.73.1 → v1.73.2): Refresh only the locked certifi dependency to 2026.10.19 to remove the compromised emSign ECC Root CA - G3 trust anchor (GHSA-6q48-6c7w-9gw2). Preserve the other package pins and dependency edges. Change type: security maintenance repair.
+- **skill-creator** (`daymade-skill` v1.73.1 → v1.73.2): Refresh only the locked certifi dependency to 2026.10.19 to remove the emSign ECC Root CA - G3 trust anchor affected by compromised intermediate CA keys (GHSA-6q48-6c7w-9gw2). Preserve the other package pins and dependency edges. Change type: security maintenance repair.
 
 - **read-claude-code-history** (`daymade-claude-code` v4.30.19 → v4.30.20): Fold provenance-confirmed runtime Skill bodies in default briefings. Preserve full expansion, raw timeline text, user pastes, queued prompts and uncertain or mixed records. Change type: bounded display behavior change.
 
