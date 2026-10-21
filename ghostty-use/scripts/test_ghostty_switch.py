@@ -331,6 +331,114 @@ class SwitchTest(unittest.TestCase):
         self.assertIn("--profile work", cmd)
 
 
+    def test_after_login_is_explicit_and_keeps_original_process_unverified(self):
+        doc = self.saved()
+        self.auth("old")
+        self.active[2].return_value = gs.SessionList(doc["sessions"])
+        self.assertEqual(self.cli("--after-login", "--check"), 1)
+        self.active[2].return_value = gs.SessionList([self.reopened(doc["sessions"][0])])
+        self.assertEqual(self.cli("--after-login", "--check"), 0)
+        self.assertIn("snapshot captured after login", self.output.getvalue())
+        self.assertIn("billing: NOT CHECKED", self.output.getvalue())
+        self.assertFalse(self.state.exists())
+        self.auth("new")
+        self.assertEqual(self.cli("--after-login", "--check"), 2)
+        self.active[3].assert_not_called()
+
+    def test_after_login_partial_restore_leaves_other_old_session_untouched(self):
+        doc = self.saved([self.session(), self.session(B, pid=11)])
+        self.auth("old")
+        old = doc["sessions"][1]
+        fresh = self.reopened(doc["sessions"][0])
+        self.active[2].side_effect = [gs.SessionList([old]), gs.SessionList([old]), gs.SessionList([old, fresh])]
+        self.assertEqual(self.cli("--after-login", "--only", A), 1)  # whole set still incomplete
+        self.active[3].assert_called_once()
+        result = json.loads(next((self.state / "switches").glob("*-result.json")).read_text())
+        self.assertEqual(result["reopened"], [A])
+        self.assertEqual(result["old_processes"], [B])
+        self.assertTrue(result["after_login"])
+        self.assertEqual(result["authentication"], "not_checked")
+        self.assertEqual(self.cli("--check"), 2)  # target/mode cannot silently change
+
+    def test_plan_defers_current_and_rejects_executor_in_target_tree(self):
+        doc = self.saved([self.session(), self.session(B, pid=11)])
+        self.active[2].return_value = gs.SessionList(doc["sessions"])
+        args = ["switch-plan", "--snapshot", str(self.manifest), "--current-session", A]
+        self.assertEqual(gs.main(args), 1)
+        self.assertLess(self.output.getvalue().index("TARGET " + B), self.output.getvalue().index("CURRENT LAST " + A))
+        with mock.patch.object(sw.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, "10 1\n90 10\n")), \
+                mock.patch.object(gs, "_proc_start", return_value=300):
+            self.assertEqual(gs.main(args + ["--executor-pid", "90"]), 2)
+        with mock.patch.object(sw.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, "10 1\n90 1\n")), \
+                mock.patch.object(gs, "_proc_start", return_value=300):
+            self.assertEqual(gs.main(args + ["--executor-pid", "90"]), 0)
+        self.active[3].assert_not_called()
+        self.assertFalse(self.state.exists())
+
+
+class ControlTest(unittest.TestCase):
+    def setUp(self):
+        self.binding = dict(surface="synthetic-surface", sid=A, pid=100, started=1000, tty="ttys001")
+        self.ready = dict(self.binding, app="com.mitchellh.ghostty", tool="codex", allowed=True,
+                          foreground=True, exclusive=True, idle=True, draft="", observed_at=100)
+
+    def adapter(self, before=None, after=None):
+        adapter = mock.Mock()
+        adapter.observe.side_effect = [self.ready if before is None else before,
+                                      dict(self.ready, draft="/quit") if after is None else after]
+        return adapter
+
+    def test_control_pastes_one_literal_then_verifies_before_single_submit(self):
+        adapter = self.adapter()
+        self.assertEqual(sw.guarded_control(self.binding, "/quit", adapter, now=lambda: 100), "submitted_unverified")
+        self.assertEqual(adapter.method_calls, [mock.call.observe(), mock.call.paste("/quit"),
+                                               mock.call.observe(), mock.call.submit()])
+
+    def test_every_missing_null_and_unsafe_readiness_field_prevents_paste(self):
+        for key in self.ready:
+            for value in (None, "", "unsafe"):
+                if value == self.ready[key]:
+                    continue  # an empty draft is the positive control
+                with self.subTest(key=key, value=value):
+                    bad = dict(self.ready, **{key: value})
+                    adapter = self.adapter(before=bad)
+                    with self.assertRaises(ValueError):
+                        sw.guarded_control(self.binding, "/quit", adapter, now=lambda: 100)
+                    adapter.paste.assert_not_called()
+                    adapter.submit.assert_not_called()
+            bad = dict(self.ready)
+            del bad[key]
+            adapter = self.adapter(before=bad)
+            with self.assertRaises(ValueError):
+                sw.guarded_control(self.binding, "/quit", adapter, now=lambda: 100)
+            adapter.paste.assert_not_called()
+
+    def test_lost_slash_draft_claude_takeover_pid_reuse_and_denial_never_submit(self):
+        variants = [dict(self.ready, draft=v) for v in ("quit", "tatus", "status", "user draft/quit")]
+        variants += [dict(self.ready, draft="/quit", **change) for change in (
+            dict(tool="claude"), dict(allowed=False), dict(foreground=False), dict(exclusive=False),
+            dict(idle=False), dict(pid=101), dict(started=1001), dict(surface="other"),
+            dict(observed_at=94), dict(observed_at=101))]
+        for bad in variants:
+            adapter = self.adapter(after=bad)
+            with self.assertRaises(ValueError):
+                sw.guarded_control(self.binding, "/quit", adapter, now=lambda: 100)
+            adapter.submit.assert_not_called()
+
+    def test_failed_paste_or_unknown_submit_is_never_retried(self):
+        adapter = self.adapter()
+        adapter.paste.side_effect = RuntimeError("host denied")
+        with self.assertRaises(RuntimeError):
+            sw.guarded_control(self.binding, "/quit", adapter, now=lambda: 100)
+        adapter.observe.assert_called_once()
+        adapter.submit.assert_not_called()
+        adapter = self.adapter()
+        adapter.submit.side_effect = RuntimeError("outcome unknown")
+        with self.assertRaises(RuntimeError):
+            sw.guarded_control(self.binding, "/quit", adapter, now=lambda: 100)
+        adapter.submit.assert_called_once()
+
+
 class ObserverTest(unittest.TestCase):
     def test_only_ghostty_codex_is_observed_without_claude_body_reads(self):
         graph = ('1 0 ?? /Applications/Ghostty.app/Contents/MacOS/ghostty\n'

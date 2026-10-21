@@ -2,14 +2,14 @@
 name: local-codex
 description: >-
   Launches and manages the local OpenAI Codex CLI as a non-interactive coding sub-agent via ChatGPT
-  Pro OAuth, never API keys. Use to delegate coding tasks to Codex, run codex exec, generate or
+  OAuth, never API keys. Use to delegate coding tasks to Codex, run codex exec, generate or
   refactor code, or get a Codex code review; phrases like 'codex', 'run codex', 'codex exec',
   'delegate to codex'.
 ---
 
 # Local Codex
 
-Delegate coding tasks to the local OpenAI Codex CLI agent using your ChatGPT Pro subscription (OAuth, no API charges).
+Delegate coding tasks to the local OpenAI Codex CLI agent using the authorized ChatGPT account's OAuth access.
 
 ## When to Use
 
@@ -18,12 +18,13 @@ Delegate coding tasks to the local OpenAI Codex CLI agent using your ChatGPT Pro
 - User wants to use Codex's GPT-5.5 agent capabilities
 - User mentions "codex", "run codex", "delegate to codex"
 
-## Authentication (OAuth / ChatGPT Pro)
+## Authentication (ChatGPT OAuth)
 
-**CRITICAL**: This skill uses OAuth authentication from `~/.codex/auth.json` (ChatGPT Pro flat-rate subscription). **Do NOT set `OPENAI_API_KEY` or pass API keys** — that would switch to pay-per-use billing.
+**CRITICAL**: Use ChatGPT OAuth through the selected credential store. **Do NOT set `OPENAI_API_KEY` or pass API keys** for this workflow. Keep the authentication route separate from the account's allowance and extra Credit policy; OAuth does not guarantee that long work cannot consume extra Credit.
 
-- The ChatGPT.app desktop bundle and CLI share the same auth cache
-- Before login, account switching, or token recovery, read [references/oauth-guide.md](references/oauth-guide.md). Use its valid-cache/device-code branches and verify the expected account through the actual CLI entry.
+- Resolve the actual `CODEX_HOME` and store; the desktop app and CLI can share credentials.
+- Before login, account switching or token recovery, read [the OAuth guide](references/oauth-guide.md) and follow its [recovery recipe](references/oauth-guide.md#remote-account-switch-and-expired-login-recovery). Use fresh empty stores for independent grants, retain explicitly authorized single-owner transfers, and verify actual access and existing-process adoption separately.
+- Before a native quota query, read [refresh ownership](references/oauth-guide.md#bind-refresh-ownership-before-native-queries); a nominally read-only query can refresh credentials.
 
 ## Codex CLI Path
 

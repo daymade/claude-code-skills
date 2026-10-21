@@ -67,6 +67,73 @@ TUIs before opening: their unknown IDs could produce duplicates. Check identity,
 original process generation, saved cwd/rollout and CLI support for `--no-daemon`.
 Dry-run changes no progress, window, clipboard or login.
 
+## Login already changed before capture
+
+Keep a complete snapshot of the still-open Codex set under the target login.
+Use the same fixed manifest, with an explicit mode on every retry:
+
+```bash
+python3 <skill-dir>/scripts/ghostty_session.py switch-restore \
+  --snapshot <fixed-manifest> --after-login --check
+python3 <skill-dir>/scripts/ghostty_session.py switch-restore \
+  --snapshot <fixed-manifest> --after-login --only <missing-id> --dry-run
+```
+
+`--after-login` binds the target to the account captured in the snapshot. It does
+not invent a previous account or prove that it changed. Original PID/birth pairs
+remain old/unverified even when the credential file is already correct. New
+independent processes must start at or after capture. In this mode, `--only`
+may reopen missing selected IDs while other known original sessions stay open;
+selected old processes and unresolved live identities still block opening.
+The final report and exit 1 cover the entire fixed set, including deferred rows.
+Progress binds both account and mode; do not remove it to force a different mode.
+
+## Exit controls and the executing session
+
+An authorized account switch may include normal exits through a currently allowed
+host UI channel. It does not authorize signals, closing the whole app or touching
+Claude windows. Snapshot and preserve work first. Plan the fixed set read-only:
+
+```bash
+python3 <skill-dir>/scripts/ghostty_session.py switch-plan \
+  --snapshot <fixed-manifest> --current-session <full-uuid>
+# Supply only a verified independent controller, outside the target process trees:
+python3 <skill-dir>/scripts/ghostty_session.py switch-plan \
+  --snapshot <fixed-manifest> --current-session <full-uuid> --executor-pid <pid>
+```
+
+Exit 1 without an executor defers the executing session; exit 0 records the
+executor's current PID/birth and prints that session last. This verifies process
+independence, not its account, quota or authority. Before the final exit, the
+independent executor must possess the fixed manifest, original cwd/resume command,
+authorized channel and sufficient target-account quota for the intended work.
+It must remain alive outside the exiting agent's process tree. Recheck its birth
+immediately before handoff. Preserve the original recovery command outside the
+exiting terminal. No script here exits or restarts the executing session for you.
+
+For each exit, bind the actual visible Ghostty surface to the exact Codex UUID,
+TTY and live PID/birth using the host's current observations. A window title or
+process argv alone does not establish which input surface will receive text.
+Require a known empty draft, idle task state, foreground focus and exclusive
+ownership. Preserve nonempty drafts and wait for work; never clear them to make
+the precondition pass. Use one clipboard paste of the literal `/quit` or `/exit`,
+then read the input back before Return. Missing slash, partial input, changed
+focus or human takeover stops input immediately. Do not send a test prompt.
+
+The existing `ghostty_switch.guarded_control(expected, control, controller)` helper
+implements that two-observation sequence for an **authorized host adapter**. Its
+`observe()` returns `app`, `tool`, `surface`, `sid`, `pid`, `started`, `tty`,
+`allowed`, `foreground`, `exclusive`, `idle`, `draft`, `observed_at`; `expected`
+binds the surface/session/process/TTY fields. Observations must be fresh (within
+5 seconds); readiness booleans must be exactly true. `paste(text)` must paste the
+complete literal and raise on failure; `submit()` sends Return once and raises
+on failure or unknown delivery. The helper returns `submitted_unverified` only.
+Reconcile process disappearance before restore; never retry an unknown submit.
+The helper supplies no surface-binding GUI adapter: the host must obtain and
+verify those observations through its permitted channel. It cannot turn supplied
+metadata into permission. A host denial stops GUI operation; do not fall back to
+AppleScript or another channel to bypass it. Read-only plans/checks remain usable.
+
 ## Restore and resume an interrupted batch
 
 Apply the Skill entry's foreground check: use an authorized bounded Ghostty handoff
@@ -123,6 +190,8 @@ work continuing in every restored session before claiming end-to-end success.
 
 Send no test prompt through this workflow. Report authentication as `not_checked`
 until real continuation is observed; keep unavailable GUI/authentication evidence
-explicit. Run synthetic control-flow regressions with
+explicit. Local identity, successful authentication, remaining quota, process
+adoption and billing policy are separate facts. Neither reopening nor OAuth
+authentication proves that paid Credit is disabled. Run synthetic control-flow regressions with
 `python3 -m unittest discover -s <skill-dir>/scripts -p 'test_ghostty*.py'`;
 those tests do not replace the manual switch acceptance.
