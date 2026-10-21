@@ -24,7 +24,7 @@ stand down without waiting for a human to disable it.
 | Installing a NEW watchdog from scratch | Select the trigger through `references/event-driven-observers.md`, then § Deploy and § The quiet-watchdog contract |
 | Installing, upgrading, reusing or starting a persistent Python job | § Persistent Python runtime |
 | An existing watchdog misbehaves (spam, re-launches apps, hammers) | § The quiet-watchdog contract, diagnose which clause it violates |
-| Stopping / disabling / restarting a job | § Stop semantics |
+| Stopping / disabling / restarting a job | § Stop semantics; before replacement follow `references/event-driven-observers.md` § Wait for an authorized unload before replacement |
 | Retiring a job and its tool permanently | § Stop semantics → Decommissioning a job permanently |
 | plist key details (KeepAlive forms, domains, logging, resource limits) | `references/launchd-plist-reference.md` |
 | Choosing between event-driven and periodic for a source of truth | `references/event-driven-observers.md` § Select event vs periodic |
@@ -149,7 +149,7 @@ in § Deploy and the current task's authorization boundary.
 |---|---|
 | Stop now, allow re-bootstrap later | `launchctl bootout gui/$(id -u)/<label>` (daemon: `sudo launchctl bootout system/<label>`) |
 | Prevent later loads across login (stop a loaded job separately) | `launchctl disable user/$(id -u)/<label>` (reverse: `enable`) |
-| Edit then reload | `bootout` → edit plist → `bootstrap` |
+| Edit then reload | `bootout` → bounded exact-service unload observation through the Deployment SOP → edit plist → `bootstrap` |
 
 Use `bootstrap`/`bootout` instead of deprecated `load`/`unload`. When a job
 must remain disabled across later loads, apply `disable`; stopping an instance
