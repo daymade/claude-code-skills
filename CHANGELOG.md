@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.21.11 → v1.21.12): Distinguish empty-but-focused Find from clear-and-blur, retain scope information through collapsed controls and preserve ordinary hosts of a shared Reader. Add synthetic loaded-window and naturally drifting pending-question regression cases. Change type: bounded acceptance guidance correction and evaluation coverage maintenance.
+- **data-visualization-discipline** (v1.1.3 → v1.1.4): Add a synthetic status-wall regression separating activity, attention, detail coverage, observation freshness and current identity, with complete-zero controls. Preserve runtime semantics. Change type: evaluation coverage maintenance.
+
 - **git-safety-net** (v1.22.8 → v1.22.9): Disable automatic maintenance only in the merged-branch test's disposable repositories so background object writes cannot outlive fixture cleanup. Preserve the large-conflict regression and production verdict logic. Change type: test-fixture isolation repair.
 
 - **transcript-fixer** (`daymade-audio` v1.50.2 → v1.50.3): Bind written entity citations to the selected occurrence. Support source-attested company short names in explicit founder introductions and their same-paragraph account references; preserve person-name conflicts, unrelated-source refusal and atomic verdict/ledger writes. Change type: bounded authority-validation behavior change.
