@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` v1.73.0 → v1.73.1): Keep invocation, selection and incomplete-read semantics in their owners. Distinguish registered tool selection from the capture command's child argv.
 - **skill-creator** (`daymade-skill` v1.72.0 → v1.73.0): Capture an already-authorized argv without returning its output bodies.
 - **pdf-creator** (`daymade-docs` v1.26.0 → v1.26.1): Keep illustrated-guide metadata at its authoritative source while retaining expected hashes, crop data and unique locators. Add the project entry and a quoted Chinese-path example; remove copied theme properties, computed totals and an unresolved rule attribution. Rendering behavior is unchanged.
 - **local-codex** (`daymade-codex` v1.4.4 → v2.0.0): Make `status` inspect cached login without a model turn. Breaking status contract: `authenticated` is now null; use `login_present`/`auth_mode` for local evidence and the separately authorized verification workflow for live access. Align resume and independent-process examples, retire duplicated defaults/output tables and obsolete diagnostic-schema summaries. Change type: status-interface safety repair and documentation correction.
