@@ -55,7 +55,10 @@ Keep unavailable identity an explicit error.
 
 Let work finish before exit. The user exits the saved Codex TUIs and changes
 ChatGPT account in the saved CODEX_HOME. Do not log out, rewrite credentials,
-terminate processes or close Ghostty wholesale: Claude Code may share the app.
+send process-termination signals or close Ghostty wholesale: Claude Code may share the app.
+For the login or credential-recovery step, follow
+[local-codex's OAuth guide](https://github.com/daymade/claude-code-skills/blob/main/daymade-codex/local-codex/references/oauth-guide.md);
+this script owns session preservation and restoration.
 
 ```bash
 python3 <skill-dir>/scripts/ghostty_session.py switch-restore --dry-run
@@ -156,6 +159,11 @@ python3 <skill-dir>/scripts/ghostty_session.py switch-restore --snapshot <fixed-
 python3 <skill-dir>/scripts/ghostty_session.py switch-restore --check
 ```
 
+Keep `--after-login` on each restore/check/retry when using
+[post-login capture](#login-already-changed-before-capture). The examples above
+show the normal pre-login snapshot route. Generic reboot `check` establishes
+presence only and cannot replace this account/process reconciliation.
+
 Reopen with saved CODEX_HOME, cwd, UUID, model/profile and permission options.
 Add `--no-daemon` to avoid the shared background server. Do not replay initial
 prompts, reattach startup images or create another managed worktree. Fail on
@@ -175,16 +183,18 @@ mode. Rerun using persisted progress to open only missing IDs. If the account
 changes again mid-handoff, stop and prepare a new handoff.
 
 Expect `reopened: N/M`, old/unverified processes and every missing ID. Exit 0
-means the fixed set reopened in new process generations under the changed
-file-auth context; exit 1 means missing/old processes or a further account change;
+means the fixed set reopened in eligible independent process generations under
+the mode-bound file-auth context: changed identity for the normal route, captured
+target identity for `--after-login`. Neither mode proves authenticated continuation.
+Exit 1 means missing/old processes or a further account change;
 exit 2 means invalid input, unavailable evidence or failed prerequisites. Missing
 rows print an exact retry limited to their UUIDs. Progress/result sidecars leave
 the original manifest untouched. Read the report as well as the exit code.
 
 ## Accept actual continuation
 
-Distinguish restoration from usability. Reopened original IDs under a changed
-local account context prove restoration; live processes and credential hashes
+Distinguish restoration from usability. Reopened original IDs under the selected
+mode's account/process checks prove restoration; live processes and credential hashes
 do not prove that new-account requests succeeded. Observe the user's intended
 work continuing in every restored session before claiming end-to-end success.
 

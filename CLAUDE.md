@@ -158,6 +158,11 @@ as the route rather than a second copy of those procedures.
 For customer-approved report forms, follow
 [skill-creator's report-template contract](daymade-skill/skill-creator/references/authoring-and-reuse.md#show-the-result-not-just-the-work).
 
+For Codex login, credential recovery or quota-query ownership, enter
+[local-codex authentication](daymade-codex/local-codex/SKILL.md#authentication-chatgpt-oauth).
+For existing Ghostty Codex windows around an account switch, enter
+[ghostty-use's switch workflow](ghostty-use/SKILL.md#codex-account-switch).
+
 For rebuilding a paper form from an image, scan or screenshot as an editable
 XLSX with a printable layout, enter
 [excel-automation](daymade-docs/excel-automation/SKILL.md).

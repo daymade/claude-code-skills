@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Codex-only manual account handoff; no logout, process termination or messages."""
+"""Codex-only account handoff; no credential changes, signals or model prompts."""
 import base64
 import hashlib
 import json
@@ -252,7 +252,7 @@ def prepare(args, gs):
     for s in unresolved:
         print(f"  UNRESOLVED tty={s.get('tty')} pid={s.get('pid')} {s.get('reason', 'no unambiguous session identity')}")
     print("Claude Code excluded. No process exited; no login changed.")
-    print("Next: finish work and manually exit these Codex TUIs, switch ChatGPT account in this CODEX_HOME, then run switch-restore.")
+    print("Next: follow codex-account-switch.md for the pre-login or --after-login route; exit only released target TUIs, then restore the fixed manifest.")
     return 1 if unresolved else 0
 
 
