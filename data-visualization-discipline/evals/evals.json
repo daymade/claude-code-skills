@@ -12,8 +12,25 @@
         "Shows both monitor identities for C instead of first-result or average aggregation",
         "Makes D's configured certificate risk visible alongside its reachable state",
         "Accepts the complete fresh all-up no-risk control and does not treat empty coverage as all-online",
-        "Keeps project observation/threshold ownership and reports that rendered/browser behavior has not been verified"
-      ]
-    }
+      "Keeps project observation/threshold ownership and reports that rendered/browser behavior has not been verified"
+    ]
+  },
+  {
+    "id": 2,
+    "name": "session-attention-activity-identity-and-detail-coverage",
+    "prompt": "Review a synthetic worker status wall before implementation. Evaluation time is 12:00:00. The declared scope has six current identities: A/current, B/current, C/current, D/current, E/current and F/current. This fixture's existing project contract accepts an attention observation as current only when its identity matches the current row and its own observation age is at most 300 seconds. All stated observations succeeded; no later events occur. A/current has current activity unknown, matching attention observed at 11:59:00 saying waiting for reply, and question details not read (the unloaded items array is empty). B/current has current activity executing, matching attention at 11:59:00 saying waiting for reply, and two unanswered questions read with remaining detail coverage incomplete. C/current has current activity idle, matching attention at 11:55:01 saying waiting for reply, and a complete detail read containing one unanswered question. D/current has activity executing observed at 12:00:00; its only matching attention observation says waiting for reply at 11:54:59, with no newer attention read. E/current has activity idle observed at 12:00:00; its only attention observation says waiting for reply at 11:59:00 but belongs to E/previous, with no attention observation for E/current. F/current has activity idle and a matching complete attention read at 11:59:00 confirming no waiting reply; its complete question detail read confirms zero unanswered questions. For each row, propose reader-facing activity, attention, inclusion in a confirmed-waiting filter and question-count wording. Explain what a wall-level waiting or question summary can legitimately claim and what evidence would resolve remaining unknowns. Do not access production, implement a new state machine or claim rendered/browser behavior has been verified.",
+    "expected_output": "A scoped presentation plan preserving independent activity and attention evidence. A, B and C remain confirmed waiting despite unknown, executing and idle activity respectively. A's question count remains unknown, B shows two read with incomplete coverage, and C can show one. D's stale matching observation and E's fresh wrong-identity observation do not establish current waiting or current zero; both retain visible current-attention unknown with its reason. F supports explicit zero within its complete fresh scope. Summaries distinguish confirmed waiting from unresolved coverage and do not claim an exact total unanswered-question count.",
+    "files": [],
+    "assertions": [
+      "Keeps A/current in confirmed waiting while showing activity unknown; does not turn its unloaded empty question array into zero unanswered questions or remove it from the waiting filter",
+      "Shows executing plus waiting for B/current and idle plus waiting for C/current; neither activity value suppresses the known attention fact",
+      "Describes B/current as two questions read with incomplete coverage rather than exactly two total, while allowing C/current's complete read to establish one unanswered question",
+      "Rejects D/current's 301-second-old attention observation as current evidence; its fresh activity timestamp does not renew that observation, and current attention remains unknown rather than waiting or zero",
+      "Rejects E/previous's fresh attention observation as evidence for E/current; preserves the identity mismatch and does not infer current waiting or current zero",
+      "Accepts F/current's matching fresh complete reads as evidence of no waiting reply and zero unanswered questions within that scope",
+      "Keeps summaries and the confirmed-waiting filter consistent: A, B and C are confirmed waiting, D and E have unresolved current attention, F is confirmed clear, and the total unanswered-question count remains unknown",
+      "Keeps the 300-second freshness policy local to this fixture's supplied project contract and leaves rendered/browser behavior unverified"
+    ]
+  }
   ]
 }
