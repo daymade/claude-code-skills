@@ -59,6 +59,10 @@ is not the Skill directory. The census readings answer different questions:
 - **By instantaneous %CPU** — *who is burning right now?* Catches the active
   storm that the cumulative view dilutes.
 
+For retained agent/MCP children, read
+[Stateful agent and MCP children](references/incident-playbook.md#stateful-agent-and-mcp-children)
+before treating them as waste.
+
 ### 3. Attribute the owner
 
 Trace the parent chain of the suspect until it ends at something ownable:

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-load-doctor** (`daymade-macos` v1.24.5 → v1.24.6): Preserve live REPL/browser state when triaging retained agent/MCP children; distinguish fresh/expired catalog behavior and probe-created servers with a fixed-version Codex CUA case. Change type: bounded diagnostic guidance addition.
+
 - **git-safety-net** (v1.22.8 → v1.22.9): Disable automatic maintenance only in the merged-branch test's disposable repositories so background object writes cannot outlive fixture cleanup. Preserve the large-conflict regression and production verdict logic. Change type: test-fixture isolation repair.
 
 - **transcript-fixer** (`daymade-audio` v1.50.2 → v1.50.3): Bind written entity citations to the selected occurrence. Support source-attested company short names in explicit founder introductions and their same-paragraph account references; preserve person-name conflicts, unrelated-source refusal and atomic verdict/ledger writes. Change type: bounded authority-validation behavior change.
