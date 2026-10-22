@@ -131,6 +131,8 @@ sandbox 或 approval，不回复服务审批请求。消息在宿主下一次接
 转 queue 或重发。核对原 message ID 的接收证据后决定下一步；先修复已确认的环境缺口，
 不能把错误当成换通道授权，也不手动改传 queued 绕过同一失败。需要及时回应却无法及时投递的窗口协调，保留未送达的事实，按既定等待窗口与隔离方案继续；不是再建一条迟到的请求。helper 本身不启动服务、不杀进程、不修改权限。
 
+不对称形态（2026-10-22 实测）：对端 App Server socket 缺席时，原生跨会话投递的**入站方向仍然工作**——你可能持续收到对方经原生通道发来的协调请求，而每条回信都失败于 `App Server connection unavailable`。此时「不回复」不等于沉默对抗：对方的窗口请求协议里大多自带安全兜底（无回复即按声明推进），且**可观察的状态变化本身就是回执**——对方请求的那件事（如收敛某个 checkout）真的完成后，他们下次只读核验会看到。对已过期的请求回信会被判 `suppressed_closed_reply` 直接抑制；若信息仍改变对方下一步（例如其声明「explicitly pending」的前置已满足），换一条新的 `--kind notice`（新 event、新有效期）再发一次，不重发旧信封。
+
 调用 `codex queue` 的子进程异常中，只有 `FileNotFoundError` 同时满足 `errno == ENOENT` 且 `filename == "codex"`
 才提交 not_sent；其他启动或通信错误、超时及 queue 非零退出仍提交 unknown。
 

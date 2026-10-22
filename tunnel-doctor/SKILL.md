@@ -108,6 +108,7 @@ Determine which scenario applies:
 - **SSH connects but `be-child ssh` exits code 1** → WSL snap sandbox issue (Step 5)
 - **TCP port 22 reachable (`nc -z` succeeds) but SSH fails with `kex_exchange_identification: Connection closed`** → Tailscale SSH proxy intercept on WSL (Step 5A)
 - **Same `kex_exchange_identification` / `Connection closed by UNKNOWN port 65535`, but there is no Tailscale — you are behind a TUN and the host is a public cloud VM whose HTTPS still works** → could be your TUN *or* the destination's firewall allowlist; they are indistinguishable from the client. Step 2K settles it out-of-band
+- **Every node of one proxy provider stalls identically (TCP connects, TLS `appconnect=0.000`), and restarting the local proxy app + packet-tunnel extension changes nothing** → provider-level event, not your tunnel; confirm with the provider's control plane and switch to a *different* provider's node (Step 2L)
 - **`tailscale ssh` returns "not available on App Store builds"** → Wrong Tailscale distribution on macOS (Step 5B)
 - **Any tool using system DNS (`ssh`, `curl`, `git`) hangs ~60s before resolving, but `nslookup` returns instantly** → Stalled resolver in `getaddrinfo` chain (Step 2I)
 - **Windows+WSL host: everything offline at once (domestic AND overseas), WSL dead too, "even Tailscale won't come online" — and/or the user tried several recovery actions (switched NICs, toggled TUN) and can't tell which one fixed it** → Windows host TUN cascade + event-log forensics (Step 5C)
@@ -994,6 +995,20 @@ Two fixes:
 
 1. Add a DIRECT rule for that host/port in the TUN tool, then re-test. This is a config change to someone's proxy — get the machine owner's agreement first if it is not yours.
 2. Better for anything unattended: move the automation off SSH and onto the out-of-band channel you just used. It survives **both** failure modes — the allowlist rotting *and* the proxy refusing the port — and depends on no local network state.
+
+### Step 2L: Provider-Level Outage (all same-provider nodes stall identically)
+
+**Symptom**: every node of one provider shows the same signature — TCP connect succeeds but the TLS handshake never completes (`time_appconnect=0.000`) — and restarting the local proxy app *and* its packet-tunnel extension changes nothing. Through the proxy, all overseas destinations fail together; direct-rule traffic keeps working.
+
+**Why this needs its own step**: it impersonates Step 2H/2J (local TUN misbehavior) and Step 2K (one destination's firewall), but the failing component is the provider's data plane — no local repair helps, and the venue test from Step 2K is already answered: a venue problem kills plain TCP connects too, while here they succeed. The only local fix is a node from a *different* provider.
+
+**Confirm in ~10 s with TUN-bypassing probes** (`--interface en0` + `--resolve`, real IPs from `dig @223.5.5.5`):
+
+1. **Baseline sanity**: an unrelated TLS host via the same physical path answers (e.g. `api.github.com` returns 200) → your wire and generic TLS are fine.
+2. **Same-provider generality**: two or more nodes of the same subscription show the identical TLS stall → provider-level, not one dead node.
+3. **Control plane**: the subscription domain direct — `521` (Cloudflare edge up, origin down) is the provider stating its own outage; `200/302/404` means the control plane is alive and the event is data-plane-only.
+
+**Fix**: record the current node selection (for rollback), probe a candidate node of a *different* subscription the same way before selecting it (`time_appconnect` must be non-zero), then switch. Measured 2026-10-22: one provider's subscription origin returned 521 while all five of its VLESS nodes stalled at TLS; a second subscription's residential-IP line was healthy and restored the plane seconds after selection. With no second subscription, the honest state is "provider down — wait"; do not keep restarting local apps, and do not conclude "GFW blocked the provider" from this signature alone (a provider core outage and a protocol-level block are indistinguishable from the client — but both are answered by the same switch).
 
 ### Step 3: Fix Proxy Tool Configuration
 

@@ -28,6 +28,18 @@ Tool results are outside this prose index; use the owning exact-session reader
 to verify them. Live-source raw search is disabled. Add `--include-agent-prompts`
 only when the question is specifically “how did I instruct the agent?”
 
+Corollary, measured 2026-10-22: an event that happened purely inside tool calls
+(a capture/cleanup command nobody narrated) has **zero footprint in both recall
+modes** — 19 candidate sessions overlapping the event window ranked nothing,
+because there was no prose to rank. Absence from recall therefore cannot even
+support "no session did it." The probe that still works: pin a high-entropy
+exact string the event must have produced (a `time_ns`-named artifact doubles
+as its own creation timestamp — read the name, get the moment), then
+literal-grep one physically date-scoped day directory (Codex
+`sessions/YYYY/MM/DD/`) for that needle. Zero needle hits across the day is a
+strong elimination of session-origin; pair it with the index's session
+inventory (started/ended) before concluding the trigger left no session record.
+
 ## One-time setup
 
 Install the pinned Chinese FTS5 tokenizer backend:
