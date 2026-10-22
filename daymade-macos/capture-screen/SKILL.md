@@ -27,6 +27,34 @@ host refusal/GUI lock. Only request a handoff when existing authorization is abs
 
 ## Quick Start
 
+### Observe an unidentified dialog or the full desktop
+
+Use this route when the user requests a whole-screen view, or when permitted
+window observation cannot identify the reported obstruction. First establish
+that the host permits this capture and its scope. An app-specific control
+refusal does not prove screen capture is unavailable; it also does not authorize
+using a different tool to read content the host protects. Stop if the refusal
+covers the proposed capture or a GUI lock prevents it.
+
+Capture without activation, scrolling or input:
+
+```bash
+capture_dir="$(mktemp -d)"
+screencapture -x "$capture_dir/desktop.png"
+```
+
+Inspect the resulting image with the host's permitted image viewer. On a
+multi-display desktop, inspect each produced display image before claiming to
+have checked the whole desktop. File creation alone does not prove the requested
+dialog was captured. Once identified, prefer the exact window for further
+observations and keep the user's reported interaction failure in scope.
+
+Follow the macOS permission owner's `macos-permissions` entry for classification
+and recovery. A screenshot cannot grant access, prove an input was delivered or
+establish that the blocked business operation recovered.
+
+### Capture a known window
+
 ```bash
 # Find Excel window ID
 swift scripts/get_window_id.swift Excel
@@ -47,7 +75,8 @@ Workflow:
 
 ## Step 1: Get Window ID (Swift)
 
-Use Swift with CoreGraphics to enumerate windows. This is the **only reliable method** on macOS.
+Use the bundled Swift/CoreGraphics route when the host permits window enumeration.
+Prefer the host's native window inventory when it supplies the required IDs.
 
 ### Quick inline execution
 
@@ -316,6 +345,6 @@ If you maintain another macOS permission-related flow, reuse this standardized t
 |------------|-----------|-------------------|-------|
 | Microsoft Excel | Swift | Full (zoom, scroll, select, activate sheet) | Best supported |
 | Google Chrome | Swift | Basic (activate, window management) | No scroll/zoom via AppleScript |
-| Any macOS app | Swift | Basic (activate via `tell application`) | screencapture works universally |
+| Other macOS apps | Swift or permitted host inventory | App-dependent | Capture requires host permission and a capturable surface |
 
 AppleScript control depth varies by application. Excel has the richest AppleScript dictionary. For apps with limited AppleScript, keyboard simulation via `System Events` is a foreground alternative only after the entry gate passes, not an automatic recovery from a failed background action.

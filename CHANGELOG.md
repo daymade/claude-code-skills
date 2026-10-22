@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **transcript-fixer** (`daymade-audio` v1.50.5 → v1.50.6): Align authority-record help with both supported record kinds, retain explicit candidate-index selection, and repair reviewed-transcript finalization links and the repository entry. Keep occurrence verdicts separate from reusable rules. Change type: factual documentation and navigation repair; executable behavior unchanged.
 - **skill-creator** (`daymade-skill` v1.73.2 → v1.73.3): Correct the materialization summary example to read removed/retained paths from the complete receipt. Change type: factual documentation repair; output and cleanup behavior unchanged.
+- **macos-permissions / capture-screen** (`daymade-macos` v1.24.8 → v1.25.0): Classify observed dialogs before TCC diagnosis, preserve reported interaction failures, and add a separately authorized Keychain obstruction-cancellation procedure. Document permitted full-screen observation and distinguish dialog removal from consent and application recovery. Change type: additive diagnostic and recovery guidance.
 
 - **transcript-fixer** (`daymade-audio` v1.50.4 → v1.50.5): Resolve Stage 1 trap contexts through the active configuration directory, preserving missing/empty-context behavior without reading default-directory traps after relocation. Align context-location documentation and maintainer entry points. Change type: existing configuration-contract repair and documentation alignment.
 
