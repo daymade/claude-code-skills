@@ -39,6 +39,8 @@ literal-grep one physically date-scoped day directory (Codex
 `sessions/YYYY/MM/DD/`) for that needle. Zero needle hits across the day is a
 strong elimination of session-origin; pair it with the index's session
 inventory (started/ended) before concluding the trigger left no session record.
+(Claude-side equivalent for the same gap: `analyze_sessions.py tool-calls`;
+the day-directory needle is for Codex rollouts, which that tool does not read.)
 
 ## One-time setup
 
