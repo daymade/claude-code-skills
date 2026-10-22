@@ -323,10 +323,10 @@
     },
     {
       "name": "daymade-macos",
-      "description": "Apple-platform development and operations suite for macOS window capture, TCC permission diagnosis and Full Disk Access repair, iOS/macOS app development, disk cleanup, and launchd watchdogs.",
+      "description": "Apple-platform development and operations suite for macOS window capture, TCC and Keychain dialog diagnosis, Full Disk Access repair, iOS/macOS app development, disk cleanup, and launchd watchdogs.",
       "source": "./daymade-macos",
       "strict": false,
-      "version": "1.24.8",
+      "version": "1.25.0",
       "category": "suite",
       "keywords": [
         "suite",

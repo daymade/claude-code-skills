@@ -1,14 +1,38 @@
 ---
 name: macos-permissions
 description: >-
-  Diagnoses and repairs macOS TCC dialogs and silent denials: Full Disk Access, Screen Recording,
+  Diagnoses TCC denials and stuck Keychain dialogs: Full Disk Access, Screen Recording,
   Microphone, Camera, Accessibility, Automation. Use for recurring prompts, LaunchAgent/uv jobs
   that fail only in background, broken grants, or automating Full Disk Access (权限弹窗 / 授权了没用 /
   完全磁盘访问). Checks requester and grants first. Not for launchd design
   (macos-watchdog) or app permission UX (developing-ios-apps).
 ---
 
-# macOS Permissions (TCC)
+# macOS Permission Dialogs
+
+## Observe and classify the reported problem first
+
+The executing agent preserves the user's symptom: a dialog that cannot be clicked,
+typed into or dismissed needs an interaction diagnosis even when it contains a
+password field. Do not replace that report with instructions to enter a password.
+
+Read the actual dialog before choosing a subsystem or naming its owner. Use the
+host's permitted observation tools; when whole-screen observation is authorized
+and permitted, use `capture-screen`'s full-screen route without raising windows.
+A refusal to control one protected app neither identifies the unseen dialog nor
+proves every observation method is unavailable. Respect the refusal's scope;
+never switch tools to bypass a host restriction or GUI lock.
+
+| Observed dialog or failure | Route |
+|---|---|
+| Keychain item access, a `login` keychain password, or a blocked Keychain window | Read [Keychain dialog recovery](references/keychain-dialog-recovery.md) |
+| Privacy resource request or a protected operation failing without a visible dialog | Continue with the TCC procedure below |
+| Script, Git hook, or application-specific confirmation | Inspect that request through its owning task/tool; do not change TCC or Keychain settings |
+| Content or owner still unknown | Keep it unknown; obtain only the missing permitted observation or ask the user for the visible text |
+
+These are operator decisions, not an automatic dialog classifier.
+
+## TCC diagnosis
 
 macOS gates per-app, per-resource access through **TCC** (Transparency, Consent, Control).
 TCC records permission decisions in its databases and controls what a process can do.
