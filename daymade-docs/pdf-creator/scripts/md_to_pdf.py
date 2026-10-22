@@ -50,7 +50,7 @@ if platform.system() == "Darwin":
 
 
 def _find_chrome() -> str | None:
-    """Find Chrome/Chromium binary path."""
+    """Find Chrome/Chromium binary path (on Windows, Microsoft Edge as well)."""
     candidates = [
         "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
         "/Applications/Chromium.app/Contents/MacOS/Chromium",
@@ -58,10 +58,32 @@ def _find_chrome() -> str | None:
         shutil.which("chromium"),
         shutil.which("chrome"),
     ]
+    if os.name == "nt":
+        candidates += _windows_browser_candidates()
     for c in candidates:
         if c and Path(c).exists():
             return str(c)
     return None
+
+
+def _windows_browser_candidates() -> list[str | None]:
+    """Chrome, then Edge, where Windows installs them.
+
+    Windows puts neither browser on PATH: both live under Program Files (or a
+    per-user LocalAppData install) and register only under App Paths, which
+    shutil.which does not read. Edge is Chromium, takes the same headless
+    --print-to-pdf flags, and ships with Windows 10 and 11.
+    """
+    names = ("ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA")
+    roots = [os.environ.get(name) for name in names]
+    candidates: list[str | None] = []
+    for parts in (
+        ("Google", "Chrome", "Application", "chrome.exe"),
+        ("Microsoft", "Edge", "Application", "msedge.exe"),
+    ):
+        candidates += [os.path.join(root, *parts) for root in roots if root]
+    candidates.append(shutil.which("msedge"))
+    return candidates
 
 
 def _has_weasyprint() -> bool:
