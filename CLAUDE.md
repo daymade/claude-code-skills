@@ -171,14 +171,20 @@ For rebuilding a paper form from an image, scan or screenshot as an editable
 XLSX with a printable layout, enter
 [excel-automation](daymade-docs/excel-automation/SKILL.md).
 
+For growth analysis from sales or support conversations, enter
+[product-growth](product-growth/SKILL.md) and follow its
+[customer-conversation evidence recipe](product-growth/references/customer-conversations.md).
+
 For HTML report creation or updates, enter
 [report-with-html's Define success workflow](report-with-html/SKILL.md#workflow)
 for reader/use, evidence precision, delivery location and investigation acceptance.
 Its [technical comparison reading order](report-with-html/references/visualization-patterns.md)
 owns concrete plans, cost boundaries and next-verification choices; do not turn a research
 shortlist into purchase or deployment approval.
-Its [maintenance contract](report-with-html/references/long-lived-report-maintenance.md)
-owns later reconciliation and consumer readback.
+For filtered evidence inspection, follow its
+[interactive-analysis recipe](report-with-html/references/interactive-analysis.md).
+For transcript speaker-label updates, later reconciliation and consumer readback,
+follow its [maintenance contract](report-with-html/references/long-lived-report-maintenance.md).
 
 For citation previews and in-place source inspection, enter
 [report-with-html's interaction owner](report-with-html/references/interaction-components.md)

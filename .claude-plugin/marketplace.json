@@ -1349,7 +1349,7 @@
       "description": "Diagnose growth from business data and actively discovered feedback; distinguish attribution from causal effects and validate useful actions across product types. Use for growth sources, missing channels/metrics, activation, retention, revenue or ecosystem adoption.",
       "source": "./product-growth",
       "strict": false,
-      "version": "1.0.1",
+      "version": "1.0.2",
       "category": "productivity",
       "keywords": [
         "growth",
