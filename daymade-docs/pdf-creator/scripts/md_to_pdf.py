@@ -595,12 +595,15 @@ def _lint_pdf_typography(pdf_file: str) -> list[dict]:
          before next CJK content (suggests forced break in narrow cell)
 
     Returns: list of dicts {page, line, kind, snippet, message}.
-    Empty list if pdftotext unavailable or PDF clean.
+    Empty list if pdftotext or pdfinfo is unavailable, or the PDF is clean.
 
     Note: this only catches obvious cases. Subtle typography issues (uneven
     line spacing, awkward breaks at safe points) require visual inspection.
     """
-    if not shutil.which("pdftotext"):
+    # pdfinfo runs first, then pdftotext per page. Git for Windows ships
+    # pdftotext without pdfinfo, so checking pdftotext alone let a run crash
+    # with FileNotFoundError after the PDF was already written.
+    if not (shutil.which("pdftotext") and shutil.which("pdfinfo")):
         return []
 
     findings: list[dict] = []
