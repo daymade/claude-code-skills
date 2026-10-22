@@ -152,7 +152,7 @@ def _parse_domains(raw: str | None) -> list[str] | None:
 def _load_trap_demotion_sets(domains: list[str] | None) -> tuple[frozenset, frozenset]:
     """Collect 禁裸词/勿修 demotion tokens from each named domain's context file.
 
-    Convention: ``~/.transcript-fixer/contexts/<domain>.md``. No --domain (or
+    Contexts live under the active configuration directory. No --domain (or
     the "all" alias) means no specific domain's file to consult, so nothing
     demotes — demotion is a domain-scoped veto, and a whole-library run has
     no owner to veto with. A missing or malformed context file must never
@@ -163,7 +163,8 @@ def _load_trap_demotion_sets(domains: list[str] | None) -> tuple[frozenset, froz
     from core.trap_scanner import extract_demotion_sets
     banned: set = set()
     keep: set = set()
-    ctx_home = Path.home() / ".transcript-fixer" / "contexts"
+    from utils.config import get_config
+    ctx_home = Path(get_config().paths.config_dir) / "contexts"
     for domain in domains:
         context_path = ctx_home / f"{domain}.md"
         if not context_path.is_file():
@@ -1512,7 +1513,7 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
               file=sys.stderr)
 
     # Trap-aware demotion: a named domain's context file
-    # (~/.transcript-fixer/contexts/<domain>.md) can veto auto-application of
+    # (selected by _load_trap_demotion_sets) can veto auto-application of
     # the same-named dictionary rule — traps annotated 禁裸词/禁入词典 and
     # confirmed-correct (勿修) records are the domain owner's machine-readable
     # "judge the context, never auto-apply" (the 绿点→绿电 class: a real-word

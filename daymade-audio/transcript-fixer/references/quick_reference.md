@@ -4,9 +4,10 @@
 > elsewhere in the bundle are for agent-less API automation. Prefer the CLI over
 > direct SQL writes; read `database_schema.md` before any custom query.
 
-**Storage**: transcript-fixer uses SQLite database for corrections storage.
-
-**Database location**: `~/.transcript-fixer/corrections.db`
+For database selection and storage operations, use
+[configuration overrides](script_parameters.md#environment-variables) and the
+[database schema](database_schema.md). SQL examples below assume the default
+database; substitute the selected database when its location is overridden.
 
 ## Quick Start Examples
 
@@ -28,13 +29,15 @@ uv run scripts/fix_transcription.py --add "候选误识词" "正确词" --domain
 
 ### Stage 1 with Sibling Domains
 
+Resolve `<domain-context.md>` through the [context location](domain_context_guide.md#location).
+
 ```bash
 # One pass over several sibling project domains; --apply-domain trusts the union
 uv run scripts/fix_transcription.py -i meeting.md --stage 1 --domain myproject,myproject-alt --apply-domain
 
 # Native-pass trap-scan: every trap the domain context file documents, located
 # with line + context (replaces the per-trap manual grep loop)
-uv run scripts/fix_transcription.py --scan-traps --context-file ~/.transcript-fixer/contexts/myproject.md -i meeting.md
+uv run scripts/fix_transcription.py --scan-traps --context-file "<domain-context.md>" -i meeting.md
 ```
 
 ### Adding Corrections via SQL

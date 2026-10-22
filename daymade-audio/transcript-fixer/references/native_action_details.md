@@ -6,7 +6,7 @@ Read the named section before executing its action. The common native sequence r
 
 1. **Give the file its final name before Stage 1.** Queue anchors store absolute paths. Use a human-readable project filename before any deferral can enqueue. When the input arrives as inline text with no file yet — a slash-command argument, a pasted block — write it to a file before anything else; `--input` and the queue anchors both need a path, and a scratch location is fine when nothing downstream will archive it. No `--domain` given and none obvious from context? Omitting the flag already defaults to searching every domain (`--domain`'s own default), so don't block on picking one — run Stage 1 bare and let safe mode gate what auto-applies. If a specific candidate still needs resolving, one step of the ladder is cheap enough to keep even at fast tier though the rest of it isn't: [native_entity_triage.md](native_entity_triage.md) rung 1, a single cross-domain lookup — `--lookup "<term>"` prints every existing claim on the term (dictionary rules active or disabled, as FROM or TO; context rules; roster variants; queue rows) — not the full verification ladder the tier table tells you to skip, just that one query.
 2. **Recover the raw baseline before reading a pre-corrected transcript.** If an ingest pipeline or previous API pass already touched the text, diff against the raw source first. Judge upstream edits as edits, not as ground truth.
-3. **Load project priors and read the complete transcript.** Read `~/.transcript-fixer/contexts/<domain>.md` when present, then read the whole file before deciding early ambiguities.
+3. **Load project priors and read the complete transcript.** Resolve the domain file through the [context location](domain_context_guide.md#location), read it when present, then read the whole transcript before deciding early ambiguities.
 4. **Run Stage 1 and inspect the real result.** Prefer explicit project domains plus `--apply-domain --json`. Read `deferred` and `review_enqueued`; never silently discard the sidecar or queue gap.
 5. **Diff Stage 1 against raw/original.** If a rule changed correct speech, work from the original, retire the stored pair with `--report-false-positive "<from>" "<to>" --domain <domain>`, and verify it no longer fires.
 6. **Triage every candidate.**
@@ -61,7 +61,7 @@ Read the named section before executing its action. The common native sequence r
     # you adjudicate the printed list; --write auto-appends only the recurring
     # (≥2x) non-bare candidates; --write-all also appends the one-off set)
     uv run scripts/harvest_corrections.py raw.md corrected.md \
-      --context-file ~/.transcript-fixer/contexts/<domain>.md
+      --context-file "<domain-context.md>"
     ~~~
 
     Every emitted bullet is round-trip verified through the real trap parser before printing, and pairs already documented in the context file are skipped. A pair the bullet grammar cannot carry — a side with no lexical content or a `*` in it, such as a vendor's `***` redaction mask diffed against the real word — is dropped at the noise filter, and any bullet that still fails to parse is reported on stderr and excluded rather than aborting the run. High-frequency candidates are strong traps; single-occurrence ones need a human judgment — that is why `--write` leaves them out by default — and ⚠️ 裸形 candidates are never auto-written. This replaces hand-writing trap bullets from memory.
@@ -260,7 +260,7 @@ uv run scripts/generate_word_diff.py original.md corrected.md output.html
 
 # Harvest native-pass edits into context-trap candidates
 uv run scripts/harvest_corrections.py raw.md corrected.md \
-  --context-file ~/.transcript-fixer/contexts/myproject.md --write
+  --context-file "<domain-context.md>" --write
 
 # Collect clip evidence at operator-verified media positions; resolve rows separately
 # Read references/advanced_correction_evidence.md before selecting the engine or clock mapping.

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **transcript-fixer** (`daymade-audio` v1.50.4 → v1.50.5): Resolve Stage 1 trap contexts through the active configuration directory, preserving missing/empty-context behavior without reading default-directory traps after relocation. Align context-location documentation and maintainer entry points. Change type: existing configuration-contract repair and documentation alignment.
+
 - **tunnel-doctor** (v1.17.4 → v1.17.5): Add Step 2L for provider-level proxy outages — the identical TLS-stall signature across all same-provider nodes with a restarted local stack, control-plane discrimination (521 vs alive), and the cross-subscription node-switch fix with probe-before-select. Change type: documentation-only diagnostic guidance.
 - **peer-message** (v1.24.1 → v1.24.2): Document the asymmetric channel state where native inbound delivery keeps working while the Codex App Server socket is down — replies then fail as not_sent, expired-request replies are suppressed as suppressed_closed_reply, and observable state changes act as the receipt. Change type: documentation-only protocol guidance.
 - **read-claude-code-history** (`daymade-claude-code` v4.30.21 → v4.30.22): Document that tool-call-only events leave zero prose footprint in recall, with the exact-string needle probe over a physically date-scoped day directory as the working elimination path. Change type: documentation-only reference guidance.
