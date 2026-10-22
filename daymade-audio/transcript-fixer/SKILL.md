@@ -10,7 +10,7 @@ description: >-
 
 # Transcript Fixer
 
-Use a two-phase loop:
+Use the correction loop:
 
 1. Stage 1 applies deterministic, already-known corrections.
 2. Native AI Correction reads the complete transcript, fixes one-off errors, verifies uncertain entities, and compounds reusable fixes.
@@ -40,6 +40,9 @@ If the bundle location is genuinely unknown, use the installation-resolution pro
 
 ## Quick start
 
+Resolve `<domain-context.md>` through the [context location](references/domain_context_guide.md#location)
+before filling the explicit file argument below.
+
 ~~~bash
 # Initialize once
 uv run scripts/fix_transcription.py --init
@@ -61,7 +64,7 @@ uv run scripts/fix_transcription.py \
 
 # Scan all documented context traps after the native read-through.
 uv run scripts/fix_transcription.py --scan-traps \
-  --context-file ~/.transcript-fixer/contexts/myproject.md \
+  --context-file "<domain-context.md>" \
   --input meeting.md
 ~~~
 
@@ -170,8 +173,6 @@ a rare sentence-local mishearing stays file-only.
 
 ## Reference map
 
-All references are one level from this file.
-
 | Need | Read |
 |---|---|
 | Historical incidents (optional; not a prerequisite) | [native_historical_evidence.md](references/native_historical_evidence.md) |
@@ -189,7 +190,7 @@ All references are one level from this file.
 | Queue, dashboard, audio, re-anchor | [review_queue_dashboard.md](references/review_queue_dashboard.md) |
 | Resume pending evidence or apply an explicit human verdict | [pending-continuation.md](references/pending-continuation.md) |
 | Numbers, photos, multi-recording, clip cross-check, batches, batch pending-queue audio adjudication | [advanced_correction_evidence.md](references/advanced_correction_evidence.md) |
-| Context-file grammar/template | [domain_context_guide.md](references/domain_context_guide.md) |
+| Context-file location and grammar/template | [domain_context_guide.md](references/domain_context_guide.md) |
 | CLI flags and review-item schema | [script_parameters.md](references/script_parameters.md) |
 | Database schema and queries | [database_schema.md](references/database_schema.md), [sql_queries.md](references/sql_queries.md) |
 | Short command lookup | [quick_reference.md](references/quick_reference.md), [dictionary_guide.md](references/dictionary_guide.md) |

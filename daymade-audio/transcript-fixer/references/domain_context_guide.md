@@ -1,19 +1,10 @@
 # Domain Context Guide
 
-Format and template for per-domain correction context files — the third layer of
-the correction system, alongside the dictionary (deterministic replacements) and
-the people roster (person names).
-
-## Contents
-
-- What problem this solves
-- Location and format
-- Worked example
-- Machine-readable grammar and maintenance rules
+Format and template for per-domain correction context files.
 
 ## What problem this solves
 
-Three kinds of ASR errors, three homes:
+Choose the home for each error class:
 
 | Error class | Example | Home | Why |
 |---|---|---|---|
@@ -21,22 +12,23 @@ Three kinds of ASR errors, three homes:
 | Person names | garbled coworker/client names | People roster (`people.md`) | Names need relationship context and survive DB resets |
 | **Context-dependent homophones** | `减`→`剪` only when discussing clip production | **Domain context file** | A rule would corrupt other sentences (`减少` is real); only in-context judgment can decide |
 
-The third class is invisible to Stage 1 by design and *undercorrected* by a
-generic AI pass: without a domain prior, the AI suspects the error but won't
-touch it — the fix falls to the human, every time it recurs. The context file
-supplies that prior once, and every future native run on this domain benefits.
+A generic AI pass can leave context-dependent readings unresolved without a
+domain prior. The context file supplies that prior for native correction;
+Stage 1's narrower veto role is defined in the [format](#format).
 
 ## Location
 
-One file per domain, in user space next to `corrections.db` and `people.md`:
+Store one file per domain at `contexts/<domain>.md` relative to the active
+configuration directory. The [configuration loader](../scripts/utils/config.py)
+defines directory selection and precedence; supported environment overrides are
+listed in [Environment Variables](script_parameters.md#environment-variables).
+Stage 1 uses that selected directory and does not merge traps from the default
+home directory when another directory is selected. A missing or empty domain
+file contributes no vetoes.
 
-```
-~/.transcript-fixer/contexts/<domain>.md
-```
-
-`<domain>` matches the `--domain` name you already use for the dictionary
-(e.g. a project slug). If you relocate the config dir via
-`TRANSCRIPT_FIXER_CONFIG_DIR`, contexts live under that dir's `contexts/`.
+`<domain>` matches the `--domain` name used for the dictionary, such as a
+project slug. Resolve this location before filling `--context-file` in the
+command examples.
 
 Never put context files inside the skill bundle — skill installs are wiped on
 update, and domain knowledge is often private to a project.
@@ -44,7 +36,7 @@ update, and domain knowledge is often private to a project.
 ## Format
 
 Free markdown, but keep it short (aim under ~80 lines — it's read at the start
-of every native session on this domain) and cover three sections:
+of every native session on this domain) and use this template:
 
 ```markdown
 # <domain> — correction context
@@ -68,7 +60,7 @@ For each trap:
   contexts) without firing blindly everywhere. A confirmed-correct record
   (**X = 真实实体，勿修**) demotes rules whose FROM is X. Demotion beats
   `--apply-domain` trust; `--apply-all` still applies by explicit override.
-  Two authoring constraints, both from the matcher being a per-bullet-line
+  Authoring constraints follow from the matcher being a per-bullet-line
   literal substring check: write the marker on the trap's own line (a marker
   on an indented continuation line is silently missed), and never *discuss*
   the marker word in a trap line's prose (「评审后决定不标禁裸词」 still
@@ -110,7 +102,7 @@ word, so it's a deterministic fix and went to the dictionary via
 "from" side is real text in some other reading stay in this file.)
 
 ## Authoritative name sources  (read ALL of these — names split by role)
-- Alias ledger: <project-repo>/context.md — 3 person tables, read every one:
+- Alias ledger: <project-repo>/context.md — read every listed person table:
   ① top team directory (internal staff) ② §speaker-alias-table (internal speakers + ASR variants)
   ③ §client-and-vendor-side (client + dealer-side staff — e.g. the editor whose name ASR keeps garbling)
 - People roster: ~/.transcript-fixer/people.md (team section)

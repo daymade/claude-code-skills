@@ -379,6 +379,8 @@ For same-line repeats or a legacy row needing an explicit slot, follow
 [occurrence anchoring](daymade-audio/transcript-fixer/references/review_queue_dashboard.md#same-line-occurrence-anchoring).
 Use the [CLI reference](daymade-audio/transcript-fixer/references/script_parameters.md#fix_transcriptionpy)
 to select the command; the argument parser owns accepted combinations.
+For domain-context location, configuration-directory selection or homophone-veto
+authoring, enter the [Domain Context Guide](daymade-audio/transcript-fixer/references/domain_context_guide.md).
 For remaining pending rows or a received human verdict on an already reviewed file, enter
 [pending continuation](daymade-audio/transcript-fixer/references/pending-continuation.md).
 For source-audio export, identity and timeline pairing, follow
@@ -398,6 +400,8 @@ review coverage, unresolved verdicts, and repository publication distinct.
 For local correction tests and repository CI ownership, follow the
 [testing strategy](daymade-audio/transcript-fixer/references/architecture.md#testing-strategy);
 keep maintainer-only repository resources distinct from installed Skill paths.
+Context-veto CLI regressions live in
+[test_trap_demotion.py](daymade-audio/transcript-fixer/scripts/tests/test_trap_demotion.py).
 
 ### Feishu Recording Lookup
 
