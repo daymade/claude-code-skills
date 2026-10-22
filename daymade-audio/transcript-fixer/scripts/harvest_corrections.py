@@ -34,7 +34,7 @@ Usage:
     uv run scripts/harvest_corrections.py RAW CORRECTED
     uv run scripts/harvest_corrections.py RAW CORRECTED --json
     uv run scripts/harvest_corrections.py RAW CORRECTED \
-        --context-file ~/.transcript-fixer/contexts/<domain>.md --write
+        --context-file "<domain-context.md>" --write
 """
 
 from __future__ import annotations

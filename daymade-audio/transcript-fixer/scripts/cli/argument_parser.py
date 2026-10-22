@@ -227,8 +227,8 @@ def create_argument_parser() -> argparse.ArgumentParser:
         "--context-file",
         metavar="PATH",
         dest="context_file",
-        help="Domain context markdown for --scan-traps (e.g. "
-             "~/.transcript-fixer/contexts/<domain>.md)"
+        help="Domain context markdown for --scan-traps; select the domain file "
+             "under the active configuration directory's contexts/"
     )
     parser.add_argument(
         "--probe",

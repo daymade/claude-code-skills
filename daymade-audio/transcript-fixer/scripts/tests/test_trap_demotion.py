@@ -141,6 +141,13 @@ class TestDemotedByTrapGrading:
 # ---------------------------------------------------------------------------
 
 class TestLoadTrapDemotionSets:
+    @pytest.fixture(autouse=True)
+    def selected_config(self, tmp_path, monkeypatch):
+        from types import SimpleNamespace
+        import utils.config as config_module
+        monkeypatch.setattr(config_module, "get_config", lambda: SimpleNamespace(
+            paths=SimpleNamespace(config_dir=tmp_path / ".transcript-fixer")))
+
     def test_reads_each_named_domain_context_file(self, tmp_path, monkeypatch):
         contexts = tmp_path / ".transcript-fixer" / "contexts"
         contexts.mkdir(parents=True)
@@ -166,6 +173,44 @@ class TestLoadTrapDemotionSets:
         from cli.commands import _load_trap_demotion_sets
         assert _load_trap_demotion_sets(["nosuchdomain"]) == \
             (frozenset(), frozenset())
+
+
+@pytest.mark.parametrize("context_state", ["protected", "missing", "empty"])
+@pytest.mark.parametrize("config_source", ["default", "environment", "config_file"])
+def test_loader_uses_the_selected_configuration_directory(
+        tmp_path, monkeypatch, config_source, context_state):
+    """Use the real config loader; a relocated directory must not read home traps."""
+    import json
+    import utils.config as config_module
+    from cli.commands import _load_trap_demotion_sets
+
+    home = tmp_path / "home"
+    default_dir = home / ".transcript-fixer"
+    default_dir.mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    monkeypatch.delenv("TRANSCRIPT_FIXER_CONFIG_DIR", raising=False)
+    monkeypatch.setattr(config_module, "_config", None)
+    selected = default_dir if config_source == "default" else tmp_path / "selected config"
+    if config_source == "environment":
+        monkeypatch.setenv("TRANSCRIPT_FIXER_CONFIG_DIR", str(selected))
+    elif config_source == "config_file":
+        (default_dir / "config.json").write_text(json.dumps(
+            {"paths": {"config_dir": str(selected)}}), encoding="utf-8")
+    if selected != default_dir:
+        (default_dir / "contexts").mkdir()
+        (default_dir / "contexts" / "synthetic.md").write_text(
+            "- **旧词 → 错词（禁裸词）** — decoy\n", encoding="utf-8")
+    contexts = selected / "contexts"
+    contexts.mkdir(parents=True)
+    if context_state != "missing":
+        (contexts / "synthetic.md").write_text(
+            "- **霁斌 → 霁兵（禁裸词）** — cue\n" if context_state == "protected" else "",
+            encoding="utf-8")
+
+    assert config_module.get_config().paths.config_dir == selected
+    banned, keep = _load_trap_demotion_sets(["synthetic"])
+    assert banned == (frozenset({"霁斌"}) if context_state == "protected" else frozenset())
+    assert keep == frozenset()
 
 
 @pytest.mark.parametrize("context_state", ["protected", "missing", "empty"])
@@ -213,7 +258,8 @@ def test_cli_trap_keeps_system_and_person_homophones_separate(
     )
     monkeypatch.setattr(commands, "_get_service", lambda: service)
     monkeypatch.setattr(config_module, "get_config", lambda: SimpleNamespace(
-        paths=SimpleNamespace(people_roster_path=None),
+        paths=SimpleNamespace(people_roster_path=None,
+                              config_dir=tmp_path / ".transcript-fixer"),
         resources=SimpleNamespace(max_file_size=1_000_000, max_text_length=1_000_000)))
     source = tmp_path / "conversation.md"
     raw = ("甲 00:00:01.000\n霁斌系统有 demoasr 线索。\n"

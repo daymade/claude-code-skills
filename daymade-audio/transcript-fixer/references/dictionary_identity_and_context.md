@@ -453,7 +453,7 @@ same from→to pair is safe on future transcripts. A user verdict that
 contradicts your search results is still the verdict winning, not an anomaly to
 double-check.
 
-**Three more verdict shapes worth naming, because all three get mishandled.**
+**Verdict shapes that need distinct handling.**
 - *"Fix this occurrence — never a rule."* The user confirms the swap for the sentence in front of you while explicitly forbidding the standing pair. Landing spots, all in the same turn: the file edit; a caution line in the owning roster or domain context ("A→X forbidden as a rule — one-off mishearing, judge per occurrence"); if a queue item exists for this occurrence, its `decision_note` quoting the prohibition verbatim — a mid-turn chat verdict often has none, and in that case do **not** manufacture a queue item just to hold the note, the caution line is the carrier; and *nothing* in the dictionary. The verdict fixes one occurrence; the recorded prohibition is what saves the next session from compounding it.
 - *A rejected merge is not a person.* `kept_original` — or the user rejecting your merge candidate — settles only that the text stands as written. It does not establish that the token is a real entity, and it does not license creating a roster entry asserting real-personhood for a token you know nothing about. Roster entries require positive identity knowledge (who this person is, from the user or a ledger); manufacturing an entry from the negation of your own wrong guess poisons the very SSOT the next run reads. If the user then tells you the token is nobody, or names the actual person, *that* is the fact to record.
 - *One token, two real referents — within one domain.* The same garbled string can be a mishearing of person X in one file and person Y in another — same week, same engine. Once a verdict reveals that, record **both** directions as trap bullets marked `禁裸词` in the owning domain's context file (the veto machinery under "Domain Correction Contexts" below demotes any same-FROM dictionary rule, and `--scan-traps` then surfaces each new occurrence for per-case enqueue); there is no dictionary-safe form of "A sometimes means X, sometimes Y" *in the same domain*. The cross-project escape hatch is narrower than it looks: if the two referents separate cleanly by project, domain-scoped rules (`A→X` under `--domain P1`, `A→Y` under `--domain P2`) are the domain-isolation section's sanctioned move **only when the FROM token is garble-shaped** — when the FROM is itself a plausible real name, the matrix's *real name → different real name* row still wins, because a P1 transcript can always mention the person from P2.
@@ -462,26 +462,15 @@ double-check.
 
 The dictionary handles deterministic replacements; the people roster handles names. A third class of error can't safely live in either: **context-dependent homophones** — words that are only wrong in a particular discussion context. Think `减`→`剪` in a meeting about producing N video clips per day, or a finance call where a common word collides with a ticker nickname. A dictionary rule on a common word silently corrupts every other transcript, and a generic AI pass lacks the domain prior to fix it confidently — it either guesses wrong or leaves it for the human. (Real case: a transcript had four `减到 N 条` occurrences that all meant `剪到`; the AI pass suspected but wouldn't touch them without a domain prior, and the user had to fix them by hand.)
 
-Domain context files close this gap. One markdown file per domain, in **user space** next to your `corrections.db` and `people.md` (never inside the skill bundle — it survives skill updates and keeps project knowledge private):
-
-```
-~/.transcript-fixer/contexts/<domain>.md
-```
-
-(If you relocated the config dir via `TRANSCRIPT_FIXER_CONFIG_DIR`, contexts live under that dir's `contexts/`.)
-
-During native correction (see [native_ai_full_workflow.md](native_ai_full_workflow.md)), read the transcript's domain context file before triaging. It should contain three things:
-
-1. **One line of business context** — what this domain's recordings are usually about
-2. **Known homophone traps** — each with the *contextual cue* that disambiguates it ("when the sentence is about producing/editing clips, `剪` is intended"), optionally with a dated real example
-3. **Pointers to authoritative name sources** — the project's alias ledger, the relevant people-roster section, existing DB domains — so the verification ladder in [native_ai_full_workflow.md](native_ai_full_workflow.md) knows where to look first
+During [native correction](native_ai_full_workflow.md), read the transcript's
+domain context before triaging. Use the [context location](domain_context_guide.md#location)
+and [format/template](domain_context_guide.md#format) maintained in the Domain
+Context Guide; keep project knowledge outside the installed Skill bundle.
 
 What must NOT go in a context file: hard replacement rules. `减→剪` as a rule belongs in NEITHER the context file NOR the dictionary — the file primes your judgment with priors and cues; it never authorizes blind replacement. Every fix still goes through the confidence triage in [native_ai_full_workflow.md](native_ai_full_workflow.md).
 
 Maintenance loop (mirrors the dictionary's `--add` habit): when a native session surfaces a **context-dependent** recurring error — you fixed it here, and it'll recur in this domain's future transcripts — append it to the domain's context file with its disambiguating cue. Deterministic non-word/name fixes keep going to `--add --domain` / the roster as before.
 
 **Machine-readable vetoes (consumed by Stage 1, since 2026-08):** two annotation classes in the context file act on the *dictionary*, not just on the reader. ① A trap whose bullet carries the literal marker `禁裸词` or `禁入词典` (**妙计 → 妙记（飞书妙记语境，禁裸词）**) demotes any dictionary rule with the same FROM to safe-mode deferral — the pair may only be corrected with its context judged, exactly the 绿点→绿电 class (a real-word rule right in some contexts, wrong in others). ② A confirmed-correct record (**X = 真实实体，勿修**) demotes any rule whose FROM is that token. Demotion beats `--apply-domain` trust-flattening; `--apply-all` remains the operator's explicit override. Two scope rules: the veto only fires when the domain is named via `--domain` (a whole-library run has no owner to veto with), and in a multi-domain union it applies by FROM across the whole union regardless of which named domain owns the rule. This is how a trap documented *after* a rule was added still stops the rule from firing — before this layer, only `--report-false-positive` (which disables the rule everywhere, including the contexts where it is right) could.
-
-Format and a worked template: [domain_context_guide.md](domain_context_guide.md).
 
 Note: the cue prose itself is consumed by the **native workflow** (the agent reads the file); API mode (`--stage 2/3`, the backup channel) does not inject contexts yet; Stage 1 consumes only the two veto classes above, never the prose.
