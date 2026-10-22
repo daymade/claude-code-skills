@@ -33,10 +33,11 @@ Leave conflicting names pending; recognizer agreement never establishes identity
 3. Inspect the command's exit status and exact row/file readback. On refusal,
    follow the stated re-anchor or recovery path; do not bypass it with a separate
    file edit or ledger claim. Do not rerun ASR or repeat a settled question.
-4. Complete Native checklist steps 10–12 and Finalization in
-   [SKILL.md](../SKILL.md#native-correction-checklist): exact-file pending check,
-   final diff and required scans, sidecar closure, correct learning destination,
-   and review of affected owning-project derived references. Preserve raw ASR.
+4. Follow [finalization](native_action_details.md#finalization) and
+   [learning and entity propagation](native_action_details.md#native-correction-checklist):
+   exact-file pending check, final diff and required scans, sidecar closure,
+   correct learning destination, and review of affected owning-project derived
+   references. Preserve raw ASR.
    A one-off confirmed name does not authorize a bare dictionary rule.
 5. Follow the owning repository's commit/publication and independent readback
    contract. For an already delivered transcript, update its existing revision

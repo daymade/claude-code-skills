@@ -142,7 +142,7 @@ Safety rules:
 - `original` is only the suspect token/span; never put the whole sentence there.
 - `context` is copied verbatim; `line` is the key, not `line_hint`. For same-line repeats, use a unique context or add `context_offset` pointing to the intended token inside that context; see the queue reference for offset units and legacy-row repair.
 - `suggested` is the key, not `suggestion`. Use `actions`, not `action_pack`.
-- Inspect all `candidates` for a located occurrence; conflicting suggestions require an explicit override. Use `--consolidate-review --review-file FILE` for a legacy batch, then repair reported ambiguous anchors explicitly. Read [occurrence grouping and written nonperson authority](review_queue_dashboard.md#one-occurrence-multiple-candidates) before using these routes; a system/product type alone cannot bypass person-name protection.
+- Inspect all `candidates` for a located occurrence and follow [candidate selection](review_queue_dashboard.md#one-occurrence-multiple-candidates) for an explicit candidate index or override. Use `--consolidate-review --review-file FILE` for a legacy batch, then repair reported ambiguous anchors explicitly. Read [written nonperson authority](review_queue_dashboard.md#written-authority-for-nonperson-names) before using that route; a system/product type alone cannot bypass person-name protection.
 - Resolve one occurrence at a time; sweep sibling entity occurrences only after the whole batch is resolved.
 - A `pending` row is a blocking state for a high-quality/final transcript, not proof that the issue was handled. Queue detection without a human/evidence verdict leaves the artifact incomplete.
 - Read `resolved_text` after an override; the listing can still display the rejected suggestion.

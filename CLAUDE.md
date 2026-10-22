@@ -381,8 +381,9 @@ Use the [CLI reference](daymade-audio/transcript-fixer/references/script_paramet
 to select the command; the argument parser owns accepted combinations.
 For domain-context location, configuration-directory selection or homophone-veto
 authoring, enter the [Domain Context Guide](daymade-audio/transcript-fixer/references/domain_context_guide.md).
-For remaining pending rows or a received human verdict on an already reviewed file, enter
-[pending continuation](daymade-audio/transcript-fixer/references/pending-continuation.md).
+For remaining pending rows or a received occurrence-specific human verdict on an
+already reviewed file, enter [pending continuation](daymade-audio/transcript-fixer/references/pending-continuation.md)
+for queue resolution and its finalization, learning and propagation owners.
 For source-audio export, identity and timeline pairing, follow
 [the audio setup SOP](daymade-audio/transcript-fixer/references/review_queue_dashboard.md#source-audio-and-timeline-pairing)
 and its [audio helper](daymade-audio/transcript-fixer/scripts/fetch_minute_audio.py).

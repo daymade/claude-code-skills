@@ -101,9 +101,9 @@ printf 'run exit: %s\n' "$materialization_exit"
 
 Expected: preparation reports `prepared`; run reports `run_succeeded` with child
 return code 0; `artifacts/run-0001/stdout.log` contains `True`. Finish reports
-`finished`, lists the removed input paths, and retains the log files. Read
-`task/.materialization.json` independently to check the persisted outcome and
-cleanup paths. Process exit 0 does not establish business acceptance; inspect the
+`finished` and retains the log files. Read `task/.materialization.json`
+independently for the persisted outcome and removed/retained paths. Process exit 0
+does not establish business acceptance; inspect the
 task's outputs against the user's acceptance criterion.
 
 ## Run and account for every retry
