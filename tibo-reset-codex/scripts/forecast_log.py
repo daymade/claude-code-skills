@@ -799,10 +799,10 @@ def snapshot_health(state_dir, enabled=True):
     if not behind:
         return {"status": "ok"}
     return {"status": "lagging", "uncommitted": behind,
-            "hint": "These journals have content the local git snapshot does not. A snapshot "
-                    "retries only the journal it was triggered for, so the next append to the "
-                    "same journal retries it and prints the reason on stderr ('git snapshot "
-                    "skipped'); appends to other journals never clear it."}
+            "hint": "These journals have content the local git snapshot does not. Run "
+                    "snapshot-status for the recorded failure and read-only lock diagnosis. "
+                    "Unchanged failures are deferred; after resolving the cause, run "
+                    "snapshot-retry for the affected journal."}
 
 
 def main():
