@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **debugging-network-issues** (v1.11.5 → v1.11.6): Attribute layered comparisons only to verified path differences, preserve the CDN/LB distinction, and return to the original condition within a set budget when failures are intermittent. Keep recovery acceptance separate from root-cause certainty. Change type: bounded diagnostic inference correction.
+
 - **macos-cleaner** (`daymade-macos` v1.25.1 → v1.25.2): Correct the OrbStack sparse-image path to the 2.x group-container layout, replace the removed Reclaim button with the measured lagged auto-TRIM behavior, add absolute off-limits rows for agent chat history and the WeChat container, split Downloads scan authorization from per-batch deletion, and document safe_delete.py batch-confirmation semantics. Change type: documentation accuracy and safety rulings.
 
 - **tunnel-doctor** (v1.17.6 → v1.17.7): Add node-liveness verification reference — a data-plane url-test as the only liveness verdict, plus a mihomo delay-API recipe that verifies any node's recovery without touching the user's active channel (Shadowrocket credential extraction, control-group calibration, measured pitfalls); warn against naming the active node from exit-IP lookups in the TUN contamination table. Change type: additive diagnostic capability with misattribution guardrails.
