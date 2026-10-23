@@ -377,3 +377,31 @@ test('volume control affects both players and newly created playback objects',as
   assert.equal(app.nodes.get('volumeValue').textContent,'40%');
   app.run('setVolume(2)'); assert.equal(app.audios[1].volume,1);
 });
+
+test('focused read-only J/K updates the selected locator, time and editor binding together',()=>{
+  const app=application();
+  app.run("view.mode='samples';filterItems();chooseItem('sample');");
+  const editor=app.nodes.get('transcriptEditor');editor.focus();
+  assert.equal(editor.value,'Synthetic location hint');
+  app.key(editor,'j');
+  assert.equal(app.run('view.selectedId'),'confirmed');
+  assert.equal(editor.value,'Confirmed phrase');
+  assert.equal(editor.dataset.itemId,'confirmed');
+  assert.match(app.nodes.get('currentTime').textContent,/00:40/);
+  app.key(editor,'k');
+  assert.equal(app.run('view.selectedId'),'sample');
+  assert.equal(editor.value,'Synthetic location hint');
+});
+
+test('editor and note drafts follow their own item when focus survives a selection change',()=>{
+  const app=application(),editor=app.nodes.get('transcriptEditor'),note=app.nodes.get('noteEditor');
+  app.run("view.drafts.set('early',{text:'Pending early edit',note:'Early note'});view.drafts.set('late',{text:'Pending late edit',note:'Late note'});renderSelected();");
+  editor.focus();assert.equal(editor.value,'Pending early edit');
+  app.run("chooseItem('late')");
+  assert.equal(editor.value,'Pending late edit');
+  assert.equal(editor.dataset.itemId,'late');
+  note.focus();app.run("chooseItem('early')");
+  assert.equal(note.value,'Early note');assert.equal(note.dataset.itemId,'early');
+  assert.equal(app.run("view.drafts.get('late').text"),'Pending late edit');
+  assert.equal(app.run("view.drafts.get('early').note"),'Early note');
+});

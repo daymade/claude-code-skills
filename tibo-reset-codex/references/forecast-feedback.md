@@ -47,8 +47,9 @@ uv run python scripts/forecast_log.py summary
    再按主 Skill 的监测轮实际获取；它不联网、不安排后台任务，也不证明清单已完成。
    `summary` 还带 `snapshot`（只读探测，不创建目录）：`ok` 表示已存在的台账文件都已进 git
    快照（还没有任何台账文件时也是 `ok`）；`lagging` 并列出 `uncommitted` 文件（含被
-   `.gitignore` 挡住、从没进过快照的），另带一句 `hint`，表示有内容没进快照——多半是某次快照
-   提交被拒，被拒的内容留在暂存区。追加成功不代表 Git 快照完成。自动快照只处理本次
+   `.gitignore` 挡住、从没进过快照的），另带一句 `hint`。这只证明内容尚未进入快照，
+   不区分锁阻塞、提交检查拒绝或其他 Git 失败；原因按下方恢复入口核实。
+   追加成功不代表 Git 快照完成。自动快照只处理本次
    追加的台账；同一失败且 Git 控制状态未变化时返回 `deferred/unchanged_failure`，
    不因增加另一条读数反复启动已失败的提交。修正原因后按下面的快照恢复入口重试。
    `no_repo` 是快照还没建立（全新目录也是这样，不算故障）；`disabled` 是用了 `--no-git`；
@@ -142,7 +143,7 @@ findings 隐私契约（本文件对它唯一的完整表述）：不放邮箱�
 ```bash
 uv run python scripts/forecast_log.py snapshot-status
 uv run python scripts/forecast_log.py snapshot-retry --journal findings.jsonl
-# 不带 --journal 时只重试已经存在的四类台账，不追加业务记录
+# 不带 --journal 时重试脚本支持且已经存在的台账，不追加业务记录
 ```
 
 先读 `snapshot-status` 的 journal 健康状态、锁与失败原因。`lock.owner=unknown`
@@ -153,11 +154,11 @@ uv run python scripts/forecast_log.py snapshot-retry --journal findings.jsonl
 先确认该 Skill/正文可读取；缺失时保留具体依赖缺口，继续只读诊断，不自行编造清锁步骤。
 锁阻塞与 hook 拒绝分别诊断；邮箱、本机路径、群标识等命中均交给实际 guard 的现行处置流程，
 既有授权先回查原文与作用域，不由本 Skill 新增豁免，也不改写已追加的原始读数。
-锁释放、提交检查原因解决后，用本页 `snapshot-retry` 续跑；不带 `--journal` 可覆盖已存在的四类台账。
+锁释放、提交检查原因解决后，用本页 `snapshot-retry` 续跑。
 恢复验收同时要求 `snapshot-status` 的 `snapshot.status=ok`、本次台账原件哈希未变、
 每份台账与其已提交 HEAD blob 一致，并保留原锁的恢复副本。脚本发布成功不替代这项运行状态验收。
 
-`.snapshot-status.json` 只保留本地快照失败诊断，不改变四类 JSONL 格式；
+`.snapshot-status.json` 只保留本地快照失败诊断，不改变既有 JSONL 格式；
 `.snapshot-run.lock` 用非阻塞文件锁串行化本脚本的快照尝试。另一尝试在运行时返回
 `deferred/snapshot_in_progress`，不等待或停止它。Git 子命令超时上限为 60 秒，
 只约束本次启动的 Git 子进程；超时不证明 hooks 或其他进程已退出，必须独立读回。
@@ -203,7 +204,7 @@ uv run python scripts/forecast_log.py announce --input /tmp/tibo-announcement.js
 uv run python scripts/forecast_log.py followup
 ```
 
-`/tmp/tibo-announcement.json` 是本轮准备的输入。必填：`kind`（沿用两种 reset 类型）、
+`/tmp/tibo-announcement.json` 是本轮准备的输入。必填：`kind`（沿用 reset 类型）、
 `announced_at`（原帖发布时间）、`eta_at`（主解释的单点时刻）、`source_url`、`source_text`
 （原帖逐字时间措辞）、`interpretation`（解释与未澄清之处）、`revision_trigger`、
 `evidence_urls`（必须包含 source_url）。可选：`alternative_eta_at`（承重的另一时区解释）、
@@ -212,7 +213,7 @@ uv run python scripts/forecast_log.py followup
 
 官宣没有 `confidence` 或预测窗口，不计入 `forecast_count`、`cycle_counts`；
 `announcement_count` 单独计数。主 ETA 已过即进入 overdue，不用备选解释推迟复查；回答中
-仍保留两种解释与官方澄清状态。官宣的 `review` 可以给出发布之后、补录之前已有的完成确认，
+仍保留主解释、承重备选解释与官方澄清状态。官宣的 `review` 可以给出发布之后、补录之前已有的完成确认，
 判断预测的发生区间仍必须晚于预测实际发出时间。
 
 `review` 的事件层与评分层独立：
@@ -230,7 +231,7 @@ uv run python scripts/forecast_log.py followup
 `event_status=confirmed`、`confirmed_at`、`evidence_urls`，但评分仍 unknown。
 confirmed_at 必须是来源中的确认时刻，不是估计的发生时刻。已存的旧 review 只有在携带
 有效 time_basis、事件时间与 evidence_urls 时才派生为已确认；旧的裸 unknown 保持待查。
-三个层分别采用最后一次明确更新：新的裸 unknown 评分不擦掉已有事件确认或账号观测。
+事件、评分与账号观测各自采用最后一次明确更新：新的裸 unknown 评分不擦掉已有事件确认或账号观测。
 要撤销已有事件确认，显式填 `event_status=unknown` 并说明反证；事件与账号的来源 review ID
 分别显示为 `event_review_id` 与 `account_review_id`，不把旧读数伪装成本轮的新读数。
 多个账号按各自 account_ref 保留最近观测，列表显示为 `account_observations`；一个账号到账
@@ -252,9 +253,9 @@ hit/early/late 不因补一条到账记录消失。`score_review_id` 与 `score_
 若绑定账号仍 not_delivered 或 unknown，它独立留在 `account_followup`。补查账号后再追加
 review 并保留事件确认事实，不编辑旧行；账号送达后退出该账号队列。
 
-`followup` 返回 `event_tasks`、`account_tasks` 和最新监测 `handoff`。事件 overdue 的任务要求
-新鲜账号读数、官方主帖、候选回复链、有界回复发现与已授权社区增量；到窗前只准备较窄的
-前三腿。沿主 Skill 逐项执行，失败写本轮 unknown/uncovered 与下一复查条件；不由清单推断
+`followup` 返回 `event_tasks`、`account_tasks` 和最新监测 `handoff`。按每项事件任务的
+`required_sources` 执行相应查询；来源集合由脚本按任务的 `urgency` 生成，不在本文手维护。
+沿主 Skill 执行，失败写本轮 unknown/uncovered 与下一复查条件；不由清单推断
 实际覆盖，不把别人的失败复述成自己的实测。仅剩 account_tasks 时只核对相应账号。
 
 修改已发出的预测时再追加一条 `record`，不能编辑历史行。同类型且 `anchor_event_url` 相同

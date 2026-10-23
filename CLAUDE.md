@@ -654,6 +654,10 @@ in that owner rather than maintaining another push example here.
 
 For recovery or repository convergence under concurrent work, enter
 [git-safety-net](git-safety-net/SKILL.md).
+For local snapshot failures involving an index lock or commit-hook refusal, use its
+[snapshot recovery procedure](git-safety-net/references/recovery_playbook.md#blocked-local-snapshots).
+For Tibo's application retry and acceptance, follow
+[the forecast journal owner](tibo-reset-codex/references/forecast-feedback.md#快照诊断与显式恢复).
 For inherited upload restrictions or source paths hidden by ignore rules, read its
 [convergence authority and source-inventory procedure](git-safety-net/references/merge_verification.md#1-freeze-the-outcome-and-the-first-ref-snapshot).
 

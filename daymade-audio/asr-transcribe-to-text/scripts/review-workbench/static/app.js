@@ -228,7 +228,8 @@ function renderDecision() {
   const explanation=state==='unsaved'?`待保存：${escapeHTML(data.status==='unknown'?'无法辨认':data.status==='skipped'?'跳过这一句':data.speaker||'当前判断')}。尚未写入本机。`:state==='confirmed'?`<strong>${escapeHTML(data.speaker||'已确认')}</strong> · 人工确认，仅当前句`:state==='candidate'?`${escapeHTML(data.speaker||'未辨认')} · 模型候选，尚未人工确认`:state==='unknown'?'已记为无法辨认，可继续保留待审':state==='skipped'?'已跳过，原始候选与文字保留':'尚未裁决，原始身份保持未知';
   $('judgmentSummary').innerHTML='<span class="eyebrow">当前判断</span><p>'+explanation+'</p>';
   $('decisionHint').textContent='选一个名字，即保存当前'+(item.kind==='speaker_sample'?'声样':'句')+'。';
-  if(document.activeElement!==$('noteEditor'))$('noteEditor').value=data.note||'';
+  const note=$('noteEditor');
+  if(document.activeElement!==note||note.dataset.itemId!==item.id){note.value=data.note||'';note.dataset.itemId=item.id;}
   renderReferences();
 }
 function renderSelected({keepPosition=false}={}) {
@@ -239,7 +240,8 @@ function renderSelected({keepPosition=false}={}) {
   $('currentOrdinal').textContent=index<0?'当前句在筛选之外':`${String(index+1).padStart(2,'0')} / ${view.filtered.length.toLocaleString()}`;
   $('currentTime').textContent=`${formatTime(item.start)} — ${formatTime(item.end)}`;
   $('currentDuration').textContent=Math.max(0,item.end-item.start).toFixed(1)+' s';
-  if(document.activeElement!==$('transcriptEditor'))$('transcriptEditor').value=data.text||'';
+  const editor=$('transcriptEditor');
+  if(isSample||document.activeElement!==editor||editor.dataset.itemId!==item.id){editor.value=data.text||'';editor.dataset.itemId=item.id;}
   $('transcriptEditor').readOnly=isSample;
   $('transcriptEditor').closest('.sentence-paper').classList.toggle('is-sample',isSample);
   $('transcriptEditorLabel').textContent=isSample?'声样定位提示，非逐字稿，只读':'当前句文字，可直接修改';
