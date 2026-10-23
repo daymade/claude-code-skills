@@ -50,8 +50,7 @@ dialog was captured. Once identified, prefer the exact window for further
 observations and keep the user's reported interaction failure in scope.
 
 Follow the macOS permission owner's `macos-permissions` entry for classification
-and recovery. A screenshot cannot grant access, prove an input was delivered or
-establish that the blocked business operation recovered.
+and recovery.
 
 ### Capture a known window
 
@@ -61,16 +60,6 @@ swift scripts/get_window_id.swift Excel
 
 # Capture that window (replace 12345 with actual WID)
 screencapture -x -l 12345 output.png
-```
-
-## Overview
-
-Workflow:
-
-```
-1. Find Window  →  Swift CGWindowListCopyWindowInfo  →  get numeric Window ID
-2. Control View  →  only if needed and authorized    →  zoom, scroll, select
-3. Capture       →  screencapture -l <WID>            →  PNG/JPEG output
 ```
 
 ## Step 1: Get Window ID (Swift)
@@ -280,64 +269,19 @@ These methods were tested and confirmed to fail on macOS:
 
 ## Permission Troubleshooting
 
-`swift scripts/get_window_id.swift` reads on-screen windows via CoreGraphics, so it needs Screen Recording permission on macOS.
-
-Use this order:
-
-1. Confirm trigger
-2. Confirm target identity
-3. Add/enable exact app in Settings
-
-If the command fails with `ERROR: Failed to enumerate windows`, use the permission
-triage below; opening System Settings is foreground work governed by the entry gate:
-
-```bash
-open "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
-```
-
-Or print the same checklist directly from the script:
+If `get_window_id.swift` cannot enumerate windows or a required field is unavailable,
+read the actual result before attributing the failure to Screen Recording. Request
+the helper's diagnostic guidance without enumerating windows:
 
 ```bash
 swift scripts/get_window_id.swift --permission-hint screen
 swift scripts/get_window_id.swift --permission-hint microphone
 ```
 
-Then:
-
-1. In Privacy & Security → Screen Recording, enable the target app.
-2. If your app is missing from the list:
-    - Ensure you granted permission to the real app bundle (not `swift` / terminal helpers).
-    - For CLI tools, build/run as a packaged `.app` during permission verification.
-    - Click `+` and add the `.app` manually from `/Applications`.
-3. Follow the [permission request lifecycle](../macos-permissions/SKILL.md#after-a-grant-or-reset)
-   before retrying or deciding whether the app needs a relaunch.
-4. If this is a CLI workflow, also check whether the launcher is a helper binary:
-   - In most cases the entry shown in TCC is the helper process (`swift`, `Terminal`, `iTerm`, etc.), not the business app.
-   - Permission still works after helper-level grant, but it is not ideal for final UX.
-
-For mic-access-related prompts, use the same pattern with the microphone pane:
-
-```bash
-open "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
-```
-
-The same rule still applies: the system can only show permissions for a concrete `.app` bundle. If the request is made by a helper binary, the settings list can be misleading or empty for your product app.
-
-### Quick Check Template
-
-```text
-1) Error: permission denied
-2) Open target pane
-3) Verify identity shown by OS = identity you granted
-4) If not matched, use the script-reported candidate identities and grant the launcher process
-5) Verify through the permission request lifecycle above
-```
-
-For production apps, avoid requesting permissions via `swift`/`python` entry points; always route permission checks in the packaged app process so users only see one target.
-
-If you maintain another macOS permission-related flow, reuse this standardized triage template:
-
-- [permission-triage-template.md](references/permission-triage-template.md)
+Interpret that output with the [helper diagnostic procedure](references/permission-triage-template.md).
+The hint prints guidance and execution context; it does not check grant state or
+identify which process should receive a grant. Keep general TCC attribution,
+permission changes and request recovery with `macos-permissions`.
 
 ## Supported Applications
 

@@ -83,8 +83,3 @@ duplicate an operation whose prior result or side effect is still unknown.
 Report each outcome separately. If only the window was removed, say that access
 and application recovery remain unverified and the cause is unknown. Do not
 re-trigger unrelated requests solely to improve that report.
-
-Treat a normal termination that leaves a dialog present, followed by an
-authorized force termination and a screenshot without the dialog, as evidence
-for obstruction removal in that instance. It does not establish a universal
-Keychain fix, successful consent or the cause of the original blockage.

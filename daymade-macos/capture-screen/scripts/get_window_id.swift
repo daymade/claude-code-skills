@@ -138,14 +138,14 @@ if expectPermissionTarget {
 if let kind = permissionHintTarget {
     switch kind {
     case .screen:
-        fputs("Screen Recording permission required.\n", stderr)
+        fputs("Screen Recording permission guidance (status not checked).\n", stderr)
         printCommonPermissionHint(
             pane: "Privacy_ScreenCapture",
             label: "Screen Recording"
         )
         printPermissionContextHint()
     case .microphone:
-        fputs("Microphone permission required.\n", stderr)
+        fputs("Microphone permission guidance (status not checked).\n", stderr)
         printCommonPermissionHint(
             pane: "Privacy_Microphone",
             label: "Microphone"
@@ -158,22 +158,19 @@ if let kind = permissionHintTarget {
 func printCommonPermissionHint(pane: String, label: String, missing: Bool = true) {
     let openCommand = "x-apple.systempreferences:com.apple.preference.security?\(pane)"
     fputs("Troubleshooting:\n", stderr)
-    fputs("  - Open Settings: `open \"\(openCommand)\"`\n", stderr)
-    fputs("  - In Privacy & Security → \(label), enable the target application.\n", stderr)
+    fputs("  - Identify the original failed operation and effective TCC requester before changing grants.\n", stderr)
+    fputs("  - After diagnosis and foreground authorization, open Settings: `open \"\(openCommand)\"`\n", stderr)
+    fputs("  - Verify the selected requester in Privacy & Security → \(label).\n", stderr)
     if missing {
         fputs("  - If the target app is not in the list:\n", stderr)
-        fputs("      - Granting happens by real .app bundle, not by helper/terminal scripts.\n", stderr)
-        fputs("      - For CLI workflows, grant to the host app you launch from (Terminal, iTerm, iTerm2, Swift, etc.) if no dedicated .app exists yet.\n", stderr)
-        fputs("      - Click `+` and add the actual `.app` from `/Applications`.\n", stderr)
+        fputs("      - Use macos-permissions to establish attribution; the displayed name or a .app path alone is insufficient.\n", stderr)
+        fputs("      - Do not grant to a helper or terminal merely because it launched this script.\n", stderr)
     }
-    fputs("  - If permission status does not refresh, quit/reopen terminal/app and retry.\n", stderr)
+    fputs("  - Read the original request result after a grant; relaunch only when needed, authorized and in-flight work is preserved.\n", stderr)
     if helperBinaries.contains(invokerName) || helperBinaries.contains(runtimeProcessName) {
         fputs("  - Current launcher is a helper/runtime process (`\(runtimeProcessName)`) -> OS may show this entry instead of the tool name.\n", stderr)
     } else if invokerIsBundle {
         fputs("  - The launcher path looks like a bundled app, which is the preferred state for permissions.\n", stderr)
-    }
-    if let scriptPath = scriptPath {
-        fputs("  - Script entry: `\(scriptPath)`\n", stderr)
     }
 }
 
@@ -181,15 +178,15 @@ func printPermissionContextHint() {
     fputs("  - Invoker path: `\(invocationPath)`\n", stderr)
     fputs("  - Runtime process: `\(runtimeProcessName)`\n", stderr)
     if !invokerCandidates.isEmpty {
-        fputs("  - Candidate identities in System Settings:\n", stderr)
+        fputs("  - Execution identity clues (not verified grant targets):\n", stderr)
         for identity in invokerCandidates {
             fputs("      - \(identity)\n", stderr)
         }
     }
     if invokerIsBundle {
-        fputs("    This looks like a bundled app path, so the setting should match the app identity.\n", stderr)
+        fputs("    A bundled path alone does not establish the effective TCC requester.\n", stderr)
     } else {
-        fputs("    If this is not your final app binary, permissions can be inconsistent.\n", stderr)
+        fputs("    Resolve attribution before choosing a grant target from these clues.\n", stderr)
     }
     fputs("  - Recommended for production: keep permission requests inside your signed `.app` process.\n", stderr)
     if let scriptPath = scriptPath {
@@ -198,8 +195,7 @@ func printPermissionContextHint() {
 }
 
 func printScreenRecordingPermissionHint() {
-    fputs("Screen Recording permission required.\n", stderr)
-    fputs("Troubleshooting:\n", stderr)
+    fputs("Window enumeration needs diagnosis; permission status is not established.\n", stderr)
     printCommonPermissionHint(pane: "Privacy_ScreenCapture", label: "Screen Recording")
     printPermissionContextHint()
 }
