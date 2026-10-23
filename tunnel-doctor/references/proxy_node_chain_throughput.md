@@ -27,7 +27,11 @@ always required or always harmful; the requested topology is an input, not a fix
    time budget, and client for each node. Confirm each selection was persisted and
    became active before measuring. Do not run candidates concurrently: they would
    compete for the same access link and corrupt the ranking. Do not stop at the
-   first node that returns 200; availability is not throughput.
+   first node that returns 200; availability is not throughput. Neither is the
+   tool's displayed node latency: in one measured set, four entry lines of a
+   single product displayed 140–152 ms while delivering 78 KB/s to 1.5 MB/s in
+   serial fixed-window downloads — a 19× spread that did not rank with the
+   displayed numbers. Measure every candidate.
 4. **Re-test from the real client path.** A fast result on the proxy host proves
    only that host's path. If production traffic arrives through another Mac, WSL,
    VM, LAN proxy, or reverse SSH tunnel, repeat the rate test there and add an
@@ -68,6 +72,39 @@ tests long enough for transfer behavior to dominate setup cost. The practical
 translation here is simple: choose a payload or fixed time budget large enough to
 measure capacity, and finish on the workload the user actually needs.
 
+## Candidate sets when the exit identity is fixed
+
+When the requested topology is a static-IP product — one fixed exit address
+reached through several entry lines — the candidate set is that product's own
+entry lines. Switching lines preserves the egress identity the user selected;
+switching to another product's node changes the exit IP, which is a topology
+change, not a throughput experiment.
+
+After each switch, confirm two things independently: the tool's active-node
+readout (the switch took effect) and the egress IP through the tunnel (identity
+was preserved). An unchanged egress IP alone proves nothing — a failed switch
+reads identically; the changed measurement is the other half of the proof.
+
+## Headline capacity probes on macOS
+
+`networkQuality -s` is the built-in capacity probe. Under a TUN, a default run
+rides the tunnel — verified: the identical run moved 64.7 → 472.6 Mbps after a
+node switch (2026-10-23) — so it measures the path the user experiences, not the
+wire. `networkQuality -s -I en0` binds the test to the physical interface (`-I`:
+"Bind test to interface", per its own help) for the wire baseline. Trust the
+capacity numbers; do not compare the latency/responsiveness sub-metrics across
+binding modes — an interface-bound run has reported higher idle latency than the
+tunneled run on a healthy host. Whether the default run exercises the node at
+all depends on the proxy tool's rules for the test endpoints; a number that
+moves when the node changes is proof it rode the tunnel.
+
+An instant HTTP error with ~0 bytes from a measurement endpoint is the endpoint
+refusing the exit address, not node incapacity — a speed-test CDN answered 403
+in 1.3 s through a residential exit (observed 2026-10-23) while the same node
+served a plain CDN-hosted 100 MB object (Hetzner's speed-test file) fine. Switch
+to a neutral object that serves the exit's class, and keep one target for the
+whole ranking.
+
 ## Mutation boundary
 
 Node selection and subscription refresh are implementation-specific. Read the
@@ -77,3 +114,9 @@ installed compatibility operator exposes an authorized heal command, use it only
 when its declared success topology matches the user's request. Never run a
 “residential chain intact” command for a task whose contract is “remain single
 hop,” and never copy a version-sensitive database writer into this reference.
+
+Shadowrocket on macOS exposes no CLI; drive its accessibility tree. Click the
+node row's button, then read back the active marker before measuring — the
+row's label gains a "Use Server" prefix and the toolbar button shows the active
+node name. Element indexes invalidate after every click; re-observe the tree
+before the next action instead of reusing a stale index.
