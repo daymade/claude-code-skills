@@ -385,6 +385,10 @@ queue anchor behavior in
 [review_queue.py](daymade-audio/transcript-fixer/scripts/core/review_queue.py).
 For same-line repeats or a legacy row needing an explicit slot, follow
 [occurrence anchoring](daymade-audio/transcript-fixer/references/review_queue_dashboard.md#same-line-occurrence-anchoring).
+For company slots or a short match inside a longer name, follow
+[minimum occurrence checks](daymade-audio/transcript-fixer/references/dictionary_identity_and_context.md#minimum-occurrence-checks-for-name-candidates).
+For wording supported by a parallel transcript, follow
+[written wording evidence](daymade-audio/transcript-fixer/references/review_queue_dashboard.md#written-evidence-for-ordinary-wording).
 Use the [CLI reference](daymade-audio/transcript-fixer/references/script_parameters.md#fix_transcriptionpy)
 to select the command; the argument parser owns accepted combinations.
 For domain-context location, configuration-directory selection or homophone-veto
