@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-cleaner** (`daymade-macos` v1.25.2 → v1.25.3): Add the Git LFS object-cache pruning sequence with the push-side endpoint-completeness proof and the remote-missing-is-not-data-loss check, and extend the pnpm phantom note to APFS clonefile imports. Change type: documentation accuracy from measured cleanup.
+- **skill-creator** (`daymade-skill` v1.73.3 → v1.73.4): Document the GitHub mergeable_state cache oracle (`merge-tree --write-tree`) and the strict-ruleset fleet livelock with its merge-latency countermeasure. Change type: release-operations guidance from a measured race.
 - **debugging-network-issues** (v1.11.5 → v1.11.6): Attribute layered comparisons only to verified path differences, preserve the CDN/LB distinction, and return to the original condition within a set budget when failures are intermittent. Keep recovery acceptance separate from root-cause certainty. Change type: bounded diagnostic inference correction.
 - **ghostty-use** (v1.8.1 → v1.8.2): Keep account-switch recovery bound to the complete saved session set when old sessions remain open or the host denies UI control. Reuse exact existing resume commands and distinguish prepared handoff from verified restoration. Change type: recovery-route clarification.
 - **prior-work-retrieval** (`daymade-claude-code` v4.30.22 → v4.30.23): For explicit successful-method reuse, follow locators to the procedure and recorded outcome, and state current applicability differences. Preserve ordinary lookup and current-SOP use when historical success is unknown. Change type: bounded adoption-contract correction.
