@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # layered-isolation-probe.sh — run the 3-path A/B/C comparison for a CDN-
-# fronted service and report which layer closed the connection.
+# fronted service and report observed path differences.
 #
 # Prereqs: a mock idle upstream running reachable from the origin host,
 # and a temporary CDN/reverse-proxy route that forwards a test hostname
@@ -16,8 +16,8 @@
 #   MAX_SECONDS=300 \
 #   ./layered-isolation-probe.sh
 #
-# Expected output: a matrix showing close time per path. A failing-only-
-# on-path-A pattern pins the CDN as the culprit.
+# Expected output: a matrix showing close time per path. Verify which hops
+# each path removes before attributing the contrast to a single layer.
 
 set -euo pipefail
 
@@ -80,7 +80,7 @@ CURL_COMMON="-sS -o $RESULTS_DIR/__body.tmp -w 'HTTP=%{http_code}\nTIME=%{time_t
 # Path A: full path through the CDN
 PATH_A_CMD="$STRIP_ENV curl $CURL_COMMON https://$HOST/probe-a"
 
-# Path B: bypass the CDN via --resolve to origin IP
+# Path B: direct origin; also bypasses any LB in front of that address
 PATH_B_CMD="$STRIP_ENV curl $CURL_COMMON --resolve $HOST:443:$ORIGIN_IP https://$HOST/probe-b"
 
 # Path C: loopback from inside the origin host
@@ -91,7 +91,7 @@ PATH_C_CMD="ssh $SERVER_SSH \"$STRIP_ENV curl -sS -o /tmp/__probe_c_body -w 'HTT
 # gives clean per-path logs.
 run_path A "via CDN (baseline — expected to fail)" "$PATH_A_CMD"
 sleep 5
-run_path B "bypass CDN (--resolve to origin IP)"   "$PATH_B_CMD"
+run_path B "direct origin (--resolve; also bypasses a separate LB)" "$PATH_B_CMD"
 sleep 5
 run_path C "server loopback (inside origin)"       "$PATH_C_CMD"
 
@@ -105,11 +105,12 @@ done
 
 echo
 echo "=== Interpretation guide ==="
-echo "- Only Path A short-closes: CDN is the cause"
-echo "- A and B short-close, C does not: origin external network / LB"
-echo "- All three short-close: origin application / upstream"
+echo "- Only Path A short-closes: investigate hops removed by direct origin (CDN / LB / route)"
+echo "- A and B short-close, C does not: investigate external route / listener removed by loopback"
+echo "- All three short-close: investigate shared application / upstream and probe validity"
 echo "- All three run to MAX_SECONDS: failure did not reproduce"
 echo "- Path B unexpectedly short-closes: CHECK FOR LOCAL PROXY LEAKAGE"
 echo "  (env -i above should prevent, but verify with 'curl -v' if in doubt)"
+echo "- Intermittent contrast: return to original A within a set budget; A passing leaves causation unestablished"
 echo
 echo "Raw outputs: $RESULTS_DIR"
