@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tunnel-doctor** (v1.17.6 → v1.17.7): Add node-liveness verification reference — a data-plane url-test as the only liveness verdict, plus a mihomo delay-API recipe that verifies any node's recovery without touching the user's active channel (Shadowrocket credential extraction, control-group calibration, measured pitfalls); warn against naming the active node from exit-IP lookups in the TUN contamination table. Change type: additive diagnostic capability with misattribution guardrails.
 - **git-safety-net** (v1.23.0 → v1.23.1): Add the repository startup route to local snapshot recovery and remove the manually duplicated reference contents list. Change type: documentation alignment.
 - **tibo-reset-codex** (v2.1.0 → v2.1.1): Keep lagging snapshot causes unclassified until diagnosis; remove journal/type/layer counts and delegate follow-up source selection to the actual required_sources output. Change type: documentation correction and SSOT cleanup.
 
