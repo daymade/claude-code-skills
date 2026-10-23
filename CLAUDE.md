@@ -423,14 +423,13 @@ For Feishu document reads and archives, enter
 [feishu-doc-scraper](feishu-doc-scraper/SKILL.md). Its
 [comments and feedback SOP](feishu-doc-scraper/references/comments-and-feedback.md)
 owns discussion capture and interpretation; the bundled helper owns the CLI
-interface. For filing, use its
+interface. Before permanent filing or choosing an authorized archive destination,
+follow the [destination handoff](feishu-doc-scraper/references/archive-destination-handoff.md).
+For storage decisions, use its
 [archive storage contract](feishu-doc-scraper/references/archive-storage-contract.md)
 alongside the destination repository's storage SOP.
-For local originals or an Obsidian delivery, follow the Skill's
+For local originals, Obsidian delivery or a personal source-catalog handoff, follow the Skill's
 [original-media and reader SOP](feishu-doc-scraper/references/original-media-and-reader.md).
-That SOP owns archive-root containment, conversion versus delivery evidence,
-and the source-catalog handoff to favorites-search. Respect the selected destination
-and any user-excluded checks; do not substitute a different archive or acceptance claim.
 
 ### Prior Work Retrieval Boundary
 
