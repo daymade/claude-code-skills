@@ -369,6 +369,10 @@ Keep decision criteria and verification details in those owners.
 
 ### Transcript Correction
 
+For local audio listening, speaker decisions, word edits and recovery of saved
+judgments, use [Listening Desk](daymade-audio/asr-transcribe-to-text/references/review_workbench.md).
+Its saving and playback contracts govern both the browser and local service.
+
 For explicit single-task speaker-inference requests, load
 [scoped speaker inference](daymade-audio/transcript-fixer/references/scoped_speaker_inference.md).
 

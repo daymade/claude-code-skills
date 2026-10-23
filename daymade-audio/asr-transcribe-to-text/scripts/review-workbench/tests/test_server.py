@@ -91,14 +91,14 @@ class WorkbenchTests(unittest.TestCase):
         return status, json.loads(body), response_headers
 
     def decision(self, revision=0, request_id="save-1", item_id="line-1", **changes):
-        return self.api("POST", "/api/decision", {"base_revision": revision, "request_id": request_id, "item_id": item_id, "changes": changes})
+        return self.api("POST", "/api/decision", {"project_fingerprint": self.project.fingerprint, "base_revision": revision, "request_id": request_id, "item_id": item_id, "changes": changes})
 
     def test_public_project_has_no_paths_and_fingerprint_is_stable(self):
         status, public, _ = self.api("GET", "/api/project")
         self.assertEqual(status, 200)
         self.assertNotIn(str(self.root), json.dumps(public))
         self.assertNotIn("audio_path", public["sources"][0])
-        self.assertEqual(public["sources"][0]["media_url"], "/media/B")
+        self.assertEqual(public["sources"][0]["media_url"], "/media/B?project_fingerprint=" + public["fingerprint"])
         self.assertEqual(public["sources"][0]["mime"], "audio/mpeg")
         self.assertEqual(public["fingerprint"], workbench.Project(self.project_path).fingerprint)
         self.assertEqual(self.api("GET", "/api/state")[1]["fingerprint"], public["fingerprint"])
@@ -194,19 +194,19 @@ class WorkbenchTests(unittest.TestCase):
     def test_undo_is_durable_audited_and_does_not_overwrite_other_item(self):
         first = self.decision(status="confirmed", speaker="Participant A")[1]
         self.decision(revision=1, request_id="second", item_id="line-2", status="confirmed", speaker="新同事")
-        status, undone, _ = self.api("POST", "/api/undo", {"base_revision": 2, "request_id": "undo-1"})
+        status, undone, _ = self.api("POST", "/api/undo", {"project_fingerprint": self.project.fingerprint, "base_revision": 2, "request_id": "undo-1"})
         self.assertEqual(status, 200)
         self.assertEqual(undone["revision"], 3)
         self.assertEqual(undone["decisions"], first["decisions"])
         self.restart()
         self.assertEqual(self.api("GET", "/api/state")[1], undone)
-        self.assertEqual(self.api("POST", "/api/undo", {"base_revision": 2, "request_id": "undo-1"})[1], undone)
+        self.assertEqual(self.api("POST", "/api/undo", {"project_fingerprint": self.project.fingerprint, "base_revision": 2, "request_id": "undo-1"})[1], undone)
         audit = json.loads((self.state_dir / "state.json").read_text())["audit"]
         self.assertEqual(audit[-1]["action"], "undo")
         self.assertEqual(audit[-1]["undoes_revision"], 2)
-        self.api("POST", "/api/undo", {"base_revision": 3, "request_id": "undo-2"})
+        self.api("POST", "/api/undo", {"project_fingerprint": self.project.fingerprint, "base_revision": 3, "request_id": "undo-2"})
         self.assertEqual(self.api("GET", "/api/state")[1]["decisions"], {})
-        self.assertEqual(self.api("POST", "/api/undo", {"base_revision": 4, "request_id": "undo-3"})[0], 409)
+        self.assertEqual(self.api("POST", "/api/undo", {"project_fingerprint": self.project.fingerprint, "base_revision": 4, "request_id": "undo-3"})[0], 409)
 
     def test_exports_contain_real_decisions_and_keep_candidate_distinct(self):
         corrected = '改成："视频有效"，然后\n补一句 <script>。'
@@ -245,7 +245,7 @@ class WorkbenchTests(unittest.TestCase):
         other = workbench.StateStore(self.project, self.state_dir)
         self.decision(status="confirmed", speaker="Participant A")
         with self.assertRaises(workbench.APIError) as caught:
-            other.mutate("decision", {"item_id": "line-2", "changes": {"status": "unknown"}, "base_revision": 0, "request_id": "other-process"})
+            other.mutate("decision", {"project_fingerprint": self.project.fingerprint, "item_id": "line-2", "changes": {"status": "unknown"}, "base_revision": 0, "request_id": "other-process"})
         self.assertEqual(caught.exception.status, 409)
         self.assertIn("line-1", other.snapshot()["decisions"])
         self.assertEqual(other.snapshot()["revision"], 1)
@@ -255,7 +255,7 @@ class WorkbenchTests(unittest.TestCase):
         self.write_project()
         project = workbench.Project(self.project_path)
         store = workbench.StateStore(project, self.root / "original-confirmed-state")
-        result = store.mutate("decision", {"item_id": "line-1", "changes": {"note": "Synthetic note", "text": "Synthetic correction"}, "base_revision": 0, "request_id": "note-only"})
+        result = store.mutate("decision", {"project_fingerprint": project.fingerprint, "item_id": "line-1", "changes": {"note": "Synthetic note", "text": "Synthetic correction"}, "base_revision": 0, "request_id": "note-only"})
         row = workbench.derived_items(project, result)[0]
         self.assertEqual((row["identity_status"], row["speaker"]), ("human_confirmed", "Participant A"))
         self.assertEqual(row["text"], "Synthetic correction")
@@ -280,29 +280,30 @@ class WorkbenchTests(unittest.TestCase):
         self.assertEqual(set(self.store.snapshot()["decisions"]), {"line-1", "line-2"})
 
     def test_range_suffix_head_and_unsatisfiable(self):
-        status, headers, body = self.request("GET", "/media/B", headers={"Range": "bytes=10-29"})
+        media_url = self.project.public["sources"][0]["media_url"]
+        status, headers, body = self.request("GET", media_url, headers={"Range": "bytes=10-29"})
         self.assertEqual((status, body), (206, self.audio[10:30]))
         self.assertEqual(headers["Content-Range"], f"bytes 10-29/{len(self.audio)}")
         self.assertEqual(headers["Content-Type"], "audio/mpeg")
-        self.assertEqual(self.request("GET", "/media/B", headers={"Range": "bytes=-7"})[2], self.audio[-7:])
-        self.assertEqual(self.request("GET", "/media/B", headers={"Range": "bytes=8190-"})[2], self.audio[8190:])
-        status, headers, body = self.request("HEAD", "/media/B", headers={"Range": "bytes=10-29"})
+        self.assertEqual(self.request("GET", media_url, headers={"Range": "bytes=-7"})[2], self.audio[-7:])
+        self.assertEqual(self.request("GET", media_url, headers={"Range": "bytes=8190-"})[2], self.audio[8190:])
+        status, headers, body = self.request("HEAD", media_url, headers={"Range": "bytes=10-29"})
         self.assertEqual(status, 206)
         self.assertEqual(headers["Content-Length"], "20")
         self.assertEqual(body, b"")
         for value in ("bytes=999999-", "bytes=-0", "bytes=20-10", "bytes=0-1,4-5", "nonsense"):
-            status, headers, body = self.request("GET", "/media/B", headers={"Range": value})
+            status, headers, body = self.request("GET", media_url, headers={"Range": value})
             self.assertEqual(status, 416, value)
             self.assertEqual(headers["Content-Range"], f"bytes */{len(self.audio)}")
             self.assertEqual(body, b"")
-        self.assertEqual(self.request("GET", "/media/B")[2], self.audio)
+        self.assertEqual(self.request("GET", media_url)[2], self.audio)
         self.assertEqual(self.request("GET", "/media/../project.json")[0], 404)
 
     def test_invalid_input_cross_origin_and_traversal_are_rejected(self):
         for changes in ({"status": "sure"}, {"status": []}, {"status": {}}, {"status": None}, {"status": "confirmed", "speaker": []}, {"status": "confirmed", "speaker": "x" * 81}, {"status": "unknown", "text": None}, {"status": "unknown", "unexpected": True}):
             self.assertEqual(self.decision(**changes)[0], 400)
         self.assertEqual(self.decision(item_id="absent", status="unknown")[0], 400)
-        payload = {"base_revision": 0, "request_id": "cross-site", "item_id": "line-1", "changes": {"status": "unknown"}}
+        payload = {"project_fingerprint": self.project.fingerprint, "base_revision": 0, "request_id": "cross-site", "item_id": "line-1", "changes": {"status": "unknown"}}
         self.assertEqual(self.api("POST", "/api/decision", payload, {"Origin": "https://example.org"})[0], 403)
         self.assertEqual(self.api("POST", "/api/decision", payload, {"Host": "attacker.example"})[0], 403)
         self.assertEqual(self.api("POST", "/api/decision", payload, {"Sec-Fetch-Site": "cross-site"})[0], 403)

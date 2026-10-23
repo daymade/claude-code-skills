@@ -55,3 +55,44 @@
 .timeline-source,.timeline-label .eyebrow,.timeline-end{font-size:10px}
 .timeline-end>.timeline-dot,#sessionProgress{display:none}
 @media(max-height:850px){.current-heading{margin-bottom:11px}.context-section{min-height:134px}.decision-hint{font-size:11px}.sentence-paper textarea{min-height:60px;font-size:26px}.wave-track,.wave-track canvas{height:40px}.person-choice{height:46px}.scope-note p{font-size:10px}}
+
+/* The transport reads like an instrument: state, signal source, then recovery. */
+.listening-status{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-top:14px;min-height:22px}
+.playback-state{display:inline-flex;align-items:center;gap:7px;color:var(--muted);font:10px var(--mono);letter-spacing:.5px}
+.playback-state:before{content:"";width:5px;height:5px;border:1px solid currentColor;border-radius:50%}
+.audio-desk[data-phase="playing"] .playback-state{color:var(--orange)}
+.audio-desk[data-phase="playing"] .playback-state:before{background:currentColor}
+.audio-desk[data-phase="error"] .playback-state{color:#a63d2d}
+.audio-desk[data-phase="loading"] .playback-state,.audio-desk[data-phase="buffering"] .playback-state{color:var(--orange)}
+.volume-control{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:10px}
+.volume-control input{width:72px;height:18px;accent-color:var(--orange);margin:0;cursor:pointer}
+.volume-control output{font:10px var(--mono);width:34px;text-align:right}
+.audio-message{margin:5px 0 0;line-height:1.75}
+.sound-help{margin-top:5px;color:var(--muted);font-size:11px;line-height:1.8}
+.sound-help summary{cursor:pointer;width:max-content;text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--line-dark)}
+.sound-help[open]{border-left:2px solid var(--orange);padding-left:12px;margin-top:10px}
+.sound-help p{max-width:62ch;margin:8px 0}
+.reference-bank{border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-top:12px;padding:12px 0}
+.reference-bank summary{display:flex;align-items:center;gap:7px;cursor:pointer;font-size:11px;color:var(--green);list-style:none}
+.reference-bank summary::-webkit-details-marker{display:none}
+.reference-bank summary:after{content:"+";margin-left:3px;font:16px var(--mono)}
+.reference-bank[open] summary:after{content:"−"}
+.reference-bank summary>svg{width:16px;height:16px}
+.reference-bank summary>.mono{margin-left:auto;font-size:10px;color:var(--muted)}
+.reference-choices{display:flex;flex-direction:column;gap:4px;margin-top:12px}
+.reference-choice{display:flex;align-items:center;gap:8px;width:100%;padding:8px;background:var(--green-light);color:var(--green);text-align:left;font-size:12px;border:1px solid transparent}
+.reference-choice:hover,.reference-choice.active{border-color:var(--green)}
+.reference-choice.active{background:var(--paper-light)}
+.reference-choice>svg{width:15px;height:15px}
+.reference-choice>.mono{margin-left:auto;font-size:9px}
+.reference-message{font-size:10px;line-height:1.8;color:var(--muted);margin:9px 0 0}
+.resume-current{font-size:11px;color:var(--orange);padding:9px 0 0;text-decoration:underline;text-underline-offset:3px}
+.text-comparison{border-top:1px solid var(--line);margin:5px 0 14px;font-size:11px;color:var(--muted)}
+.text-comparison summary{cursor:pointer;padding:10px 0;line-height:1.5}
+.text-comparison summary>span{float:right;color:var(--orange)}
+.comparison-row{display:grid;grid-template-columns:34px 1fr;gap:12px;padding:10px 12px;background:#ebe8de;line-height:1.8}
+.comparison-row>span{font-size:10px;padding-top:2px}
+.comparison-row p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px}
+.comparison-row.revised{background:var(--green-light);color:var(--green);margin-top:2px}
+@media(max-height:850px){.listening-status{margin-top:10px}.reference-bank{padding:10px 0}}
+@media(max-height:700px){body{overflow:auto}.workbench{min-height:500px}.session-timeline{position:relative}.load-error{position:absolute;min-height:500px}}

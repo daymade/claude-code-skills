@@ -2,7 +2,7 @@
 
 Use one local desktop workspace to hear a recording, compare recorders, assign
 the current speaker, correct the actual transcript and retain the decision.
-Python 3.10+ serves the page without Python packages or external web assets.
+The Python server uses the standard library and no external web assets.
 CSV preparation requires `ffprobe` and `ffmpeg` on PATH; it performs no ASR or
 speaker inference. Original audio and transcript inputs remain unchanged.
 
@@ -27,16 +27,26 @@ only. Keep it running while reviewing; closing the page does not close it.
   locator text is read-only and is not a replacement for the transcript. Open
   the corresponding original turn to correct its words, then return to the sample.
 - **Full transcript / 整场逐字稿:** search words, speakers or notes, filter by
-  speaker or pending status, and navigate surrounding turns without exporting.
-- **Listen:** `Q` or Space plays/pauses; `J/K` changes turn. Extend the clip by
-  three seconds, loop it, change speed, or select a source at the same canonical
-  meeting time. An unavailable source stays disabled.
+  speaker or pending speaker identity, and navigate nearby turns without exporting.
+  Identity confirmation does not certify the words or the source of the speech.
+- **Listen:** `Q` or Space plays/pauses; `J/K` changes turn. Extend the clip with
+  available context, loop it, change speed, or select a source at the same canonical
+  meeting time. An unavailable source stays disabled. The transport distinguishes
+  reading, buffering, playing, paused, ended and failed states. Retry reloads
+  failed media; switching turns cancels pending playback before changing position.
+- **Compare voices:** expand the confirmed-voice drawer to hear a short reference
+  from another human-confirmed item. The current turn, cursor and judgment
+  remain in place; resume the current turn directly after listening. Candidate,
+  unknown, skipped and unsaved identities are excluded from the reference bank.
 - **Decide:** keys `1–4` select the first four roster members; enter another
   name when needed. A name click saves that item only. `U` records unknown,
   `S` skips and `Z` undoes the latest saved edit. Typing does not trigger shortcuts.
 - **Correct:** edit the actual transcript or a note; typing is saved after a
   short pause. Model candidates, unknowns, pending saves and human confirmations
   remain distinct. A note or word edit does not certify a candidate's identity.
+  Changed text exposes a collapsible original/current comparison. `Esc` returns
+  focus from editing to the listening control; IME composition stays protected.
+  Read-only sample text does not disable the listening shortcuts.
 - **Export:** JSON includes decisions and derived items; CSV and Markdown carry
   readable derived transcripts with identity status. Exports do not modify a
   canonical file, cloud labels, a voiceprint library or a correction dictionary.
@@ -55,6 +65,14 @@ All item times use one canonical meeting clock. For a source with `offset` and
 `scale`, its local playback time is `(canonical_time - offset) / scale`.
 Determine that mapping from actual matching audio; never infer it from filenames
 or assume two devices started together.
+
+When a downstream correction uses external evidence files to map excerpts back
+to their originals, set project `evidence_hashes` before review. It is a nonempty
+map of ASCII identifier keys to lowercase SHA-256 digests of those files. The
+map joins the project fingerprint; changing it requires a new review binding.
+Omitting it preserves the existing project fingerprint contract. An old state
+cannot silently acquire a new evidence association. This binds a review to the
+declared files; it does not authenticate their author or prove their contents.
 
 ```json
 {
@@ -89,6 +107,14 @@ with revisions, request IDs, undo history and an audit trail. The browser stores
 only view preferences locally. Do not close a page with unresolved unsaved edits.
 A failed save retains the pending choice; retry explicitly. A conflicting
 revision reloads current state and requires inspection before a new decision.
+Editing, queued requests and unsent changes remain unsaved until their own
+acknowledgment arrives. Returning a field to an earlier value does not let an old
+response confirm the new edit.
+
+Every save and undo binds the project fingerprint captured when it was queued.
+If the service now serves a different project, the page retains the unsaved edit
+and refuses to retry it against the replacement. Preserve that edit before
+opening the intended project again. A project mismatch is not a revision conflict.
 
 Restart with the same project and state directory to resume. The state binds
 recording bytes, source clocks, item IDs, original text and identity evidence.
@@ -98,15 +124,39 @@ Corrupt state is an explicit error, never an empty successful session. Preserve
 the file before investigating; a new state directory starts a separate review
 and does not recover earlier judgments.
 
+For supported integer PCM WAV sources, the service streams a sample-bounded WAV
+for the selected item, source and context. Its natural end limits playback even
+when browser timers are delayed; seeking and the displayed clock retain the
+original source offset. Partial source coverage remains visible. Other audio
+formats retain full-source playback with an explicit approximate-boundary notice;
+they do not acquire the PCM boundary guarantee. The server advertises this
+capability from the actual file header, not the filename.
+
 The service supports HTTP Range and detects common audio types by their headers.
 It serves only declared audio and its bundled static assets. There is no upload,
 cloud synchronization, background inference or automatic voice enrollment.
 
+Playback progress and decoded media do not establish audible output. If progress
+moves without sound, use the page's sound-help disclosure: check the browser's
+tab/site mute, the page volume and the system output device. Page JavaScript
+cannot remove browser-level tab muting. Listening references use the same volume
+control and do not create or update a voiceprint profile.
+
 ## Verify changes
 
 Run `python3 -m unittest discover -s <skill-root>/scripts/review-workbench/tests -v`
-and `node --check <skill-root>/scripts/review-workbench/static/app.js` for changed
-code. Then exercise the real browser: hear a clip; change source inside overlap;
+for changed backend/importer code. For frontend changes run
+`node --check <skill-root>/scripts/review-workbench/static/app.js` and
+`node --test <skill-root>/scripts/review-workbench/tests/*.cjs`.
+Then exercise the real browser: hear a clip; change source inside overlap;
 confirm an item; refresh; undo; download and open an export. Check failed-save
 and revision-conflict recovery without polluting the real review's decisions.
-Use a separate project ID/state directory for test judgments.
+Use a separate project ID/state directory for test judgments. Also compare a
+confirmed reference, resume the current turn, and verify the cursor and judgment
+stay unchanged. A page blocked by browser permissions leaves these journeys
+unverified even when synthetic event regressions pass.
+For persistence changes, exercise rapid edits that return to the first value,
+lost acknowledgments and a stale tab after the server changes project. For
+playback changes, inspect actual decoded media boundaries and distinguish nearby
+overlapping recorders from disconnected recordings; a clamped progress display
+alone cannot establish where playback stopped.

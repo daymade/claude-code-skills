@@ -13,7 +13,7 @@ function application(fetch) {
   assert.notEqual(source, input, 'Application bootstrap must be isolated from the test');
   const nodes = new Map();
   function node() {
-    return {innerHTML:'', textContent:'', value:'', hidden:false, style:{},
+    return {innerHTML:'', textContent:'', value:'', hidden:false, style:{}, dataset:{},
       scrollTop:0, clientHeight:600, classList:{toggle(){},add(){},remove(){}},
       setAttribute(){}, querySelector(){return null;}, querySelectorAll(){return [];}};
   }
@@ -24,9 +24,9 @@ function application(fetch) {
   const context = vm.createContext({document, window:{crypto:{randomUUID:()=>`request-${++request}`}},
     fetch, setTimeout:()=>1, clearTimeout(){}, Map, Set, Date, Math, Number, String, Promise, console});
   vm.runInContext(source, context, {filename:file});
-  vm.runInContext(`view.project={project_id:'synthetic',sources:[],people:[],items:[
+  vm.runInContext(`view.project={project_id:'synthetic',fingerprint:'synthetic-fingerprint',sources:[],people:[],items:[
     {id:'sample',kind:'speaker_sample',start:2,end:4,text:'Synthetic sample',speaker:'',identity_status:'unknown'}
-  ]};view.selectedId='sample';view.state={revision:0,decisions:{}};`, context);
+  ]};view.selectedId='sample';view.state={fingerprint:'synthetic-fingerprint',revision:0,decisions:{}};`, context);
   return {context, nodes, run:code=>vm.runInContext(code, context)};
 }
 
@@ -43,8 +43,8 @@ test('failed name-only choice retains the exact pending intent and visible retry
 test('lost response reuses the request and reads later work after idempotent replay',async()=>{
   let first=true;
   const requests=[];
-  const original={revision:1,decisions:{sample:{speaker:'Participant A',status:'confirmed'}}};
-  const latest={revision:2,decisions:{...original.decisions,other:{note:'Later work',status:'unknown'}}};
+  const original={fingerprint:'synthetic-fingerprint',revision:1,decisions:{sample:{speaker:'Participant A',status:'confirmed'}}};
+  const latest={fingerprint:'synthetic-fingerprint',revision:2,decisions:{...original.decisions,other:{note:'Later work',status:'unknown'}}};
   const app=application(async(url,options)=>{
     if(url==='/api/state')return {ok:true,json:async()=>latest};
     const request=JSON.parse(options.body);requests.push(request);
