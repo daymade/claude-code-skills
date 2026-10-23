@@ -1,3 +1,4 @@
+<!-- Fixture note: the OrbStack "Reclaim disk space" control referenced below no longer exists in OrbStack 2.2.x (physical release is automatic lagged TRIM, measured 2026-10-23). This file is gate-checker corpus, not operational guidance. -->
 # macOS 磁盘清理方案 — Phase 2（停在确认闸门，本轮不执行任何命令）
 
 ## 当前状态

@@ -468,6 +468,8 @@ Prefer archiving or removing the whole obsolete project through a separate, expl
 
 **Check before deleting**: Might contain important downloads
 
+**Scanning and deleting are separate authorizations.** A metadata-level inventory and classification (names, sizes, ages — never content reads) may be standing-authorized by the user; deleting any batch still requires the user to name that exact batch. A classification table is the deliverable, not a deletion list.
+
 ### Disk Images (.dmg, .iso)
 
 **What it is**: Mountable disk images, often installers
@@ -539,6 +541,17 @@ tmutil deletelocalsnapshots <snapshot_date>
   never include in a candidate list, never "helpfully" clean it. If the user
   ever wants it trimmed, that is their instruction with their scope, not a
   cleanup proposal.
+- `~/.codex/sessions/` — Codex session transcripts. The user extended the same
+  absolute off-limits ruling to all agent chat history on 2026-10-23
+  (standing): never propose deleting, archiving, or migrating it as a cleanup
+  move.
+
+### Application Chat Data (user's absolute ruling, 2026-10-23)
+
+- `~/Library/Containers/com.tencent.xinWeChat` — WeChat's sandboxed container,
+  including anything reachable through the app's own storage manager. Ruled
+  absolutely off-limits (standing). It shows up large in every container
+  inventory; it is never a candidate.
 
 ### System Files
 

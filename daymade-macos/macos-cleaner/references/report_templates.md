@@ -140,7 +140,7 @@ List every object rather than reporting category totals:
 No prune-family command is part of the plan.
 ```
 
-For OrbStack, add **OrbStack Settings → Reclaim disk space** as a separate, explicitly approved manual plan item when host APFS recovery is required. Engine-object deletion and sparse-image compaction have different effects and postconditions; never promise host `df` recovery from Docker's object-size tables alone.
+For OrbStack, engine-object deletion frees space inside the VM immediately while the sparse image's host-physical release follows via automatic TRIM on a lag (the manual Reclaim button no longer exists in 2.2.x; measured 2026-10-23). Report VM-side and host-side as two separate postconditions with the lag expectation stated; never promise host `df` recovery from Docker's object-size tables alone.
 
 ## Phase-4 result
 
