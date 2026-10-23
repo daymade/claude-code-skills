@@ -1,20 +1,5 @@
 # Recovery Playbook — get lost work back, then make it un-loseable
 
-## Contents
-- [Blocked local snapshots](#blocked-local-snapshots)
-- Mental model: nothing is gone until gc runs
-- The authoritative "is anything at risk" check
-- Linked worktrees and detached worktree HEADs
-- Ladder step 1 — `git reflog` (first move, ~90% of recoveries)
-- Ladder step 2 — dropped stashes
-- Ladder step 3 — detached-HEAD work
-- Ladder step 4 — `git fsck` for true orphans
-- Preserve: pin danglers so gc can never take them
-- Triple-backup a critical commit
-- Widen the safety window (config)
-- Destructive-operation safety (reset/force-push/rewrite)
-- Sources
-
 ## Blocked local snapshots
 
 Use this for an existing local repository with a committed HEAD when an application's
