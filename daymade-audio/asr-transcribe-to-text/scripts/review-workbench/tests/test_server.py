@@ -232,12 +232,52 @@ class WorkbenchTests(unittest.TestCase):
     def test_unknown_clears_final_name_and_note_alone_cannot_confirm_identity(self):
         status, state, _ = self.decision(note="先听一遍")
         self.assertEqual(status, 200)
-        self.assertEqual(state["decisions"]["line-1"]["status"], "unknown")
+        self.assertNotIn("status", state["decisions"]["line-1"])
+        original = self.api("GET", "/api/export?format=json")[1]["items"][0]
+        self.assertEqual(original["identity_status"], "candidate")
         self.decision(revision=1, request_id="confirm", status="confirmed", speaker="Participant A")
         self.decision(revision=2, request_id="unknown", status="unknown")
         exported = self.api("GET", "/api/export?format=json")[1]["items"][0]
         self.assertEqual(exported["speaker"], "")
         self.assertEqual(exported["original_speaker"], "Participant A")
+
+    def test_independent_stores_share_revision_and_cannot_erase_an_acknowledged_edit(self):
+        other = workbench.StateStore(self.project, self.state_dir)
+        self.decision(status="confirmed", speaker="Participant A")
+        with self.assertRaises(workbench.APIError) as caught:
+            other.mutate("decision", {"item_id": "line-2", "changes": {"status": "unknown"}, "base_revision": 0, "request_id": "other-process"})
+        self.assertEqual(caught.exception.status, 409)
+        self.assertIn("line-1", other.snapshot()["decisions"])
+        self.assertEqual(other.snapshot()["revision"], 1)
+
+    def test_text_and_note_edits_preserve_original_human_identity(self):
+        self.input_project["items"][0]["identity_status"] = "human_confirmed"
+        self.write_project()
+        project = workbench.Project(self.project_path)
+        store = workbench.StateStore(project, self.root / "original-confirmed-state")
+        result = store.mutate("decision", {"item_id": "line-1", "changes": {"note": "Synthetic note", "text": "Synthetic correction"}, "base_revision": 0, "request_id": "note-only"})
+        row = workbench.derived_items(project, result)[0]
+        self.assertEqual((row["identity_status"], row["speaker"]), ("human_confirmed", "Participant A"))
+        self.assertEqual(row["text"], "Synthetic correction")
+        self.assertNotIn("status", result["decisions"]["line-1"])
+
+    def test_post_replace_fsync_failure_reconciles_before_the_next_edit(self):
+        real_fsync = workbench.os.fsync
+        calls = 0
+        def fail_directory_sync(fd):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise OSError("Synthetic directory sync failure after replacement")
+            return real_fsync(fd)
+        with patch.object(workbench.os, "fsync", side_effect=fail_directory_sync):
+            self.assertEqual(self.decision(status="confirmed", speaker="Participant A")[0], 507)
+        observed = self.store.snapshot()
+        self.assertEqual(observed["revision"], 1)
+        self.assertIn("line-1", observed["decisions"])
+        self.assertEqual(self.decision(revision=0, request_id="stale-later", item_id="line-2", status="unknown")[0], 409)
+        self.assertEqual(self.decision(revision=1, request_id="valid-later", item_id="line-2", status="unknown")[0], 200)
+        self.assertEqual(set(self.store.snapshot()["decisions"]), {"line-1", "line-2"})
 
     def test_range_suffix_head_and_unsatisfiable(self):
         status, headers, body = self.request("GET", "/media/B", headers={"Range": "bytes=10-29"})

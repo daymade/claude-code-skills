@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+from contextlib import contextmanager
 import csv
 import hashlib
 import io
@@ -226,6 +227,11 @@ class StateStore:
             raise StateError("--state-dir must be an absolute path")
         directory.mkdir(parents=True, exist_ok=True)
         self.path = directory / "state.json"
+        self._transaction_depth = 0
+        with self._disk_guard():
+            self._load_initial(project)
+
+    def _load_initial(self, project):
         if self.path.exists():
             try:
                 state = read_json(self.path)
@@ -245,6 +251,50 @@ class StateStore:
         else:
             self.data = {"schema_version": 1, "fingerprint": project.fingerprint, "revision": 0, "decisions": {}, "updated_at": None, "audit": [], "undo_stack": [], "requests": {}}
             self._persist(self.data)
+
+    @contextmanager
+    def _disk_guard(self):
+        # Separate processes must agree on the same revision before replacing it.
+        with (self.path.parent / ".state.lock").open("a+b") as stream:
+            if os.name == "nt":
+                import msvcrt
+                stream.seek(0, os.SEEK_END)
+                if stream.tell() == 0:
+                    stream.write(b"0")
+                    stream.flush()
+                stream.seek(0)
+                msvcrt.locking(stream.fileno(), msvcrt.LK_LOCK, 1)
+                try:
+                    yield
+                finally:
+                    stream.seek(0)
+                    msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+
+    @contextmanager
+    def _locked_state(self):
+        with self.lock:
+            if self._transaction_depth:
+                yield
+                return
+            with self._disk_guard():
+                try:
+                    state = read_json(self.path)
+                    self._validate(state)
+                except (OSError, ValueError, TypeError, KeyError) as exc:
+                    raise APIError(503, "state_unreadable", "Saved state cannot be verified; preserve it before recovery") from exc
+                self.data = state
+                self._transaction_depth += 1
+                try:
+                    yield
+                finally:
+                    self._transaction_depth -= 1
 
     def _validate(self, state):
         if not isinstance(state, dict) or state.get("schema_version") != 1:
@@ -290,7 +340,9 @@ class StateStore:
 
     @staticmethod
     def _validate_decision(decision):
-        if not isinstance(decision, dict) or set(decision) - {"speaker", "text", "status", "note"} or not isinstance(decision.get("status"), str) or decision["status"] not in STATUSES:
+        if not isinstance(decision, dict) or not decision or set(decision) - {"speaker", "text", "status", "note"}:
+            raise StateError("Invalid decision")
+        if "status" in decision and (not isinstance(decision["status"], str) or decision["status"] not in STATUSES):
             raise StateError("Invalid decision")
         for key, maximum in (("speaker", 80), ("text", 32768), ("note", 8192)):
             if key in decision and (not isinstance(decision[key], str) or len(decision[key]) > maximum):
@@ -320,7 +372,7 @@ class StateStore:
                     pass
 
     def snapshot(self, revision=None):
-        with self.lock:
+        with self._locked_state():
             if revision is None or revision == self.data["revision"]:
                 return copy.deepcopy({key: self.data[key] for key in ("revision", "decisions", "updated_at", "fingerprint")})
             decisions = {}
@@ -344,7 +396,7 @@ class StateStore:
         if not isinstance(request_id, str) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", request_id):
             raise APIError(400, "invalid_request_id", "request_id must contain 1–128 letters, digits, dots, dashes, colons or underscores")
         digest = hashlib.sha256(json.dumps({"action": action, **payload}, ensure_ascii=False, sort_keys=True, allow_nan=False, separators=(",", ":")).encode()).hexdigest()
-        with self.lock:
+        with self._locked_state():
             self.project.assert_sources_unchanged()
             previous = self.data["requests"].get(request_id)
             if previous:
@@ -362,16 +414,19 @@ class StateStore:
                 if not isinstance(changes, dict) or not changes or set(changes) - {"speaker", "text", "status", "note"}:
                     raise APIError(400, "invalid_changes", "changes must contain speaker, text, status or note")
                 before = next_data["decisions"].get(item_id)
-                after = {"status": "unknown", **(before or {}), **changes}
+                # Editing words or notes does not change the identity evidence.
+                after = {**(before or {}), **changes}
+                if "speaker" in changes and "status" not in changes:
+                    raise APIError(400, "missing_status", "A speaker change needs an explicit identity decision")
                 try:
                     self._validate_decision(after)
                 except StateError as exc:
                     raise APIError(400, "invalid_changes", str(exc)) from exc
-                if after["status"] == "unknown":
+                if after.get("status") == "unknown":
                     after["speaker"] = ""
                 if "speaker" in after and after["speaker"] in self.project.people:
                     after["speaker"] = self.project.people[after["speaker"]]["name"]
-                if after["status"] == "confirmed":
+                if after.get("status") == "confirmed":
                     effective_speaker = after.get("speaker", self.project.items[item_id]["speaker"])
                     if not effective_speaker.strip():
                         raise APIError(400, "missing_speaker", "Choose a speaker before confirming an identity")
@@ -399,6 +454,14 @@ class StateStore:
             try:
                 self._persist(next_data)
             except OSError as exc:
+                # replace() may have committed before a directory fsync failed.
+                # Reconcile that result while still holding the process lock.
+                try:
+                    observed = read_json(self.path)
+                    self._validate(observed)
+                    self.data = observed
+                except (OSError, ValueError, TypeError, KeyError):
+                    pass
                 raise APIError(507, "save_failed", "The save could not be confirmed; reload the saved state before retrying") from exc
             self.data = next_data
             return self.snapshot()
@@ -409,7 +472,7 @@ def derived_items(project, state):
     names = {pid: p["name"] for pid, p in project.people.items()}
     for item in project.items.values():
         decision = state["decisions"].get(item["id"])
-        if decision:
+        if decision and "status" in decision:
             status = {"confirmed": "human_confirmed", "unknown": "unknown", "skipped": "skipped"}[decision["status"]]
             speaker = decision.get("speaker", item["speaker"]) if status == "human_confirmed" else ""
         else:
