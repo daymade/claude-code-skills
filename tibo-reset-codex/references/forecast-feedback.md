@@ -20,6 +20,12 @@ uv run python scripts/forecast_log.py --help
 uv run python scripts/forecast_log.py summary
 ```
 
+写入命令默认返回紧凑回执：`id`、`record_type`、`recorded_at`、`append_status`、
+`journal` 与独立的 `snapshot` 状态。原始 `readings` 仍完整追加到 JSONL，不随终端显示缩短。
+需要旧版完整 JSON 返回时，把全局参数 `--full` 放在子命令之前，例如
+`forecast_log.py --full finding --input <input.json>`；只读 `handoff` 保留完整交接。
+调用器按记录 ID 从回执指定的 journal 读取原行；不要为查看正文再创建一条不同记录。
+
 脚本只在本地工作：读写 JSONL，并为每次成功追加做一次 best-effort 的本地 git 快照
 （自动 init、逐次 commit、失败不阻塞，规则见下方 findings 节）；不联网、不取账号凭据、
 不兑换额度。首次写入创建权限为 0600 的文件，
@@ -42,9 +48,9 @@ uv run python scripts/forecast_log.py summary
    `summary` 还带 `snapshot`（只读探测，不创建目录）：`ok` 表示已存在的台账文件都已进 git
    快照（还没有任何台账文件时也是 `ok`）；`lagging` 并列出 `uncommitted` 文件（含被
    `.gitignore` 挡住、从没进过快照的），另带一句 `hint`，表示有内容没进快照——多半是某次快照
-   提交被拒，被拒的内容留在暂存区。快照只重试它被触发的那一份台账：`forecasts.jsonl` 靠再
-   `record`/`review` 一次，`findings.jsonl` 靠再 `finding` 一次，`withdrawals.jsonl` 靠再
-   `withdraw` 一次，重试失败会在那次追加的 stderr 打出原因；往别的台账追加清不掉它。
+   提交被拒，被拒的内容留在暂存区。追加成功不代表 Git 快照完成。自动快照只处理本次
+   追加的台账；同一失败且 Git 控制状态未变化时返回 `deferred/unchanged_failure`，
+   不因增加另一条读数反复启动已失败的提交。修正原因后按下面的快照恢复入口重试。
    `no_repo` 是快照还没建立（全新目录也是这样，不算故障）；`disabled` 是用了 `--no-git`；
    `unknown` 是 git 自身出错。快照失败只在追加当时的 stderr 打一行，`summary` 是每轮第一眼
    读到它的地方。
@@ -120,8 +126,9 @@ findings 隐私契约（本文件对它唯一的完整表述）：不放邮箱�
 写微信群名/项目名/人名时，用全称（规则与执行细节在 group-name-guard hook 与 read-wechat-messages skill，本行不复制——写之前先经 chatlog 核对该群的 remark/nickName 全称）；
 本轮没核实过全称就写「未确认全称的群」，别从旧台账记录里照抄一个看着像简称的写法。
 这条契约有执行层：机器上若配置了全局 pre-commit 的个人信息检查，findings 里出现
-邮箱就会让快照提交被拒——追加本身仍然成功，但被拒的内容留在暂存区，同一份台账此后每次快照都会带着它
-再失败一次，完整性护栏形同失效。快照失败时 stderr 的 note 是一行 JSON：
+邮箱就会让快照提交被拒——追加本身仍然成功，但被拒的内容留在暂存区。
+同一失败不会因后续追加自动消失；新脚本在控制状态未变时返回 deferred，显式重试仍会接受原 hooks 检查。
+首次快照失败时 stderr 的 note 是一行 JSON：
 `{"note": "git snapshot skipped: <git 报错首行，含命令行与状态目录路径> | <stderr 末三行>"}`
 （stderr 里含 `@` 的片段会被替换成 `<email>`），用 `git snapshot skipped:` 前缀就能认出。
 先按 stderr 的原因分：是个人信息检查拒绝，就查 findings 里是否混入邮箱
@@ -129,6 +136,26 @@ findings 隐私契约（本文件对它唯一的完整表述）：不放邮箱�
 改写，此后的追加不再写邮箱，已入库的命中记录如何处理（例如是否把既有指纹加进该 hook 的基线）
 由用户决定，向用户报告，不自行改 hook 配置；是其他原因（如未配置 git 身份、超时、非仓库），
 按 stderr 给出的原因处理，与邮箱无关。
+
+## 快照诊断与显式恢复
+
+```bash
+uv run python scripts/forecast_log.py snapshot-status
+uv run python scripts/forecast_log.py snapshot-retry --journal findings.jsonl
+# 不带 --journal 时只重试已经存在的四类台账，不追加业务记录
+```
+
+先读 `snapshot-status` 的 journal 健康状态、锁与失败原因。`lock.owner=unknown`
+表示未识别属主，不表示锁已过期。现存 Git index 锁令写入快照返回 `blocked/index_locked`；
+台账仍正常追加。不得自动删除锁、终止已有进程、跳过 hook 或修改其基线。
+按 Git owner 的只读诊断与当前授权处理真正故障，锁释放后再执行 `snapshot-retry`。
+
+`.snapshot-status.json` 只保留本地快照失败诊断，不改变四类 JSONL 格式；
+`.snapshot-run.lock` 用非阻塞文件锁串行化本脚本的快照尝试。另一尝试在运行时返回
+`deferred/snapshot_in_progress`，不等待或停止它。Git 子命令超时上限为 60 秒，
+只约束本次启动的 Git 子进程；超时不证明 hooks 或其他进程已退出，必须独立读回。
+失败后在 Git 控制文件状态改变或显式重试前保持可见的 deferred；显式重试仍运行原有 hooks。
+新版本写入的完整 journal 仍可被旧 JSONL reader 读取；旧 CLI 完整返回用 `--full` 保留。
 
 ## 保存预测：record
 

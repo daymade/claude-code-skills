@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tibo-reset-codex** (v1.23.3 → v2.0.0): Return compact append receipts with explicit `--full` compatibility, bound rollout terminal output while retaining full private reports, and separate journal persistence from deferred/locked Git snapshots. Add read-only snapshot diagnostics, explicit retry, tracker timestamp/source metadata and community-window coverage. Preserve account attribution gates and complete JSONL readings. Change type: approved CLI output redesign and bounded recovery/evidence capability.
+
 - **macos-permissions / capture-screen** (`daymade-macos` v1.25.0 → v1.25.1): Align repository instructions, bilingual discovery entries and window-helper diagnostics with the permission owner. Remove duplicate workflow summaries and guessed grant/relaunch guidance; mark manual permission hints as guidance without a grant-state check. Change type: documentation alignment and diagnostic-output correction.
 - **feishu-doc-scraper** (v1.9.0 → v1.10.0): Recognize source-card attachments and attributed titles, add verified batch attachment downloads with safe resume, and distinguish original-file archiving from reader acceptance. Preserve legacy references and resource-specific permission boundaries. Change type: parser repair and additive archive helper.
 

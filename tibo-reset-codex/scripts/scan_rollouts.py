@@ -21,6 +21,7 @@ The traps documented in SKILL.md are built in:
 import argparse
 from datetime import datetime, timedelta, timezone
 import glob
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -154,10 +155,14 @@ def find_low_usage_anchor_advances(rows):
     return advances
 
 
-def format_report(rows, scan, backjumps, zeroings):
+def format_report(rows, scan, backjumps, zeroings, limit=None):
+    if limit is not None and limit < 0:
+        raise ValueError("limit must be nonnegative")
+    def selected(values):
+        return values if limit is None else values[-limit:] if limit else []
     lines = [f"采样 {len(rows)} 行 | 最早 {parse_ts(rows[0][0]):%m-%d %H:%M}"
              f" | 扫了 {scan} 个日期目录", ""]
-    for j in backjumps:
+    for j in selected(backjumps):
         up = " ⚠ 已用量上升且锚点回退：需核对身份与窗口配置" if j["rose"] else ""
         lines.append(
             f"回跳 {parse_ts(j['ts']):%m-%d %H:%M:%S} 锚点 {j['from']:%m-%d %H:%M} → "
@@ -165,16 +170,17 @@ def format_report(rows, scan, backjumps, zeroings):
             f" used {j['used_from']:.0f}%→{j['used_to']:.0f}%{up}")
     lines.append(f"回跳次数: {len(backjumps)}  （形状检查不证明账号数量；命中项需核对身份与窗口配置）")
     lines.append("")
-    for z in zeroings:
+    for z in selected(zeroings):
         shape = "干净+7d" if z["clean"] else "非干净+7d"
         lines.append(
             f"归零区间 {parse_ts(z['prev_ts']):%m-%d %H:%M:%S} {z['prev_used']:.0f}% → "
             f"{parse_ts(z['ts']):%m-%d %H:%M:%S} {z['used']:.0f}%"
             f" | 新锚点 {z['anchor']:%m-%d %H:%M} {shape}"
             f" | {z['attribution']}：匿名快照不证明重置")
+    lines.append(f"归零候选: {len(zeroings)}（不能当重置次数）")
     lines.append("")
     advances = find_low_usage_anchor_advances(rows)
-    for a in advances:
+    for a in selected(advances):
         lines.append(
             f"低用量锚点前移 {parse_ts(a['prev_ts']):%m-%d %H:%M:%S} {a['prev_used']:.0f}% → "
             f"{parse_ts(a['ts']):%m-%d %H:%M:%S} {a['used']:.0f}%"
@@ -184,6 +190,9 @@ def format_report(rows, scan, backjumps, zeroings):
     lines.append(f"低用量锚点前移候选: {len(advances)}（按新锚点分钟去重，不能当重置次数）")
     lines.append("覆盖边界：归零列表只收录已用量下降 >20 点；本候选也非穷尽，"
                  "0 条不证明未重置。")
+    if limit is not None:
+        lines.append(f"终端每类最多显示最近 {limit} 条；完整明细用 --full 或 --report-file，"
+                     "上面的候选总数未截断。")
     last = rows[-1]
     lines.append("")
     lines.append(f"最新快照 {parse_ts(last[0]):%F %H:%M:%S} 北京 | 已用 {last[1]:.0f}%"
@@ -205,9 +214,16 @@ def main():
                         help="authorized Codex home; never mix snapshots across homes")
     parser.add_argument("--as-of",
                         help="ISO timestamp with timezone used as 'now', for reproducible slices")
+    parser.add_argument("--full", action="store_true", help="print every anonymous candidate")
+    parser.add_argument("--limit", type=int, default=3,
+                        help="latest candidates per class on stdout (default 3; counts remain complete)")
+    parser.add_argument("--report-file", type=Path,
+                        help="save the full report privately to a new file; never overwrite an existing file")
     args = parser.parse_args()
     if args.days < 1:
         parser.error("--days must be >= 1")
+    if args.limit < 0:
+        parser.error("--limit must be >= 0")
     if args.as_of:
         now = datetime.fromisoformat(args.as_of.replace("Z", "+00:00"))
         if now.tzinfo is None:
@@ -220,7 +236,15 @@ def main():
         # Empty is not an anomaly but a state that must be reported: the window is a blind spot.
         raise SystemExit("没有可用快照：该窗口内没跑过 Codex，或 sessions 目录为空。\n"
                          "这不构成「没有重置」，只说明该区间无观测。")
-    print(format_report(rows, scan, find_backjumps(rows), find_zeroings(rows)))
+    backjumps, zeroings = find_backjumps(rows), find_zeroings(rows)
+    if args.report_file:
+        report = format_report(rows, scan, backjumps, zeroings).encode("utf-8")
+        fd = os.open(args.report_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(report)
+        print(json.dumps({"report_file": str(args.report_file.resolve()),
+                          "bytes": len(report), "sha256": hashlib.sha256(report).hexdigest()}))
+    print(format_report(rows, scan, backjumps, zeroings, limit=None if args.full else args.limit))
     return 0
 
 

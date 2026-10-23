@@ -9,6 +9,7 @@ import argparse
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -641,32 +642,102 @@ def followup_plan(path, now=None):
             "background_monitoring": False}
 
 
-def snapshot(state_dir, filename, record_type, enabled=True):
-    """Best-effort local git snapshot of an appended journal; never blocks.
+def _snapshot_context(state_dir):
+    """Read Git control-file identities without changing or removing any lock."""
+    git_dir = state_dir / ".git"
+    if git_dir.is_file():
+        value = git_dir.read_text().strip()
+        if not value.startswith("gitdir: "):
+            raise ValueError("unrecognized .git file")
+        git_dir = (state_dir / value[8:]).resolve()
+    lock = git_dir / "index.lock"
+    digest = hashlib.sha256()
+    for name in ("HEAD", "index", "config", "hooks/pre-commit", "index.lock"):
+        path = git_dir / name
+        digest.update(name.encode())
+        try:
+            stat = path.stat()
+            digest.update(str((stat.st_ino, stat.st_size, stat.st_mtime_ns)).encode())
+        except FileNotFoundError:
+            digest.update(b"missing")
+    return digest.hexdigest(), {"present": lock.exists(), "path": str(lock),
+                               "owner": "unknown", "removed": False}
+
+
+def _snapshot_failures(state_dir):
+    path = state_dir / ".snapshot-status.json"
+    if not path.exists():
+        return {}
+    data = json.loads(path.read_text())
+    if not isinstance(data, dict) or data.get("schema") != 1 \
+            or not isinstance(data.get("failures"), dict):
+        raise ValueError("invalid snapshot status; inspect it before retrying")
+    return data["failures"]
+
+
+def _save_snapshot_failures(state_dir, failures):
+    path = state_dir / ".snapshot-status.json"
+    temporary = path.with_name(path.name + "." + uuid.uuid4().hex)
+    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w") as stream:
+        json.dump({"schema": 1, "failures": failures}, stream, ensure_ascii=False)
+        stream.write("\n")
+    os.replace(temporary, path)
+
+
+def snapshot(state_dir, filename, record_type, enabled=True, retry=False, timeout=60):
+    """Attempt a bounded Git snapshot independently of the successful append.
 
     The journals are the only durable record of past readings, so a local
-    commit per append makes silent truncation or rewriting detectable. Any
-    git failure prints one note on stderr and leaves the append itself
-    untouched; this is integrity wiring, not a backup promise.
+    Keep hooks enabled. Cache an unchanged failure until Git control state changes
+    or the operator explicitly retries. Never remove locks or terminate a process
+    discovered on the machine. The timeout applies only to the Git child we start.
     """
     if not enabled:
-        return
+        return {"status": "disabled"}
+
+    state_dir = Path(state_dir)
+    result = None
+    run_lock = None
 
     def run(*argv):
         return subprocess.run(["git", "-C", str(state_dir), *argv], capture_output=True,
-                              text=True, timeout=15, check=True)
+                              text=True, timeout=timeout, check=True)
 
     try:
+        lock_fd = os.open(state_dir / ".snapshot-run.lock",
+                          os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        os.fchmod(lock_fd, 0o600)
+        run_lock = os.fdopen(lock_fd, "a+")
+        try:
+            fcntl.flock(run_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return {"status": "deferred", "reason": "snapshot_in_progress"}
+        fingerprint, lock = _snapshot_context(state_dir)
+        failures = _snapshot_failures(state_dir)
+        if lock["present"]:
+            return {"status": "blocked", "reason": "index_locked", "lock": lock,
+                    "next_action": "Inspect the lock owner read-only; retry after it is released."}
+        previous = failures.get(filename)
+        if not retry and previous and previous.get("fingerprint") == fingerprint:
+            return {"status": "deferred", "reason": "unchanged_failure",
+                    "last_failure": previous,
+                    "next_action": "Correct the cause, then run snapshot-retry."}
         if not (state_dir / ".git").exists():
             os.chmod(state_dir, 0o700)
             run("init")
         if not run("status", "--porcelain", "--", filename).stdout.strip():
-            return  # Nothing new to preserve; a clean snapshot needs no commit.
-        run("add", "--", filename)
-        # Pathspec-limited commit: when --state-dir points into an existing git
-        # repo, other sessions' staged entries must not ride along.
-        run("commit", "-m", f"tibo-reset-codex: append {record_type}", "--", filename)
-    except (OSError, subprocess.SubprocessError) as error:
+            result = {"status": "clean"}
+        else:
+            run("add", "--", filename)
+            # Preserve unrelated staged paths when state-dir is an existing repo.
+            run("commit", "-m", f"tibo-reset-codex: append {record_type}", "--", filename)
+            result = {"status": "committed"}
+        if filename in failures:
+            failures.pop(filename)
+            _save_snapshot_failures(state_dir, failures)
+        return result
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
         detail = str(error).splitlines()[0] if str(error) else type(error).__name__
         stderr = getattr(error, "stderr", None)
         if isinstance(stderr, str):
@@ -681,6 +752,20 @@ def snapshot(state_dir, filename, record_type, enabled=True):
                 detail += " | " + " | ".join(tail)[:300]
         print(json.dumps({"note": f"git snapshot skipped: {detail}"}, ensure_ascii=False),
               file=sys.stderr)
+        failure = {"status": "failed", "detail": detail,
+                   "checked_at": datetime.now(timezone.utc).isoformat()}
+        try:
+            fingerprint, lock = _snapshot_context(state_dir)
+            failure.update(fingerprint=fingerprint, lock=lock)
+            failures = _snapshot_failures(state_dir)
+            failures[filename] = failure
+            _save_snapshot_failures(state_dir, failures)
+        except (OSError, ValueError):
+            failure["status_persisted"] = False
+        return failure
+    finally:
+        if run_lock is not None:
+            run_lock.close()
 
 
 JOURNALS = ("forecasts.jsonl", "announcements.jsonl", "findings.jsonl", "withdrawals.jsonl")
@@ -714,10 +799,10 @@ def snapshot_health(state_dir, enabled=True):
     if not behind:
         return {"status": "ok"}
     return {"status": "lagging", "uncommitted": behind,
-            "hint": "These journals have content the local git snapshot does not. A snapshot "
-                    "retries only the journal it was triggered for, so the next append to the "
-                    "same journal retries it and prints the reason on stderr ('git snapshot "
-                    "skipped'); appends to other journals never clear it."}
+            "hint": "These journals have content the local git snapshot does not. Run "
+                    "snapshot-status for the recorded failure and read-only lock diagnosis. "
+                    "Unchanged failures are deferred; after resolving the cause, run "
+                    "snapshot-retry for the affected journal."}
 
 
 def main():
@@ -726,6 +811,8 @@ def main():
     parser.add_argument("--state-dir", type=Path, default=root / "tibo-reset-codex")
     parser.add_argument("--no-git", action="store_true",
                         help="skip the best-effort local git snapshot of the journals")
+    parser.add_argument("--full", action="store_true",
+                        help="echo the full appended record (default: compact receipt)")
     sub = parser.add_subparsers(dest="command", required=True)
     summary = sub.add_parser("summary", help="Read pending forecasts, outcomes and lessons")
     summary.add_argument("--kind", choices=KINDS)
@@ -736,6 +823,9 @@ def main():
     listing.add_argument("--limit", type=int, default=20)
     sub.add_parser("handoff", help="Read the complete latest monitor handoff")
     sub.add_parser("followup", help="List evidence tasks for due promises and account arrival")
+    sub.add_parser("snapshot-status", help="Read journal snapshot health and lock diagnostics")
+    retry_parser = sub.add_parser("snapshot-retry", help="Explicitly retry snapshots without appending records")
+    retry_parser.add_argument("--journal", choices=JOURNALS)
     args = parser.parse_args()
     state = args.state_dir.expanduser()
     path = state / "forecasts.jsonl"
@@ -749,22 +839,43 @@ def main():
             result = latest_monitor_handoff(state / "findings.jsonl")
         elif args.command == "followup":
             result = followup_plan(path)
+        elif args.command == "snapshot-status":
+            result = {"snapshot": snapshot_health(state, enabled=not args.no_git)}
+            if state.exists():
+                _, lock = _snapshot_context(state)
+                result.update(lock=lock, failures=_snapshot_failures(state))
+        elif args.command == "snapshot-retry":
+            names = [args.journal] if args.journal else [n for n in JOURNALS if (state / n).exists()]
+            result = {"snapshots": {n: snapshot(state, n, "retry", enabled=not args.no_git,
+                                                retry=True) for n in names}}
         elif args.command == "finding":
             target = state / "findings.jsonl"
             result = append_finding(target, json.loads(args.input.read_text(encoding="utf-8")))
-            snapshot(state, target.name, "finding", enabled=not args.no_git)
+            snap = snapshot(state, target.name, "finding", enabled=not args.no_git)
+            if not args.full:
+                result = append_receipt(result, target, snap)
         else:
             result = append_record(path, args.command, json.loads(args.input.read_text(encoding="utf-8")))
             filename = ("withdrawals.jsonl" if args.command == "withdraw" else
                         "announcements.jsonl" if args.command == "announce" else path.name)
-            snapshot(state, filename, {"record": "forecast", "announce": "announcement", "review": "review",
+            snap = snapshot(state, filename, {"record": "forecast", "announce": "announcement", "review": "review",
                                        "withdraw": "withdrawal"}[args.command],
                      enabled=not args.no_git)
+            if not args.full:
+                result = append_receipt(result, state / filename, snap)
         print(json.dumps(result, ensure_ascii=False, indent=2))
     except (OSError, ValueError, KeyError, TypeError) as error:
         print(json.dumps({"status": "error", "error": str(error)}, ensure_ascii=False))
         return 1
     return 0
+
+
+def append_receipt(row, path, snap):
+    """Keep raw readings unchanged in the journal, not in the terminal response."""
+    return {"id": row["id"], "record_type": row["record_type"],
+            "recorded_at": row["recorded_at"], "append_status": "stored",
+            "journal": str(path.resolve()), "snapshot": snap,
+            "full_record": "Read the matching id from the journal, or invoke the append with --full."}
 
 
 if __name__ == "__main__":
