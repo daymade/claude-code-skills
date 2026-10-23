@@ -23,6 +23,13 @@ The single most valuable part of this skill: a record of what does **not** work,
 
 ## Dead-end table (do NOT attempt)
 
+Scope these failures to the listed resource, operation and tested version.
+XLSX attachment cards were downloaded successfully through `docs +media-download`
+on 1.0.96; use [attachment archives](attachment-archives.md) for that route.
+This does not establish that the historical docx-image methods below now work.
+Use the installed CLI guide for current command syntax and preserve actual
+permission refusals instead of retrying them through a different transport.
+
 | Path | Failure mode (verified) | Root cause |
 |---|---|---|
 | Bypass `131006` via lark-cli retry / different token | still `131006` | server-side per-node ACL |

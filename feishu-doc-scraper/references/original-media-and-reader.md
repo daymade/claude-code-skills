@@ -7,6 +7,11 @@ description: >-
 
 # Original media and Markdown reader handoff
 
+For original-file archiving without a promised reader experience, first use
+[attachment archives](attachment-archives.md). Report verified capture/retention
+separately from reader status. Use this page's completion gate for reading
+delivery; do not downgrade an already requested reading check to storage-only.
+
 ## Select the failure branch
 
 The executing agent records the selected account/profile and operation before

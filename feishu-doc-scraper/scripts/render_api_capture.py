@@ -71,8 +71,10 @@ def document_title(document, fallback):
     if document.get('title'):
         return document['title']
     content = document.get('content') or ''
-    match = re.search(r'<title>(.*?)</title>', content, flags=re.DOTALL)
-    return html.unescape(match.group(1)).strip() if match else fallback
+    match = re.search(r'<title\b[^>]*>(.*?)</title\s*>', content,
+                      flags=re.DOTALL | re.IGNORECASE)
+    title = html.unescape(match.group(1)).strip() if match else ''
+    return title or fallback
 
 
 def discussion_destination(root, output, discussion):
