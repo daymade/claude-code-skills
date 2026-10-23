@@ -30,13 +30,22 @@ only. Keep it running while reviewing; closing the page does not close it.
   speaker or pending status, and navigate surrounding turns without exporting.
 - **Listen:** `Q` or Space plays/pauses; `J/K` changes turn. Extend the clip by
   three seconds, loop it, change speed, or select a source at the same canonical
-  meeting time. An unavailable source stays disabled.
+  meeting time. An unavailable source stays disabled. The transport distinguishes
+  reading, buffering, playing, paused, ended and failed states. Retry reloads
+  failed media; switching turns cancels pending playback before changing position.
+- **Compare voices:** expand the confirmed-voice drawer to hear up to eight
+  seconds from another human-confirmed item. The current turn, cursor and judgment
+  remain in place; resume the current turn directly after listening. Candidate,
+  unknown, skipped and unsaved identities are excluded from the reference bank.
 - **Decide:** keys `1–4` select the first four roster members; enter another
   name when needed. A name click saves that item only. `U` records unknown,
   `S` skips and `Z` undoes the latest saved edit. Typing does not trigger shortcuts.
 - **Correct:** edit the actual transcript or a note; typing is saved after a
   short pause. Model candidates, unknowns, pending saves and human confirmations
   remain distinct. A note or word edit does not certify a candidate's identity.
+  Changed text exposes a collapsible original/current comparison. `Esc` returns
+  focus from editing to the listening control; IME composition stays protected.
+  Read-only sample text does not disable the listening shortcuts.
 - **Export:** JSON includes decisions and derived items; CSV and Markdown carry
   readable derived transcripts with identity status. Exports do not modify a
   canonical file, cloud labels, a voiceprint library or a correction dictionary.
@@ -102,11 +111,22 @@ The service supports HTTP Range and detects common audio types by their headers.
 It serves only declared audio and its bundled static assets. There is no upload,
 cloud synchronization, background inference or automatic voice enrollment.
 
+Playback progress and decoded media do not establish audible output. If progress
+moves without sound, use the page's sound-help disclosure: check the browser's
+tab/site mute, the page volume and the system output device. Page JavaScript
+cannot remove browser-level tab muting. Listening references use the same volume
+control and do not create or update a voiceprint profile.
+
 ## Verify changes
 
 Run `python3 -m unittest discover -s <skill-root>/scripts/review-workbench/tests -v`
-and `node --check <skill-root>/scripts/review-workbench/static/app.js` for changed
-code. Then exercise the real browser: hear a clip; change source inside overlap;
+for changed backend/importer code. For frontend changes run
+`node --check <skill-root>/scripts/review-workbench/static/app.js` and
+`node --test <skill-root>/scripts/review-workbench/tests/*.cjs`.
+Then exercise the real browser: hear a clip; change source inside overlap;
 confirm an item; refresh; undo; download and open an export. Check failed-save
 and revision-conflict recovery without polluting the real review's decisions.
-Use a separate project ID/state directory for test judgments.
+Use a separate project ID/state directory for test judgments. Also compare a
+confirmed reference, resume the current turn, and verify the cursor and judgment
+stay unchanged. A page blocked by browser permissions leaves these journeys
+unverified even when synthetic event regressions pass.

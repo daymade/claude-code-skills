@@ -353,7 +353,7 @@
       "description": "Audio processing suite covering the full speech pipeline: ASR transcription (Qwen3, StepFun) with batch-mode guards against music-only repetition-loop hallucinations, speaker diarization and CAM++ voiceprint identification for multi-speaker recordings, transcript error correction, structured meeting minutes generation, and TTS voice synthesis (StepFun). Install once for the complete audio workflow.",
       "source": "./daymade-audio",
       "strict": false,
-      "version": "1.51.1",
+      "version": "1.52.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -826,7 +826,7 @@
       "description": "MUST be used first for tunnel / proxy-path connectivity failures or slow throughput (网络故障 / 连不上 / 代理或隧道下超时). Diagnoses Tailscale, proxy, TUN, DNS and SSH-tunnel problems on macOS and Windows/WSL, e.g. Tailscale ping works but SSH fails, curl works but browser gets 503, Git/Docker fails behind the proxy, or downloads crawl despite a reachable proxy. Not for application-layer bugs (use debugging-network-issues).",
       "source": "./tunnel-doctor",
       "strict": false,
-      "version": "1.17.5",
+      "version": "1.17.6",
       "category": "developer-tools",
       "keywords": [
         "tailscale",
@@ -1329,7 +1329,7 @@
       "description": "Snapshots, restores and reconciles Claude Code / Codex sessions inside Ghostty tabs across reboots. Use when quitting the Mac for an update (保存终端会话 / 重启前备份终端), after restart to reopen tabs with their original session IDs (恢复之前的窗口 / restore my ghostty tabs), or to audit which sessions survived. Not for resuming one conversation via its own --resume, terminal screenshots, or tmux state. Also use for periodic change-only snapshots (定期增量快照 / 没变化不记录). Also use before or after a manual Codex account switch (额度耗尽换号 / 换号后恢复全部 Codex).",
       "source": "./ghostty-use",
       "strict": false,
-      "version": "1.8.0",
+      "version": "1.8.1",
       "category": "developer-tools",
       "keywords": [
         "ghostty",

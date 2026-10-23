@@ -130,7 +130,9 @@ python3 <skill-dir>/scripts/ghostty_session.py restore \
 ```
 
 Reconstruction merges the optional `--snapshot` (otherwise latest, if present) with
-bounded recent indexed Codex candidates. It verifies internal rollout identity using
+bounded recent indexed Codex candidates. `--only` filters this merged result, so the
+output manifest contains exactly the requested rows even when a latest snapshot exists.
+It verifies internal rollout identity using
 the owning reader and marks each row `past-snapshot` or `indexed-terminal-candidate`.
 Terminal evidence is `source=cli` or `originator=codex-tui`; actual TUIs can report
 `source=vscode`. `--terminal-source` and `--terminal-originator` customize those
@@ -180,6 +182,11 @@ or unavailable evidence. Dry-run output is JSON for inspection.
   that visible; never skip it, and never declare success from paste return codes alone.
 - Before any paste, tell the user to leave keyboard and mouse untouched through
   reconciliation. The script repeats this notice before its first GUI action.
+- Settle user-controlled external preconditions before the first paste. An in-flight
+  ChatGPT account switch is the common one: a reopened tab binds to whichever account
+  is logged in when `codex resume` launches, so opening before the switch finishes
+  means closing and restoring those tabs again. If switching accounts is the goal,
+  use [the switch SOP](references/codex-account-switch.md) instead.
 - Requires **Accessibility permission** for `osascript` keystrokes (System Events).
   If the current host denies Ghostty UI automation, do not switch channels to
   bypass it: prepare the selected manifest and exact user-run restore command,

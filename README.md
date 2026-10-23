@@ -2357,23 +2357,8 @@ claude plugin install daymade-skill@daymade-skills
 
 ### **feishu-doc-scraper** - Feishu/Lark → Faithful Markdown + Source-First Archive
 
-Extract Feishu (Lark) Docs, Wiki pages/collections, spreadsheets (including cell-attachment file download), and Minutes (妙记) transcripts into faithful local Markdown. The primary path uses the `lark-cli` API — it extracts the document body programmatically (no model paraphrasing), recursively follows a collection's reference graph, and reads permission boundaries from error codes; a browser-DOM path is the fallback only when lark-cli cannot reach the content.
-
-**When to use:**
-- The source is a Feishu/Lark URL and fidelity matters (导出飞书文档/合集/妙记转写)
-- Converting a Feishu wiki/knowledge base to Markdown, or archiving a Feishu collection
-- Exporting a Feishu Minutes (妙记) transcript
-- Converting an owner-exported `.docx` into faithful Markdown with heading/highlight restoration
-
-**Key features:**
-- Document comments and complete reply threads accompany the body, with quoted passages, source positions, author IDs, timestamps, solved scope, and explicit coverage gaps
-- lark-cli API extraction writes the body to disk via `jq` (never retyped by the model — the single most important fidelity rule)
-- Recursive reference-graph traversal (BFS) with `feishu_extract_refs.py`, plus a residual rich-media-tag acceptance gate so no referenced doc is silently missed
-- Native Minutes transcript export (never re-runs ASR on downloaded media)
-- Permission-denied path: owner-exported `.docx` → Markdown with font-size→heading and `w:shd`→highlight restoration, then visual verification
-- Source-first artifact manifest + fail-closed validator: structured/searchable derivatives go to Git, raw binaries remain on Feishu or an explicitly chosen object store, and local downloads stay optional caches instead of Git LFS payloads
-- `LARK_CLI_NO_PROXY=1` discipline for `*.feishu.cn` (avoids credential leak/DNS hijack) and a U+FFFD encoding-corruption final check
-- Works with both Feishu (feishu.cn) and Lark (larkoffice.com)
+For supported inputs, extraction steps and prerequisites, read the [Skill guide](feishu-doc-scraper/SKILL.md).
+For archiving, follow the [destination handoff](feishu-doc-scraper/references/archive-destination-handoff.md) and [storage contract](feishu-doc-scraper/references/archive-storage-contract.md).
 
 **Example usage:**
 ```bash
@@ -2385,8 +2370,6 @@ claude plugin install feishu-doc-scraper@daymade-skills
 "export this Feishu Minutes transcript"
 "save this Lark wiki page as Markdown"
 ```
-
-**Requirements**: `lark-cli` binary (npm `@larksuite/cli`) authenticated to the target tenant; `jq`. Fallback path needs a browser-automation surface; the docx path needs `python-docx` and a docx→md converter (the bundled doc-to-markdown skill or pandoc).
 
 ---
 
