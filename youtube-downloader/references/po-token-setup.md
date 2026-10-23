@@ -4,36 +4,23 @@
 
 Proof of Origin (PO) Tokens are cryptographic attestations required by YouTube for certain clients and request types. Without them, requests for affected format URLs may return HTTP Error 403 or result in restricted format access.
 
-## Why PO Tokens Matter
+## When to Enter This Branch
 
-As of late 2024/early 2025, YouTube increasingly requires PO tokens for high-quality video formats (1080p, 1440p, 4K). Without PO token support:
+Start with yt-dlp's default clients. Use this guide when the failed extraction or media request explicitly identifies a missing/required PO Token, or the user explicitly requests provider setup. A 403, unavailable format, images-only result or requested 1080p/4K quality alone is insufficient.
 
-- **Android client**: Only 360p available (format 18)
-- **Web client**: nsig extraction failures, missing formats
-- **iOS client**: Similar restrictions
-
-With PO token provider: **Full access** to all quality levels including 4K.
-
-## Recommended Solution: PO Token Provider Plugin
+Check the current [extractor guidance](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#youtube), [Token enforcement by client/request type](https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide#current-po-token-enforcement) and [EJS setup](https://github.com/yt-dlp/yt-dlp/wiki/EJS). Treat JavaScript challenge/runtime failures separately from token failures. Do not assume a provider grants every source quality.
 
 ## Operational SOP (Internal)
 
-Use this checklist to prevent common failures:
+Follow [the download SOP](internal-sop.md) for diagnosis, authorization and file acceptance. Within an already-authorized setup branch, run the preparation and resume the original download yourself. Otherwise obtain only the missing installation/service permission. Cookie extraction requires its own authorization.
 
-1. Quote URLs in shell commands to avoid zsh globbing (`'https://www.youtube.com/watch?v=VIDEO_ID'`).
-2. Ensure proxy is active for yt-dlp and token providers (HTTP_PROXY/HTTPS_PROXY/ALL_PROXY).
-3. If YouTube asks to confirm you’re not a bot, use browser cookies. Do not proceed without cookies.
-4. Start the PO token provider before downloading.
-   - Prefer Docker bgutil when available.
-   - Fall back to WPC (browser) if Docker is missing or fails.
-5. Use `web_safari` when cookies are present; use `mweb` otherwise for PO tokens.
-6. Keep the browser window open during WPC token minting.
-7. If you see “Only images are available” or “Requested format is not available”, treat it as PO token failure and retry after fixing provider/browser state.
-8. If you see SSL EOF/fragment errors, treat it as proxy instability and retry with progressive formats or a better proxy.
+For a failed explicit token requirement, the wrapper's `--auto-po-token` option permits provider setup and a token-assisted retry after its native attempt. `--info` and `-F` never start the helper. Direct provider setup below remains available for an explicit setup request.
 
-### Automatic Setup (Preferred for non-technical users)
+Use `mweb` with web tokens for a targeted non-cookie retry; preserve compatible cookie clients (the wrapper uses `web_safari`) when authorized cookies are present. Web tokens are not Android/iOS tokens. Keep a WPC browser window open while it mints tokens. Preserve shared providers on health failure rather than deleting/restarting them automatically.
 
-If Docker is available, you can start the PO token provider automatically:
+### Authorized Provider Setup
+
+After setup is authorized, reuse a healthy installed provider. If a new Docker provider is needed and Docker is already available:
 
 1. Install the plugin into yt-dlp's Python environment (one-time):
 ```bash
@@ -78,7 +65,7 @@ python3 -m pip install bgutil-ytdlp-pot-provider --user
 yt-dlp -F "https://youtu.be/VIDEO_ID"
 ```
 
-Look for high-quality formats (137, 248, 271, 313) in the output. If present, the plugin is working.
+Inspect verbose yt-dlp output for the selected provider and successful token acquisition. Then download the requested format and verify the file. Format availability alone does not prove which provider supplied it.
 
 ## Available PO Token Provider Plugins
 
@@ -123,20 +110,7 @@ pip install yt-dlp-getpot-wpc -i https://pypi.tuna.tsinghua.edu.cn/simple
 yt-dlp -F "https://youtu.be/VIDEO_ID"
 ```
 
-**Without PO token provider:**
-```
-ID  EXT   RESOLUTION
-18  mp4   640x360     # Only low quality
-```
-
-**With PO token provider:**
-```
-ID  EXT   RESOLUTION
-137 mp4   1920x1080   # 1080p available
-248 webm  1920x1080
-271 webm  2560x1440   # 1440p available
-313 webm  3840x2160   # 4K available
-```
+Compare the actual format list with the requested media. Format IDs and maximum resolution vary by source and client. Do not infer provider status from a fixed ID list or resolution table.
 
 ### Download Best Quality
 
@@ -159,13 +133,13 @@ ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of defau
 
 ### Plugin Not Working
 
-**Symptom**: Still only seeing format 18 after plugin installation
+**Symptom**: The chosen provider reports a token-generation or connection error
 
 **Solution**:
 1. Verify yt-dlp version: `yt-dlp --version` (need 2025.05.22+)
 2. Check plugin installation: `pip list | grep bgutil`
 3. Ensure plugin installed in correct Python environment
-4. Try reinstalling: `pip uninstall bgutil-ytdlp-pot-provider && pip install bgutil-ytdlp-pot-provider`
+4. Read the provider error and repair its diagnosed dependency or connection within authorization. Do not reinstall or restart a shared service on a resolution-only symptom.
 
 ### Warning Messages
 
@@ -173,13 +147,13 @@ ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of defau
 WARNING: [youtube] [pot:bgutil:http] Error reaching GET http://127.0.0.1:4416/ping
 ```
 
-**Impact**: This warning is usually harmless if formats are available. The plugin uses HTTP as fallback.
+**Impact**: The named HTTP provider did not answer. Other clients/providers may still complete the download; this message alone does not establish the final result.
 
 **Action**: No action needed if download succeeds with high-quality formats.
 
 ## Alternative: Browser Cookies Method
 
-If PO token providers don't work, use browser cookies for authentication:
+When an account or persistent bot check requires an authenticated session, obtain cookie permission before using:
 
 ```bash
 # Firefox
@@ -192,20 +166,15 @@ yt-dlp --cookies-from-browser chrome "VIDEO_URL"
 **Benefits**:
 - Access age-restricted content
 - Access members-only content
-- Better quality selection
+- Availability according to that account's actual access; no quality guarantee
 
 **Requirements**:
 - Must be logged into YouTube in the browser
 - Browser and yt-dlp must use same IP address
 
-## Quality Comparison
+## Quality and Recovery Boundaries
 
-| Method | 360p | 720p | 1080p | 1440p | 4K |
-|--------|------|------|-------|-------|-----|
-| Default (no workaround) | ✗ | ✗ | ✗ | ✗ | ✗ |
-| Android client only | ✓ | ✗ | ✗ | ✗ | ✗ |
-| PO token provider | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Browser cookies | ✓ | ✓ | ✓ | ✓ | ✓ |
+Verify the downloaded file rather than promising quality by setup type. Cookies do not replace a missing Token; a provider does not fix missing EJS components, network timeouts or absent source formats. Stop escalating once the requested file is verified. Keep a failed provider setup visible and resume from that missing prerequisite after it is repaired.
 
 ## References
 

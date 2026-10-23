@@ -712,7 +712,7 @@ claude plugin install ghostty-use@daymade-skills
 - 在受限环境中下载视频
 
 **主要功能：**
-- 自动 PO Token 提供器（优先 Docker，失败自动切换浏览器方案）
+- 先用 yt-dlp 默认客户端；明确报缺少 Token 后，按授权配置 PO Token 提供器
 - 通过浏览器 Cookie 处理“不是机器人”验证（更友好）
 - 仅音频下载并转换为 MP3
 - 格式列表和自定义格式选择
