@@ -142,6 +142,62 @@ uv run scripts/fix_transcription.py --resolve-review 12 --decision accepted \
   --review-entity-type system --authority-record entity-reference.json --json
 ```
 
+### Written evidence for ordinary wording
+
+`kind=wording` does not bypass the person-name guard: short CJK phrases can have
+the same single-edit shape as names. A parallel transcript quote is written
+evidence, not a user verdict or audio verification. When that is the evidence
+actually available, use this finite `wording_reference` record rather than naming
+an authority class the operator has not obtained.
+
+The first supported construction is `message_arrival`: a whole clause
+`[还]有信息来` or `[还]有消息来`. Brackets mean optional. The original must be a
+whole `[还]有XX来` clause, with two CJK characters in place of `XX`. The selected
+candidate must remain `kind=wording`, `entity_type=unknown`; person/entity kinds,
+other syntax and known roster names/variants retain their existing authority route.
+This is a bounded nonperson discriminator, not a general grammar classifier.
+
+Synthetic example: the selected context is `有消吸来。先看记录，再决定。`, and a
+verified parallel export contains `这两天没更新。还有消息来。`. Bind the exact
+current queue item and literal strings, not this example's ID or source path:
+
+```json
+{
+  "kind": "wording_reference",
+  "construction": "message_arrival",
+  "source_type": "parallel_transcript",
+  "item_id": 12,
+  "original": "有消吸来",
+  "target": "有消息来",
+  "context": "有消吸来。先看记录，再决定。",
+  "context_offset": 0,
+  "source_ref": "parallel-export:turn-2",
+  "source_path": "/absolute/parallel-export.md",
+  "quote": "这两天没更新。还有消息来。",
+  "quote_offset": 8
+}
+```
+
+Offsets are zero-based Unicode-character offsets. `context_offset` must select
+the recorded original occurrence, and `quote_offset` the exact target within the
+quote. Both selected clauses must be whole: a target embedded in a person's name,
+an attribution or another phrase does not qualify. Missing, null, blank, wrong-item
+or wrong-target fields refuse without changing the verdict/evidence or transcript.
+The CLI reads `source_path` and verifies the quote literally; the operator must
+still verify that the export is the same utterance and is reliable enough to
+settle this wording. The record neither authenticates the source nor establishes
+independent acoustic corroboration.
+
+```bash
+uv run scripts/fix_transcription.py --resolve-review 12 --decision overridden \
+  --override-to '有消息来' --authority-record wording-reference.json --json
+```
+
+Read back the exact occurrence and queue verdict. This settles only the bound
+occurrence; it does not create a reusable rule. If the supported syntax or source
+requirements do not fit, retain the raw form pending another available evidence
+route. Do not relabel an unresolved person question as wording to pass this branch.
+
 ### Cited answers and ledger writes
 
 When the user answers an unresolved term or name question, preserve that answer
