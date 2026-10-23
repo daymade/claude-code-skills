@@ -65,6 +65,7 @@ an assistant-authored restriction is a lookup lead, not a new user decision.
 
 | The user says / needs… | Go to |
 |---|---|
+| Local snapshots are blocked by an `index.lock` or commit-hook refusal | [Blocked local snapshots](references/recovery_playbook.md#blocked-local-snapshots) — preserve the lock and staged state; diagnose both layers before an authorized recovery |
 | "I think I lost a commit / branch / stash", "recover the deleted X", "git reflog" | **Mode A — Recover** |
 | "did I lose anything?", "what worktrees/stashes/branches remain?", after a messy session | **Mode B — Audit & preserve** |
 | "is everything merged?", "what's still not on main?", before deleting old branches | **Mode C — Verify merged** |
