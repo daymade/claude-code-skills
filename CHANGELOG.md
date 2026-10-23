@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **asr-transcribe-to-text** (`daymade-audio` v1.50.6 → v1.51.0): Add Listening Desk, one local workspace for focused voice review, full-transcript navigation, synchronized recorder playback, per-item speaker/text decisions, durable saving, undo and exports. Keep source evidence immutable and preserve the offline audit and guarded correction-queue workflows. Change type: additive review capability.
+
 - **tibo-reset-codex** (v1.23.3 → v2.0.0): Return compact append receipts with explicit `--full` compatibility, bound rollout terminal output while retaining full private reports, and separate journal persistence from deferred/locked Git snapshots. Add read-only snapshot diagnostics, explicit retry, tracker timestamp/source metadata and community-window coverage. Preserve account attribution gates and complete JSONL readings. Change type: approved CLI output redesign and bounded recovery/evidence capability.
 
 - **macos-permissions / capture-screen** (`daymade-macos` v1.25.0 → v1.25.1): Align repository instructions, bilingual discovery entries and window-helper diagnostics with the permission owner. Remove duplicate workflow summaries and guessed grant/relaunch guidance; mark manual permission hints as guidance without a grant-state check. Change type: documentation alignment and diagnostic-output correction.

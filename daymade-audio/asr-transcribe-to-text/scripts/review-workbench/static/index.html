@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f2eb">
+  <title>声间 · 声音校勘台</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <svg class="symbols" aria-hidden="true"><defs>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="m9 5 11 7-11 7Z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5h3v14H8zm6 0h3v14h-3" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
+    <symbol id="i-next" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+    <symbol id="i-prev" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></symbol>
+    <symbol id="i-loop" viewBox="0 0 24 24"><path d="M20 9a7 7 0 0 0-12-4L4 9m0-5v5h5M4 15a7 7 0 0 0 12 4l4-4m-5 0h5v5"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M5 10h9a6 6 0 0 1 0 12M9 5l-5 5 5 5" transform="translate(0 -2)"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="m14 5 5 5M4 20l5-1L20 8a2 2 0 0 0-5-5L4 14Z"/></symbol>
+    <symbol id="i-ear" viewBox="0 0 24 24"><path d="M7 9a6 6 0 1 1 12 0c0 5-5 5-5 9a3 3 0 0 1-6 0M11 9a2 2 0 0 1 4 0c0 2-3 3-3 5"/></symbol>
+  </defs></svg>
+
+  <header class="masthead">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span><div><div class="brand-name">声间<span>声音校勘台</span></div><div class="brand-caption">THE LISTENING DESK</div></div></div>
+    <div class="project-heading"><span class="eyebrow">正在校勘 / MEETING RECORD</span><h1 id="projectTitle">正在打开录音…</h1><p id="projectSubtitle"></p></div>
+    <div class="header-actions"><div id="saveStatus" class="save-status" role="status" aria-live="polite"><span class="status-dot"></span><span>连接本地工作台</span></div><button id="retrySaveButton" class="text-button" hidden>重试保存</button><button id="undoButton" class="icon-button" title="撤销上一条裁决 · Z" aria-label="撤销上一条裁决"><svg><use href="#i-undo"/></svg></button><button id="shortcutsButton" class="plain-button keyboard-help" title="键盘快捷键">⌘<span>操作指南</span></button><div class="export-wrap"><button id="exportButton" class="plain-button export-button"><svg><use href="#i-download"/></svg>导出</button><div id="exportMenu" class="export-menu" hidden><a href="/api/export?format=json" download>JSON <span>保留全部裁决</span></a><a href="/api/export?format=csv" download>CSV <span>用于表格复核</span></a><a href="/api/export?format=md" download>Markdown <span>可读逐字稿</span></a></div></div></div>
+  </header>
+
+  <main class="workbench" id="workbench" aria-busy="true">
+    <aside class="navigation-panel" aria-label="录音片段导航">
+      <div class="navigation-heading"><span class="section-number">01</span><h2>听音目录</h2><span id="queueCount" class="count-label">—</span></div>
+      <div class="queue-tabs" role="tablist" aria-label="浏览范围"><button id="samplesTab" role="tab" aria-selected="true" data-mode="samples">声样 <span id="sampleCount">—</span></button><button id="transcriptTab" role="tab" aria-selected="false" data-mode="transcript">逐字稿 <span id="transcriptCount">—</span></button></div>
+      <label class="search-field"><svg><use href="#i-search"/></svg><input id="searchInput" type="search" placeholder="搜索原文或备注" aria-label="搜索原文、说话人或备注"><kbd>/</kbd></label>
+      <div class="filter-row"><select id="personFilter" aria-label="按说话人筛选"><option value="">所有说话人</option></select><button id="pendingFilter" class="filter-button" aria-pressed="false"><span class="tiny-ring"></span>仅待审</button></div>
+      <div class="list-heading"><span id="listDescription">声音需要一个名字</span><span id="filteredCount">—</span></div>
+      <div id="itemList" class="item-list" role="list" tabindex="0" aria-label="可选择的录音片段"><div id="listSpacer" class="list-spacer"></div><div id="listRows" class="list-rows"></div><div id="emptyList" class="empty-list" hidden>没有匹配的片段。<br><button id="clearFilters" class="text-button">清除筛选</button></div></div>
+      <div class="navigation-foot"><span class="mini-square"></span><span id="progressText">原音与判断，分别保留</span></div>
+    </aside>
+
+    <section class="listening-panel" aria-label="当前片段听音与文字校勘">
+      <div class="current-heading"><div class="section-heading"><span class="section-number">02</span><span id="currentKind">听见，再确认</span></div><span id="currentOrdinal" class="mono">— / —</span></div>
+      <div class="sentence-meta"><span id="currentStatus" class="identity-badge">待认声</span><span id="currentTime" class="mono">00:00 — 00:00</span><span id="currentDuration" class="duration-label"></span></div>
+      <div class="editor-object"><span id="editorObjectLabel">逐字稿原句 · 可编辑</span><button id="returnSampleButton" class="text-button return-sample" hidden>← 返回声样</button></div>
+      <div class="sentence-paper"><div class="quote-mark" aria-hidden="true">“</div><label class="sr-only" id="transcriptEditorLabel" for="transcriptEditor">当前句文字，可直接修改</label><textarea id="transcriptEditor" spellcheck="false" placeholder="选择一个片段，开始听音。"></textarea><div class="editor-foot"><span><svg><use href="#i-edit"/></svg><span id="editorHint">停笔后自动保存</span></span><div class="editor-links"><button id="editNearbyTranscript" class="text-button original-link" hidden>校对对应原句 ↗</button><button id="restoreTextButton" class="text-button" hidden>恢复原文</button></div></div></div>
+
+      <div class="audio-desk">
+        <div class="wave-heading"><div><span class="eyebrow">双设备原音</span><span id="syncSummary" class="sync-summary">同一会议时刻</span></div><span id="positionLabel" class="position-label mono">会议 00:00.0</span></div>
+        <div id="waveTracks" class="wave-tracks"></div>
+        <div class="time-ruler" id="timeRuler" aria-hidden="true"></div>
+        <div class="transport"><div class="transport-primary"><button id="previousButton" class="icon-button" aria-label="上一句 · K" title="上一句 · K"><svg><use href="#i-prev"/></svg></button><button id="playButton" class="play-button" aria-label="播放当前片段 · Q 或空格"><svg><use href="#i-play"/></svg><span>听原音</span><kbd>Q</kbd></button><button id="nextButton" class="icon-button" aria-label="下一句 · J" title="下一句 · J"><svg><use href="#i-next"/></svg></button></div><div class="transport-options"><button id="contextButton" class="option-button" aria-pressed="false" title="前后各增加 3 秒">±3s</button><button id="loopButton" class="option-button" aria-pressed="false" title="循环当前片段"><svg><use href="#i-loop"/></svg></button><label class="speed-control"><span class="sr-only">播放速度</span><select id="speedSelect"><option value="0.75">0.75×</option><option value="1" selected>1.0×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2.0×</option></select></label></div></div>
+        <p id="audioMessage" class="audio-message" aria-live="polite">点击波形定位；切换设备时保留会议时刻。</p>
+      </div>
+
+      <div class="context-section"><div class="context-heading"><span class="eyebrow">前后文</span><button id="fullContextButton" class="text-button">展开阅读 <span>↗</span></button></div><div id="contextPreview" class="context-preview"></div></div>
+      <div class="desk-foot"><div><kbd>J</kbd><kbd>K</kbd><span>切换片段</span><kbd>Z</kbd><span>撤销</span></div></div>
+    </section>
+
+    <aside class="decision-panel" aria-label="说话人裁决与备注">
+      <div class="decision-heading"><span class="section-number">03</span><h2>谁在说话</h2><svg><use href="#i-ear"/></svg></div>
+      <p id="decisionHint" class="decision-hint">选择姓名即保存当前片段。</p>
+      <div id="peopleChoices" class="people-choices"></div>
+      <div class="other-person"><button id="otherPersonToggle" class="text-button">＋ 其他说话人</button><form id="otherPersonForm" hidden><label class="sr-only" for="otherPersonInput">其他说话人姓名</label><input id="otherPersonInput" placeholder="输入姓名"><button type="submit" class="small-button">确认</button></form></div>
+      <div class="secondary-decisions"><button id="unknownButton" class="secondary-decision"><span class="decision-symbol">?</span><span>暂时无法辨认</span><kbd>U</kbd></button><button id="skipButton" class="secondary-decision"><span class="decision-symbol">↷</span><span>先跳过这一句</span><kbd>S</kbd></button></div>
+      <div class="judgment-summary" id="judgmentSummary"><span class="eyebrow">当前判断</span><p>尚未裁决</p></div>
+      <label class="note-label" for="noteEditor">校勘备注<span>可选</span></label><textarea id="noteEditor" class="note-editor" placeholder="例如：两人重叠、声音太远，或需要再听…" spellcheck="false"></textarea>
+      <div class="scope-note"><span class="scope-line"></span><p>仅保存这一句的判断。<br>不会自动推断整场身份。</p></div>
+    </aside>
+  </main>
+
+  <footer class="session-timeline"><div class="timeline-label"><span class="eyebrow">整场录音</span><span id="sessionDuration" class="mono">—</span><span id="sessionSource" class="timeline-source">设备 B</span></div><div class="overview-wrap"><canvas id="overviewCanvas" tabindex="0" role="slider" aria-label="整场录音时间轴" aria-valuemin="0" aria-valuenow="0"></canvas><div id="overviewTicks" class="overview-ticks" aria-hidden="true"></div></div><div class="timeline-end"><span class="timeline-dot"></span><span id="sessionProgress">本地保存</span><span class="edition">LISTEN · COMPARE · CONFIRM</span></div></footer>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="helpDialog" class="desk-dialog"><div class="dialog-heading"><div><span class="eyebrow">让手留在键盘上</span><h2>听音，不必来回点击。</h2></div><button class="icon-button" data-close="helpDialog" aria-label="关闭操作指南"><svg><use href="#i-close"/></svg></button></div><div class="shortcut-grid"><div><kbd>Q</kbd><kbd>Space</kbd><span>播放 / 暂停当前片段</span></div><div><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd><span>确认右侧对应人物</span></div><div><kbd>U</kbd><span>标记为无法辨认</span></div><div><kbd>S</kbd><span>跳过当前句</span></div><div><kbd>J</kbd><kbd>K</kbd><span>下一句 / 上一句</span></div><div><kbd>Z</kbd><span>撤销最近一次裁决</span></div><div><kbd>/</kbd><span>搜索全文</span></div></div><p class="dialog-note">输入文字或备注时，快捷键不会触发。切换设备会保留同一会议时刻；灰色波形表示该设备没有覆盖这段录音。</p></dialog>
+  <dialog id="contextDialog" class="desk-dialog context-dialog"><div class="dialog-heading"><div><span class="eyebrow">完整上下文</span><h2>回到对话里。</h2></div><button class="icon-button" data-close="contextDialog" aria-label="关闭上下文"><svg><use href="#i-close"/></svg></button></div><div id="fullContext" class="full-context"></div></dialog>
+  <div id="loadError" class="load-error" hidden><span class="eyebrow">工作台尚未连接</span><h2>录音没有打开。</h2><p id="loadErrorText"></p><button id="retryLoad" class="play-button">重新连接</button></div>
+</body>
+</html>
