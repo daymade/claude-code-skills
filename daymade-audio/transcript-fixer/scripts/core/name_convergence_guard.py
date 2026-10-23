@@ -147,6 +147,7 @@ _DENIAL_OBJECT_PREFIX_RE = re.compile(r"(?:\s|任何|取得|获得|有效的?)*"
 
 USER_ANSWER_PREFIX = "[user_answer] "
 ENTITY_REFERENCE_PREFIX = "[entity_reference] "
+WORDING_REFERENCE_PREFIX = "[wording_reference] "
 NONPERSON_CUES = {
     "system": ("系统", "平台", "system", "platform"),
     "product": ("产品", "软件", "product", "software"),
@@ -274,6 +275,57 @@ def entity_reference_citation(record: object, *, item_id: int, target: str,
     if not adjacent and not short_name:
         raise ValueError("this occurrence has no supported source-bound cue for entity_type")
     return ENTITY_REFERENCE_PREFIX + json.dumps(record, ensure_ascii=False, separators=(",", ":"))
+
+
+def _message_clause(text: str, offset: int, selected: str) -> bool:
+    """A whole arrival clause, rather than a token embedded in a name/quote."""
+    boundaries = r"[。.!！?？;；\n\r]"
+    start = max((m.end() for m in re.finditer(boundaries, text[:offset])), default=0)
+    end_match = re.search(boundaries, text[offset + len(selected):])
+    end = offset + len(selected) + end_match.start() if end_match else len(text)
+    clause = text[start:end].strip()
+    return clause in (selected, "还" + selected)
+
+
+def wording_reference_citation(record: object, *, item_id: int, target: str,
+                              original: str, context: Optional[str],
+                              context_offset: Optional[int], kind: str,
+                              entity_type: str) -> str:
+    """Validate a deliberately finite written-evidence route for ordinary wording.
+
+    This is not a general nonperson classifier. Only a standalone message-arrival
+    clause is supported; other grammatical forms retain the existing gate.
+    """
+    if not isinstance(record, dict) or record.get("kind") != "wording_reference":
+        raise ValueError("authority record requires kind=wording_reference")
+    if kind != "wording" or entity_type != "unknown":
+        raise ValueError("wording_reference requires kind=wording and entity_type=unknown")
+    if record.get("construction") != "message_arrival" or record.get("source_type") != "parallel_transcript":
+        raise ValueError("wording_reference supports only message_arrival from a parallel_transcript")
+    if type(record.get("item_id")) is not int or record["item_id"] != item_id:
+        raise ValueError("wording_reference item_id does not match this queue item")
+    if record.get("original") != original or record.get("target") != target or record.get("context") != context:
+        raise ValueError("wording_reference original/target/context does not match this occurrence")
+    offset = _citation_occurrence(original, context, context_offset)
+    if type(record.get("context_offset")) is not int or record["context_offset"] != offset:
+        raise ValueError("wording_reference context_offset does not select this occurrence")
+    # These literal nouns and the whole-clause check are the positive nonperson
+    # discriminator. An arbitrary wording label or 有NAME来 shape is insufficient.
+    if re.fullmatch(r"(?:还)?有(?:信息|消息)来", target) is None:
+        raise ValueError("wording_reference target is outside the supported message-arrival syntax")
+    if re.fullmatch(r"(?:还)?有[\u3400-\u9fff]{2}来", original) is None or not _message_clause(context, offset, original):
+        raise ValueError("wording_reference original is not a whole message-arrival clause")
+    for key in ("source_ref", "source_path", "quote"):
+        if not isinstance(record.get(key), str) or not record[key].strip():
+            raise ValueError(f"wording_reference requires nonempty {key}")
+    quote, quote_offset = record["quote"], record.get("quote_offset")
+    if (type(quote_offset) is not int or quote_offset < 0
+            or quote[quote_offset:quote_offset + len(target)] != target
+            or not _message_clause(quote, quote_offset, target)):
+        raise ValueError("wording_reference quote_offset must select the exact whole target clause")
+    if quote not in Path(record["source_path"]).expanduser().read_text(encoding="utf-8"):
+        raise ValueError("wording_reference quote is absent from source_path")
+    return WORDING_REFERENCE_PREFIX + json.dumps(record, ensure_ascii=False, separators=(",", ":"))
 
 # This is a citation syntax, not an open-ended sentiment classifier. A target
 # mention (including a target followed by a rejection) cannot testify for itself.
@@ -478,6 +530,10 @@ def evidence_names_authority(evidence: Optional[str]) -> bool:
         return False
     if _has_user_answer_citation(evidence):
         return True
+    # A parallel written transcript never becomes a user ruling/audio citation
+    # through words inside its JSON, source identifier or quoted conversation.
+    evidence = "\n".join(line for line in evidence.splitlines()
+                         if WORDING_REFERENCE_PREFIX not in line)
     for clause in _CLAUSE_END_RE.split(evidence):
         if _ungoverned_authority_starts(clause):
             return True
@@ -493,6 +549,7 @@ def guard(
     lookup_fn: Callable[[str], NameLookup],
     entity_type: str = "unknown",
     nonperson_reference_validated: bool = False,
+    wording_reference_validated: bool = False,
 ) -> Optional[GuardRejection]:
     """Decide whether converging ``from_text`` onto ``to_text`` may be written.
 
@@ -503,6 +560,32 @@ def guard(
     from/to pair matches the phonetic-neighbour shape (so --add, which carries
     no kind, is still gated on exactly the incident shape).
     """
+    if wording_reference_validated:
+        if (kind != "wording" or entity_type != "unknown"
+                or re.fullmatch(r"(?:还)?有(?:信息|消息)来", to_text) is None):
+            return GuardRejection("wording_reference_scope", "written wording evidence cannot settle an entity/person question")
+        cited = False
+        for line in (evidence or "").splitlines():
+            if WORDING_REFERENCE_PREFIX not in line:
+                continue
+            try:
+                record = json.loads(line.split(WORDING_REFERENCE_PREFIX, 1)[1])
+                cited = (isinstance(record, dict) and record.get("kind") == "wording_reference"
+                         and record.get("construction") == "message_arrival"
+                         and record.get("source_type") == "parallel_transcript"
+                         and record.get("original") == from_text and record.get("target") == to_text)
+                if cited:
+                    break
+            except (TypeError, ValueError):
+                continue
+        if not cited:
+            return GuardRejection("wording_authority_required", "written wording evidence requires its validated occurrence-bound citation")
+        # Check the phrase and its noun too: a known person's name may itself be
+        # a common noun. Classification evidence never overrides a roster.
+        terms = {from_text, to_text, from_text.removeprefix("还")[1:-1], to_text.removeprefix("还")[1:-1]}
+        if any((claim := lookup_fn(term)).roster_entry or claim.roster_variant_of for term in terms):
+            return GuardRejection("nonperson_roster_conflict", "wording reference conflicts with a recorded person; retain person-name authority")
+        return None
     if entity_type in NONPERSON_CUES:
         # Known people cannot be relabelled into products/systems to get a
         # written-reference exception. Roster variants also remain protected.

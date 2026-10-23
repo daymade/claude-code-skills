@@ -585,9 +585,10 @@ def create_argument_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--authority-record", metavar="JSON", dest="review_authority_record",
-        help="JSON file with kind=user_answer or kind=entity_reference, bound to this "
+        help="JSON file with kind=user_answer, entity_reference or wording_reference, bound to this "
              "item_id and target. See review_queue_dashboard.md for each kind's "
-             "supported forms and source requirements. "
+             "supported forms and source requirements. wording_reference supports only the "
+             "documented message-arrival clause from an exact parallel-transcript quote. "
              "Validation does not authenticate user authorship or source authority. "
              "Only with accepted/overridden; incompatible with --authority."
     )

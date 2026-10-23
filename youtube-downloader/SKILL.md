@@ -13,7 +13,7 @@ description: >-
 ## Overview
 
 Enable reliable video and audio downloads from YouTube and HLS streaming platforms (Mux, Vimeo, etc.) using yt-dlp and ffmpeg. This skill provides workflows for:
-- YouTube downloads (up to 4K) using PO token providers or browser cookies
+- YouTube downloads at available quality, with optional PO token and authorized cookie recovery
 - HLS stream downloads with authentication headers
 - Handling protected content and troubleshooting common download failures
 
@@ -56,7 +56,7 @@ Assume the user is non-technical. Do not ask them to run commands. Execute every
 - Confirm installing/upgrading dependencies if missing.
 - Ask before extracting browser cookies.
 - If using cookies, never mention cookie counts or raw cookie details in user-facing responses. Say “used your Chrome login session”.
-- If verification is required, automatically set up a local PO Token helper (no user actions). If Docker is missing or fails, do **not** attempt to install Docker—switch to the browser-based PO Token provider instead.
+- Set up a PO Token helper only after an explicit token diagnostic or a user request, and within existing installation/service authorization. If that authorization is already present, execute the recovery and resume the download. Otherwise request only the missing permission. Do not install Docker as a fallback; use the authorized browser provider when appropriate.
 
 **Legal/Safety reminder (brief):**
 - Proceed only if the user has the rights or permission to download the content.
@@ -80,40 +80,22 @@ Where should I save it? (Default: Downloads folder)
 
 **If the user says “just download”:**
 - Proceed with defaults and confirm when the download finishes.
-  - If blocked by a 403, automatically set up the verification helper and retry.
+  - If blocked, classify the actual diagnostic using the SOP below and execute the applicable authorized recovery.
 
 ## Reliable Download SOP (Internal)
 
-Follow this SOP to avoid common failures and confusion:
-
-1. Quote URLs in shell commands (zsh treats `?` as a glob). Example: `'https://www.youtube.com/watch?v=VIDEO_ID'`.
-2. Ensure proxy is active for both yt-dlp and PO Token providers (HTTP_PROXY/HTTPS_PROXY/ALL_PROXY).
-3. If you see “Sign in to confirm you’re not a bot”, request permission and use browser cookies. Do not proceed without cookies.
-4. Start a PO Token provider before downloading (fail fast if it cannot start).
-   - Use Docker bgutil provider when available.
-   - If Docker is missing or fails, switch to browser-based WPC provider.
-5. If cookies are in use, prefer the `web_safari` player client. Otherwise prefer `mweb` for PO tokens.
-6. Keep the browser window open while WPC is minting tokens. Ensure Chrome can reach YouTube through the same proxy.
-7. If you get “Only images are available” or “Requested format is not available”, treat it as a PO Token failure and retry after fixing token provider/browser state.
-8. If you get SSL EOF or fragment errors, treat it as a proxy/network issue. Retry with progressive formats and/or a better proxy.
+Read [the download SOP](references/internal-sop.md) before retrying a failure. Start with the current yt-dlp default clients and the existing network configuration. Do not require a provider, switch to Android, or extract browser cookies merely to begin a download.
 
 ## Agent Execution Checklist (Internal)
 
-- Run `scripts/download_video.py URL --info` (add `--cookies-from-browser chrome` if permission granted) to fetch metadata and thumbnail.
-- If yt-dlp metadata fails, rely on the script’s oEmbed fallback for title/uploader/thumbnail and note that duration may be unavailable.
-- If a thumbnail URL is present, render it in the response with Markdown image syntax.
-- Ask the user to choose video vs. audio-only and (optionally) a quality preset.
-- Use a friendly default save location (Downloads folder) unless the user specifies a folder.
-- For subtitles, run with `--subtitles` and the requested `--sub-lang`.
-- After download, report file name, size, and resolution (if video) in plain language.
-- If download fails with 403/fragment errors, retry once with non-m3u8 progressive formats.
-- If “Sign in to confirm you’re not a bot” appears, request cookie access and retry with cookies + `web_safari`.
-- If “Only images are available” appears, treat it as PO Token failure and retry after fixing provider/browser state.
-- Start the PO Token provider before downloads (`--auto-po-token` default). Fail fast if it cannot start.
-- If Docker-based provider fails (common in China), automatically fall back to the browser-based WPC provider (it may briefly open a browser window).
-- If the WPC provider is used, keep the browser window open until download starts. If the browser fails to launch, set the Chrome path explicitly.
-- If the PO Token provider times out, restart it once and retry.
-- If a system proxy is configured, pass it into the provider container. If the proxy points to 127.0.0.1/localhost, rewrite it to `host.docker.internal` for Docker.
+- Run `scripts/download_video.py URL --info` for metadata. It never starts a provider; its oEmbed fallback supplies limited fields when extraction fails.
+- Render the thumbnail when available. Use the requested file/audio, quality, subtitles and save location; proceed with defaults when already specified or implied.
+- Run the ordinary download first. With an installed Node runtime, pass `--js-runtimes node` when yt-dlp needs it; runtime installation still follows dependency authorization.
+- On failure, read the actual error and `-F` output. An absent requested format, images-only output, 403 or low resolution alone does not establish a token problem.
+- If a failed request explicitly reports a missing/required PO Token, read [provider setup](references/po-token-setup.md). Within existing setup authorization, execute `--auto-po-token` and finish the original download; do not stop at giving the user a command. This option attempts the native route first, then permits a bounded provider retry and WPC recovery.
+- Request browser-cookie permission before supplying either cookie option. Preserve the authorized cookie session and a compatible client throughout retries.
+- For an isolated 403/fragment failure, the wrapper can retry a quality preset once with progressive formats. Verify the resulting resolution; the fallback may be lower quality. Custom formats and audio-only requests keep their explicit selection.
+- Verify the final file with `ffprobe` and report its path, size and actual resolution or audio properties. Provider health or a format listing alone is not a completed download.
 
 ## When to Use This Skill
 
@@ -137,7 +119,7 @@ which yt-dlp
 yt-dlp --version
 ```
 
-If not installed or outdated (< 2025.10.22):
+If missing or a current extraction diagnostic requires an update, obtain any missing install/upgrade authorization, then use the existing installation owner:
 
 ```bash
 brew upgrade yt-dlp  # macOS
@@ -145,7 +127,7 @@ brew upgrade yt-dlp  # macOS
 pip install --upgrade yt-dlp  # Cross-platform
 ```
 
-**Critical**: Outdated yt-dlp versions cause nsig extraction failures and missing formats.
+Check the current [EJS setup guide](https://github.com/yt-dlp/yt-dlp/wiki/EJS) for the JavaScript runtime and challenge-solver requirements of the installed distribution. An installed Node binary may need explicit `--js-runtimes node`; do not treat an EJS/nsig failure as a PO Token failure.
 
 ### 2. Check Current Quality Access (Run this yourself)
 
@@ -155,37 +137,28 @@ Before downloading, check available formats:
 yt-dlp -F "https://youtu.be/VIDEO_ID"
 ```
 
-**If only format 18 (360p) appears**: PO token provider setup needed for high-quality access.
+Compare the listed media streams with the requested quality. If only a low-resolution format appears, inspect extraction/runtime warnings and the source availability before choosing recovery.
 
 ## High-Quality Download Workflow
 
-### Step 1: Install PO Token Provider (One-time Setup)
+### Step 1: Try the Native Client Selection
 
-For 1080p/1440p/4K access, install a PO token provider plugin into yt-dlp's Python environment:
+Keep `player_client` unset unless there is a specific diagnostic or explicit request. The [official extractor guide](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#youtube) describes yt-dlp's default attempt with clients that do not require tokens. Available formats depend on the video, account, client, network and current YouTube enforcement.
 
-```bash
-# Find yt-dlp's Python path (interpreter used by yt-dlp)
-head -1 $(which yt-dlp)
-
-# Install plugin using the interpreter from the line above
-<YTDLP_PYTHON> -m pip install bgutil-ytdlp-pot-provider
-```
-
-**Verification**: Run `yt-dlp -F "VIDEO_URL"` again. Look for formats 137 (1080p), 271 (1440p), or 313 (4K).
-
-See `references/po-token-setup.md` for detailed setup instructions and troubleshooting.
-
-### Step 2: Download with Best Quality
-
-Once PO token provider is installed:
+### Step 2: Download and Escalate Only When Needed
 
 ```bash
 # Download best quality up to 1080p
-yt-dlp -f "bestvideo[height<=1080]+bestaudio/best" "VIDEO_URL"
+scripts/download_video.py "VIDEO_URL" --quality 1080p
 
-# Download best available quality (4K if available)
-yt-dlp -f "bestvideo+bestaudio/best" "VIDEO_URL"
+# Download best available quality
+scripts/download_video.py "VIDEO_URL"
+
+# After an explicit token requirement, with setup already authorized
+scripts/download_video.py "VIDEO_URL" --auto-po-token
 ```
+
+For installation and provider-specific recovery, load [PO Token setup](references/po-token-setup.md). Do not infer a provider requirement from resolution alone.
 
 ### Step 3: Verify Download Quality
 
@@ -201,9 +174,9 @@ width=1920
 height=1080
 ```
 
-## Alternative: Browser Cookies Method
+## Authorized Browser Cookies Method
 
-If PO token provider setup is problematic, use browser cookies:
+Use cookies when the content requires the authorized account or a bot check persists, after cookie permission is granted. Cookies authenticate a session; they do not replace a missing PO Token:
 
 ```bash
 # Firefox
@@ -217,7 +190,7 @@ yt-dlp --cookies-from-browser chrome -f "bestvideo[height<=1080]+bestaudio/best"
 **Requirements**:
 - Must be logged into YouTube in the specified browser.
 - Browser and yt-dlp must use the same IP/proxy.
-- Do not use Android client with cookies (Android client does not support cookies).
+- Preserve yt-dlp's default cookie-compatible clients; use `web_safari` only as a targeted retry. Do not combine account cookies with Android/iOS clients that do not support them.
 
 ## Common Tasks
 
@@ -270,53 +243,21 @@ ffmpeg -i "video.webm" -c:v libx264 -preset medium -crf 23 -c:a aac -b:a 128k "v
 
 ## Troubleshooting Quick Reference
 
-### Only 360p Available (Format 18)
+### Missing Quality / Only Images / Requested Format Not Available
 
-**Cause**: Missing PO token provider or outdated yt-dlp.
-
-**Solution**:
-1. Update yt-dlp: `brew upgrade yt-dlp`
-2. Install PO token provider (see Step 1 above)
-3. Or use browser cookies method
+Inspect `-F`, the selected format expression, current yt-dlp/EJS/runtime warnings and source availability. These messages have multiple causes. Enter provider setup only when a failed extraction or media request also names a missing/required PO Token. Do not install a provider because a requested height or format ID is absent.
 
 ### Sign in to Confirm You’re Not a Bot
 
-**Cause**: YouTube requires authentication to proceed.
+Check that the intended proxy/network is in use. If the challenge persists and cookies are needed, obtain cookie authorization, retain that session, and retry. Stop with the exact authorization gap if it is unavailable; do not silently read browser cookies.
 
-**Solution**:
-1. Request permission and use browser cookies (`--cookies-from-browser chrome`).
-2. Ensure the browser and yt-dlp use the same IP/proxy.
-3. Retry with `web_safari` client if needed.
+### nsig / JavaScript Challenge Failure
 
-### Only Images Available / Requested Format Not Available
+Check the installed yt-dlp version and the [EJS runtime and solver instructions](https://github.com/yt-dlp/yt-dlp/wiki/EJS). Repair the diagnosed prerequisite within authorization. Android or AndroidVR can be selected explicitly for a bounded diagnostic, but neither is the default recovery or a guaranteed solution.
 
-**Cause**: PO tokens not applied or provider/browser verification failed.
+### 403 / SSL EOF / Fragment Errors
 
-**Solution**:
-1. Verify PO Token provider is running before download.
-2. Keep the browser window open if using WPC.
-3. If cookies are in use, prefer `web_safari` client and retry.
-
-### nsig Extraction Failed
-
-**Symptoms**:
-```
-WARNING: [youtube] nsig extraction failed: Some formats may be missing
-```
-
-**Solution**:
-1. Update yt-dlp to latest version
-2. Install PO token provider
-3. If still failing and PO tokens are disabled, use Android client: `yt-dlp --extractor-args "youtube:player_client=android" "VIDEO_URL"`
-
-### SSL EOF / Fragment Errors
-
-**Cause**: Proxy or network instability.
-
-**Solution**:
-1. Retry with progressive formats (non-m3u8).
-2. Switch to a more stable proxy/node.
-3. Avoid closing the PO token browser window during download.
+Distinguish a media 403 from TLS, timeout, proxy and provider-health errors. A generic 403 does not prove a Token requirement. Check the network path first for SSL/timeout failures; retry only after a relevant change. The wrapper's single progressive retry applies to 403/fragment failures with quality presets, and may reduce quality.
 
 ### Slow Downloads or Network Errors
 
@@ -331,13 +272,13 @@ For users in China or behind restrictive proxies:
 WARNING: android client https formats require a GVS PO Token
 ```
 
-**Action**: Ignore if download succeeds. This indicates Android client has limited format access without PO tokens.
+**Action**: A successful, verified download needs no repair for an unused-client warning. On failure, read the full diagnostic and actual formats before choosing a token branch.
 
 ## Bundled Script Reference
 
 ### scripts/download_video.py
 
-Use this convenience wrapper to auto-start a PO Token provider by default for high-quality downloads. Use it yourself and report results to the user without asking them to run commands.
+Use this wrapper for native-client downloads and bounded diagnostic recovery. It does not install/start providers or read cookies by default. Execute it yourself and report the verified file.
 
 **Basic usage:**
 ```bash
@@ -356,26 +297,20 @@ scripts/download_video.py "VIDEO_URL"
 - `--cookies-from-browser` - Load cookies from a browser (e.g., chrome, firefox)
 - `--cookies-file` - Load cookies from a cookies.txt file
 - `--player-client` - Use a specific YouTube player client (e.g., web_safari)
-- `--auto-po-token` - Auto-start PO Token provider (default; uses Docker if available, otherwise switches to browser-based provider)
-- `--no-auto-po-token` - Disable auto PO Token setup
+- `--auto-po-token` - Authorize provider setup after a failed explicit missing/required-token diagnostic; try native clients first, then Docker bgutil or browser WPC
+- `--no-auto-po-token` - Disable provider setup (default); does not disable already-installed yt-dlp plugins
 - `--proxy` - Proxy URL for yt-dlp and the PO Token provider (e.g., http://127.0.0.1:1082)
 - `--wpc-browser-path` - Browser executable path for WPC provider
 - `-F, --list-formats` - List available formats
 - `--merge-format` - Merge output container (e.g., mp4, mkv). Default: mp4
 - `--playlist` - Allow playlist downloads (default: single video only)
 - `--info` - Print title/uploader/duration/thumbnail and exit
-- `--no-android-client` - Disable Android client fallback
-
-**Note**: Use the Android client only when PO tokens are disabled. Keep PO tokens enabled for high quality.
+- `--no-android-client` - Retained compatibility option; the wrapper already leaves native client selection unchanged
+- `--js-runtimes` - Pass an installed runtime to yt-dlp, e.g. `node` or `node:/path/to/node`
 
 ## Quality Expectations
 
-| Setup | 360p | 720p | 1080p | 1440p | 4K |
-|-------|------|------|-------|-------|-----|
-| **Auto PO token (default)** | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Android client only | ✓ | ✗ | ✗ | ✗ | ✗ |
-| PO token provider (manual) | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Browser cookies | ✓ | ✓ | ✓ | ✓ | ✓ |
+Do not promise a resolution based on a provider/client/cookie combination. Request the desired quality, inspect available formats, and verify the actual downloaded file. A successful high-resolution download without new provider setup proves only that input and environment; installed plugins or configuration may still contribute. A provider cannot create a resolution absent from the source.
 
 ## HLS Stream Downloads (m3u8)
 

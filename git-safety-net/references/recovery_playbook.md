@@ -1,6 +1,7 @@
 # Recovery Playbook — get lost work back, then make it un-loseable
 
 ## Contents
+- [Blocked local snapshots](#blocked-local-snapshots)
 - Mental model: nothing is gone until gc runs
 - The authoritative "is anything at risk" check
 - Linked worktrees and detached worktree HEADs
@@ -13,6 +14,76 @@
 - Widen the safety window (config)
 - Destructive-operation safety (reset/force-push/rewrite)
 - Sources
+
+## Blocked local snapshots
+
+Use this for an existing local repository with a committed HEAD when an application's
+data writes succeed but its Git snapshots fail. The operator needs Git, read access
+to the exact repository and its hook owner, and a private recovery directory outside
+the checkout. Resolve a linked worktree's actual index and lock with
+`git -C <repo> rev-parse --path-format=absolute --git-path index` and the same command
+for `index.lock`; do not assume they live under `<repo>/.git/`.
+
+1. **Bind the target and authority.** Record the application's snapshot status,
+   current branch and full HEAD, exact snapshot paths, staged paths and resolved
+   index/lock paths. Use `git --no-optional-locks -C <repo> status --porcelain=v1
+   --untracked-files=all` for the initial status. Reuse verified prior authorization
+   only for its actual objects, action and destination. Inspection alone does not
+   authorize moving a lock, accepting guard findings or changing staged content.
+   Keep unrelated files and writers outside the recovery action.
+2. **Establish writer ownership before touching the lock.** Inspect the owning
+   application's run/mutex state, relevant process/open-file evidence and any
+   registered writer or shared-filesystem owner. Coordinate release with a live
+   owner; do not terminate it. Lock age, unchanged metadata, an empty `lsof` result
+   or a process-name miss alone proves neither abandonment nor permission. An
+   unknown owner, incomplete occupancy check or writer conflict stops lock mutation;
+   report that specific gap and continue independent read-only diagnosis.
+3. **Preserve the threatened state.** In the private recovery directory, copy the
+   complete original snapshot files, current index and existing lock, preserving
+   metadata and relative paths. Record hashes, types, inode/mtime/size and HEAD;
+   independently compare source and backup bytes. Never print secret-bearing
+   contents. A lock may contain a newer index rather than an empty sentinel: inspect
+   a *backup copy* with `GIT_INDEX_FILE=<absolute-backup-lock> git -C <repo> ls-files
+   --stage`. If it parses, preserve its referenced staged blobs as well; copying an
+   index alone does not preserve Git objects. If it cannot be interpreted, retain
+   it as opaque evidence; do not replace the current index with it. Unsupported
+   file types, unpreserved staged objects or changing inputs stop mutation.
+4. **Preflight the next layer before releasing the lock.** Read the actual hook
+   dispatcher and its owner contract. If running it is authorized and its side
+   effects are understood, create a unique temporary index outside the checkout
+   from the preserved current index (or committed HEAD when no index exists), stage
+   only the approved snapshot paths into that index, inspect its staged diff/stat,
+   then run the original `git hook run pre-commit` with that child-only
+   `GIT_INDEX_FILE`. This isolates index changes; it does **not** isolate hook writes
+   to the working tree, network or processes. An unsafe/unavailable hook preflight
+   remains unverified. Never disable hooks or change the exposure tier to obtain a
+   green result. A refusal is a separate cause from the index lock: resolve it
+   through the hook owner's existing correction/acceptance procedure and verified
+   authorization, then preflight again. Review the scanner's actual matched text:
+   a prefix exception covers later suffix changes in that file, not one complete
+   path literal. Missing authority leaves that finding blocked; do not rewrite
+   append-only originals or invent a baseline exception.
+5. **Recover only the authorized abandoned lock.** Proceed only after the writer
+   has released it or its owner has confirmed abandonment, and existing task
+   authorization covers this exact recovery action. Recheck HEAD, index, originals,
+   lock identity/hashes and occupancy immediately before mutation. A changed or
+   re-created lock ends this attempt. Acquire the application's recovery mutex
+   when available, move the exact lock to a new non-overwriting quarantine path,
+   and independently verify its preserved bytes and the source-path absence.
+   Release a mutex the normal snapshot command needs before invoking that command.
+   Do not install automatic lock deletion. A rollback must not overwrite a newly
+   created lock/index or undo completed commits; retain the quarantine and let the
+   owner select the recovery when state has advanced.
+6. **Resume and verify the real result.** Use the application's existing explicit
+   snapshot retry, keeping its original hooks and path scope. Read every command
+   to a terminal result. Independently query snapshot health and compare each
+   approved original file with both its pre-recovery hash and committed HEAD blob.
+   Confirm unrelated staged paths survived. A successful commit alone does not
+   prove all snapshot files caught up. New concurrent data ends the frozen
+   comparison: preserve it and resume from its current state, never restore old
+   bytes to force a match. Stop when the requested files are snapshotted, originals
+   are unchanged and quarantine remains recoverable, or report the exact remaining
+   ownership, permission or hook failure without repeating an unchanged attempt.
 
 ## Mental model: nothing is gone until gc runs
 

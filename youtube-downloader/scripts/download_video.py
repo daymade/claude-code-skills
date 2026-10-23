@@ -7,8 +7,8 @@ especially useful for users behind proxies or in regions with YouTube access iss
 
 Requirements:
     - yt-dlp: Install via `brew install yt-dlp` (macOS) or `pip install yt-dlp` (cross-platform)
-    - For high-quality downloads (1080p+): Install PO token provider
-      See ../references/po-token-setup.md for setup instructions
+    - A supported JavaScript runtime and EJS components for current YouTube extraction
+    - Optional PO token provider: see ../references/po-token-setup.md
 
 Usage:
     scripts/download_video.py "https://youtu.be/VIDEO_ID"
@@ -17,8 +17,9 @@ Usage:
     scripts/download_video.py "https://youtu.be/VIDEO_ID" -o ~/Downloads
 
 Note:
-    This script auto-starts a PO Token provider for high-quality downloads.
-    If PO tokens are disabled, it can fall back to the Android client (360p only).
+    Start with yt-dlp's default clients. --auto-po-token authorizes provider setup
+    only after a failed download with an explicit missing-token diagnostic.
+    Browser cookies and alternate clients require explicit options.
 """
 
 import argparse
@@ -28,6 +29,7 @@ import sys
 import shutil
 import time
 import os
+import re
 from pathlib import Path
 from typing import Iterable, Optional
 from urllib.parse import quote, urlparse, urlunparse
@@ -133,37 +135,58 @@ def filter_cookie_lines(text: str) -> str:
 
 
 def run_yt_dlp(cmd: list, hide_cookie_logs: bool = False) -> subprocess.CompletedProcess:
-    if not hide_cookie_logs:
-        return subprocess.run(cmd)
+    # Retain diagnostics even without cookies, while keeping progress visible.
+    with subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        text=True, encoding="utf-8", errors="replace",
+    ) as process:
+        lines = []
+        for line in process.stdout:
+            lines.append(line)
+            visible = filter_cookie_lines(line) if hide_cookie_logs else line.rstrip("\n")
+            if visible:
+                print(visible, flush=True)
+        return subprocess.CompletedProcess(cmd, process.wait(), "".join(lines), "")
 
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    stdout = filter_cookie_lines(result.stdout)
-    stderr = filter_cookie_lines(result.stderr)
-    if stdout:
-        print(stdout)
-    if stderr:
-        print(stderr, file=sys.stderr)
-    return result
+
+def final_error(result: subprocess.CompletedProcess) -> str:
+    """Use the terminal failure, not explanatory words in an unused-format warning."""
+    text = ((result.stdout or "") + "\n" + (result.stderr or "")).lower()
+    errors = [line.strip() for line in text.splitlines() if re.match(
+        r"^(?:error:\s*\S|\[download\].*error:|http error [45])", line.strip())]
+    return errors[-1] if errors else ""
 
 
 def has_403_error(result: subprocess.CompletedProcess) -> bool:
-    text = ""
-    if hasattr(result, "stdout") and result.stdout:
-        text += result.stdout
-    if hasattr(result, "stderr") and result.stderr:
-        text += result.stderr
-    text = text.lower()
-    return "http error 403" in text or "403: forbidden" in text or "fragment 1 not found" in text
+    text = final_error(result)
+    return any(marker in text for marker in (
+        "http error 403", "403: forbidden", "fragment 1 not found",
+    ))
 
 
 def has_pot_error(result: subprocess.CompletedProcess) -> bool:
-    text = ""
-    if hasattr(result, "stdout") and result.stdout:
-        text += result.stdout
-    if hasattr(result, "stderr") and result.stderr:
-        text += result.stderr
-    text = text.lower()
-    return "pot" in text and "error" in text
+    """Identify an explicit missing-token diagnostic, not a generic download error."""
+    if result.returncode == 0:
+        return False
+    text = ((result.stdout or "") + "\n" + (result.stderr or "")).lower()
+    # A provider timeout or a warning for an unused client does not explain a
+    # failed network request. Leave these failures on the network/recovery path.
+    if any(word in text for word in ("timed out", "timeout", "ssl", "connection reset", "network is unreachable")):
+        return False
+    token_lines = [
+        line for line in text.splitlines()
+        if
+        re.search(r"\bpo[ _-]?tokens?\b", line)
+        and re.search(r"\b(require[ds]?|required|missing|not provided|not supplied|must provide)\b", line)
+    ]
+    failure = final_error(result)
+    return bool(token_lines) and (
+        failure in token_lines
+        or any(marker in failure for marker in (
+            "only images are available", "requested format is not available",
+            "http error 403", "403: forbidden",
+        ))
+    )
 
 
 def has_wpc_error(result: subprocess.CompletedProcess) -> bool:
@@ -177,17 +200,28 @@ def has_wpc_error(result: subprocess.CompletedProcess) -> bool:
 
 
 def with_player_client(cmd: list, client: str) -> list:
+    """Replace only the YouTube player_client, retaining provider arguments."""
     rebuilt = []
-    skip_next = False
-    for token in cmd:
-        if skip_next:
-            skip_next = False
-            continue
-        if token == "--extractor-args":
-            skip_next = True
+    youtube_args = []
+    index = 0
+    while index < len(cmd):
+        token = cmd[index]
+        if token == "--extractor-args" and index + 1 < len(cmd):
+            value = cmd[index + 1]
+            if value.startswith("youtube:"):
+                youtube_args.extend(
+                    part for part in value[len("youtube:"):].split(";")
+                    if part and not part.startswith("player_client="))
+            else:
+                rebuilt.extend([token, value])
+            index += 2
             continue
         rebuilt.append(token)
-    rebuilt.extend(["--extractor-args", f"youtube:player_client={client}"])
+        index += 1
+    youtube_args.append(f"player_client={client}")
+    # yt-dlp replaces repeated dictionaries for the same extractor. Keep all
+    # YouTube settings together so its real parser retains them.
+    rebuilt.extend(["--extractor-args", "youtube:" + ";".join(youtube_args)])
     return rebuilt
 
 
@@ -261,6 +295,8 @@ def provider_ping(url: str = "http://127.0.0.1:4416/ping") -> bool:
 
 
 def docker_available() -> bool:
+    if not shutil.which("docker"):
+        return False
     result = subprocess.run(["docker", "--version"], capture_output=True, text=True)
     return result.returncode == 0
 
@@ -504,12 +540,8 @@ def ensure_po_token_provider(proxy_url: Optional[str], no_proxy: Optional[str]) 
         print("✓ PO Token provider is running.")
         return "bgutil"
 
-    # If container started but not responding, recreate with proxy settings
-    if restart_po_token_provider(proxy_url, no_proxy) and provider_ping():
-        print("✓ PO Token provider is running.")
-        return "bgutil"
-
-    print("⚠️  Docker-based provider failed. Switching to browser-based PO Token provider...")
+    # Do not remove/restart a shared container just because its health probe failed.
+    print("⚠️  Docker provider did not respond; preserving it and trying the browser provider...")
     return "wpc" if ensure_wpc_provider(proxy_url) else None
 
 
@@ -690,14 +722,15 @@ def download_video(
     cookies_from_browser: str = None,
     cookies_file: str = None,
     player_client: str = None,
-    auto_po_token: bool = True,
+    auto_po_token: bool = False,
     proxy: str = None,
     wpc_browser_path: str = None,
     allow_playlist: bool = False,
-    use_android_client: bool = True,
+    use_android_client: bool = False,
     audio_only: bool = False,
     list_formats: bool = False,
     info_only: bool = False,
+    js_runtimes: str = None,
 ) -> int:
     """
     Download a YouTube video using yt-dlp.
@@ -714,14 +747,15 @@ def download_video(
         cookies_from_browser: Load cookies from browser (e.g., chrome, firefox)
         cookies_file: Load cookies from a cookies.txt file
         player_client: Use a specific YouTube player client (e.g., web_safari)
-        auto_po_token: Attempt to auto-start PO Token provider on 403 errors
+        auto_po_token: Authorize provider setup after a failed explicit PO-token diagnostic
         proxy: Proxy URL for yt-dlp and PO Token provider
         wpc_browser_path: Browser path for WPC PO Token provider
         allow_playlist: Allow playlist downloads (default: False)
-        use_android_client: Use Android client to avoid nsig extraction issues
+        use_android_client: Explicit legacy Android client request (default: False)
         audio_only: Download audio only
         list_formats: List available formats instead of downloading
         info_only: Print video info before exiting
+        js_runtimes: Explicit yt-dlp JavaScript runtime configuration (e.g., node)
 
     Returns:
         Exit code (0 for success, non-zero for failure)
@@ -744,29 +778,14 @@ def download_video(
 
     proxy_value, no_proxy = get_proxy_settings(proxy)
 
-    use_po_token = auto_po_token and not info_only
-    provider_type = None
-    wpc_available = False
-    wpc_retried = False
-    if use_po_token:
-        provider_type = ensure_po_token_provider(proxy_value, no_proxy)
-        if not provider_type:
-            print("✗ PO Token provider could not be started. Aborting download.")
+    has_cookies = bool(cookies_from_browser or cookies_file)
+    if has_cookies and player_client:
+        clients = set(player_client.split(","))
+        if clients & {"android", "android_vr", "ios", "tv_simply"}:
+            print("✗ Error: The selected player client does not support account cookies.")
             return 2
-        wpc_available = provider_type == "wpc"
-
-    if not wpc_browser_path and use_po_token:
-        wpc_browser_path = find_chrome_path()
-
-    # Use Android client by default only when PO tokens are disabled and no custom client/cookies
-    use_android = use_android_client and not (
-        use_po_token or cookies_from_browser or cookies_file or player_client
-    )
-    if use_android_client and not use_android:
-        if use_po_token:
-            print("ℹ︎ Note: Disabling Android client because PO Token provider is enabled.")
-        else:
-            print("ℹ︎ Note: Disabling Android client because cookies or player client are in use.")
+    # Never make an alternate client the consequence of disabling PO tokens.
+    use_android = use_android_client and not (has_cookies or player_client)
     if use_android:
         cmd.extend(["--extractor-args", "youtube:player_client=android"])
 
@@ -777,17 +796,11 @@ def download_video(
 
     if proxy_value:
         cmd.extend(["--proxy", proxy_value])
-
-    po_token_client = None
-    if use_po_token:
-        po_token_client = "mweb"
-        if cookies_from_browser or cookies_file:
-            po_token_client = "web_safari"
+    if js_runtimes:
+        cmd.extend(["--js-runtimes", js_runtimes])
 
     if player_client:
         cmd.extend(["--extractor-args", f"youtube:player_client={player_client}"])
-    elif po_token_client:
-        cmd.extend(["--extractor-args", f"youtube:player_client={po_token_client}"])
 
     if not allow_playlist:
         cmd.append("--no-playlist")
@@ -796,12 +809,6 @@ def download_video(
     if list_formats:
         cmd.extend(["-F", url])
         result = run_yt_dlp(cmd, hide_cookie_logs=bool(cookies_from_browser))
-
-        # Check if PO token provider might be needed
-        if result.returncode == 0 and use_android_client:
-            print("\n💡 Tip: Using Android client (360p only).")
-            print("   For 1080p/4K, install PO token provider:")
-            print("   See ../references/po-token-setup.md for instructions")
 
         return result.returncode
 
@@ -832,7 +839,7 @@ def download_video(
     # Handle audio-only downloads
     if audio_only:
         cmd.extend(["-x", "--audio-format", "mp3"])
-    elif format_spec:
+    if format_spec:
         cmd.extend(["-f", format_spec])
 
     if subtitles:
@@ -865,103 +872,75 @@ def download_video(
             print(f"\n✓ Download completed successfully!")
             print(f"  Location: {output_root}")
 
-    retry_client = player_client or po_token_client
-
-    if wpc_available and wpc_browser_path:
-        cmd = with_wpc_browser(cmd, wpc_browser_path)
-
-    # Execute download
     before_files = list_files(output_root)
     print(f"Executing: {' '.join(cmd)}")
     result = run_yt_dlp(cmd, hide_cookie_logs=bool(cookies_from_browser))
-
     if result.returncode == 0:
         finalize_download(before_files)
-    else:
-        if use_po_token and provider_type == "bgutil" and has_pot_error(result):
-            print("\n⚠️  PO Token provider did not respond. Restarting it and retrying...")
-            if restart_po_token_provider(proxy_value, no_proxy):
-                retry_cmd = with_player_client(cmd, retry_client or "mweb")
-                before_retry = list_files(output_root)
-                print(f"Executing: {' '.join(retry_cmd)}")
-                retry_result = run_yt_dlp(retry_cmd, hide_cookie_logs=bool(cookies_from_browser))
-                if retry_result.returncode == 0:
-                    finalize_download(before_retry)
+        return 0
+
+    if has_pot_error(result):
+        if auto_po_token:
+            token_client = player_client or ("web_safari" if has_cookies else "mweb")
+            if use_android or token_client not in {"mweb", "web", "web_safari", "web_music", "web_creator"}:
+                print("✗ Select a compatible web player client before using the web PO Token provider.")
+                return 2
+            print("\n⚠️  Explicit PO Token requirement detected. Preparing the authorized provider...")
+            provider_type = ensure_po_token_provider(proxy_value, no_proxy)
+            if provider_type:
+                cmd = with_player_client(cmd, token_client)
+                if provider_type == "wpc":
+                    browser = wpc_browser_path or find_chrome_path()
+                    cmd = with_wpc_browser(cmd, browser)
+                print(f"Executing: {' '.join(cmd)}")
+                result = run_yt_dlp(cmd, hide_cookie_logs=bool(cookies_from_browser))
+                if result.returncode == 0:
+                    finalize_download(before_files)
                     return 0
-                result = retry_result
-            if has_pot_error(result):
-                print("\n⚠️  Docker provider still failing. Switching to browser-based PO Token provider...")
-                if ensure_wpc_provider(proxy_value):
-                    retry_cmd = with_player_client(cmd, retry_client or "mweb")
-                    retry_cmd = with_wpc_browser(retry_cmd, wpc_browser_path)
-                    before_retry = list_files(output_root)
-                    print(f"Executing: {' '.join(retry_cmd)}")
-                    retry_result = run_yt_dlp(retry_cmd, hide_cookie_logs=bool(cookies_from_browser))
-                    if retry_result.returncode == 0:
-                        finalize_download(before_retry)
+                diagnostics = ((result.stdout or "") + (result.stderr or "")).lower()
+                if provider_type == "bgutil" and "[pot:bgutil" in diagnostics and "error" in diagnostics:
+                    print("\n⚠️  The authorized provider failed. Trying WPC without restarting the shared service...")
+                    if ensure_wpc_provider(proxy_value):
+                        provider_type = "wpc"
+                        cmd = with_wpc_browser(cmd, wpc_browser_path or find_chrome_path())
+                        result = run_yt_dlp(cmd, hide_cookie_logs=bool(cookies_from_browser))
+                        if result.returncode == 0:
+                            finalize_download(before_files)
+                            return 0
+                if provider_type == "wpc" and has_wpc_error(result):
+                    print("\n⚠️  Browser verification not ready. Retrying once; keep its window open...")
+                    time.sleep(3)
+                    result = run_yt_dlp(cmd, hide_cookie_logs=bool(cookies_from_browser))
+                    if result.returncode == 0:
+                        finalize_download(before_files)
                         return 0
-                    result = retry_result
-                    wpc_retried = True
-
-        if use_po_token and has_wpc_error(result):
-            print("\n⚠️  Browser verification not ready. Keeping Chrome open and retrying once...")
-            time.sleep(3)
-            retry_cmd = with_player_client(cmd, retry_client or "mweb")
-            retry_cmd = with_wpc_browser(retry_cmd, wpc_browser_path)
-            before_retry = list_files(output_root)
-            print(f"Executing: {' '.join(retry_cmd)}")
-            retry_result = run_yt_dlp(retry_cmd, hide_cookie_logs=bool(cookies_from_browser))
-            if retry_result.returncode == 0:
-                finalize_download(before_retry)
-                return 0
-            result = retry_result
-            wpc_retried = True
-
-        if use_po_token and has_pot_error(result) and not wpc_retried:
-            print("\n⚠️  PO Token provider failed. Switching to browser-based PO Token provider...")
-            if ensure_wpc_provider(proxy_value):
-                retry_cmd = with_player_client(cmd, retry_client or "mweb")
-                retry_cmd = with_wpc_browser(retry_cmd, wpc_browser_path)
-                before_retry = list_files(output_root)
-                print(f"Executing: {' '.join(retry_cmd)}")
-                retry_result = run_yt_dlp(retry_cmd, hide_cookie_logs=bool(cookies_from_browser))
-                if retry_result.returncode == 0:
-                    finalize_download(before_retry)
-                    return 0
-                result = retry_result
-
-        if cookies_from_browser and not player_client and has_403_error(result):
-            print("\n⚠️  Download failed with 403 errors. Retrying with web_safari client...")
-            retry_cmd = with_player_client(cmd, "web_safari")
-            before_retry = list_files(output_root)
-            print(f"Executing: {' '.join(retry_cmd)}")
-            retry_result = run_yt_dlp(retry_cmd, hide_cookie_logs=bool(cookies_from_browser))
-            if retry_result.returncode == 0:
-                finalize_download(before_retry)
-                return 0
-            result = retry_result
-
-        if not audio_only and format_from_quality:
-            print("\n⚠️  Download failed. Retrying with non-m3u8 progressive formats...")
-            retry_cmd = cmd[:]
-            retry_format = fallback_format_for_quality(quality)
-            if "-f" in retry_cmd:
-                format_index = retry_cmd.index("-f") + 1
-                if format_index < len(retry_cmd):
-                    retry_cmd[format_index] = retry_format
             else:
-                retry_cmd.extend(["-f", retry_format])
-            before_retry = list_files(output_root)
-            print(f"Executing: {' '.join(retry_cmd)}")
-            retry_result = run_yt_dlp(retry_cmd, hide_cookie_logs=bool(cookies_from_browser))
-            if retry_result.returncode == 0:
-                finalize_download(before_retry)
-                return 0
-            print(f"\n✗ Download failed with exit code {retry_result.returncode}")
-            return retry_result.returncode
+                print("✗ Authorized PO Token setup failed; the original download was already attempted.")
+                return result.returncode
+        else:
+            print("\nPO Token requirement detected. If provider setup is authorized, retry with --auto-po-token.")
 
-        print(f"\n✗ Download failed with exit code {result.returncode}")
+    # A 403 alone never authorizes installing a provider or extracting cookies.
+    # Retain explicitly supplied cookies on the one compatible-client retry.
+    if has_cookies and not player_client and has_403_error(result):
+        print("\n⚠️  Retrying the authorized cookie session with web_safari...")
+        cmd = with_player_client(cmd, "web_safari")
+        result = run_yt_dlp(cmd, hide_cookie_logs=bool(cookies_from_browser))
+        if result.returncode == 0:
+            finalize_download(before_files)
+            return 0
 
+    if not audio_only and format_from_quality and has_403_error(result):
+        print("\n⚠️  403/fragment failure. Retrying once with progressive formats; quality may be lower...")
+        retry_cmd = cmd[:]
+        retry_format = fallback_format_for_quality(quality)
+        retry_cmd[retry_cmd.index("-f") + 1] = retry_format
+        result = run_yt_dlp(retry_cmd, hide_cookie_logs=bool(cookies_from_browser))
+        if result.returncode == 0:
+            finalize_download(before_files)
+            return 0
+
+    print(f"\n✗ Download failed with exit code {result.returncode}")
     return result.returncode
 
 
@@ -1024,16 +1003,20 @@ def main():
         "--wpc-browser-path",
         help="Browser executable path for WPC PO Token provider",
     )
+    parser.add_argument(
+        "--js-runtimes",
+        help="Enable an installed yt-dlp JavaScript runtime (e.g., node or node:/path/to/node)",
+    )
     auto_group = parser.add_mutually_exclusive_group()
     auto_group.add_argument(
         "--auto-po-token",
         action="store_true",
-        help="Automatically start a PO Token provider (default)",
+        help="Authorize provider installation/start after a failed explicit PO Token diagnostic",
     )
     auto_group.add_argument(
         "--no-auto-po-token",
         action="store_true",
-        help="Disable automatic PO Token provider setup",
+        help="Do not install/start a PO Token provider (default)",
     )
     parser.add_argument(
         "--playlist",
@@ -1043,7 +1026,7 @@ def main():
     parser.add_argument(
         "--no-android-client",
         action="store_true",
-        help="Disable Android client workaround",
+        help="Compatibility option: default clients are already used; select Android explicitly with --player-client",
     )
     parser.add_argument(
         "-a", "--audio-only", action="store_true", help="Download audio only (as MP3)"
@@ -1071,14 +1054,15 @@ def main():
         cookies_from_browser=args.cookies_from_browser,
         cookies_file=args.cookies_file,
         player_client=args.player_client,
-        auto_po_token=not args.no_auto_po_token,
+        auto_po_token=args.auto_po_token,
         proxy=args.proxy,
         wpc_browser_path=args.wpc_browser_path,
         allow_playlist=args.playlist,
-        use_android_client=not args.no_android_client,
+        use_android_client=False,
         audio_only=args.audio_only,
         list_formats=args.list_formats,
         info_only=args.info,
+        js_runtimes=args.js_runtimes,
     )
 
     sys.exit(exit_code)

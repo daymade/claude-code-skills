@@ -683,7 +683,7 @@ For spoken-content text, reuse existing transcripts first, then fetch original s
 - Working with YouTube content in regions with access restrictions
 
 **Key features:**
-- Auto PO Token provider (Docker-first, browser fallback) for high-quality access
+- Native yt-dlp clients first; optional PO Token setup after an explicit token diagnostic
 - Browser-cookie verification for “not a bot” prompts (privacy-friendly)
 - Audio-only download with MP3 conversion
 - Format listing and custom format selection

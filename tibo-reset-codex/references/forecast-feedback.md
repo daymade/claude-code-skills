@@ -148,7 +148,14 @@ uv run python scripts/forecast_log.py snapshot-retry --journal findings.jsonl
 先读 `snapshot-status` 的 journal 健康状态、锁与失败原因。`lock.owner=unknown`
 表示未识别属主，不表示锁已过期。现存 Git index 锁令写入快照返回 `blocked/index_locked`；
 台账仍正常追加。不得自动删除锁、终止已有进程、跳过 hook 或修改其基线。
-按 Git owner 的只读诊断与当前授权处理真正故障，锁释放后再执行 `snapshot-retry`。
+进入 `git-safety-net` 的[本地快照恢复流程](https://github.com/daymade/claude-code-skills/blob/main/git-safety-net/references/recovery_playbook.md#blocked-local-snapshots)：
+它维护占用与授权核对、原件和索引保全、隔离索引的原 hook 预检、可恢复的锁隔离及停止条件。
+先确认该 Skill/正文可读取；缺失时保留具体依赖缺口，继续只读诊断，不自行编造清锁步骤。
+锁阻塞与 hook 拒绝分别诊断；邮箱、本机路径、群标识等命中均交给实际 guard 的现行处置流程，
+既有授权先回查原文与作用域，不由本 Skill 新增豁免，也不改写已追加的原始读数。
+锁释放、提交检查原因解决后，用本页 `snapshot-retry` 续跑；不带 `--journal` 可覆盖已存在的四类台账。
+恢复验收同时要求 `snapshot-status` 的 `snapshot.status=ok`、本次台账原件哈希未变、
+每份台账与其已提交 HEAD blob 一致，并保留原锁的恢复副本。脚本发布成功不替代这项运行状态验收。
 
 `.snapshot-status.json` 只保留本地快照失败诊断，不改变四类 JSONL 格式；
 `.snapshot-run.lock` 用非阻塞文件锁串行化本脚本的快照尝试。另一尝试在运行时返回
