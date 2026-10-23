@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-cleaner** (`daymade-macos` v1.25.2 → v1.25.3): Add the Git LFS object-cache pruning sequence with the push-side endpoint-completeness proof and the remote-missing-is-not-data-loss check, and extend the pnpm phantom note to APFS clonefile imports. Change type: documentation accuracy from measured cleanup.
+- **skill-creator** (`daymade-skill` v1.73.3 → v1.73.4): Document the GitHub mergeable_state cache oracle (`merge-tree --write-tree`) and the strict-ruleset fleet livelock with its merge-latency countermeasure. Change type: release-operations guidance from a measured race.
+
 - **macos-cleaner** (`daymade-macos` v1.25.1 → v1.25.2): Correct the OrbStack sparse-image path to the 2.x group-container layout, replace the removed Reclaim button with the measured lagged auto-TRIM behavior, add absolute off-limits rows for agent chat history and the WeChat container, split Downloads scan authorization from per-batch deletion, and document safe_delete.py batch-confirmation semantics. Change type: documentation accuracy and safety rulings.
 
 - **tunnel-doctor** (v1.17.6 → v1.17.7): Add node-liveness verification reference — a data-plane url-test as the only liveness verdict, plus a mihomo delay-API recipe that verifies any node's recovery without touching the user's active channel (Shadowrocket credential extraction, control-group calibration, measured pitfalls); warn against naming the active node from exit-IP lookups in the TUN contamination table. Change type: additive diagnostic capability with misattribution guardrails.

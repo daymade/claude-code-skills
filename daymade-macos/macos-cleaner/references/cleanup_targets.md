@@ -399,7 +399,7 @@ data and installed tools, and select only the verified dependency or build roots
 The executing agent establishes those roles from installation metadata and live
 consumers; the directory name and the deletion helper do not establish them.
 
-**pnpm hard links make `du` a phantom.** pnpm links every installed file into the store (`nlink=2`), so deleting a project `node_modules` while the store stays releases ≈0 — the preserve-by-default store keeps the content alive (the SKILL.md mechanism table's hard-link row). Probe before promising any release: `find "<dir>" -type f -links +1 | head` — any hit means the directory is a link farm and the only real reclamation is the store itself, which is a separate USER-DECISION (it is not a row in the preserve-by-default table, so the Phase 2 cross-check does not apply; ask, don't propose) (2026-10-07: four project `node_modules` totaling 6.3 GiB sampled 200/200 hard-linked; all four left the action set with expected release ≈0).
+**pnpm hard links make `du` a phantom.** pnpm links every installed file into the store (`nlink=2`), so deleting a project `node_modules` while the store stays releases ≈0 — the preserve-by-default store keeps the content alive (the SKILL.md mechanism table's hard-link row). Probe before promising any release: `find "<dir>" -type f -links +1 | head` — any hit means the directory is a link farm and the only real reclamation is the store itself. An empty probe does not clear the phantom either: on APFS, pnpm can import via clonefile — shared extents with nlink=1, invisible to `-links +1`. Keep expected release unknown until a df readback in either import mode. Reclaiming the store itself remains a separate USER-DECISION (it is not a row in the preserve-by-default table, so the Phase 2 cross-check does not apply; ask, don't propose) (2026-10-07: four project `node_modules` totaling 6.3 GiB sampled 200/200 hard-linked; all four left the action set with expected release ≈0).
 
 ### Retired packaged test Apps and build caches
 
@@ -451,6 +451,14 @@ This is discovery only. Do not use `fdupes -d`, `--delete`, or any automatic-sel
 - You might need the history
 
 Prefer archiving or removing the whole obsolete project through a separate, explicitly approved plan. Do not recommend deleting only `.git`: it silently converts a repository into an unversioned folder and destroys local-only history, reflogs, branches, and recovery data.
+
+### Git LFS object caches (`.git/lfs/objects`)
+
+The local LFS object cache is a re-downloadable copy while the remote endpoint is intact — REBUILDABLE, not history. Pruning sequence (measured 2026-10-23, 39.6 GiB released from a 62.1 GiB cache):
+
+1. Prove endpoint completeness from the push side: `git lfs push --all origin` transferring 0 B means every ref-reachable object is already on the endpoint. Under a standalone transfer agent, `git lfs prune --verify-remote` does not merely lose its check — it **fabricates success** (observed on git-lfs 3.7.1 by independent review probe: reports `N verified with remote`, exit 0, for objects absent from the remote). Never treat its output as evidence in this configuration; the push-side proof (or per-object HEAD checks through the repo's own transfer helper for a named candidate set) is the only verification.
+2. Objects absent from the endpoint AND unreferenced by any pushed ref are orphans of amended/abandoned history, not a backup hole — **remote-missing does not imply data loss; check referenced-ness before raising an alarm**. `git lfs prune`'s built-in retention (current checkout across all worktrees, recent commits, stash, unpushed branches) already covers what a cleanup must keep — but prune ignores the reflog: objects referenced only by abandoned commits are deleted even when the local copy is the only one, so accept that loss explicitly before pruning.
+3. Report expected release as unknown until the `df` readback; measure the cache with `du -x -k -s .git/lfs` and the HEAD-referenced share by summing `git lfs ls-files -s`.
 
 ## Large Files
 
