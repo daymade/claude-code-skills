@@ -146,6 +146,7 @@ def archive(capture, output, source, profile=None, workers=4, timeout=90, resume
     try:
         state = output / 'attachment-state.json'
         previous = {}
+        prior_manifest = None
         if resume:
             if state.is_symlink() or not state.is_file():
                 raise ValueError('Resume state missing or unsafe')
@@ -159,6 +160,16 @@ def archive(capture, output, source, profile=None, workers=4, timeout=90, resume
             if stored_capture.is_symlink() or not stored_capture.is_file() or stored_capture.read_bytes() != raw:
                 raise ValueError('Archived capture changed; preserve it and use a new output directory')
             previous = {i['token']: i for i in prior_items if i['status'] == 'verified'}
+            manifest_path = output / 'manifest.json'
+            if manifest_path.exists() or manifest_path.is_symlink():
+                if manifest_path.is_symlink() or not manifest_path.is_file():
+                    raise ValueError('Resume manifest missing or unsafe')
+                prior_manifest = json.loads(manifest_path.read_text())
+                errors = validate_manifest(prior_manifest)
+                if errors or prior_manifest.get('source') != source:
+                    raise ValueError('Resume manifest invalid or belongs to another source')
+                if not isinstance(prior_manifest.get('resource_summary', {}), dict):
+                    raise ValueError('Resume manifest resource summary must be an object')
         else:
             (output / 'capture.json').write_bytes(raw)
             write_json(state, {'binding': binding, 'items': []})
@@ -188,7 +199,7 @@ def archive(capture, output, source, profile=None, workers=4, timeout=90, resume
                         # Do not put signed URLs or credential-bearing stderr in the manifest.
                         raise ValueError(f'lark-cli download failed (exit {result.returncode}); inspect this token with the current CLI guide')
                     reply = json.loads(result.stdout)
-                    if reply.get('ok') is not True:
+                    if not isinstance(reply, dict) or reply.get('ok') is not True:
                         raise ValueError('lark-cli did not confirm download success')
                     verified = verify_file(target, item)
                     # Atomic no-clobber publication; never replace an existing user's file.
@@ -215,12 +226,29 @@ def archive(capture, output, source, profile=None, workers=4, timeout=90, resume
         downloaded_tokens = {r['token'] for r in items}
         pending = [r for r in extract(content)
                    if r['type'] != 'file' or r['ref'] not in downloaded_tokens]
-        manifest = {'schema_version': 1, 'source': source, 'captured_at': datetime.now(timezone.utc).isoformat(),
-                    'files': files, 'resource_summary': {
-                        'requested_attachments': len(items), 'verified_attachments': len(good),
-                        'failed_attachments': [r for r in results if r['status'] != 'verified'],
-                        'other_references': pending, 'reader': 'not_checked',
-                        'independent_retention': 'not_checked'}}
+        manifest = prior_manifest or {
+            'schema_version': 1, 'source': source,
+            'captured_at': datetime.now(timezone.utc).isoformat(), 'files': [],
+            'resource_summary': {'reader': 'not_checked', 'independent_retention': 'not_checked'}}
+        # Storage/reader owners may have added OSS locators, replicas or notes.
+        # Preserve their entries; update only this helper's mutable state snapshots.
+        for entry in files:
+            key = 'path' if entry['storage'] == 'git' else 'cache_path'
+            matches = [i for i, old in enumerate(manifest['files']) if old.get(key) == entry[key]]
+            if len(matches) > 1:
+                raise ValueError('Resume manifest has duplicate artifact paths')
+            if not matches:
+                manifest['files'].append(entry)
+            elif key == 'path':
+                manifest['files'][matches[0]] = entry
+            else:
+                old = manifest['files'][matches[0]]
+                if any(old.get(k) != entry[k] for k in ('bytes', 'sha256')):
+                    raise ValueError('Resume artifact metadata changed; preserve the existing manifest')
+        manifest.setdefault('resource_summary', {}).update({
+            'requested_attachments': len(items), 'verified_attachments': len(good),
+            'failed_attachments': [r for r in results if r['status'] != 'verified'],
+            'other_references': pending})
         errors = validate_manifest(manifest)
         if errors:
             raise ValueError('; '.join(errors))

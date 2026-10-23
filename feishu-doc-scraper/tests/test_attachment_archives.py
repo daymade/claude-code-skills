@@ -1,4 +1,5 @@
 import io
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -173,11 +174,53 @@ class AttachmentArchiveTests(unittest.TestCase):
 
     def test_cli_false_success_and_zero_without_file_remain_partial(self):
         self.save()
-        for index, reply in enumerate(({'ok': False}, {'ok': True})):
+        for index, reply in enumerate(({'ok': False}, {'ok': True}, [], None, 'unexpected')):
             with patch.object(archive.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, json.dumps(reply), '')):
                 result = archive.archive(self.capture, self.root/f'output-{index}', SOURCE)
             self.assertEqual(result['status'], 'partial')
             self.assertEqual(result['verified'], 0)
+
+    def test_enriched_manifest_survives_resume(self):
+        other = 'SyntheticAttachmentToken000002'
+        self.save(card()+card(other, 'second.xlsx'))
+        def partial(cmd, **kw):
+            if cmd[cmd.index('--token')+1] == other:
+                return subprocess.CompletedProcess(cmd, 1, '', 'transient')
+            return self.run_cli(cmd, **kw)
+        with patch.object(archive.subprocess, 'run', side_effect=partial):
+            self.assertEqual(archive.archive(self.capture, self.output, SOURCE)['status'], 'partial')
+        path = self.output/'manifest.json'; m = json.loads(path.read_text())
+        original = m['files'][0]
+        original['replicas'] = [{'storage': 'oss', 'locator': {'system': 'oss', 'uri': 'oss://synthetic-bucket/object'}}]
+        note = b'# index\n'; (self.output/'index.md').write_bytes(note)
+        m['files'].append({'role':'document_snapshot','storage':'git','path':'index.md',
+                          'bytes':len(note),'sha256':hashlib.sha256(note).hexdigest(),'mime':'text/markdown'})
+        m['resource_summary']['owner_annotation'] = 'retained'
+        path.write_text(json.dumps(m))
+        with patch.object(archive.subprocess, 'run', side_effect=self.run_cli):
+            self.assertEqual(archive.archive(self.capture, self.output, SOURCE, resume=True)['verified'], 2)
+        actual = json.loads(path.read_text())
+        self.assertEqual(actual['files'][0], original)
+        self.assertIn(m['files'][-1], actual['files'])
+        self.assertEqual(actual['resource_summary']['owner_annotation'], 'retained')
+        self.assertEqual(archive.validate_manifest(actual), [])
+
+    def test_malformed_response_does_not_lose_other_successful_items(self):
+        other = 'SyntheticAttachmentToken000002'
+        self.save(card()+card(other, 'second.xlsx'))
+        def run(cmd, **kw):
+            if cmd[cmd.index('--token')+1] == TOKEN:
+                return subprocess.CompletedProcess(cmd, 0, '[]', '')
+            return self.run_cli(cmd, **kw)
+        with patch.object(archive.subprocess, 'run', side_effect=run):
+            result = archive.archive(self.capture, self.output, SOURCE, workers=2)
+        self.assertEqual((result['verified'], result['failed']), (1, 1))
+        state = json.loads((self.output/'attachment-state.json').read_text())
+        self.assertEqual(len(state['items']), 2)
+        with patch.object(archive.subprocess, 'run', side_effect=self.run_cli):
+            result = archive.archive(self.capture, self.output, SOURCE, resume=True)
+        self.assertEqual(result['verified'], 2)
+        self.assertEqual(len(self.calls), 2)
 
     def test_corrupt_zip_rejected(self):
         f = self.root/'broken.xlsx'

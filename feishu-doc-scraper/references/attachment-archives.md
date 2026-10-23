@@ -55,6 +55,9 @@ No destination file is overwritten.
 
 After addressing a transient failure, reuse the same arguments with `--resume`.
 The capture bytes, source URL and explicit profile must match the saved binding.
+Keep downstream manifest entries, OSS locators, replicas and reader-note records
+when resuming. The helper updates only its attachment counts and state snapshots;
+it does not reclassify existing originals' durable storage.
 Previously verified originals are reused only after size, structure and hash
 readback. Changed or unrecorded existing files are preserved and reported, not
 silently replaced. A changed capture needs a new output directory. An interrupted
