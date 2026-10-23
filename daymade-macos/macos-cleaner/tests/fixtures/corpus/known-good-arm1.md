@@ -1,3 +1,4 @@
+<!-- Fixture note: the OrbStack "Reclaim disk space" control referenced below no longer exists in OrbStack 2.2.x (physical release is automatic lagged TRIM, measured 2026-10-23). This file is gate-checker corpus, not operational guidance. -->
 # macOS 磁盘诊断与清理方案
 
 调用 `macos-cleaner` skill 完成。**全程只读诊断，没有执行任何清理/删除/状态变更命令**（未跑 `npm cache clean`、`brew cleanup`、`uv cache clean/prune`、任何 `docker rmi`/`prune`、任何 `rm`、任何写操作的 `osascript`）。下面每条命令都停在确认闸门口。

@@ -60,26 +60,26 @@ Docker's numbers use different scopes. Do not copy an image's displayed `SIZE` i
 - Local-volume `SIZE` is allocation inside the Docker VM. It is not proof that the host APFS volume will immediately gain the same amount.
 - If shared-layer effects or runtime details prevent a defensible per-object number, write `unknown` or `upper bound: <value>` in the Phase-2 report. An honest unknown satisfies the contract; a false precise number does not.
 - **A summed total needs a second method before it enters a plan.** Adding per-image `UNIQUE SIZE` values is an easy sum to make and an easy one to get wrong — layers can be shared across images the filter excluded, and container references can pin a layer that looks unreferenced in the images table alone. Recompute the total from a second direction (`docker system df -v` aggregate, or the shared-layer graph built from `docker image inspect` over every candidate) and treat any disagreement as a stop. On 2026-09-19 an independently reviewed sweep of a candidate set reported "6 dangling images, all deletable" came back as 6.38 GiB net reclaimable with 2 images still referenced by containers — the first sum was structurally incapable of seeing the second fact. A number that no second method has touched is a claim about your arithmetic, not about the disk.
-- On OrbStack, object deletion can free space inside the VM while host `df` remains unchanged until sparse-image compaction. Report these as two separate postconditions.
+- On OrbStack, object deletion can free space inside the VM while host `df` remains unchanged until automatic TRIM settles the sparse image (lagged; 2.2.x has no manual Reclaim control). Report these as two separate postconditions.
 
 ## Step 2B: OrbStack-Specific Analysis
 
 OrbStack users have additional considerations.
 
-**data.img.raw is a Sparse File**:
+**data.img.raw is a Sparse File** (OrbStack 2.x real layout, measured 2026-10-23 on 2.2.4 — older notes citing `~/Library/OrbStack/` are wrong; that directory does not exist):
 ```bash
 # Logical size (can show 8TB+, meaningless)
-ls -lh ~/Library/OrbStack/data/data.img.raw
+ls -lh "$HOME/Library/Group Containers/HUAQ24HBR6.dev.orbstack/data/data.img.raw"
 
 # Actual disk usage (this is what matters)
-du -h ~/Library/OrbStack/data/data.img.raw
+du -h "$HOME/Library/Group Containers/HUAQ24HBR6.dev.orbstack/data/data.img.raw"
 ```
 
-The logical vs actual size difference is normal. Only actual usage counts.
+The logical vs actual size difference is normal. Only actual usage counts. If the group-container path is absent on a different machine, locate the live image with `find "$HOME/Library/Group Containers" -maxdepth 3 -name 'data.img.raw'` rather than assuming the path.
 
-**Post-Cleanup: Reclaim Disk Space**: After cleaning Docker objects inside OrbStack, `data.img.raw` does NOT shrink automatically. Treat **OrbStack Settings → Reclaim disk space** as a separate, explicitly approved manual plan item, not an automatic consequence of `docker rm/rmi/volume rm`. Record `du -k` on the sparse image and host `df -k /System/Volumes/Data` before and after the UI action.
+**Post-Cleanup: physical release is automatic but lagged (OrbStack 2.2.x)**: deleting Docker objects frees space inside the VM immediately, and the sparse image's physical blocks follow via TRIM on a lag — measured 2026-10-23 on 2.2.4: 12.86 GB of image deletions became −7.7 GiB physical within ~50 minutes with no operator action. There is **no "Reclaim disk space" button** in 2.2.x Settings → Storage (only usage bars and the Danger Zone resets — never touch those). The postcondition is a downward trend in `du -k` on the sparse image plus host `df -k` over minutes, not an instantaneous jump. Do not restart OrbStack to force a reclaim: a restart interrupts the Docker service for every co-resident session and needs its own explicit authorization.
 
-**OrbStack Logs**: Typically 1-2 MB total (`~/Library/OrbStack/log/`). Not worth cleaning.
+**OrbStack Logs**: a few MB total at `~/.orbstack/log/`. Not worth cleaning.
 
 **Verifying which subdirectory drives real VM disk usage**: `du -h data.img.raw` on the macOS side gives an accurate top-level number. To see *which subdirectory inside the VM* is driving it (overlay2 vs volumes vs containers), a temporary container is required. That is not Phase-1 read-only: it creates and removes container state and could pull an image if written loosely. First list the exact command and obtain inspection-only approval. Resolve an already-present immutable full image ID, then use no network, no pull, a read-only root, and a read-only bind mount:
 
