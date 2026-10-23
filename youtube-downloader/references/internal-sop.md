@@ -1,12 +1,10 @@
 # YouTube Downloader Internal SOP
 
-Use this SOP to avoid common yt-dlp failures and confusion:
-
-1. Quote YouTube URLs in shell commands (zsh treats `?` as glob). Example: `'https://www.youtube.com/watch?v=VIDEO_ID'`.
-2. Ensure proxy is active for both yt-dlp and PO Token providers (HTTP_PROXY/HTTPS_PROXY/ALL_PROXY).
-3. If you see "Sign in to confirm you're not a bot", request cookie permission and use browser cookies.
-4. Start the PO Token provider before downloading. Prefer Docker bgutil; fall back to browser-based WPC when Docker is unavailable or fails.
-5. Use `web_safari` client when cookies are present; otherwise use `mweb` for PO tokens.
-6. Keep the browser window open while WPC is minting tokens and make sure it can reach YouTube through the same proxy.
-7. If you see "Only images are available" or "Requested format is not available", treat it as PO token failure and retry after fixing provider/browser state.
-8. If you see SSL EOF or fragment errors, treat it as proxy instability. Retry with progressive formats or switch to a more stable proxy.
+1. Quote URLs in shell commands (`'https://www.youtube.com/watch?v=VIDEO_ID'`). Bind the requested video, output type and quality before downloading.
+2. Check the current yt-dlp installation, supported JavaScript runtime/EJS setup and the intended proxy. Use the native default clients first; do not install a provider or select Android as a prerequisite. Pass `--js-runtimes node` to the wrapper only when using an already-installed Node runtime.
+3. Read the failing diagnostic and available media formats. “Only images”, “Requested format is not available”, 360p-only output and HTTP 403 each need diagnosis; none alone establishes a PO Token requirement. A timeout/SSL failure is not token evidence.
+4. If the failed extraction or media request explicitly names a missing/required PO Token, load [provider setup](po-token-setup.md). Within existing installation/service authorization, execute the wrapper with `--auto-po-token`, then verify the original file request. If setup is not authorized, ask only for that missing permission. Do not stop after suggesting a command when it is already authorized.
+5. If an account or persistent bot check requires cookies, obtain cookie permission before supplying either cookie option. Preserve the authorized session. Leave client selection native unless a compatible targeted retry is needed; never switch a cookie download to Android/iOS.
+6. For an authorized provider branch, use bgutil or browser WPC as documented. Keep the WPC window open while minting tokens and use the same intended network path. Pass that proxy to the provider too; in a bridged container, translate a host-local proxy address to `host.docker.internal`. If browser discovery fails, supply `--wpc-browser-path`. Do not install Docker, restart a shared service, or delete a container as an automatic workaround.
+7. For a media 403/fragment error under a quality preset, allow one progressive-format retry and check whether its lower quality still satisfies the request. Preserve custom format selections. For network failures, repair the diagnosed connection issue before another bounded attempt.
+8. Validate the actual local file with `ffprobe`: streams, duration and resolution/audio properties. Report the observed path, size and quality; provider health, metadata and format listings do not prove media delivery.
