@@ -10,7 +10,7 @@
     {
       "id": 2,
       "prompt": "做这个报告前先看看其他项目的成功 SOP 和成品，不要重新造流程。",
-      "expected_output": "Searches declared cross-project docs, deliverables, skills, and conversations; verifies authority and currentness; cites adopted candidate IDs.",
+      "expected_output": "Searches declared cross-project docs, deliverables, skills, and conversations; verifies authority and currentness; cites adopted candidate IDs. Treats a navigation or index document as a locator only: adopts a candidate as a proven successful SOP only after opening the actual method steps and reading back their recorded outcome; when the old outcome cannot be read back, reports the historical success as unverified while still proceeding with a currently verifiable authorized SOP.",
       "files": []
     },
     {
