@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **debugging-network-issues** (v1.11.5 → v1.11.6): Attribute layered comparisons only to verified path differences, preserve the CDN/LB distinction, and return to the original condition within a set budget when failures are intermittent. Keep recovery acceptance separate from root-cause certainty. Change type: bounded diagnostic inference correction.
+- **ghostty-use** (v1.8.1 → v1.8.2): Keep account-switch recovery bound to the complete saved session set when old sessions remain open or the host denies UI control. Reuse exact existing resume commands and distinguish prepared handoff from verified restoration. Change type: recovery-route clarification.
+- **prior-work-retrieval** (`daymade-claude-code` v4.30.22 → v4.30.23): For explicit successful-method reuse, follow locators to the procedure and recorded outcome, and state current applicability differences. Preserve ordinary lookup and current-SOP use when historical success is unknown. Change type: bounded adoption-contract correction.
 
 - **macos-cleaner** (`daymade-macos` v1.25.1 → v1.25.2): Correct the OrbStack sparse-image path to the 2.x group-container layout, replace the removed Reclaim button with the measured lagged auto-TRIM behavior, add absolute off-limits rows for agent chat history and the WeChat container, split Downloads scan authorization from per-batch deletion, and document safe_delete.py batch-confirmation semantics. Change type: documentation accuracy and safety rulings.
 

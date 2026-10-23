@@ -146,6 +146,21 @@ named experiment. If runtime proof is accessible, obtain it before delivering;
 an “unverified” disclaimer does not complete the lookup. If the user explicitly
 wants a historical draft, return that edition without imposing a live check.
 
+For an explicit request to reuse a historically successful method — the user
+asks how something was done successfully before, or wants a proven approach
+repeated — a navigation document, catalog entry, or index hit is only a
+locator. Continue from it to the actual operable method (the steps or commands
+that ran) and its outcome recorded at the time: success, failure, or
+unconfirmed. Adopt a candidate as a historical success only after opening
+both, and record the method, its recorded outcome, and current-environment
+applicability differences (tooling, version, account, data shape) in the
+existing adoption reason. When the old outcome cannot be read back — logs
+gone, record expired — report the historical success as unverified rather
+than claiming it, and continue with a currently verifiable authorized SOP
+when one exists: an unreadable old log is not a hard blocker. Ordinary code
+reuse, current-state checks, and simply locating an entry point carry no
+success-evidence requirement.
+
 Open promising candidates at their original path. Check:
 
 - **Match**: does it solve the same business problem, not merely share words?
@@ -199,7 +214,8 @@ system the user meant, or establish current deployment. It also does not prove
 that every dependency was recovered. Preserve these distinctions in the handoff.
 For artifact retrieval, record the selected artifact/member and its matching
 evidence in the adoption reason. A receipt about a locator document alone does
-not establish that the final artifact is correct.
+not establish that the final artifact is correct — or, for a successful-method
+request, that the located method actually succeeded.
 
 Classify the items you actually inspected:
 
@@ -263,6 +279,11 @@ uv run --no-project python scripts/prior_work.py check \
 Only after this passes should substantial production begin. Cite adopted
 candidate IDs in the implementation/plan so the receipt is connected to the
 result instead of becoming ceremonial paperwork.
+
+`check` accepting a receipt validates this session's searched sources,
+classified candidates, and declaration contract. It does not prove an adopted
+candidate's business success, or that a locator's target was actually read;
+those remain the verification duties above.
 
 ## Companion hooks
 
