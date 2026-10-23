@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **git-safety-net** (v1.23.0 → v1.23.1): Add the repository startup route to local snapshot recovery and remove the manually duplicated reference contents list. Change type: documentation alignment.
+- **tibo-reset-codex** (v2.1.0 → v2.1.1): Keep lagging snapshot causes unclassified until diagnosis; remove journal/type/layer counts and delegate follow-up source selection to the actual required_sources output. Change type: documentation correction and SSOT cleanup.
+
 - **asr-transcribe-to-text** (`daymade-audio` v1.51.0 → v1.51.1): Add Listening Desk, one local workspace for focused voice review, full-transcript navigation, synchronized recorder playback, per-item speaker/text decisions, durable saving, undo and exports. Keep source evidence immutable and preserve the offline audit and guarded correction-queue workflows. Change type: additive review capability.
 - **transcript-fixer** (`daymade-audio` v1.50.6 → v1.51.0): Add an occurrence-bound written-evidence route for standalone message-arrival wording while retaining person-name authority checks. Add synthetic regressions for company context and short matches within longer names, and document scoped resolution. Change type: additive evidence contract and context-preservation regression coverage.
 
