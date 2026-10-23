@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tunnel-doctor** (v1.17.5 → v1.17.6): Add serial node-capacity measurement guidance — displayed node latency does not rank throughput (a 19× measured spread across four lines displaying 140–152 ms), static-exit products keep egress identity when switching their own entry lines, macOS `networkQuality` tunnel-vs-wire binding semantics with a TUN contamination-table entry, measurement-endpoint refusal vs node incapacity, and Shadowrocket macOS accessibility-tree node switching with active-marker readback. Change type: documentation-only measurement guidance.
 - **asr-transcribe-to-text** (`daymade-audio` v1.51.0 → v1.51.1): Add Listening Desk, one local workspace for focused voice review, full-transcript navigation, synchronized recorder playback, per-item speaker/text decisions, durable saving, undo and exports. Keep source evidence immutable and preserve the offline audit and guarded correction-queue workflows. Change type: additive review capability.
 - **transcript-fixer** (`daymade-audio` v1.50.6 → v1.51.0): Add an occurrence-bound written-evidence route for standalone message-arrival wording while retaining person-name authority checks. Add synthetic regressions for company context and short matches within longer names, and document scoped resolution. Change type: additive evidence contract and context-preservation regression coverage.
 
