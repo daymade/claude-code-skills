@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **asr-transcribe-to-text** (`daymade-audio` v1.51.0 → v1.51.1): Add Listening Desk, one local workspace for focused voice review, full-transcript navigation, synchronized recorder playback, per-item speaker/text decisions, durable saving, undo and exports. Keep source evidence immutable and preserve the offline audit and guarded correction-queue workflows. Change type: additive review capability.
 - **transcript-fixer** (`daymade-audio` v1.50.6 → v1.51.0): Add an occurrence-bound written-evidence route for standalone message-arrival wording while retaining person-name authority checks. Add synthetic regressions for company context and short matches within longer names, and document scoped resolution. Change type: additive evidence contract and context-preservation regression coverage.
 
 - **git-safety-net** (v1.22.10 → v1.23.0): Add an operator-led local snapshot recovery route covering writer authority, original/index preservation, isolated-index hook preflight, reversible lock quarantine and committed-content readback. Keep unknown owners and unresolved guard findings blocked. Change type: bounded recovery workflow.

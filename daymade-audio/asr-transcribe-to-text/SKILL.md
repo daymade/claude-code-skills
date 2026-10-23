@@ -865,6 +865,31 @@ isolation. This section covers the pieces.
 
 ## Transcript Audit & Review (HTML)
 
+For listening, speaker annotation and transcript correction in one place, use
+the bundled **Listening Desk / 声间**. It combines a focused review queue with
+full-transcript navigation, synchronized source audio, keyboard decisions,
+durable local saving, undo and JSON/CSV/Markdown export. The browser never
+promotes a model candidate to a human-confirmed identity without a decision.
+
+```bash
+python3 ${CLAUDE_SKILL_DIR}/scripts/review-workbench/prepare_project.py \
+  --csv /absolute/output/meeting.csv --audio /absolute/audio/meeting.m4a \
+  --output /absolute/review/project.json --title "Meeting review"
+python3 ${CLAUDE_SKILL_DIR}/scripts/review-workbench/server.py \
+  --project /absolute/review/project.json --state-dir /absolute/review/state
+```
+
+Open the local URL printed by the server. Keep project data and decisions outside
+the Skill bundle. For several recorders, selected voice samples, source clocks,
+state recovery and the boundary with dictionary/queue actions, read
+[the Listening Desk guide](references/review_workbench.md).
+
+### Offline audit export
+
+Retain the existing self-contained page for offline or batch browsing. Its
+browser-local aliases and issue flags are separate from Listening Desk's saved
+per-item decisions; do not treat an alias as an independently verified identity.
+
 After diarization you get a CSV per file (`file,start,end,duration,speaker,text`). The bundled audit HTML generator turns those CSVs into a single, reader-first review page with audio playback, per-turn flags/notes, speaker aliasing, and export.
 
 Generate it from a speaker-transcribe output directory:
