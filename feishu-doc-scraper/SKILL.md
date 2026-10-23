@@ -16,7 +16,7 @@ Extract a Feishu/Lark source into faithful local Markdown. **Prefer the lark-cli
 
 ## Scope (read this first)
 
-This skill's contract is **faithful per-source Markdown + a record of what was extracted**. It does *not* decide how the resulting files are named, indexed, deduplicated against existing notes, or organized into a knowledge base — that belongs to the host PKM / the user's own conventions. Stopping at faithful extraction keeps this skill orthogonal and reusable. When the user wants the output filed into a vault, extract first, then hand the clean Markdown to their organizing workflow.
+This skill's contract is **faithful per-source Markdown + a record of what was extracted**. Naming, indexing, deduplication and knowledge ownership belong to the recipient's archive workflow. For a filing request, including permission to choose a suitable location, first follow [archive destination handoff](references/archive-destination-handoff.md). Temporary extraction may proceed while the destination is unresolved; permanent filing and uploads follow the host's selected ownership and storage contract.
 
 **For every document read or archived, load [comments and feedback](references/comments-and-feedback.md).**
 It owns the body-plus-discussion workflow, selected scope, body-only exception,
@@ -233,6 +233,8 @@ Verified dead-ends — retrying them only wastes the session. Full table with fa
 Use the destination already selected by the user. For personal favorites, follow
 the [source-catalog handoff](references/original-media-and-reader.md#declare-a-selected-personal-collection)
 to favorites-search. Do not reopen that choice as a PKM recommendation or promote
-private material to a team collection. When no destination was selected, deliver
-the faithful capture and its explicit gaps; filing and deduplication belong to
-the recipient's chosen archive workflow.
+private material to a team collection. When the user authorizes choosing a
+suitable archive, complete the [destination handoff](references/archive-destination-handoff.md)
+through the host's conventions. For extraction-only requests without filing
+authorization, deliver the faithful capture and explicit gaps without selecting
+a permanent knowledge base.
