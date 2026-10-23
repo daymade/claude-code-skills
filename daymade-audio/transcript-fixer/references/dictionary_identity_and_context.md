@@ -7,6 +7,7 @@ Read this file before adding reusable corrections, resolving names, editing the 
 - Dictionary-addition decision matrix and corpus probes
 - Project-domain isolation
 - People-roster precedence and variant families
+- Minimum occurrence checks for name candidates
 - Domain correction contexts
 
 ### Dictionary Addition After Fixing
@@ -97,7 +98,7 @@ uv run scripts/fix_transcription.py --add "错误2" "正确2" --domain business
 
 The most important pattern for **recurring, project-specific errors** — person names, project jargon, shelf codenames — is the `--domain` flag. It is also the *answer* to the false-positive worry above: a person-name fix that's right **in your project** (a teammate's name the ASR keeps garbling) might collide with a real, differently-spelled person in someone else's transcript — so it must NOT go into the global (`general`) dictionary.
 
-`--domain` makes such rules safe by isolating them:
+`--domain` limits where such rules run:
 
 ```bash
 # Add the rule under an isolated, project-named domain (not 'general')
@@ -106,7 +107,28 @@ uv run scripts/fix_transcription.py --add "<ASR-garbled-name>" "<correct-name>" 
 uv run scripts/fix_transcription.py --input meeting.md --stage 1 --domain <project>
 ```
 
-A rule added under `--domain <project>` only fires when you pass `--domain <project>` at correction time. Other projects (their own domain, or default `all`) are unaffected — so even a risky short-word / common-word person-name rule is safe, because it only fires inside the project where it's correct.
+A rule added under `--domain <project>` only fires when you pass that domain at correction time. This limits exposure; it does not establish the identity of a particular occurrence. The same project may contain a company name or a longer person's name that includes the variant. Apply the occurrence check below before accepting a deferred match; an explicit domain is not evidence for that slot.
+
+### Minimum occurrence checks for name candidates
+
+Inspect the complete name-bearing phrase before resolving a dictionary or cold-read
+candidate. Read both roster sources, then distinguish the recorded person's name,
+a company/entity slot, an address and a longer name. A known target spelling
+answers how that person is written; it does not identify this occurrence.
+
+Use these wholly synthetic contrasts, without adding their mappings:
+
+| Raw occurrence / candidate | Required action |
+|---|---|
+| `苓可公司预算35万` / a roster variant proposes `苓可`→`Nora` | Keep the company occurrence unless source evidence identifies the company wording. Rejecting this candidate does not disable the person's confirmed variant elsewhere. |
+| `让岑若正有这个能力` / a short rule proposes `岑若`→`岑若辰` | Do not manufacture `岑若辰正`. Judge the full `岑若正` name as its own occurrence; preserve it pending identity evidence. A short-match `kept_original` verdict does not settle the longer name's spelling. |
+
+For a safe-mode false positive, record `kept_original` with its occurrence reason.
+If the full name remains uncertain, enqueue the complete literal span separately;
+retain its context/offset and the original speaker, timestamp and numbers. Keep
+ordinary wording on the [written-wording route](review_queue_dashboard.md#written-evidence-for-ordinary-wording)
+when supported, or pending when not. Do not turn a one-off adjudication into a bare
+dictionary replacement or use `--apply-all` to silence a disagreement.
 
 ### Why this beats a one-off script (the core value, do not skip)
 

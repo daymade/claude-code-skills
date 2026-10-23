@@ -2690,14 +2690,16 @@ def _name_lookup(term: str):
 
 def _name_convergence_refusal(args, from_text: str, to_text: str,
                               evidence: str | None, kind: str | None,
-                              entity_type: str = "unknown", nonperson_reference_validated: bool = False):
+                              entity_type: str = "unknown", nonperson_reference_validated: bool = False,
+                              wording_reference_validated: bool = False):
     """Run the name-convergence guard; on rejection emit the refusal and exit
     non-zero with nothing written (fail-closed). Returns None when the write
     may proceed."""
     from core.name_convergence_guard import guard
 
     rejection = guard(from_text, to_text, evidence, kind, lookup_fn=_name_lookup,
-                      entity_type=entity_type, nonperson_reference_validated=nonperson_reference_validated)
+                      entity_type=entity_type, nonperson_reference_validated=nonperson_reference_validated,
+                      wording_reference_validated=wording_reference_validated)
     if rejection is not None:
         _queue_cmd_error(args, rejection.code, rejection.message, code=2)
     return None
@@ -2975,6 +2977,7 @@ def cmd_resolve_review(args: argparse.Namespace) -> None:
     # skipped / reopen write no target form, so they are not gated.
     if decision in ("accepted", "overridden"):
         nonperson_reference_validated = False
+        wording_reference_validated = False
         item = queue.get(args.resolve_review)
         if item is None:
             _queue_cmd_error(args, "not_found",
@@ -3008,7 +3011,8 @@ def cmd_resolve_review(args: argparse.Namespace) -> None:
         # means the refusal leaves no side effects, so the append now happens
         # only after the guard has said the write may proceed.
         if record_path is not None:
-            from core.name_convergence_guard import user_answer_citation, entity_reference_citation
+            from core.name_convergence_guard import (user_answer_citation, entity_reference_citation,
+                                                    wording_reference_citation)
             try:
                 record = json.loads(Path(record_path).read_text(encoding="utf-8"))
                 if isinstance(record, dict) and record.get("kind") == "entity_reference":
@@ -3016,6 +3020,11 @@ def cmd_resolve_review(args: argparse.Namespace) -> None:
                         entity_type=entity_type, original=item.original_text, context=item.context_snippet,
                         context_offset=item.context_offset)
                     nonperson_reference_validated = True
+                elif isinstance(record, dict) and record.get("kind") == "wording_reference":
+                    authority = wording_reference_citation(record, item_id=item.id, target=to_text,
+                        original=item.original_text, context=item.context_snippet,
+                        context_offset=item.context_offset, kind=candidate_kind, entity_type=entity_type)
+                    wording_reference_validated = True
                 else:
                     authority = user_answer_citation(record, item_id=item.id, target=to_text)
             except (OSError, ValueError, TypeError) as e:
@@ -3027,6 +3036,7 @@ def cmd_resolve_review(args: argparse.Namespace) -> None:
                 args, item.original_text, to_text,
                 _combined_evidence(candidate_evidence, authority), candidate_kind,
                 entity_type=entity_type, nonperson_reference_validated=nonperson_reference_validated,
+                wording_reference_validated=wording_reference_validated,
             )
 
     try:
