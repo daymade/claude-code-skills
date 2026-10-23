@@ -143,6 +143,13 @@ The downloaded file is a working cache, not the default durable archive. Preserv
 
 ## Step 5: the reference-graph recursion (collections/hubs)
 
+For `<source token="…" name="…" size="…" mime="…"/>` attachment cards, follow
+[attachment archives](attachment-archives.md) and use `archive_attachments.py`.
+The saved API response is its input; it verifies originals and creates the
+manifest without model transcription. Preserve other references as a separate
+worklist. Use the installed Lark guides for current commands and permission
+handling; the historical command examples in this reference are not version locks.
+
 A hub is the root of a reference graph. Treat it as BFS/DFS over references until every branch reaches a leaf (a doc with no further references).
 
 **Enumerate references with the bundled extractor** (a missed reference is a missing document — the single biggest hub-scraping failure; do not hand-roll `grep` and forget the `my.feishu.cn` personal-space pattern, which is exactly what happened before this script existed):
@@ -168,14 +175,15 @@ The references it recognizes (the full rich-media inventory): `<mention-doc toke
 | `<lark-table>` | render inline to a Markdown table (pandas `read_html` handles colspan/rowspan); it is content, not a link |
 | `<image token>` | register the token; lark-cli cannot download it (see permission-and-failure-boundaries.md) |
 | `<whiteboard token>` | NOT recursed — export a preview image (`lark-cli whiteboard +export --whiteboard-token <token> --output-type preview --output <path>.jpg --overwrite`) and Read it; keep the JPEG as a cache by default, with the whiteboard token as the stable source locator; see SKILL.md Path A step 4 and `archive-storage-contract.md` |
-| `<view><file>` | attachment — record token + filename; treat like an image gap unless separately retrievable |
+| `<source token name size mime>` | use `archive_attachments.py` per [attachment archives](attachment-archives.md); reconcile every requested token |
+| `<view><file>` | preserve the legacy token + filename; use the installed lark-doc media-download guide, recording missing metadata or download failures explicitly |
 
 **Recursion loop:** fetch root → extract refs → for each new ref, dispatch and fetch → run the extractor on each newly fetched body → repeat until no new tokens appear. A child doc can itself embed another reference (e.g. a summary doc that embeds a third Minutes link); the loop must re-scan every newly fetched file, not only the root.
 
 **Leaf / completion gate** — before declaring the collection done, no rich-media reference may remain unresolved anywhere:
 
 ```bash
-grep -rlE '<(lark-table|lark-tr|sheet token=|mention-doc|cite doc-id=|whiteboard token=|view type=)' . \
+grep -rlE '<(source|file|lark-table|lark-tr|sheet token=|mention-doc|cite doc-id=|whiteboard token=|view type=)' . \
   && echo "UNRESOLVED — keep recursing" || echo "clean"
 ```
 

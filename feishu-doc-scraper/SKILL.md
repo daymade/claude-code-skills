@@ -30,11 +30,18 @@ snapshot commands, interpretation and coverage checks.
 
 Before filing an archive, declare this split in an artifact manifest and run the bundled storage validator. The complete schema and examples are in **[references/archive-storage-contract.md](references/archive-storage-contract.md)**.
 
-For local original media, failed media exports, or an Obsidian handoff, load
+Select the delivery scope from the user's requested result before loading fallback
+or reader procedures. For original-file downloads, use
+[attachment archives](references/attachment-archives.md): fetch the body first,
+enumerate its actual resource types, then load only those handlers. Record body,
+attachments, independent retention and reader acceptance separately. An attachment
+batch alone never establishes completion of the document's reference graph.
+
+For failed media exports, original-preview retrieval, or an Obsidian reading handoff, load
 [original media and reader handoff](references/original-media-and-reader.md).
 Use its verified-preview downloader and API-capture renderer before expanding
 the batch. Its Delivery completion gate (`check_reader_delivery.py finalize`)
-is the local-archive completion entry; conversion, byte and search success do
+is the reader-delivery completion entry; conversion, byte and search success do
 not replace a current actual-reader evidence record.
 For a user-selected personal favorites destination, its source catalog producer
 hands off to favorites-search without changing this Skill's filing ownership.
@@ -60,6 +67,15 @@ A collection/hub is just a docx whose body references other docs — **Path A ha
 ## Path A — lark-cli API extraction (primary)
 
 Full command catalog, recursion engine, cross-tenant and personal-space nuances: **[references/lark-cli-api-extraction.md](references/lark-cli-api-extraction.md)**. The essentials for the common case:
+
+Resolve current CLI commands, identity and permission handling through
+`lark-cli-router` when available, otherwise the installed `lark-cli skills list`
+and its selected `lark-*` guides. Historical examples below document capture
+shapes; use the installed guide when flags, response envelopes or methods differ.
+For source-card files, the [batch archive procedure](references/attachment-archives.md)
+uses the exercised download command. A supplied share password does not establish
+whether the current identity needs browser access; attempt the authorized API read
+first, and respect its permission result.
 
 **1. Disable the proxy for Feishu domestic domains.** Feishu's `*.feishu.cn` endpoints are direct-connect in mainland China; routing them through a local proxy leaks credentials through the proxy and gets DNS-hijacked. lark-cli itself warns about this. Always:
 
@@ -113,7 +129,7 @@ Because the loss is real and type-dependent, **extraction (step 4) and the resid
 python3 scripts/feishu_extract_refs.py "<sanitized-title>.html"   # → JSON list of {type, ref, title, dispatch}
 ```
 
-Run this once per fetched document — the root, then every newly-fetched child — using that document's own `<sanitized-title>.html` (see step 3's naming caveat). The extractor is a plain regex scan — it works on either the `.html` or `.md` for a given document, since it just checks whether the file's text contains the tags — but **`.html` is the one to trust when both exist**; fall back to `.md` only if no `.html` was ever saved for that document (the `.data.markdown` branch, see step 3). Recursion loop, dispatch table, and the cross-tenant/`my.feishu.cn` personal-space rules are in the reference.
+Run this once per fetched document — the root, then every newly-fetched child — using that document's own `<sanitized-title>.html` (see step 3's naming caveat). The extractor scans reference text and parses source-card tags — it works on either the `.html` or `.md` for a given document, since it just checks whether the file's text contains the tags — but **`.html` is the one to trust when both exist**; fall back to `.md` only if no `.html` was ever saved for that document (the `.data.markdown` branch, see step 3). Recursion loop, dispatch table, and the cross-tenant/`my.feishu.cn` personal-space rules are in the reference.
 
 **Whiteboard blocks are not a followable reference — export and read them in place.** A `whiteboard token="…"` tag is Feishu's native diagram/flowchart block, inlined in the current document — it is not a pointer to another document, so don't try to recurse/fetch it like `mention-doc`/`sheet`. It must be understood visually: a flowchart's meaning is not reliably recoverable from raw node coordinates/text-fragment lists alone. Export a preview image and actually look at it:
 
@@ -126,11 +142,16 @@ Then use the Read tool on the resulting `.jpg` to see the diagram's actual conte
 **5. Final residual-tag check (acceptance gate — run this on every fetched document, not just collections).** A single standalone document with no cross-doc references still needs this: an inline `whiteboard` or unresolved reference tag can appear with zero other documents involved (this is exactly what happened on a real single-doc extraction 2026-08-16 — no hub, no recursion, just 3 unread whiteboards). Every rich-media reference must have been resolved and rendered. Run this recursively over the whole working directory, not a single file — a collection has one `<sanitized-title>.html`/`.md` pair per document (step 3), and the pandoc-converted `.md` can report "clean" on its own while real tags were silently dropped (see step 3's callout), so the scan needs to reach every `.html` on disk:
 
 ```bash
-grep -rlE '<(lark-table|lark-tr|sheet token=|mention-doc|cite doc-id=|whiteboard token=|view type=)' . \
+grep -rlE '<(source|file|lark-table|lark-tr|sheet token=|mention-doc|cite doc-id=|whiteboard token=|view type=)' . \
   && echo "UNRESOLVED — keep recursing" || echo "clean"
 ```
 
-`lark-tr` and `view type=` in that pattern are pre-existing, unverified-against-real-HTML terms — unlike the other five, they have no backing regex in `feishu_extract_refs.py` and no dispatch entry, so a hit here has no structured tooling support; treat it as "stop and inspect the raw tag by hand," not as something the extractor already understands.
+`lark-tr` and `view type=` in that pattern are pre-existing, unverified-against-real-HTML terms. They have no backing regex in `feishu_extract_refs.py` and no dispatch entry, so a hit here has no structured tooling support; treat it as "stop and inspect the raw tag by hand," not as something the extractor already understands.
+
+Reconcile every `<source>`/`<file>` hit with an attachment token and verified local
+file when originals were requested. The extractor preserves source-card filename,
+size and MIME; a missing token is `unresolved-attachment`, never a leaf. Do not
+equate a zero-reference result with completeness before checking raw capture tags.
 
 ⚠️ **On each document's saved `.html`, "empty" is not a literal stop condition — treat each hit as a worklist item, not a failure to loop on.** Each `<sanitized-title>.html` is an immutable raw capture of *that* document (nothing in this skill rewrites a document's own file in place once fetched — see step 3's per-document naming caveat), so a parent doc that genuinely references N other docs or M diagrams keeps showing N+M matches forever in its own file, even after every one of them has been correctly handled — chasing this grep to a literal zero across the whole directory will never terminate for a real hub doc. Instead, for every match, verify the corresponding artifact exists on disk: a `mention-doc`/`cite doc-id=`/`sheet` hit is resolved once the referenced child doc has actually been fetched and saved (step 3, applied to that child); a `whiteboard` hit is resolved once its preview `.jpg` was exported and Read (step 4) — **never** by fetching another document, it is not a followable reference. Stop only once every match maps to a verified on-disk artifact. (On the `.data.markdown` fallback branch, where the fetched body is the deliverable Markdown itself rather than an immutable raw capture, a literal empty result remains the simpler signal — but that branch was not confirmed reachable on any current lark-cli build, see step 3.)
 
@@ -169,6 +190,7 @@ Stop only when all that apply are true:
 - Apply the discussion acceptance rules in [comments and feedback](references/comments-and-feedback.md).
 - **Every fetched document — a lone doc as much as a collection**: every hit from the residual rich-media-tag check (Path A step 5, run recursively over the whole working directory) maps to a handled artifact — every `mention-doc`/`cite doc-id=`/`sheet`/cross-tenant reference was **followed** to a fetched leaf file, and every `whiteboard` reference was **exported and read** (not followed — a whiteboard is inline visual content, never a link to recurse into). Raw binaries then map to a stable platform/OSS locator plus optional verified local cache; structured/searchable derivatives map to versioned files. This is not a collections-only check: a standalone document can contain an unresolved `whiteboard` with zero other documents involved. Each document's own `.html` legitimately keeps showing its tags forever (it's an immutable raw capture, never rewritten — as long as each document got its own filename per step 3) — don't chase the grep itself to a literal zero.
 - The artifact manifest passes `python3 scripts/check_archive_storage.py <manifest>`: no raw binary is declared as Git storage, every external artifact has a stable locator, and every local cache is clearly marked as non-authoritative.
+- Original-file requests also meet [attachment archive acceptance](references/attachment-archives.md#acceptance): reconcile all requested originals and any separate retention requirement. Keep actual-reader status unverified until the reader gate passes.
 - Local reader-facing delivery follows the [completion gate](references/original-media-and-reader.md#delivery-completion-gate). A conversion or storage check is not reader acceptance. User-excluded checks remain excluded and unverified; do not expand the task or fabricate a receipt to force a ready state.
 - `LC_ALL=C grep -rl $'\xef\xbf\xbd' .` is empty.
 - docx path: rendered to an image and visually compared to the source; heading hierarchy and highlights match (see docx reference's checklist).
@@ -189,6 +211,8 @@ Verified dead-ends — retrying them only wastes the session. Full table with fa
 ## Bundled resources
 
 - [scripts/fetch_comments.py](scripts/fetch_comments.py) — executable comment-capture interface.
+- [scripts/archive_attachments.py](scripts/archive_attachments.py) — download captured source-card originals, verify bytes and Office/ZIP structure, and generate a storage manifest; follow [attachment archives](references/attachment-archives.md) for scope and recovery.
+- [scripts/render_api_capture.py](scripts/render_api_capture.py) — render the saved API body using its captured title and manifest-local attachments; conversion does not establish reader acceptance.
 - `scripts/feishu_extract_refs.py` — deterministic reference-token extractor; the recursion engine's core. Run it once per fetched document, on that document's own `<sanitized-title>.html` (prefer over `.md` — step 3), to enumerate `<mention-doc>`/`<sheet>`/`<image>`/`<whiteboard>`/cross-tenant/Minutes/Tencent-Meeting references as JSON.
 - `scripts/restore_docx_headings.py` — for Path B: reads true font sizes via python-docx, maps them to heading levels, restores `w:shd` highlights to Obsidian `==…==`, without retyping body text.
 - `scripts/feishu_dom_capture.js` — Path D: injectable end-to-end browser DOM capture.

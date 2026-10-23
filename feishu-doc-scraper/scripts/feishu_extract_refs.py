@@ -37,6 +37,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+from html.parser import HTMLParser
 import json
 import re
 import sys
@@ -126,6 +127,25 @@ RE_IMAGE_TAG = re.compile(r'<image\s+token="([^"]+)"')
 # RE_SHEET_TAG above.
 RE_FILE_TAG = re.compile(r'<file\s+token="([^"]+)"[^>]*>([^<]*)</file>')
 
+
+class AttachmentParser(HTMLParser):
+    """Read current API attachment cards without depending on attribute order."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.sources = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == 'source':
+            self.sources.append(dict(attrs))
+
+
+def attachment_sources(text: str) -> list[dict]:
+    parser = AttachmentParser()
+    parser.feed(text)
+    parser.close()
+    return parser.sources
+
 # --- whiteboard (inline diagram, NOT a followable reference) ----------------
 # Verified 2026-08-16 against a real document (3 tags in raw HTML, 0 trace
 # in the pandoc-converted .md of the same doc). This is Feishu's native
@@ -176,11 +196,12 @@ DISPATCH = {
     "url-wiki": "wiki spaces get_node then docs +fetch",
     "url-sheets": "sheets +read (split token on '_' -> SP, SID)",
     "url-base": "Bitable API (outside this skill) — record token",
-    "url-file": "attachment — record token + name; treat like image gap",
+    "url-file": "Drive file — use the installed lark-drive download guide",
     "url-minutes": "native transcript API (feishu-minutes-transcript.md)",
     "sheet-tag": "sheets +read (split token on '_' -> SP, SID)",
     "image": "register token; lark-cli cannot download docx images",
-    "file": "attachment — record token + name; treat like image gap",
+    "file": "attachment — use archive_attachments.py for captured source cards; otherwise use the installed lark-doc media-download guide",
+    "unresolved-attachment": "source card has no token — inspect the original capture; do not declare a leaf",
     "tencent-meeting": "Tencent Meeting native transcript (never download+re-ASR)",
     "lark-table": "inline content — render in place to a Markdown table",
     "whiteboard": "export preview + Read image (see SKILL.md Path A step 4) — NOT a followable reference",
@@ -298,6 +319,18 @@ def extract(text: str) -> list[dict]:
             "ref": token,
             "title": "",
             "dispatch": DISPATCH["whiteboard"],
+        })
+
+    for index, source in enumerate(attachment_sources(text)):
+        token = source.get('token')
+        kind = 'file' if token else 'unresolved-attachment'
+        refs.append({
+            'type': kind,
+            'ref': token or f'(missing-token:{index + 1})',
+            'title': source.get('name') or '',
+            'size': source.get('size'),
+            'mime': source.get('mime'),
+            'dispatch': DISPATCH[kind],
         })
 
     for token, name in RE_FILE_TAG.findall(text):
