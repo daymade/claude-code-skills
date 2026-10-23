@@ -2336,21 +2336,8 @@ claude plugin install daymade-skill@daymade-skills
 
 ### **feishu-doc-scraper** - 飞书/Lark → 保真 Markdown
 
-把飞书（Lark）文档、Wiki 页面/合集、表格（含单元格附件文件下载）以及妙记转写提取成保真的本地 Markdown。首选路径用 `lark-cli` API——以编程方式提取正文（不经模型改写）、递归跟随合集的引用图、从错误码读取权限边界；浏览器 DOM 路径只在 lark-cli 触达不到内容时作为兜底。
-
-**使用场景：**
-- 源是飞书/Lark URL 且要求保真（导出飞书文档/合集/妙记转写）
-- 把飞书 wiki/知识库转成 Markdown，或归档一个飞书合集
-- 导出飞书妙记转写
-- 把文档所有者导出的 `.docx` 转成保真 Markdown 并恢复标题/高亮
-
-**主要功能：**
-- lark-cli API 提取通过 `jq` 把正文落盘（绝不经模型转抄——最重要的保真铁律）
-- 用 `feishu_extract_refs.py` 做递归引用图遍历（BFS），并设残留富媒体标签验收闸，确保没有被引用的文档被静默漏掉
-- 妙记原生转写导出（绝不对下载的媒体重跑 ASR）
-- 权限被拒路径：所有者导出 `.docx` → Markdown，恢复字号→标题、`w:shd`→高亮，再做视觉验证
-- 对 `*.feishu.cn` 强制 `LARK_CLI_NO_PROXY=1`（避免凭据泄漏/DNS 劫持），并做 U+FFFD 编码损坏终检
-- 同时支持飞书（feishu.cn）与 Lark（larkoffice.com）
+适用场景、提取流程和依赖要求见 [Skill 正文](feishu-doc-scraper/SKILL.md)。
+归档时进入[落点交接](feishu-doc-scraper/references/archive-destination-handoff.md)和[存储合同](feishu-doc-scraper/references/archive-storage-contract.md)。
 
 **示例用法：**
 ```bash
@@ -2362,8 +2349,6 @@ claude plugin install feishu-doc-scraper@daymade-skills
 "export this Feishu Minutes transcript"
 "把这个 Lark wiki 页面存成 Markdown"
 ```
-
-**要求**：已认证到目标租户的 `lark-cli` 二进制（npm `@larksuite/cli`）、`jq`。兜底路径需要浏览器自动化环境；docx 路径需要 `python-docx` 和一个 docx→md 转换器（内置的 doc-to-markdown 技能或 pandoc）。
 
 ---
 
