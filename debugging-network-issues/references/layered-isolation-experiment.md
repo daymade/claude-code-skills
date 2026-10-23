@@ -7,6 +7,7 @@
 - Mock upstream pattern
 - Result matrix and interpretation
 - Failure modes and probe self-verification
+- Intermittent failures: return to the original condition
 - Extended variants (4+ paths, client-side variation)
 - Canonical reference case (case-study SSE RST)
 
@@ -14,26 +15,26 @@
 
 Multi-hop network systems concentrate bugs at the seams. A request from a user to a backend service typically traverses: client → ISP → CGNAT → CDN/edge → load balancer → reverse proxy → application → upstream dependency. Each hop introduces a timeout policy, a connection pool, a rewrite rule, a header translation, or a flow-control window. When something fails, hypothesis-stacking ("maybe it's the CDN, no maybe the LB, actually probably the app…") tends to burn hours with circumstantial evidence on each candidate.
 
-Layered isolation inverts the approach: instead of reasoning about which hop caused the symptom, run the same logical request through several paths that differ by exactly one hop, then observe where the symptom appears. The differential directly names the responsible layer.
+Layered isolation inverts the approach: run the same logical request through paths with known differences, then localize the symptom to those differences. Name every removed hop before interpreting a comparison. Attribute a single layer only when the actual paths and request conditions isolate it; a direct-origin request can bypass several layers at once.
 
 ## The 3-path pattern
 
 For a CDN-fronted service with the topology `Client → CDN → LB → Origin`:
 
-| Path  | How it routes                                                                | Excludes if clean                        |
-| ----- | ---------------------------------------------------------------------------- | ---------------------------------------- |
-| **A** | Client → CDN → LB → Origin (full production path)                            | (baseline — this reproduces the symptom) |
-| **B** | Client → Origin directly (e.g., `curl --resolve host:443:origin-ip`)         | The CDN layer                            |
-| **C** | Server loopback (`curl http://127.0.0.1:port/...` on the origin host itself) | CDN + LB + any intermediate network      |
+| Path  | How it routes | Difference from the full path |
+| ----- | ------------- | ----------------------------- |
+| **A** | Client → CDN → LB → Origin | Baseline: reproduce the symptom |
+| **B** | Client → Origin directly (e.g., `curl --resolve host:443:origin-ip`) | Bypass both CDN and LB, plus their connecting route |
+| **C** | Server loopback (`curl http://127.0.0.1:port/...` on the origin host itself) | Also remove the external client-to-origin route; name any local proxy still traversed |
 
 Interpretation:
 
-- If **A fails, B passes, C passes**: the CDN is the cause
-- If **A fails, B fails, C passes**: the LB / origin external network path is the cause
-- If **A fails, B fails, C fails**: the cause is in the application or upstream dependency (hypothesis-stacking was wrong from the start)
+- If **A fails, B passes, C passes**: localize the difference to the CDN/LB path removed by B; this comparison alone does not distinguish CDN from LB
+- If **A fails, B fails, C passes**: investigate the external client-to-origin route or external listener omitted by C; the bypassed LB alone cannot explain B failing
+- If **A fails, B fails, C fails**: investigate the shared application/upstream stack and the probe itself; matching failure labels alone do not prove a common cause
 - If **all three pass**: the failure condition was not actually reproduced; re-examine the assumed trigger
 
-Add a fourth path as needed — e.g., bypass only the LB by hitting the origin VM's private IP from within the VPC, or test from a different client geography if ISP/CGNAT is suspect.
+To distinguish CDN from LB, add `Client → LB → Origin` while preserving hostname, TLS/SNI, request body, protocol and origin configuration. Confirm that the target really is the LB address, rather than assume `--resolve` preserves it. Differences in network route remain possible confounders; use endpoint logs or packet evidence to narrow them. Changing client geography is a separate comparison for ISP/CGNAT hypotheses.
 
 ## Mock upstream pattern
 
@@ -63,7 +64,7 @@ Deploy the mock on a port the reverse proxy can reach, add a temporary route in 
 After running the experiment, tabulate:
 
 ```
-              | Path A (via CDN) | Path B (bypass CDN) | Path C (loopback) |
+              | Path A (via CDN + LB) | Path B (direct origin) | Path C (loopback) |
 --------------|------------------|---------------------|-------------------|
 Result        | RST @ 126s       | Clean @ 220s        | Clean @ 220s      |
 Observed by   | curl + server    | curl + server       | curl + server     |
@@ -106,6 +107,16 @@ If the probe depends on the infrastructure being tested, its output is not indep
 
 When the target runs in Docker, Path C (loopback) behavior differs depending on whether you run `curl` from the host or from inside the container. Host `curl localhost:3002` may hit a port-mapped container, while container-internal `curl localhost:3002` hits the service directly. They are different isolation paths — pick based on which hops you are trying to include/exclude and be explicit about which one you ran.
 
+## Intermittent failures: return to the original condition
+
+When A fails and a changed condition B succeeds, return once to the original A within a declared time/attempt budget before attributing the recovery to B. The investigator records the actual route, input, options, timestamps and result for each attempt; this causal judgment is manual, not enforced by the probe script. Keep all other controllable conditions fixed and record any that changed or remain unknown.
+
+- **A fails → B succeeds → A succeeds:** the original failure no longer reproduces. Report causation unestablished; do not remove the toggled feature or declare it exonerated on these observations alone.
+- **A fails → B succeeds → A fails:** the contrast recurs under these conditions. Use it to choose the next isolating probe, together with endpoint evidence; three attempts are not statistical proof or a guarantee against time-dependent confounding.
+- **Original A cannot be restored safely or the budget expires:** stop the experiment and retain the causal uncertainty. Do not keep retrying until a preferred answer appears.
+
+For example, a request failing with a plugin, succeeding without it, then succeeding with it again does not establish that the plugin caused the failure. Preserve the feature while investigating any remaining symptom. A successful transfer can still satisfy its file-integrity acceptance criterion even when the earlier timeout's cause remains unknown.
+
 ## Extended variants
 
 ### 4-path with client-side variation
@@ -113,7 +124,7 @@ When the target runs in Docker, Path C (loopback) behavior differs depending on 
 ```
 A: client via CDN via LB
 B: different client (mobile hotspot) via CDN via LB   # ISP/CGNAT differential
-C: client --resolve to origin IP (bypass CDN only)
+C: same client --resolve to verified LB IP (retain LB, bypass CDN)
 D: server loopback
 ```
 
@@ -137,6 +148,6 @@ The 130s RST incident (documented in [case-sse-rst-130s.md](case-sse-rst-130s.md
 | B: `--resolve` to origin IP | Clean @ 220s (bounded by client `--max-time`) |
 | C: server loopback          | Clean @ 220s                                  |
 
-Interpretation was immediate: the RST comes from Cloudflare's edge, not the origin or any network in between. What 5 hours of circumstantial reasoning could not resolve (Caddy? <upstream-provider>? VPN? CGNAT? CLI bug?), the 3-path experiment resolved in the 10 minutes it took to set up.
+In that case's documented `Client → Cloudflare → Caddy → application` topology, the direct-origin request retained Caddy and the application, repeated results agreed, and the peer-sent HTTP/2 reset supplied additional evidence for the edge diagnosis. Do not transfer that conclusion to the CDN-plus-LB topology above: its direct-origin path removes an additional layer.
 
 The lesson: **when multiple layers could be the cause, do not reason about which one — test**.

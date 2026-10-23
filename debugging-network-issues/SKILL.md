@@ -49,7 +49,7 @@ If the answer is "nothing" or "I cannot think of one", the hypothesis is unfalsi
 
 ### 3. Layered isolation
 
-Multi-hop systems (client → CDN → LB → reverse proxy → app → upstream) concentrate bugs at the seams between layers. When a symptom could plausibly come from several layers, **do not reason about which layer; test**. The canonical technique: run the same logical request through three or more paths that differ by exactly one hop, then compare where the symptom appears. This resolves in minutes what stacking hypotheses cannot resolve in hours. See [references/layered-isolation-experiment.md](references/layered-isolation-experiment.md).
+Multi-hop systems (client → CDN → LB → reverse proxy → app → upstream) concentrate bugs at the seams between layers. When a symptom could plausibly come from several layers, **do not reason about which layer; test**. Compare the same logical request across verified paths, name every changed hop, and attribute only the isolated difference. For intermittent failures, use a bounded return to the original condition before treating a successful variation as causal evidence. Read [references/layered-isolation-experiment.md](references/layered-isolation-experiment.md) for path design and A/B/A interpretation.
 
 **The same technique isolates capacity, not just correctness.** When the symptom is a rate rather than an error, vary the *stack* instead of the *hop*: measure the same direction over two channels that share the network path but share no application code. It is the cheapest way to stop tuning an application that was never the bottleneck. Resist compressing the reading into "agreement means the path" — that holds only when both channels are *slow*; two fast channels mean the probe failed to reproduce the symptom and prove nothing at all. See Step 0.7 for how to read each of the four outcomes.
 
@@ -356,21 +356,21 @@ If you cannot state a concrete refuter, the hypothesis is unfalsifiable. Flag it
 
 ### Step 3: Decisive experiment
 
-For network-layer problems, the default is **layered isolation**: three paths differing by exactly one hop. Example for a CDN-fronted service:
+For network-layer problems, use **layered isolation** with verified path differences. Example for `Client → CDN → LB → Origin`:
 
-| Path | Route                                 | Rules out if it passes                 |
-| ---- | ------------------------------------- | -------------------------------------- |
-| A    | Full path via CDN                     | Nothing — this is the failing baseline |
-| B    | `--resolve` to origin IP (bypass CDN) | CDN layer                              |
-| C    | Server loopback (bypass CDN + LB)     | CDN + LB                               |
+| Path | Route | Difference from the full path |
+| ---- | ----- | ----------------------------- |
+| A | Full path via CDN and LB | Baseline |
+| B | `--resolve` to verified origin IP | Remove CDN, LB and their connecting route |
+| C | Server loopback | Also remove the external client-to-origin route |
 
-If only A fails, the CDN is the cause. If A and B fail but C passes, the LB is. Compose more variants as needed. See [references/layered-isolation-experiment.md](references/layered-isolation-experiment.md) for a runnable template using a mock idle upstream — the experiment does not need a cooperating production request to trigger, the idle interval can be controlled precisely.
+If only A fails, localize the difference to the removed CDN/LB path; add a path retaining the LB to distinguish those layers. If A and B fail but C passes, investigate what C additionally removes. Read [references/layered-isolation-experiment.md](references/layered-isolation-experiment.md) for the full interpretation, bounded A/B/A checks for intermittent symptoms, and a mock idle upstream with a controlled idle interval.
 
 For non-network domains:
 
 - Performance: controlled benchmark with one variable changed
 - Correctness bug: failing test case that reproduces
-- Intermittent: sampled tracing + wait for recurrence
+- Intermittent: sampled tracing plus a bounded return to the original condition; retain uncertainty when the contrast does not recur
 
 ### Step 4: Instrumentation when needed
 
