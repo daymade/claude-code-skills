@@ -13,7 +13,7 @@ function application(fetch) {
   assert.notEqual(source, input, 'Application bootstrap must be isolated from the test');
   const nodes = new Map();
   function node() {
-    return {innerHTML:'', textContent:'', value:'', hidden:false, style:{},
+    return {innerHTML:'', textContent:'', value:'', hidden:false, style:{}, dataset:{},
       scrollTop:0, clientHeight:600, classList:{toggle(){},add(){},remove(){}},
       setAttribute(){}, querySelector(){return null;}, querySelectorAll(){return [];}};
   }
