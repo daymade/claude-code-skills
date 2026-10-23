@@ -271,6 +271,14 @@ For oversized images or figure readability in a Markdown note or transcript, use
 It owns reader-specific sizing and the representative pilot; keep display values
 and verification details there.
 
+### Visible permission and Keychain dialogs
+
+For a visible permission or Keychain dialog, enter
+[macos-permissions' observation and classification route](daymade-macos/macos-permissions/SKILL.md#observe-and-classify-the-reported-problem-first).
+For an authorized desktop view, use
+[capture-screen's full-screen observation route](daymade-macos/capture-screen/SKILL.md#observe-an-unidentified-dialog-or-the-full-desktop).
+Keep detailed diagnosis and cancellation procedures with those Skills.
+
 ### Background protected-data access
 
 For a background protected-data read failure, start at

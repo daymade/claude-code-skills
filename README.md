@@ -1794,47 +1794,18 @@ claude plugin install daymade-docs@daymade-skills
 
 > **Install**: `claude plugin install daymade-macos@daymade-skills` (suite-only — invoked as `daymade-macos:capture-screen`)
 
-Capture application windows by CGWindowID with a reliable three-step workflow: discover window IDs via Swift, control app state via AppleScript, and capture outputs with `screencapture`.
-
-**When to use:**
-- Automating repeatable screenshot workflows for documentation
-- Capturing specific app windows instead of full-screen screenshots
-- Producing multi-shot sequences after scripted scroll/zoom changes
-- Building visual evidence capture pipelines on macOS
-
-**Key features:**
-- Bundled Swift script to resolve accurate window IDs (`CGWindowListCopyWindowInfo`)
-- Verified AppleScript patterns for app activation and window preparation
-- Window-scoped capture commands with silent mode, delays, and format control
-- Multi-shot workflow pattern for section-by-section capture
-- Clear anti-pattern notes for methods that fail on macOS
-
-**Example usage:**
-```bash
-# Install the Apple platform suite
-claude plugin install daymade-macos@daymade-skills
-
-# Then ask Claude to capture windows programmatically
-"Find the Excel window ID and capture it silently"
-"Create a multi-shot capture workflow for this workbook"
-"Capture Chrome window sections with scripted scrolling"
-```
-
-**🎬 Live Demo**
-
-*Coming soon*
-
-📚 **Documentation**: See [capture-screen/SKILL.md](./daymade-macos/capture-screen/SKILL.md).
+For desktop or app-window screenshots, start with the Skill's
+[observation and control boundary](./daymade-macos/capture-screen/SKILL.md#select-observation-or-foreground-control),
+then select its [capture route](./daymade-macos/capture-screen/SKILL.md#quick-start).
 
 ### **macos-permissions** - Diagnose and Repair macOS Privacy Permissions
 
 > **Install**: `claude plugin install daymade-macos@daymade-skills` (suite-only — invoked as `daymade-macos:macos-permissions`)
 
-Use for repeated TCC prompts, silent denials, and background jobs that cannot read protected files. It identifies the actual requester, checks for a usable existing grant, and verifies the repair through the real job. The Skill contains the diagnostic and Full Disk Access repair procedure.
-
-📚 **Documentation**: See [macos-permissions/SKILL.md](./daymade-macos/macos-permissions/SKILL.md).
-
-**Requirements**: macOS. Reading TCC.db also requires Full Disk Access for the process doing the read.
+For visible permission or Keychain dialogs, start with
+[observation and classification](./daymade-macos/macos-permissions/SKILL.md#observe-and-classify-the-reported-problem-first).
+For protected-data failures without a visible dialog, enter the
+[TCC request procedure](./daymade-macos/macos-permissions/SKILL.md#reproduce-the-reported-denial-first).
 
 ---
 

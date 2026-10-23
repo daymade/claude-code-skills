@@ -1816,47 +1816,16 @@ claude plugin install daymade-docs@daymade-skills
 
 > **安装**：`claude plugin install daymade-macos@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-macos:capture-screen`）
 
-通过三步法实现稳定的窗口截图自动化：Swift 获取 CGWindowID、AppleScript 控制应用状态、`screencapture` 输出截图文件。
-
-**使用场景：**
-- 为文档或审计流程自动化生成可重复截图
-- 只捕获目标应用窗口而非整屏
-- 在脚本化滚动/缩放后分段截图
-- 构建 macOS 视觉证据采集流水线
-
-**主要功能：**
-- 内置 Swift 脚本获取准确窗口 ID（`CGWindowListCopyWindowInfo`）
-- 提供已验证的 AppleScript 激活与预处理命令模式
-- 支持窗口级静默截图、延时截图与格式控制
-- 提供分段多图采集工作流模板
-- 明确列出在 macOS 上不可用的错误方案，避免踩坑
-
-**示例用法：**
-```bash
-# 安装 Apple 平台套件
-claude plugin install daymade-macos@daymade-skills
-
-# 然后请求 Claude 执行程序化截图
-"找到 Excel 窗口 ID 并静默截图"
-"为这个工作簿生成分段截图工作流"
-"通过脚本滚动后抓取 Chrome 窗口多个区域"
-```
-
-**🎬 实时演示**
-
-*即将推出*
-
-📚 **文档**：参见 [capture-screen/SKILL.md](./daymade-macos/capture-screen/SKILL.md)。
+截取桌面或应用窗口前，先读 Skill 的
+[观察与前台操作边界](./daymade-macos/capture-screen/SKILL.md#select-observation-or-foreground-control)，
+再选择对应的[截图路线](./daymade-macos/capture-screen/SKILL.md#quick-start)。
 
 ### **macos-permissions** - 诊断并修复 macOS 隐私权限
 
 > **安装**：`claude plugin install daymade-macos@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-macos:macos-permissions`）
 
-用于排查反复弹出的 TCC 权限提示、静默拒绝，以及后台任务无法读取受保护文件的问题。Skill 会定位实际请求权限的进程，检查现有授权能否复用，并通过真实后台读取验收；诊断和完全磁盘访问权限的修复步骤以 Skill 正文为准。
-
-📚 **文档**：参见 [macos-permissions/SKILL.md](./daymade-macos/macos-permissions/SKILL.md)。
-
-**要求**：macOS。读取 TCC.db 时，执行读取的进程还需具备完全磁盘访问权限。
+出现可见的权限或钥匙串弹窗时，从[观察与分类](./daymade-macos/macos-permissions/SKILL.md#observe-and-classify-the-reported-problem-first)进入。
+没有可见弹窗、但受保护数据读取失败时，进入 [TCC 原请求诊断](./daymade-macos/macos-permissions/SKILL.md#reproduce-the-reported-denial-first)。
 
 ---
 
