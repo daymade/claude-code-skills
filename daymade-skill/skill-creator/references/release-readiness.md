@@ -61,6 +61,23 @@ behavior evidence only for content proved unchanged; review the changed delta.
 For an unchanged complete distribution, use the opt-in rebind procedure below
 instead of editing the original independent review.
 
+## GitHub says dirty; git says clean
+
+`mergeable_state: dirty` is an asynchronous cache, not a verdict. After the base
+moves under parallel mergers it can stick, and close/reopen does not reliably
+recompute it. The local oracle is `git merge-tree --write-tree <branch>
+origin/main` (exit 0 = clean); when git says clean and GitHub says dirty, pushing
+a branch that contains current main (a real integration merge) is the reliable
+refresher — the head changes, so rebind evidence to the new head.
+
+A strict up-to-date ruleset plus a fleet merging every few minutes is a
+livelock: each integration changes the head, CI reruns (~20 min class), and
+another peer lands in between. The only lever is merge latency — merge the
+instant checks go green (a background poller on the check-runs API, not a
+long-lived `--watch`), and keep the content diff byte-identical across every
+base move so the existing review stays valid: the review covers the content,
+not the parent commit.
+
 ## External-archive helper and dispatcher
 
 This marketplace's existing pre-push dispatcher checks changed shipped Skill roots

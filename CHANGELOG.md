@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-cleaner** (`daymade-macos` v1.25.2 → v1.25.3): Add the Git LFS object-cache pruning sequence with the push-side endpoint-completeness proof and the remote-missing-is-not-data-loss check, and extend the pnpm phantom note to APFS clonefile imports. Change type: documentation accuracy from measured cleanup.
+- **skill-creator** (`daymade-skill` v1.73.3 → v1.73.4): Document the GitHub mergeable_state cache oracle (`merge-tree --write-tree`) and the strict-ruleset fleet livelock with its merge-latency countermeasure. Change type: release-operations guidance from a measured race.
 - **debugging-network-issues** (v1.11.5 → v1.11.6): Attribute layered comparisons only to verified path differences, preserve the CDN/LB distinction, and return to the original condition within a set budget when failures are intermittent. Keep recovery acceptance separate from root-cause certainty. Change type: bounded diagnostic inference correction.
 
 - **macos-cleaner** (`daymade-macos` v1.25.1 → v1.25.2): Correct the OrbStack sparse-image path to the 2.x group-container layout, replace the removed Reclaim button with the measured lagged auto-TRIM behavior, add absolute off-limits rows for agent chat history and the WeChat container, split Downloads scan authorization from per-batch deletion, and document safe_delete.py batch-confirmation semantics. Change type: documentation accuracy and safety rulings.
