@@ -149,14 +149,19 @@ def run_yt_dlp(cmd: list, hide_cookie_logs: bool = False) -> subprocess.Complete
         return subprocess.CompletedProcess(cmd, process.wait(), "".join(lines), "")
 
 
+def final_error(result: subprocess.CompletedProcess) -> str:
+    """Use the terminal failure, not explanatory words in an unused-format warning."""
+    text = ((result.stdout or "") + "\n" + (result.stderr or "")).lower()
+    errors = [line.strip() for line in text.splitlines() if re.match(
+        r"^(?:error:\s*\S|\[download\].*error:|http error [45])", line.strip())]
+    return errors[-1] if errors else ""
+
+
 def has_403_error(result: subprocess.CompletedProcess) -> bool:
-    text = ""
-    if hasattr(result, "stdout") and result.stdout:
-        text += result.stdout
-    if hasattr(result, "stderr") and result.stderr:
-        text += result.stderr
-    text = text.lower()
-    return "http error 403" in text or "403: forbidden" in text or "fragment 1 not found" in text
+    text = final_error(result)
+    return any(marker in text for marker in (
+        "http error 403", "403: forbidden", "fragment 1 not found",
+    ))
 
 
 def has_pot_error(result: subprocess.CompletedProcess) -> bool:
@@ -174,9 +179,10 @@ def has_pot_error(result: subprocess.CompletedProcess) -> bool:
         re.search(r"\bpo[ _-]?tokens?\b", line)
         and re.search(r"\b(require[ds]?|required|missing|not provided|not supplied|must provide)\b", line)
     ]
+    failure = final_error(result)
     return bool(token_lines) and (
-        any("error" in line for line in token_lines)
-        or any(marker in text for marker in (
+        failure in token_lines
+        or any(marker in failure for marker in (
             "only images are available", "requested format is not available",
             "http error 403", "403: forbidden",
         ))
@@ -196,23 +202,26 @@ def has_wpc_error(result: subprocess.CompletedProcess) -> bool:
 def with_player_client(cmd: list, client: str) -> list:
     """Replace only the YouTube player_client, retaining provider arguments."""
     rebuilt = []
+    youtube_args = []
     index = 0
     while index < len(cmd):
         token = cmd[index]
         if token == "--extractor-args" and index + 1 < len(cmd):
             value = cmd[index + 1]
             if value.startswith("youtube:"):
-                args = [part for part in value[len("youtube:"):].split(";")
-                        if not part.startswith("player_client=")]
-                if args:
-                    rebuilt.extend([token, "youtube:" + ";".join(args)])
+                youtube_args.extend(
+                    part for part in value[len("youtube:"):].split(";")
+                    if part and not part.startswith("player_client="))
             else:
                 rebuilt.extend([token, value])
             index += 2
             continue
         rebuilt.append(token)
         index += 1
-    rebuilt.extend(["--extractor-args", f"youtube:player_client={client}"])
+    youtube_args.append(f"player_client={client}")
+    # yt-dlp replaces repeated dictionaries for the same extractor. Keep all
+    # YouTube settings together so its real parser retains them.
+    rebuilt.extend(["--extractor-args", "youtube:" + ";".join(youtube_args)])
     return rebuilt
 
 

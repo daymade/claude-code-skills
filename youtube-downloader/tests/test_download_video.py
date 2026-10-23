@@ -27,6 +27,13 @@ TOKEN = (
     "ERROR: Requested format is not available"
 )
 
+# Shape emitted by yt-dlp's skipped-format diagnostic, with synthetic identity.
+SKIPPED_TOKEN_WARNING = (
+    "WARNING: [youtube] VIDEO_ID: mweb client https formats require a GVS "
+    "PO Token which was not provided. They will be skipped as they may "
+    "yield HTTP Error 403."
+)
+
 
 class DownloadRoutes(unittest.TestCase):
     def invoke(self, outcomes=None, **kwargs):
@@ -91,11 +98,20 @@ class DownloadRoutes(unittest.TestCase):
             "ERROR: nsig extraction failed",
             "ERROR: Sign in to confirm you're not a bot",
             "WARNING: PO Token missing\nERROR: ffmpeg failed",
+            SKIPPED_TOKEN_WARNING + "\nERROR: Postprocessing: ffmpeg not found. Please install or provide the path using --ffmpeg-location",
+            SKIPPED_TOKEN_WARNING + "\nERROR: unable to open for writing: Permission denied",
+            SKIPPED_TOKEN_WARNING + "\nERROR: HTTP Error 403\nERROR: Postprocessing: ffmpeg failed",
             "ERROR: transport failed",
         ):
             with self.subTest(diagnostic=diagnostic):
                 code, calls, providers, _ = self.invoke([result(1, diagnostic)], auto_po_token=True)
                 self.assertEqual((code, len(calls), providers), (1, 1, 0))
+
+    def test_real_warning_shape_plus_real_format_failure_can_recover(self):
+        code, calls, providers, _ = self.invoke(
+            [result(1, SKIPPED_TOKEN_WARNING + "\nERROR: Requested format is not available"), result()],
+            auto_po_token=True)
+        self.assertEqual((code, len(calls), providers), (0, 2, 1))
 
     def test_403_only_uses_bounded_progressive_retry(self):
         code, calls, providers, _ = self.invoke([result(1, "HTTP Error 403"), result()], auto_po_token=True)
@@ -147,9 +163,9 @@ class DownloadRoutes(unittest.TestCase):
         cmd = ["yt-dlp", "--extractor-args", "youtube:player_client=mweb;po_token=mweb.gvs+FAKE",
                "--extractor-args", "youtubepot-wpc:browser_path=/synthetic/chrome", "URL"]
         actual = downloader.with_player_client(cmd, "web_safari")
-        self.assertIn("youtube:po_token=mweb.gvs+FAKE", actual)
+        self.assertIn("youtube:po_token=mweb.gvs+FAKE;player_client=web_safari", actual)
         self.assertIn("youtubepot-wpc:browser_path=/synthetic/chrome", actual)
-        self.assertIn("youtube:player_client=web_safari", actual)
+        self.assertEqual(sum(value.startswith("youtube:") for value in actual), 1)
 
     def test_capture_diagnostics_without_cookies(self):
         with redirect_stdout(io.StringIO()):
