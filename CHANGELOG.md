@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **git-safety-net** (v1.22.10 → v1.23.0): Add an operator-led local snapshot recovery route covering writer authority, original/index preservation, isolated-index hook preflight, reversible lock quarantine and committed-content readback. Keep unknown owners and unresolved guard findings blocked. Change type: bounded recovery workflow.
 - **tibo-reset-codex** (v2.0.0 → v2.1.0): Route locked snapshots to the shared Git recovery procedure, distinguish hook refusals and require unchanged original journals plus complete snapshot readback. Change type: recovery handoff and acceptance.
+- **feishu-doc-scraper** (v1.10.0 → v1.10.1): Resolve authorized archive destination selection through host ownership, reader and storage rules before permanent filing; preserve extraction-only and explicitly selected destinations. Change type: bounded filing-handoff correction.
 
 - **tibo-reset-codex** (v1.23.3 → v2.0.0): Return compact append receipts with explicit `--full` compatibility, bound rollout terminal output while retaining full private reports, and separate journal persistence from deferred/locked Git snapshots. Add read-only snapshot diagnostics, explicit retry, tracker timestamp/source metadata and community-window coverage. Preserve account attribution gates and complete JSONL readings. Change type: approved CLI output redesign and bounded recovery/evidence capability.
 
