@@ -216,8 +216,8 @@ eval-directory assertions by original text and multiplicity; keep missing or
 empty targets explicitly unbound for legacy/preparation observations.
 
 Before shipping a new skill or a changed rule/contract/number, follow
-[independent review](references/independent-review-protocol.md). Freeze the exact
-artifact, reader spec, blast radius, failure axes and terminal condition. Use
+[independent review](references/independent-review-protocol.md) and freeze its
+evidence inputs and scope before dispatch. Use
 fresh context and evidence outside the author's changes. Reproduce hypotheses;
 after substantive fixes recheck the failed axes plus preservation with fresh
 context. Persist and commit the current review in the private review archive,

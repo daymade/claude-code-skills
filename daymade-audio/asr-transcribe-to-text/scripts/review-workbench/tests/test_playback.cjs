@@ -19,8 +19,8 @@ const input = revision
 const source = input.replace(/bindEvents\(\);loadProject\(\);\s*$/, '');
 assert.notEqual(source, input, 'Only the application bootstrap must be removed');
 
-function application({readyState=1, manualSeek=false, deferPlay=false}={}) {
-  const nodes = new Map(), timers = new Map(), events = [], audios = [];
+function application({readyState=1, manualSeek=false, deferPlay=false, bounded=false, descriptorFetch=null}={}) {
+  const nodes = new Map(), timers = new Map(), events = [], audios = [], clipRequests=[], clips=new Map();
   let nextTimer = 0;
   function eventTarget(target) {
     const listeners = new Map();
@@ -74,7 +74,7 @@ function application({readyState=1, manualSeek=false, deferPlay=false}={}) {
       this._currentTime=0; this.seeking=false; this.paused=true; this.muted=false; this.volume=1;
       this.loads=0; this.plays=0; this.playRequests=[]; this.srcAssignments=0; audios.push(this);
     }
-    set src(value){this._src=value; this.srcAssignments++;} get src(){return this._src;}
+    set src(value){this._src=value;this.srcAssignments++;if(clips.has(value))this.duration=clips.get(value).duration;} get src(){return this._src;}
     set currentTime(value){this._currentTime=value; this.seeking=manualSeek;} get currentTime(){return this._currentTime;}
     play(){
       this.plays++;
@@ -88,19 +88,39 @@ function application({readyState=1, manualSeek=false, deferPlay=false}={}) {
     metadata(){this.readyState=1; this.dispatch('loadedmetadata');}
     seeked(){this.seeking=false; this.dispatch('seeked');}
     progress(time){this._currentTime=time; this.dispatch('timeupdate');}
+    naturalEnd(){this._currentTime=this.duration;this.paused=true;this.dispatch('ended');}
   }
-  const context = vm.createContext({document, Audio, console, Map, Set, Date, Math, Number, String, Promise,
+  function descriptor(url) {
+    const params=new URL(url,'http://synthetic.invalid').searchParams;
+    const project=JSON.parse(run('JSON.stringify(view.project)'));
+    const item=project.items.find(i=>i.id===params.get('item_id')),src=project.sources.find(s=>s.id===params.get('source_id'));
+    const padding=Number(params.get('context')),reference=Number(params.get('reference')),rate=src.sample_rate;
+    const localStart=(Math.max(0,item.start-padding)-src.clock.offset)/src.clock.scale;
+    const localEnd=reference?Math.min((item.end-src.clock.offset)/src.clock.scale,localStart+8):(item.end+padding-src.clock.offset)/src.clock.scale;
+    const startFrame=Math.ceil(Math.max(0,localStart)*rate),endFrame=Math.floor(Math.min(src.available_duration,localEnd)*rate);
+    const clip={project_fingerprint:project.fingerprint,item_id:item.id,source_id:src.id,context:padding,reference,
+      start_frame:startFrame,end_frame:endFrame,sample_rate:rate,local_start:startFrame/rate,local_end:endFrame/rate,duration:(endFrame-startFrame)/rate,
+      canonical_start:src.clock.offset+startFrame/rate*src.clock.scale,canonical_end:src.clock.offset+endFrame/rate*src.clock.scale,
+      coverage_complete:localStart>=0&&localEnd<=src.available_duration,media_url:'/clip?'+params};
+    clips.set(clip.media_url,clip);return clip;
+  }
+  const context = vm.createContext({document, Audio, console, Map, Set, Date, Math, Number, String, Promise, URLSearchParams, AbortController,
     window:eventTarget({devicePixelRatio:1}), ResizeObserver:class{observe(){}}, requestAnimationFrame(){},
     setTimeout(fn, ms){const id=++nextTimer; timers.set(id,{fn,ms}); return id;},
     clearTimeout(id){timers.delete(id);}, localStorage:{setItem(){},getItem(){return null;}},
-    fetch(){throw new Error('Network is forbidden in player tests');}
+    async fetch(url,options){
+      if(!url.startsWith('/api/clip?'))throw new Error('Only synthetic clip descriptors are allowed');
+      clipRequests.push({url,options});
+      if(descriptorFetch)return descriptorFetch(url,options,descriptor);
+      return {ok:true,status:200,json:async()=>descriptor(url)};
+    }
   });
   const run = code=>vm.runInContext(code, context, {filename:revision||file});
   run(source);
   run(`drawTracks=()=>{}; drawOverview=()=>{};
-    view.project={project_id:'synthetic-player',people:[{name:'Person A'},{name:'Person B'}],sources:[
-      {id:'A',label:'Device A',duration:400,clock:{offset:0,scale:1}},
-      {id:'B',label:'Device B',duration:400,clock:{offset:2,scale:1}}
+    view.project={project_id:'synthetic-player',fingerprint:'synthetic-playback-fingerprint',people:[{name:'Person A'},{name:'Person B'}],sources:[
+      {id:'A',label:'Device A',bounded_clip:${bounded},sample_rate:1000,available_frames:400000,available_duration:400,duration:400,clock:{offset:0,scale:1}},
+      {id:'B',label:'Device B',bounded_clip:${bounded},sample_rate:1000,available_frames:400000,available_duration:400,duration:400,clock:{offset:2,scale:1}}
     ],items:[
       {id:'early',kind:'transcript',start:10,end:20,text:'Early synthetic phrase'},
       {id:'late',kind:'transcript',start:100,end:110,text:'Late synthetic phrase'},
@@ -109,11 +129,11 @@ function application({readyState=1, manualSeek=false, deferPlay=false}={}) {
       {id:'confirmed-b',kind:'transcript',start:60,end:64,text:'Other confirmed phrase'},
       {id:'candidate',kind:'speaker_sample',start:80,end:84,text:'Candidate phrase',speaker:'Model guess',identity_status:'candidate'}
     ]};
-    view.state={revision:7,decisions:{confirmed:{speaker:'Person A',status:'confirmed'},'confirmed-b':{speaker:'Person B',status:'confirmed'}}};
+    view.state={fingerprint:'synthetic-playback-fingerprint',revision:7,decisions:{confirmed:{speaker:'Person A',status:'confirmed'},'confirmed-b':{speaker:'Person B',status:'confirmed'}}};
     view.mode='transcript'; view.filtered=view.project.items; view.selectedId='early'; view.sourceId='A'; view.position=12;
     bindEvents(); renderSelected();`);
   function flushEvents(){for(let count=0;events.length;count++){assert.ok(count<100,'Synthetic media queue must settle');events.shift()();}}
-  async function settle(){for(let i=0;i<8;i++)await Promise.resolve(); flushEvents();}
+  async function settle(){for(let i=0;i<30;i++)await Promise.resolve(); flushEvents();}
   function expire(ms=10000){
     const matching=[...timers.entries()].filter(([,timer])=>timer.ms===ms);
     assert.ok(matching.length, `Expected a pending ${ms}ms timeout`);
@@ -125,7 +145,7 @@ function application({readyState=1, manualSeek=false, deferPlay=false}={}) {
     return document.dispatch('keydown',event);
   }
   function currentSnapshot(){return JSON.parse(run('JSON.stringify({selectedId:view.selectedId,sourceId:view.sourceId,position:view.position,state:view.state,drafts:[...view.drafts]})'));}
-  return {run,nodes,audios,events,timers,document,node,flushEvents,settle,expire,key,currentSnapshot};
+  return {run,nodes,audios,events,timers,clipRequests,document,node,flushEvents,settle,expire,key,currentSnapshot};
 }
 
 function assertStatus(app, phase, status, button) {
@@ -404,4 +424,113 @@ test('editor and note drafts follow their own item when focus survives a selecti
   assert.equal(note.value,'Early note');assert.equal(note.dataset.itemId,'early');
   assert.equal(app.run("view.drafts.get('late').text"),'Pending late edit');
   assert.equal(app.run("view.drafts.get('early').note"),'Early note');
+});
+
+test('bounded WAV maps rounded clip-local time and ends only at natural EOF',async()=>{
+  const app=application({bounded:true});
+  app.run('view.project.items[0].start=10.0004;view.project.items[0].end=20.0008;view.position=12');
+  await app.run('playAudio()');app.flushEvents();
+  const audio=app.audios[0];
+  assert.match(audio.src,/^\/clip\?/);
+  assert.equal(audio.reviewClip.local_start,10.001);
+  assert.ok(Math.abs(audio.currentTime-1.999)<1e-10);
+  audio.progress(9.99);app.flushEvents();
+  assert.equal(audio.paused,false,'timeupdate cannot cut the final samples short');
+  assert.ok(Math.abs(app.run('view.position')-19.991)<1e-10);
+  audio.naturalEnd();app.flushEvents();
+  assertStatus(app,'ended','片段结束',/再听一次/);
+  assert.equal(app.run('view.position'),20);
+  await app.run('playAudio()');app.flushEvents();
+  assert.equal(audio.currentTime,0);assert.equal(app.audios.length,1);
+  assert.equal(app.clipRequests.length,1,'Resume/replay reuses the validated bounded clip');
+});
+
+test('bounded source switch, speed, loop and changed context retain canonical coordinates',async()=>{
+  const app=application({bounded:true});await app.run('playAudio()');app.flushEvents();
+  app.audios[0].progress(5);
+  assert.equal(app.run('view.position'),15);
+  await app.run("switchSource('B')");app.flushEvents();
+  const b=app.audios[1];assert.equal(b.currentTime,5);assert.equal(b.reviewClip.local_start,8);
+  app.nodes.get('speedSelect').value='1.5';app.nodes.get('speedSelect').dispatch('change');assert.equal(b.playbackRate,1.5);
+  app.run('view.loop=true');b.naturalEnd();await app.settle();
+  assert.equal(b.currentTime,0);assert.equal(b.paused,false);assert.equal(b.playbackRate,1.5);
+  b.progress(3);assert.equal(app.run('view.position'),13);
+  app.nodes.get('contextButton').dispatch('click');await app.settle();
+  const extended=app.audios.at(-1);assert.equal(extended.reviewClip.context,3);assert.equal(extended.reviewClip.local_start,5);
+  assert.equal(extended.currentTime,6);assert.equal(app.run('view.position'),13);
+  assert.equal(b.paused,true);
+});
+
+test('bounded descriptor errors and unknown capability never play full media',async()=>{
+  for(const response of [
+    {ok:false,status:415,json:async()=>({error:{code:'unsupported_clip_format',message:'Synthetic unsupported codec'}})},
+    {ok:true,status:200,json:async()=>({project_fingerprint:'foreign-project'})}
+  ]){
+    const app=application({bounded:true,descriptorFetch:async()=>response});
+    await app.run('playAudio()');assert.equal(app.audios.length,0);assertStatus(app,'error','读取失败',/重试原音/);
+  }
+  const unknown=application();unknown.run('delete currentSource().bounded_clip');await unknown.run('playAudio()');
+  assert.equal(unknown.audios.length,0);assertStatus(unknown,'error','读取失败',/重试原音/);
+  const legacy=application();await legacy.run('playAudio()');assert.match(legacy.audios[0].src,/^\/media\//);
+  assert.match(legacy.nodes.get('audioMessage').textContent,/句尾可能有延迟/);
+});
+
+test('bounded descriptor cancellation and timeout cannot resurrect playback',async()=>{
+  let complete;
+  const app=application({bounded:true,descriptorFetch:(url,options,descriptor)=>new Promise(resolve=>{complete=()=>resolve({ok:true,status:200,json:async()=>descriptor(url)});})});
+  const pending=app.run('playAudio()');app.run("chooseItem('late')");
+  complete();await pending;await app.settle();assert.equal(app.audios.length,0);assert.equal(app.run('view.position'),100);
+  assert.equal(app.clipRequests[0].options.signal.aborted,true);
+  const timeout=application({bounded:true,descriptorFetch:()=>new Promise(()=>{})});
+  const waiting=timeout.run('playAudio()');timeout.expire();await waiting;
+  assertStatus(timeout,'error','读取失败',/重试原音/);assert.equal(timeout.audios.length,0);
+});
+
+test('bounded reference EOF keeps current work intact and resumes at the same cursor',async()=>{
+  const app=application({bounded:true});await app.run('playAudio()');app.flushEvents();app.audios[0].progress(5);
+  const before=app.currentSnapshot();await app.run("playReference('confirmed')");app.flushEvents();
+  const reference=app.audios[1];assert.match(reference.src,/^\/clip\?/);assert.equal(reference.currentTime,0);assert.equal(reference.duration,8);
+  reference.progress(7.99);assert.notEqual(app.run('view.reference'),null);reference.naturalEnd();app.flushEvents();
+  assert.equal(app.run('view.reference'),null);assert.deepEqual(app.currentSnapshot(),before);
+  await app.run('playAudio()');app.flushEvents();assert.equal(app.audios[0].currentTime,5);assert.equal(app.audios[0].paused,false);
+});
+
+test('partial bounded context stays disclosed before and during playback',async()=>{
+  const app=application({bounded:true});app.run('view.project.items[0].start=0;view.project.items[0].end=2;view.project.sources[0].duration=2;view.project.sources[0].available_duration=2;view.project.sources[0].available_frames=2000;view.position=0;view.context=true;renderSelected()');
+  assert.match(app.nodes.get('audioMessage').textContent,/只覆盖本段部分原音/);
+  const playing=app.run('playAudio()');assert.match(app.nodes.get('audioMessage').textContent,/只覆盖本段部分原音/);
+  await playing;app.flushEvents();assert.equal(app.audios[0].duration,2);assert.match(app.nodes.get('audioMessage').textContent,/只覆盖本段部分原音/);
+});
+
+test('actual PCM extent discloses partial audio before playback and through natural EOF',async()=>{
+  const app=application({bounded:true});
+  app.run("view.project.items[0].start=1;view.project.items[0].end=3;view.project.sources[0].duration=3;view.project.sources[0].available_frames=2000;view.project.sources[0].available_duration=2;view.position=1;view.project.sources=[view.project.sources[0]];renderSelected()");
+  assert.equal(app.run('sourceCoverage(currentSource()).end'),2);
+  assert.match(app.nodes.get('audioMessage').textContent,/只覆盖本段部分原音/);
+  const pending=app.run('playAudio()');assert.match(app.nodes.get('audioMessage').textContent,/只覆盖本段部分原音/);
+  await pending;app.flushEvents();const audio=app.audios[0];
+  assert.equal(audio.reviewClip.coverage_complete,false);assert.equal(audio.duration,1);
+  for(const phase of ['playing','buffering','paused','idle','error']){app.run(`setAudioPhase('${phase}')`);assert.match(app.nodes.get('audioMessage').textContent,/只覆盖本段部分原音/);}
+  app.run("setAudioPhase('playing')");audio.naturalEnd();app.flushEvents();
+  assert.match(app.nodes.get('audioMessage').textContent,/可用原音已播完.*只覆盖本段部分原音/);
+  assert.equal(app.run('view.position'),2);
+});
+
+test('the matching descriptor remains authoritative and partial references never start',async()=>{
+  const app=application({bounded:true,descriptorFetch:async(url,options,descriptor)=>{
+    const clip=descriptor(url);clip.coverage_complete=false;
+    return {ok:true,status:200,json:async()=>clip};
+  }});
+  await app.run('playAudio()');app.flushEvents();
+  assert.equal(app.run('sourceCoverage(currentSource()).partial'),false,'Declared metadata alone would claim complete coverage');
+  assert.match(app.nodes.get('audioMessage').textContent,/只覆盖本段部分原音/);
+  app.run("chooseItem('late')");assert.doesNotMatch(app.nodes.get('audioMessage').textContent,/只覆盖本段部分原音/,'A previous item descriptor cannot contaminate the next selection');
+  await app.run("playReference('confirmed')");assert.equal(app.audios.length,1,'Incomplete reference descriptor must not create an Audio player');
+  assert.equal(app.run('view.reference'),null);assert.match(app.nodes.get('referenceMessage').textContent,/没有完整音频覆盖/);
+});
+
+test('reference candidates exclude recordings that do not contain the complete confirmed phrase',()=>{
+  const app=application({bounded:true});
+  app.run("view.project.sources=[view.project.sources[0]];view.project.sources[0].available_duration=45;view.project.sources[0].available_frames=45000;renderReferences()");
+  assert.deepEqual(JSON.parse(app.run('JSON.stringify(confirmedReferences().map(item=>item.id))')),[]);
 });

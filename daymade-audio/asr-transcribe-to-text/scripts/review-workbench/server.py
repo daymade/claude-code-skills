@@ -7,6 +7,7 @@ import argparse
 import copy
 from contextlib import contextmanager
 import csv
+from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR
 import hashlib
 import io
 import ipaddress
@@ -16,18 +17,20 @@ import mimetypes
 import os
 from pathlib import Path
 import re
+import struct
 import sys
 import tempfile
 import threading
 from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, quote, unquote, urlsplit
+from urllib.parse import parse_qs, quote, unquote, urlencode, urlsplit
 import webbrowser
 
 
 MAX_BODY = 64 * 1024
 STATUSES = {"confirmed", "unknown", "skipped"}
+PCM_FRAME_SNAP_TOLERANCE = Decimal("0.000001")
 
 
 class ProjectError(ValueError):
@@ -85,6 +88,65 @@ def _audio_mime(path):
     return mimetypes.guess_type(path.name)[0] or "application/octet-stream"
 
 
+def _pcm_wav(path, size):
+    """Read only RIFF chunk headers; unsupported encodings keep ordinary playback."""
+    with path.open("rb") as stream:
+        head = stream.read(12)
+        if len(head) != 12 or head[:4] != b"RIFF" or head[8:] != b"WAVE":
+            return None
+        limit = struct.unpack_from("<I", head, 4)[0] + 8
+        if limit > size:
+            return None
+        fmt = data = None
+        position = 12
+        while position + 8 <= limit:
+            stream.seek(position)
+            chunk = stream.read(8)
+            if len(chunk) != 8:
+                return None
+            tag, length = struct.unpack("<4sI", chunk)
+            offset = position + 8
+            if offset + length > limit:
+                return None
+            if tag == b"fmt ":
+                if fmt is not None or length < 16:
+                    return None
+                raw = stream.read(16)
+                if len(raw) != 16:
+                    return None
+                encoding, channels, rate, byte_rate, alignment, bits = struct.unpack("<HHIIHH", raw)
+                if (encoding != 1 or not channels or not rate or bits not in {8, 16, 24, 32}
+                        or alignment != channels * (bits // 8) or byte_rate != rate * alignment):
+                    return None
+                fmt = {"channels": channels, "sample_rate": rate, "block_align": alignment, "bits": bits}
+            elif tag == b"data":
+                if data is not None:
+                    return None
+                data = {"offset": offset, "length": length}
+            position = offset + length + (length % 2)
+        if fmt is None or data is None or not data["length"] or data["length"] % fmt["block_align"]:
+            return None
+        return {**fmt, **data, "frames": data["length"] // fmt["block_align"]}
+
+
+def _wav_header(pcm, data_size):
+    return struct.pack("<4sI4s4sIHHIIHH4sI", b"RIFF", 36 + data_size + data_size % 2,
+                       b"WAVE", b"fmt ", 16, 1, pcm["channels"], pcm["sample_rate"],
+                       pcm["sample_rate"] * pcm["block_align"], pcm["block_align"], pcm["bits"],
+                       b"data", data_size)
+
+
+def _snap_pcm_frame(position):
+    """Remove clock arithmetic noise, without treating missing samples as covered."""
+    nearest = position.to_integral_value()
+    return nearest if abs(position - nearest) <= PCM_FRAME_SNAP_TOLERANCE else position
+
+
+def _available_pcm_frames(source):
+    declared = _snap_pcm_frame(Decimal(str(source["public"]["duration"])) * source["pcm"]["sample_rate"])
+    return min(source["pcm"]["frames"], int(declared.to_integral_value(rounding=ROUND_FLOOR)))
+
+
 class Project:
     def __init__(self, path):
         path = Path(path)
@@ -97,6 +159,16 @@ class Project:
         if not isinstance(data, dict) or type(data.get("schema_version")) is not int or data["schema_version"] != 1:
             raise ProjectError("Project schema_version must be 1")
         self.project_id = identifier(data.get("project_id"), "project_id")
+        self.evidence_hashes = None
+        if "evidence_hashes" in data:
+            hashes = data["evidence_hashes"]
+            if not isinstance(hashes, dict) or not hashes:
+                raise ProjectError("Project evidence_hashes must be a nonempty object")
+            if any(not isinstance(key, str) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,160}", key)
+                   or not isinstance(value, str) or not re.fullmatch(r"[a-f0-9]{64}", value)
+                   for key, value in hashes.items()):
+                raise ProjectError("Project evidence_hashes must map ASCII identifiers to lowercase SHA-256 hashes")
+            self.evidence_hashes = copy.deepcopy(hashes)
         if not isinstance(data.get("title"), str) or not data["title"].strip():
             raise ProjectError("Project title must be a nonempty string")
         if "subtitle" in data and not isinstance(data["subtitle"], str):
@@ -150,6 +222,7 @@ class Project:
                         digest.update(chunk)
                 stat = audio_path.stat()
                 mime = _audio_mime(audio_path)
+                pcm = _pcm_wav(audio_path, stat.st_size) if mime == "audio/wav" else None
             except OSError as exc:
                 raise ProjectError(f"Audio for source {sid} is not a readable file") from exc
             public = {key: copy.deepcopy(source[key]) for key in ("id", "label", "duration", "clock", "peaks")}
@@ -157,7 +230,7 @@ class Project:
             public["mime"] = mime
             public_sources.append(public)
             fingerprint_sources.append({**public, "content_sha256": digest.hexdigest()})
-            self.sources[sid] = {"path": audio_path, "size": stat.st_size, "mtime_ns": stat.st_mtime_ns, "mime": mime, "public": public}
+            self.sources[sid] = {"path": audio_path, "size": stat.st_size, "mtime_ns": stat.st_mtime_ns, "mime": mime, "pcm": pcm, "public": public}
         self.items = {}
         for item in data["items"]:
             if not isinstance(item, dict):
@@ -205,8 +278,19 @@ class Project:
                 for item in self.items.values()
             ], key=lambda item: item["id"]),
         }
+        if self.evidence_hashes is not None:
+            basis.update(fingerprint_version=3, evidence_hashes=self.evidence_hashes)
+            self.public["evidence_hashes"] = copy.deepcopy(self.evidence_hashes)
         self.fingerprint = hashlib.sha256(json.dumps(basis, ensure_ascii=False, sort_keys=True, allow_nan=False, separators=(",", ":")).encode()).hexdigest()
         self.public["fingerprint"] = self.fingerprint
+        # Runtime media URLs and capabilities do not change the evidence binding.
+        for source in self.sources.values():
+            source["public"]["media_url"] += "?" + urlencode({"project_fingerprint": self.fingerprint})
+            source["public"]["bounded_clip"] = source["pcm"] is not None
+            if source["pcm"] is not None:
+                source["public"]["sample_rate"] = source["pcm"]["sample_rate"]
+                source["public"]["available_frames"] = _available_pcm_frames(source)
+                source["public"]["available_duration"] = source["public"]["available_frames"] / source["pcm"]["sample_rate"]
 
     def assert_sources_unchanged(self):
         for source in self.sources.values():
@@ -216,6 +300,63 @@ class Project:
                 raise APIError(409, "source_changed", "An audio source is unavailable; restart after restoring the project") from exc
             if stat.st_size != source["size"] or stat.st_mtime_ns != source["mtime_ns"]:
                 raise APIError(409, "source_changed", "An audio source changed; reload the project before reviewing")
+
+    def assert_fingerprint(self, fingerprint):
+        if not isinstance(fingerprint, str) or not fingerprint.strip():
+            raise APIError(400, "invalid_project_fingerprint", "project_fingerprint must be a nonempty string")
+        if fingerprint != self.fingerprint:
+            raise APIError(409, "project_mismatch", "This page belongs to different project data or audio; open the current project before reviewing")
+
+    def clip(self, query):
+        params = parse_qs(query, keep_blank_values=True)
+        binding = params.get("project_fingerprint", [None])
+        self.assert_fingerprint(binding[0] if len(binding) == 1 else None)
+        allowed = {"project_fingerprint", "item_id", "source_id", "context", "reference"}
+        if set(params) - allowed or any(len(values) != 1 for values in params.values()):
+            raise APIError(400, "invalid_clip", "Clip parameters must be unique and supported")
+        values = {key: entries[0] for key, entries in params.items()}
+        item_id, source_id = values.get("item_id"), values.get("source_id")
+        item, source = self.items.get(item_id), self.sources.get(source_id)
+        if item is None:
+            raise APIError(404, "unknown_item", "Clip item was not found")
+        if source is None:
+            raise APIError(404, "unknown_source", "Audio source was not found")
+        context, reference = values.get("context", "0"), values.get("reference", "0")
+        if context not in {"0", "3"} or reference not in {"0", "1"} or (reference == "1" and context != "0"):
+            raise APIError(400, "invalid_clip", "Use context 0 or 3; references require context 0")
+        self.assert_sources_unchanged()
+        pcm = source["pcm"]
+        if pcm is None:
+            raise APIError(415, "unsupported_clip_format", "Exact clip playback requires an uncompressed PCM WAV source")
+        start, end = Decimal(str(item["start"])), Decimal(str(item["end"]))
+        if reference == "1":
+            end = min(end, start + 8)
+        requested_start, requested_end = max(Decimal(0), start - int(context)), end + int(context)
+        clock = source["public"]["clock"]
+        offset, scale = Decimal(str(clock["offset"])), Decimal(str(clock["scale"]))
+        rate = pcm["sample_rate"]
+        start_position = _snap_pcm_frame((requested_start - offset) / scale * rate)
+        end_position = _snap_pcm_frame((requested_end - offset) / scale * rate)
+        available_frames = _available_pcm_frames(source)
+        if _snap_pcm_frame((end - offset) / scale * rate) <= 0 or _snap_pcm_frame((start - offset) / scale * rate) >= available_frames:
+            raise APIError(416, "clip_unavailable", "This source does not cover the selected item")
+        # Include only whole frames contained in the requested interval.
+        start_frame = max(0, int(start_position.to_integral_value(rounding=ROUND_CEILING)))
+        end_frame = min(available_frames, int(end_position.to_integral_value(rounding=ROUND_FLOOR)))
+        if start_frame >= end_frame:
+            raise APIError(416, "clip_unavailable", "This source has no complete audio samples in the selected interval")
+        actual_start, actual_end = start_frame / rate, end_frame / rate
+        normalized = {"project_fingerprint": self.fingerprint, "item_id": item_id, "source_id": source_id,
+                      "context": int(context), "reference": int(reference)}
+        public = {**normalized, "start_frame": start_frame, "end_frame": end_frame, "sample_rate": rate,
+                  "local_start": actual_start, "local_end": actual_end, "duration": (end_frame - start_frame) / rate,
+                  "canonical_start": float(offset + Decimal(start_frame) / rate * scale),
+                  "canonical_end": float(offset + Decimal(end_frame) / rate * scale),
+                  "coverage_complete": start_position >= 0 and end_position <= available_frames,
+                  "media_url": "/clip?" + urlencode(normalized)}
+        data_size = (end_frame - start_frame) * pcm["block_align"]
+        return {"public": public, "source": source, "header": _wav_header(pcm, data_size),
+                "offset": pcm["offset"] + start_frame * pcm["block_align"], "data_size": data_size}
 
 
 class StateStore:
@@ -235,7 +376,7 @@ class StateStore:
         if self.path.exists():
             try:
                 state = read_json(self.path)
-                migrate_fingerprint = isinstance(state, dict) and state.get("fingerprint") == project.legacy_fingerprint
+                migrate_fingerprint = project.evidence_hashes is None and isinstance(state, dict) and state.get("fingerprint") == project.legacy_fingerprint
                 if migrate_fingerprint:
                     # This match includes the current full input and audio bytes,
                     # so it proves the older binding refers to this exact project.
@@ -386,7 +527,8 @@ class StateStore:
     def mutate(self, action, payload):
         if not isinstance(payload, dict):
             raise APIError(400, "invalid_body", "JSON body must be an object")
-        allowed = {"base_revision", "request_id"} | ({"item_id", "changes"} if action == "decision" else set())
+        self.project.assert_fingerprint(payload.get("project_fingerprint"))
+        allowed = {"project_fingerprint", "base_revision", "request_id"} | ({"item_id", "changes"} if action == "decision" else set())
         if set(payload) - allowed:
             raise APIError(400, "invalid_body", "JSON body contains unsupported fields")
         revision = payload.get("base_revision")
@@ -606,6 +748,10 @@ class Handler(BaseHTTPRequestHandler):
             elif parsed.path == "/api/state":
                 self.server.project.assert_sources_unchanged()
                 self._json(self.server.store.snapshot())
+            elif parsed.path == "/api/clip":
+                self._json(self.server.project.clip(parsed.query)["public"])
+            elif parsed.path == "/clip":
+                self._clip_media(self.server.project.clip(parsed.query))
             elif parsed.path == "/api/export":
                 self.server.project.assert_sources_unchanged()
                 kind = parse_qs(parsed.query).get("format", ["json"])[0]
@@ -616,7 +762,7 @@ class Handler(BaseHTTPRequestHandler):
                 if self.command != "HEAD":
                     self.wfile.write(body)
             elif parsed.path.startswith("/media/"):
-                self._media(unquote(parsed.path[len("/media/"):]))
+                self._media(unquote(parsed.path[len("/media/"):]), parsed.query)
             elif parsed.path.startswith("/api/"):
                 raise APIError(404, "not_found", "API endpoint was not found")
             else:
@@ -626,10 +772,15 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             pass
 
-    def _media(self, source_id):
+    def _media(self, source_id, query):
         source = self.server.project.sources.get(source_id)
         if source is None:
             raise APIError(404, "unknown_source", "Audio source was not found")
+        params = parse_qs(query, keep_blank_values=True)
+        binding = params.get("project_fingerprint", [None])
+        self.server.project.assert_fingerprint(binding[0] if len(binding) == 1 else None)
+        if set(params) != {"project_fingerprint"}:
+            raise APIError(400, "invalid_media", "Only a project_fingerprint is accepted for media requests")
         self.server.project.assert_sources_unchanged()
         size = source["size"]
         range_header = self.headers.get("Range")
@@ -660,6 +811,47 @@ class Handler(BaseHTTPRequestHandler):
                     break
                 self.wfile.write(chunk)
                 length -= len(chunk)
+
+    def _clip_media(self, clip):
+        header, data_size = clip["header"], clip["data_size"]
+        size = len(header) + data_size + data_size % 2
+        start, end = 0, size - 1
+        range_header = self.headers.get("Range")
+        if range_header:
+            try:
+                start, end = byte_range(range_header, size)
+            except ValueError:
+                self._headers(416, "audio/wav", 0, Content_Range=f"bytes */{size}", Accept_Ranges="bytes")
+                return
+        source = clip["source"]
+        try:
+            stream = source["path"].open("rb")
+        except OSError as exc:
+            raise APIError(404, "audio_unavailable", "Audio source cannot be opened") from exc
+        with stream:
+            stat = os.fstat(stream.fileno())
+            if stat.st_size != source["size"] or stat.st_mtime_ns != source["mtime_ns"]:
+                raise APIError(409, "source_changed", "An audio source changed; reload the project before reviewing")
+            headers = {"Accept_Ranges": "bytes"}
+            if range_header:
+                headers["Content_Range"] = f"bytes {start}-{end}/{size}"
+            self._headers(206 if range_header else 200, "audio/wav", end - start + 1, **headers)
+            if self.command == "HEAD":
+                return
+            if start < len(header):
+                self.wfile.write(header[start:min(end + 1, len(header))])
+            audio_start, audio_end = max(start, len(header)), min(end + 1, len(header) + data_size)
+            remaining = max(0, audio_end - audio_start)
+            stream.seek(clip["offset"] + audio_start - len(header))
+            while remaining:
+                chunk = stream.read(min(remaining, 256 * 1024))
+                if not chunk:
+                    self.close_connection = True
+                    return
+                self.wfile.write(chunk)
+                remaining -= len(chunk)
+            if data_size % 2 and end == size - 1:
+                self.wfile.write(b"\0")
 
     def _static(self, path):
         if "\x00" in path or "\\" in path:

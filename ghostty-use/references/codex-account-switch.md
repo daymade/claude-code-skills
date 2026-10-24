@@ -173,6 +173,78 @@ insufficient when it exposes no exact SID/TTY or independently observable draft.
 A host denial stops GUI operation; do not fall back to
 AppleScript or another channel to bypass it. Read-only plans/checks remain usable.
 
+## Reopen the original recorded set, not a blank session
+
+Classify the request before opening anything. "Restore my sessions" around a
+switch targets the fixed manifest's original set: the same SIDs, working
+directories and replay-safe argv captured by `switch-prepare`. A new blank
+`codex` tab is a different request — never substitute one for the set, never
+count one as recovery, and never narrow the set to what is convenient to open.
+An explicit request for a fresh blank session needs no manifest and is outside
+this route.
+
+When opening is blocked or delegated — the user keeps old processes and clears
+session locks themselves, or the current host denies Ghostty UI automation —
+deliver the complete exact command set with per-item status, not a demand that
+old processes exit first and not blank terminals:
+
+```bash
+# Read-only, no account precondition: exact reopen command per fixed-set SID,
+# executing session last. Exit 1 without an executor is the deferral signal;
+# the printed REOPEN set is still the deliverable.
+python3 <skill-dir>/scripts/ghostty_session.py switch-plan \
+  --snapshot <fixed-manifest> --current-session <executing-session-full-uuid>
+
+# Mode-bound reconciliation; retain --after-login for post-login capture:
+python3 <skill-dir>/scripts/ghostty_session.py switch-restore \
+  --snapshot <fixed-manifest> --check
+```
+
+Pass `--current-session` only the executing session's true full UUID when it
+belongs to the fixed set; never substitute another target's SID. Unresolved
+live identity or duplicate SIDs can block this plan. If the coordinator is
+outside the set, or live reconciliation is blocked, prepare the complete
+commands through the same bundled helpers without probing accounts or processes:
+
+```bash
+python3 -B - '<skill-dir>/scripts' '<fixed-manifest>' <<'PY'
+import sys
+from types import SimpleNamespace
+sys.path.insert(0, sys.argv[1])
+import ghostty_session as gs
+import ghostty_switch as sw
+_, saved = sw.current_manifest(gs, SimpleNamespace(snapshot=sys.argv[2]))
+targets = sw.main_sessions(saved, gs)
+for row in targets['sessions']:
+    print('UNVERIFIED ' + row['sid'])
+    print('  REOPEN ' + sw.command(row, saved['codex_home']))
+PY
+```
+
+This reads the fixed manifest and each saved rollout's identity metadata. It
+retains the existing legacy-subagent filter: report each `SKIP SUBAGENT` with
+its saved parent; an unavailable/mismatched rollout or absent parent fails.
+It does not authorize opening any command or establish live status. Keep each
+target unverified until reconciliation. The mode-bound check reports reopened,
+old/unverified and missing once its account precondition holds; plan `live_pid`
+columns show presence only. Old-PID and duplicate-SID refusals remain unchanged;
+the helpers cannot certify successful restoration while duplicate copies remain.
+
+Printing commands is preparation, not recovery. Any actual reopen requires the
+current host's permission; a host denial stops GUI input and is not bypassed
+through a CLI, AppleScript or another UI channel — deliver the command set and
+reconcile after permitted execution. Whoever runs a delivered command later
+acts under their own authorization; the command preserves identity and options
+and confers no permission. Account adoption, authenticated continuation and
+billing stay layered as defined in [the acceptance section](#accept-actual-continuation).
+
+Accept the delivered command set only by independent comparison against the
+original fixed manifest: every independently resumable `sessions[]` row needs
+its exact SID, cwd, CODEX_HOME and full argv, with every legacy subagent
+explicitly accounted for by its saved parent rather than resumed separately.
+A blank or new session, an omitted row, a wrong cwd or an altered flag fails.
+Matching the delivery's prose or keywords is not acceptance.
+
 ## Restore and resume an interrupted batch
 
 Apply the Skill entry's foreground check: use an authorized bounded Ghostty handoff

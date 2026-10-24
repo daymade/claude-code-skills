@@ -298,6 +298,11 @@ the visible text population and exact repetitions inspectable; review the full
 population against the task, not only its repetition candidates. Complete
 inventory coverage is not proof that the content is necessary.
 
+For a publication whose local checks pass but discovery or reading still feels
+cluttered, use the [publication journey cases](references/publication-journey-cases.md)
+to calibrate whole-path findings against a failing case and a healthy control.
+These synthetic cases supplement the existing necessity check, not a style score.
+
 Some defects produce no diagnostic anywhere: a global reset outranking a
 component's own styles, a library renaming its internal DOM classes so whole
 rule groups match nothing, a font family declared but never shipped, geometry

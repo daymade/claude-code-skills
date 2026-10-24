@@ -63,7 +63,21 @@ the user for the missing anchor rather than reporting an independent pass you di
 
 ## Writing the reviewer prompt
 
-Give it **exactly two evidence-bearing inputs**: the immutable artifact and the reader spec.
+Give it these evidence-bearing inputs, and nothing that asserts your conclusion:
+
+1. **The immutable artifact** — the exact file set or commit/ref being judged.
+2. **The external original request / acceptance anchor** — the out-of-blast-radius record
+   chosen per *Choosing an anchor* above. Without it the reviewer can judge coherence but
+   not fidelity: it can only re-derive agreement between your artifact and your own account
+   of what was asked.
+3. **The replay record, when the pass covers a behavior replay** — the exact input the
+   consumer actually received, the declared adaptations, its first answer and every
+   subsequent intervention, preserved per the
+   [behavior-replay fidelity contract](#behavior-replay-fidelity). The reviewer
+   compares original request → dispatched input → first answer → claimed coverage before
+   judging the artifact.
+4. **The reader spec** — defined below.
+
 Also provide three non-evidentiary control fields: the current change's blast radius, named
 failure axes, and terminal condition. These fields constrain what the pass may inspect and
 when it stops; they do not assert that the implementation is correct. Give no design rationale,
@@ -134,6 +148,71 @@ choice, or name the missing basis. Passing value tests proves implementation com
 that the chosen value suits the task. Add this question to the existing bounded
 pass; it does not create another review obligation.
 
+## Behavior-replay fidelity
+
+A with-skill replay is evidence only for the task the consumer actually received.
+The executor and the already-required independent review adjudicate fidelity;
+this procedure is not mechanically enforced. Missing records leave the corresponding
+coverage unverified.
+
+### Preserve at dispatch
+
+Keep three checkable materials in the existing dispatch/review archives — no new per-task
+ledger is required:
+
+1. **The original task intent, with source coordinates** — the user's verbatim request or
+   the frozen acceptance anchor and where it lives, not a paraphrase written after the
+   output exists.
+2. **The exact input the consumer actually received** — including the facts, tools and
+   controls it was really given.
+3. **The outcome record split by phase** — the first answer, then each subsequent prompt or
+   correction, stored separately; see *First answer vs. corrected answer* below.
+
+Check the question before the result: compare original request → dispatched input → first
+answer → claimed acceptance coverage first, and only then judge the artifact. A
+complete-original replay, a diagnostic or boundary unit test, and a post-prompt correction
+are three different evidence types; record their conclusions separately. A simplified unit
+test is legitimate evidence for the narrow mechanism it exercises, but its PASS never
+auto-fills coverage of the original question — it says nothing about the parts it removed.
+
+### Adaptations are allowed; hiding them is not
+
+Byte-for-byte equality between the original request and the dispatched input is not
+required. Legitimate adaptations include necessary redaction, credential removal, stripping
+non-executive wrapping, turning background material into a runnable task, tool or file path
+substitution, fact supplements, and isolation controls that prevent real sending or external
+effects. For each adaptation, record what changed, why, and which part of the original
+acceptance it supports or leaves unverified; the independent pass judges the semantics.
+Removing part of a mixed purpose or supplying a determination under test narrows what the
+run can establish; label it as diagnostic or assisted evidence rather than original-task
+coverage. Do not reject a sound test merely because it was adapted, nor claim semantic
+equivalence without a stated basis. When the original
+request involves a real send or production effect, a safe prepare-only rehearsal verifies
+material selection only; never report the send itself as verified.
+
+### What the consumer may not receive
+
+Keep the evaluator's answer key, author conclusions and hints resolving the judgment
+under test out of the consumer input. Preserve the actual user's requirements, including
+explicit acceptance criteria and output formats, and the Skill instructions being tested.
+Supplying the facts a real consumer would legitimately have is not a leak — a
+fact fixture stays a fact even when it names a risk. Telling a reply-drafting consumer "the
+ship date slipped and the customer has not been told" is a fact fixture; adding "so you must
+open with an apology for the delay" feeds it the decision under test. The line is judgment:
+a condition the original task left to the consumer's own judgment stays open, and rewriting
+it as "you must …" no longer tests whether the consumer makes that judgment without a hint.
+A consumer that has seen the evaluator's answer key or the author's proposed solution may
+serve diagnosis, but does not establish unprompted performance on that judgment.
+
+### First answer vs. corrected answer
+
+Store the first answer and every post-intervention correction separately. Never re-feed the
+complete original wording and then re-record the corrected answer as a first-pass PASS; a
+correction after supplied evidence is its own evidence type, as in the
+[first-answer-and-correction example](change-verification.md#first-answer-and-correction-correct-reads-with-an-unsupported-next-action).
+Existing archives and task records are sufficient storage — do not create a new long table
+or a JSON record for every ordinary typo.
+
 ## Interpreting what comes back
 
 | Finding type | Authority | What to do |
@@ -184,15 +263,21 @@ each genuine finding becomes permission to inspect a wider subsystem, and “ver
 quietly turns into “redesign everything the artifact has ever done.” That is not rigor; it is
 an unapproved scope change whose completion condition moves after every pass.
 
-Freeze these fields before dispatch and include them in the reviewer prompt. The artifact
-and reader specification are evidence-bearing inputs; blast radius, failure axes and terminal
-condition control the review rather than supplying evidence for the author's conclusion:
+Freeze these fields before dispatch and include them in the reviewer prompt. The artifact,
+external anchor, any replay record and the reader specification are evidence-bearing inputs;
+blast radius, failure axes and terminal condition control the review rather than supplying
+evidence for the author's conclusion:
 
 1. **Immutable artifact** — exact file set or commit/ref being judged.
-2. **Reader spec** — who must execute it and what they already know.
-3. **Change blast radius** — capabilities, rules, scripts, and runtime paths this edit touched or newly advertised.
-4. **Failure axes** — the bounded questions this pass must answer.
-5. **Terminal condition** — for example: no unresolved BLOCKER/MAJOR on those axes, deterministic gates pass, and every old scenario has a classified disposition.
+2. **External original request / acceptance anchor** — the out-of-blast-radius record from
+   *Choosing an anchor*; without it there is no fidelity check, only coherence.
+3. **Replay record, when the pass covers a behavior replay** — dispatched input, declared
+   adaptations, first answer and subsequent interventions, per the
+   [behavior-replay fidelity contract](#behavior-replay-fidelity).
+4. **Reader spec** — who must execute it and what they already know.
+5. **Change blast radius** — capabilities, rules, scripts, and runtime paths this edit touched or newly advertised.
+6. **Failure axes** — the bounded questions this pass must answer.
+7. **Terminal condition** — for example: no unresolved BLOCKER/MAJOR on those axes, deterministic gates pass, and every old scenario has a classified disposition.
 
 ### Public-distribution axes
 

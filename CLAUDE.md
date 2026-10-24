@@ -236,6 +236,8 @@ For persistent Python service installation, environment reuse or startup, follow
 
 For rendered UI freshness, delayed editor/batch responses or deployment acceptance, enter
 [frontend-visual-qa](frontend-visual-qa/SKILL.md).
+For publication-wide clutter despite passing local checks, use its
+[publication journey calibration](frontend-visual-qa/references/publication-journey-cases.md).
 Before measuring loading speed, read its
 [cache and timing comparison](frontend-visual-qa/references/browser-driving-and-observation-traps.md#separate-freshness-checks-from-performance-comparisons).
 For build reuse across source refs or a target redeployed during acceptance, load its
@@ -363,11 +365,16 @@ For memory pressure or suspected child-process leaks, enter that Skill's
 [memory evidence](daymade-macos/macos-load-doctor/SKILL.md#memory-evidence) before attributing the cause.
 The observation contract above owns delayed-sampling acceptance; keep its tests
 and the diagnostic stop conditions in those Skills.
-For changed operating defaults or thresholds in an already-required review, use
+For changed operating defaults or thresholds in an already-required review,
+or behavior-replay dispatch and coverage claims, use
 [skill-creator's independent-review protocol](daymade-skill/skill-creator/references/independent-review-protocol.md).
 Keep decision criteria and verification details in those owners.
 
 ### Transcript Correction
+
+For local audio listening, speaker decisions, word edits and recovery of saved
+judgments, use [Listening Desk](daymade-audio/asr-transcribe-to-text/references/review_workbench.md).
+Its saving and playback contracts govern both the browser and local service.
 
 For explicit single-task speaker-inference requests, load
 [scoped speaker inference](daymade-audio/transcript-fixer/references/scoped_speaker_inference.md).
@@ -444,6 +451,8 @@ already created by the current prompt. Artifact selection and runtime-read
 comparison are owned by that Skill; a receipt about a locator is not proof of
 the delivered artifact. For retrieval freshness, changed-source recovery and
 receipt lifetime, follow the [Prior Work operating contract](daymade-claude-code/prior-work-retrieval/SKILL.md).
+Requests to repeat a previously successful method enter its
+[candidate verification](daymade-claude-code/prior-work-retrieval/SKILL.md#4-verify-candidates-at-authority).
 
 For CLI/hook manifest selection or continuation in an already-running host, read
 [the manifest-selection contract](daymade-claude-code/prior-work-retrieval/SKILL.md#2-validate-the-explicit-source-manifest).
@@ -526,7 +535,10 @@ Skill links.
 ### Ghostty Terminal Sessions
 
 For snapshotting, restoring or reconciling Claude Code / Codex sessions in Ghostty
-across reboots, enter [`ghostty-use`](ghostty-use/SKILL.md). Its bundled script owns
+across reboots, enter [`ghostty-use`](ghostty-use/SKILL.md). Manual Codex account
+switches and blocked/delegated reopening enter its
+[account-switch SOP](ghostty-use/references/codex-account-switch.md), including
+the original-set handoff and actual-continuation acceptance. Its bundled script owns
 liveness classification and the paste-restore + auto-reconciliation loop; keep the
 storage-layout facts and macOS Ghostty limits in its references rather than here.
 For change-only automatic backups, use its
