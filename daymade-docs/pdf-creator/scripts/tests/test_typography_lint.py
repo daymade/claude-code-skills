@@ -165,6 +165,26 @@ def test_clean_cjk_content_produces_no_findings() -> None:
     )
 
 
+# ---------------- Missing Poppler tools ----------------
+
+
+def test_lint_skips_when_pdfinfo_is_missing() -> None:
+    """The lint runs pdfinfo, then pdftotext per page, so it needs both.
+
+    Git for Windows ships pdftotext without pdfinfo. A guard on pdftotext
+    alone let such a host reach pdfinfo and crash with FileNotFoundError
+    after the PDF had already been written.
+    """
+    def which(name: str) -> str | None:
+        return "/usr/local/bin/pdftotext" if name == "pdftotext" else None
+
+    missing = FileNotFoundError("pdfinfo")
+    with patch.object(md_to_pdf.shutil, "which", side_effect=which), \
+         patch.object(md_to_pdf.subprocess, "run", side_effect=missing) as run:
+        assert md_to_pdf._lint_pdf_typography("/fake/path/test.pdf") == []
+    run.assert_not_called()
+
+
 # ---------------- Runner ----------------
 
 
@@ -177,6 +197,7 @@ def run_all() -> int:
         ("P4: detect short line trailing 「、」",   test_pattern4_detects_short_line_ending_with_dunhao),
         ("P4: ignore long line trailing 「、」",    test_pattern4_ignores_long_line_ending_with_dunhao),
         ("Negative: clean content → no findings",  test_clean_cjk_content_produces_no_findings),
+        ("Missing pdfinfo: lint skipped, no crash", test_lint_skips_when_pdfinfo_is_missing),
     ]
     passed = failed = 0
     for name, fn in tests:
