@@ -81,3 +81,45 @@ An auditor who passes the first case solely because controls work misses the
 failure. An auditor who deletes every caption in the second case overgeneralizes
 it. Passing both is a bounded calibration observation, not proof of future
 design quality or permission to restart an accepted frontend.
+
+## Ancillary-copy release control
+
+Use this synthetic pair for the existing necessity check's pre-release pause
+point. The actor is choosing an article, understanding its mechanism, and
+checking the cited edition. These observations describe supplied visible states;
+they are not evidence that an auditor visited a live site.
+
+**Failing packet:** a collection headed “Articles” adds “Published articles,
+each with its own evidence and research scope.” Its source section adds “The
+original materials, preserving their version information” immediately above
+paper titles, edition labels and working source links. An opened footer
+disclosure shows “Article / Release / Content digest” with opaque identifiers;
+the same identifiers remain in the machine delivery manifest. A figure's
+caption, nearby note and following paragraph each repeat that it is illustrative
+and not a measured score. The default view and these expanded states are supplied;
+the search-error state has not been inspected. Geometry checks pass.
+
+Expected action: inspect each ancillary group for a concrete reader consequence.
+The two producer descriptions add no selection or source-identification fact
+beyond the surrounding content. Opaque build identities do not establish the
+paper edition. Repetition alone does not decide the figure boundary: preserve
+an explicit illustration label and any unique semantic limitation, then remove
+unneeded repetitions. Do not grant release-ready while relevant state coverage
+or necessity dispositions remain unresolved. Do not turn technical-identity
+cleanup into deletion of machine provenance.
+
+**Near-boundary healthy packet:** a source title includes an edition whose
+results differ from a later revision, with an expandable section locator and
+an “Open original” action. A schematic is labeled “Mechanism illustration”;
+its dashed-node key explains which observations the policy cannot access. An
+independently consumed result chart repeats its unit and comparison baseline.
+The article says that a suggestive function name does not establish a speedup,
+and that lack of validation is not evidence the result is wrong. A search error
+offers an actionable retry; its accessible name survives the shorter helper.
+
+Expected action: retain these distinctions where their absence changes the
+reader's evidence, mechanism interpretation or next action. Do not treat a
+negative scientific statement, version label, source locator or repeated unit
+as producer scaffold based on wording alone. A concise illustration label is
+sufficient only when it preserves the relevant truth boundary. Report the
+supplied-state judgment separately from unobserved rendering and human value.

@@ -238,6 +238,8 @@ For rendered UI freshness, delayed editor/batch responses or deployment acceptan
 [frontend-visual-qa](frontend-visual-qa/SKILL.md).
 For publication-wide clutter despite passing local checks, use its
 [publication journey calibration](frontend-visual-qa/references/publication-journey-cases.md).
+For the pre-release ancillary-copy gate, follow
+[information necessity](frontend-visual-qa/references/history-derived-checklist.md#information-necessity-before-layout).
 Before measuring loading speed, read its
 [cache and timing comparison](frontend-visual-qa/references/browser-driving-and-observation-traps.md#separate-freshness-checks-from-performance-comparisons).
 For build reuse across source refs or a target redeployed during acceptance, load its

@@ -175,16 +175,23 @@ modal surfaces.
 
 ## Information necessity before layout
 
-Run this check for whole-surface composition/density review, or when the user
-rejects clutter, repeated context, explanations or wasted space. The auditor
-owns it before local typography work. Stop when the declared surface and the
+Run this check for whole-surface composition/density review, when the user
+rejects clutter, repeated context, explanations or wasted space, and before a
+release-ready claim for rendered UI. The auditor owns it before local typography
+work. A local audit retains its declared scope; release review covers its declared
+shipped surface. Stop when that surface and the
 same failure class have been examined; do not expand into unrelated workflows.
 
 1. State the actor's immediate reading/decision task and the information that
    would cause a wrong decision if absent. Start from the user contract, not a
    list of existing components. A title/helper/status slot in a template is not
    a requirement to fill it.
-2. Inventory the whole visible composition. Use the sweep's `attentionInventory`
+2. Inventory the whole visible composition. For a release review, include shared
+   header/footer and template copy plus affected disclosure, search, empty,
+   error and other conditional states that actually exist in the declared
+   surface. Open the relevant states; a source string or default screenshot does
+   not prove what readers see. Identify unvisited states as missing coverage.
+   Use the sweep's `attentionInventory`
    plus its screenshot, or an equivalent DOM/visible-window inventory from the
    canonical harness. Each text item has a structural selector and coordinates;
    JSON hashes labels rather than exporting private page text. Use those
@@ -195,7 +202,10 @@ same failure class have been examined; do not expand into unrelated workflows.
    boundaries. Inspect brand versus product identity, repeated axes and units,
    section titles that restate visible objects, status words echoing navigation,
    explanatory subtitles, provenance/process descriptions and permanent footer
-   bands. Inspect all groups, including ones the script did not flag.
+   bands. Include producer notes, audit claims, implementation identifiers and
+   self-defense about what the page is or is not doing. Inspect all groups,
+   including ones the script did not flag. These are review candidates, not a
+   forbidden-word list: assess their function in the actor's task.
 4. For each ancillary group, ask the falsifiable counterfactual: **what specific
    mistake would this actor make if it were absent here?** Check whether another
    visible encoding already supplies that information. “It explains the section”,
@@ -213,13 +223,31 @@ same failure class have been examined; do not expand into unrelated workflows.
    and verify that core values, relationships, warnings and actions remain
    usable. Do not count reduced lines, less text or a larger chart as acceptance
    by themselves. A failed explicit requirement remains failed until the actual
-   layout changes or the user changes the requirement.
+   layout changes or the user changes the requirement. Before a release-ready
+   claim, give every ancillary group a disposition and its concrete reading or
+   action consequence in the existing audit report. An unexamined group or an
+   unresolved task-relevant uncertainty leaves the claim partial. Fix/remove
+   confirmed needless copy only within source authority, then inspect the
+   resulting target under its separate lifecycle authority.
 
 Keep necessary labels, units, dangerous-state warnings and unfamiliar controls
 at the point of use. Repeated labels can be necessary in independently scrolling
 or independently consumed views; shared, visibly aligned regions may need only
 one axis. Neither “always explain” nor “remove every caption” is a general rule.
 Do not trade needless prose for unlabeled icons, hidden risk or lost provenance.
+
+Keep explanations that change the reader's action or understanding. A statement
+that the producer preserved evidence or completed checks does not earn a slot
+merely by being true; use the actual citation, version or source action where
+those facts support the task. Keep machine-consumed digests and build metadata
+in their delivery contract unless the reader needs them to distinguish artifacts.
+
+For explanatory figures, preserve the truth boundary with a concise explicit
+label such as “Mechanism illustration” when that prevents reading a schematic
+as measured evidence. Retain an additional scope limitation only when the short
+label leaves a specific misreading possible; do not delete scientific scope,
+units, comparison labels or provenance to shorten copy. Recheck nearby controls'
+visible labels and accessible names after removing helper text.
 
 After a structural rejection, validate the **class**, not only named instances:
 retain the rejected page as a negative control, check an unmentioned occurrence

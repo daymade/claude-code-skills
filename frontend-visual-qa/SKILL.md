@@ -293,7 +293,12 @@ and inspect the affected text positions rather than accepting scroll movement al
 Load [references/history-derived-checklist.md](references/history-derived-checklist.md)
 for the core visual/responsive defect catalog and standards-backed checks.
 For composition or density audits, execute its **Information necessity before
-layout** check before fixing line breaks. The sweep's `attentionInventory` makes
+layout** check before fixing line breaks. Before declaring rendered UI ready for
+release, complete that check's ancillary-copy inventory and dispositions across
+the declared surface, including shared text and affected conditional states.
+Missing coverage or unresolved task-relevant explanations leave that release
+claim partial; passing geometry or finding no forbidden words cannot clear it.
+The sweep's `attentionInventory` makes
 the visible text population and exact repetitions inspectable; review the full
 population against the task, not only its repetition candidates. Complete
 inventory coverage is not proof that the content is necessary.
@@ -558,7 +563,8 @@ Call **current-render status** verified only when:
   level;
 - no unresolved Blocker/Major finding contradicts the pass;
 - every explicit pass condition is met, including information necessity when
-  layout/density is in scope; calling a violation Moderate, Minor, taste or
+  layout/density or release readiness is in scope; calling a violation Moderate,
+  Minor, taste or
   “still usable” does not override a user's requirement;
 - remaining limitations are explicit.
 
