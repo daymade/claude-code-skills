@@ -109,6 +109,11 @@ On a shared machine, **diagnosis is read-only; remediation has an owner**.
   ownership with peers, but their agreement does not grant that authorization.
   Pause only the intervention that needs approval; continue the authorized
   read-only investigation that does not depend on it.
+  Once the current user authorizes a specific termination, run the five-step
+  authorized-kill sequence in `~/.claude/references/irreversible-gates.md`
+  §终止进程 (parent-chain trace, visible-window check, side-effect list,
+  SIGTERM first — never `-9` first — and post-kill readback including
+  terminal mouse-mode reset via `~/scripts/pty-tui-reset/pty-tui-reset.sh`).
 - For a named alert, reconstruct its recorded window, measurement units and
   trigger calculation before attributing the cause. Another process being
   hotter does not explain why this alert fired. Keep alert validity and the

@@ -154,6 +154,29 @@ python3 scripts/reset_attribution.py --input /tmp/tibo-attribution.json
 `all_accounts`（仅官方 `all_paid`）。`block` 的断言不得交付。脚本缺键、空值、重复周窗口、
 不可比窗口或坏时间戳会显式失败或保持 `unknown`，不把 malformed input 变成正面归因。
 
+## 消耗归因（机械判据）
+
+把额度消耗归到某个进程/会话之前，必须附下面三项探针中至少一项的实测读数；**「进程存活」
+不是消耗证据**——挂着不动的进程不产生计量。
+
+1. **lifetime CPU 显著增长**：同一 pid 间隔 ≥60 秒取两次 `ps -o pid=,time= -p <pid>`，
+   第二次 TIME 明显大于第一次。TIME 不动 = 它在睡眠，不在烧。
+2. **持有到 API 的连接**：`lsof -i -p <pid>` 输出里存在到 chatgpt.com:443 的
+   ESTABLISHED 行（`lsof` 的 NAME 列只显示 host:port；用 `-nP` 时按 IP 判，对照
+   chatgpt.com 的当前解析）。只在本地空转的进程没有这条连接。
+3. **其 rollout 文件在窗口期内有写入**：用同仓 `scripts/scan_rollouts.py` 确认该会话的
+   rollout 在归因窗口内继续追加 `rate_limits` 快照；rollout mtime 停在窗口之前 = 窗口内
+   无活动。
+
+三项全阴性的进程不是消耗者；拿「它活着」当烧额度证据的归因一律保持 `unknown`。
+
+**进程→会话归属用 `lsof -p <pid>` 打开的 rollout 文件定，不用 argv 匹配**——从选择器
+resume 出来的进程 argv 不带会话 ID，argv 比对会把多个会话错并成一个。
+
+**计量事实**：额度只被模型推理调用计量；认证端点（token 刷新）不计入用量窗口。老进程每
+30~70 秒刷 `Failed to refresh token` 不消耗额度，也不构成「它还在烧」的证据；其处置
+（重启老进程，不是全局重登）见 SKILL.md 多账号归因检查节的「连带影响」段。
+
 ## 相邻两次重置的归因
 
 同一账号的自然周重置发生在 T1，只解释 T1 的回满；T2 的额度与下次重置时间又变化时，
