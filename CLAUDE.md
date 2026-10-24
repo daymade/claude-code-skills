@@ -251,7 +251,7 @@ focus or filtered-selection changes, use its
 [reader journey](frontend-visual-qa/references/journey-and-page-contracts.md#embedded-readers-and-semantic-zoom).
 For long-document outlines, active-section cues or source sidebars, follow its
 [reading-position recipe](frontend-visual-qa/references/journey-and-page-contracts.md#long-document-reading-positions).
-For browser visibility, selected read modes, request/capture timing or long JSONL input problems, load its
+For browser visibility, hidden-page polling, selected read modes, request/capture timing or long JSONL input problems, load its
 [browser-driving and observation traps](frontend-visual-qa/references/browser-driving-and-observation-traps.md);
 keep adapter requirements and invocation examples in that reference.
 For timed-out screenshots or blank hidden-window captures, follow its
