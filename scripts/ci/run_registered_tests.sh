@@ -40,10 +40,11 @@ while read -r runner target _rest; do
     # nullglob keeps unmatched patterns from reaching node as literal paths.
     node-test)
       shopt -s nullglob
-      _files=( "${target}"/test_*.mjs "${target}"/test-*.mjs "${target}"/*.test.mjs )
+      _files=( "${target}"/test_*.mjs "${target}"/test-*.mjs "${target}"/*.test.mjs
+               "${target}"/test_*.cjs "${target}"/test-*.cjs "${target}"/*.test.cjs )
       shopt -u nullglob
       if [ ${#_files[@]} -eq 0 ]; then
-        echo "FAIL: node-test suite '$target' has no test_*.mjs / test-*.mjs / *.test.mjs files"
+        echo "FAIL: node-test suite '$target' has no test_*.mjs / test-*.mjs / *.test.mjs or corresponding .cjs files"
         failed=$((failed + 1))
         continue
       fi
