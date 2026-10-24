@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.21.13 → v1.21.14): Distinguish media focus emulation from true hidden-page polling acceptance. Add a bounded READ-DO check with a normal visible-query control, progressing callbacks, request-start deltas and contract-bound recovery; reject frozen-timer and synthetic-visibility false passes. Change type: bounded evidence-selection correction.
 - **skill-creator** (`daymade-skill` v1.73.4 → v1.73.5): Bind replay coverage to the original task, actual consumer inputs and first response; distinguish diagnostic controls and corrections from original-task evidence. Clarify the independent review input contract without adding a review round or restricting legitimate task adaptation. Change type: bounded verification-workflow correction.
 - **frontend-visual-qa** (v1.21.12 → v1.21.13): Add synthetic publication-journey calibration cases for whole-path clutter despite passing local checks, with a healthy necessary-context control and explicit limits on render and human-acceptance claims. Change type: additive examples for the existing information-necessity audit.
 
