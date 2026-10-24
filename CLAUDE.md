@@ -448,6 +448,8 @@ already created by the current prompt. Artifact selection and runtime-read
 comparison are owned by that Skill; a receipt about a locator is not proof of
 the delivered artifact. For retrieval freshness, changed-source recovery and
 receipt lifetime, follow the [Prior Work operating contract](daymade-claude-code/prior-work-retrieval/SKILL.md).
+Requests to repeat a previously successful method enter its
+[candidate verification](daymade-claude-code/prior-work-retrieval/SKILL.md#4-verify-candidates-at-authority).
 
 For CLI/hook manifest selection or continuation in an already-running host, read
 [the manifest-selection contract](daymade-claude-code/prior-work-retrieval/SKILL.md#2-validate-the-explicit-source-manifest).
@@ -530,7 +532,10 @@ Skill links.
 ### Ghostty Terminal Sessions
 
 For snapshotting, restoring or reconciling Claude Code / Codex sessions in Ghostty
-across reboots, enter [`ghostty-use`](ghostty-use/SKILL.md). Its bundled script owns
+across reboots, enter [`ghostty-use`](ghostty-use/SKILL.md). Manual Codex account
+switches and blocked/delegated reopening enter its
+[account-switch SOP](ghostty-use/references/codex-account-switch.md), including
+the original-set handoff and actual-continuation acceptance. Its bundled script owns
 liveness classification and the paste-restore + auto-reconciliation loop; keep the
 storage-layout facts and macOS Ghostty limits in its references rather than here.
 For change-only automatic backups, use its
