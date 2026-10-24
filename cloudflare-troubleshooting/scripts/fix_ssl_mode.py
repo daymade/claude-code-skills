@@ -168,8 +168,8 @@ def fix_ssl_mode(
 
         new_mode = data["result"]["value"]
         print(f"SSL mode successfully changed: {current_mode} -> {new_mode}")
-        print("\nCloudflare is updating edge servers (typically takes 10-30 seconds)")
-        print("Recommendation: Clear your browser cache or use incognito mode to test")
+        print("\nVerify the ordinary hostname and current certificate/redirect state.")
+        print("If only the browser differs, compare a fresh context before clearing its cache.")
         return True
 
     except requests.RequestException as exc:
@@ -275,7 +275,7 @@ def main() -> None:
             sys.exit(1)
 
     if should_apply:
-        print("\nDone. Test your site after 30 seconds.")
+        print("\nConfiguration step finished. Verify the ordinary hostname and browser before reporting recovery.")
     else:
         print("\nDone. This was a dry run; no live Cloudflare settings were changed.")
     sys.exit(0)

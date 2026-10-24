@@ -67,7 +67,7 @@ python scripts/fix_ssl_mode.py example.com user@example.com API_KEY full --apply
    python scripts/fix_ssl_mode.py domain.com email API_KEY full --apply
    ```
 
-3. **Purge cache:**
+3. **If stale HTTP redirects remain, purge HTTP cache:**
    ```bash
    curl -X POST "https://api.cloudflare.com/client/v4/zones/ZONE_ID/purge_cache" \
      -H "X-Auth-Email: email" \
@@ -75,7 +75,7 @@ python scripts/fix_ssl_mode.py example.com user@example.com API_KEY full --apply
      -d '{"purge_everything":true}'
    ```
 
-4. **Clear browser cache or use incognito mode**
+4. **If only the browser retains the old redirect, compare a fresh browser context before deciding whether its cache needs clearing**
 
 ---
 
@@ -116,7 +116,7 @@ nslookup domain.com
 ### Common Causes
 
 #### 1. Universal SSL Certificate Provisioning Delay
-**Solution:** Wait 15-30 minutes for Cloudflare to provision certificate
+**Solution:** Inspect the current certificate/domain validation state and any unmet issuance prerequisite; do not infer readiness from a fixed delay.
 
 #### 2. CAA Records Blocking Certificate Issuance
 **Solution:**
@@ -225,7 +225,7 @@ Page Rules don't seem to apply
 - Test patterns: `example.com/*` vs `*example.com/*`
 
 #### 3. Cache Already Set
-**Solution:** Purge cache after creating/modifying Page Rules
+**Solution:** If an old HTTP response remains cached after the rule change, purge the relevant HTTP cache and recheck the normal hostname.
 
 ---
 
@@ -255,7 +255,7 @@ python scripts/check_cloudflare_config.py domain.com email API_KEY
 
 ### Step 6: Apply Fixes
 - Implement specific solutions based on diagnosis
-- Purge cache after changes
+- Purge HTTP cache only when stale HTTP responses are implicated
 - Test in incognito/private mode
 
 ### Step 7: Monitor
