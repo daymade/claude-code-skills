@@ -236,6 +236,8 @@ For persistent Python service installation, environment reuse or startup, follow
 
 For rendered UI freshness, delayed editor/batch responses or deployment acceptance, enter
 [frontend-visual-qa](frontend-visual-qa/SKILL.md).
+For publication-wide clutter despite passing local checks, use its
+[publication journey calibration](frontend-visual-qa/references/publication-journey-cases.md).
 Before measuring loading speed, read its
 [cache and timing comparison](frontend-visual-qa/references/browser-driving-and-observation-traps.md#separate-freshness-checks-from-performance-comparisons).
 For build reuse across source refs or a target redeployed during acceptance, load its
