@@ -17,7 +17,9 @@ For an existing-Skill preservation request, retain the
 before choosing prompts or tuning the candidate. Bind the approved cases to those
 affected jobs and output/performance criteria. Add newly discovered diagnostic
 cases as needed; do not replace the original acceptance with easier development
-cases or the candidate's successful examples.
+cases or the candidate's successful examples. At dispatch, apply the same
+[behavior-replay fidelity contract](independent-review-protocol.md#behavior-replay-fidelity)
+used for ordinary replays; paired execution does not change its evidence boundaries.
 
 After writing the skill draft, come up with 2-3 realistic test prompts — the kind of thing a real user would actually say. **For skills that act on live systems (a running service, a logged-in client, production data), give each test prompt an explicit side-effect budget** — e.g. "probe read-only and conclude; do NOT execute the download / drive the UI." An eval that mutates a live environment while "just testing" is a real action, not a test. Present them via **AskUserQuestion**:
 

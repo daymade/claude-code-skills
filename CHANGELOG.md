@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` v1.73.4 → v1.73.5): Bind replay coverage to the original task, actual consumer inputs and first response; distinguish diagnostic controls and corrections from original-task evidence. Clarify the independent review input contract without adding a review round or restricting legitimate task adaptation. Change type: bounded verification-workflow correction.
+
 - **tunnel-doctor** (v1.17.7 → v1.17.8): Add provider account suspension reference — the four-part signature (subscription alive + all nodes dead + TCP open + TLS fast-reject `unrecognized name`) maps to account-level suspension, not domain rotation; health-check table gains a row routing all-nodes-dead-with-working-subscription to the provider dashboard before any local repair. Change type: additive diagnostic capability from a real 2026-10-23 misdiagnosis.
 - **tibo-reset-codex** (v2.1.1 → v2.1.2): Add "exclude egress first" section to account-usage.md (multi-account unknown → curl chatgpt.com before protocol-layer deep-dives); route multi-account queries to minions usage-refresh (CodexBar RPC) before browser isolated profiles. Change type: diagnostic priority and channel-priority correction from the same incident.
 - **macos-cleaner** (`daymade-macos` v1.25.2 → v1.25.3): Add the Git LFS object-cache pruning sequence with the push-side endpoint-completeness proof and the remote-missing-is-not-data-loss check, and extend the pnpm phantom note to APFS clonefile imports. Change type: documentation accuracy from measured cleanup.
