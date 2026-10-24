@@ -61,7 +61,10 @@ consumer execution, answer correctness and correction after supplied evidence.
 Select 1–2 replays only when they exercise the entire changed behavior **and**
 required preservation scope. For a broad loading or routing change, cover each
 important affected job rather than treating a successful correction, recovery or
-creation example as evidence for all jobs. Choose further evidence by the remaining
+creation example as evidence for all jobs. When dispatching each replay, follow the
+canonical [behavior-replay fidelity contract](independent-review-protocol.md#behavior-replay-fidelity);
+it owns input preservation, declared adaptations, first-answer vs. correction records and
+the consumer no-leak boundary. Choose further evidence by the remaining
 failure axes; this does not impose repeated trials or multi-model benchmarks on
 every edit. Keep the tier and heavy-eval authorization boundaries below.
 
