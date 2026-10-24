@@ -534,3 +534,104 @@ test('reference candidates exclude recordings that do not contain the complete c
   app.run("view.project.sources=[view.project.sources[0]];view.project.sources[0].available_duration=45;view.project.sources[0].available_frames=45000;renderReferences()");
   assert.deepEqual(JSON.parse(app.run('JSON.stringify(confirmedReferences().map(item=>item.id))')),[]);
 });
+
+async function pendingSkip(app) {
+  app.run(`filterItems();
+    fetchJSON=(_url,options)=>new Promise(resolve=>{
+      const request=JSON.parse(options.body);
+      globalThis.acknowledgeSkip=()=>resolve({...view.state,revision:view.state.revision+1,
+        decisions:{...view.state.decisions,[request.item_id]:{...view.state.decisions[request.item_id],...request.changes}}});
+    });skipItem();`);
+  await app.settle();
+}
+async function acknowledgeSkip(app) {
+  app.run('acknowledgeSkip()');
+  await app.run('view.saveChain');
+  await app.settle();
+  assert.equal(app.run("view.state.decisions.early.status"),'skipped','The original sentence is durably acknowledged');
+  assert.equal(app.run('view.drafts.size'),0);
+}
+
+test('regression: delayed skip acknowledgement preserves a newer sentence and cursor',async()=>{
+  const app=application();await pendingSkip(app);
+  app.run("chooseItem('late',{position:105})");
+  await acknowledgeSkip(app);
+  assert.equal(app.run('view.selectedId'),'late');
+  assert.equal(app.run('view.position'),105);
+});
+
+test('regression: delayed skip cannot override navigation away and back to the original sentence',async()=>{
+  const app=application();await pendingSkip(app);
+  app.run("chooseItem('late');chooseItem('early',{position:17})");
+  await acknowledgeSkip(app);
+  assert.equal(app.run('view.selectedId'),'early');
+  assert.equal(app.run('view.position'),17);
+});
+
+test('regression: delayed skip preserves a deliberate same-sentence seek or device switch',async()=>{
+  for(const source of ['A','B']){
+    const app=application();await pendingSkip(app);
+    await app.run(`switchSource('${source}',{position:16,autoplay:false})`);
+    await acknowledgeSkip(app);
+    assert.equal(app.run('view.selectedId'),'early');
+    assert.equal(app.run('view.sourceId'),source);
+    assert.equal(app.run('view.position'),16);
+  }
+});
+
+test('regression: successful skip still advances without navigation, including passive playback progress',async()=>{
+  for(const playing of [false,true]){
+    const app=application();
+    if(playing){await app.run('playAudio()');app.flushEvents();}
+    await pendingSkip(app);
+    if(playing){app.audios[0].progress(17);assert.equal(app.run('view.position'),17);}
+    await acknowledgeSkip(app);
+    assert.equal(app.run('view.selectedId'),'confirmed-b','Next chronological transcript is chosen once');
+    assert.equal(app.run('view.position'),60);
+  }
+});
+
+test('regression: reference plays eight covered seconds of a valid rounded tail without changing the review',async()=>{
+  const app=application();
+  app.run(`view.project.sources=[{id:'A',label:'Device A',duration:50,bounded_clip:false,clock:{offset:0,scale:1}}];
+    view.project.items.find(i=>i.id==='confirmed').end=44;
+    view.project.items.push({id:'rounded-tail',kind:'transcript',source_id:'A',start:40,end:50.05,
+      text:'Valid 0.1-second endpoint tolerance',speaker:'Person A',identity_status:'human_confirmed'});
+    view.drafts.set('early',{text:'Still editing the selected sentence'});renderReferences();`);
+  assert.equal(app.run("confirmedReferences().find(i=>personLabel(i)==='Person A').id"),'rounded-tail');
+  const before=app.currentSnapshot();
+  await app.run("playReference('rounded-tail')");app.flushEvents();
+  assert.equal(app.audios.length,1);
+  assert.equal(app.audios[0].paused,false);
+  assert.equal(app.audios[0].currentTime,40);
+  app.audios[0].progress(47.99);
+  assert.notEqual(app.run('view.reference'),null);
+  assert.deepEqual(app.currentSnapshot(),before);
+  app.audios[0].progress(48);app.flushEvents();
+  assert.equal(app.run('view.reference'),null);
+  assert.equal(app.audios[0].paused,true);
+  assert.deepEqual(app.currentSnapshot(),before);
+});
+
+test('reference availability excludes zero overlap and falls back to a calibrated covered source',async()=>{
+  const missing=application();
+  missing.run(`view.project.sources=[{id:'A',label:'Ended device',duration:35,bounded_clip:false,clock:{offset:0,scale:1}}];renderReferences();`);
+  assert.equal(missing.run('confirmedReferences().length'),0);
+  await missing.run("playReference('confirmed')");
+  assert.equal(missing.audios.length,0,'A reference with no source overlap cannot start');
+
+  const app=application();
+  app.run(`view.project.sources=[
+      {id:'A',label:'Ended device',duration:40,bounded_clip:false,clock:{offset:0,scale:1}},
+      {id:'B',label:'Scaled device',duration:100,bounded_clip:false,clock:{offset:10,scale:2}}];
+    Object.assign(view.project.items.find(i=>i.id==='confirmed'),{source_id:'A',start:40,end:70});renderReferences();`);
+  const before=app.currentSnapshot();
+  await app.run("playReference('confirmed')");app.flushEvents();
+  assert.equal(app.run('view.reference.sourceId'),'B');
+  assert.equal(app.audios[0].currentTime,15,'Meeting 40s maps to local (40-10)/2');
+  app.audios[0].progress(22.99);
+  assert.notEqual(app.run('view.reference'),null);
+  app.audios[0].progress(23);app.flushEvents();
+  assert.equal(app.run('view.reference'),null,'The cap is eight actual audio seconds despite clock scale');
+  assert.deepEqual(app.currentSnapshot(),before);
+});

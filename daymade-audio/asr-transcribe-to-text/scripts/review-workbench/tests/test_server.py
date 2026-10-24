@@ -241,6 +241,81 @@ class WorkbenchTests(unittest.TestCase):
         self.assertEqual(exported["speaker"], "")
         self.assertEqual(exported["original_speaker"], "Participant A")
 
+    def test_selected_name_wins_over_another_person_id_through_edits_restart_and_exports(self):
+        self.input_project["people"] = [{"id": "person-alice", "name": "Alice"}, {"id": "Alice", "name": "Bob"}]
+        self.write_project()
+        self.restart()
+        status, saved, _ = self.decision(status="confirmed", speaker="Alice")
+        self.assertEqual(status, 200)
+        self.assertEqual(saved["decisions"]["line-1"]["speaker"], "Alice")
+        for revision, changes in ((1, {"note": "Synthetic review note"}), (2, {"text": "Synthetic corrected words"})):
+            status, saved, _ = self.decision(revision=revision, request_id=f"edit-{revision}", **changes)
+            self.assertEqual(status, 200)
+            self.assertEqual(saved["decisions"]["line-1"]["speaker"], "Alice")
+        self.restart()
+        self.assertEqual(self.api("GET", "/api/state")[1], saved)
+        status, exported, _ = self.api("GET", "/api/export?format=json")
+        self.assertEqual(status, 200)
+        row = exported["items"][0]
+        self.assertEqual((row["speaker"], row["speaker_id"], row["identity_status"]), ("Alice", "person-alice", "human_confirmed"))
+        self.assertEqual((row["text"], row["note"]), ("Synthetic corrected words", "Synthetic review note"))
+        csv_status, _, csv_body = self.request("GET", "/api/export?format=csv")
+        self.assertEqual(csv_status, 200)
+        csv_row = next(csv.DictReader(io.StringIO(csv_body.decode("utf-8-sig"))))
+        self.assertEqual((csv_row["speaker"], csv_row["identity_status"]), ("Alice", "human_confirmed"))
+        md_status, _, md_body = self.request("GET", "/api/export?format=md")
+        self.assertEqual(md_status, 200)
+        self.assertIn("· Alice · 人工确认", md_body.decode())
+        self.assertNotIn("· Bob · 人工确认", md_body.decode())
+
+    def test_ordinary_names_legacy_ids_and_nonroster_custom_names_keep_their_identity(self):
+        self.input_project["people"] = [{"id": "person-alice", "name": "Alice"}, {"id": "Alice", "name": "Bob"}]
+        self.write_project()
+        self.restart()
+        for revision, (submitted, name, person_id) in enumerate((("Bob", "Bob", "Alice"), ("person-alice", "Alice", "person-alice"), ("Synthetic Guest", "Synthetic Guest", ""))):
+            with self.subTest(submitted=submitted):
+                status, saved, _ = self.decision(revision=revision, request_id=f"speaker-{revision}", status="confirmed", speaker=submitted)
+                self.assertEqual(status, 200)
+                self.assertEqual(saved["decisions"]["line-1"]["speaker"], name)
+                row = self.api("GET", "/api/export?format=json")[1]["items"][0]
+                self.assertEqual((row["speaker"], row["speaker_id"], row["identity_status"]), (name, person_id, "human_confirmed"))
+
+    def test_raw_source_speaker_id_resolves_once_and_original_display_survives_review(self):
+        self.input_project["people"] = [{"id": "person-alice", "name": "Alice"}, {"id": "Alice", "name": "Bob"}]
+        self.input_project["items"][0]["speaker"] = "Alice"
+        self.write_project()
+        self.state_dir = self.root / "source-id-state"
+        self.restart()
+        original = self.api("GET", "/api/export?format=json")[1]["items"][0]
+        self.assertEqual((original["speaker"], original["speaker_id"], original["original_speaker"]), ("Bob", "Alice", "Bob"))
+        status, saved, _ = self.decision(status="confirmed")
+        self.assertEqual(status, 200)
+        self.assertEqual(saved["decisions"]["line-1"]["speaker"], "Bob")
+        status, _, _ = self.decision(revision=1, request_id="select-alice", status="confirmed", speaker="Alice")
+        self.assertEqual(status, 200)
+        self.restart()
+        reviewed = self.api("GET", "/api/export?format=json")[1]["items"][0]
+        self.assertEqual((reviewed["speaker"], reviewed["speaker_id"], reviewed["original_speaker"]), ("Alice", "person-alice", "Bob"))
+
+    def test_ipv4_and_ipv6_loopback_serve_actual_http_requests(self):
+        self.assertEqual(self.api("GET", "/api/project")[0], 200)
+        server = workbench.WorkbenchServer(("::1", 0), self.project, self.store, self.static)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            connection = http.client.HTTPConnection("::1", server.server_port, timeout=3)
+            try:
+                connection.request("GET", "/api/project")
+                response = connection.getresponse()
+                self.assertEqual(response.status, 200)
+                self.assertEqual(json.loads(response.read())["project_id"], self.project.project_id)
+            finally:
+                connection.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=3)
+
     def test_independent_stores_share_revision_and_cannot_erase_an_acknowledged_edit(self):
         other = workbench.StateStore(self.project, self.state_dir)
         self.decision(status="confirmed", speaker="Participant A")

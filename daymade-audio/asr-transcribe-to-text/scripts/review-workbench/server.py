@@ -18,6 +18,7 @@ import os
 from pathlib import Path
 import re
 import struct
+import socket
 import sys
 import tempfile
 import threading
@@ -52,6 +53,16 @@ def utc_now():
 
 def json_bytes(value):
     return json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode("utf-8")
+
+
+def speaker_identity(project, value, *, name_first=False):
+    """Resolve raw source IDs or canonical decision names without aliasing them."""
+    matches = [person for person in project.people.values() if person["name"] == value]
+    if matches and name_first:
+        return value, matches[0]["id"] if len(matches) == 1 else ""
+    if value in project.people:
+        return project.people[value]["name"], value
+    return value, matches[0]["id"] if len(matches) == 1 else ""
 
 
 def _reject_constant(value):
@@ -566,13 +577,17 @@ class StateStore:
                     raise APIError(400, "invalid_changes", str(exc)) from exc
                 if after.get("status") == "unknown":
                     after["speaker"] = ""
-                if "speaker" in after and after["speaker"] in self.project.people:
-                    after["speaker"] = self.project.people[after["speaker"]]["name"]
+                if "speaker" in changes and after.get("status") != "unknown":
+                    after["speaker"] = speaker_identity(self.project, after["speaker"], name_first=True)[0]
                 if after.get("status") == "confirmed":
-                    effective_speaker = after.get("speaker", self.project.items[item_id]["speaker"])
+                    # Existing decisions contain names; note/text edits must not
+                    # reinterpret a saved name as somebody else's source ID.
+                    effective_speaker = after.get("speaker")
+                    if effective_speaker is None:
+                        effective_speaker = speaker_identity(self.project, self.project.items[item_id]["speaker"])[0]
                     if not effective_speaker.strip():
                         raise APIError(400, "missing_speaker", "Choose a speaker before confirming an identity")
-                    after["speaker"] = self.project.people.get(effective_speaker, {}).get("name", effective_speaker).strip()
+                    after["speaker"] = effective_speaker.strip()
                 next_data["undo_stack"].append(revision + 1)
                 extra = {}
             else:
@@ -611,16 +626,19 @@ class StateStore:
 
 def derived_items(project, state):
     rows = []
-    names = {pid: p["name"] for pid, p in project.people.items()}
     for item in project.items.values():
         decision = state["decisions"].get(item["id"])
+        name_first = False
         if decision and "status" in decision:
             status = {"confirmed": "human_confirmed", "unknown": "unknown", "skipped": "skipped"}[decision["status"]]
             speaker = decision.get("speaker", item["speaker"]) if status == "human_confirmed" else ""
+            name_first = "speaker" in decision
         else:
             status = item["identity_status"]
             speaker = item["speaker"] if status != "unknown" else ""
-        rows.append({"id": item["id"], "kind": item["kind"], "start": item["start"], "end": item["end"], "source_id": item["source_id"], "speaker": names.get(speaker, speaker), "speaker_id": speaker if speaker in names else "", "identity_status": status, "original_speaker": names.get(item["speaker"], item["speaker"]), "original_identity_status": item["identity_status"], "text": decision.get("text", item["text"]) if decision else item["text"], "note": decision.get("note", "") if decision else ""})
+        speaker, speaker_id = speaker_identity(project, speaker, name_first=name_first)
+        original_speaker = speaker_identity(project, item["speaker"])[0]
+        rows.append({"id": item["id"], "kind": item["kind"], "start": item["start"], "end": item["end"], "source_id": item["source_id"], "speaker": speaker, "speaker_id": speaker_id, "identity_status": status, "original_speaker": original_speaker, "original_identity_status": item["identity_status"], "text": decision.get("text", item["text"]) if decision else item["text"], "note": decision.get("note", "") if decision else ""})
     return rows
 
 
@@ -681,6 +699,8 @@ class WorkbenchServer(ThreadingHTTPServer):
     def __init__(self, address, project, store, static_dir=None):
         self.project, self.store = project, store
         self.static_dir = (Path(static_dir) if static_dir else Path(__file__).parent / "static").resolve()
+        if ":" in address[0]:
+            self.address_family = socket.AF_INET6
         super().__init__(address, Handler)
 
 

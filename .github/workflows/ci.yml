@@ -192,14 +192,23 @@ jobs:
       # delegates filesystem search to ripgrep and must fail visibly when it is absent.
       - name: Install registered-suite runtime tools
         run: |
+          packages=()
           if ! command -v rg >/dev/null 2>&1; then
+            packages+=(ripgrep)
+          fi
+          if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; then
+            packages+=(ffmpeg)
+          fi
+          if [ "${#packages[@]}" -gt 0 ]; then
             # Bound mirror retries on runner images that still carry apt defaults.
             apt_options=(-o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15)
             apt-config "${apt_options[@]}" dump Acquire::Retries Acquire::http::Timeout Acquire::https::Timeout
             sudo apt-get "${apt_options[@]}" update
-            sudo apt-get "${apt_options[@]}" install -y ripgrep
+            sudo apt-get "${apt_options[@]}" install -y "${packages[@]}"
           fi
           rg --version
+          ffmpeg -version
+          ffprobe -version
 
       # Suites shell out to git; without an identity, commit-creating fixtures fail with an
       # error that looks like a product bug.

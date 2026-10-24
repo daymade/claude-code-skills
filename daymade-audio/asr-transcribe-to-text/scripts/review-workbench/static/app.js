@@ -4,7 +4,7 @@ const $ = id => document.getElementById(id);
 const svg = name => `<svg aria-hidden="true"><use href="#i-${name}"/></svg>`;
 const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ROW_HEIGHT = 112;
-const view = {project:null,state:null,mode:'samples',selectedId:null,sourceId:null,position:0,context:false,loop:false,speed:1,pending:false,search:'',person:'',filtered:[],drafts:new Map(),draftVersions:new Map(),draftEpochs:new Map(),draftGeneration:0,conflictEpoch:0,failedRequests:new Map(),pendingSaves:new Map(),failedUndo:null,saveTimers:new Map(),audio:null,playing:false,audioPhase:'idle',audioToken:0,cancelAudioWait:null,volume:1,reference:null,referenceToken:0,saveChain:Promise.resolve(),viewTimer:null,toastTimer:null,resizeObserver:null};
+const view = {project:null,state:null,mode:'samples',selectedId:null,sourceId:null,position:0,navigationGeneration:0,context:false,loop:false,speed:1,pending:false,search:'',person:'',filtered:[],drafts:new Map(),draftVersions:new Map(),draftEpochs:new Map(),draftGeneration:0,conflictEpoch:0,failedRequests:new Map(),pendingSaves:new Map(),failedUndo:null,saveTimers:new Map(),audio:null,playing:false,audioPhase:'idle',audioToken:0,cancelAudioWait:null,volume:1,reference:null,referenceToken:0,saveChain:Promise.resolve(),viewTimer:null,toastTimer:null,resizeObserver:null};
 
 function formatTime(seconds, decimal=false) {
   const value = Math.max(0, Number(seconds) || 0);
@@ -273,6 +273,7 @@ function scrollToSelected() {
 }
 function chooseItem(itemId,{position=null,autoplay=false}={}) {
   const item=view.project.items.find(i=>i.id===itemId); if(!item)return;
+  ++view.navigationGeneration;
   stopReference();pauseAudio({phase:'idle'});view.selectedId=itemId;view.position=position??item.start;
   if(!sourceCoverage(currentSource(),item)) view.sourceId=view.project.sources.find(s=>sourceCoverage(s,item))?.id||view.sourceId;
   renderSelected();renderList();rememberView();
@@ -535,6 +536,7 @@ async function playAudio({restart=false}={}) {
 function togglePlayback(){playbackActive()?pauseAudio():playAudio();}
 async function switchSource(sourceId,{position=null,autoplay=null}={}) {
   const source=view.project.sources.find(s=>s.id===sourceId);if(!source||!sourceCoverage(source))return;
+  ++view.navigationGeneration;
   const wasPlaying=autoplay??playbackActive();
   pauseAudio({phase:'idle'});stopReference();if(position!==null)view.position=position;
   view.sourceId=sourceId;renderWaveTracks();updatePosition();rememberView();
@@ -559,16 +561,27 @@ function openNearbyTranscript(){
   const nearest=items.reduce((best,item)=>{const distance=center>=item.start&&center<=item.end?0:Math.min(Math.abs(item.start-center),Math.abs(item.end-center));return !best||distance<best.distance?{item,distance}:best;},null).item;
   view.mode='transcript';view.search='';view.person='';view.pending=false;$('searchInput').value='';$('personFilter').value='';filterItems();chooseItem(nearest.id);scrollToSelected();$('transcriptEditor').focus();toast('已定位到真实逐字稿。可直接修改文字，停笔后保存。');
 }
+function referenceExcerpt(item){
+  const sources=[...view.project.sources].sort((a,b)=>Number(b.id===item.source_id)-Number(a.id===item.source_id));
+  for(const source of sources){
+    // PCM references use the server's canonical interval; ordinary media
+    // retains its eight audio-second cap. Require that entire excerpt.
+    const end=source.bounded_clip===true?Math.min(item.end,item.start+8):Math.min(item.end,canonicalTime(source,sourceTime(source,item.start)+8));
+    const coverage=sourceCoverage(source,{...item,end},{context:false});
+    if(coverage&&!coverage.partial)return {source,start:coverage.start,end:coverage.end};
+  }
+  return null;
+}
 function confirmedReferences(){
   const byName=new Map();
   for(const item of view.project?.items||[]){
     if(identity(item)!=='confirmed'||item.id===view.selectedId)continue;
     const name=personLabel(item);if(!name||name==='未辨认')continue;
-    const sources=view.project.sources.filter(s=>{const coverage=sourceCoverage(s,item,{context:false});return coverage&&!coverage.partial;});
-    if(!sources.length)continue;
+    const excerpt=referenceExcerpt(item);if(!excerpt)continue;
     const old=byName.get(name);
     // Prefer a useful spoken phrase over a very short acknowledgement.
-    if(!old||Math.min(8,item.end-item.start)>Math.min(8,old.end-old.start))byName.set(name,item);
+    const previous=old&&referenceExcerpt(old);
+    if(!previous||excerpt.end-excerpt.start>previous.end-previous.start)byName.set(name,item);
   }
   return [...byName.values()];
 }
@@ -592,10 +605,10 @@ async function playReference(itemId){
   if(view.reference?.itemId===itemId){stopReference();return;}
   const item=confirmedReferences().find(i=>i.id===itemId);if(!item)return;
   pauseAudio();stopReference();
-  const complete=s=>{const coverage=sourceCoverage(s,item,{context:false});return coverage&&!coverage.partial;};
-  const source=view.project.sources.find(s=>s.id===item.source_id&&complete(s))||view.project.sources.find(complete);
-  if(!source){$('referenceMessage').textContent='这段参照音没有完整音频覆盖。';return;}
-  const token=view.referenceToken,end=Math.min(sourceTime(source,item.end),sourceTime(source,item.start)+8);
+  const excerpt=referenceExcerpt(item);
+  if(!excerpt){$('referenceMessage').textContent='这段参照音没有完整音频覆盖。';return;}
+  const {source,start,end}=excerpt;
+  const token=view.referenceToken;
   let audio;const active={itemId,sourceId:source.id,audio:null,cancel:null};view.reference=active;
   const current=()=>view.reference===active&&token===view.referenceToken;
   const finish=message=>{if(!current())return;stopReference();$('referenceMessage').textContent=message;};
@@ -622,7 +635,7 @@ async function playReference(itemId){
     audio.addEventListener('error',()=>finish('参照音读取失败 · 点击姓名可重新加载。'));
     audio.src=clip.media_url;
     await wait('loadedmetadata',()=>audio.readyState>=1);if(!current())return;
-    audio.currentTime=Math.max(0,sourceTime(source,item.start)-clip.local_start);await wait('seeked',()=>!audio.seeking);if(!current())return;
+    audio.currentTime=Math.max(0,start-clip.local_start);await wait('seeked',()=>!audio.seeking);if(!current())return;
     await audio.play();if(!current()){audio.pause();return;}
   }catch(error){finish('参照音未开始播放：'+error.message+' · 点击姓名重试。');}
 }
@@ -648,7 +661,7 @@ function handleShortcut(event){
 }
 function confirmPerson(name){const item=currentItem();if(item)saveDecision(item.id,{speaker:name,status:'confirmed'});}
 function markUnknown(){const item=currentItem();if(item)saveDecision(item.id,{speaker:'',status:'unknown'});}
-function skipItem(){const item=currentItem();if(!item)return;const index=view.filtered.findIndex(i=>i.id===item.id),next=view.filtered[index+1]||view.filtered[index-1];saveDecision(item.id,{status:'skipped'}).then(ok=>{if(ok&&next){chooseItem(next.id);scrollToSelected();}});}
+function skipItem(){const item=currentItem();if(!item)return;const generation=view.navigationGeneration,index=view.filtered.findIndex(i=>i.id===item.id),next=view.filtered[index+1]||view.filtered[index-1];saveDecision(item.id,{status:'skipped'}).then(ok=>{if(ok&&next&&view.selectedId===item.id&&view.navigationGeneration===generation){chooseItem(next.id);scrollToSelected();}});}
 async function retryUnsaved(){if(view.failedUndo&&!(await undoDecision({retry:true})))return false;const operations=[];for(const id of new Set([...view.drafts.keys(),...view.failedRequests.keys()]))operations.push(saveDecision(id,{}, {quiet:true,explicit:true}));return Promise.all(operations);}
 function flushBeforeExport(){const operations=[];for(const id of view.drafts.keys())if(!view.failedRequests.has(id))operations.push(saveDecision(id,{}, {quiet:true,explicit:false}));return Promise.all(operations);}
 function bindEvents(){
