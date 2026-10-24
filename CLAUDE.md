@@ -1006,4 +1006,6 @@ Identify the failing layer before updating a marketplace or reinstalling a plugi
 
 ## Cloudflare mail operations
 
+For Pages custom-hostname failures or signed delegation moves, enter [Cloudflare Troubleshooting](cloudflare-troubleshooting/SKILL.md) and its [custom-domain procedure](cloudflare-troubleshooting/references/pages-custom-domain.md). For a failure confined to one recently moved hostname, [Tunnel Doctor](tunnel-doctor/SKILL.md) selects its local-path comparison; keep mutation authority and recovery with the selected owner.
+
 For domain forwarding diagnosis, use [Email Routing](cloudflare-troubleshooting/references/email-routing.md) through the owning Cloudflare Skill. Keep its endpoint sequence and delivery evidence contract in that reference.

@@ -87,7 +87,7 @@ Website not accessible or showing old content
 ### Common Causes
 
 #### 1. DNS Not Propagated
-**Solution:** Wait 24-48 hours for full DNS propagation
+**Solution:** Compare registrar save, parent publication and recursive answers using the registry's publication policy and observed TTLs. For Pages or a delegation/DNSSEC move, follow [the custom-domain procedure](pages-custom-domain.md); waiting alone does not establish correct configuration.
 
 Check propagation:
 ```bash

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **cloudflare-troubleshooting** (v1.1.0 → v1.1.1): Route Pages hostname failures through existing-project binding, registrar/delegation and DNSSEC checks; distinguish parent publication, resolver caches and normal-hostname acceptance. Replace blanket propagation waits with observed state. Change type: bounded DNS recovery and evidence correction.
+- **tunnel-doctor** (v1.17.8 → v1.17.9): Separate one recently moved hostname from multi-domain DIRECT forwarding failure; use authorized client comparisons without treating forced-IP success as ordinary recovery. Change type: bounded attribution and recovery correction.
+
 - **frontend-visual-qa** (v1.21.15 → v1.21.16): Bind hidden-page polling acceptance to actual query eligibility and the original scheduling chain or observed product cancellation. Distinguish logical queries from network starts; reject not-yet-due and suspended-scheduler false passes without rejecting a correct timer cancellation. Change type: bounded acceptance-evidence correction.
 - **asr-transcribe-to-text** (`daymade-audio` v1.53.1 → v1.53.2): Align Listening Desk operating guidance with saved-name resolution, asynchronous skip navigation, capped reference coverage, IPv6 loopback and registered CI ownership. Route ongoing operation through the guide instead of historical review artifacts. Change type: documentation alignment with existing behavior.
 - **auto-repo-setup** (v2.1.6 → v2.1.7): Bind dependency repair to the actual runtime consumer, preserve valid non-target dependencies and in-flight work, and verify installed versions plus the product path in a new process. Keep isolated validation, running processes, other machines and hosted alert state distinct. Change type: bounded environment-verification correction.

@@ -133,7 +133,7 @@
       "description": "Investigate and resolve Cloudflare configuration issues using API-driven evidence gathering. Use when troubleshooting ERR_TOO_MANY_REDIRECTS, SSL errors, DNS issues, or any Cloudflare-related problems. Focus on systematic investigation using Cloudflare API to examine actual configuration rather than making assumptions.",
       "source": "./cloudflare-troubleshooting",
       "strict": false,
-      "version": "1.1.0",
+      "version": "1.1.1",
       "category": "developer-tools",
       "keywords": [
         "cloudflare",
@@ -826,7 +826,7 @@
       "description": "MUST be used first for tunnel / proxy-path connectivity failures or slow throughput (网络故障 / 连不上 / 代理或隧道下超时). Diagnoses Tailscale, proxy, TUN, DNS and SSH-tunnel problems on macOS and Windows/WSL, e.g. Tailscale ping works but SSH fails, curl works but browser gets 503, Git/Docker fails behind the proxy, or downloads crawl despite a reachable proxy. Not for application-layer bugs (use debugging-network-issues).",
       "source": "./tunnel-doctor",
       "strict": false,
-      "version": "1.17.8",
+      "version": "1.17.9",
       "category": "developer-tools",
       "keywords": [
         "tailscale",
