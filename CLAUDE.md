@@ -376,7 +376,8 @@ Keep decision criteria and verification details in those owners.
 
 For local audio listening, speaker decisions, word edits and recovery of saved
 judgments, use [Listening Desk](daymade-audio/asr-transcribe-to-text/references/review_workbench.md).
-Its saving and playback contracts govern both the browser and local service.
+Its saving, recovery and verification sections govern the browser and local
+service; keep the operating procedure there rather than in review artifacts.
 
 For explicit single-task speaker-inference requests, load
 [scoped speaker inference](daymade-audio/transcript-fixer/references/scoped_speaker_inference.md).

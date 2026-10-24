@@ -19,7 +19,8 @@ Then run `scripts/review-workbench/server.py --project <absolute-project.json>
 --state-dir <absolute-private-state-directory>`. The default URL is
 `http://127.0.0.1:8780/`; `--port` selects another available port and
 `--no-browser` suppresses automatic opening. The server accepts loopback hosts
-only. Keep it running while reviewing; closing the page does not close it.
+only; `--host ::1` uses IPv6 loopback and prints a bracketed URL. Keep it running
+while reviewing; closing the page does not close it.
 
 ## Review in one place
 
@@ -38,9 +39,13 @@ only. Keep it running while reviewing; closing the page does not close it.
   from another human-confirmed item. The current turn, cursor and judgment
   remain in place; resume the current turn directly after listening. Candidate,
   unknown, skipped and unsaved identities are excluded from the reference bank.
+  The capped reference excerpt must be fully covered by its selected source;
+  a longer turn extending beyond the recording does not exclude a covered excerpt.
 - **Decide:** keys `1–4` select the first four roster members; enter another
   name when needed. A name click saves that item only. `U` records unknown,
   `S` skips and `Z` undoes the latest saved edit. Typing does not trigger shortcuts.
+  A delayed skip acknowledgment saves its original item without moving you away
+  from a newer turn, seek or recorder selection.
 - **Correct:** edit the actual transcript or a note; typing is saved after a
   short pause. Model candidates, unknowns, pending saves and human confirmations
   remain distinct. A note or word edit does not certify a candidate's identity.
@@ -102,6 +107,12 @@ omits the waveform while preserving playback.
 
 ## Saving and recovery
 
+Roster buttons submit display names. Saved decision names keep that meaning
+through later edits and exports, even when a name equals another person's roster
+ID. Original item speakers matching a roster ID still resolve as source IDs;
+they do not override the reviewed name. Exports attach a roster ID only when the
+reviewed name identifies a unique roster member.
+
 The server atomically stores `state.json` under the supplied state directory,
 with revisions, request IDs, undo history and an audit trail. The browser stores
 only view preferences locally. Do not close a page with unresolved unsaved edits.
@@ -148,6 +159,10 @@ Run `python3 -m unittest discover -s <skill-root>/scripts/review-workbench/tests
 for changed backend/importer code. For frontend changes run
 `node --check <skill-root>/scripts/review-workbench/static/app.js` and
 `node --test <skill-root>/scripts/review-workbench/tests/*.cjs`.
+For source-repository CI, follow
+[CI operations](https://github.com/daymade/claude-code-skills/blob/main/references/ci-operations.md)
+to inspect the exact candidate's registered-suite results. Keep test totals in
+the run's historical evidence rather than maintaining them in this guide.
 Then exercise the real browser: hear a clip; change source inside overlap;
 confirm an item; refresh; undo; download and open an export. Check failed-save
 and revision-conflict recovery without polluting the real review's decisions.
