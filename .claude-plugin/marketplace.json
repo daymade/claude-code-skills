@@ -326,7 +326,7 @@
       "description": "Apple-platform development and operations suite for macOS window capture, TCC and Keychain dialog diagnosis, Full Disk Access repair, iOS/macOS app development, disk cleanup, and launchd watchdogs.",
       "source": "./daymade-macos",
       "strict": false,
-      "version": "1.25.3",
+      "version": "1.25.4",
       "category": "suite",
       "keywords": [
         "suite",
@@ -1214,7 +1214,7 @@
       "description": "查询 ChatGPT/Codex 重置公告及多个 Pro 账号的剩余额度、备用 Full reset；复用 Google 登录逐个核实并恢复网页账号，换算北京时间。区分 Tibo 官宣、未官宣的平台静默重置、banked reset 与账户级周期重置。Use when 用户问「什么时候重置」「额度什么时候恢复」「下次全员重置几点」 「banked reset 到了吗」「Tibo 说了什么」「usage limit when reset」，或说「额度突然回到 100%」「好像/肯定又重置了」，或问「几个账号都用完了吗」「哪个还满额」。必须用实时产品状态、独立用户实测与公告交叉核验；禁止因 Tibo Radar 没有新条目就否定已经发生的重置，并须把太平洋时间当场换算为北京时间。",
       "source": "./tibo-reset-codex",
       "strict": false,
-      "version": "2.1.2",
+      "version": "2.1.3",
       "category": "utilities",
       "keywords": [
         "chatgpt",
@@ -1329,7 +1329,7 @@
       "description": "Snapshots, restores and reconciles Claude Code / Codex sessions inside Ghostty tabs across reboots. Use when quitting the Mac for an update (保存终端会话 / 重启前备份终端), after restart to reopen tabs with their original session IDs (恢复之前的窗口 / restore my ghostty tabs), or to audit which sessions survived. Not for resuming one conversation via its own --resume, terminal screenshots, or tmux state. Also use for periodic change-only snapshots (定期增量快照 / 没变化不记录). Also use before or after a manual Codex account switch (额度耗尽换号 / 换号后恢复全部 Codex).",
       "source": "./ghostty-use",
       "strict": false,
-      "version": "1.8.2",
+      "version": "1.8.3",
       "category": "developer-tools",
       "keywords": [
         "ghostty",

@@ -172,6 +172,11 @@ metadata into permission. In particular, a terminal screen's title or text is
 insufficient when it exposes no exact SID/TTY or independently observable draft.
 A host denial stops GUI operation; do not fall back to
 AppleScript or another channel to bypass it. Read-only plans/checks remain usable.
+If a graceful exit cannot complete through the allowed channel, killing the
+process is a separate, per-target authorization — follow
+`~/.claude/references/irreversible-gates.md` §终止进程 (SIGTERM first,
+post-kill terminal reset via `~/scripts/pty-tui-reset/pty-tui-reset.sh`);
+a killed TUI leaves mouse-mode residue that floods the window.
 
 ## Reopen the original recorded set, not a blank session
 

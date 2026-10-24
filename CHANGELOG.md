@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tibo-reset-codex** (v2.1.2 → v2.1.3): Add consumption-attribution section to account-usage.md — attributing quota burn to a process/session requires at least one measured probe (lifetime CPU growth, held API connection, rollout writes in the window; "process alive" is not evidence), the metering fact that auth endpoints don't consume quota, and lsof-over-argv for process→session identity. SKILL.md monitoring rounds gain the burn-authorization contract (absolute stop time + stop executor + stop method written at acceptance; self-stopping runner as default; escalation ladder with kill only for per-contract named targets). Change type: bounded attribution-evidence correction from three same-shape 2026-10-24 failures.
+- **ghostty-use** (v1.8.2 → v1.8.3): Point account-switch recovery at the authorized-kill sequence in irreversible-gates §终止进程 when graceful exit is unavailable; a killed TUI leaves mouse-mode residue that floods the window. Change type: recovery-route pointer.
+- **macos-load-doctor** (`daymade-macos` v1.25.3 → v1.25.4): Point the authorized-termination boundary at the five-step authorized-kill sequence in irreversible-gates §终止进程 (parent-chain trace, visible-window check, side-effect list, SIGTERM first, post-kill readback). Change type: boundary-procedure pointer.
+
 - **frontend-visual-qa** (v1.21.14 → v1.21.15): Require task-based ancillary-copy dispositions before a rendered-UI release-ready claim, including shared and conditional text. Preserve useful labels, scientific boundaries, provenance and accessibility while separating producer scaffold from reader information. Change type: bounded information-necessity acceptance correction.
 
 - **frontend-visual-qa** (v1.21.13 → v1.21.14): Distinguish media focus emulation from true hidden-page polling acceptance. Add a bounded READ-DO check with a normal visible-query control, progressing callbacks, request-start deltas and contract-bound recovery; reject frozen-timer and synthetic-visibility false passes. Change type: bounded evidence-selection correction.
