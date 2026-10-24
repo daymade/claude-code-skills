@@ -296,7 +296,12 @@ and inspect the affected text positions rather than accepting scroll movement al
 Load [references/history-derived-checklist.md](references/history-derived-checklist.md)
 for the core visual/responsive defect catalog and standards-backed checks.
 For composition or density audits, execute its **Information necessity before
-layout** check before fixing line breaks. The sweep's `attentionInventory` makes
+layout** check before fixing line breaks. Before declaring rendered UI ready for
+release, complete that check's ancillary-copy inventory and dispositions across
+the declared surface, including shared text and affected conditional states.
+Missing coverage or unresolved task-relevant explanations leave that release
+claim partial; passing geometry or finding no forbidden words cannot clear it.
+The sweep's `attentionInventory` makes
 the visible text population and exact repetitions inspectable; review the full
 population against the task, not only its repetition candidates. Complete
 inventory coverage is not proof that the content is necessary.
@@ -466,7 +471,7 @@ surrounding context to locate it — a full-page screenshot proves nothing about
 matter how accurate. `scripts/silent_degradation_probe.mjs shot` crops one
 element plus padding for exactly this.
 
-Four rules that decide whether the evidence survives contact with a reader:
+Rules that decide whether the evidence survives contact with a reader:
 comparisons must be **scale-matched** (two full-width regions placed side by side
 shrink until the 3px difference under discussion vanishes — crop both to the same
 component at the same width instead); dimensions are reported in **CSS px, never
@@ -532,7 +537,7 @@ or target mutation. In **fix-and-verify** mode:
 5. Add or update the smallest regression guard that would catch the confirmed
    failure class.
 
-Three habits keep the fix pass from manufacturing its own defects — each has
+These habits keep the fix pass from manufacturing its own defects — each has
 produced one:
 
 - **Shoot the "before" while the defect still exists.** After the rebuild it is
@@ -561,7 +566,8 @@ Call **current-render status** verified only when:
   level;
 - no unresolved Blocker/Major finding contradicts the pass;
 - every explicit pass condition is met, including information necessity when
-  layout/density is in scope; calling a violation Moderate, Minor, taste or
+  layout/density or release readiness is in scope; calling a violation Moderate,
+  Minor, taste or
   “still usable” does not override a user's requirement;
 - remaining limitations are explicit.
 
