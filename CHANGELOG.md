@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tunnel-doctor** (v1.17.9 → v1.17.10): Remove derived command and check totals from diagnostic labels; preserve the commands and required recovery checks.
+
 - **cloudflare-troubleshooting** (v1.1.1 → v1.1.2): Align redirect/certificate examples and CLI post-apply guidance with evidence-based waiting and conditional HTTP cache purging; retain browser-context comparison, normal-hostname recovery and existing API/write behavior. Change type: follow-up guidance consistency fix.
 
 - **cloudflare-troubleshooting** (v1.1.0 → v1.1.1): Route Pages hostname failures through existing-project binding, registrar/delegation and DNSSEC checks; distinguish parent publication, resolver caches and normal-hostname acceptance. Replace blanket propagation waits with observed state. Change type: bounded DNS recovery and evidence correction.
