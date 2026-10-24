@@ -814,9 +814,9 @@ For other VPN/tunneling tools, prefer a clean app-level quit (menu bar → Quit,
 
 **Why "restart the app" beats "flush DNS cache"**: `sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder` flushes cached results, but the resolver chain in `scutil --dns` is rebuilt from network configuration, not from the cache. The dead resolver is still there after a flush. The fix has to come from the app that registered the resolver in the first place.
 
-#### Verify End-to-End (4 Dimensions)
+#### Verify End-to-End
 
-A DNS-resolver fix is easy to half-verify. All four must pass before declaring the system path healed:
+A DNS-resolver fix is easy to half-verify. All checks below must pass before declaring the system path healed:
 
 ```bash
 # 1. The owning daemon is back (not just its UI)
@@ -835,7 +835,7 @@ ssh -o "ProxyCommand=none" -T git@github.com
 # Expected: "Hi <user>! You've successfully authenticated..."
 ```
 
-The fourth dimension is the one that matters most. If you applied a workaround during diagnosis (a `ProxyCommand` that delegates DNS to a SOCKS5 proxy, a `/etc/hosts` entry, a hardcoded IP), running the original command with the workaround disabled (`ProxyCommand=none`) is the only way to know you actually healed the system DNS path rather than just routed around it.
+The original failing operation is the decisive check. If you applied a workaround during diagnosis (a `ProxyCommand` that delegates DNS to a SOCKS5 proxy, a `/etc/hosts` entry, a hardcoded IP), running the original command with the workaround disabled (`ProxyCommand=none`) is the only way to know you actually healed the system DNS path rather than just routed around it.
 
 See [references/dns_resolver_chain_stall.md](references/dns_resolver_chain_stall.md) for the full mental model of macOS resolver ordering, the IPv4-vs-IPv6 split, and a worked example walking through every diagnostic command and its real output.
 
@@ -850,7 +850,7 @@ See [references/dns_resolver_chain_stall.md](references/dns_resolver_chain_stall
 
 **Root cause**: the TUN tool (Shadowrocket / Clash / Surge in fake-IP mode) has two independent forwarding planes: proxied traffic (overseas, via the node) and DIRECT traffic (matched by domain rules, forwarded from the tool's own network stack). The DIRECT plane's state can break alone — DNS-over-tunnel failure, stale fake-IP table after a network change, or internal state corruption — while the proxied plane stays perfectly healthy. Everything resolved to a fake IP whose domain matches a DIRECT rule then dies inside the tool.
 
-**Diagnosis** — three commands separate this from a real network outage:
+**Diagnosis:**
 
 ```bash
 # 1. Confirm fake-IP DNS is in effect (domain resolves into 198.18.0.0/15)
@@ -879,7 +879,7 @@ must still reach the armed recovery action. Use the corresponding API or GUI for
 Run `sudo killall -HUP mDNSResponder` only within the authorized maintenance scope after the
 tunnel is confirmed connected; DNS cache flushing does not restore a disconnected VPN.
 
-**Verify all four planes** — a fix that restores one plane can leave (or put) another down:
+**Verify each required plane** — a fix that restores one plane can leave (or put) another down:
 
 ```bash
 curl -sS -o /dev/null -w 'domestic direct: %{http_code}\n' --max-time 10 https://<domestic-site>/
