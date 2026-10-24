@@ -198,10 +198,10 @@ For custom origin servers, install Cloudflare Origin Certificates:
 Set up alerts for SSL-related errors (525, 526) in Cloudflare Analytics
 
 ### 6. Test After Changes
-- Clear browser cache
-- Test in incognito mode
-- Purge Cloudflare cache
-- Wait 30-60 seconds for edge server updates
+- Verify the ordinary hostname and actual certificate/redirect state
+- If only the browser differs, compare a fresh context before clearing its cache
+- Purge HTTP cache only when stale HTTP responses are implicated
+- Report pending prerequisites or observed recovery rather than a fixed wait
 
 ## Additional Security Settings
 

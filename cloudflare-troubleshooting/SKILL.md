@@ -90,7 +90,7 @@ curl -X PATCH "https://api.cloudflare.com/client/v4/zones/{zone_id}/settings/ssl
   --data '{"value":"full"}'
 ```
 
-Purge cache after fix:
+If stale HTTP redirects remain after the fix, purge the relevant HTTP cache:
 ```bash
 curl -X POST "https://api.cloudflare.com/client/v4/zones/{zone_id}/purge_cache" \
   -H "X-Auth-Email: email" \
@@ -158,7 +158,7 @@ For a working `pages.dev` site with an unreachable custom hostname, missing Page
 **Common issues:**
 - Error 526: SSL mode is "strict" but origin cert invalid
 - Error 525: SSL handshake failure at origin
-- Provisioning delay: Wait 15-30 minutes for Universal SSL
+- Provisioning delay: inspect the selected product's certificate/domain validation state and report the remaining prerequisite or pending state
 
 ### Origin Server Errors (502/503/504)
 
@@ -305,13 +305,13 @@ curl -X PATCH "https://api.cloudflare.com/client/v4/zones/ZONE_ID/settings/ssl" 
   -H "Content-Type: application/json" \
   --data '{"value":"full"}'
 
-# 4. Purge cache
+# 4. Only if stale HTTP redirects remain, purge HTTP cache
 curl -X POST "https://api.cloudflare.com/client/v4/zones/ZONE_ID/purge_cache" \
   -H "X-Auth-Email: user@example.com" \
   -H "X-Auth-Key: abc123" \
   -d '{"purge_everything":true}'
 
-# 5. Inform user: Wait 60 seconds, clear browser cache, retry
+# 5. Recheck the ordinary hostname and browser; report observed recovery or the unresolved layer
 ```
 
 ## When Scripts Are Useful
