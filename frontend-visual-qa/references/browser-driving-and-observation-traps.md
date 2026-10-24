@@ -367,13 +367,14 @@ or explicitly authorized owned target, using the existing request observer:
    being suppressed for hidden state, or the product's hidden handler actually
    canceling that armed timer/trigger. Bind cancellation evidence to the original
    scheduled work and its pre-cancellation due point; a declaration that it
-   stopped is insufficient. A correct cancellation need not leave polling
-   callbacks running. Require zero new starts at the contracted layer while
-   hidden; a forbidden start fails that
-   claim. An independent heartbeat or advancing clock does not prove that the
-   polling chain could run. If the actual due point was not reached, other
-   eligibility conditions prevented work, or the polling chain was suspended
-   without product-cancellation evidence, report **unverified**, even with zero
+   stopped is insufficient. Verified cancellation is the alternative to an
+   eligible callback: do not require waiting for its former due point or keeping
+   polling callbacks running. Require zero new starts at the contracted layer
+   while hidden; a forbidden start fails that claim. An independent heartbeat
+   or advancing clock does not prove that the polling chain could run. Without
+   verified product cancellation, if the actual due point was not reached,
+   other eligibility conditions prevented work, or
+   the polling chain was suspended, report **unverified**, even with zero
    starts. Extend only within the declared budget; do not change due times,
    clear caches, release pending work or force a query to create an opportunity.
 5. Return the same page to visible and observe recovery according to the
