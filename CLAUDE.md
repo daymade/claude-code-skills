@@ -365,7 +365,8 @@ For memory pressure or suspected child-process leaks, enter that Skill's
 [memory evidence](daymade-macos/macos-load-doctor/SKILL.md#memory-evidence) before attributing the cause.
 The observation contract above owns delayed-sampling acceptance; keep its tests
 and the diagnostic stop conditions in those Skills.
-For changed operating defaults or thresholds in an already-required review, use
+For changed operating defaults or thresholds in an already-required review,
+or behavior-replay dispatch and coverage claims, use
 [skill-creator's independent-review protocol](daymade-skill/skill-creator/references/independent-review-protocol.md).
 Keep decision criteria and verification details in those owners.
 
