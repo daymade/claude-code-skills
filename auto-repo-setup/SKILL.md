@@ -100,8 +100,18 @@ For each failed requirement:
 1. Capture the exact command, exit code, stdout, and stderr.
 2. Trace the failure to the declaring source: project guide, manifest, lockfile,
    configuration, or runtime log.
-3. Apply the smallest project-consistent repair.
-4. Re-run the failed check before moving on.
+3. Resolve the affected command's actual runtime from its launch configuration
+   and read-only probes: interpreter and package environment, container image,
+   or service launcher as applicable. Keep an isolated validation environment
+   distinct from that consumer. If the consumer already meets the requirement,
+   retain it and continue to A4 without reinstalling.
+4. Before changing that environment, inspect affected in-flight work and existing
+   authority. Setup authorization does not authorize interrupting other work;
+   coordinate or wait when the change would disrupt it, and report the exact
+   unresolved activation step rather than killing or restarting its processes.
+5. Apply the smallest project-consistent repair through the project's existing
+   update route, preserving valid non-target dependencies and configuration.
+6. Re-run the failed check before moving on.
 
 Do not restart, reinstall everything, or switch package managers as a first move.
 Do not print .env or credential contents; verify presence and behavior without
@@ -112,6 +122,13 @@ echoing values.
 Run the project's documented smoke test, build, or start command. If none exists,
 derive one from CI/task-runner configuration and label the derivation. Verify the
 observable result, not merely a zero exit code.
+
+For dependency repairs, use a new process in the resolved consumer environment
+to read back the installed versions and run that product check. A changed lockfile
+or successful isolated install does not establish that the consumer was updated.
+Keep already-running processes and other machines outside the claim unless
+separately verified; do not restart them just to widen the claim. Read a hosted
+dependency alert separately before claiming it closed.
 
 Report:
 
