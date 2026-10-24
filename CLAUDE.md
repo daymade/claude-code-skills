@@ -644,6 +644,12 @@ After committing, run `scripts/ci/validate_changed_skills.sh origin/main`; it ch
 the committed diff. A repository-level plugin validation does not replace per-Skill
 validation.
 
+### Repository Environment Repair
+
+For repository startup failures or dependency/environment repairs, enter
+[auto-repo-setup](auto-repo-setup/SKILL.md) and select its Environment repair workflow.
+Keep runtime identification, update steps and consumer verification in that owner.
+
 ### Git Operations
 
 For document-ingestion reviews and authorized small maintainer repairs, enter
