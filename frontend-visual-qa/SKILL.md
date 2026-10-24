@@ -247,6 +247,9 @@ the user's expected viewport when finished.
 
 For a loading-speed claim, read §2's performance-comparison boundary before measuring.
 
+For hidden-page polling, read that reference's **Verify polling stops in a genuinely
+hidden page** recipe before testing; media focus emulation cannot establish that policy.
+
 For a scripted sweep, first prove the target state is reproducible with one of:
 
 - the project's fixture/storage-state/setup path;
@@ -602,7 +605,7 @@ check the available agent tools can perform.
 - references/browser-driving-and-observation-traps.md — the auditor's own failure
   modes: misread clicks, stale caches, `file://` limits, viewport-vs-page
   screenshots, width-resize vs device emulation, states a default screenshot
-  cannot show, hidden-tab media deferral, virtual-time false negatives,
+  cannot show, hidden-tab media deferral and polling acceptance, virtual-time false negatives,
   `--dump-dom` timing (and the title-encoded interaction probe done right), and
   Range-server media stalls. Read it before driving a real browser, and whenever
   an observation surprises you.
