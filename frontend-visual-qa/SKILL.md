@@ -468,7 +468,7 @@ surrounding context to locate it — a full-page screenshot proves nothing about
 matter how accurate. `scripts/silent_degradation_probe.mjs shot` crops one
 element plus padding for exactly this.
 
-Four rules that decide whether the evidence survives contact with a reader:
+Rules that decide whether the evidence survives contact with a reader:
 comparisons must be **scale-matched** (two full-width regions placed side by side
 shrink until the 3px difference under discussion vanishes — crop both to the same
 component at the same width instead); dimensions are reported in **CSS px, never
@@ -534,7 +534,7 @@ or target mutation. In **fix-and-verify** mode:
 5. Add or update the smallest regression guard that would catch the confirmed
    failure class.
 
-Three habits keep the fix pass from manufacturing its own defects — each has
+These habits keep the fix pass from manufacturing its own defects — each has
 produced one:
 
 - **Shoot the "before" while the defect still exists.** After the rebuild it is

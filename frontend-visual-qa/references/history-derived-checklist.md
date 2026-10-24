@@ -5,19 +5,6 @@ responsive, typography, and composition checks. Load the journey/page-contract
 reference separately when the audit includes routes, overlays, browser outputs,
 native shells, GIS, or review tools.
 
-## Contents
-
-- Standards-Backed Baseline
-- Evidence Order
-- Viewport And Responsive Checks
-- Typography And Line Breaks
-- Layout And Composition
-- Information necessity before layout
-- Images And Media
-- Reference Parity And Taste
-- Mechanical Finding Triage
-- Invalid Fixes
-
 ## Standards-Backed Baseline
 
 Use these standards as tests, not as decoration:
