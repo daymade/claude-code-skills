@@ -342,39 +342,55 @@ hidden-page polling policy. When the product contract says to pause queries whil
 hidden, the executing auditor follows this **READ-DO** sequence in an isolated
 or explicitly authorized owned target, using the existing request observer:
 
-1. Record the target, selected view, original visibility/emulation state, query
-   interval and visible-resume behavior from the product's current contract.
-   Define the ordinary query's request-start counter/filter before acting; retain
-   request identities so completions of earlier requests are not new queries.
-2. Observe the same query starting normally while the page is visible. Record
-   timestamps and a positive request delta as the healthy control. A visible
-   page with no working query cannot establish a hidden-policy pass.
+1. Record the target, selected view, original visibility/emulation state and
+   visible-resume behavior from the current product contract. Read the actual
+   query eligibility and next-due state, including cache freshness, backoff and
+   pending work; the nominal interval alone does not establish a query is due.
+   Define the counter/filter and its layer: logical poll/query invocation or
+   browser network request start. Server logs establish arrivals only.
+   Cache/deduplication can hide logical work from the network; zero network
+   starts does not prove zero logical queries. Retain request identities so
+   earlier completions are not counted as new starts.
+2. Observe an eligible query through the original scheduling chain while the
+   page is visible, at the same observation layer. Record its due/eligibility
+   state, timestamps and positive start delta as the healthy control. A control
+   that never reaches that layer cannot establish a hidden-policy pass.
 3. Disable focus emulation for this target through the current harness; for an
    isolated Chromium CDP target, use `Emulation.setFocusEmulationEnabled` with
    `enabled: false`. Make the page genuinely hidden through an authorized tab or
    window action, then corroborate the harness's target state with the page's
    unmodified `document.visibilityState` and `document.hidden`. Overriding either
    property or dispatching a synthetic visibility event is replay evidence only.
-4. At the confirmed hidden boundary, record time and the request-start count.
-   Observe across at least the original query interval while real time **and
-   page event-loop callbacks** continue progressing; use an existing heartbeat
-   or an authorized bounded, non-network timer probe. Retain its timestamp
-   samples and the ending count. Require zero new ordinary query starts while
-   hidden. Zero requests with frozen timers, no hidden confirmation or an
-   insufficient observation window leaves this claim unverified.
+4. At the confirmed hidden boundary, record real time, the counter and the
+   actual eligibility/next-due state. Within a bounded window, establish either
+   an eligible opportunity reaching the **original polling timer/trigger** and
+   being suppressed for hidden state, or the product's hidden handler actually
+   canceling that armed timer/trigger. Bind cancellation evidence to the original
+   scheduled work and its pre-cancellation due point; a declaration that it
+   stopped is insufficient. Verified cancellation is the alternative to an
+   eligible callback: do not require waiting for its former due point or keeping
+   polling callbacks running. Require zero new starts at the contracted layer
+   while hidden; a forbidden start fails that claim. An independent heartbeat
+   or advancing clock does not prove that the polling chain could run. Without
+   verified product cancellation, if the actual due point was not reached,
+   other eligibility conditions prevented work, or
+   the polling chain was suspended, report **unverified**, even with zero
+   starts. Extend only within the declared budget; do not change due times,
+   clear caches, release pending work or force a query to create an opportunity.
 5. Return the same page to visible and observe recovery according to the
    original product contract. Do not require an immediate refresh or invent a
    new interval. Keep an unconfirmed original request unconfirmed; do not resend
    it to obtain cleaner evidence.
 6. Restore only this audit's changed settings/state and retain the visible
-   control, visibility transitions, start/end times, callback samples and request
-   deltas. Report real-target, isolated diagnostic and synthetic replay evidence
+   control, visibility transitions, times, eligibility/next-due state, original
+   scheduling or cancellation evidence, counter layer and deltas. Report
+   real-target, isolated diagnostic and synthetic replay evidence
    separately; a replay cannot certify the live hidden-page behavior.
 
 This is an auditor-run acceptance check; the layout sweep does not enforce it.
-If the harness cannot establish real hiding or progressing callbacks, report the
-missing evidence. Do not close the user's production browser or alter network
-settings to manufacture the condition.
+If the harness cannot establish real hiding and the relevant scheduling or
+cancellation evidence, report the gap. Do not close the user's production
+browser or alter network settings to manufacture the condition.
 
 ### Long commands through a terminal can be truncated
 
