@@ -335,6 +335,47 @@ scripting (e.g. AppleScript's application object) may not see the automation
 window at all when it belongs to another profile/instance — don't burn rounds
 trying to raise it; and per trap 9, don't verify the escape under virtual time.
 
+### Verify polling stops in a genuinely hidden page
+
+Focus emulation remains useful for the media check above; it cannot prove a
+hidden-page polling policy. When the product contract says to pause queries while
+hidden, the executing auditor follows this **READ-DO** sequence in an isolated
+or explicitly authorized owned target, using the existing request observer:
+
+1. Record the target, selected view, original visibility/emulation state, query
+   interval and visible-resume behavior from the product's current contract.
+   Define the ordinary query's request-start counter/filter before acting; retain
+   request identities so completions of earlier requests are not new queries.
+2. Observe the same query starting normally while the page is visible. Record
+   timestamps and a positive request delta as the healthy control. A visible
+   page with no working query cannot establish a hidden-policy pass.
+3. Disable focus emulation for this target through the current harness; for an
+   isolated Chromium CDP target, use `Emulation.setFocusEmulationEnabled` with
+   `enabled: false`. Make the page genuinely hidden through an authorized tab or
+   window action, then corroborate the harness's target state with the page's
+   unmodified `document.visibilityState` and `document.hidden`. Overriding either
+   property or dispatching a synthetic visibility event is replay evidence only.
+4. At the confirmed hidden boundary, record time and the request-start count.
+   Observe across at least the original query interval while real time **and
+   page event-loop callbacks** continue progressing; use an existing heartbeat
+   or an authorized bounded, non-network timer probe. Retain its timestamp
+   samples and the ending count. Require zero new ordinary query starts while
+   hidden. Zero requests with frozen timers, no hidden confirmation or an
+   insufficient observation window leaves this claim unverified.
+5. Return the same page to visible and observe recovery according to the
+   original product contract. Do not require an immediate refresh or invent a
+   new interval. Keep an unconfirmed original request unconfirmed; do not resend
+   it to obtain cleaner evidence.
+6. Restore only this audit's changed settings/state and retain the visible
+   control, visibility transitions, start/end times, callback samples and request
+   deltas. Report real-target, isolated diagnostic and synthetic replay evidence
+   separately; a replay cannot certify the live hidden-page behavior.
+
+This is an auditor-run acceptance check; the layout sweep does not enforce it.
+If the harness cannot establish real hiding or progressing callbacks, report the
+missing evidence. Do not close the user's production browser or alter network
+settings to manufacture the condition.
+
 ### Long commands through a terminal can be truncated
 
 When a selected browser harness accepts JSONL, drive it from a file through
