@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tibo-reset-codex** (`tibo-reset-codex` v2.1.3 → v2.1.4): Record the pinned-occurrence time basis for second-spaced rollout snapshots and the per-record `event_start` rule when one event has both an announce and a forecast record. Change type: review-scoring calibration from a live landing verification.
 - **frontend-visual-qa** (v1.21.17 → v1.21.18): Calibrate retained-but-clipped Reader recovery with a synthetic status-bar fixture and browser controls for final prose, footnotes, document/Find/scroll continuity and verbatim source text. Change type: bounded acceptance-evidence correction.
 
 - **qa-expert** (v1.2.6): Derive partial-run group totals from actual outcomes and verify zero-selection and interrupted-loop reporting through the executing harness. Change type: bounded reporting-method repair.
