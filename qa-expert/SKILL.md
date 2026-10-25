@@ -85,6 +85,9 @@ before selecting cases. For schema upgrades, accounting views or integration
 fixtures, load [migration and fixture acceptance](references/migration-fixture-acceptance.md).
 For file-backed state, snapshot dependency checks, recovery or CLI output/read-cost
 changes, load [file persistence and CLI acceptance](references/file-persistence-cli-acceptance.md).
+For admission decisions, account/resource bindings or recovery that can authorize
+an effect, load [admission and recovery acceptance](references/admission-recovery-acceptance.md)
+before choosing fault timing or side-effect assertions.
 For responses, normalization or suggested edits that race with user changes,
 load [asynchronous editing and conflict acceptance](references/async-edit-conflict-acceptance.md)
 before selecting timing, session and related-object cases.

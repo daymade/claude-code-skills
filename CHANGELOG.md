@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **app-evolver** (v1.1.8 → v1.1.9): Add domain-role extraction through real consumer adoption while retaining adjacent admission, execution and recovery owners. Change type: bounded engineering-guidance correction.
+- **qa-expert** (v1.2.3 → v1.2.4): Add admission/recovery binding cases and extend delivered-package, final-open race, configuration-snapshot and fixture-contract acceptance. Preserve healthy retry and first-create paths. Change type: bounded acceptance-workflow correction.
+
 - **tunnel-doctor** (v1.17.9 → v1.17.10): Remove derived command and check totals from diagnostic labels; preserve the commands and required recovery checks.
 
 - **cloudflare-troubleshooting** (v1.1.1 → v1.1.2): Align redirect/certificate examples and CLI post-apply guidance with evidence-based waiting and conditional HTTP cache purging; retain browser-context comparison, normal-hostname recovery and existing API/write behavior. Change type: follow-up guidance consistency fix.
