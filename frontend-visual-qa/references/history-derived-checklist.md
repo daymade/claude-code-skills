@@ -254,6 +254,19 @@ requires enough information for the task without competing irrelevant detail;
 supports disclosure for information only some users need, not hiding information
 most users need. Apply those task-dependent boundaries, not a minimalism style.
 
+### Established methods
+
+Select the method that answers the observed failure; do not install or run every
+tool. These adapted checks work without upstream CLIs. For a full named command,
+load its current entry and keep this audit's authorization and evidence boundary.
+
+| Observed failure | Apply the established method |
+| --- | --- |
+| Generic composition despite clean lint | [Impeccable critique](https://github.com/pbakaus/impeccable/blob/936867543ac2576920d663cc9803597f6044f3ac/skill/reference/critique.md): judge product specificity and cognitive load before seeing detector output; reconcile both against rendered evidence. A detector's clean result does not decide necessity or user acceptance. |
+| Explanations and controls compete with the work | [Impeccable distill](https://github.com/pbakaus/impeccable/blob/936867543ac2576920d663cc9803597f6044f3ac/skill/reference/distill.md) and [clarify](https://github.com/pbakaus/impeccable/blob/936867543ac2576920d663cc9803597f6044f3ac/skill/reference/clarify.md): remove obstacles rather than functionality; say each idea once, keep the fact and available action at the relevant state, and disclose uncommon detail. Apply the counterfactual above before shortening. |
+| A dashboard reads like a template or instruction sheet | [Taste Skill's app-screen method](https://github.com/Leonxlnx/taste-skill/blob/12af471f627f866411b4bd785b19646d3672784c/skills/taste-skill/references/app-screens.md): use the work screen's task, objects and data; localize a failure with a useful retry and last-good time when known. Keep missing values distinct from zero without narrating every absent field. Do not import marketing-page hero or word-budget rules into an operating screen. |
+| Technical truth produces an overloaded status surface | [Product Writing](https://github.com/scarletkc/agents/blob/3be29ae86c2eb29a220cc2f11c8ba21228387fbb/skills/product-writing/SKILL.md): give a summary and diagnostics distinct jobs; retain decision-relevant failure, scope and recovery while moving investigative detail to its inspection view. Judge product-authored guidance separately from attributed original content; do not rewrite source quotes to pass a copy check. |
+
 ## Images And Media
 
 Verify:
