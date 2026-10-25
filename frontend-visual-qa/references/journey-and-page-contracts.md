@@ -94,6 +94,19 @@ Check incomplete detail counts separately from confirmed complete zero counts.
 Retain the observed identities, filter membership and transition results; this
 recipe supplies no generic state classifier or additional write authority.
 
+When the project distinguishes observed condition from attention or retention
+intent, compare two objects with the same adverse condition but different
+confirmed intent. Check default ordering, attention membership/counts and
+list-to-detail wording against that contract; an accurate failure badge alone
+does not pass. Verify the existing route for finding excluded records. If
+restoration is supported and authorized, verify the same object returns to the
+expected attention position. Reopen the original route and check persistence.
+
+Do not infer intent from expiry, disabled automatic renewal or absence from a
+provider inventory. Use declared decisions; keep unknown intent on the project's
+existing review path. Excluding intentional retirements must preserve attention
+for a still-retained failing control.
+
 ### Embedded readers and semantic zoom
 
 Use this bounded recipe when an affected workspace moves from cards or summaries

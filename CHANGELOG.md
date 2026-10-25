@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **tibo-reset-codex** (v2.2.0 → v2.2.1): Resolve the browser verifier's executable identity through filesystem symlinks so source-backed Skill entry points execute instead of exiting silently. Add a real subprocess CLI regression. Change type: deterministic repair of the existing invocation contract.
 
+- **frontend-visual-qa** (v1.21.18 → v1.21.19): Check attention ordering, counts and recovery against confirmed retention intent. Change type: bounded acceptance-evidence correction.
 - **tibo-reset-codex** (v2.1.5 → v2.2.0): Add authorized, same-machine Chrome session migration for existing ChatGPT logins, with selected-site replacement, coherent SQLite reads, destination backups and restore, and restarted-browser identity plus usage verification. Preserve the Google-only merge default. Change types: capability addition and bounded migration correctness fixes.
 
 - **tibo-reset-codex** (`tibo-reset-codex` v2.1.4 → v2.1.5): Allow the second-spaced rollout exception in the main zeroing-reporting rule and route its scoring to the occurrence section of forecast-feedback. Change type: main-text consistency fix for the v2.1.4 calibration.
