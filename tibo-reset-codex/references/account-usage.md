@@ -240,6 +240,13 @@ mouseReleased 序列）；宿主没有真实输入通道时不自起浏览器、
 去掉 URL 的查询参数与片段；OAuth 回调可能把 token 或授权码放进 URL。不要保存完整回调
 URL，不从聊天记录、浏览器 Cookie 库或旧工具回执中搜 token 来替代正常登录。
 
+### 已有 ChatGPT 会话迁移
+
+用户授权迁移现成登录态时，进入[同机同 Chrome 会话迁移](browser-session-migration.md)。
+它直接迁移 ChatGPT/OpenAI 站点 Cookie，以重开后的预期账号与真实额度响应验收，
+不依赖 Google 账号选择器。仅源有活会话且当前宿主允许该本地脚本通道时执行；
+前文关于不得提取 Cookie token 替代正常登录的约束，保留在未授权迁移的普通查询路径。
+
 ### 隔离 Chrome profile 自动化：真实输入通道的适用边界（2026-09-16 实测）
 
 用隔离 profile（`~/.chrome-profiles/tibo-codex-{a,b}`）+ Playwright `connectOverCDP` 自动
@@ -256,12 +263,13 @@ URL，不从聊天记录、浏览器 Cookie 库或旧工具回执中搜 token �
 - **登录态判据用正面证据，不猜 URL**：解析到邮箱或 `Weekly usage limit` 文本才算已登录。
   登出时 usage 页可能留在 `/` 首页（有 Log in/Sign up）、也可能重定向到 `/auth/login`，
   两种 URL 都得覆盖，只认 `/auth/` 会漏掉首页登出态。
-- **隔离 profile 无 Google 会话 token，免密直登做不到**。`import-google-cookies.py` 只搬
+- **当次隔离 profile 没有可用的 Google 会话 token**。当时 `import-google-cookies.py` 只搬到
   `ACCOUNT_CHOOSER`（账号记忆列表）+ `LSOLH` + 分析类 cookie，实测 `SID`/`__Secure-1PSID`/
   `__Secure-3PSID`/`HSID`/`SSID`/`SAPISID` 全无。Google 账号选择器会列出全部账号但**每个都
   标 `Signed out`**，点任意一个都要密码/验证码。所以自动化只能驱动到「Google 账号选择器」
   为止；密码/验证码/授权确认交人工，**不自动化输入**。人工登录一次后会话 cookie 存进隔离
-  profile，之后读模式才全自动——这段「登录后读取」需人工首登后实测，不能预先宣称已验证。
+  profile，之后验证读模式。这是当次 Google 路线的观察，不是 ChatGPT 现成会话不可迁移的结论；
+  已授权迁移走上一节，不能预先宣称任何账号均可免密。
 - **Google cookie 读不出明文邮箱**。CDP `Network.getAllCookies` 拿到的是 Google 侧编码值
   （`ACCOUNT_CHOOSER`/`LSOLH` 已是密文/编码），账号身份只能从页面 DOM 读（账号选择器或
   `myaccount.google.com`）。别试图解密 cookie 取邮箱。
