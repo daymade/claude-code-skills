@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.21.18 → v1.21.19): Check attention ordering, counts and recovery against confirmed retention intent. Change type: bounded acceptance-evidence correction.
 - **tibo-reset-codex** (`tibo-reset-codex` v2.1.4 → v2.1.5): Allow the second-spaced rollout exception in the main zeroing-reporting rule and route its scoring to the occurrence section of forecast-feedback. Change type: main-text consistency fix for the v2.1.4 calibration.
 - **tibo-reset-codex** (`tibo-reset-codex` v2.1.3 → v2.1.4): Record the pinned-occurrence time basis for second-spaced rollout snapshots and the per-record `event_start` rule when one event has both an announce and a forecast record. Change type: review-scoring calibration from a live landing verification.
 - **frontend-visual-qa** (v1.21.17 → v1.21.18): Calibrate retained-but-clipped Reader recovery with a synthetic status-bar fixture and browser controls for final prose, footnotes, document/Find/scroll continuity and verbatim source text. Change type: bounded acceptance-evidence correction.
