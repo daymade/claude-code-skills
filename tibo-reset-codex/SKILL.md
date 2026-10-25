@@ -247,7 +247,8 @@ stdin/heredoc 及 Python/Node 子进程调用却可能报 `Failed to start ego l
 如实报告 helper 不可用；已有合法的 runner timeout 自停方式仍可用，不借此自动安装或扩大终止权限。
 
 按 README 的实际接口执行：核对本次点名目标、实例/会话归属、停止授权及带时区的绝对 deadline，
-并与当前时刻比较；已过期不新建调度，进入下述到期处置。使用 README 的 `arm` 命令，
+并与当前时刻比较；已过期不新建调度，进入下述到期处置。仅授权 runner 自停时继续用其 timeout，
+不把自停授权解释为 helper 发送 SIGTERM 的授权。已明确授权 helper 的停止方式时，使用 README 的 `arm` 命令，
 按其示例提供 `--at`、`--targets`、`--label` 与 `--note`；授权来源记入 note，note 本身不授予权限。
 武装后用同一 label 的 `status` 读回 deadline、generation、目标与
 `scheduler.plist_exists`、`scheduler.launchd_loaded`，不能只凭 `arm` 回执宣称已受保护。
