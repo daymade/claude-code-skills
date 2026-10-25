@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
+import {mkdtempSync, symlinkSync, rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {spawnSync} from 'node:child_process';
 import {verified} from '../scripts/verify-chatgpt-profile.mjs';
 
 test('only the expected authenticated account with readable identity-bound usage passes', () => {
@@ -11,4 +16,19 @@ test('only the expected authenticated account with readable identity-bound usage
     {...good,usage:{status:200}}, {...good,usage:{...good.usage,window_count:null}}]) {
     assert.equal(verified(result, 'test@example.com'), false);
   }
+});
+
+test('CLI help executes through an installed symlink, including paths with spaces', () => {
+  const root = mkdtempSync(join(tmpdir(), 'profile-entry-'));
+  try {
+    const entry = join(root, 'linked verifier.mjs');
+    const source = fileURLToPath(new URL('../scripts/verify-chatgpt-profile.mjs', import.meta.url));
+    symlinkSync(source, entry);
+    for (const script of [source, entry]) {
+      const result = spawnSync(process.execPath, [script, '--help'], {encoding:'utf8', timeout:10000});
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, /--profile-dir/);
+      assert.match(result.stdout, /--expected-email/);
+    }
+  } finally {rmSync(root, {recursive:true, force:true});}
 });
