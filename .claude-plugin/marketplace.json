@@ -706,7 +706,7 @@
       "description": "QA process setup with AAA test cases, P0-P4 bug tracking, metrics reports, OWASP security testing and third-party handoffs. Use for test planning, approved-batch execution and checkpoint recovery through the bundled master prompt.",
       "source": "./qa-expert",
       "strict": false,
-      "version": "1.2.3",
+      "version": "1.2.4",
       "category": "developer-tools",
       "keywords": [
         "qa",

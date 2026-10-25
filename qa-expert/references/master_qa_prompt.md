@@ -42,6 +42,12 @@ For each test:
 Reporting and stopping:
 - At the end of the authorized batch/day, report observed results, evidence,
   blockers and the next unmet step. Compute totals from current rows at report time.
+- For each reported check group in a smoke, partial or filtered batch, derive
+  executed/passed/failed/skipped counts from actual case outcomes and explain exclusions;
+  do not inherit a full-suite success line. After changing case selection or summary
+  code, the executing agent replays the actual harness entrypoint with zero selected
+  cases for that group and with a mid-loop failure, checking zero passes and accurate
+  partial counts respectively. No bundled tool enforces this executor check.
 - At the project's reporting checkpoint (Friday when that is its schedule), use
   WEEKLY-PROGRESS-REPORT.md as a template and save the report under tests/docs/reports/.
   Compare current evidence with the dated baseline, without copying live counters

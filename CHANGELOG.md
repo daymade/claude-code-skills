@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **qa-expert** (v1.2.4): Derive partial-run group totals from actual outcomes and verify zero-selection and interrupted-loop reporting through the executing harness. Change type: bounded reporting-method repair.
+
 - **frontend-visual-qa** (v1.21.16 → v1.21.17): Route AI-generated UI/copy complaints through the existing necessity check with task-matched Impeccable, Taste Skill and Product Writing methods. Calibrate redundant explanation against localized recovery, honest unknown states, necessary warnings and verbatim source quotes; remove the evaluation reward for adding overview explanation by default. Change type: bounded runtime guidance and evaluation correction.
 
 - **tunnel-doctor** (v1.17.9 → v1.17.10): Remove derived command and check totals from diagnostic labels; preserve the commands and required recovery checks.
