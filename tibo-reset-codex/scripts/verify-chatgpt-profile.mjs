@@ -6,7 +6,7 @@ import {access, mkdir, readFile, unlink, realpath} from 'node:fs/promises';
 import {homedir} from 'node:os';
 import {resolve} from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
-import {pathToFileURL} from 'node:url';
+import {fileURLToPath} from 'node:url';
 
 export function verified(result, expected) {
   return result?.state === 'authenticated' && typeof result.email === 'string'
@@ -159,7 +159,7 @@ export async function run(argv) {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+if (process.argv[1] && await realpath(fileURLToPath(import.meta.url)) === await realpath(resolve(process.argv[1]))) {
   if (process.argv.includes('--help')) {
     console.log('node verify-chatgpt-profile.mjs --profile-dir <isolated-root> [--initialize | --expected-email <email>] [--chrome <executable>] [--proxy <url>] [--headless]');
   } else {
