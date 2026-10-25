@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **read-claude-code-history** (`daymade-claude-code` v4.31.0 → v4.31.1): Resolve the output-limit default through executable CLI help. Align repository instruction routes with Workflow evidence and saved release-evidence handling.
+- **tibo-reset-codex** (v2.2.2 → v2.2.3): Remove the derived authorization-field total and redundant monitor cadence from the stop contract; retain the required fields and deadline behavior.
+- **tunnel-doctor** (v1.17.11 → v1.17.12): Remove the observation total from provider-account triage while retaining its evidence boundaries.
+
 - **read-claude-code-history / claude-code-hooks** (`daymade-claude-code` v4.30.24 → v4.31.0): Read Workflow subagent tool evidence by exact leaf path while preserving main-only defaults; reject invalid release evidence inside its predicate and retain CLI fault diagnostics.
 - **tunnel-doctor** (v1.17.10 → v1.17.11): Prioritize provider account checks without treating TLS symptoms as proof of suspension; require account and data-plane evidence.
 - **tibo-reset-codex** (v2.2.1 → v2.2.2): Separate HTTP reachability from authenticated Usage results and add the optional deadline-stopper handoff with actual stop-result verification.

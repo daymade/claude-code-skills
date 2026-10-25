@@ -179,8 +179,9 @@ label absent counterparts `missing_call` or `missing_result`, and missing IDs
 Read the original result's error/content fields before claiming the action worked.
 
 Check `coverage.output_complete` before treating returned matches as complete.
-The default `--max-output-bytes 64000` bounds the entire UTF-8 JSON envelope,
-including its newline. Larger matches may return an explicitly incomplete
+`--max-output-bytes` bounds the entire UTF-8 JSON envelope, including its newline;
+read the [CLI help](scripts/read_claude_session.py) for its current default.
+Larger matches may return an explicitly incomplete
 `block_json_prefix` with its original character count instead of a `block`;
 later groups may be omitted with a count and `first_omitted_ordinal`. Raise the
 bound or use `--full` redirected to an absolute local output path to obtain full
