@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **qa-expert** (v1.2.5): Derive partial-run group totals from actual outcomes and verify zero-selection and interrupted-loop reporting through the executing harness. Change type: bounded reporting-method repair.
+- **qa-expert** (v1.2.6): Derive partial-run group totals from actual outcomes and verify zero-selection and interrupted-loop reporting through the executing harness. Change type: bounded reporting-method repair.
 
 - **claude-code-hooks** (`daymade-claude-code` v4.30.23 → v4.30.24): Replace filename-only registration health with owner-bound checks, preserve silent healthy output and failure diagnostics, and align advisory examples with existing delivery and state-failure boundaries. Add cadence-reset and recovery-suppression counterexamples. Change type: bounded verification correction.
 - **qa-expert** (v1.2.4 → v1.2.5): Add actual-process argument and early-exit checks for affected CLI refactors, preserving legal special modes, stdin behavior, output contracts and allowed side effects. Change type: bounded acceptance-evidence correction.
