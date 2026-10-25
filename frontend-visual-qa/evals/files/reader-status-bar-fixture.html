@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Synthetic source reading</title>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; color: #24352f; background: #f4f6f4; font: 16px/24px system-ui, sans-serif; }
+header { height: 90px; padding: 12px 24px; }
+h1 { font-size: 20px; margin: 0 0 8px; }
+button, input { font: inherit; }
+button { cursor: pointer; }
+#clip { height: calc(100vh - 115px); margin: 0 24px; overflow: hidden; background: white; }
+#stack { height: 100%; }
+#status { height: 52px; padding: 12px; background: #fff2da; }
+#reader { display: block; border: 0; height: 100%; width: 100%; }
+body.bounded #stack { display: flex; flex-direction: column; min-height: 0; }
+body.bounded #status { flex: none; }
+body.bounded #reader { flex: 1 1 0; min-height: 0; }
+[hidden] { display: none !important; }
+</style>
+<header>
+  <h1>Draft review · Execution unknown</h1>
+  <button id="fail">Fail source check</button>
+  <button id="recover">Recover source check</button>
+</header>
+<main id="clip"><div id="stack">
+  <div id="status" role="status" hidden>Source check failed. <button id="retry">Retry</button></div>
+  <iframe id="reader" title="Original conversation"></iframe>
+</div></main>
+<script>
+// Reduced synthetic calibration only; this is not a deployed application or its Reader.
+const layout = new URLSearchParams(location.search).get('layout');
+document.body.classList.toggle('bounded', layout === 'bounded');
+const reader = document.querySelector('#reader');
+reader.srcdoc = `<!doctype html><html lang="en"><meta charset="utf-8"><title>Draft source</title>
+<style>
+*{box-sizing:border-box}html,body{height:100%;margin:0;font:16px/24px system-ui,sans-serif;color:#24352f}
+body{display:flex;flex-direction:column}nav{flex:none;padding:12px;background:#eef3ef}
+input,button{font:inherit}#body{flex:1;min-height:0;overflow:auto;padding:12px 20px;outline-offset:-3px}
+article{padding:12px 0;border-bottom:1px solid #dae3dc}p{margin:0 0 12px}small{display:block;font-size:14px;line-height:24px}
+</style>
+<nav><label>Find <input id="find" type="search"></label> <button id="next">Next</button> <output id="matches">0/0</output><span> · Records 1–34</span></nav>
+<div id="body" tabindex="0" aria-label="Conversation body" data-first="1" data-last="34"></div></html>`;
+reader.addEventListener('load', () => {
+  const doc = reader.contentDocument;
+  const body = doc.querySelector('#body');
+  for (let number = 1; number <= 34; number++) {
+    const article = doc.createElement('article');
+    article.id = `record-${number}`;
+    const heading = doc.createElement('p');
+    heading.textContent = `Record ${number} · Author`;
+    const prose = doc.createElement('p');
+    prose.textContent = number === 34
+      ? 'Final decision: keep the amber draft. The complete decision ends here.'
+      : `Draft needle ${number}: read the complete source before choosing a revision.`;
+    article.append(heading, prose);
+    if (number === 34) {
+      prose.id = 'last-prose';
+      const note = doc.createElement('small');
+      note.id = 'last-note';
+      note.textContent = 'Original author wrote: “No responsibility declared.”';
+      article.append(note);
+    }
+    body.append(article);
+  }
+  let matches = [], current = -1;
+  doc.querySelector('#find').addEventListener('input', event => {
+    const query = event.target.value.toLowerCase();
+    matches = query ? [...body.querySelectorAll('article')].filter(node => node.textContent.toLowerCase().includes(query)) : [];
+    current = -1;
+    doc.querySelector('#matches').textContent = `0/${matches.length}`;
+  });
+  doc.querySelector('#next').addEventListener('click', () => {
+    if (!matches.length) return;
+    current = (current + 1) % matches.length;
+    matches[current].scrollIntoView({ block: 'center' });
+    doc.querySelector('#matches').textContent = `${current + 1}/${matches.length}`;
+  });
+});
+document.querySelector('#fail').onclick = () => { document.querySelector('#status').hidden = false; };
+const recover = () => { document.querySelector('#status').hidden = true; };
+document.querySelector('#recover').onclick = recover;
+document.querySelector('#retry').onclick = recover;
+</script>
+</html>

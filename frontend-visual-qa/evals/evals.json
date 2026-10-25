@@ -563,6 +563,34 @@
         "Recognizes C5 as attributed source content, preserves its verbatim wording and original-reading behavior, and does not flag or rewrite it as product-authored explanatory copy",
         "Uses the reader's task and concrete information loss to compare A and B; does not certify quality from fewer words, a keyword blacklist, an arbitrary word budget, passing geometry, an invented interaction or a generic aesthetic score"
       ]
+    },
+    {
+      "id": 38,
+      "name": "retained-reader-status-bar-clips-final-record",
+      "prompt": "Audit the synthetic reader-status-bar fixture at ?layout=overflowing, then ?layout=bounded at the same settled desktop viewport. Find needle, use Next, and retain that document, query, loaded range and body scroll through Fail source check and Retry. With failure visible, ordinarily scroll the conversation body to its end and read the final record's complete decision and footnote through the outer clipping boundary. Decide whether retained iframe/Find/scroll alone establish recovery usability. If no live browser is available, give the bounded recipe and leave actual rendering unverified. Do not change the fixture or claim this reduced example is a deployed application or production incident.",
+      "expected_output": "Rejects the overflowing failure state despite intact document, Find, loaded range and body scroll because its final prose or footnote is concealed by the parent clip. Accepts the bounded layout only after reading both final text units and checking the same reading-state/recovery controls. Binds observations to the same viewport and distinguishes synthetic calibration from product acceptance.",
+      "files": ["evals/files/reader-status-bar-fixture.html"],
+      "expectations": [
+        "Triggers the actual failure and retry controls and checks document identity, Find query/matches, loaded range and actual body scroll without replacing these preservation checks with geometry",
+        "Reaches the actual scroll owner's end and examines both the complete final prose and footnote through the parent clipping boundary; nonzero frame height, DOM presence and retained state do not suffice",
+        "Rejects overflowing and accepts bounded only with the corresponding observed final-text readability, while retaining the same viewport and reading input",
+        "Keeps truthful localized failure and its Retry control rather than hiding the error to obtain a usable Reader",
+        "Reports unavailable browser/pixel evidence as unverified and labels the supplied example as reduced synthetic calibration, not real application or production acceptance"
+      ]
+    },
+    {
+      "id": 39,
+      "name": "bounded-reader-preserves-source-and-absent-sections",
+      "prompt": "Audit the synthetic reader-status-bar fixture at ?layout=bounded. Its task is to read the final draft decision, retain Find and the loaded window during source-check failure/recovery, and continue reading. The header honestly says Execution unknown. No responsibility data or product-authored Responsibility section is supplied. Record 34 includes an attributed original footnote: Original author wrote: “No responsibility declared.” Inspect its readable end state and working Find/Retry controls. Explain whether the absent section, unknown state or original quote needs a defect, placeholder, warning or rewrite under the existing information-necessity contract. If no browser is available, do not claim a live inspection.",
+      "expected_output": "Accepts the bounded readable final decision and intact recovery/Find when observed, keeps the honest unknown and localized error/retry, leaves the absent responsibility section absent, and preserves the original author's exact quote. Does not mistake literal overlap with missing-field narration for product-authored slop or invent responsibilities. Actual unsupplied render evidence remains unverified.",
+      "files": ["evals/files/reader-status-bar-fixture.html"],
+      "expectations": [
+        "Checks readable final decision and footnote, actual Find functionality and reading-state continuity through failure/retry rather than accepting fewer words or a preserved frame alone",
+        "Keeps an absent responsibility section absent when no data or reader action requires it; does not introduce a no-data placeholder or explanatory paragraph",
+        "Preserves the attributed original No responsibility declared quote verbatim and distinguishes source content from product-authored missing-field narration despite identical wording",
+        "Accepts honest Execution unknown and useful localized failure/Retry while preserving original reading; does not invent idle, completed or declared responsibility",
+        "Limits any verified claim to observed synthetic fixture states and leaves unavailable runtime/rendering or real user adoption unknown"
+      ]
     }
   ]
 }
