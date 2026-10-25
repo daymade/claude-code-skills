@@ -32,6 +32,37 @@ is authorized. Preserve user-owned data and other sessions' work. Continue
 independent increments when a separate dependency is blocked, and resume the
 blocked increment from the first unmet condition.
 
+## Extract a domain role through its consumers
+
+Load this recipe when the requested change introduces a domain role, extracts
+scattered policy or consolidates an existing application's decision ownership.
+The engineering owner first traces one real user operation across its callers;
+the recipe does not require a new service, queue, database or universal runtime.
+
+Identify the existing owner of each boundary: facts and their freshness, policy
+decisions, permission/admission, execution and recovery. Name the decision the
+new role owns and the inputs/results it exchanges with those adjacent owners.
+Reuse their current matcher, ledger, authority or lifecycle rather than copying
+their semantics into the new role. Keep observation, recommendation and the
+right to execute distinct; a successful recommendation is not execution permission.
+
+Inventory affected CLI, web, native and compatibility consumers from actual call
+sites. Move shared policy behind the domain owner while keeping each surface's
+transport and presentation responsibilities. An exported wrapper or shared
+import does not prove adoption if a consumer still decides the same policy
+locally, bypasses admission or applies different recovery rules.
+
+Verify with a controlled policy change or distinguishing fixture: exercise the
+affected real consumers and show that they follow the same domain decision.
+Observe the final effect and the existing admission boundary, not just calls to
+the new module. Include a healthy operation, a rejected operation and the
+affected recovery/compatibility path; preserve explicitly supported differences
+between consumers. Bind the evidence to the delivered runtime when that is the
+requested surface. Use QA's admission/recovery recipe when that boundary changes.
+
+The engineering owner selects these probes in the existing harness; this prose
+does not mechanically detect a policy left behind in an unexamined caller.
+
 ## Protect the lifecycle
 
 Inspect normal execution, failure, cancel, retry and late completion wherever
