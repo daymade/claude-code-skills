@@ -108,6 +108,17 @@ class CookieMigrationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'different databases'):
             migration.transfer(self.src, alias, site='google', approve=lambda _: True)
 
+    def test_source_writer_is_not_blocked_while_approval_uses_the_captured_snapshot(self):
+        self.add(self.src, '.chatgpt.com', '__Secure-next-auth.session-token', b'BEFORE_APPROVAL')
+        def approve(_):
+            with sqlite3.connect(self.src, timeout=0.05) as writer:
+                writer.execute('UPDATE cookies SET encrypted_value=?', (b'AFTER_APPROVAL',))
+            return True
+        summary = self.transfer(approve=approve)
+        self.assertEqual(summary['rows'], 1)
+        self.assertEqual(self.rows(self.src)[0][2], b'AFTER_APPROVAL')
+        self.assertEqual(self.rows(self.dst)[0][2], b'BEFORE_APPROVAL')
+
     def test_restore_recovers_prior_destination_and_backs_up_replaced_state(self):
         self.add(self.src, '.chatgpt.com', '__Secure-next-auth.session-token')
         self.add(self.dst, '.other.example', 'original')

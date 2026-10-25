@@ -119,6 +119,9 @@ def transfer(source: Path, destination: Path, *, site: str, approve) -> dict:
         parameters = [value for domain in domains for value in (domain, "%." + domain)]
         col_list = ", ".join('"' + column.replace('"', '""') + '"' for column in columns)
         rows = src.execute(f"SELECT {col_list} FROM cookies WHERE {where}", parameters).fetchall()
+        # The selected snapshot is now in memory. Do not keep a source read lock
+        # while a person decides whether to approve the destination write.
+        src.rollback()
         names = {row[columns.index("name")] for row in rows}
         if site == "chatgpt" and not any(
             name == "__Secure-next-auth.session-token" or name.startswith("__Secure-next-auth.session-token.")
