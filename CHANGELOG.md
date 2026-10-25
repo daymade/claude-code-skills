@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.21.17 → v1.21.18): Calibrate retained-but-clipped Reader recovery with a synthetic status-bar fixture and browser controls for final prose, footnotes, document/Find/scroll continuity and verbatim source text. Change type: bounded acceptance-evidence correction.
+
 - **qa-expert** (v1.2.6): Derive partial-run group totals from actual outcomes and verify zero-selection and interrupted-loop reporting through the executing harness. Change type: bounded reporting-method repair.
 
 - **claude-code-hooks** (`daymade-claude-code` v4.30.23 → v4.30.24): Replace filename-only registration health with owner-bound checks, preserve silent healthy output and failure diagnostics, and align advisory examples with existing delivery and state-failure boundaries. Add cadence-reset and recovery-suppression counterexamples. Change type: bounded verification correction.
