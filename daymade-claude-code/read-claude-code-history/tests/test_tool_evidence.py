@@ -217,5 +217,130 @@ class ToolEvidenceTests(unittest.TestCase):
             self.assertEqual(self.run_cli(*args).returncode, 2, args)
 
 
+class SubagentEvidenceTests(unittest.TestCase):
+    setUp = ToolEvidenceTests.setUp
+    write = ToolEvidenceTests.write
+    run_cli = ToolEvidenceTests.run_cli
+    data = ToolEvidenceTests.data
+
+    def leaf(self, relative="workflows/wf-one/agent-a1.jsonl", records=None):
+        path = self.path.parent / self.path.stem / "subagents" / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if records is None:
+            records = json.loads(json.dumps(self.records[:2]))
+            for record in records:
+                record["agentId"] = "a1"
+                record["isSidechain"] = True
+        path.write_text("".join(json.dumps(record) + "\n" for record in records))
+        return path
+
+    def test_nested_and_flat_discovery_main_only_and_exact_leaf_selection(self):
+        nested = self.leaf()
+        flat = self.leaf("agent-a2.jsonl")
+        self.assertEqual(READER.discover_subagent_files(self.path), [flat, nested])
+        default = self.data(self.run_cli("--contains", "scp"))
+        self.assertEqual(default["source"]["subagent_files_read"], 0)
+        data = self.data(self.run_cli("--subagent-path", "workflows/wf-one/agent-a1.jsonl", "--contains", "scp"))
+        self.assertEqual(data["source"]["path"], str(nested))
+        self.assertEqual(data["source"]["subagent_files_read"], 1)
+        self.assertEqual(data["coverage"]["groups_examined"], 1)
+        self.assertEqual(data["pairs"][0]["pairing_status"], "paired")
+        self.assertEqual(len(data["pairs"][0]["calls"]), 1)
+        # Exact paths preserve two runs with the same agent ID, without selecting
+        # one by basename or coalescing their independent call/result streams.
+        self.leaf("workflows/wf-two/agent-a1.jsonl")
+        self.assertEqual(len(READER.discover_subagent_files(self.path)), 3)
+        failed = self.run_cli("--subagent-path", "agent-a1.jsonl", "--contains", "scp")
+        self.assertEqual(failed.returncode, 1)
+        self.assertIn("missing or ambiguous", failed.stderr)
+        self.assertEqual(failed.stdout, "")
+
+    def test_flat_leaf_export_and_invalid_missing_empty_scope(self):
+        self.leaf("agent-a1.jsonl")
+        data = self.data(self.run_cli("--subagent-path", "agent-a1.jsonl", "--tool", "Bash"))
+        self.assertEqual(data["pairs"][0]["pairing_status"], "paired")
+        for value in ["", "../agent-a1.jsonl", "/tmp/agent-a1.jsonl", "workflows//wf-one/agent-a1.jsonl"]:
+            result = self.run_cli("--subagent-path", value, "--tool", "Bash")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, "")
+
+    def test_nested_hash_and_prompt_lookup_ignore_api_request_copies(self):
+        records = json.loads(json.dumps(self.records[:2]))
+        command = records[1]["message"]["content"][0]["input"]["command"]
+        prompt = json.loads(json.dumps(records[1]))
+        prompt["message"]["content"][0].update(name="Agent", input={"prompt": "synthetic nested reviewer", "description": "review"})
+        diagnostic = json.loads(json.dumps(prompt))
+        diagnostic["type"] = "api-request-shape"
+        leaf = self.leaf(records=records + [prompt, diagnostic])
+        digest = READER.find_tool_uses_by_command_sha256(self.path, READER.command_sha256(command))
+        self.assertEqual(len(digest["files"]), 2)
+        self.assertEqual(len(digest["matches"]), 2)  # one original in each file
+        prompts = READER.find_agent_prompts_in_session(self.path)
+        self.assertEqual(len(prompts["matches"]), 1)
+        self.assertEqual(prompts["matches"][0]["path"], leaf)
+        self.assertEqual(prompts["matches"][0]["subagent"], "workflows/wf-one/agent-a1")
+        parsed = READER.parse_session_structure(leaf, collect_tool_evidence=True)
+        self.assertEqual(len(parsed["tool_events"]), 3)
+
+    def test_nested_bad_json_foreign_missing_agent_and_source_change_fail_closed(self):
+        leaf = self.leaf()
+        with leaf.open("a") as handle:
+            handle.write('{"type":')
+        failure = self.run_cli("--subagent-path", "workflows/wf-one/agent-a1.jsonl", "--tool", "Bash")
+        self.assertEqual(failure.returncode, 1)
+        self.assertEqual(failure.stdout, "")
+        self.assertIn("malformed JSONL", failure.stderr)
+        inventory = READER.extract_subagent_context(self.path)
+        self.assertEqual(len(inventory), 1)
+        self.assertIn("malformed JSONL", inventory[0]["coverage_error"])
+        self.assertIn("workflows/wf-one/agent-a1", inventory[0]["id"])
+        for field, value in [("sessionId", "foreign"), ("sessionId", None), ("agentId", "other"), ("agentId", None), ("agentId", "")]:
+            leaf = self.leaf()
+            records = [json.loads(line) for line in leaf.read_text().splitlines()]
+            records[1][field] = value
+            self.leaf(records=records)
+            failure = self.run_cli("--subagent-path", "workflows/wf-one/agent-a1.jsonl", "--tool", "Bash")
+            self.assertEqual(failure.returncode, 1, (field, value, failure.stderr))
+            self.assertEqual(failure.stdout, "")
+        self.leaf()
+        with patch.object(READER, "_file_digest", side_effect=["before", "after"]), \
+                patch.object(sys, "argv", [str(SCRIPT), "--session", "fx-rev", "--tool-evidence", "--subagent-path", "workflows/wf-one/agent-a1.jsonl", "--tool", "Bash"]), \
+                patch.object(READER, "discover_exact_session_refs", return_value=([{"session_id": "fx-rev", "path": self.path}], [])), \
+                self.assertRaises(SystemExit) as status:
+            READER.main()
+        self.assertEqual(status.exception.code, 1)
+
+    def test_divergent_same_leaf_copies_fail_without_main_only_regression(self):
+        self.leaf()
+        second_project = self.home / "projects" / "-archive"
+        second_project.mkdir()
+        second_main = second_project / self.path.name
+        second_main.write_text(self.path.read_text())
+        other_leaf = second_project / self.path.stem / "subagents" / "workflows/wf-one/agent-a1.jsonl"
+        other_leaf.parent.mkdir(parents=True)
+        records = json.loads(json.dumps(self.records[:2]))
+        for record in records:
+            record["agentId"] = "a1"
+            record["isSidechain"] = True
+        records[1]["message"]["content"][0]["input"]["command"] = "printf 'different synthetic branch'"
+        other_leaf.write_text("".join(json.dumps(record) + "\n" for record in records))
+        result = self.run_cli("--subagent-path", "workflows/wf-one/agent-a1.jsonl", "--tool", "Bash")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("divergent physical copies", result.stderr)
+        self.assertEqual(result.stdout, "")
+        self.data(self.run_cli("--contains", "scp"))
+
+    def test_leaf_cannot_escape_selected_session_through_symlink(self):
+        leaf = self.leaf()
+        outside = self.root / "outside.jsonl"
+        outside.write_text(leaf.read_text())
+        leaf.unlink()
+        leaf.symlink_to(outside)
+        result = self.run_cli("--subagent-path", "workflows/wf-one/agent-a1.jsonl", "--tool", "Bash")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("escapes selected Session", result.stderr)
+        self.assertEqual(result.stdout, "")
+
+
 if __name__ == "__main__":
     unittest.main()

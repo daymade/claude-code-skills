@@ -494,6 +494,10 @@ the fallback allows, and a genuine cross-domain commit ships with no dialog (rul
 ValueError note). Ask of every allowed row: *would this command actually have done
 the thing?* If no, the allow is correct.
 
+When saved evidence can release a block, validate its shape inside that predicate;
+read [invalid evidence and outer fail-open handlers](references/hook_pitfalls.md#68-invalid-release-evidence-can-escape-into-an-outer-fail-open-handler).
+A rejected receipt and an unrelated runtime fault have separate failure policies.
+
 Running this exact probe against a real state-deriving guard returned two allows on
 the first pass: one was correct (the short-circuit above) and one was a genuine
 fail-open. **The probe finds things; you still have to classify what it found** —

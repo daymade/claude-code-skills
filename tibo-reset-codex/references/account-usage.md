@@ -26,13 +26,23 @@ CC Switch 管理**——即使 `~/.cc-switch/cc-switch.db` 存在且记有 codex
 **第一步是最小可证伪动作，不是深入协议层**：
 
 ```bash
-curl -s -m 8 -o /dev/null -w '%{http_code} %{time_total}s\n' https://chatgpt.com
+curl -sS -m 8 -o /dev/null -w 'http=%{http_code} elapsed=%{time_total}s\n' https://chatgpt.com
+# 紧接上一条执行，保留 curl 的传输退出码：
+printf 'curl_exit=%s\n' "$?"
 ```
 
-- **不通**（000 / 超时 / 非 2xx）→ 出口断了。**停止所有账号层排查**，转 `tunnel-doctor` 修出口。provider 协议、登录态、token 全是浪费。
-- **通**（200/401/403 均可——401 只是未登录，证明网络通）→ 出口正常，继续按原流程查 provider / 登录态 / 凭据。
+- **`000` / 未取得 HTTP 响应**：结合退出码与 stderr 区分 DNS、连接、TLS、超时等失败，
+  转 `tunnel-doctor` 做最小链路排查；不能仅凭这一读数断言出口中断或账号异常。
+- **已取得 HTTP 响应（含 200、401、403、429、5xx）**：只证明到达了某个 HTTP 边界，
+  不证明正确的 Usage 端点、登录身份、额度或完整出口健康。非 2xx 不自动归为网络或认证单一根因；
+  检查响应来源与必要的错误正文，区分站点、代理、WAF/挑战或服务端拒绝，再选对应排查路径。
+  首页 401/403 不能当作 Usage 请求已成功或 token 已失效的证据。
+- **继续原查询**：用已核实账号的正确请求或官网 Usage 页验证实际读数；只有该请求返回预期字段，
+  才能报告对应账号额度。链路问题保留来源与未核字段，不用反复切号或重登来试网络。
 
-**为什么**：2026-10-23 实战——4 账号同时 unknown，先深入 provider 协议层 40 分钟，最后才发现是 JMS 流量超限导致的出口中断。一次 10 秒的 curl 就能省掉全部排查。
+该探针用于选择下一步，不是完整健康检查。`000` 的边界见
+[curl 响应码说明](https://curl.se/libcurl/c/CURLINFO_RESPONSE_CODE.html)：未收到服务端响应码时为零。
+首次探针后只做能区分当前候选的检查；原因已定位就回原账号查询，不无限扩查。
 
 ## 实时 API：只读一个明确账号
 

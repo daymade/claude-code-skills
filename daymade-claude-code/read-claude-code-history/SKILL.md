@@ -134,6 +134,8 @@ the whole briefing or recreating a raw-history parser.
   --tool-evidence --tool Bash --contains 'scp' --contains 'backup'
 <skill-dir>/scripts/read_claude_session.py --session <SESSION_ID> \
   --tool-evidence --ordinal 4:6 --from <ISO_WITH_TIMEZONE> --to <ISO_WITH_TIMEZONE>
+<skill-dir>/scripts/read_claude_session.py --session <SESSION_ID> \
+  --tool-evidence --subagent-path workflows/<run>/agent-<id>.jsonl --tool Bash
 
 # Save the complete selected payload when it exceeds the bounded response.
 <skill-dir>/scripts/read_claude_session.py --session <SESSION_ID> \
@@ -143,8 +145,15 @@ the whole briefing or recreating a raw-history parser.
 Expect one JSON envelope with original `tool_use` and `tool_result` blocks, the
 selected source SHA-256, one-based physical line and content-block coordinates,
 record UUID/parent UUID, timestamp, cwd and recorded agent/sidechain identity.
-This mode reads the selected main transcript, including its stored sidechains;
-it excludes separate subagent files and does not read current Git state or memory.
+By default this mode reads only the selected main transcript, including its stored
+sidechains. To read one known subagent leaf, add `--subagent-path agent-<id>.jsonl`
+or `--subagent-path workflows/<run>/agent-<id>.jsonl`, relative to that Session's
+`subagents/` directory. Use the full run-relative path: a basename never selects
+among repeated agent IDs across Workflow runs. Missing, empty, escaping or unknown
+paths fail without exporting evidence. Selected leaf tool blocks must carry the
+matching agent identity and parent Session identity. The JSON source scope and
+`subagent_files_read` name the actual surface; other leaves remain excluded.
+Neither mode reads current Git state or memory.
 It validates every physical record in that transcript; its evidence output omits
 unrelated conversation prose. Global lookup checks only exact
 `<SESSION_ID>.jsonl` filenames in active homes and registered archives; a renamed
@@ -196,8 +205,14 @@ the file and line, timestamp, record uuid, tool name and id, cwd, and the full
 command in a fence. Exit 0 means at least one match, 1 no match, 2 a malformed
 digest or missing `--session`. The digest is SHA-256 over `tool_input.command`
 as UTF-8. A hook event raised inside a subagent carries the parent Session ID,
-so the lookup also searches `<SESSION_ID>/subagents/*.jsonl`; a main-transcript-only
-search misses those calls. Unlike the briefing, the lookup skips and counts
+so the lookup also searches `<SESSION_ID>/subagents/*.jsonl` and
+`<SESSION_ID>/subagents/workflows/*/agent-*.jsonl`; a main-transcript-only search
+misses those calls. Agent/Task prompt lookup and the briefing's subagent inventory
+use the same Session-bounded layouts, without recursive history discovery. Matches
+and inventory retain the Workflow run in the relative path. Malformed or foreign
+inventory leaves are reported with unknown coverage, never as completed agents.
+Only original assistant/user event records count as tool evidence; diagnostic
+request-shape copies are excluded. Unlike the briefing, the lookup skips and counts
 unparseable lines so it still works on a Session that is being written; a zero
 with skipped lines does not prove the call is absent.
 

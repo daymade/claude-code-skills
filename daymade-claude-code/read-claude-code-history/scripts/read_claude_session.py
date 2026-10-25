@@ -550,6 +550,8 @@ def parse_session_structure(session_file: Path, *, collect_tool_evidence: bool =
                 raise SessionEvidenceError(
                     f"invalid message object at physical line {i + 1} in {session_file}"
                 )
+            if msg_type not in ("assistant", "user"):
+                continue
             role = msg.get("role", "")
             content = msg.get("content", "")
             if collect_tool_evidence and isinstance(content, list):
@@ -777,7 +779,7 @@ def _evidence_json(value: Dict) -> str:
 def format_tool_evidence(
     session_id: str, session_file: Path, source_hash: str, parsed: Dict,
     selected: Dict, *, source_labels: List[str], copy_paths: List[Path],
-    filters: Dict, max_output_bytes: Optional[int],
+    filters: Dict, max_output_bytes: Optional[int], subagent_path: Optional[str] = None,
 ) -> str:
     """Return one JSON envelope bounded in UTF-8 bytes, including its newline.
 
@@ -792,8 +794,10 @@ def format_tool_evidence(
             "bytes": parsed["file_size"], "physical_lines": parsed["total_lines"],
             "sources": source_labels, "copies_checked": [str(path) for path in copy_paths],
             "observed_session_ids": sorted(parsed["observed_session_ids"]),
-            "scope": "selected main transcript, including its recorded sidechains",
-            "subagent_files_read": 0,
+            "scope": ("selected subagent transcript only" if subagent_path else
+                      "selected main transcript, including its recorded sidechains"),
+            "subagent_files_read": 1 if subagent_path else 0,
+            **({"subagent_path": subagent_path} if subagent_path else {}),
         },
         "filters": filters,
         "coverage": {
@@ -1172,26 +1176,46 @@ def _append_timeline(sections: List[str], messages: List[Dict], full: bool) -> N
 # ── Subagent extraction ──────────────────────────────────────────────
 
 
+def discover_subagent_files(session_file: Path) -> List[Path]:
+    """Enumerate only the selected Session's flat and Workflow leaf layouts.
+
+    Deliberately avoid recursive corpus scans and reject links escaping this
+    Session. A run-relative path, not an agent basename, identifies a leaf.
+    """
+    root = session_file.parent / session_file.stem / "subagents"
+    if not root.resolve().is_relative_to(session_file.parent.resolve() / session_file.stem):
+        raise SessionEvidenceError(f"subagent directory escapes selected Session: {root}")
+    candidates = sorted(root.glob("*.jsonl")) + sorted(root.glob("workflows/*/agent-*.jsonl"))
+    for path in candidates:
+        if not path.resolve().is_relative_to(root.resolve()):
+            raise SessionEvidenceError(f"subagent path escapes selected Session: {path}")
+    return candidates
+
+
+def select_subagent_file(session_file: Path, relative_path: str) -> Path:
+    """Resolve one exact run-relative leaf; never guess by agent ID."""
+    relative = Path(relative_path)
+    if (not relative_path or relative.is_absolute() or ".." in relative.parts
+            or relative.as_posix() != relative_path):
+        raise SessionEvidenceError("--subagent-path needs an exact relative JSONL leaf path")
+    root = session_file.parent / session_file.stem / "subagents"
+    matches = [path for path in discover_subagent_files(session_file)
+               if path.relative_to(root).as_posix() == relative_path]
+    if len(matches) != 1:
+        raise SessionEvidenceError("subagent leaf missing or ambiguous; use its full path relative to subagents, including workflows/<run>/ when present")
+    return matches[0]
+
+
 def extract_subagent_context(session_file: Path) -> List[Dict]:
     """Extract subagent summaries from session subdirectories.
 
     Returns list of {name, type, status, last_text, is_interrupted}.
     """
-    session_dir = session_file.parent / session_file.stem
-    subagents_dir = session_dir / "subagents"
-    if not subagents_dir.is_dir():
-        return []
-
-    # Group by agent ID: find meta.json and .jsonl pairs
-    agent_ids = set()
-    for f in subagents_dir.iterdir():
-        if f.suffix == ".jsonl":
-            agent_ids.add(f.stem)
-
     results = []
-    for agent_id in sorted(agent_ids):
-        jsonl_file = subagents_dir / f"{agent_id}.jsonl"
-        meta_file = subagents_dir / f"{agent_id}.meta.json"
+    root = session_file.parent / session_file.stem / "subagents"
+    for jsonl_file in discover_subagent_files(session_file):
+        agent_id = jsonl_file.relative_to(root).with_suffix("").as_posix()
+        meta_file = jsonl_file.with_suffix(".meta.json")
 
         # Parse agent type from ID (format: agent-a<type>-<hash> or agent-a<hash>)
         agent_type = "unknown"
@@ -1205,7 +1229,7 @@ def extract_subagent_context(session_file: Path) -> List[Dict]:
 
         if agent_type == "unknown":
             # Infer from ID pattern: agent-a<type>-<hash>
-            match = re.match(r'agent-a(compact|prompt_suggestion|[a-z_]+)-', agent_id)
+            match = re.match(r'agent-a(compact|prompt_suggestion|[a-z_]+)-', jsonl_file.stem)
             if match:
                 agent_type = match.group(1)
 
@@ -1213,53 +1237,38 @@ def extract_subagent_context(session_file: Path) -> List[Dict]:
         if agent_type in ("compact", "prompt_suggestion"):
             continue
 
-        # Read last few lines for final output
+        # Reuse the strict Session parser and order-independent pending-call
+        # accounting. Malformed or foreign leaves are unknown, never completed.
         last_text = ""
-        is_interrupted = False
         line_count = 0
-
-        if jsonl_file.exists():
-            try:
-                lines = jsonl_file.read_text(encoding="utf-8").strip().split("\n")
-                line_count = len(lines)
-                has_tool_use_pending = False
-                # Check last 10 lines for final assistant text
-                for raw_line in reversed(lines[-10:]):
-                    try:
-                        obj = json.loads(raw_line)
-                        msg = obj.get("message", {})
-                        role = msg.get("role", "")
-                        content = msg.get("content", "")
-
-                        if role == "assistant" and isinstance(content, list):
-                            for block in content:
-                                if not isinstance(block, dict):
-                                    continue
-                                block_type = block.get("type")
-                                if block_type == "tool_use":
-                                    has_tool_use_pending = True
-                                elif block_type == "text":
-                                    text = block.get("text", "")
-                                    if text.strip() and not last_text:
-                                        last_text = text.strip()[:500]
-
-                        if role == "user" and isinstance(content, list):
-                            for block in content:
-                                if isinstance(block, dict) and block.get("type") == "tool_result":
-                                    has_tool_use_pending = False
-                    except json.JSONDecodeError:
-                        continue
-
-                is_interrupted = has_tool_use_pending
-            except OSError:
-                pass
-
+        error = None
+        is_interrupted = False
+        try:
+            source_hash = _file_digest(jsonl_file)
+            parsed = parse_session_structure(jsonl_file)
+            validate_selected_session_identity(parsed["observed_session_ids"], session_file.stem)
+            if _file_digest(jsonl_file) != source_hash:
+                raise SessionEvidenceError("subagent transcript changed during the read")
+            line_count = parsed["total_lines"]
+            is_interrupted = bool(parsed["unresolved_tool_calls"])
+            for record in reversed(parsed["messages"]):
+                message = record.get("message", {})
+                if message.get("role") != "assistant":
+                    continue
+                content = message.get("content", [])
+                if isinstance(content, str):
+                    last_text = content.strip()[:500]
+                elif isinstance(content, list):
+                    last_text = "\n".join(block.get("text", "") for block in content
+                                          if isinstance(block, dict) and block.get("type") == "text").strip()[:500]
+                if last_text:
+                    break
+        except (SessionEvidenceError, OSError, UnicodeError) as exc:
+            error = str(exc)
         results.append({
-            "id": agent_id,
-            "type": agent_type,
-            "last_text": last_text,
-            "is_interrupted": is_interrupted,
-            "lines": line_count,
+            "id": agent_id, "path": str(jsonl_file), "type": agent_type,
+            "last_text": last_text, "is_interrupted": is_interrupted,
+            "lines": line_count, "coverage_error": error,
         })
 
     return results
@@ -1280,28 +1289,22 @@ def find_tool_uses_by_command_sha256(session_file: Path, digest: str) -> Dict:
     """Find the tool calls in one Session whose ``input.command`` hashes to ``digest``.
 
     A hook event made inside a subagent carries the parent Session ID, so the
-    matching record can live in ``<session>/subagents/*.jsonl`` rather than the
+    matching record can live in ``<session>/subagents/*.jsonl`` and ``subagents/workflows/<run>/agent-*.jsonl`` rather than the
     main transcript; both are searched. Returns the examined files, how many
     tool calls carried a string ``command``, unparseable line counts, the main
     transcript's record-level Session IDs, and every match in file order.
     """
-    files = [session_file]
-    subagents_dir = session_file.parent / session_file.stem / "subagents"
-    if subagents_dir.is_dir():
-        files.extend(sorted(subagents_dir.glob("*.jsonl")))
+    files = [session_file, *discover_subagent_files(session_file)]
 
     examined = 0
     unparseable: Dict[str, int] = {}
     observed_ids: set[str] = set()
     matches: List[Dict] = []
     for path in files:
+        source_hash = _file_digest(path)
         is_main = path == session_file
         with path.open(encoding="utf-8", errors="surrogateescape") as handle:
             for line_number, line in enumerate(handle, 1):
-                # Only the main transcript needs every record (for its Session
-                # identity); a subagent line without a tool call cannot match.
-                if not is_main and '"tool_use"' not in line:
-                    continue
                 if not line.strip():
                     continue
                 try:
@@ -1311,8 +1314,10 @@ def find_tool_uses_by_command_sha256(session_file: Path, digest: str) -> Dict:
                     continue
                 if not isinstance(record, dict):
                     continue
-                if is_main and isinstance(record.get("sessionId"), str):
+                if isinstance(record.get("sessionId"), str) and record["sessionId"]:
                     observed_ids.add(record["sessionId"])
+                if record.get("type") != "assistant":
+                    continue
                 message = record.get("message")
                 content = message.get("content") if isinstance(message, dict) else None
                 if not isinstance(content, list):
@@ -1320,6 +1325,8 @@ def find_tool_uses_by_command_sha256(session_file: Path, digest: str) -> Dict:
                 for block in content:
                     if not isinstance(block, dict) or block.get("type") != "tool_use":
                         continue
+                    if not isinstance(record.get("sessionId"), str) or not record["sessionId"]:
+                        raise SessionEvidenceError(f"tool block has no record-level Session identity in {path}:{line_number}")
                     tool_input = block.get("input")
                     command = (
                         tool_input.get("command") if isinstance(tool_input, dict) else None
@@ -1331,7 +1338,7 @@ def find_tool_uses_by_command_sha256(session_file: Path, digest: str) -> Dict:
                         continue
                     matches.append({
                         "path": path,
-                        "subagent": None if is_main else path.stem,
+                        "subagent": None if is_main else path.relative_to(session_file.parent / session_file.stem / "subagents").with_suffix("").as_posix(),
                         "line": line_number,
                         "timestamp": record.get("timestamp"),
                         "uuid": record.get("uuid"),
@@ -1340,6 +1347,8 @@ def find_tool_uses_by_command_sha256(session_file: Path, digest: str) -> Dict:
                         "tool_use_id": block.get("id"),
                         "command": command,
                     })
+        if _file_digest(path) != source_hash:
+            raise SessionEvidenceError(f"transcript changed during the read: {path}")
     return {
         "files": files,
         "examined": examined,
@@ -1420,30 +1429,24 @@ def find_agent_prompts_in_session(
 
     A review record must quote the prompt given to an independent reviewer
     agent verbatim. Searches the main transcript and
-    ``<session>/subagents/*.jsonl`` (a subagent can itself dispatch another
+    ``<session>/subagents/*.jsonl`` and ``subagents/workflows/<run>/agent-*.jsonl`` (a subagent can itself dispatch another
     agent). Returns the examined files, how many Agent/Task tool calls
     carried a string ``prompt`` (before any ``description_prefix`` filter),
     unparseable line counts, the main transcript's record-level Session IDs,
     and every match in file order — including duplicates: the same prompt
     dispatched twice is reported twice, not collapsed.
     """
-    files = [session_file]
-    subagents_dir = session_file.parent / session_file.stem / "subagents"
-    if subagents_dir.is_dir():
-        files.extend(sorted(subagents_dir.glob("*.jsonl")))
+    files = [session_file, *discover_subagent_files(session_file)]
 
     examined = 0
     unparseable: Dict[str, int] = {}
     observed_ids: set[str] = set()
     matches: List[Dict] = []
     for path in files:
+        source_hash = _file_digest(path)
         is_main = path == session_file
         with path.open(encoding="utf-8", errors="surrogateescape") as handle:
             for line_number, line in enumerate(handle, 1):
-                # Only the main transcript needs every record (for its Session
-                # identity); a subagent line without a tool call cannot match.
-                if not is_main and '"tool_use"' not in line:
-                    continue
                 if not line.strip():
                     continue
                 try:
@@ -1453,8 +1456,10 @@ def find_agent_prompts_in_session(
                     continue
                 if not isinstance(record, dict):
                     continue
-                if is_main and isinstance(record.get("sessionId"), str):
+                if isinstance(record.get("sessionId"), str) and record["sessionId"]:
                     observed_ids.add(record["sessionId"])
+                if record.get("type") != "assistant":
+                    continue
                 message = record.get("message")
                 content = message.get("content") if isinstance(message, dict) else None
                 if not isinstance(content, list):
@@ -1464,6 +1469,8 @@ def find_agent_prompts_in_session(
                         continue
                     if block.get("name") not in AGENT_TOOL_NAMES:
                         continue
+                    if not isinstance(record.get("sessionId"), str) or not record["sessionId"]:
+                        raise SessionEvidenceError(f"tool block has no record-level Session identity in {path}:{line_number}")
                     tool_input = block.get("input")
                     prompt = (
                         tool_input.get("prompt") if isinstance(tool_input, dict) else None
@@ -1480,7 +1487,7 @@ def find_agent_prompts_in_session(
                         continue
                     matches.append({
                         "path": path,
-                        "subagent": None if is_main else path.stem,
+                        "subagent": None if is_main else path.relative_to(session_file.parent / session_file.stem / "subagents").with_suffix("").as_posix(),
                         "line": line_number,
                         "timestamp": record.get("timestamp"),
                         "uuid": record.get("uuid"),
@@ -1492,6 +1499,8 @@ def find_agent_prompts_in_session(
                         "run_in_background": tool_input.get("run_in_background"),
                         "prompt": prompt,
                     })
+        if _file_digest(path) != source_hash:
+            raise SessionEvidenceError(f"transcript changed during the read: {path}")
     return {
         "files": files,
         "examined": examined,
@@ -1758,8 +1767,13 @@ def build_briefing(
     subagents = extract_subagent_context(session_file)
     if subagents:
         interrupted = [s for s in subagents if s["is_interrupted"]]
-        completed = [s for s in subagents if not s["is_interrupted"]]
+        completed = [s for s in subagents if not s["is_interrupted"] and not s.get("coverage_error")]
+        unknown = [s for s in subagents if s.get("coverage_error")]
         sections.append(f"\n## Subagent Workflow ({len(completed)} completed, {len(interrupted)} interrupted)\n")
+        if unknown:
+            sections.append("### Subagents with unknown coverage\n")
+            for sa in unknown:
+                sections.append(f"- `{sa['id']}`: {sa['coverage_error']}")
         if interrupted:
             sections.append("### Interrupted Subagents\n")
             for sa in interrupted:
@@ -1889,6 +1903,8 @@ def main():
     )
     parser.add_argument("--tool-evidence", "--tools", action="store_true",
                         help="With exact --session: JSON original tool call/result pairs only")
+    parser.add_argument("--subagent-path", metavar="RELATIVE_JSONL",
+                        help="With --tool-evidence: one exact leaf relative to this Session's subagents/ (flat or workflows/<run>/agent-*.jsonl); default main only")
     parser.add_argument("--tool", action="append", default=[], metavar="NAME",
                         help="With --tool-evidence: exact tool name; repeat for alternatives")
     parser.add_argument("--contains", action="append", default=[], metavar="TEXT",
@@ -1903,6 +1919,10 @@ def main():
                         help="Tool evidence UTF-8 JSON byte bound including newline (default: 64000; --full removes it)")
     args = parser.parse_args()
     tool_filters = bool(args.tool or args.contains or args.ordinal or args.from_time or args.to_time)
+    if args.subagent_path is not None and not args.tool_evidence:
+        parser.error("--subagent-path needs --tool-evidence")
+    if args.subagent_path == "":
+        parser.error("--subagent-path cannot be empty")
     if tool_filters and not args.tool_evidence:
         parser.error("--tool/--contains/--ordinal/--from/--to need --tool-evidence")
     ordinal_range = None
@@ -2092,9 +2112,22 @@ def main():
 
     if args.tool_evidence:
         try:
+            if args.subagent_path is not None:
+                leaf = select_subagent_file(session_file, args.subagent_path)
+                leaf_copies = []
+                for parent_copy in copy_paths:
+                    candidate = parent_copy.parent / parent_copy.stem / "subagents" / args.subagent_path
+                    if candidate.exists():
+                        leaf_copies.append({"path": select_subagent_file(parent_copy, args.subagent_path)})
+                session_file, _, copy_paths = select_session_copy({"path": leaf, "copies": leaf_copies})
             source_hash = _file_digest(session_file)
             parsed = parse_session_structure(session_file, collect_tool_evidence=True)
             validate_selected_session_identity(parsed["observed_session_ids"], session_id)
+            if args.subagent_path is not None:
+                expected_agent = session_file.stem.removeprefix("agent-")
+                for event in parsed["tool_events"]:
+                    if event["agent_id"] not in (expected_agent, session_file.stem):
+                        raise SessionEvidenceError("selected subagent tool block has missing or mismatched agent identity")
             if _file_digest(session_file) != source_hash:
                 raise SessionEvidenceError("selected transcript changed during the read; retry the read")
             selected = select_tool_evidence(
@@ -2107,6 +2140,7 @@ def main():
                 filters={"tools": args.tool, "contains": args.contains, "ordinal": ordinal_range,
                          "from": args.from_time, "to": args.to_time},
                 max_output_bytes=None if args.full else args.max_output_bytes,
+                subagent_path=args.subagent_path,
             )
         except (SessionEvidenceError, OSError, UnicodeError) as error:
             print(f"Error: cannot read original Claude tool evidence: {error}", file=sys.stderr)
