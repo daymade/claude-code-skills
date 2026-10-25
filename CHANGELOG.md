@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.21.16 → v1.21.17): Calibrate dashboard information necessity against redundant explanation, localized recovery, honest unknown states, necessary warnings and verbatim source quotes. Remove the evaluation reward for adding overview explanation by default. Change type: bounded evaluation correction; runtime instructions unchanged.
+
 - **tunnel-doctor** (v1.17.9 → v1.17.10): Remove derived command and check totals from diagnostic labels; preserve the commands and required recovery checks.
 
 - **cloudflare-troubleshooting** (v1.1.1 → v1.1.2): Align redirect/certificate examples and CLI post-apply guidance with evidence-based waiting and conditional HTTP cache purging; retain browser-context comparison, normal-hostname recovery and existing API/write behavior. Change type: follow-up guidance consistency fix.
