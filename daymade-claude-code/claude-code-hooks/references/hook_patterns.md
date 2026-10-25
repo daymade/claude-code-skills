@@ -818,11 +818,20 @@ for h in "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/hooks/*.sh; do    # active profil
   [ -e "$h" ] || { PROBLEMS+=("dangling symlink: $h"); continue; }   # -e follows the link
   bash -n "$h" 2>/dev/null || PROBLEMS+=("syntax error: $h")
 done
-# 2. The ACTIVE profile actually registers the Tier-0 guards.
-SETTINGS="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
-for g in proxy-guard git-worktree-guard <your-tier0-guards>; do
-  grep -q "$g" "$SETTINGS" 2>/dev/null || PROBLEMS+=("not registered in $SETTINGS: $g.sh")
-done
+# 2. Check effective registration through its existing installation owner.
+# Configure this array with that owner's documented READ-ONLY check command,
+# targeting the required Tier-0 rules/events in this active profile and project.
+# Verify its contract below before treating exit 0 as healthy. No universal
+# installer flags are assumed here; an unconfigured skeleton must warn unknown.
+REGISTRATION_CHECK=()
+if [ "${#REGISTRATION_CHECK[@]}" -eq 0 ]; then
+  PROBLEMS+=("registration unknown: configure the owning installer's read-only check for this profile/project")
+elif REGISTRATION_OUTPUT=$("${REGISTRATION_CHECK[@]}" 2>&1); then
+  : # The calibrated owner says healthy; suppress its routine status output.
+else
+  REGISTRATION_STATUS=$?
+  PROBLEMS+=("effective registration not verified (owner exit $REGISTRATION_STATUS)${REGISTRATION_OUTPUT:+: $REGISTRATION_OUTPUT}")
+fi
 
 if [ "${#PROBLEMS[@]}" -gt 0 ]; then
   { printf '⚠️  hook-health-check: %d problem(s):\n' "${#PROBLEMS[@]}"
@@ -830,6 +839,29 @@ if [ "${#PROBLEMS[@]}" -gt 0 ]; then
 fi
 exit 0
 ```
+
+Before registering this skeleton, bind `REGISTRATION_CHECK` to the existing
+installation owner's check; do not add a second settings parser. Require that
+check to resolve the active profile and applicable project/managed settings,
+identify the expected host event and matcher, and verify exactly one effective
+handler for the target rule. For a dispatcher, follow its actual rule selection
+and validate the complete selection with the consumer's own contract: matching
+filenames, a saved installation snapshot or valid target-rule fields cannot
+certify a selection the consumer rejects before dispatch. Preserve intentional
+disables, and report an unavailable configuration layer, unsupported wrapper or
+unverifiable selection as **unknown**, not healthy. Use text search only to locate
+candidate entries.
+
+Calibrate the configured owner check on its healthy registration and on the same
+configuration with the target handler removed while its name remains elsewhere.
+Also test a consumer-rejected selection when delegation applies. Bind a check
+whose calibrated exit contract distinguishes healthy from broken/unknown; a
+report-only command returning 0 for every state is unsuitable without its owner's
+documented result interpretation. Keep a healthy wrapper silent even when the
+owner prints routine status. On failure/unknown, preserve captured stdout and
+stderr in the wrapper's stderr warning while the wrapper itself exits 0. Test
+both output channels; do not require the owner to add a quiet mode.
+Keep native matching-event consumption separate from this registration check.
 
 Register once per profile under `SessionStart`. It's how the 2026-07-05 poisoning
 class ("environment acting up" that was really a broken hook) becomes visible at
@@ -881,8 +913,10 @@ python3 -c "import json,sys; print(json.dumps({'hookSpecificOutput':{'hookEventN
 exit 0
 ```
 
-The value is that the model **cannot forget a check that runs automatically**.
-Injected truth beats "I think the commit worked."
+Running the check automatically removes dependence on the model remembering to
+invoke it. Its injected result remains advisory and can be ignored (rule 7,
+mechanism 0): verify emission, observed use of that result and the requested
+business outcome separately.
 
 **Testing note:** the `says` helper in `scripts/test_hook.sh` captures **stderr**
 — right for blocking hooks (their contract text lives there) but blind for this

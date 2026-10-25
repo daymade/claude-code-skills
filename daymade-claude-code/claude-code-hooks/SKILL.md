@@ -374,8 +374,8 @@ a guard; use bounded deployment/liveness checks (rule 4; Pattern C in
   so the next profile to start a session carries the registration into every
   profile. `--all` is the explicit convergence mode; run it when immediate
   profile synchronization is needed, without treating that write as activation proof.
-  A SessionStart health check greps each profile for the Tier-0 guards to
-  catch drift. For new or changed registrations, verify a real matching event
+  A SessionStart health check verifies each profile's effective registrations
+  through their owner; use text searches only to locate candidates. For new or changed registrations, verify a real matching event
   and debug evidence in a fresh native session. Claim current-session hot reload
   only after observing that session invoke the changed registration; a successful
   settings write or startup health line alone is insufficient. The current
