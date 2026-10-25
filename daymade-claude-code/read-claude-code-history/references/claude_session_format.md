@@ -252,3 +252,14 @@ tail -n 200 <session-file>.jsonl \
 cat ~/.claude/projects/<normalized-path>/sessions-index.json \
   | jq -r '.entries[] | select(.firstPrompt | test("keyword"; "i")) | "\(.modified) \(.sessionId) \(.firstPrompt)"'
 ```
+
+## Reading Workflow leaves
+
+The exact-session reader discovers flat `subagents/*.jsonl` and Workflow leaves
+`subagents/workflows/*/agent-*.jsonl` inside the selected Session only. Digest and
+Agent/Task prompt lookups include both; the briefing inventory preserves each
+run-relative path and labels unreadable, malformed or foreign leaves unknown.
+`--tool-evidence` stays main-only unless `--subagent-path` names one exact relative
+leaf (for example `workflows/<run>/agent-<id>.jsonl`). It does not resolve agent
+basenames across runs or pair blocks from different files. The same original-block
+pairing, identity, output-byte and changed-source checks apply to the selected leaf.
