@@ -3405,6 +3405,22 @@ this list and describe defects you reach by asking a different question):
   establish the supplied context; they do not prove the model's action was right.
   Reminder counts, registration and green fixtures remain distinct from business
   acceptance. This entry adds no new gate or guarantee against every priority error.
+- **Cadence starvation counterexample:** preserving a maximum-deferral timestamp
+  does not preserve its activity predicate. If every prompt clears the activity
+  count, a sequence of active windows that each stop just below the ordinary
+  threshold can stay silent forever, even after maximum deferral expires. Test
+  that sequence across multiple prompt resets and delivery windows; retain
+  separately scoped activity for the maximum-deferral path, while keeping truly
+  low-activity windows quiet. Apply rule 7's recurring-advisory liveness contract,
+  rather than treating a passing single-window timer test as long-session proof.
+- **Recovery suppression counterexample:** a failed optional cadence write can
+  abort a recovery branch before it emits independently available, safe context.
+  Isolate that write's error handling from context generation and keep the failure
+  observable; do not fabricate a persistence or delivery receipt. Calibrate both
+  healthy and failed writes on the recovery event, and retain ordinary-event and
+  missing-input quiet cases. Apply rule 5's failure-direction decision to each
+  dependency: this does not authorize guessed project facts, context requiring the
+  failed state, or unconditional output whenever any state operation fails.
 
 ## 66. Hook emission and model-context records do not prove that a notification is visible in the ordinary interface
 

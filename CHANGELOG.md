@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **claude-code-hooks** (`daymade-claude-code` v4.30.23 → v4.30.24): Replace filename-only registration health with owner-bound checks, preserve silent healthy output and failure diagnostics, and align advisory examples with existing delivery and state-failure boundaries. Add cadence-reset and recovery-suppression counterexamples. Change type: bounded verification correction.
+- **qa-expert** (v1.2.3 → v1.2.4): Add actual-process argument and early-exit checks for affected CLI refactors, preserving legal special modes, stdin behavior, output contracts and allowed side effects. Change type: bounded acceptance-evidence correction.
+
 - **tunnel-doctor** (v1.17.9 → v1.17.10): Remove derived command and check totals from diagnostic labels; preserve the commands and required recovery checks.
 
 - **cloudflare-troubleshooting** (v1.1.1 → v1.1.2): Align redirect/certificate examples and CLI post-apply guidance with evidence-based waiting and conditional HTTP cache purging; retain browser-context comparison, normal-hostname recovery and existing API/write behavior. Change type: follow-up guidance consistency fix.
