@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **app-evolver** (v1.1.8 → v1.1.9): Add domain-role extraction through real consumer adoption while retaining adjacent admission, execution and recovery owners. Change type: bounded engineering-guidance correction.
+- **qa-expert** (v1.2.3 → v1.2.4): Add admission/recovery binding cases and extend delivered-package, final-open race, configuration-snapshot and fixture-contract acceptance. Preserve healthy retry and first-create paths; deduplicate the entry's onboarding schedule into its existing guide. Change types: bounded acceptance-workflow correction and lossless entry compression.
 - **frontend-visual-qa** (v1.21.16 → v1.21.17): Route AI-generated UI/copy complaints through the existing necessity check with task-matched Impeccable, Taste Skill and Product Writing methods. Calibrate redundant explanation against localized recovery, honest unknown states, necessary warnings and verbatim source quotes; remove the evaluation reward for adding overview explanation by default. Change type: bounded runtime guidance and evaluation correction.
 
 - **tunnel-doctor** (v1.17.9 → v1.17.10): Remove derived command and check totals from diagnostic labels; preserve the commands and required recovery checks.

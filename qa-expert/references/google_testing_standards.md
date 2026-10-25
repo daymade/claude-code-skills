@@ -106,6 +106,12 @@ Examples:
 
 ## Coverage Planning
 
+For a shared interface or admission change, inventory its affected real consumers
+and test doubles before selecting regressions. Exercise the real integration
+boundaries as well as focused units; a mock accepting a new call does not show
+that a production consumer preserves the contract. Reuse checks already green
+on unchanged inputs; broaden only for a new change, failure or unresolved axis.
+
 Treat the following values as illustrative planning examples. Adopt or replace
 them through the target project's test strategy; keep the accepted values there
 rather than copying them into reports or prompts. Passing a coverage target does
@@ -125,6 +131,19 @@ not establish that the assertions detect the required failure.
 ---
 
 ## Test Isolation
+
+Use the repository's CI-pinned test environment and declared development
+dependencies. A minimal production runtime missing a test-only client is not an
+assertion failure; run that test in its intended environment rather than adding
+development packages to a shared production service.
+
+Update stale fixtures to the actual interface and success-result contract. A
+unit fixture may isolate a gate when it already substitutes that boundary, but
+retain a separate real integration consumer that exercises the gate. Do not
+weaken production validation or replace the integration gate with a permissive
+mock to restore a green suite. For operation-local configuration snapshots,
+use [file persistence](file-persistence-cli-acceptance.md) for within-call,
+next-call and exceptional-exit cases.
 
 ### Mandatory Principles
 

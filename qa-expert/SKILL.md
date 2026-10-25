@@ -85,6 +85,9 @@ before selecting cases. For schema upgrades, accounting views or integration
 fixtures, load [migration and fixture acceptance](references/migration-fixture-acceptance.md).
 For file-backed state, snapshot dependency checks, recovery or CLI output/read-cost
 changes, load [file persistence and CLI acceptance](references/file-persistence-cli-acceptance.md).
+For admission decisions, account/resource bindings or recovery that can authorize
+an effect, load [admission and recovery acceptance](references/admission-recovery-acceptance.md)
+before choosing fault timing or side-effect assertions.
 For responses, normalization or suggested edits that race with user changes,
 load [asynchronous editing and conflict acceptance](references/async-edit-conflict-acceptance.md)
 before selecting timing, session and related-object cases.
@@ -190,18 +193,8 @@ Each security test follows AAA pattern with specific attack vectors documented.
 
 ## Day 1 Onboarding
 
-For new QA engineers joining a project, complete 5-hour onboarding guide:
-
-**Read**: `references/day1_onboarding.md`
-
-**Timeline**:
-- Hour 1: Environment setup (database, dev server, dependencies)
-- Hour 2: Documentation review (test strategy, quality gates)
-- Hour 3: Test data setup (users, CLI, DevTools)
-- Hour 4: Execute first test case
-- Hour 5: Team onboarding & Week 1 planning
-
-**Checkpoint**: By end of Day 1, environment running, first test executed, ready for Week 1.
+For new QA engineers, follow [Day 1 onboarding](references/day1_onboarding.md)
+for its sequence, checkpoints and project setup examples.
 
 ## Autonomous Execution (⭐ Recommended)
 
@@ -249,7 +242,7 @@ unattended execution and verify its activity separately.
 
 Access detailed guidelines from bundled references:
 
-- **`references/day1_onboarding.md`** - 5-hour onboarding guide for new QA engineers
+- **`references/day1_onboarding.md`** - New QA engineer onboarding
 - **`references/master_qa_prompt.md`** - Preparation, execution, recovery and reporting SOP
 - **`references/llm_prompts_library.md`** - Prompts for specific QA tasks
 - **`references/google_testing_standards.md`** - AAA pattern, coverage planning, release acceptance and fail-fast validation

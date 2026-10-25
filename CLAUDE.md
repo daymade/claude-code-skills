@@ -79,7 +79,7 @@ For user-selected collection destinations, load the
 For running an original application demo, follow that Skill's
 [original-app demo recipe](competitors-analysis/references/original-app-demo.md).
 For file-backed persistence and CLI acceptance, transaction recovery tests,
-financial migration/fixture acceptance, runtime compatibility or project-bound release acceptance, enter
+financial migration/fixture acceptance, admission/recovery bindings, runtime compatibility or project-bound release acceptance, enter
 [qa-expert](qa-expert/SKILL.md); its test-case routes select the detailed recipes.
 For path normalization or drive-relative adapter cases, follow its
 [runtime compatibility recipe](qa-expert/references/runtime-compatibility-acceptance.md#select-optional-path-operation-cases).
@@ -109,6 +109,8 @@ For evidence-based improvement of an existing application, enter
 [app-evolver](app-evolver/SKILL.md). For released-artifact or runtime evidence,
 load its [Skill composition route](app-evolver/references/skill-composition.md);
 keep specialist selection and handoff boundaries in that owner.
+For domain-role extraction or scattered policy, use its
+[consumer-adoption recipe](app-evolver/references/implementation-and-acceptance.md#extract-a-domain-role-through-its-consumers).
 When the user corrects premises, research focus or scope, return first to its
 [task binding](app-evolver/SKILL.md#1-bind-the-application-and-unfinished-result).
 For next-increment selection after that reconciliation or a completed repair batch, use its
