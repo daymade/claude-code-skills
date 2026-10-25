@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **claude-code-hooks** (`daymade-claude-code` v4.30.23 → v4.30.24): Replace filename-only registration health with owner-bound checks, preserve silent healthy output and failure diagnostics, and align advisory examples with existing delivery and state-failure boundaries. Add cadence-reset and recovery-suppression counterexamples. Change type: bounded verification correction.
 - **qa-expert** (v1.2.3 → v1.2.4): Add actual-process argument and early-exit checks for affected CLI refactors, preserving legal special modes, stdin behavior, output contracts and allowed side effects. Change type: bounded acceptance-evidence correction.
+- **frontend-visual-qa** (v1.21.16 → v1.21.17): Route AI-generated UI/copy complaints through the existing necessity check with task-matched Impeccable, Taste Skill and Product Writing methods. Calibrate redundant explanation against localized recovery, honest unknown states, necessary warnings and verbatim source quotes; remove the evaluation reward for adding overview explanation by default. Change type: bounded runtime guidance and evaluation correction.
 
 - **tunnel-doctor** (v1.17.9 → v1.17.10): Remove derived command and check totals from diagnostic labels; preserve the commands and required recovery checks.
 

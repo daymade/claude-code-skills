@@ -295,8 +295,9 @@ and inspect the affected text positions rather than accepting scroll movement al
 
 Load [references/history-derived-checklist.md](references/history-derived-checklist.md)
 for the core visual/responsive defect catalog and standards-backed checks.
-For composition or density audits, execute its **Information necessity before
-layout** check before fixing line breaks. Before declaring rendered UI ready for
+For composition or density audits, including AI-generated UI or copy complaints,
+execute its **Information necessity before layout** check and select the matched
+**Established methods** before fixing line breaks. Before declaring rendered UI ready for
 release, complete that check's ancillary-copy inventory and dispositions across
 the declared surface, including shared text and affected conditional states.
 Missing coverage or unresolved task-relevant explanations leave that release
