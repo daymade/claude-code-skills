@@ -316,11 +316,17 @@ uv run python scripts/forecast_log.py summary
   `forecast_log.py` 只按输入时间与标志计分，不会替你核验事件归因。已归因的区间可以
   比确认帖时刻给出更窄上界。
 
-- `time_basis`：`occurrence` 表示明确发生时刻（起止相同）；`observed_interval` 表示已核实的
-  发生区间；`confirmation_only` 表示只有完成帖时间，不能把它冒充发生时间。
+- `time_basis`：`occurrence` 表示明确发生时刻（典型时起止相同；秒级窄窗口填两端亦合法）；`observed_interval` 表示已核实的
+  发生区间；`confirmation_only` 表示只有完成帖时间，不能把它冒充发生时间。本机 rollout 相邻
+  快照**秒级间隔**时，归零迁移本身就已 pin 到秒级，直接记 `occurrence`，不人为拉成区间
+  （2026-10-25 实测：相邻快照 1 秒间隔，落地 pin 到 3 秒窗口，评分获得可判分的窄区间；
+  分钟级采样间隔时仍用 `observed_interval`）。
 - 预测发出前的最后读数不能作 `event_start`——脚本会以
   「event interval must follow forecast issuance」拒绝；取发出后一刻，先验读数写进 `reason`
-  （2026-09-24 实测）。
+  （2026-09-24 实测）。**变体（2026-10-25 实测被拒）**：同一事件在 announce 与 forecast 各有
+  记录时，`event_start` 按各自记录的发出时刻分别取——announce 侧取官宣后一刻可以通过，但
+  forecast 侧复用这个较早起点会被拒，哪怕官宣确实早于预测发出；先验读数写进该条 review 的
+  `reason`。
 - `first_event_verified`：只有证据足以确认是发出预测后首个同类型事件才填 `true`。
   来源覆盖不足或存在更早事件疑点时填 `false`，在 `reason` 说明，不为得到分数硬填。
 
