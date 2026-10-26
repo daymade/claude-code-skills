@@ -10,6 +10,16 @@ Use only in isolated compatibility tests. Do not update this fixture to match th
 current implementation. It represents the v1.19.0 consumer of the shared journal;
 the old reader does not implement the new announcement sidecar or account views.
 
+`forecast_log_v240.py` is the unmodified public production script from
+`daymade/claude-code-skills` commit
+`962ec6d27517b856a6e260c16c0be296ed92bf2d`, path
+`tibo-reset-codex/scripts/forecast_log.py`.
+SHA-256: `c71b8206b0a13b30b9ed806a8cc075b3a597869c6635fa949ea71cbb0f128c15`.
+
+Use only in isolated compatibility tests as the pre-compact v2.4.0 reader, including
+its announcement sidecar and account views. Do not update this fixture to match the
+current implementation; its purpose is to catch full-summary and followup drift.
+
 `account-switch-replay.json` is a synthetic, de-identified replay of the 2026-10-17
 failure shape: matching endpoint `account_ref` values, a usage drop, a changed
 anchor and anonymous rollout evidence without a direct reset event. Its account

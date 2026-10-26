@@ -17,6 +17,11 @@ SPEC = importlib.util.spec_from_file_location(
 log = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(log)
 
+BASELINE_SPEC = importlib.util.spec_from_file_location(
+    "forecast_log_v240", Path(__file__).resolve().parent / "fixtures" / "forecast_log_v240.py")
+baseline = importlib.util.module_from_spec(BASELINE_SPEC)
+BASELINE_SPEC.loader.exec_module(baseline)
+
 
 def _leaf_values(value, prefix=()):
     """Return every scalar or empty-container path without sharing projection logic."""
@@ -753,7 +758,12 @@ class ForecastLogTests(unittest.TestCase):
         with self.path.open("a", encoding="utf-8") as stream:
             stream.write(json.dumps(legacy_review) + "\n")
 
-        full = log.summarize(self.path, now=self.now + timedelta(days=30))
+        checked_at = self.now + timedelta(days=30)
+        full = log.summarize(self.path, now=checked_at)
+        # compact 与当前 full 自洽还不够：冻结旧 reader 必须 independently 守住 full/followup。
+        self.assertEqual(full, baseline.summarize(self.path, now=checked_at))
+        self.assertEqual(log.followup_plan(self.path, now=checked_at),
+                         baseline.followup_plan(self.path, now=checked_at))
         full["snapshot"] = {"status": "unknown", "detail": "synthetic git error"}
         compact = log.compact_summary(full)
 
