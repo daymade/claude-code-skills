@@ -456,8 +456,9 @@ This is a journey-specific auditor check, not an automatic sweep verdict.
 
 ### Wheel requests are not browser-received wheel events
 
-When judging wheel-driven pan or zoom sensitivity, use the input-target check
-above and observe the event stream **at the browser's actual target**. Record
+When judging wheel-driven pan or zoom sensitivity, reuse the fresh geometry and
+hit-target checks above for the intended pan/zoom surface; the `closest <pre>`
+predicate applies only to PRE reading. Observe the event stream **at the browser's actual target**. Record
 received `deltaX`, `deltaY`, `deltaMode`, modifier keys and event count alongside
 camera/scroll state before and after. A harness request can be scaled or split
 before delivery; its requested delta is not the denominator for product gain.
