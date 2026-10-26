@@ -78,7 +78,8 @@ For user-selected collection destinations, load the
 [collection destination route](competitors-analysis/references/collection_destination.md).
 For running an original application demo, follow that Skill's
 [original-app demo recipe](competitors-analysis/references/original-app-demo.md).
-For file-backed persistence and CLI acceptance, transaction recovery tests,
+For file-backed persistence and CLI acceptance (including wrapper argument forwarding
+and compatibility aliases), transaction recovery tests,
 financial migration/fixture acceptance, admission/recovery bindings, runtime compatibility or project-bound release acceptance, enter
 [qa-expert](qa-expert/SKILL.md); its test-case routes select the detailed recipes.
 For path normalization or drive-relative adapter cases, follow its

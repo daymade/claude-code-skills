@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **qa-expert** (v1.2.6 → v1.2.7): Exercise wrapper argument forwarding and retained compatibility aliases through the actual entry; verify dry-run propagation or explicit rejection before effects while preserving CLI argument and early-exit contracts. Change type: bounded acceptance-evidence correction.
+
 - **data-visualization-discipline** (v1.1.5 → v1.1.6): Remove the stale layer total and a redundant page total from journey guidance; retain the complete criteria and example sequence. Change type: deterministic documentation correction.
 - **data-visualization-discipline** (v1.1.4 → v1.1.5): Distinguish page topology from ordered visits, preserve return steps and derive both views from the same facts. Treat presentation components as choices rather than a universal journey style. Change type: bounded guidance correction.
 - **frontend-visual-qa** (v1.21.21 → v1.21.22): Check promised occurrence persistence across refresh, deep links and history; measure wheel gain from browser-received events while retaining product-specific transforms and physical-input limits. Change type: bounded acceptance-evidence correction.
