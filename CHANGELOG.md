@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **frontend-visual-qa** (v1.21.19 → v1.21.20): Check brief-specific responsibility distinctions through visible original work and results, preserving shared roles and overview disclosure. Recheck time-sensitive fixture state coverage at capture and review without altering production unknowns. Change type: bounded acceptance-evidence correction.
+- **frontend-visual-qa** (v1.21.20 → v1.21.21): Check brief-specific responsibility distinctions through visible original work and results, preserving shared roles and overview disclosure. Recheck time-sensitive fixture state coverage at capture and review without altering production unknowns. Change type: bounded acceptance-evidence correction.
 
 - **frontend-visual-qa** (v1.21.19 → v1.21.20): Compare task-relevant objects and fields visible together in the initial working viewport under controlled data, state, ordering and display conditions. Keep business-priority changes separate from layout regressions. Change type: bounded acceptance-evidence correction.
 - **tibo-reset-codex** (v2.3.0 → v2.4.0): Bind reset claims to selected account identities and explicit timing evidence; separate quota opportunity estimates from measured loss, and audit existing notification delivery before proposing new monitoring. Preserve account-query fallbacks and distinguish transport, receipt and acknowledgement.
