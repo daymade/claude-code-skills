@@ -252,7 +252,8 @@ URL，不从聊天记录、浏览器 Cookie 库或旧工具回执中搜 token �
 
 ### 已有 ChatGPT 会话迁移
 
-用户授权迁移现成登录态时，进入[同机同 Chrome 会话迁移](browser-session-migration.md)。
+用户授权迁移现成登录态时，进入[Cookie Copy 接入](browser-session-migration.md)，
+由独立 `cookie-copy` 处理复制与登录验证，再回到本 Skill 核对真实额度。
 它直接迁移 ChatGPT/OpenAI 站点 Cookie，以重开后的预期账号与真实额度响应验收，
 不依赖 Google 账号选择器。仅源有活会话且当前宿主允许该本地脚本通道时执行；
 前文关于不得提取 Cookie token 替代正常登录的约束，保留在未授权迁移的普通查询路径。

@@ -123,12 +123,13 @@ stdin/heredoc 及 Python/Node 子进程调用却可能报 `Failed to start ego l
 - 用户只问当前剩余或下一次周期重置 → 同样进入账号 SOP 的实时查询；需要解释历史跳变时
   再走 §2 的 rollout 快照。当前余额查询不要求先跑整段历史重建或重查公告。
 - 想迁移日常 Chrome 中**现成的 ChatGPT 登录态**到隔离查询 profile → 先读
-  [已有会话迁移](references/browser-session-migration.md)，执行目标初始化、站点 Cookie
-  迁移及预期账号与真实额度读取验证。只在当前宿主允许外部 Chrome 脚本通道时执行；
-  不把复制成功当作登录成功，不把同机同浏览器实测外推为跨浏览器或跨机器可用。
+  [Cookie Copy 接入](references/browser-session-migration.md)，加载独立 `cookie-copy`
+  执行复制与身份验证，再由本 Skill 验证账号绑定的真实额度。先安装缺失依赖并读回；
+  不把复制成功或仅登录成功当作额度查询完成。
 - 想把日常 Chrome 的 Google Cookie 接到隔离查询 profile →
-  `scripts/launch-usage-profile.sh <a|b>` 建/开隔离 Chrome profile，`scripts/import-google-cookies.py --profile <a|b>`
-  搬运 `.google.com` 系 cookie（机制与安全论证见脚本自身 docstring，2026-09-15 验证过）。
+  先按 [Cookie Copy 接入](references/browser-session-migration.md) 准备依赖；
+  `scripts/launch-usage-profile.sh <a|b>` 建/开隔离 Chrome profile，关闭目标后用
+  `scripts/import-google-cookies.py --profile <a|b>` 搬运 `.google.com` 系 Cookie。
 - 想**自动**驱动隔离 Chrome 查第二账号用量 → `node scripts/read-usage-profile.cjs`（依赖
   `~/.chrome-profiles/tibo-cdp/` 的 playwright；默认 profile a）。读模式直接解析当前登录账号
   usage；加 `--drive-login` 在未登录时自动点 `Continue with Google` 驱动到 Google 账号选择器

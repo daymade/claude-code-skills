@@ -3421,6 +3421,14 @@ they become load-bearing data. Its separate Chat Deep Research route exports a f
 操作 Kimi 客户端，用已安装插件核对这组市场数据
 ```
 
+### **cookie-copy** - Copy Cookies Between Chrome Profiles
+
+> **Install**: `claude plugin install cookie-copy@daymade-skills`
+
+Copy Google or ChatGPT/OpenAI cookies between local profiles of the same macOS Chrome, with destination backups, restore and expected-account verification for ChatGPT.
+
+[Instructions](cookie-copy/SKILL.md)
+
 ### **tibo-reset-codex** - ChatGPT/Codex 额度重置速查
 
 > **Install**: `claude plugin install tibo-reset-codex@daymade-skills`

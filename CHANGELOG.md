@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **cookie-copy** (v1.0.0): Extract same-machine macOS Chrome cookie copying, backups, restore and ChatGPT identity verification into a standalone Skill. Keep quota verification in **tibo-reset-codex** (v2.2.3 → v2.3.0), with dependency preparation and compatibility entry points for existing commands. Change types: user-requested ownership extraction and separation of login from quota acceptance. Marketplace v3.26.0.
+
 - **read-claude-code-history** (`daymade-claude-code` v4.31.0 → v4.31.1): Resolve the output-limit default through executable CLI help. Align repository instruction routes with Workflow evidence and saved release-evidence handling.
 - **tibo-reset-codex** (v2.2.2 → v2.2.3): Remove the derived authorization-field total and redundant monitor cadence from the stop contract; retain the required fields and deadline behavior.
 - **tunnel-doctor** (v1.17.11 → v1.17.12): Remove the observation total from provider-account triage while retaining its evidence boundaries.

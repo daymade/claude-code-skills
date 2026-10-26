@@ -32,3 +32,18 @@ test('CLI help executes through an installed symlink, including paths with space
     }
   } finally {rmSync(root, {recursive:true, force:true});}
 });
+
+test('independently installed cookie-copy dependency must resolve before browser work', () => {
+  const root = mkdtempSync(join(tmpdir(),'quota dependency '));
+  try {
+    const source=fileURLToPath(new URL('../scripts/verify-chatgpt-profile.mjs',import.meta.url));
+    for (const dependency of ['', join(root,'missing')]) {
+      const result=spawnSync(process.execPath,[source,'--profile-dir',join(root,'target'),'--expected-email','test@example.com'], {
+        encoding:'utf8', env:{...process.env,COOKIE_COPY_SKILL_DIR:dependency},timeout:10000
+      });
+      assert.equal(result.status,1);
+      assert.match(result.stderr,/cookie-copy|COOKIE_COPY_SKILL_DIR/);
+      assert.doesNotMatch(result.stderr,/test@example.com/);
+    }
+  } finally {rmSync(root,{recursive:true,force:true});}
+});
