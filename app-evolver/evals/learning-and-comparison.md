@@ -90,3 +90,33 @@ this was an author-context or fresh-context replay. One passing conversation
 establishes these outputs, not a win rate, a model comparison or real user success.
 Stop once the clauses have dispositions; a failed clause calls for the smallest
 affected fix and replay, not an automatic A/B pipeline or viewer.
+
+## Independent replay: task pivot and return
+
+Use this separate replay for discovery-state changes; it is not another
+checkpoint required by the learning-scope scenario above.
+
+Prompt:
+
+> A research library is searched for method Larch with artifact=program and two
+> selected comparisons. From Larch, the reader opens benchmark Reed, then asks
+> for all benchmarks measuring accuracy. The candidate copies every parameter:
+> q=Larch&artifact=program&kind=benchmark&metric=accuracy. It shows no results;
+> the same metric without the method constraints includes Reed and other works.
+> The original exploration is still encoded in the detail's return link.
+> Separately, adding feedback=tests while still searching methods is an ordinary
+> refinement. Review only: state which state belongs to each transition and the
+> minimum failing/healthy replays. No runnable app is supplied. A browser probe
+> clicked a default return link before initialization and reached the unfiltered
+> library; waiting for the rewritten link later passed. What does that establish?
+
+Output-level acceptance:
+
+- Reject the benchmark empty set as a discovery-context defect, not missing data.
+- Separate the new benchmark task from the retained return location; preserve
+  comparison selections where meaningful and clear incompatible predicates.
+- Preserve q=Larch and artifact=program in the same-task feedback refinement.
+- Require actual pivot, return and refinement paths; do not invent a runtime pass.
+- Distinguish the initialized-link success from unverified early-click safety;
+  neither longer waits nor a green probe alone resolve that product question.
+- Missing/empty answers and blanket clear-all/preserve-all prescriptions fail.

@@ -120,6 +120,7 @@ For next-increment selection after that reconciliation or a completed repair bat
 [increment-selection contract](app-evolver/references/evidence-and-fit.md#make-the-disposition-operational).
 When feedback questions navigation, information hierarchy or interface coherence, use its
 [structure comparison](app-evolver/references/evidence-and-fit.md#reconsider-interface-structure).
+For discovery-task changes, follow its [task-pivot and return-context cases](app-evolver/references/implementation-and-acceptance.md#task-pivots-and-return-context).
 
 For permission-sensitive fixtures, use Skill Creator's
 [execution-context verification recipe](daymade-skill/skill-creator/references/stateful-script-verification.md#execution-identity-and-permission-fixtures).
