@@ -17,6 +17,8 @@
 
 ```bash
 uv run python scripts/forecast_log.py --help
+uv run python scripts/forecast_log.py summary --compact
+# 审计、复盘或需要完整叙述时：
 uv run python scripts/forecast_log.py summary
 ```
 
@@ -35,7 +37,10 @@ uv run python scripts/forecast_log.py summary
 
 ## 每次调用先回看
 
-1. 运行 `summary`，先读 `due_for_followup`（窗口已过期或即将关闭、尚无定论的 pending；
+1. 正常监测轮运行 `summary --compact`；审计、复盘或需要完整叙述时运行 `summary`。compact
+   是同一个完整 summary 的投影，只省略 forecast 的 `rationale`、`feedback_applied`，以及
+   `latest_review` / `latest_withdrawal` 的 `reason`、`lesson`；其他字段保持不变，包括各队列及其顺序、ID、kind、状态、窗口、`revision_trigger`、
+   证据引用、账号观测、`withdrawal_conflicts` 与 `snapshot`。先读 `due_for_followup`（窗口已过期或即将关闭、尚无定论的 pending；
    临近关闭阈值以脚本常量 `CLOSING_SOON_HOURS` 为准，完整 id 可直接喂 review），
    再核对 `withdrawal_conflicts`，然后读 `pending`、`recent_resolved` 和 `recent_withdrawn`。`pending`
    同时含未核验与证据不足的记录；`window_elapsed` 只说明窗口已过，不判输赢。没有历史时

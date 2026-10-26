@@ -17,6 +17,22 @@ SPEC = importlib.util.spec_from_file_location(
 log = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(log)
 
+BASELINE_SPEC = importlib.util.spec_from_file_location(
+    "forecast_log_v240", Path(__file__).resolve().parent / "fixtures" / "forecast_log_v240.py")
+baseline = importlib.util.module_from_spec(BASELINE_SPEC)
+BASELINE_SPEC.loader.exec_module(baseline)
+
+
+def _leaf_values(value, prefix=()):
+    """Return every scalar or empty-container path without sharing projection logic."""
+    if isinstance(value, dict) and value:
+        return {path: leaf for key, child in value.items()
+                for path, leaf in _leaf_values(child, (*prefix, key)).items()}
+    if isinstance(value, list) and value:
+        return {path: leaf for index, child in enumerate(value)
+                for path, leaf in _leaf_values(child, (*prefix, index)).items()}
+    return {prefix: value}
+
 
 class ForecastLogTests(unittest.TestCase):
     def setUp(self):
@@ -712,6 +728,115 @@ class ForecastLogTests(unittest.TestCase):
                 self.record()
             self.assertEqual(self.path.read_bytes(), bad)
             self.path.write_text(original)
+
+    def test_compact_projection_omits_only_narrative_and_preserves_decision_leaves(self):
+        pending = self.record(anchor_event_url="https://example.invalid/pending")
+        self.review(pending["id"], unknown=True, account_status="not_delivered",
+                    account_ref="1234abcd",
+                    account_checked_at=(self.now + timedelta(days=5)).isoformat())
+        resolved = self.record(anchor_event_url="https://example.invalid/resolved")
+        self.review(resolved["id"])
+        announced = log.append_record(self.path, "announce", {
+            "kind": "global_reset", "announced_at": self.now.isoformat(),
+            "eta_at": (self.now + timedelta(hours=2)).isoformat(),
+            "source_url": "https://example.invalid/announcement",
+            "source_text": "Synthetic announcement text.",
+            "interpretation": "Synthetic interpretation.",
+            "revision_trigger": "Read the completion post.",
+            "evidence_urls": ["https://example.invalid/announcement"],
+            "anchor_event_url": None}, self.now)
+        self.review(announced["id"], time_basis="confirmation_only",
+                    first_event_verified=False)
+        withdrawn = self.record(anchor_event_url="https://example.invalid/withdrawn")
+        withdrawal = self.withdraw(withdrawn["id"])
+        legacy_review = {"schema_version": 1, "id": "legacy-review",
+                         "record_type": "review",
+                         "recorded_at": (self.now + timedelta(hours=2)).isoformat(),
+                         "forecast_id": withdrawn["id"], "outcome": "hit",
+                         "reason": "A legacy client wrote this after withdrawal.",
+                         "lesson": "Reconcile before scoring."}
+        with self.path.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(legacy_review) + "\n")
+
+        checked_at = self.now + timedelta(days=30)
+        full = log.summarize(self.path, now=checked_at)
+        # compact 与当前 full 自洽还不够：冻结旧 reader 必须 independently 守住 full/followup。
+        self.assertEqual(full, baseline.summarize(self.path, now=checked_at))
+        self.assertEqual(log.followup_plan(self.path, now=checked_at),
+                         baseline.followup_plan(self.path, now=checked_at))
+        full["snapshot"] = {"status": "unknown", "detail": "synthetic git error"}
+        compact = log.compact_summary(full)
+
+        self.assertEqual((full["forecast_count"], full["announcement_count"]), (3, 1))
+        expected_ids = {
+            "pending": [pending["id"]], "recent_resolved": [resolved["id"]],
+            "recent_withdrawn": [withdrawn["id"]], "confirmed_unscored": [announced["id"]],
+        }
+        for collection, ids in expected_ids.items():
+            self.assertEqual([item["id"] for item in full[collection]], ids)
+            self.assertEqual([item["id"] for item in compact[collection]], ids)
+            for full_item, compact_item in zip(full[collection], compact[collection]):
+                for field in ("kind", "revision_trigger", "event_status",
+                              "account_status", "score_outcome"):
+                    self.assertIn(field, full_item)
+                    self.assertEqual(compact_item[field], full_item[field])
+                if full_item.get("entry_type") == "official_announcement":
+                    self.assertIn("eta_at", full_item)
+                else:
+                    for field in ("window_start", "window_end"):
+                        self.assertIn(field, full_item)
+                for field in ("window_start", "window_end", "announced_at", "eta_at"):
+                    if field in full_item:
+                        self.assertEqual(compact_item[field], full_item[field])
+        self.assertEqual([item["id"] for item in compact["due_for_followup"]], [pending["id"]])
+        self.assertEqual(compact["account_followup"], full["account_followup"])
+        self.assertEqual(compact["withdrawal_conflicts"], [{
+            "forecast_id": withdrawn["id"], "withdrawal_id": withdrawal["id"],
+            "review_id": "legacy-review", "review_outcome": "hit"}])
+        self.assertEqual(compact["snapshot"], full["snapshot"])
+        self.assertEqual(set(compact), set(full))
+
+        full_leaves = _leaf_values(full)
+        compact_leaves = _leaf_values(compact)
+        self.assertFalse(set(compact_leaves) - set(full_leaves))
+        for path, value in compact_leaves.items():
+            self.assertEqual(value, full_leaves[path], path)
+        allowed_removals = set()
+        for collection in expected_ids:
+            for index, item in enumerate(full[collection]):
+                for field in ("rationale", "feedback_applied"):
+                    if field in item:
+                        allowed_removals.add((collection, index, field))
+                for nested in ("latest_review", "latest_withdrawal"):
+                    review = item.get(nested)
+                    if isinstance(review, dict):
+                        for field in ("reason", "lesson"):
+                            if field in review:
+                                allowed_removals.add((collection, index, nested, field))
+        self.assertEqual(set(full_leaves) - set(compact_leaves), allowed_removals)
+        self.assertTrue(allowed_removals)
+        for collection in ("pending", "recent_resolved", "recent_withdrawn"):
+            self.assertIn("rationale", full[collection][0])
+            self.assertNotIn("rationale", compact[collection][0])
+        for field in ("source_text", "interpretation"):
+            self.assertIn(field, full["confirmed_unscored"][0])
+            self.assertEqual(compact["confirmed_unscored"][0][field],
+                             full["confirmed_unscored"][0][field])
+
+    def test_cli_summary_compact_preserves_projection_and_reduces_bytes(self):
+        state = self._health_repo()
+        argv = [sys.executable, str(Path(log.__file__).resolve()), "--state-dir", str(state)]
+        full_run = subprocess.run([*argv, "summary"], capture_output=True, check=True)
+        compact_run = subprocess.run([*argv, "summary", "--compact"],
+                                     capture_output=True, check=True)
+        full = json.loads(full_run.stdout)
+        compact = json.loads(compact_run.stdout)
+        expected = log.compact_summary({**full, "checked_at": compact["checked_at"]})
+        self.assertEqual(compact, expected)
+        self.assertEqual(compact["snapshot"], full["snapshot"])
+        self.assertIn("rationale", full["pending"][0])
+        self.assertNotIn("rationale", compact["pending"][0])
+        self.assertLess(len(compact_run.stdout), len(full_run.stdout))
 
     def test_due_for_followup_flags_overdue_pending_with_elapsed_hours(self):
         """过期未定论的预测必须第一眼可见，不用从 rationale 里人工拼。
