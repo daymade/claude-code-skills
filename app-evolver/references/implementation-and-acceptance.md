@@ -212,7 +212,7 @@ the name of continuity. Keep a valid same-task refinement as the healthy control
 For a static page whose default link is rewritten after initialization, waiting
 for that link only verifies the initialized path. An early real-user click is a
 separate observation; do not relabel a product race as a harness problem without
-evidence. Use the bounded [state-pivot replay](../evals/learning-and-comparison.md#independent-replay-task-pivot-and-return).
+evidence.
 
 ## Deliver at the declared boundary
 
