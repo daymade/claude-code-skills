@@ -252,6 +252,11 @@ For build reuse across source refs or a target redeployed during acceptance, loa
 [delivery verification procedure](frontend-visual-qa/references/delivery-verification.md).
 For nested zoomable workspaces, use its
 [journey and state matrix](frontend-visual-qa/references/journey-and-page-contracts.md#journey-and-state-matrix).
+For repeated journey positions or measured wheel sensitivity, use its
+[route contract](frontend-visual-qa/references/journey-and-page-contracts.md#route-and-addressability)
+and [received-input recipe](frontend-visual-qa/references/browser-driving-and-observation-traps.md#wheel-requests-are-not-browser-received-wheel-events).
+Before drawing page relationships or a click-through journey, use
+[the topology/visit distinction](data-visualization-discipline/references/visual-form-selection.md#关系拓扑与有序旅程).
 For live status or attention filters, follow its
 [cross-view attention journey](frontend-visual-qa/references/journey-and-page-contracts.md#operational-attention-across-views).
 For embedded-reader sizing, surrounding navigation, overlays, zoom, reading/return,
