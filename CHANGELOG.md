@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **claude-switch-models-setup** (`daymade-claude-code` v4.31.1 → v4.31.2): Point all six highspeed template model fields at `k3.1-pro-highspeed` while preserving credential placeholders and context settings. Change type: bounded runtime-template correction.
+
 - **tibo-reset-codex** (v2.4.0 → v2.5.0): Add backward-compatible `summary --compact` as a projection of the full result, preserving routine decision fields, evidence references, account and snapshot state while omitting declared long narratives; retain full-summary and followup behavior. Freeze the pre-compact reader in compatibility tests to catch full/followup drift. Record successful community-source deployment, full group name, talker, time/seq cursor and media coverage in local handoff, with private talker values kept out of the public Skill. Verified with 170 Python and 3 Node tests plus real-ledger field equivalence; compact output is 37.49% smaller. Change types: additive capability and factual handoff correction.
 - **macos-watchdog** (`daymade-macos` v1.26.0 → v1.26.1): Bind the ordinary entry, permitted manual activation and lifecycle coverage before trigger selection; helper-only rounds stay component-only evidence while explicitly manual requests keep their scope. Change type: bounded decision-entry guidance addition.
 
