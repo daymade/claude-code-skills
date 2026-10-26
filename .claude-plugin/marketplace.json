@@ -1388,7 +1388,17 @@
       "name": "xzai-me-media",
       "description": "Generate Seedance videos (10s/15s/30s), Seedream 5.0 images, TTS speech and OpenAI-compatible chat via the xzai.me API. Zero-dependency CLI, async polling, local download. 视频生成/图片生成/语音合成技能。",
       "source": "./xzai-me-media",
-      "strict": false
+      "strict": false,
+      "version": "1.0.0",
+      "category": "media",
+      "keywords": [
+        "video-generation",
+        "seedance",
+        "seedream",
+        "tts",
+        "image-generation",
+        "media"
+      ]
     }
   ]
 }
