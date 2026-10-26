@@ -292,6 +292,9 @@ catalogued in the same reference at §4–§5.
 Before reading an overflowing `<pre>` with horizontal wheel input, load the
 [fresh input-target check](references/browser-driving-and-observation-traps.md#horizontal-pre-reading-needs-a-fresh-input-target)
 and inspect the affected text positions rather than accepting scroll movement alone.
+Before judging wheel-driven pan/zoom sensitivity, load the same reference's
+**Wheel requests are not browser-received wheel events** recipe; compare movement
+with received input rather than the harness request.
 
 Load [references/history-derived-checklist.md](references/history-derived-checklist.md)
 for the core visual/responsive defect catalog and standards-backed checks.
@@ -408,6 +411,8 @@ For UI refactors, category splits, or navigation changes, first apply the
 [references/journey-and-page-contracts.md](references/journey-and-page-contracts.md).
 Derive affected journeys from the immutable pre-change version, then verify them
 on the current target; the new navigation alone cannot define what survived.
+For refresh/deep-link/return checks, use that reference's **Route And Addressability**
+recipe, including repeated occurrences when the product promises to retain them.
 
 **A visible signifier is not proof of behavior — trigger every relevant control
 whose side effects fit the explicit action authority, confirm the response, and
