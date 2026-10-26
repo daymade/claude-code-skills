@@ -57,6 +57,20 @@ def current_only_bundle(events):
     }
 
 
+def four_account_replay():
+    """Synthetic identities preserve the 2026-10-26 failure's observed shape."""
+    transitions = []
+    for ref, before_used, after_used in (("replay-a", 2, 3), ("replay-b", 100, 0),
+                                         ("replay-c", 0, 0), ("replay-d", 100, 0)):
+        item = natural_bundle()["transitions"][0]
+        item["before"].update(account_ref=ref, checked_at_utc="2026-10-26T04:43:19Z",
+                              used_percent=before_used, reset_at_utc="2026-11-01T06:10:00Z")
+        item["after"].update(account_ref=ref, checked_at_utc="2026-10-26T06:29:49Z",
+                             used_percent=after_used, reset_at_utc="2026-11-02T06:08:00Z")
+        transitions.append(item)
+    return {"transitions": transitions, "events": []}
+
+
 def usage_payload(account_ref="a1b2c3d4"):
     return {
         "status": "ok",
@@ -86,6 +100,221 @@ def evaluate_records(records, message=None):
 
 
 class ResetAttributionTests(unittest.TestCase):
+    def test_four_account_replay_keeps_aggregate_and_per_account_distinct(self):
+        bundle = four_account_replay()
+        result = attr.evaluate(bundle)
+        self.assertEqual(result["classification"], "unknown")
+        self.assertEqual(result["claim_gate"][attr.CLAIM_MULTI_ACCOUNT], "block")
+        self.assertEqual(result["observations"]["cross_account_window_changes"], "observed")
+        self.assertEqual(result["observations"]["cross_account_near_simultaneous_reset"], "unknown")
+        self.assertEqual(result["claim_gate"][attr.CLAIM_ALL_ACCOUNTS], "block")
+        for item in bundle["transitions"]:
+            single = attr.evaluate({"transitions": [item], "events": []})
+            self.assertEqual(single["claim_gate"][attr.CLAIM_SAME_ACCOUNT], "block")
+
+    def test_near_simultaneous_requires_compatible_narrow_intervals(self):
+        bundle = four_account_replay()
+        bundle["timing_evidence"] = {"max_span_seconds": 7200, "source_ref": "synthetic-sampling-contract"}
+        # The original asynchronous query rounds remain a healthy comparison.
+        self.assertEqual(attr.evaluate(bundle)["claim_gate"][attr.CLAIM_CROSS_ACCOUNT], "allow")
+        for variant in ("different_day", "wide_overlap", "reversed_time"):
+            bad = copy.deepcopy(bundle)
+            if variant == "different_day":
+                for endpoint in ("before", "after"):
+                    bad["transitions"][-1][endpoint]["checked_at_utc"] = (
+                        "2026-10-27T04:43:19Z" if endpoint == "before" else "2026-10-27T06:29:49Z")
+            elif variant == "wide_overlap":
+                for item in bad["transitions"]:
+                    item["before"]["checked_at_utc"] = "2026-10-01T00:00:00Z"
+            else:
+                for item in bad["transitions"]:
+                    item["before"]["checked_at_utc"] = "2026-10-26T07:00:00Z"
+            with self.subTest(variant=variant):
+                result = attr.evaluate(bad)
+                self.assertEqual(result["claim_gate"][attr.CLAIM_MULTI_ACCOUNT], "block")
+                self.assertEqual(result["claim_gate"][attr.CLAIM_CROSS_ACCOUNT], "block")
+                self.assertEqual(result["observations"]["cross_account_near_simultaneous_reset"], "unknown")
+
+    def test_timing_evidence_missing_null_and_malformed_do_not_invent_resolution(self):
+        bundle = four_account_replay()
+        for value in (None,):
+            bundle["timing_evidence"] = value
+            result = attr.evaluate(bundle)
+            self.assertEqual(result["claim_gate"][attr.CLAIM_MULTI_ACCOUNT], "block")
+            self.assertEqual(result["observations"]["cross_account_window_changes"], "observed")
+            self.assertIsNone(result["timing_evidence"])
+        for value in ({}, {"max_span_seconds": 300}, {"source_ref": "source"},
+                      {"max_span_seconds": None, "source_ref": "source"},
+                      {"max_span_seconds": 300, "source_ref": ""},
+                      {"max_span_seconds": 300, "source_ref": None},
+                      {"max_span_seconds": 0, "source_ref": "source"},
+                      {"max_span_seconds": True, "source_ref": "source"}, "300"):
+            with self.subTest(value=value), self.assertRaises(attr.AttributionError):
+                attr.evaluate({**bundle, "timing_evidence": value})
+
+    def test_bounded_direct_events_can_narrow_wide_observation_intervals(self):
+        bundle = four_account_replay()
+        bundle["timing_evidence"] = {"max_span_seconds": 300, "source_ref": "synthetic-direct-event-intervals"}
+        for item in bundle["transitions"]:
+            item["before"]["checked_at_utc"] = "2026-10-01T00:00:00Z"
+        for item in bundle["transitions"][1::2]:
+            bundle["events"].append({"kind": "account_reset_observed",
+                "account_ref": item["after"]["account_ref"],
+                "interval_start_utc": "2026-10-26T06:08:00Z",
+                "interval_end_utc": "2026-10-26T06:10:00Z"})
+        self.assertEqual(attr.evaluate(bundle)["claim_gate"][attr.CLAIM_MULTI_ACCOUNT], "allow")
+        # Query/confirmation timestamps cannot substitute for occurrence bounds.
+        for event in bundle["events"]:
+            event.pop("interval_start_utc")
+            event.pop("interval_end_utc")
+            event["checked_at_utc"] = "2026-10-26T06:10:00Z"
+        self.assertEqual(attr.evaluate(bundle)["claim_gate"][attr.CLAIM_MULTI_ACCOUNT], "block")
+
+    def test_independent_banked_redemptions_do_not_prove_platform_reset(self):
+        bundle = four_account_replay()
+        bundle["timing_evidence"] = {"max_span_seconds": 7200, "source_ref": "synthetic-sampling-contract"}
+        bundle["transitions"] = bundle["transitions"][1::2]
+        bundle["events"] = [{"kind": "banked_redeem", "account_ref": item["after"]["account_ref"],
+                             "checked_at_utc": item["after"]["checked_at_utc"]}
+                            for item in bundle["transitions"]]
+        result = attr.evaluate(bundle)
+        self.assertEqual(result["classification"], "banked_redeem")
+        self.assertEqual(result["claim_gate"][attr.CLAIM_SAME_ACCOUNT], "allow")
+        self.assertEqual(result["claim_gate"][attr.CLAIM_MULTI_ACCOUNT], "block")
+        # An unrelated earlier redemption does not explain this interval.
+        for event in bundle["events"]:
+            event.update(interval_start_utc="2026-10-01T00:00:00Z",
+                         interval_end_utc="2026-10-01T00:01:00Z")
+        self.assertEqual(attr.evaluate(bundle)["claim_gate"][attr.CLAIM_MULTI_ACCOUNT], "allow")
+
+    def test_selected_account_claims_do_not_inherit_the_last_account(self):
+        bundle = four_account_replay()
+        refs = [item["after"]["account_ref"] for item in bundle["transitions"]]
+        bundle["selected_account_refs"] = refs
+        bundle["events"] = [{"kind": "account_reset_observed", "account_ref": refs[-1],
+                             "checked_at_utc": "2026-10-26T06:30:00Z"}]
+        messages = ("四个账号都重置了。", "4个账号都重置了。", "我们所有账号都重置了。",
+                    "这四个账号都重置了。", "我们全部账户已重置。")
+        partial = attr.evaluate(bundle)
+        self.assertEqual(partial["claim_gate"][attr.CLAIM_SAME_ACCOUNT], "allow")
+        for message in messages:
+            with self.subTest(message=message):
+                claims = attr.claims_in_message(message)
+                self.assertEqual([item["claim"] for item in claims], [attr.CLAIM_SELECTED_ACCOUNTS])
+                self.assertFalse(attr.claim_allowed(partial, claims[0]))
+        bundle["events"] = [{"kind": "account_reset_observed", "account_ref": ref,
+                             "checked_at_utc": "2026-10-26T06:30:00Z"} for ref in refs]
+        complete = attr.evaluate(bundle)
+        for message in messages:
+            self.assertTrue(attr.claim_allowed(complete, attr.claims_in_message(message)[0]))
+        self.assertEqual(complete["claim_gate"][attr.CLAIM_ALL_ACCOUNTS], "block")
+        self.assertFalse(attr.claim_allowed(complete, attr.claims_in_message("五个账号都重置了。")[0]))
+
+    def test_selected_account_roster_missing_empty_duplicate_and_partial_fail_closed(self):
+        bundle = four_account_replay()
+        refs = [item["after"]["account_ref"] for item in bundle["transitions"]]
+        bundle["events"] = [{"kind": "account_reset_observed", "account_ref": ref,
+                             "checked_at_utc": "2026-10-26T06:30:00Z"} for ref in refs]
+        for value in (None,):
+            bundle["selected_account_refs"] = value
+            self.assertEqual(attr.evaluate(bundle)["claim_gate"][attr.CLAIM_SELECTED_ACCOUNTS], "block")
+        del bundle["selected_account_refs"]
+        self.assertEqual(attr.evaluate(bundle)["claim_gate"][attr.CLAIM_SELECTED_ACCOUNTS], "block")
+        for value in ([], [refs[0], refs[0]], [""], [None], "replay-a"):
+            with self.subTest(value=value), self.assertRaises(attr.AttributionError):
+                attr.evaluate({**bundle, "selected_account_refs": value})
+        for variant in ("missing_account", "duplicate_observation", "anonymous", "missing_identity", "missing_after"):
+            bad = copy.deepcopy(bundle)
+            bad["selected_account_refs"] = refs
+            if variant == "missing_account":
+                bad["transitions"].pop(0)
+            elif variant == "duplicate_observation":
+                bad["transitions"].append(copy.deepcopy(bad["transitions"][0]))
+            elif variant == "anonymous":
+                bad["transitions"][0]["after"]["identity"] = "anonymous"
+            elif variant == "missing_identity":
+                del bad["transitions"][0]["after"]["identity"]
+            else:
+                del bad["transitions"][0]["after"]
+            with self.subTest(variant=variant):
+                if variant == "missing_after":
+                    with self.assertRaises(attr.AttributionError):
+                        attr.evaluate(bad)
+                else:
+                    self.assertEqual(attr.evaluate(bad)["claim_gate"][attr.CLAIM_SELECTED_ACCOUNTS], "block")
+        for value in (None, ""):
+            bad = copy.deepcopy(bundle)
+            bad["selected_account_refs"] = refs
+            bad["transitions"][0]["after"]["checked_at_utc"] = value
+            with self.subTest(time=value), self.assertRaises(attr.AttributionError):
+                attr.evaluate(bad)
+        bad = copy.deepcopy(bundle)
+        bad["selected_account_refs"] = refs
+        del bad["transitions"][0]["after"]["checked_at_utc"]
+        with self.assertRaises(attr.AttributionError):
+            attr.evaluate(bad)
+
+    def test_selected_scope_does_not_hide_a_separate_platform_claim(self):
+        bundle = four_account_replay()
+        refs = [item["after"]["account_ref"] for item in bundle["transitions"]]
+        bundle["selected_account_refs"] = refs
+        bundle["events"] = [{"kind": "account_reset_observed", "account_ref": ref,
+                             "checked_at_utc": "2026-10-26T06:30:00Z"} for ref in refs]
+        selected_only = attr.evaluate(bundle)
+        mixed = ("我们四个账号都重置了并且平台所有账号也都重置了。",
+                 "我们的四个账号和所有付费账号均已重置。")
+        for message in mixed:
+            with self.subTest(message=message):
+                claims = attr.claims_in_message(message)
+                self.assertEqual([item["claim"] for item in claims],
+                                 [attr.CLAIM_SELECTED_ACCOUNTS, attr.CLAIM_ALL_ACCOUNTS])
+                self.assertEqual([item["claim"] for item in claims
+                                  if not attr.claim_allowed(selected_only, item)], [attr.CLAIM_ALL_ACCOUNTS])
+        for message in ("我们所有账号都重置了。", "我们的四个账号都重置了。"):
+            with self.subTest(message=message):
+                claims = attr.claims_in_message(message)
+                self.assertEqual([item["claim"] for item in claims], [attr.CLAIM_SELECTED_ACCOUNTS])
+                self.assertTrue(all(attr.claim_allowed(selected_only, item) for item in claims))
+        bundle["events"].append({"kind": "official_global_reset", "account_ref": None,
+                                 "scope": "all_paid", "checked_at_utc": "2026-10-26T06:30:00Z"})
+        both_scopes = attr.evaluate(bundle)
+        for message in mixed:
+            self.assertTrue(all(attr.claim_allowed(both_scopes, item)
+                                for item in attr.claims_in_message(message)))
+
+    def test_selected_scope_keeps_independent_current_account_and_each_count(self):
+        refs = ["synthetic-a", "synthetic-b", "synthetic-c", "synthetic-d"]
+        observations = [current_only_bundle([])["transitions"][0] for _ in range(5)]
+        for ref, item in zip(refs + ["synthetic-e"], observations):
+            item["after"]["account_ref"] = ref
+        bundle = {"transitions": observations, "selected_account_refs": refs,
+                  "events": [{"kind": "account_reset_observed", "account_ref": ref,
+                              "source_ref": "synthetic-confirmation"} for ref in refs]}
+        result = attr.evaluate(bundle)
+        self.assertEqual(result["claim_gate"][attr.CLAIM_SELECTED_ACCOUNTS], "allow")
+        self.assertEqual(result["claim_gate"][attr.CLAIM_SAME_ACCOUNT], "block")
+        selected = attr.claims_in_message("这四个账号已重置。")
+        self.assertTrue(all(attr.claim_allowed(result, item) for item in selected))
+        current = attr.claims_in_message("当前账号已重置。")
+        self.assertEqual([item["claim"] for item in current], [attr.CLAIM_SAME_ACCOUNT])
+        self.assertFalse(attr.claim_allowed(result, current[0]))
+        mixed = attr.claims_in_message("这四个账号已重置且当前账号已重置。")
+        self.assertEqual([item["claim"] for item in mixed],
+                         [attr.CLAIM_SELECTED_ACCOUNTS, attr.CLAIM_SAME_ACCOUNT])
+        self.assertEqual([item["claim"] for item in mixed if not attr.claim_allowed(result, item)],
+                         [attr.CLAIM_SAME_ACCOUNT])
+        counts = attr.claims_in_message("四个账号已重置且五个账号已重置。")
+        self.assertEqual([item["account_count"] for item in counts], [4, 5])
+        self.assertEqual([item["account_count"] for item in counts if not attr.claim_allowed(result, item)], [5])
+        # Repeated valid quantities remain valid, and independent current proof
+        # can satisfy its own clause without changing the selected roster.
+        repeated = attr.claims_in_message("四个账号已重置且这4个账号已重置。")
+        self.assertTrue(all(attr.claim_allowed(result, item) for item in repeated))
+        bundle["events"].append({"kind": "account_reset_observed", "account_ref": "synthetic-e",
+                                 "source_ref": "synthetic-confirmation-e"})
+        complete = attr.evaluate(bundle)
+        self.assertTrue(all(attr.claim_allowed(complete, item) for item in mixed))
+
     def test_real_failure_shape_is_window_change_not_reset(self):
         result = attr.evaluate(load_failure_bundle())
         self.assertEqual(result["classification"], "unknown")
@@ -371,7 +600,8 @@ class ResetAttributionTests(unittest.TestCase):
             transition["before"]["reset_at_utc"] = future
             transition["after"]["reset_at_utc"] = "2026-10-17T13:30:00Z"
             transitions.append(transition)
-        result = attr.evaluate({"transitions": transitions, "events": []})
+        timing = {"max_span_seconds": 7200, "source_ref": "synthetic-sampling-contract"}
+        result = attr.evaluate({"transitions": transitions, "events": [], "timing_evidence": timing})
         self.assertEqual(result["claim_gate"][attr.CLAIM_MULTI_ACCOUNT], "allow")
         self.assertEqual(result["claim_gate"][attr.CLAIM_CROSS_ACCOUNT], "allow")
 
@@ -381,7 +611,7 @@ class ResetAttributionTests(unittest.TestCase):
             transition["before"]["account_ref"] = ref
             transition["after"]["account_ref"] = ref
             natural_two.append(transition)
-        weaker = attr.evaluate({"transitions": natural_two, "events": []})
+        weaker = attr.evaluate({"transitions": natural_two, "events": [], "timing_evidence": timing})
         self.assertEqual(weaker["claim_gate"][attr.CLAIM_MULTI_ACCOUNT], "block")
         self.assertEqual(weaker["claim_gate"][attr.CLAIM_CROSS_ACCOUNT], "allow")
 
@@ -411,8 +641,9 @@ class ResetAttributionTests(unittest.TestCase):
             ]}},
         ]
         result = evaluate_records(records, "观测到大范围静默重置。")
-        self.assertEqual(result["claim_gate"][attr.CLAIM_MULTI_ACCOUNT], "allow")
-        self.assertFalse(result["blocked"])
+        self.assertEqual(result["claim_gate"][attr.CLAIM_MULTI_ACCOUNT], "block")
+        self.assertEqual(result["observations"]["cross_account_window_changes"], "observed")
+        self.assertTrue(result["blocked"])
 
     def test_banked_reverse_order_confirmation(self):
         records = [
@@ -487,7 +718,9 @@ class ResetAttributionTests(unittest.TestCase):
             transitions.append(transition)
             events.append({"kind": "account_reset_observed", "account_ref": ref,
                            "checked_at_utc": "2026-10-17T12:50:00Z"})
-        result = attr.evaluate({"transitions": transitions, "events": events})
+        result = attr.evaluate({"transitions": transitions, "events": events,
+                               "timing_evidence": {"max_span_seconds": 7200,
+                                                   "source_ref": "synthetic-sampling-contract"}})
         claims = attr.claims_in_message("观测到大范围静默重置。")
         self.assertEqual([c["claim"] for c in claims], [attr.CLAIM_MULTI_ACCOUNT])
         self.assertEqual(result["claim_gate"][attr.CLAIM_MULTI_ACCOUNT], "allow")
