@@ -591,6 +591,34 @@
         "Accepts honest Execution unknown and useful localized failure/Retry while preserving original reading; does not invent idle, completed or declared responsibility",
         "Limits any verified claim to observed synthetic fixture states and leaves unavailable runtime/rendering or real user adoption unknown"
       ]
+    },
+    {
+      "id": 40,
+      "name": "branch-replay-reader-meaning-and-necessary-legend",
+      "prompt": "Audit only two synthetic diagram inventories for the same replay. The reader must tell which saved attempt is being inspected, distinguish stored-but-unread records from events that have not happened, and choose where to continue. The data contract says both continuations are already stored, the two buttons choose alternative views, and neither choice scores performance. Inventory A labels nodes root/A1/B1, uses buttons P and Q, says A1 + B1, and captions its view Only the initial workspace and first attempt are revealed while an extra orange continuation is visible. Its checks confirm all labels exist and both buttons change aria-pressed. Inventory B names the initial workspace and saved attempts, labels buttons View the first attempt's successor and View another attempt from the initial workspace, and its visible branch matches the selected action. In B the only legend says The outlined node is the current viewing start; dashed branches are saved records not yet read. A minimal B variant removes that legend but leaves dashed branches unexplained. An attributed original source still says root and A1. Give separate verdicts for A, B and the minimal B variant. No runnable page or screenshot is supplied; do not invent a visual test.",
+      "expected_output": "Rejects A's contradictory state and unexplained operational symbols despite working buttons. B is semantically consistent on the supplied inventory, with live pixels/interactions unverified. Keeps B's decision-bearing legend, identifies the minimal variant's ambiguity, and preserves attributed original source text.",
+      "files": [],
+      "expectations": [
+        "Identifies the visible extra continuation contradicting A's claimed revealed state rather than passing on aria-pressed or string presence",
+        "Explains the chosen object, alternative-view behavior and stored-but-unread status without inferring a winner, a score or newly generated records",
+        "Retains or equivalently encodes B's viewing-start and dashed-branch meanings; does not reward removing the necessary legend merely for fewer words",
+        "Keeps the attributed source quotation unchanged and does not apply an identifier blacklist to originals",
+        "Limits B's positive judgment to supplied semantic consistency; unavailable rendering, real clicks and human acceptance remain unverified"
+      ]
+    },
+    {
+      "id": 41,
+      "name": "whole-network-local-neighborhood-and-inspector-continuity",
+      "prompt": "Audit only a supplied research-interface journey. A reader who knows no paper name needs to find shared references and different connected areas before choosing a work. The reference provides an overview and selected-work inspector. Our candidate correctly shows neighbors after the evaluator supplies a known work, and all source links open; the author calls that whole-site parity. A revised inventory exposes an overview and selected-work inspector. On entering Selected neighborhood, that inspector drops the current work's identity, summary and explicit detail/comparison actions; a central SVG node still links to its detail, but the novice did not discover it and returned to the overview. In the overview circles mean methods and squares benchmarks; the neighborhood draws every work as a circle, including named benchmark neighbors. State the failed reader tasks, healthy controls and smallest affected follow-up. No runnable app is supplied.",
+      "expected_output": "Rejects local supplied-name success as whole-collection orientation proof, flags cross-view shape inconsistency and the loss of explicit selected-object actions, recognizes that the central link still provides a route, and keeps the correction bounded to the reader task rather than requiring the reference's exact graph or a redesign.",
+      "files": [],
+      "expectations": [
+        "Separates unknown-name global orientation from a known work's local citation task; does not use node totals or working links as parity evidence",
+        "Flags benchmark circles in the neighborhood as a cross-view semantic inconsistency against the supplied legend",
+        "Describes disappearing explicit actions as discovery friction while acknowledging the existing central detail link; does not invent an absolute navigation block",
+        "Preserves the valid known-work neighborhood and source-link controls, and asks for only the affected overview-to-neighborhood/detail-return replay",
+        "Leaves live rendering and reader benefit unverified and does not demand copied graph styling, every taxonomy field or an unrelated feature"
+      ]
     }
   ]
 }

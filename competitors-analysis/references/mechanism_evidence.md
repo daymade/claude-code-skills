@@ -86,3 +86,21 @@ recovery or no improvement would narrow or overturn the recommendation.
 For a standalone source review, omit snapshot B and the our-product judgment;
 source facts about snapshot A still stand. Missing comparison context is not a
 reason to stop that review or to execute its status command.
+
+### Synthetic control: a neighborhood is not a collection overview
+
+The requested job is to orient a reader who knows no work's name: identify
+shared references and different connected areas, then choose something to read.
+The reference shows a collection-wide network with a selected-work inspector.
+Our tested path starts from a supplied work and draws only its direct neighbors.
+Both paths correctly open their source links.
+
+The supplied-work path proves local exploration, not the unknown-name job.
+Compare that job through the actual overview or another existing entry before
+claiming equivalence. Do not require the reference's force layout, node count or
+every taxonomy dimension: a different overview may serve the same decision.
+
+Healthy control: if the requested job is only to inspect a known work's direct
+citations, the neighborhood can be sufficient. Keep this scoped success rather
+than declaring the whole product deficient. Source-only observations still do
+not establish that either interface improves real reader outcomes.

@@ -195,6 +195,25 @@ does not classify a mutation or authorize a replay. The acceptance owner uses
 the app's available traces and receiving view; missing access remains an explicit
 evidence gap, not a reason to invent a new request or generic allowance.
 
+## Task pivots and return context
+
+When changing discovery navigation, distinguish refining the current task from
+starting another task. Preserve state by its meaning, not by copying the whole
+query string. Trace the actual caller before choosing which conditions survive.
+
+| Transition | Required observation |
+|---|---|
+| Refine a method search with another compatible condition | Existing query, compatible filters and selected comparisons survive. |
+| From one method's evaluated benchmark, request other benchmarks with the same metric | The new metric task can find its intended candidates; the old method-name query and method-only predicates do not silently exclude them. |
+| Return from a detail or original to the previous exploration | Restore the promised object identity, original predicates and position independently of the new task's constraints. |
+
+Do not universally clear queries on navigation or preserve every parameter in
+the name of continuity. Keep a valid same-task refinement as the healthy control.
+For a static page whose default link is rewritten after initialization, waiting
+for that link only verifies the initialized path. An early real-user click is a
+separate observation; do not relabel a product race as a harness problem without
+evidence.
+
 ## Deliver at the declared boundary
 
 Read back the result at the consumer: persisted data, real receiving view,
