@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-watchdog** (`daymade-macos` v1.26.0 → v1.26.1): Bind the ordinary entry, permitted manual activation and lifecycle coverage before trigger selection; helper-only rounds stay component-only evidence while explicitly manual requests keep their scope. Change type: bounded decision-entry guidance addition.
+
 - **qa-expert** (v1.2.6 → v1.2.7): Exercise wrapper argument forwarding and retained compatibility aliases through the actual entry; verify dry-run propagation or explicit rejection before effects while preserving CLI argument and early-exit contracts. Change type: bounded acceptance-evidence correction.
 
 - **data-visualization-discipline** (v1.1.5 → v1.1.6): Remove the stale layer total and a redundant page total from journey guidance; retain the complete criteria and example sequence. Change type: deterministic documentation correction.

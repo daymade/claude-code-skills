@@ -190,8 +190,13 @@ jobs:
       # Registered suites stay free of pip/npm dependencies, but may exercise a
       # production CLI when this job provisions it explicitly. prior-work-retrieval
       # delegates filesystem search to ripgrep and must fail visibly when it is absent.
+      #
+      # Prefer official HTTPS mirrors and bound the complete APT transfer: a
+      # slow-but-alive response can evade per-request timeouts. Exercise the
+      # fixture-only deadline contract before using this one-shot hosted VM.
       - name: Install registered-suite runtime tools
         run: |
+          scripts/ci/apt_install_bounded.sh --self-test
           packages=()
           if ! command -v rg >/dev/null 2>&1; then
             packages+=(ripgrep)
@@ -200,11 +205,7 @@ jobs:
             packages+=(ffmpeg)
           fi
           if [ "${#packages[@]}" -gt 0 ]; then
-            # Bound mirror retries on runner images that still carry apt defaults.
-            apt_options=(-o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15)
-            apt-config "${apt_options[@]}" dump Acquire::Retries Acquire::http::Timeout Acquire::https::Timeout
-            sudo apt-get "${apt_options[@]}" update
-            sudo apt-get "${apt_options[@]}" install -y "${packages[@]}"
+            scripts/ci/apt_install_bounded.sh "${packages[@]}"
           fi
           rg --version
           ffmpeg -version
@@ -228,11 +229,13 @@ jobs:
       # The static HTML batch gate exercises the actual converter; schema-only
       # fixtures cannot establish conversion behavior. Keep its CLI dependency
       # explicit and its selected stdlib suite separate from unrelated tests.
+      # Same bounded preparation as the runtime tools above — this reuses the mirror
+      # list that step already rewrote on the same one-shot VM (the helper re-checks
+      # the reference shape and is a no-op rewrite when the list is already official).
       - name: HTML reader pilot and batch safety
         if: ${{ !cancelled() }}
         run: |
-          sudo apt-get update
-          sudo apt-get install -y pandoc
+          scripts/ci/apt_install_bounded.sh pandoc
           pandoc --version
           python3 -m unittest discover -s daymade-docs/doc-to-markdown/scripts -p test_reader_pilot_gate.py
 
