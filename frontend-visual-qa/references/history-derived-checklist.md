@@ -217,6 +217,17 @@ same failure class have been examined; do not expand into unrelated workflows.
    confirmed needless copy only within source authority, then inspect the
    resulting target under its separate lifecycle authority.
 
+For a density/layout comparison, the auditor records which task-relevant objects
+and comparison fields are visible together in the initial working viewport, with
+opened before/after screenshots. Hold real data, conditional state, filters/order,
+viewport, zoom and required text size constant; otherwise leave the density
+benefit unknown. Include priorities required by the task contract, such as
+imminent deadlines, and inspect whether the reader can identify and compare them
+with their values, warnings and actions intact. Do not credit hidden risk or
+smaller text as reclaimed space. Judge against that task, not a target row count.
+Evaluate an authorized business-scope or priority change under its own contract;
+different object membership alone does not establish a layout regression.
+
 Keep necessary labels, units, dangerous-state warnings and unfamiliar controls
 at the point of use. Repeated labels can be necessary in independently scrolling
 or independently consumed views; shared, visibly aligned regions may need only
