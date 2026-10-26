@@ -198,6 +198,20 @@ python3 "$PEER_SKILL_ROOT/scripts/peer.py" send '<original-sender>' reply.txt \
 python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord finish --message-id '<original-id>'
 ```
 
+原生工具覆盖原发送者时，回复仍走 `coord prepare` → 原生发送 → `coord commit`，不改走脚本 `send`：
+
+```bash
+# 前置：已保存完整原信封；action_needed 且判断确需回信。
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord receive received.txt
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord prepare '<original-sender>' reply.txt \
+  --kind reply --in-reply-to '<original-id>'
+# 只有 prepared：把输出的 body 原样交给原生 SendMessage，然后记录本次 prepared id。
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord commit \
+  --message-id '<prepared-id>' --outcome accepted
+```
+
+`suppressed_closed_reply` 是发送前抑制，不是已回复；停止，不为该原请求继续派生动作。原生 `accepted` 仍只证明 transport 层；原问题处理完后才按上文 `finish`。
+
 正常收件处理完或问题已有后续证据解决时 finish；返回 `closed`，不证明业务完成。
 处理中的会话中断后先核对该消息的实际后续动作，再由参与者 finish；不凭
 `already_processing` 自动重做，也不将真正未完成的工作报为完成。
