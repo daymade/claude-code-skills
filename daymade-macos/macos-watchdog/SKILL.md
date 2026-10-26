@@ -11,6 +11,29 @@ description: >-
 
 # macOS Watchdog
 
+## Bind the ordinary entry before choosing a mechanism
+
+Before selecting event/periodic triggers, a transport, or a helper, record these
+constraints from the original request in the current task plan; do not create a
+separate document for a simple task:
+
+- **Ordinary entry:** where the user will actually start or use the work.
+- **Manual activation:** whether the request permits any extra command or setup
+  after delivery.
+- **Lifecycle:** whether the result covers a session, login, or machine, and
+  which owned components must start and stop with it.
+
+If the request explicitly limits the work to a manually run helper, an opt-in
+experiment, or a read-only design, preserve that scope. Otherwise, accept through
+the ordinary entry without unrequested manual activation. Reuse the existing
+session owner for session-bound components; use launchd for login/machine
+persistence rather than turning every automation request into a global watcher.
+
+A completed business round inside a helper alone is component-only evidence:
+leave the requested result unmet and continue authorized integration. Keep
+unauthorized or unobserved old-session takeover and other lifecycle coverage
+unknown; do not stop other tasks or bypass a host refusal to obtain acceptance.
+
 Select event or periodic triggers for the problem being observed, then apply the quiet-watchdog contract before remediation.
 
 Bind a watchdog's lifecycle to its premise state. When it cannot repair the
