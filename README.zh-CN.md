@@ -3385,6 +3385,14 @@ A 股行业投研工作流：全板块成分股 Top N 涨幅计算、公告窗�
 操作 Kimi 客户端，用已安装插件核对这组市场数据
 ```
 
+### **cookie-copy** - 复制 Chrome Cookie
+
+> **安装**：`claude plugin install cookie-copy@daymade-skills`
+
+在本机同一 Chrome 的 profile 间复制 Google 或 ChatGPT/OpenAI Cookie，保留目标备份与恢复入口，并验证 ChatGPT 预期账号。
+
+[操作说明](cookie-copy/SKILL.md)
+
 ### **tibo-reset-codex** - ChatGPT/Codex 额度重置速查
 
 > **安装**：`claude plugin install tibo-reset-codex@daymade-skills`

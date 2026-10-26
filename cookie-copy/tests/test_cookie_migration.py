@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-SCRIPT = Path(__file__).parents[1] / 'scripts/import-google-cookies.py'
+SCRIPT = Path(__file__).parents[1] / 'scripts/copy-cookies.py'
 spec = importlib.util.spec_from_file_location('cookie_migration', SCRIPT)
 migration = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(migration)
