@@ -576,7 +576,10 @@ That owner defines project-authorization recovery, credential-store selection an
 For Codex reset announcements or account quota questions, enter
 [tibo-reset-codex](tibo-reset-codex/SKILL.md). Follow its
 [account usage SOP](tibo-reset-codex/references/account-usage.md) for authentication,
-per-account verification, adjacent-reset attribution and browser restoration. Treat
+per-account verification, adjacent-reset attribution and browser restoration.
+For unused quota, reset gains or avoidable waste, follow
+[waste and added capacity](tibo-reset-codex/references/account-usage.md#浪费与新增容量).
+Treat
 [query_usage.py](tibo-reset-codex/scripts/query_usage.py) as the executable authority
 for query parameters, supported response fields and exit behavior;
 [reset_attribution.py](tibo-reset-codex/scripts/reset_attribution.py) owns mechanical
