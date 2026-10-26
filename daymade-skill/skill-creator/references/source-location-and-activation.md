@@ -52,6 +52,20 @@ For an approved independent Fleet clone, follow the source owner's
 Its ordinary online check uses the deployed owner inventory without `--inventory`;
 the exported-evidence option above remains for offline evidence checks.
 
+**Before releasing an affected executable entry**, run a minimal safe command through
+its declared distribution form, such as a source-backed symlink or installed package;
+include a path containing spaces when that form is supported. Check both the exit
+status and the expected, meaningful output: exit 0 with empty output is not success
+when the command promises help, JSON or another result. Running only the source path
+does not test entry-point detection or path resolution through the installed form.
+Use a temporary representative entry before publication when the actual installation
+cannot yet contain the candidate; do not claim that probe proves installation.
+
+After release and synchronization, run the applicable task smoke through the actual
+installed entry when local use is in scope. Keep source, distribution-form, installed
+identity and business-result evidence distinct. Reuse unchanged evidence; this recipe
+does not require a new test suite, browser or live login for an instruction-only Skill.
+
 At delivery, run the read-only check against the requested Skill name and declared source owner, not merely whatever happens to appear in a catalog:
 
 ```bash

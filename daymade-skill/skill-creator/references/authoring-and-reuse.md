@@ -213,6 +213,16 @@ existing plan: user entry → executable owner/upstream → home of our verified
 choices; this is not a new approval gate or mandatory document. For a narrow edit
 that leaves ownership unchanged, retain that mapping and proceed.
 
+**Do not infer ownership from the first caller.** Compare the capability's supported
+inputs, outputs and lifecycle independently of the business task that first needed
+it. A stable, independently invoked workflow can belong to a standalone or shared
+owner; leave each caller's business acceptance with that caller. For example,
+copying a browser login and verifying its identity can serve several workflows;
+a quota-query caller still owns verifying that account's quota. Conversely, keep
+an internal helper with its existing owner when it has no independently supported
+job or distinct invocation, permission or update boundary. Apply this distinction
+within the ownership decision above, without adding another approval or document.
+
 Only when no suitable owner exists, or a distinct invocation/lifecycle boundary is
 justified, build a standalone skill. The evidence that permits an independent skill
 must also prevent over-merging: an unrelated permission or lifecycle remains separate.
