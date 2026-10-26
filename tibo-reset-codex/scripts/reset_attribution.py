@@ -27,6 +27,7 @@ CLAIM_SAME_ACCOUNT = "same_account_reset"
 CLAIM_MULTI_ACCOUNT = "multi_account_reset"
 CLAIM_CROSS_ACCOUNT = "cross_account_observation"
 CLAIM_ALL_ACCOUNTS = "all_accounts"
+CLAIM_SELECTED_ACCOUNTS = "selected_accounts_reset"
 DIRECT_EVENT_KINDS = {"account_reset_observed", "banked_redeem", "official_global_reset"}
 
 
@@ -193,28 +194,123 @@ def official_global_events(transition, events):
             and overlaps(item, transition.get("before"), transition.get("after"))]
 
 
-def cross_account_window_changes(transitions, events):
+def has_banked_redemption(transition, events):
+    after = transition.get("after")
+    return any(item["kind"] == "banked_redeem" and target_matches(item, after)
+               and overlaps(item, transition.get("before"), after) for item in events)
+
+
+def transition_interval(transition, events):
+    """Return a bounded occurrence candidate; observation time alone is not one."""
+    before, after = transition.get("before"), transition.get("after")
+    interval = None
+    if verified_pair(transition) and before["checked_at"] <= after["checked_at"]:
+        interval = (before["checked_at"], after["checked_at"])
+    bounded = [item for item in events if item["kind"] == "account_reset_observed"
+               and item["bounded"] and item["start"] is not None and item["end"] is not None
+               and target_matches(item, after) and overlaps(item, before, after)]
+    # Conflicting direct occurrence intervals cannot silently narrow each other.
+    for item in bounded:
+        left, right = item["start"], item["end"]
+        if interval is not None:
+            left, right = max(left, interval[0]), min(right, interval[1])
+        if left > right:
+            return None
+        interval = (left, right)
+    return interval
+
+
+def timing_resolution(bundle):
+    """Read the caller's event-observation contract, without authenticating it."""
+    evidence = bundle.get("timing_evidence")
+    if evidence is None:
+        return None
+    if not isinstance(evidence, dict):
+        raise AttributionError("timing_evidence must be an object or null")
+    seconds = evidence.get("max_span_seconds")
+    source_ref = evidence.get("source_ref")
+    if (type(seconds) is not int or seconds <= 0
+            or not isinstance(source_ref, str) or not source_ref.strip()):
+        raise AttributionError("timing_evidence requires positive max_span_seconds and source_ref")
+    try:
+        return timedelta(seconds=seconds)
+    except OverflowError as error:
+        raise AttributionError("timing_evidence.max_span_seconds is too large") from error
+
+
+def near_simultaneous_refs(candidates, events, max_span):
+    # The evidence bundle must declare its comparison resolution. There is no
+    # universal time tolerance inferred from one successful account query round.
+    if max_span is None:
+        return set()
+    intervals = [(item["after"]["account_ref"], transition_interval(item, events))
+                 for item in candidates]
     refs = set()
+    for index, (ref, interval) in enumerate(intervals):
+        if interval is None:
+            continue
+        for other_ref, other in intervals[index + 1:]:
+            if other is None or ref == other_ref:
+                continue
+            if (max(interval[0], other[0]) <= min(interval[1], other[1])
+                    and max(interval[1], other[1]) - min(interval[0], other[0])
+                    <= max_span):
+                refs.update((ref, other_ref))
+    return refs
+
+
+def cross_account_window_change_candidates(transitions, events):
+    candidates = []
     for transition in transitions:
         after = transition.get("after")
         if (after is not None and after["identity"] == "verified"
                 and window_change_observed(transition)
                 and not has_account_switch(transition, events)):
-            refs.add(after["account_ref"])
-    return refs
+            candidates.append(transition)
+    return candidates
 
 
-def multi_account_reset_observed(transitions, events):
-    refs = set()
+def cross_account_window_changes(transitions, events, max_span=None):
+    return near_simultaneous_refs(cross_account_window_change_candidates(transitions, events),
+                                  events, max_span)
+
+
+def multi_account_reset_observed(transitions, events, max_span=None):
+    candidates = []
     for transition in transitions:
         after = transition.get("after")
         if after is None or after["identity"] != "verified":
             continue
-        if natural_cycle_observed(transition) or has_account_switch(transition, events):
+        if (natural_cycle_observed(transition) or has_account_switch(transition, events)
+                or has_banked_redemption(transition, events)):
             continue
         if window_change_observed(transition) or has_direct_account_reset(transition, events):
-            refs.add(after["account_ref"])
-    return len(refs) >= 2
+            candidates.append(transition)
+    return len(near_simultaneous_refs(candidates, events, max_span)) >= 2
+
+
+def selected_accounts_result(bundle, transitions, events):
+    refs = bundle.get("selected_account_refs")
+    if refs is None:
+        return {"account_refs": [], "complete": False, "per_account_reset": {}}
+    if (not isinstance(refs, list) or not refs
+            or any(not isinstance(ref, str) or not ref.strip() for ref in refs)
+            or len(set(refs)) != len(refs)):
+        raise AttributionError("selected_account_refs must be a nonempty array of unique account refs")
+    per_account = {}
+    for ref in refs:
+        matches = [item for item in transitions if item["after"]["account_ref"] == ref]
+        if len(matches) != 1:
+            per_account[ref] = "block"
+            continue
+        item = matches[0]
+        after = item["after"]
+        allowed = (after["identity"] == "verified" and after["checked_at"] is not None
+                   and not has_account_switch(item, events)
+                   and (natural_cycle_observed(item) or has_direct_account_reset(item, events)))
+        per_account[ref] = "allow" if allowed else "block"
+    return {"account_refs": refs, "complete": all(value == "allow" for value in per_account.values()),
+            "per_account_reset": per_account}
 
 
 def current_state(after):
@@ -243,11 +339,13 @@ def evaluate(bundle):
     for index, raw in enumerate(transitions_input):
         if not isinstance(raw, dict):
             raise AttributionError(f"transitions[{index}] must be an object")
-        after = observation(raw["after"], f"transitions[{index}].after")
+        after = observation(raw.get("after"), f"transitions[{index}].after")
         before = observation(raw["before"], f"transitions[{index}].before") if raw.get("before") is not None else None
         transitions.append({"before": before, "after": after,
                             "anonymous_candidates": raw.get("anonymous_candidates") or []})
     events = [event(raw, f"events[{index}]") for index, raw in enumerate(bundle.get("events") or [])]
+    selected = selected_accounts_result(bundle, transitions, events)
+    max_span = timing_resolution(bundle)
     transition = transitions[-1]
     after = transition["after"]
     before = transition["before"]
@@ -257,8 +355,10 @@ def evaluate(bundle):
     official_records = official_global_events(transition, events)
     official = bool(official_records)
     window_changed = window_change_observed(transition)
-    multi_account = multi_account_reset_observed(transitions, events)
-    cross_account = len(cross_account_window_changes(transitions, events)) >= 2
+    multi_account = multi_account_reset_observed(transitions, events, max_span)
+    cross_account = len(cross_account_window_changes(transitions, events, max_span)) >= 2
+    changed_refs = {item["after"]["account_ref"]
+                    for item in cross_account_window_change_candidates(transitions, events)}
     banked = natural is False and direct_reset and any(
         item["kind"] == "banked_redeem" and target_matches(item, after)
         and overlaps(item, before, after) for item in events)
@@ -319,6 +419,7 @@ def evaluate(bundle):
         "account_window_changed_between_observations": "observed" if window_changed else "unknown",
         "same_account_reset": "observed" if reset_observed else "unknown",
         "cross_account_near_simultaneous_reset": "observed" if cross_account else "unknown",
+        "cross_account_window_changes": "observed" if len(changed_refs) >= 2 else "unknown",
     }
     claim_gate = {
         "current_state": "allow" if after["identity"] == "verified" else "block",
@@ -330,6 +431,7 @@ def evaluate(bundle):
         "global_reset": "allow" if official else "block",
         "cause": "allow" if classification != "unknown" else "block",
         "all_accounts": "allow" if official and global_scope == "all_paid" else "block",
+        CLAIM_SELECTED_ACCOUNTS: "allow" if selected["complete"] else "block",
     }
     refs = [item["source_ref"] for item in events]
     refs += [transition[key]["source_ref"] for key in ("before", "after") if transition.get(key)]
@@ -339,6 +441,8 @@ def evaluate(bundle):
         "scope": scope,
         "observations": observations,
         "claim_gate": claim_gate,
+        "selected_accounts": selected,
+        "timing_evidence": bundle.get("timing_evidence"),
         "reason_codes": reasons,
         "missing_evidence": missing,
         "evidence_refs": refs,
@@ -677,6 +781,40 @@ ALL_ACCOUNTS_CLAIM = re.compile(
     r"|officially reset (?:all|everyone)",
     re.I,
 )
+SELECTED_SCOPE_PATTERN = (
+    r"(?:(?:我们|咱们)(?:的)?(?:所有|全部)?\s*账[号户]|"
+    r"(?:这批|本次查询的)\s*账[号户]|"
+    r"(?:我们(?:的)?|这)?\s*[一二两三四五六七八九十\d]+\s*个\s*账[号户])"
+)
+SELECTED_ACCOUNTS_CLAIM = re.compile(
+    SELECTED_SCOPE_PATTERN + r"[^。!？?；;，,\n]{0,60}(?:重置|reset)|"
+    r"(?:重置|reset)[^。!？?；;，,\n]{0,30}" + SELECTED_SCOPE_PATTERN, re.I)
+SELECTED_ACCOUNT_COUNT = re.compile(r"([一二两三四五六七八九十\d]+)\s*个\s*账[号户]")
+
+
+def selected_account_count(text):
+    match = SELECTED_ACCOUNT_COUNT.search(text)
+    if not match:
+        return None
+    value = match.group(1)
+    if value.isascii() and value.isdigit():
+        return int(value)
+    digits = {char: index for index, char in enumerate("零一二三四五六七八九")}
+    digits["两"] = 2
+    if value in digits:
+        return digits[value]
+    if value == "十":
+        return 10
+    # Unsupported counts fail closed instead of becoming an uncounted claim.
+    return -1
+
+
+def claim_allowed(result, claim):
+    if result["claim_gate"].get(claim["claim"], "block") != "allow":
+        return False
+    if claim["claim"] == CLAIM_SELECTED_ACCOUNTS and claim.get("account_count") is not None:
+        return claim["account_count"] == len(result["selected_accounts"]["account_refs"])
+    return True
 
 
 def claims_in_message(message):
@@ -689,8 +827,21 @@ def claims_in_message(message):
         claim_source = BANKED_RESET_TERM.sub("", stripped)
         has_multi = bool(MULTI_ACCOUNT_CLAIM.search(stripped))
         has_cross = bool(CROSS_ACCOUNT_CLAIM.search(stripped))
-        has_all = bool(ALL_ACCOUNTS_CLAIM.search(claim_source))
-        if not (has_all or has_multi or has_cross) and SAME_ACCOUNT_CLAIM.search(claim_source):
+        has_selected = bool(SELECTED_ACCOUNTS_CLAIM.search(claim_source))
+        # Remove only the selected scope phrase: "our all accounts" must not
+        # hide a separate platform-wide assertion later in the same sentence.
+        platform_source = re.sub(SELECTED_SCOPE_PATTERN, "", claim_source)
+        has_all = bool(ALL_ACCOUNTS_CLAIM.search(platform_source))
+        if has_selected:
+            for scope_match in re.finditer(SELECTED_SCOPE_PATTERN, claim_source):
+                claims.append({"claim": CLAIM_SELECTED_ACCOUNTS, "text": stripped[:180],
+                               "account_count": selected_account_count(scope_match.group())})
+        # Independently check a current/single-account assertion after removing
+        # only the other scopes, rather than disabling it for the whole sentence.
+        single_source = re.sub(ALL_SCOPE_PATTERN, "", platform_source, flags=re.I)
+        single_source = MULTI_ACCOUNT_CLAIM.sub("", single_source)
+        single_source = CROSS_ACCOUNT_CLAIM.sub("", single_source)
+        if SAME_ACCOUNT_CLAIM.search(single_source):
             claims.append({"claim": CLAIM_SAME_ACCOUNT, "text": stripped[:180]})
         if has_multi:
             claims.append({"claim": CLAIM_MULTI_ACCOUNT, "text": stripped[:180]})
@@ -707,7 +858,7 @@ def evaluate_transcript(path, message=None):
     if message is None:
         return result
     claims = claims_in_message(message)
-    blocked = [item for item in claims if result["claim_gate"].get(item["claim"], "block") == "block"]
+    blocked = [item for item in claims if not claim_allowed(result, item)]
     result["claims"] = claims
     result["blocked_claims"] = blocked
     result["blocked"] = bool(blocked)
@@ -730,7 +881,7 @@ def main():
                 claims = claims_in_message(args.message)
                 result["claims"] = claims
                 result["blocked_claims"] = [item for item in claims
-                                            if result["claim_gate"].get(item["claim"], "block") == "block"]
+                                            if not claim_allowed(result, item)]
                 result["blocked"] = bool(result["blocked_claims"])
     except (OSError, ValueError, AttributionError) as error:
         print(json.dumps({"status": "error", "error": str(error)}, ensure_ascii=False))

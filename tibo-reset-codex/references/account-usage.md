@@ -15,9 +15,26 @@ ChatGPT 登录态、本机已经登录的 Google 账号。它们的数量可以�
 
 **入口裁定（不因「这次形态不太一样」重开）**：2026-09-08 用户已裁定这批账号**不用
 CC Switch 管理**——即使 `~/.cc-switch/cc-switch.db` 存在且记有 codex providers，也只把
-它当上面的邮箱线索来源，不作查询通道。首选入口是官网的 Google 登录态；本机凭据文件
-（`~/.codex/auth.json`）只覆盖当前 CLI 登录的那一个账号。2026-09-10 二次实测：仍然
-因为优先去翻 CC Switch 与本机备份目录被当场纠正——裁定之后不重开，直接走正路。
+它当上面的邮箱线索来源，不作查询通道。本机凭据文件（`~/.codex/auth.json`）只覆盖当前
+CLI 登录的那一个账号；多账号查询按下一节选通道，不为查询重开已明确不用某管理器的决定。
+
+## 选择当前查询通道
+
+1. 当前宿主已配置非空的 Minions 账号注册表时，先读其现行帮助与配置，按实际配置运行
+   `usage-refresh`，逐个核对用户选定账号。该能力是可选的本地集成，不随本 Skill 分发；
+   不猜注册表路径、远程主机、端点或凭据，也不为查询安装一套新管理器。
+2. 对每个账号读取 `usage.fresh`、`disposition`、额度观察时间、窗口值和来源。顶层 Worker
+   `stale` 不等于账号额度未知；反之，旧 `last_observation` 也不能补成当前值。按额度自身的
+   新鲜度和身份决定哪些字段可报告，不用一次请求成功给整张表背书。
+3. 将 Minions 注册表的 `account_ref` 原值另存为 `registry_ref`，与本 SOP 的哈希
+   `account_ref` 保留身份映射。前者用于找到已配置账号，后者用于归因与本地台账；未核实
+   映射时分别保留，不把相似标签当同一账号。
+4. Minions 未配置、调用失败或未返回所需字段时，继续用已有且已授权的只读账号源补查。
+   例如缺 banked 字段，只补该字段，不把缺失当零。当前 CLI 可用下节 API；其他账号可走
+   官网已有 Google 登录态及隔离 profile。其他宿主直接选这些合法路径，保留各自身份与时间。
+
+执行者完成实际查询后按逐账号结果汇报；字段仍缺失时写明准确缺口和已尝试通道。注册表
+维护、远程访问与认证由原 owner 管理，本节不授权改生产配置或凭据。
 
 ## 多账号失败时先排除出口
 
@@ -106,7 +123,8 @@ Windows 未实测。请求、认证文件默认位置、参数和退出行为的
 （网页文本抓出的邮箱常带句末的 `.`，会算出另一个值），再小写取哈希：
 `python3 -c "import hashlib,sys;print(hashlib.sha256(sys.argv[1].strip().strip('.,;:').casefold().encode()).hexdigest()[:8])" <email>`。
 邮箱只出现在这条命令行里。它是无盐的 32 位短哈希，已知邮箱能反推，
-只当本地假名，不当匿名化。`account_ref` 是唯一的账号句柄：账号标签只作 `notes` 里的可读别名，
+只当本地假名，不当匿名化。`account_ref` 是归因与台账的账号句柄；外部注册表句柄另保留映射，
+账号标签只作 `notes` 里的可读别名，
 不能替代它，也不能当基线。没有 `account_ref` 的旧读数不能当基线；没有基线时只报告当前值，
 banked 到账写「未核实」。判断该账号上次读数之后是否兑现过：问用户，或读官网备用重置的逐条
 到期列表。
@@ -155,14 +173,51 @@ python3 scripts/reset_attribution.py --input /tmp/tibo-attribution.json
 | `transitions[].before/after` | 各为一个观测；`identity=verified` 必须有 `account_ref` 与带时区的 `checked_at_utc`；匿名观测用 `identity=anonymous`。另有 `window_seconds`、`used_percent`、`reset_at_utc` 和可选 banked/plan 字段；没有前读数时 `before=null` |
 | `transitions[].anonymous_candidates` | 可选；只记录匿名形状，不能补身份 |
 | `events[]` | 可选直接事件：`account_switch`、`account_reset_observed`、`banked_redeem`、`official_global_reset`；附 `account_ref`（global 为 null）、`source`、`source_ref` 和 `checked_at_utc`。有明确发生区间时另给 `interval_start_utc` / `interval_end_utc`；官方范围用 `scope=all_paid` 或 `unknown` |
+| `selected_account_refs` | 问「我们 N 个是否都到账」时显式提供用户选定集合，必须为非空且唯一的账号句柄列表；不能从本轮查询返回的条数反推分母 |
+| `timing_evidence` | 需要「近同时」结论时提供 `max_span_seconds`（有依据的正整数分辨率）与非空 `source_ref`；没有默认分辨率。不能为让判据通过随意加宽时间范围 |
 | `auth_hints.last_refresh_utc` | 可选提示；只追加 `LAST_REFRESH_NON_DETERMINATIVE`，不参与分类 |
 
 输出的 `observations.current_state` 是可报告现值；`classification` 与 `candidate_causes` 是证据分类；
 `claim_gate` 逐类放行或阻断 `current_state`、`account_window_change`、`same_account_reset`、
 `multi_account_reset`（多账号排除自然周期与切号后的提前窗口变化或直接实测）、
-`cross_account_observation`（较弱的跨账户窗口变化观测）、`account_switch`、`global_reset` 与
-`all_accounts`（仅官方 `all_paid`）。`block` 的断言不得交付。脚本缺键、空值、重复周窗口、
+`cross_account_observation`（声明分辨率内的跨账户近同时窗口变化）、`account_switch`、`global_reset` 与
+`all_accounts`（仅官方 `all_paid`）、`selected_accounts_reset`（用户选定集合逐号证实）。
+`selected_accounts` 输出该集合的 `account_refs`、`complete` 与 `per_account_reset`；逐号读回，
+不把 `all_accounts` 放行当作本地选定集合已核完。
+`observations.cross_account_window_changes` 可报告较弱的跨号窗口变化；没有足够时间证据时，
+「近同时」保持 `unknown`。时间判据通过仅表示在声明的分辨率内兼容，不证明共同平台因果。
+`block` 的断言不得交付。脚本缺键、空值、重复周窗口、
 不可比窗口或坏时间戳会显式失败或保持 `unknown`，不把 malformed input 变成正面归因。
+
+问「是否每个账号都到账」时，每个选定账号分别写当前值、变化、事件归因与缺口。`100%→100%`
+只证明两次满额；`98%→97%` 且截止时间变了，只证明净余下降与截止时间变化。不同来源的动态
+`reset_at` 差异也不能单独证明到账。要确认该号发生重置，仍需本节规定的事件证据；不能从其他
+账号的阳性结果或官方范围声明替它补出个人到账时间。
+
+## 浪费与新增容量
+
+用户问浪费、收益或未利用机会时，执行者先逐账号区分四项，再决定能算什么：
+
+| 项目 | 可报告范围 |
+|---|---|
+| 已知旧余额 | 某个身份已绑定的账号在某时刻剩余多少；它是历史读数 |
+| 事件覆盖 | 哪些账号已证实发生何种重置、发生区间与证据；未知账号单列 |
+| 落地前实际未用量 | 已归因事件发生前、足够临近且身份已绑定的余额；旧读数不能直接替代 |
+| 新增容量／未利用机会 | 重置相对不重置新增的可用量，以及在当时任务、时间与授权下本可使用的机会；这是需要前提的比较 |
+
+有落地前读数时，说明其离事件区间多远、期间消耗与容量配置是否已覆盖；没有时先给有用的
+已知值和缺口，实际未用量保持 `unknown`。不能用「较早旧余额 + 重置后读数」精确结算被覆盖
+的余额，也不能无条件称旧余额为损失上限。只有身份与容量未变、期间无补发或其他重置、
+余量只可能下降等前提均有证据时，才可给条件上限，并把前提写在数字旁。
+
+百分比是相应账号、套餐子规格、窗口与当时配置下的比例；不同容量的 Pro 子规格不能把
+百分比相加、平均后称为 token 或金钱损失。即使子规格相同，没有可核计量换算也只报告各自
+比例。新增容量不等于已创造收益，没用完也不自动等于可避免的损失；要判断可避免性，补查
+当时是否有值得做的任务、可用执行时间及消费授权。没有这些证据就保留机会估算的条件。
+
+验收是读者能分清「当时看到多少」「哪些号确实重置」「落地前还剩多少」与「原本能多用
+多少」。归因脚本只检查事件证据，不计算这笔损失；这些核算前提由执行者核对，当前没有
+自动核算器保证它们成立。证据不足时停止精确结算，不以继续刷新当前余额代替缺失的历史。
 
 ## 消耗归因（机械判据）
 
