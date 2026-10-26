@@ -17,6 +17,7 @@ Choose the narrowest path that can answer the request:
 
 | User signal | Route |
 |---|---|
+| Identical inactive local files must retain every path and offline availability | Read `references/apfs-shared-blocks.md`; use only authorized explicit pairs, native APFS checks and the bundled guarded executor |
 | Apple Content Caching, `AssetCacheManagerUtil`, `CacheUsed`, `ActualCacheUsed`, iCloud cache, or “Caching needs more space” | Read `references/apple_content_caching.md` completely before probing or proposing commands |
 | Docker, OrbStack, images, containers, or volumes | Read `references/docker_analysis.md`; inspect every object and never use prune-family commands |
 | Docker build cache | Measure with `docker builder du`; this skill reports it but does not delete it because Docker exposes category-wide prune controls rather than per-record intent |
@@ -144,6 +145,10 @@ Read `references/docker_analysis.md` before reporting Docker savings. List every
 ## Phase 2: report and resolve authorization
 
 ### Phase 2 entry gate
+
+Before starting or extending a long batch, read `references/batch-selection.md`.
+Use `scripts/batch_budget.py` to relate the measured pilot, remaining reclaim
+ceiling and time to the actual free-space gap; an item count is not capacity success.
 
 A real 2026-09-19 run followed the Phase 1 machinery to the letter and still shipped three bad plans: it proposed preserve-by-default caches (npm `_cacache`, Playwright browsers, Homebrew) as a "low-risk combo" because the rule lives in `references/cleanup_targets.md` — a file the discovery workflow never opens; it proposed `uv cache prune` as zero-impact from a `--help` line plus size ratios, never verifying semantics or the installed version; and it led with 2 GB items beside a 91 GB candidate because no free-space target had been set. The rules that would have caught all three already existed in this skill — in a reference the procedure never opened, which makes them not rules in practice. A prose checklist is only one level better than the reference it summarizes: an independent review of the first draft of this gate found thirteen blocking defects, the deepest being that the gate itself had no mechanical enforcement. Step 4 is therefore a script, not a promise — run it, or the plan does not exist.
 
@@ -278,6 +283,10 @@ uv run scripts/cleanup_report.py --snapshot after --compare
 ```
 
 ## Resources
+
+- `references/batch-selection.md` and `scripts/batch_budget.py` — select a bounded next batch using supplied capacity and pilot evidence; unknown ceilings stay unknown.
+- `references/apfs-shared-blocks.md` and `scripts/apfs_cow.py` — preserve exact inactive local paths with guarded APFS cloning, pinned rollback, per-item lock release and an exact remainder.
+- `scripts/stream_accounting.py` — calculate internal full-clone allocation upper bounds from supplied native observations; not a probe or physical-release measurement.
 
 Load only the branch relevant to the current task:
 

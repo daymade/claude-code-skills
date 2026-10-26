@@ -146,9 +146,39 @@ miss — it frees ≈0 today while its real cost accrues tomorrow. Attribution r
 for snapshot directories must name the live source as the writer, not the capture
 script.
 
+### Internal clone-stream bounds
+
+Keep three accounting layers separate: path-accounted bytes, native allocation
+bounds for a closed set of clone streams, and same-volume host `df` change.
+A VM disk allocation decline is a subsystem observation; it need not equal the
+host change over a mixed activity window. Do not force the residual onto cleanup.
+
+For an internal-sharing upper bound, group native observations by device and
+clone-stream ID, deduplicate inodes, and count allocated bytes once per stream.
+Require stable observations, consistent sizes/refcounts and a full-clone reference
+count equal to all observed distinct inodes; account for every hard-link path.
+External references, missing members, partial sharing or unknown flags stay
+excluded/unknown. A stream ID without those conditions cannot establish closure.
+This bound does not account for every snapshot/extent interaction and is not a
+promise of bytes freed by removing one member.
+
+`scripts/stream_accounting.py /absolute/observations.json` checks supplied records
+as a nonempty JSON list. Each record needs `path`, `device`, `inode`, `logical_bytes`,
+`allocated_bytes`, `nlink`, `clone_id`, `full_clone_refs`, `extended_flags`, and
+`stable`. Collect those fields through a verified native probe at one stable
+checkpoint; the calculator does not collect or authenticate evidence. Its
+`internal_allocated_upper_bytes` is an upper bound, not deletion authority.
+
 ## 5. Name the writer
 
 A growing directory without an owner is an unfinished row. For each top row:
+
+- The numeric suffix on a macOS `fs_usage` process label is a thread ID, not
+  necessarily a PID. Map it contemporaneously through native `proc_pidinfo`
+  `PROC_PIDLISTTHREADS`, then bind the parent process's argv and start identity.
+  Missing mappings stay unknown; do not query a same-numbered PID as attribution.
+  Writes to `/dev/null` and overwrites do not themselves prove allocated growth.
+  Naming a writer does not make its protected records cleanup candidates.
 
 - Trace the writing process: `ps -axo pid,etime,command` for processes whose command
   line or open files point into the directory, then walk `ps -o ppid=` up to the owning
