@@ -51,7 +51,9 @@ class NativeCommandTests(unittest.TestCase):
             "HOME": str(self.home), "PATH": str(self.bin) + ":/usr/bin:/bin:/usr/sbin:/sbin",
             "ZDOTDIR": str(self.home), "CLAUDE_PROFILES_CONFIG_DIR": str(self.helpers),
         }
-        (self.bin / "python3").symlink_to(sys.executable)
+        python = self.bin / "python3"
+        python.write_text("#!/bin/sh\nexec " + shlex.quote(sys.executable) + ' "$@"\n')
+        python.chmod(0o700)
 
     def write_native(self, destination, identity, code):
         destination.write_text(
@@ -109,14 +111,32 @@ class NativeCommandTests(unittest.TestCase):
                         self.assertFalse(self.events.exists())
 
     def test_invalid_native_command_fails_before_profile_setup_or_native(self):
+        directory_alias = self.base / "directory alias"
+        directory_alias.symlink_to(self.base, target_is_directory=True)
+        nonexecutable = self.base / "nonexecutable"
+        nonexecutable.write_text("synthetic non-executable file\n")
         for shell in self.shells():
-            for command in ("", "relative-command", str(self.base / "missing")):
+            for command in ("", "relative-command", str(self.base / "missing"), str(self.base),
+                            str(directory_alias), str(nonexecutable)):
                 with self.subTest(shell=shell, command=command):
                     result = self.run_profile(shell, command=command)
                     self.assertIn(result.returncode, (64, 126), result.stderr)
                     self.assertFalse(self.sync_log.exists())
                     self.assertFalse(self.native_log.exists())
                     self.assertFalse(self.events.exists())
+
+    def test_executable_file_symlink_remains_supported(self):
+        alias = self.bin / "callback alias"
+        alias.symlink_to(self.callback)
+        for shell in self.shells():
+            with self.subTest(shell=shell):
+                self.reset_outputs()
+                result = self.run_profile(shell, command=str(alias))
+                self.assertEqual(result.returncode, 7, result.stderr)
+                launch = json.loads(self.native_log.read_text())
+                self.assertEqual(launch["identity"], "callback")
+                self.assertEqual(launch["argv"], ["--settings", str(self.settings), *self.arguments])
+                self.assertEqual(launch["profile"], str(self.profile))
 
     def test_missing_profile_and_settings_preserve_refusal_on_both_entries(self):
         for shell in self.shells():

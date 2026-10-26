@@ -281,7 +281,7 @@ with open(p, 'w') as f:
 claude-profile-with-command() {
     local native_command="${1:-}"
     case "$native_command" in
-        /*) [ -x "$native_command" ] || return 126 ;;
+        /*) [ -f "$native_command" ] && [ -x "$native_command" ] || return 126 ;;
         *) echo 'native profile command must be an absolute executable' >&2; return 64 ;;
     esac
     shift
