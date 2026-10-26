@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.21.19 → v1.21.20): Compare task-relevant objects and fields visible together in the initial working viewport under controlled data, state, ordering and display conditions. Keep business-priority changes separate from layout regressions. Change type: bounded acceptance-evidence correction.
+
 - **cookie-copy** (v1.0.0): Extract same-machine macOS Chrome cookie copying, backups, restore and ChatGPT identity verification into a standalone Skill. Keep quota verification in **tibo-reset-codex** (v2.2.3 → v2.3.0), with dependency preparation and compatibility entry points for existing commands. Change types: user-requested ownership extraction and separation of login from quota acceptance. Marketplace v3.26.0.
 
 - **read-claude-code-history** (`daymade-claude-code` v4.31.0 → v4.31.1): Resolve the output-limit default through executable CLI help. Align repository instruction routes with Workflow evidence and saved release-evidence handling.
