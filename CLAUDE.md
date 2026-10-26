@@ -247,7 +247,7 @@ For rendered UI freshness, delayed editor/batch responses or deployment acceptan
 [frontend-visual-qa](frontend-visual-qa/SKILL.md).
 For publication-wide clutter despite passing local checks, use its
 [publication journey calibration](frontend-visual-qa/references/publication-journey-cases.md).
-For the pre-release ancillary-copy gate, follow
+For the pre-release ancillary-copy gate or density/layout comparisons, follow
 [information necessity](frontend-visual-qa/references/history-derived-checklist.md#information-necessity-before-layout).
 Before measuring loading speed, read its
 [cache and timing comparison](frontend-visual-qa/references/browser-driving-and-observation-traps.md#separate-freshness-checks-from-performance-comparisons).
@@ -260,7 +260,7 @@ For repeated journey positions or measured wheel sensitivity, use its
 and [received-input recipe](frontend-visual-qa/references/browser-driving-and-observation-traps.md#wheel-requests-are-not-browser-received-wheel-events).
 Before drawing page relationships or a click-through journey, use
 [the topology/visit distinction](data-visualization-discipline/references/visual-form-selection.md#关系拓扑与有序旅程).
-For live status or attention filters, follow its
+For live status, attention filters, retention intent or excluded-record recovery, follow its
 [cross-view attention journey](frontend-visual-qa/references/journey-and-page-contracts.md#operational-attention-across-views).
 For embedded-reader sizing, surrounding navigation, overlays, zoom, reading/return,
 focus or filtered-selection changes, use its
