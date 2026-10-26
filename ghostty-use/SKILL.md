@@ -230,6 +230,42 @@ user-local data outside the skill bundle; no default mapping ships.
 | osascript refuses keystrokes | grant Accessibility (System Events) permission; verify with `osascript -e 'tell application "System Events" to get UI elements enabled'` |
 | a brand-new tab is missing from the session list | a fresh TUI has no argv UUID and its transcript file appears with its first message; until then it shows under unresolved live TUIs. If the first message came >20 minutes after the tab opened, the birth window has passed and the tab stays unresolved by design |
 
+## One-shot helper terminals and original sessions
+
+Some delegated batch runners end by returning an interactive shell in their own
+terminal; their lifecycle is distinct from the original sessions this skill
+snapshots and restores. Keep the following evidence boundaries:
+
+- A one-shot helper terminal that shows `Process exited` proves only that its
+  foreground process ended. It does not identify which run it was, why it ended,
+  or what business result followed — read the run's own saved receipt (its
+  summary and stderr files) instead of the emulator's exit message.
+- `Last login` prints the previous login record when a shell starts; it is not an
+  identifier of the current TTY's session, and matching its timestamp does not
+  attribute the tab.
+- Split historical evidence from current binding; neither proves the other.
+  Historical attribution of a tab whose foreground process has already exited
+  rests on time-bound recorded evidence: a recorded PID with its recorded start
+  time, the recorded session/SID, and the recorded terminal-device binding,
+  each captured while the process ran. Historical attribution does not require
+  that original process to remain alive; state the window and sources the
+  recorded evidence covers without inferring descendant exit or cleanup.
+- Before acting on a live session, re-observe its PID/start time, session/SID,
+  terminal device and exact current surface. For an exited owned helper, match
+  the host's existing current surface identity to its recorded launch evidence
+  and check for continuing or replacement work on that surface; do not demand a
+  live process from an exited terminal. If the host cannot establish the needed
+  binding, retain unknown and leave that action unperformed. Existing task
+  authorization and host permissions still apply. A reused TTY number, title
+  or matching wall-clock time does not establish this binding.
+- A host denial of Ghostty UI automation continues to bind. Do not close,
+  relaunch or "repair" an old tab by inference, and never signal a process you
+  cannot bind to a run this way.
+- A locally installed one-shot controller integration (for example, a
+  local-agents terminal entry) may already return an interactive shell after its
+  batch; resolve it through its own installed entry. This skill neither requires
+  nor configures it, and this skill's restore route never substitutes for it.
+
 ## Deeper details
 
 - [references/session_liveness.md](references/session_liveness.md) — storage layouts
