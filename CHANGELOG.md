@@ -8,7 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **data-visualization-discipline** (v1.1.4 → v1.1.5): Distinguish page topology from ordered visits, preserve return steps and derive both views from the same facts. Treat presentation components as choices rather than a universal journey style. Change type: bounded guidance correction.
-- **frontend-visual-qa** (v1.21.20 → v1.21.21): Check promised occurrence persistence across refresh, deep links and history; measure wheel gain from browser-received events while retaining product-specific transforms and physical-input limits. Change type: bounded acceptance-evidence correction.
+- **frontend-visual-qa** (v1.21.21 → v1.21.22): Check promised occurrence persistence across refresh, deep links and history; measure wheel gain from browser-received events while retaining product-specific transforms and physical-input limits. Change type: bounded acceptance-evidence correction.
+- **frontend-visual-qa** (v1.21.20 → v1.21.21): Check brief-specific responsibility distinctions through visible original work and results, preserving shared roles and overview disclosure. Recheck time-sensitive fixture state coverage at capture and review without altering production unknowns. Change type: bounded acceptance-evidence correction.
+
 - **frontend-visual-qa** (v1.21.19 → v1.21.20): Compare task-relevant objects and fields visible together in the initial working viewport under controlled data, state, ordering and display conditions. Keep business-priority changes separate from layout regressions. Change type: bounded acceptance-evidence correction.
 - **tibo-reset-codex** (v2.3.0 → v2.4.0): Bind reset claims to selected account identities and explicit timing evidence; separate quota opportunity estimates from measured loss, and audit existing notification delivery before proposing new monitoring. Preserve account-query fallbacks and distinguish transport, receipt and acknowledgement.
 

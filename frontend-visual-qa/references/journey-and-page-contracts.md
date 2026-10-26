@@ -343,6 +343,11 @@ reference; no bundled text-count or DOM-node metric decides whether detail is us
    what. Names, lifecycle events and repeated missing-content warnings cannot
    establish that answer. A verified source gap may be shown with an actionable
    coverage state; record the unanswered question rather than granting a pass.
+   When the brief asks readers to distinguish collaborators' responsibilities,
+   compare their visible original work or results at the intended reading level
+   and state what each contributed without relying only on opaque identifiers.
+   Shared roles and repeated layouts are healthy when the work supports them;
+   a far-zoom overview may defer that detail to the promised reading level.
 3. Trigger the actual control, then read and extract the newly visible granular
    rows, relationships, explanations, or supporting evidence. Answer the expanded
    question using that evidence, naming what was unavailable while collapsed.

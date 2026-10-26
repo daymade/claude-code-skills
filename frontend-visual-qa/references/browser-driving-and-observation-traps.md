@@ -248,6 +248,15 @@ rest still need a deliberately constructed state — the point is to *know that
 default-state evidence is partial* and say so, rather than reporting "audited"
 after one screenshot.
 
+For time-sensitive populated fixtures, the auditor rechecks the rendered state
+mix at capture and review time, including the timestamps or expiry policy that
+select it. A fixture intended to show active, waiting and unknown items may have
+expired into all-unknown; that image cannot verify the intended mixed states.
+Refresh timestamps only in an authorized isolated harness, then recapture and
+inspect the resulting states. Preserve genuine production unknowns and report
+missing state coverage when an isolated replay is unavailable. This is an
+auditor-run check; the default sweep does not establish the intended state mix.
+
 **A note on what should not become an automated check:** a custom scrollbar, a
 missing hover style, an unusual focus color — these are design choices, and
 flagging them mechanically produces false positives on healthy pages. A check
