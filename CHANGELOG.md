@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **claude-switch-models-setup** (`daymade-claude-code` v4.31.2 → v4.32.0): Add an explicit native-command entry for callers that separate structured native stdout from profile setup output; preserve ordinary profile launch, settings, synchronization and exit behavior. Change type: additive script interface.
+
 - **peer-message** (v1.24.2 → v1.24.3): Add a complete native reply sequence from envelope receipt through reply preparation, unchanged native body delivery and outcome commit; stop derived actions on suppressed closed replies while preserving the script fallback for uncovered targets. Change type: bounded coordination guidance clarification.
 - **read-codex-history** (`daymade-claude-code` v4.31.1 → v4.31.2): Follow recorded runners and separately scoped child evidence when investigating termination; distinguish keyword search coverage, signal attempts, process exit and user-visible recovery.
 - **ghostty-use** (v1.8.3 → v1.8.4): Distinguish one-shot helper closeout from original-session recovery and preserve unknown terminal identity when only an exit banner, previous-login line or reused TTY is available.
