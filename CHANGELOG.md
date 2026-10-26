@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tibo-reset-codex** (v2.4.0 → v2.5.0): Add backward-compatible `summary --compact` as a projection of the full result, preserving routine decision fields, evidence references, account and snapshot state while omitting declared long narratives; retain full-summary and followup behavior. Record successful community-source deployment, full group name, talker, time/seq cursor and media coverage in local handoff, with private talker values kept out of the public Skill. Verified with 170 Python and 3 Node tests plus real-ledger field equivalence; compact output is 37.49% smaller. Change types: additive capability and factual handoff correction.
+
 - **qa-expert** (v1.2.6 → v1.2.7): Exercise wrapper argument forwarding and retained compatibility aliases through the actual entry; verify dry-run propagation or explicit rejection before effects while preserving CLI argument and early-exit contracts. Change type: bounded acceptance-evidence correction.
 
 - **data-visualization-discipline** (v1.1.5 → v1.1.6): Remove the stale layer total and a redundant page total from journey guidance; retain the complete criteria and example sequence. Change type: deterministic documentation correction.

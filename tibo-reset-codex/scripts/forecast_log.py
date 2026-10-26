@@ -623,6 +623,36 @@ def summarize(path, kind=None, now=None):
                     "Review evidence is supplied by the caller, not independently verified here."}
 
 
+_FORECAST_NARRATIVE_FIELDS = frozenset(("rationale", "feedback_applied"))
+_REVIEW_NARRATIVE_FIELDS = frozenset(("reason", "lesson"))
+_SUMMARY_ITEM_COLLECTIONS = (
+    "pending", "recent_resolved", "recent_withdrawn", "confirmed_unscored")
+
+
+def compact_summary(summary):
+    """Project one full summary without recomputing any business state.
+
+    Routine rounds keep every identifier, status, window, evidence reference and
+    future field by default. Only known long-form narrative leaves are omitted;
+    use the full summary when auditing or learning from those narratives.
+    """
+    projected = dict(summary)
+    for collection in _SUMMARY_ITEM_COLLECTIONS:
+        items = []
+        for item in summary[collection]:
+            compact_item = {key: value for key, value in item.items()
+                            if key not in _FORECAST_NARRATIVE_FIELDS}
+            for review_key in ("latest_review", "latest_withdrawal"):
+                review = compact_item.get(review_key)
+                if isinstance(review, dict):
+                    compact_item[review_key] = {
+                        key: value for key, value in review.items()
+                        if key not in _REVIEW_NARRATIVE_FIELDS}
+            items.append(compact_item)
+        projected[collection] = items
+    return projected
+
+
 def followup_plan(path, now=None):
     """Produce the next read-only evidence tasks; do not fetch or schedule them."""
     summary = summarize(path, now=now)
@@ -816,6 +846,8 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
     summary = sub.add_parser("summary", help="Read pending forecasts, outcomes and lessons")
     summary.add_argument("--kind", choices=KINDS)
+    summary.add_argument("--compact", action="store_true",
+                         help="omit long narrative fields while preserving decision fields")
     for command in ("record", "announce", "review", "withdraw", "finding"):
         p = sub.add_parser(command)
         p.add_argument("--input", type=Path, required=True, help="UTF-8 JSON object file")
@@ -832,6 +864,8 @@ def main():
     try:
         if args.command == "summary":
             result = summarize(path, args.kind)
+            if args.compact:
+                result = compact_summary(result)
             result["snapshot"] = snapshot_health(state, enabled=not args.no_git)
         elif args.command == "findings":
             result = list_findings(state / "findings.jsonl", max(args.limit, 0))
