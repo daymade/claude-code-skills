@@ -91,6 +91,11 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
+# GNU timeout treats zero as "no deadline"; this interface only permits
+# positive whole seconds so callers cannot accidentally disable either bound.
+[[ "$deadline" =~ ^[1-9][0-9]*$ ]] || die "--deadline must be positive integer seconds"
+[[ "$grace" =~ ^[1-9][0-9]*$ ]] || die "--grace must be positive integer seconds"
+
 # ---------------------------------------------------------------- fixture path validation
 # Path checks use python3 stdlib only (os/stat/tempfile). No third-party imports.
 
@@ -501,6 +506,15 @@ self_test() {
   }
 
   local dir log out rc foreign
+
+  for option in --deadline --grace; do
+    for value in 0 -1 ''; do
+      out="$("$0" "$option" "$value" ripgrep 2>&1)" && rc=0 || rc=$?
+      expect "$option rejects nonpositive/empty seconds ($value)" 1 "$rc" "$out" "positive integer seconds"
+    done
+    out="$("$0" "$option" 2>&1)" && rc=0 || rc=$?
+    expect "$option rejects a missing value" 1 "$rc" "$out" "needs a value"
+  done
 
   # 1. health: official URL+priority:N grammar, rewrite keeps URL+metadata shape.
   dir="$root/health"; mkdir -p "$dir"; log="$dir/stub.log"
