@@ -191,15 +191,9 @@ jobs:
       # production CLI when this job provisions it explicitly. prior-work-retrieval
       # delegates filesystem search to ripgrep and must fail visibly when it is absent.
       #
-      # The APT transfer itself is the failure this step had (PR #1218): the hosted
-      # image ranks the Azure HTTP mirror first and the mirror method only switches on
-      # request failure, so a slow-but-alive download (95 MB of ffmpeg deps) starved two
-      # 20-minute jobs to cancellation with no per-request timeout firing and zero tests
-      # run. apt_install_bounded.sh moves the one-shot VM's mirror list to the official
-      # HTTPS archive first and wraps the whole update+install in a wall-clock deadline
-      # that fails this step instead of starving the job. The self-test runs first: GNU
-      # timeout, the real mirror file and a real APT transfer exist only on this VM, so
-      # the deadline contract is exercised here, not on a contributor's Mac.
+      # Prefer official HTTPS mirrors and bound the complete APT transfer: a
+      # slow-but-alive response can evade per-request timeouts. Exercise the
+      # fixture-only deadline contract before using this one-shot hosted VM.
       - name: Install registered-suite runtime tools
         run: |
           scripts/ci/apt_install_bounded.sh --self-test
