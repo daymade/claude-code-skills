@@ -55,6 +55,8 @@ For executable handoffs, including instruction-only cross-owner workflows, bind 
 [intended-consumer boundary](daymade-skill/skill-creator/references/change-verification.md#bind-the-intended-consumer-before-verification)
 and follow its [first-use route](daymade-skill/skill-creator/references/first-use-and-resume.md).
 Use its selected workflow for regression review, validation, initialization, and packaging.
+For capability extraction or reuse across business callers, follow its
+[ownership decision](daymade-skill/skill-creator/references/authoring-and-reuse.md#the-extend-vs-create-check--runs-before-any-specialized-branch).
 
 Operational or code-bearing Skill edits complete directly affected document alignment
 before the first candidate freeze; follow skill-creator's Edit workflow.
@@ -245,7 +247,7 @@ For rendered UI freshness, delayed editor/batch responses or deployment acceptan
 [frontend-visual-qa](frontend-visual-qa/SKILL.md).
 For publication-wide clutter despite passing local checks, use its
 [publication journey calibration](frontend-visual-qa/references/publication-journey-cases.md).
-For the pre-release ancillary-copy gate, follow
+For the pre-release ancillary-copy gate or density/layout comparisons, follow
 [information necessity](frontend-visual-qa/references/history-derived-checklist.md#information-necessity-before-layout).
 Before measuring loading speed, read its
 [cache and timing comparison](frontend-visual-qa/references/browser-driving-and-observation-traps.md#separate-freshness-checks-from-performance-comparisons).
@@ -258,7 +260,7 @@ For repeated journey positions or measured wheel sensitivity, use its
 and [received-input recipe](frontend-visual-qa/references/browser-driving-and-observation-traps.md#wheel-requests-are-not-browser-received-wheel-events).
 Before drawing page relationships or a click-through journey, use
 [the topology/visit distinction](data-visualization-discipline/references/visual-form-selection.md#关系拓扑与有序旅程).
-For live status or attention filters, follow its
+For live status, attention filters, retention intent or excluded-record recovery, follow its
 [cross-view attention journey](frontend-visual-qa/references/journey-and-page-contracts.md#operational-attention-across-views).
 For embedded-reader sizing, surrounding navigation, overlays, zoom, reading/return,
 focus or filtered-selection changes, use its
@@ -562,6 +564,10 @@ For change-only automatic backups, use its
 
 ### Codex Quota and Account Checks
 
+For selected-site Cookie copying between local profiles of the same macOS Chrome,
+enter [cookie-copy](cookie-copy/SKILL.md). For its quota-query caller, follow
+[Tibo's Cookie Copy handoff](tibo-reset-codex/references/browser-session-migration.md).
+
 For a remote Codex sign-in prompt or terminal refresh rejection, start at
 [Local Codex authentication recovery](daymade-codex/local-codex/references/oauth-guide.md#remote-account-switch-and-expired-login-recovery).
 That owner defines project-authorization recovery, credential-store selection and usable-access verification; quota checks below remain a separate route.
@@ -601,6 +607,9 @@ digest; a matching basename is not identity. A pending item is not a delivery
 receipt, and an automatic outbox path gets one non-retrying HTTP attempt.
 
 ### Testing Skills Locally
+
+For affected executable entries before release and after source synchronization,
+follow [source location and activation](daymade-skill/skill-creator/references/source-location-and-activation.md).
 
 For installed-Skill and fresh-host acceptance, test the canonical source route. Use the current
 `claude-switch-models-setup` local-source workflow for this maintainer machine,
