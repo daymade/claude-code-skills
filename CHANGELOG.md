@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.21.23 → v1.21.24): Verify ordinary startup separately from deep links, including empty-first and late-source arrivals without overriding user navigation. Check retained Reader queries and nonzero reading positions only after the same document is visible. Change type: bounded acceptance-case clarification.
+- **data-visualization-discipline** (v1.1.6 → v1.1.7): Add synthetic Agent-state controls separating selection, execution, historical participation, result adoption and loaded-window counts; retain independent healthy observations during partial collection failures. Change type: bounded state-interpretation clarification.
+- **macos-cleaner** (`daymade-macos` v1.26.3 → v1.26.4): Record whether copy-budget reserve comes from an imposed minimum or a reversible task choice; require a fresh passing preflight after reassessment without changing permission or classification gates. Change type: bounded preflight clarification.
 - **peer-message** (v1.24.3 → v1.24.4): Clarify that a suppressed closed reply stops the old request without retry, transport switching or message rewriting, while genuinely new facts follow the independent new-notice branch; link native replies from repository startup guidance. Change type: documentation consistency correction.
 
 - **tibo-reset-codex** (v2.5.1 → v2.5.2): Route project-level monitoring instructions to canonical procedures and remove duplicated display defaults and derivable documentation counts. Runtime behavior is unchanged.

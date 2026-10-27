@@ -166,6 +166,15 @@ Run `scripts/check_gate_plan.py --table <gate-table.md> --plan <plan.md> --copy-
 | `copies` | Nonempty array; each entry has an exact classification-table `target`, positive integer `source_bytes` and `copies_at_peak`, a nonblank `reason`, and `basis` of `unique-state` or `user-requested` |
 | `copies[].user_direction` | Nonblank original instruction when `basis` is `user-requested`; the executor verifies its authority and scope |
 
+Record the reserve's source in the existing plan before treating low space as a
+blocker: an explicit user/runtime minimum, or a reversible task-specific choice
+with its reason. Do not describe an executor-chosen value as a runtime requirement.
+If that choice blocks an authorized copy, reassess necessity, peak copies and the
+chosen reserve; keep any imposed minimum and all classification/authorization
+gates. A revised choice requires an updated budget and a fresh passing preflight,
+not a checker bypass or a universal smaller reserve. Missing provenance does not
+authorize lowering a minimum whose authority is still unknown.
+
 Count each archive, extracted tree, verification tree and retained partial as a copy at its measured uncompressed size. Charge metadata/log overhead within the total allowance. The checker rejects absent/invalid fields, automatic copies of REBUILDABLE/PROPOSABLE targets, a peak estimate above the allowance, and insufficient live destination space for the allowance plus reserve. For necessary preservation, reclassify genuine unique state with evidence before copying; user-requested artifact preservation remains supported.
 
 Without `--copy-budget`, a passing plan grants no copy preparation. This preflight does not run or monitor copies and cannot prove source classification or user authority. Re-run it before each stage with the complete still-retained set. On low space or an unknown measurement, stop the affected copy, keep the original, reassess its necessity, and continue independent authorized cleanup.
