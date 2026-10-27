@@ -1,14 +1,12 @@
 ---
 name: ghostty-use
 description: >-
-  Snapshots, restores and reconciles Claude Code / Codex sessions inside Ghostty tabs
-  across reboots. Use when quitting the Mac for an update (保存终端会话 / 重启前备份终端),
-  after restart to reopen tabs with their original session IDs (恢复之前的窗口 / restore
-  my ghostty tabs), or to audit which sessions survived. Not for resuming one conversation
-  via its own --resume, terminal screenshots, or tmux state. Also use for periodic
-  change-only snapshots (定期增量快照 / 没变化不记录).
-  Also use before or after a manual Codex account switch for unmanaged/legacy sessions
-  (额度耗尽换号 / 换号后恢复全部 Codex). Minions native_runtime sessions use Account Manager instead.
+  Snapshots/restores Ghostty Claude Code/Codex tabs across reboots. Use before Mac updates
+  (保存终端会话/重启前备份终端), after restart to reopen original session IDs
+  (恢复之前的窗口/restore my ghostty tabs), audit survivors, or periodic change-only snapshots
+  (定期增量快照/没变化不记录). Also for unmanaged/legacy Codex account switches
+  (额度耗尽换号/换号后恢复全部 Codex); Minions native_runtime uses Account Manager.
+  Not for --resume, screenshots or tmux.
 ---
 
 # ghostty-use
