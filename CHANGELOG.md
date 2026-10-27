@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **read-codex-history** (`daymade-claude-code` v4.32.0 → v4.33.0): Resolve UUID prefixes through bounded state-index queries and verify unique matches against original session metadata. Separate ambiguous and unavailable results, document strict inventory JSON parsing, and route identity-only requests without full inventory or writer-lock probes. Change type: additive lookup capability.
+
 - **frontend-visual-qa** (v1.21.26 → v1.21.27): Prepare existing business records for data-bearing demos by checking identity, date filters and observation windows, preserving legitimate empty or net-zero states, and verifying populated states in the delivered artifact. Change type: bounded execution-recipe clarification.
 - **tibo-reset-codex** (v2.5.2 → v2.5.3): Bind multi-account transport diagnosis to the actual consumer, its configured egress and the real Usage endpoint; preserve the no-credential-copy boundary. Resolve the existing Playwright dependency without manual `NODE_PATH`, and keep browser navigation failures unknown instead of misreporting a logged-out account. Change types: bounded diagnostic correction and deterministic launcher repair.
 
