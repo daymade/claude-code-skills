@@ -322,7 +322,16 @@ rule（`--add-context-rule`）或先 `--probe` 标定, because the add-time
 validators can only say "it is a real word in Chinese", never "how often it
 is real in this corpus".
 
-**Roster format** (canonical: `### Name` + `- **ASR 变体**: variant1, variant2`):
+**Unlock order for a ruled family.** A user ruling makes the canonical form
+authoritative, but the resolve gate reads machine-readable claims only, and
+`--add` is refused while OPEN rows touch the pair. The working sequence:
+`--add-context-rule <variant> <canonical>` first — anchored context rules have
+no person-gate and no OPEN-row block — which puts the canonical form into the
+"context rules" lookup class in the table above; then resolve each OPEN row
+with `--authority` citing the rule or the ruling. Prose citations like
+「context.md 台账行」 in `--authority` fail `target_unknown`: the gate reads
+artifact classes, not prose. (2026-10-28: first applied end-to-end on a
+21-variant person-name family.)
 ```markdown
 ### Ada Lovelace
 - **ASR 变体**: Aida, 艾达
