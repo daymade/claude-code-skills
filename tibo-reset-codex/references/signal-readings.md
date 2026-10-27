@@ -11,12 +11,13 @@ uv run python scripts/signal_readings.py --source community-x --input <thread.js
   --window-start <本轮反馈窗口起点ISO> --checked-at <实际获取时刻ISO>
 ```
 
-默认显示前十条元数据，`examined/displayed/omitted` 区分输入条数与输出条数；
+`examined/displayed/omitted` 区分输入条数与输出条数；展示上限由
+[signal_readings.py](../scripts/signal_readings.py) 的 `--limit` 参数定义。
 调整 `--limit` 读取剩余定位。脚本不联网、不改原响应、不回显长正文。
 按 `source_record` 或 `body_pointer` 回原文件读完整候选及承重 parent、quote、图片；
 元数据成功不证明正文已读或来源穷尽。
 
-## 分开记录三种时刻
+## 区分来源时刻与查询时刻
 
 - `source_posted_at`：原帖发布时间；通过独立取得的原帖响应按 status ID 绑定。
 - `operator_observed_at`：追踪站运营者声称观察到状态变化的时刻，不是原帖时间。

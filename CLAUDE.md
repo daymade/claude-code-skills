@@ -360,10 +360,10 @@ For self-hosted routing, resource limits or cache persistence, follow its
 [runner acceptance](github-ops/references/workflow_operations.md#self-hosted-runner-capacity-and-acceptance).
 Keep demand selection, validation-reuse and capacity acceptance in those owners.
 
-For browser-backed recurring jobs, enter
-[macos-watchdog](daymade-macos/macos-watchdog/SKILL.md) and apply its deployment
-acceptance before shipping. That Skill owns resource-budget and focus evidence;
-keep the detailed procedure there.
+For automatic observers or recovery jobs, begin with
+[ordinary-entry and lifecycle acceptance](daymade-macos/macos-watchdog/SKILL.md#bind-the-ordinary-entry-before-choosing-a-mechanism),
+including recovery after temporary protection. Browser-backed recurring jobs also
+use that Skill's deployment acceptance for resource-budget and focus evidence.
 
 Before selecting file-event or periodic triggers, follow
 [macos-watchdog's trigger and acceptance workflow](daymade-macos/macos-watchdog/references/event-driven-observers.md).
@@ -589,11 +589,12 @@ owns candidate output. An unfulfilled
 reset promise, missing execution signals or deadline-bound quota work enters the Skill's
 [monitoring and stop contract](tibo-reset-codex/SKILL.md#监测轮从信息到可行动信号) and
 [output contract](tibo-reset-codex/SKILL.md#输出合同先给结论再交代边界).
-Before using a third-party date or Yes/No as a reset signal, check its source-post
-chronology (an operator-entered event cites no source post), whether it observes
-account quota changes or only classifies posts, and whether the monitor completed a
-plausible-time check. The Skill owns the
-detailed procedure.
+Before interpreting tracker timestamps, Yes/No labels or mixed X reply results,
+follow [signal readings](tibo-reset-codex/references/signal-readings.md).
+For recurring community queries, follow
+[community increments](tibo-reset-codex/references/forecast-feedback.md#社区增量读取);
+when preparing the next monitor invocation, follow
+[handoff carry-forward](tibo-reset-codex/references/forecast-feedback.md#交接结转).
 [Next-reset forecast](tibo-reset-codex/references/next-reset-forecast.md) owns
 date judgments; [forecast feedback](tibo-reset-codex/references/forecast-feedback.md)
 owns recording, review and withdrawal, with
