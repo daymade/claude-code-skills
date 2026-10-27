@@ -26,9 +26,9 @@ description: >-
    `disabled` to be false before describing the job as enabled. Require the
    scheduling comparisons in § Scheduling flags to be true, including when
    an expected key is absent. Null scheduling flags mean incomplete evidence.
-5. Verify the owning job's completed native round and business output separately.
-   Do not use `loaded: true`, a matching configuration or a running process as
-   proof of successful work, public-output freshness or failure-path health.
+5. Complete [ordinary-entry and recovery acceptance](../SKILL.md#bind-the-ordinary-entry-before-choosing-a-mechanism)
+   separately from this configuration comparison. Before declaring the job healthy,
+   follow the [failure-path checks](../SKILL.md#troubleshooting-quick-map).
 
 ## Apply the helper's supported boundary
 
@@ -48,8 +48,9 @@ description: >-
   ENV as an empty map, which fails any nonempty expected ENV.
 - Preserve unknown for values this text format cannot represent unambiguously
   (for example multiline arguments). Do not normalize them into a match.
-- Use `--timeout <seconds>` only within `(0, 30]`; retain the default 5 seconds
-  per command otherwise. Expect exactly two read-only native commands:
+- Leave `--timeout` unset unless the task needs an override; the
+  [helper](../scripts/inspect_native_job.py) defines its accepted range and default.
+  The read-only native commands are
   `launchctl print` for the service and `launchctl print-disabled` for its GUI
   domain. Do not install, reload, restart or signal jobs through this helper.
   Accept native disabled-state entries expressed as `enabled` / `disabled` or

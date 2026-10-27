@@ -277,7 +277,24 @@ with open(p, 'w') as f:
 # Launch a profile
 # ---------------------------------------------------------------------------
 
+# claude-profile-native-command-api: 1
+claude-profile-with-command() {
+    local native_command="${1:-}"
+    case "$native_command" in
+        /*) [ -f "$native_command" ] && [ -x "$native_command" ] || return 126 ;;
+        *) echo 'native profile command must be an absolute executable' >&2; return 64 ;;
+    esac
+    shift
+    _claude-profile-launch "$native_command" "$@"
+}
+
 claude-profile() {
+    _claude-profile-launch '' "$@"
+}
+
+_claude-profile-launch() {
+    local native_command="$1"
+    shift
     local profile="${1:-}"
     shift || true
 
@@ -326,7 +343,11 @@ claude-profile() {
         echo "[WARN] plugin sync SKIPPED: python3 or claude-plugins-sync.py missing ($syncer) — marketplaces may report 'corrupted installLocation'." >&2
     fi
 
-    CLAUDE_CONFIG_DIR="$profile_dir" claude --settings "$settings_file" "$@"
+    if [ -n "$native_command" ]; then
+        CLAUDE_CONFIG_DIR="$profile_dir" "$native_command" --settings "$settings_file" "$@"
+    else
+        CLAUDE_CONFIG_DIR="$profile_dir" claude --settings "$settings_file" "$@"
+    fi
 }
 
 # ---------------------------------------------------------------------------

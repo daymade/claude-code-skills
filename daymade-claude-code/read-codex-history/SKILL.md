@@ -248,6 +248,41 @@ coordinates, and `truncated: false`. Missing requested ordinals fail visibly.
 Zero matches apply only to the reported scope. `--full` still governs prose
 briefing clipping; it does not turn a briefing into complete tool evidence.
 
+### Suspected termination evidence
+
+To investigate whether a recorded batch or controller was terminated, route into
+the recorded run's own evidence chain instead of a bare process search:
+
+1. Select the exact Session by identity, then read the original paired tool
+   records with `--tools`, pairing each result with `paired_call`. A literal
+   `--contains kill` returning zero matches cannot prove that no termination was
+   attempted: `--contains` filters literal substrings within the reported scope
+   only, and the recorded command may name signals without the word "kill".
+   A match in a path, quoted source or code edit is also not proof that a signal
+   was sent; inspect the actual operation and its paired result.
+2. The declared logical history expands root-to-selected ancestor records only.
+   Separate subagent/child threads and attachment bytes are not expanded, so a
+   child's termination evidence lives in the child's own records or its own run
+   receipt — not in the parent's logical history.
+3. Distinguish three facts that do not prove each other: a signal attempt
+   recorded in the controller's session, the child's actual exit (its own return
+   code or process evidence), and later UI or business cleanup. Establishing one
+   never establishes another.
+4. Follow the recorded runner: read its dispatch record's runner/script
+   fingerprint together with the run's retained summary (timeout, cancel, and
+   exit fields) and the versioned cleanup implementation of that recorded ref.
+   Preserve the original script version when current source differs; a bare
+   process-name or `kill` search cannot reconstruct this chain.
+5. Record the searched time bounds next to every conclusion. An observed symptom
+   time (or an approximate period such as "that afternoon") bounds the symptom,
+   not its cause: the causing controller action may fall in an earlier interval
+   the reader never searched. A filter that starts at a chosen cutoff silently
+   omits everything before it, so zero matches inside a filtered window is a
+   scoped miss — never global absence, and never a reason to sweep the raw
+   corpus. When evidence points earlier, widen only the already-selected task's
+   or candidates' window, state the corrected bounds, and re-read the same
+   records within them.
+
 ### Indexed content search
 
 The index returns candidates from stored prose. Read the exact rollout to check

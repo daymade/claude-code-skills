@@ -11,12 +11,13 @@ uv run python scripts/signal_readings.py --source community-x --input <thread.js
   --window-start <本轮反馈窗口起点ISO> --checked-at <实际获取时刻ISO>
 ```
 
-默认显示前十条元数据，`examined/displayed/omitted` 区分输入条数与输出条数；
+`examined/displayed/omitted` 区分输入条数与输出条数；展示上限由
+[signal_readings.py](../scripts/signal_readings.py) 的 `--limit` 参数定义。
 调整 `--limit` 读取剩余定位。脚本不联网、不改原响应、不回显长正文。
 按 `source_record` 或 `body_pointer` 回原文件读完整候选及承重 parent、quote、图片；
 元数据成功不证明正文已读或来源穷尽。
 
-## 分开记录三种时刻
+## 区分来源时刻与查询时刻
 
 - `source_posted_at`：原帖发布时间；通过独立取得的原帖响应按 status ID 绑定。
 - `operator_observed_at`：追踪站运营者声称观察到状态变化的时刻，不是原帖时间。
@@ -51,3 +52,16 @@ Reddit 等页面只给“几分钟前”且无法核实绝对时刻时，标为�
 已有证据足以决定当前账号是否能继续工作时先报告可用额度、备用现值及查询时刻；
 本轮事件归因、运营者观测和全员范围分别说明。不得因官方确认尚缺而隐去已核现值，
 也不得为给出肯定结论降低 `reset_attribution.py` 的 claim gate。
+
+### 回复样本判读
+
+执行者先保留原集合，再按 status ID、作者、原始时间及可取得的 parent/thread 关系辨认
+主帖、相关回复和无关或关系未核条目。相关性不能仅由作者相同、包含 `reset` 或出现在同一
+响应中决定；关系字段缺失时沿原帖补证，仍取不到就保留未核。引用帖不自动算主帖的回复。
+
+需要报告覆盖数量时分别给原始项数、已确认相关回复数与无关／未核项数；未分类完就不报
+有效回复总数。广告、推荐、主帖或旧帖可能占用返回项，固定返回 50 项不证明读到了 50 条回复。
+没有接口的穷尽标记和明确范围，只能说样本内未见某信号；有界网页观察也仍是 `partial`。
+
+`signal_readings.py` 只整理已有响应的时间和来源，不认证任意条目的线程归属或回复穷尽；
+本段由执行者核对原文与关系证据，不能拿脚本成功或 `examined` 数值代替。

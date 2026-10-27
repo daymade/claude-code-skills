@@ -68,32 +68,36 @@ def observe(gs):
             continue
         parent_row = graph.get(p["ppid"])
         wrapper = watch.cli_identity(parent_row) if parent_row else None
-        if wrapper and wrapper[0] == "codex" and wrapper[3] == 1 and parent_row["tty"] == p["tty"]:
+        if (wrapper and wrapper[0] == "codex" and wrapper[3] == 1
+                and parent_row["tty"] == p["tty"]
+                and (identity[1] is None or identity[1] == wrapper[1])):
             continue
-        candidates.append((p, identity[1]))
+        candidates.append((p, identity[1], identity[2] is None))
     if len(candidates) > watch.MAX_SESSIONS:
         raise ValueError("Codex inventory exceeds observation limit")
     if not candidates:
         return gs.SessionList()
-    pids = [p["pid"] for p, _ in candidates]
+    pids = [p["pid"] for p, _, _ in candidates]
     raw = watch.run_bounded(["/usr/sbin/lsof", "-a", "-p", ",".join(map(str, pids)),
                              "-d", "cwd", "-Fpn"], deadline, counters)
     cwds = watch.parse_cwds(raw, pids)
-    seen, fresh, identities = {}, [], set()
-    for p, sid in candidates:
+    seen, fresh, identities, unresolved = {}, [], set(), []
+    for p, sid, opaque in candidates:
         started = gs._proc_start(p["pid"])
         if started is None:
             raise ValueError("Codex process start unavailable; inventory is incomplete")
         entry = dict(tool="codex", pid=p["pid"], started=started, tty=p["tty"],
-                     cwd=cwds[p["pid"]], cmdline=p["cmdline"], profile="direct")
-        if sid:
+                     cwd=cwds[p["pid"]], cmdline=p["cmdline"],
+                     profile="unknown" if opaque else "direct")
+        if opaque:
+            unresolved.append(dict(entry, cmd=p["cmdline"], reason=watch.OPAQUE_REASON))
+        elif sid:
             if sid in identities:
                 raise ValueError("same Codex session is running in multiple Ghostty surfaces; resolve duplicates first")
             identities.add(sid)
             seen[sid] = dict(entry, sid=sid, anchor="argv", transcript=None)
         else:
             fresh.append(dict(entry, cmd=p["cmdline"]))
-    unresolved = []
     for p in gs._assign_transcripts(fresh, seen):
         if "sid" in p:
             seen[p["sid"]] = {k: v for k, v in p.items() if k != "cmd"}

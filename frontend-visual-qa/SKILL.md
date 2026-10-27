@@ -245,6 +245,11 @@ run final evidence on the original URL. The detailed page-state probe,
 §2–§5. Record the final URL and dimensions before CSS diagnosis, then restore
 the user's expected viewport when finished.
 
+For a data-bearing Demo that promises existing activity but renders zero/empty,
+load the reference's
+[Data-bearing Demo states](references/browser-driving-and-observation-traps.md#data-bearing-demo-states)
+recipe before judging the state.
+
 For a loading-speed claim, read §2's performance-comparison boundary before measuring.
 
 For hidden-page polling, read that reference's **Verify polling stops in a genuinely
@@ -311,9 +316,11 @@ population against the task, not only its repetition candidates. Complete
 inventory coverage is not proof that the content is necessary.
 
 For a publication whose local checks pass but discovery or reading still feels
-cluttered, use the [publication journey cases](references/publication-journey-cases.md)
-to calibrate whole-path findings against a failing case and a healthy control.
-These synthetic cases supplement the existing necessity check, not a style score.
+cluttered, including feedback such as “还有 AI Slop”, use the
+[publication journey cases](references/publication-journey-cases.md) to calibrate
+whole-path findings, including the declared controls, deks and expanded summaries,
+against failing and healthy cases. These supplement the existing necessity check,
+not a style score.
 
 Some defects produce no diagnostic anywhere: a global reset outranking a
 component's own styles, a library renaming its internal DOM classes so whole
@@ -412,7 +419,8 @@ For UI refactors, category splits, or navigation changes, first apply the
 Derive affected journeys from the immutable pre-change version, then verify them
 on the current target; the new navigation alone cannot define what survived.
 For refresh/deep-link/return checks, use that reference's **Route And Addressability**
-recipe, including repeated occurrences when the product promises to retain them.
+recipe, including default-entry and late-data controls when startup is affected,
+and repeated occurrences when the product promises to retain them.
 
 **A visible signifier is not proof of behavior — trigger every relevant control
 whose side effects fit the explicit action authority, confirm the response, and

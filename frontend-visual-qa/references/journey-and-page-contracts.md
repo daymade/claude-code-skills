@@ -178,6 +178,13 @@ generic active-section algorithm.
   discoverable, and the sidebar does not conceal document actions below it.
 
 Keep a healthy ordinary reading/return control alongside the reproduced defect.
+For a promised Reader return, leave a nonempty Find query and scroll the actual
+reading container away from zero before leaving. Reopen the same document and
+version through ordinary controls; compare its identity, query, visible passage
+and scroll owner. Wait for the Reader to be visible with nonzero layout before
+measuring: a retained hidden pane reporting zero scroll does not by itself prove
+lost position. Keep a visible reset-to-top as the failing control and a restored
+passage as the healthy control; switching documents tests a different contract.
 Retain screenshots of the failing and repaired positions with their version
 identities, and record the observed cue, visible heading, controls and return
 target. Reuse unaffected evidence; do not run a full viewport/state Cartesian
@@ -403,6 +410,31 @@ are affected, or when the user requests a broad gate.
   safe action.
 
 ## Route And Addressability
+
+### Default entry and late-arriving data
+
+When the claim concerns what users see on opening the product, test the ordinary
+entry separately from an explicit object deep link. Record the expected startup
+state from the product contract, including saved-selection policy. Open the
+canonical URL in its intended authentication state without adding an object ID,
+preselecting content or clicking into the improved view to rescue the result.
+A successful detail view does not settle the default-entry claim.
+
+For an affected multi-source or staged-loading entry, use the existing isolated
+harness to control response order, then verify the representative real entry:
+
+| Synthetic sequence | Observation to decide against the product contract |
+|---|---|
+| Fresh empty first source, then valid work from another source | Does the later work reach the promised startup view without a manual rescue? |
+| The same sequence after an explicit deep link or user navigation | Does the original selection or user-chosen view retain precedence? |
+| Complete fresh empty results from every contracted source | Is the legitimate empty state usable without invented work? |
+
+Record visible state and route at each relevant arrival. Do not treat one
+source's successful empty response as proof the full inventory is ready, or
+prescribe automatic selection for products that do not promise it. An isolated
+replay establishes the arrival mechanism; it does not replace live-entry evidence.
+
+### Navigation and occurrence preservation
 
 For every real page, tab, workspace, or map view under review:
 

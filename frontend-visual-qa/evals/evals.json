@@ -591,6 +591,63 @@
         "Accepts honest Execution unknown and useful localized failure/Retry while preserving original reading; does not invent idle, completed or declared responsibility",
         "Limits any verified claim to observed synthetic fixture states and leaves unavailable runtime/rendering or real user adoption unknown"
       ]
+    },
+    {
+      "id": 40,
+      "name": "branch-replay-reader-meaning-and-necessary-legend",
+      "prompt": "Audit only two synthetic diagram inventories for the same replay. The reader must tell which saved attempt is being inspected, distinguish stored-but-unread records from events that have not happened, and choose where to continue. The data contract says both continuations are already stored, the two buttons choose alternative views, and neither choice scores performance. Inventory A labels nodes root/A1/B1, uses buttons P and Q, says A1 + B1, and captions its view Only the initial workspace and first attempt are revealed while an extra orange continuation is visible. Its checks confirm all labels exist and both buttons change aria-pressed. Inventory B names the initial workspace and saved attempts, labels buttons View the first attempt's successor and View another attempt from the initial workspace, and its visible branch matches the selected action. In B the only legend says The outlined node is the current viewing start; dashed branches are saved records not yet read. A minimal B variant removes that legend but leaves dashed branches unexplained. An attributed original source still says root and A1. Give separate verdicts for A, B and the minimal B variant. No runnable page or screenshot is supplied; do not invent a visual test.",
+      "expected_output": "Rejects A's contradictory state and unexplained operational symbols despite working buttons. B is semantically consistent on the supplied inventory, with live pixels/interactions unverified. Keeps B's decision-bearing legend, identifies the minimal variant's ambiguity, and preserves attributed original source text.",
+      "files": [],
+      "expectations": [
+        "Identifies the visible extra continuation contradicting A's claimed revealed state rather than passing on aria-pressed or string presence",
+        "Explains the chosen object, alternative-view behavior and stored-but-unread status without inferring a winner, a score or newly generated records",
+        "Retains or equivalently encodes B's viewing-start and dashed-branch meanings; does not reward removing the necessary legend merely for fewer words",
+        "Keeps the attributed source quotation unchanged and does not apply an identifier blacklist to originals",
+        "Limits B's positive judgment to supplied semantic consistency; unavailable rendering, real clicks and human acceptance remain unverified"
+      ]
+    },
+    {
+      "id": 41,
+      "name": "whole-network-local-neighborhood-and-inspector-continuity",
+      "prompt": "Audit only a supplied research-interface journey. A reader who knows no paper name needs to find shared references and different connected areas before choosing a work. The reference provides an overview and selected-work inspector. Our candidate correctly shows neighbors after the evaluator supplies a known work, and all source links open; the author calls that whole-site parity. A revised inventory exposes an overview and selected-work inspector. On entering Selected neighborhood, that inspector drops the current work's identity, summary and explicit detail/comparison actions; a central SVG node still links to its detail, but the novice did not discover it and returned to the overview. In the overview circles mean methods and squares benchmarks; the neighborhood draws every work as a circle, including named benchmark neighbors. State the failed reader tasks, healthy controls and smallest affected follow-up. No runnable app is supplied.",
+      "expected_output": "Rejects local supplied-name success as whole-collection orientation proof, flags cross-view shape inconsistency and the loss of explicit selected-object actions, recognizes that the central link still provides a route, and keeps the correction bounded to the reader task rather than requiring the reference's exact graph or a redesign.",
+      "files": [],
+      "expectations": [
+        "Separates unknown-name global orientation from a known work's local citation task; does not use node totals or working links as parity evidence",
+        "Flags benchmark circles in the neighborhood as a cross-view semantic inconsistency against the supplied legend",
+        "Describes disappearing explicit actions as discovery friction while acknowledging the existing central detail link; does not invent an absolute navigation block",
+        "Preserves the valid known-work neighborhood and source-link controls, and asks for only the affected overview-to-neighborhood/detail-return replay",
+        "Leaves live rendering and reader benefit unverified and does not demand copied graph styling, every taxonomy field or an unrelated feature"
+      ]
+    },
+    {
+      "id": 42,
+      "name": "publication-copy-residuals-after-local-green",
+      "prompt": "Audit only this anonymized research-publication inventory. The user says 还有 AI Slop after an earlier release. The declared surface is the bilingual homepage controls and all supplied card deks and expanded summaries; article bodies are outside this audit. The actor wants to choose an article, understand its reported mechanism or comparison, and open the cited edition. Earlier checks found working View buttons, source links and comparison selection, correct layout and passing SEO. The earlier fix reworded controls and removed a separate explanation band, but viewing narration still repeated the selected action; the diagram key remained. The user singles out card A's dek ending 图中的取格范围让区别清晰起来 after a sentence already distinguishing final overall performance from old-task retention. Other supplied cards: B's dek ends 解释了这项贡献该怎样理解, while its expanded summary still says 成绩需要连着各自评测口径读. Synthetic card C says A call count describes discovery effort and elapsed time describes a solver's runtime; its expanded summary has the reported 317 versus 550 discovery calls, a lower mean solver time driven by one dataset, and five other datasets becoming slower. D's summary says 作者报告的生产收益，把模型生成的代码与模型训练基础设施连了起来；随后训练出的模型是否更会发现算法，所提供的案例尚未测量. Its preceding sentences already specify a matrix-tiling rule, real-TPU runtime evaluation and separate optimization/evaluation input shapes. Give findings and dispositions across the declared supplied groups, with any necessary next probe. No live page, screenshot or write permission is supplied.",
+      "expected_output": "Does not stop at the named card or pass on controls/layout/SEO. Finds residual self-praise and reader instruction in A and B including the opened summary, considers whether C's correct definitions actually serve the comparison task, and separates D's abstract restatement from its necessary unmeasured-outcome boundary. Keeps source access and the necessary key, and limits conclusions to the supplied semantic evidence.",
+      "files": [],
+      "expectations": [
+        "Covers A, B's dek and expanded summary, C and D rather than treating the user's singled-out A as the entire complaint; does not claim an article-body review",
+        "Identifies A's self-praise and B's residual reading instruction with a concrete missing comparison or reader consequence; does not certify closure merely because the short dek was shortened",
+        "Recognizes that C's metric definitions can remain insufficient for this comparison task despite being true, and considers the reported contrast without requiring every number in the initial card",
+        "Dispositions D's clauses separately: the connection restatement can be removed or rewritten while the unmeasured later-model outcome is preserved; inability to delete the whole sentence does not establish that it needs no edit",
+        "Retains source/edition access and the decision-bearing diagram key; does not infer redundancy from negative wording, bilingual controls or a generic keyword list",
+        "Does not promote working buttons, layout, SEO, fewer words or an unrun scan to copy acceptance, invent a browser run or claim human endorsement; preserves audit-only authority and the declared surface"
+      ]
+    },
+    {
+      "id": 43,
+      "name": "publication-concrete-revision-with-scientific-boundaries",
+      "prompt": "Audit only a supplied final revision candidate for the same research-reading task: choose an article, understand the reported comparison and open the cited edition. The replay-study dek says recorded attempts let policies test different continuations without repeating discovery. Its expanded summary attributes a five-round comparison to the authors: 317 versus 550 discovery calls and 2931.0 versus 3587.1 ms mean solver time across six held-out datasets; one dataset drives the lower mean while all five others become slower. It says incumbent retention guarantees a non-decreasing mean replay score only on the identical fixed history pool, not improvement in later online searches. A kernel-study summary explains the tiling-rule experiment and says the supplied case did not measure whether a later trained model discovers better algorithms. Cards retain author attribution, an edition label and an Open original control. Bilingual View controls select saved views; the only key distinguishes the current viewing start from stored-but-unread dashed branches. Duplicate visible-outcome narration is absent. These are candidate source revisions, not user-endorsed templates; no live page, clicks, paper revalidation or human acceptance is supplied. Give dispositions and limits without applying a generic remove-all-explanation policy.",
+      "expected_output": "Accepts the supplied concrete comparisons as addressing the earlier semantic gap, preserves the study limits, source identity and necessary diagram key with their reader consequences, and keeps current rendering, behavior, scientific revalidation and human approval unverified. Does not turn the candidate into a universal template or force all expanded detail into the first card.",
+      "files": [],
+      "expectations": [
+        "Explains why the concrete reported contrast answers a different question from generic metric definitions and permits detailed results in the expanded summary",
+        "Retains the one-dataset/five-slower contrast and fixed-history versus later-online limit because deleting them would overstate what the reported mean and guarantee establish",
+        "Retains the kernel study's unmeasured later-model outcome; does not flag a scientific limitation as producer self-defense merely because it states a negative",
+        "Preserves author attribution, edition, original access and viewing-start/stored-but-unread key by their specific reading consequences, without reintroducing the duplicate outcome narration",
+        "Separates semantic candidate usefulness from unobserved pixels, real control behavior, scientific fact revalidation and human style acceptance; does not claim every sentence was user-approved or prescribe the candidate as a fixed template"
+      ]
     }
   ]
 }

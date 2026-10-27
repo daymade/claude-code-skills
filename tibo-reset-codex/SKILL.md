@@ -229,7 +229,8 @@ stdin/heredoc 及 Python/Node 子进程调用却可能报 `Failed to start ego l
    不是承诺与产品相矛盾；也不能据此断言后端尚未执行或已在其他账户到账。
    从帖子引用、回复对象、官方事故、独立账户观测和用户已授权的社区记录中选最有辨别力的
    下一跳。用户已指出「VIP 1群|一支烟花社区」是本案有效的补充发现源；正常轮若尚无该群
-   的新鲜覆盖，就用现有 `read-wechat-messages` 读取其增量，包含纯图片与语音，随后回原帖
+   的新鲜覆盖，就按[社区增量读取](references/forecast-feedback.md#社区增量读取)调用现有
+   `read-wechat-messages`，包含所选片段的纯图片与语音，随后回原帖
    核验。读取成功后，在本地 handoff 写明平台、成功部署标签、完整群名、talker、时间/seq
    游标与媒体覆盖；下一轮先复用这次成功定位，失败再检查部署或换源。私有 talker 只写本地
    台账，不写进公开 Skill。相关群会随用户反馈和实际信号增减，不把这个群写成永远完整的来源清单。群消息是
@@ -255,8 +256,8 @@ stdin/heredoc 及 Python/Node 子进程调用却可能报 `Failed to start ego l
    此刻兑现备用等于白扔库存（2026-10-11 实测：4 账号全空 + EOD 官宣在途，官宣后 5h45m 落地、
    距 EOD 上限仍提前 ~3h，2 次备用保住未花）。
 5. **把下一轮要接的状态落下。** 在本轮最后追加一条 `invocation=monitor` 的交接 finding；
-   `query` 写当前监测问题，`endpoints=[]`、`readings={}`，`notes` 写本轮 UTC 检查时刻、新线索、已排除解释、
-   未决问题、候选来源、各来源覆盖、下次触发条件及用户纠偏。重要判断另按预测路径保存或
+   `query` 写当前监测问题，`endpoints=[]`、`readings={}`，按[交接结转](references/forecast-feedback.md#交接结转)
+   保留本轮判断、带观测时刻的来源状态、未决问题、下次触发条件及用户纠偏。重要判断另按预测路径保存或
    修订预测，并以 `evidence_refs` 链接原始读数。没有新信息也更新下一轮应检查的条件；不得以「连续数日
    没信号」自行拉长宿主调用间隔。Skill 只能规定被调用时的行为，不能凭一次执行证明未来
    定时唤起、消息送达或 ACK 已生效。
@@ -387,9 +388,10 @@ curl -sS --max-time 20 "https://api.fxtwitter.com/<user>/status/<status-id>" \
   （被回复人 handle）与 `replying_to_status`（被回复帖 id）足够判断一条已知帖子是否为回复，
   被回复帖本身再用同一条命令取一次；但它**不能枚举主帖下有哪些回复**。主帖零命中、主帖时间线
   无新项，或某个 CLI search 返回 404，都不能写成「没有回复」。
-- 已知候选帖（官宣帖、落地帖）的回复链核验有更便宜的路：`twitter tweet <id> --json` 一次返回
-  主帖＋replies（作者字段是 `data[].author.screenName`——不是 `userName`，2026-09-24 实测
-  50 items，据此确认承诺帖下 Tibo 本人零回复）。它只给「这一条帖下的回复」；「他最近回过谁」
+- 已知候选帖（官宣帖、落地帖）的回复链核验可用 `twitter tweet <id> --json`；返回集合可能混有
+  主帖、回复和无关条目，不能把 `len(data)` 当回复数或穷尽信号。作者字段是
+  `data[].author.screenName`，不是 `userName`。按[回复样本判读](references/signal-readings.md#回复样本判读)
+  核对作者、时间和线程关系；未见本人回复只报告「本次样本中未见」。它不枚举本人全部回复；「他最近回过谁」
   的发现性扫描仍走下面的网页滚动法。`twitter search`（含 `from:` 查询）实测 HTTP 404，搜索路线不可用。
 - **有界 reply 发现路径**（2026-09-23 已登录 X 原站实测能看到一条主帖入口遗漏的旧回复）：
   1. 先固定起点：上次**可靠** reply 检查的 UTC；没有就用本任务窗口或当前未决承诺的起点。

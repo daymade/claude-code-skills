@@ -100,6 +100,7 @@ def list_sessions(resolve_uuidless=True):
         procs[int(parts[0])] = (parts[1], parts[2])
     seen = {}
     uuidless_by_tui = {}
+    opaque_by_tui = {}
     for pid, (tty, cmd) in sorted(procs.items()):
         if any(p in cmd for p in SKIP_PATTERNS):
             continue
@@ -111,9 +112,16 @@ def list_sessions(resolve_uuidless=True):
         if tool == "codex":
             # Share the watcher's option-aware command classification: daemon is
             # a service subcommand, while --no-daemon and option values are TUIs.
-            from ghostty_watch import cli_identity
-            if cli_identity({"cmdline": cmd}) is None:
+            from ghostty_watch import OPAQUE_REASON, cli_identity
+            identity = cli_identity({"cmdline": cmd})
+            if identity is None:
                 continue
+            if identity[2] is None:
+                key = (tool, tty)
+                if key not in opaque_by_tui:
+                    opaque_by_tui[key] = {"pid": pid, "tty": tty, "tool": tool,
+                                          "cmd": cmd, "reason": OPAQUE_REASON}
+                continue  # prompt text is evidence, never an argv SID or transcript query
         m = UUID_RE.search(cmd)
         if m:
             sid = m.group(0)
@@ -132,7 +140,7 @@ def list_sessions(resolve_uuidless=True):
                                         "cwd": _proc_cwd(pid), "started": _proc_start(pid)}
             continue  # a node wrapper and its vendor child share one pty — one TUI
                       # (sorted pids keep the wrapper; their lstarts agree to ~1s)
-    unresolved = []
+    unresolved = list(opaque_by_tui.values())
     for proc in _assign_transcripts(list(uuidless_by_tui.values()), seen):
         if "sid" in proc:
             seen[proc["sid"]] = {

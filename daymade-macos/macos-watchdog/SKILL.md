@@ -17,7 +17,11 @@ Before selecting event/periodic triggers, a transport, or a helper, record these
 constraints from the original request in the current task plan; do not create a
 separate document for a simple task:
 
-- **Ordinary entry:** where the user will actually start or use the work.
+- **Ordinary entry:** where the user will actually start or use the work. When
+  its launcher adopts only some invocation or lifecycle forms, derive the
+  relevant forms from the current launcher and actual requested use; record
+  adopted, bypassed and unverified forms separately, and accept each claimed
+  form through its real consumer.
 - **Manual activation:** whether the request permits any extra command or setup
   after delivery.
 - **Lifecycle:** whether the result covers a session, login, or machine, and
@@ -33,6 +37,13 @@ A completed business round inside a helper alone is component-only evidence:
 leave the requested result unmet and continue authorized integration. Keep
 unauthorized or unobserved old-session takeover and other lifecycle coverage
 unknown; do not stop other tasks or bypass a host refusal to obtain acceptance.
+
+When a safety condition is temporary and automatic work must resume afterward,
+exercise its release in the same running instance: first verify no prohibited
+action, then remove that condition and require the next eligible event to
+complete the business action. A separate fresh-instance success, no-action
+result or health flag does not establish this transition; preserve explicit
+stop, lost identity and uncertain-delivery boundaries.
 
 Select event or periodic triggers for the problem being observed, then apply the quiet-watchdog contract before remediation.
 
@@ -73,7 +84,7 @@ The script's first act on every run: verify the state that justifies its existen
 
 Detection stays honest on every cycle, but the *disruptive action* defers until the failure persists across N consecutive cycles (patient mode). Rationale: oscillating chains self-recover in minutes; a force-reconnect on a self-limiting blip is net-harmful. Measure your system's real self-recovery window before choosing N (one chain's 94-min observatory run showed ≤3 min self-recovery → N=2 cycles at 5-min interval).
 
-When the trigger aggregates several independent sources into one verdict (not a single health check), the cross-source agreement fraction is a *second, separate* parameter from N — don't default to "all sources must agree." An all-or-nothing gate produces a false negative on exactly the correlated-but-partial incident the watchdog exists to catch, because real failures rarely take every source down at once (real case: a 9-source collection-health gate required 9/9 failing and missed a live incident sitting at 6/9; recalibrating against the actual incident data to a ≥60%-of-sources threshold caught it while three-fixture testing at 0%/11%/100% confirmed it still tolerated a single-source blip). Calibrate breadth (what fraction must agree) against real historical failure data the same way you calibrate depth (N) — a threshold picked from what "sounds strict enough" is a guess, not a calibration.
+When the trigger aggregates several independent sources into one verdict (not a single health check), the cross-source agreement fraction is a *second, separate* parameter from N — don't default to "all sources must agree." An all-or-nothing gate produces a false negative on exactly the correlated-but-partial incident the watchdog exists to catch, because real failures rarely take every source down at once (real case: a 9-source collection-health gate required 9/9 failing and missed a live incident sitting at 6/9; recalibrating against the actual incident data to a ≥60%-of-sources threshold caught it while fixture testing at 0%/11%/100% confirmed it still tolerated a single-source blip). Calibrate breadth (what fraction must agree) against real historical failure data the same way you calibrate depth (N) — a threshold picked from what "sounds strict enough" is a guess, not a calibration.
 
 Escalation ladder (cheap → disruptive): refresh state → restart connection → remote repair. Each rung verifies before climbing.
 
@@ -115,7 +126,7 @@ Verify the completed business round separately from registration or process stat
 6. **TCC / Full Disk Access**: a LaunchAgent reading protected files needs a working grant for its effective permission subject. Use `macos-permissions` to inspect TCC attribution and verify a protected read from the actual job; the shell's interpreter path alone does not decide this.
 7. **Batch throttling by default**: any watchdog loop that spawns work (replays, fuzz, batch scans, parallel API calls) needs an explicit rate cap as a default parameter, not a later optimization. To the machine, an unthrottled loop and a runaway process are indistinguishable (real case: an unthrottled test replay forked 1,041 processes/sec for 7 minutes and pushed the die to 83 °C).
 8. **Browser side-effect acceptance**: a successful data fetch alone does not prove a browser-backed watchdog is ready. The deploying operator must declare a budget for task-owned spaces and pages, then independently inventory them across multiple rounds, including injected initialization and cleanup failures. Counts must stay within that lifecycle budget; protect user-owned and unknown-origin pages throughout. If the task requires no focus stealing, independently observe the foreground app and visible windows during those rounds; CDP success is not focus evidence. For ego lite lifecycle, locking, ownership conflicts and cleanup readback, load the named Skill `ego-lite-use` when installed. Otherwise use the owning browser tool's documented lifecycle while meeting the same budget and readback requirements. Missing resource observations, or missing focus observations when no focus stealing is required, leave acceptance incomplete.
-9. **Sub-minute `StartInterval` is a BTM transition tax — prefer a `KeepAlive` loop for high-frequency probes.** Every periodic firing costs two launchd job state transitions (running + exited), and `backgroundtaskmanagementd` converts each into a store write plus a 250 ms-coalesced distributed `userDataDidChange` broadcast that drives LoginItems.appex full monitor rebuilds — the amplifier behind the 2026-10-06/10-17 watchdog panics. Three 30 s jobs alone cost ~16,200 transitions/day. A persistent job running an in-process loop (period = max(interval, runtime+1s)) keeps the cadence with zero steady-state transitions. Measured effect of converting the three biggest offenders: BTM-triggering monitor updates 0.45/s → ~0.20/s.
+9. **Sub-minute `StartInterval` is a BTM transition tax — prefer a `KeepAlive` loop for high-frequency probes.** Every periodic firing enters running and then exited; `backgroundtaskmanagementd` converts each into a store write plus a 250 ms-coalesced distributed `userDataDidChange` broadcast that drives LoginItems.appex full monitor rebuilds — the amplifier behind the 2026-10-06/10-17 watchdog panics. A persistent job running an in-process loop (period = max(interval, runtime+1s)) keeps the cadence with zero steady-state transitions. Measured effect of converting the three biggest offenders: BTM-triggering monitor updates 0.45/s → ~0.20/s.
 10. **macOS zeroes `XPC_SERVICE_NAME` for spawned children — identity guards break when you wrap the probe.** A launchd job process reads its own label, but every child it spawns (bash/sh/python) reads `XPC_SERVICE_NAME=0`, and `export` does not survive `exec` (measured on 27.0.1 with a dedicated probe job). A script whose guard is `[ "$XPC_SERVICE_NAME" = <label> ]` passes only when the script IS the job process. Wrap it in a loop/driver and the probe becomes a grandchild: the guard rejects 100% of iterations while `launchctl` shows `state=running` — one collector produced zero rows for 75 minutes. Pass identity through a different variable the driver sets (e.g. `<PROJECT>_CALLER_LABEL` via argv) and have the guard accept it as an alternative; direct execution stays refused because neither variable is set in a human shell.
 
 ### Persistent Python runtime
@@ -209,8 +220,8 @@ recoverable.
    explicitly instead of cleaning silently.
 
 Measured 2026-10-20 (wechat-print retirement): an every-minute
-`StartCalendarInterval` job had cost 2,880 launchd transitions/day of
-§ Deploy-9 BTM tax while emitting nothing but failure logs for six days.
+`StartCalendarInterval` job kept incurring § Deploy-9 BTM tax while emitting
+nothing but failure logs for six days.
 
 ## Troubleshooting quick map
 

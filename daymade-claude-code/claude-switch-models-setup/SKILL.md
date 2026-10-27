@@ -97,6 +97,23 @@ Check size, JSON validity, top-level key count, `hooks` length, unexpected `env`
 keys, and sandbox signatures such as `/bin/true`. Then scan the other profiles:
 scope is all of them, so one run can hit several.
 
+## Callers that capture native structured output
+
+Source `scripts/claude-profiles.sh` and call
+`claude-profile-with-command "<absolute-executable>" <profile> [claude arguments...]`
+when a caller must attach stdout capture at the native invocation. The supplied
+executable file (or a symlink to one) receives the original `--settings` and Claude arguments with the
+profile's `CLAUDE_CONFIG_DIR`; profile validation, synchronization, launch output
+and credentials keep their existing owners. The executable controls only its
+native invocation and returns that invocation's exit status.
+
+Use a trusted, version-matched script with the
+`claude-profile-native-command-api: 1` contract before invoking this entry. A caller
+that requires this boundary must refuse an unsupported script before running
+profile setup; intercepting a shell function named `claude` cannot cover `command
+claude` or an absolute native path. Ordinary `claude-profile` calls retain their
+existing behavior.
+
 ## One-Click Setup Workflow
 
 When the user says something like "set up Claude Code profiles" or "I want to use Kimi and DeepSeek in different windows":

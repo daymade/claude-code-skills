@@ -120,6 +120,7 @@ For next-increment selection after that reconciliation or a completed repair bat
 [increment-selection contract](app-evolver/references/evidence-and-fit.md#make-the-disposition-operational).
 When feedback questions navigation, information hierarchy or interface coherence, use its
 [structure comparison](app-evolver/references/evidence-and-fit.md#reconsider-interface-structure).
+For discovery-task changes, follow its [task-pivot and return-context cases](app-evolver/references/implementation-and-acceptance.md#task-pivots-and-return-context).
 
 For permission-sensitive fixtures, use Skill Creator's
 [execution-context verification recipe](daymade-skill/skill-creator/references/stateful-script-verification.md#execution-identity-and-permission-fixtures).
@@ -245,7 +246,8 @@ For persistent Python service installation, environment reuse or startup, follow
 
 For rendered UI freshness, delayed editor/batch responses or deployment acceptance, enter
 [frontend-visual-qa](frontend-visual-qa/SKILL.md).
-For publication-wide clutter despite passing local checks, use its
+For publication-wide clutter or AI Slop despite passing local checks, including
+controls, deks and expanded summaries, use its
 [publication journey calibration](frontend-visual-qa/references/publication-journey-cases.md).
 For the pre-release ancillary-copy gate or density/layout comparisons, follow
 [information necessity](frontend-visual-qa/references/history-derived-checklist.md#information-necessity-before-layout).
@@ -359,10 +361,10 @@ For self-hosted routing, resource limits or cache persistence, follow its
 [runner acceptance](github-ops/references/workflow_operations.md#self-hosted-runner-capacity-and-acceptance).
 Keep demand selection, validation-reuse and capacity acceptance in those owners.
 
-For browser-backed recurring jobs, enter
-[macos-watchdog](daymade-macos/macos-watchdog/SKILL.md) and apply its deployment
-acceptance before shipping. That Skill owns resource-budget and focus evidence;
-keep the detailed procedure there.
+For automatic observers or recovery jobs, begin with
+[ordinary-entry and lifecycle acceptance](daymade-macos/macos-watchdog/SKILL.md#bind-the-ordinary-entry-before-choosing-a-mechanism),
+including recovery after temporary protection. Browser-backed recurring jobs also
+use that Skill's deployment acceptance for resource-budget and focus evidence.
 
 Before selecting file-event or periodic triggers, follow
 [macos-watchdog's trigger and acceptance workflow](daymade-macos/macos-watchdog/references/event-driven-observers.md).
@@ -535,7 +537,7 @@ details belong in [the transport and receiver-evidence SOP](peer-message/referen
 Enter that SOP when diagnosing delayed Codex coordination or comparing live and queued receipts.
 Before asking about mutable ownership or a publication window, use the
 [fresh-state preflight](peer-message/references/coordination-and-learning-loop.md#51-发现别人的在制品先核实再问等一个有界窗口).
-For an inbound coordination envelope or a receive-integrity error, follow
+For an inbound coordination envelope, a native reply or a receive-integrity error, follow
 [receive, reply and closure](peer-message/references/local-coordination.md#收件回信和关闭).
 For oversized discovery responses or complete-title export, use its
 [discovery-output contract](peer-message/references/protocol-and-discovery.md#发现输出的范围).
@@ -575,7 +577,10 @@ That owner defines project-authorization recovery, credential-store selection an
 For Codex reset announcements or account quota questions, enter
 [tibo-reset-codex](tibo-reset-codex/SKILL.md). Follow its
 [account usage SOP](tibo-reset-codex/references/account-usage.md) for authentication,
-per-account verification, adjacent-reset attribution and browser restoration. Treat
+per-account verification, adjacent-reset attribution and browser restoration.
+For unused quota, reset gains or avoidable waste, follow
+[waste and added capacity](tibo-reset-codex/references/account-usage.md#浪费与新增容量).
+Treat
 [query_usage.py](tibo-reset-codex/scripts/query_usage.py) as the executable authority
 for query parameters, supported response fields and exit behavior;
 [reset_attribution.py](tibo-reset-codex/scripts/reset_attribution.py) owns mechanical
@@ -585,11 +590,12 @@ owns candidate output. An unfulfilled
 reset promise, missing execution signals or deadline-bound quota work enters the Skill's
 [monitoring and stop contract](tibo-reset-codex/SKILL.md#监测轮从信息到可行动信号) and
 [output contract](tibo-reset-codex/SKILL.md#输出合同先给结论再交代边界).
-Before using a third-party date or Yes/No as a reset signal, check its source-post
-chronology (an operator-entered event cites no source post), whether it observes
-account quota changes or only classifies posts, and whether the monitor completed a
-plausible-time check. The Skill owns the
-detailed procedure.
+Before interpreting tracker timestamps, Yes/No labels or mixed X reply results,
+follow [signal readings](tibo-reset-codex/references/signal-readings.md).
+For recurring community queries, follow
+[community increments](tibo-reset-codex/references/forecast-feedback.md#社区增量读取);
+when preparing the next monitor invocation, follow
+[handoff carry-forward](tibo-reset-codex/references/forecast-feedback.md#交接结转).
 [Next-reset forecast](tibo-reset-codex/references/next-reset-forecast.md) owns
 date judgments; [forecast feedback](tibo-reset-codex/references/forecast-feedback.md)
 owns recording, review and withdrawal, with
