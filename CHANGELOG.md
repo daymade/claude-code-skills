@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **peer-message** (v1.24.3 → v1.24.4): Clarify that a suppressed closed reply stops the old request without retry, transport switching or message rewriting, while genuinely new facts follow the independent new-notice branch; link native replies from repository startup guidance. Change type: documentation consistency correction.
+
 - **tibo-reset-codex** (v2.5.1 → v2.5.2): Route project-level monitoring instructions to canonical procedures and remove duplicated display defaults and derivable documentation counts. Runtime behavior is unchanged.
 
 - **macos-watchdog** (`daymade-macos` v1.26.2 → v1.26.3): Route native-readback and event-convergence acceptance through the ordinary-entry and recovery contract; keep timeout policy with its helper and remove derived counts from operating prose. Synchronize the project instruction entry. Change type: scoped documentation alignment.

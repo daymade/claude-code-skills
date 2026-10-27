@@ -210,7 +210,7 @@ python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord commit \
   --message-id '<prepared-id>' --outcome accepted
 ```
 
-`suppressed_closed_reply` 是发送前抑制，不是已回复；停止，不为该原请求继续派生动作。原生 `accepted` 仍只证明 transport 层；原问题处理完后才按上文 `finish`。
+`suppressed_closed_reply` 是发送前抑制，不是已回复；对该原请求停止，不重试、不换脚本发送，也不把旧回复改写成新消息绕过抑制。若另有会改变对方下一步的新事实，按 [新 notice 分支](protocol-and-discovery.md) 独立评估，不把它当作原请求的回复。原生 `accepted` 仍只证明 transport 层；原问题处理完后才按上文 `finish`。
 
 正常收件处理完或问题已有后续证据解决时 finish；返回 `closed`，不证明业务完成。
 处理中的会话中断后先核对该消息的实际后续动作，再由参与者 finish；不凭
