@@ -739,6 +739,32 @@ class ListSessionsAnchorTest(unittest.TestCase):
         self.assertEqual(sessions.unresolved, [])
         self.assertEqual({s["tty"] for s in sessions}, {"ttys042", "ttys043"})
 
+    def test_opaque_prompt_uuid_never_becomes_manual_identity_or_transcript_candidate(self):
+        rows = (f"  500 ttys042 codex resume {S_CODEX}\n"
+                f"  501 ttys043 codex discuss {S_DEAD} in prompt-with-quote\"\n")
+        def fake_run(args, **kw):
+            if args[:3] == ["ps", "-eo", "pid,tty,command"]:
+                return subprocess.CompletedProcess(args, 0, stdout=self.PS_HEADER + rows)
+            raise AssertionError(f"unexpected subprocess call: {args}")
+        for resolve in (False, True):
+            with self.subTest(resolve_uuidless=resolve), \
+                    mock.patch.object(gs.subprocess, "run", side_effect=fake_run), \
+                    mock.patch.object(gs, "_proc_cwd", return_value="/Users/x/demo"), \
+                    mock.patch.object(gs, "_proc_start", return_value=1000.0), \
+                    mock.patch.object(gs, "_transcript_candidates",
+                                      side_effect=AssertionError("opaque transcript lookup forbidden")), \
+                    mock.patch.object(gs, "_assign_transcripts", return_value=[]) as assign:
+                sessions = gs.list_sessions(resolve_uuidless=resolve)
+            self.assertEqual([row["sid"] for row in sessions], [S_CODEX])
+            self.assertNotIn(S_DEAD, [row["sid"] for row in sessions])
+            self.assertEqual(assign.call_args.args[0], [])
+            self.assertEqual(len(sessions.unresolved), 1)
+            opaque = sessions.unresolved[0]
+            self.assertEqual(opaque["pid"], 501)
+            self.assertIn("unparseable process command", opaque["reason"])
+            self.assertNotIn("sid", opaque)
+            self.assertNotIn("restore_command", opaque)
+
     def test_resolve_disabled_keeps_argv_only(self):
         rows = "  500 ttys042 claude --dangerously-skip-permissions\n"
         def fake_run(args, **kw):

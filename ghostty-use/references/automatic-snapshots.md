@@ -110,6 +110,13 @@ Codex prompt beginning `resume <UUID>` is indistinguishable from a real resume
 subcommand. This recognition assumes a prompt-free selector invocation; use
 explicit indexed identity verification when that boundary is uncertain.
 
+A recognized CLI whose flattened command cannot be shell-tokenized (for example,
+an unmatched quote or trailing escape) becomes an opaque `unresolved` row instead
+of aborting the observation. Preserve its raw command only as evidence, with
+profile `unknown` and no inferred SID, argv or restore command; healthy rows
+remain reportable, and raw evidence is never replay input. Manual and switch
+Codex inventories likewise exclude opaque rows from raw-UUID and transcript matching.
+
 A nonempty known set can still produce a useful partial backup. While unresolved
 TUIs exist, preserve previously recorded IDs that are now absent as
 `retained-unverified`; do not interpret an ambiguous observation as a removal.

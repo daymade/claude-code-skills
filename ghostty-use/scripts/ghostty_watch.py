@@ -31,6 +31,7 @@ MAX_PROCESSES = 25000
 MAX_SESSIONS = 256
 MAX_LOG_BYTES = 1 << 20
 DEFAULT_EVERY_MINUTES = 10
+OPAQUE_REASON = 'CLI argv unavailable: unparseable process command'
 
 
 def home_state():
@@ -104,8 +105,13 @@ def cli_identity(row):
         return None
     if first in ("node", "nodejs") and (len(raw) < 2 or Path(raw[1]).name not in ("codex", "claude")):
         return None
-    tokens = executable_tokens(row["cmdline"])
     index = 1 if first in ('node', 'nodejs') else 0
+    try:
+        tokens = executable_tokens(row["cmdline"])
+    except ValueError:
+        # ps flattened a recognized interactive candidate beyond shell recovery.
+        # Preserve the row as opaque evidence; never infer argv, SID or profile.
+        return Path(raw[index]).name, None, None, index
     tool = Path(tokens[index]).name
     required = CLAUDE_REQUIRED if tool == 'claude' else CODEX_REQUIRED
     optional = CLAUDE_OPTIONAL if tool == 'claude' else set()
@@ -234,21 +240,22 @@ def observe(deadline=None):
             continue
         if sid is not None:
             seen.add((tool, sid))
-        candidates.append((row, tool, sid))
+        candidates.append((row, tool, sid, tokens))
         if len(candidates) > MAX_SESSIONS:
             raise ValueError('Ghostty session count exceeds observation limit')
     selected, unresolved = [], []
     if candidates:
-        pids = [row['pid'] for row, _, _ in candidates]
+        pids = [row['pid'] for row, _, _, _ in candidates]
         counters['lsof_calls'] = 1
         output = run_bounded(['/usr/sbin/lsof', '-a', '-p', ','.join(map(str, pids)),
                               '-d', 'cwd', '-Fpn'], deadline, counters)
         cwds = parse_cwds(output, pids)
-        for row, tool, sid in candidates:
+        for row, tool, sid, tokens in candidates:
             entry = {'tool': tool, 'cwd': cwds[row['pid']], 'cmdline': row['cmdline'],
-                     'profile': gs._detect_profile(row['cmdline']), 'tty': row['tty']}
+                     'profile': 'unknown' if tokens is None else gs._detect_profile(row['cmdline']),
+                     'tty': row['tty']}
             if sid is None:
-                entry.update(pid=row['pid'], reason='CLI UUID absent from argv')
+                entry.update(pid=row['pid'], reason=OPAQUE_REASON if tokens is None else 'CLI UUID absent from argv')
                 unresolved.append(entry)
             else:
                 entry['sid'] = sid
@@ -295,8 +302,12 @@ def canonical_unresolved(rows):
         if identity is None:
             raise ValueError('invalid unresolved CLI record')
         tool, _, tokens, index = identity
-        values.append({'tool': tool, 'cwd': row.get('cwd') or '',
-                       'profile': row.get('profile') or 'direct', 'argv': tokens[index + 1:]})
+        if tokens is None:
+            values.append({'tool': tool, 'cwd': row.get('cwd') or '', 'profile': 'unknown',
+                           'raw_command': row['cmdline'], 'parse_status': 'opaque'})
+        else:
+            values.append({'tool': tool, 'cwd': row.get('cwd') or '',
+                           'profile': row.get('profile') or 'direct', 'argv': tokens[index + 1:]})
     return sorted(values, key=lambda row: json.dumps(row, sort_keys=True))
 
 
