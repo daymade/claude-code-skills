@@ -199,6 +199,9 @@ authorized transition; it grants no authority to stop a busy or unrelated job.
 
 ## Acceptance SOP
 
+First bind the requested consumer through [ordinary-entry and recovery acceptance](../SKILL.md#bind-the-ordinary-entry-before-choosing-a-mechanism).
+Then verify the configuration-convergence paths below for that consumer.
+
 Use authorized, reversible inputs or task-owned fixtures. Preserve the original
 content and restore it with downstream readback after the acceptance change.
 
