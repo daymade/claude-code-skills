@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **ghostty-use** (v1.8.5 → v1.8.6): Route Minions native_runtime sessions to Account Manager while preserving manual account switching and same-ID restoration for unmanaged/legacy Ghostty sessions. Add `switch-prepare --only` so mixed-owner inventories save only explicitly selected unmanaged/legacy UUIDs. Change type: bounded account-owner correction.
+- **local-codex** (`daymade-codex` v2.0.1 → v2.0.2): Require SID, cwd and unique-runtime observer proof before session account or process attribution; reject recency and account-capability fallbacks, keep incomplete or contradictory evidence unknown, and treat first-hand `/status` conflicts as stopping conditions. Change type: bounded session-evidence correction.
 
 - **read-claude-code-history / claude-code-hooks** (`daymade-claude-code` v4.33.2 → v4.33.3): Distinguish pasted interface records from actual execution and require exact role=system request-context evidence for hook delivery; preserve unknown states and physical-order independence. Change type: bounded evidence-selection clarification.
 
