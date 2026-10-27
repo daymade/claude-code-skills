@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.21.26 → v1.21.27): Add synthetic reading-journey calibration for distinct goals, requirements and replies, exact-source return, long requirements and runtime replacement. Healthy, misbound, reset and stale-identity controls run through the existing browser test. Change type: bounded evaluation-case addition.
+
 - **ghostty-use** (v1.8.4 → v1.8.5): Preserve known sessions and explicit unresolved evidence when a single CLI command cannot be tokenized. Keep partial snapshots conservative without guessing session IDs or recovery commands. Change type: bounded inventory repair.
 
 - **frontend-visual-qa** (v1.21.25 → v1.21.26): Remove copied inspection totals from the publication case while retaining card-field versus article-body scope; align the project instruction entry with controls, deks and expanded summaries. Change type: documentation alignment and scoped deduplication.

@@ -70,4 +70,80 @@ document.querySelector('#return').addEventListener('click', () => {
   reader.scrollTop = returnScroll;
 });
 </script>
+<style>
+#semantic { width: min(900px, 100%); }
+#semantic h1 { font-size: 22px; }
+#request-preview { max-height: 48px; overflow: hidden; }
+#work-list { height: 220px; overflow: auto; border: 1px solid; padding: 12px; }
+#work-list p { margin: 12px 0; }
+#semantic-original { height: 320px; overflow: auto; border: 1px solid; padding: 12px; }
+</style>
+<section id="semantic" hidden>
+  <section id="workbench" data-workspace="workspace-cedar" data-runtime="run-copper" data-page="3" data-selected="record-b">
+    <h1>Draft review</h1>
+    <h2>Goal</h2><p id="goal-text">Prepare an illustrated field guide.</p>
+    <h2>Current requirement</h2><p id="request-preview"></p>
+    <button id="read-requirement">Read full requirement</button>
+    <h2>Latest reply</h2><p id="latest-reply">The index is drafted; the illustrations still need review.</p>
+    <p id="runtime-status">Current native workspace</p>
+    <button id="choose-current" hidden>Choose current native workspace</button>
+    <div id="work-list" tabindex="0" aria-label="Contributions"></div>
+  </section>
+  <section id="semantic-original-view" hidden>
+    <h1>Original record</h1><p id="semantic-identity"></p>
+    <div id="semantic-original" tabindex="0"><p id="semantic-original-body"></p></div>
+    <button id="rotate-runtime">Simulate runtime replacement</button>
+    <button id="semantic-return">Return to workbench</button>
+  </section>
+</section>
+<script>
+if (params.get('journey') === 'semantic') {
+  document.querySelector('main').hidden = true;
+  const semantic = document.querySelector('#semantic');
+  const workbench = document.querySelector('#workbench');
+  const originalView = document.querySelector('#semantic-original-view');
+  const originalBody = document.querySelector('#semantic-original-body');
+  const workList = document.querySelector('#work-list');
+  const currentButton = document.querySelector('#choose-current');
+  const status = document.querySelector('#runtime-status');
+  const mode = params.get('fault') || 'none';
+  let liveRuntime = 'run-copper';
+  let savedScroll = 0;
+  const request = 'Review the illustration captions before publishing. ' +
+    'Keep each caption with its matching drawing, including the appendix. '.repeat(35) +
+    'Final requirement: retain the turquoise envelope in illustration seven.';
+  document.querySelector('#request-preview').textContent = request;
+  workList.innerHTML = Array.from({ length: 16 }, (_, index) => `<p>Contribution ${index + 1}: draft notes awaiting review.</p>`).join('');
+  semantic.hidden = false;
+  document.querySelector('#read-requirement').addEventListener('click', () => {
+    savedScroll = workList.scrollTop;
+    const record = mode === 'goal-as-request' ? 'record-a' : mode === 'reply-as-request' ? 'record-c' : 'record-b';
+    const workspace = mode === 'wrong-source' ? 'workspace-birch' : workbench.dataset.workspace;
+    Object.assign(originalView.dataset, { workspace, runtime: workbench.dataset.runtime, record });
+    document.querySelector('#semantic-identity').textContent = `${workspace} / ${workbench.dataset.runtime} / ${record}`;
+    originalBody.textContent = record === 'record-a' ? document.querySelector('#goal-text').textContent :
+      record === 'record-c' ? document.querySelector('#latest-reply').textContent : request;
+    workbench.hidden = true; originalView.hidden = false;
+    document.querySelector('#semantic-original').scrollTop = 0;
+  });
+  document.querySelector('#rotate-runtime').addEventListener('click', () => { liveRuntime = 'run-amber'; });
+  document.querySelector('#semantic-return').addEventListener('click', () => {
+    originalView.hidden = true; workbench.hidden = false;
+    if (liveRuntime !== workbench.dataset.runtime && mode !== 'stale-return') {
+      workbench.dataset.selected = '';
+      status.textContent = 'Previous workspace instance is unavailable. Choose the current native workspace.';
+      currentButton.hidden = false;
+      document.querySelector('#read-requirement').disabled = true;
+    }
+    if (mode === 'false-return') {
+      workbench.dataset.page = '1'; workbench.dataset.selected = 'record-a'; workList.scrollTop = 0;
+    } else { workList.scrollTop = savedScroll; }
+  });
+  currentButton.addEventListener('click', () => {
+    workbench.dataset.runtime = liveRuntime; workbench.dataset.selected = 'record-b';
+    status.textContent = 'Current native workspace'; currentButton.hidden = true;
+    document.querySelector('#read-requirement').disabled = false;
+  });
+}
+</script>
 </html>
