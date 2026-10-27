@@ -536,7 +536,7 @@ details belong in [the transport and receiver-evidence SOP](peer-message/referen
 Enter that SOP when diagnosing delayed Codex coordination or comparing live and queued receipts.
 Before asking about mutable ownership or a publication window, use the
 [fresh-state preflight](peer-message/references/coordination-and-learning-loop.md#51-发现别人的在制品先核实再问等一个有界窗口).
-For an inbound coordination envelope or a receive-integrity error, follow
+For an inbound coordination envelope, a native reply or a receive-integrity error, follow
 [receive, reply and closure](peer-message/references/local-coordination.md#收件回信和关闭).
 For oversized discovery responses or complete-title export, use its
 [discovery-output contract](peer-message/references/protocol-and-discovery.md#发现输出的范围).
