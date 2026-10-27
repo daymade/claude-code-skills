@@ -496,6 +496,9 @@ owns complete Codex tool evidence, and
 owns indexed role/phrase filters. Keep commands and source-attribution rules in
 those owners rather than copying them here.
 
+For suspected batch or controller termination, enter
+[suspected termination evidence](daymade-claude-code/read-codex-history/SKILL.md#suspected-termination-evidence).
+
 For original Claude tool calls/results from a known Session, including a named
 Workflow subagent, use
 [read-claude-code-history's narrow evidence entry](daymade-claude-code/read-claude-code-history/SKILL.md#original-tool-callresult-evidence).
@@ -563,6 +566,9 @@ liveness classification and the paste-restore + auto-reconciliation loop; keep t
 storage-layout facts and macOS Ghostty limits in its references rather than here.
 For change-only automatic backups, use its
 [automatic workflow](ghostty-use/references/automatic-snapshots.md).
+
+For one-shot helper exits or attribution of an exited terminal, enter
+[helper terminals and original sessions](ghostty-use/SKILL.md#one-shot-helper-terminals-and-original-sessions).
 
 ### Codex Quota and Account Checks
 
