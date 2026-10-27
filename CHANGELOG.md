@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **frontend-visual-qa** (v1.21.26 → v1.21.27): Add synthetic reading-journey calibration for distinct goals, requirements and replies, exact-source return, long requirements and runtime replacement. Healthy, misbound, reset and stale-identity controls run through the existing browser test. Change type: bounded evaluation-case addition.
+- **frontend-visual-qa** (v1.21.27 → v1.21.28): Add synthetic reading-journey calibration for distinct goals, requirements and replies, exact-source return, long requirements and runtime replacement. Healthy, misbound, reset and stale-identity controls run through the existing browser test. Change type: bounded evaluation-case addition.
 
 - **read-codex-history** (`daymade-claude-code` v4.32.0 → v4.33.0): Resolve UUID prefixes through bounded state-index queries and verify unique matches against original session metadata. Separate ambiguous and unavailable results, document strict inventory JSON parsing, and route identity-only requests without full inventory or writer-lock probes. Change type: additive lookup capability.
 
