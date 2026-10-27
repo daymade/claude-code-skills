@@ -412,7 +412,8 @@ For UI refactors, category splits, or navigation changes, first apply the
 Derive affected journeys from the immutable pre-change version, then verify them
 on the current target; the new navigation alone cannot define what survived.
 For refresh/deep-link/return checks, use that reference's **Route And Addressability**
-recipe, including repeated occurrences when the product promises to retain them.
+recipe, including default-entry and late-data controls when startup is affected,
+and repeated occurrences when the product promises to retain them.
 
 **A visible signifier is not proof of behavior — trigger every relevant control
 whose side effects fit the explicit action authority, confirm the response, and

@@ -68,7 +68,7 @@ description: >-
 | `references/graphical-perception-science.md` | 被质疑"凭什么这么画"时：Cleveland & McGill / Bertin / Tufte / Few 的出处，以及这些理论互相冲突的地方 |
 | `references/transaction-status-colors.md` | 阶段 3–4，交易列表难以区分扣款、退款、待处理、取消/失败时：套用颜色语义与第二通道的合成案例，并按闸 4–5 验读者是否读对 |
 | `references/monthly-budget-disclosure.md` | 阶段 3，累计预算的概览与月度明细并存时：用合成案例区分月度贡献与精确查数；交互验收交给 frontend-visual-qa |
-| `references/operational-state-matrix.md` | 阶段 2，监控、可用性或证书状态矩阵：先区分当前观察、未知与历史值，再核对多路分歧和风险是否可见 |
+| `references/operational-state-matrix.md` | 阶段 2，监控、可用性、证书或 Agent 工作状态：先区分当前观察、未知、历史与读取范围，再核对选择焦点、多路分歧和风险是否可见 |
 
 **先读哪个**：动手画图 → 直接按下面的阶段走；内容是定性的、不知道画成什么形状 → 阶段 3「内容不是数字时」+ `visual-form-selection.md`；被质疑"凭什么这么画" → `graphical-perception-science.md` 拿实证出处。
 
