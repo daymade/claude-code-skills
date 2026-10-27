@@ -6,6 +6,7 @@
 //   node read-usage-profile.cjs --drive-login      # 未登录时驱动到 Google 账号选择器（交人工输密码）
 //   TIBO_PROFILE=b node read-usage-profile.cjs     # 换 profile b
 //   TIBO_PROXY=... node read-usage-profile.cjs     # 自定义代理（默认 127.0.0.1:1082）
+//   TIBO_PLAYWRIGHT_PATH=... node read-usage-profile.cjs  # 覆盖 playwright 包路径
 //
 // 边界（重要，勿越界）：
 //   - 只驱动到 Google「选择账号」页为止。密码/验证码/授权确认一律交人工，绝不自动化输入。
@@ -17,7 +18,7 @@
 //   - open -na 不继承系统代理，必须显式 --proxy-server=...，否则 chatgpt.com 直连挂起/403。
 //   - CDP Network.getAllCookies 拿到的 Google cookie 是 Google 侧编码值，读不出明文邮箱；
 //     账号身份只能从页面 DOM 读（账号选择器 / myaccount 页）。
-const { chromium } = require('playwright');
+const { chromium } = require('./resolve-playwright.cjs')();
 const { execFile } = require('child_process');
 const http = require('http');
 
@@ -67,11 +68,12 @@ function parseUsage(text, url) {
   // 登录态以正面证据为准：解析到邮箱 或 出现 weekly 用量文本 = 已登录。
   // 不猜 URL——登出时 usage 页可能留在 / 首页、也可能重定向到 /auth/login，两种都要覆盖。
   const hasUsage = !!email || /weekly usage limit/i.test(text);
-  const loggedOut = !hasUsage;
-  return { email, weekly, pcts, resets, fiveH, loggedOut };
+  const unavailable = /^chrome-error:\/\/|^about:blank$/.test(url);
+  const loggedOut = !unavailable && !hasUsage;
+  return { email, weekly, pcts, resets, fiveH, unavailable, loggedOut };
 }
 
-(async () => {
+async function main() {
   if (!(await ensureChrome())) { console.error('隔离 Chrome CDP 未就绪'); process.exit(2); }
   // connectOverCDP 会间歇 handshake 卡顿（ws 连上但 browse 端点没稳定）——带重试
   let browser = null;
@@ -90,6 +92,15 @@ function parseUsage(text, url) {
 
   const text = await page.innerText('body').catch(() => '');
   const u = parseUsage(text, page.url());
+
+  if (u.unavailable) {
+    console.log('[读取失败] usage 页未取得可判定内容，账号状态保持 unknown');
+    console.log('当前 URL:', page.url());
+    console.log('请检查隔离 profile 的代理与目标站点连通性；不把读取失败当登出。');
+    process.exitCode = 2;
+    await browser.close();
+    return;
+  }
 
   if (u.loggedOut) {
     console.log('[登录] usage 页是登出态');
@@ -146,4 +157,10 @@ function parseUsage(text, url) {
   console.log('--- innerText 前 1400 字（人工核对）---');
   console.log(text.slice(0, 1400));
   await browser.close(); // connectOverCDP：不断底层 Chrome
-})().catch((e) => { console.error('ERR:', e.message); process.exit(1); });
+}
+
+if (require.main === module) {
+  main().catch((e) => { console.error('ERR:', e.message); process.exit(1); });
+}
+
+module.exports = { parseUsage };

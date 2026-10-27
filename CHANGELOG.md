@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **frontend-visual-qa** (v1.21.26 → v1.21.27): Prepare existing business records for data-bearing demos by checking identity, date filters and observation windows, preserving legitimate empty or net-zero states, and verifying populated states in the delivered artifact. Change type: bounded execution-recipe clarification.
+- **tibo-reset-codex** (v2.5.2 → v2.5.3): Bind multi-account transport diagnosis to the actual consumer, its configured egress and the real Usage endpoint; preserve the no-credential-copy boundary. Resolve the existing Playwright dependency without manual `NODE_PATH`, and keep browser navigation failures unknown instead of misreporting a logged-out account. Change types: bounded diagnostic correction and deterministic launcher repair.
+
 - **ghostty-use** (v1.8.4 → v1.8.5): Preserve known sessions and explicit unresolved evidence when a single CLI command cannot be tokenized. Keep partial snapshots conservative without guessing session IDs or recovery commands. Change type: bounded inventory repair.
 
 - **frontend-visual-qa** (v1.21.25 → v1.21.26): Remove copied inspection totals from the publication case while retaining card-field versus article-body scope; align the project instruction entry with controls, deks and expanded summaries. Change type: documentation alignment and scoped deduplication.
