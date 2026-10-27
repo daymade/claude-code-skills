@@ -172,8 +172,9 @@ For customer-approved report forms, follow
 
 For Codex login, credential recovery, quota-query ownership or quota-driven continuation, enter
 [local-codex authentication](daymade-codex/local-codex/SKILL.md#authentication-chatgpt-oauth).
-For existing Ghostty Codex windows around an account switch, enter
-[ghostty-use's switch workflow](ghostty-use/SKILL.md#codex-account-switch).
+For existing unmanaged/legacy Ghostty Codex windows around a manual account switch, enter
+[ghostty-use's switch workflow](ghostty-use/SKILL.md#codex-account-switch). Minions
+`native_runtime` rows instead use the owning Account Manager, not that manual route.
 
 For rebuilding a paper form from an image, scan or screenshot as an editable
 XLSX with a printable layout, enter
@@ -558,10 +559,11 @@ Skill links.
 ### Ghostty Terminal Sessions
 
 For snapshotting, restoring or reconciling Claude Code / Codex sessions in Ghostty
-across reboots, enter [`ghostty-use`](ghostty-use/SKILL.md). Manual Codex account
+across reboots, enter [`ghostty-use`](ghostty-use/SKILL.md). Unmanaged/legacy manual Codex account
 switches and blocked/delegated reopening enter its
 [account-switch SOP](ghostty-use/references/codex-account-switch.md), including
-the original-set handoff and actual-continuation acceptance. Its bundled script owns
+the original-set handoff and actual-continuation acceptance. Minions `native_runtime`
+rows use the owning Account Manager instead. Its bundled script owns
 liveness classification and the paste-restore + auto-reconciliation loop; keep the
 storage-layout facts and macOS Ghostty limits in its references rather than here.
 For change-only automatic backups, use its

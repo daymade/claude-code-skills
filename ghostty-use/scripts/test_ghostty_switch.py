@@ -118,6 +118,57 @@ class SwitchTest(unittest.TestCase):
         self.assertNotIn("synthetic-access", Path(pointer["manifest"]).read_text())
         self.assertFalse((self.state / "snapshots/latest.json").exists())
 
+    def test_prepare_only_excludes_unselected_managed_rows(self):
+        eligible, managed = self.session(A), self.session(B, pid=11)
+        self.active[2].return_value = gs.SessionList([eligible, managed])
+        conversations = [mock.Mock(session_id=A), mock.Mock(session_id=B)]
+        with mock.patch.object(gs, "history_reader", return_value=(mock.Mock(), None)), \
+                mock.patch.object(gs, "_indexed_conversations", return_value=conversations), \
+                mock.patch.object(gs, "resolve_indexed_rollout", side_effect=lambda _reader, conv: Path(
+                    eligible["transcript"] if conv.session_id == A else managed["transcript"])) as resolve:
+            self.assertEqual(gs.main(["switch-prepare", "--only", A, "--out", str(self.manifest),
+                                      "--codex-home", str(self.home)]), 0)
+        doc = json.loads(self.manifest.read_text())
+        self.assertEqual([row["sid"] for row in doc["sessions"]], [A])
+        self.assertEqual(doc["coverage"], "complete")
+        self.assertEqual(doc["unresolved"], [])
+        self.assertNotIn(B, self.manifest.read_text())
+        resolve.assert_called_once()
+        self.assertIn("Claude Code and unselected rows excluded", self.output.getvalue())
+        pointer = json.loads((self.state / "switches/current.json").read_text())
+        self.assertEqual(Path(pointer["manifest"]), self.manifest.resolve())
+
+    def test_prepare_only_retains_unresolved_inventory_and_previous_pointer(self):
+        eligible = self.session(A)
+        self.active[2].return_value = gs.SessionList([eligible], unresolved=[dict(
+            tool="codex", pid=12, started=100, tty="ttys12", cwd=str(self.root),
+            cmdline="codex managed-unresolved")])
+        folder = self.state / "switches"
+        folder.mkdir(parents=True)
+        pointer = folder / "current.json"
+        pointer.write_text('{"manifest":"previous-complete"}')
+        with mock.patch.object(gs, "history_reader", return_value=(mock.Mock(), None)), \
+                mock.patch.object(gs, "_indexed_conversations", return_value=[mock.Mock(session_id=A)]), \
+                mock.patch.object(gs, "resolve_indexed_rollout", return_value=Path(eligible["transcript"])):
+            self.assertEqual(gs.main(["switch-prepare", "--only", A, "--out", str(self.manifest),
+                                      "--codex-home", str(self.home)]), 1)
+        doc = json.loads(self.manifest.read_text())
+        self.assertEqual([row["sid"] for row in doc["sessions"]], [A])
+        self.assertEqual(doc["coverage"], "partial")
+        self.assertEqual(doc["unresolved"][0]["pid"], 12)
+        self.assertEqual(json.loads(pointer.read_text())["manifest"], "previous-complete")
+
+    def test_prepare_only_unknown_id_preserves_pointer_and_creates_no_manifest(self):
+        folder = self.state / "switches"
+        folder.mkdir(parents=True)
+        pointer = folder / "current.json"
+        pointer.write_text('{"manifest":"previous-complete"}')
+        self.active[2].return_value = gs.SessionList([self.session(A)])
+        self.assertEqual(gs.main(["switch-prepare", "--only", B, "--out", str(self.manifest),
+                                  "--codex-home", str(self.home)]), 2)
+        self.assertFalse(self.manifest.exists())
+        self.assertEqual(json.loads(pointer.read_text())["manifest"], "previous-complete")
+
     def test_incomplete_prepare_does_not_replace_pinned_handoff(self):
         folder = self.state / "switches"
         folder.mkdir(parents=True)

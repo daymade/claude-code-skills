@@ -910,8 +910,10 @@ def main(argv=None):
     p4.add_argument("--limit", type=positive, default=100)
     p4.add_argument("--terminal-source", type=nonempty, action="append", help="verified session_meta.source (default cli)")
     p4.add_argument("--terminal-originator", type=nonempty, action="append", help="verified originator (default codex-tui)")
-    p5 = sub.add_parser("switch-prepare", help="freeze all Ghostty Codex sessions before a manual account switch")
+    p5 = sub.add_parser("switch-prepare", help="freeze all or selected unmanaged/legacy Ghostty Codex sessions before a manual account switch")
     p5.add_argument("--out", type=nonempty, help="new exclusive manifest path; never replaces an existing file")
+    p5.add_argument("--only", nargs="+", type=nonempty, metavar="ID",
+                    help="capture only these unmanaged/legacy session IDs; required for a mixed-owner inventory")
     p6 = sub.add_parser("switch-restore", help="restore the fixed Codex switch manifest after manual login")
     p6.add_argument("--snapshot", type=nonempty)
     p6.add_argument("--only", nargs="+", type=nonempty, metavar="ID")
