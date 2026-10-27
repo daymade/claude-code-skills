@@ -257,6 +257,30 @@ inspect the resulting states. Preserve genuine production unknowns and report
 missing state coverage when an isolated replay is unavailable. This is an
 auditor-run check; the default sweep does not establish the intended state mix.
 
+### Data-bearing Demo states
+
+When a requested Demo promises existing business activity but the selected views
+show zero or empty results, first bind the actual actor and demonstrated record:
+record its identity, state and absolute transaction date. Inspect the record row
+area rather than treating a no-more-data footer as an empty list, and check the
+current date, status and store filters.
+
+Select a read-only range that covers the real existing record; a relative window
+such as "today" can age out of historic activity. Never seed data, create a
+payment or edit timestamps solely to make a screenshot look populated.
+
+Compare filter states from the same observation window. If underlying records
+changed between captures, label that change separately instead of attributing it
+to the filter.
+
+Keep healthy empty and net-zero states intact: populated rows above a
+no-more-data footer are not empty, and fully refunded gross-paid activity can
+legitimately net to zero. Do not impose a permanent record-count or
+nonzero-amount gate. Give distinct demonstrated records or states distinct
+screenshots and evidence nodes; never mix another actor's order into the
+selected record. Inspect the final delivered artifact, not only the source
+image, before accepting the result.
+
 **A note on what should not become an automated check:** a custom scrollbar, a
 missing hover style, an unusual focus color — these are design choices, and
 flagging them mechanically produces false positives on healthy pages. A check
