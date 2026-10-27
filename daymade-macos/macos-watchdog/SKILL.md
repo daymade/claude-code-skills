@@ -17,7 +17,11 @@ Before selecting event/periodic triggers, a transport, or a helper, record these
 constraints from the original request in the current task plan; do not create a
 separate document for a simple task:
 
-- **Ordinary entry:** where the user will actually start or use the work.
+- **Ordinary entry:** where the user will actually start or use the work. When
+  its launcher adopts only some invocation or lifecycle forms, derive the
+  relevant forms from the current launcher and actual requested use; record
+  adopted, bypassed and unverified forms separately, and accept each claimed
+  form through its real consumer.
 - **Manual activation:** whether the request permits any extra command or setup
   after delivery.
 - **Lifecycle:** whether the result covers a session, login, or machine, and
@@ -33,6 +37,13 @@ A completed business round inside a helper alone is component-only evidence:
 leave the requested result unmet and continue authorized integration. Keep
 unauthorized or unobserved old-session takeover and other lifecycle coverage
 unknown; do not stop other tasks or bypass a host refusal to obtain acceptance.
+
+When a safety condition is temporary and automatic work must resume afterward,
+exercise its release in the same running instance: first verify no prohibited
+action, then remove that condition and require the next eligible event to
+complete the business action. A separate fresh-instance success, no-action
+result or health flag does not establish this transition; preserve explicit
+stop, lost identity and uncertain-delivery boundaries.
 
 Select event or periodic triggers for the problem being observed, then apply the quiet-watchdog contract before remediation.
 
