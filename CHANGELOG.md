@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **read-codex-history** (`daymade-claude-code` v4.32.0 → v4.33.0): Resolve UUID prefixes through bounded state-index queries and verify unique matches against original session metadata. Separate ambiguous and unavailable results, document strict inventory JSON parsing, and route identity-only requests without full inventory or writer-lock probes. Change type: additive lookup capability.
+
+- **frontend-visual-qa** (v1.21.26 → v1.21.27): Prepare existing business records for data-bearing demos by checking identity, date filters and observation windows, preserving legitimate empty or net-zero states, and verifying populated states in the delivered artifact. Change type: bounded execution-recipe clarification.
 - **ghostty-use** (v1.8.4 → v1.8.5): Preserve known sessions and explicit unresolved evidence when a single CLI command cannot be tokenized. Keep partial snapshots conservative without guessing session IDs or recovery commands. Change type: bounded inventory repair.
 
 - **frontend-visual-qa** (v1.21.25 → v1.21.26): Remove copied inspection totals from the publication case while retaining card-field versus article-body scope; align the project instruction entry with controls, deks and expanded summaries. Change type: documentation alignment and scoped deduplication.
