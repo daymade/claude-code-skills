@@ -245,6 +245,11 @@ run final evidence on the original URL. The detailed page-state probe,
 §2–§5. Record the final URL and dimensions before CSS diagnosis, then restore
 the user's expected viewport when finished.
 
+For a data-bearing Demo that promises existing activity but renders zero/empty,
+load the reference's
+[Data-bearing Demo states](references/browser-driving-and-observation-traps.md#data-bearing-demo-states)
+recipe before judging the state.
+
 For a loading-speed claim, read §2's performance-comparison boundary before measuring.
 
 For hidden-page polling, read that reference's **Verify polling stops in a genuinely
