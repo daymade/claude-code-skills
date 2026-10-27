@@ -3443,6 +3443,19 @@ this list and describe defects you reach by asking a different question):
   following: the immediate prompt appears exactly once; the
   next prompt does not display it again; and the reminder body still enters
   the next model request.
+- **Verify model-context delivery at the receiver, not from the emission
+  records.** A `systemMessage`, hook stdout, or
+  `hook_additional_context` attachment alone does not prove that the model
+  received the context. In a current Claude transcript, require the exact
+  content in an `api-request-blob` with `message.role == "system"` and the
+  host's `hook additional context` projection, bound by its event/sequence
+  anchor rather than physical record order; a reminder quoted by a tool
+  result, source inspection, or assistant text is a different record. Keep the
+  result unknown when the anchor or later request projection is unavailable.
+  For `goal-reanchor`, use its operator SOP's three-state `--verify-delivery`
+  check. Do not migrate an event channel from user-interface invisibility or
+  one missing attachment: reproduce the original tool event and inspect its
+  actual request projection first.
 - **Real case:** `goal-reanchor`'s re-anchor reminder had injection and
   transcript evidence while ordinary-interface visibility remained a separate
   question. Checking one logical injection in the real host, rather than
