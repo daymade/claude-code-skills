@@ -624,4 +624,9 @@ check the available agent tools can perform.
   Range-server media stalls. Read it before driving a real browser, and whenever
   an observation surprises you.
 - evals/evals.json and evals/trigger-evals.json — behavior and routing
-  regression cases; excluded from packaged runtime content.
+  regression cases; excluded from packaged runtime content. Source-development
+  cases 44–45 calibrate Goal/requirement/reply separation, exact originals,
+  long-text return and runtime replacement using the nested-source fixture.
+  From an existing Playwright project, run
+  `node --test <skill-root>/tests/test_nested_source_return.mjs`. This is
+  synthetic calibration, not a prerequisite for ordinary audits or product acceptance.
