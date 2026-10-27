@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-watchdog** (`daymade-macos` v1.26.1 → v1.26.2): Verify automatic recovery after temporary protection in the same running instance, and distinguish adopted, bypassed and unverified launcher forms through their real consumers. Preserve explicit stop, identity and uncertain-delivery boundaries. Change type: bounded acceptance correction.
+
 - **claude-switch-models-setup** (`daymade-claude-code` v4.31.2 → v4.32.0): Add an explicit native-command entry for callers that separate structured native stdout from profile setup output; preserve ordinary profile launch, settings, synchronization and exit behavior. Change type: additive script interface.
 
 - **peer-message** (v1.24.2 → v1.24.3): Add a complete native reply sequence from envelope receipt through reply preparation, unchanged native body delivery and outcome commit; stop derived actions on suppressed closed replies while preserving the script fallback for uncovered targets. Change type: bounded coordination guidance clarification.
