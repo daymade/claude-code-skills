@@ -589,11 +589,12 @@ owns candidate output. An unfulfilled
 reset promise, missing execution signals or deadline-bound quota work enters the Skill's
 [monitoring and stop contract](tibo-reset-codex/SKILL.md#监测轮从信息到可行动信号) and
 [output contract](tibo-reset-codex/SKILL.md#输出合同先给结论再交代边界).
-Before using a third-party date or Yes/No as a reset signal, check its source-post
-chronology (an operator-entered event cites no source post), whether it observes
-account quota changes or only classifies posts, and whether the monitor completed a
-plausible-time check. The Skill owns the
-detailed procedure.
+Before interpreting tracker timestamps, Yes/No labels or mixed X reply results,
+follow [signal readings](tibo-reset-codex/references/signal-readings.md).
+For recurring community queries, follow
+[community increments](tibo-reset-codex/references/forecast-feedback.md#社区增量读取);
+when preparing the next monitor invocation, follow
+[handoff carry-forward](tibo-reset-codex/references/forecast-feedback.md#交接结转).
 [Next-reset forecast](tibo-reset-codex/references/next-reset-forecast.md) owns
 date judgments; [forecast feedback](tibo-reset-codex/references/forecast-feedback.md)
 owns recording, review and withdrawal, with
