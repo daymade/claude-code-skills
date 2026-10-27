@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **peer-message** (v1.24.3 → v1.24.4): Clarify that a suppressed closed reply stops the old request without retry, transport switching or message rewriting, while genuinely new facts follow the independent new-notice branch; link native replies from repository startup guidance. Change type: documentation consistency correction.
+
 - **tibo-reset-codex** (v2.5.0 → v2.5.1): Treat mixed tweet results as samples, use existing community paging to bound media processing, and carry current monitoring state with timestamped evidence instead of concatenating prior handoffs. Preserve unresolved delivery and media gaps. Change type: bounded evidence and continuation guidance correction.
 
 - **macos-watchdog** (`daymade-macos` v1.26.1 → v1.26.2): Verify automatic recovery after temporary protection in the same running instance, and distinguish adopted, bypassed and unverified launcher forms through their real consumers. Preserve explicit stop, identity and uncertain-delivery boundaries. Change type: bounded acceptance correction.
