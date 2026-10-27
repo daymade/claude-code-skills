@@ -614,6 +614,40 @@ class ObserverTest(unittest.TestCase):
         claude.assert_not_called()
         self.assertEqual(assign.call_args.args[0], [])
 
+    def test_opaque_prompt_uuid_stays_unresolved_and_skips_transcript_assignment(self):
+        prompt_uuid = "33333333-3333-3333-3333-333333333333"
+        graph = ('1 0 ?? /Applications/Ghostty.app/Contents/MacOS/ghostty\n'
+                 '2 1 ttys001 zsh\n3 2 ttys001 codex resume ' + A + '\n'
+                 '7 2 ttys007 codex discuss ' + prompt_uuid + ' in prompt-with-quote"\n')
+        with mock.patch.object(sw.watch, "run_bounded",
+                               side_effect=[graph, 'p3\nn/tmp/example\np7\nn/tmp/opaque\n']), \
+                mock.patch.object(gs, "_proc_start", return_value=100), \
+                mock.patch.object(gs, "_assign_transcripts", return_value=[]) as assign:
+            live = sw.observe(gs)
+        self.assertEqual([row["sid"] for row in live], [A])
+        self.assertNotIn(prompt_uuid, [row["sid"] for row in live])
+        self.assertEqual(assign.call_args.args[0], [])
+        self.assertEqual(len(live.unresolved), 1)
+        opaque = live.unresolved[0]
+        self.assertEqual(opaque["pid"], 7)
+        self.assertIn("unparseable process command", opaque["reason"])
+        self.assertNotIn("sid", opaque)
+        self.assertNotIn("restore_command", opaque)
+
+    def test_malformed_wrapper_does_not_hide_valid_native_child(self):
+        graph = ('1 0 ?? /Applications/Ghostty.app/Contents/MacOS/ghostty\n'
+                 '2 1 ttys001 zsh\n'
+                 '6 2 ttys006 node /opt/bin/codex discuss synthetic-prompt-with-quote"\n'
+                 '7 6 ttys006 /opt/vendor/codex resume ' + A + '\n')
+        with mock.patch.object(sw.watch, "run_bounded",
+                               side_effect=[graph, 'p6\nn/tmp/wrapper\np7\nn/tmp/native\n']), \
+                mock.patch.object(gs, "_proc_start", return_value=100), \
+                mock.patch.object(gs, "_assign_transcripts", return_value=[]) as assign:
+            live = sw.observe(gs)
+        self.assertEqual([row["sid"] for row in live], [A])
+        self.assertEqual([row["pid"] for row in live.unresolved], [6])
+        self.assertEqual(assign.call_args.args[0], [])
+
     def test_window_and_tab_sender_choose_distinct_shortcuts(self):
         with mock.patch.object(gs.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)) as run:
             gs._paste_tab("echo synthetic", layout="windows")

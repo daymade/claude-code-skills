@@ -46,6 +46,13 @@ def unknown(**values):
     return row
 
 
+def opaque_unknown(**values):
+    row = unknown(cmdline='/opt/vendor/codex --model synthetic prompt-with-quote"',
+                  profile='unknown', reason='CLI argv unavailable: unparseable process command')
+    row.update(values)
+    return row
+
+
 def active_calendar(minutes, stream='com.apple.launchd.calendarinterval'):
     events = []
     for index, minute in enumerate(reversed(minutes)):
@@ -81,6 +88,65 @@ class ObserverTest(unittest.TestCase):
         self.assertEqual(result['counters']['commands'], 2)
         self.assertEqual(result['counters']['lsof_calls'], 1)
         self.assertEqual(result['counters']['history_body_reads'], 0)
+
+    def test_malformed_recognized_clis_are_opaque_not_round_failures(self):
+        graph = self.process_graph() + '\n' + '\n'.join([
+            '90 2 ttys010 /opt/vendor/codex --model synthetic prompt-with-quote"',
+            '91 2 ttys011 claude --model synthetic prompt-with-quote"',
+            '92 2 ttys012 node /opt/bin/codex --model synthetic prompt-with-quote"',
+            '93 2 ttys013 /opt/vendor/codex --model synthetic trailing\\',
+        ])
+        def run(command, deadline, counters):
+            counters['commands'] += 1
+            return graph if command[0] == '/bin/ps' else ''.join(
+                'p' + pid + '\nn/tmp/demo\n' for pid in command[3].split(','))
+        with mock.patch.object(watch, 'run_bounded', side_effect=run):
+            result = watch.observe()
+        self.assertEqual({row['sid'] for row in result['sessions']}, {S1, S2})
+        self.assertEqual({row['pid'] for row in result['unresolved']}, {90, 91, 92, 93})
+        for row in result['unresolved']:
+            self.assertEqual(row['profile'], 'unknown')
+            self.assertIn('unparseable process command', row['reason'])
+            self.assertNotIn('sid', row)
+            self.assertNotIn('restore_command', row)
+        self.assertEqual(result['counters']['commands'], 2)
+        self.assertEqual(result['counters']['history_body_reads'], 0)
+
+    def test_malformed_wrapper_and_native_child_do_not_hide_each_other(self):
+        cases = [
+            ('90 2 ttys010 node /opt/bin/codex --model synthetic prompt-with-quote"\n'
+             '91 90 ttys010 /opt/vendor/codex resume ' + S3, {90}),
+            ('90 2 ttys010 node /opt/bin/codex resume ' + S3 + '\n'
+             '91 90 ttys010 /opt/vendor/codex --model synthetic prompt-with-quote"', set()),
+        ]
+        for extra, opaque_pids in cases:
+            with self.subTest(opaque_pids=opaque_pids):
+                graph = self.process_graph() + '\n' + extra
+                def run(command, deadline, counters):
+                    counters['commands'] += 1
+                    return graph if command[0] == '/bin/ps' else ''.join(
+                        'p' + pid + '\nn/tmp/demo\n' for pid in command[3].split(','))
+                with mock.patch.object(watch, 'run_bounded', side_effect=run):
+                    result = watch.observe()
+                self.assertEqual({row['sid'] for row in result['sessions']}, {S1, S2, S3})
+                self.assertEqual({row['pid'] for row in result['unresolved']}, opaque_pids)
+
+    def test_probe_outputs_useful_partial_json_for_malformed_cli(self):
+        graph = self.process_graph() + '\n90 2 ttys010 /opt/vendor/codex --model synthetic prompt-with-quote"'
+        def run(command, deadline, counters):
+            counters['commands'] += 1
+            return graph if command[0] == '/bin/ps' else ''.join(
+                'p' + pid + '\nn/tmp/demo\n' for pid in command[3].split(','))
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(watch, 'run_bounded', side_effect=run), \
+                redirect_stdout(stdout), redirect_stderr(stderr):
+            self.assertEqual(watch.main(['probe']), 1)
+        result = json.loads(stdout.getvalue())
+        self.assertEqual({row['sid'] for row in result['sessions']}, {S1, S2})
+        self.assertEqual([row['pid'] for row in result['unresolved']], [90])
+        self.assertEqual(result['unresolved'][0]['profile'], 'unknown')
+        self.assertNotIn('sid', result['unresolved'][0])
+        self.assertEqual(stderr.getvalue(), '')
 
     def test_uuidless_wrapper_native_count_once_preserve_cwd_flags(self):
         graph = self.process_graph() + '\n90 2 ttys010 node /opt/bin/codex --model synthetic\n91 90 ttys010 /opt/vendor/codex --model synthetic'
@@ -300,6 +366,48 @@ class SnapshotTest(unittest.TestCase):
         # A later complete nonempty observation can record genuine removals.
         self.run_cycle([session(S1), session(S3)])
         self.assertEqual({row['sid'] for row in json.loads(self.latest.read_text())['sessions']}, {S1, S3})
+
+    def test_opaque_partial_cycle_roundtrip_ignores_pid_tty_and_retains_known(self):
+        self.run_cycle([session(S1), session(S2)])
+        result = self.run_cycle([session(S1), session(S3)], [opaque_unknown()])
+        self.assertEqual(result['state'], 'changed')
+        self.assertEqual(result['retained_unverified'], 1)
+        doc = json.loads(self.latest.read_text())
+        self.assertEqual({row['sid'] for row in doc['sessions']}, {S1, S2, S3})
+        self.assertEqual(doc['unresolved'][0]['profile'], 'unknown')
+        self.assertNotIn('sid', doc['unresolved'][0])
+        self.assertNotIn('restore_command', doc['unresolved'][0])
+        opaque = doc['canonical_unresolved'][0]
+        self.assertEqual(opaque['raw_command'], doc['unresolved'][0]['cmdline'])
+        self.assertEqual(opaque['parse_status'], 'opaque')
+        self.assertEqual(opaque['profile'], 'unknown')
+        self.assertNotIn('argv', opaque)
+        self.assertNotIn('sid', opaque)
+        self.assertNotIn('restore_command', opaque)
+        before = {path: (path.read_bytes(), path.stat().st_mtime_ns)
+                  for path in (self.state / 'snapshots').glob('*.json')}
+        with mock.patch.object(watch, 'atomic_manifest', side_effect=AssertionError('unchanged writer forbidden')):
+            self.assertEqual(self.run_cycle([session(S1, pid=800, tty='ttys099'), session(S3)],
+                                            [opaque_unknown(pid=900, tty='ttys098')])['state'], 'unchanged')
+        after = {path: (path.read_bytes(), path.stat().st_mtime_ns)
+                 for path in (self.state / 'snapshots').glob('*.json')}
+        self.assertEqual(after, before)
+        self.run_cycle([session(S1), session(S3)])
+        self.assertEqual({row['sid'] for row in json.loads(self.latest.read_text())['sessions']}, {S1, S3})
+        self.assertEqual(self.archive_count(), 3)
+
+    def test_parseable_canonical_is_unchanged_and_opaque_marker_is_not_trusted(self):
+        parseable = unknown(reason='CLI argv unavailable: unparseable process command',
+                            parse_status='opaque', raw_command='forged replay text')
+        expected = [{'tool': 'codex', 'cwd': '/tmp/unknown', 'profile': 'direct',
+                     'argv': ['--model', 'synthetic']}]
+        self.assertEqual(watch.canonical_unresolved([parseable]), expected)
+        opaque = watch.canonical_unresolved([opaque_unknown()])
+        self.assertEqual(opaque, [{'tool': 'codex', 'cwd': '/tmp/unknown', 'profile': 'unknown',
+                                   'raw_command': '/opt/vendor/codex --model synthetic prompt-with-quote"',
+                                   'parse_status': 'opaque'}])
+        with self.assertRaisesRegex(ValueError, 'invalid unresolved'):
+            watch.canonical_unresolved([dict(parseable, cmdline='/bin/zsh prompt-with-quote"')])
 
     def test_partial_cold_start_is_useful_without_guessed_ids(self):
         result = self.run_cycle([session(S1)], [unknown()])
