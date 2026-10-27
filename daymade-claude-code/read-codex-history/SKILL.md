@@ -14,6 +14,23 @@ Read Codex evidence only. Do not continue the old task or change its project. If
 the user wants execution after the read is complete, pass the verified evidence
 to `daymade-claude-code:continue-codex-work`.
 
+## Find a complete thread ID first
+
+For a pasted UUID prefix or an identity-only request, run this bounded lookup:
+
+```text
+python3 <skill-dir>/scripts/find_codex_session.py <UUID-prefix>
+```
+
+Accept only exit 0 with `status: unique` and `identity_verified: true`. The command
+queries matching state-index rows, includes archived/subagent entries, and verifies
+the unique candidate with the exact rollout locator. It does not export unrelated
+inventory, read conversation bodies, or probe writer locks. On ambiguity, show the
+returned candidates and ask for a longer prefix; on unavailable evidence, retain
+unknown. Return the verified ID and title, then stop. Load the rest of this Skill
+only for an additional requested result. Read [lookup and JSON contracts](references/session-lookup.md)
+only for exit handling, programmatic consumption or inventory JSON parsing.
+
 ## Codex history surfaces
 
 | Surface | Authority | Use |
@@ -71,8 +88,8 @@ Pitfalls measured 2026-10-03:
   Write boundaries as UTC literals (local wall time minus your offset) instead.
 
 Read [references/storage_and_portability.md](references/storage_and_portability.md)
-for source discovery, timestamps, writer-lock semantics, legacy Kimi compatibility,
-and storage failures. Read
+when inventory reports unsupported, missing or ambiguous storage, or when interpreting
+timestamps, writer locks or legacy Kimi storage. Read
 [references/codex_rollout_format.md](references/codex_rollout_format.md) before
 interpreting fork snapshots, compaction, event streams, or end reasons.
 
@@ -80,6 +97,7 @@ interpreting fork snapshots, compaction, event streams, or end reasons.
 
 | User wants | Use |
 |---|---|
+| Complete thread ID from a UUID prefix, without conversation reconstruction | `scripts/find_codex_session.py <UUID-prefix>`; stop after verified identity |
 | Recent Codex sessions, titles, IDs, or positive writer-lock evidence | `scripts/list_local_history.py --source codex --index-only`; an unavailable index leaves inventory unknown |
 | Find the Session containing a pasted quote, with a known project, date, or title clue | **Locate a quoted exchange** below: inventory candidates, then verify the original messages |
 | Exact recent user inputs from newest to oldest, grouped by Session | `scripts/list_codex_user_inputs.py` |
