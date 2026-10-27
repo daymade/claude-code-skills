@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-watchdog** (`daymade-macos` v1.26.2 → v1.26.3): Route native-readback and event-convergence acceptance through the ordinary-entry and recovery contract; keep timeout policy with its helper and remove derived counts from operating prose. Synchronize the project instruction entry. Change type: scoped documentation alignment.
+
 - **macos-watchdog** (`daymade-macos` v1.26.1 → v1.26.2): Verify automatic recovery after temporary protection in the same running instance, and distinguish adopted, bypassed and unverified launcher forms through their real consumers. Preserve explicit stop, identity and uncertain-delivery boundaries. Change type: bounded acceptance correction.
 
 - **claude-switch-models-setup** (`daymade-claude-code` v4.31.2 → v4.32.0): Add an explicit native-command entry for callers that separate structured native stdout from profile setup output; preserve ordinary profile launch, settings, synchronization and exit behavior. Change type: additive script interface.
