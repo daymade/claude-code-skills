@@ -1,8 +1,9 @@
 # Keychain dialogs that block the desktop
 
-Use this branch after observing a Keychain access dialog. Preserve the reported
-symptom and distinguish a normal request for consent from a window the user
-cannot operate. A password field alone does not decide which case applies.
+Use this branch after observing a Keychain access dialog or confirming a Keychain
+access failure through the original operation. Preserve the reported symptom;
+distinguish a normal consent request, an inoperable window and a background failure
+without a dialog. A password field alone does not decide which case applies.
 
 ## Bind the request and the intended result
 
@@ -16,7 +17,9 @@ access, and restoring the original application operation require different
 evidence. Do not reset TCC, reset a keychain, change item access controls or
 restart the requesting application merely to remove a window.
 
-For an operable consent prompt, leave password entry and any required permission
+When existing authorization and a registered provider cover the operation, first
+use [authorized provider recovery](#recover-through-an-authorized-registered-provider).
+Otherwise, for an operable consent prompt, leave password entry and any required permission
 decision to the person under the current host contract. Never request the
 password in chat. Explain the selected button only when needed: Apple documents
 one-time access, persistent access and denial as different choices in its
@@ -35,6 +38,45 @@ Respect host restrictions and GUI ownership. Do not use another input tool,
 process signals or a screenshot path to bypass a protected-interface refusal.
 Consider process termination only as a separately authorized cancellation of an
 observed obstructing request, where the host permits process management.
+
+## Recover through an authorized registered provider
+
+Use this route only when both hold: the task's standing authorization already covers
+using this credential for this purpose, and a registered credential or session
+provider already owns it. This route restores a same-session consumer that is blocked
+on Keychain access; it never creates a grant and never widens an existing one.
+
+1. Locate the registered provider through the task's owning configuration or
+   procedure — the entry that owns this credential. A missing default file means the
+   owner is unresolved, not that no provider exists; resolve the owner before
+   declaring the resource unavailable.
+
+2. Verify the match before invoking: exact machine, account, keychain and security
+   context, and that the authorization covers this use of this credential. Any
+   mismatch stops this route and keeps the state unknown.
+
+3. Invoke the provider through its normal execution entry only. Do not pass secret
+   values through command arguments, logs or general settings files, and do not copy
+   the credential into the task record.
+
+4. Run recovery and the dependent consumer in the security session required by
+   that provider. An unlock in another SSH, login or service session does not
+   establish access for the blocked requester. Distinguish four states and report them separately:
+   the keychain is unlocked, the named item is actually readable, the original
+   pending request's state, and the final business result. Only the named protected
+   operation succeeding in the original requester and context closes the
+   corresponding recovery; an unlock never establishes an ACL, TCC or system-wide
+   permission repair.
+
+5. If the original request is still running, do not start a duplicate write
+   operation. Wait for a bounded terminal state, inspect any completed side effect,
+   and only then decide whether a single retry is warranted.
+
+6. Keep every human path intact: manual password entry, a new explicit grant and
+   cancellation of the dialog remain supported routes. A missing owner, a match
+   failure or a native permission refusal ends this route: keep the state unknown,
+   do not broaden permissions, do not use another principal's key or session, and do
+   not control a protected window the host refused.
 
 ## Cancel the obstructing dialog only within explicit authority
 

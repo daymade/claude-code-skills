@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **claude-switch-models-setup** (`daymade-claude-code` v4.33.1 → v4.33.2): Reuse authorized profile bindings before requesting a key, keep credentials in per-profile shell exports, and remove template token placeholders that override those exports. Change type: credential recovery repair.
+- **macos-permissions** (`daymade-macos` v1.26.4 → v1.26.5): Route confirmed Keychain failures through an authorized session provider when available, and verify the original operation separately from unlock and item access. Preserve consent and protected-window refusal boundaries. Change type: recovery-path clarification.
+
 - **frontend-visual-qa** (v1.21.27 → v1.21.28): Add synthetic reading-journey calibration for distinct goals, requirements and replies, exact-source return, long requirements and runtime replacement. Healthy, misbound, reset and stale-identity controls run through the existing browser test. Change type: bounded evaluation-case addition.
 
 - **claude-switch-models-setup** (`daymade-claude-code` v4.33.0 → v4.33.1): Point all six highspeed template model fields at `k3.1-pro-highspeed` while preserving credential placeholders and context settings. Change type: bounded runtime-template correction.
