@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **ghostty-use** (v1.8.5 → v1.8.6): Route Minions native_runtime sessions to Account Manager while preserving manual account switching and same-ID restoration for unmanaged/legacy Ghostty sessions. Change type: bounded account-owner correction.
+
 - **read-claude-code-history / claude-code-hooks** (`daymade-claude-code` v4.33.2 → v4.33.3): Distinguish pasted interface records from actual execution and require exact role=system request-context evidence for hook delivery; preserve unknown states and physical-order independence. Change type: bounded evidence-selection clarification.
 
 - **claude-switch-models-setup** (`daymade-claude-code` v4.33.1 → v4.33.2): Reuse authorized profile bindings before requesting a key, keep credentials in per-profile shell exports, and remove template token placeholders that override those exports. Change type: credential recovery repair.

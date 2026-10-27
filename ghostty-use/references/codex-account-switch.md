@@ -1,18 +1,30 @@
 ---
 name: codex-account-switch
 description: >-
-  Save and reopen all Ghostty Codex sessions around a manual ChatGPT account
-  switch. Read for quota exhaustion, pre-switch capture, post-switch restoration
-  or interrupted batch recovery; exclude Claude Code.
+  Save and reopen unmanaged/legacy Ghostty Codex sessions around a manual ChatGPT
+  account switch. Read for quota exhaustion, pre-switch capture, post-switch restoration
+  or interrupted batch recovery; exclude Claude Code and Minions native_runtime sessions.
 ---
 
 # Manual Codex account switch
 
-Keep ongoing Codex work available when account quota runs out. Save the open
+Keep ongoing unmanaged/legacy Codex work available when account quota runs out. Save the open
 session set before exit, let the user change accounts, then restore the same
 session IDs, working directories and replay-safe options in one batch. Do not
 require a reboot. Leave Claude Code outside capture, transcript reads and restore
 actions. Keep the existing reboot and automatic-backup routes available.
+
+## Choose the account owner first
+
+This route applies only to unmanaged/legacy Ghostty Codex sessions. A Minions
+`native_runtime` row, a Minions-managed launch command, or a managed account-adoption
+error belongs to the owning Account Manager's native session flow. Do not run
+`switch-prepare`, manual `logout/login`, or this batch restore for those rows, and do
+not use this route for a mixed set that includes them. The Account Manager owns
+managed candidate selection and account binding; manual credential changes do not
+rebind that managed session. Preserve any eligible unmanaged/legacy work through its
+own verified route instead of treating the whole Ghostty inventory as one account
+switch.
 
 ## Save before switching
 
@@ -48,7 +60,7 @@ and preserves the pointer. Prepare again before each new account switch.
 Record stable account/subject hashes, PID/start time, UUID, cwd, verified rollout
 and replay-safe argv; save no tokens or credential contents. Token refresh is
 not a switch. Require ChatGPT file-auth identity in the selected store;
-keyring-only, API-key and remote/local-provider sessions are outside this route.
+keyring-only, API-key, remote/local-provider and Minions-managed sessions are outside this route.
 Keep unavailable identity an explicit error.
 
 ## Manual handoff and readiness

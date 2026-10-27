@@ -7,7 +7,8 @@ description: >-
   my ghostty tabs), or to audit which sessions survived. Not for resuming one conversation
   via its own --resume, terminal screenshots, or tmux state. Also use for periodic
   change-only snapshots (定期增量快照 / 没变化不记录).
-  Also use before or after a manual Codex account switch (额度耗尽换号 / 换号后恢复全部 Codex).
+  Also use before or after a manual Codex account switch for unmanaged/legacy sessions
+  (额度耗尽换号 / 换号后恢复全部 Codex). Minions native_runtime sessions use Account Manager instead.
 ---
 
 # ghostty-use
@@ -34,13 +35,16 @@ restore your old focus. Host denials remain binding.
 | Rebooted, want tabs back ("恢复之前的窗口") | Use a suitable snapshot; if absent or outdated, `reconstruct`, then `restore --all` on the selected manifest |
 | "Was anything lost?" / suspicion after restore | `check` |
 | One specific session to bring back | `restore --only <id-prefix>` |
-| Codex quota running out; manually switching account, keeping all Codex work | Read codex-account-switch.md; `switch-prepare` → manual exit/login → `switch-restore` |
+| Minions `native_runtime` session or managed account-adoption error | Do not use the manual switch route; use the owning Account Manager's native session flow |
+| Unmanaged/legacy Codex quota running out; manually switching account, keeping all Codex work | Read codex-account-switch.md; `switch-prepare` → manual exit/login → `switch-restore` |
 | After a switch, want the same sessions back ("换号后恢复原会话"); opening blocked or delegated | Same SOP's original-set route: deliver the fixed manifest's exact per-SID commands with per-item status; a blank tab is not a recovery |
 
 ## Codex account switch
 
-Preserve all Ghostty Codex sessions before the user manually switches ChatGPT
-accounts, then reopen the original session IDs in one batch. Exclude Claude Code.
+Preserve unmanaged/legacy Ghostty Codex sessions before the user manually switches
+ChatGPT accounts, then reopen the original session IDs in one batch. Exclude Claude
+Code and Minions `native_runtime` sessions; those managed rows use the owning Account
+Manager, not this route's manual logout/login or batch restore.
 Read [codex-account-switch.md](references/codex-account-switch.md) before this route.
 Use `scripts/ghostty_session.py switch-prepare` and `switch-restore`; the bundled
 `scripts/ghostty_switch.py` owns fixed-manifest selection, account/process checks,
