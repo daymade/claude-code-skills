@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tibo-reset-codex** (v2.5.1 → v2.5.2): Route project-level monitoring instructions to canonical procedures and remove duplicated display defaults and derivable documentation counts. Runtime behavior is unchanged.
+
 - **macos-watchdog** (`daymade-macos` v1.26.2 → v1.26.3): Route native-readback and event-convergence acceptance through the ordinary-entry and recovery contract; keep timeout policy with its helper and remove derived counts from operating prose. Synchronize the project instruction entry. Change type: scoped documentation alignment.
 - **tibo-reset-codex** (v2.5.0 → v2.5.1): Treat mixed tweet results as samples, use existing community paging to bound media processing, and carry current monitoring state with timestamped evidence instead of concatenating prior handoffs. Preserve unresolved delivery and media gaps. Change type: bounded evidence and continuation guidance correction.
 
@@ -18,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **read-codex-history** (`daymade-claude-code` v4.31.1 → v4.31.2): Follow recorded runners and separately scoped child evidence when investigating termination; distinguish keyword search coverage, signal attempts, process exit and user-visible recovery.
 - **ghostty-use** (v1.8.3 → v1.8.4): Distinguish one-shot helper closeout from original-session recovery and preserve unknown terminal identity when only an exit banner, previous-login line or reused TTY is available.
 
-- **tibo-reset-codex** (v2.4.0 → v2.5.0): Add backward-compatible `summary --compact` as a projection of the full result, preserving routine decision fields, evidence references, account and snapshot state while omitting declared long narratives; retain full-summary and followup behavior. Freeze the pre-compact reader in compatibility tests to catch full/followup drift. Record successful community-source deployment, full group name, talker, time/seq cursor and media coverage in local handoff, with private talker values kept out of the public Skill. Verified with 170 Python and 3 Node tests plus real-ledger field equivalence; compact output is 37.49% smaller. Change types: additive capability and factual handoff correction.
+- **tibo-reset-codex** (v2.4.0 → v2.5.0): Add backward-compatible `summary --compact` as a projection of the full result, preserving routine decision fields, evidence references, account and snapshot state while omitting declared long narratives; retain full-summary and followup behavior. Freeze the pre-compact reader in compatibility tests to catch full/followup drift. Record successful community-source deployment, full group name, talker, time/seq cursor and media coverage in local handoff, with private talker values kept out of the public Skill. Change types: additive capability and factual handoff correction.
 - **competitors-analysis** (v1.6.5 → v1.6.6), **app-evolver** (v1.1.9 → v1.1.10): Add synthetic whole-collection versus known-work orientation controls and task-pivot/return-context replays. Preserve same-task filters and distinguish initialized navigation from early-click safety. Change type: bounded acceptance-case addition.
 - **frontend-visual-qa** (v1.21.22 → v1.21.23): Extend semantic QA evals with saved-branch interpretation, necessary legends, cross-view node shapes and selected-object action continuity; working controls and source links do not settle reader understanding. Change type: evaluation-case addition.
 
