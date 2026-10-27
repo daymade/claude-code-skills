@@ -25,7 +25,7 @@ never switch tools to bypass a host restriction or GUI lock.
 
 | Observed dialog or failure | Route |
 |---|---|
-| Keychain item access, a `login` keychain password, or a blocked Keychain window | Read [Keychain dialog recovery](references/keychain-dialog-recovery.md) |
+| Confirmed Keychain item access failure, a `login` keychain password, or a blocked Keychain window | Read [Keychain recovery](references/keychain-dialog-recovery.md) |
 | Privacy resource request or a protected operation failing without a visible dialog | Continue with the TCC procedure below |
 | Script, Git hook, or application-specific confirmation | Inspect that request through its owning task/tool; do not change TCC or Keychain settings |
 | Content or owner still unknown | Keep it unknown; obtain only the missing permitted observation or ask the user for the visible text |

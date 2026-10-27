@@ -62,16 +62,16 @@ Then reload:
 source ~/.zshrc
 ```
 
-### 3. Create a provider settings file
+### 3. Create a provider settings file and add your key
 
-For each provider, create `~/.claude/settings/<provider>.json`.
+For each provider, create `~/.claude/settings/<provider>.json`. The settings
+file holds only non-secret routing config — never your API key.
 
 Example for Kimi:
 
 ```json
 {
   "env": {
-    "ANTHROPIC_AUTH_TOKEN": "your-kimi-api-key",
     "ANTHROPIC_BASE_URL": "https://api.moonshot.cn",
     "ANTHROPIC_MODEL": "kimi-k2.7-code",
     "CLAUDE_CODE_SUBAGENT_MODEL": "kimi-k2.7-code",
@@ -83,7 +83,24 @@ Example for Kimi:
 }
 ```
 
-Ask your instructor or provider documentation for the exact `ANTHROPIC_BASE_URL` and model name.
+Using an authorized editor, store your own key once in `~/.zprofile` under a
+provider-named export. Do not put the real value in chat or a shell command:
+
+```bash
+export KIMI_API_KEY="<your-own-key>"
+```
+
+Keep that file private (`chmod 600 ~/.zprofile`). In `~/.zshrc`, replace the
+existing `csk` alias with the binding below; an interactive alias alone will be
+lost or overwritten when the rc file reloads:
+
+```bash
+alias csk='ANTHROPIC_AUTH_TOKEN="$KIMI_API_KEY" claude-profile kimi'
+```
+
+Existing legacy settings that contain a token remain readable; new setup keeps
+the token outside settings. Ask your instructor or provider documentation for
+the exact `ANTHROPIC_BASE_URL` and model name.
 
 ### 4. Initialize profiles
 
@@ -96,10 +113,20 @@ It also keeps plugin install state and enabled plugin settings aligned with the 
 
 ### 5. Launch
 
+Reload the exports and aliases after initialization:
+
+```bash
+source ~/.zprofile && source ~/.zshrc
+```
+
 ```bash
 csk   # Kimi window
 csd   # DeepSeek window
 ```
+
+Send one short message. A working reply proves the key reached the consumer.
+If the window says `Not logged in`, the binding did not reach the launch —
+re-check the export and the alias, not the settings file.
 
 ## Common questions
 
