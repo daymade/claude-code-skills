@@ -269,6 +269,10 @@ Select a read-only range that covers the real existing record; a relative window
 such as "today" can age out of historic activity. Never seed data, create a
 payment or edit timestamps solely to make a screenshot look populated.
 
+Compare filter states from the same observation window. If underlying records
+changed between captures, label that change separately instead of attributing it
+to the filter.
+
 Keep healthy empty and net-zero states intact: populated rows above a
 no-more-data footer are not empty, and fully refunded gross-paid activity can
 legitimately net to zero. Do not impose a permanent record-count or
