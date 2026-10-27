@@ -648,6 +648,38 @@
         "Preserves author attribution, edition, original access and viewing-start/stored-but-unread key by their specific reading consequences, without reintroducing the duplicate outcome narration",
         "Separates semantic candidate usefulness from unobserved pixels, real control behavior, scientific fact revalidation and human style acceptance; does not claim every sentence was user-approved or prescribe the candidate as a fixed template"
       ]
+    },
+    {
+      "id": 44,
+      "name": "goal-requirement-reply-source-and-return",
+      "prompt": "Audit only the synthetic nested-source-return fixture with ?journey=semantic&fault=none, then faults goal-as-request, reply-as-request, wrong-source and false-return. The task is to read the full current requirement and return to the same contribution view. Goal A, requirement B and latest reply C intentionally differ. Use ordinary controls and scrolling; read the end of long B, inspect original workspace/runtime/record and compare the returned selection, page and actual scroll. Every variant loads successfully. Do not edit the fixture or infer production acceptance. If no browser is available, give the bounded recipe and keep execution unverified.",
+      "expected_output": "Accepts the healthy requirement B and same-context return when observed; rejects Goal A or reply C substitution, wrong-source B and reset-to-start return despite successful loading. Verifies that the long requirement does not conceal the latest reply or original action, and reads its final requirement through the actual reader.",
+      "files": [
+        "evals/files/nested-source-return-fixture.html"
+      ],
+      "expectations": [
+        "Distinguishes the Goal, current requirement and latest reply by their supplied meanings; opens record-b rather than accepting any loaded original",
+        "Checks workspace-cedar/run-copper/record-b identity as well as the complete requirement including the turquoise-envelope final line; detects wrong-source even when its text matches",
+        "Ordinarily scrolls and returns to the same workspace, runtime, page, selected record and nonzero contribution position; rejects the false-return reset",
+        "Accepts the healthy control without treating long original content itself as clutter, while verifying it does not displace current progress in the overview",
+        "Treats HTTP success, DOM text and framework loading as supporting signals only; limits conclusions to observed synthetic states and leaves unavailable browser evidence or product adoption unverified"
+      ]
+    },
+    {
+      "id": 45,
+      "name": "runtime-replacement-refusal-and-explicit-current-selection",
+      "prompt": "Audit only the synthetic nested-source-return fixture at ?journey=semantic&fault=none and fault=stale-return. Open Read full requirement, use Simulate runtime replacement while the original is open, then Return to workbench. The same workspace has a new runtime; the task is to continue reading without claiming the old selection was recovered. Compare refusal, explicit current-native selection and its original record. Do not change identities or edit the fixture. If the browser is unavailable, do not claim execution.",
+      "expected_output": "Accepts the honest old-instance-unavailable state followed by explicit selection of the current native workspace and its requirement original. Rejects the stale-return variant even though the old visible view and original remain readable; does not misclassify the healthy identity refusal as a missing-data defect.",
+      "files": [
+        "evals/files/nested-source-return-fixture.html"
+      ],
+      "expectations": [
+        "Exercises runtime replacement during the open Reader rather than inferring it from a title or an HTTP status",
+        "Keeps the old-instance refusal separate from content readability; does not mark old run-copper selection restored after replacement",
+        "Uses the explicit current native workspace action and verifies run-amber/record-b and the requirement body, without silently rebinding the old key",
+        "Rejects the stale-return control and accepts the healthy refusal/recovery path when observed; does not demand automatic selection, identity borrowing or removal of the refusal",
+        "Reports synthetic fixture calibration separately from installed application behavior, real deployment, physical-input feel and user adoption"
+      ]
     }
   ]
 }
