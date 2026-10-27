@@ -360,10 +360,10 @@ For self-hosted routing, resource limits or cache persistence, follow its
 [runner acceptance](github-ops/references/workflow_operations.md#self-hosted-runner-capacity-and-acceptance).
 Keep demand selection, validation-reuse and capacity acceptance in those owners.
 
-For browser-backed recurring jobs, enter
-[macos-watchdog](daymade-macos/macos-watchdog/SKILL.md) and apply its deployment
-acceptance before shipping. That Skill owns resource-budget and focus evidence;
-keep the detailed procedure there.
+For automatic observers or recovery jobs, begin with
+[ordinary-entry and lifecycle acceptance](daymade-macos/macos-watchdog/SKILL.md#bind-the-ordinary-entry-before-choosing-a-mechanism),
+including recovery after temporary protection. Browser-backed recurring jobs also
+use that Skill's deployment acceptance for resource-budget and focus evidence.
 
 Before selecting file-event or periodic triggers, follow
 [macos-watchdog's trigger and acceptance workflow](daymade-macos/macos-watchdog/references/event-driven-observers.md).
