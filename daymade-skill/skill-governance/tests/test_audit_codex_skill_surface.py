@@ -784,11 +784,12 @@ class CodexSkillSurfaceAuditTests(unittest.TestCase):
     def test_summary_human_output_and_argument_boundary(self):
         prompt, options, _, _ = self.market_case()
         args = [sys.executable, str(SCRIPT), "--prompt-json", str(prompt),
+                "--source-sync-script", os.environ.get("SKILL_AUDIT_TEST_SOURCE_OWNER", str(SCRIPT.parents[3] / "daymade-claude-code/claude-switch-models-setup/scripts/sync-local-skill-sources.py")),
                 "--skills-json", str(self.inventory), "--config", str(self.config),
                 "--activation-manifest", str(self.manifest), "--cwd", str(self.root),
                 *options, "--require-visible", "actual-name", "--required-only", "--summary"]
         result = subprocess.run(args, capture_output=True, text=True)
-        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
         self.assertIn("Codex required Skills: present (exit 0)", result.stdout)
         self.assertNotIn("activation_manifest", result.stdout)
         result = subprocess.run([sys.executable, str(SCRIPT), "--summary"], capture_output=True, text=True)
