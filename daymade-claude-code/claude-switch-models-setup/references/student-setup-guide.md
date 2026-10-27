@@ -98,11 +98,6 @@ lost or overwritten when the rc file reloads:
 alias csk='ANTHROPIC_AUTH_TOKEN="$KIMI_API_KEY" claude-profile kimi'
 ```
 
-Reload (`source ~/.zprofile && source ~/.zshrc`), launch `csk`, and send one
-short message. A working reply proves the key reached the consumer. If the
-window says `Not logged in`, the binding did not reach the launch — re-check
-the export and the alias, not the settings file.
-
 Existing legacy settings that contain a token remain readable; new setup keeps
 the token outside settings. Ask your instructor or provider documentation for
 the exact `ANTHROPIC_BASE_URL` and model name.
@@ -118,10 +113,20 @@ It also keeps plugin install state and enabled plugin settings aligned with the 
 
 ### 5. Launch
 
+Reload the exports and aliases after initialization:
+
+```bash
+source ~/.zprofile && source ~/.zshrc
+```
+
 ```bash
 csk   # Kimi window
 csd   # DeepSeek window
 ```
+
+Send one short message. A working reply proves the key reached the consumer.
+If the window says `Not logged in`, the binding did not reach the launch —
+re-check the export and the alias, not the settings file.
 
 ## Common questions
 
