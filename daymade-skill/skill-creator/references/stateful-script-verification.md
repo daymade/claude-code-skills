@@ -224,6 +224,40 @@ the Skill.
 
 ## Complete file reads
 
+### Codex Code Mode receipt
+
+When the host exposes `functions.exec`, use one literal absolute `cat` or bounded
+`sed` command per cell. Emit the source text separately from command metadata;
+keep both the inner command and outer response within their output budgets:
+
+```javascript
+const result = await tools.exec_command({
+  cmd: "sed -n '1,20p' '<absolute-source-file>'",
+  max_output_tokens: 2000,
+});
+text({ exit_code: result?.exit_code, session_id: result?.session_id });
+if (result === null || typeof result !== "object" || Array.isArray(result)
+    || result.exit_code !== 0 || typeof result.output !== "string"
+    || Object.prototype.hasOwnProperty.call(result, "session_id")) exit();
+text(result.output);
+```
+
+Replace the path and range with the selected source before execution. This is a
+range read, not a whole-file loading claim; use the hash-bound plan below when
+the complete file is required. A running command must reach its terminal receipt
+before its output can establish a completed read.
+
+For hosts with a loading-evidence adapter, an inner PostToolUse observation may
+say `model-facing-receipt-pending` before the outer cell returns. The next guarded
+boundary can reconcile that returned text. Check the resulting source-bound
+coverage rather than rereading solely because of the earlier pending notice.
+Serialized command results can also be recognized by current adapters; JSON
+wrapping alone does not prove a read failed. Omitted text, partial ranges and
+unrecognized host envelopes remain incomplete or unknown. This recipe neither
+sets a loaded marker nor overrides the host's loading check.
+
+### Planned ranges and whole-file coverage
+
 Prefer the host's Skill/Read loader. For a shell fallback, use the fixed entry with
 an absolute source path. The original direct `skill_read_plan.py <file>
 --max-chunk-bytes <bytes>` invocation remains supported. First request a plan:

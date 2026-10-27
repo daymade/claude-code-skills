@@ -853,6 +853,33 @@ def _print_human(report: dict[str, Any]) -> None:
         print("  max_visible_exceeded=true")
 
 
+def _required_summary(report: dict[str, Any], names: list[str], code: int) -> dict[str, Any]:
+    """Project the requested gate without conflating it with whole-catalog pressure."""
+    summary = {
+        "schema_version": 1,
+        "kind": "codex_skill_surface_summary",
+        "status": "invalid" if code == 2 else report["required_status"],
+        "exit_code": code,
+        "exit_scope": "required_names",
+        "required_names": sorted(set(names)),
+        "required_failures": None if code == 2 else report["required_failures"],
+        "overall_status": None if code == 2 else report["status"],
+    }
+    if code == 2:
+        summary["error"] = report["error"]
+    return summary
+
+
+def _print_summary(summary: dict[str, Any]) -> None:
+    print(f"Codex required Skills: {summary['status']} (exit {summary['exit_code']})")
+    print(f"  required: {', '.join(summary['required_names'])}")
+    if summary["status"] == "invalid":
+        print(f"  error: {summary['error']}")
+    else:
+        print(f"  missing or wrong source: {', '.join(summary['required_failures']) or 'none'}")
+        print(f"  overall catalog: {summary['overall_status']}")
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Read-only audit of the Skill catalog compiled into a fresh Codex prompt"
@@ -875,6 +902,10 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--source-sync-script", type=Path, help="Source owner exposing load_skill_activation_policy and --print-source-inventory")
     parser.add_argument("--source-inventory-json", type=Path, help="Use a frozen source inventory instead of running the resolver")
     parser.add_argument("--required-only", action="store_true", help="Gate only explicitly required names; keep all other findings in the report")
+    parser.add_argument(
+        "--summary", action="store_true",
+        help="With --required-only, emit only the target verdict and overall catalog status",
+    )
     parser.add_argument(
         "--require-visible",
         action="append",
@@ -904,6 +935,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--max-visible must be non-negative")
     if args.required_only and not args.require_visible:
         parser.error("--required-only requires --require-visible")
+    if args.summary and not args.required_only:
+        parser.error("--summary requires --required-only")
     try:
         report = build_report(args)
     except AuditInputError as exc:
@@ -913,7 +946,13 @@ def main(argv: list[str] | None = None) -> int:
             "status": "invalid",
             "error": str(exc),
         }
-        if args.json:
+        if args.summary:
+            summary = _required_summary(payload, args.require_visible, 2)
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))
+            else:
+                _print_summary(summary)
+        elif args.json:
             print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
         else:
             print(f"Codex Skill surface: invalid\n  {exc}", file=sys.stderr)
@@ -927,13 +966,18 @@ def main(argv: list[str] | None = None) -> int:
         report["required_failures"] = sorted(failures)
         report["required_status"] = "missing" if failures else "present"
         report["exit_scope"] = "required_names"
-    if args.json:
+    code = int(bool(report["required_failures"])) if args.required_only else int(report["status"] == "pressure")
+    if args.summary:
+        summary = _required_summary(report, args.require_visible, code)
+        if args.json:
+            print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))
+        else:
+            _print_summary(summary)
+    elif args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
     else:
         _print_human(report)
-    if args.required_only:
-        return int(bool(report["required_failures"]))
-    return 1 if report["status"] == "pressure" else 0
+    return code
 
 
 if __name__ == "__main__":

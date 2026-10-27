@@ -725,6 +725,76 @@ class CodexSkillSurfaceAuditTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, report)
         self.assertEqual(report["findings"]["active_missing_links"], ["actual-name"])
 
+    def test_summary_target_success_remains_distinct_from_catalog_pressure(self):
+        prompt, options, _, agents = self.market_case()
+        prompt = self.write_prompt([
+            ("control", "Con", self.control),
+            ("actual-name", "Complete metadata.", agents / "actual-name/SKILL.md"),
+        ])
+        result, full = self.run_audit(
+            prompt, *options, "--require-visible", "actual-name", "--required-only"
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(full["status"], "pressure")
+        self.assertEqual(full["required_status"], "present")
+        self.assertIn("activation_manifest", full)
+        result, summary = self.run_audit(
+            prompt, *options, "--require-visible", "actual-name", "--required-only", "--summary"
+        )
+        self.assertEqual(result.returncode, 0, summary)
+        self.assertEqual(summary, {
+            "schema_version": 1, "kind": "codex_skill_surface_summary",
+            "status": "present", "exit_code": 0, "exit_scope": "required_names",
+            "required_names": ["actual-name"], "required_failures": [],
+            "overall_status": "pressure",
+        })
+        self.assertLess(len(result.stdout), 600)
+        self.assertNotIn(str(self.root), result.stdout)
+
+    def test_summary_missing_wrong_source_and_invalid_evidence_keep_exit_meanings(self):
+        prompt, options, _, agents = self.market_case()
+        for name in ("absent-control", "actual-name"):
+            if name == "actual-name":
+                wrong = self.write_skill("wrong-summary", "actual-name", "Wrong source.")
+                (agents / name).unlink()
+                (agents / name).symlink_to(wrong.parent)
+                prompt = self.write_prompt([
+                    ("control", "Control.", self.control),
+                    (name, "Wrong source.", agents / name / "SKILL.md"),
+                ])
+            result, summary = self.run_audit(
+                prompt, *options, "--require-visible", name, "--required-only", "--summary"
+            )
+            self.assertEqual(result.returncode, 1, summary)
+            self.assertEqual(summary["status"], "missing")
+            self.assertEqual(summary["exit_code"], 1)
+            self.assertEqual(summary["required_failures"], [name])
+        for invalid in ({}, {"data": None}, {"data": []}):
+            self.inventory.write_text(json.dumps(invalid), encoding="utf-8")
+            result, summary = self.run_audit(
+                prompt, *options, "--require-visible", "actual-name", "--required-only", "--summary"
+            )
+            self.assertEqual(result.returncode, 2, summary)
+            self.assertEqual(summary["status"], "invalid")
+            self.assertEqual(summary["exit_code"], 2)
+            self.assertIsNone(summary["required_failures"])
+            self.assertIsNone(summary["overall_status"])
+            self.assertTrue(summary["error"])
+
+    def test_summary_human_output_and_argument_boundary(self):
+        prompt, options, _, _ = self.market_case()
+        args = [sys.executable, str(SCRIPT), "--prompt-json", str(prompt),
+                "--skills-json", str(self.inventory), "--config", str(self.config),
+                "--activation-manifest", str(self.manifest), "--cwd", str(self.root),
+                *options, "--require-visible", "actual-name", "--required-only", "--summary"]
+        result = subprocess.run(args, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Codex required Skills: present (exit 0)", result.stdout)
+        self.assertNotIn("activation_manifest", result.stdout)
+        result = subprocess.run([sys.executable, str(SCRIPT), "--summary"], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("--summary requires --required-only", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
