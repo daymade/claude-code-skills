@@ -34,7 +34,7 @@ restore your old focus. Host denials remain binding.
 | "Was anything lost?" / suspicion after restore | `check` |
 | One specific session to bring back | `restore --only <id-prefix>` |
 | Minions `native_runtime` session or managed account-adoption error | Do not use the manual switch route; use the owning Account Manager's native session flow |
-| Unmanaged/legacy Codex quota running out; manually switching account, keeping all Codex work | Read codex-account-switch.md; `switch-prepare` → manual exit/login → `switch-restore` |
+| Unmanaged/legacy Codex quota running out; manually switching account, keeping all Codex work | Read codex-account-switch.md; `switch-prepare [--only <unmanaged-uuid>...]` → manual exit/login → `switch-restore` |
 | After a switch, want the same sessions back ("换号后恢复原会话"); opening blocked or delegated | Same SOP's original-set route: deliver the fixed manifest's exact per-SID commands with per-item status; a blank tab is not a recovery |
 
 ## Codex account switch
@@ -58,6 +58,8 @@ literal-control receipt.
 
 ```bash
 python3 <skill-dir>/scripts/ghostty_session.py switch-prepare
+# Mixed managed/unmanaged inventory: capture only the eligible unmanaged/legacy UUIDs.
+python3 <skill-dir>/scripts/ghostty_session.py switch-prepare --only <unmanaged-uuid> [...]
 # User: finish work, exit the saved Codex TUIs and manually switch account.
 python3 <skill-dir>/scripts/ghostty_session.py switch-restore
 ```
