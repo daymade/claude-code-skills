@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.21.26 → v1.21.27): Prepare existing business records for data-bearing demos by checking identity and date filters, preserving legitimate empty or net-zero states, and verifying populated states in the delivered artifact. Change type: bounded execution-recipe clarification.
+
 - **frontend-visual-qa** (v1.21.25 → v1.21.26): Remove copied inspection totals from the publication case while retaining card-field versus article-body scope; align the project instruction entry with controls, deks and expanded summaries. Change type: documentation alignment and scoped deduplication.
 
 - **frontend-visual-qa** (v1.21.24 → v1.21.25): Calibrate publication-copy review against functioning controls with unresolved card-summary filler, mixed factual sentences and necessary legends or scientific limits. Preserve semantic, rendered and human-acceptance evidence boundaries. Change type: bounded acceptance-case addition.
