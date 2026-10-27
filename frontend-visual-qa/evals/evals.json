@@ -619,6 +619,35 @@
         "Preserves the valid known-work neighborhood and source-link controls, and asks for only the affected overview-to-neighborhood/detail-return replay",
         "Leaves live rendering and reader benefit unverified and does not demand copied graph styling, every taxonomy field or an unrelated feature"
       ]
+    },
+    {
+      "id": 42,
+      "name": "publication-copy-residuals-after-local-green",
+      "prompt": "Audit only this anonymized research-publication inventory. The user says 还有 AI Slop after an earlier release. The declared surface is the bilingual homepage controls and all supplied card deks and expanded summaries; article bodies are outside this audit. The actor wants to choose an article, understand its reported mechanism or comparison, and open the cited edition. Earlier checks found working View buttons, source links and comparison selection, correct layout and passing SEO. The earlier fix reworded controls and removed a separate explanation band, but viewing narration still repeated the selected action; the diagram key remained. The user singles out card A's dek ending 图中的取格范围让区别清晰起来 after a sentence already distinguishing final overall performance from old-task retention. Other supplied cards: B's dek ends 解释了这项贡献该怎样理解, while its expanded summary still says 成绩需要连着各自评测口径读. Synthetic card C says A call count describes discovery effort and elapsed time describes a solver's runtime; its expanded summary has the reported 317 versus 550 discovery calls, a lower mean solver time driven by one dataset, and five other datasets becoming slower. D's summary says 作者报告的生产收益，把模型生成的代码与模型训练基础设施连了起来；随后训练出的模型是否更会发现算法，所提供的案例尚未测量. Its preceding sentences already specify a matrix-tiling rule, real-TPU runtime evaluation and separate optimization/evaluation input shapes. Give findings and dispositions across the declared supplied groups, with any necessary next probe. No live page, screenshot or write permission is supplied.",
+      "expected_output": "Does not stop at the named card or pass on controls/layout/SEO. Finds residual self-praise and reader instruction in A and B including the opened summary, considers whether C's correct definitions actually serve the comparison task, and separates D's abstract restatement from its necessary unmeasured-outcome boundary. Keeps source access and the necessary key, and limits conclusions to the supplied semantic evidence.",
+      "files": [],
+      "expectations": [
+        "Covers A, B's dek and expanded summary, C and D rather than treating the user's singled-out A as the entire complaint; does not claim an article-body review",
+        "Identifies A's self-praise and B's residual reading instruction with a concrete missing comparison or reader consequence; does not certify closure merely because the short dek was shortened",
+        "Recognizes that C's metric definitions can remain insufficient for this comparison task despite being true, and considers the reported contrast without requiring every number in the initial card",
+        "Dispositions D's clauses separately: the connection restatement can be removed or rewritten while the unmeasured later-model outcome is preserved; inability to delete the whole sentence does not establish that it needs no edit",
+        "Retains source/edition access and the decision-bearing diagram key; does not infer redundancy from negative wording, bilingual controls or a generic keyword list",
+        "Does not promote working buttons, layout, SEO, fewer words or an unrun scan to copy acceptance, invent a browser run or claim human endorsement; preserves audit-only authority and the declared surface"
+      ]
+    },
+    {
+      "id": 43,
+      "name": "publication-concrete-revision-with-scientific-boundaries",
+      "prompt": "Audit only a supplied final revision candidate for the same research-reading task: choose an article, understand the reported comparison and open the cited edition. The replay-study dek says recorded attempts let policies test different continuations without repeating discovery. Its expanded summary attributes a five-round comparison to the authors: 317 versus 550 discovery calls and 2931.0 versus 3587.1 ms mean solver time across six held-out datasets; one dataset drives the lower mean while all five others become slower. It says incumbent retention guarantees a non-decreasing mean replay score only on the identical fixed history pool, not improvement in later online searches. A kernel-study summary explains the tiling-rule experiment and says the supplied case did not measure whether a later trained model discovers better algorithms. Cards retain author attribution, an edition label and an Open original control. Bilingual View controls select saved views; the only key distinguishes the current viewing start from stored-but-unread dashed branches. Duplicate visible-outcome narration is absent. These are candidate source revisions, not user-endorsed templates; no live page, clicks, paper revalidation or human acceptance is supplied. Give dispositions and limits without applying a generic remove-all-explanation policy.",
+      "expected_output": "Accepts the supplied concrete comparisons as addressing the earlier semantic gap, preserves the study limits, source identity and necessary diagram key with their reader consequences, and keeps current rendering, behavior, scientific revalidation and human approval unverified. Does not turn the candidate into a universal template or force all expanded detail into the first card.",
+      "files": [],
+      "expectations": [
+        "Explains why the concrete reported contrast answers a different question from generic metric definitions and permits detailed results in the expanded summary",
+        "Retains the one-dataset/five-slower contrast and fixed-history versus later-online limit because deleting them would overstate what the reported mean and guarantee establish",
+        "Retains the kernel study's unmeasured later-model outcome; does not flag a scientific limitation as producer self-defense merely because it states a negative",
+        "Preserves author attribution, edition, original access and viewing-start/stored-but-unread key by their specific reading consequences, without reintroducing the duplicate outcome narration",
+        "Separates semantic candidate usefulness from unobserved pixels, real control behavior, scientific fact revalidation and human style acceptance; does not claim every sentence was user-approved or prescribe the candidate as a fixed template"
+      ]
     }
   ]
 }
