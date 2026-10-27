@@ -75,9 +75,9 @@ passed. It reworded controls, removed a separate explanation band and repaired a
 misleading diagram state, but viewing narration still repeated the selected
 action. Those observations did not establish necessity of the remaining copy.
 
-The next inspection covered titles, deks and expanded summaries on 13 research
-cards, changing bilingual dek or summary metadata for 10 articles. It was not a
-review or rewrite of 13 article bodies. Use the following research-copy excerpts
+The next inspection covered card titles, deks and expanded summaries, and revised
+bilingual dek or summary metadata. It was not an article-body review or rewrite.
+Use the following research-copy excerpts
 with the actor's task: choose an article, understand its reported mechanism or
 comparison, and reach the cited edition. Translations in parentheses explain the
 Chinese examples; they are not additional observed copy. The row marked synthetic

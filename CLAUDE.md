@@ -246,7 +246,8 @@ For persistent Python service installation, environment reuse or startup, follow
 
 For rendered UI freshness, delayed editor/batch responses or deployment acceptance, enter
 [frontend-visual-qa](frontend-visual-qa/SKILL.md).
-For publication-wide clutter despite passing local checks, use its
+For publication-wide clutter or AI Slop despite passing local checks, including
+controls, deks and expanded summaries, use its
 [publication journey calibration](frontend-visual-qa/references/publication-journey-cases.md).
 For the pre-release ancillary-copy gate or density/layout comparisons, follow
 [information necessity](frontend-visual-qa/references/history-derived-checklist.md#information-necessity-before-layout).
