@@ -337,9 +337,11 @@ URL，不从聊天记录、浏览器 Cookie 库或旧工具回执中搜 token �
   先导航到 `/auth/login` 再点 SSO 按钮，别在首页点 Log in。按钮 `disabled:false`、
   `pointer-events:auto`、坐标在视口内也可能点了没反应——换入口比调坐标有用。
 - **登录态判据用正面证据，不猜 URL**：解析到邮箱或 `Weekly usage limit` 文本才算已登录。
-  `chrome-error://` 与 `about:blank` 是读取失败/unknown，不是登出；只有非错误页面缺少这些
-  正面证据时才进入登出分支。登出时 usage 页可能留在 `/` 首页（有 Log in/Sign up）、
-  也可能重定向到 `/auth/login`，两种 URL 都得覆盖，只认 `/auth/` 会漏掉首页登出态。
+  `page.goto()` 抛错或超时、`chrome-error://` 与 `about:blank` 都是本次读取失败/unknown，
+  不是登出；即使浏览器仍保留上一张 HTTPS 页面，其中的旧用量或登录文案也不能作为本次账号
+  状态证据，必须停止登出与登录驱动分支。只有成功导航后的非错误页面缺少这些正面证据时才
+  进入登出分支。登出时 usage 页可能留在 `/` 首页（有 Log in/Sign up）、也可能重定向到
+  `/auth/login`，两种 URL 都得覆盖，只认 `/auth/` 会漏掉首页登出态。
 - **当次隔离 profile 没有可用的 Google 会话 token**。当时 `import-google-cookies.py` 只搬到
   `ACCOUNT_CHOOSER`（账号记忆列表）+ `LSOLH` + 分析类 cookie，实测 `SID`/`__Secure-1PSID`/
   `__Secure-3PSID`/`HSID`/`SSID`/`SAPISID` 全无。Google 账号选择器会列出全部账号但**每个都

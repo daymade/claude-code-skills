@@ -26,6 +26,38 @@ test('navigation failures stay unknown instead of becoming a logged-out account'
   assert.equal(loggedOut.loggedOut, true);
 });
 
+test('rejected usage navigation cannot reuse a retained HTTPS page', async () => {
+  const {readUsagePage} = require('../scripts/read-usage-profile.cjs');
+  const retainedPages = [
+    'Log in or sign up',
+    'account@example.com\nWeekly usage limit\n50% remaining',
+  ];
+  for (const retainedText of retainedPages) {
+    const page = {
+      goto: async () => { throw new Error('Timeout 20000ms exceeded'); },
+      innerText: async () => retainedText,
+      url: () => 'https://chatgpt.com/',
+    };
+    const result = await readUsagePage(page, 0);
+    assert.equal(result.unavailable, true);
+    assert.equal(result.loggedOut, false);
+  }
+});
+
+test('successful usage navigation preserves fresh body text for normal output', async () => {
+  const {readUsagePage} = require('../scripts/read-usage-profile.cjs');
+  const text = 'account@example.com\nWeekly usage limit\n50% remaining';
+  const page = {
+    goto: async () => {},
+    innerText: async () => text,
+    url: () => 'https://chatgpt.com/codex/settings/usage',
+  };
+  const result = await readUsagePage(page, 0);
+  assert.equal(result.unavailable, false);
+  assert.equal(result.loggedOut, false);
+  assert.equal(result.text, text);
+});
+
 test('existing local Playwright resolves without NODE_PATH', () => {
   const env = {...process.env};
   delete env.NODE_PATH;

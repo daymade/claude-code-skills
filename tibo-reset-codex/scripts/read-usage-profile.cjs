@@ -59,7 +59,7 @@ async function realClick(cdp, x, y) {
   await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
 }
 
-function parseUsage(text, url) {
+function parseUsage(text, url, navigationFailed = false) {
   const email = (text.match(/[\w.+-]+@[\w-]+\.[\w.-]+/) || [null])[0];
   const weekly = (text.match(/Weekly usage limit[^\n]{0,70}/i) || [null])[0];
   const pcts = [...text.matchAll(/(\d+)\s*%\s*(remaining|left)/gi)].map((m) => `${m[1]}% ${m[2]}`);
@@ -68,9 +68,22 @@ function parseUsage(text, url) {
   // 登录态以正面证据为准：解析到邮箱 或 出现 weekly 用量文本 = 已登录。
   // 不猜 URL——登出时 usage 页可能留在 / 首页、也可能重定向到 /auth/login，两种都要覆盖。
   const hasUsage = !!email || /weekly usage limit/i.test(text);
-  const unavailable = /^chrome-error:\/\/|^about:blank$/.test(url);
+  const unavailable = navigationFailed || /^chrome-error:\/\/|^about:blank$/.test(url);
   const loggedOut = !unavailable && !hasUsage;
   return { email, weekly, pcts, resets, fiveH, unavailable, loggedOut };
+}
+
+async function readUsagePage(page, waitMs = 12000) {
+  let navigationFailed = false;
+  console.log(`[nav] → ${USAGE}`);
+  await page.goto(USAGE, { waitUntil: 'commit', timeout: 20000 }).catch((e) => {
+    navigationFailed = true;
+    console.log('goto warn:', e.message.split('\n')[0]);
+  });
+  await sleep(waitMs); // SPA 渲染 + 可能重定向到 analytics#usage 或首页/auth/login
+
+  const text = await page.innerText('body').catch(() => '');
+  return { ...parseUsage(text, page.url(), navigationFailed), text };
 }
 
 async function main() {
@@ -86,12 +99,7 @@ async function main() {
   let page = ctx.pages().find((p) => p.url().startsWith('https://chatgpt.com'));
   if (!page) page = await ctx.newPage();
 
-  console.log(`[nav] → ${USAGE}`);
-  await page.goto(USAGE, { waitUntil: 'commit', timeout: 20000 }).catch((e) => console.log('goto warn:', e.message.split('\n')[0]));
-  await sleep(12000); // SPA 渲染 + 可能重定向到 analytics#usage 或首页/auth/login
-
-  const text = await page.innerText('body').catch(() => '');
-  const u = parseUsage(text, page.url());
+  const { text, ...u } = await readUsagePage(page);
 
   if (u.unavailable) {
     console.log('[读取失败] usage 页未取得可判定内容，账号状态保持 unknown');
@@ -163,4 +171,4 @@ if (require.main === module) {
   main().catch((e) => { console.error('ERR:', e.message); process.exit(1); });
 }
 
-module.exports = { parseUsage };
+module.exports = { parseUsage, readUsagePage };
