@@ -449,10 +449,10 @@ list. A source-only or package-only delivery does not authorize local activation
 2. Read back the installed route. Codex needs the correct source link. Claude can
    use either its personal Skill or an enabled plugin containing that Skill;
    absence from plugin install JSON alone does not prove a personal Skill missing.
-3. Run the fresh-host checks from this bundle:
+3. Run the requested host's check from this bundle. For Codex, use the
+   [named-target verdict](#named-target-verdict). For Claude:
 
    ```bash
-   python3 scripts/audit_codex_skill_surface.py --require-visible <skill-name> --required-only --summary --json
    python3 scripts/audit_claude_skill_surface.py --require-visible <command-name> --json
    ```
 
@@ -469,15 +469,6 @@ list. A source-only or package-only delivery does not authorize local activation
    whole-host audit, omit it: the audit expands `active_marketplaces` through the
    source owner's `--print-source-inventory` resolver. `--source-sync-script`
    selects that resolver; `--source-inventory-json` supplies a frozen fixture.
-   For a compact Codex target verdict, add `--summary` (requires `--required-only`).
-   It preserves the exit code and emits `status: present` / `missing` / `invalid`,
-   `exit_code: 0` / `1` / `2`, `exit_scope: required_names`, `required_names`,
-   `required_failures` and the separate `overall_status`. Invalid evidence carries
-   `required_failures: null`, `overall_status: null` and an error; null is unknown,
-   not an empty successful result. `overall_status: pressure` can coexist with
-   `status: present`; the requested target gate decides delivery. Omit `--json`
-   for a short human-readable verdict. Omit `--summary` for the unchanged full
-   report. Argument errors remain argparse stderr diagnostics with exit 2.
 5. For a retained cold entry, prove it stays absent at each exact discovery alias
    and that its router still resolves a representative resource. Codex exact-path
    disables apply only to those lexical paths, not to new aliases of the source.
@@ -485,6 +476,29 @@ list. A source-only or package-only delivery does not authorize local activation
 Do not use `skill-install-audit.py` exit 0 as this gate: it is an inventory report,
 can contain findings, and does not measure the fresh host catalog. Stop when the
 requested host discovers the target and the retained cold route still works.
+
+### Named-target verdict
+
+Resolve `<skill-governance-dir>` to the directory containing this Skill's
+`SKILL.md`. Use the consuming project's directory for `<target-workspace>`;
+running from the Skill directory must not silently select that directory's
+loading environment. For an explicitly requested Codex target, run:
+
+```bash
+python3 "<skill-governance-dir>/scripts/audit_codex_skill_surface.py" \
+  --cwd "<target-workspace>" --require-visible "<skill-name>" \
+  --required-only --summary --json
+```
+
+The compact verdict uses `--summary` (requires `--required-only`). It preserves
+the exit code and emits the target `status` (`present`, `missing`, `invalid`),
+`exit_code` (`0`, `1`, `2`), `exit_scope: required_names`, `required_names`,
+`required_failures` and the separate `overall_status`. Invalid evidence carries
+`required_failures: null`, `overall_status: null` and an error; null is unknown,
+not an empty successful result. `overall_status: pressure` can coexist with
+`status: present`; the requested target gate decides delivery. Omit `--json`
+for a short human-readable verdict. Omit `--summary` for the unchanged full
+report. Argument errors remain argparse stderr diagnostics with exit 2.
 
 ### Task behavior when it is part of delivery
 
