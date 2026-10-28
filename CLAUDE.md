@@ -132,6 +132,8 @@ Before a command that may exceed the response budget, enter Skill Creator's
 [large-output capture recipe](daymade-skill/skill-creator/references/stateful-script-verification.md#large-command-output).
 For a large file or saved tool response, use its
 [complete-file reading workflow](daymade-skill/skill-creator/references/stateful-script-verification.md#complete-file-reads).
+For Codex Code Mode source reads or provisional loading receipts, enter its
+[Code Mode receipt procedure](daymade-skill/skill-creator/references/stateful-script-verification.md#codex-code-mode-receipt).
 Keep invocation, selection and incomplete-read semantics in those owners.
 
 For plugin/Skill naming, source registration or release labels, use
@@ -652,6 +654,9 @@ that may already omit the new Skill. Keep installation/catalog evidence separate
 from actual task results. A daemon using a pinned plugin copy also needs the
 [pin-update workflow](daymade-claude-code/claude-switch-models-setup/references/troubleshooting.md#advance-the-pin).
 Do not treat a merged source change as proof that this runtime advanced.
+For a named-target availability verdict, use the
+[target-verdict procedure](daymade-skill/skill-governance/references/skill-surface-governance.md#named-target-verdict).
+Keep its invocation and result contract in that owner.
 For recorder deployment, follow that workflow's ordinary-copy migration and
 link readback; retaining a LaunchAgent wrapper does not update its files.
 

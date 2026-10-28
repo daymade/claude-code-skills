@@ -82,16 +82,19 @@ target-name checks in `references/skill-surface-governance.md` §14 before calli
 it ready. This covers Claude's fresh command catalog and Codex's fresh prompt.
 The name must come from the requested delivery, not only the active whitelist.
 
-Run from this Skill bundle:
+Invoke the script by its resolved Skill path and pass the consuming project as
+`--cwd`:
 
 ```bash
-python3 scripts/audit_codex_skill_surface.py --json
+python3 "<skill-governance-dir>/scripts/audit_codex_skill_surface.py" \
+  --cwd "<target-workspace>" --json
 ```
 
 Only add policy the user or activation SSOT actually declared:
 
 ```bash
-python3 scripts/audit_codex_skill_surface.py \
+python3 "<skill-governance-dir>/scripts/audit_codex_skill_surface.py" \
+  --cwd "<target-workspace>" \
   --require-visible gstack-router \
   --json
 ```
@@ -102,10 +105,8 @@ Exit `0` is clean, `1` is pressure or drift to classify, and `2` means
 the evidence is invalid. It is read-only. Do not convert exit `1` into automatic
 pruning.
 
-For delivery of named targets, use `--require-visible <name> --required-only
---summary --json`. Read the summary's target `status` and `exit_code`; a separate
-`overall_status: pressure` does not override target presence. The default full
-report remains available without `--summary`.
+For delivery of named targets, follow the
+[target-verdict procedure](references/skill-surface-governance.md#named-target-verdict).
 
 For a project's dual roots:
 
