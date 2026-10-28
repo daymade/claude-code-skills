@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **CI documentation**: Document bootstrap-mismatch diagnosis and image-change acceptance using the existing dependency and deadline guards.
+- **claude-code-hooks** (`daymade-claude-code` v4.33.5 → v4.33.6): Align receiving-side hook delivery checks with native Codex records, root session identity and event timestamps; retain unknown for incomplete evidence and route project instructions to the existing visibility and delivery contract. Change type: bounded factual correction.
 
 - **skill-governance** (`daymade-skill` v1.74.2 → v1.74.3): Link suite delivery instructions to the canonical fresh-host gate; keep coexistence setup with its owner and remove duplicated parser internals from the operating SOP. Change type: scoped documentation alignment.
 - **feishu-doc-scraper** (v1.10.2 → v1.10.3): Align the project capture entry with the owning API extraction SOP and reference the storage validator's canonical host suffixes instead of maintaining a second list. Change type: documentation alignment.
