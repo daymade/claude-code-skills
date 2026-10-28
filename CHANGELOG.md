@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **feishu-doc-scraper** (v1.10.1 → v1.10.2): Recognize the existing Lark host family consistently, dispatch wiki nodes by their resolved object type, and keep capture scope and preview evidence explicit. Preserve full-collection traversal and stop denied operations without retrying them through another transport.
+
 - **auto-repo-setup** (v2.1.7 → v2.1.8): Carry an authorized repository-maintenance status check through safe fast-forward synchronization and independent readback; preserve explicit read-only, local-work and conflict boundaries. Change type: bounded workflow-entry correction.
 
 - **git-safety-net** (v1.23.1 → v1.23.2): Separate ref manifests from recovery exports. Skip redundant history bundles only for clean temporary checkouts whose exact tips remain on independently verified retained remote main; retain immediate tip/carrier checks and unique-work preservation. Clarify that `--branch` includes reachable ancestry. Change type: bounded preservation-workflow correction.

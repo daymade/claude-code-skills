@@ -15,7 +15,13 @@ from pathlib import Path
 import re
 import os
 import urllib.parse
+from check_archive_storage import FEISHU_HOST_SUFFIXES
 from download_original_preview import writer_lock
+
+
+def _feishu_host(host):
+    """Require a tenant subdomain on the bundle's canonical host family."""
+    return any(host.endswith('.' + s) for s in FEISHU_HOST_SUFFIXES)
 
 
 def scalar(front, name, indent=0):
@@ -49,7 +55,7 @@ def build(root, collection, display_name, scope='private'):
         key, platform, kind = (scalar(fm, k, 4) for k in ('key', 'platform', 'kind'))
         host = urllib.parse.urlsplit(url or '').hostname or ''
         if (platform != 'feishu' or not isinstance(key, str) or not key or key in keys or
-                not title or not kind or not host.endswith('.feishu.cn')):
+                not title or not kind or not _feishu_host(host)):
             raise ValueError('Missing/duplicate Feishu source identity: ' + str(rel))
         body_scope = scalar(fm, 'share_scope') or scope
         levels = {'public': 0, 'restricted': 1, 'private': 2}

@@ -39,8 +39,10 @@ URL is saved by the helper. It does not change content already in the capture.
 
 Successful downloads match captured sizes and receive SHA-256 values. ZIP
 containers receive CRC checks; XLSX/DOCX/PPTX also require their core XML and
-content-types document. XLSX worksheet metadata is retained. These checks do not
-evaluate formulas, macros, document layout or the meaning of the templates.
+content-types document. XLSX worksheet metadata is retained. For preview versus
+original evidence, follow the [media failure branch](original-media-and-reader.md#select-the-failure-branch).
+These checks do not evaluate formulas, macros, document layout or the meaning of
+the templates.
 Unrecognized binary formats retain `application/octet-stream`; do not invent a
 detector result from the filename. Current XLSX source-card downloads were
 verified with lark-cli 1.0.96; that evidence does not settle image/video access.
