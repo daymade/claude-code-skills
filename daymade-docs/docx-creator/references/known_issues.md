@@ -355,7 +355,8 @@ page. Reproduced and fixed live while writing this skill (2026-08-12): the unpat
 produced a file whose title bar read "test-contract — 兼容性模式"; after adding the
 `DocumentSettingsPart`, the identical markdown produced a file that opened as plain
 "test-contract" with a clean first page and an intact 3-column table on page 2. This is now a
-mandatory step — see `references/verification_protocol.md` Step 3a.
+required when the existing native route is authorized and usable; otherwise preserve native
+acceptance as pending — see `references/verification_protocol.md` Step 3a.
 
 ---
 

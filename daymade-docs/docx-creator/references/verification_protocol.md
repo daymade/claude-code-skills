@@ -45,7 +45,7 @@ The remaining steps describe the DOCX-specific chain.
 dotnet --version                                        # any SDK; see scripts/README.md
 ls -l /Applications/LibreOffice.app/Contents/MacOS/soffice   # the file must exist
 which pdftoppm                                          # brew install poppler
-ls -d "/Applications/Microsoft Word.app" 2>/dev/null && echo "Word available — Step 3a required"
+ls -d "/Applications/Microsoft Word.app" 2>/dev/null   # installation only; assess readiness in Step 3a
 ```
 
 `ls` on the soffice binary is the real installation check. `brew install --cask libreoffice`
@@ -131,7 +131,7 @@ ls -l /tmp/docxcheck/your-doc.pdf
 
 ---
 
-## Step 3a — Open in real Microsoft Word, not just LibreOffice (mandatory if Word is available)
+## Step 3a — Check the actual file in Microsoft Word when the native route is usable
 
 **LibreOffice passing Steps 3-5 is not the same claim as "Word will render this correctly."**
 ISSUE-012 is a real, reproduced case: a file that renders perfectly in the LibreOffice PDF —
@@ -143,25 +143,46 @@ no matter how carefully you read its rendered pages. This is the exact shape of 
 (qlmanage hides what LibreOffice shows) recurring one layer up (LibreOffice hides what Word
 does).
 
-If Microsoft Word.app is installed on the machine — check with `ls -d "/Applications/Microsoft
-Word.app"` — this step is not optional, it is Step 3a, between rendering and rasterizing:
+Distinguish installation from a usable native route. The executing agent checks the existing
+project renderer or authorized app route: can it invoke Word for this exact file, is that
+operation permitted, and can it observe the resulting document/pages or native export?
+An app directory, successful event delivery or process exit alone proves none of these.
 
-```bash
-open -a "Microsoft Word" your-doc.docx
-```
+- **Ready:** when the native route is callable, authorized and observable, perform this check.
+  Do not choose the unavailable exit merely because LibreOffice has already rendered cleanly.
+  Open the actual file (or use the project's verified native route):
 
-Then look at two things, in this order:
+  ```bash
+  open -a "Microsoft Word" your-doc.docx
+  ```
 
-1. **The title bar.** Any suffix after the filename other than "— 已保存到…" / "— saved" is a
-   red flag; "兼容性模式" specifically means ISSUE-012 (missing `DocumentSettingsPart`
-   compatibility declaration) — go fix that before doing anything else.
-2. **Every page, same five checks as Step 5**, but now the ground truth is what a real
-   recipient's Word will show, not what LibreOffice approximated.
+  Inspect the title bar first: a suffix other than "— 已保存到…" / "— saved" is a red flag;
+  "兼容性模式" specifically requires the ISSUE-012 compatibility-settings check. Then inspect
+  every page for Step 5's five failures. Unexpected Compatibility Mode, unrequested markers
+  or visible damage returns to Step 6;
+  a fallback PDF does not excuse a real text, structure or layout defect.
+- **Not yet known:** make one bounded readiness pass over existing, already-authorized native
+  routes. Read the observed failure before another attempt; retry only after a relevant state
+  change. Keep an unobservable result pending. Installation alone does not require an Office
+  installation, activation, login or network-repair project as part of document delivery.
+- **Explicit host/permission refusal:** stop that native operation. Do not switch automation
+  tools, credentials or machines to bypass the refusal. Record the refused operation and leave
+  native acceptance incomplete.
+- **Unavailable:** if Word is absent, or existing authorized routes are demonstrably unusable
+  after that bounded pass, stop native attempts. Record the concrete missing prerequisite or
+  failure and the action needed to resume; do not claim native verification passed.
 
-If Word is not installed on this machine (common on Linux CI, some Mac minis), say so
-explicitly in your verification report rather than silently skipping the step — "Word was not
-available to verify this on" is honest; a verification report that omits Step 3a without
-comment reads as if it passed.
+When native acceptance remains incomplete, continue independent content/structure checks and
+repair real defects. If an allowed renderer is available, deliver the generated, reviewable
+DOCX together with a PDF rendered after the final edit and inspected on every page (Steps 4–5).
+Name the actual PDF engine/version and label **Word-native acceptance pending**, with its cause.
+If no allowed renderer can produce that PDF, state the missing PDF/layout acceptance instead
+of inventing evidence. Respect any explicit project requirement for a particular renderer.
+
+This is a review handoff, not proof that a signing-ready clean document is complete. Keep any
+other content/approval/annotation-removal requirements pending too. Resume at this native
+check when access becomes usable; do not repeat already valid independent checks. The agent
+records these observations; no automatic readiness or prose classifier enforces this branch.
 
 ---
 
@@ -215,7 +236,7 @@ all pages affected by reflow (changing spacing moves page breaks, which is check
 | Substitution | Why it is not verification |
 |---|---|
 | `qlmanage -t` thumbnail | Different rendering engine; showed a clean page for a document Word laid out visibly broken. This is the mistake that created this document (ISSUE-008). |
-| **LibreOffice PDF alone, with Word installed and skipped** | Different rendering engine, one level up from the qlmanage mistake — LibreOffice has no Compatibility Mode fallback and cannot surface it, so a clean LibreOffice render is not evidence Word will render the same file correctly (ISSUE-012). |
+| **LibreOffice PDF alone, with a usable authorized Word route skipped** | Different rendering engine, one level up from the qlmanage mistake — LibreOffice has no Compatibility Mode fallback and cannot surface it, so a clean LibreOffice render is not evidence Word will render the same file correctly (ISSUE-012). |
 | Exit code 0 | Says the writer did not crash. Every failure mode here is silent. |
 | `minimax-docx validate` reporting `PASSED` alone | Does not check `rPr`/`pPr`/`tblPr` child-element order or `tblGrid` presence — a file with real ECMA-376 violations still passes it (ISSUE-013). |
 | `python-docx` / text extraction round-trip | Confirms the characters are present. The characters were never the problem — their layout was. |
@@ -227,14 +248,16 @@ all pages affected by reflow (changing spacing moves page breaks, which is check
 
 ## Minimum evidence to claim "verified"
 
-State all five, or do not use the word:
+State all five. Use an unqualified "Word verified" only after native acceptance passes;
+an unavailable-route review handoff must state which checks passed and which remain pending:
 
 1. `Validation: PASSED` from the XSD validator, **and**, if available, 0 errors from
    `OpenXmlValidator` (ISSUE-013 — the first alone is not sufficient).
-2. PDF produced by LibreOffice at a named path, generated after the last edit.
+2. PDF produced at a named path after the last edit; name the actual renderer and version.
 3. Page count, and confirmation that **every** page image was read.
 4. The five checks in Step 5, each explicitly passed — naming the info block and the list you
    looked at, not "looks good".
-5. **If Microsoft Word.app is installed**, Step 3a done: title bar has no "兼容性模式" suffix,
-   and no unrequested markers on any page. If Word is not installed, say so explicitly instead
-   of omitting this point silently.
+5. Step 3a native result: when the route is usable, title bar has no "兼容性模式" suffix and
+   no page has unrequested markers. Otherwise record **Word-native acceptance pending**, its
+   observed cause and resume condition; describe the completed PDF/structure checks by scope,
+   not as unqualified "Word verified" or "signing-ready clean copy".

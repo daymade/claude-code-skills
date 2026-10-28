@@ -22,12 +22,16 @@ are separate operations. Preserve the error JSON/stderr outside the public bundl
 |---|---|---|
 | Selected identity cannot read the body (`131006`) | Use the existing permission/owner-export route | Do not replay credentials or guess an alternate token |
 | Body is readable; media export is denied and the CLI recommends preview | Read the installed CLI's media-preview guide; attempt that authorized operation once | Preview permission refusal is a boundary, not a transport retry |
+| Preview completes and its byte count matches the declared size | Record the actual capture operation and size comparison in the existing capture evidence. Original byte identity remains unverified without an independent original hash/byte comparison; parseable JSON/PDF proves preview validity only | Do not infer original byte equality from preview size or validity |
+| The actual error or installed guide explicitly lists a separate view operation for the same resource (e.g. `drive +preview --type source_file`) | Run that listed operation as its own authorized operation and record it under its own name | Do not retry the refused download; an empty converted-preview list proves only that the list was empty, not that every view operation is unavailable |
 | Preview returns `INTERNAL_ERROR` / unexpected EOF | Inspect the same source in an already authorized browser session | No identical retry loop; do not label EOF as an ACL refusal |
 | Browser actually plays/displays the requested original | Capture its observed original request URL and narrowly scoped headers through the browser owner | No invented URL, token enumeration, login-wall bypass or cross-account credential borrowing |
 | No authorized original request is available | Retain text and source token; report the media gap | Do not claim an original was saved |
 
 Read command availability from the installed CLI. An older command failure does
 not establish the permissions or behavior of a current original-preview operation.
+Keep these observations with the capture evidence; do not add unsupported fields
+to the storage manifest.
 
 ## Download one original per destination
 
