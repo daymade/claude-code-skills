@@ -76,13 +76,20 @@ stdin/heredoc 及 Python/Node 子进程调用却可能报 `Failed to start ego l
   追查兑现状态和原因；这不是上轮漏报归因，不能只重放旧 findings。
 - 裸调用（没带具体问题，只想知道现在什么情况）→ 组合执行：台账回看 → 公告线（Radar 索引 +
   独立的 Tibo 主帖时间线 + 有界 reply 发现，按 §1 各路径）+ 故障线（§1）→
-  本机落地状态（§2 脚本）→ [监测轮的线索决策](#监测轮从信息到可行动信号)与台账回填。
+  当前已核身份的实时用量与 banked（`scripts/query_usage.py`，见账号 SOP）→
+  [监测轮的线索决策](#监测轮从信息到可行动信号)与台账回填。
+  先完成能回答当前问题的读取。仅在用户要求历史复盘、需要解释窗口异常，或未兑现承诺的
+  发生区间确实需要匿名快照补证时执行 §2；按相关事件选择回溯天数，不默认重建七天曲线。
+  匿名快照仍不能替账号补身份或独自证明到账。到期未决项继续按 `followup` 逐项核验，
+  不因当前事件已有完成帖而清除旧问题；追加来源不能改变当前有界结论时停止扩查。
   按输出合同先给当前重置状态结论，再按预测路径给出下一步时间判断；没有可支持的日期窗口时，
   给出等待是否值得的判断，不为填满格式调用 `record` 造窗。公告线、故障线与
   本机扫描的每次实际抓取先落 findings 记录，回填时用
-  evidence_refs 挂链（见[预测反馈的 findings 节](references/forecast-feedback.md)）。**§2 之后必须再跑一次实时 banked 查询**（`scripts/query_usage.py`，读法与字段表见
-  [账号 SOP](references/account-usage.md)）——§2 的 rollout 快照结构上没有备用重置字段，不跑就
-  答不全「现在什么情况」这个最常被问的维度；只取 banked 一个数即可，并把输出里的 `account_ref` 一起记进 findings（记录规则见 forecast-feedback.md 的隐私契约，banked 计数的可比范围见账号 SOP）；本条其余部分仍只管重置状态。
+  evidence_refs 挂链（见[预测反馈的 findings 节](references/forecast-feedback.md)）。
+  **实时 banked 查询不能被 §2 替代**：rollout 快照结构上没有备用重置字段。本轮已有身份
+  核实、时间仍适用的实时读数时直接复用；缺失、查询期间发生切号或新事件使旧读数失效时，
+  再运行 `scripts/query_usage.py` 补查。把 `account_ref` 连同读数记进 findings；计数的可比范围
+  与字段读法见[账号 SOP](references/account-usage.md)。本条不授权切号或兑换备用。
   ⚠️ **scan 与 banked 不要 `&&` 串联**：scan_rollouts 无快照时 exit 1，`&&` 会把 banked 查询直接
   短路掉——表面上全套像跑过了，实际少一维（2026-09-19 实测）。两条分开跑，或串联时给 scan
   加 `|| true`。**循环场景下 skill 里的裸命令被 `same-cmd-resend-guard` 拦**（端点抖动失败一次
@@ -231,7 +238,7 @@ stdin/heredoc 及 Python/Node 子进程调用却可能报 `Failed to start ego l
    不是承诺与产品相矛盾；也不能据此断言后端尚未执行或已在其他账户到账。
    从帖子引用、回复对象、官方事故、独立账户观测和用户已授权的社区记录中选最有辨别力的
    下一跳。用户已指出「VIP 1群|一支烟花社区」是本案有效的补充发现源；正常轮若尚无该群
-   的新鲜覆盖，就按[社区增量读取](references/forecast-feedback.md#社区增量读取)调用现有
+   的新鲜覆盖且该缺口会改变当前未决判断，就按[社区增量读取](references/forecast-feedback.md#社区增量读取)调用现有
    `read-wechat-messages`，包含所选片段的纯图片与语音，随后回原帖
    核验。读取成功后，在本地 handoff 写明平台、成功部署标签、完整群名、talker、时间/seq
    游标与媒体覆盖；下一轮先复用这次成功定位，失败再检查部署或换源。私有 talker 只写本地
