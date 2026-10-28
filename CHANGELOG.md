@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tibo-reset-codex** (v2.5.2 → v2.6.0): Read current usage and banked resets before conditional historical reconstruction. Bound community follow-up to decision-bearing gaps. Add evidence-linked account follow-up closure/reopening without changing arrival evidence, global confirmation or forecast scores; retain compatibility with existing journals. Change types: bounded workflow redesign and additive queue control.
+
 - **skill-governance** (`daymade-skill` v1.74.2 → v1.74.3): Link suite delivery instructions to the canonical fresh-host gate; keep coexistence setup with its owner and remove duplicated parser internals from the operating SOP. Change type: scoped documentation alignment.
 - **feishu-doc-scraper** (v1.10.1 → v1.10.2): Recognize the existing Lark host family consistently, dispatch wiki nodes by their resolved object type, and keep capture scope and preview evidence explicit. Preserve full-collection traversal and stop denied operations without retrying them through another transport.
 
