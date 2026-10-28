@@ -13,7 +13,7 @@
 #                                          `git stash -u` / `-a`. `git stash
 #                                          show -p` does NOT display these, so
 #                                          a patch alone silently loses them.
-#   branches  -> branches.bundle           selected named-ref history, verified
+#   branches  -> branches.bundle           selected refs AND ALL reachable ancestors
 #   all refs  -> all-refs.bundle           every current ref, including stash,
 #                                          hidden backup refs, and linked-worktree
 #                                          HEADs; truly dangling objects must be
@@ -27,6 +27,8 @@
 #   --all-stashes   export every stash in `git stash list`
 #   --stash N       export stash@{N} (repeatable)
 #   --branch REF    include one branch or other named ref in branches.bundle (repeatable)
+#                   This is a full reachable-history export, not an incremental diff.
+#                   Apply the Skill's preservation decision before exporting a merged tip.
 #   --all-refs      create all-refs.bundle from `git bundle create --all`; use before
 #                   a full-ref-topology operation only when every captured ref is explicitly
 #                   authorized. Mutually exclusive with --branch.

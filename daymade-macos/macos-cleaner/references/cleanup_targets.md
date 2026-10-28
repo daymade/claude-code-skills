@@ -401,6 +401,33 @@ consumers; the directory name and the deletion helper do not establish them.
 
 **pnpm hard links make `du` a phantom.** pnpm links every installed file into the store (`nlink=2`), so deleting a project `node_modules` while the store stays releases ≈0 — the preserve-by-default store keeps the content alive (the SKILL.md mechanism table's hard-link row). Probe before promising any release: `find "<dir>" -type f -links +1 | head` — any hit means the directory is a link farm and the only real reclamation is the store itself. An empty probe does not clear the phantom either: on APFS, pnpm can import via clonefile — shared extents with nlink=1, invisible to `-links +1`. Keep expected release unknown until a df readback in either import mode. Reclaiming the store itself remains a separate USER-DECISION (it is not a row in the preserve-by-default table, so the Phase 2 cross-check does not apply; ask, don't propose) (2026-10-07: four project `node_modules` totaling 6.3 GiB sampled 200/200 hard-linked; all four left the action set with expected release ≈0).
 
+### Cargo and manual CI outputs
+
+For a Cargo or ad-hoc CI output, identify the creating command, retained source/lockfile,
+task owner, completed child processes and requested finished artifacts before selecting files.
+Read the producing project's lifecycle entry; use its existing ownership/budget/finish mechanism
+when authorized. An unregistered old directory cannot be adopted merely by naming it as output.
+
+- **Cargo:** `target/.../deps` may contain a finished test executable from `cargo test --no-run`
+  or `cargo build --tests`. Preserve those requested executable products. For an owned run,
+  compiler-artifact JSON can identify generated files, but interpret its `executable` field with
+  the actual command: a runner used by a completed ordinary test and a requested build-only
+  executable have different retention roles. Unknown files remain outside the selection.
+- **Manual CI:** `.test-assets`, `node_modules` and `dist` are names, not provenance. A check can
+  write a unique analysis result inside any of them. For automatic dependency retirement, snapshot
+  the successful locked installation before running the user command; remove only registered files
+  whose content, size and permissions still match that baseline. Preserve later edits, additions,
+  partial failed preparations and requested finished output. Do not register the whole tree after
+  the command and thereby relabel its unknown results as disposable.
+- **Finish:** after success, failure or a catchable interruption, preserve the original command
+  outcome and archive/verify the required evidence before retirement. If evidence verification or
+  active-reader checks fail, retain inputs and use the producer's recovery-only finish operation;
+  do not rerun the build or reset the task's cumulative budget to make cleanup succeed. Runtime
+  logs and result records do not require keeping every round's heavy dependency/source copies.
+
+These are selection rules, not deletion authorization. Keep source, user records and unrelated
+processes protected; a process ending or a successful test alone does not authorize removal.
+
 ### Retired packaged test Apps and build caches
 
 Verify that an exact bundle/cache is a generated test artifact rather than an installed or currently selected application. Check current processes, open files and live launch/configuration references; retain source, build inputs and diagnostic records outside the deletion target. Confirm retirement independently of inactivity: an offline installer or required historical reproduction may still matter.
