@@ -146,6 +146,14 @@ For a Chinese illustrated recipient guide from a manufacturer PDF, enter
 For relative-image resource paths or Markdown → PDF rendering, read
 [PDF Creator's ordinary entry](daymade-docs/pdf-creator/SKILL.md).
 
+For Word creation, existing Word/WPS → PDF, DOCX review or version comparison, enter
+[docs-router](daymade-docs/docs-router/SKILL.md) and load its selected child before acting.
+DOCX delivery follows docx-creator's
+[native acceptance procedure](daymade-docs/docx-creator/references/verification_protocol.md#step-3a--check-the-actual-file-in-microsoft-word-when-the-native-route-is-usable),
+including refused/unavailable checks and reviewable handoff. DOCX comparison follows
+[the input-identity and coverage procedure](daymade-docs/read-docx-review/references/full-comparison.md);
+keep sending evidence, revision-view selection and comparison limits with that owner.
+
 For saved HTML batches, follow [the conversion owner](daymade-docs/doc-to-markdown/references/html-conversion.md#gate-a-batch-through-the-existing-recipe)
 and its actual-reader pilot before expansion. Keep conversion evidence and reader
 observations separate; this file does not define another batch recipe.

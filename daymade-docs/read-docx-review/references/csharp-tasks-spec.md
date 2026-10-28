@@ -1,6 +1,7 @@
 # csharp/tasks/ — 修订感知的 docx 解析脚本
 
-dotnet-script (.csx) 脚本，基于 [DocumentFormat.OpenXml 3.2.0](https://github.com/dotnet/Open-XML-SDK) 提供修订感知的 docx 文本提取。
+dotnet-script (.csx) 脚本，基于 [OpenXML SDK](https://github.com/dotnet/Open-XML-SDK)
+提供下述范围内的修订感知查询和比较快照。
 
 ## 为什么存在这个目录
 
@@ -12,16 +13,10 @@ OpenXML SDK 是 Word 工程团队维护的 SDK。本目录封装修订/批注/�
 
 ## 依赖
 
-```bash
-# 一次性安装 dotnet-script 全局工具
-dotnet tool install -g dotnet-script
-export PATH="$PATH:$HOME/.dotnet/tools"
-
-# 如果本机只有 .NET 9+ 而 csx 引用 net8，需要 roll-forward
-export DOTNET_ROLL_FORWARD=Major
-```
-
-NuGet 包（DocumentFormat.OpenXml 3.2.0）由 dotnet-script 自动 restore，无需手动管理。
+首次准备沿 [`SKILL.md` 的依赖入口](../SKILL.md#依赖首次使用装一次)执行。
+各 `.csx` 的 `#r` 声明定义 NuGet 依赖；Python 入口的环境和 PATH 处理由
+[`docx_bridge_client.py`](../scripts/bridge_lib/docx_bridge_client.py) 定义。
+直接调用 dotnet-script 时需自行提供相应工具路径和运行环境。
 
 ## 段落索引语义
 
@@ -34,7 +29,7 @@ NuGet 包（DocumentFormat.OpenXml 3.2.0）由 dotnet-script 自动 restore，�
 
 ### list_revisions.csx
 
-列出 docx 中所有修订（内联 + 段落级），区分 ins/del 类型。
+列出 body 直接子段中支持的内联与段落标记 ins/del，不递归表格，也不枚举所有修订类型。
 
 ```bash
 dotnet-script scripts/csharp/tasks/list_revisions.csx -- /path/to/file.docx
@@ -95,13 +90,13 @@ dotnet-script scripts/csharp/tasks/list_comments.csx -- /path/to/file.docx
 - `document.xml` 的 `<w:commentRangeStart>` / `<w:commentRangeEnd>` — 段落锚定（首选）
 - `document.xml` 的 `<w:commentReference>` — 锚定回退：WPS 导出件部分批注只有引用点没有
   range（实测 2026-08-29 某 WPS 件 96 条中 6 条），此时用引用点所在段做单段锚定
-- 零批注文件的 summary 同样输出五键（threadRoots/replies 为 0），下游无需特殊分支
+- 零批注文件的 summary 保持相同字段形状，threadRoots/replies 为 0，下游无需特殊分支
 
 **典型用途**：批注清单的权威来源（本 skill 中由 extract_review.py 消费）。
 
 ### extract_views.csx
 
-每段输出三种文本视图 + 修订状态。NDJSON 格式（每行一段）。
+每个 body 直接子段输出下列文本视图与修订状态。NDJSON 格式（每行一段）。
 
 ```bash
 # 全文
@@ -120,11 +115,15 @@ dotnet-script scripts/csharp/tasks/extract_views.csx -- /path/to/file.docx --ran
 ```
 
 视图语义：
-- `accepted`：模拟"接受所有修订" → 包含 ins 文本，跳过 del 文本（`<w:t>` + `<w:ins>` 内 `<w:t>`，跳过 `<w:del>` 子树）
-- `rejected`：模拟"拒绝所有修订" → 包含 del 文本，跳过 ins 文本（`<w:t>` + `<w:delText>`，跳过 `<w:ins>` 子树）
+- `accepted`：保留已支持的内联 ins 文本，跳过 del 文本
+- `rejected`：保留已支持的内联 del 文本，跳过 ins 文本
 - `display`：含修订标记 → del 用 `[-...-]`，ins 用 `{+...+}`，其余正常
 
-**典型用途**：替代 paragraph.text 的核心数据接口。Python 端 `bridge_lib/docx_bridge_client.py` 用这个脚本提供 `paragraph_text()` / `paragraphs_text()` / `extract_views()` 三个函数。
+段落标记增删另由 `paraMarkDel` / `paraMarkIns` 报告；这些文本视图并不落实整段合并、
+移位、表格或属性修订，不能当成“接受/拒绝全文所有修订”的物化结果。实现与输出字段见
+[`extract_views.csx`](../scripts/csharp/tasks/extract_views.csx)。
+
+**典型用途**：替代 paragraph.text 的核心数据接口。Python 端 `bridge_lib/docx_bridge_client.py` 用这个脚本提供 `paragraph_text()` / `paragraphs_text()` / `extract_views()`。
 
 ### compare_snapshot.csx
 
@@ -141,14 +140,15 @@ dotnet-script scripts/csharp/tasks/extract_views.csx -- /path/to/file.docx --ran
 ## 设计参考
 
 - 修订处理模式：`~/.claude/plugins/cache/minimax-skills/.../Samples/TrackChangesSamples.cs`
-- 批注 4-file 系统：`~/.claude/plugins/cache/minimax-skills/.../Samples/FootnoteAndCommentSamples.cs`
+- 批注系统：`~/.claude/plugins/cache/minimax-skills/.../Samples/FootnoteAndCommentSamples.cs`
 - OOXML 元素顺序：`~/.claude/plugins/cache/minimax-skills/.../references/openxml_element_order.md`
 
-## 性能
+## 调用与缓存
 
-- 首次调用：~1.5 秒（dotnet-script 启动 + NuGet restore，restore 在 ~/.nuget/packages/ 首次后会缓存）
-- 后续调用同一 docx：Python client 内存级 LRU 缓存命中，~0ms
-- 不同 docx：每次重新启动 csx，~1 秒
+查询 API 的缓存和 csx 启动方式见
+[`docx_bridge_client.py`](../scripts/bridge_lib/docx_bridge_client.py)。比较快照不走查询缓存，
+由比较入口绑定当前输入哈希。依赖 restore 与执行耗时取决于实际环境，不据固定等待时长
+判定成功；检查进程结果和输出。
 
 ## 添加新脚本的 SOP
 

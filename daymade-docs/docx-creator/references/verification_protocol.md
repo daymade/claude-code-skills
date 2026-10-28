@@ -1,10 +1,9 @@
 # Verification protocol
 
-**A .docx that generates without error is not a verified .docx.** Every failure mode that
-matters in a formal Chinese document — stretched info blocks, restarted-or-not list numbers,
-missing table rules, font fallback — is invisible in the exit code, invisible in the extracted
-text, and invisible in a macOS Quick Look thumbnail. The only thing that surfaces them is a
-Word-grade rendering, looked at.
+**A .docx that generates without error is not a verified .docx.** Layout failures such as
+stretched info blocks, incorrect list numbers, missing table rules and font fallback require
+inspection of rendered pages. A successful process or extracted text cannot establish that
+layout is correct; macOS Quick Look is not the target Word engine.
 
 This protocol covers DOCX and existing-Word → PDF delivery. Apply the gate for the actual
 deliverable: Word application checks matter when delivering DOCX; a PDF-only handoff needs
@@ -158,7 +157,7 @@ An app directory, successful event delivery or process exit alone proves none of
 
   Inspect the title bar first: a suffix other than "— 已保存到…" / "— saved" is a red flag;
   "兼容性模式" specifically requires the ISSUE-012 compatibility-settings check. Then inspect
-  every page for Step 5's five failures. Unexpected Compatibility Mode, unrequested markers
+  every page for Step 5's failures. Unexpected Compatibility Mode, unrequested markers
   or visible damage returns to Step 6;
   a fallback PDF does not excuse a real text, structure or layout defect.
 - **Not yet known:** make one bounded readiness pass over existing, already-authorized native
@@ -198,7 +197,7 @@ small enough to read quickly. Raise to 150 if a table's borders are ambiguous.
 
 ---
 
-## Step 5 — Read every page image and check five things
+## Step 5 — Read every page image and check the failure modes
 
 `Read` each `page-NN.png`. Not the first page. Not a sample. Every page — pagination bugs and
 signature-block damage live at the end, which is exactly where sampling stops looking.
@@ -206,7 +205,7 @@ signature-block damage live at the end, which is exactly where sampling stops lo
 | # | Check | Failing looks like | Cause |
 |---|---|---|---|
 | 1 | **Info blocks are not stretched** — 甲方/乙方 blocks, addresses, signature blocks | Huge, uneven gaps between characters on every line but the last of the block | ISSUE-004 |
-| 2 | **Every list starts at 1** | Second clause's list starts at 4 | ISSUE-005 |
+| 2 | **Independent generated lists restart; intentional existing continuations remain** | An independent clause's list continues a previous counter, or an intended continuation restarts | ISSUE-005/016 |
 | 3 | **Table borders complete** | Some cells unruled, or only outer border drawn | Missing `insideH` / `insideV` |
 | 4 | **Signature block intact** | Party rows split across a page break; name and seal line separated; column drift | Layout / pagination |
 | 5 | **Pagination sane** | Orphaned heading at page bottom, single-line last page, clause split from its number | Spacing / keep-with-next |
@@ -248,14 +247,14 @@ all pages affected by reflow (changing spacing moves page breaks, which is check
 
 ## Minimum evidence to claim "verified"
 
-State all five. Use an unqualified "Word verified" only after native acceptance passes;
+State the evidence below. Use an unqualified "Word verified" only after native acceptance passes;
 an unavailable-route review handoff must state which checks passed and which remain pending:
 
 1. `Validation: PASSED` from the XSD validator, **and**, if available, 0 errors from
    `OpenXmlValidator` (ISSUE-013 — the first alone is not sufficient).
 2. PDF produced at a named path after the last edit; name the actual renderer and version.
 3. Page count, and confirmation that **every** page image was read.
-4. The five checks in Step 5, each explicitly passed — naming the info block and the list you
+4. The checks in Step 5, each explicitly passed — naming the info block and the list you
    looked at, not "looks good".
 5. Step 3a native result: when the route is usable, title bar has no "兼容性模式" suffix and
    no page has unrequested markers. Otherwise record **Word-native acceptance pending**, its

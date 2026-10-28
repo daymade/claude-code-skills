@@ -17,9 +17,9 @@ Severity legend: **P0** = ships a broken document. **P1** = costs an hour. **P2*
 bold, list, table, alignment, font, border, or footer. Output is an undifferentiated wall of
 default-styled paragraphs.
 
-**Root cause.** `create --content-json` understands exactly three block types. In
+**Root cause.** In
 `minimax-docx/scripts/dotnet/MiniMaxAIDocx.Core/Commands/CreateCommand.cs`, `AddContentFromJson`
-(line 287) switches over `"heading"`, `"paragraph"`, `"pagebreak"` (lines 301, 309, 313) and
+switches over `"heading"`, `"paragraph"`, `"pagebreak"` and
 drops everything else on the floor — unknown types are not even warned about, they simply do
 not append. The JSON schema is `{type, text, level?}`; there is no field in which bold, list
 or table could be encoded.
@@ -30,7 +30,6 @@ the CLI. That is what `scripts/Program.cs` is. Keep using the CLI for what it is
 
 **Verify.** Grep the switch yourself before assuming a block type is supported:
 `grep -n 'case "' minimax-docx/scripts/dotnet/MiniMaxAIDocx.Core/Commands/CreateCommand.cs`.
-Three cases means three block types.
 
 ---
 
@@ -45,15 +44,9 @@ fails too because it is not installed.
 `minimax-docx/scripts/dotnet/MiniMaxAIDocx.Core/Commands/`: analyze, apply-template, create,
 diff, edit-content, fix-order, merge-runs, validate. No script runner among them.
 
-**Fix.** Create your own console project — that is the supported path in practice:
-
-```bash
-dotnet new console -o _docxgen
-dotnet add _docxgen package DocumentFormat.OpenXml --version 3.2.0
-dotnet add _docxgen package Markdig
-```
-
-`scripts/mmdocx-gen.csproj` is exactly this, already wired up.
+**Fix.** Use the supplied console project and its pinned dependencies. Follow the staging
+commands in [`scripts/README.md`](../scripts/README.md#run); the machine-consumed framework
+and package definitions live in [`mmdocx-gen.csproj`](../scripts/mmdocx-gen.csproj).
 
 **Verify.** `ls minimax-docx/scripts/dotnet/MiniMaxAIDocx.Core/Commands/` — if there is no
 `RunScriptCommand.cs`, the documented invocation is fiction on your installed version.
@@ -90,8 +83,9 @@ DOTNET_ROLL_FORWARD=Major dotnet run --project <path-to>/MiniMaxAIDocx.Cli -- va
 `Microsoft.NETCore.App 10.0.5`: without the env var the launch fails with the message above;
 with it, the same command prints `Validation: PASSED`.
 
-Note: this env var is for **minimax-docx's** CLI only. `scripts/mmdocx-gen.csproj` targets the
-local SDK's framework and needs no roll-forward.
+For this generator, match the framework declared in
+[`scripts/mmdocx-gen.csproj`](../scripts/mmdocx-gen.csproj). It does not dynamically select
+the local SDK's framework; the roll-forward remedy above concerns the engine CLI failure.
 
 ---
 
@@ -209,18 +203,10 @@ characters fall back to a system default, so line lengths, weight and page break
 picks. Font *size* has the same trap: `FontSize` covers the Latin run, `FontSizeComplexScript`
 covers complex-script runs, and setting only one produces mixed sizes in bilingual lines.
 
-**Fix.** Always set all three font slots and both size properties:
-
-```csharp
-rp.Append(new RunFonts { Ascii = "Times New Roman", HighAnsi = "Times New Roman", EastAsia = "宋体" });
-rp.Append(new FontSize { Val = "21" });               // half-points → 10.5pt
-rp.Append(new FontSizeComplexScript { Val = "21" });
-```
-
-Shipped scheme: 宋体 body / 黑体 headings; 21 half-points body (10.5pt), 36 H1, 28 clause
-heading; Chinese bold runs switch family to 黑体 (ISSUE-014); body paragraphs carry a
-2-character first-line indent (`FirstLine = "420"` twips, sized for 10.5pt).
-See `RunProps` in `scripts/Program.cs` (`scripts/README.md`'s lookup table).
+**Fix.** Set the Latin and East Asian font slots and the regular/complex-script size
+properties. The current values and emitted properties are defined in
+[`Program.cs`](../scripts/Program.cs), at the constants and `RunProps`; its body paragraph
+caller owns the matching first-line indent. ISSUE-014 explains the Chinese bold-family fix.
 
 **Verify.** Convert to PDF and inspect embedded fonts (`pdffonts out.pdf`), or read the page
 PNGs — a fallback font is visible as a weight and width change against the surrounding text.
@@ -355,7 +341,7 @@ page. Reproduced and fixed live while writing this skill (2026-08-12): the unpat
 produced a file whose title bar read "test-contract — 兼容性模式"; after adding the
 `DocumentSettingsPart`, the identical markdown produced a file that opened as plain
 "test-contract" with a clean first page and an intact 3-column table on page 2. This is now a
-required when the existing native route is authorized and usable; otherwise preserve native
+required check when the existing native route is authorized and usable; otherwise preserve native
 acceptance as pending — see `references/verification_protocol.md` Step 3a.
 
 ---

@@ -37,7 +37,7 @@ original `/daymade-docs:<leaf>` command manually.
 | Extract Mermaid diagrams from Markdown or render Mermaid as PNG | `../mermaid-tools/SKILL.md` |
 | Create a professionally formatted Excel workbook, parse a complex investment-bank `.xlsm` model, or control Excel on macOS | `../excel-automation/SKILL.md` |
 | Turn photos of paper pages into a scanned PDF, replace pages in a scan, or make an unsigned digital document look hand-signed and scanned | `../photo-to-scanned-pdf/SKILL.md` |
-| Extract Word/WPS DOCX comments or tracked changes; compare a returned DOCX with its explicit sent baseline, including files with no review traces | `../read-docx-review/SKILL.md` |
+| Extract Word/WPS DOCX comments or tracked changes; compare explicitly selected DOCX versions, using the verified sent baseline for counterpart feedback, including files with no review traces | `../read-docx-review/SKILL.md` |
 | Check documentation impact after an authorized code, script, config, environment, path, deployment, auth, test, or procedure change; or consolidate redundant docs | `../docs-cleaner/SKILL.md` |
 
 Decide by the **input and requested output**, not a shared word such as “PDF”
