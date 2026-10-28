@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-cleaner** (`daymade-macos` v1.26.6 → v1.26.7): Check existing metadata exclusions and report metadata asymmetry before APFS prepare payload hashing; distinguish snapshot verification from untested clone compatibility and physical release. Preserve the candidate schema, strict execution metadata and rollback boundaries. Change type: bounded diagnostic and preflight repair.
+
 - **skill-governance** (`daymade-skill` v1.74.0 → v1.74.1): Parse standalone Codex catalog headings instead of prose mentions; retain missing, empty and duplicate-catalog errors, including repeated headings in one text block. Preserve CLI exit codes and target summaries. Change type: bounded parser repair.
 
 - **macos-load-doctor** (`daymade-macos` v1.26.5 → v1.26.6): Clarify manual cleanup of an owned disposable REPL context, preserve valuable or uncertain state, and distinguish kernel exit evidence from reset receipts and supervisor lifetime. Change type: bounded lifecycle guidance.
