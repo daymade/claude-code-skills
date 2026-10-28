@@ -8,7 +8,7 @@ dotnet-script (.csx) 脚本，基于 [DocumentFormat.OpenXml 3.2.0](https://gith
 
 裸 lxml 的 `.//w:t` 能读到 ins，但无法识别"段落标记被 `<w:del>` 包装的整段"——这些段在 docx 里仍有 `<w:t>` 内容，但接受修订后会消失。
 
-OpenXML SDK 是 Word 工程团队官方维护的 SDK，对 ins/del/move/format 修订有完整一等公民支持。本目录的 3 个 csx 脚本封装了修订/批注/文本视图三类查询，输出 JSON 供 Python client 消费。
+OpenXML SDK 是 Word 工程团队维护的 SDK。本目录封装修订/批注/文本视图查询及无未决修订稿的全文比较快照，输出 JSON 供 Python client 消费；各脚本支持范围分别如下。
 
 ## 依赖
 
@@ -25,7 +25,10 @@ NuGet 包（DocumentFormat.OpenXml 3.2.0）由 dotnet-script 自动 restore，�
 
 ## 段落索引语义
 
-所有脚本统一用 `body.Elements<Paragraph>()`（**只数 body 直接子段，不递归表格内段**），与 python-docx `Document.paragraphs` 行为对齐。改用 `Descendants<Paragraph>()` 会包含表格内段落，索引会跟 Python 端错位。
+原有 `list_revisions`、`list_comments`、`extract_views` 的段落号统一用
+`body.Elements<Paragraph>()`（**只数 body 直接子段，不递归表格内段**），与 python-docx
+`Document.paragraphs` 对齐。新增比较快照使用独立的 story/path 地址，包含表格内段落；
+不要将其地址当成旧 API 的段落号。
 
 ## 脚本清单
 
@@ -123,6 +126,18 @@ dotnet-script scripts/csharp/tasks/extract_views.csx -- /path/to/file.docx --ran
 
 **典型用途**：替代 paragraph.text 的核心数据接口。Python 端 `bridge_lib/docx_bridge_client.py` 用这个脚本提供 `paragraph_text()` / `paragraphs_text()` / `extract_views()` 三个函数。
 
+### compare_snapshot.csx
+
+供 `comparison_snapshot(docx)` 调用；读取正文、页眉、页脚、脚注和尾注。先检查这些部件中
+未决的插入、删除、段落标记、移位、属性及表格修订；发现即抛错，不生成比较结果，不写文件。
+旧查询接口不受此门影响。处理视图的分工见 [全文对比流程](full-comparison.md)。
+
+输出对象字段：`engine`、`revisionPolicy`、`stories`、`unsupported`、`records`。
+每条记录包含 `story`、`path`、`kind`（`paragraph` 或 `table_shape`）与完整 `text`。
+表格形状按行记录单元格的横向跨度与纵向合并；内容仍逐段保留。路径可包含
+`/table1/row1/cell2/p1`，脚注/尾注用 note id。页眉页脚按 part URI 区分，不能据此判断
+它当前在某一页是否显示。`unsupported` 标出图片、文本框、嵌入对象或替代内容等另核范围。
+
 ## 设计参考
 
 - 修订处理模式：`~/.claude/plugins/cache/minimax-skills/.../Samples/TrackChangesSamples.cs`
@@ -138,7 +153,7 @@ dotnet-script scripts/csharp/tasks/extract_views.csx -- /path/to/file.docx --ran
 ## 添加新脚本的 SOP
 
 1. 复制 `list_revisions.csx` 作为模板（含 `#r` 头、Args 校验、try/finally、JSON 输出）
-2. 段落索引必须用 `body.Elements<Paragraph>()`
+2. 扩展旧段落 API 时保留 `body.Elements<Paragraph>()`；比较记录沿用其独立 story/path 地址
 3. 文档化：入参/出参 schema、source sample 引用、典型用途
 4. 在 `bridge_lib/docx_bridge_client.py` 中加对应的 Python wrapper（含 LRU 缓存 + TypedDict）
 5. 在本 README 加一节
