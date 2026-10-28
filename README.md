@@ -3148,7 +3148,7 @@ additive until a step is explicitly labeled destructive.
 - Audits every linked worktree HEAD, dirty checkout, local-only commit, stash, and dangling commit
 - Pins dangling commits gc-proof under `refs/dangling-backup/` before any cleanup
 - Verifies a branch is merged by CONTENT — defeating the squash-merge "100 commits ahead" illusion
-- Proves a linked worktree safe before non-forced removal and exports all refs in one verified bundle
+- [Preservation before retirement](./git-safety-net/references/merge_verification.md#preservation-before-retirement)
 - Optional adversarial multi-agent verification for a high-stakes "is everything merged?" call
 - Catches another session's commit adopted onto your branch before it ships inside your PR
 - Settles "did my push/merge actually land?" by content when the receipt was lost to a flaky network
