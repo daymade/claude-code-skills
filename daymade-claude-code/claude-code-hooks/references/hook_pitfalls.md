@@ -3455,9 +3455,15 @@ this list and describe defects you reach by asking a different question):
   content in an `api-request-blob` with `message.role == "system"` and the
   host's `hook additional context` projection, bound by its event/sequence
   anchor rather than physical record order; a reminder quoted by a tool
-  result, source inspection, or assistant text is a different record. Keep the
-  result unknown when the anchor or later request projection is unavailable.
-  For `goal-reanchor`, use its operator SOP's three-state `--verify-delivery`
+  result, source inspection, or assistant text is a different record. For Codex,
+  require a `response_item` message with role `developer` and
+  `hooks.additional_context` in
+  `payload.internal_chat_message_metadata_passthrough.content_item_kinds`;
+  bind the complete reminder and timestamp to the event, and validate the
+  `session_meta.id` root identity against the event ledger rather than a fork
+  filename. Keep the result unknown when identity, the event anchor or comparable
+  later request-context evidence is unavailable; missing evidence alone does not
+  prove failed delivery. For `goal-reanchor`, use its operator SOP's `--verify-delivery`
   check. Do not migrate an event channel from user-interface invisibility or
   one missing attachment: reproduce the original tool event and inspect its
   actual request projection first.

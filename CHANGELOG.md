@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **docx-creator / read-docx-review** (`daymade-docs` v1.27.0 → v1.27.1): Align Word acceptance and comparison documentation with the existing implementations, distinguish sent-baseline evidence from explicit version controls, and link configuration to its defining sources. Remove derived checklist totals and unsupported restore-time estimates; preserve read-only comparison, revision refusal and pending native acceptance. Change type: scoped documentation alignment.
+- **claude-code-hooks** (`daymade-claude-code` v4.33.5 → v4.33.6): Align receiving-side hook delivery checks with native Codex records, root session identity and event timestamps; retain unknown for incomplete evidence and route project instructions to the existing visibility and delivery contract. Change type: bounded factual correction.
 
 - **skill-governance** (`daymade-skill` v1.74.2 → v1.74.3): Link suite delivery instructions to the canonical fresh-host gate; keep coexistence setup with its owner and remove duplicated parser internals from the operating SOP. Change type: scoped documentation alignment.
 - **feishu-doc-scraper** (v1.10.1 → v1.10.2): Recognize the existing Lark host family consistently, dispatch wiki nodes by their resolved object type, and keep capture scope and preview evidence explicit. Preserve full-collection traversal and stop denied operations without retrying them through another transport.
