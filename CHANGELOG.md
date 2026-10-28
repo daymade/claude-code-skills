@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-governance** (`daymade-skill` v1.74.0 → v1.74.1): Parse standalone Codex catalog headings instead of prose mentions; retain missing, empty and duplicate-catalog errors, including repeated headings in one text block. Preserve CLI exit codes and target summaries. Change type: bounded parser repair.
+
 - **macos-load-doctor** (`daymade-macos` v1.26.5 → v1.26.6): Clarify manual cleanup of an owned disposable REPL context, preserve valuable or uncertain state, and distinguish kernel exit evidence from reset receipts and supervisor lifetime. Change type: bounded lifecycle guidance.
 
 - **skill-governance / skill-creator** (`daymade-skill` v1.73.6 → v1.74.0): Add optional target-audit summaries with distinct presence, absence and invalid-evidence results while preserving full reports and exit codes. Document source-text delivery and provisional loading receipts in Codex Code Mode. Change types: additive output capability and bounded reading recipe.
