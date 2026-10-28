@@ -40,22 +40,29 @@ CLI 登录的那一个账号；多账号查询按下一节选通道，不为查�
 
 **触发**：多个账号同时 unknown / 查询超时 / provider_error，或任何一条查询通道返回「全部失败」。
 
-**第一步是最小可证伪动作，不是深入协议层**：
+**第一步先确定实际 consumer 与其出口**：从当前部署的 `accounts.usage_command` 判断查询在本机还是
+远端执行；若为 SSH argv，以下探针必须在同一远端节点运行，并沿用该 provider 已配置的 `proxy_env`。
+只在进程内应用这些配置，不打印认证内容，也不拿本机或其他节点的代理替代。随后对真实 Usage 端点
+`/backend-api/wham/usage` 做最小可证伪探测；只有 consumer 就在本机且使用当前 shell 出口时，才可把
+`https://chatgpt.com` 首页当作本机 HTTP 边界探针：
 
 ```bash
-curl -sS -m 8 -o /dev/null -w 'http=%{http_code} elapsed=%{time_total}s\n' https://chatgpt.com
+# 在 actual consumer 节点、沿用其实际 provider 的进程级代理配置后执行：
+curl -sS -m 8 -o /dev/null -w 'http=%{http_code} elapsed=%{time_total}s\n' \
+  https://chatgpt.com/backend-api/wham/usage
 # 紧接上一条执行，保留 curl 的传输退出码：
 printf 'curl_exit=%s\n' "$?"
 ```
 
 - **`000` / 未取得 HTTP 响应**：结合退出码与 stderr 区分 DNS、连接、TLS、超时等失败，
-  转 `tunnel-doctor` 做最小链路排查；不能仅凭这一读数断言出口中断或账号异常。
+  转 `tunnel-doctor` 排查实际 consumer 的最小链路；不能仅凭这一读数断言出口中断或账号异常。
 - **已取得 HTTP 响应（含 200、401、403、429、5xx）**：只证明到达了某个 HTTP 边界，
   不证明正确的 Usage 端点、登录身份、额度或完整出口健康。非 2xx 不自动归为网络或认证单一根因；
   检查响应来源与必要的错误正文，区分站点、代理、WAF/挑战或服务端拒绝，再选对应排查路径。
   首页 401/403 不能当作 Usage 请求已成功或 token 已失效的证据。
 - **继续原查询**：用已核实账号的正确请求或官网 Usage 页验证实际读数；只有该请求返回预期字段，
-  才能报告对应账号额度。链路问题保留来源与未核字段，不用反复切号或重登来试网络。
+  才能报告对应账号额度。链路问题保留来源与未核字段，不用反复切号、重登或复制认证来试网络。
+  临时出口成功只证明该次路径；正式验收仍须通过正常 consumer 入口。
 
 该探针用于选择下一步，不是完整健康检查。`000` 的边界见
 [curl 响应码说明](https://curl.se/libcurl/c/CURLINFO_RESPONSE_CODE.html)：未收到服务端响应码时为零。
@@ -318,6 +325,9 @@ URL，不从聊天记录、浏览器 Cookie 库或旧工具回执中搜 token �
 用隔离 profile（`~/.chrome-profiles/tibo-codex-{a,b}`）+ Playwright `connectOverCDP` 自动
 查询时，逐条是踩过的可执行事实，不是通用教程：
 
+- **Playwright 由 `read-usage-profile.cjs` 自动解析**：优先使用普通安装；未安装时回退到
+  `~/.chrome-profiles/tibo-cdp/node_modules/playwright`。其他宿主用 `TIBO_PLAYWRIGHT_PATH`
+  指向 playwright 包的绝对路径，不需要手工设置 `NODE_PATH`；加载失败会明确报告依赖路径。
 - **`open -na "Google Chrome"` 不继承 macOS 系统代理**。必须显式 `--proxy-server=…`
   （本机 `http://127.0.0.1:1082`），否则 chatgpt.com 直连挂起或 403。日常 Chrome 走系统
   代理正常，隔离 Chrome 不共享这份设置。
@@ -327,8 +337,11 @@ URL，不从聊天记录、浏览器 Cookie 库或旧工具回执中搜 token �
   先导航到 `/auth/login` 再点 SSO 按钮，别在首页点 Log in。按钮 `disabled:false`、
   `pointer-events:auto`、坐标在视口内也可能点了没反应——换入口比调坐标有用。
 - **登录态判据用正面证据，不猜 URL**：解析到邮箱或 `Weekly usage limit` 文本才算已登录。
-  登出时 usage 页可能留在 `/` 首页（有 Log in/Sign up）、也可能重定向到 `/auth/login`，
-  两种 URL 都得覆盖，只认 `/auth/` 会漏掉首页登出态。
+  `page.goto()` 抛错或超时、`chrome-error://` 与 `about:blank` 都是本次读取失败/unknown，
+  不是登出；即使浏览器仍保留上一张 HTTPS 页面，其中的旧用量或登录文案也不能作为本次账号
+  状态证据，必须停止登出与登录驱动分支。只有成功导航后的非错误页面缺少这些正面证据时才
+  进入登出分支。登出时 usage 页可能留在 `/` 首页（有 Log in/Sign up）、也可能重定向到
+  `/auth/login`，两种 URL 都得覆盖，只认 `/auth/` 会漏掉首页登出态。
 - **当次隔离 profile 没有可用的 Google 会话 token**。当时 `import-google-cookies.py` 只搬到
   `ACCOUNT_CHOOSER`（账号记忆列表）+ `LSOLH` + 分析类 cookie，实测 `SID`/`__Secure-1PSID`/
   `__Secure-3PSID`/`HSID`/`SSID`/`SAPISID` 全无。Google 账号选择器会列出全部账号但**每个都
