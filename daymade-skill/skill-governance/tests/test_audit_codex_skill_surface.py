@@ -566,6 +566,67 @@ class CodexSkillSurfaceAuditTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 2)
         self.assertEqual(payload["status"], "invalid")
 
+    def test_catalog_with_prose_heading_mentions_keeps_cli_outcomes(self) -> None:
+        skill_file = self.write_skill("alpha", "alpha", "Runs alpha workflows.")
+        prompt = self.write_prompt([("alpha", "Runs alpha workflows.", skill_file)])
+        catalog = json.loads(prompt.read_text())[0]["content"][0]["text"]
+        mention = "Documentation refers to `### Available skills` in prose."
+        for same_message in (False, True):
+            with self.subTest(same_message=same_message):
+                content = [{"text": mention + "\n" + catalog}] if same_message else [
+                    {"text": mention}, {"text": catalog},
+                ]
+                prompt.write_text(json.dumps([{"content": content}]))
+                for required, expected in (("alpha", 0), ("absent", 1)):
+                    with self.subTest(required=required):
+                        result, payload = self.run_audit(
+                            prompt, "--require-visible", required,
+                            "--required-only", "--summary",
+                        )
+                        self.assertEqual(result.returncode, expected, payload)
+                        self.assertEqual(payload["exit_code"], expected)
+
+    def test_prose_heading_mention_without_catalog_is_invalid(self) -> None:
+        self.write_inventory([])
+        prompt = self.root / "mention.json"
+        prompt.write_text(json.dumps([{"content": [{
+            "text": "Read the ### Available skills section before acting.",
+        }]}]))
+        result, payload = self.run_audit(prompt)
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(payload["status"], "invalid")
+        self.assertIn("found 0", payload["error"])
+
+    def test_duplicate_catalog_headings_are_invalid_in_one_or_two_messages(self) -> None:
+        skill_file = self.write_skill("alpha", "alpha", "Runs alpha workflows.")
+        prompt = self.write_prompt([("alpha", "Runs alpha workflows.", skill_file)])
+        catalog = json.loads(prompt.read_text())[0]["content"][0]["text"]
+        for content in (
+            [{"text": catalog}, {"text": catalog}],
+            [{"text": catalog + "\n" + catalog}],
+        ):
+            with self.subTest(content_blocks=len(content)):
+                prompt.write_text(json.dumps([{"content": content}]))
+                result, payload = self.run_audit(prompt)
+                self.assertEqual(result.returncode, 2, payload)
+                self.assertIn("found 2", payload["error"])
+
+    def test_missing_empty_and_null_prompt_text_remain_invalid(self) -> None:
+        self.write_inventory([])
+        prompt = self.root / "missing-text.json"
+        for content in ([], [{}], [{"text": ""}], [{"text": None}]):
+            with self.subTest(content=content):
+                prompt.write_text(json.dumps([{"content": content}]))
+                result, payload = self.run_audit(prompt)
+                self.assertEqual(result.returncode, 2, payload)
+                self.assertEqual(payload["status"], "invalid")
+
+    def test_empty_catalog_remains_invalid(self) -> None:
+        prompt = self.write_prompt([])
+        result, payload = self.run_audit(prompt)
+        self.assertEqual(result.returncode, 2, payload)
+        self.assertEqual(payload["status"], "invalid")
+
 
     def market_case(self, visible=True, link=True):
         source = self.write_skill("source/member", "actual-name", "Complete metadata.")

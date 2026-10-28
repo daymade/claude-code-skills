@@ -90,10 +90,18 @@ def _extract_prompt_text(payload: Any) -> str:
                 visit(child)
 
     visit(payload)
-    matches = [text for text in candidates if "### Available skills" in text]
+    # Instruction prose can mention the heading without containing a catalog.
+    # Count sections, including repeats within one content block, so ambiguous
+    # input stays invalid instead of silently selecting its first catalog.
+    matches = [
+        text
+        for text in candidates
+        for line in text.splitlines()
+        if line == "### Available skills"
+    ]
     if len(matches) != 1:
         raise AuditInputError(
-            "expected exactly one prompt text containing '### Available skills', "
+            "expected exactly one '### Available skills' section, "
             f"found {len(matches)}"
         )
     return matches[0]
