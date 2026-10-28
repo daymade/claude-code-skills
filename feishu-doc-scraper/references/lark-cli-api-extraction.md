@@ -46,12 +46,13 @@ That warning is the signal — credentials would transit the proxy and Feishu's 
 
 | URL shape | Meaning | Action |
 |---|---|---|
-| `…/wiki/<node_token>` | wiki node (a pointer, **not** a doc) | Step 2 then Step 3 |
+| `…/wiki/<node_token>` | wiki node (a pointer, **not** a doc) | Step 2, then the handler for the resolved `obj_type` |
 | `…/docx/<doc_token>` | doc, already a doc token | Step 3 directly |
 | `…/sheets/<sp_token>` | spreadsheet | Step 4 |
 | `…/minutes/<minute_token>` | Minutes / 妙记 | see feishu-minutes-transcript.md |
-| `…/base/<token>`, `…/file/<token>` | Bitable / file attachment | see reference-graph dispatch (Step 5) |
-| `https://<anything>.feishu.cn/docx/…` or `https://my.feishu.cn/docx/…` | cross-tenant / personal space | Step 6 (same fetch, permission is per-doc) |
+| `…/base/<token>` | Bitable | installed `lark-base` guide (table-list / records) — never `docs +fetch` a bitable (see Step 5 dispatch) |
+| `…/file/<token>` | file attachment | installed `lark-drive` download guide (see Step 5 dispatch) |
+| `https://<anything>.feishu.cn/docx/…`, `https://<anything>.larkoffice.com/docx/…` or `https://my.feishu.cn/docx/…` | cross-tenant / personal space | Step 6 (same fetch, permission is per-doc) |
 
 ## Step 2: resolve wiki node → doc token
 
@@ -63,9 +64,9 @@ lark-cli wiki spaces get_node --params '{"token":"<node_token>"}'
 
 Returns `{"code":0,"data":{"node":{"node_token":"…","obj_token":"<DOC_TOKEN>","obj_type":"docx","node_type":"origin","has_child":false,…}}}`.
 
-- Use `.data.node.obj_token` + `.data.node.obj_type` for Step 3.
+- Use `.data.node.obj_token` with the handler selected by `.data.node.obj_type`: `docx` → Step 3; `sheet`/`sheets` → Step 4; `bitable` → the installed `lark-base` guide; `file`/`slides` → the installed `lark-drive`/slides guide. Only `docx` goes to Step 3's `docs +fetch`. `docs +fetch` on a non-docx `obj_type` fails with `3380002 Unsupported document type '…'. Only docx is supported.` — that error is evidence the wrong handler was selected, not a permission denial and not proof the source is unreadable.
 - `has_child:false` on the entry node does **not** mean "no content" — a collection hub is typically a single docx whose *body* references many other docs (Step 5), not a multi-node wiki tree.
-- `code 131006 … node permission denied` → this node is permission-walled; stop and go to Path B (docx-export-to-markdown.md). Do not try to bypass it.
+- `code 131006 … node permission denied` → stop that route. If the user separately supplies an owner-exported DOCX, process it with Path B (docx-export-to-markdown.md); do not retry the denied operation through another transport.
 
 ## Step 3: fetch the body programmatically
 
@@ -150,7 +151,14 @@ manifest without model transcription. Preserve other references as a separate
 worklist. Use the installed Lark guides for current commands and permission
 handling; the historical command examples in this reference are not version locks.
 
-A hub is the root of a reference graph. Treat it as BFS/DFS over references until every branch reaches a leaf (a doc with no further references).
+A hub is the root of a reference graph. Treat it as BFS/DFS over references
+until every branch reaches a leaf (a doc with no further references) — **within
+the user's authorized capture scope**: the roots, depth and resource set the
+user actually selected. A reference beyond that scope stays a recorded locator
+(URL/token + title) marked not-captured in the worklist; it does not become a
+required fetch. A full-collection request retains the existing BFS until all
+in-scope branches reach leaves; the caller applies that scope when choosing
+which references to follow.
 
 **Enumerate references with the bundled extractor** (a missed reference is a missing document — the single biggest hub-scraping failure; do not hand-roll `grep` and forget the `my.feishu.cn` personal-space pattern, which is exactly what happened before this script existed):
 
@@ -168,8 +176,9 @@ The references it recognizes (the full rich-media inventory): `<mention-doc toke
 | Reference type | Handler |
 |---|---|
 | `mention-doc` type `docx` / cross-tenant `/docx/` / `my.feishu.cn/docx/` | Step 3 `docs +fetch` |
-| `mention-doc` / URL `/wiki/` | Step 2 then Step 3 |
+| `mention-doc` / URL `/wiki/` | Step 2, then the handler for the node's **actual `obj_type`**: `docx`→Step 3; `sheet`→Step 4; `bitable`→installed `lark-base` guide; `file`/`slides`→installed `lark-drive`/slides guide. Never `docs +fetch` a non-docx node (`3380002 Unsupported document type` = wrong handler selected, not a permission denial) |
 | `sheet` / `/sheets/` | Step 4 |
+| URL `/base/` / `bitable` obj_type | installed `lark-base` guide (table-list / records); if that guide is unavailable, record token + resolved type in the worklist as unextracted |
 | `/minutes/` URL | feishu-minutes-transcript.md (native transcript API) |
 | `meeting.tencent.com/crm/` | Tencent Meeting tooling (outside this skill — its native transcript API; never download+re-ASR) |
 | `<lark-table>` | render inline to a Markdown table (pandas `read_html` handles colspan/rowspan); it is content, not a link |
@@ -178,9 +187,9 @@ The references it recognizes (the full rich-media inventory): `<mention-doc toke
 | `<source token name size mime>` | use `archive_attachments.py` per [attachment archives](attachment-archives.md); reconcile every requested token |
 | `<view><file>` | preserve the legacy token + filename; use the installed lark-doc media-download guide, recording missing metadata or download failures explicitly |
 
-**Recursion loop:** fetch root → extract refs → for each new ref, dispatch and fetch → run the extractor on each newly fetched body → repeat until no new tokens appear. A child doc can itself embed another reference (e.g. a summary doc that embeds a third Minutes link); the loop must re-scan every newly fetched file, not only the root.
+**Recursion loop:** fetch root → extract refs → for each new ref, dispatch and fetch → run the extractor on each newly fetched body → repeat until no new tokens appear **within the authorized capture scope** (beyond-scope references stay recorded locators; see the scope paragraph above). A child doc can itself embed another reference (e.g. a summary doc that embeds a third Minutes link); the loop must re-scan every newly fetched file, not only the root.
 
-**Leaf / completion gate** — before declaring the collection done, no rich-media reference may remain unresolved anywhere:
+**Leaf / completion gate** — account for every extracted reference: resolve in-scope references to fetched leaves or exported and read whiteboards; retain beyond-scope locators as not-captured and ACL-denied routes as unavailable. An actual `131006` permission denial stops that route and does not authorize alternate-transport retries. A `3380002 Unsupported document type` error from `docs +fetch` is dispatch evidence — re-select the handler by the resolved `obj_type`; it does not mean the source is unreadable. Report unavailable in-scope content as a remaining gap, not as a completed capture.
 
 ```bash
 grep -rlE '<(source|file|lark-table|lark-tr|sheet token=|mention-doc|cite doc-id=|whiteboard token=|view type=)' . \
