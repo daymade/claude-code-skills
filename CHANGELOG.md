@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **tibo-reset-codex** (v2.5.2 → v2.6.0): Read current usage and banked resets before conditional historical reconstruction. Bound community follow-up to decision-bearing gaps. Add evidence-linked account follow-up closure/reopening without changing arrival evidence, global confirmation or forecast scores; retain compatibility with existing journals. Change types: bounded workflow redesign and additive queue control.
+- **tibo-reset-codex** (v2.5.3 → v2.6.0): Read current usage and banked resets before conditional historical reconstruction. Bound community follow-up to decision-bearing gaps. Add evidence-linked account follow-up closure/reopening without changing arrival evidence, global confirmation or forecast scores; retain compatibility with existing journals. Change types: bounded workflow redesign and additive queue control.
 
 - **skill-governance** (`daymade-skill` v1.74.2 → v1.74.3): Link suite delivery instructions to the canonical fresh-host gate; keep coexistence setup with its owner and remove duplicated parser internals from the operating SOP. Change type: scoped documentation alignment.
 - **feishu-doc-scraper** (v1.10.1 → v1.10.2): Recognize the existing Lark host family consistently, dispatch wiki nodes by their resolved object type, and keep capture scope and preview evidence explicit. Preserve full-collection traversal and stop denied operations without retrying them through another transport.
@@ -45,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **read-codex-history** (`daymade-claude-code` v4.32.0 → v4.33.0): Resolve UUID prefixes through bounded state-index queries and verify unique matches against original session metadata. Separate ambiguous and unavailable results, document strict inventory JSON parsing, and route identity-only requests without full inventory or writer-lock probes. Change type: additive lookup capability.
 
 - **frontend-visual-qa** (v1.21.26 → v1.21.27): Prepare existing business records for data-bearing demos by checking identity, date filters and observation windows, preserving legitimate empty or net-zero states, and verifying populated states in the delivered artifact. Change type: bounded execution-recipe clarification.
+- **tibo-reset-codex** (v2.5.2 → v2.5.3): Bind multi-account transport diagnosis to the actual consumer, its configured egress and the real Usage endpoint; preserve the no-credential-copy boundary. Resolve the existing Playwright dependency without manual `NODE_PATH`, and keep browser navigation failures unknown instead of misreporting a logged-out account. Change types: bounded diagnostic correction and deterministic launcher repair.
+
 - **ghostty-use** (v1.8.4 → v1.8.5): Preserve known sessions and explicit unresolved evidence when a single CLI command cannot be tokenized. Keep partial snapshots conservative without guessing session IDs or recovery commands. Change type: bounded inventory repair.
 
 - **frontend-visual-qa** (v1.21.25 → v1.21.26): Remove copied inspection totals from the publication case while retaining card-field versus article-body scope; align the project instruction entry with controls, deks and expanded summaries. Change type: documentation alignment and scoped deduplication.

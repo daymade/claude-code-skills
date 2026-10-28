@@ -141,8 +141,10 @@ stdin/heredoc 及 Python/Node 子进程调用却可能报 `Failed to start ego l
   先按 [Cookie Copy 接入](references/browser-session-migration.md) 准备依赖；
   `scripts/launch-usage-profile.sh <a|b>` 建/开隔离 Chrome profile，关闭目标后用
   `scripts/import-google-cookies.py --profile <a|b>` 搬运 `.google.com` 系 Cookie。
-- 想**自动**驱动隔离 Chrome 查第二账号用量 → `node scripts/read-usage-profile.cjs`（依赖
-  `~/.chrome-profiles/tibo-cdp/` 的 playwright；默认 profile a）。读模式直接解析当前登录账号
+- 想**自动**驱动隔离 Chrome 查第二账号用量 → `node scripts/read-usage-profile.cjs`（默认 profile a）。
+  脚本先解析普通 playwright 安装；未安装时回退到 `~/.chrome-profiles/tibo-cdp/node_modules/playwright`，
+  可用 `TIBO_PLAYWRIGHT_PATH` 指定其他 playwright 包路径，不需要手工设置 `NODE_PATH`。
+  读模式直接解析当前登录账号
   usage；加 `--drive-login` 在未登录时自动点 `Continue with Google` 驱动到 Google 账号选择器
   并列出全部账号。**实测边界（2026-09-16）**：隔离 profile 无 Google 会话 token，账号选择器
   每个账号都标 `Signed out`；这只说明当次 Google 路线未取得活会话，不否定上面的
