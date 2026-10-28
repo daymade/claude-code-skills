@@ -516,8 +516,9 @@ This section creates refs, objects, external backups, or hosted state. Run it on
 exclusive writer window from Step 1 remains valid. If another writer resumes, stop before the next
 mutation; the frozen evidence remains useful, but it does not authorize continuing.
 
-Create a repository-external bundle containing only the branches/refs whose deletion is authorized,
-then verify it. The bundle is the ref manifest: immediately before deletion run:
+Freeze each authorized ref and full tip SHA independently of any backup. Apply
+[the preservation decision](#preservation-before-retirement) to select the retained carrier or
+required export. When an export is required, create and verify a repository-external bundle:
 
 ```bash
 scripts/git_export_before_drop.sh \
@@ -526,7 +527,7 @@ scripts/git_export_before_drop.sh \
 scripts/git_export_before_drop.sh --verify-current <external-backup-dir>/branches.bundle
 ```
 
-For an authorized linked worktree on a branch, export that branch. For an authorized detached HEAD,
+For a linked worktree requiring export, select its branch. For a detached HEAD requiring export,
 create one collision-checked recovery ref pointing at the recorded HEAD, then export that ref:
 
 ```bash
@@ -560,9 +561,10 @@ restore the complete verified WIP set after materializing the new base.
 ### 4. Re-freeze immediately before deletion
 
 While retaining exclusive writer ownership, fetch again, re-query hosting branches/PRs, and
-re-enumerate local refs. Compare the result with the
-bundle heads. A new branch, changed tip, or late PR inside the change-authorized set is new evidence:
-stop, classify its unique behavior, and rebuild the bundle. A newly discovered collaborator object
+re-enumerate local refs. Compare each tip with the frozen ref manifest and, when present, the verified
+bundle heads. Recheck that the retained remote carrier still contains each exempted exact commit.
+A new branch, changed tip, lost carrier, or late PR inside the change-authorized set is new evidence:
+stop and reclassify; rebuild a recovery export only when the new threatened state needs one. A newly discovered collaborator object
 does not silently join that set; record it as inspect-only or excluded and rebuild only if the next
 authorized destructive action could reach it. This is not an optional "final check"; it is the only
 check that covers work created after the first audit.
@@ -742,6 +744,36 @@ If the clone must remain active instead of being retired, stop this procedure. F
 use the official dissociation path (`git repack -a`) and verify it no longer depends on alternates;
 that is a different outcome from clone retirement and should not be smuggled into cleanup.
 
+## Preservation before retirement
+
+Use this decision for named branch/worktree retirement, including the convergence procedure above.
+It does not exempt independent clone metadata, submodule repositories, stashes or unique uncommitted
+bytes from their own preservation procedures.
+
+1. Freeze the authorized ref (or detached HEAD), its full 40-hex tip and the retained carrier's
+   identity. Refresh the exact remote main, resolve it locally, verify its hosted SHA with a separate
+   remote query, and require `git merge-base --is-ancestor <tip> <verified-main-sha>` to exit 0.
+   Check command errors separately from a genuine non-ancestor result.
+2. When that exact commit remains reachable through the retained remote main, and the checkout's
+   tracked, untracked and ignored inventories contain no unique bytes threatened by removal, skip
+   the redundant history bundle. Record the refs and SHAs in the existing task manifest instead.
+   This is exact-object preservation: squash/content-only containment does not establish it.
+3. Otherwise preserve the unique state through its existing recovery procedure. A content-contained
+   squash tip whose exact identity is still required needs a durable ref or verified export; do not
+   infer that the replacement commit preserves every original object. Preserve dirty/ignored bytes
+   separately because a Git bundle cannot capture them.
+4. `git_export_before_drop.sh --branch <ref>` includes all reachable ancestors, even for a tiny
+   branch diff. Before a required export, inspect the selected revision/object set and its size
+   (for example `git rev-list --disk-usage --objects <full-ref>`; this is an estimate of selected
+   stored objects, not the final bundle size), destination reserve and restore dependencies. Do not
+   call `--branch` incremental. An explicitly selected incremental bundle requires its prerequisite
+   objects at restore time; verify that recovery before relying on it. Do not silently change the
+   existing helper's self-contained export contract.
+5. Immediately before deletion, require the current authorized tip to equal the frozen SHA and
+   independently recheck the retained carrier. A moved ref or lost carrier reopens classification;
+   the absence of a bundle does not remove this final gate. After removal, verify the commit still
+   resolves through its retained carrier or required recovery artifact.
+
 ## Worktree retirement — prove the checkout is disposable before removal
 
 A linked worktree is both a checkout and a ref boundary. A clean branch elsewhere does not prove
@@ -795,16 +827,17 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
 4. **Record the exact identity:** copy `git -C <worktree-path> rev-parse HEAD` and
    `git -C <worktree-path> branch --show-current`. An empty branch means detached HEAD, not "no
    work". Confirm the recorded HEAD resolves as a commit; when a branch is present, require that
-   branch to resolve to the same SHA. The targeted bundle in step 6 preserves this exact identity.
+   branch to resolve to the same SHA. Step 6 selects the carrier for this exact identity.
 5. **Prove containment against a fresh base:** fetch the maintained repository, then run
    `scripts/git_verify_branch_merged.sh <recorded-head> <base>`. An
    ancestor/content-contained verdict proves the committed state is on the base; NEEDS REVIEW
    requires manual supersession triage or preserving the commit under a branch/ref.
-6. **Back up before deletion:** export the worktree's named branch with `--branch`. For a detached
-   HEAD, create one collision-checked `refs/recovery/<worktree-id>` ref at the recorded HEAD and
-   export that ref. Verify the targeted bundle; do not pin unrelated danglers or use `--all-refs`
-   unless the Outcome contract separately authorizes every captured ref. Keep any ignored-file
-   copies from step 3 beside this backup—the bundle does not contain them.
+6. **Preserve threatened state:** apply [Preservation before retirement](#preservation-before-retirement).
+   Retain the exact ref-to-SHA manifest even when no bundle is needed. When export is required,
+   select the named branch or create one collision-checked `refs/recovery/<worktree-id>` at the
+   detached HEAD, then verify its export. Do not pin unrelated danglers or use `--all-refs` unless
+   separately authorized. Keep unique ignored-file copies from step 3 outside the worktree—the
+   bundle does not contain them.
    For every local submodule repository threatened by removal, obtain preservation authority for
    that exact repository and preserve it independently. A superproject bundle records a gitlink,
    not the module's objects. Freeze its HEAD, refs/symbolic targets, reflogs and all local objects
