@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **auto-repo-setup** (v2.1.7 → v2.1.8): Carry an authorized repository-maintenance status check through safe fast-forward synchronization and independent readback; preserve explicit read-only, local-work and conflict boundaries. Change type: bounded workflow-entry correction.
+
 - **git-safety-net** (v1.23.1 → v1.23.2): Separate ref manifests from recovery exports. Skip redundant history bundles only for clean temporary checkouts whose exact tips remain on independently verified retained remote main; retain immediate tip/carrier checks and unique-work preservation. Clarify that `--branch` includes reachable ancestry. Change type: bounded preservation-workflow correction.
 - **macos-cleaner** (`daymade-macos` v1.26.7 → v1.26.8): Add Cargo and manual-CI selection rules for requested executable products, dependency baselines and unknown results; reuse producer ownership, archive verification and recovery-only finish. Change type: bounded artifact-classification guidance.
 - **docx-creator / read-docx-review** (`daymade-docs` v1.26.1 → v1.27.0): Distinguish Word installation from an authorized, usable native check; retain pending native acceptance when access is refused or unavailable while delivering reviewable files with scoped PDF evidence. Add read-only baseline/return comparison across body, tables, headers, footers and notes, including zero-trace edits, merge geometry and move/rewrite clues. Preserve the existing comment/revision CLI and reject unresolved revisions before the new comparison. Change types: workflow redesign and additive comparison capability.

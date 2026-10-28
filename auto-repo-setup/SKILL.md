@@ -23,7 +23,7 @@ they all contain the word "setup".
 | User outcome | Mode | First action |
 |---|---|---|
 | "It won't run", missing dependency, new machine | Environment repair | Read project instructions and detect the actual stack |
-| "Sync before we work", "pull the latest" | Session routine | Use project instructions or execute the user's natural-language request |
+| "Sync before we work", "pull the latest", or a status question during repository maintenance | Session routine | Determine sync authority from the ongoing task and project instructions, then use Workflow B |
 | Repeated or unexpected hook output | Hook diagnosis | Count registrations and firing sessions before editing configuration |
 | A teammate needs a repeatable handoff | Repository handoff | Audit existing onboarding and fill only the missing operational contract |
 | Commit, push, conflict, leaked secret/history | Git safety | Read [references/git_safety.md](references/git_safety.md) before mutation |
@@ -142,17 +142,29 @@ Report:
 For "sync before work", prefer a short project instruction shared by the agents
 that use the repository. The routine is:
 
-1. Inspect branch, upstream, and working-tree state.
-2. If the task includes already-authorized delivery and the repository declares
+1. Determine whether the ongoing task and project instructions already authorize
+   synchronization. Treat a status question during that maintenance as a progress
+   request, not as revocation or completion of the authorized sync. For an explicit
+   read-only audit or when sync authority is absent, inspect and report only.
+2. Inspect the target branch, its upstream, and working-tree cleanliness. Fetch
+   and compare the local and freshly fetched remote histories. Treat a behind
+   count as a discovery, not a completed sync.
+3. If the task includes already-authorized delivery and the repository declares
    usable scoped tools that preserve unrelated shared HEAD, index, and WIP, use
    [Authorized shared-checkout delivery](references/git_safety.md#authorized-shared-checkout-delivery).
    Dirty or divergent state alone is not a reason to leave that delivery waiting.
-3. Otherwise, if the working tree is clean, run git pull --ff-only.
-4. If there are local changes, do not auto-stash or pull; explain the state.
-5. If local and remote histories diverged, do not auto-merge, rebase, or force;
-   explain the state.
-6. If the network fails, say so and continue locally only when the user's task can
-   safely proceed on the local version.
+4. Otherwise, use repository-declared safe sync tools when applicable; without
+   such a tool, on the target branch with a clean working tree and behind-only
+   histories, run git pull --ff-only. Before reporting synchronized, independently
+   verify the target branch, clean status, and local/remote commit equality.
+5. Outside authorized shared-checkout delivery, stop for non-target branches,
+   real WIP, ahead-only or divergent histories, locks, or active-writer conflicts;
+   explain the state. For divergence, show the graph and ask how the local commits
+   should be handled. Do not auto-stash, discard, rebase, create a non-fast-forward
+   merge, force, or absorb others' commits.
+6. If the network fails, report the remote state as unknown rather than already
+   current; continue locally only when the user's task can safely proceed on the
+   local version.
 
 A collaborator may also simply say:
 
