@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **skill-governance** (`daymade-skill` v1.74.2 → v1.74.3): Link suite delivery instructions to the canonical fresh-host gate; keep coexistence setup with its owner and remove duplicated parser internals from the operating SOP. Change type: scoped documentation alignment.
+- **feishu-doc-scraper** (v1.10.2 → v1.10.3): Align the project capture entry with the owning API extraction SOP and reference the storage validator's canonical host suffixes instead of maintaining a second list. Change type: documentation alignment.
+
 - **feishu-doc-scraper** (v1.10.1 → v1.10.2): Recognize the existing Lark host family consistently, dispatch wiki nodes by their resolved object type, and keep capture scope and preview evidence explicit. Preserve full-collection traversal and stop denied operations without retrying them through another transport.
 
 - **auto-repo-setup** (v2.1.7 → v2.1.8): Carry an authorized repository-maintenance status check through safe fast-forward synchronization and independent readback; preserve explicit read-only, local-work and conflict boundaries. Change type: bounded workflow-entry correction.

@@ -456,6 +456,9 @@ To find an existing Feishu recording by date, enter
 
 For Feishu document reads and archives, enter
 [feishu-doc-scraper](feishu-doc-scraper/SKILL.md). Its
+[API extraction SOP](feishu-doc-scraper/references/lark-cli-api-extraction.md)
+owns resolved Wiki target dispatch and the authorized reference-traversal scope.
+Its
 [comments and feedback SOP](feishu-doc-scraper/references/comments-and-feedback.md)
 owns discussion capture and interpretation; the bundled helper owns the CLI
 interface. Before permanent filing or choosing an authorized archive destination,
