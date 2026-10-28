@@ -172,7 +172,8 @@ jobs:
 
   tests:
     name: Registered test suites (Linux)
-    runs-on: ubuntu-latest
+    # Base image must satisfy scripts/ci/apt_install_bounded.sh before APT runs.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
@@ -182,7 +183,7 @@ jobs:
           python-version: '3.12'
 
       # node-test suites need node:sqlite (NetworkState) — DatabaseSync exists only
-      # on Node 22.5+; the ubuntu image default is older. Provision explicitly.
+      # on Node 22.5+. Provision the required runtime explicitly.
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

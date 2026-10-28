@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **CI**: Keep the bounded-APT registered-suite job on a compatible runner image and document bootstrap-mismatch diagnosis and image-change acceptance. Preserve the dependency and deadline guards.
+
 - **skill-governance** (`daymade-skill` v1.74.2 → v1.74.3): Link suite delivery instructions to the canonical fresh-host gate; keep coexistence setup with its owner and remove duplicated parser internals from the operating SOP. Change type: scoped documentation alignment.
 - **feishu-doc-scraper** (v1.10.2 → v1.10.3): Align the project capture entry with the owning API extraction SOP and reference the storage validator's canonical host suffixes instead of maintaining a second list. Change type: documentation alignment.
 

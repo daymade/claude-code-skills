@@ -357,7 +357,7 @@ A `tests/` directory under a Skill does **not** automatically run in CI.
 [The registry](scripts/ci/test-suites.txt) owns suite admission and membership;
 [the dispatcher](scripts/ci/run_registered_tests.sh) owns their execution commands.
 [The workflow](.github/workflows/ci.yml) owns job environments, dependency installation,
-timeouts and additional test steps. For required-check readback, installation stalls,
+timeouts and additional test steps. For required-check readback, bootstrap mismatches, installation stalls,
 test failures and temporary-Git cleanup, follow [CI operations](references/ci-operations.md).
 
 For CI demand, notification overload, exhausted allowance or repeated validation,
