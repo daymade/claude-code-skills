@@ -478,6 +478,9 @@ list. A source-only or package-only delivery does not authorize local activation
    `status: present`; the requested target gate decides delivery. Omit `--json`
    for a short human-readable verdict. Omit `--summary` for the unchanged full
    report. Argument errors remain argparse stderr diagnostics with exit 2.
+   The prompt reader counts standalone `### Available skills` headings, not prose
+   mentions of that title; repeated headings within or across text blocks remain
+   invalid evidence. An empty catalog also remains invalid.
 5. For a retained cold entry, prove it stays absent at each exact discovery alias
    and that its router still resolves a representative resource. Codex exact-path
    disables apply only to those lexical paths, not to new aliases of the source.
