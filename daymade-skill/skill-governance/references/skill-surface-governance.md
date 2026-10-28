@@ -500,10 +500,6 @@ not an empty successful result. `overall_status: pressure` can coexist with
 for a short human-readable verdict. Omit `--summary` for the unchanged full
 report. Argument errors remain argparse stderr diagnostics with exit 2.
 
-The prompt reader counts standalone `### Available skills` headings, not prose
-mentions of that title; repeated headings within or across text blocks remain
-invalid evidence. An empty catalog also remains invalid.
-
 ### Task behavior when it is part of delivery
 
 Use the concrete requested task and check its returned material or state against
