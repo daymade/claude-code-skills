@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {test} from 'node:test';
+import {after, test} from 'node:test';
 import {mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -10,6 +10,11 @@ import {fileURLToPath} from 'node:url';
 const require = createRequire(import.meta.url);
 const resolver = fileURLToPath(new URL('../scripts/resolve-playwright.cjs', import.meta.url));
 const loadPlaywright = require(resolver);
+const moduleFixtureRoot = mkdtempSync(join(tmpdir(), 'quota module fixture '));
+const modulePlaywright = join(moduleFixtureRoot, 'playwright');
+writePlaywrightFixture(modulePlaywright);
+process.env.TIBO_PLAYWRIGHT_PATH = modulePlaywright;
+after(() => rmSync(moduleFixtureRoot, {recursive: true, force: true}));
 
 test('browser entry invokes the resolver instead of destructuring the loader', () => {
   const source = readFileSync(new URL('../scripts/read-usage-profile.cjs', import.meta.url), 'utf8');
@@ -58,23 +63,28 @@ test('successful usage navigation preserves fresh body text for normal output', 
   assert.equal(result.text, text);
 });
 
-test('existing local Playwright resolves without NODE_PATH', () => {
-  const env = {...process.env};
-  delete env.NODE_PATH;
-  const result = spawnSync(process.execPath, ['-e', `const load=require(${JSON.stringify(resolver)}); console.log(typeof load().chromium)`], {
-    encoding: 'utf8', env, timeout: 10000,
-  });
-  assert.equal(result.status, 0, result.stderr);
-  assert.equal(result.stdout.trim(), 'object');
+test('default fallback Playwright resolves without NODE_PATH', () => {
+  const home = mkdtempSync(join(tmpdir(), 'quota fallback '));
+  try {
+    writePlaywrightFixture(join(home, '.chrome-profiles', 'tibo-cdp', 'node_modules', 'playwright'));
+    const env = {...process.env, HOME: home};
+    delete env.NODE_PATH;
+    delete env.TIBO_PLAYWRIGHT_PATH;
+    const result = spawnSync(process.execPath, ['-e', `const load=require(${JSON.stringify(resolver)}); console.log(typeof load().chromium)`], {
+      encoding: 'utf8', env, timeout: 10000,
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout.trim(), 'object');
+  } finally {
+    rmSync(home, {recursive: true, force: true});
+  }
 });
 
 test('explicit dependency path supports spaces and missing paths fail usefully', () => {
   const root = mkdtempSync(join(tmpdir(), 'quota dependency '));
   try {
     const packageDir = join(root, 'playwright with spaces');
-    mkdirSync(packageDir);
-    writeFileSync(join(packageDir, 'package.json'), JSON.stringify({name: 'playwright', main: 'index.js'}));
-    writeFileSync(join(packageDir, 'index.js'), 'module.exports={chromium:{fixture:true}};\n');
+    writePlaywrightFixture(packageDir);
     envWithPath(packageDir, resolver, (result) => {
       assert.equal(result.status, 0, result.stderr);
       assert.equal(result.stdout.trim(), 'object');
@@ -88,6 +98,12 @@ test('explicit dependency path supports spaces and missing paths fail usefully',
     rmSync(root, {recursive: true, force: true});
   }
 });
+
+function writePlaywrightFixture(packageDir) {
+  mkdirSync(packageDir, {recursive: true});
+  writeFileSync(join(packageDir, 'package.json'), JSON.stringify({name: 'playwright', main: 'index.js'}));
+  writeFileSync(join(packageDir, 'index.js'), 'module.exports={chromium:{fixture:true}};\n');
+}
 
 function envWithPath(dependencyPath, source, check) {
   const env = {...process.env, TIBO_PLAYWRIGHT_PATH: dependencyPath};
