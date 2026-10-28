@@ -342,6 +342,8 @@ When changing measurement, run the SOP's targeted regression suite before shippi
 For uv cache diagnosis or retirement, enter
 [macos-cleaner](daymade-macos/macos-cleaner/SKILL.md) and its
 [uv target semantics](daymade-macos/macos-cleaner/references/cleanup_targets.md#uv-cache-retirement).
+For Cargo or manual CI cleanup, read its
+[artifact selection rules](daymade-macos/macos-cleaner/references/cleanup_targets.md#cargo-and-manual-ci-outputs).
 
 ### Automated Test Suites (CI)
 
@@ -827,6 +829,8 @@ claiming the whole checkout is current.
 For divergent local `main` or branch/worktree retirement, follow
 [git-safety-net](git-safety-net/SKILL.md) and its
 [content-containment proof](git-safety-net/references/merge_verification.md).
+Before exporting recovery material for a named branch or worktree, read
+[Preservation before retirement](git-safety-net/references/merge_verification.md#preservation-before-retirement).
 When current content differs from an older published review, use that reference's
 [historical publication example](git-safety-net/references/merge_verification.md#worked-example--old-review-content-landed-through-another-ref)
 before deciding supersession; historical equality alone does not establish current intent.
