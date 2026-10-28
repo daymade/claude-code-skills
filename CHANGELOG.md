@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-load-doctor** (`daymade-macos` v1.26.5 → v1.26.6): Clarify manual cleanup of an owned disposable REPL context, preserve valuable or uncertain state, and distinguish kernel exit evidence from reset receipts and supervisor lifetime. Change type: bounded lifecycle guidance.
+
 - **skill-governance / skill-creator** (`daymade-skill` v1.73.6 → v1.74.0): Add optional target-audit summaries with distinct presence, absence and invalid-evidence results while preserving full reports and exit codes. Document source-text delivery and provisional loading receipts in Codex Code Mode. Change types: additive output capability and bounded reading recipe.
 - **claude-code-hooks** (`daymade-claude-code` v4.33.3 → v4.33.4): Separate Codex loading-receipt reconciliation from the recorded native Read recovery case; retain unknown for missing or unsupported evidence. Change type: troubleshooting clarification.
 
