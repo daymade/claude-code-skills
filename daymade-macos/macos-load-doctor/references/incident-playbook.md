@@ -61,6 +61,29 @@ when an inventory probe may have created them.
    actual exit evidence or `unknown`; a transient birth alone is not a leak.
    Keep workflow/collector completion distinct from product outcomes.
 
+### Manual cleanup of an owned temporary REPL
+
+For a temporary `node_repl` context owned by the current task, collect required
+outputs and confirm its remaining heap is disposable before using the official
+context-reset tool. Close self-created handles in that same context first; never
+close an old context's bare file-descriptor number from a new context. Preserve
+valuable state or uncertain ownership. Do not create a context merely for routine
+cleanup, reset another task's context, or terminate its supervisor.
+
+When checking kernel retirement, record the kernel PID and birth identity before
+reset and require independent OS readback before reporting its exit. Check parent
+and supervisor survival separately. Treat a reset receipt, cleared bindings, or
+`Transport closed` as insufficient process-exit evidence. If reset is unavailable,
+preserve the unknown outcome and stop without a kill or rebuild fallback.
+
+When independently testing reset and reuse, require a new kernel to execute
+successfully with the prior bindings absent, then close its own handles and reset
+that test context too. Keep this extra context out of routine cleanup. Scope the
+result to the exercised manual `node_repl` path; do not infer CUA behavior,
+automatic idle cleanup, whole-tree retirement, or RAM savings. Apply these
+ownership and disposal decisions as operator judgments; no automatic policy
+enforces them.
+
 ### Worked case — Codex 0.163.0 CUA
 
 Scope this observation to a global Codex 0.163.0 runtime with one unchanged CUA

@@ -28,11 +28,20 @@ python3 scripts/apfs_cow.py check /absolute/candidate.json
 
 Choose reserve bytes for this host, not from the example. Budget a full target-sized
 temporary copy in addition to reserve even though cloning is expected to share
-blocks. Native clone-state prescreen precedes full hashing. Compare full content,
+blocks. Native clone-state and existing unsupported-metadata checks precede full hashing.
+Read the `metadata_preflight` JSON on stderr before payload hashing: it lists differing
+metadata fields and xattr names (source-only, target-only or different values), without
+printing their values. Missing and present-but-empty xattrs are distinct. These
+differences are observations, not a prediction that cloning will fail or a waiver
+of strict metadata preservation. Compare full content,
 identity, owner/mode, timestamps, flags, ACL and xattrs; resource-fork/unsupported
 metadata cases fail closed. The target's access time may advance during checking;
 the executor preserves its actual pre-operation value. Other frozen metadata and
 source identity remain strict. Tools and parent-directory identities are bound.
+
+Read `verification` in the prepare/check JSON result as byte, identity and metadata
+snapshot verification only. Actual clone metadata compatibility and physical release
+remain `unverified`; neither command creates a clone or tests metadata overlay.
 
 Ordinary pairs use exact-pair occupancy checks. Do not apply a global Git-LFS veto
 to unrelated ordinary files. For LFS use `kind: "lfs"`, `repo`, `pointer_ref` and

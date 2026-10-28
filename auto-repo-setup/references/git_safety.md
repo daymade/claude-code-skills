@@ -41,14 +41,29 @@ installation at every commit.
 
 ## Routine synchronization
 
-1. Verify the current branch has the intended upstream.
-2. Check the gate in [Authorized shared-checkout delivery](#authorized-shared-checkout-delivery)
+1. Determine whether the ongoing task and project instructions already authorize
+   synchronization. Treat a status question during that maintenance as a progress
+   request, not as revocation or completion of the authorized sync. For an explicit
+   read-only audit or when sync authority is absent, inspect and report only.
+2. Verify that the current branch is the target branch with the intended upstream,
+   check working-tree cleanliness, then fetch and compare the local and freshly
+   fetched remote histories. Treat a behind count as a discovery, not a completed
+   sync.
+3. Check the gate in [Authorized shared-checkout delivery](#authorized-shared-checkout-delivery)
    when the task includes delivery, before treating dirty or divergent state as a stop.
-3. Outside that gate, if the working tree is clean, run git pull --ff-only.
-4. If local changes exist, do not auto-stash or pull; report the changed paths.
-5. If histories diverged, show the graph and ask how the local commits should be
-   handled. Do not choose merge/rebase/force by habit.
-6. On network failure, distinguish "remote not checked" from "already current".
+4. Outside that gate, use repository-declared safe sync tools when applicable;
+   otherwise, on the target branch with a clean working tree and behind-only
+   histories, run git pull --ff-only.
+5. Before reporting synchronized, independently verify the target branch, clean
+   status, and local/remote commit equality.
+6. Outside that gate, do not pull on a non-target branch or with real WIP; report
+   the changed paths. Leave ahead-only or divergent local commits in place. For
+   divergence, show the graph and ask how the local commits should be handled.
+   Pause for locks or active-writer conflicts. Do not auto-stash, discard, rebase,
+   create a non-fast-forward merge, force, or absorb others' commits.
+7. On network failure, report the remote state as unknown rather than already
+   current. Continue locally only when the user's task can safely proceed on the
+   local version.
 
 git pull --ff-only only accepts a fast-forward update. Automatic stash/pop is a
 separate operation and can create non-trivial conflicts.

@@ -447,6 +447,31 @@ Records that ARE reliably not user prose and safe to drop on structure alone:
 compact-summary continuations ("This session is being continued from a
 previous conversation …").
 
+## Pasted interface text is not an execution record
+
+A user message quoting terminal or UI text such as `⏺ Skill(...)`,
+`PreToolUse:Skill says: ...`, or `Successfully loaded skill` is still only a
+user-text record. It does not establish that the current session invoked that
+tool or hook. Before judging what the current host injected or executed, find
+the actual assistant `tool_use`, its paired `tool_result`, and the related hook
+attachments in the exact session. If only a pasted fragment is present, locate
+the original session through the index or a physically bounded tool-call query;
+do not treat the fragment as a live experiment.
+
+For hook-context delivery, keep the native records separate:
+
+- `hook_success.stdout` and `hook_additional_context` establish emitted or
+  recorded content.
+- An `api-request-blob` with `message.role == "system"` and the host's
+  `hook additional context` projection establishes that the content entered the
+  model request. Match the exact content and its event/sequence anchor, not just
+  a keyword that may also occur in investigation output, and do not use physical
+  record order as request chronology.
+- Text in `tool_result`, assistant thinking, or a user paste is not a substitute
+  for that request projection. If the relevant anchor or later blob is absent,
+  preserve delivery as unknown rather than declaring either success or a dead
+  channel.
+
 ## Field Locations
 
 Due to schema variations, some fields may appear in different locations:

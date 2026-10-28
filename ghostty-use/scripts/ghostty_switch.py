@@ -212,6 +212,8 @@ def prepare(args, gs):
     home = gs._codex_home().resolve()
     before = account_identity(home)
     live = observe(gs)
+    if args.only:
+        live = gs.SessionList(gs.select_sessions(live, args.only), unresolved=live.unresolved)
     if not live and not live.unresolved:
         raise ValueError("no Ghostty Codex TUIs found; previous switch pointer preserved")
     reader, _ = gs.history_reader()
@@ -256,7 +258,8 @@ def prepare(args, gs):
         print(f"  SAVED {s['sid']} cwd={s['cwd']}")
     for s in unresolved:
         print(f"  UNRESOLVED tty={s.get('tty')} pid={s.get('pid')} {s.get('reason', 'no unambiguous session identity')}")
-    print("Claude Code excluded. No process exited; no login changed.")
+    excluded = "Claude Code and unselected rows" if args.only else "Claude Code"
+    print(excluded + " excluded. No process exited; no login changed.")
     print("Next: follow codex-account-switch.md for the pre-login or --after-login route; exit only released target TUIs, then restore the fixed manifest.")
     return 1 if unresolved else 0
 

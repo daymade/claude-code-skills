@@ -3129,7 +3129,7 @@ Codex 上次做到一半中断了，读取 rollout 后把工作做完
 - 审计每个 worktree HEAD、脏 checkout、本地独有提交、stash 与悬空提交
 - 在清理前把悬空提交钉到 `refs/dangling-backup/`、避免被 gc 回收
 - 按内容验证分支是否已合并，破解 squash-merge 后“100 commits ahead”的幻觉
-- 删除 linked worktree 前证明其 HEAD 已被吸收，并把全部 refs 导出为校验过的 bundle
+- [退役前保全决策](./git-safety-net/references/merge_verification.md#preservation-before-retirement)
 - 高风险“是否真的全部合并了”场景可选对抗性多 agent 验证
 - 在开 PR 前抓出并行 session 的提交混入自己分支——分支级检查全绿也照样发生
 - 网络吞掉 push/merge 回执时，按内容而不是「远端 ref 动了」判定自己的写入是否落地
@@ -3234,7 +3234,7 @@ LibreOffice→PDF→PNG 视觉验证链（禁止用 qlmanage 缩略图——它�
 
 ---
 
-### **read-docx-review** - 读取 Word/WPS 审阅批注与修订
+### **read-docx-review** - 读取 Word/WPS 审阅并对比回稿
 
 > **安装**：`claude plugin install daymade-docs@daymade-skills`
 >（仅作为套件成员发布，调用方式 `daymade-docs:read-docx-review`）
@@ -3249,6 +3249,8 @@ SDK——python-docx 裸读会漏掉修订插入（w:ins）、认不出整段删
 - 捕获 python-docx 静默漏掉的 w:ins / w:del 修订
 - WPS 仅引用式批注锚点有 fallback，每条批注都可定位
 - 零批注文件显式提示「无审阅痕迹」，不给静默空表
+- 用明确已发基线对比回稿的正文、表格、页眉页脚和注释；零痕迹改稿也提供移位、改写线索
+- 新比较入口拒绝未决修订，原有修订感知读取 CLI 保留
 - 边界：生成／排版 docx → docx-creator 或 minimax-docx；PDF 批注不在范围
 
 **使用示例：**
@@ -3256,6 +3258,7 @@ SDK——python-docx 裸读会漏掉修订插入（w:ins）、认不出整段删
 提取这份 docx 的批注
 对方批注完的合同回来了，读一下审阅意见
 读一下修订，谁批了什么、批在哪
+这份回稿没有批注，用实际发出的版本核对改了什么
 ```
 
 ---

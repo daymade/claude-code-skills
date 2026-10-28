@@ -566,6 +566,67 @@ class CodexSkillSurfaceAuditTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 2)
         self.assertEqual(payload["status"], "invalid")
 
+    def test_catalog_with_prose_heading_mentions_keeps_cli_outcomes(self) -> None:
+        skill_file = self.write_skill("alpha", "alpha", "Runs alpha workflows.")
+        prompt = self.write_prompt([("alpha", "Runs alpha workflows.", skill_file)])
+        catalog = json.loads(prompt.read_text())[0]["content"][0]["text"]
+        mention = "Documentation refers to `### Available skills` in prose."
+        for same_message in (False, True):
+            with self.subTest(same_message=same_message):
+                content = [{"text": mention + "\n" + catalog}] if same_message else [
+                    {"text": mention}, {"text": catalog},
+                ]
+                prompt.write_text(json.dumps([{"content": content}]))
+                for required, expected in (("alpha", 0), ("absent", 1)):
+                    with self.subTest(required=required):
+                        result, payload = self.run_audit(
+                            prompt, "--require-visible", required,
+                            "--required-only", "--summary",
+                        )
+                        self.assertEqual(result.returncode, expected, payload)
+                        self.assertEqual(payload["exit_code"], expected)
+
+    def test_prose_heading_mention_without_catalog_is_invalid(self) -> None:
+        self.write_inventory([])
+        prompt = self.root / "mention.json"
+        prompt.write_text(json.dumps([{"content": [{
+            "text": "Read the ### Available skills section before acting.",
+        }]}]))
+        result, payload = self.run_audit(prompt)
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(payload["status"], "invalid")
+        self.assertIn("found 0", payload["error"])
+
+    def test_duplicate_catalog_headings_are_invalid_in_one_or_two_messages(self) -> None:
+        skill_file = self.write_skill("alpha", "alpha", "Runs alpha workflows.")
+        prompt = self.write_prompt([("alpha", "Runs alpha workflows.", skill_file)])
+        catalog = json.loads(prompt.read_text())[0]["content"][0]["text"]
+        for content in (
+            [{"text": catalog}, {"text": catalog}],
+            [{"text": catalog + "\n" + catalog}],
+        ):
+            with self.subTest(content_blocks=len(content)):
+                prompt.write_text(json.dumps([{"content": content}]))
+                result, payload = self.run_audit(prompt)
+                self.assertEqual(result.returncode, 2, payload)
+                self.assertIn("found 2", payload["error"])
+
+    def test_missing_empty_and_null_prompt_text_remain_invalid(self) -> None:
+        self.write_inventory([])
+        prompt = self.root / "missing-text.json"
+        for content in ([], [{}], [{"text": ""}], [{"text": None}]):
+            with self.subTest(content=content):
+                prompt.write_text(json.dumps([{"content": content}]))
+                result, payload = self.run_audit(prompt)
+                self.assertEqual(result.returncode, 2, payload)
+                self.assertEqual(payload["status"], "invalid")
+
+    def test_empty_catalog_remains_invalid(self) -> None:
+        prompt = self.write_prompt([])
+        result, payload = self.run_audit(prompt)
+        self.assertEqual(result.returncode, 2, payload)
+        self.assertEqual(payload["status"], "invalid")
+
 
     def market_case(self, visible=True, link=True):
         source = self.write_skill("source/member", "actual-name", "Complete metadata.")
@@ -724,6 +785,77 @@ class CodexSkillSurfaceAuditTests(unittest.TestCase):
         result, report = self.run_audit(prompt, *options, "--require-visible", "actual-name", "--required-only")
         self.assertEqual(result.returncode, 1, report)
         self.assertEqual(report["findings"]["active_missing_links"], ["actual-name"])
+
+    def test_summary_target_success_remains_distinct_from_catalog_pressure(self):
+        prompt, options, _, agents = self.market_case()
+        prompt = self.write_prompt([
+            ("control", "Con", self.control),
+            ("actual-name", "Complete metadata.", agents / "actual-name/SKILL.md"),
+        ])
+        result, full = self.run_audit(
+            prompt, *options, "--require-visible", "actual-name", "--required-only"
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(full["status"], "pressure")
+        self.assertEqual(full["required_status"], "present")
+        self.assertIn("activation_manifest", full)
+        result, summary = self.run_audit(
+            prompt, *options, "--require-visible", "actual-name", "--required-only", "--summary"
+        )
+        self.assertEqual(result.returncode, 0, summary)
+        self.assertEqual(summary, {
+            "schema_version": 1, "kind": "codex_skill_surface_summary",
+            "status": "present", "exit_code": 0, "exit_scope": "required_names",
+            "required_names": ["actual-name"], "required_failures": [],
+            "overall_status": "pressure",
+        })
+        self.assertLess(len(result.stdout), 600)
+        self.assertNotIn(str(self.root), result.stdout)
+
+    def test_summary_missing_wrong_source_and_invalid_evidence_keep_exit_meanings(self):
+        prompt, options, _, agents = self.market_case()
+        for name in ("absent-control", "actual-name"):
+            if name == "actual-name":
+                wrong = self.write_skill("wrong-summary", "actual-name", "Wrong source.")
+                (agents / name).unlink()
+                (agents / name).symlink_to(wrong.parent)
+                prompt = self.write_prompt([
+                    ("control", "Control.", self.control),
+                    (name, "Wrong source.", agents / name / "SKILL.md"),
+                ])
+            result, summary = self.run_audit(
+                prompt, *options, "--require-visible", name, "--required-only", "--summary"
+            )
+            self.assertEqual(result.returncode, 1, summary)
+            self.assertEqual(summary["status"], "missing")
+            self.assertEqual(summary["exit_code"], 1)
+            self.assertEqual(summary["required_failures"], [name])
+        for invalid in ({}, {"data": None}, {"data": []}):
+            self.inventory.write_text(json.dumps(invalid), encoding="utf-8")
+            result, summary = self.run_audit(
+                prompt, *options, "--require-visible", "actual-name", "--required-only", "--summary"
+            )
+            self.assertEqual(result.returncode, 2, summary)
+            self.assertEqual(summary["status"], "invalid")
+            self.assertEqual(summary["exit_code"], 2)
+            self.assertIsNone(summary["required_failures"])
+            self.assertIsNone(summary["overall_status"])
+            self.assertTrue(summary["error"])
+
+    def test_summary_human_output_and_argument_boundary(self):
+        prompt, options, _, _ = self.market_case()
+        args = [sys.executable, str(SCRIPT), "--prompt-json", str(prompt),
+                "--source-sync-script", os.environ.get("SKILL_AUDIT_TEST_SOURCE_OWNER", str(SCRIPT.parents[3] / "daymade-claude-code/claude-switch-models-setup/scripts/sync-local-skill-sources.py")),
+                "--skills-json", str(self.inventory), "--config", str(self.config),
+                "--activation-manifest", str(self.manifest), "--cwd", str(self.root),
+                *options, "--require-visible", "actual-name", "--required-only", "--summary"]
+        result = subprocess.run(args, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+        self.assertIn("Codex required Skills: present (exit 0)", result.stdout)
+        self.assertNotIn("activation_manifest", result.stdout)
+        result = subprocess.run([sys.executable, str(SCRIPT), "--summary"], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("--summary requires --required-only", result.stderr)
 
 
 if __name__ == "__main__":

@@ -16,6 +16,30 @@ SCHEMA = 'apfs-explicit-pairs-v1'
 LFS_QUIET = core.quiet
 
 
+def metadata_preflight(target, source):
+    """Report existing metadata differences before reading either full payload."""
+    tm, sm = core.metadata(target), core.metadata(source)
+    tx, sx = tm['xattrs'], sm['xattrs']
+    differences = dict(
+        fields=sorted(k for k in tm if k != 'xattrs' and tm[k] != sm[k]),
+        xattrs=dict(source_only=sorted(set(sx)-set(tx)),
+                    target_only=sorted(set(tx)-set(sx)),
+                    different_values=sorted(k for k in set(tx) & set(sx) if tx[k] != sx[k])))
+    # Names/categories only: never print xattr values or other metadata values.
+    print(json.dumps(dict(event='metadata_preflight',
+                          metadata_differences=differences,
+                          clone_metadata_compatibility='unverified')),
+          file=sys.stderr, flush=True)
+    core.ensure_supported(target, tm)
+    core.ensure_supported(source, sm)
+
+
+def snapshot_verification():
+    return dict(bytes_identity_metadata_snapshot='verified',
+                clone_metadata_compatibility='unverified',
+                physical_release='unverified')
+
+
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
@@ -116,6 +140,7 @@ def prepare(pairs, output, reserve, lock_file):
         cc=core.native.clone_info(t); sc=core.native.clone_info(s)
         if ti[0] != si[0] or ti[1] == si[1] or ti[5] != 1 or not cc['clone_id'] or not sc['clone_id'] or cc['clone_id']==sc['clone_id'] or cc['full_clone_refs']!=1 or cc['extended_flags'] & 0x41:
             raise ValueError('not an independent unshared target')
+        metadata_preflight(t, s)
         h=core.stable_hash(t,ti)
         if core.stable_hash(s,si)!=h:
             raise ValueError('bytes differ')
@@ -226,18 +251,20 @@ def remainder(manifest, summary_path, output):
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     sub=p.add_subparsers(dest='cmd',required=True)
-    a=sub.add_parser('prepare');a.add_argument('--pairs',required=True);a.add_argument('--output',required=True);a.add_argument('--reserve-bytes',required=True,type=int);a.add_argument('--lock-file')
-    a=sub.add_parser('check');a.add_argument('manifest')
+    a=sub.add_parser('prepare', help='Verify byte/identity/metadata snapshots; clone metadata compatibility and physical release remain unverified');a.add_argument('--pairs',required=True);a.add_argument('--output',required=True);a.add_argument('--reserve-bytes',required=True,type=int);a.add_argument('--lock-file')
+    a=sub.add_parser('check', help='Recheck frozen snapshots; no clone or physical release test');a.add_argument('manifest')
     a=sub.add_parser('execute');a.add_argument('manifest');a.add_argument('--approved-manifest-sha256',required=True);a.add_argument('--run-dir',required=True);a.add_argument('--pause-file')
     a=sub.add_parser('remainder');a.add_argument('manifest');a.add_argument('--summary',required=True);a.add_argument('--output',required=True)
     a=p.parse_args()
     try:
         if a.cmd=='prepare':
-            prepare(json.loads(Path(a.pairs).read_text()),a.output,a.reserve_bytes,a.lock_file);print(json.dumps({'manifest_sha256':digest(a.output),'mutation':False}))
+            prepare(json.loads(Path(a.pairs).read_text()),a.output,a.reserve_bytes,a.lock_file);print(json.dumps({'manifest_sha256':digest(a.output),'mutation':False,'verification':snapshot_verification()}))
         elif a.cmd=='check':
             m,h=load(a.manifest)
-            for cfg in m['objects']:check_pair(cfg)
-            print(json.dumps({'objects':len(m['objects']),'manifest_sha256':h,'mutation':False}))
+            for cfg in m['objects']:
+                metadata_preflight(physical(cfg['cache']), physical(cfg['work']))
+                check_pair(cfg)
+            print(json.dumps({'objects':len(m['objects']),'manifest_sha256':h,'mutation':False,'verification':snapshot_verification()}))
         elif a.cmd=='execute':
             s=execute(a.manifest,a.approved_manifest_sha256,a.run_dir,a.pause_file);print(json.dumps({k:v for k,v in s.items() if k!='completed'}))
         else:print(json.dumps(remainder(a.manifest,a.summary,a.output)))

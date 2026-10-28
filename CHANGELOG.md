@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **feishu-doc-scraper** (v1.10.1 → v1.10.2): Recognize the existing Lark host family consistently, dispatch wiki nodes by their resolved object type, and keep capture scope and preview evidence explicit. Preserve full-collection traversal and stop denied operations without retrying them through another transport.
+
+- **auto-repo-setup** (v2.1.7 → v2.1.8): Carry an authorized repository-maintenance status check through safe fast-forward synchronization and independent readback; preserve explicit read-only, local-work and conflict boundaries. Change type: bounded workflow-entry correction.
+
+- **git-safety-net** (v1.23.1 → v1.23.2): Separate ref manifests from recovery exports. Skip redundant history bundles only for clean temporary checkouts whose exact tips remain on independently verified retained remote main; retain immediate tip/carrier checks and unique-work preservation. Clarify that `--branch` includes reachable ancestry. Change type: bounded preservation-workflow correction.
+- **macos-cleaner** (`daymade-macos` v1.26.7 → v1.26.8): Add Cargo and manual-CI selection rules for requested executable products, dependency baselines and unknown results; reuse producer ownership, archive verification and recovery-only finish. Change type: bounded artifact-classification guidance.
+- **docx-creator / read-docx-review** (`daymade-docs` v1.26.1 → v1.27.0): Distinguish Word installation from an authorized, usable native check; retain pending native acceptance when access is refused or unavailable while delivering reviewable files with scoped PDF evidence. Add read-only baseline/return comparison across body, tables, headers, footers and notes, including zero-trace edits, merge geometry and move/rewrite clues. Preserve the existing comment/revision CLI and reject unresolved revisions before the new comparison. Change types: workflow redesign and additive comparison capability.
+
+- **macos-cleaner** (`daymade-macos` v1.26.6 → v1.26.7): Check existing metadata exclusions and report metadata asymmetry before APFS prepare payload hashing; distinguish snapshot verification from untested clone compatibility and physical release. Preserve the candidate schema, strict execution metadata and rollback boundaries. Change type: bounded diagnostic and preflight repair.
+
+- **skill-governance** (`daymade-skill` v1.74.1 → v1.74.2): Keep target-verdict commands and interpretation in the owning SOP, bind audit examples to the consuming workspace, and align project instruction routes. Change type: documentation alignment and scoped deduplication.
+- **claude-code-hooks** (`daymade-claude-code` v4.33.4 → v4.33.5): Link Codex receipt handling to its canonical procedure and remove locally derivable counts from the recorded native Read case. Change type: scoped documentation hygiene.
+- **skill-governance** (`daymade-skill` v1.74.0 → v1.74.1): Parse standalone Codex catalog headings instead of prose mentions; retain missing, empty and duplicate-catalog errors, including repeated headings in one text block. Preserve CLI exit codes and target summaries. Change type: bounded parser repair.
+
+- **macos-load-doctor** (`daymade-macos` v1.26.5 → v1.26.6): Clarify manual cleanup of an owned disposable REPL context, preserve valuable or uncertain state, and distinguish kernel exit evidence from reset receipts and supervisor lifetime. Change type: bounded lifecycle guidance.
+
+- **skill-governance / skill-creator** (`daymade-skill` v1.73.6 → v1.74.0): Add optional target-audit summaries with distinct presence, absence and invalid-evidence results while preserving full reports and exit codes. Document source-text delivery and provisional loading receipts in Codex Code Mode. Change types: additive output capability and bounded reading recipe.
+- **claude-code-hooks** (`daymade-claude-code` v4.33.3 → v4.33.4): Separate Codex loading-receipt reconciliation from the recorded native Read recovery case; retain unknown for missing or unsupported evidence. Change type: troubleshooting clarification.
+
+- **transcript-fixer** (`daymade-audio` v1.53.2 → v1.53.3): Document the unlock order for user-ruled name families — add the anchored context rule first so the canonical form enters the machine-readable "context rules" claim layer, then resolve the family's OPEN review rows; prose-only authority citations fail target_unknown. Change type: documentation alignment.
+- **ghostty-use** (v1.8.5 → v1.8.6): Route Minions native_runtime sessions to Account Manager while preserving manual account switching and same-ID restoration for unmanaged/legacy Ghostty sessions. Add `switch-prepare --only` so mixed-owner inventories save only explicitly selected unmanaged/legacy UUIDs. Change type: bounded account-owner correction.
+- **local-codex** (`daymade-codex` v2.0.1 → v2.0.2): Require SID, cwd and unique-runtime observer proof before session account or process attribution; reject recency and account-capability fallbacks, keep incomplete or contradictory evidence unknown, and treat first-hand `/status` conflicts as stopping conditions. Change type: bounded session-evidence correction.
+
+- **read-claude-code-history / claude-code-hooks** (`daymade-claude-code` v4.33.2 → v4.33.3): Distinguish pasted interface records from actual execution and require exact role=system request-context evidence for hook delivery; preserve unknown states and physical-order independence. Change type: bounded evidence-selection clarification.
+
+- **claude-switch-models-setup** (`daymade-claude-code` v4.33.1 → v4.33.2): Reuse authorized profile bindings before requesting a key, keep credentials in per-profile shell exports, and remove template token placeholders that override those exports. Change type: credential recovery repair.
+- **macos-permissions** (`daymade-macos` v1.26.4 → v1.26.5): Route confirmed Keychain failures through an authorized session provider when available, and verify the original operation separately from unlock and item access. Preserve consent and protected-window refusal boundaries. Change type: recovery-path clarification.
+
 - **frontend-visual-qa** (v1.21.27 → v1.21.28): Add synthetic reading-journey calibration for distinct goals, requirements and replies, exact-source return, long requirements and runtime replacement. Healthy, misbound, reset and stale-identity controls run through the existing browser test. Change type: bounded evaluation-case addition.
 
 - **claude-switch-models-setup** (`daymade-claude-code` v4.33.0 → v4.33.1): Point all six highspeed template model fields at `k3.1-pro-highspeed` while preserving credential placeholders and context settings. Change type: bounded runtime-template correction.
@@ -18,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **ghostty-use** (v1.8.4 → v1.8.5): Preserve known sessions and explicit unresolved evidence when a single CLI command cannot be tokenized. Keep partial snapshots conservative without guessing session IDs or recovery commands. Change type: bounded inventory repair.
 
 - **frontend-visual-qa** (v1.21.25 → v1.21.26): Remove copied inspection totals from the publication case while retaining card-field versus article-body scope; align the project instruction entry with controls, deks and expanded summaries. Change type: documentation alignment and scoped deduplication.
+- **qa-expert** (v1.2.7 → v1.2.8): Require real-PTY acceptance against declared exclusive or coordinated terminal ownership, preserving exact input, observable health and existing failure/output channels. Change type: bounded acceptance-case addition.
 
 - **frontend-visual-qa** (v1.21.24 → v1.21.25): Calibrate publication-copy review against functioning controls with unresolved card-summary filler, mixed factual sentences and necessary legends or scientific limits. Preserve semantic, rendered and human-acceptance evidence boundaries. Change type: bounded acceptance-case addition.
 

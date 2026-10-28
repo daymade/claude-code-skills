@@ -45,9 +45,9 @@ reversible server suppression, and fresh-process acceptance.
 - For the full local-source architecture, read `references/local-source-sync-architecture.md` before changing these scripts.
 - For Skill authoring in an approved independent Fleet clone, use the
   [leased-authoring owner procedure](references/local-source-sync-architecture.md#leased-fleet-authoring-clones).
-- Provider routing is done via `~/.claude/settings/<name>.json`, which sets `ANTHROPIC_MODEL`, `ANTHROPIC_BASE_URL`, and `ANTHROPIC_AUTH_TOKEN` for that window. **That file is a full settings file rather than an env file, and it is the one layer the converger never touches** — `claude-profile` launches with `claude --settings ~/.claude/settings/<name>.json`, while the converger only ever writes `<profile>/settings.json`. So anything that has to be per-profile *and* has to survive every session start belongs here; put it in the profile's own `settings.json` and the next convergence takes it back. This includes per-profile `permissions.deny`, such as denying `WebSearch` and `WebFetch`.
+- Provider routing is done via `~/.claude/settings/<name>.json`, which sets non-secret `ANTHROPIC_MODEL` and `ANTHROPIC_BASE_URL` for that window. Deliver credentials through the explicit export binding in setup step 4; existing in-file credentials remain readable for legacy compatibility. **That file is a full settings file rather than an env file, and it is the one layer the converger never touches** — `claude-profile` launches with `claude --settings ~/.claude/settings/<name>.json`, while the converger only ever writes `<profile>/settings.json`. So anything that has to be per-profile *and* has to survive every session start belongs here; put it in the profile's own `settings.json` and the next convergence takes it back. This includes per-profile `permissions.deny`, such as denying `WebSearch` and `WebFetch`.
 - **Per-profile thinking effort lives in that provider file too.** The default profile sets effort per Anthropic model via `modelSettings` in `~/.claude/settings.json`; a third-party profile that needs a *different* effort pins `CLAUDE_CODE_EFFORT_LEVEL` (e.g. `"max"`) in its `~/.claude/settings/<name>.json` env instead. The provider file is the only layer that can hold that pin: put it in the profile's own `settings.json` env and the converger deletes it at the next session start (a non-identity env key the default profile doesn't carry is deletion-propagated away); put it in the default profile's env and it applies there *and* converges into every third-party profile's `settings.json` — usually wrong, because weaker third-party models benefit from forced max effort exactly when the default flagship no longer does (verified end-to-end 2026-10-06: a session launched via `claude-profile` reads the pinned value back from its own environment).
-- **Credentials ride in that same file, so anything scripting a profile has to pass `--settings` as well.** `CLAUDE_CONFIG_DIR=<profile> claude -p ...` on its own answers `Not logged in · Please run /login`, because the token lives in the provider file and nothing else loads it. The message names login; the cause is the missing flag.
+- **A scripted profile needs its provider settings and its credential binding.** Use `claude-profile` or the registered execution owner so the model, endpoint and authorized token reach the same process. A caller that supplies only `CLAUDE_CONFIG_DIR` can omit those inputs; `Not logged in` does not by itself mean a new login or key is needed. Resolve the existing source and reproduce its explicit per-profile export binding first. Legacy in-file tokens remain readable, but new setup must not put a secret in a settings file.
 - The converger has no single-profile mode: every invocation covers all of `~/.claude-profiles/*` plus `$CLAUDE_CONFIG_DIR`, and no flag narrows that. To converge one profile on demand, point `CLAUDE_PROFILES_ROOT` at a directory holding only it, or run `--check` and read the per-profile lines. The default profile's own files are the source and are never written.
 
 ### ⚠️ Never run the converger against a synthetic main
@@ -191,7 +191,21 @@ When the user says something like "set up Claude Code profiles" or "I want to us
 4. **Generate provider settings files**
    - For each provider the user wants, create `~/.claude/settings/<provider>.json`
    - Use the templates in `assets/templates/` as a starting point
-   - Prompt the user for their API key and base URL; **never hardcode defaults**
+   - Source the API key by machine class before asking anyone for anything:
+     - **Owner's own or explicitly authorized machine:** first locate the key
+       where it is already registered — the owner's provider credential setup
+       and recovery entry (their operations docs or account-provider skill),
+       the shell exports it already maintains, and any existing profile
+       binding. A missing key at the default settings path does **not** mean
+       the credential is unavailable. Hand the token to consumers as a
+       `~/.zprofile` export with an explicit per-profile binding, and verify
+       by actually invoking the original consumer — a real headless request
+       succeeding, not a written file or an echoed variable.
+     - **A new user's or student's machine:** prompt them for their own valid
+       API key and base URL; **never hardcode defaults**, and never copy or
+       lend the maintainer's credentials. Have them store the key the same
+       way — a shell export (e.g. in `~/.zprofile`) bound explicitly to the
+       profile that consumes it — not as a secret inside a settings file.
    - Set the context window correctly for this specific provider — `[1m]` suffix vs explicit `CLAUDE_CODE_MAX_CONTEXT_TOKENS`/`CLAUDE_CODE_AUTO_COMPACT_WINDOW`, see "Configuring Context Window Size" below. Do this explicitly for every new profile rather than copying whatever the nearest template happens to already have — the nearest template not needing it is not evidence that this one doesn't either.
    - Include the required isolation flags:
      - `CLAUDE_CODE_SUBAGENT_MODEL` (same as `ANTHROPIC_MODEL`)
@@ -286,7 +300,7 @@ Use the provider templates in [`assets/templates/`](assets/templates/). Read the
 chosen file for its model, endpoint, context settings, and thinking behavior;
 do not infer those values from a hand-maintained template summary.
 
-Every template uses the `<API_KEY>` placeholder. Templates for configurable gateways also use `<BASE_URL>`; the MiniMax templates pin the documented regional endpoint. Ask the user for every real placeholder value; do not guess or reuse values from the current machine unless the user explicitly provides them.
+Templates contain non-secret provider settings. Configurable gateways also use `<BASE_URL>`; the MiniMax templates pin the documented regional endpoint. Resolve required values through setup step 4: on an owner-authorized machine, first reuse the registered source and binding; a new user supplies their own valid key and never receives the maintainer's. Put the key only in the explicit export binding, and fill only non-secret values into the settings file. Existing legacy JSON credentials remain supported for reading; do not generate a new in-file credential.
 
 MiniMax-M3 supports adaptive or disabled thinking; keep `ANTHROPIC_REASONING_MODEL`
 on the same model. MiniMax-M2.7 thinking is always on; do not claim a
@@ -532,11 +546,14 @@ CLAUDE_CONFIG_DIR=~/.claude-profiles/<name> claude --settings ~/.claude/settings
 A launched session's Bash inherits the settings `env`, so the printed value
 proves the whole launch path — config dir, provider file, env application —
 end to end. This is the read-back for the `CLAUDE_CODE_EFFORT_LEVEL` pin
-described under How It Works.
+described under How It Works. Never point this printenv pattern at a
+credential: tokens are verified by a real request succeeding (e.g.
+`-p 'reply with ok'`), not by printing their value — see the credential
+sourcing rule in setup step 4.
 
 ## Security Notes
 
-- API keys are written to `~/.claude/settings/<provider>.json` in plain text, the same way Claude Code stores `ANTHROPIC_AUTH_TOKEN`. This matches Claude Code's own security model.
+- API keys reach a profile as an explicit shell export with a per-profile binding (for example from `~/.zprofile`). Provider settings and templates hold only non-secret routing config. Treat an existing legacy provider file that still carries a token as sensitive; retaining compatibility does not make writing a new token there a setup option. Never copy a real key or private endpoint into a public template or example.
 - This skill never uploads keys or settings anywhere.
 - For public distribution, the bundled scripts contain no hardcoded secrets, endpoints, or user-specific paths.
 

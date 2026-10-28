@@ -64,6 +64,16 @@ process: `gtimeout … codex` resolves an executable and cannot call a shell fun
 The bundled Python wrapper does not reproduce shell initialization or support
 every native flag; use native CLI invocation when those capabilities are required.
 
+Before attributing an account, quota, error, or process state to a session, apply
+the [existing-session evidence recipe](references/oauth-guide.md#check-existing-sessions-separately).
+Require observer proof that binds the target session ID (SID), its cwd, and
+exactly one runtime to the same session. A runtime-scoped state response alone is
+insufficient. Zero, multiple, or incomplete matches remain `unknown`; never select
+or fall back by recency, account capability, quota availability, or a healthy
+runtime. Treat a contradictory first-hand user `/status` as a stopping
+contradiction and reconcile it rather than repeating the agent inference. When
+available, Minions' public session-bound diagnostic owns the mechanical gate.
+
 ## Usage Patterns
 
 ### 1. Basic exec (single task)
@@ -133,7 +143,9 @@ codex exec resume "${CODEX_SESSION_ID:?Set the session ID from the first invocat
 
 The wrapper currently runs single-shot exec. For multi-step workflows, use raw `codex exec` commands.
 An ephemeral invocation does not persist a session for later resume.
-Use `--last` only after confirming that the most recent recorded session is the intended target.
+`--last` is not session-selection evidence or an attribution fallback. Use it only
+after independently confirming the intended recorded session, and apply the
+SID+cwd+unique-runtime gate above before any account or process claim about it.
 
 ## Limitations
 

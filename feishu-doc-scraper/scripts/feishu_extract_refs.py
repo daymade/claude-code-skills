@@ -42,11 +42,10 @@ import json
 import re
 import sys
 from pathlib import Path
+from check_archive_storage import FEISHU_HOST_SUFFIXES
 
-# Feishu/Lark hosts. feishu.cn = mainland tenants + my.feishu.cn personal space;
-# larksuite.com = international Lark. Both serve the same /docx /wiki /sheets
-# /minutes /base /file path scheme.
-_HOST = r"[a-z0-9-]+\.(?:feishu\.cn|larksuite\.com)"
+# Keep reference extraction on the bundle's canonical Feishu/Lark host family.
+_HOST = r"[a-z0-9-]+\.(?:" + "|".join(re.escape(s) for s in FEISHU_HOST_SUFFIXES) + r")"
 
 # Inline rich-media tags: retain Markdown pseudo-tags for captured Markdown
 # and raw HTML shapes for captured HTML. Select the input from the actual
@@ -186,16 +185,22 @@ RE_TENCENT_MEETING = re.compile(
 )
 
 # How the caller should handle each type (mirrors the reference's dispatch
-# table, surfaced here so the caller does not have to re-derive it).
+# table, surfaced here so the caller does not have to re-derive it). Wiki and
+# base entries deliberately do NOT name a fixed fetch command: a wiki node
+# resolves to a concrete obj_type (docx/sheet/bitable/file/slides/...) and the
+# handler is chosen from that obj_type using the installed CLI's own guide for
+# it — never by assuming docx (a docs +fetch on a bitable returns
+# "3380002 Unsupported document type" — a wrong-handler error, not a
+# permission boundary).
 DISPATCH = {
     "mention-doc-docx": "docs +fetch --doc <token>",
-    "mention-doc-wiki": "wiki spaces get_node then docs +fetch",
+    "mention-doc-wiki": "wiki spaces get_node, then dispatch on the node's actual obj_type (docx→docs +fetch; sheet→sheets commands; bitable→installed lark-base guide; file/slides→installed lark-drive/slides guide)",
     "mention-doc-sheet": "sheets +read",  # not currently produced -- see mention-doc-other; kept for when sheet's real <cite> shape is confirmed
     "mention-doc-other": "unconfirmed file-type on a real <cite> tag — inspect manually (sheet/bitable is a plausible but UNVERIFIED guess, see RE_SHEET_TAG comment)",
     "url-docx": "docs +fetch --doc <token>",
-    "url-wiki": "wiki spaces get_node then docs +fetch",
+    "url-wiki": "wiki spaces get_node, then dispatch on the node's actual obj_type (docx→docs +fetch; sheet→sheets commands; bitable→installed lark-base guide; file/slides→installed lark-drive/slides guide)",
     "url-sheets": "sheets +read (split token on '_' -> SP, SID)",
-    "url-base": "Bitable API (outside this skill) — record token",
+    "url-base": "installed lark-base guide (table-list/records) — never docs +fetch a bitable; if the guide is unavailable, record the token in the worklist, do not guess a fetch",
     "url-file": "Drive file — use the installed lark-drive download guide",
     "url-minutes": "native transcript API (feishu-minutes-transcript.md)",
     "sheet-tag": "sheets +read (split token on '_' -> SP, SID)",

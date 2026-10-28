@@ -132,6 +132,8 @@ Before a command that may exceed the response budget, enter Skill Creator's
 [large-output capture recipe](daymade-skill/skill-creator/references/stateful-script-verification.md#large-command-output).
 For a large file or saved tool response, use its
 [complete-file reading workflow](daymade-skill/skill-creator/references/stateful-script-verification.md#complete-file-reads).
+For Codex Code Mode source reads or provisional loading receipts, enter its
+[Code Mode receipt procedure](daymade-skill/skill-creator/references/stateful-script-verification.md#codex-code-mode-receipt).
 Keep invocation, selection and incomplete-read semantics in those owners.
 
 For plugin/Skill naming, source registration or release labels, use
@@ -172,8 +174,9 @@ For customer-approved report forms, follow
 
 For Codex login, credential recovery, quota-query ownership or quota-driven continuation, enter
 [local-codex authentication](daymade-codex/local-codex/SKILL.md#authentication-chatgpt-oauth).
-For existing Ghostty Codex windows around an account switch, enter
-[ghostty-use's switch workflow](ghostty-use/SKILL.md#codex-account-switch).
+For existing unmanaged/legacy Ghostty Codex windows around a manual account switch, enter
+[ghostty-use's switch workflow](ghostty-use/SKILL.md#codex-account-switch). Minions
+`native_runtime` rows instead use the owning Account Manager, not that manual route.
 
 For rebuilding a paper form from an image, scan or screenshot as an editable
 XLSX with a printable layout, enter
@@ -339,6 +342,8 @@ When changing measurement, run the SOP's targeted regression suite before shippi
 For uv cache diagnosis or retirement, enter
 [macos-cleaner](daymade-macos/macos-cleaner/SKILL.md) and its
 [uv target semantics](daymade-macos/macos-cleaner/references/cleanup_targets.md#uv-cache-retirement).
+For Cargo or manual CI cleanup, read its
+[artifact selection rules](daymade-macos/macos-cleaner/references/cleanup_targets.md#cargo-and-manual-ci-outputs).
 
 ### Automated Test Suites (CI)
 
@@ -496,6 +501,9 @@ owns complete Codex tool evidence, and
 owns indexed role/phrase filters. Keep commands and source-attribution rules in
 those owners rather than copying them here.
 
+For suspected batch or controller termination, enter
+[suspected termination evidence](daymade-claude-code/read-codex-history/SKILL.md#suspected-termination-evidence).
+
 For original Claude tool calls/results from a known Session, including a named
 Workflow subagent, use
 [read-claude-code-history's narrow evidence entry](daymade-claude-code/read-claude-code-history/SKILL.md#original-tool-callresult-evidence).
@@ -555,14 +563,18 @@ Skill links.
 ### Ghostty Terminal Sessions
 
 For snapshotting, restoring or reconciling Claude Code / Codex sessions in Ghostty
-across reboots, enter [`ghostty-use`](ghostty-use/SKILL.md). Manual Codex account
+across reboots, enter [`ghostty-use`](ghostty-use/SKILL.md). Unmanaged/legacy manual Codex account
 switches and blocked/delegated reopening enter its
 [account-switch SOP](ghostty-use/references/codex-account-switch.md), including
-the original-set handoff and actual-continuation acceptance. Its bundled script owns
+the original-set handoff and actual-continuation acceptance. Minions `native_runtime`
+rows use the owning Account Manager instead. Its bundled script owns
 liveness classification and the paste-restore + auto-reconciliation loop; keep the
 storage-layout facts and macOS Ghostty limits in its references rather than here.
 For change-only automatic backups, use its
 [automatic workflow](ghostty-use/references/automatic-snapshots.md).
+
+For one-shot helper exits or attribution of an exited terminal, enter
+[helper terminals and original sessions](ghostty-use/SKILL.md#one-shot-helper-terminals-and-original-sessions).
 
 ### Codex Quota and Account Checks
 
@@ -644,6 +656,9 @@ that may already omit the new Skill. Keep installation/catalog evidence separate
 from actual task results. A daemon using a pinned plugin copy also needs the
 [pin-update workflow](daymade-claude-code/claude-switch-models-setup/references/troubleshooting.md#advance-the-pin).
 Do not treat a merged source change as proof that this runtime advanced.
+For a named-target availability verdict, use the
+[target-verdict procedure](daymade-skill/skill-governance/references/skill-surface-governance.md#named-target-verdict).
+Keep its invocation and result contract in that owner.
 For recorder deployment, follow that workflow's ordinary-copy migration and
 link readback; retaining a LaunchAgent wrapper does not update its files.
 
@@ -814,6 +829,8 @@ claiming the whole checkout is current.
 For divergent local `main` or branch/worktree retirement, follow
 [git-safety-net](git-safety-net/SKILL.md) and its
 [content-containment proof](git-safety-net/references/merge_verification.md).
+Before exporting recovery material for a named branch or worktree, read
+[Preservation before retirement](git-safety-net/references/merge_verification.md#preservation-before-retirement).
 When current content differs from an older published review, use that reference's
 [historical publication example](git-safety-net/references/merge_verification.md#worked-example--old-review-content-landed-through-another-ref)
 before deciding supersession; historical equality alone does not establish current intent.

@@ -589,7 +589,10 @@ Example failure class: `UNKNOWN_CERTIFICATE_VERIFICATION_ERROR` after all skill-
 ## I want to add another provider
 
 1. Copy a template to `~/.claude/settings/<new-provider>.json`.
-2. Fill in the API key and base URL.
+2. Fill in the base URL and model names; source the API key per the
+   machine-class rule in SKILL.md setup step 4 — deliver it as a
+   `~/.zprofile` export binding rather than an in-file secret, and verify by
+   actually launching the new profile.
 3. Update the model names to match that provider's Anthropic-compatible model IDs.
 4. Run `claude-profiles-init`.
 5. Add an alias to your shell rc file if desired.

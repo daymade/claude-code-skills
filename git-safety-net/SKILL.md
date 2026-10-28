@@ -102,8 +102,10 @@ report-only until the user expands the authorized targets.
    **Scope has a third axis: the REF SET itself moves.** A branch inventory and a verified bundle
    prove what existed at one instant; they do not authorize deletion five minutes later. Immediately
    before deleting, re-enumerate local refs and hosting-service branches, then require every target
-   ref to still equal the object recorded in the bundle. A new branch, a moved tip, or a new parallel
-   PR reopens classification and requires a new bundle. Do not delete against a stale inventory.
+   ref to still equal its frozen manifest SHA (and bundle head when export was required).
+   A new branch, a moved tip, or a new parallel
+   PR reopens classification and the preservation decision; rebuild a required recovery export,
+   or revalidate the retained carrier for an exact-object exemption. Do not delete against a stale inventory.
    **Scope has a fourth axis: OWNERSHIP.** Repository visibility does not make every visible object
    part of this task. Partition discovered refs/worktrees/PRs into change-authorized, inspect-only,
    and explicitly excluded sets before acting; compute cleanup success over the authorized set.
@@ -563,8 +565,15 @@ rungs (including the squash-artifact and absorbed-into-refactor cases):
 **Step 2 — after deletion authority exists and immediately before deletion, preserve exactly what
 that deletion threatens:**
 
+Apply [the preservation decision](references/merge_verification.md#preservation-before-retirement)
+before exporting. A clean temporary checkout whose exact tip is already an ancestor of an
+independently verified, retained remote main needs no redundant history bundle. Keep a ref-to-full-SHA
+manifest and recheck both the tip and retained carrier immediately before deletion. Content-only
+containment after a squash is not this exact-object exemption. Unique WIP, ignored files, independent
+clone metadata and submodule objects still need their existing preservation checks.
+
 ```bash
-# Targeted branch cleanup: prefer the narrow export.
+# Only when the preservation decision requires a recovery export.
 scripts/git_export_before_drop.sh --branch <branch> --out <external-backup-dir>
 # Pin only an authorized dangling SHA; leave unrelated danglers report-only.
 git update-ref refs/dangling-backup/<sha> <sha>
@@ -575,11 +584,14 @@ scripts/git_export_before_drop.sh --verify-current <external-backup-dir>/all-ref
 
 The targeted `update-ref` reaches only the authorized dangling commit. If every reported dangler is
 in scope, the whole-set `git_preserve_danglers.sh` may replace it. Prefer repeated `--branch` options
-for named branch/worktree retirement. `--all-refs` captures branches, tags, stashes, hidden backup
+when those named refs need export. `--branch` still includes every reachable ancestor; it is not an
+incremental bundle or a size limit. Inspect the selected object scope and destination capacity before
+exporting. `--all-refs` captures branches, tags, stashes, hidden backup
 refs, and linked-worktree HEAD refs, so it is valid only when that whole captured set is authorized;
 add `--all-stashes` only when stashes are also deletion targets. `--verify-current` is the final
 compare-and-swap gate: it exits 1 if any recorded ref moved or disappeared. Refresh remote authority
-before it, and rebuild the bundle on any mismatch. Keep backups outside the repository; never turn
+before it, and reclassify a changed tip before rebuilding a required bundle. Without a bundle, compare
+against the frozen ref manifest instead. Keep backups outside the repository; never turn
 one branch into a repo export.
 
 For a multi-branch "only one main" cleanup while other sessions may still commit or open PRs, read
@@ -598,8 +610,8 @@ and final branch-count gates that a single-branch retirement does not need.
   then inventory ignored paths separately with `--ignored`. A normal clean status hides `!!`
   files, and no bundle can preserve them; copy out anything not proven reproducible, preserve its
   relative path, and verify it against a recorded pre-removal content hash.
-  Record the exact HEAD, prove it contained/superseded against a freshly fetched base, export its
-  branch or collision-checked recovery ref into a verified targeted bundle, and obtain
+  Record the exact HEAD, prove it contained/superseded against a freshly fetched base, apply the
+  preservation decision above, retain its exact ref manifest or required verified bundle, and obtain
   current-session deletion authority. As the final pre-remove gate, re-run the empty status and
   the complete ignored inventory. Require exact equality with the frozen
   pre-removal manifest for every ignored path, entry type, file hash, and symlink target, and

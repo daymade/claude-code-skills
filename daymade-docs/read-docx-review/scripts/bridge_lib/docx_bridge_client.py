@@ -37,6 +37,7 @@ TASKS_DIR = _HERE.parent / "csharp" / "tasks"
 LIST_REVISIONS_CSX = TASKS_DIR / "list_revisions.csx"
 LIST_COMMENTS_CSX = TASKS_DIR / "list_comments.csx"
 EXTRACT_VIEWS_CSX = TASKS_DIR / "extract_views.csx"
+COMPARE_SNAPSHOT_CSX = TASKS_DIR / "compare_snapshot.csx"
 
 
 # ── 类型契约 ─────────────────────────────────────────────────────────
@@ -157,6 +158,15 @@ def _list_comments_cached(key: tuple[str, float]) -> CommentsResult:
 def list_comments(docx: str | Path) -> CommentsResult:
     """列出 docx 中所有批注 + thread 关系 + 段落锚定。"""
     return _list_comments_cached(_cache_key(docx))
+
+
+def comparison_snapshot(docx: str | Path) -> dict[str, Any]:
+    """Read all comparison stories; reject unresolved revisions before extracting text.
+
+    Keep this separate from the existing revision-aware body-paragraph APIs.
+    No cache: each comparison binds actual current inputs by SHA-256 in its caller.
+    """
+    return json.loads(_run_csx(COMPARE_SNAPSHOT_CSX, Path(docx).resolve()))
 
 
 @lru_cache(maxsize=4)

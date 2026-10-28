@@ -62,9 +62,9 @@ Markdown, or when the requested document editing requires another engine capabil
    | | Bundled macOS Word GUI-menu export | LibreOffice (`soffice --headless`) |
    |---|---|---|
    | Font/pagination fidelity | Renders with Word's own font substitution logic — the same thing the eventual reader's Word will do | Its own, different substitution logic — can silently reflow a document that Word renders on one page onto two |
-   | Requires | `Word.app` installed on the rendering machine | `soffice` on PATH (or `/Applications/LibreOffice.app/.../soffice` on macOS) |
+   | Requires | `Word.app` installed, with an authorized, callable and observable native route | `soffice` on PATH (or `/Applications/LibreOffice.app/.../soffice` on macOS) |
    | Automatable headlessly | This helper drives the real GUI (see script below) | Yes |
-   | Use when | Fidelity to what a Word reader will see matters — the common case, given the skill's own general stance in `SKILL.md` that a lenient renderer clearing every check is not proof Word renders the same file correctly — or the project has explicitly ruled out LibreOffice for this deliverable | Word isn't installed, or the delivery genuinely doesn't depend on exact Word-fidelity |
+   | Use when | Fidelity to what a Word reader will see matters — the common case, given the skill's own general stance in `SKILL.md` that a lenient renderer clearing every check is not proof Word renders the same file correctly — or the project has explicitly ruled out LibreOffice for this deliverable | The existing authorized native route is unavailable (follow verification protocol Step 3a), or this delivery does not require exact Word fidelity |
 
    (That `SKILL.md` stance — quoted there as `"LibreOffice rendering clean is not the same
    claim as "Word renders this correctly.""` — was written about a different, generator-side

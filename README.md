@@ -3148,7 +3148,7 @@ additive until a step is explicitly labeled destructive.
 - Audits every linked worktree HEAD, dirty checkout, local-only commit, stash, and dangling commit
 - Pins dangling commits gc-proof under `refs/dangling-backup/` before any cleanup
 - Verifies a branch is merged by CONTENT — defeating the squash-merge "100 commits ahead" illusion
-- Proves a linked worktree safe before non-forced removal and exports all refs in one verified bundle
+- [Preservation before retirement](./git-safety-net/references/merge_verification.md#preservation-before-retirement)
 - Optional adversarial multi-agent verification for a high-stakes "is everything merged?" call
 - Catches another session's commit adopted onto your branch before it ships inside your PR
 - Settles "did my push/merge actually land?" by content when the receipt was lost to a flaky network
@@ -3263,7 +3263,7 @@ give me a Word file for this labor contract
 
 ---
 
-### **read-docx-review** - Read Word/WPS Review Comments & Tracked Changes
+### **read-docx-review** - Read Word/WPS Reviews & Compare Returned Drafts
 
 > **Install**: `claude plugin install daymade-docs@daymade-skills`
 > (suite-only — invoked as `daymade-docs:read-docx-review`)
@@ -3280,6 +3280,8 @@ silently misses are captured. Read-only — never mutates the reviewer's file.
 - Captures the w:ins / w:del revisions that python-docx silently drops
 - WPS reference-only comment anchors get a fallback so every comment stays locatable
 - Zero-comment files emit an explicit "no review traces" warning instead of a silent empty table
+- Compare an explicit sent baseline with a returned draft across body text, tables, headers, footers and notes; identify possible moves and rewrites even with no review traces
+- Reject unresolved revisions in the comparison entry; keep the existing revision-aware reading CLI
 - Boundary: producing/formatting docx → docx-creator or minimax-docx; PDF annotations out of scope
 
 **Example usage:**
@@ -3287,6 +3289,7 @@ silently misses are captured. Read-only — never mutates the reviewer's file.
 提取这份 docx 的批注
 对方批注完的合同回来了，读一下审阅意见
 读一下修订，谁批了什么、批在哪
+Compare this returned DOCX with the exact draft we sent
 ```
 
 ---
