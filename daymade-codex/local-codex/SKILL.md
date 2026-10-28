@@ -64,6 +64,30 @@ process: `gtimeout … codex` resolves an executable and cannot call a shell fun
 The bundled Python wrapper does not reproduce shell initialization or support
 every native flag; use native CLI invocation when those capabilities are required.
 
+### Executable identity baseline (opt-in)
+
+Before an expensive build, resume or recovery claim that depends on *which*
+codex entry is in play, freeze the identity once and compare it at claim time;
+never refresh a baseline to make a comparison pass.
+
+```bash
+# Freeze once, before the work (add --watch-file for owner-selected configs):
+python3 scripts/entry_identity.py snapshot --output <task-owned-baseline.json>
+# Compare before the expensive claim:
+python3 scripts/entry_identity.py check --baseline <task-owned-baseline.json>
+```
+
+The check separates the owning-shell dispatch entry (what `/bin/zsh -lic`
+resolves `codex` to: external, function, alias) from the wrapper-selected
+external executable (the `CODEX_BIN` > PATH > app-bundle order above). Exit
+codes: `0` unchanged, `1` drift, `2` unknown, `3` usage or baseline error.
+`unchanged` is identity-only evidence — it never proves wrapper downstream
+runtime, authentication, quota or model health. When the dispatch entry is a
+function or alias, its consumer stays opaque (the definition is hashed, never
+executed), so bind the executable it should run, for example via `CODEX_BIN`,
+before the build. Read [entry-identity.md](references/entry-identity.md) for
+fields, failure shapes and a startup-report example.
+
 Before attributing an account, quota, error, or process state to a session, apply
 the [existing-session evidence recipe](references/oauth-guide.md#check-existing-sessions-separately).
 Require observer proof that binds the target session ID (SID), its cwd, and
