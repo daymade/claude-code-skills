@@ -172,7 +172,8 @@ jobs:
 
   tests:
     name: Registered test suites (Linux)
-    runs-on: ubuntu-latest
+    # The bounded APT helper requires this runner's GNU coreutils runtime.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
