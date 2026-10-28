@@ -3335,6 +3335,16 @@ this list and describe defects you reach by asking a different question):
 
 ## 64. skill-creator-guard's "loaded" verdict requires byte-verified Read coverage — Skill-tool invocation does not count, paged Reads leak seam lines, and parallel Reads race the ledger
 
+- **Codex Code Mode:** use Skill Creator's
+  [receipt recipe](https://github.com/daymade/claude-code-skills/blob/main/daymade-skill/skill-creator/references/stateful-script-verification.md#codex-code-mode-receipt),
+  whose execution contract says to emit source text separately from metadata.
+  An inner `model-facing-receipt-pending` notice is provisional until the outer
+  cell's received text is reconciled. Plain source text and recognized serialized
+  command receipts can both establish coverage; JSON wrapping alone is not the
+  failure criterion. Retain unknown for missing text or unsupported envelopes.
+- **Native Claude Code observations:** the mechanics and recovery below describe
+  the recorded native Read case; do not assume its numbered-Read-only workaround
+  applies to a Codex host without that tool.
 - **Symptom:** you loaded skill-creator this session — via the Skill
   tool, or by reading its SKILL.md in a few big paged Reads — yet the
   guard still blocks your SKILL.md edit with "load skill-creator

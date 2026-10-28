@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-governance / skill-creator** (`daymade-skill` v1.73.6 → v1.74.0): Add optional target-audit summaries with distinct presence, absence and invalid-evidence results while preserving full reports and exit codes. Document source-text delivery and provisional loading receipts in Codex Code Mode. Change types: additive output capability and bounded reading recipe.
+- **claude-code-hooks** (`daymade-claude-code` v4.33.3 → v4.33.4): Separate Codex loading-receipt reconciliation from the recorded native Read recovery case; retain unknown for missing or unsupported evidence. Change type: troubleshooting clarification.
+
 - **transcript-fixer** (`daymade-audio` v1.53.2 → v1.53.3): Document the unlock order for user-ruled name families — add the anchored context rule first so the canonical form enters the machine-readable "context rules" claim layer, then resolve the family's OPEN review rows; prose-only authority citations fail target_unknown. Change type: documentation alignment.
 - **ghostty-use** (v1.8.5 → v1.8.6): Route Minions native_runtime sessions to Account Manager while preserving manual account switching and same-ID restoration for unmanaged/legacy Ghostty sessions. Add `switch-prepare --only` so mixed-owner inventories save only explicitly selected unmanaged/legacy UUIDs. Change type: bounded account-owner correction.
 - **local-codex** (`daymade-codex` v2.0.1 → v2.0.2): Require SID, cwd and unique-runtime observer proof before session account or process attribution; reject recency and account-capability fallbacks, keep incomplete or contradictory evidence unknown, and treat first-hand `/status` conflicts as stopping conditions. Change type: bounded session-evidence correction.

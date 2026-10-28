@@ -102,6 +102,11 @@ Exit `0` is clean, `1` is pressure or drift to classify, and `2` means
 the evidence is invalid. It is read-only. Do not convert exit `1` into automatic
 pruning.
 
+For delivery of named targets, use `--require-visible <name> --required-only
+--summary --json`. Read the summary's target `status` and `exit_code`; a separate
+`overall_status: pressure` does not override target presence. The default full
+report remains available without `--summary`.
+
 For a project's dual roots:
 
 ```bash
