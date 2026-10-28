@@ -20,8 +20,8 @@ moment of an expensive build, resume or recovery claim.
 ## Scope and boundaries
 
 - This seam answers one question: **did the codex entry identity change since
-  the frozen baseline?** It does not run codex, does not submit a model turn,
-  does not touch credentials or accounts, and does not probe the network.
+  the frozen baseline?** It runs only the selected external executable's
+  `--version`, submits no model turn and invokes no account or network query.
 - The wrapper's resolution order (`CODEX_BIN` > PATH > ChatGPT.app bundle) and
   its bad-override refusal are unchanged; this script reuses
   `codex_wrapper.find_codex_binary()` as-is.
@@ -42,7 +42,8 @@ moment of an expensive build, resume or recovery claim.
 
 A function or alias consumer stays opaque. The definition is hashed, never
 executed, so the executable it would ultimately run cannot be derived here;
-only the owner can bind it (for example via `CODEX_BIN`). A PATH-resolved path
+verify its target through the launcher's owner. `CODEX_BIN` selects the wrapper
+and does not establish an independent function's target. A PATH-resolved path
 under a function is what the wrapper would select, not what the interactive
 shell would run.
 
