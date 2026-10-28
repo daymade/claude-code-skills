@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-cleaner** (`daymade-macos` v1.26.6 → v1.26.7): Check existing metadata exclusions and report metadata asymmetry before APFS prepare payload hashing; distinguish snapshot verification from untested clone compatibility and physical release. Preserve the candidate schema, strict execution metadata and rollback boundaries. Change type: bounded diagnostic and preflight repair.
+
 - **skill-governance** (`daymade-skill` v1.74.1 → v1.74.2): Keep target-verdict commands and interpretation in the owning SOP, bind audit examples to the consuming workspace, and align project instruction routes. Change type: documentation alignment and scoped deduplication.
 - **claude-code-hooks** (`daymade-claude-code` v4.33.4 → v4.33.5): Link Codex receipt handling to its canonical procedure and remove locally derivable counts from the recorded native Read case. Change type: scoped documentation hygiene.
 - **skill-governance** (`daymade-skill` v1.74.0 → v1.74.1): Parse standalone Codex catalog headings instead of prose mentions; retain missing, empty and duplicate-catalog errors, including repeated headings in one text block. Preserve CLI exit codes and target summaries. Change type: bounded parser repair.

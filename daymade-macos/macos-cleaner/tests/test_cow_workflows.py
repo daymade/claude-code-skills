@@ -1,6 +1,7 @@
 import ctypes
 import fcntl
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -173,6 +174,68 @@ class NativeTests(unittest.TestCase):
         pairs=self.r/'pairs.json';pairs.write_text('{}')
         result=subprocess.run([sys.executable,str(SCRIPTS/'apfs_cow.py'),'prepare','--pairs',str(pairs),'--output',str(self.manifest),'--reserve-bytes','1'],capture_output=True,text=True)
         self.assertEqual(result.returncode,2);self.assertFalse(self.manifest.exists())
+
+    def test_metadata_preflight_reports_names_without_values(self):
+        target=dict(self.c.core.metadata(self.target),xattrs={'com.apple.quarantine':'76616c7565'})
+        for target_attrs, source_attrs, expected in [
+            (target['xattrs'], dict(target['xattrs']), dict(source_only=[],target_only=[],different_values=[])),
+            (target['xattrs'], {}, dict(source_only=[],target_only=['com.apple.quarantine'],different_values=[])),
+            ({}, {'com.apple.quarantine':''}, dict(source_only=['com.apple.quarantine'],target_only=[],different_values=[])),
+            (target['xattrs'], {'com.apple.quarantine':''}, dict(source_only=[],target_only=[],different_values=['com.apple.quarantine'])),
+            (target['xattrs'], {**target['xattrs'],'com.apple.provenance':'1234'}, dict(source_only=['com.apple.provenance'],target_only=[],different_values=[])),
+        ]:
+            source=dict(target,xattrs=source_attrs)
+            target_meta=dict(target,xattrs=target_attrs)
+            output=io.StringIO()
+            with mock.patch.object(self.c.core,'metadata',side_effect=[target_meta,source]),mock.patch('sys.stderr',output):
+                self.c.metadata_preflight(self.target,self.source)
+            event=json.loads(output.getvalue())
+            self.assertEqual(event['metadata_differences']['xattrs'],expected)
+            self.assertEqual(event['clone_metadata_compatibility'],'unverified')
+            self.assertNotIn('1234',output.getvalue())
+            self.assertNotIn(str(self.source),output.getvalue())
+
+    def test_prepare_metadata_notice_precedes_payload_hash(self):
+        original=self.c.core.stable_hash
+        output=io.StringIO()
+        def hashing(*args):
+            event=json.loads(output.getvalue().splitlines()[0])
+            self.assertEqual(event['event'],'metadata_preflight')
+            self.assertEqual(event['metadata_differences']['xattrs']['different_values'],['com.apple.quarantine'])
+            return original(*args)
+        with mock.patch('sys.stderr',output),mock.patch.object(self.c.core,'stable_hash',side_effect=hashing):
+            self.c.prepare(self.pairs,self.manifest,1024*1024,None)
+        m,h=self.c.load(self.manifest)
+        self.assertEqual(m['schema'],'apfs-explicit-pairs-v1')
+        self.assertNotIn('verification',m)
+        self.c.check_pair(m['objects'][0])
+
+    def test_existing_metadata_exclusions_precede_payload_hash(self):
+        healthy=self.c.core.metadata(self.target)
+        for changed in [dict(flags=1),dict(mode=0o4644),dict(uid=os.getuid()+1),
+                        dict(xattrs={'com.apple.ResourceFork':'00'}),
+                        dict(xattrs={'synthetic.large':'00'*(1024*1024+1)})]:
+            for side in (0,1):
+                metadata=[healthy,healthy];metadata[side]=dict(healthy,**changed)
+                with mock.patch.object(self.c.core,'metadata',side_effect=metadata),mock.patch.object(self.c.core,'stable_hash') as hashed,mock.patch('sys.stderr',io.StringIO()):
+                    with self.assertRaises(RuntimeError):
+                        self.c.prepare(self.pairs,self.manifest,1,None)
+                    hashed.assert_not_called()
+                self.assertFalse(self.manifest.exists())
+
+    def test_cli_snapshot_scope_and_legacy_fields(self):
+        pairs=self.r/'pairs.json';pairs.write_text(json.dumps(self.pairs))
+        before=[self.c.core.ident(p) for p in (self.target,self.source)]
+        commands=[['prepare','--pairs',str(pairs),'--output',str(self.manifest),'--reserve-bytes','1048576'],['check',str(self.manifest)]]
+        for command in commands:
+            result=subprocess.run([sys.executable,str(SCRIPTS/'apfs_cow.py'),*command],capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+            value=json.loads(result.stdout)
+            self.assertFalse(value['mutation']);self.assertEqual(len(value['manifest_sha256']),64)
+            self.assertEqual(value['verification'],dict(bytes_identity_metadata_snapshot='verified',clone_metadata_compatibility='unverified',physical_release='unverified'))
+            self.assertEqual(json.loads(result.stderr.splitlines()[0])['event'],'metadata_preflight')
+        self.assertEqual(value['objects'],1)
+        self.assertEqual(before,[self.c.core.ident(p) for p in (self.target,self.source)])
 
 
 if __name__=='__main__':unittest.main()
