@@ -84,8 +84,9 @@ codes: `0` unchanged, `1` drift, `2` unknown, `3` usage or baseline error.
 `unchanged` is identity-only evidence — it never proves wrapper downstream
 runtime, authentication, quota or model health. When the dispatch entry is a
 function or alias, its consumer stays opaque (the definition is hashed, never
-executed), so bind the executable it should run, for example via `CODEX_BIN`,
-before the build. Read [entry-identity.md](references/entry-identity.md) for
+executed). Verify its downstream executable through the launcher's owner;
+setting `CODEX_BIN` selects the wrapper and does not prove where a function runs.
+Read [entry-identity.md](references/entry-identity.md) for
 fields, failure shapes and a startup-report example.
 
 Before attributing an account, quota, error, or process state to a session, apply

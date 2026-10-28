@@ -12,7 +12,7 @@ Separates two identities that the ordinary wrapper deliberately does not merge:
 
 A function or alias consumer stays opaque: its definition is hashed in memory
 only, never executed and never emitted, so the executable it would ultimately
-run cannot be derived here. The owner must bind it (for example via CODEX_BIN)
+run cannot be derived here. The launcher's owner must independently verify it
 before an expensive build/resume/recovery claim.
 
 stdlib only. Every subprocess is finite (timeout) and output-bounded. Version
@@ -26,10 +26,11 @@ import hashlib
 import json
 import os
 import re
+import selectors
 import stat as stat_module
 import subprocess
 import sys
-import threading
+import time
 from pathlib import Path
 from typing import Any, Dict, List, NoReturn, Optional, Tuple
 
@@ -123,22 +124,6 @@ def fail(detail: str, extra: Optional[Dict[str, Any]] = None) -> NoReturn:
 # Bounded subprocess execution
 # ---------------------------------------------------------------------------
 
-def _drain(stream, limit: int, keep: bool) -> Tuple[bytes, int]:
-    """Read a pipe to EOF, keeping at most `limit` bytes when `keep`."""
-    chunks: List[bytes] = []
-    kept = 0
-    total = 0
-    while True:
-        block = stream.read(65536)
-        if not block:
-            break
-        total += len(block)
-        if keep and kept < limit:
-            chunks.append(block[: limit - kept])
-            kept += len(chunks[-1])
-    return b"".join(chunks), total
-
-
 def run_bounded(argv: List[str], timeout_s: int, max_capture: int) -> Dict[str, Any]:
     """Run argv with a hard timeout; return bounded stdout and stderr size.
 
@@ -146,39 +131,58 @@ def run_bounded(argv: List[str], timeout_s: int, max_capture: int) -> Dict[str, 
     stderr is never kept: only its byte count is reported, so unexpected CLI
     text (which can contain environment-specific detail) cannot leak.
     """
-    proc = subprocess.Popen(
-        argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL
-    )
-    assert proc.stdout is not None and proc.stderr is not None
-    result: Dict[str, Any] = {"argv0": argv[0], "timeout_s": timeout_s}
-
-    def drain_out() -> None:
-        result["stdout"], result["stdout_bytes"] = _drain(proc.stdout, max_capture, True)
-
-    def drain_err() -> None:
-        _, result["stderr_bytes"] = _drain(proc.stderr, max_capture, False)
-
-    threads = [threading.Thread(target=drain_out), threading.Thread(target=drain_err)]
-    for thread in threads:
-        thread.daemon = True
-        thread.start()
-    timed_out = False
+    result: Dict[str, Any] = {
+        "argv0": argv[0], "timeout_s": timeout_s, "stdout": b"",
+        "stdout_bytes": 0, "stderr_bytes": 0, "returncode": None,
+        "timed_out": False, "stdout_truncated": False,
+    }
     try:
-        result["returncode"] = proc.wait(timeout=timeout_s)
+        proc = subprocess.Popen(
+            argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            stdin=subprocess.DEVNULL, bufsize=0,
+        )
+    except OSError:
+        return result
+    deadline = time.monotonic() + timeout_s
+    captured = bytearray()
+    streams = (proc.stdout, proc.stderr)
+    try:
+        with selectors.DefaultSelector() as selector:
+            for stream, label in zip(streams, ("stdout", "stderr")):
+                os.set_blocking(stream.fileno(), False)
+                selector.register(stream, selectors.EVENT_READ, label)
+            while selector.get_map():
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise subprocess.TimeoutExpired(argv, timeout_s)
+                for key, _ in selector.select(remaining):
+                    try:
+                        block = os.read(key.fd, 65536)
+                    except BlockingIOError:
+                        continue
+                    if not block:
+                        selector.unregister(key.fileobj)
+                        continue
+                    result[key.data + "_bytes"] += len(block)
+                    if key.data == "stdout" and len(captured) < max_capture:
+                        captured.extend(block[:max_capture - len(captured)])
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired(argv, timeout_s)
+            result["returncode"] = proc.wait(timeout=remaining)
     except subprocess.TimeoutExpired:
-        timed_out = True
-        proc.kill()
+        result["timed_out"] = True
+        # Only the exact child created above is eligible for cleanup. A
+        # descendant retaining a pipe makes this observation unknown; it does
+        # not authorize terminating an unrelated process or service.
+        if proc.poll() is None:
+            proc.kill()
         proc.wait()
-        result["returncode"] = None
-    for thread in threads:
-        thread.join(timeout=10)
-    for stream in (proc.stdout, proc.stderr):
-        try:
+    finally:
+        for stream in streams:
             stream.close()
-        except Exception:
-            pass
-    result["timed_out"] = timed_out
-    result["stdout_truncated"] = result.get("stdout_bytes", 0) > len(result.get("stdout", b""))
+    result["stdout"] = bytes(captured)
+    result["stdout_truncated"] = result["stdout_bytes"] > len(captured)
     return result
 
 
@@ -206,7 +210,14 @@ def fingerprint_file(selected_path: str) -> Dict[str, Any]:
     }
     try:
         info["realpath"] = os.path.realpath(selected_path)
-        with open(selected_path, "rb") as handle:
+        # A FIFO must not block before its file type can be checked. Check
+        # the opened descriptor too, so a path replaced after stat is refused.
+        if not stat_module.S_ISREG(os.stat(selected_path).st_mode):
+            info["status"] = "not_regular"
+            info["detail"] = "not a regular file"
+            return info
+        fd = os.open(selected_path, os.O_RDONLY | os.O_NONBLOCK)
+        with os.fdopen(fd, "rb") as handle:
             before = os.fstat(handle.fileno())
             if not stat_module.S_ISREG(before.st_mode):
                 info["status"] = "not_regular"
@@ -435,8 +446,12 @@ def observe_executable() -> Dict[str, Any]:
         observation["version_status"] = "unknown"
         observation["detail"] = f"version probe exit {probe['returncode']}"
         return observation
+    if probe["stdout_truncated"]:
+        observation["version_status"] = "unknown"
+        observation["detail"] = "version output exceeded capture limit"
+        return observation
     head = probe["stdout"][:VERSION_SCAN_BYTES].decode("utf-8", errors="replace")
-    match = VERSION_RE.search(head)
+    match = VERSION_RE.fullmatch(head.strip())
     if not match:
         observation["version_status"] = "unknown"
         observation["detail"] = "unrecognized version output"
@@ -577,6 +592,7 @@ def _validate_executable(executable: Dict[str, Any]) -> None:
 
 
 def _validate_watch(watch: Dict[str, Any]) -> None:
+    _require_type(watch, dict, "baseline.watch")
     for key, entry in watch.items():
         where = f"baseline.watch[{key}]"
         _require_exact_keys(entry, WATCH_ENTRY_KEYS, where)
@@ -630,13 +646,19 @@ def validate_baseline(raw: Any) -> Dict[str, Any]:
 
 def load_baseline(path: str) -> Dict[str, Any]:
     try:
-        with open(path, "r", encoding="utf-8") as handle:
-            raw = json.load(handle)
+        fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+        with os.fdopen(fd, "rb") as handle:
+            if not stat_module.S_ISREG(os.fstat(handle.fileno()).st_mode):
+                raise UsageError("baseline must be a regular file")
+            data = handle.read(MAX_CAPTURE_BYTES + 1)
+            if len(data) > MAX_CAPTURE_BYTES:
+                raise UsageError("baseline exceeds the size limit")
+            raw = json.loads(data)
     except FileNotFoundError:
         raise UsageError(f"baseline not found: {path}")
     except OSError as exc:
         raise UsageError(f"baseline unreadable: {exc.__class__.__name__}")
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, UnicodeDecodeError):
         raise UsageError("baseline is not valid JSON")
     return validate_baseline(raw)
 

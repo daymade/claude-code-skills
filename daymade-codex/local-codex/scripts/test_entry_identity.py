@@ -131,6 +131,46 @@ class EntryIdentityTest(unittest.TestCase):
         return code, payload
 
 
+class BoundedObservationTest(unittest.TestCase):
+    def test_regular_file_and_fifo_without_writer(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            regular = root / "regular"
+            regular.write_bytes(b"known bytes")
+            self.assertEqual(eid.fingerprint_file(str(regular))["status"], "observed")
+            fifo = root / "fifo"
+            os.mkfifo(fifo)
+            code = ("import sys;sys.path.insert(0,sys.argv[1]);"
+                    "import entry_identity as e;import json;"
+                    "print(json.dumps(e.fingerprint_file(sys.argv[2])))")
+            result = subprocess.run([PYTHON, "-c", code, str(SCRIPTS), str(fifo)],
+                                    capture_output=True, text=True, timeout=2)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(result.stdout)["status"], "not_regular")
+            with self.assertRaisesRegex(eid.UsageError, "regular file"):
+                eid.load_baseline(str(fifo))
+
+    def test_inherited_pipe_obeys_original_deadline(self):
+        code = ("import subprocess,sys;subprocess.Popen([sys.executable,'-c',"
+                "'import time;time.sleep(1.5)']);print('codex-cli 9.9.9')")
+        started = time.monotonic()
+        result = eid.run_bounded([PYTHON, "-c", code], 0.2, 100)
+        self.assertTrue(result["timed_out"])
+        self.assertIsNone(result["returncode"])
+        self.assertLess(time.monotonic() - started, 1.2)
+
+    def test_healthy_capture_caps_bytes_and_discards_stderr(self):
+        code = "import sys;print('x'*200);sys.stderr.write('private text')"
+        result = eid.run_bounded([PYTHON, "-c", code], 3, 10)
+        self.assertFalse(result["timed_out"])
+        self.assertEqual(result["returncode"], 0)
+        self.assertEqual(result["stdout"], b"x" * 10)
+        self.assertEqual(result["stdout_bytes"], 201)
+        self.assertEqual(result["stderr_bytes"], 12)
+        self.assertTrue(result["stdout_truncated"])
+        self.assertNotIn("stderr", result)
+
+
 class StableIdentityTest(EntryIdentityTest):
     def test_healthy_stable_round_trip(self):
         baseline, envelope = self.snapshot()
@@ -255,6 +295,21 @@ class DriftTest(EntryIdentityTest):
 
 
 class VersionProbeTest(EntryIdentityTest):
+    def test_conflicting_and_truncated_versions_remain_unknown(self):
+        with mock.patch.dict(os.environ, self.fixture.env(), clear=True):
+            for text, truncated in [(b"codex-cli 9.9.9\ncodex-cli 8.8.8\n", False),
+                                    (b"codex-cli 9.9.9\n", True)]:
+                with self.subTest(text=text, truncated=truncated):
+                    probe = {"timed_out": False, "returncode": 0, "stdout": text,
+                             "stdout_bytes": len(text), "stderr_bytes": 0,
+                             "stdout_truncated": truncated}
+                    with mock.patch.object(eid, "run_bounded", return_value=probe):
+                        observation = eid.observe_executable()
+                    self.assertEqual(observation["version_status"], "unknown")
+                    findings, unknowns = [], []
+                    eid._compare_executable(observation, observation, findings, unknowns)
+                    self.assertEqual(eid.decide(findings, unknowns), "unknown")
+
     def test_failed_version_is_unknown_not_unchanged(self):
         broken = write_stub(self.fixture.root / "broken-codex",
                             body="#!/bin/sh\necho synthetic-stderr-leak >&2\nexit 3\n")
@@ -457,6 +512,22 @@ class ShellRefusalTest(EntryIdentityTest):
 
 
 class FailClosedBaselineTest(EntryIdentityTest):
+    def test_nonobject_watch_is_baseline_error(self):
+        for invalid in [None, [], ""]:
+            with self.subTest(invalid=invalid):
+                out = self.fixture.root / "shape.json"
+                # Construct once per case through the ordinary snapshot API.
+                code, _ = self.run_inprocess("snapshot", "--output", str(out))
+                self.assertEqual(code, 0)
+                data = json.loads(out.read_text())
+                data["watch"] = invalid
+                out.write_text(json.dumps(data))
+                proc = self.check_cli(out)
+                self.assertEqual(proc.returncode, eid.EXIT_ERROR, proc.stderr)
+                self.assertIn("error", json.loads(proc.stdout))
+                self.assertNotIn("Traceback", proc.stderr)
+                out.unlink()
+
     def baseline_dict(self) -> dict:
         out, _ = self.snapshot()
         return json.loads(out.read_text())

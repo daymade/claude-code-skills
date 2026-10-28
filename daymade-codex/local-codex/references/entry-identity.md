@@ -126,7 +126,7 @@ later `not_found`.
   that actually ran, not the baseline build.
 - **`function`/`alias` dispatch means bind before build.** The wrapper-selected
   executable is evidence about the wrapper, not about the interactive entry;
-  the owner must bind the function's executable (e.g. `CODEX_BIN`) before any
+  the owner must verify the function's downstream executable before any
   build/resume claim that names the ordinary entry.
 - **Unchanged is narrow.** It never proves downstream runtime, authentication,
   quota or model health, adoption by a running TUI, or that a candidate build
@@ -160,7 +160,9 @@ Keep the report's evidence claims separate:
    claim made against the baseline build is unattributed until re-established.
 2. **Dispatch is a function — the interactive consumer stays opaque.** The
    wrapper-selected path is wrapper evidence only; bind the function's
-   executable before a build claim that names the ordinary entry.
+   executable through its launcher's owner before a build claim that names
+   the ordinary entry. `CODEX_BIN` selects the wrapper; it does not redirect
+   or verify an independent shell function.
 3. **Restored externally is not adoption.** A later `unchanged` after the owner
    restored an install proves identity only; whether a running TUI adopted the
    restored entry is the OAuth guide's separate session-evidence question.
