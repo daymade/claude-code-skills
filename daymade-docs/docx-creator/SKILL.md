@@ -75,7 +75,8 @@ soffice --headless --convert-to pdf --outdir /tmp/docxcheck your-doc.docx
 pdftoppm -png -r 100 /tmp/docxcheck/your-doc.pdf /tmp/docxcheck/page
 # then Read every /tmp/docxcheck/page-NN.png
 
-# 5. MANDATORY if Microsoft Word.app is installed — LibreOffice cannot see ISSUE-012
+# 5. Assess the existing authorized Word route, then perform native checks when usable
+# Installed alone is not usable; follow Step 3a for denied/unavailable routes
 open -a "Microsoft Word" your-doc.docx   # check the title bar for "兼容性模式", check every page
 ```
 
@@ -142,8 +143,12 @@ opened broken in Word — that is the origin of this rule. ISSUE-008.
 **Required chain:** generate → XSD validate → `soffice --headless --convert-to pdf` →
 `pdftoppm -png` → `Read` every page image → check the five failure modes
 (info blocks not stretched / each list restarting at 1 / table borders present / signature
-block intact / no orphaned pagination) → **if Microsoft Word.app is installed, open the actual
-file in it and check the title bar for "兼容性模式" plus every page**. Details, prerequisites
+block intact / no orphaned pagination) → **assess and use the existing authorized, observable
+Word route; check the actual file/title bar and every page when usable**. Installation alone
+is not readiness. If refused or unavailable after bounded checks, preserve native acceptance
+pending and hand off the reviewable DOCX plus an allowed-engine PDF inspected on every page;
+name the renderer and the missing native check. Follow Step 3a rather than expanding the task
+into Office setup or bypassing a refusal. Details, prerequisites
 and the "what counts as failure" list: `references/verification_protocol.md`.
 
 **LibreOffice rendering clean is not the same claim as "Word renders this correctly."**
@@ -177,8 +182,9 @@ already carries a schema-order comment at each construction site (`RunProps`, `P
 `BuildTable`) — extend the existing property list in place rather than appending after it, and
 if you add a genuinely new element, look up its position in `openxml_element_order.md`
 (minimax-docx) before deciding where the `.Append()` call goes. Re-run Step 3a of the
-verification protocol (real Word, not just LibreOffice) after any such change — that is the
-only check in the whole chain that would have caught this class of bug.
+verification protocol after any such change. Real Word is the only check in this chain that
+would have caught this class of bug; if its route is refused or unusable, preserve that native
+check as pending under Step 3a rather than declaring the DOCX Word-ready.
 
 ## References
 

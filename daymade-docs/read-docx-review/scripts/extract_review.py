@@ -141,6 +141,7 @@ def render_markdown(report: dict, include_resolved: bool) -> str:
     if cs.get("total", 0) == 0 and not details:
         lines.append("（无批注、无修订——这份 docx 没有携带任何审阅痕迹。若对方确认已批注，")
         lines.append("检查拿到的是不是导出时丢了批注的副本，或对方批在了在线版而未导出。）")
+        lines.append("零审阅痕迹不等于正文未改；有明确已发基线时，继续用 compare_docx.py 对比全文。")
     return "\n".join(lines)
 
 
