@@ -102,7 +102,8 @@ report-only until the user expands the authorized targets.
    **Scope has a third axis: the REF SET itself moves.** A branch inventory and a verified bundle
    prove what existed at one instant; they do not authorize deletion five minutes later. Immediately
    before deleting, re-enumerate local refs and hosting-service branches, then require every target
-   ref to still equal the object recorded in the bundle. A new branch, a moved tip, or a new parallel
+   ref to still equal its frozen manifest SHA (and bundle head when export was required).
+   A new branch, a moved tip, or a new parallel
    PR reopens classification and the preservation decision; rebuild a required recovery export,
    or revalidate the retained carrier for an exact-object exemption. Do not delete against a stale inventory.
    **Scope has a fourth axis: OWNERSHIP.** Repository visibility does not make every visible object
