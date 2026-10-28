@@ -452,11 +452,11 @@ def observe_executable() -> Dict[str, Any]:
         return observation
     head = probe["stdout"][:VERSION_SCAN_BYTES].decode("utf-8", errors="replace")
     match = VERSION_RE.fullmatch(head.strip())
-    if not match:
+    if not match or len(match.group(1)) > 64:
         observation["version_status"] = "unknown"
         observation["detail"] = "unrecognized version output"
         return observation
-    observation["version"] = match.group(1)[:64]
+    observation["version"] = match.group(1)
     observation["version_status"] = "ok"
     return observation
 

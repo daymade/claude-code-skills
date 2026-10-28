@@ -295,6 +295,18 @@ class DriftTest(EntryIdentityTest):
 
 
 class VersionProbeTest(EntryIdentityTest):
+    def test_overlong_version_tokens_are_not_silently_truncated(self):
+        with mock.patch.dict(os.environ, self.fixture.env(), clear=True):
+            for suffix in ("A", "B"):
+                text = ("codex-cli 9.9.9-" + "a" * 70 + suffix).encode()
+                probe = {"timed_out": False, "returncode": 0, "stdout": text,
+                         "stdout_bytes": len(text), "stderr_bytes": 0,
+                         "stdout_truncated": False}
+                with mock.patch.object(eid, "run_bounded", return_value=probe):
+                    observation = eid.observe_executable()
+                self.assertEqual(observation["version_status"], "unknown")
+                self.assertIsNone(observation["version"])
+
     def test_conflicting_and_truncated_versions_remain_unknown(self):
         with mock.patch.dict(os.environ, self.fixture.env(), clear=True):
             for text, truncated in [(b"codex-cli 9.9.9\ncodex-cli 8.8.8\n", False),
