@@ -392,21 +392,25 @@ Only the real-Word check in Step 3a settles that.**
 
 ---
 
-## ISSUE-011 — `~$name.docx` beside the target means the recipient has it open (P2)
+## ISSUE-011 — A stale open copy can hide regenerated output (P2)
 
 **Symptom.** You regenerate and overwrite a delivered .docx. The recipient insists nothing
 changed.
 
-**Root cause.** A sibling file named `~$<same-name>.docx` is Word's owner lock, written while
-a document is open. Its presence means someone has the **old** version open right now.
-Overwriting the file on disk does not touch their in-memory copy, and Word may write theirs
-back over yours when they save.
+**Root cause.** Replacing a file on disk does not update an existing in-memory copy, and a
+later save may overwrite the regenerated file. A sibling `~$<same-name>.docx` signals a
+possible Word holder, but presence alone does not establish a live process or recipient;
+absence does not prove release or identify which generated version was loaded.
 
-**Fix.** Before overwriting, `ls` the target directory for `~$` files. If one exists, tell the
-recipient to close the document first, and to reopen it after you deliver.
+**Fix.** Follow the verification protocol's
+[holder and output-identity check](verification_protocol.md#before-replacing-a-generated-docx).
+Preserve original signed/template/returned artifacts; investigate actual holders, wait for
+save and close, verify release and keep uncertain replacement pending. Do not force release
+by killing, quitting without save or deleting the lock.
 
-**Verify.** `ls -a <dir> | grep '^~\$'` returns nothing before you overwrite, and the
-recipient confirms a reopen after delivery.
+**Verify.** Record the observed holder/release result or its concrete visibility gap. Verify
+the final generated file against the intended source/build identity and reopen that exact
+delivered path. An empty lock listing or an old visible window cannot clear this check.
 
 ---
 

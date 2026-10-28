@@ -67,11 +67,39 @@ dotnet run --project _docxgen -- your-doc.md your-doc.docx
 Read the summary line it prints. The list count must match the number of separate lists in
 your markdown — a mismatch means lists merged, which is ISSUE-005 about to happen.
 
-**Before overwriting an already-delivered file**, check for Word's owner lock (ISSUE-011):
+### Before replacing a generated DOCX
+
+The executing agent preserves signed documents, templates and returned drafts at their
+original paths; generate a derived file at a new output path. Replace an existing generated
+deliverable only within the authorized regeneration scope. Pin its exact path/hash and the
+source/build that should produce the replacement. A lock check does not establish this
+identity or prove that an old generated file is the intended current output.
+
+A sibling `~$<name>.docx` is a signal to investigate, not proof of a current holder, their
+identity or release. Whether or not a lock is present, inspect the existing app/document
+route and, when available, query the exact target path for local open-file holders:
 
 ```bash
-ls -a $(dirname your-doc.docx) | grep '^~\$' || echo "no lock, safe to overwrite"
+target="/absolute/path/your-doc.docx"
+lsof -- "$target"
 ```
+
+Inspect stdout, stderr and exit status. Reported process/PID/user rows identify observed
+local handles, not which recipient saved the document. A missing tool, permission refusal,
+warning, path error or unobservable app state leaves holder status unknown; retain the
+original and continue at a new output path. A clean no-match query only means no local
+holder was observed through that probe. Absence of a lock is not overwrite clearance.
+
+If a holder is observed, wait for it to save and close the document, then repeat the same
+path query and check the app/document state to verify release. Do not kill the process,
+quit without saving, or delete the lock to force release. An unexplained remaining lock or
+unknown release keeps replacement pending; absence of a lock cannot override an observed
+holder. A no-lock/no-observed-holder case may continue after the independent identity checks.
+
+After regeneration, verify the final file's hash against the new build output and its
+source identity, then reopen the final delivered path for the required content/layout
+checks. An old open window or a prior PDF at that path does not prove the new output was
+loaded. ISSUE-011 records the stale-open-copy failure.
 
 ---
 

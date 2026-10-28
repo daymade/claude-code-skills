@@ -154,9 +154,11 @@ surface that class of defect. This is ISSUE-008's own lesson (a lenient renderer
 Word does) recurring one layer up; treat LibreOffice-only verification as incomplete whenever
 Word is available to check against directly.
 
-**Before overwriting a delivered .docx**, check for a sibling `~$<name>.docx` — that is Word's
-owner lock, meaning the recipient has the old version open. Overwriting works, but they will
-keep seeing the stale document until they close and reopen it. Tell them. ISSUE-011.
+**Before replacing a generated .docx**, follow
+[the holder and output-identity check](references/verification_protocol.md#before-replacing-a-generated-docx).
+Preserve signed/template/returned originals. A lock is a signal, not proof of a live holder
+or safe release; keep unknown holder/release states pending and verify the new output
+independently of the lock. ISSUE-011 records the stale-open-copy failure.
 
 ## Customizing
 
