@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **tibo-reset-codex** (v2.5.3 → v2.5.4): Deliver verified decision-changing information through the existing host contract before nonessential follow-up. Make preserving banked resets conditional on account evidence and the cost of delaying valuable work; preserve read-only hosting, notification permissions and manual redemption. Change type: bounded decision and delivery guidance correction.
+- **tibo-reset-codex** (v2.6.0 → v2.6.1): Deliver verified decision-changing information through the existing host contract before nonessential follow-up. Make preserving banked resets conditional on account evidence and the cost of delaying valuable work; preserve read-only hosting, notification permissions and manual redemption. Change type: bounded decision and delivery guidance correction.
+- **tibo-reset-codex** (v2.5.3 → v2.6.0): Read current usage and banked resets before conditional historical reconstruction. Bound community follow-up to decision-bearing gaps. Add evidence-linked account follow-up closure/reopening without changing arrival evidence, global confirmation or forecast scores; retain compatibility with existing journals. Change types: bounded workflow redesign and additive queue control.
 - **claude-code-hooks** (`daymade-claude-code` v4.33.5 → v4.33.6): Align receiving-side hook delivery checks with native Codex records, root session identity and event timestamps; retain unknown for incomplete evidence and route project instructions to the existing visibility and delivery contract. Change type: bounded factual correction.
 
 - **skill-governance** (`daymade-skill` v1.74.2 → v1.74.3): Link suite delivery instructions to the canonical fresh-host gate; keep coexistence setup with its owner and remove duplicated parser internals from the operating SOP. Change type: scoped documentation alignment.
