@@ -172,7 +172,7 @@ jobs:
 
   tests:
     name: Registered test suites (Linux)
-    # Base image must satisfy scripts/ci/apt_install_bounded.sh before APT runs.
+    # The bounded APT runner requires GNU timeout.
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -205,12 +205,17 @@ jobs:
           if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; then
             packages+=(ffmpeg)
           fi
+          if [ ! -x /bin/zsh ]; then
+            packages+=(zsh)
+          fi
           if [ "${#packages[@]}" -gt 0 ]; then
             scripts/ci/apt_install_bounded.sh "${packages[@]}"
           fi
           rg --version
           ffmpeg -version
           ffprobe -version
+          test -x /bin/zsh
+          /bin/zsh --version
 
       # Suites shell out to git; without an identity, commit-creating fixtures fail with an
       # error that looks like a product bug.
