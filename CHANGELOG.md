@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **tibo-reset-codex** (v2.5.2 → v2.5.3): Deliver verified decision-changing information through the existing host contract before nonessential follow-up. Make preserving banked resets conditional on account evidence and the cost of delaying valuable work; preserve read-only hosting, notification permissions and manual redemption. Change type: bounded decision and delivery guidance correction.
+- **tibo-reset-codex** (v2.5.3 → v2.5.4): Deliver verified decision-changing information through the existing host contract before nonessential follow-up. Make preserving banked resets conditional on account evidence and the cost of delaying valuable work; preserve read-only hosting, notification permissions and manual redemption. Change type: bounded decision and delivery guidance correction.
 
 - **skill-governance** (`daymade-skill` v1.74.2 → v1.74.3): Link suite delivery instructions to the canonical fresh-host gate; keep coexistence setup with its owner and remove duplicated parser internals from the operating SOP. Change type: scoped documentation alignment.
 - **feishu-doc-scraper** (v1.10.1 → v1.10.2): Recognize the existing Lark host family consistently, dispatch wiki nodes by their resolved object type, and keep capture scope and preview evidence explicit. Preserve full-collection traversal and stop denied operations without retrying them through another transport.
