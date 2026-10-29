@@ -114,6 +114,26 @@ and stderr. Call `run` again for a retry under the same root and cumulative budg
 before calling `finish`.
 Runs are serialized; another run or finish cannot acquire its active lock.
 
+### Adapt an existing runner for a bounded resume
+
+Prefer the owning runner's native resume or retry entry. When only programmatic
+step selection is available, keep one adapter for the entire retry sequence rather
+than creating a new temporary driver after each failure. Bind it to the immutable
+input ref, stable owner and cumulative budget, with a distinct output root for each
+attempt; count the adapter, copies and logs in the same task budget.
+
+Derive the selected steps from the runner's persisted receipt: include only
+unfinished checks and explicitly required environment preparation, not steps that
+already passed. A step recorded as `running` without its command record did not run.
+The receipt's schema and terminal status are authoritative; finished cleanup or a
+shell exit 0 alone is not a passed check.
+
+Propagate a programmatic entry's return code—for example,
+`raise SystemExit(main())` when `main()` returns an exit code. After a storage stop,
+preserve evidence and remove only verified rebuildable owned inputs before resuming
+with the same owner and reserve. Do not lower the reserve, delete evidence, or start
+another adapter to manufacture a green run.
+
 The runner samples only its own root and the root filesystem's available space.
 It charges the larger of each path's logical or allocated size, including
 directory metadata. Per-path observed high-water sizes and charged bytes persist
