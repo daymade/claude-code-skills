@@ -553,6 +553,25 @@ def recover(root, owner):
     return record
 
 
+def cleanup_summary(record):
+    """Project declared-input cleanup scope and counts; unknown stays unknown.
+
+    Only declared inputs are ever removed. Counts are reported only when the
+    recorded inventory is complete; a missing, null, or failed inventory stays
+    unknown instead of implying an emptied directory. Paths are never echoed.
+    """
+    cleanup = record.get("cleanup")
+    if not isinstance(cleanup, dict):
+        return None
+    complete = cleanup.get("inventory_complete")
+    removed, retained = cleanup.get("removed"), cleanup.get("retained")
+    counts_known = complete is True and isinstance(removed, list) and isinstance(retained, list)
+    return {"scope": "declared_inputs",
+            "inventory_complete": complete if isinstance(complete, bool) else None,
+            "removed_count": len(removed) if counts_known else None,
+            "retained_count": len(retained) if counts_known else None}
+
+
 def receipt_summary(record):
     """Project recorded outcomes without echoing input inventories or child argv."""
     result = {key: record[key] for key in
@@ -563,6 +582,9 @@ def receipt_summary(record):
     if isinstance(runs, list) and runs and isinstance(runs[-1], dict):
         result["last_run"] = {key: runs[-1][key] for key in ("state", "returncode")
                               if key in runs[-1]}
+    cleanup = cleanup_summary(record)
+    if cleanup is not None:
+        result["cleanup"] = cleanup
     return result
 
 
