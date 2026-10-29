@@ -17,6 +17,23 @@ if [ ! -f "$REGISTRY" ]; then
   exit 1
 fi
 
+if [ "$#" -gt 0 ]; then
+  if [ "$#" -ne 2 ] || [ "$1" != "--selection" ] || [ ! -f "$2" ]; then
+    echo "FAIL: expected --selection <existing registry subset>" >&2
+    exit 1
+  fi
+  # Never execute an arbitrary path supplied by a selection artifact.
+  while read -r runner target rest; do
+    case "${runner:-}" in ''|'#'*) continue ;; esac
+    if [ -n "$rest" ] || ! awk -v runner="$runner" -v target="$target" \
+      '$1 == runner && $2 == target { found=1 } END { exit !found }' "$REGISTRY"; then
+      echo "FAIL: unregistered selected suite: $runner $target" >&2
+      exit 1
+    fi
+  done < "$2"
+  REGISTRY="$2"
+fi
+
 total=0
 failed=0
 
