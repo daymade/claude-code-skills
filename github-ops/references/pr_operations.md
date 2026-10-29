@@ -328,9 +328,11 @@ mergeability-cache problem or retry a merge through another API.
 
 Only after freshness is established, compare the exact candidate with this base
 using `git merge-tree --write-tree <candidate> <verified-base>`. A conflict is a
-real integration issue. Exit 0 with GitHub still reporting `dirty` is a cache
-candidate, not permission to merge: preserve required checks and wait for confirmed
-mergeability. Do not close/reopen the PR or push an empty commit merely to refresh
+real integration issue. When local and hosted results disagree, follow
+[the merge-semantics diagnostic](https://github.com/daymade/claude-code-skills/blob/main/github-review-pr/SKILL.md#when-local-and-hosted-merge-results-disagree)
+before attributing the discrepancy to a cache; local attributes and drivers can
+change merge semantics. Preserve required checks and wait for confirmed mergeability.
+Do not close/reopen the PR or push an empty commit merely to refresh
 that state. A later base/head change invalidates this observation; repeat the
 preflight against the new objects. These are executor checks, not a server-side
 lock on the base branch.

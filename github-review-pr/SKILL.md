@@ -189,7 +189,8 @@ Record these values with a timestamp that includes a time zone:
 | Close/merge actor and time, when applicable | issue timeline plus REST merge fields |
 
 Treat `mergeable` and `mergeStateStatus` as cached advisory signals. Do not substitute
-them for local three-way analysis.
+them for local three-way analysis, or use a local clean result to override a hosted
+merge refusal. Reconcile disagreement through the diagnostic below.
 
 After a base-history rewrite, `baseRefOid`, REST `.base.sha`, the PR files endpoint,
 and hosted commit/file counts may remain anchored to a stale recorded base even after
@@ -294,6 +295,48 @@ no-op/superseded candidate rather than pretending its old patch still needs to l
 Treat conflicts as evidence, not as a reason to update or rebase the branch
 automatically. Report the conflicting paths and determine whether base drift, the PR,
 or both own the required resolution.
+
+#### When local and hosted merge results disagree
+
+The reviewing agent runs this diagnostic when local three-way analysis is clean but
+GitHub reports `CONFLICTING`/`DIRTY`, or the reverse. Ordinary matching results do not
+require a second merge. Preserve both observations; green CI tests a candidate, not
+whether the host can merge it.
+
+1. Re-read the hosted head and independently resolved live base, then verify the local
+   objects match both full OIDs. Recompute changed inputs first; different snapshots
+   do not establish a difference in merge semantics.
+2. Inspect the affected paths' effective `merge` attributes with `git check-attr merge
+   -- <paths>`, the relevant `.gitattributes` at both tips, `.git/info/attributes`, and
+   attribute/config sources (`core.attributesFile`, `merge.default`, and
+   `merge.<driver>.driver`/`recursive`). Record the checkout/attribute context and Git
+   version used by the original local merge. Inspect driver commands before executing
+   them: a PR-controlled driver is untrusted code. Repository attributes and locally
+   configured drivers can produce semantics different from the hosted merge.
+3. Counter-test the same OIDs with the suspected driver replaced by ordinary text
+   merging for that invocation only. For an effective `merge=union`, use:
+
+   ```bash
+   git -c 'merge.union.driver=git merge-file %A %O %B' \
+     -c merge.union.recursive=text \
+     merge-tree --write-tree --messages "$CURRENT_BASE_SHA" "$HEAD_SHA"
+   ```
+
+   This replaces only the named `union` driver; it is not a full GitHub emulator.
+   Adapt the override to each inspected nonstandard driver involved; retain binary
+   paths' intended semantics. Save both exit codes, tree OIDs and conflict paths/stages.
+   A counter-test's nonzero tree is conflict evidence, never a landable tree.
+4. If the counter-test exposes a conflict hidden by local drivers, explain that
+   concrete difference and inspect the conflicting contents. If it stays clean,
+   keep the hosted discrepancy unresolved until a bounded fresh hosted read or other
+   evidence explains it; do not declare a cache fault from `DIRTY` alone. Stop repeated
+   archive/review/CI or branch-update cycles that add no evidence about the mismatch.
+
+Keep configuration, protections and published history unchanged during diagnosis.
+Only an already-authorized repair may resolve and integrate the actual conflict;
+then recheck the resulting exact head/live base and required checks. Reuse unaffected
+evidence under the repository's policy. A local clean result alone never grants a
+merge bypass or branch-update permission.
 
 ### 4. Reconstruct Intent and Scope
 
