@@ -165,8 +165,9 @@ false. `warn` exits 0 for compatibility, so read the status and difference sampl
 The [PDF acceptance procedure](references/pdf-acceptance.md) owns source-scope
 reconciliation and the structural/native-reader checks this script cannot perform.
 
-Run the validator's bidirectional controls with
-`python3 -m unittest discover -s tests -v` (Pandoc required).
+From this Skill's source checkout, run the validator's bidirectional controls with
+`python3 -m unittest discover -s tests -v` (Pandoc required). Default packages
+exclude this development test directory; a zero-test run is not validation.
 
 ## Merge Outputs Manually
 
