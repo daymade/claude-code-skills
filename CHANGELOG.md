@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tibo-reset-codex** (v2.6.1 → v2.6.2): Preserve independent scan and live-banked results, distinguish missing observations from command failures, and replace command-text workaround advice with cause-based retries. Align repository instruction routes and retire duplicated merge-attribute prescriptions. Change type: factual operating-procedure correction.
+
 - **git-safety-net** (v1.23.2 → v1.23.3): Align the worktree audit reminder with the existing conditional history-preservation procedure. Retain unique-file and submodule preservation, exact-tip manifests, final carrier checks and occupancy protection. Change type: factual SOP correction.
 - **local-codex** (`daymade-codex` v2.1.0 → v2.1.1): Scope OAuth recovery to the actual native owner and version. Document the verified 0.165 browser-login lifecycle, shared-owner authorization, completion/readback and subsequent-work checks; preserve independent grants, legacy recovery and Account Manager boundaries. Change type: authoritative factual correction.
 
