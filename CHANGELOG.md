@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **skill-creator** (`daymade-skill` v1.74.3 → v1.74.4): Add source-only oversized-output and truncated-read regression cases with actual-tool evidence and an incomplete-output negative control; preserve runtime instructions.
+- **local-conversation-history / read-claude-code-history / read-codex-history** (`daymade-claude-code` v4.33.6 → v4.33.7): Check recent project continuations before selecting the latest related conversation. Filter explicit-ID metadata before title cleanup, replace blank-line regex backtracking, and isolate history-test discovery roots. Preserve ranked recall and existing identity, pagination and copy checks.
 
 - **peer-message** (v1.24.5 → v1.24.6): Connect exact inbound-envelope inspection to checked original-byte reception with an explicit current-host actor. Stop on unsuccessful inspection or incomplete envelope data; retain native-tool routing and the supported-wrapper boundary. Change type: bounded operating recipe.
 - **peer-message** (v1.24.4 → v1.24.5): Let `coord --actor` disambiguate inherited Claude and Codex identities only when the exact UUID matches the selected host's environment. Keep native-event sender checks, duplicate suppression and conflicting-identity refusals.

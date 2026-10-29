@@ -18,6 +18,7 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest import mock
 
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
@@ -577,14 +578,37 @@ class KimiCliSearchTests(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def run_cli(self, *arguments: str) -> subprocess.CompletedProcess[str]:
+        env = os.environ.copy()
+        env["HOME"] = str(self.user_home)
+        for key in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "KIMI_HOME"):
+            env.pop(key, None)
         return subprocess.run(
             [sys.executable, str(SCRIPT), *arguments],
             text=True,
             encoding="utf-8",
             capture_output=True,
             check=True,
-            env={**os.environ, "HOME": str(self.user_home)},
+            env=env,
         )
+
+    def test_run_cli_removes_inherited_discovery_environment(self):
+        poison = {
+            "CLAUDE_CONFIG_DIR": str(self.root / "inherited-claude"),
+            "CODEX_HOME": str(self.root / "inherited-codex"),
+            "KIMI_HOME": str(self.root / "inherited-kimi"),
+            "FIXTURE_ENV_SENTINEL": "preserved",
+        }
+        with mock.patch.dict(os.environ, poison, clear=False), mock.patch.object(
+            subprocess, "run"
+        ) as run:
+            self.run_cli("--help")
+            run.assert_called_once()
+            child_env = run.call_args.kwargs["env"]
+
+        self.assertEqual(child_env["HOME"], str(self.user_home))
+        for key in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "KIMI_HOME"):
+            self.assertNotIn(key, child_env)
+        self.assertEqual(child_env["FIXTURE_ENV_SENTINEL"], "preserved")
 
     def test_cli_kimi_flag_searches_wires(self) -> None:
         session_id = "session_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
