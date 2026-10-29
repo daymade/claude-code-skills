@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **tech-selection** (`daymade-claude-code` v4.33.8 → v4.33.9): Bind observability comparisons to the business decision and measurement scope; ship the usable existing path before optional collector expansion while retaining required coverage gaps. Change type: bounded evidence-selection clarification.
+- **tech-selection** (`daymade-claude-code` v4.33.9 → v4.33.10): Bind observability comparisons to the business decision and measurement scope; ship the usable existing path before optional collector expansion while retaining required coverage gaps. Change type: bounded evidence-selection clarification.
 
 - **local-conversation-history / read-codex-history** (`daymade-claude-code` v4.33.8 → v4.33.9): Align ancestor-resolution docstrings and the repository's provider routing with the existing implementation. Remove derived enumeration counts from the history router; preserve commands and runtime behavior. Change type: factual documentation correction and lossless wording cleanup.
 
