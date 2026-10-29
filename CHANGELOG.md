@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **qa-expert** (v1.2.8 → v1.2.9): Add a job-scoped runtime capability case before long validation, distinguishing missing or denied APIs from a healthy operation under the selected interpreter. Preserve platform and path compatibility cases. Change type: bounded acceptance guidance.
 - **git-safety-net** (v1.23.2 → v1.23.3): Align the worktree audit reminder with the existing conditional history-preservation procedure. Retain unique-file and submodule preservation, exact-tip manifests, final carrier checks and occupancy protection. Change type: factual SOP correction.
 - **local-codex** (`daymade-codex` v2.1.0 → v2.1.1): Scope OAuth recovery to the actual native owner and version. Document the verified 0.165 browser-login lifecycle, shared-owner authorization, completion/readback and subsequent-work checks; preserve independent grants, legacy recovery and Account Manager boundaries. Change type: authoritative factual correction.
 

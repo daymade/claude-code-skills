@@ -31,6 +31,15 @@ distinguishes them.
 | Platform-specific selection | Populate only a different platform's cache or configuration; leave the selected platform's location empty. Repeat with the selected location populated. | The other platform cannot satisfy the selected platform's requirement. The selected location still succeeds. Assert the selected path as well as the status. |
 | Path classification and resolution | Compare rooted-without-drive, drive-absolute and relative inputs with the promised implementation under fixed base/current directories. Use its actual path API and the candidate's real path parser. | Compare exact paths/classifications at the same API boundary. Preserve literal input where the contract does; resolve only the inputs the target resolves. Healthy absolute and relative cases remain correct. |
 | Version or implementation difference | Run the discriminating input through the supported runtime versions or standard implementations; record their identities and outputs. | A host-specific substitute cannot stand in for an untested supported implementation. If it is unavailable, retain that gap while testing available paths. |
+| Required runtime capability | Before long validation, run a small operation through the actual selected interpreter in the affected job's platform and execution context; record its version/build and the required API. | A supported version string or a present symbol alone cannot establish readiness. A missing API or rejected operation leaves that job explicitly `not_ready`; a healthy control must complete the operation and release its resources. Keep unrelated jobs on their existing path. |
+
+For a Linux job requiring `os.pidfd_open`, two interpreter builds in the supported
+Python 3.12 series can differ in API availability. Probe the selected interpreter
+with `fd = os.pidfd_open(os.getpid(), 0); os.close(fd)` before the long run.
+Distinguish a missing symbol from a call rejected by the host; neither establishes
+readiness. Calibrate both failure cases with synthetic controls and verify actual
+self-open and close on the healthy Linux runtime. Select this case only for jobs
+that require that API; do not impose pidfd on other platforms or unrelated Python jobs.
 
 For a synthetic example, consider a Python adapter promising Node.js Windows
 path behavior. Python 3.13 changed `ntpath.isabs()` for a single leading slash
@@ -75,5 +84,6 @@ These checks support compatibility claims, not adoption or retention claims.
 ## Sources
 
 - [Python path modules and version-specific `isabs`](https://docs.python.org/3.13/library/os.path.html#os.path.isabs)
+- [Python 3.12 `os.pidfd_open` and Linux availability](https://docs.python.org/3.12/library/os.html#os.pidfd_open)
 - [Node.js platform-specific path APIs](https://nodejs.org/api/path.html#pathwin32)
 - [Node.js v24.14.0 normalization and resolution](https://nodejs.org/download/release/v24.14.0/docs/api/path.html#pathnormalizepath)
