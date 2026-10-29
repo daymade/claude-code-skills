@@ -640,23 +640,26 @@ class ClassifyRefsTests(unittest.TestCase):
         real_git = shutil.which("git")
         self.assertIsNotNone(real_git)
         wrapper = wrapper_dir / "git"
-        wrapper.write_text(
-            '#!/usr/bin/env bash\n'
-            'if [ "$1" = merge-tree ]; then echo "synthetic Git failure" >&2; exit 2; fi\n'
-            f'exec {shlex.quote(real_git)} "$@"\n', encoding="utf-8",
-        )
-        wrapper.chmod(0o755)
         env = dict(self.env, PATH=str(wrapper_dir) + os.pathsep + self.env["PATH"])
-        failed = subprocess.run(
-            ["bash", str(SCRIPT), "--base", base, *self.bound_args(manifest)],
-            cwd=str(self.repo), env=env, capture_output=True, text=True,
-        )
-        self.assertEqual(failed.returncode, 1, failed.stdout + failed.stderr)
-        self.assertEqual(self.row_for(failed.stdout, "refs/heads/feature")[0], "ERROR-rc2")
-        summary = self.summary(failed.stdout)
-        self.assertEqual(summary["examined"], "1")
-        self.assertEqual(summary["errors"], "1")
-        self.assertEqual(summary["scope_complete"], "false")
+        for command, code in (("merge-tree", 2), ("diff", 128)):
+            with self.subTest(command=command):
+                wrapper.write_text(
+                    '#!/usr/bin/env bash\n'
+                    f'if [ "$1" = {command} ]; then echo "synthetic Git failure" >&2; exit {code}; fi\n'
+                    f'exec {shlex.quote(real_git)} "$@"\n', encoding="utf-8",
+                )
+                wrapper.chmod(0o755)
+                failed = subprocess.run(
+                    ["bash", str(SCRIPT), "--base", base, *self.bound_args(manifest)],
+                    cwd=str(self.repo), env=env, capture_output=True, text=True,
+                )
+                self.assertEqual(failed.returncode, 1, failed.stdout + failed.stderr)
+                self.assertEqual(self.row_for(failed.stdout, "refs/heads/feature")[0],
+                                 f"ERROR-rc{code}")
+                summary = self.summary(failed.stdout)
+                self.assertEqual(summary["examined"], "1")
+                self.assertEqual(summary["errors"], "1")
+                self.assertEqual(summary["scope_complete"], "false")
         healthy = self.run_bound(manifest, base)
         self.assertEqual(healthy.returncode, 0, healthy.stdout + healthy.stderr)
         self.assertEqual(self.summary(healthy.stdout)["needs-review"], "1")

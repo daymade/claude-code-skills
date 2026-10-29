@@ -583,14 +583,19 @@ Then inspect each selected authorized path with both `git -C <worktree-path> sta
 and inspect only the exact authorized retirement path. The first status must be empty; every ignored
 item must be proven reproducible
 or copied out with its relative path and verified against a recorded content hash because Git
-bundles cannot reach it. Record the exact HEAD, prove containment against
-a freshly fetched maintained base, and create a verified targeted bundle from the worktree's branch
-or collision-checked recovery ref before current-session authorization and normal removal.
-Afterwards verify the path/registration disappeared and the recorded HEAD still resolves through a
-kept ref/base or the bundle, then recheck every copied
-ignored item against its pre-removal hash. Immediately before removal, repeat the worktree status
-and source-hash checks and make removal the next operation; otherwise a writer can change ignored
-bytes after the early backup check. The § Worktree retirement procedure in
+bundles cannot reach it. Record the exact HEAD in a full 40-hex ref-to-SHA manifest, prove containment against a freshly
+fetched maintained base, and apply [Preservation before
+retirement](merge_verification.md#preservation-before-retirement). Skip the redundant history bundle
+only when that exact tip remains reachable through freshly verified, independently retained remote
+main and no unique tracked, untracked, ignored or submodule state is threatened by removal.
+Otherwise create and verify the required targeted bundle from the worktree's branch or
+collision-checked recovery ref before current-session authorization and normal removal.
+Afterwards verify the path/registration disappeared and the recorded HEAD still resolves through
+the retained carrier or required bundle, then recheck every copied ignored item against its
+pre-removal hash. Immediately before removal, repeat the worktree status and source-hash checks,
+require the current tip to equal the frozen full SHA, independently recheck the retained carrier,
+and make removal the next operation; otherwise a writer can change ignored bytes after the early
+backup check. The § Worktree retirement procedure in
 [merge_verification.md](merge_verification.md) also covers recursive module preservation and
 occupancy, with one narrow single-`--force` branch after normal removal refuses a clean submodule
 worktree specifically because of its modules. Dirty, unknown, locked, occupied or incompletely

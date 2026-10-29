@@ -220,7 +220,21 @@ classify_one() {
   # Names differing between base and the trial-merge tree. Safe even on the conflict branch
   # below: a conflicted file differs from base by definition, so it appears in --name-only
   # regardless of whether the tree's bytes for it are real content or conflict markers.
-  nfiles=$(git diff --name-only "$BASE_TREE" "$tree" 2>/dev/null | wc -l | tr -d ' ')
+  local diff_output diff_line
+  if diff_output="$(git diff --name-only "$BASE_TREE" "$tree" 2>&1)"; then
+    nfiles=0
+    if [ -n "$diff_output" ]; then
+      while IFS= read -r diff_line; do
+        nfiles=$((nfiles + 1))
+      done <<< "$diff_output"
+    fi
+  else
+    rc=$?
+    printf '%s\n' "$diff_output" >&2
+    printf 'ERROR-rc%s\t-1\t%s\t%s\tgit diff failed; changed paths unknown\n' \
+      "$rc" "${display_sha:0:SHA_WIDTH}" "$ref"
+    return
+  fi
   if [ "$rc" -eq 0 ]; then verdict="NEEDS-REVIEW-CLEAN"; else verdict="NEEDS-REVIEW-CONFLICT"; fi
 
   # --pr-map overlay: only for a ref this ladder could not already clear, and only on an
