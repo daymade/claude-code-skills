@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **git-safety-net** (v1.24.2 → v1.24.3): Stop the bound-batch recipe before classification when prerequisite resolution or manifest creation fails. Align helper help and mutation boundaries with actual trial-merge behavior; remove derived prose totals. Change type: operating-recipe repair and factual documentation correction.
 - **feishu-doc-scraper** (v1.10.3 → v1.10.4): Recognize embedded wikilinks across Pandoc AST variants using source positions, preserving external-media rejection and escaped ordinary links. Change type: deterministic parser compatibility repair.
+- **claude-switch-models-setup** (`daymade-claude-code` v4.33.11 → v4.33.12): Document the official single-Skill plugin-to-personal-source conversion, scoped sync, partial-failure recovery and fresh-host acceptance. Close a remaining enabled plugin route after verifying its personal source link, then check that initialization does not reinstall it. Route repository instructions to that owner instead of duplicating activation policy. Change type: bounded SOP alignment.
 - **git-safety-net** (v1.24.1 → v1.24.2): Route worktree retirement and recovery-material selection to their canonical preservation procedure; remove a hand-maintained heading inventory and duplicated retirement instructions. Preserve the existing unique-work, occupancy, authority and recovery boundaries. Change type: lossless documentation deduplication.
 
 - **ghostty-use** (v1.9.0 → v1.9.1): Align recovery entry points with current-set verification and existing foreground authorization; preserve observer cadence and stopped state during upgrades. Keep detailed procedures with their owners and remove copied timing values. Change type: bounded SOP alignment.
