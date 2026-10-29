@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` v1.74.6 → v1.74.7): Load the existing publication and dependency-bound review-reuse prerequisites before the first independent review. Change type: bounded entry-order correction.
+- **git-safety-net** (v1.23.3 → v1.23.4): Add a read-only batch regular-file hash example with exact path/output pairing, changed-file checks and failure handling; retain complete ignored inventories, symlink targets and retirement gates. Change type: bounded operating example.
+- **github-ops** (v1.14.14 → v1.14.15): Diagnose bootstrap and dependency failures from exact run/job/image evidence, retain unrun test status and use job-log fallback before authorizing a rerun. Change type: bounded diagnostic guidance.
+
 - **ghostty-use** (v1.8.6 → v1.8.7): Require Kimi for Ghostty computer-use observation and interaction, prohibit Codex computer use, and retain the existing AppleScript batch restore under its foreground and reconciliation rules. Change type: bounded channel-selection guidance.
 
 - **tibo-reset-codex** (v2.6.1 → v2.6.2): Preserve independent scan and live-banked results, distinguish missing observations from command failures, and replace command-text workaround advice with cause-based retries. Align repository instruction routes and retire duplicated merge-attribute prescriptions. Change type: factual operating-procedure correction.

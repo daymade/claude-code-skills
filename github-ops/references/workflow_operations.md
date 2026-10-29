@@ -354,6 +354,41 @@ gh workflow run deploy.yml \
 
 ## Monitoring and Debugging
 
+### Diagnose a prerequisite failure before rerunning
+
+Bind the investigation to the run's exact `head_sha` and the failed job/step.
+Read its runner identity, `Set up job` image details, workflow at that commit and
+original log before deciding whether the tests failed:
+
+```bash
+gh api -X GET repos/OWNER/REPO/actions/runs/RUN_ID \
+  --jq '{head_sha,run_attempt,status,conclusion}'
+gh api -X GET 'repos/OWNER/REPO/actions/runs/RUN_ID/jobs?per_page=100' --paginate \
+  --jq '.jobs[] | {id,name,runner_name,labels,conclusion,steps}'
+gh run view RUN_ID -R OWNER/REPO --job JOB_ID --log
+gh api -X GET repos/OWNER/REPO/actions/jobs/JOB_ID/logs > job.log
+```
+
+Use the job-log endpoint when the normal log command cannot retrieve the selected
+job; unavailable logs leave the command-level cause unknown. Classify from the
+first failing step and preserve the status of every later required step:
+
+- **Bootstrap or dependency installation failed; test step skipped:** report
+  tests as unrun. Compare the dependency's actual prerequisite with the observed
+  image and installation command; a workflow label alone does not identify the
+  provisioned tool version.
+- **Test step ran and reported an assertion/exception:** reproduce that failing
+  input under the declared dependencies and compare the same job on main.
+- **Original output is unavailable:** retain the known step failure and unknown
+  cause; do not infer a flaky test, runner outage or completed installation.
+
+Repair a demonstrated deterministic prerequisite mismatch within authorization
+before rerunning; an unchanged retry is not a repair. For an authorized retry,
+read back the new attempt's actual environment, installation result and all
+required checks. Keep earlier valid evidence only while its inputs remain
+unchanged. Do not replace the failed required job with an unrelated local pass
+or turn one image mismatch into a blanket ban on moving runner labels.
+
 ### Common Debugging Techniques
 
 ```bash
