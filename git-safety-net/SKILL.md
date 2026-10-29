@@ -532,7 +532,9 @@ worktrees/refs/tags/reflogs/stashes/danglers it enumerates are inside evidence s
 objects as report-only, keep explicitly excluded collaborator resources out of both the retirement
 plan and its terminal counts, then retire only the named targets. If any enumerated surface is
 excluded, do not run the full loss audit or an `--all-refs` export; use checkout/ref-scoped checks
-and targeted exports instead:
+and targeted exports instead. Preserve the original authorized outcome when a batch finishes:
+unreviewed refs and unlanded keeper changes remain unfinished even after its worktrees or backup
+have been handled.
 
 **Step 1 — classify each leftover: live WIP, or superseded draft?** Evidence ladder, strongest first:
 
@@ -540,7 +542,11 @@ and targeted exports instead:
    `scripts/git_verify_branch_merged.sh`. An ancestor/content-contained verdict is deletion-grade
    evidence. If it returns NEEDS REVIEW, continue down this ladder; do not convert uncertainty to
    MERGED with a weaker heuristic. For many leftovers against one frozen base,
-   `scripts/git_classify_refs.sh` runs this exact rung across every branch in one offline pass.
+   `scripts/git_classify_refs.sh` runs this exact rung in one offline pass. For a selected or
+   delegated batch, use its `--expected-common-dir` and `--target-manifest` binding from
+   [the frozen-snapshot recipe](references/merge_verification.md#1-freeze-the-outcome-and-the-first-ref-snapshot).
+   Read the actual coverage and unresolved rows, not just exit 0: this is a classification report,
+   not proof that keeper content reached main or that authorized cleanup finished.
 2. **`git cherry <base> <branch>` is a hint, not a verdict.** A `-` proves that one patch-id is
    upstream; a `+` does not prove missing work because squash merges deliberately create a new
    patch-id. Never rescue or delete a whole branch from this output alone.
@@ -733,7 +739,7 @@ never tell a user to run bare `git_verify_branch_merged.sh` unless `command -v` 
 | `scripts/git_loss_audit.sh [remote]` | Refresh one remote, then report every worktree, local ref/tag, reflog-only commit, stash, and dangler; no exclusions, so the whole evidence surface must be in scope | Remote-tracking refs only |
 | `scripts/git_preserve_danglers.sh [--patch-dir DIR]` | Pin every dangling commit to `refs/dangling-backup/`, optional patches; whole-set only | Adds refs only (never deletes/gc) |
 | `scripts/git_verify_branch_merged.sh <branch> [base] [--no-fetch] [--base REF] [--merge-commit SHA]` | Give a content-level MERGED/UNMERGED verdict for one branch. `--merge-commit` adds a rung that proves containment at a historical merge commit when base later changed the same lines and the CURRENT base can no longer prove it; the verdict also names the current-base shape (conflict = routine, clean-but-changes = regression candidate). `--no-fetch`/`--base` support offline and flag-driven batch use | Remote-tracking refs only (skipped entirely with `--no-fetch`) |
-| `scripts/git_classify_refs.sh --base SHA [--pr-map JSON] [--all-namespaces]` | Batch version of the above: classify every local/remote-tracking branch against one frozen base in a single offline pass (ancestor / content-contained / needs-review, with file-count-changed); `--pr-map` overlays the `--merge-commit` rung from a hosting platform's PR export | Nothing (read-only, no fetch — pin the base with `git rev-parse` first) |
+| `scripts/git_classify_refs.sh --base SHA [--pr-map JSON] [--all-namespaces]` | Batch content classification; bind a selected set with `--expected-common-dir PATH --target-manifest TSV` to reject another clone or missing/moved tips and report full OIDs plus coverage. Classification success does not establish convergence. `--pr-map` retains the historical-merge rung. | Nothing (read-only, no fetch; no ownership or deletion authority) |
 | `scripts/git_align_checkout.sh --preview --target SHA` / `--apply --target SHA --source-worktree PATH --backup-manifest FILE` | Preview or materialize a checkout's content up to a target commit without a throwaway snapshot branch and without moving HEAD; `--apply` only overwrites a path once its current content is proven reproducible (target's own history, or a manifest sha256) | `--preview`: nothing. `--apply`: working-tree files only for paths it proves safe — never the real index, never HEAD, never a delete |
 | `scripts/git_export_before_drop.sh [export options]` | Export stashes plus selected branches or every current ref into verified bundles | Writes backup files only (never drops/deletes) |
 | `scripts/git_export_before_drop.sh --verify-current BUNDLE` | Fail if any bundled ref moved or disappeared since export | Nothing (read-only) |
