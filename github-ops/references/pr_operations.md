@@ -279,9 +279,10 @@ does not lock the repository or freeze another writer.
    [CI input-matching procedure](ci-demand-and-notifications.md#3-remove-unnecessary-demand-before-moving-execution),
    which distinguishes the actual tested checkout tree from a PR head SHA.
    Coordination alone cannot establish test equivalence or reduce required checks.
-4. Immediately before landing, reread the hosted head/base, mergeability and check
-   results. Use the exact head match in the merge command below. If the base moved,
-   reconcile under the repository's update/check policy before claiming readiness.
+4. Immediately before landing, follow [fresh-base verification](#fresh-base-verification)
+   and reread the hosted head, mergeability and check results. Use the exact head
+   match in the merge command below. If the base moved, reconcile under the
+   repository's update/check policy before claiming readiness.
    Read back the landed commit and owned paths, then release the agreed window.
 
 Check repository capability before choosing automatic merge:
@@ -296,11 +297,53 @@ verification; do not change repository settings or repeatedly retry `--auto`.
 The acting agent and repository protection enforce this sequence's executable
 checks. A peer window remains a coordination agreement, not a mechanical mutex.
 
+### Fresh-base verification
+
+The publishing agent performs this read before merging or diagnosing a conflict.
+A PR's `baseRefOid` / `base.sha` and a cached `origin/<base>` do not independently
+prove the base branch's current tip. Read the exact branch from the named remote,
+fetch it, and require the fetched commit to match that observation. With `REPO`,
+`REMOTE` and `BASE` bound to the authorized repository, remote and PR base branch:
+
+```bash
+base_ref="refs/heads/${BASE}"
+remote_base=$(git -C "$REPO" ls-remote --exit-code "$REMOTE" "$base_ref") || exit 1
+read -r base_sha observed_ref <<< "$remote_base"
+test "$observed_ref" = "$base_ref" || exit 1
+git -C "$REPO" fetch --no-tags "$REMOTE" \
+  "+${base_ref}:refs/remotes/${REMOTE}/${BASE}" || exit 1
+fetched_base=$(git -C "$REPO" rev-parse --verify \
+  "refs/remotes/${REMOTE}/${BASE}^{commit}") || exit 1
+test "$fetched_base" = "$base_sha" || {
+  printf 'Base moved during verification; reconcile before merging.\n' >&2
+  exit 1
+}
+printf 'Verified base %s at %s\n' "$base_ref" "$base_sha"
+```
+
+Compare this commit with the base used for integration/checks and the PR-reported
+base. A changed tip requires reconciliation and the repository's check policy;
+a failed or empty read leaves freshness unknown. Do not call either case a
+mergeability-cache problem or retry a merge through another API.
+
+Only after freshness is established, compare the exact candidate with this base
+using `git merge-tree --write-tree <candidate> <verified-base>`. A conflict is a
+real integration issue. When local and hosted results disagree, follow
+[the merge-semantics diagnostic](https://github.com/daymade/claude-code-skills/blob/main/github-review-pr/SKILL.md#when-local-and-hosted-merge-results-disagree)
+before attributing the discrepancy to a cache; local attributes and drivers can
+change merge semantics. Preserve required checks and wait for confirmed mergeability.
+Do not close/reopen the PR or push an empty commit merely to refresh
+that state. A later base/head change invalidates this observation; repeat the
+preflight against the new objects. These are executor checks, not a server-side
+lock on the base branch.
+
 ### Merging PRs
 
 Before merging, observe the checks required by the task/repository at the exact
 candidate; use `gh pr checks NUMBER -R OWNER/REPO --watch` and inspect its exit
-status. `--auto` follows the requirements actually configured on GitHub. If none
+status, then perform [fresh-base verification](#fresh-base-verification) and reread
+the exact PR head and mergeability. `--auto` follows the requirements actually
+configured on GitHub. If none
 block the merge, it can merge immediately while other CI is still queued. It is
 not a replacement for this check or a way to satisfy a stricter task contract.
 

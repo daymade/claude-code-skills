@@ -769,8 +769,27 @@ def is_noise_text(text: str) -> bool:
     return not lowered or any(lowered.startswith(prefix) for prefix in NOISE_PREFIXES)
 
 
+def _split_title_separator_lines(text: str) -> list[str]:
+    """Split on dash-only lines without backtracking across adjacent newlines."""
+    parts: list[str] = []
+    current: list[str] = []
+    found_separator = False
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if len(stripped) >= 4 and not stripped.strip("-"):
+            parts.append("\n".join(current))
+            current = []
+            found_separator = True
+        else:
+            current.append(line)
+    if not found_separator:
+        return [text]
+    parts.append("\n".join(current))
+    return parts
+
+
 def clean_title(text: str, max_chars: int) -> str:
-    separator_parts = re.split(r"(?:^|\n)\s*-{4,}\s*(?:\n|$)", text)
+    separator_parts = _split_title_separator_lines(text)
     if len(separator_parts) > 1:
         raw_candidates = [part.strip() for part in separator_parts if part.strip()]
         processed_candidates = [
@@ -813,6 +832,11 @@ def first_meaningful_title(
     short_candidate: Optional[str] = None
     for candidate in candidates:
         if not isinstance(candidate, str):
+            continue
+        # Without a possible separator, cleanup cannot expose a meaningful tail
+        # behind an already-recognized noise prefix. Skip that expensive work;
+        # retain the old separator path for mixed noise/request records.
+        if is_noise_text(candidate) and "----" not in candidate:
             continue
         cleaned = clean_title(candidate, max_chars)
         if is_noise_text(cleaned):
