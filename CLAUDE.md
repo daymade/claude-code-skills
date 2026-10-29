@@ -728,6 +728,8 @@ Before selecting an environment for an authorized repair, follow its
 [carrier and source-owner selection](github-review-pr/SKILL.md#2-fetch-the-exact-objects-without-touching-the-users-worktree).
 For cross-runtime staged-content validation or isolated task-copy setup, enter
 [auto-repo-setup's Git safety reference](auto-repo-setup/references/git_safety.md).
+Before choosing a task checkout's storage location, follow its
+[isolated checkout preparation](auto-repo-setup/references/git_safety.md#isolated-checkout-preparation).
 
 For already-authorized delivery in a shared checkout, enter
 [auto-repo-setup's scoped delivery route](auto-repo-setup/references/git_safety.md#authorized-shared-checkout-delivery).
