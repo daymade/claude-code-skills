@@ -248,7 +248,8 @@ For automatic artifact validation before ordinary Git commits, use the
 It covers Git hooks across Agent and manual commits, staged-input verification
 and existing-hook preservation. Use the
 [isolated checkout preparation](references/git_safety.md#isolated-checkout-preparation)
-when task isolation must retain repository-specific LFS and security configuration.
+before creating a task copy, including storage lifetime, repository-specific LFS
+and security configuration.
 
 For a read-only history scan, the existing scripts/sanitize_history.sh remains
 available. It never rewrites history; treat its findings as candidates and do not
