@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tech-selection** (`daymade-claude-code` v4.33.8 → v4.33.9): Bind observability comparisons to the business decision and measurement scope; ship the usable existing path before optional collector expansion while retaining required coverage gaps. Change type: bounded evidence-selection clarification.
+
+
 - **ghostty-use** (v1.8.6 → v1.8.7): Require Kimi for Ghostty computer-use observation and interaction, prohibit Codex computer use, and retain the existing AppleScript batch restore under its foreground and reconciliation rules. Change type: bounded channel-selection guidance.
 
 - **tibo-reset-codex** (v2.6.1 → v2.6.2): Preserve independent scan and live-banked results, distinguish missing observations from command failures, and replace command-text workaround advice with cause-based retries. Align repository instruction routes and retire duplicated merge-attribute prescriptions. Change type: factual operating-procedure correction.
