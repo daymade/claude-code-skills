@@ -14,12 +14,11 @@ description: >-
 Give this skill an endpoint (`base_url` + `model` + an API key in an env var) and it
 measures whether the endpoint actually works and whether the model is fast, stable,
 protocol-correct, and good enough — instead of trusting the vendor's headline numbers.
-Six dimensions, usually scattered across ad-hoc scripts that get rewritten (with the
-same bugs) every time:
+Choose from the following evaluation dimensions:
 
 | Dimension | Script | Answers |
 |---|---|---|
-| **Availability** | `scripts/availability_probe.py` | which model IDs work here, with 3-state error classification |
+| **Availability** | `scripts/availability_probe.py` | which model IDs work here, with explicit error classification |
 | **Request fidelity** | `scripts/fidelity_probe.py` | do system prompt / tools / history actually REACH the model? |
 | **Speed** | `scripts/speed_probe.py` | TTFT + sustained decode tok/s, **thinking-aware** |
 | **Concurrency / stability** | `scripts/concurrency_probe.py` | success rate, p50/p90 latency, where it breaks |
@@ -46,7 +45,7 @@ Route from what the user is actually doing:
 - "部署闸门 / 常驻监控 / 告警老误报" →
   [references/production_testing_patterns.md](references/production_testing_patterns.md)
 
-Don't run all six ritually — pick what answers the user's question.
+Run only the dimensions that answer the user's question.
 
 **Key handling (non-negotiable):** every script takes the API key by **env-var name**
 (`--key-env MY_KEY`), never the key value on the command line — so it stays out of `ps`,
@@ -83,8 +82,7 @@ uv run --with aiohttp python scripts/concurrency_probe.py \
 ```
 
 If the endpoint is Anthropic-Messages-shaped (`/v1/messages`), also run the protocol probe
-(below). Pick dimensions by what the user actually asked — don't run all six if they only
-asked "is it fast?".
+(below). [Select the dimensions for the task](#which-dimensions-to-run).
 
 Pass `--auth bearer` to Anthropic protocol/concurrency probes when the route requires
 Authorization instead of x-api-key. The default remains x-api-key and applies to both
@@ -98,7 +96,7 @@ uv run --with aiohttp python scripts/availability_probe.py \
   --models model-a vendor/model-b @models.txt --output /tmp/avail.json
 ```
 
-- Verdicts are 3-state per failure, not pass/fail: `no-channel` (no route for this
+- Classify failures as `no-channel` (no route for this
   ID), `upstream-error` (route exists, upstream failing — retry later), `empty-content`
   (usually a max_tokens artifact on reasoning models, NOT a broken model). The probe
   keeps `--max-tokens` at 8192 by default precisely so thinking models don't read as
@@ -125,7 +123,7 @@ uv run --with aiohttp python scripts/fidelity_probe.py \
   --format anthropic --check all --repeat 10 --output /tmp/fidelity.json
 ```
 
-- Four checks: `system` (canary code planted in the system prompt — can the model echo
+- Probe `system` (canary code planted in the system prompt — can the model echo
   it back?), `tools` (full round-trip including returning a tool result and verifying
   the final answer uses it), `multiturn` (plant facts across turns, recall them all),
   `auth` (x-api-key vs Bearer on both protocol endpoints — gateways commonly accept
@@ -138,7 +136,7 @@ uv run --with aiohttp python scripts/fidelity_probe.py \
   across every legal way of sending it, while sibling aliases delivered intermittently
   with rates that changed by the hour.
 - Delivery through routed gateways is **probabilistic and time-varying** — hence
-  `--repeat` (default 10) and a three-state verdict (delivered / intermittent k-of-N /
+  `--repeat` (default 10) and a verdict (delivered / intermittent k-of-N /
   not-delivered). A clean single-window result is still just that window: re-sample in
   another time slice before publishing a number (disciplines §12).
 - The probe reports token-accounting corroboration but never trusts it alone —
@@ -222,8 +220,8 @@ uv run python scripts/protocol_probe.py \
   question before writing an "X doesn't support thinking" conclusion into anything.
 - **Compliance is often probabilistic, not binary, for BOTH checks.** One real vendor honored
   the thinking block on only ~13% of generation requests (vs 100% for two competitors). That's
-  why `--repeat` defaults to 10; generation's verdict has three states (`fully-implemented`,
-  `intermittent (k/N)`, `not-implemented`), history-replay's has its own three-plus states
+  why `--repeat` defaults to 10; generation reports `fully-implemented`,
+  `intermittent (k/N)` or `not-implemented`; history-replay reports
   (`accepts-thinking-in-history`, `rejects-thinking-in-history`, `inconsistent`, or
   `inconclusive` when errors look unrelated to thinking at all). Never conclude from a single
   sample.
@@ -233,7 +231,7 @@ uv run python scripts/protocol_probe.py \
 
 ## Dimension 4 — Quality / use-case regression (blind judge)
 
-This is two halves on purpose: **collect**, then **judge independently**.
+**Collect**, then **judge independently**.
 
 **Step 1 — collect** the model's answers to your use-case library:
 

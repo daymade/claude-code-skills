@@ -90,7 +90,17 @@ GitHub 写入主体检查由 `github-ops` 执行；本 SOP 不以 `gh` 身份替
 uv run python scripts/query_usage.py --help
 uv run python scripts/query_usage.py
 uv run python scripts/query_usage.py --auth-file /path/to/authorized/auth.json --expected-email account@example.com
+# 一次查询同时保存去邮箱原读数并追加 finding；两个目录用绝对路径，output-dir 必须尚不存在
+uv run python scripts/query_usage.py --auth-file /path/to/authorized/auth.json \
+  --output-dir /path/to/private/new-usage-read --finding-state-dir /path/to/private/tibo-state
 ```
+
+带 `--output-dir` 时，脚本以 0700 新建目录、以 0600 独占创建 `usage.json`，只保存明确列出的
+非敏感读数、原查询时刻和 `account_ref`，不保存邮箱、token 或完整服务端响应；终端只返回路径、
+账号句柄和可选 finding 回执。已存在的输出路径在请求前拒绝，不覆盖旧文件。finding 失败时退出 1，
+已保存的 `usage_file` 仍可读回，不能把落盘成功当作记账成功；先核查 journal 再用既有 `finding`
+入口补记该文件，不重复查数冒充同一次查询。`partial` 读数仍会保存并退出 2，未知字段不补值。
+不带新参数时保留原 stdout 接口。此路径只发原有 GET，不 refresh、登录、切号或兑换。
 
 显式参数示例需替换为用户明确授权的文件和邮箱；有符合帮助要求的 Python 时可省略 `uv run`。
 Windows 未实测。请求、认证文件默认位置、参数和退出行为的可执行 SSOT 是
@@ -106,6 +116,14 @@ Windows 未实测。请求、认证文件默认位置、参数和退出行为的
 | `rate_limit_reset_credits.available_count` | 保存的备用重置数量 |
 | `rate_limit_reset_credits.applicable_available_count` | 此刻可适用的数量；不替代保存总数 |
 | `credits.balance` / `has_credits` | 购买的额外 credits；不能据此判断备用重置 |
+
+**分母变化：百分比变多不等于 reset。**
+
+在同一账号、同一窗口、已用绝对量不变的前提下，设旧限额为 L、原剩余 11%，则已用为
+0.89L；总限额翻倍为 2L 后，剩余为 `1 - 0.89L / (2L) = 55.5%`。这组数值是合成例子。
+这种变化仅与增容相容，不能证明该账号已实际采用新限额，更不能证明 reset；仍需核对实际
+限额、身份、观测时刻和窗口连续性。只有百分比、身份不明或观察时刻不明时，原因保持 unknown，
+继续按下文机械归因判据核验，不将产品增容公告当作该账号的采用回执。
 
 实测同一响应可以同时出现 `available_count: 2`、`applicable_available_count: 0`、
 `credits.balance: "0"`。这仍然是存着两次备用重置。不要把“现在不能适用”或“购买余额为零”
