@@ -210,6 +210,9 @@ follow its [maintenance contract](report-with-html/references/long-lived-report-
 For citation previews and in-place source inspection, enter
 [report-with-html's interaction owner](report-with-html/references/interaction-components.md)
 and [frontend-visual-qa's source-inspection route](frontend-visual-qa/references/journey-and-page-contracts.md#cited-source-inspection).
+For lightbox keyboard behavior, use the [shipped component](report-with-html/assets/components/lightbox-gallery.html);
+for masked screenshots, use the [delivery gate](report-with-html/scripts/delivery_gate.py)
+through the report workflow above.
 
 For HTML report images and explanatory diagrams, enter
 [report-with-html](report-with-html/SKILL.md); its
