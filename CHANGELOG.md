@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **git-safety-net** (v1.24.0 → v1.24.1): Stop the bound-batch recipe before classification when prerequisite resolution or manifest creation fails. Align helper help and mutation boundaries with actual trial-merge behavior; remove derived prose totals. Change type: operating-recipe repair and factual documentation correction.
+- **claude-switch-models-setup** (`daymade-claude-code` v4.33.10 → v4.33.11): Document the existing official single-Skill plugin-to-personal-source conversion, scoped sync, partial-failure recovery and fresh-host acceptance. Route repository instructions to that owner instead of duplicating activation policy. Change type: bounded SOP alignment.
+
 - **auto-repo-setup** (v2.1.8 → v2.1.9): Select persistent storage for resumable task checkouts and continuation evidence before creating a task copy; reserve system temporary directories for disposable scratch. Preserve unknown evidence loss during recovery. Change type: bounded workspace-lifetime guidance.
 - **tech-selection** (`daymade-claude-code` v4.33.9 → v4.33.10): Bind observability comparisons to the business decision and measurement scope; ship the usable existing path before optional collector expansion while retaining required coverage gaps. Change type: bounded evidence-selection clarification.
 

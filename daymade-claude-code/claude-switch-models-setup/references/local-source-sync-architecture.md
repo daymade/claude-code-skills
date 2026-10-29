@@ -193,6 +193,42 @@ publishes it with a no-overwrite hard link only when no manifest exists. A
 concurrent writer wins and is preserved; setup never overwrites the user's
 current selection.
 
+### Convert an installed single-Skill plugin to a personal source link
+
+For an explicitly authorized conversion, the executor uses the official Claude plugin CLI
+and this existing sync owner; do not hand-edit plugin registries or create links manually.
+This applies to a user-scope plugin that supplies only the requested Skill. A suite or plugin
+with other commands, hooks, agents or components stays on its existing route until those
+components have an authorized replacement.
+
+1. Read the current activation manifest, registered source inventory, user-scope plugin record
+   and enable state. Confirm the requested canonical source, its owning marketplace in
+   `claude_active_marketplaces`, and the Codex selection when both hosts must agree. Disabled,
+   unknown or conflicting scope is a diagnosis to resolve, not permission to bypass it.
+2. Check `claude plugin uninstall --help` in the owning default profile. With `PLUGIN_ID` set
+   to the verified `plugin@marketplace` identity, run
+   `claude plugin uninstall "${PLUGIN_ID:?}" --scope user --keep-data --json`.
+   Read back that exact plugin's uninstall result and installed/enabled state. Retain its cache
+   data for existing sessions; never remove the marketplace to convert one plugin.
+3. Run the deployed owner's dry-run below. Keep discovery of every marketplace named by the
+   manifest: restricting `--repo` to just this Skill's repo can fail the policy preflight.
+   Inspect all proposed changes; proceed only when they are within the authorized conversion.
+
+   ```bash
+   python3 ~/.config/claude-switch-models-setup/sync-local-skill-sources.py \
+     --skip-claude-cache --skip-codex --skip-agents --skip-marketplace-source
+   ```
+
+   After a successful, accepted dry-run, repeat that command with `--apply`. These flags limit
+   repair to Claude personal links; they do not install or change the Codex selection. A watcher
+   may already have created the requested link, so a no-change plan is valid only after readback.
+4. Resolve both requested host entries to the intended canonical source, then use the
+   [host availability and task-behavior checks](../../../daymade-skill/skill-governance/references/skill-surface-governance.md#14-verify-a-newly-registered-skill)
+   for fresh-host discovery and actual consumption. Existing sessions can retain old catalogs.
+   If uninstall succeeded but sync failed, report that partial state, preserve the source/cache,
+   and repair through this owner or restore the verified plugin through the official CLI;
+   do not manufacture success with a manual link.
+
 ### Explicit source preferences
 
 Use activation schema 3 when two deliberately different bundles register the

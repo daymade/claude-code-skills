@@ -20,14 +20,14 @@ The only trustworthy question is: **is the branch's content already contained in
 
 `scripts/git_verify_branch_merged.sh <branch> [base]` answers that question with Git's own merge
 machinery instead of per-file guesses. It rejects the base ref itself as a deletion target, then
-runs two checks in order:
+runs these checks in order:
 
 1. **Ancestor** — the branch is literally in the base's history:
    ```bash
    git merge-base --is-ancestor origin/<branch> origin/main && echo "MERGED (ancestor)"
    ```
 
-2. **Content-contained** — do a trial 3-way merge of the branch *into* the base, in memory, and
+2. **Content-contained** — do a trial 3-way merge of the branch *into* the base, without checkout, and
    ask whether it changes anything. If merging the branch produces the base's exact tree, the
    branch adds nothing the base lacks — which is precisely the squash/rebase case where the count
    says "ahead" but the content is already upstream:
@@ -190,7 +190,7 @@ whatever base did afterward (the same double-apply hazard SKILL.md's troubleshoo
 already warns about for a mis-timed rescue); the right response is to find and understand the
 regression, not to re-ship.
 
-**Two ways to find it, in order of how targeted the loss is:**
+**Find it in order of how targeted the loss is:**
 
 1. **Walk base's own history for the regression, first-parent, comparing one tracked value per
    commit.** Useful whenever the lost content is (or is summarized by) an orderable or
@@ -472,18 +472,26 @@ Two independent clones may share the same remote and base but hold different loc
 
 ```bash
 # REPO is the already authorized canonical checkout; TASK_DIR is its existing external scratch.
-COMMON_DIR=$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir)
-BASE=$(git -C "$REPO" rev-parse --verify 'origin/main^{commit}')
+(
+COMMON_DIR=$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir) || exit 2
+BASE=$(git -C "$REPO" rev-parse --verify 'origin/main^{commit}') || exit 2
 # Replace this explicit list with the selected, inspect-authorized refs; a missing ref is an error.
 for ref in refs/heads/feature-a refs/heads/feature-b; do
   oid=$(git -C "$REPO" rev-parse --verify "$ref") || exit 2
-  printf '%s\t%s\n' "$ref" "$oid"
-done > "$TASK_DIR/targets.tsv"
+  printf '%s\t%s\n' "$ref" "$oid" || exit 2
+done > "$TASK_DIR/targets.tsv" || exit 2
 (cd "$REPO" && bash "$SKILL_DIR/scripts/git_classify_refs.sh" --base "$BASE" \
   --expected-common-dir "$COMMON_DIR" --target-manifest "$TASK_DIR/targets.tsv")
+)
 ```
 
-Use absolute input paths. Bound mode requires both options and nonempty two-column TSV with
+The task owner runs this recipe with absolute input paths. Its checked prerequisites stop the
+subshell before classification when repository/base resolution or manifest creation fails;
+an old manifest must not become a successful substitute. Trial merges can write unreferenced
+Git objects, so this is not a repository-read-only probe: refs, index and working files stay
+unchanged, but existing sole-writer coordination still applies.
+
+Bound mode requires both options and nonempty two-column TSV with
 full refnames and 40-hex OIDs; it cannot be combined with `--all-namespaces`. Missing, moved or
 invalid targets return 2 instead of disappearing from the inventory; classification errors return 1.
 Exit 0 means the selected objects were classified, including any `NEEDS-REVIEW` rows. Read
