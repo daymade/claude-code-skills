@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **ghostty-use** (v1.8.7 → v1.9.0): Scope manual capture to Ghostty descendants, persist ordinary terminals and unresolved TUIs, and keep reported tab counts separate from process coverage. Resolve forked children without replaying parent selectors; preserve the captured executable. Add explicit restore/check exclusions and neutral missing-session guidance without changing the saved snapshot. Change types: identity bug fixes, additive capture metadata and bounded recovery selection.
+
 - **local-conversation-history / read-codex-history** (`daymade-claude-code` v4.33.8 → v4.33.9): Align ancestor-resolution docstrings and the repository's provider routing with the existing implementation. Remove derived enumeration counts from the history router; preserve commands and runtime behavior. Change type: factual documentation correction and lossless wording cleanup.
 
 - **ghostty-use** (v1.8.6 → v1.8.7): Require Kimi for Ghostty computer-use observation and interaction, prohibit Codex computer use, and retain the existing AppleScript batch restore under its foreground and reconciliation rules. Change type: bounded channel-selection guidance.
