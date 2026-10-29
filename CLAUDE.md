@@ -364,6 +364,8 @@ For third-party model speed, protocol, concurrency or answer collection, enter
 [llm-eval-harness](llm-eval-harness/SKILL.md). For machine results, consumed inputs,
 retained answers, output-directory reuse or interrupted runs, read its
 [machine-result contract](llm-eval-harness/references/machine-results.md).
+For endpoint throttling or exhausted quota, follow its
+[concurrency failure guidance](llm-eval-harness/SKILL.md#dimension-2--concurrency--stability).
 Process exit alone does not establish the measured result.
 
 A `tests/` directory under a Skill does **not** automatically run in CI.
