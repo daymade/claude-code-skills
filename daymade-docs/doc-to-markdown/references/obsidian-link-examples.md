@@ -63,6 +63,35 @@ bytes. If Obsidian is unavailable, mark reader behavior partial and retain the
 conversion evidence separately. Continue the batch only after the pilot's
 required reader behavior is proven; repeat for a materially different link form.
 
+## Same-name book indexes and return links
+
+Use [the synthetic nested vault](../assets/obsidian-links/nested-vault/index.md)
+when a book has its own `index.md` alongside a vault or product index. Copy that
+whole directory into a task-owned location in the reader, preserving names; no
+private vault paths or global settings are required by the sample.
+
+The root says **Synthetic vault directory**, the product index says **Product
+directory**, and the book index says **Equipment question directory**. From the
+book, open `01-questions.md`; click the book return link at both its top and
+bottom, then the parent-product link. Verify the actual file/breadcrumb and
+distinct visible landing heading at each step. Also click the Chinese heading
+link containing punctuation and inspect the exact section reached.
+
+The fixed book links use `../equipment-book/index.md` rather than bare
+`index.md`. This is an explicit target for this sample, not a universal rewrite:
+some reader/configuration combinations resolve a bare same-name target
+elsewhere. In a task-private copy, replace one book return with `(index.md)` as
+a diagnostic control and record where it actually lands; do not assume every
+relative link fails. Preserve working sibling and parent links. If the diagnostic
+also reaches the correct book, record it as healthy in that environment.
+
+The book's original-file help points to the sample's single storage guide. For
+a real project, reuse its existing guide and inspect the promised payload rather
+than copying commands or credentials into every book. A Git LFS pointer is not
+a readable original. This sample has no live storage service and cannot prove
+remote restoration. Missing reader access leaves navigation unverified; static
+path resolution is only a supporting check.
+
 ## Bind the repair before automated expansion
 
 Use [the gated batch route](html-conversion.md#gate-a-batch-through-the-existing-recipe)
