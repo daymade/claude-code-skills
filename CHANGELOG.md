@@ -2972,6 +2972,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sensitive-info sanitization** (full health-check findings): removed the owner's real private domains from shipped examples — `tunnel-doctor` v1.6.1 (`quick_diagnose.py` default `--host` + SKILL.md example) and `terraform-skill` v1.0.1 (Caddyfile / compose / SQL examples) — and a real personal handle used as a speaker-name example in `transcript-fixer` (`daymade-audio` suite v1.2.1); all replaced with `example.com` / neutral placeholders. These were pre-existing leaks predating the global PII-guard domain rules (which already cover them for future diffs). The repo-local `.gitleaks.toml` is deliberately NOT given the real private values — a public allowlist enumerating real assets would itself be a leak (anti-target principle).
 - **Broken flagship install commands** ([#67](https://github.com/daymade/claude-code-skills/issues/67)): `claude plugin install skill-creator@daymade-skills` (plus `skill-reviewer` / `skills-search` / `doc-to-markdown`) failed because those are suite members, not standalone plugins. Corrected every occurrence across README.md, README.zh-CN.md, QUICKSTART.md, QUICKSTART.zh-CN.md to the suite name (`daymade-skill@daymade-skills` / `daymade-docs@daymade-skills`), invoked as `daymade-skill:skill-creator` etc.
 
+- **tibo-reset-codex** (v2.6.0 → v2.6.1): Deliver verified decision-changing information through the existing host contract before nonessential follow-up. Make preserving banked resets conditional on account evidence and the cost of delaying valuable work; preserve read-only hosting, notification permissions and manual redemption. Change type: bounded decision and delivery guidance correction.
+
 ## [1.82.0] - 2026-07-07
 
 ### Changed
