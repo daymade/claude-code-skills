@@ -60,6 +60,29 @@ class RegisteredNodeSuitesTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(message, result.stdout)
 
+    def test_selected_subset_uses_registered_rows_with_dependency_metadata(self):
+        (self.suite / "test_ok.cjs").write_text("console.log('SELECTED SUITE');\n")
+        excluded = self.root / "excluded"
+        excluded.mkdir()
+        (excluded / "test_fail.cjs").write_text("throw new Error('MUST NOT EXECUTE');\n")
+        self.registry.write_text("node-test suite shared/\nnode-test excluded *\n")
+        selection = self.root / "selected.txt"
+        selection.write_text("node-test suite\n")
+        result = subprocess.run(["bash", str(self.runner), "--selection", str(selection)], capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("SELECTED SUITE", result.stdout)
+        self.assertNotIn("MUST NOT EXECUTE", result.stdout + result.stderr)
+
+    def test_unknown_empty_and_missing_selection_fail(self):
+        self.registry.write_text("node-test suite\n")
+        selection = self.root / "selected.txt"
+        for content in ("node-test elsewhere\n", "node-test suite trailing\n", ""):
+            selection.write_text(content)
+            result = subprocess.run(["bash", str(self.runner), "--selection", str(selection)], capture_output=True, text=True, timeout=30)
+            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        result = subprocess.run(["bash", str(self.runner), "--selection", str(self.root / "missing")], capture_output=True, text=True, timeout=30)
+        self.assertNotEqual(result.returncode, 0)
+
 
 if __name__ == "__main__":
     unittest.main()
