@@ -96,6 +96,11 @@ needed, report that the current bundled inventory would scan raw bodies.
 
 ### Exact Session evidence
 
+Before running a large Session read, expanding folded/clipped turns, or reading a
+Session whose output size is unknown, follow [file-backed briefing reading](references/large-session-briefing.md).
+Keep the complete chronology in one private artifact and bring only bounded ranges
+into the tool response; do not solve output pressure by selecting only the tail.
+
 ```text
 <skill-dir>/scripts/read_claude_session.py --session <SESSION_ID>
 
