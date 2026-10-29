@@ -11,8 +11,8 @@
 #
 # Method (sound, not heuristic):
 #   1. If the branch is an ancestor of base  -> MERGED (already in history).
-#   2. Else do a trial 3-way merge of the branch INTO the base (git merge-tree, in memory, no
-#      checkout). If merging changes nothing (result tree == base tree), the branch adds nothing
+#   2. Else do a trial 3-way merge of the branch INTO the base (git merge-tree, no checkout).
+#      If merging changes nothing (result tree == base tree), the branch adds nothing
 #      the base lacks -> MERGED (content contained) — this is what defeats the squash-merge count.
 #   3. Else, if --merge-commit was given, try that rung (see below) before giving up.
 #   4. Otherwise -> UNMERGED / NEEDS REVIEW, listing the branch's contribution to inspect.
@@ -20,6 +20,7 @@
 # By default it refreshes remote-tracking refs, then runs merge-base/merge-tree/rev-parse/diff
 # against explicit refs. It never changes working files, commits, branches, stashes, or
 # user-authored refs.
+# Trial merges can write unreferenced objects into the Git object database.
 #
 # Usage (run from anywhere inside the repo):
 #   git_verify_branch_merged.sh <branch> [base] [options]   # base defaults to origin/main
@@ -167,7 +168,7 @@ if git merge-base --is-ancestor "$BRANCH_REF" "$BASE"; then
   exit 0
 fi
 
-# --- Step 2: content-contained? Trial 3-way merge of branch INTO base, in memory. If merging the
+# --- Step 2: content-contained? Trial 3-way merge of branch INTO base, without checkout. If merging the
 #     branch changes nothing, the branch adds nothing base lacks (the classic squash/rebase case
 #     where the count says "ahead" but the content is already upstream). This is sound: it is
 #     exactly Git's merge, so a revert/edit the base lacks WOULD change the tree and fail this. ---
