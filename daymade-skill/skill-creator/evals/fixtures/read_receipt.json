@@ -1,0 +1,10 @@
+{
+  "status": "child_exited",
+  "returncode": 0,
+  "stdout": {
+    "path": "complete.stdout",
+    "model_facing_truncated": true
+  },
+  "requested_record": "records[256]",
+  "scope": "Synthetic recorded read receipt; the harness supplies the actual file and hash before dispatch."
+}
