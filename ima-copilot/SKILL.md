@@ -34,7 +34,7 @@ This skill is a **wrapper layer** around ima-skill. The wrapper contract is non-
 
 | Capability | Entry point | Detail |
 |---|---|---|
-| 1. Install upstream ima-skill to 3 agents | `scripts/install_ima_skill.sh` | See `references/installation_flow.md` |
+| 1. Install upstream ima-skill to supported agents | `scripts/install_ima_skill.sh` | See `references/installation_flow.md` |
 | 2. Configure API credentials (XDG style) | Inline workflow below | See `references/api_key_setup.md` |
 | 3. Diagnose and fix known upstream issues | `scripts/diagnose.sh` + workflow below | See `references/known_issues.md` |
 | 4. Fan-out search with priority boosting | `scripts/search_fanout.py` | See `references/search_best_practices.md` |
@@ -183,7 +183,7 @@ When the pages to read are ones the local machine cannot fetch but IMA's servers
 ima-copilot/
 ├── SKILL.md                         # This file — entry and routing
 ├── scripts/
-│   ├── install_ima_skill.sh         # Download → stage → npx skills add to 3 agents
+│   ├── install_ima_skill.sh         # Download → stage → npx skills add to supported agents
 │   ├── diagnose.sh                  # Read-only health report
 │   └── search_fanout.py             # Fan-out search with priority grouping
 ├── references/

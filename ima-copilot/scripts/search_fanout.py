@@ -46,7 +46,7 @@ from pathlib import Path
 
 API_BASE = "https://ima.qq.com/openapi"
 HARD_HIT_CAP = 100  # search_knowledge silently caps at 100, no cursor
-KB_PAGE_SIZE = 20  # search_knowledge_base rejects larger pages
+KB_PAGE_SIZE = 20  # verified listing size; the previous request size was rejected
 
 
 def load_credentials():
