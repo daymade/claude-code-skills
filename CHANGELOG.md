@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` v1.74.3 → v1.74.4): Add source-only oversized-output and truncated-read regression cases with actual-tool evidence and an incomplete-output negative control; preserve runtime instructions.
+
 - **peer-message** (v1.24.5 → v1.24.6): Connect exact inbound-envelope inspection to checked original-byte reception with an explicit current-host actor. Stop on unsuccessful inspection or incomplete envelope data; retain native-tool routing and the supported-wrapper boundary. Change type: bounded operating recipe.
 - **read-claude-code-history** (`daymade-claude-code` v4.33.6 → v4.33.7): Capture large or unmeasured exact-session briefings privately, read bounded record ranges, and reuse verified snapshots without dropping queued requests or pre-compaction evidence. Preserve the existing reader and exact tool-evidence interfaces. Change type: bounded reading workflow.
 
