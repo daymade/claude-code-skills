@@ -56,6 +56,8 @@ Read `status` and inspect the reported label in
 user's enabled/stopped policy. Do not run `install --apply` merely to refresh a
 stopped or disabled job: it enables the job. Keep that state until the requested
 enablement is established; do not infer permission from an available installer.
+Report the installed-copy refresh as pending while that stopped state is retained;
+resume here when the requested enablement is authorized.
 
 For an enabled job, choose `--every-minutes` only when its read-only plan reproduces
 the complete active calendar. Compare the plan with the loaded job and disk plist;
