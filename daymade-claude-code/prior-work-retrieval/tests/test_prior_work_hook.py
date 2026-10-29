@@ -45,6 +45,14 @@ class PriorWorkHookTests(unittest.TestCase):
                 source = 'await tools.exec_command(' + json.dumps({'cmd': command}) + ');'
                 self.assertTrue(hook.substantial_tool_use({'tool_name': name, 'tool_input': {'code': source}})[0])
 
+    def test_literal_read_does_not_hide_computed_write_in_same_cell(self):
+        for name in ('exec', 'functions.exec'):
+            for read in ('pwd', 'python scripts/prior_work.py check'):
+                source = ('const command = "mkdir /tmp/new"; '
+                          'await tools.exec_command({cmd: command}); '
+                          'await tools.exec_command({cmd: ' + json.dumps(read) + '});')
+                self.assertTrue(hook.substantial_tool_use({'tool_name': name, 'tool_input': {'code': source}})[0])
+
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)

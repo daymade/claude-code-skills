@@ -680,6 +680,12 @@ def substantial_tool_use(event: dict[str, Any]) -> tuple[bool, str]:
         payload = _tool_payload_text(event)
         if DIRECT_EXEC_WRITE_SIGNAL.search(payload):
             return True, f"{base}:write_signal"
+        if base == "exec":
+            # Literal retrieval arguments are data. Keep the rest of the cell
+            # visible: one literal read must not hide a computed write beside it.
+            residual = EXEC_COMMAND_LITERAL.sub(" ", payload)
+            if SHELL_WRITE_SIGNAL.search(residual):
+                return True, f"{base}:write_signal"
         fragments = _shell_fragments(event)
         # functions.exec can carry either JavaScript orchestration or a plain
         # command string. With no cmd/command literal, treat the payload itself
