@@ -63,20 +63,20 @@ instead of editing the original independent review.
 
 ## GitHub says dirty; git says clean
 
-`mergeable_state: dirty` is an asynchronous cache, not a verdict. After the base
-moves under parallel mergers it can stick, and close/reopen does not reliably
-recompute it. The local oracle is `git merge-tree --write-tree <branch>
-origin/main` (exit 0 = clean); when git says clean and GitHub says dirty, pushing
-a branch that contains current main (a real integration merge) is the reliable
-refresher — the head changes, so rebind evidence to the new head.
+The release executor first follows GitHub Operations'
+[fresh-base verification](../../../github-ops/references/pr_operations.md#fresh-base-verification).
+A PR-reported base or cached `origin/main` can be stale; `dirty` alone does not
+distinguish a real conflict from delayed mergeability state. Diagnose only after
+reading the actual base branch and comparing the exact candidate with it.
 
-A strict up-to-date ruleset plus a fleet merging every few minutes is a
-livelock: each integration changes the head, CI reruns (~20 min class), and
-another peer lands in between. The only lever is merge latency — merge the
-instant checks go green (a background poller on the check-runs API, not a
-long-lived `--watch`), and keep the content diff byte-identical across every
-base move so the existing review stays valid: the review covers the content,
-not the parent commit.
+When the base advances, integrate its changes before binding review evidence.
+Reuse unchanged evidence only within its proved scope; the opt-in rebind below
+still requires the complete distribution and dependency closure to match. Changed
+shared files can invalidate reuse even when the Skill directory is identical.
+Wait for checks and merge through GitHub Operations'
+[merge preflight](../../../github-ops/references/pr_operations.md#merging-prs),
+including its `gh pr checks --watch` exit-status check. Do not replace that owner
+with a separate poller or bypass checks to shorten a concurrent release cycle.
 
 ## External-archive helper and dispatcher
 

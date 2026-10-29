@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **github-ops** (v1.14.12 → v1.14.13): Verify the base branch directly from the remote and match its fetched commit before diagnosing conflicts or merging. Keep required checks, exact-head matching and readback; distinguish base drift from delayed mergeability. Change type: bounded verification-workflow correction.
+- **skill-creator** (`daymade-skill` v1.74.3 → v1.74.4): Route mergeability diagnosis and check waiting to GitHub Operations; preserve fresh-base verification and complete-distribution constraints on review reuse. Change type: scoped workflow alignment.
+- **github-ops** (v1.14.12): Continue authorized Confirm access recovery through the normal credential route while retaining physical-challenge and account-selection handoffs. Change type: bounded authentication recovery clarification.
+
 - **peer-message** (v1.24.5 → v1.24.6): Connect exact inbound-envelope inspection to checked original-byte reception with an explicit current-host actor. Stop on unsuccessful inspection or incomplete envelope data; retain native-tool routing and the supported-wrapper boundary. Change type: bounded operating recipe.
 - **peer-message** (v1.24.4 → v1.24.5): Let `coord --actor` disambiguate inherited Claude and Codex identities only when the exact UUID matches the selected host's environment. Keep native-event sender checks, duplicate suppression and conflicting-identity refusals.
 - **docx-creator / read-docx-review** (`daymade-docs` v1.27.0 → v1.27.1): Align Word acceptance and comparison documentation with the existing implementations, distinguish sent-baseline evidence from explicit version controls, and link configuration to its defining sources. Remove derived checklist totals and unsupported restore-time estimates; preserve read-only comparison, revision refusal and pending native acceptance. Change type: scoped documentation alignment.
