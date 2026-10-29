@@ -5,10 +5,11 @@ description: >-
   读取 Word/WPS 审阅后的 docx，把批注（comments）与修订（track changes）提取成可逐条裁决的
   markdown 对账表或 JSON。触发场景：对方批注完的合同/协议/书稿/报告回来了要读意见；「提取
   docx 批注」「审阅意见对账」「读一下修订」「谁批了什么、批在哪」；WPS 云文档/Word 在线协作
-  导出的审阅稿；收到带修订模式改动的回稿要看对方改了什么；已有明确已发基线，要核对无批注、
-  无修订回稿的全文改动。核心保证：修订感知——python-docx
+  导出的审阅稿；收到带修订模式改动的回稿要看对方改了什么；已有明确基线，要核对无批注、
+  无修订稿的全文改动。修订感知——python-docx
   裸读会漏掉修订插入（w:ins）的内容、认不出整段删除（w:del），本 skill 走 OpenXML SDK 引擎
-  不漏。只读，不改对方文件。边界：生成/排版 docx → docx-creator 或 minimax-docx；PDF 批注不在范围。
+  读取已支持的批注、段落增删与文本视图；范围见正文。只读，不改对方文件。
+  边界：生成/排版 docx → docx-creator 或 minimax-docx；PDF 批注不在范围。
 ---
 
 # read-docx-review — docx 审阅与回稿对账
@@ -63,7 +64,7 @@ uv run python scripts/extract_review.py <docx> --json
 uv run python scripts/extract_review.py <docx> --include-resolved
 ```
 
-要看某条批注前后更多上下文段落（对账表锚定列截断到 60 字，`--json` 里是全文）：
+要看某条批注前后更多上下文段落（Markdown 锚定列为缩略文本，`--json` 里是全文）：
 
 ```bash
 uv run python -c "
@@ -78,25 +79,26 @@ for v in extract_views('<docx>', paragraph_range=(40, 55)):  # 批注锚定段�
 python-docx 的 `paragraph.text` 走 `paragraph.runs`，runs 只取直接子 `<w:r>`、不递归
 `<w:ins>` 包装——**对方用修订模式插入的所有内容都会被漏读**；裸 lxml 的 `.//w:t` 能读到
 ins，但认不出「段落标记被 `<w:del>` 包装的整段」（接受修订后会整段消失的内容仍有 `<w:t>`）。
-两个方向的漏读都在真实出版审阅稿上踩过。本 skill 的 csx 引擎基于 Word 工程团队
-官方维护的 OpenXML SDK，ins/del/move 是一等公民。机制细节、段落索引语义（body 直接子段，
+两个方向的漏读都在真实出版审阅稿上踩过。本 skill 的 csx 引擎基于 OpenXML SDK，旧读取
+接口报告所支持的段落增删及文本视图，不保证覆盖所有修订类型。机制细节、段落索引语义（body 直接子段，
 与 python-docx 对齐、不递归表格内段）及各 csx 的出参规格见
 [references/csharp-tasks-spec.md](references/csharp-tasks-spec.md)。
 
 `scripts/bridge_lib/docx_bridge_client.py` 是 Python 入口层：`list_comments()` /
-`list_revisions()` / `extract_views()` / `paragraph_text()`，全部无状态直读 docx，按
-(路径+mtime) 做内存缓存。写自定义分析时 import 它，别绕过它手解 XML。
+`list_revisions()` / `extract_views()` / `paragraph_text()`；调用与缓存行为由该文件定义。
+写自定义分析时 import 它，别绕过它手解 XML。
 
-## 已发基线与回稿的全文对比（含零审阅痕迹）
+## 明确基线与对照稿的全文对比（含零审阅痕迹）
 
-先固定准确已发基线和回稿，保留原件。读取
+先固定准确基线和对照稿，保留原件。核对对方回稿时，基线必须有实际发送证据；用户明确
+指定的双版本控制、生成件与人工编辑件也可比较，但不能据此称基线“已发送”。读取
 [全文对比流程](references/full-comparison.md)，再运行：
 
 ```bash
-uv run python scripts/compare_docx.py <已发基线.docx> <回稿.docx>
-uv run python scripts/compare_docx.py <已发基线.docx> <回稿.docx> --json
+uv run python scripts/compare_docx.py <基线.docx> <对照稿.docx>
+uv run python scripts/compare_docx.py <基线.docx> <对照稿.docx> --json
 # 按事项选择关键承诺；核对完整所在文本块及出现次数，不只查关键词仍在
-uv run python scripts/compare_docx.py <已发基线.docx> <回稿.docx> --unchanged '付款条件'
+uv run python scripts/compare_docx.py <基线.docx> <对照稿.docx> --unchanged '付款条件'
 ```
 
 覆盖正文、页眉页脚、脚注尾注、表格文本和合并结构。脚本复用 SDK bridge，遇未决修订即
@@ -112,10 +114,10 @@ brew install dotnet                      # 或已有任意 .NET SDK
 dotnet tool install -g dotnet-script    # csx 运行时
 ```
 
-- `DOTNET_ROLL_FORWARD=Major` 已由 client 内置设置（本机 .NET 版本高于 csx 目标版本时自动兼容）。
-- `~/.dotnet/tools` 不在 PATH 时 client 会自动补，无需手动 export。
-- NuGet 包（DocumentFormat.OpenXml 3.2.0，csx 内 `#r` 声明）首跑自动 restore，需要网络，
-  首次运行慢约 10-30 秒属正常；之后走本地包缓存。
+- 环境默认值、工具 PATH 补充与内存缓存由
+  [`docx_bridge_client.py`](scripts/bridge_lib/docx_bridge_client.py) 定义。
+- NuGet 依赖由 [`scripts/csharp/tasks/`](scripts/csharp/tasks/) 内各 `.csx` 的 `#r` 声明定义。
+  首次 restore 或缺缓存时需要网络；失败读取真实错误，不用固定耗时判断是否正常。
 - Python 侧纯 stdlib，零第三方依赖（解析全部在 C# 侧完成，Python 只做编排与渲染）——
   `uv run python` 或系统 `python3` 都能跑。
 
@@ -123,8 +125,8 @@ dotnet tool install -g dotnet-script    # csx 运行时
 
 | 症状 | 原因 | 处理 |
 |---|---|---|
-| `csx script failed … dotnet-script: command not found` | dotnet-script 未装 | 上面依赖节两条安装命令 |
-| 首次运行卡 10-30 秒 | NuGet 首次 restore | 正常，等它；离线环境会失败，需联网首跑一次 |
+| `csx script failed … dotnet-script: command not found` | dotnet-script 未装 | 按依赖节准备工具 |
+| 首次运行等待或失败 | 可能需要 NuGet restore | 检查实际输出和现有缓存；缺包的离线环境需在授权范围内完成 restore，不以等待时长判定正常 |
 | 批注 0 条，但对方说改过 | 可能直接改了正文，也可能导出时丢了痕迹 | 有明确已发基线先走全文对比；对方确认有批注但本地未携带时，再取保留批注的 docx 导出件 |
 | 批注在，但「按章节筛选」类需求做不了 | 文档没用 Word Heading 样式（很多生成器直排文本） | 用锚定段落号定位；对账表本身不受影响 |
 | 修订表为空，但 Word 里能看到红字改动 | 那份文件的改动已被接受/拒绝过，红字是比较视图 | 修订只存在于未接受的 track changes；让对方发未接受修订的原稿 |

@@ -1,12 +1,15 @@
-# 已发基线与回稿全文对比
+# 明确基线与对照稿全文对比
 
 执行者收到“对方改了什么”这类任务时，先检查批注/修订，再核对是否有明确已发基线。
 批注和修订均为零，只说明没有携带这些痕迹；直接改写或已经接受的修改仍须全文比较。
 
 ## 固定输入与修订视图
 
-1. 确认哪个文件确实发给过对方；仅凭较早文件名、mtime 或本地最新草案不能指定基线。
-   保留原件，记录两个准确输入及哈希。比较 CLI 的 JSON 包含实际输入 SHA-256。
+1. 固定本次比较关系。核对“对方改了什么”时，确认哪个文件确实发给过对方；仅凭较早
+   文件名、mtime 或本地最新草案不能指定已发基线。用户明确指定的两个版本，或生成件与
+   人工编辑件，也可作为版本控制输入；如实标明各自角色，不补写发送事实。保留原件，
+   记录准确输入及哈希。CLI 的 `baseline` / `returned` 是参数角色，不验证发送状态；
+   JSON 包含实际输入 SHA-256。
 2. 先用原有 `extract_review.py` / bridge 读取现有审阅信息。全文比较入口还会扫描正文、
    页眉页脚、脚注尾注中的未决修订，包括段落标记、移位、表格和属性变化；有未决修订时
    返回非零，明确“比较未执行、原件未改”。不要把原有 body 段落修订计数为零当成全文无修订。
@@ -21,9 +24,9 @@
 在 Skill 根目录运行，或将脚本路径换成绝对路径：
 
 ```bash
-uv run python scripts/compare_docx.py sent.docx returned.docx
-uv run python scripts/compare_docx.py sent.docx returned.docx --json > comparison.json
-uv run python scripts/compare_docx.py sent.docx returned.docx --unchanged 'Payment terms'
+uv run python scripts/compare_docx.py baseline.docx comparison.docx
+uv run python scripts/compare_docx.py baseline.docx comparison.docx --json > comparison.json
+uv run python scripts/compare_docx.py baseline.docx comparison.docx --unchanged 'Payment terms'
 ```
 
 Python 使用既有 `bridge_lib` 调用 `compare_snapshot.csx`，依赖沿用 SKILL.md 的 .NET、
@@ -38,7 +41,7 @@ dotnet-script 和 OpenXML SDK；不依赖任何私有合同 Skill。缺依赖时
   一段区间时，同时核对形状变化和前后日期文本，不能只报某日期“被删除”。
 - 将 `moved`、`move_or_rewrite`、`possible_move_into_block`、`possible_partial_move` 当作位置线索。匹配基于文本
   相似度或包含关系，不裁定条款效力，也不保证每种拆分、合并都能自动配对。报“删除”之前，
-  在**完整回稿快照**查找原句及其关键片段，检查它是否进入另一分工、表格或改写后的段落。
+  在**完整对照稿快照**查找原句及其关键片段，检查它是否进入另一分工、表格或改写后的段落。
 - 用重复的 `--unchanged TEXT` 核对与本次事项有关的关键承诺。脚本比较命中词所在完整
   文本块及出现次数；只保留关键词、金额或日期的局部相同不会自动得到“不变”。基线未找到
   或文本块变动时显式标记。再人工核对主语、条件、义务、例外和关联条款；完整文本相同也

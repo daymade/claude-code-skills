@@ -1,10 +1,9 @@
 # Verification protocol
 
-**A .docx that generates without error is not a verified .docx.** Every failure mode that
-matters in a formal Chinese document — stretched info blocks, restarted-or-not list numbers,
-missing table rules, font fallback — is invisible in the exit code, invisible in the extracted
-text, and invisible in a macOS Quick Look thumbnail. The only thing that surfaces them is a
-Word-grade rendering, looked at.
+**A .docx that generates without error is not a verified .docx.** Layout failures such as
+stretched info blocks, incorrect list numbers, missing table rules and font fallback require
+inspection of rendered pages. A successful process or extracted text cannot establish that
+layout is correct; macOS Quick Look is not the target Word engine.
 
 This protocol covers DOCX and existing-Word → PDF delivery. Apply the gate for the actual
 deliverable: Word application checks matter when delivering DOCX; a PDF-only handoff needs
@@ -42,11 +41,15 @@ The remaining steps describe the DOCX-specific chain.
 ## Step 0 — Prerequisites (check the binaries, not the installers)
 
 ```bash
-dotnet --version                                        # any SDK; see scripts/README.md
+dotnet --list-sdks                                      # inventory installed SDKs
 ls -l /Applications/LibreOffice.app/Contents/MacOS/soffice   # the file must exist
 which pdftoppm                                          # brew install poppler
 ls -d "/Applications/Microsoft Word.app" 2>/dev/null   # installation only; assess readiness in Step 3a
 ```
+
+Read `TargetFramework` in [`mmdocx-gen.csproj`](../scripts/mmdocx-gen.csproj) and confirm
+the selected installed SDK supports it. An SDK being present does not establish that the
+project can build; a missing compatible SDK remains an unmet prerequisite.
 
 `ls` on the soffice binary is the real installation check. `brew install --cask libreoffice`
 can exit 0 having installed nothing (ISSUE-009), so a `$?`-based check is worthless here.
@@ -68,11 +71,39 @@ dotnet run --project _docxgen -- your-doc.md your-doc.docx
 Read the summary line it prints. The list count must match the number of separate lists in
 your markdown — a mismatch means lists merged, which is ISSUE-005 about to happen.
 
-**Before overwriting an already-delivered file**, check for Word's owner lock (ISSUE-011):
+### Before replacing a generated DOCX
+
+The executing agent preserves signed documents, templates and returned drafts at their
+original paths; generate a derived file at a new output path. Replace an existing generated
+deliverable only within the authorized regeneration scope. Pin its exact path/hash and the
+source/build that should produce the replacement. A lock check does not establish this
+identity or prove that an old generated file is the intended current output.
+
+A sibling `~$<name>.docx` is a signal to investigate, not proof of a current holder, their
+identity or release. Whether or not a lock is present, inspect the existing app/document
+route and, when available, query the exact target path for local open-file holders:
 
 ```bash
-ls -a $(dirname your-doc.docx) | grep '^~\$' || echo "no lock, safe to overwrite"
+target="/absolute/path/your-doc.docx"
+lsof -- "$target"
 ```
+
+Inspect stdout, stderr and exit status. Reported process/PID/user rows identify observed
+local handles, not which recipient saved the document. A missing tool, permission refusal,
+warning, path error or unobservable app state leaves holder status unknown; retain the
+original and continue at a new output path. A clean no-match query only means no local
+holder was observed through that probe. Absence of a lock is not overwrite clearance.
+
+If a holder is observed, wait for it to save and close the document, then repeat the same
+path query and check the app/document state to verify release. Do not kill the process,
+quit without saving, or delete the lock to force release. An unexplained remaining lock or
+unknown release keeps replacement pending; absence of a lock cannot override an observed
+holder. A no-lock/no-observed-holder case may continue after the independent identity checks.
+
+After regeneration, verify the final file's hash against the new build output and its
+source identity, then reopen the final delivered path for the required content/layout
+checks. An old open window or a prior PDF at that path does not prove the new output was
+loaded. ISSUE-011 records the stale-open-copy failure.
 
 ---
 
@@ -158,7 +189,7 @@ An app directory, successful event delivery or process exit alone proves none of
 
   Inspect the title bar first: a suffix other than "— 已保存到…" / "— saved" is a red flag;
   "兼容性模式" specifically requires the ISSUE-012 compatibility-settings check. Then inspect
-  every page for Step 5's five failures. Unexpected Compatibility Mode, unrequested markers
+  every page for Step 5's failures. Unexpected Compatibility Mode, unrequested markers
   or visible damage returns to Step 6;
   a fallback PDF does not excuse a real text, structure or layout defect.
 - **Not yet known:** make one bounded readiness pass over existing, already-authorized native
@@ -198,7 +229,7 @@ small enough to read quickly. Raise to 150 if a table's borders are ambiguous.
 
 ---
 
-## Step 5 — Read every page image and check five things
+## Step 5 — Read every page image and check the failure modes
 
 `Read` each `page-NN.png`. Not the first page. Not a sample. Every page — pagination bugs and
 signature-block damage live at the end, which is exactly where sampling stops looking.
@@ -206,7 +237,7 @@ signature-block damage live at the end, which is exactly where sampling stops lo
 | # | Check | Failing looks like | Cause |
 |---|---|---|---|
 | 1 | **Info blocks are not stretched** — 甲方/乙方 blocks, addresses, signature blocks | Huge, uneven gaps between characters on every line but the last of the block | ISSUE-004 |
-| 2 | **Every list starts at 1** | Second clause's list starts at 4 | ISSUE-005 |
+| 2 | **Independent generated lists restart; intentional existing continuations remain** | An independent clause's list continues a previous counter, or an intended continuation restarts | ISSUE-005/016 |
 | 3 | **Table borders complete** | Some cells unruled, or only outer border drawn | Missing `insideH` / `insideV` |
 | 4 | **Signature block intact** | Party rows split across a page break; name and seal line separated; column drift | Layout / pagination |
 | 5 | **Pagination sane** | Orphaned heading at page bottom, single-line last page, clause split from its number | Spacing / keep-with-next |
@@ -248,14 +279,14 @@ all pages affected by reflow (changing spacing moves page breaks, which is check
 
 ## Minimum evidence to claim "verified"
 
-State all five. Use an unqualified "Word verified" only after native acceptance passes;
+State the evidence below. Use an unqualified "Word verified" only after native acceptance passes;
 an unavailable-route review handoff must state which checks passed and which remain pending:
 
 1. `Validation: PASSED` from the XSD validator, **and**, if available, 0 errors from
    `OpenXmlValidator` (ISSUE-013 — the first alone is not sufficient).
 2. PDF produced at a named path after the last edit; name the actual renderer and version.
 3. Page count, and confirmation that **every** page image was read.
-4. The five checks in Step 5, each explicitly passed — naming the info block and the list you
+4. The checks in Step 5, each explicitly passed — naming the info block and the list you
    looked at, not "looks good".
 5. Step 3a native result: when the route is usable, title bar has no "兼容性模式" suffix and
    no page has unrequested markers. Otherwise record **Word-native acceptance pending**, its

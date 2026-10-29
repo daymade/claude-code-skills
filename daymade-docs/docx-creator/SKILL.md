@@ -48,7 +48,7 @@ patterns. Do not reinvent them here.
 | Existing Word/WPS → repaired layout / selected excerpt → PDF | Keep the Word source; follow `references/word-to-pdf.md` and `references/verification_protocol.md` |
 | Markdown → PDF | `daymade-docs:pdf-creator` |
 
-Rule of thumb: the CLI's `--content-json` understands exactly three block types
+Rule of thumb: the CLI's `--content-json` understands these block types:
 (`heading`, `paragraph`, `pagebreak`). Bold, lists, tables, borders, footers, fonts,
 alignment — none of it is expressible. A Chinese contract needs all of them. See ISSUE-001.
 
@@ -62,7 +62,7 @@ build artifacts stay out of the skill directory:
 mkdir -p _docxgen && cp <skill-dir>/scripts/Program.cs <skill-dir>/scripts/mmdocx-gen.csproj \
    <skill-dir>/scripts/.gitignore _docxgen/
 
-# 2. Generate (first run restores DocumentFormat.OpenXml + Markdig, ~20s)
+# 2. Generate (first run restores the project dependencies)
 dotnet run --project _docxgen -- your-doc.md your-doc.docx
 
 # 3. Structural validation via the engine's XSD validator (note the roll-forward env — ISSUE-003)
@@ -75,9 +75,8 @@ soffice --headless --convert-to pdf --outdir /tmp/docxcheck your-doc.docx
 pdftoppm -png -r 100 /tmp/docxcheck/your-doc.pdf /tmp/docxcheck/page
 # then Read every /tmp/docxcheck/page-NN.png
 
-# 5. Assess the existing authorized Word route, then perform native checks when usable
-# Installed alone is not usable; follow Step 3a for denied/unavailable routes
-open -a "Microsoft Word" your-doc.docx   # check the title bar for "兼容性模式", check every page
+# 5. Follow verification_protocol.md Step 3a before invoking the native Word route.
+# Perform its native checks when usable; otherwise retain the named acceptance gap.
 ```
 
 Full command details and troubleshooting: `scripts/README.md`.
@@ -87,7 +86,7 @@ Full verification steps and pass/fail criteria: `references/verification_protoco
 
 ### 1. Alignment is layered — this is the expensive one
 
-Never justify the whole document. Three layers, three alignments:
+Never justify the whole document. Apply alignment by content role:
 
 | Content | Alignment | Why |
 |---|---|---|
@@ -99,8 +98,7 @@ Never justify the whole document. Three layers, three alignments:
 The rule is machine-checkable, so do not eyeball it: if the markdown paragraph's inline tree
 contains a `LineBreakInline`, left-align that paragraph; otherwise justify it. Implemented in
 the `case ParagraphBlock p:` arm of `Main`'s block-dispatch switch, with the break detection in
-`InlineRuns`. (Line numbers are deliberately not given here — they drift every time the file
-grows; see `scripts/README.md`'s function-name lookup table instead.) Full write-up: ISSUE-004.
+`InlineRuns`. Use `scripts/README.md`'s function-name lookup table. Full write-up: ISSUE-004.
 
 ### 2. Independent lists restart; continuations retain numbering
 
@@ -108,7 +106,7 @@ Each independent markdown list must get its **own** `NumId` plus a `LevelOverrid
 `StartOverrideNumberingValue = 1`. Reuse one `NumId` across clauses and clause 3's list
 silently continues from 4. Implemented across the `case ListBlock lb:` arm and the
 `NumberingDefinitionsPart` setup — see `scripts/README.md`'s lookup table for both.
-Two SDK traps come with it (wrong class name, wrong element order) — ISSUE-005, ISSUE-006.
+SDK traps include the wrong class name and wrong element order — ISSUE-005, ISSUE-006.
 For existing Word lists, preserve intentional continuations. Resolve `numId` and its level
 before changing geometry; `numId=0` disables numbering. Typed ordinals are text, not an
 automatic list. See ISSUE-016.
@@ -117,21 +115,18 @@ automatic list. See ISSUE-016.
 
 A run must set `RunFonts { Ascii, HighAnsi, EastAsia }`. Setting only the Latin slots leaves
 Chinese characters to Word's fallback, and the document renders in whatever the reader's
-machine picks. Shipped defaults: Latin `Times New Roman`; East Asian 宋体 for body, 黑体 for
-headings. Chinese **bold runs switch family to 黑体** — 宋体 has no true bold weight and
-renderer-synthesized bold smears multi-stroke characters (ISSUE-014). Sizes are OpenXML
-half-points — body 21 (10.5pt, the common Chinese manuscript size), H1 36 (18pt), clause
-heading 28 (14pt). Body paragraphs also get a 2-character first-line indent (`420` twips at
-10.5pt — change it in lockstep with the body size). ISSUE-007.
+machine picks. Read the current fonts, half-point sizes and body indent in
+[`scripts/Program.cs`](scripts/Program.cs), at its constants and `RunProps`/`Para` callers.
+Keep body size and its character-based first-line indent in sync. Chinese bold-family
+handling is defined in `RunProps`; the rendering failure and verification are in ISSUE-014.
 
 ### 4. Page and table basics
 
-A4 is 11906 × 16838 twips with 1440 twip margins; page number goes in a centered footer
-`PAGE` field. Tables need all six borders (`top`/`bottom`/`left`/`right`/`insideH`/`insideV`,
-in that ECMA-376 order — ISSUE-013) and a `tblGrid` (ISSUE-012) — set fewer borders and cells
-look unruled in print; omit `tblGrid` and the file fails strict validation even though
-LibreOffice hides it. Implemented in `BuildTable` and the `SectionProperties`/`FooterPart`
-setup in `Main` — see `scripts/README.md`'s lookup table.
+Use [`scripts/Program.cs`](scripts/Program.cs) for the current page, margin and footer
+profile. Tables need complete borders and a `tblGrid`: missing borders leave cells unruled
+in print; a missing grid fails strict validation even when LibreOffice hides it.
+Preserve the schema order documented at `BuildTable`; ISSUE-013 explains the failure.
+Find the page/footer setup at `SectionProperties`/`FooterPart` in `Main`.
 
 ## Verification is not optional
 
@@ -141,9 +136,8 @@ are stretched apart. A document was declared "verified perfect" on qlmanage evid
 opened broken in Word — that is the origin of this rule. ISSUE-008.
 
 **Required chain:** generate → XSD validate → `soffice --headless --convert-to pdf` →
-`pdftoppm -png` → `Read` every page image → check the five failure modes
-(info blocks not stretched / each list restarting at 1 / table borders present / signature
-block intact / no orphaned pagination) → **assess and use the existing authorized, observable
+`pdftoppm -png` → `Read` every page image → check the failure modes in the verification
+protocol → **assess and use the existing authorized, observable
 Word route; check the actual file/title bar and every page when usable**. Installation alone
 is not readiness. If refused or unavailable after bounded checks, preserve native acceptance
 pending and hand off the reviewable DOCX plus an allowed-engine PDF inspected on every page;
@@ -160,13 +154,15 @@ surface that class of defect. This is ISSUE-008's own lesson (a lenient renderer
 Word does) recurring one layer up; treat LibreOffice-only verification as incomplete whenever
 Word is available to check against directly.
 
-**Before overwriting a delivered .docx**, check for a sibling `~$<name>.docx` — that is Word's
-owner lock, meaning the recipient has the old version open. Overwriting works, but they will
-keep seeing the stale document until they close and reopen it. Tell them. ISSUE-011.
+**Before replacing a generated .docx**, follow
+[the holder and output-identity check](references/verification_protocol.md#before-replacing-a-generated-docx).
+Preserve signed/template/returned originals. A lock is a signal, not proof of a live holder
+or safe release; keep unknown holder/release states pending and verify the new output
+independently of the lock. ISSUE-011 records the stale-open-copy failure.
 
 ## Customizing
 
-`scripts/Program.cs` is ~260 lines of straightforward OpenXML. Edit it directly for fonts,
+Edit `scripts/Program.cs` directly for fonts,
 sizes, spacing, borders, or new block types — that is the intended workflow. Before adding a
 structural feature (images, TOC, headers, track changes), read the corresponding
 `Samples/*.cs` in minimax-docx first; those patterns are SDK-version-verified and will save

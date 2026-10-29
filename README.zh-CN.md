@@ -3214,13 +3214,13 @@ memory 膨胀了，把该共享的内容迁到文档里
 引擎。补上底层引擎没提供的那一层：面向中文正式文档、经过验证的
 markdown-to-docx 生成器,阻止两端对齐把甲方/乙方信息块和签字栏拉散的对齐
 分层规则,列表编号分组重启,中英文双字体槽位设置,以及强制的
-LibreOffice→PDF→PNG 视觉验证链（禁止用 qlmanage 缩略图——它恰恰会把真正
-要命的问题藏起来）。
+逐页渲染检查；[验收流程](daymade-docs/docx-creator/references/verification_protocol.md)
+同时定义原生 Word 就绪判断与待验收交接。
 
 **核心能力：**
 - 职责划分：OpenXML SDK 引擎留在 `minimax-docx`，本 skill 只管中文正式文档排版规则和 CLI-vs-C# 路径选择
 - 经过验证的 markdown-to-docx 生成器（`scripts/Program.cs`），适用于带甲乙方信息块、编号条款、签字栏、表格的合同/协议/公文
-- 强制的真实渲染视觉验证（LibreOffice → PDF → PNG），不是 Quick Look 缩略图
+- 逐页渲染检查；已有授权的原生 Word 路线可用时完成原生验收，不可用时保留待验状态并交付可审阅文件
 - 纯文字类文档路由给 minimax-docx CLI，不重复造轮子
 
 **使用示例：**
@@ -3241,15 +3241,14 @@ LibreOffice→PDF→PNG 视觉验证链（禁止用 qlmanage 缩略图——它�
 
 读取审阅后的 docx（Word/WPS），把批注与修订提取成可逐条裁决的对账表（markdown 或
 JSON）：谁批的、批在哪段、批了什么，外加修订模式的逐段增删。修订感知引擎走 OpenXML
-SDK——python-docx 裸读会漏掉修订插入（w:ins）、认不出整段删除（w:del），本 skill
-不漏。只读，不改对方文件。
+SDK，读取已支持的批注、段落增删与文本视图，具体范围见 Skill。只读，不改对方文件。
 
 **核心能力：**
 - 逐条对账表自带空白「处置」列，为逐条裁决而生
 - 捕获 python-docx 静默漏掉的 w:ins / w:del 修订
-- WPS 仅引用式批注锚点有 fallback，每条批注都可定位
+- WPS 仅引用式批注锚点有 body 段落 fallback；缺失锚点保留未定位
 - 零批注文件显式提示「无审阅痕迹」，不给静默空表
-- 用明确已发基线对比回稿的正文、表格、页眉页脚和注释；零痕迹改稿也提供移位、改写线索
+- 比较明确指定的 DOCX 版本，包含零痕迹改稿；核对对方反馈须有准确已发基线。覆盖与移位/改写线索边界见[全文对比流程](daymade-docs/read-docx-review/references/full-comparison.md)
 - 新比较入口拒绝未决修订，原有修订感知读取 CLI 保留
 - 边界：生成／排版 docx → docx-creator 或 minimax-docx；PDF 批注不在范围
 

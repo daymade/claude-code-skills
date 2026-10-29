@@ -3242,14 +3242,14 @@ engine itself. Adds the layer the underlying OpenXML engine doesn't ship: a
 verified markdown-to-docx generator for Chinese formal documents, the
 alignment-layering rule that stops justified text from stretching 甲方/乙方
 info blocks and signature blocks into garbage, per-list numbering restart,
-CJK font dual-slot setup, and a mandatory LibreOffice-to-PDF-to-PNG visual
-verification chain (qlmanage thumbnails are banned — they hide exactly the
-bugs that matter).
+CJK font dual-slot setup, and mandatory rendered-page inspection. Its
+[verification protocol](daymade-docs/docx-creator/references/verification_protocol.md)
+also governs native Word readiness and pending-acceptance handoff.
 
 **Key features:**
 - Division of labor: the OpenXML SDK engine stays in `minimax-docx`; this skill owns Chinese formal-document typography rules and the CLI-vs-C# routing decision
 - Verified markdown-to-docx generator (`scripts/Program.cs`) for contracts, agreements, and 公文 with 甲乙方 info blocks, numbered clauses, signature blocks, and tables
-- Mandatory real-render visual verification (LibreOffice → PDF → PNG), not a Quick Look thumbnail
+- Rendered-page inspection and native Word checks when the authorized route is usable; scoped reviewable handoff when native acceptance remains pending
 - Routes plain prose to the minimax-docx CLI instead of duplicating it
 
 **Example usage:**
@@ -3268,7 +3268,7 @@ give me a Word file for this labor contract
 > **Install**: `claude plugin install daymade-docs@daymade-skills`
 > (suite-only — invoked as `daymade-docs:read-docx-review`)
 
-Read a reviewed docx (Word/WPS) and extract every comment and tracked change into
+Read a reviewed docx (Word/WPS) and extract supported comments and tracked changes into
 a per-item adjudication table (markdown or JSON): who commented, on which
 paragraph, what they said, plus revision-mode insertions and deletions.
 Revision-aware engine on the OpenXML SDK, so content inserted via track changes
@@ -3278,9 +3278,9 @@ silently misses are captured. Read-only — never mutates the reviewer's file.
 **Key features:**
 - Per-item adjudication table with a blank disposition column, built for clause-by-clause triage
 - Captures the w:ins / w:del revisions that python-docx silently drops
-- WPS reference-only comment anchors get a fallback so every comment stays locatable
+- WPS reference-only comment anchors get a body-paragraph fallback; missing anchors remain unlocated
 - Zero-comment files emit an explicit "no review traces" warning instead of a silent empty table
-- Compare an explicit sent baseline with a returned draft across body text, tables, headers, footers and notes; identify possible moves and rewrites even with no review traces
+- Compare explicitly selected DOCX versions, including zero-trace edits; counterpart-feedback review requires the actual sent baseline. Follow the [comparison workflow](daymade-docs/read-docx-review/references/full-comparison.md) for coverage and move/rewrite limits
 - Reject unresolved revisions in the comparison entry; keep the existing revision-aware reading CLI
 - Boundary: producing/formatting docx → docx-creator or minimax-docx; PDF annotations out of scope
 

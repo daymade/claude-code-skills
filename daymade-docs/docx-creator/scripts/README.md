@@ -1,6 +1,6 @@
 # `mmdocx-gen` — markdown to Chinese formal .docx
 
-A ~260-line C# console app built on the OpenXML SDK that `minimax-skills:minimax-docx`
+A C# console app built on the OpenXML SDK that `minimax-skills:minimax-docx`
 provides. It exists because that skill's CLI can only emit headings, paragraphs and page
 breaks, which is not enough for a contract (see `references/known_issues.md`, ISSUE-001).
 
@@ -11,14 +11,14 @@ and page-by-page visual review. Prefer editing it over rewriting it.
 
 | Requirement | Check | Notes |
 |---|---|---|
-| .NET SDK | `dotnet --version` | The shipped `mmdocx-gen.csproj` targets `net10.0`. On an older SDK, change `TargetFramework` to your SDK's major version — the code uses no version-specific APIs. |
-| NuGet reachable | first `dotnet run` restores | Pulls `DocumentFormat.OpenXml` 3.2.0 and `Markdig` 1.3.2 |
+| .NET SDK | `dotnet --version` | Match `TargetFramework` in [`mmdocx-gen.csproj`](mmdocx-gen.csproj). If adapting that target, verify the generated artifact under the selected SDK. |
+| NuGet reachable | first `dotnet run` restores | Package identities and pins are defined by [`mmdocx-gen.csproj`](mmdocx-gen.csproj). |
 | LibreOffice | `ls /Applications/LibreOffice.app/Contents/MacOS/soffice` | Needed for verification, not generation. Install check is itself a trap — ISSUE-009. |
 | poppler | `which pdftoppm` | `brew install poppler` |
 
 ## Run
 
-Stage the three files next to your markdown so `bin/`, `obj/` and the NuGet restore stay out
+Stage the generator files next to your markdown so `bin/`, `obj/` and the NuGet restore stay out
 of the skill directory:
 
 ```bash
@@ -38,8 +38,10 @@ it just leaves build output inside the skill (already gitignored).
 
 ## `DOTNET_ROLL_FORWARD=Major`
 
-**Not needed for this generator** — it targets your current SDK. It **is** needed whenever you
-invoke minimax-docx's own CLI, which targets `net8.0`:
+The generator's target is defined in [`mmdocx-gen.csproj`](mmdocx-gen.csproj); it does not
+automatically select the installed SDK's framework. For the engine CLI's launch failure and
+per-invocation roll-forward remedy, follow
+[`known_issues.md`, ISSUE-003](../references/known_issues.md#issue-003--minimax-docxs-cli-will-not-launch-on-a-net-10-only-machine-p1):
 
 ```bash
 DOTNET_ROLL_FORWARD=Major dotnet run \
@@ -55,26 +57,25 @@ Full explanation: ISSUE-003.
 
 | Markdown | Rendered as |
 |---|---|
-| `# H1` | Centered, 黑体 18pt bold |
-| `## H2` and deeper | Left, 黑体 14pt bold |
-| Paragraph, no line breaks inside | Justified body, 宋体 10.5pt, 2-character first-line indent |
+| `# H1` | Centered heading |
+| `## H2` and deeper | Left-aligned heading |
+| Paragraph, no line breaks inside | Justified body with the configured first-line indent |
 | Paragraph **with** soft/hard line breaks | **Left-aligned** body, no indent — this is the info-block and signature-block rule, ISSUE-004 |
-| `**bold**` | Bold run; Chinese bold set in 黑体 (宋体 has no true bold — ISSUE-014), nested inline emphasis preserved |
+| `**bold**` | Bold run; Chinese emphasis uses the family selected by `RunProps` rather than faux bold; nested inline emphasis preserved (ISSUE-014) |
 | `1.` / `-` lists | Numbered or bulleted, each list restarting at 1, hanging indent |
-| Pipe tables | Full six-border table, header row bold, 100% width |
+| Pipe tables | Complete borders, bold header row and configured table width |
 | `---` | Horizontal rule as a bottom-bordered empty paragraph |
 
 Everything else in the markdown AST is skipped silently — blockquotes, fenced code, images,
 links-as-hyperlinks are **not** implemented. If a document needs them, add a `case` to the
 block switch in `Program.cs` and read the matching `Samples/*.cs` in minimax-docx first.
 
-Page setup is fixed at A4 with 1440-twip margins and a centered `PAGE` field footer.
+Typography, dimensions, page setup and footer fields are defined in
+[`Program.cs`](Program.cs), at the constants, `RunProps`, `BuildTable` and `Main` setup.
 
 ## Where things are in `Program.cs`
 
-By function/case name, not line number — line numbers drift every time the file grows (they
-already had, silently, before this table was rewritten this way; see ISSUE-012/013's fix for
-the concrete incident). Grep the name to jump straight there.
+Search the function/case names below in [`Program.cs`](Program.cs).
 
 | Concern | Find it at |
 |---|---|
@@ -82,7 +83,7 @@ the concrete incident). Grep the name to jump straight there.
 | Run properties (CJK dual slot, ECMA-376 rPr child order) | `static RunProperties RunProps(...)` |
 | Inline walker + line-break detection (drives the alignment rule) | `static (List<Run> runs, bool hasBreak) InlineRuns(...)` |
 | Paragraph builder (numPr, spacing, justification — ECMA-376 pPr child order) | `static Paragraph Para(...)` |
-| Table builder (tblGrid, six borders — ECMA-376 tblPr/tblBorders child order) | `static Table BuildTable(...)` |
+| Table builder (tblGrid, complete borders — ECMA-376 tblPr/tblBorders child order) | `static Table BuildTable(...)` |
 | Block dispatch — heading / paragraph / list / table / rule | `switch (block)` inside `static void Main(...)` |
 | Alignment decision for body paragraphs | the `case ParagraphBlock p:` arm of that switch |
 | Section properties (A4, margins) | `new SectionProperties(...)` right after the `switch` block |

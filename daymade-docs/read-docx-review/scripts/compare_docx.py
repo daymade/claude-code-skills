@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare an explicit sent baseline with a returned DOCX; never change either input.
+"""Compare an explicit baseline with a comparison DOCX; never change either input.
 
 Use the existing OpenXML bridge. Reject unresolved revisions before comparison;
 this is a text/table-structure aid, not a Word layout or legal-equivalence verdict.
@@ -168,9 +168,9 @@ def _identity(path: Path) -> dict:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="已发基线与回稿的全文对比（只读，拒绝未决修订）")
-    parser.add_argument("baseline", type=Path, help="明确已发出的基线 DOCX")
-    parser.add_argument("returned", type=Path, help="收到的回稿 DOCX")
+    parser = argparse.ArgumentParser(description="明确基线与对照稿的全文对比（只读，拒绝未决修订）")
+    parser.add_argument("baseline", type=Path, help="明确指定的基线 DOCX；核对回稿时须确认是实际已发版本")
+    parser.add_argument("returned", type=Path, help="回稿或明确指定的对照版本 DOCX")
     parser.add_argument("--json", action="store_true", help="输出全文记录和变化 JSON")
     parser.add_argument("--unchanged", action="append", default=[], metavar="TEXT",
                         help="逐项核对关键承诺所在完整文本块，支持重复传入")
