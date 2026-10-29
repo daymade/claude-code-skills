@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 import os
 import stat
 import subprocess
@@ -8,6 +9,7 @@ import sys
 import tempfile
 import textwrap
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 
@@ -21,6 +23,15 @@ import os
 import sys
 
 args = sys.argv[1:]
+if os.environ.get("FAKE_LOCAL_ONLY") == "1" and args != ["features", "list"]:
+    raise SystemExit(19)
+if args == ["features", "list"]:
+    if os.environ.get("FAKE_LOCAL_FAIL") == "1":
+        print("synthetic-private-diagnostic", file=sys.stderr)
+        raise SystemExit(7)
+    if os.environ.get("FAKE_LOCAL_EMPTY") != "1":
+        print("feature_a stable true")
+    raise SystemExit(0)
 if args[:2] == ["debug", "models"]:
     model = os.environ.get("FAKE_CATALOG_MODEL", "gpt-5.6-sol")
     print(json.dumps({"models": [{
@@ -61,7 +72,9 @@ class CodexContextWindowTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp.cleanup()
 
-    def run_script(self, mode: str, **extra_env: str) -> subprocess.CompletedProcess[str]:
+    def run_script(
+        self, mode: str, *arguments: str, **extra_env: str
+    ) -> subprocess.CompletedProcess[str]:
         env = os.environ.copy()
         env.update(extra_env)
         env["CODEX_HOME"] = str(self.home)
@@ -72,6 +85,7 @@ class CodexContextWindowTests(unittest.TestCase):
                 sys.executable,
                 str(SCRIPT),
                 mode,
+                *arguments,
                 "--codex-bin",
                 str(self.fake),
                 "--json",
@@ -284,6 +298,211 @@ class CodexContextWindowTests(unittest.TestCase):
         written = (self.home / "config.toml").read_text(encoding="utf-8")
         self.assertIn("model_context_window = 272000", written)
         self.assertIn("model_auto_compact_token_limit = 163200", written)
+
+    def test_show_reads_only_numeric_base_fields_without_codex(self) -> None:
+        config = self.home / "config.toml"
+        original = (
+            b'model_context_window = 1000000\nmodel_auto_compact_token_limit = 500000\n'
+            b'api_key = "synthetic-private-value"\n'
+            b'[profiles.small]\nmodel_auto_compact_token_limit = 100000\n'
+        )
+        config.write_bytes(original)
+        self.fake.unlink()
+        result = self.run_script("show")
+        self.assertEqual(0, result.returncode, result.stderr)
+        payload = self.payload(result)
+        self.assertEqual(500000, payload['current_model_auto_compact_token_limit'])
+        self.assertEqual('base', payload['configuration_scope'])
+        self.assertEqual('unverified', payload['session_adoption'])
+        self.assertNotIn('synthetic-private-value', result.stdout + result.stderr)
+        self.assertEqual(original, config.read_bytes())
+
+    def test_show_reports_missing_values_without_inventing_defaults(self) -> None:
+        result = self.run_script("show")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIsNone(self.payload(result)['current_model_context_window'])
+        self.assertIsNone(self.payload(result)['current_model_auto_compact_token_limit'])
+        self.assertFalse((self.home / 'config.toml').exists())
+
+    def test_set_compact_only_changes_requested_assignment(self) -> None:
+        config = self.home / 'config.toml'
+        original = (
+            b'model_context_window = 1_000_000 # preserve formatting\r\n'
+            b'model_auto_compact_token_limit = 500000 # operator note\r\n'
+            b'[profiles.small]\r\nmodel_auto_compact_token_limit = 100000\r\n'
+            b'api_key = "synthetic-private-value"\r\n'
+        )
+        config.write_bytes(original)
+        result = self.run_script('set-compact', '--tokens', '400000', FAKE_LOCAL_ONLY='1')
+        self.assertEqual(0, result.returncode, result.stderr)
+        payload = self.payload(result)
+        self.assertEqual(original.replace(b'= 500000', b'= 400000'), config.read_bytes())
+        self.assertEqual(500000, payload['previous_model_auto_compact_token_limit'])
+        self.assertEqual(400000, payload['current_model_auto_compact_token_limit'])
+        self.assertEqual('ok', payload['config_load'])
+        self.assertEqual('unverified', payload['session_adoption'])
+        self.assertTrue(payload['restart_required'])
+        self.assertEqual(original, Path(payload['backup_path']).read_bytes())
+        self.assertNotIn('synthetic-private-value', result.stdout + result.stderr)
+
+    def test_set_compact_adds_only_threshold_when_window_is_missing(self) -> None:
+        result = self.run_script('set-compact', '--tokens', '400000', FAKE_LOCAL_ONLY='1')
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(
+            b'model_auto_compact_token_limit = 400000\n',
+            (self.home / 'config.toml').read_bytes(),
+        )
+
+    def test_set_compact_noop_creates_no_backup(self) -> None:
+        config = self.home / 'config.toml'
+        config.write_text('model_auto_compact_token_limit = 400000\n')
+        result = self.run_script('set-compact', '--tokens', '400000')
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertFalse(self.payload(result)['changed'])
+        self.assertFalse(self.payload(result)['restart_required'])
+        self.assertFalse((self.home / 'backups').exists())
+
+    def test_set_compact_rejects_invalid_requested_values_without_writing(self) -> None:
+        config = self.home / 'config.toml'
+        original = b'model_context_window = 1000000\n'
+        config.write_bytes(original)
+        for token in ('0', '-1', '1000001', str(2**63), 'null', ''):
+            with self.subTest(token=token):
+                result = self.run_script('set-compact', '--tokens', token)
+                self.assertEqual(2, result.returncode)
+                self.assertEqual(original, config.read_bytes())
+                self.assertFalse((self.home / 'backups').exists())
+
+    def test_rejects_missing_tokens_and_tokens_on_other_modes(self) -> None:
+        for arguments in (('set-compact',), ('show', '--tokens', '400000'),
+                          ('apply', '--tokens', '400000')):
+            with self.subTest(arguments=arguments):
+                self.assertEqual(2, self.run_script(*arguments).returncode)
+                self.assertFalse((self.home / 'config.toml').exists())
+
+    def test_local_modes_reject_invalid_existing_values_without_echoing_them(self) -> None:
+        config = self.home / 'config.toml'
+        for value in ('""', '"synthetic-private-value"', 'true', '0', '-1', '[]'):
+            original = f'model_auto_compact_token_limit = {value}\n'.encode()
+            config.write_bytes(original)
+            for arguments in (('show',), ('set-compact', '--tokens', '400000')):
+                with self.subTest(value=value, arguments=arguments):
+                    result = self.run_script(*arguments)
+                    self.assertEqual(2, result.returncode)
+                    self.assertEqual(original, config.read_bytes())
+                    self.assertNotIn('synthetic-private-value', result.stdout + result.stderr)
+
+    def test_local_check_failure_or_empty_output_rolls_back_and_withholds_body(self) -> None:
+        config = self.home / 'config.toml'
+        original = b'model_auto_compact_token_limit = 500000\n'
+        for failure in ('FAKE_LOCAL_FAIL', 'FAKE_LOCAL_EMPTY'):
+            with self.subTest(failure=failure):
+                config.write_bytes(original)
+                result = self.run_script('set-compact', '--tokens', '400000', **{failure:'1'})
+                self.assertEqual(2, result.returncode)
+                self.assertEqual(original, config.read_bytes())
+                self.assertNotIn('synthetic-private-diagnostic', result.stdout + result.stderr)
+
+    def test_local_check_failure_removes_new_file(self) -> None:
+        result = self.run_script('set-compact', '--tokens', '400000', FAKE_LOCAL_FAIL='1')
+        self.assertEqual(2, result.returncode)
+        self.assertFalse((self.home / 'config.toml').exists())
+
+    def test_quoted_unmodified_window_is_preserved(self) -> None:
+        config = self.home / 'config.toml'
+        config.write_text('"model_context_window" = 1000000\n')
+        result = self.run_script('set-compact', '--tokens', '400000')
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertTrue(config.read_bytes().startswith(b'"model_context_window" = 1000000\n'))
+
+    def test_quoted_modified_threshold_is_rejected(self) -> None:
+        config = self.home / 'config.toml'
+        original = b'"model_auto_compact_token_limit" = 500000\n'
+        config.write_bytes(original)
+        result = self.run_script('set-compact', '--tokens', '400000')
+        self.assertEqual(2, result.returncode)
+        self.assertEqual(original, config.read_bytes())
+
+    def test_noop_preserves_multiline_sample_with_quoted_real_key(self) -> None:
+        config = self.home / 'config.toml'
+        original = (
+            b'"model_auto_compact_token_limit" = 400000\n'
+            b'developer_instructions = """\n'
+            b'model_auto_compact_token_limit = 600000\n"""\n'
+        )
+        config.write_bytes(original)
+        result = self.run_script('set-compact', '--tokens', '400000')
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertFalse(self.payload(result)['changed'])
+        self.assertEqual(original, config.read_bytes())
+        self.assertFalse((self.home / 'backups').exists())
+
+    def test_update_ignores_assignment_and_table_samples_in_multiline_values(self) -> None:
+        config = self.home / 'config.toml'
+        for delimiter in ('"""', "'''"):
+            with self.subTest(delimiter=delimiter):
+                original = (
+                    f'developer_instructions = {delimiter}\n'
+                    '[profiles.sample]\nmodel_auto_compact_token_limit = 600000\n'
+                    f'{delimiter}\n'
+                    'model_auto_compact_token_limit = 500000\n'
+                ).encode()
+                config.write_bytes(original)
+                result = self.run_script('set-compact', '--tokens', '400000')
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual(original.replace(b'= 500000', b'= 400000'), config.read_bytes())
+
+    def test_missing_threshold_is_inserted_outside_multiline_sample(self) -> None:
+        config = self.home / 'config.toml'
+        original = b'developer_instructions = """\nmodel_auto_compact_token_limit = 600000\n"""\n'
+        config.write_bytes(original)
+        result = self.run_script('set-compact', '--tokens', '400000')
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(original+b'model_auto_compact_token_limit = 400000\n', config.read_bytes())
+
+    def test_concurrent_edits_are_preserved_on_changed_and_noop_paths(self) -> None:
+        spec = importlib.util.spec_from_file_location('context_setup_test', SCRIPT)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        config = self.home / 'config.toml'
+        original = b'model_auto_compact_token_limit = 500000\n'
+        foreign = original + b'# concurrent writer\n'
+        for tokens in (400000, 500000):
+            with self.subTest(tokens=tokens):
+                config.write_bytes(original)
+                def concurrent_validator():
+                    config.write_bytes(foreign)
+                    raise module.SetupError('synthetic validation failure')
+                with self.assertRaises(module.SetupError):
+                    module.persist_values(
+                        config, original, {'model_auto_compact_token_limit':500000},
+                        {'model_auto_compact_token_limit':tokens}, concurrent_validator,
+                    )
+                self.assertEqual(foreign, config.read_bytes())
+        config.write_bytes(original)
+        def changed_after_success():
+            config.write_bytes(foreign)
+        with self.assertRaises(module.SetupError):
+            module.persist_values(
+                config, original, {'model_auto_compact_token_limit':500000},
+                {'model_auto_compact_token_limit':500000}, changed_after_success,
+            )
+        self.assertEqual(foreign, config.read_bytes())
+
+        config.write_bytes(original)
+        real_backup = module.backup_config
+        def concurrent_backup(path, data):
+            result = real_backup(path, data)
+            path.write_bytes(foreign)
+            return result
+        with patch.object(module, 'backup_config', concurrent_backup):
+            with self.assertRaisesRegex(module.SetupError, 'during backup'):
+                module.persist_values(
+                    config, original, {'model_auto_compact_token_limit':500000},
+                    {'model_auto_compact_token_limit':400000}, lambda: None,
+                )
+        self.assertEqual(foreign, config.read_bytes())
 
 
 if __name__ == "__main__":
