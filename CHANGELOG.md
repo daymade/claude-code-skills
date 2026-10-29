@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **auto-repo-setup** (v2.1.8 → v2.1.9): Select persistent storage for resumable task checkouts and continuation evidence before creating a task copy; reserve system temporary directories for disposable scratch. Preserve unknown evidence loss during recovery. Change type: bounded workspace-lifetime guidance.
+
 - **ghostty-use** (v1.8.6 → v1.8.7): Require Kimi for Ghostty computer-use observation and interaction, prohibit Codex computer use, and retain the existing AppleScript batch restore under its foreground and reconciliation rules. Change type: bounded channel-selection guidance.
 
 - **tibo-reset-codex** (v2.6.1 → v2.6.2): Preserve independent scan and live-banked results, distinguish missing observations from command failures, and replace command-text workaround advice with cause-based retries. Align repository instruction routes and retire duplicated merge-attribute prescriptions. Change type: factual operating-procedure correction.
