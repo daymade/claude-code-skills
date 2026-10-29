@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **feishu-doc-scraper** (v1.10.3 → v1.10.4): Recognize embedded wikilinks across Pandoc AST variants using source positions, preserving external-media rejection and escaped ordinary links. Change type: deterministic parser compatibility repair.
 - **git-safety-net** (v1.24.1 → v1.24.2): Route worktree retirement and recovery-material selection to their canonical preservation procedure; remove a hand-maintained heading inventory and duplicated retirement instructions. Preserve the existing unique-work, occupancy, authority and recovery boundaries. Change type: lossless documentation deduplication.
 
+- **ghostty-use** (v1.9.0 → v1.9.1): Align recovery entry points with current-set verification and existing foreground authorization; preserve observer cadence and stopped state during upgrades. Keep detailed procedures with their owners and remove copied timing values. Change type: bounded SOP alignment.
 - **llm-eval-harness** (v1.7.0 → v1.7.1): Distinguish exhausted quota from transient rate limits in HTTP 429 guidance; retain status/code evidence and quota recovery instead of unconditional concurrency retries. Change type: factual SOP correction.
 - **prior-work-retrieval** (`daymade-claude-code` v4.33.11): Native `exec` retrieval envelopes; quoted `cmd`/`command` keys and JavaScript-escaped command separators.
 
