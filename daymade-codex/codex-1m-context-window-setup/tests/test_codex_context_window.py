@@ -423,6 +423,43 @@ class CodexContextWindowTests(unittest.TestCase):
         self.assertEqual(2, result.returncode)
         self.assertEqual(original, config.read_bytes())
 
+    def test_noop_preserves_multiline_sample_with_quoted_real_key(self) -> None:
+        config = self.home / 'config.toml'
+        original = (
+            b'"model_auto_compact_token_limit" = 400000\n'
+            b'developer_instructions = """\n'
+            b'model_auto_compact_token_limit = 600000\n"""\n'
+        )
+        config.write_bytes(original)
+        result = self.run_script('set-compact', '--tokens', '400000')
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertFalse(self.payload(result)['changed'])
+        self.assertEqual(original, config.read_bytes())
+        self.assertFalse((self.home / 'backups').exists())
+
+    def test_update_ignores_assignment_and_table_samples_in_multiline_values(self) -> None:
+        config = self.home / 'config.toml'
+        for delimiter in ('"""', "'''"):
+            with self.subTest(delimiter=delimiter):
+                original = (
+                    f'developer_instructions = {delimiter}\n'
+                    '[profiles.sample]\nmodel_auto_compact_token_limit = 600000\n'
+                    f'{delimiter}\n'
+                    'model_auto_compact_token_limit = 500000\n'
+                ).encode()
+                config.write_bytes(original)
+                result = self.run_script('set-compact', '--tokens', '400000')
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual(original.replace(b'= 500000', b'= 400000'), config.read_bytes())
+
+    def test_missing_threshold_is_inserted_outside_multiline_sample(self) -> None:
+        config = self.home / 'config.toml'
+        original = b'developer_instructions = """\nmodel_auto_compact_token_limit = 600000\n"""\n'
+        config.write_bytes(original)
+        result = self.run_script('set-compact', '--tokens', '400000')
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(original+b'model_auto_compact_token_limit = 400000\n', config.read_bytes())
+
     def test_concurrent_edits_are_preserved_on_changed_and_noop_paths(self) -> None:
         spec = importlib.util.spec_from_file_location('context_setup_test', SCRIPT)
         module = importlib.util.module_from_spec(spec)

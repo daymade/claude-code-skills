@@ -228,14 +228,26 @@ def inspect(codex_bin: str) -> Inspection:
 def render_config(original: bytes, config: dict[str, Any], values: dict[str, int]) -> bytes:
     if not values or not set(values).issubset(TARGET_KEYS):
         raise SetupError("unsupported configuration keys; no file was changed")
+    if all(config.get(key) == value for key, value in values.items()):
+        return original
     if original.startswith(b"\xef\xbb\xbf"):
         raise SetupError("UTF-8 BOM in config.toml is unsupported; no file was changed")
     text = original.decode("utf-8") if original else ""
     newline = "\r\n" if "\r\n" in text else "\n"
     lines = text.splitlines(keepends=True)
+
+    def complete_prefix(index: int) -> bool:
+        # An assignment/header-looking line inside a multiline TOML value has
+        # an incomplete prefix. Ask the parser rather than interpreting it as config.
+        try:
+            tomllib.loads("".join(lines[:index]))
+        except tomllib.TOMLDecodeError:
+            return False
+        return True
+
     first_table = len(lines)
     for index, line in enumerate(lines):
-        if TABLE_HEADER.match(line) and not line.lstrip().startswith("#"):
+        if TABLE_HEADER.match(line) and complete_prefix(index):
             first_table = index
             break
 
@@ -246,6 +258,8 @@ def render_config(original: bytes, config: dict[str, Any], values: dict[str, int
             continue
         key = match.group(2)
         if key not in values:
+            continue
+        if not complete_prefix(index):
             continue
         if key in found:
             raise SetupError(f"duplicate textual assignment for top-level {key}")
@@ -283,6 +297,9 @@ def render_config(original: bytes, config: dict[str, Any], values: dict[str, int
     for key, expected in values.items():
         if parsed.get(key) != expected:
             raise SetupError(f"edited config did not preserve top-level {key}={expected}")
+    expected_config = {**config, **values}
+    if parsed != expected_config:
+        raise SetupError("edited config would change unrelated settings; no file was changed")
     return rendered.encode("utf-8")
 
 
