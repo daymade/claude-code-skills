@@ -600,6 +600,12 @@ For change-only automatic backups, use its
 For one-shot helper exits or attribution of an exited terminal, enter
 [helper terminals and original sessions](ghostty-use/SKILL.md#one-shot-helper-terminals-and-original-sessions).
 
+### Codex Startup and Entry Identity
+
+Before a Codex startup diagnosis or a build/resume/recovery claim, follow
+[entry identity](daymade-codex/local-codex/references/entry-identity.md).
+That SOP owns the shell/executable binding and the limits of identity evidence.
+
 ### Codex Quota and Account Checks
 
 For selected-site Cookie copying between local profiles of the same macOS Chrome,
