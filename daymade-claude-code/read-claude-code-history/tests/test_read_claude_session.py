@@ -11,6 +11,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
@@ -694,12 +695,33 @@ class ClaudeSessionEvidenceTests(unittest.TestCase):
                 )
 
             def render(session_id: str) -> str:
+                env = os.environ.copy()
+                env["HOME"] = str(home)
+                for key in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "KIMI_HOME"):
+                    env.pop(key, None)
                 completed = subprocess.run(
                     [sys.executable, str(SCRIPT), "--project", str(project), "--session", session_id],
                     text=True, encoding="utf-8", capture_output=True, check=True,
-                    env={**os.environ, "HOME": str(home)},
+                    env=env,
                 )
                 return completed.stdout
+
+            poison = {
+                key: str(home / f"inherited-{key.lower()}")
+                for key in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "KIMI_HOME")
+            }
+            poison["FIXTURE_ENV_SENTINEL"] = "preserved"
+            with mock.patch.dict(os.environ, poison), mock.patch.object(
+                subprocess, "run"
+            ) as run:
+                run.return_value.stdout = "mocked fixture output"
+                self.assertEqual(render("local"), "mocked fixture output")
+                run.assert_called_once()
+                child_env = run.call_args.kwargs["env"]
+            self.assertEqual(child_env["HOME"], str(home))
+            for key in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "KIMI_HOME"):
+                self.assertNotIn(key, child_env)
+            self.assertEqual(child_env["FIXTURE_ENV_SENTINEL"], "preserved")
 
             local = render("local")
             self.assertIn("LOCAL RUNTIME (output)", local)

@@ -98,14 +98,37 @@ class SessionAnalyzerTests(unittest.TestCase):
     def run_cli(
         self, *arguments: str, check: bool = True
     ) -> subprocess.CompletedProcess[str]:
+        env = os.environ.copy()
+        env["HOME"] = str(self.user_home)
+        for key in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "KIMI_HOME"):
+            env.pop(key, None)
         return subprocess.run(
             [sys.executable, str(SCRIPT), *arguments],
             text=True,
             encoding="utf-8",
             capture_output=True,
             check=check,
-            env={**os.environ, "HOME": str(self.user_home)},
+            env=env,
         )
+
+    def test_run_cli_removes_inherited_discovery_environment(self):
+        poison = {
+            "CLAUDE_CONFIG_DIR": str(self.root / "inherited-claude"),
+            "CODEX_HOME": str(self.root / "inherited-codex"),
+            "KIMI_HOME": str(self.root / "inherited-kimi"),
+            "FIXTURE_ENV_SENTINEL": "preserved",
+        }
+        with mock.patch.dict(os.environ, poison, clear=False), mock.patch.object(
+            subprocess, "run"
+        ) as run:
+            self.run_cli("--help")
+            run.assert_called_once()
+            child_env = run.call_args.kwargs["env"]
+
+        self.assertEqual(child_env["HOME"], str(self.user_home))
+        for key in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "KIMI_HOME"):
+            self.assertNotIn(key, child_env)
+        self.assertEqual(child_env["FIXTURE_ENV_SENTINEL"], "preserved")
 
     def seed_structured_events(self) -> tuple[str, str]:
         active_id = "11111111-1111-4111-8111-111111111111"
@@ -1661,11 +1684,21 @@ class RawBytePrefilterSafetyTests(unittest.TestCase):
             target.write_text(
                 json.dumps(record, ensure_ascii=ensure_ascii) + "\n", encoding="utf-8"
             )
+            fixture_home = root / "user-home"
+            fixture_home.mkdir()
+            env = os.environ.copy()
+            env["HOME"] = str(fixture_home)
+            for key in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "KIMI_HOME"):
+                env.pop(key, None)
+            env["CLAUDE_CONFIG_DIR"] = str(home)
             completed = subprocess.run(
                 [sys.executable, str(SCRIPT), "search", str(workspace), keyword],
                 capture_output=True, text=True, check=False,
-                env=dict(os.environ, CLAUDE_CONFIG_DIR=str(home)),
+                env=env,
             )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertIn(target.stem, completed.stdout)
+            self.assertIn("Total mentions: 1", completed.stdout)
             self.assertNotIn("No matches found", completed.stdout,
                              f"lost a match: content={content!r} keyword={keyword!r}")
 

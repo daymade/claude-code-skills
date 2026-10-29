@@ -20,6 +20,8 @@ import time
 import types
 import unittest
 from pathlib import Path
+from datetime import datetime, timedelta, timezone
+from unittest import mock
 
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
@@ -82,6 +84,17 @@ class ToolCallsCliTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
 
+    def _now_iso(self, offset_minutes: int = 0) -> str:
+        return (datetime.now(timezone.utc) + timedelta(minutes=offset_minutes)).isoformat()
+
+    def _window(self) -> list[str]:
+        # Fresh fixture birthtimes must lie inside the CLI's metadata window.
+        now = datetime.now(timezone.utc)
+        return [
+            "--from", (now - timedelta(days=1)).strftime("%Y-%m-%d"),
+            "--to", (now + timedelta(days=1)).strftime("%Y-%m-%d"),
+        ]
+
     def _project_dir(self, home: Path, name: str = "-work-repo") -> Path:
         result = home / "projects" / name
         result.mkdir(parents=True, exist_ok=True)
@@ -90,6 +103,8 @@ class ToolCallsCliTests(unittest.TestCase):
     def run_cli(self, *args: str) -> subprocess.CompletedProcess[str]:
         env = os.environ.copy()
         env["HOME"] = str(self.user_home)
+        for key in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "KIMI_HOME"):
+            env.pop(key, None)
         return subprocess.run(
             [sys.executable, str(SCRIPT), "tool-calls", *args],
             text=True,
@@ -99,15 +114,34 @@ class ToolCallsCliTests(unittest.TestCase):
             check=False,
         )
 
+    def test_run_cli_removes_inherited_discovery_environment(self):
+        poison = {
+            "CLAUDE_CONFIG_DIR": str(self.root / "inherited-claude"),
+            "CODEX_HOME": str(self.root / "inherited-codex"),
+            "KIMI_HOME": str(self.root / "inherited-kimi"),
+            "FIXTURE_ENV_SENTINEL": "preserved",
+        }
+        with mock.patch.dict(os.environ, poison, clear=False), mock.patch.object(
+            subprocess, "run"
+        ) as run:
+            self.run_cli("--help")
+            run.assert_called_once()
+            child_env = run.call_args.kwargs["env"]
+
+        self.assertEqual(child_env["HOME"], str(self.user_home))
+        for key in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "KIMI_HOME"):
+            self.assertNotIn(key, child_env)
+        self.assertEqual(child_env["FIXTURE_ENV_SENTINEL"], "preserved")
+
     def test_hit_is_found_and_grouped_by_session(self):
         project = self._project_dir(self.active_home)
         _write_session(
             project / "sess-a.jsonl",
-            [_bash_record("sess-a", "u1", "npm run build", "2026-09-10T10:00:00Z")],
+            [_bash_record("sess-a", "u1", "npm run build", self._now_iso())],
         )
 
         result = self.run_cli(
-            "--from", "2026-09-01", "--to", "2026-09-30", "--pattern", "npm run build"
+            *self._window(), "--pattern", "npm run build"
         )
 
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -120,11 +154,11 @@ class ToolCallsCliTests(unittest.TestCase):
         project = self._project_dir(self.active_home)
         _write_session(
             project / "sess-a.jsonl",
-            [_bash_record("sess-a", "u1", "npm run build", "2026-09-10T10:00:00Z")],
+            [_bash_record("sess-a", "u1", "npm run build", self._now_iso())],
         )
 
         result = self.run_cli(
-            "--from", "2026-09-01", "--to", "2026-09-30", "--pattern", "docker build"
+            *self._window(), "--pattern", "docker build"
         )
 
         self.assertEqual(result.returncode, 1, result.stderr)
@@ -135,12 +169,12 @@ class ToolCallsCliTests(unittest.TestCase):
         _write_session(
             project / "sess-a.jsonl",
             [
-                _bash_record("sess-a", "u1", "npm run build", "2026-09-10T10:00:00Z"),
+                _bash_record("sess-a", "u1", "npm run build", self._now_iso()),
                 {
                     "type": "assistant",
                     "sessionId": "sess-a",
                     "uuid": "u2",
-                    "timestamp": "2026-09-10T10:01:00Z",
+                    "timestamp": self._now_iso(1),
                     "message": {
                         "role": "assistant",
                         "content": [
@@ -157,7 +191,7 @@ class ToolCallsCliTests(unittest.TestCase):
         )
 
         result = self.run_cli(
-            "--from", "2026-09-01", "--to", "2026-09-30", "--pattern", "npm", "--tool", "Write"
+            *self._window(), "--pattern", "npm", "--tool", "Write"
         )
 
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -176,7 +210,7 @@ class ToolCallsCliTests(unittest.TestCase):
         os.utime(old_file, (old_time, old_time))
 
         result = self.run_cli(
-            "--from", "2026-09-01", "--to", "2026-09-30", "--pattern", "npm"
+            *self._window(), "--pattern", "npm"
         )
 
         self.assertEqual(result.returncode, 1, result.stderr)
@@ -196,7 +230,7 @@ class ToolCallsCliTests(unittest.TestCase):
         )
 
         result = self.run_cli(
-            "--from", "2026-09-01", "--to", "2026-09-30", "--pattern", "npm"
+            *self._window(), "--pattern", "npm"
         )
 
         self.assertEqual(result.returncode, 1, result.stderr)
@@ -207,7 +241,7 @@ class ToolCallsCliTests(unittest.TestCase):
         project = self._project_dir(self.active_home)
         _write_session(
             project / "sess-a.jsonl",
-            [_bash_record("sess-a", "u1", "npm run build", "2026-09-10T10:00:00Z")],
+            [_bash_record("sess-a", "u1", "npm run build", self._now_iso())],
         )
         # A per-model profile home whose entire projects/ tree is a symlink to
         # the active home's — the #1 real-world source of duplicate reads.
@@ -216,7 +250,7 @@ class ToolCallsCliTests(unittest.TestCase):
         os.symlink(self.active_home / "projects", profile_home / "projects")
 
         result = self.run_cli(
-            "--from", "2026-09-01", "--to", "2026-09-30", "--pattern", "npm"
+            *self._window(), "--pattern", "npm"
         )
 
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -230,11 +264,11 @@ class ToolCallsCliTests(unittest.TestCase):
         project = self._project_dir(self.active_home)
         _write_session(
             project / "sess-a.jsonl",
-            [_bash_record("sess-a", "u1", "npm run build", "2026-09-10T10:00:00Z")],
+            [_bash_record("sess-a", "u1", "npm run build", self._now_iso())],
         )
 
         result = self.run_cli(
-            "--from", "2026-09-01", "--to", "2026-09-30", "--pattern", "npm"
+            *self._window(), "--pattern", "npm"
         )
 
         self.assertIn("Codex rollout files", result.stdout)
@@ -244,23 +278,23 @@ class ToolCallsCliTests(unittest.TestCase):
         project = self._project_dir(self.active_home)
         _write_session(
             project / "sess-a.jsonl",
-            [_bash_record("sess-a", "u1", "NPM RUN BUILD", "2026-09-10T10:00:00Z")],
+            [_bash_record("sess-a", "u1", "NPM RUN BUILD", self._now_iso())],
         )
 
         insensitive = self.run_cli(
-            "--from", "2026-09-01", "--to", "2026-09-30", "--pattern", "npm run build"
+            *self._window(), "--pattern", "npm run build"
         )
         self.assertEqual(insensitive.returncode, 0, insensitive.stderr)
 
         sensitive = self.run_cli(
-            "--from", "2026-09-01", "--to", "2026-09-30",
+            *self._window(),
             "--pattern", "npm run build", "--case-sensitive",
         )
         self.assertEqual(sensitive.returncode, 1, sensitive.stderr)
 
     def test_invalid_regex_is_a_usage_error(self):
         result = self.run_cli(
-            "--from", "2026-09-01", "--to", "2026-09-30", "--pattern", "("
+            *self._window(), "--pattern", "("
         )
         self.assertEqual(result.returncode, 2, result.stderr)
         self.assertIn("not a valid regex", result.stderr)
