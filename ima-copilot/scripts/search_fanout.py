@@ -4,7 +4,7 @@ search_fanout.py — Fan-out search across all IMA knowledge bases with
 user-defined priority boosting and subset-KB skipping.
 
 Rationale for this shape:
-  IMA's OpenAPI has three constraints that force every serious search tool
+  IMA's OpenAPI has constraints that force every serious search tool
   into the same pattern:
     1. No cross-KB endpoint — search_knowledge takes a single knowledge_base_id.
     2. No relevance score in results — ranking must be client-side.
@@ -46,6 +46,7 @@ from pathlib import Path
 
 API_BASE = "https://ima.qq.com/openapi"
 HARD_HIT_CAP = 100  # search_knowledge silently caps at 100, no cursor
+KB_PAGE_SIZE = 20  # search_knowledge_base rejects larger pages
 
 
 def load_credentials():
@@ -130,7 +131,7 @@ def list_all_kbs(client_id, api_key):
     while True:
         data = api_post(
             "wiki/v1/search_knowledge_base",
-            {"query": "", "cursor": cursor, "limit": 50},
+            {"query": "", "cursor": cursor, "limit": KB_PAGE_SIZE},
             client_id,
             api_key,
         )
@@ -171,7 +172,7 @@ def is_permission_denied(result):
 
 def rank_groups(results, priority_kbs, skip_kbs):
     """
-    Partition the per-KB results into four buckets:
+    Partition the per-KB results into buckets:
 
       - priority: kbs named in priority_kbs (in that order), with >0 hits
       - others:   every other searchable kb with >0 hits, sorted by hit count

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **ima-copilot** (v1.2.1 → v1.2.2): Use the accepted knowledge-base listing page size while preserving cursor pagination and search results. Document endpoint-specific parameter failures without patching upstream installations. Change type: API compatibility repair.
+- **feishu-doc-scraper** (v1.10.4 → v1.10.5): Carry authorized source access instructions into the destination's material entry. Stop persisting generated attachment counts and remove those legacy fields on resume while retaining independent status and evidence. Change types: bounded handoff clarification and manifest hygiene.
+
 - **feishu-doc-scraper** (v1.10.3 → v1.10.4): Recognize embedded wikilinks across Pandoc AST variants using source positions, preserving external-media rejection and escaped ordinary links. Change type: deterministic parser compatibility repair.
 - **git-safety-net** (v1.24.1 → v1.24.2): Route worktree retirement and recovery-material selection to their canonical preservation procedure; remove a hand-maintained heading inventory and duplicated retirement instructions. Preserve the existing unique-work, occupancy, authority and recovery boundaries. Change type: lossless documentation deduplication.
 

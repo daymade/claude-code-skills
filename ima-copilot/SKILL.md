@@ -65,7 +65,7 @@ To run it:
 bash scripts/install_ima_skill.sh
 ```
 
-The script auto-detects which of the three target agents are installed on the user's machine. For agents that are not present, it skips silently rather than installing anywhere the user hasn't opted in. For agents that are present, it installs globally (`-g`) in vercel skills' default symlink mode: the first detected agent's directory becomes the canonical copy, and the remaining agents are symlinked to it. This means a repair or an upgrade applied once propagates automatically to every agent — `diagnose.sh` detects this sharing and dedupes its reports so you don't see the same issue multiple times.
+The script auto-detects which target agents are installed on the user's machine. For agents that are not present, it skips silently rather than installing anywhere the user hasn't opted in. For agents that are present, it installs globally (`-g`) in vercel skills' default symlink mode: the first detected agent's directory becomes the canonical copy, and the remaining agents are symlinked to it. This means a repair or an upgrade applied once propagates automatically to every agent — `diagnose.sh` detects this sharing and dedupes its reports so you don't see the same issue multiple times.
 
 For a version override, detection logic, troubleshooting, and the full file-by-file layout produced by the installer, read `references/installation_flow.md`.
 
@@ -144,7 +144,7 @@ Every repair is **temporary in the sense that ima-skill upgrades replace everyth
 
 ## Capability 4: Personalized fan-out search
 
-IMA's OpenAPI has three hard constraints that any serious search workflow must account for:
+IMA's OpenAPI has constraints that any serious search workflow must account for:
 
 1. **No cross-knowledge-base endpoint.** `search_knowledge` requires a single `knowledge_base_id` per call. Cross-KB search is a client-side fan-out, not an API feature.
 2. **No relevance score in results.** `info_list` items only carry `media_id`, `title`, `parent_folder_id`, and `highlight_content`. Any ranking beyond insertion order must happen on the client.
@@ -161,6 +161,9 @@ The script reads `~/.config/ima/copilot.json` for personalization (priority KBs,
 The personalization file is **per-user** and private. This skill ships only a template — see `config-template/copilot.json.example`. A user with no config file gets a neutral default: fan out all accessible KBs, sort groups by hit count, no boosting.
 
 For the full algorithm, truncation handling strategy, rendering format, and a walkthrough of the evidence-based decision to allow a "subset KB skip" (e.g., a curated KB that is a strict subset of a master KB can be safely skipped to reduce duplicate hits), read `references/search_best_practices.md`.
+
+For knowledge-base listing parameter errors, use that reference's
+“Knowledge-base enumeration” procedure before diagnosing authentication or access.
 
 ## Capability 5: Import URLs and extract content
 

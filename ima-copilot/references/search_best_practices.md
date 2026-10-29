@@ -2,9 +2,20 @@
 
 This document is the reference for Capability 4 (fan-out search with personalization). Read it when the user asks about how to search, reports weird search results, or wants to tune the `copilot.json` configuration.
 
-## The three hard constraints of the IMA search API
+## Constraints of the IMA search API
 
-Any search workflow on top of IMA has to account for these three constraints. They are not documented by upstream; they were discovered by observation.
+Account for the following observed constraints when searching IMA.
+
+### Knowledge-base enumeration
+
+Use `scripts/search_fanout.py` to enumerate knowledge bases before searching. Its
+`KB_PAGE_SIZE` defines the page size accepted by `search_knowledge_base`; follow
+the returned cursor until the list ends. An API error about
+`SearchKnowledgeBaseReq.Limit` is a request-parameter failure, not evidence that
+the account has no knowledge bases. Upstream module tables may describe a larger
+limit; use the endpoint's actual response and retain the wrapper's pagination.
+Do not apply this endpoint's limit to `get_knowledge_list` or other APIs, and do
+not patch the third-party Skill installation to make this wrapper work.
 
 ### 1. No cross-knowledge-base endpoint
 

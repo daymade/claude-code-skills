@@ -4,6 +4,13 @@ Use this contract after faithful extraction and before filing the result into a 
 
 ## Artifact properties
 
+Keep aggregate counts and byte totals in on-demand command output, not in the
+durable manifest. Derive them from artifact records and attachment state when
+needed. `archive_attachments.py` removes its legacy requested/verified attachment
+counts on resume; it preserves independently maintained reader/retention state,
+owner annotations, failures and unresolved references. Per-file identity and
+integrity metadata remain part of the retrieval contract.
+
 For each artifact record:
 
 1. `storage` states the durable source of record: `git`, `source`, or `oss`.
