@@ -205,8 +205,6 @@ jobs:
       # slow-but-alive response can evade per-request timeouts. Exercise the
       # fixture-only deadline contract before using this one-shot hosted VM.
       - name: Install registered-suite runtime tools
-        env:
-          NEED_HTML_READER: ${{ steps.scope.outputs.html_reader }}
         run: |
           scripts/ci/apt_install_bounded.sh --self-test
           packages=()
@@ -218,9 +216,6 @@ jobs:
           fi
           if [ ! -x /bin/zsh ]; then
             packages+=(zsh)
-          fi
-          if [ "$NEED_HTML_READER" = true ] && ! command -v pandoc >/dev/null 2>&1; then
-            packages+=(pandoc)
           fi
           if [ "${#packages[@]}" -gt 0 ]; then
             scripts/ci/apt_install_bounded.sh "${packages[@]}"
@@ -249,10 +244,12 @@ jobs:
       # The static HTML batch gate exercises the actual converter; schema-only
       # fixtures cannot establish conversion behavior. Keep its CLI dependency
       # explicit and its selected stdlib suite separate from unrelated tests.
-      # Pandoc is provisioned with the other tools in the single bounded APT pass.
+      # Keep Pandoc in this phase: provisioning it before the registry changes
+      # which optional parser suites run in otherwise unchanged skills.
       - name: HTML reader pilot and batch safety
         if: ${{ !cancelled() && (steps.scope.outcome != 'success' || steps.scope.outputs.html_reader != 'false') }}
         run: |
+          scripts/ci/apt_install_bounded.sh pandoc
           pandoc --version
           python3 -m unittest discover -s daymade-docs/doc-to-markdown/scripts -p test_reader_pilot_gate.py
 
