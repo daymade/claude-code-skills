@@ -29,12 +29,13 @@ Never use either channel to bypass a host denial.
 
 Snapshot, reconstruction, dry-run and reconciliation can proceed without taking
 the desktop. Actual restore uses global keyboard/clipboard input and is foreground
-work even when launched as a background shell job. Before restore, use a concrete
-Ghostty handoff or existing explicit idle-desktop permission; check current activity
-and coordinate exclusive agent ownership. Under that standing grant, notify and
-execute without asking again. Idle input alone is not ownership. If busy/unknown,
-continue preparation and read-only checks; stop input on human takeover and never
-restore your old focus. Host denials remain binding.
+work even when launched as a background shell job. Apply the current user's
+foreground authorization. When it already covers this app and action, notify and
+proceed without requesting another handoff or requiring a lease or idle proof.
+Coordinate observed competing use. On human takeover, actual agent competition or
+externally overwritten state, stop input and yield; do not restore your old focus.
+If foreground use is not authorized, continue preparation and read-only checks
+until the missing bounded authorization is supplied. Host denials remain binding.
 
 ## Entry decision tree
 
@@ -88,20 +89,27 @@ account preconditions and partial-restore readiness belong to
 [the switch SOP](references/codex-account-switch.md). Never send process-termination
 signals or switch credentials through this route; normal local exit controls use
 that SOP's authorized-host protocol. Apply the foreground
-conditions above before actual opening; ask only when that handoff is missing. `--dry-run` and `--check`
+conditions above before actual opening; ask only when the required authorization is missing. `--dry-run` and `--check`
 remain read-only. Distinguish reopened IDs from new-account requests that worked:
 the script reports authentication as `not_checked` and sends no test prompt.
 
 ## Quick start
 
+Before reopening sessions, follow
+[current-set reconciliation](references/restore_mechanics.md#reconcile-the-current-wanted-set).
+Keep the same explicit manifest and selection through preview, restore and check.
+
 ```bash
 # Before quitting (from any directory):
 python3 <skill-dir>/scripts/ghostty_session.py snapshot
 
-# After restart (from any directory; needs Accessibility permission for keystrokes):
-python3 <skill-dir>/scripts/ghostty_session.py restore        # manual: active only; automatic: full recorded set
-python3 <skill-dir>/scripts/ghostty_session.py restore --all  # include waiting/quota/dead/stale/unknown records
+# After selecting the wanted set, preview it before any foreground input:
+python3 <skill-dir>/scripts/ghostty_session.py restore --snapshot <manifest.json> --all --dry-run
+# Carry the selected --only/--exclude options into this preview, then omit --dry-run to execute.
 ```
+
+Without `--all`, manual manifests select active sessions only; automatic manifests
+select their recorded set. Use `--all` to include waiting/quota/dead/stale/unknown rows.
 
 The snapshot lands in `~/.ghostty-session/snapshots/` (home-relative, survives reboot).
 Manual snapshots record Ghostty process descendants only. They persist resumable
@@ -118,27 +126,14 @@ that prints `N/M present`, a manual reopen command and a retry command containin
 missing IDs. Read that result before declaring success; per-tab `SENT (unverified)`
 is a paste acknowledgement, not proof that a session reopened. Re-running the same
 manifest opens only the IDs still missing. `--dry-run` prints commands without GUI actions.
-Read `MISSING` as not observed running, with cause unknown. Confirm which recorded
-sessions are still wanted before recommending a retry; intentional user closures
-are not failures. Use `check` or `restore --exclude <ID> [...]` for explicitly
-excluded IDs or unique prefixes without rewriting the preserved snapshot. Never
-infer those IDs from a statement such as "I closed a few". Follow
-[current-set reconciliation](references/restore_mechanics.md#reconcile-the-current-wanted-set)
-after a manual handoff or any change in the user's selection. A full AI-session
-match does not establish restored window order, ordinary shells or usable model requests.
+Repeat current-set reconciliation after a manual handoff or any change in selection.
 
 ## Automatic change-only backups
 
 Read [automatic-snapshots.md](references/automatic-snapshots.md) before installing
-or operating `scripts/ghostty_watch.py`. It saves only changed restore state and
-keeps all prior versions. Unchanged
-rounds write no snapshot or routine log. Automatic manifests cover Ghostty
-process descendants without transcript reads; their liveness is explicitly unknown
-and `restore` selects the whole recorded set. UUID-less TUIs remain unresolved in
-automatic manifests — the watcher's bounded scan deliberately reads no transcripts;
-manual snapshot/check/restore resolve them (see the anchor bullet below).
-Partial observations preserve prior missing IDs conservatively. The watcher never
-opens apps or tabs. Manual snapshots keep their active-only restore default.
+or operating `scripts/ghostty_watch.py`, including an upgrade of its installed
+script copies. That SOP owns schedule/enable-state preservation, partial coverage,
+change-only writes and native-round verification.
 
 ## No suitable snapshot: reconstruct the recovery manifest
 
@@ -260,7 +255,7 @@ user-local data outside the skill bundle; no default mapping ships.
 | `dead-channel` sessions restored anyway | expected: history reopens, session stops at `/login`; re-auth or switch provider |
 | `check` says present but tab looks empty | another live process already claimed that session id (e.g. resumed in another tab) |
 | osascript refuses keystrokes | grant Accessibility (System Events) permission; verify with `osascript -e 'tell application "System Events" to get UI elements enabled'` |
-| a brand-new tab is missing from the session list | a fresh TUI has no argv UUID and its transcript file appears with its first message; until then it shows under unresolved live TUIs. If the first message came >20 minutes after the tab opened, the birth window has passed and the tab stays unresolved by design |
+| a brand-new tab is missing from the session list | a fresh TUI has no argv UUID and its transcript file appears with its first message; until then it shows under unresolved live TUIs. Follow the [identity resolver's birth-window rules](references/session_liveness.md) when a late first message remains unresolved |
 
 ## One-shot helper terminals and original sessions
 

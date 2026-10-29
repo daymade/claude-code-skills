@@ -270,11 +270,10 @@ Matching the delivery's prose or keywords is not acceptance.
 
 ## Restore and resume an interrupted batch
 
-Apply the Skill entry's foreground check: use an authorized bounded Ghostty handoff
-or an existing explicit idle-desktop grant plus current exclusive ownership. Notify
-the user to leave keyboard and mouse untouched through reconciliation; do not ask
-again when the standing grant covers this action. Busy/unknown occupancy or takeover
-stops global input, while dry-run/check work continues. Do not bypass a host denial.
+Apply the Skill entry's
+[foreground authorization](../SKILL.md#ghostty-interaction-channel) before global input.
+Notify the user to leave keyboard and mouse untouched through reconciliation;
+dry-run/check work remains available when foreground execution is blocked.
 
 ```bash
 # Reopen missing sessions as tabs in one window:
