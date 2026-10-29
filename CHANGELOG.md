@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **git-safety-net** (v1.24.0 → v1.24.1): Route worktree retirement and recovery-material selection to their canonical preservation procedure; remove a hand-maintained heading inventory and duplicated retirement instructions. Preserve the existing unique-work, occupancy, authority and recovery boundaries. Change type: lossless documentation deduplication.
+- **git-safety-net** (v1.24.1 → v1.24.2): Route worktree retirement and recovery-material selection to their canonical preservation procedure; remove a hand-maintained heading inventory and duplicated retirement instructions. Preserve the existing unique-work, occupancy, authority and recovery boundaries. Change type: lossless documentation deduplication.
 
 - **skill-creator** (`daymade-skill` v1.74.6 → v1.74.7): Load the existing publication and dependency-bound review-reuse prerequisites before the first independent review. Change type: bounded entry-order correction.
 - **git-safety-net** (v1.24.0 → v1.24.1): Add a read-only batch regular-file hash example with exact path/output pairing, changed-file checks and failure handling; retain complete ignored inventories, symlink targets and retirement gates. Change type: bounded operating example.
