@@ -60,6 +60,9 @@ Materially adding or rewriting a reference changes the runtime loading surface:
 start at Tier 2, escalating for a Tier-3 trigger. A long file, subjective output,
 uncertain scope or an additional benchmark request does not determine the tier.
 
+Before dispatching cases from a source corpus, follow
+[source-case input preparation](references/eval_pipeline_schemas.md#source-case-input-preparation).
+
 **Paired evaluation is separately authorized.** Run it when the user explicitly
 requests A/B, baselines, benchmarking, repeated trials, a viewer or multi-agent
 evaluation; otherwise explain the decision it would resolve and obtain opt-in.

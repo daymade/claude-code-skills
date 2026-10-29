@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **local-codex** (`daymade-codex` v2.1.0 → v2.1.1): Scope OAuth recovery to the actual native owner and version. Document the verified 0.165 browser-login lifecycle, shared-owner authorization, completion/readback and subsequent-work checks; preserve independent grants, legacy recovery and Account Manager boundaries. Change type: authoritative factual correction.
+- **skill-creator** (`daymade-skill` v1.74.5 → v1.74.6): Prepare source-case inputs before executor dispatch, keep grading material outside the consumer context, and resolve recorded-output paths from actual capture. Remove cached derived answers and align the evaluation schema, caller, Skill and repository entries. Change type: bounded workflow correction.
 
 - **github-review-pr** (v1.4.5 → v1.4.6), **github-ops** (v1.14.13 → v1.14.14): Diagnose local/hosted merge disagreements against identical objects and inspected attributes/drivers before declaring a cache fault or repeating release cycles. Preserve both results, hosted merge refusals, exact-candidate evidence and required checks. Change type: bounded diagnostic correction.
 - **github-ops** (v1.14.12 → v1.14.13): Verify the base branch directly from the remote and match its fetched commit before diagnosing conflicts or merging. Keep required checks, exact-head matching and readback; distinguish base drift from delayed mergeability. Change type: bounded verification-workflow correction.
