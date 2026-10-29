@@ -16,14 +16,12 @@ Verified on Ghostty 1.3.1, macOS 26 (Darwin 25/27), 2026-10-04.
 1. Verify Accessibility first:
    `osascript -e 'tell application "System Events" to get UI elements enabled'` —
    `false` means keystrokes will silently do nothing useful; grant it before
-   restoring 40 tabs.
-2. Apply the entry's foreground authorization and ownership check. Reuse a current
-   explicit idle-desktop grant after coordinating exclusive access; do not turn the
-   notice into another approval request. Otherwise obtain the missing bounded handoff.
+   restoring sessions.
+2. Apply the entry's [foreground authorization](../SKILL.md#ghostty-interaction-channel).
    Tell the user to avoid keyboard/mouse input until reconciliation finishes.
    Per missing session: activate Ghostty → Cmd+T → write reopen command to clipboard →
-   Cmd+V → Return. Timing constants (0.8s activate / 1.2s tab / 0.4s paste)
-   are in `scripts/ghostty_session.py::_paste_tab` — tune there, not in SKILL.md.
+   Cmd+V → Return. Tune paste timing only in
+   [`ghostty_session.py::_paste_tab`](../scripts/ghostty_session.py).
    During a restore run, keyboard/mouse interruption is the main failure mode:
    an interrupted step leaves an empty tab whose command was never delivered.
    Stop input on takeover and reconcile read-only; do not restore the previous focus
@@ -33,10 +31,10 @@ Verified on Ghostty 1.3.1, macOS 26 (Darwin 25/27), 2026-10-04.
    osascript itself succeeded; they cannot say the command landed. After the
    loop, re-enumerate live sessions by UUID and print every missing session with
    its manual reopen command. Never declare success from paste receipts alone —
-   measured 39/40 on a 40-tab restore where one paste was interrupted and the
-   auto-check was the only thing that surfaced it. Per-tab `SENT (unverified)` is
-   delivery acknowledgement only. Poll live UUIDs for a bounded interval (default
-   10 seconds, configurable with `--reconcile-seconds` between 0 and 60). Exit 1
+   an interrupted paste can leave a recorded ID absent. Per-tab `SENT (unverified)` is
+   delivery acknowledgement only. Poll live UUIDs for a bounded interval using
+   `--reconcile-seconds`; its default is defined in `main()` and its bounds in
+   `bounded_seconds()` in the linked script above. Exit 1
    prints unobserved IDs, exact shell-quoted reopen commands, and an invocation
    restricted to those IDs. Review current retention intent before using it;
    absence does not establish a failed launch. A rerun skips already-present IDs.
@@ -92,15 +90,15 @@ No default mapping ships; the file is user data outside the bundle.
 
 ## Snapshot schema (output contract)
 
-`~/.ghostty-session/snapshots/snapshot-<ts>.json` + `latest.json` pointer:
+`~/.ghostty-session/snapshots/snapshot-<ts>.json` + `latest.json` pointer.
+Manual manifest excerpt; the [writer](../scripts/ghostty_session.py) defines the
+complete output, including classification settings and generated coverage fields:
 
 ```json
 {
   "captured_at": "ISO-8601 local",
-  "active_hours_threshold": 48,
   "scope": "Ghostty process descendants",
   "window_tab_mapping": "unknown",
-  "terminal_surface_count": 1,
   "terminal_inventory": [{"tty": "ttys001", "pid": 123, "cwd": "<working dir>", "cmdline": "<process evidence>", "kind": "ai"}],
   "other_terminals": [],
   "unresolved": [],
