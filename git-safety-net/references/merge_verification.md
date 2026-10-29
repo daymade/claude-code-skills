@@ -465,6 +465,32 @@ active and ownership cannot transfer, hosting/API and existing immutable-object 
 what is already known, but the inability to refresh authority is a reported gap, not permission to
 fetch concurrently.
 
+For a selected or delegated classification batch, the task owner freezes the named canonical
+repository's common directory and exact ref/OID pairs alongside that snapshot. Pass both to the
+reviewer; the receiver must not rebuild the expected identity or target list from its own cwd.
+Two independent clones may share the same remote and base but hold different local refs.
+
+```bash
+# REPO is the already authorized canonical checkout; TASK_DIR is its existing external scratch.
+COMMON_DIR=$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir)
+BASE=$(git -C "$REPO" rev-parse --verify 'origin/main^{commit}')
+# Replace this explicit list with the selected, inspect-authorized refs; a missing ref is an error.
+for ref in refs/heads/feature-a refs/heads/feature-b; do
+  oid=$(git -C "$REPO" rev-parse --verify "$ref") || exit 2
+  printf '%s\t%s\n' "$ref" "$oid"
+done > "$TASK_DIR/targets.tsv"
+(cd "$REPO" && bash "$SKILL_DIR/scripts/git_classify_refs.sh" --base "$BASE" \
+  --expected-common-dir "$COMMON_DIR" --target-manifest "$TASK_DIR/targets.tsv")
+```
+
+Use absolute input paths. Bound mode requires both options and nonempty two-column TSV with
+full refnames and 40-hex OIDs; it cannot be combined with `--all-namespaces`. Missing, moved or
+invalid targets return 2 instead of disappearing from the inventory; classification errors return 1.
+Exit 0 means the selected objects were classified, including any `NEEDS-REVIEW` rows. Read
+`expected`, `examined`, `needs-review`, `errors` and `scope_complete`; `classification_only=true`
+never closes keeper adoption, worktree/ref retirement or the terminal-state checks below. There is
+no mechanism here that judges an arbitrary agent's completion claim. Re-freeze before deletion.
+
 Classify each change-authorized non-main ref by content. Use the trial-merge verdict first. For
 NEEDS REVIEW refs, walk the supersession ladder above and open distinctive code/tests at authority.
 `git cherry` may surface candidates, but every `+` after a squash merge is still only a hypothesis.
