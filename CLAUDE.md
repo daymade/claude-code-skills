@@ -600,6 +600,8 @@ the original-set handoff and actual-continuation acceptance. Minions `native_run
 rows use the owning Account Manager instead. Its bundled script owns
 liveness classification and the paste-restore + auto-reconciliation loop; keep the
 storage-layout facts and macOS Ghostty limits in its references rather than here.
+Before a restore or retry, follow its
+[current-set reconciliation](ghostty-use/references/restore_mechanics.md#reconcile-the-current-wanted-set).
 For change-only automatic backups, use its
 [automatic workflow](ghostty-use/references/automatic-snapshots.md).
 
