@@ -34,7 +34,7 @@ Use **ChatGPT OAuth** through the supported Codex login flow. Keep this route se
 - A first-hand user `/status` report that contradicts the agent's attribution is a stopping contradiction. Stop the session-attributed claim and reconcile the user's direct observation against the SID+cwd+unique-runtime evidence; never repeat, override, or subordinate the user's report to the agent inference. Keep the attribution `unknown` until the conflict is resolved.
 - Long-lived processes can retain stale in-memory authentication. Verify the affected build and process; a changed login file and a successful new process do not establish whether an existing session adopted the account. Keep untested sessions `not_checked` rather than declaring that every session switched or must restart.
 - A token-refresh error establishes an authentication failure for that request, not that signing in on another machine always revokes every login. Group runtime errors by process before attributing repeated messages to independent failures.
-- If an existing process is confirmed stale while a new process works, preserve its conversation and coordinate an authorized resume. For terminals managed by `ghostty-use`, use that owner's existing-session snapshot/restore workflow and verified session IDs. Otherwise use bare `codex resume` (interactive picker) in the same directory after the owner releases the process. A rollout/session id for `codex resume <id>` does **not** come from the logs DB (its `thread_id` is usually NULL or logs-only); verify it in `state_*.sqlite` `threads` using cwd and creation time. Those fields locate resume candidates but do not satisfy the attribution gate above. Do not kill terminals, stop other sessions or restart daemons for a login check; preserve active work and drafts. Re-login only when the target's current credentials also fail.
+- If an existing process is confirmed stale while a new process works, first distinguish a [shared native owner](#existing-native-owner-recovery) from an independent TUI. Preserve its conversation and coordinate an authorized recovery. For independent terminals managed by `ghostty-use`, use that owner's existing-session snapshot/restore workflow and verified session IDs. Otherwise use bare `codex resume` (interactive picker) in the same directory after the owner releases the process. A rollout/session id for `codex resume <id>` does **not** come from the logs DB (its `thread_id` is usually NULL or logs-only); verify it in `state_*.sqlite` `threads` using cwd and creation time. Those fields locate resume candidates but do not satisfy the attribution gate above. Do not kill terminals, stop other sessions or restart daemons for a login check; preserve active work and drafts. Re-login only when the target's current credentials also fail.
 - To locate candidate token-refresh errors, query the runtime log. The command's mtime ordering selects only a log store, not a session; returned `process_uuid` values are candidate error locations, not account or session proof (measured 2026-10-03):
 
 ```bash
@@ -80,7 +80,7 @@ business-result check remain the executing agent's responsibility.
 
 Bind the approved target host, target user/home, expected account, and authorization before writing. Resolve the current project's already-approved account, target and recovery restrictions from its authoritative entry. Prefer its deployed provider when that owner already implements login, protected installation and request reconciliation; do not create another OAuth client/helper or bypass its locks. A recipe here does not authorize an unapproved target or a fallback forbidden by the current user direction. Keep machine addresses, project entry locations and real accounts in the owner's configuration.
 
-For an already-running official native owner with verified browser-login capability, first consider [same-owner OAuth adoption](#existing-native-owner-oauth-adoption). The fresh-store steps below remain the route for independent grants and old or unverified login implementations; they are not a requirement to restart every existing process.
+For an already-running native owner, first [compare the live account and saved login](#existing-native-owner-recovery). Use [same-owner OAuth adoption](#existing-native-owner-oauth-adoption) when new authorization is needed and the owner's browser-login capability is verified. The fresh-store steps below remain the route for independent grants and old or unverified login implementations; they are not a requirement to restart every existing process.
 
 1. **Resolve the entry the user actually runs.** Inspect the target through its login shell, including wrappers and process-scoped network configuration. On macOS, an approved SSH alias can run `/bin/zsh -lic 'command -v codex; codex --version'`. Do not assume a Homebrew path or call a native package binary when the normal entry supplies its network environment. Use the existing remote/network owner if the authenticated command plane fails.
 2. **Separate identity, validity, and quota.** Cached email/plan metadata and `codex login status` locate a login; neither proves its refresh token works or that quota remains. Bind refresh ownership before native initialization. If the target already has the expected account and a fresh authorized request succeeds, keep that valid login and finish without replacing it or requesting another authorization. Distinguish authentication rejection such as `invalid_refresh_token`, quota rejection and transport failure. Stop repeating invalid credentials; stop only task-owned probes whose terminal authentication failure is established.
@@ -102,6 +102,91 @@ For an already-running official native owner with verified browser-login capabil
 7. **Verify the attempt before installation.** Require the CLI's successful terminal exit, then use the existing provider's bounded native account observation to verify the attempt's expected identity and server access through the same entry, home and store without exposing credentials. If this observation cannot establish access, use the separately authorized model-request check below; do not silently treat cached identity as a substitute. Browser success alone, a lost CLI receipt or a failed token exchange cannot pass this step. Keep unknown attempts bound to their original handle and reconcile before retrying.
 8. **Install through the bound owner and read back.** Use the provider's existing protected installation, or coordinate exclusive access to the exact target file store, recheck target identity and unchanged pre-install state, and atomically install only the verified current auth with mode `0600`. Preserve target config/history/Hooks; do not replace the directory. Independently confirm target identity, permissions and installation before target validation. Hand refresh ownership from the attempt to the confirmed target; do not keep querying both stores. On timeout or unknown write receipt, inspect/query the same operation before retry; do not overwrite or start another login to diagnose it.
 9. **Verify target access and report its scope.** Read the installed target through its refresh-owning provider and ordinary entry, then confirm the expected identity remains selected. For quota-driven continuation apply the check above and verify the first useful business action on that target; do not require another no-op when equivalent fresh access evidence already exists. Report identity, authentication, quota, existing-process adoption and Credit policy separately. Finish the browser controller's task and read task-owned probes to terminal state; preserve other users' sessions. Arrange an authorized execution handoff before long work if the current TUI has not adopted the required account.
+
+## Existing native owner recovery
+
+Bind the actual executable/build, PID/birth, `CODEX_HOME`, credential store and
+control endpoint before choosing a write. Compare the saved login's expected
+account with the account reported by that same live owner. Cached identity locates
+the saved login; it does not prove server access, remaining quota or session adoption.
+Minions-managed account binding remains with Account Manager.
+
+| Observed state | Next action |
+|---|---|
+| The live owner already uses the expected account and authorized work succeeds | Keep the login and continue the task; do not restart or log in again. |
+| An already authorized expected login is saved, but the shared daemon still reports the previous account | Consider the saved-login adoption below, with explicit authority for its process-wide effect. |
+| The store and live owner agree, but authentication fails | Use the existing refresh-owning provider's supported recovery; do not infer that another account must be adopted. |
+| No usable expected login is available | Choose the verified [same-owner OAuth](#existing-native-owner-oauth-adoption) or [independent-grant/TRANSFER](#remote-account-switch-and-expired-login-recovery) route. |
+
+### Adopt a saved login in a shared daemon
+
+1. Verify the bound build's `app-server daemon restart --help` and its session
+   persistence/recovery behavior. Preserve affected SIDs, cwd, current work and
+   pending input, plus the daemon PID/birth, executable fingerprint and private
+   auth-file digest. Bind each claimed session to this owner; the executing TUI
+   can belong to a different process. A terminal window is not that binding.
+2. Obtain current authorization for restarting this exact shared daemon and the
+   possible interruption of its affected tasks. Coordinate active writers and
+   retain their recovery paths first. Without that authority, keep this branch
+   read-only. Do not restart merely to test this recipe or bypass a refusal.
+3. Where that build supports the verified lifecycle, run its native command
+   through the bound entry and the same home/store/network context:
+
+   ```bash
+   codex app-server daemon restart
+   ```
+
+   Do not log out, copy credentials, start OAuth, replace the selected binary or
+   change the home as part of saved-login adoption. This command is an adoption
+   route, not evidence that `account/read` with `refreshToken:true` hot-reloads an
+   externally changed store. Verify that API's behavior separately before using it.
+4. Read back the new PID/birth and actual account through the same owner, then
+   apply the [quota-driven continuation checks](#quota-driven-continuation).
+   Verify saved SIDs and their individual runtime states; an unloaded child is
+   not evidence that its recorded conversation was deleted. When unchanged auth
+   or binary bytes are part of the claim, compare the frozen digests. A changed
+   input or lost restart receipt needs reconciliation, not another restart.
+5. [Continue only authorized stopped sessions](#continue-the-bound-original-sessions)
+   and verify useful work under their original IDs. Do not claim all local TUIs,
+   uninterrupted requests, automatic Account Manager integration or Credit
+   isolation from one daemon's account readback. Build-specific success does not
+   establish the same lifecycle for stock, older or other builds.
+
+### Continue the bound original sessions
+
+Freeze only the original session set covered by the user's continuation request.
+Immediately before submission, recheck the same SID and cwd, its captured latest
+failed turn and still-authorized recoverable cause, and an idle runtime. Skip a
+changed turn, already running, completed, paused-by-user or still-blocked work.
+Separate the current turn from
+its Goal; use the existing Goal recovery owner without resetting its objective,
+budget or accumulated use. Account adoption alone authorizes no new task turn.
+
+Use the bound owner's supported submission interface and its current schema.
+Retain one stable `clientUserMessageId`, the exact authorized text, submission
+handle and returned turn ID per SID. If the user requested only “继续”, send only
+that text once. A `queue/start` not-found response can race with consumption;
+first read back that same message ID, rather than submitting it again.
+
+For a build exposing the inspected native queue contract, read
+`thread/queue/list` with the exact `threadId`. Submit only when its queue is
+explicitly empty and complete; a nonempty queue, `nextCursor`, incomplete or
+unknown read stops this write without deleting or changing existing submissions.
+Then call `thread/queue/add` with
+that `threadId`, the stable `clientUserMessageId`, and
+`input: [{"type":"text","text":"继续","text_elements":[]}]` for that literal request.
+Verify the returned submission's client ID and input before calling
+`thread/queue/start` with the same `threadId` and `queuedSubmissionId` from its
+`id`. Retain each result; do not infer a missing submission's fate from an empty
+queue or replace a failed/unknown attempt with a new client ID.
+
+Verify the matching original SID/turn, user-message `clientId` and exact body,
+then observe subsequent useful execution. In the inspected item-history schema,
+`thread/items/list` returns `data[]` entries whose `item` contains the message or
+tool and whose `turnId` identifies its turn; do not test wrapper fields as if
+they were the item. Keep missing, ambiguous or malformed reads unknown and do
+not replay them. Enqueue success, an active status, and tool execution are separate
+from the original task's finished business result.
 
 ## Existing native owner OAuth adoption
 
