@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **peer-message** (v1.24.4 → v1.24.5): Let `coord --actor` disambiguate inherited Claude and Codex identities only when the exact UUID matches the selected host's environment. Keep native-event sender checks, duplicate suppression and conflicting-identity refusals.
 - **docx-creator / read-docx-review** (`daymade-docs` v1.27.0 → v1.27.1): Align Word acceptance and comparison documentation with the existing implementations, distinguish sent-baseline evidence from explicit version controls, and link configuration to its defining sources. Remove derived checklist totals and unsupported restore-time estimates; preserve read-only comparison, revision refusal and pending native acceptance. Change type: scoped documentation alignment.
 - **CI documentation**: Document bootstrap-mismatch diagnosis and image-change acceptance using the existing dependency and deadline guards.
 - **tibo-reset-codex** (v2.5.3 → v2.6.0): Read current usage and banked resets before conditional historical reconstruction. Bound community follow-up to decision-bearing gaps. Add evidence-linked account follow-up closure/reopening without changing arrival evidence, global confirmation or forecast scores; retain compatibility with existing journals. Change types: bounded workflow redesign and additive queue control.

@@ -125,6 +125,12 @@ CLI；旧 CLI 能继续处理原 notice/request/reply，但不提供新状态模
 
 ## 原生跨会话通信
 
+宿主同时继承 Claude 与 Codex 身份时，在每个写入型 `coord` 子命令后传
+`--actor codex:<完整 UUID>` 或 `--actor claude-session:<完整 UUID>`，明确当前宿主。
+它必须逐字匹配所选产品的环境身份；同产品身份冲突、缺失或空值仍拒绝。
+`prepare` 的 `--from` 也受同一校验；后续 `commit/receive/finish/claim/release`
+继续传相同的 `--actor`。原生发送仍由宿主事件独立校验，不能用该参数选择另一会话。
+
 在安装或源路径、解释器绑定变化时，从实际安装入口运行：
 
 ```bash
