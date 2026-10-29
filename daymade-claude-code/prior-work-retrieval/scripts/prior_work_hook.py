@@ -253,6 +253,79 @@ RETRIEVAL_GLOBAL_VALUE_OPTIONS = {
     "prior_work.py": {"--manifest"},
     "history_index.py": {"--db", "--simple-root"},
 }
+
+
+def _formal_read_only_reader(script: str, arguments: list[str]) -> bool:
+    """Recognize owned read-only entries without trusting an arbitrary basename."""
+    scripts = Path(__file__).resolve().parent
+    history = scripts.parent.parent / "read-codex-history" / "scripts"
+    entries = {
+        history / "list_local_history.py": (
+            {"--index-only", "--recursive", "--all-projects", "--include-archived",
+             "--include-subagents", "--include-automated"},
+            {"--source", "--cwd", "--codex-home", "--from-date", "--to-date",
+             "--limit", "--max-title-chars", "--format", "--language"},
+        ),
+        history / "find_codex_session.py": (set(), {"--codex-home", "--format"}),
+        history / "read_codex_session.py": (
+            {"--full", "--tools"},
+            {"--session", "-s", "--project", "-p", "--record", "--contains", "--format"},
+        ),
+        scripts / "surface_version.py": (set(), set()),
+    }
+    try:
+        path = Path(script).expanduser().resolve(strict=True)
+    except (OSError, RuntimeError, ValueError):
+        return False
+    if path not in entries:
+        return False
+    switches, values = entries[path]
+    parsed: dict[str, list[str]] = {}
+    positional: list[str] = []
+    index = 0
+    while index < len(arguments):
+        token = arguments[index]
+        option, separator, value = token.partition("=")
+        if option in switches and not separator:
+            value = "true"
+        elif option in values:
+            if not separator:
+                index += 1
+                if index >= len(arguments):
+                    return False
+                value = arguments[index]
+            if not value.strip() or value.startswith("-"):
+                return False
+        elif token.startswith("-"):
+            return False
+        else:
+            positional.append(token)
+            index += 1
+            continue
+        option = {"-s": "--session", "-p": "--project"}.get(option, option)
+        if option in parsed and option != "--record":
+            return False
+        parsed.setdefault(option, []).append(value)
+        index += 1
+    if "--format" in parsed and parsed["--format"][0] not in {"json", "markdown"}:
+        return False
+    if path.name == "surface_version.py":
+        return not arguments
+    if path.name == "list_local_history.py":
+        return (not positional and "--index-only" in parsed
+                and parsed.get("--source") == ["codex"])
+    identity = positional if path.name == "find_codex_session.py" else parsed.get("--session", [])
+    if len(identity) != 1 or (path.name == "read_codex_session.py" and positional):
+        return False
+    value = identity[0].lower()
+    shape = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    minimum = 8 if path.name == "find_codex_session.py" else len(shape)
+    return minimum <= len(value) <= len(shape) and all(
+        character == "-" if expected == "-" else character in "0123456789abcdef"
+        for character, expected in zip(value, shape)
+    )
+
+
 DIRECT_EXEC_WRITE_SIGNAL = re.compile(r"\b(?:tools\.)?apply_patch\s*\(")
 EXEC_COMMAND_LITERAL = re.compile(
     r"(?<![\w$])(?:cmd|command|\"cmd\"|\"command\"|'cmd'|'command')"
@@ -594,6 +667,8 @@ def _segment_is_retrieval_route(segment: str) -> bool:
 
     if index >= len(words):
         return False
+    if _formal_read_only_reader(words[index], words[index + 1:]):
+        return True
     script = Path(words[index]).name
     subcommands = RETRIEVAL_ROUTES.get(script)
     if script not in RETRIEVAL_ROUTES:

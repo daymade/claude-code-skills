@@ -97,6 +97,7 @@ interpreting fork snapshots, compaction, event streams, or end reasons.
 
 | User wants | Use |
 |---|---|
+| Identify Codex work after a terminal disappears, including ToDesk/headless terminals | [Terminal-session recovery](references/terminal-session-recovery.md): bind host/cwd, query the index, then verify records and terminal attribution separately |
 | Complete thread ID from a UUID prefix, without conversation reconstruction | `scripts/find_codex_session.py <UUID-prefix>`; stop after verified identity |
 | Recent Codex sessions, titles, IDs, or positive writer-lock evidence | `scripts/list_local_history.py --source codex --index-only`; an unavailable index leaves inventory unknown |
 | Find the Session containing a pasted quote, with a known project, date, or title clue | **Locate a quoted exchange** below: inventory candidates, then verify the original messages |
