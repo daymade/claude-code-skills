@@ -29,10 +29,13 @@ contract before pushing rather than inventing a readiness claim.
 
 ## Integrate current main before binding review
 
-Fetch the named remote's main branch and resolve its full commit. Integrate that
-tree in the owned feature worktree before freezing the candidate; preserve parallel
-work. A candidate missing current main is integration drift, not a request to
-review main's unrelated Skills. Keep the final-tree comparison and version checks.
+Resolve the named remote's current main branch through GitHub Operations'
+[publication preflight](https://github.com/daymade/claude-code-skills/blob/main/github-ops/references/pr_operations.md#coordinate-publication-before-expensive-checks).
+Apply the repository's update/check policy before freezing the candidate. Integrate
+when that policy, a conflict or changed validation inputs require it; preserve
+parallel work. An unrelated base advance alone does not require a new PR head or
+another CI run. Keep the final-tree comparison, version checks and exact-candidate
+review binding; do not reopen unrelated Skills merely because main advanced.
 
 If a stale marketplace guard blocks the change, integrate main first. Rebuild any
 remaining manifest conflict from that immutable base plus only the owned changes;
@@ -44,7 +47,7 @@ fast-forward accepts staged content that equals the target; ort never does.
 Preserve other writers' changes throughout this recovery. Stage and commit as
 separate commands under the repository's commit contract.
 
-Resolve the integrated candidate with `git rev-parse HEAD`, then run the version
+Resolve the selected candidate with `git rev-parse HEAD`, then run the version
 check before binding review evidence:
 
 ```bash
@@ -56,26 +59,28 @@ python3 <marketplace-path>/scripts/ci/check_version_progression.py \
 Read the merged CHANGELOG and confirm its entries remain under the intended
 heading; a union merge preserves lines, not their placement. Review this candidate,
 commit its permitted archive and attest only after the checks pass. If main moves
-again, integrate it and bind the resulting exact commit anew. Reuse earlier
-behavior evidence only for content proved unchanged; review the changed delta.
+again, repeat the owning preflight. When reconciliation changes the candidate,
+bind the resulting exact commit anew. Reuse earlier behavior evidence only for
+content proved unchanged; review the changed delta.
 For an unchanged complete distribution, use the opt-in rebind procedure below
 instead of editing the original independent review.
 
 ## GitHub says dirty; git says clean
 
-Enter `github-review-pr`'s
-[merge-semantics diagnostic](https://github.com/daymade/claude-code-skills/blob/main/github-review-pr/SKILL.md#when-local-and-hosted-merge-results-disagree)
-before treating this disagreement as a cache fault. The release executor retains
-both observations and checks identical objects, attributes and driver semantics;
-local clean does not override a hosted refusal.
+The release executor first follows GitHub Operations'
+[fresh-base verification](https://github.com/daymade/claude-code-skills/blob/main/github-ops/references/pr_operations.md#fresh-base-verification).
+A PR-reported base or cached `origin/main` can be stale; `dirty` alone does not
+distinguish a real conflict from delayed mergeability state. Diagnose only after
+reading the actual base branch and comparing the exact candidate with it.
 
-Do not repeat push, rebind, archive or CI cycles merely to refresh `DIRTY`.
-Integrate current main when the repository's integration requirement or an actual
-conflict requires it, preserving parallel changes. Bind any resulting new head
-through the existing exact-candidate procedure, then use the repository's required
-checks and `github-ops` merge preflight. Rebind remains limited to its unchanged
-distribution proof below; neither a cache hypothesis nor a peer publication window
-waives that proof, required checks or the fresh head/base check.
+When the owning preflight requires integration, complete it before binding evidence.
+Reuse unchanged evidence only within its proved scope; the opt-in rebind below
+still requires the complete distribution and dependency closure to match. Changed
+shared files can invalidate reuse even when the Skill directory is identical.
+Wait for checks and merge through GitHub Operations'
+[merge preflight](https://github.com/daymade/claude-code-skills/blob/main/github-ops/references/pr_operations.md#merging-prs),
+including its `gh pr checks --watch` exit-status check. Do not replace that owner
+with a separate poller or bypass checks to shorten a concurrent release cycle.
 
 ## External-archive helper and dispatcher
 
