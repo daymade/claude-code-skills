@@ -759,8 +759,10 @@ follow the contributor entry's route to [github-review-pr](github-review-pr/SKIL
 For behavioral changes and review-led repairs, the review Skill's
 [impact procedure](github-review-pr/references/behavioral-impact-review.md) owns
 consumer tracing, preservation evidence and finding closure.
-Before expensive checks on a concurrently edited base, follow its
+Before expensive checks on a concurrently edited base, follow GitHub Operations'
 [publication coordination](github-ops/references/pr_operations.md#coordinate-publication-before-expensive-checks).
+Before diagnosing conflicts or differing local and hosted merge results, use its
+[fresh-base verification](github-ops/references/pr_operations.md#fresh-base-verification).
 Before a merge or selecting `--auto`, enter its
 [merge preflight](github-ops/references/pr_operations.md#merging-prs).
 For hosted-state writes through `gh`, follow its
