@@ -229,9 +229,9 @@ components have an authorized replacement.
    enabled, run `claude plugin disable "${PLUGIN_ID:?}" --scope user --json` and read back the
    disabled state. Do this only after the personal source link exists: the syncer preserves
    that existing route independently, but refuses to create one for a disabled plugin.
-   An enabled setting left after uninstall can cause native initialization to install the
-   plugin again. If its install record reappeared, uninstall that exact user-scope plugin
-   again after disabling it; require the record to be absent and retain the verified source link.
+   If native initialization recreates an install record while the old route is enabled,
+   repeat the exact user-scope uninstall after disabling that route; the earlier uninstall
+   result was partial. Require the record to be absent and retain the verified source link.
 5. Use the
    [host availability and task-behavior checks](../../../daymade-skill/skill-governance/references/skill-surface-governance.md#14-verify-a-newly-registered-skill)
    for fresh-host discovery and actual consumption. After initialization, re-read the exact

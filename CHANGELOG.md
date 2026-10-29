@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **git-safety-net** (v1.24.0 → v1.24.1): Stop the bound-batch recipe before classification when prerequisite resolution or manifest creation fails. Align helper help and mutation boundaries with actual trial-merge behavior; remove derived prose totals. Change type: operating-recipe repair and factual documentation correction.
+- **git-safety-net** (v1.24.1 → v1.24.2): Stop the bound-batch recipe before classification when prerequisite resolution or manifest creation fails. Align helper help and mutation boundaries with actual trial-merge behavior; remove derived prose totals. Change type: operating-recipe repair and factual documentation correction.
 - **claude-switch-models-setup** (`daymade-claude-code` v4.33.10 → v4.33.11): Document the official single-Skill plugin-to-personal-source conversion, scoped sync, partial-failure recovery and fresh-host acceptance. Close a remaining enabled plugin route after verifying its personal source link, then check that initialization does not reinstall it. Route repository instructions to that owner instead of duplicating activation policy. Change type: bounded SOP alignment.
 
 - **llm-eval-harness** (v1.7.0 → v1.7.1): Distinguish exhausted quota from transient rate limits in HTTP 429 guidance; retain status/code evidence and quota recovery instead of unconditional concurrency retries. Change type: factual SOP correction.

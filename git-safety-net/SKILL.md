@@ -749,8 +749,7 @@ These helpers run from the repository root. They use read-only enumeration/confi
 `find`, `config`, `symbolic-ref`, `submodule status`, `status`, `cat-file`, `rev-list`, `rev-parse`,
 `fsck`, `for-each-ref`, and `remote get-url`; plus scoped `fetch`, `archive`, `bundle create/verify`,
 metadata hashing/archive, and (preserve only) `update-ref` where each script's table row says so.
-Only `git_find_all_checkouts.sh` is repository-read-only and safe beside read-only agents; it never
-fetches, so it also works offline and behind a proxy. Any helper that fetches, writes backup state,
+Any helper that fetches, writes backup state,
 adds refs, or creates trial-merge objects runs only after existing coordination transfers exclusive writer ownership. None of
 the helpers authorizes `checkout`, `reset`, `push`, `stash drop`, `branch -d`, or `gc`.
 
