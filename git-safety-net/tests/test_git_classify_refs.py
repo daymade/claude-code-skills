@@ -664,6 +664,19 @@ class ClassifyRefsTests(unittest.TestCase):
         self.assertEqual(healthy.returncode, 0, healthy.stdout + healthy.stderr)
         self.assertEqual(self.summary(healthy.stdout)["needs-review"], "1")
         self.assertEqual(self.summary(healthy.stdout)["errors"], "0")
+        wrapper.write_text(
+            '#!/usr/bin/env bash\n'
+            'if [ "$1" = diff ]; then echo "synthetic diff warning" >&2; fi\n'
+            f'exec {shlex.quote(real_git)} "$@"\n', encoding="utf-8",
+        )
+        warned = subprocess.run(
+            ["bash", str(SCRIPT), "--base", base, *self.bound_args(manifest)],
+            cwd=str(self.repo), env=env, capture_output=True, text=True,
+        )
+        self.assertEqual(warned.returncode, 0, warned.stdout + warned.stderr)
+        self.assertIn("synthetic diff warning", warned.stderr)
+        self.assertEqual(self.row_for(warned.stdout, "refs/heads/feature")[1], "1")
+        self.assertEqual(self.summary(warned.stdout)["errors"], "0")
 
 
 
