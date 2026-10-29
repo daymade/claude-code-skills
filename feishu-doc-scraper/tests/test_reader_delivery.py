@@ -142,6 +142,19 @@ class ReaderDeliveryTests(unittest.TestCase):
         (self.root/'note.md').write_text('![[https://example.org/external.png]]');self.seal()
         with self.assertRaisesRegex(ValueError,'embed is not a movable'):self.inspect()
 
+    def test_wikilink_source_positions_preserve_unicode_tabs_and_escaping(self):
+        for prefix in ('', '中文 ', 'a\t中', '> ', '- '):
+            with self.subTest(prefix=prefix):
+                refs = gate.references(prefix + '![[https://example.org/external.png]]')
+                self.assertEqual(refs, [('https://example.org/external.png', True, 'markdown')])
+        for text in (r'\![[https://example.org/external.png]]',
+                     r'\![ordinary](https://example.org/external.png "wikilink")',
+                     '! [ordinary](https://example.org/external.png "wikilink")',
+                     '[ordinary](https://example.org/external.png "wikilink")'):
+            with self.subTest(text=text):
+                self.assertEqual(gate.references(text), [('https://example.org/external.png', False, 'markdown')])
+        self.assertEqual(gate.references('`![[https://example.org/code.png]]`'), [])
+
     def test_linked_thumbnail_is_checked_with_its_source_link(self):
         (self.root/'note.md').write_text('[![](media/image.png)](https://example.org/source)')
         self.seal();r=self.inspect();self.assertEqual(r['examined_files'],2)
