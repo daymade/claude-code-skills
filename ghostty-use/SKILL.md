@@ -38,6 +38,13 @@ restore your old focus. Host denials remain binding.
 
 ## Entry decision tree
 
+Bind the terminal host before selecting a snapshot. For ToDesk-created or other
+headless Codex terminals without evidence of Ghostty ownership, use the maintained
+`read-codex-history` Skill's terminal-session recovery recipe. Its index and exact
+reader identify saved work; a similarly sized Ghostty snapshot does not establish
+that it contains the missing terminals. Resume this workflow only for confirmed
+Ghostty surfaces.
+
 | You just said / want | Run |
 |---|---|
 | Quitting for an update / reboot ("重启前保存会话") | `snapshot` |
