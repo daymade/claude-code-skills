@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **codex-1m-context-window-setup** (`daymade-codex` v2.1.1 → v2.2.0): Add local field-only `show` and transactional `set-compact --tokens N` without model discovery. Preserve unrelated config bytes, distinguish saved settings from session adoption, and retain the full-expansion 60% preset. Change type: additive local configuration workflow.
+
 - **git-safety-net** (v1.24.2 → v1.24.3): Stop the bound-batch recipe before classification when prerequisite resolution or manifest creation fails. Align helper help and mutation boundaries with actual trial-merge behavior; remove derived prose totals. Change type: operating-recipe repair and factual documentation correction.
 - **feishu-doc-scraper** (v1.10.3 → v1.10.4): Recognize embedded wikilinks across Pandoc AST variants using source positions, preserving external-media rejection and escaped ordinary links. Change type: deterministic parser compatibility repair.
 - **claude-switch-models-setup** (`daymade-claude-code` v4.33.11 → v4.33.12): Document the official single-Skill plugin-to-personal-source conversion, scoped sync, partial-failure recovery and fresh-host acceptance. Close a remaining enabled plugin route after verifying its personal source link, then check that initialization does not reinstall it. Route repository instructions to that owner instead of duplicating activation policy. Change type: bounded SOP alignment.
