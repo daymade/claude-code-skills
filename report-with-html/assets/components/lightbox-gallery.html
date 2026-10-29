@@ -94,6 +94,19 @@ dialog.lbg.lbg-single .lbg-prev,dialog.lbg.lbg-single .lbg-next,dialog.lbg.lbg-s
   im.addEventListener('click', e => { e.stopPropagation(); dlg.close(); });
   dlg.addEventListener('click', e => { if (e.target === dlg || e.target === dlg.querySelector('figure')) dlg.close(); });
   dlg.addEventListener('keydown', e => {
+    if (e.key === 'Tab') {
+      const controls = [...dlg.querySelectorAll('button:not(:disabled)')].filter(button =>
+        button.tabIndex >= 0 && button.getClientRects().length > 0 &&
+        getComputedStyle(button).visibility !== 'hidden');
+      if (!controls.length) return;
+      e.preventDefault();
+      const current = controls.indexOf(document.activeElement);
+      const next = e.shiftKey
+        ? (current <= 0 ? controls.length - 1 : current - 1)
+        : (current < 0 || current === controls.length - 1 ? 0 : current + 1);
+      controls[next].focus();
+      return;
+    }
     if (e.key === 'ArrowLeft')  { e.preventDefault(); show(idx - 1); }
     if (e.key === 'ArrowRight') { e.preventDefault(); show(idx + 1); }
   });

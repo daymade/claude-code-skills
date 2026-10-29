@@ -85,6 +85,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from urllib.parse import urljoin
 
 PLACEHOLDER = "‹待填›"
 VOID_MIN_CSS_PX = 120
@@ -414,9 +415,65 @@ def inject_mask(src: str) -> str:
     return block + src   # 无 head 的片段式页面：置顶即可，后续规则同样被 !important 压过
 
 
+def _with_original_base(src: str, page: Path) -> str:
+    """Keep relative resource URLs anchored to the source while rendering a temp copy."""
+    class BaseLocator(html.parser.HTMLParser):
+        def __init__(self) -> None:
+            super().__init__(convert_charrefs=True)
+            self.head_end = 0
+            self.document_start = 0
+            self.base = None
+            self.template_depth = 0
+
+        def handle_starttag(self, tag, attrs) -> None:
+            if tag == "template":
+                self.template_depth += 1
+            if self.template_depth:
+                return
+            if tag not in {"html", "head", "base"}:
+                return
+            line, column = self.getpos()
+            start = sum(len(part) + 1 for part in src.split("\n")[:line - 1]) + column
+            raw = self.get_starttag_text()
+            if tag == "html" and not self.document_start:
+                self.document_start = start + len(raw)
+            if tag == "head" and not self.head_end:
+                self.head_end = start + len(raw)
+            if tag == "base" and self.base is None:
+                for index, (name, value) in enumerate(attrs):
+                    if name == "href":
+                        self.base = (start, len(raw), attrs, index, value or "")
+                        break
+
+        def handle_endtag(self, tag) -> None:
+            if tag == "template" and self.template_depth:
+                self.template_depth -= 1
+
+        def handle_decl(self, decl) -> None:
+            if decl.lower().startswith("doctype") and not self.document_start:
+                line, column = self.getpos()
+                start = sum(len(part) + 1 for part in src.split("\n")[:line - 1]) + column
+                self.document_start = src.index(">", start) + 1
+
+    locator = BaseLocator()
+    locator.feed(src)
+    document_url = page.resolve().as_uri()
+    if locator.base is not None:
+        start, length, attrs, index, href = locator.base
+        attrs[index] = ("href", urljoin(document_url, href))
+        base = "<base" + "".join(
+            f' {name}="{html.escape(value, quote=True)}"' if value is not None else f" {name}"
+            for name, value in attrs
+        ) + ">"
+        return src[:start] + base + src[start + length:]
+    base = f'<base href="{html.escape(document_url, quote=True)}">'
+    position = locator.head_end or locator.document_start
+    return src[:position] + base + src[position:]
+
+
 def render_masked(page: Path, out_png: Path, height: int) -> None:
     """把文字全部透明化后重渲一次——遮字自测的那份产物。"""
-    masked = inject_mask(page.read_text(encoding="utf-8"))
+    masked = inject_mask(_with_original_base(page.read_text(encoding="utf-8"), page))
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td) / (page.stem + "__masked.html")
         tmp.write_text(masked, encoding="utf-8")
