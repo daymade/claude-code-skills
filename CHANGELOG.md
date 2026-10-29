@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **codex-1m-context-window-setup** (`daymade-codex` v2.1.1 → v2.2.0): Add local field-only `show` and transactional `set-compact --tokens N` without model discovery. Preserve unrelated config bytes, distinguish saved settings from session adoption, and retain the full-expansion 60% preset. Change type: additive local configuration workflow.
+
 - **git-safety-net** (v1.24.2 → v1.24.3): Stop the bound-batch recipe before classification when prerequisite resolution or manifest creation fails. Align helper help and mutation boundaries with actual trial-merge behavior; remove derived prose totals. Change type: operating-recipe repair and factual documentation correction.
 - **data-visualization-discipline** (v1.1.7 → v1.1.8): Preserve spatial, role and port semantics in relationship layouts; separate factual, reading and aesthetic acceptance, and limit local updates to affected regions. Correct the universal claim that users do not value visual quality. Change types: bounded methodology clarification and factual correction.
 - **prior-work-retrieval** (`daymade-claude-code` v4.33.12 → v4.33.13): Compare rendered visual candidates as well as source, separate reusable presentation decisions from superseded facts, and retain explicit user style boundaries. Change type: bounded candidate-verification guidance.

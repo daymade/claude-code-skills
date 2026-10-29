@@ -2,31 +2,44 @@
 name: codex-1m-context-window-setup
 description: >-
   Configures and verifies an expanded, model-aware context window for OpenAI Codex CLI and Desktop.
-  Use when Codex shows ~258K context, you want 500K or 1M tokens, auto-compaction fires too often,
-  or model_context_window/model_auto_compact_token_limit needs repair. Not for changing the selected
-  model or other Codex settings.
-argument-hint: "[doctor|apply|verify]"
+  Use to inspect local context settings, lower or set the auto-compaction threshold, expand
+  ~258K context to 500K or 1M, or repair model_context_window/model_auto_compact_token_limit.
+  Not for changing the selected model or other Codex settings.
+argument-hint: "[show|set-compact --tokens N|doctor|apply|verify]"
 ---
 
 # Codex 1m Context Window Setup
 
-Expand future Codex sessions without pretending every model supports one million
-tokens. The bundled script reads Codex's current model catalog, caps the request at
-the selected model's declared maximum, and applies the user's established 60%
-auto-compaction policy.
+Inspect local settings or change only automatic compaction. For full context
+expansion, read Codex's current model catalog, cap the request at the model's
+declared maximum, and apply the 60% expansion preset.
 
 ## Route the request
 
 | User intent | Action |
 |---|---|
-| Inspect the current limit, explain 258K, or preview the recommendation | Run `doctor` |
+| Read the current base-config window or compaction threshold | Run `show`; no Codex process or model catalog needed |
+| Lower/set only automatic compaction | Run `show`, then `set-compact --tokens N` |
+| Explain 258K, diagnose model limits, or preview full expansion | Run `doctor` |
 | Configure/fix/raise the context window | Run `apply` |
 | Confirm a prior setup is still correct after an update or model switch | Run `verify` |
 
-Do not ask the user for raw token numbers. The model catalog is the authority and
-the script derives the attainable values.
+Honor a user-specified threshold exactly. If the user only asks for a small
+reduction, choose and state a modest reversible reduction from the observed value.
+For expansion, derive attainable values from the live catalog instead of asking
+the user for model limits. Running `apply` selects the full 60% preset and replaces
+a custom threshold; do it only when full setup is requested.
+
+For local reads/edits, start with the bundled commands. Do not dump config.toml,
+load unrelated machine manuals, or run network/model diagnostics. Consult official
+OpenAI documentation when parameter semantics or compatibility are unresolved;
+it cannot establish this machine's current value. Respect host output restrictions;
+if numeric output is denied, use its supported field-condition probe and keep an
+unread value unknown. Do not reconstruct denied values through repeated comparisons.
 
 ## Run the workflow
+
+Run the bundled [configuration script](scripts/codex_context_window.py).
 
 When this Skill loads, the host exposes its installed path. Resolve it explicitly:
 
@@ -56,9 +69,34 @@ uv run --no-project python "$SkillDir/scripts/codex_context_window.py" apply
 uv run --no-project python "$SkillDir/scripts/codex_context_window.py" verify
 ```
 
+### `show` and `set-compact`
+
+Use the same resolved script path on either platform:
+
+```bash
+uv run --no-project python "$SKILL_DIR/scripts/codex_context_window.py" show --json
+uv run --no-project python "$SKILL_DIR/scripts/codex_context_window.py" set-compact --tokens 400000 --json
+uv run --no-project python "$SKILL_DIR/scripts/codex_context_window.py" show --json
+```
+
+In PowerShell, substitute `$SkillDir` for `$SKILL_DIR`. Choose `--tokens` from
+the current request, not this example. `show` emits only the two numeric settings,
+the config path and evidence status; a missing value is null, not a guessed default.
+It does not inspect profile or command-line overrides.
+
+`set-compact` preserves the context-window setting, profiles, comments and existing
+formatting; inserting a missing key may add a separating newline. It rejects nonpositive/out-of-range tokens and thresholds
+above an explicitly configured window. When the window is absent, leave it absent;
+model-derived runtime caps remain unverified. Before a changed write, back up the
+original and check for concurrent edits. Write atomically, run the local
+`codex features list` configuration-load check with captured output, and read back
+the target. Restore the original on validation failure unless a concurrent edit
+makes that unsafe. A no-op creates no backup. Do not echo diagnostic bodies that
+may contain unrelated configuration. Use `show` afterward as independent readback.
+
 ### `doctor`
 
-Run first. It is read-only and reports:
+Run first for full expansion or model-cap diagnosis. It is read-only and reports:
 
 - selected model resolved by Codex;
 - catalog default, model maximum, and usable percentage;
@@ -66,8 +104,9 @@ Run first. It is read-only and reports:
 - current base-config values and whether `apply` is needed;
 - exact `$CODEX_HOME/config.toml` target.
 
-If Codex cannot return a live model catalog, stop. Do not substitute remembered
-model limits, API marketing numbers, or a bundled default.
+If Codex cannot return a live model catalog, stop the expansion path. Do not
+substitute remembered model limits, API marketing numbers, or a bundled default.
+Local `show`/`set-compact` remain independent of catalog availability.
 
 ### `apply`
 
@@ -89,11 +128,19 @@ CLI thread or restart/open a new Codex Desktop thread.
 
 Run after Codex upgrades, default-model changes, or on a newly configured machine.
 It exits non-zero when the current base config no longer equals the model-aware
-recommendation. Report the mismatch; do not call it configured.
+60% preset. A deliberate custom threshold can differ from that preset; this is not
+proof that the saved threshold is invalid. Use `show` for its current base value.
 
 ## Report the outcome
 
-Copy exact values from script output. Include:
+For a threshold-only change, report previous → saved tokens, backup path when
+changed, local configuration-load result and independent readback. Keep
+`session_adoption: unverified` until the actual consumer supplies evidence. Ask
+the user to start a new CLI thread or restart/open a new Desktop thread that reads
+this base config; do not claim the running thread changed. Profile and `-c`
+overrides can still supersede it.
+
+For expansion, copy exact values from script output. Include:
 
 - model slug;
 - configured raw window;
