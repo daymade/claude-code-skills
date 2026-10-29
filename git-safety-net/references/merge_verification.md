@@ -837,7 +837,8 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
    important. Real case: a retirement pass that named 22 paths (a few credentials and plan files)
    missed that the actual `!!` set was 8092 entries and roughly 200MB, including 13 build-output
    directories that existed only in that worktree. For every regular leaf, record
-   `git hash-object --no-filters -- <path>`; for every symlink, record its `readlink` output. Stop on
+   `git hash-object --no-filters -- <path>`; use the [batch example](#batch-regular-file-hashes-without-dropping-manifest-entries)
+   for a large regular-file set. For every symlink, record its `readlink` output. Stop on
    an unsupported special-file type. An entry is disposable on one of two grounds only: the primary
    checkout has the same relative path with byte-identical content (the same `git hash-object`
    output), or a named tool rebuilds it from tracked inputs alone (dependency caches, bytecode,
@@ -909,6 +910,73 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
 
 The recovery artifacts created in step 6 may later follow § Retire task-owned temporary recovery
 artifacts. A copied ignored path that exists only in that backup keeps the artifact ineligible.
+
+### Batch regular-file hashes without dropping manifest entries
+
+Use this read-only Python 3.10+ example for the regular-file subset of the complete
+ignored inventory. Pass the authorized checkout root, its frozen relative paths
+and the absolute path of the installed Git binary already checked with
+`git --version`. Keep symlinks and their `readlink` targets in the full manifest;
+do not pass symlinks, directories or special files to this function.
+
+```python
+import stat
+import subprocess
+from pathlib import Path, PurePosixPath
+
+
+def hash_regular_files(root, paths, git_binary):
+    root = Path(root).resolve(strict=True)
+    paths = tuple(paths)
+    if not Path(git_binary).is_absolute() or len(set(paths)) != len(paths):
+        raise ValueError("Require an absolute Git binary and unique paths")
+
+    def stamp(rel):
+        parts = PurePosixPath(rel)
+        if not parts.parts or parts.is_absolute() or ".." in parts.parts or str(parts) != rel:
+            raise ValueError("Require normalized relative paths")
+        entry = root / rel
+        if entry.resolve(strict=True) != entry:
+            raise ValueError("Keep symlinks outside the regular-file batch")
+        info = entry.lstat()
+        if not stat.S_ISREG(info.st_mode):
+            raise ValueError("Require a regular file")
+        return (info.st_dev, info.st_ino, info.st_mode, info.st_size,
+                info.st_mtime_ns, info.st_ctime_ns)
+
+    result = {}
+    for offset in range(0, len(paths), 16):
+        batch = paths[offset:offset + 16]
+        before = [stamp(rel) for rel in batch]
+        run = subprocess.run(
+            [git_binary, "-C", str(root), "hash-object", "--no-filters", "--", *batch],
+            check=True, capture_output=True, text=True,
+        )
+        hashes = run.stdout.splitlines()
+        if len(hashes) != len(batch) or any(
+            len(value) not in (40, 64) or any(c not in "0123456789abcdef" for c in value)
+            for value in hashes
+        ):
+            raise RuntimeError("Incomplete or invalid hash output")
+        if before != [stamp(rel) for rel in batch]:
+            raise RuntimeError("File identity or metadata changed during hashing")
+        result.update(zip(batch, hashes))
+    return result
+```
+
+Preserve every returned path/hash pair in the existing manifest; require its key
+set to equal the supplied regular-file set, not just a sample or total. An empty
+mapping proves no inventory completeness by itself. Run the same recipe at each
+source/backup root in the same Git object format, then compare corresponding
+paths. Argument vectors preserve spaces, Unicode and newlines without shell
+splitting; command errors abort the batch without returning a partial manifest.
+
+Keep the original retirement gates: classify every physical leaf, preserve unique
+bytes, check symlink targets, then re-freeze the full inventory immediately before
+removal. Metadata checks do not lock files or make hashing atomic; detected change
+requires a new manifest, and a possible writer still blocks retirement. Use batches
+to reduce Git process launches, not to claim a measured speedup or permission to
+delete anything.
 
 ### Clean-submodule exception — one force flag after a specific normal refusal
 
