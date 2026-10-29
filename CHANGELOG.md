@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **git-safety-net** (v1.24.1 → v1.24.2): Route worktree retirement and recovery-material selection to their canonical preservation procedure; remove a hand-maintained heading inventory and duplicated retirement instructions. Preserve the existing unique-work, occupancy, authority and recovery boundaries. Change type: lossless documentation deduplication.
 
 - **llm-eval-harness** (v1.7.0 → v1.7.1): Distinguish exhausted quota from transient rate limits in HTTP 429 guidance; retain status/code evidence and quota recovery instead of unconditional concurrency retries. Change type: factual SOP correction.
+- **prior-work-retrieval** (`daymade-claude-code` v4.33.11): Native `exec` retrieval envelopes; quoted `cmd`/`command` keys and JavaScript-escaped command separators.
+
 - **skill-creator** (`daymade-skill` v1.74.6 → v1.74.7): Load the existing publication and dependency-bound review-reuse prerequisites before the first independent review. Change type: bounded entry-order correction.
 - **git-safety-net** (v1.24.0 → v1.24.1): Add a read-only batch regular-file hash example with exact path/output pairing, changed-file checks and failure handling; retain complete ignored inventories, symlink targets and retirement gates. Change type: bounded operating example.
 - **github-ops** (v1.14.14 → v1.14.15): Diagnose bootstrap and dependency failures from exact run/job/image evidence, retain unrun test status and use job-log fallback before authorizing a rerun. Change type: bounded diagnostic guidance.
